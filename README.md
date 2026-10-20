@@ -22,9 +22,32 @@ npm run fetch-media
 ## Studies
 
 - `/studies/node/`: one memory going from a dot to a full image. Hover to expand; the slider sets the resting expansion (0 to 1).
-- `/studies/scatter/`: about 90 to 220 small dots (scaled to the window). They sway in a breeze and swell toward the hover peak as the cursor nears. The dot being looked at (hovered, open, or showing the headline) is pinned where you found it, and the others make way. Layout is deterministic (`studies/shared/lens.js`): each dot's target comes from its home and the focused dots only, through a radial push whose strength and reach scale with the focus's size; neighbors grow only as far as their room allows, and the breeze calms near the focus. A clicked dot opens fully until another is clicked. (The `main` branch has the earlier physics version, `studies/shared/field.js`.)
+- `/studies/scatter/`: about 90 to 220 small dots (scaled to the window), each a scene from film history, colored by genre. They sway in a breeze and swell toward the hover peak as the cursor nears. The dot being looked at (hovered, open, or showing the headline) is pinned where you found it, and the others make way. Layout is deterministic (`studies/shared/lens.js`): each dot's target comes from its home and the focused dots only, through a radial push whose strength and reach scale with the focus's size; neighbors grow only as far as their room allows, and the breeze calms near the focus. A clicked dot opens fully until another is clicked. (The `main` branch has the earlier physics version, `studies/shared/field.js`.)
+  Growing dots play short low-res loops; a clicked dot hands off to its full clip with sound (see Clips below).
 
 Both studies share `studies/shared/node.js`, where `MemoryNode.shape(e)` defines the whole dot-to-image transition, and `studies/shared/label.js`, the text tag under each node. Tags have four tiers set by expansion (`TIERS`): hidden, short tag, headline, then headline plus description. The tag scales smoothly with its node and opens like a drawer: the short tag widens into the headline, then the description slides out below (timings in `DURATION`). Text is placeholder.
+
+## Clips
+
+The scatter study plays 100 scenes from the [Condensed Movies](https://www.robots.ox.ac.uk/~vgg/research/condensed-movies) dataset (Bain, Nagrani, Brown, Zisserman, ACCV 2020), one per film, hand-picked to span the 1930s to the 2010s. This is an academic, non-public demo, and it uses short excerpts only. The media isn't in git; to rebuild it you need ffmpeg and [yt-dlp](https://github.com/yt-dlp/yt-dlp) (the dataset's videos are its original YouTube uploads):
+
+```bash
+python3 scripts/clips/download.py /path/to/yt-dlp
+```
+
+```bash
+python3 scripts/clips/build.py
+```
+
+- `scripts/clips/selection.json`: the 100 films and the scene for each (plus backups per decade, used when a video is no longer available).
+- `download.py` saves a 60-second window of each scene to `media-src/`.
+- `build.py` writes `public/clips/`:
+  - `full/NNN.mp4`: a 30-second clip with sound, up to 720p (source resolution varies from 360p to 1080p).
+  - `atlas.mp4`: every clip's 4-second loop in one 10×10 grid video, so all small dots share one decoder.
+  - `atlas.jpg`: the atlas's first frame, shown while the video loads.
+  - `clips.json`: the manifest (tile positions, aspect ratios, film metadata and tag text).
+
+Each loop is the first 4 seconds of its full clip, frame for frame, and its last half second blends back into its start so it cycles seamlessly. Opening a dot starts the full clip at the loop's current moment and crossfades once that frame is on screen.
 
 ## Code map
 
