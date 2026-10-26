@@ -3,6 +3,16 @@
 A browser prototype that answers "why a spatial interface?" for Mind Palace Next Gen.
 The design notes and spec are in [mind-palace-next-gen.md](mind-palace-next-gen.md).
 
+## AI agent system plan
+
+Read the [HTML reading edition](docs/agent-system-plan.html) for a navigable overview,
+the complete plan, and the research links. It opens directly in a browser and works
+offline, with mobile layouts, day/night reading, and print/PDF styling.
+
+The canonical source is [agent-system-plan.md](agent-system-plan.md). To refresh the
+HTML after editing it, run `python3 scripts/render-agent-plan.py` (requires
+`markdown-it-py`). The template is in `docs/agent-system-plan.template.html`.
+
 ## Run
 
 ```bash

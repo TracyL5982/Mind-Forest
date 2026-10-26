@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="A reading edition of the Mind Palace AI system plan: project librarians, managed memory, revisable personalization, and the path to a VR product.">
+  <title>Mind Palace — Agent system plan</title>
+  <style>
+    :root{color-scheme:light;--paper:#faf9f6;--surface:#fff;--ink:#25303b;--muted:#65717b;--line:#dedfd9;--accent:#355f79;--soft:#eaf0f1;--warm:#a7794c;--code:#eeefeb;--rail:262px;--top:66px}
+    :root[data-theme="dark"]{color-scheme:dark;--paper:#171c21;--surface:#1c242b;--ink:#e1e7e7;--muted:#a3b0b7;--line:#34414a;--accent:#a7cedb;--soft:#263841;--warm:#d8b58d;--code:#28313a}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth;scroll-padding-top:90px}
+    body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:16px;line-height:1.75;-webkit-font-smoothing:antialiased}
+    a{color:var(--accent);text-underline-offset:4px;text-decoration-thickness:1px}
+    a:hover{text-decoration-thickness:2px}
+    button,summary,a{-webkit-tap-highlight-color:transparent}
+    button{font:inherit;cursor:pointer}
+    :focus-visible{outline:3px solid var(--accent);outline-offset:5px}
+    ::selection{background:var(--soft);color:var(--ink)}
+    .skip-link{position:fixed;left:20px;top:-90px;z-index:50;background:var(--ink);color:var(--paper);padding:10px 18px}
+    .skip-link:focus{top:10px}
+    .reading-progress{position:fixed;top:0;left:0;width:100%;height:3px;z-index:30;pointer-events:none}
+    .reading-progress span{display:block;width:0;height:100%;background:var(--accent)}
+    .topbar{position:sticky;top:0;height:var(--top);z-index:20;background:var(--paper);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 34px;gap:24px}
+    .wordmark{display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none;font-weight:650;letter-spacing:-.3px;white-space:nowrap}
+    .mark{width:24px;height:24px;position:relative;display:inline-block;border:1px solid var(--accent);border-radius:50%}
+    .mark:before{content:"";position:absolute;inset:5px;border:1px solid var(--accent);border-radius:50%}
+    .mark:after{content:"";position:absolute;width:5px;height:5px;left:17px;top:2px;background:var(--warm);border-radius:50%;box-shadow:0 0 0 3px var(--paper)}
+    .top-label{color:var(--muted);font-size:12px;letter-spacing:.09em;text-transform:uppercase;margin-left:20px;border-left:1px solid var(--line);padding-left:20px;font-weight:450}
+    .top-actions{display:flex;align-items:center;gap:20px;font-size:13px;line-height:1.2}
+    .text-button{border:0;padding:8px 0;background:transparent;color:var(--muted);min-height:40px}
+    .text-button:hover{color:var(--ink)}
+    .top-actions a{text-decoration:none;color:var(--muted)}
+    .top-actions a:hover{color:var(--ink);text-decoration:underline}
+    .layout{max-width:1550px;display:grid;grid-template-columns:var(--rail) minmax(0,1fr);margin:0 auto}
+    .sidebar{position:sticky;top:var(--top);align-self:start;height:calc(100vh - var(--top));overflow-y:auto;padding:42px 24px 28px 34px;border-right:1px solid var(--line);font-size:13px}
+    .rail-label{font-size:10px;font-weight:650;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+    .sidebar nav ol{margin:0;padding:0;list-style:none}
+    .chapter-link{display:flex;align-items:baseline;gap:13px;padding:8px 0 8px 10px;margin:0 0 4px -10px;color:var(--muted);text-decoration:none;border-left:2px solid transparent;line-height:1.5}
+    .chapter-link span{font-size:10px;font-variant-numeric:tabular-nums;opacity:.7}
+    .chapter-link:hover,.chapter-link.active{color:var(--accent);border-left-color:var(--accent);text-decoration:none}
+    .chapter-link.active{font-weight:600}
+    .rail-divider{border:0;border-top:1px solid var(--line);margin:30px 0 24px}
+    .question-links{display:flex;flex-direction:column;gap:13px;line-height:1.6}
+    .question-links a{text-decoration:none;color:var(--muted)}
+    .question-links a:hover{color:var(--accent)}
+    .rail-note{font-size:11px;color:var(--muted);line-height:1.65;margin-top:30px}
+    .rail-note span{display:block;margin-top:4px}
+    main{min-width:0;padding:60px clamp(30px,5.3vw,88px) 50px}
+    .hero{max-width:950px;padding-bottom:48px;border-bottom:1px solid var(--line)}
+    .eyebrow{display:flex;align-items:center;gap:10px;color:var(--accent);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:650;margin:0 0 22px}
+    .status-dot{width:5px;height:5px;background:var(--warm);border-radius:50%;display:inline-block}
+    h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(44px,4.5vw,70px);font-weight:400;line-height:1.07;letter-spacing:-2.7px;margin:0 0 25px;max-width:730px}
+    h1 em{font-style:italic;color:var(--accent)}
+    .hero-lead{max-width:670px;font-size:19px;line-height:1.65;color:var(--muted);margin:0 0 25px}
+    .document-meta{display:flex;flex-wrap:wrap;gap:8px 19px;color:var(--muted);font-size:11px;letter-spacing:.01em}
+    .document-meta span+span:before{content:"·";margin-right:19px;color:var(--warm)}
+    .start-here{max-width:950px;padding:35px 0 15px}
+    .section-kicker{font-size:10px;letter-spacing:.15em;text-transform:uppercase;font-weight:650;color:var(--muted);margin:0 0 20px}
+    .decisions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:26px;margin-bottom:30px}
+    .decision{padding-top:14px;border-top:2px solid var(--accent)}
+    .decision .index{font-size:11px;color:var(--warm);font-variant-numeric:tabular-nums}
+    .decision h2{font-size:17px;line-height:1.4;font-weight:600;margin:9px 0 8px;letter-spacing:-.2px}
+    .decision p{font-size:13px;line-height:1.75;color:var(--muted);margin:0 0 12px}
+    .decision a{font-size:12px;text-decoration:none}
+    .decision a:hover{text-decoration:underline}
+    .thesis{font-family:Georgia,"Times New Roman",serif;font-size:23px;line-height:1.55;border-left:2px solid var(--warm);padding-left:22px;max-width:760px;margin:32px 0}
+    .first-proof{background:var(--soft);padding:22px 26px;margin:26px 0 8px}
+    .first-proof .section-kicker{color:var(--accent);margin-bottom:10px}
+    .proof-path{display:flex;flex-wrap:wrap;gap:6px 0;font-size:13px;line-height:1.9;font-weight:550}
+    .proof-path span+span:before{content:"→";color:var(--muted);font-weight:400;margin:0 10px}
+    .first-proof p:last-child{font-size:12px;color:var(--muted);margin:8px 0 0;max-width:710px}
+    .mobile-contents{display:none}
+    .chapter{max-width:950px;margin-top:66px;padding-top:34px;border-top:1px solid var(--line);scroll-margin-top:20px}
+    .chapter-heading{display:flex;gap:18px;align-items:flex-start;margin-bottom:38px}
+    .chapter-number{font-family:Georgia,"Times New Roman",serif;color:var(--warm);font-size:24px;line-height:1.4;min-width:30px}
+    .chapter-heading h2{font-family:Georgia,"Times New Roman",serif;font-size:36px;line-height:1.2;font-weight:400;letter-spacing:-.8px;margin:0 0 10px}
+    .chapter-heading p{font-size:14px;line-height:1.65;color:var(--muted);margin:0;max-width:650px}
+    .plan-section{margin-top:42px;scroll-margin-top:20px}
+    .plan-section:first-of-type{margin-top:0}
+    .section-title{font-size:21px;line-height:1.45;font-weight:600;letter-spacing:-.4px;margin:0 0 18px}
+    .permalink{font-weight:400;font-size:15px;opacity:0;padding:5px 10px;text-decoration:none}
+    .section-title:hover .permalink,.permalink:focus-visible{opacity:1}
+    .prose{font-size:15.5px;line-height:1.85}
+    .prose p{max-width:76ch;margin:0 0 20px}
+    .prose h4{font-size:17px;font-weight:600;line-height:1.5;letter-spacing:-.2px;margin:34px 0 15px;scroll-margin-top:20px}
+    .prose h5{font-size:15.5px;line-height:1.5;margin:26px 0 12px}
+    .prose ul,.prose ol{padding-left:24px;max-width:76ch;margin:0 0 22px}
+    .prose li{padding-left:4px;margin-bottom:8px}
+    .prose li::marker{color:var(--accent)}
+    strong{font-weight:600}
+    code{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;font-size:.83em;background:var(--code);padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}
+    pre{font-size:12px;line-height:1.75;background:var(--code);padding:20px;white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;margin:18px 0}
+    pre code{padding:0;background:none;font-size:inherit}
+    .table-wrap{margin:23px 0 30px;width:100%;min-width:0}
+    table{border-collapse:collapse;width:100%;font-size:13px;line-height:1.75;text-align:left}
+    th{font-size:10px;font-weight:650;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--ink);padding:0 14px 12px 0;vertical-align:bottom}
+    td{padding:15px 18px 15px 0;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+    td:first-child{color:var(--ink);font-weight:550;min-width:130px;width:24%}
+    td:not(:first-child){color:var(--muted)}
+    td:last-child,th:last-child{padding-right:0}
+    table p{font-size:inherit;margin:0!important}
+    td strong{color:var(--ink)}
+    .roadmap-steps{margin-top:12px}
+    .roadmap-step{position:relative;display:grid;grid-template-columns:38px minmax(0,1fr);gap:18px;padding-bottom:24px}
+    .roadmap-step:not(:last-child):before{content:"";position:absolute;left:14px;top:31px;bottom:0;width:1px;background:var(--line)}
+    .step-marker{font-size:10px;color:var(--accent);border:1px solid var(--line);border-radius:50%;width:29px;height:29px;display:flex;align-items:center;justify-content:center;margin-top:3px;position:relative;background:var(--paper);font-variant-numeric:tabular-nums}
+    .roadmap-step h4{margin:0 0 16px}
+    .roadmap-step p:has(>strong:first-child){border-left:2px solid var(--warm);padding-left:16px;font-size:13px;color:var(--muted)}
+    .architecture-map{margin:28px 0;background:var(--surface);border:1px solid var(--line);padding:25px 24px}
+    .architecture-map figcaption{font-size:17px;line-height:1.5;font-weight:600;margin-bottom:25px}
+    .system-path+.system-path{border-top:1px solid var(--line);margin-top:25px;padding-top:23px}
+    .path-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:650;margin:0 0 16px!important}
+    .prose .path-nodes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;max-width:none;list-style:none;margin:0;padding:0}
+    .prose .path-nodes li{position:relative;padding:0;margin:0;font-size:12px;line-height:1.6}
+    .path-nodes li+li:before{content:"→";position:absolute;left:-17px;top:23px;color:var(--muted)}
+    .path-nodes span{display:block;font-size:10px;color:var(--warm);margin-bottom:6px}
+    .path-nodes strong{display:block;font-size:13px;margin-bottom:4px}
+    .path-nodes small{font-size:11px;line-height:1.6;color:var(--muted);display:block}
+    .figure-note{font-size:11px!important;line-height:1.7;color:var(--muted);margin:23px 0 0!important}
+    .technical-detail{font-size:12px;margin:20px 0;border-bottom:1px solid var(--line);padding-bottom:18px}
+    .technical-detail summary{cursor:pointer;color:var(--accent);padding:8px 0;font-weight:550}
+    .detail-note{font-size:12px;color:var(--muted);margin-top:12px!important}
+    .footer{max-width:950px;border-top:1px solid var(--line);margin-top:70px;padding-top:24px;display:flex;justify-content:space-between;gap:20px;color:var(--muted);font-size:11px}
+    .footer a{text-decoration:none}
+    @media(min-width:1500px){main{padding-left:90px;padding-right:90px}.prose{font-size:16px}}
+    @media(max-width:1100px){:root{--rail:225px}.sidebar{padding-left:24px;padding-right:18px}.topbar{padding:0 25px}.top-label{display:none}main{padding:45px 32px}.decisions{gap:20px}h1{font-size:56px}.chapter-heading h2{font-size:32px}}
+    @media(max-width:820px){.layout{display:block}.sidebar{display:none}.topbar{height:60px;padding:0 22px}.top-actions{gap:15px}.top-actions a{display:none}main{padding:38px 25px 35px}.hero{padding-bottom:30px}h1{font-size:53px;letter-spacing:-2px}.hero-lead{font-size:17px}.mobile-contents{display:block;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;margin:30px 0 0;font-size:13px}.mobile-contents summary{cursor:pointer;font-weight:550;color:var(--accent);padding:4px 0}.mobile-contents nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px;padding:18px 0 8px}.mobile-contents a{text-decoration:none;line-height:1.5}.mobile-contents a span{color:var(--muted);font-size:10px;margin-right:10px}.chapter{margin-top:45px;padding-top:28px}.prose{font-size:15.5px}}
+    @media(max-width:580px){.topbar{padding:0 18px}.wordmark{font-size:14px}.top-actions{font-size:12px;gap:14px}main{padding:31px 20px}.eyebrow{font-size:9px;letter-spacing:.12em;margin-bottom:19px}h1{font-size:44px;letter-spacing:-1.6px}.hero-lead{font-size:16px;line-height:1.75}.document-meta{font-size:10px;gap:6px 12px}.document-meta span+span:before{margin-right:12px}.decisions{grid-template-columns:1fr;gap:19px}.decision{display:grid;grid-template-columns:26px minmax(0,1fr);gap:0 12px;padding-top:13px}.decision .index{grid-row:1/4;padding-top:4px}.decision h2{margin:0 0 6px}.decision p{margin-bottom:7px}.decision a{grid-column:2}.start-here{padding-top:25px}.thesis{font-size:21px;padding-left:17px;margin:28px 0}.first-proof{padding:19px}.proof-path{font-size:12px}.chapter-heading{gap:13px;margin-bottom:27px}.chapter-number{font-size:21px;min-width:25px}.chapter-heading h2{font-size:29px}.chapter-heading p{font-size:13px}.section-title{font-size:19px}.prose h4{font-size:16px}.plan-section{margin-top:34px}.permalink{opacity:.6}.table-wrap{margin:20px 0 27px}table,tbody,tr,td{display:block}thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}tbody{border-top:1px solid var(--line)}tr{padding:15px 0;border-bottom:1px solid var(--line)}td{padding:6px 0;border:0;font-size:13px;width:100%!important;min-width:0!important}td:first-child{font-size:14px;padding-top:0;font-weight:600}td:not(:first-child):before{content:attr(data-label);display:block;font-size:9px;letter-spacing:.09em;text-transform:uppercase;font-weight:600;color:var(--accent);margin-bottom:3px}.architecture-map{padding:20px 17px}.prose .path-nodes{grid-template-columns:1fr;gap:20px}.prose .path-nodes li{padding-left:29px}.path-nodes span{position:absolute;left:0;top:2px}.path-nodes li+li:before{content:none}.path-nodes small{font-size:12px}.figure-note{font-size:11px!important}.roadmap-step{grid-template-columns:29px minmax(0,1fr);gap:12px}.footer{flex-direction:column;gap:6px}.mobile-contents nav{grid-template-columns:1fr}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+    @media print{:root,:root[data-theme="dark"]{color-scheme:light;--paper:#fff;--surface:#fff;--ink:#111;--muted:#444;--line:#ccc;--accent:#294f65;--soft:#f3f4f1;--warm:#825c39;--code:#f1f1ee}html{scroll-behavior:auto}body{background:#fff;color:#111;font-size:11pt}.topbar,.sidebar,.mobile-contents,.reading-progress,.permalink,.skip-link,.footer a{display:none!important}.layout{display:block}main{padding:0}.hero,.start-here,.chapter,.footer{max-width:none}.hero{padding-bottom:20px}h1{font-size:38pt;color:#111}.hero-lead{font-size:13pt}.chapter{margin-top:32px;padding-top:20px;break-before:page}.chapter-heading{break-after:avoid;margin-bottom:20px}.chapter-heading h2{font-size:25pt}.section-title,.prose h4{break-after:avoid}.prose{font-size:10.5pt;line-height:1.6}.prose p{max-width:none}table{font-size:9pt}tr,.decision,.roadmap-step{break-inside:avoid}thead{display:table-header-group}a{color:#111}code,pre{background:#f1f1ee}.architecture-map{break-inside:avoid}.first-proof{background:#f2f4f1}.document-meta,.eyebrow,.chapter-heading p,.decision p,td:not(:first-child),.figure-note{color:#444}.technical-detail{display:block}.technical-detail>summary{color:#111}.technical-detail pre{display:block}.footer{margin-top:30px}}
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the plan</a>
+  <div class="reading-progress" aria-hidden="true"><span id="progress"></span></div>
+  <header class="topbar">
+    <a class="wordmark" href="#main"><span class="mark" aria-hidden="true"></span>Mind Palace<span class="top-label">System design / Reading edition</span></a>
+    <div class="top-actions"><a href="../agent-system-plan.md">Markdown source ↗</a><button class="text-button" id="theme-toggle" type="button" aria-label="Switch to dark appearance" aria-pressed="false">Night reading</button><button class="text-button" id="print" type="button">Print / PDF</button></div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Plan navigation">
+      <p class="rail-label">In this document</p>
+      <nav aria-label="Chapters"><ol><li><a class="chapter-link" href="#overview" data-chapter="overview"><span>01</span>The idea</a></li>
+<li><a class="chapter-link" href="#experience" data-chapter="experience"><span>02</span>The experience</a></li>
+<li><a class="chapter-link" href="#librarians" data-chapter="librarians"><span>03</span>Librarians &amp; projects</a></li>
+<li><a class="chapter-link" href="#memory" data-chapter="memory"><span>04</span>Memory &amp; evidence</a></li>
+<li><a class="chapter-link" href="#personalization" data-chapter="personalization"><span>05</span>Learning the user</a></li>
+<li><a class="chapter-link" href="#trust" data-chapter="trust"><span>06</span>Trust &amp; change</a></li>
+<li><a class="chapter-link" href="#architecture" data-chapter="architecture"><span>07</span>The architecture</a></li>
+<li><a class="chapter-link" href="#roadmap" data-chapter="roadmap"><span>08</span>Build &amp; evaluate</a></li></ol></nav>
+      <hr class="rail-divider">
+      <p class="rail-label">Your three questions</p>
+      <div class="question-links">
+        <a href="#section-7-project-specific-librarians">A librarian for every project? ↗</a>
+        <a href="#section-10-memory-types-and-lifecycle">How do we manage memory? ↗</a>
+        <a href="#section-6-learning-about-the-user-over-time">How does it learn about me? ↗</a>
+      </div>
+      <p class="rail-note">Research-informed proposal<span>Revised October 25, 2026</span><span>Complete plan · ~35 min</span></p>
+    </aside>
+    <main id="main">
+      <header class="hero">
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>Proposed architecture · Research-informed plan</p>
+        <h1>Mind Palace.<br><em>A system that grows with you.</em></h1>
+        <p class="hero-lead">A librarian for your spatial world: find what you remember, develop the connections, and return to what matters.</p>
+        <div class="document-meta"><span>October 25, 2026</span><span>8 chapters</span><span>Full plan · ~35 min</span></div>
+      </header>
+      <section class="start-here" aria-label="The plan at a glance">
+        <p class="section-kicker">Start here / Three decisions</p>
+        <div class="decisions">
+          <div class="decision"><span class="index">01</span><h2>Project continuity</h2><p>Each meaningful project keeps its own context. Its librarian wakes when there is work to do, using shared original sources.</p><a href="#section-7-project-specific-librarians">Explore the librarian model →</a></div>
+          <div class="decision"><span class="index">02</span><h2>Memory with a lifecycle</h2><p>Preserve experiences, reconcile what changed, and keep current knowledge distinct from historical or tentative information.</p><a href="#section-10-memory-types-and-lifecycle">Follow the memory lifecycle →</a></div>
+          <div class="decision"><span class="index">03</span><h2>Personalization you can revise</h2><p>Learn preferences in context, retain their evidence, and let you inspect, correct, or retire what the system assumes.</p><a href="#section-6-learning-about-the-user-over-time">See how the system learns →</a></div>
+        </div>
+        <p class="thesis">One coherent librarian. Persistent project understanding. A shared memory you can inspect and shape.</p>
+        <div class="first-proof"><p class="section-kicker">The first useful proof</p><div class="proof-path"><span>Two projects</span><span>Shared real notes</span><span>A grounded question</span><span>Compare sources</span><span>Save a constellation</span><span>Reopen after restart</span></div><p>The current app is a browser interaction prototype. The durable memory service, agents, and headset runtime described below are proposed work.</p></div>
+      </section>
+      <details class="mobile-contents"><summary>Browse the eight chapters</summary><nav aria-label="Mobile chapters"><a href="#overview"><span>01</span>The idea</a>
+<a href="#experience"><span>02</span>The experience</a>
+<a href="#librarians"><span>03</span>Librarians &amp; projects</a>
+<a href="#memory"><span>04</span>Memory &amp; evidence</a>
+<a href="#personalization"><span>05</span>Learning the user</a>
+<a href="#trust"><span>06</span>Trust &amp; change</a>
+<a href="#architecture"><span>07</span>The architecture</a>
+<a href="#roadmap"><span>08</span>Build &amp; evaluate</a></nav></details>
+      <section class="chapter" id="overview" aria-labelledby="heading-overview">
+          <header class="chapter-heading"><span class="chapter-number">01</span><div><h2 id="heading-overview">The idea</h2><p>A coherent assistant, built on the palace you already have.</p></div></header>
+          <article class="plan-section" id="section-1">
+      <h3 class="section-title">Product direction<a class="permalink" href="#section-1" aria-label="Link to Product direction">#</a></h3>
+      <div class="prose"><p>Build a librarian that helps someone capture an experience, find their own ideas, think across them, and return to what matters. Its work should become visible through the palace: sources brought forward, relationships explained, paths saved, and proposed changes previewed in place.</p>
+<p>The user interacts with one coherent assistant. Behind it, specialized workflows share the same knowledge store, evidence rules, and change system. A role is a bounded responsibility; it does not require an always-running agent or a separate model.</p>
+<p>As the palace grows, give each established project a persistent context package and an on-demand project librarian. Keep canonical memories shared, with scoped retrieval and centralized writes. Manage memory through an explicit lifecycle, and personalize through a contextual, evidence-backed user model. The three design decisions are: <strong>persistent project continuity, selective memory activation, and revisable personalization</strong>.</p>
+<p>The first product should answer three questions well:</p>
+<ol>
+<li><strong>Where did I put this, and what did I actually say?</strong></li>
+<li><strong>How does this connect to what I already know?</strong></li>
+<li><strong>What changed in my thinking, and what deserves another look?</strong></li>
+</ol>
+<p>Working assumptions: start with a single user's private palace; keep the existing Three.js client; support desktop as a companion surface; validate one target headset early; permit provider-neutral AI through a service; make background schedules opt-in. Device choice, hosting, and collaboration remain product decisions.</p>
+</div>
+    </article><article class="plan-section" id="section-2">
+      <h3 class="section-title">The prototype today<a class="permalink" href="#section-2" aria-label="Link to The prototype today">#</a></h3>
+      <div class="prose"><p>The implementation is a Vite/Three.js browser prototype. Its design document describes a broader XR product; those aspirations should be separated from shipped behavior.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Existing implementation</th>
+<th>Implication for AI</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Existing implementation"><code>src/data.js</code> creates 40 images and 12 notes, repeated into 200 visual nodes.</td><td data-label="Implication for AI">Extend the useful distinction between content and visual instances. Repeated appearances must never count as independent evidence.</td></tr>
+<tr><td data-label="Existing implementation"><code>src/app.js</code> exposes group/focus navigation, Explore, path picking, cross-links, and saving a chain.</td><td data-label="Implication for AI">An assistant can operate through these concepts and return navigable results.</td></tr>
+<tr><td data-label="Existing implementation"><code>src/layout.js:computeRelated()</code> ranks by tag overlap, chain recency, cross-links, and seeded variation.</td><td data-label="Implication for AI">Replace or augment the retrieval input while keeping spatial presentation deterministic.</td></tr>
+<tr><td data-label="Existing implementation">Groups, drag placements, and constellations live in memory. IDs are array indices.</td><td data-label="Implication for AI">Durable identity, persistence, revision history, and undo are prerequisites for meaningful agent writes.</td></tr>
+<tr><td data-label="Existing implementation">A node has one group.</td><td data-label="Implication for AI">Multi-membership requires a new relationship model; it is proposed in the design notes but not implemented.</td></tr>
+<tr><td data-label="Existing implementation">Labels/HUD use DOM; regions and connections use 2D canvases. Camera/input are desktop driven.</td><td data-label="Implication for AI">A headset version needs XR presentation/input work beyond enabling a stereo renderer.</td></tr>
+<tr><td data-label="Existing implementation">The 4096-pixel atlas has 64 cells: 40 images plus two cells for each of 12 notes. Mesh capacity is allocated at construction.</td><td data-label="Implication for AI">New notes need a dynamic rendering/capacity strategy. Arbitrary AI text cannot simply be appended to the demo arrays.</td></tr>
+</tbody>
+</table></div>
+<p>There is no existing AI client, backend, document importer, persistent database, search index, transcript pipeline, durable job queue, or WebXR session implementation.</p>
+</div>
+    </article>
+        </section>
+<section class="chapter" id="experience" aria-labelledby="heading-experience">
+          <header class="chapter-heading"><span class="chapter-number">02</span><div><h2 id="heading-experience">The experience</h2><p>Capture, explore, think, review, and maintain—through space.</p></div></header>
+          <article class="plan-section" id="section-3">
+      <h3 class="section-title">Five ways to work with the librarian<a class="permalink" href="#section-3" aria-label="Link to Five ways to work with the librarian">#</a></h3>
+      <div class="prose"><p>Expose these experiences instead of making users manage an organizational chart of agents.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Experience</th>
+<th>Example request</th>
+<th>Spatial result</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Experience"><strong>Capture</strong></td><td data-label="Example request">“Remember this, and connect it to my interface project.”</td><td data-label="Spatial result">A source-backed draft arrives in an inbox; likely destinations appear as placement suggestions.</td></tr>
+<tr><td data-label="Experience"><strong>Explore</strong></td><td data-label="Example request">“Show me what connects these two ideas.”</td><td data-label="Spatial result">Existing memories rise into a temporary constellation, with an explanation for each connection.</td></tr>
+<tr><td data-label="Experience"><strong>Think</strong></td><td data-label="Example request">“Help me test this idea.”</td><td data-label="Spatial result">Claims, supporting sources, counterexamples, and open questions form a working path.</td></tr>
+<tr><td data-label="Experience"><strong>Review</strong></td><td data-label="Example request">“What mattered this week?”</td><td data-label="Spatial result">A short review opens as a walkable trail through the events and original memories behind it.</td></tr>
+<tr><td data-label="Experience"><strong>Maintain</strong></td><td data-label="Example request">“Clean up this topic.”</td><td data-label="Spatial result">Proposed merges, renames, links, and moves appear together for inspection and selective acceptance.</td></tr>
+</tbody>
+</table></div>
+<p>The assistant should ask which kind of help is wanted when it matters: recall, synthesis, challenge, or new research. A request for recall should not silently expand into internet research or speculative idea generation.</p>
+<p>For example, the user selects two memories about interface design and says, “Why do these feel connected?” The assistant shows the selected scope, retrieves related sources, and brings three cited candidates forward. The user inspects a passage without changing the graph, chooses one candidate for the working path, rejects an overstated connection, and saves a constellation with their own conclusion. A later review can resurface that conclusion and its original evidence.</p>
+<p>Onboarding can begin with three questions: “What should this palace help you do?”, “Which memories may AI use?”, and “How much help do you want with organization?” A topic starter then asks about the outcome, current familiarity, and boundaries of that particular topic. Both flows should permit a useful small start without a long questionnaire.</p>
+</div>
+    </article><article class="plan-section" id="section-4">
+      <h3 class="section-title">Stable homes, changing relevance<a class="permalink" href="#section-4" aria-label="Link to Stable homes, changing relevance">#</a></h3>
+      <div class="prose"><p>The current prototype makes depth express relevance. That is valuable for exploration, but long-term spatial memory also needs recognizable places.</p>
+<p>Separate three things:</p>
+<ol>
+<li><strong>Identity and meaning:</strong> the memory, its revisions, sources, and semantic relationships.</li>
+<li><strong>Home and membership:</strong> where the user placed it, which topics it belongs to, and other saved appearances.</li>
+<li><strong>Session presentation:</strong> temporary depth, size, highlights, ranking, and working-path placement.</li>
+</ol>
+<p>A note can belong to several topics, appear in several constellations, and still have a deliberate home. Bringing it forward in Explore does not move its home. Closing a session restores the saved arrangement. Pinned homes and landmarks must survive group growth and automatic layout calculations.</p>
+<p>Use explicit commands for persistent movement. “Show related ideas” creates a temporary lens; “save this arrangement” creates placements; “move this to the design room” changes a home. Before a broad reorganization, show the proposed positions and provide undo.</p>
+<p>Do not overload depth with every meaning. During exploration, depth means relevance to the current question. Confidence, authorship, age, and stale status use readable badges or an inspector. Use restrained line styles and labels for relationship types, with detail on focus rather than a permanent web of lines.</p>
+</div>
+    </article><article class="plan-section" id="section-13">
+      <h3 class="section-title">Inside the spatial experience<a class="permalink" href="#section-13" aria-label="Link to Inside the spatial experience">#</a></h3>
+      <div class="prose"><p><strong>A quiet librarian.</strong> Provide a compact summon control and optional voice. Show a short answer in the scene with sources around it. Long text opens in an adjustable reading panel or desktop companion. The user can interrupt, stop, narrow the scope, or continue without speech.</p>
+<p><strong>A working surface.</strong> Selected notes and the current question form a temporary workbench. Assistant suggestions appear in a distinct preview state. Picking one adds it to the path; accepting a link changes the graph. Viewing a suggestion alone does neither.</p>
+<p>Use a clear interaction flow: choose/inspect scope → ask → see retrieval progress/cancel → inspect answer and sources → select path items → save the session or accept a graph change. Source inspection, path selection, graph acceptance, and saving have separate effects and visible state. If the user changes the scope or path during retrieval, discard or explicitly relabel the older result.</p>
+<p><strong>A review inbox.</strong> Background work adds a small number of inspectable proposals to a consistent place. No unsolicited objects fly into the user's focus. Notifications are for useful changes or required decisions and can wait until the user next enters.</p>
+<p><strong>Explained relationships.</strong> Focus on a suggested edge to see the relation, supporting passage, and why it was surfaced now. Similarity is labeled as similarity; a substantive claim needs evidence. The user can accept, reject, or choose another relationship.</p>
+<p><strong>Comparison as a spatial tool.</strong> Keep the current claim near the center, place supporting passages on one side and challenges on the other, and let the user compare them without replacing the thought in focus. Validate this with pointer/ray controls first; two-handed manipulation can extend it later.</p>
+<p><strong>Spatial recall support.</strong> Offer “take me back,” “show its home,” and “replay how I got here.” Save the question, visited sources, selected edges, user annotations, and the final conclusion with a constellation. A path represents the user's exploration; not every adjacent pair is a factual support relationship.</p>
+<p>A review trail works seated: bring each source forward through the same selection controls. Physical walking is optional. Preserve usable text/input alternatives for people who prefer not to speak, turn, or reach.</p>
+<p>Give the review inbox a configurable display budget, initially a few proposals per visit. Group repetitive maintenance work and offer dismissal for a whole suggestion family. Keep a separate optional history rather than making the user clear an ever-growing proposal backlog.</p>
+<p><strong>Comfort and control.</strong> Keep landmarks stable; avoid automatic camera/head motion; use optional transitions and restore the prior view after an AI lens. Gaze can identify a candidate target but does not by itself authorize a write or become evidence of a preference. Resolve “put this there” using an explicit selected target and destination preview when ambiguous.</p>
+<p><strong>Scale.</strong> A large palace can preserve conceptual presence through topic shells and aggregates. Do not require every memory to be fully rendered or readable simultaneously. The registry/search covers all eligible content independently of the visible subset.</p>
+</div>
+    </article>
+        </section>
+<section class="chapter" id="librarians" aria-labelledby="heading-librarians">
+          <header class="chapter-heading"><span class="chapter-number">03</span><div><h2 id="heading-librarians">Librarians &amp; projects</h2><p>Persistent project understanding. Specialists when the work needs them.</p></div></header>
+          <article class="plan-section" id="section-7">
+      <h3 class="section-title">Who does what<a class="permalink" href="#section-7" aria-label="Link to Who does what">#</a></h3>
+      <div class="prose"><p>The librarian routes user intent to these workflows. Each invocation receives a bounded scope, source-reading contract, allowed operations, budget, and definition of done.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Trigger and inputs</th>
+<th>Output and write boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Role"><strong>User builder</strong></td><td data-label="Trigger and inputs">Onboarding, explicit “remember this about me,” or a proposed preference change. Reads approved profile plus relevant statements.</td><td data-label="Output and write boundary">A small profile patch with source/date. Explicit instructions can be recorded within scope; inferred candidates stay tentative until reviewed for promotion.</td></tr>
+<tr><td data-label="Role"><strong>Project librarian</strong></td><td data-label="Trigger and inputs">A scoped project question, meaningful project changes, or an enabled review. Reads its project context and relevant canonical sources.</td><td data-label="Output and write boundary">Resumable project understanding, evidenced answers, and proposed project changes; no independent global user profile.</td></tr>
+<tr><td data-label="Role"><strong>Memory curator</strong></td><td data-label="Trigger and inputs">New evidence, correction, permission change, or consolidation job. Reads candidates, lineage, and affected memory entries.</td><td data-label="Output and write boundary">Typed add/update/supersede/reject/invalidate operations through the command service; explicit ambiguity where evidence conflicts.</td></tr>
+<tr><td data-label="Role"><strong>Navigation builder</strong></td><td data-label="Trigger and inputs">Import, membership/location changes, or requested audit. Reads the registry and authored organization rules.</td><td data-label="Output and write boundary">Regenerated manifests plus proposals for ambiguous topic labels. IDs/counts/links are maintained by code.</td></tr>
+<tr><td data-label="Role"><strong>Skill builder</strong></td><td data-label="Trigger and inputs">User describes a recurring way of working. Reads approved playbooks and examples.</td><td data-label="Output and write boundary">Draft playbook with triggers, steps, tools, output schema, failure behavior, and evaluation examples. Activation is explicit.</td></tr>
+<tr><td data-label="Role"><strong>Note taker / chronicler</strong></td><td data-label="Trigger and inputs">Explicit capture, imported transcript, or a saved assistant session.</td><td data-label="Output and write boundary">Original source plus separate summary, decisions, unresolved questions, and proposed tasks/links. Never fabricates speaker identity, agreement, or a task owner.</td></tr>
+<tr><td data-label="Role"><strong>Daily reviewer</strong></td><td data-label="Trigger and inputs">Manual invocation or an enabled schedule. Reads new source events since its checkpoint, changed notes, and capture/session records.</td><td data-label="Output and write boundary">Timestamped daily log, concise review, and a separate list of unresolved items. Does not turn every observation into a task.</td></tr>
+<tr><td data-label="Role"><strong>Weekly/monthly reviewer</strong></td><td data-label="Trigger and inputs">Manual invocation or an enabled period review. Reads lower-level reviews, active projects, and selected original evidence.</td><td data-label="Output and write boundary">Changes in direction, recurring themes, carried questions, and proposed priorities. Reports missing days and weak evidence.</td></tr>
+<tr><td data-label="Role"><strong>Topic starter</strong></td><td data-label="Trigger and inputs">“Help me start learning/thinking about X.”</td><td data-label="Output and write boundary">A starter constellation: goal, boundaries, existing knowledge, central questions, and a small next-step set. Asks a few high-value questions before assuming the topic's meaning.</td></tr>
+<tr><td data-label="Role"><strong>Thinking partner</strong></td><td data-label="Trigger and inputs">A question, selected memories, or a working path.</td><td data-label="Output and write boundary">Evidence-linked synthesis, challenges, alternatives, and questions. Captures the user's conclusion separately from its own suggestions.</td></tr>
+<tr><td data-label="Role"><strong>Connection/content suggester</strong></td><td data-label="Trigger and inputs">User request or a limited, enabled discovery pass.</td><td data-label="Output and write boundary">A few explained links, resurfaced memories, or labeled external leads. Dismissals and “not now” affect repetition.</td></tr>
+<tr><td data-label="Role"><strong>Cleaner / maintainer</strong></td><td data-label="Trigger and inputs">Requested cleanup or a bounded integrity scan.</td><td data-label="Output and write boundary">A reviewable change set for duplicate candidates, broken links, inconsistent metadata, stale derivatives, and proposed moves. No silent broad rewrites.</td></tr>
+<tr><td data-label="Role"><strong>Verifier</strong></td><td data-label="Trigger and inputs">Before committing a change set or publishing a substantive review.</td><td data-label="Output and write boundary">Structural checks and an evidence audit; may send a run back for missing sources or unsupported claims. It has no authority to expand permissions.</td></tr>
+</tbody>
+</table></div>
+<p>Use parallel agents where perspectives or independent scopes help: a thinking partner and a critic, or independent topic summaries during a full review. Keep each reviewer's evidence visible. Start with shared workflow code, not a large collection of permanently chatting agents.</p>
+<h4 id="section-7-project-specific-librarians">Project-specific librarians</h4>
+<p>Yes: each meaningful project should have durable continuity. The persistent element is its context package; an agent runs when there is relevant work. A tiny project can use scoped retrieval directly. A larger project can use a specialist with its own working context. Avoid assigning a separate autonomous agent to every tag or visual group.</p>
+<p>A project context package contains purpose and success criteria, constraints, current decisions with rationale and dates, unresolved questions, local vocabulary, source IDs, local working preferences, saved constellations/landmarks, recent changes, and a processed-event checkpoint. Its brief is a navigational cache with source links, not a substitute for the underlying evidence. Store the revisions and last refresh time.</p>
+<p>Route a simple project question to one retrieval workflow; a deep project question to a specialist; a cross-project comparison to bounded independent specialists plus synthesis. “Where else have I thought about this?” also searches the global accessible index, so an early routing mistake cannot silently hide other rooms. Show the current scope and let the user broaden it.</p>
+<p>Specialist handoffs include findings, source IDs/revisions/passages, coverage, exclusions, unresolved questions, and proposed changes separately. The lead librarian can reopen important evidence. Deduplicate sources shared by several projects. All specialists use one canonical store and command service; permissions and concurrent revision checks apply before read, answer, and commit.</p>
+<p>Project lifecycle: candidate grouping → active → paused → archived. Establish projects through purpose or explicit choice, not note count alone. Active projects can have enabled maintenance; paused/archived projects keep their landmarks and searchable sources without routine model calls. An archived project can be consulted on demand. Splits and merges preserve memberships and redirects.</p>
+<p>This is a design recommendation, supported indirectly by <a href="https://www.anthropic.com/research/multi-agent-research-system">Anthropic's deployed research architecture</a> and <a href="https://arxiv.org/abs/2512.08296v3">controlled agent-scaling experiments</a>: independent subtasks can benefit from delegation, while coordination adds cost and task-dependent failure modes. Their results do not prove that a specialist is better for every personal project. Compare a well-designed single-agent baseline, project-context loading, and actual delegation at comparable budgets before increasing complexity.</p>
+</div>
+    </article>
+        </section>
+<section class="chapter" id="memory" aria-labelledby="heading-memory">
+          <header class="chapter-heading"><span class="chapter-number">04</span><div><h2 id="heading-memory">Memory &amp; evidence</h2><p>Preserve the experience. Keep current knowledge accurate and traceable.</p></div></header>
+          <article class="plan-section" id="section-5">
+      <h3 class="section-title">The shared knowledge model<a class="permalink" href="#section-5" aria-label="Link to The shared knowledge model">#</a></h3>
+      <div class="prose"><p>The graph is a durable data model that also powers the view. It must remain usable when a memory is outside the field of view, filtered out, archived, or represented only by metadata.</p>
+<h4 id="section-5-core-records">Core records</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Record</th>
+<th>Required information</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Record"><strong>Memory</strong></td><td data-label="Required information">Stable UUID, kind, title/body or asset reference, revision, author/origin, created/modified times, applicable belief/decision dates when known, lifecycle status, sensitivity/AI scope.</td></tr>
+<tr><td data-label="Record"><strong>Source</strong></td><td data-label="Required information">Original file/URL/import ID, content hash, captured time, extraction status, transcript/OCR revision, retrievable spans or time ranges.</td></tr>
+<tr><td data-label="Record"><strong>Topic/project</strong></td><td data-label="Required information">Stable ID, name and aliases, purpose, memberships, optional navigation summary.</td></tr>
+<tr><td data-label="Record"><strong>Project context</strong></td><td data-label="Required information">Goals, constraints, decisions, open questions, important source references, local preferences, lifecycle, summary revision and processed-event checkpoint.</td></tr>
+<tr><td data-label="Record"><strong>User-model entry</strong></td><td data-label="Required information">Subject, scoped statement/preference, explicit or inferred origin, evidence IDs, applicable dates, confirmation/expiry status, sensitivity/allowed uses, exclusions, last correction.</td></tr>
+<tr><td data-label="Record"><strong>Relation</strong></td><td data-label="Required information">Stable endpoints, relation type, author, status, evidence references, source revisions, rationale.</td></tr>
+<tr><td data-label="Record"><strong>Placement</strong></td><td data-label="Required information">Memory ID, palace/view ID, home or secondary appearance, anchor/slot/transform, pinned state.</td></tr>
+<tr><td data-label="Record"><strong>Constellation</strong></td><td data-label="Required information">Ordered memory references, explicit edges, annotations, session question, saved layout, revision.</td></tr>
+<tr><td data-label="Record"><strong>Session/run</strong></td><td data-label="Required information">User intent, scope, sources read, decisions, open questions, artifacts, workflow/profile/playbook/policy revisions, status and budget.</td></tr>
+<tr><td data-label="Record"><strong>Derived artifact</strong></td><td data-label="Required information">Summary/review/caption/embedding, exact upstream IDs and revisions, generation version, current/stale status.</td></tr>
+<tr><td data-label="Record"><strong>Change set/event</strong></td><td data-label="Required information">Typed operations, actor, expected revisions, provenance, before/after references, causation ID, commit status and undo information.</td></tr>
+</tbody>
+</table></div>
+<p>Relations should distinguish organizational membership from semantic claims. Start with a small vocabulary: <code>belongs_to</code>, <code>references</code>, <code>supports</code>, <code>contradicts</code>, <code>develops</code>, <code>derived_from</code>, and <code>supersedes</code>. For an apparent contradiction, store an evidenced candidate relation until reviewed; disagreement may depend on time or context.</p>
+<p>Separate <strong>authorship</strong> from <strong>acceptance</strong>. An AI-written paragraph remains AI-authored after the user accepts it. A user can adopt it without erasing its origin. An unreviewed AI suggestion is not an established fact about the user.</p>
+<p>Maintain three complementary views over these records:</p>
+<ul>
+<li>A complete, paginated registry of accessible content and locations.</li>
+<li>Typed graph relationships and source dependencies.</li>
+<li>Search indexes: exact/keyword search first, semantic retrieval when useful.</li>
+</ul>
+<p>A dedicated graph database is unnecessary for the first version. Tables for records and edges are sufficient. Embeddings are rebuildable indexes, not the source of truth.</p>
+</div>
+    </article><article class="plan-section" id="section-8">
+      <h3 class="section-title">Retrieval and honest coverage<a class="permalink" href="#section-8" aria-label="Link to Retrieval and honest coverage">#</a></h3>
+      <div class="prose"><p>The user's concern about random samples is fundamental: knowing that a note exists, finding it, reading its summary, and reading its full content are different states. A graph alone does not establish completeness.</p>
+<h4 id="section-8-different-questions-need-different-retrieval">Different questions need different retrieval</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Question</th>
+<th>Strategy</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Question">“Where is the note about X?”</td><td data-label="Strategy">Exact/alias and keyword search, with semantic fallback.</td></tr>
+<tr><td data-label="Question">“What led to this decision?”</td><td data-label="Strategy">Traverse dated decisions and source-linked relationships, then read supporting episodes.</td></tr>
+<tr><td data-label="Question">“What themes span my projects?”</td><td data-label="Strategy">Search project/topic summaries, synthesize across relevant groups, and reopen important originals.</td></tr>
+<tr><td data-label="Question">“Review every note in this room.”</td><td data-label="Strategy">Exhaustive scoped enumeration and batched reading with coverage accounting.</td></tr>
+</tbody>
+</table></div>
+<p><a href="https://arxiv.org/abs/2404.16130">GraphRAG</a> provides evidence for hierarchical summaries on global sensemaking questions in its evaluated corpora. It does not establish that every recall query needs a graph traversal. A <a href="https://arxiv.org/abs/2601.01280">controlled dialog-memory analysis</a> also cautions that representation and retrieval settings account for substantial differences between systems. Keep explicit graph relations for navigation, provenance, and reasoning, while evaluating retrieval against a strong hybrid-search baseline.</p>
+<p>Fuse keyword and semantic candidates, apply project/time/permission filters, expand a bounded set of useful graph neighbors, rerank, and retain diverse evidence. Preserve important older decisions rather than ranking everything by recency. When an index is stale, include its unindexed delta or disclose the gap. Daily and project summaries narrow navigation; direct source retrieval remains available for details omitted by summaries.</p>
+<h4 id="section-8-retrieval-sequence">Retrieval sequence</h4>
+<ol>
+<li>Resolve the requested scope: selected notes, constellation, topic, date interval, or whole accessible palace.</li>
+<li>Read a manifest at a known registry revision. Record exclusions, access limits, and extraction failures.</li>
+<li>Find candidates through IDs/aliases, keyword search, graph neighborhoods, and optional embeddings. Deduplicate by canonical memory/source identity.</li>
+<li>Read the relevant content, including original passages or transcript intervals when needed. Record exact source revisions and spans.</li>
+<li>Search for contrary evidence and alternative topic interpretations when synthesizing an answer.</li>
+<li>Return cited conclusions and explicit gaps, alongside the nodes to present spatially.</li>
+</ol>
+<p>For a scoped question, selective retrieval is appropriate. For “review everything in this room,” enumerate every eligible record with cursor exhaustion and process all content in batches. For a large palace-wide audit, use a resumable background job and disclose partial completion. Never relabel a top-K search as a complete review.</p>
+<h4 id="section-8-run-coverage-record">Run coverage record</h4>
+<p>Record <code>scope</code>, <code>registryRevision</code>, <code>expectedRecordIds</code>, <code>discoveredIds</code>, <code>readIdsAndRevisions</code>, <code>readMode</code> (metadata/summary/excerpts/full), <code>failedOrExcludedIds</code>, <code>indexRevision</code>, and <code>continuationCheckpoint</code>. For long sources, include expected and processed chunks or time ranges.</p>
+<p>For delegated batch work, record which worker read each source and which evidence artifact it returned. A coordinator that sees only summaries should describe that aggregated coverage accurately rather than claim direct full-text inspection.</p>
+<p>Example user-facing report: “42 notes in scope; 39 fully read, 2 read as summaries, 1 unavailable.” Counters come from tools. A summary read does not increment the full-read count. Completing an enumeration proves the scope was traversed; it does not prove that a model interpreted every passage correctly.</p>
+<p>For a complete review, pin both the registry and eligible source revisions to a coherent snapshot, and identify its time in the result. If that is unavailable, report an “as read” review with changed-since-start items and reconcile those changes before claiming current coverage. Account for indexing lag through a matching index revision or a scan of unindexed changes. A snapshot never overrides a later access revocation.</p>
+<p>Every factual answer about the palace should link to the underlying memory and a passage/revision when practical. In VR, selecting the citation opens that source beside the claim and offers “show its home.” Generated hypotheses carry a different label. An unsuccessful search should be phrased within the accessible scope, not as proof that the user has never thought about something.</p>
+</div>
+    </article><article class="plan-section" id="section-10">
+      <h3 class="section-title">Capture, memory, and review<a class="permalink" href="#section-10" aria-label="Link to Capture, memory, and review">#</a></h3>
+      <div class="prose"><h4 id="section-10-capture">Capture</h4>
+<p>Keep source capture and interpretation separate. An audio clip, transcript, photo, imported note, and assistant conversation can all be source records. Extraction may fail or be incomplete; show that state rather than implying the source was read.</p>
+<p>An explicit save should be immediate even if AI is offline. Summaries, suggested memberships, and links can arrive later. Start with pasted text, Markdown imports, and saved assistant sessions. Add recording and environmental capture after the headset/input path is validated. Recording has an explicit control, visible indicator, retention choice, and a way to exclude a private passage.</p>
+<h4 id="section-10-memory-types-and-lifecycle">Memory types and lifecycle</h4>
+<p>Memory type and storage tier are different dimensions:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Memory type</th>
+<th>Examples</th>
+<th>Main control</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Memory type">Working</td><td data-label="Examples">Current question, selected notes, plan, pending tool results.</td><td data-label="Main control">Bounded context; preserve useful checkpoints before compaction.</td></tr>
+<tr><td data-label="Memory type">Episodic</td><td data-label="Examples">What happened in a session or meeting, with original sources.</td><td data-label="Main control">Dated, attributable evidence; retains qualifications and context.</td></tr>
+<tr><td data-label="Memory type">Semantic</td><td data-label="Examples">Current project facts, confirmed preferences, definitions.</td><td data-label="Main control">Source-linked entries with scope, revision, and applicable dates.</td></tr>
+<tr><td data-label="Memory type">Procedural</td><td data-label="Examples">Approved ways to run a review or organize a specific output.</td><td data-label="Main control">Versioned playbook with tests and permission limits.</td></tr>
+<tr><td data-label="Memory type">Prospective</td><td data-label="Examples">A commitment, unresolved question, or thing to revisit.</td><td data-label="Main control">Explicit state/trigger; never rely on similarity search alone for due items.</td></tr>
+<tr><td data-label="Memory type">Spatial</td><td data-label="Examples">Homes, landmarks, saved views, and exploration paths.</td><td data-label="Main control">Durable identity and placement; relevance changes do not silently move homes.</td></tr>
+</tbody>
+</table></div>
+<p>Inference candidates remain explicitly tentative within these types. These categories can share tables and indexes; they do not require six databases or six agents.</p>
+<p>Use this lifecycle: <code>source captured → extraction candidate → reconcile → typed commit → index → retrieve/use → review → update/supersede/archive/delete</code>. Preserve the source first. Extract bounded claims, decisions, questions, and preferences with passages and applicable scope. Compare candidates with existing entries before adding or updating; exact duplicates add provenance rather than another apparent fact. A changed decision may supersede an older decision; a preference in a different project may coexist. Ambiguity stays unresolved until evidence or user clarification settles it.</p>
+<p>The curator owns this reconciliation workflow while application code enforces structure, versions, permissions, and transactions. Reviews can nominate candidates, but generated observations do not automatically become confirmed memory. Important user corrections update the current entry and invalidate derived material promptly; they should not wait until the next weekly review.</p>
+<p>Make reconciliation outcomes explicit: <code>ADD</code>, <code>LINK_EVIDENCE</code>, <code>SUPERSEDE</code>, <code>CONFLICT</code>, <code>NO_CHANGE</code>, or <code>REJECT</code>. A memory claim carries subject, value/relation, scope, applicable date interval, recorded time, source spans/revisions, epistemic status, and supersession/conflict links. Retrieved or frequently repeated claims do not become more credible merely through use.</p>
+<p>Use <strong>hot</strong> memory for the current task and a small relevant context package, <strong>warm</strong> memory for indexed source-linked records and project summaries, and <strong>cold</strong> memory for retained originals and inactive history. These are retrieval/storage policies, not different truth levels. A cold source remains searchable and can return to active use. Compact context and consolidate derived summaries without deleting retained original evidence.</p>
+<p>Distinguish five forms of forgetting: removing something from the current prompt, reducing proactive salience, archiving, superseding its current applicability, and deleting it. Inactivity alone should not erase a user's note or conclude that an important old decision is false. User-pinned memories and active commitments need separate handling. Temporary assumptions can expire; uncertain durable preferences can request revalidation. Explicit deletion also reaches dependent summaries, indexes, caches, and pending jobs under app control.</p>
+<p>The emphasis on updates is supported by <a href="https://arxiv.org/abs/2410.10813">LongMemEval</a>, which evaluates temporal reasoning, updates, and abstention alongside recall, and <a href="https://arxiv.org/abs/2604.20006">Memora</a>, which reports reuse of invalidated memories in its benchmark. These motivate temporal records and retirement rules; they do not establish one universally best consolidation schedule.</p>
+<h4 id="section-10-review-hierarchy">Review hierarchy</h4>
+<p><code>original sources + changes → daily log/review → weekly review → monthly synthesis</code></p>
+<p>Daily logs are chronological observations. Reviews are interpretations. Backlog items are possible actions with an explicit unresolved/resolved state. Keeping them separate prevents the system from treating all activity as unfinished work.</p>
+<p>A daily entry includes event time, summary, source IDs, decision status, and any open question. Use real event timestamps, record the user's timezone, and handle late imports and corrections. Keep the time a belief/decision applied separate from when its note was captured, imported, or edited. An old note imported today is not automatically the user's newest position. Re-running a day should not duplicate its entries.</p>
+<p>Advance processing checkpoints by a monotonic ingestion/event sequence, separately from the event's <code>occurredAt</code> time used for display. An older meeting imported today still gets processed and is labeled as a late arrival. Advance a completed checkpoint only after every event in its range has a recorded outcome; keep failures resumable. Historical reviews receive linked amendments or new revisions rather than silent replacement.</p>
+<p>Weekly and monthly reviewers use the lower-level material as an index, then reopen original sources for important themes, apparent contradictions, changed goals, and carried commitments. A model's earlier summary is not independent corroboration. Preserve links all the way back to originals; count unique sources rather than repeated summaries. Missing days and unavailable sources remain visible.</p>
+<p>Suggested review outputs:</p>
+<ul>
+<li>What was added or materially changed.</li>
+<li>What the user decided, versus ideas still being explored.</li>
+<li>Important connections and tensions, with evidence.</li>
+<li>Unresolved questions or commitments to revisit.</li>
+<li>A small proposed set of next actions, accepted individually.</li>
+</ul>
+<p>Reviewing the app's recorded history does not imply access to arbitrary external conversations or other applications. Each additional capture source requires an intentional integration and scope.</p>
+</div>
+    </article>
+        </section>
+<section class="chapter" id="personalization" aria-labelledby="heading-personalization">
+          <header class="chapter-heading"><span class="chapter-number">05</span><div><h2 id="heading-personalization">Learning the user</h2><p>Understand preferences in context, with room to change.</p></div></header>
+          <article class="plan-section" id="section-6">
+      <h3 class="section-title">Personal context and playbooks<a class="permalink" href="#section-6" aria-label="Link to Personal context and playbooks">#</a></h3>
+      <div class="prose"><p>The <a href="https://www.linkingyourthinking.com/ai-os-full-setup-guide">AI OS guide</a> uses portable personal context, a vault map, and a skill map. Adapt that pattern to structured records with readable, exportable documents. These are the user's configuration and knowledge, independent of the model provider.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Document/view</th>
+<th>Purpose</th>
+<th>Maintenance rule</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Document/view"><strong><code>User.md</code></strong></td><td data-label="Purpose">A compact view of confirmed global preferences and goals, with links to project-scoped context.</td><td data-label="Maintenance rule">Export from structured entries; keep tentative inferences and temporary intent separate.</td></tr>
+<tr><td data-label="Document/view"><strong><code>Navigation.md</code></strong></td><td data-label="Purpose">Palace/topic overview, landmarks, aliases, inboxes, creation destinations, and links to scoped indexes.</td><td data-label="Maintenance rule">Generate IDs, counts, and location links from the store; preserve separately authored navigation guidance.</td></tr>
+<tr><td data-label="Document/view"><strong><code>Skills.md</code> + individual playbooks</strong></td><td data-label="Purpose">Available workflows, invocation phrases, allowed tools/scopes, outputs, and examples.</td><td data-label="Maintenance rule">Versioned registrations; playbook changes are reviewed and cannot grant new permissions.</td></tr>
+<tr><td data-label="Document/view"><strong>Creation templates</strong></td><td data-label="Purpose">Rules for captures, meeting notes, topic starters, reviews, and proposals.</td><td data-label="Maintenance rule">Define required fields, source handling, destination, naming, and acceptance criteria.</td></tr>
+</tbody>
+</table></div>
+<p>For scale, <code>Navigation.md</code> is the front door to a hierarchy of topic and room manifests; it should not become an enormous prompt containing every note. The deterministic registry remains complete even when summaries are compact.</p>
+<p>Readable files and the app must have one reconciliation path. Recommended: structured records are canonical; Markdown is an export and supported import/edit surface. An external edit becomes a validated proposed update against a known revision. Avoid maintaining two independently authoritative versions.</p>
+<h4 id="section-6-learning-about-the-user-over-time">Learning about the user over time</h4>
+<p>Use a contextual user model rather than a single expanding biography:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Example</th>
+<th>Update behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Layer">Explicit global contract</td><td data-label="Example">“Keep my chosen locations stable.”</td><td data-label="Update behavior">Record direct instructions; edit or revoke immediately when requested.</td></tr>
+<tr><td data-label="Layer">Project preferences and expertise</td><td data-label="Example">“For this research project, keep methodological detail.”</td><td data-label="Update behavior">Apply within that project; generalize only with evidence or user instruction.</td></tr>
+<tr><td data-label="Layer">Current intent and temporary conditions</td><td data-label="Example">“Today I only have ten minutes.”</td><td data-label="Update behavior">Apply to the current interaction or defined interval, then expire.</td></tr>
+<tr><td data-label="Layer">Tentative patterns</td><td data-label="Example">“Often chooses diagrams when comparing architectures.”</td><td data-label="Update behavior">Store as a scoped hypothesis with provenance; use cautiously for low-impact presentation choices.</td></tr>
+<tr><td data-label="Layer">Assistant performance knowledge</td><td data-label="Example">“This workflow produces too many cleanup suggestions.”</td><td data-label="Update behavior">Improve an evaluated workflow or ranking policy; do not turn it into an identity claim about the user.</td></tr>
+</tbody>
+</table></div>
+<p>Resolve applicable preferences in this order: current explicit request, current project instructions, confirmed global preferences, then tentative patterns. Permissions remain an independent constraint at every layer. Expertise is topic-specific and can change; avoid one global novice/expert label.</p>
+<p>The learning loop is <code>observe → propose a scoped candidate → compare with existing entries → apply or ask where useful → observe outcome → revise or retire</code>. Strong evidence includes a direct correction or preference statement. A deliberate edit is informative within its task. A click, accepted suggestion, pause, or gaze is ambiguous; absence of complaint is not approval. Several summaries of one episode remain one piece of evidence.</p>
+<p>Resolve who a statement is about before storing personal context. A friend's preference, a quotation, roleplay, or a hypothetical example is not automatically about the user. Record the subject and the type of evidence.</p>
+<p>Within an enabled personalization scope, the system may retain labeled hypotheses and try reversible, low-impact formatting adaptations with a simple correction control. This does not mark a hypothesis as confirmed. Promotion into confirmed personal context requires review or an explicit user instruction; avoid automatic sensitive-trait inference. Store evidence strength and conflicts rather than trusting an LLM's self-reported confidence score. A changed preference supersedes the applicable entry while preserving dated history; ambiguous differences remain scoped alternatives.</p>
+<p>For example, repeated requests for shorter daily reviews can teach the system a <strong>review-format preference</strong>. They do not justify labeling the user as someone who dislikes detail. The same user may want a long technical design discussion. “Only for this project,” “not anymore,” and “that assumption is wrong” should be first-class feedback actions.</p>
+<p>Provide a “What the librarian knows” inspector showing confirmed entries, tentative assumptions, their scope, sources, dates, and actual influence on a response. Support correction, expiry, exclusion, and forgetting through the same dependency-aware deletion path as other memories. Avoid automatically inferring sensitive personal traits from patterns.</p>
+<p>Feedback should distinguish “wrong fact,” “wrong context,” “outdated,” “not now,” “too repetitive,” “useful connection,” and “prefer this format.” These have different effects: temporary dismissal changes timing; correction invalidates a claim; a local preference changes local behavior. Preserve a deliberate discovery/challenge mode that searches for counterevidence and unfamiliar connections. User preferences may shape vocabulary and presentation; they do not determine factual correctness. Store “the user believes X” separately from evidence that X is true.</p>
+<p>This design is an inference from the evidence, not an established optimal user model. <a href="https://aclanthology.org/2024.acl-long.399/">LaMP</a> demonstrates the value of retrieving relevant user history on its personalization tasks. <a href="https://arxiv.org/abs/2504.14225">PERSONAMEM</a> tests changing profiles and preferences, using simulated histories. Neither establishes longitudinal understanding of a real person. A <a href="https://arxiv.org/abs/2509.12517">CHI 2026 study</a> found that user context can increase agreement-seeking behavior; a <a href="https://arxiv.org/abs/2608.08300">structured-memory study</a> reports reduced cross-domain leakage in its benchmark when memories are partitioned by domain. Evaluate helpfulness and factual candor separately.</p>
+<p>Begin learning through editable memory, retrieval/ranking, and tested playbook changes. Per-user model fine-tuning is a later experiment if held-out results justify it; it complicates inspection, correction, and removal. The system should improve at helping this person while keeping the source of each adaptation accessible.</p>
+</div>
+    </article>
+        </section>
+<section class="chapter" id="trust" aria-labelledby="heading-trust">
+          <header class="chapter-heading"><span class="chapter-number">06</span><div><h2 id="heading-trust">Trust &amp; change</h2><p>Make actions inspectable, bounded, and reversible.</p></div></header>
+          <article class="plan-section" id="section-9">
+      <h3 class="section-title">How an agent runs<a class="permalink" href="#section-9" aria-label="Link to How an agent runs">#</a></h3>
+      <div class="prose"><p>Use a typed workflow loop:</p>
+<p><code>understand → scope → retrieve → propose → verify → present/commit → record</code></p>
+<p>At each step, application code validates allowed tools, arguments, resource access, source versions, and budgets. Model output is a proposal to the runtime.</p>
+<p>There are three kinds of work:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Work</th>
+<th>Recommended executor</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Work">IDs, permissions, pagination, revision checks, invalidation, persistence, scheduling</td><td data-label="Recommended executor">Deterministic application code.</td></tr>
+<tr><td data-label="Work">Bounded classification or routing, such as capture type or which workflow fits</td><td data-label="Recommended executor">Rules first; optionally a small structured model or decision model.</td></tr>
+<tr><td data-label="Work">Synthesis, disambiguation, explanation, critique, and drafting</td><td data-label="Recommended executor">A reasoning/generative model with scoped tools.</td></tr>
+</tbody>
+</table></div>
+<p><a href="https://typesafe.ai/blog/introducing-system-one-models-and-jev">TypeSafe describes Jev</a> as producing typed probabilistic decisions. It could be evaluated for routing, candidate relation classification, or deciding when to request a deeper review. The <a href="https://medium.com/@patriwala/jev-opus-5-5-why-your-coding-agent-needs-two-kinds-of-thinking-46f641eb6a0f">linked article</a> provides an architectural example of pairing decision and generative work.</p>
+<p>Keep Jev optional behind a decision-provider interface. Benchmark it against rules and a structured-output model on actual palace examples before adding another dependency. Valid output types and high model scores do not establish factual correctness or authorize an action. Set automation thresholds from measured errors and acceptable consequences, with abstention for ambiguous cases.</p>
+<p>Each run stores its objective, accepted decisions, unresolved questions, evidence references, job status, and useful failure/feedback records. This task state is separate from conversation history and from durable facts about the user. Store inspectable actions and decisions rather than private model reasoning.</p>
+</div>
+    </article><article class="plan-section" id="section-11">
+      <h3 class="section-title">Propagating changes<a class="permalink" href="#section-11" aria-label="Link to Propagating changes">#</a></h3>
+      <div class="prose"><p>Track dependencies using <code>derived_from</code> references to precise upstream revisions, including transitive lineage to original sources. Commit a domain mutation and its outbox event in the same database transaction. A worker drains the event outbox idempotently, updates deterministic indexes, and marks affected AI artifacts stale; regeneration is a separate job. This closes the crash window between saving content and scheduling its maintenance.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Change</th>
+<th>Automatic maintenance</th>
+<th>User-visible handling</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Change">Rename a note/topic</td><td data-label="Automatic maintenance">Resolve stable-ID links, update aliases, current labels, manifests, and search.</td><td data-label="User-visible handling">Preview prose substitutions where context matters; retain original quotations and historical names.</td></tr>
+<tr><td data-label="Change">Correct a source statement</td><td data-label="Automatic maintenance">Invalidate affected summaries, embeddings, claims, and reviews.</td><td data-label="User-visible handling">Show a correction or revised review; preserve the earlier version with its date.</td></tr>
+<tr><td data-label="Change">Change a convention</td><td data-label="Automatic maintenance">Find matching current notes/playbooks with a bounded migration.</td><td data-label="User-visible handling">Review a batch patch; skip historical text unless explicitly included.</td></tr>
+<tr><td data-label="Change">Move a home</td><td data-label="Automatic maintenance">Update placement and location lookup.</td><td data-label="User-visible handling">Animate only the accepted move; keep semantic relationships intact.</td></tr>
+<tr><td data-label="Change">Merge duplicates</td><td data-label="Automatic maintenance">Redirect stable identities, preserve provenance and all placements, flag conflicts.</td><td data-label="User-visible handling">Preview the survivor, redirects, content choices, and undo. Similarity alone is insufficient.</td></tr>
+<tr><td data-label="Change">Delete/exclude a source</td><td data-label="Automatic maintenance">Remove it from active retrieval, invalidate derivatives, cancel pending use.</td><td data-label="User-visible handling">Apply the selected retention/deletion policy to copies, summaries, embeddings, exports under app control, and caches; show residual history status.</td></tr>
+<tr><td data-label="Change">Change AI scope or access</td><td data-label="Automatic maintenance">Invalidate affected cached responses and derived views; cancel or revalidate jobs using that source.</td><td data-label="User-visible handling">Apply the current source restrictions through summaries, profile context, and other derivatives before serving them again.</td></tr>
+</tbody>
+</table></div>
+<p>Distinguish a historical snapshot from a current living summary. A review about what the user believed last month should not silently become a description of today's beliefs. Show “corrected later” or create a revised version.</p>
+<p>Prevent propagation loops with event IDs, causation IDs, coalescing, idempotent handlers, and source-revision checks. Generated summary updates do not recursively create new “user activity.” Index bookkeeping does not re-run a whole review. Rejected suggestions stay dismissed until material evidence or user intent changes.</p>
+</div>
+    </article><article class="plan-section" id="section-12">
+      <h3 class="section-title">Permissions and change sets<a class="permalink" href="#section-12" aria-label="Link to Permissions and change sets">#</a></h3>
+      <div class="prose"><p>Use one change mechanism for all agent writes. A change set contains purpose, scope, exact typed operations, expected revisions, evidence, affected derived artifacts, and preview/undo information. A stale proposal must be revalidated if the user edits a source while the agent is working.</p>
+<p>A clear instruction identifying the object and requested change authorizes that work within its scope; avoid asking for the same permission again. Promoting proactive inferences to confirmed context and performing broad or ambiguous transformations need a reviewable proposal. Recheck current permissions and approved context before tool access and commit, including for queued jobs. Revoking a source, integration, or playbook cancels or narrows pending work and prevents cached context from being sent onward.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Default behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Action">Search/read within the enabled AI scope; build a temporary view</td><td data-label="Default behavior">Execute in the current interaction.</td></tr>
+<tr><td data-label="Action">Save a capture or constellation the user explicitly requested</td><td data-label="Default behavior">Commit within that request; show undo.</td></tr>
+<tr><td data-label="Action">Maintain deterministic indexes, counts, and manifests</td><td data-label="Default behavior">Automatic and recoverable.</td></tr>
+<tr><td data-label="Action">Create an AI draft in the designated inbox</td><td data-label="Default behavior">Allowed within an invoked workflow or enabled automation.</td></tr>
+<tr><td data-label="Action">Store a tentative preference hypothesis or try reversible presentation adaptation</td><td data-label="Default behavior">Allowed within enabled personalization scope; keep it labeled and separately inspectable.</td></tr>
+<tr><td data-label="Action">Promote a proactive profile inference to confirmed context, rewrite authored text, merge, change homes, or migrate conventions</td><td data-label="Default behavior">Present a concrete patch for acceptance; execute specific user-authorized changes within their scope with undo.</td></tr>
+<tr><td data-label="Action">Activate/change a playbook, broaden tool access, enable an external integration</td><td data-label="Default behavior">Explicit user control; playbook prose cannot grant access.</td></tr>
+<tr><td data-label="Action">Send/share/publish, record other conversations, or permanently purge</td><td data-label="Default behavior">A separate, explicit action with appropriate product confirmation.</td></tr>
+</tbody>
+</table></div>
+<p>Treat imported content and transcripts as evidence, never as privileged instructions. Retrieval permissions also apply to embeddings, source excerpts, profile builders, and summaries. Check authorization again before serving cached or derived content and before releasing an in-flight answer. A private room cannot leak through an otherwise public-looking generated answer. Give users per-room/per-source AI inclusion, a clear cloud-processing setting, and retention controls.</p>
+</div>
+    </article>
+        </section>
+<section class="chapter" id="architecture" aria-labelledby="heading-architecture">
+          <header class="chapter-heading"><span class="chapter-number">07</span><div><h2 id="heading-architecture">The architecture</h2><p>A shared memory service connects the interface and the agents.</p></div></header>
+          <article class="plan-section" id="section-14">
+      <h3 class="section-title">Implementation architecture<a class="permalink" href="#section-14" aria-label="Link to Implementation architecture">#</a></h3>
+      <div class="prose"><figure class="architecture-map" aria-labelledby="architecture-caption">
+      <figcaption id="architecture-caption">Two paths through one shared system</figcaption>
+      <div class="system-path">
+        <p class="path-label">Read &amp; understand</p>
+        <ol class="path-nodes">
+          <li><span>01</span><strong>Your question</strong><small>Selected memories + scope</small></li>
+          <li><span>02</span><strong>Palace librarian</strong><small>Coordinates relevant specialists</small></li>
+          <li><span>03</span><strong>Shared memory</strong><small>Retrieve and inspect sources</small></li>
+          <li><span>04</span><strong>Cited answer</strong><small>Sources and a spatial path</small></li>
+        </ol>
+      </div>
+      <div class="system-path">
+        <p class="path-label">Propose &amp; remember</p>
+        <ol class="path-nodes">
+          <li><span>01</span><strong>A proposed change</strong><small>Evidence + expected revisions</small></li>
+          <li><span>02</span><strong>Check &amp; review</strong><small>Policy, sources, user review as needed</small></li>
+          <li><span>03</span><strong>Commit once</strong><small>Versioned records + event outbox</small></li>
+          <li><span>04</span><strong>Refresh dependents</strong><small>Indexes, project briefs, summaries</small></li>
+        </ol>
+      </div>
+      <p class="figure-note">Project librarians, the user model, and review workflows all reference the same canonical sources.</p>
+    </figure><details class="technical-detail">
+          <summary>Full architecture notation</summary>
+          <p class="detail-note">The complete Mermaid definition from the source plan.</p>
+          <pre><code>flowchart TD
+    UI[Desktop / XR palace] --&gt; Runtime[Assistant orchestrator]
+    Runtime --&gt; Context[Registry + retrieval + read ledger]
+    Context --&gt; Store[Versioned memory store + assets]
+    Runtime --&gt; Projects[On-demand project librarians]
+    Projects --&gt; Capsules[Persistent project context packages]
+    Capsules --&gt; Store
+    Projects --&gt; Context
+    Runtime --&gt; UserModel[Scoped user model]
+    UserModel --&gt; Store
+    Runtime --&gt; Roles[Bounded role workflows]
+    Roles --&gt; Models[Model and optional decision providers]
+    Projects --&gt; Models
+    Roles --&gt; Proposals[Typed change sets]
+    Projects --&gt; Proposals
+    Proposals --&gt; Verify[Policy + revision + evidence checks]
+    Verify --&gt; Review[User preview when required]
+    Review --&gt; Commit[Transactional command service]
+    Verify --&gt;|Already authorized operations| Commit
+    Commit --&gt; Store
+    Commit --&gt; Events[Domain events + durable jobs]
+    Events --&gt; Curator[Memory reconciliation + invalidation]
+    Curator --&gt; Proposals
+    Events --&gt; Context
+    Events --&gt; Derived[Indexes / summaries / review drafts]
+    Store --&gt; View[Spatial view adapter]
+    Derived --&gt; View
+    View --&gt; UI
+</code></pre></details>
+<h4 id="section-14-recommended-first-architecture">Recommended first architecture</h4>
+<p>Use one service for memory commands, retrieval, job state, and model access. For a private development pilot, this can run on the user's computer with a database and local asset directory. A headset client requires a secure, reachable authenticated endpoint; localhost on the headset is not the user's desktop. A hosted service is an alternative deployment of the same boundaries. Decide the connection/deployment path in the headset spike.</p>
+<p>For a single-user pilot, a transactional store such as SQLite with relationship tables and full-text search is sufficient; add an embedding index if retrieval evaluations justify it. Keep assets and source versions accessible through the service. Require durable client storage for new captures and saved paths before claiming offline success: client-generated stable IDs, a local outbox, visible pending/synced status, and idempotent reconnect synchronization. Cache selected existing content for offline browsing. A revision conflict preserves both versions for resolution instead of silently overwriting one. Define broader conflict behavior before adding more devices or shared editing.</p>
+<p>Keep provider credentials on the service, outside the Vite bundle. Run AI jobs outside the render loop; heavy local extraction/index work belongs off the UI thread. Background daily/weekly work requires a persistent service or a visible “catch up next launch” policy; a closed or suspended headset browser cannot be the only scheduler.</p>
+<p>Start with one orchestrator, a bounded worker queue, a model-provider adapter, and a tool registry. Durable jobs need checkpoints, idempotency keys, bounded retries, cancellation, resource/time/token budgets, and observable failures. Cache by source revision and workflow version. Limit graph expansion and return partial results clearly when a budget ends.</p>
+<p>Scale work by activity and query scope, rather than total project count. Maintain incremental indexes and changed project contexts; do not ask every project librarian to reread every note nightly. Retrieve bounded candidates before model reranking, limit cross-project fan-out, and avoid all-pairs relationship generation. Keep canonical memory writes serialized or revision-checked while independent extraction/search can run in parallel. Render a bounded working set and aggregated distant topics independently of how much the memory service indexes.</p>
+<h4 id="section-14-how-this-connects-to-the-current-files">How this connects to the current files</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Current file/seam</th>
+<th>Planned change</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Current file/seam"><code>src/data.js</code></td><td data-label="Planned change">Retain demo fixtures; load canonical memories, memberships, and placements from a repository adapter. Replace durable array-index references with stable IDs.</td></tr>
+<tr><td data-label="Current file/seam"><code>src/app.js</code></td><td data-label="Planned change">Keep navigation/view intent, but route persisted changes through typed commands. Store session focus separately from domain records and animation state.</td></tr>
+<tr><td data-label="Current file/seam"><code>src/layout.js:computeRelated()</code></td><td data-label="Planned change">Accept asynchronous retrieval results containing memory IDs, rank, relation/reason, and evidence; map them to visual instances. Keep a local fallback and discard stale responses after the question/path changes.</td></tr>
+<tr><td data-label="Current file/seam"><code>src/app.js:saveChain()</code></td><td data-label="Planned change">Save a durable constellation with stable node/edge references, question, annotations, and optional layout; support reopen.</td></tr>
+<tr><td data-label="Current file/seam"><code>organize()</code>, <code>groupSelection()</code>, <code>endDrag()</code></td><td data-label="Planned change">Separate preview from committed membership/placement commands; persist and support undo.</td></tr>
+<tr><td data-label="Current file/seam"><code>src/atlas.js</code>, <code>src/nodes.js</code></td><td data-label="Planned change">Support changing content/capacity, paged or incremental textures, and a readable full-note panel. Do not use the atlas excerpt as the AI's source text.</td></tr>
+<tr><td data-label="Current file/seam"><code>src/hud.js</code>, <code>src/overlay.js</code>, <code>src/regions.js</code></td><td data-label="Planned change">Desktop views for assistant status, citations, and proposals; headset equivalents in scene space.</td></tr>
+<tr><td data-label="Current file/seam"><code>src/input.js</code>, camera update, <code>src/main.js</code></td><td data-label="Planned change">Input adapter for controller/hand rays and supported target-device inputs; respect headset pose, per-eye rendering, and angular text/detail sizes.</td></tr>
+<tr><td data-label="Current file/seam"><code>App.on/emit</code></td><td data-label="Planned change">Keep UI notifications; add durable domain events from commits for indexing, reviews, and invalidation.</td></tr>
+</tbody>
+</table></div>
+<p>Suggested modules: <code>domain/</code>, <code>repositories/</code>, <code>retrieval/</code>, <code>agents/</code>, <code>jobs/</code>, <code>commands/</code>, and <code>presentation/</code>. These are boundaries to establish incrementally, not a requirement for an immediate rewrite.</p>
+</div>
+    </article>
+        </section>
+<section class="chapter" id="roadmap" aria-labelledby="heading-roadmap">
+          <header class="chapter-heading"><span class="chapter-number">08</span><div><h2 id="heading-roadmap">Build &amp; evaluate</h2><p>Prove the smallest useful loop, then grow the system.</p></div></header>
+          <article class="plan-section" id="section-15">
+      <h3 class="section-title">The build sequence<a class="permalink" href="#section-15" aria-label="Link to The build sequence">#</a></h3>
+      <div class="prose"><div class="roadmap-steps"><div class="roadmap-step"><span class="step-marker" aria-hidden="true">00</span><div><h4 id="section-15-step-0-durable-content-and-a-headset-feasibility-spike">Step 0: durable content and a headset feasibility spike</h4>
+<p>Implement stable IDs, notes/assets, placements, constellations, revisions, save/reload, a durable local capture/path outbox, and a basic command/undo boundary. In parallel, test one target headset: stereo node rendering, readable source panel, ray selection, and the service connection. Check current shader billboarding, DOM/canvas overlays, and camera behavior on-device. Choose WebXR or a native shell based on required input/capture capabilities and the actual device result.</p>
+<p><strong>Exit:</strong> a real note and saved path survive restart; offline saves survive restart and sync once after reconnection; one note can appear in two views without duplication; the headset can select and read a memory comfortably and reach the service.</p>
+</div></div><div class="roadmap-step"><span class="step-marker" aria-hidden="true">01</span><div><h4 id="section-15-step-1-evidence-backed-spatial-librarian-the-mvp">Step 1: evidence-backed spatial librarian — the MVP</h4>
+<p>Support pasted/Markdown notes, explicit scoped preferences, project context packages for two projects, generated navigation manifests, keyword/tag/graph retrieval, a read ledger, and a single assistant interaction. Add semantic search only if the initial retrieval set needs it. Present cited answers and related nodes through Explore; save and reopen annotated constellations. Add minimal source correction invalidation from the start. Validate shared-source identity and cross-project discovery before adding delegated project workers.</p>
+<p><strong>Exit:</strong> “Find my earlier thoughts on this” retrieves real sources, opens supporting passages, reports coverage honestly, preserves homes, and saves the reasoning path. Test an honest empty result, an unavailable source, and an ambiguous “put this there.” Network/model failure preserves browsing of cached content and durable local saving; uncompleted AI work remains visibly pending or failed.</p>
+</div></div><div class="roadmap-step"><span class="step-marker" aria-hidden="true">02</span><div><h4 id="section-15-step-2-capture-and-thinking-workflows">Step 2: capture and thinking workflows</h4>
+<p>Add source-backed session summaries, the topic starter, thinking partner and optional critic, candidate relations, a memory reconciliation workflow, and a proposal inbox. Add a user-context inspector, correction controls, and project-local feedback. Evaluate on-demand project specialists against direct scoped retrieval. Add audio/transcript capture as supported by the selected device and deployment.</p>
+<p><strong>Exit:</strong> a captured conversation produces a useful draft with traceable decisions and unresolved questions; a thinking session distinguishes user conclusions from generated suggestions; rejected proposals do not recur immediately.</p>
+</div></div><div class="roadmap-step"><span class="step-marker" aria-hidden="true">03</span><div><h4 id="section-15-step-3-scheduled-consolidation">Step 3: scheduled consolidation</h4>
+<p>Add event checkpoints, daily logs/reviews, weekly and monthly synthesis, missing-period reporting, and a walkable review trail. Start with manual “review today” before scheduling the same workflow.</p>
+<p><strong>Exit:</strong> retries create no duplicate entries; an interrupted job resumes; major review claims lead to originals; missing days and later corrections remain visible. A closed headset has defined scheduling behavior.</p>
+</div></div><div class="roadmap-step"><span class="step-marker" aria-hidden="true">04</span><div><h4 id="section-15-step-4-controlled-maintenance-and-personalization">Step 4: controlled maintenance and personalization</h4>
+<p>Add rename/merge/convention migrations, dependency-aware propagation, evidence-backed preference hypotheses, evaluated ranking/playbook adaptation, editable skills, and an evaluated fast decision provider if useful. Permit narrowly scoped automatic actions based on demonstrated acceptance and error rates. Essential explicit preferences and corrections are already supported in earlier steps.</p>
+<p><strong>Exit:</strong> a batch change is previewable, conflict-checked, reversible, and reflected consistently in search, navigation, sources, and current derivatives. Historical snapshots remain interpretable.</p>
+<p>Defer broad autonomous organization, always-on environmental recording, automatic skill activation, multi-user graph editing, and many independent agent processes until the core loop is useful and reliable.</p>
+</div></div></div></div>
+    </article><article class="plan-section" id="section-16">
+      <h3 class="section-title">How we know it works<a class="permalink" href="#section-16" aria-label="Link to How we know it works">#</a></h3>
+      <div class="prose"><p>Build a small, representative evaluation palace containing aliases, near-duplicate notes, negations, changed opinions, dated decisions, incomplete transcripts, multi-topic memberships, and restricted sources. Keep expected evidence and acceptable abstentions with each test case.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Quality</th>
+<th>Evidence to collect</th>
+</tr>
+</thead>
+<tbody>
+<tr><td data-label="Quality">Retrieval</td><td data-label="Evidence to collect">Known sources found, irrelevant results, cross-topic recall, and whether citations actually support the answer.</td></tr>
+<tr><td data-label="Quality">Coverage honesty</td><td data-label="Evidence to collect">Exact tool-derived counts; incomplete jobs and excerpt reads never reported as full review.</td></tr>
+<tr><td data-label="Quality">Knowledge integrity</td><td data-label="Evidence to collect">AI hypotheses remain labeled; two summaries of one source do not count as two sources; correction/deletion invalidates affected derivatives.</td></tr>
+<tr><td data-label="Quality">Spatial value</td><td data-label="Evidence to collect">Time to return to a remembered source, landmark stability, ease of inspecting evidence, and usefulness of a saved path compared with a simple result list.</td></tr>
+<tr><td data-label="Quality">Automation quality</td><td data-label="Evidence to collect">Accepted/edited/rejected proposals, duplicate log entries, repeated dismissed suggestions, successful resume and rollback.</td></tr>
+<tr><td data-label="Quality">Runtime quality</td><td data-label="Evidence to collect">Measured response latency, job cost, cancellation behavior, and headset frame-time/comfort on the selected hardware.</td></tr>
+<tr><td data-label="Quality">Scope enforcement</td><td data-label="Evidence to collect">No restricted source returned through a summary, embedding, profile update, or generated answer; no stale proposal overwrites a newer edit.</td></tr>
+<tr><td data-label="Quality">Personalization</td><td data-label="Evidence to collect">Helpful adaptation on future held-out interactions, correction success, temporary-preference expiry, cross-project appropriateness, and factual candor.</td></tr>
+<tr><td data-label="Quality">Project specialization</td><td data-label="Evidence to collect">Compare direct retrieval, project-context loading, and delegation with equivalent tools and budgets; measure cross-project misses, duplicate work, and coordination cost.</td></tr>
+</tbody>
+</table></div>
+<p>Evaluate learning chronologically: learn from earlier interactions and test on later interactions without exposing their answers during memory construction. Include “concise for daily reviews, detailed for research,” a temporary constraint that expires, a changed preference, a false candidate inference, a friend's preference in quoted text, a user claim contradicted by evidence, a source shared across projects, an archived project, and a revoked source. Compare explicit-profile-only, relevant-example retrieval, and candidate-pattern adaptation. Optimize for task success, reduced correction burden, and user control; engagement and acceptance rates alone reward the wrong behavior.</p>
+<p>Hard invariants should include stable identity, source-linked generated claims, version-checked commits, explicit partial coverage, and preserved pinned homes. Measure numerical targets after a representative corpus and headset are selected; do not assume vendor benchmarks describe this workload.</p>
+<p>Recommended defaults for the remaining decisions:</p>
+<ol>
+<li><strong>Primary job:</strong> recovering and developing the user's own ideas. External discovery is a separate, labeled mode.</li>
+<li><strong>Experience:</strong> one librarian, five user-facing modes, specialist workflows behind it.</li>
+<li><strong>Memory model:</strong> canonical records plus multiple spatial appearances and temporary relevance lenses.</li>
+<li><strong>Autonomy:</strong> automatic indexing and requested captures; drafts/proposals for interpretation and organization.</li>
+<li><strong>Storage:</strong> a private single-user service first, with portable Markdown/JSON/asset export. Define a cloud or desktop deployment before headset integration.</li>
+<li><strong>Device:</strong> select one real headset for the first slice; do not assume eye tracking, passthrough capture, or a native filesystem exists on every target.</li>
+<li><strong>First demo:</strong> create a real note → ask a grounded question → inspect sources in space → select a connection → save a constellation → restart and reopen it.</li>
+</ol>
+<p>A later product branch is deliberate recall practice: ask the user to reconstruct a relationship or route before revealing the saved path. Decide whether strengthening unaided recall is a separate goal; it requires different interaction design and evaluation from helping someone retrieve and develop ideas.</p>
+<p>The first implementation backlog should follow that final loop. It establishes the memory substrate, evidence contract, spatial interaction, and useful AI behavior before adding broad background agency.</p>
+</div>
+    </article>
+        </section>
+      <footer class="footer"><span>Mind Palace · AI agent system plan · Reading edition</span><a href="#main">Back to the beginning ↑</a></footer>
+    </main>
+  </div>
+  <script>
+    (()=>{
+      const root=document.documentElement;
+      const theme=document.getElementById('theme-toggle');
+      let savedTheme='light';
+      try{savedTheme=localStorage.getItem('mind-palace-plan-theme')||'light'}catch{}
+      function setTheme(value){root.dataset.theme=value;const dark=value==='dark';theme.textContent=dark?'Day reading':'Night reading';theme.setAttribute('aria-pressed',String(dark));theme.setAttribute('aria-label',dark?'Switch to light appearance':'Switch to dark appearance');try{localStorage.setItem('mind-palace-plan-theme',value)}catch{}}
+      setTheme(savedTheme==='dark'?'dark':'light');
+      theme.addEventListener('click',()=>setTheme(root.dataset.theme==='dark'?'light':'dark'));
+      const chapters=[...document.querySelectorAll('.chapter')];
+      const links=[...document.querySelectorAll('.chapter-link')];
+      const progress=document.getElementById('progress');
+      let scheduled=false;
+      function update(){const total=root.scrollHeight-innerHeight;progress.style.width=(total>0?Math.min(100,scrollY/total*100):0)+'%';let active='';for(const chapter of chapters){if(chapter.getBoundingClientRect().top<innerHeight*.35)active=chapter.id}for(const link of links){const selected=link.dataset.chapter===active;link.classList.toggle('active',selected);if(selected)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current')}scheduled=false}
+      addEventListener('scroll',()=>{if(!scheduled){scheduled=true;requestAnimationFrame(update)}},{passive:true});addEventListener('resize',update);update();
+      document.querySelectorAll('.mobile-contents a').forEach(a=>a.addEventListener('click',()=>{document.querySelector('.mobile-contents').open=false}));
+      let expandedForPrint=[];
+      addEventListener('beforeprint',()=>{expandedForPrint=[...document.querySelectorAll('details:not([open])')];expandedForPrint.forEach(d=>d.open=true)});
+      addEventListener('afterprint',()=>{expandedForPrint.forEach(d=>d.open=false);expandedForPrint=[]});
+      document.getElementById('print').addEventListener('click',()=>window.print());
+    })();
+  </script>
+</body>
+</html>
