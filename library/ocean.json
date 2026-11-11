@@ -1,0 +1,237 @@
+{
+  "version": 1,
+  "tags": [
+    {"id": "hitchcock", "name": "Alfred Hitchcock", "kind": "people", "films": [22, 25, 27, 29, 33]},
+    {"id": "spielberg", "name": "Steven Spielberg", "kind": "people", "films": [44, 48, 54, 56, 66, 67, 72]},
+    {"id": "kubrick", "name": "Stanley Kubrick", "kind": "people", "films": [34, 38, 53]},
+    {"id": "scorsese", "name": "Martin Scorsese", "kind": "people", "films": [46, 92, 94]},
+    {"id": "capra", "name": "Frank Capra", "kind": "people", "films": [4, 6, 15]},
+    {"id": "wilder", "name": "Billy Wilder", "kind": "people", "films": [13, 28]},
+    {"id": "huston", "name": "John Huston", "kind": "people", "films": [11, 17]},
+    {"id": "tarantino", "name": "Quentin Tarantino", "kind": "people", "films": [69, 82, 88]},
+    {"id": "fincher", "name": "David Fincher", "kind": "people", "films": [70, 75, 91]},
+    {"id": "coens", "name": "The Coen brothers", "kind": "people", "films": [71, 85]},
+    {"id": "nolan", "name": "Christopher Nolan", "kind": "people", "films": [87, 90]},
+    {"id": "scott", "name": "Ridley Scott", "kind": "people", "films": [51, 55, 78]},
+    {"id": "coppola", "name": "Francis Ford Coppola", "kind": "people", "films": [41, 52]},
+    {"id": "kazan", "name": "Elia Kazan", "kind": "people", "films": [18, 21]},
+    {"id": "stewart", "name": "James Stewart", "kind": "people", "films": [6, 9, 15, 22, 25]},
+    {"id": "bogart", "name": "Humphrey Bogart", "kind": "people", "films": [11, 12, 17]},
+    {"id": "brando", "name": "Marlon Brando", "kind": "people", "films": [18, 21, 41, 52]},
+    {"id": "grant", "name": "Cary Grant", "kind": "people", "films": [8, 9, 27]},
+    {"id": "herrmann", "name": "Bernard Herrmann score", "kind": "people", "films": [19, 25, 27, 29, 46]},
+    {"id": "williams", "name": "John Williams score", "kind": "people", "films": [44, 48, 50, 54, 56, 66, 67, 72]},
+
+    {"id": "dolly-zoom", "name": "Dolly zoom", "kind": "craft", "films": [25, 44, 80]},
+    {"id": "pov", "name": "Point-of-view shot", "kind": "craft", "films": [22, 25, 44, 65, 99]},
+    {"id": "long-take", "name": "Long take", "kind": "craft", "films": [20, 84, 97]},
+    {"id": "steadicam", "name": "Steadicam", "kind": "craft", "films": [45, 53]},
+    {"id": "mirror", "name": "Mirror shot", "kind": "craft", "films": [2, 46, 89]},
+    {"id": "editing", "name": "The cut is the event", "kind": "craft", "films": [29, 32, 37, 38, 45]},
+    {"id": "creature", "name": "A creature built for real", "kind": "craft", "films": [1, 3, 44, 51, 56, 58, 66]},
+    {"id": "wire-work", "name": "Bodies off the ground", "kind": "craft", "films": [50, 76, 77, 82, 90]},
+    {"id": "one-color", "name": "One color carries it", "kind": "craft", "films": [7, 25, 67, 79, 97]},
+    {"id": "chase", "name": "The chase", "kind": "craft", "films": [26, 27, 54, 56, 93, 98]},
+    {"id": "to-camera", "name": "Talking to us", "kind": "craft", "films": [47, 60, 65, 75, 94]},
+
+    {"id": "watching", "name": "Watching unseen", "kind": "story", "films": [22, 25, 29, 65, 73, 74, 95, 99]},
+    {"id": "double", "name": "The double", "kind": "story", "films": [2, 25, 28, 29, 75, 89]},
+    {"id": "standoff", "name": "The standoff", "kind": "story", "films": [16, 17, 24, 37, 63, 80, 85, 88]},
+    {"id": "dance", "name": "Dancing anyway", "kind": "story", "films": [20, 31, 49, 62, 69, 89, 95, 97]},
+    {"id": "song", "name": "A song takes over", "kind": "story", "films": [30, 36, 48, 52, 59, 98]},
+    {"id": "machines", "name": "Machines that look back", "kind": "story", "films": [19, 38, 55, 76, 95]},
+    {"id": "contact", "name": "First contact", "kind": "story", "films": [3, 19, 48, 56, 96]},
+    {"id": "monster", "name": "The monster arrives", "kind": "story", "films": [0, 1, 3, 33, 39, 42, 51, 53, 66]},
+    {"id": "revenge", "name": "Revenge", "kind": "story", "films": [57, 63, 70, 78, 82]},
+    {"id": "con", "name": "The pitch and the lie", "kind": "story", "films": [11, 13, 34, 43, 71, 94]},
+    {"id": "unreal", "name": "The world is not what it seems", "kind": "story", "films": [7, 40, 73, 76, 83, 90, 99]},
+    {"id": "goodbye", "name": "The goodbye", "kind": "story", "films": [5, 12, 55, 80, 83]},
+    {"id": "unsaid", "name": "Said and can't be unsaid", "kind": "story", "films": [14, 18, 21, 23, 43, 86, 91]},
+    {"id": "one-voice", "name": "One voice against the room", "kind": "story", "films": [6, 10, 24, 34, 78]},
+    {"id": "war", "name": "War", "kind": "story", "films": [12, 32, 52, 67, 72, 88]},
+    {"id": "wonder", "name": "Wonder", "kind": "story", "films": [7, 15, 48, 50, 56, 79, 92]},
+    {"id": "fast-talk", "name": "Fast talk", "kind": "story", "films": [4, 8, 9, 13, 28, 30, 47]},
+    {"id": "power", "name": "Power and crime", "kind": "story", "films": [41, 57, 69, 81, 87]},
+    {"id": "hero", "name": "The hero's moment", "kind": "story", "films": [26, 35, 45, 54, 61, 64, 68, 93]}
+  ],
+  "notes": [
+    {
+      "id": "watched-brief", "kicker": "Brief", "tone": "note",
+      "headline": "A look for a story about being watched",
+      "highlight": "The watcher is always in the frame too",
+      "summary": "Six films where the camera turns you into the one who watches.",
+      "tags": ["watching", "pov"],
+      "links": [
+        {"to": "film:22", "why": "The lens as a character"},
+        {"to": "film:29", "why": "The peephole"},
+        {"to": "film:73", "why": "Watched by everyone"},
+        {"to": "film:99", "why": "Watched from inside"},
+        {"to": "film:95", "why": "Glass walls"},
+        {"to": "note:watched-pattern", "why": "Pattern"}
+      ]
+    },
+    {
+      "id": "watched-pattern", "kicker": "Pattern", "tone": "note",
+      "headline": "Each one shows the watcher before the watched",
+      "highlight": "A frame inside the frame",
+      "summary": "A window, a peephole, a monitor, a pane of glass. The look you want starts with what the watcher looks through.",
+      "diagram": "frames",
+      "tags": ["watching"],
+      "links": [
+        {"to": "film:25", "why": "Following from a distance"},
+        {"to": "film:74", "why": "A camcorder as a shield"},
+        {"to": "film:65", "why": "Glass between them"},
+        {"to": "note:watched-question", "why": "Question"}
+      ]
+    },
+    {
+      "id": "watched-question", "kicker": "Question", "tone": "question",
+      "headline": "Who is watching the watcher?",
+      "highlight": "The audience",
+      "summary": "Every one of these scenes ends by catching you looking. That is the feeling to design for.",
+      "tags": ["to-camera"],
+      "links": [
+        {"to": "film:46", "why": "He performs for a mirror"},
+        {"to": "film:60", "why": "He knows you're there"}
+      ]
+    },
+
+    {
+      "id": "dz-answer", "kicker": "Answer", "tone": "note",
+      "headline": "The face stays put while the world stretches",
+      "highlight": "Your eyes say you moved. Your body says you didn't.",
+      "summary": "The camera travels one way while the lens zooms the other, at a matched speed. The subject holds its size and the background rushes.",
+      "diagram": "dollyZoom",
+      "tags": ["dolly-zoom"],
+      "links": [
+        {"to": "note:dz-how", "why": "How it's made"},
+        {"to": "note:dz-who", "why": "Who found it"},
+        {"to": "film:25", "why": "Where it began"},
+        {"to": "film:44", "why": "The famous one"},
+        {"to": "note:dz-dread", "why": "Question"},
+        {"to": "note:dz-else", "why": "Question"}
+      ]
+    },
+    {
+      "id": "dz-how", "kicker": "How it's made", "tone": "note",
+      "headline": "Move the camera, zoom against it, match the speed",
+      "highlight": "Two moves that cancel on the subject only",
+      "summary": "On a track, roll away while zooming in, or roll in while zooming out. Whatever is at the focus distance holds still. Everything behind it changes size.",
+      "diagram": "rig",
+      "tags": ["dolly-zoom"],
+      "links": [
+        {"to": "film:80", "why": "The road pulls toward them"},
+        {"to": "note:dz-else", "why": "Question"}
+      ]
+    },
+    {
+      "id": "dz-who", "kicker": "Who found it", "tone": "note",
+      "headline": "Invented for Vertigo, 1958",
+      "highlight": "Irmin Roberts, second-unit cameraman",
+      "summary": "Hitchcock wanted the feeling of fainting at a height. Roberts worked out the move, and went uncredited.",
+      "tags": ["hitchcock"],
+      "links": [
+        {"to": "film:25", "why": "The bell tower stairs"},
+        {"to": "film:29", "why": "Hitchcock, two years on"}
+      ]
+    },
+    {
+      "id": "dz-dread", "kicker": "Question", "tone": "question",
+      "headline": "Why dread and not wonder?",
+      "highlight": "Nothing moves, and everything changes",
+      "summary": "Wonder takes you somewhere. Here you are pinned in place while the room gives way, which is how panic feels.",
+      "tags": [],
+      "links": [
+        {"to": "film:44", "why": "A realization, on a beach"},
+        {"to": "film:80", "why": "Danger felt before it's seen"},
+        {"to": "note:dz-opposite", "why": "Question"}
+      ]
+    },
+    {
+      "id": "dz-opposite", "kicker": "Question", "tone": "question",
+      "headline": "What does the opposite feel like?",
+      "highlight": "A push-in: the world holds, the face grows",
+      "summary": "Moving closer with no zoom keeps space honest. It reads as attention or intimacy, never vertigo.",
+      "tags": [],
+      "links": [
+        {"to": "film:65", "why": "Closer, until it's too close"},
+        {"to": "film:12", "why": "Closer, to say goodbye"}
+      ]
+    },
+    {
+      "id": "dz-else", "kicker": "Question", "tone": "question",
+      "headline": "What else bends space in a shot?",
+      "highlight": "The lens you pick is a point of view",
+      "summary": "A long lens presses distance flat. A wide lens up close makes rooms swallow people.",
+      "diagram": "lenses",
+      "tags": [],
+      "links": [
+        {"to": "film:22", "why": "Long lens: distance pressed flat"},
+        {"to": "film:53", "why": "Wide lens: corridors that pull"},
+        {"to": "film:84", "why": "No cut: nowhere to hide"}
+      ]
+    },
+
+    {
+      "id": "dance-brief", "kicker": "Brief", "tone": "note",
+      "headline": "People who dance when they shouldn't",
+      "highlight": "The dance says what the scene can't",
+      "summary": "Dancing as defiance, as escape, or as a warning.",
+      "tags": ["dance", "song"],
+      "links": [
+        {"to": "film:20", "why": "Joy against the weather"},
+        {"to": "film:69", "why": "Cool, as a dare"},
+        {"to": "film:95", "why": "A dance to dodge a question"},
+        {"to": "film:89", "why": "Perfection turning on her"},
+        {"to": "film:49", "why": "The floor clears"},
+        {"to": "note:dance-pattern", "why": "Pattern"}
+      ]
+    },
+    {
+      "id": "dance-pattern", "kicker": "Pattern", "tone": "note",
+      "headline": "The room decides what the dance means",
+      "highlight": "Same steps, different danger",
+      "summary": "In the rain it's joy. In a diner it's a dare. In a locked house it's a threat. Pick the room first.",
+      "tags": ["dance"],
+      "links": [
+        {"to": "film:62", "why": "A hall that isn't theirs"},
+        {"to": "film:31", "why": "A rooftop argument, sung"},
+        {"to": "film:97", "why": "A traffic jam"}
+      ]
+    },
+
+    {
+      "id": "standoff-note", "kicker": "Pattern", "tone": "note",
+      "headline": "A standoff is a scene about waiting",
+      "highlight": "The longer nobody moves, the louder it gets",
+      "summary": "Faces, hands, eyes. The cut does the shooting long before a gun does.",
+      "tags": ["standoff", "editing"],
+      "links": [
+        {"to": "film:37", "why": "Three men, a graveyard"},
+        {"to": "film:85", "why": "A coin on a counter"},
+        {"to": "film:24", "why": "Twelve men, one knife"}
+      ]
+    },
+    {
+      "id": "machines-note", "kicker": "Pattern", "tone": "note",
+      "headline": "The machine is scariest when it is polite",
+      "highlight": "A calm voice, an unblinking eye",
+      "summary": "From Gort to Ava, the films give the machine stillness and let the people fidget.",
+      "tags": ["machines"],
+      "links": [
+        {"to": "film:38", "why": "A bone becomes a satellite"},
+        {"to": "film:95", "why": "She watches him dance"},
+        {"to": "film:55", "why": "A machine mourns"}
+      ]
+    }
+  ],
+  "briefs": [
+    {"id": "watched", "line": "A look for a story about being watched", "title": "Being watched", "root": "note:watched-brief"},
+    {"id": "dolly", "line": "Why does a dolly zoom feel like dread?", "title": "The dolly zoom", "root": "note:dz-answer"},
+    {"id": "dance", "line": "People who dance when they shouldn't", "title": "Dancing anyway", "root": "note:dance-brief"}
+  ],
+  "saved": [
+    {"title": "Standoffs", "maker": "you", "steps": ["tag:standoff", "film:37", "tag:editing", "film:45"]},
+    {"title": "Machines that look back", "maker": "gardener", "steps": ["note:machines-note", "film:38", "tag:kubrick", "film:53"]}
+  ]
+}
