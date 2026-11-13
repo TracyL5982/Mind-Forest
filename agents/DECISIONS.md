@@ -38,3 +38,7 @@ Instead: stream microphone audio to the realtime endpoint for partials on every 
 ## 10. Only the first three cards of a dump are scouted at once
 Scouting every card of a large dump would cost a search each. The first three get picks straight away. Any other card gets its picks the first time the user opens it.
 Instead: raise `EAGER_SCOUTS` in `src/core/pipeline.ts`.
+
+## 11. Every schema goes to the model in strict form
+Measured on the live model: the Organizer's reply schema had optional keys and open objects, and the model answered a rename with dozens of invented keys ("title Lima", "title Swagger", …) and no title. The rename failed 4 times out of 4. The model client now closes every object, requires every key, and makes optional keys nullable before sending (`strictSchema` in `src/node/model-meta.ts`), then drops the nulls from the reply. The same request then succeeded 4 times out of 4.
+This is fixed at the one place requests leave, so no role can reintroduce it.

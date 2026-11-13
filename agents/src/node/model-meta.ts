@@ -50,14 +50,15 @@ export class MetaModel implements ModelClient {
         format: {
           type: 'json_schema',
           name: req.role.replace(/[^a-zA-Z0-9_-]/g, '_'),
-          schema: z.toJSONSchema(req.schema, { io: 'input' }),
+          schema: strictSchema(z.toJSONSchema(req.schema, { io: 'input' })),
+          strict: true,
         },
       },
     };
     const output = await this.responses('json', req.role, body);
     const text = finalText(output);
     if (!text) throw new Error(`${req.role}: the model returned no text`);
-    return req.schema.parse(JSON.parse(text));
+    return req.schema.parse(dropNulls(JSON.parse(text)));
   }
 
   async search(req: { role: string; query: string; max?: number }): Promise<WebResult[]> {
@@ -73,7 +74,7 @@ export class MetaModel implements ModelClient {
       tools: [{ type: 'web_search' }],
       include: ['web_search_call.results'],
       reasoning: { effort: 'low' },
-      text: { format: { type: 'json_schema', name: 'search_results', schema: z.toJSONSchema(SearchReply) } },
+      text: { format: { type: 'json_schema', name: 'search_results', schema: strictSchema(z.toJSONSchema(SearchReply)), strict: true } },
     });
     // The API's own hits carry no snippet, so the model writes one. Its URLs are only trusted when the search really returned them.
     const found = new Map<string, WebResult>();
@@ -187,6 +188,56 @@ export class MetaModel implements ModelClient {
     this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: false });
     throw new Error(`${role}: model request failed: ${lastError}`);
   }
+}
+
+type Json = Record<string, unknown>;
+
+/**
+ * Rewrites a JSON Schema into the API's strict subset: every object closed, every key required, optional keys nullable.
+ * Measured on the live model: with an open object and optional keys, constrained decoding invents dozens of junk keys
+ * and leaves the real ones out. With the strict form it does not.
+ */
+export function strictSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(strictSchema);
+  if (!schema || typeof schema !== 'object') return schema;
+  const node: Json = { ...(schema as Json) };
+  delete node.$schema;
+  for (const key of ['items', 'anyOf', 'prefixItems']) if (key in node) node[key] = strictSchema(node[key]);
+  for (const key of ['$defs', 'definitions']) {
+    if (node[key] && typeof node[key] === 'object') {
+      node[key] = Object.fromEntries(Object.entries(node[key] as Json).map(([k, v]) => [k, strictSchema(v)]));
+    }
+  }
+  if (node.properties && typeof node.properties === 'object') {
+    const required = new Set(Array.isArray(node.required) ? (node.required as string[]) : []);
+    node.properties = Object.fromEntries(
+      Object.entries(node.properties as Json).map(([k, v]) => [k, required.has(k) ? strictSchema(v) : nullable(strictSchema(v))]),
+    );
+    node.required = Object.keys(node.properties as Json);
+    node.additionalProperties = false;
+  } else if (node.type === 'object' && node.additionalProperties && typeof node.additionalProperties === 'object') {
+    node.additionalProperties = strictSchema(node.additionalProperties);
+  }
+  return node;
+}
+
+function nullable(schema: unknown): unknown {
+  const node = schema as Json;
+  if (Array.isArray(node.type)) return node.type.includes('null') ? node : { ...node, type: [...node.type, 'null'] };
+  if (typeof node.type === 'string') return node.type === 'null' ? node : { ...node, type: [node.type, 'null'] };
+  if (Array.isArray(node.anyOf)) return { ...node, anyOf: [...node.anyOf, { type: 'null' }] };
+  return { anyOf: [node, { type: 'null' }] };
+}
+
+/** Optional keys come back as null under the strict schema. Zod's optional wants them absent. */
+function dropNulls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(dropNulls);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value as Json)
+      .filter(([, v]) => v !== null)
+      .map(([k, v]) => [k, dropNulls(v)]),
+  );
 }
 
 const SearchReply = z.object({

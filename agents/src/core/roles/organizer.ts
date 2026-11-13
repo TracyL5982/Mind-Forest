@@ -34,7 +34,7 @@ Return "operations", which are applied in order, and "summary".
 Each operation has "op" and only the fields that op needs. Leave the other fields out.
 - move: put nodeId, with everything under it, under targetNodeId.
 - delete: with nodeId, delete that node and everything under it. With treeId and no nodeId, delete the whole tree.
-- rename: with nodeId, set that item's title. With treeId and no nodeId, set the tree's title.
+- rename: put the new name in "title". With nodeId, it sets that item's title. With treeId and no nodeId, it sets the tree's title. To rename a tree, always give its treeId from the "Tree" line.
 - edit: change the title, the text, or both, of the item at nodeId.
 - create: add a new text note under targetNodeId, from title and text. Use "why" for one short line on why it sits there.
 - newTree: with nodeId, move that node and everything under it out into a tree of its own, titled title. Without nodeId, start a new tree titled title whose root is a new note with the given text.
@@ -106,7 +106,8 @@ class Plan {
   }
 
   private rename(op: OrganizerOp): string | void {
-    const title = op.title?.trim();
+    // The live model sometimes puts the new name in "text".
+    const title = op.title?.trim() || op.text?.trim();
     if (!title) return 'it has no title';
     if (op.nodeId) {
       const node = this.inScope(op.nodeId);
