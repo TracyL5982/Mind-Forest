@@ -148,7 +148,7 @@ export class MetaModel implements ModelClient {
     });
     this.opts.onCall?.({ kind: 'transcribe', role: 'voice', ms: Date.now() - started, ok: res.ok });
     if (!res.ok) throw new Error(`transcribe failed: ${res.status} ${(await res.text()).slice(0, 300)}`);
-    return transcriptOf(await res.json());
+    return transcriptOf(await res.json()).replace(/([.?!])\1+$/, '$1').trim();
   }
 
   private async responses(kind: string, role: string, body: unknown): Promise<OutputItem[]> {

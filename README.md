@@ -3,6 +3,10 @@
 A browser prototype that answers "why a spatial interface?" for Mind Palace Next Gen.
 The design notes and spec are in [mind-palace-next-gen.md](mind-palace-next-gen.md).
 
+## The agent system
+
+The agents that run the mindstorm live in [agents/](agents/README.md): a service, a web client, and an adapter for the Ocean app. Start there to run it.
+
 ## AI agent system plan
 
 Read the [HTML reading edition](docs/agent-system-plan.html) for a navigable overview,
