@@ -22,3 +22,19 @@ The plan listed it. A change set already applies several commands atomically, so
 
 ## 6. Composites are `Group` records, set with `setGroup`
 The plan folded them into `setView`. A composite spans several nodes, so it needs its own record with members and an anchor.
+
+## 7. Web search is held to one search and no page reading
+Measured in the first live end-to-end run: left free, the model opened every page it found. One search took 50 s on average and the whole run used 8.4 million tokens across 23 searches, roughly $10 of API spend at list price. With "run exactly one search, do not open any page" in the prompt, the same search takes about 14 s and about 4,000 tokens (measured), and still returns a real URL, title and snippet per hit.
+Instead: let it read pages again for richer summaries, at about 90 times the cost and four times the wait.
+
+## 8. "Muse code" is the Muse model writing a code sketch
+Muse Code is a terminal coding agent with no request API in the docs. The Scout's code tool asks `muse-spark-1.3` for one small self-contained sketch and files it as a `code` item.
+Instead: shell out to the Muse Code CLI on the host, if you want real multi-file output.
+
+## 9. Speech is transcribed by the client, with a service fallback
+The web client uses the browser's speech recognition for live partial transcripts. Where that is missing it records audio and posts it to `/api/transcribe`, which calls `muse-voice-transcribe-1.0`. The realtime transcription socket in the Meta API is not used yet.
+Instead: stream microphone audio to the realtime endpoint for partials on every device.
+
+## 10. Only the first three cards of a dump are scouted at once
+Scouting every card of a large dump would cost a search each. The first three get picks straight away. Any other card gets its picks the first time the user opens it.
+Instead: raise `EAGER_SCOUTS` in `src/core/pipeline.ts`.

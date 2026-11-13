@@ -9,6 +9,8 @@ export interface MetaModelOptions {
   voiceModel?: string;
   fetch?: typeof fetch;
   /** Called after every request, for the run log and the cost tally. */
+  /** Total tokens this client may spend before it refuses further requests. Guards against a runaway loop. */
+  tokenBudget?: number;
   onCall?: (call: { kind: string; role: string; ms: number; ok: boolean; tokens?: number }) => void;
 }
 
@@ -24,6 +26,8 @@ export class MetaModel implements ModelClient {
   private readonly base: string;
   private readonly model: string;
   private readonly send: typeof fetch;
+  /** Tokens spent so far by this client. */
+  spent = 0;
 
   constructor(private readonly opts: MetaModelOptions) {
     this.base = (opts.baseUrl ?? 'https://api.meta.ai/v1').replace(/\/+$/, '');
@@ -63,7 +67,9 @@ export class MetaModel implements ModelClient {
       input:
         `Search the web for: ${req.query}\n` +
         `Return the ${max} most useful and varied results. For each give the page's exact URL, its title, ` +
-        `and a snippet of one or two sentences saying what the page itself says about the query.`,
+        `and a snippet of one or two sentences.\n` +
+        // Left free, the model opens every page it finds: measured at 50 s and about 350,000 tokens a search.
+        `Run exactly one search. Do not open any page. Write each snippet only from what the search result itself shows.`,
       tools: [{ type: 'web_search' }],
       include: ['web_search_call.results'],
       reasoning: { effort: 'low' },
@@ -151,6 +157,8 @@ export class MetaModel implements ModelClient {
   }
 
   private async post(kind: string, role: string, path: string, body: unknown): Promise<unknown> {
+    const budget = this.opts.tokenBudget ?? 5_000_000;
+    if (this.spent >= budget) throw new Error(`${role}: token budget of ${budget} is used up; restart the service to reset it`);
     const started = Date.now();
     let lastError = '';
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -169,6 +177,7 @@ export class MetaModel implements ModelClient {
       }
       if (res.ok) {
         const json = (await res.json()) as { usage?: { total_tokens?: number } };
+        this.spent += json.usage?.total_tokens ?? 0;
         this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: true, tokens: json.usage?.total_tokens });
         return json;
       }
