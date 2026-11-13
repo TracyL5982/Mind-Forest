@@ -8,6 +8,8 @@ export interface JsonRequest<T> {
   schema: z.ZodType<T>;
   /** Public URLs or data: URLs the model should look at. */
   images?: string[];
+  /** Public URLs or data: URLs of video the model should watch. */
+  videos?: string[];
   effort?: 'low' | 'medium' | 'high';
 }
 

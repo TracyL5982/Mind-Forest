@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.13" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "start": "node --no-warnings --import tsx src/node/main.ts",
     "test": "node --no-warnings --import tsx --test 'test/**/*.test.ts' 'src/**/*.test.ts'",
     "typecheck": "tsc --noEmit",
-    "scenario": "node --no-warnings --import tsx scripts/scenario.ts"
+    "scenario": "node --no-warnings --import tsx scripts/scenario.ts",
+    "dev:fake": "node --no-warnings --import tsx src/node/main.ts --fake"
   },
   "dependencies": {
     "ws": "^8.23.0",

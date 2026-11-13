@@ -1,0 +1,126 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test } from 'node:test';
+import { WebSocket } from 'ws';
+import { FakeModel } from '../src/fake/model.ts';
+import { fakeRoles } from '../src/fake/roles.ts';
+import { startServer, type Running } from '../src/node/server.ts';
+
+interface Msg {
+  t: string;
+  [k: string]: unknown;
+}
+
+async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-'))): Promise<{ run: Running; dataDir: string }> {
+  const run = await startServer({ port: 0, host: '127.0.0.1', dataDir, clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret' });
+  return { run, dataDir };
+}
+
+function connect(run: Running, token = 'secret'): Promise<{ ws: WebSocket; seen: Msg[]; until: (pred: (m: Msg) => boolean) => Promise<Msg> }> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`${run.url.replace('http', 'ws')}/ws?token=${token}`);
+    const seen: Msg[] = [];
+    const waiters: { pred: (m: Msg) => boolean; done: (m: Msg) => void }[] = [];
+    ws.on('message', (raw) => {
+      const m = JSON.parse(String(raw)) as Msg;
+      seen.push(m);
+      for (const w of [...waiters]) if (w.pred(m)) (waiters.splice(waiters.indexOf(w), 1), w.done(m));
+    });
+    const until = (pred: (m: Msg) => boolean) =>
+      new Promise<Msg>((done) => {
+        const hit = seen.find(pred);
+        if (hit) done(hit);
+        else waiters.push({ pred, done });
+      });
+    ws.on('open', () => resolve({ ws, seen, until }));
+    ws.on('error', reject);
+  });
+}
+
+test('a wrong token is refused on the socket and on the API', async () => {
+  const { run } = await boot();
+  await assert.rejects(connect(run, 'wrong'));
+  assert.equal((await fetch(`${run.url}/api/state`)).status, 401);
+  assert.equal((await fetch(`${run.url}/api/health`)).status, 200);
+  await run.close();
+});
+
+test('a dump becomes a tree with dashed picks, a kept pick turns solid, and it all survives a restart', async () => {
+  const { run, dataDir } = await boot();
+  const c = await connect(run);
+  const hello = await c.until((m) => m.t === 'hello');
+  assert.equal((hello.snapshot as { nodes: unknown[] }).nodes.length, 0);
+
+  c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'The dolly zoom makes dread out of geometry' }] }));
+  await run.pipeline.idle();
+  await c.until((m) => m.t === 'activity' && (m.activity as { role: string; state: string }).role === 'scout' && (m.activity as { state: string }).state === 'done');
+  await run.pipeline.idle();
+
+  assert.equal(run.mind.trees.size, 1);
+  const root = [...run.mind.trees.values()][0]!.rootId;
+  const picks = run.mind.picks(root);
+  assert.equal(picks.length, 4);
+  assert.equal(picks.find((p) => p.view.component === 'chart')?.view.by, 'renderer', 'the Renderer upgraded the default view');
+
+  c.ws.send(JSON.stringify({ t: 'keep', nodeIds: [picks[0]!.id] }));
+  await c.until((m) => m.t === 'change' && (m.set as { label: string }).label === 'Keep a pick');
+  assert.equal(run.mind.node(picks[0]!.id).status, 'kept');
+
+  c.ws.send(JSON.stringify({ t: 'undo' }));
+  await c.until((m) => m.t === 'change' && typeof (m.set as { undoes?: string }).undoes === 'string');
+  assert.equal(run.mind.node(picks[0]!.id).status, 'pick');
+
+  c.ws.send(JSON.stringify({ t: 'nonsense' }));
+  await c.until((m) => m.t === 'error');
+
+  const before = run.mind.snapshot();
+  c.ws.close();
+  await run.close();
+  const again = await boot(dataDir);
+  assert.deepEqual(again.run.mind.snapshot(), before);
+  await again.run.close();
+});
+
+test('an uploaded file is served back with byte ranges, and a handoff downloads as a zip', async () => {
+  const { run } = await boot();
+  const auth = { Authorization: 'Bearer secret' };
+  const up = await fetch(`${run.url}/api/assets?name=a.png`, { method: 'POST', headers: { ...auth, 'Content-Type': 'image/png' }, body: new Uint8Array([1, 2, 3, 4, 5]) });
+  const { url } = (await up.json()) as { url: string };
+  const part = await fetch(`${run.url}${url}`, { headers: { ...auth, Range: 'bytes=1-2' } });
+  assert.equal(part.status, 206);
+  assert.deepEqual([...new Uint8Array(await part.arrayBuffer())], [2, 3]);
+
+  const c = await connect(run);
+  c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Lenses and how they bend space' }] }));
+  await c.until((m) => m.t === 'change');
+  c.ws.send(JSON.stringify({ t: 'handoff', scope: { treeIds: [], nodeIds: [] }, note: 'continue this' }));
+  const made = await c.until((m) => m.t === 'handoff');
+  const zipped = new Uint8Array(await (await fetch(`${run.url}${made.url as string}`, { headers: auth })).arrayBuffer());
+  assert.deepEqual([...zipped.slice(0, 4)], [0x50, 0x4b, 0x03, 0x04]);
+  assert.ok((made.markdown as string).includes('Lenses'));
+  await run.pipeline.idle();
+  c.ws.close();
+  await run.close();
+});
+
+test('speech that settles is acted on once, and the final transcript does not repeat it', async () => {
+  const { run } = await boot();
+  const c = await connect(run);
+  c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Jaws beach scene' }] }));
+  await run.pipeline.idle();
+  await c.until((m) => m.t === 'change');
+  await run.pipeline.idle();
+  const root = [...run.mind.trees.values()][0]!.rootId;
+  const scene = { focus: root, selection: [] };
+  const before = c.seen.filter((m) => m.t === 'say').length;
+  run.pipeline.utter('why does this scene feel so wrong', scene, false);
+  await new Promise((r) => setTimeout(r, 1000));
+  run.pipeline.utter('why does this scene feel so wrong', scene, true);
+  await run.pipeline.idle();
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(c.seen.filter((m) => m.t === 'say').length - before, 1);
+  c.ws.close();
+  await run.close();
+});

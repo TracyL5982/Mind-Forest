@@ -1,0 +1,121 @@
+import { z } from 'zod';
+import type { Assets, ModelClient, Page, SocialPost, Tools } from '../core/ports.ts';
+import { siteOf } from '../core/views.ts';
+
+export interface ToolOptions {
+  model: ModelClient;
+  assets: Assets;
+  instagram?: { token: string; userId: string };
+  fetch?: typeof fetch;
+}
+
+const CodeReply = z.object({ title: z.string(), language: z.string(), source: z.string() });
+
+export function makeTools(opts: ToolOptions): Tools {
+  const send = opts.fetch ?? fetch.bind(globalThis);
+  return {
+    web: {
+      search: (query, max) => opts.model.search({ role: 'tool.web', query, max }),
+      read: (url) => readPage(send, url),
+    },
+    instagram: {
+      async recent(limit = 12): Promise<SocialPost[]> {
+        if (!opts.instagram) return [];
+        const fields = 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp';
+        const res = await send(
+          `https://graph.facebook.com/v21.0/${opts.instagram.userId}/media?fields=${fields}&limit=${Math.min(limit, 50)}`,
+          { headers: { Authorization: `Bearer ${opts.instagram.token}` }, signal: AbortSignal.timeout(20_000) },
+        );
+        if (!res.ok) throw new Error(`instagram: ${res.status} ${(await res.text()).slice(0, 200)}`);
+        const json = (await res.json()) as { data?: Record<string, string>[] };
+        return (json.data ?? []).map((m) => ({
+          id: m.id ?? '',
+          url: m.permalink ?? '',
+          caption: m.caption ?? '',
+          mediaType: m.media_type === 'VIDEO' ? 'video' : m.media_type === 'CAROUSEL_ALBUM' ? 'album' : 'image',
+          mediaUrl: m.media_url,
+          thumbnailUrl: m.thumbnail_url,
+          postedAt: m.timestamp ?? '',
+        }));
+      },
+    },
+    images: {
+      async generate(prompt) {
+        const made = await opts.model.image({ role: 'tool.image', prompt });
+        return { asset: (await opts.assets.put(made.bytes, made.mime, 'generated')).id };
+      },
+    },
+    code: {
+      // Muse Code itself is a terminal agent with no request API, so code sketches come from the same Muse model.
+      generate: (prompt) =>
+        opts.model.json({
+          role: 'tool.code',
+          system:
+            'You write one small, self-contained code sketch that a person can read in a minute and run as is. ' +
+            'Prefer plain JavaScript or Python with no dependencies. Return a short title, the language, and the source.',
+          user: prompt,
+          schema: CodeReply,
+          effort: 'medium',
+        }),
+    },
+  };
+}
+
+const MAX_PAGE_BYTES = 2_000_000;
+const MAX_TEXT = 20_000;
+
+async function readPage(send: typeof fetch, url: string): Promise<Page | null> {
+  try {
+    const res = await send(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MindPalace/0.1)', Accept: 'text/html,application/xhtml+xml,text/plain' },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(12_000),
+    });
+    const type = res.headers.get('content-type') ?? '';
+    if (!res.ok || !/text\/|xml|json/.test(type)) return null;
+    const html = new TextDecoder().decode((await res.arrayBuffer()).slice(0, MAX_PAGE_BYTES));
+    const meta = (name: string) =>
+      decode(
+        new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]*content=["']([^"']*)["']`, 'i').exec(html)?.[1] ??
+          new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${name}["']`, 'i').exec(html)?.[1] ??
+          '',
+      );
+    const title = meta('og:title') || decode(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? '').trim() || url;
+    const body = /text\/html|xml/.test(type) ? textOf(html) : html;
+    const description = meta('og:description') || meta('description');
+    const image = meta('og:image');
+    return {
+      url: res.url || url,
+      title: title.slice(0, 300),
+      text: `${description ? `${description}\n\n` : ''}${body}`.slice(0, MAX_TEXT),
+      site: meta('og:site_name') || siteOf(res.url || url),
+      ...(image ? { image: new URL(image, res.url || url).href } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function textOf(html: string): string {
+  const main = /<(article|main)[\s>][\s\S]*<\/\1>/i.exec(html)?.[0] ?? html;
+  return decode(
+    main
+      .replace(/<(script|style|noscript|svg|nav|header|footer|aside|form|iframe)[\s>][\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<\/(p|div|li|h[1-6]|tr|section|blockquote)>|<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, ' '),
+  )
+    .replace(/[ \t\r\f]+/g, ' ')
+    .replace(/\n\s*\n+/g, '\n')
+    .trim();
+}
+
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', mdash: '—', ndash: '–', hellip: '…', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“' };
+
+function decode(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, code: string) => {
+    if (code[0] !== '#') return ENTITIES[code.toLowerCase()] ?? whole;
+    const n = code[1]!.toLowerCase() === 'x' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
+    return Number.isFinite(n) && n > 0 && n < 0x110000 ? String.fromCodePoint(n) : whole;
+  });
+}

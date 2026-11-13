@@ -1,0 +1,411 @@
+import { CommandError, type ChangeSet, type Command, type Id, type Item, type Origin } from './domain.ts';
+import type { Assets, ModelClient, Store, Tools } from './ports.ts';
+import {
+  AGENT,
+  type Handoff,
+  type Intent,
+  type RawDump,
+  type RoleContext,
+  type Roles,
+  type Scene,
+  type Scope,
+  type Settings,
+  type Turn,
+} from './roles/types.ts';
+import type { Mindstorm } from './state.ts';
+
+export interface Activity {
+  id: Id;
+  role: string;
+  state: 'start' | 'done' | 'error';
+  message: string;
+  /** The node the work is about, so a client can show the work state in place. */
+  nodeId?: Id;
+}
+
+/** Everything the pipeline tells the outside world. A host forwards these to its clients. */
+export type Outbound =
+  | { t: 'change'; set: ChangeSet }
+  | { t: 'activity'; activity: Activity }
+  | { t: 'note'; role: string; message: string }
+  | { t: 'say'; text: string }
+  | { t: 'heard'; text: string; final: boolean }
+  | { t: 'navigate'; nodeId?: Id; treeId?: Id }
+  | { t: 'handoff'; handoff: Handoff }
+  | { t: 'settings'; settings: Settings };
+
+export interface PipelineDeps {
+  mind: Mindstorm;
+  roles: Roles;
+  model: ModelClient;
+  tools: Tools;
+  assets: Assets;
+  store: Store;
+  settings: Settings;
+  newId: () => Id;
+  now: () => string;
+  emit: (message: Outbound) => void;
+  /** How long a partial transcript must hold still before the agent acts on it. */
+  settleMs?: number;
+}
+
+const USER: Origin = { by: 'user' };
+/** Dumped nodes scouted straight away. The rest get picks when the user first looks at them. */
+const EAGER_SCOUTS = 3;
+const MAX_PARALLEL_SCOUTS = 2;
+
+/**
+ * The one place roles are run and their commands applied.
+ * Content roles decide what exists; every batch they produce is then handed to the Renderer, which decides how it looks.
+ */
+export class Pipeline {
+  readonly ctx: RoleContext;
+  private readonly history: Turn[] = [];
+  private readonly scoutRun = new Map<Id, number>();
+  private readonly scouted = new Set<Id>();
+  private scoutQueue: (() => Promise<void>)[] = [];
+  private scoutsRunning = 0;
+  private voiceRun = 0;
+  private settle: ReturnType<typeof setTimeout> | null = null;
+  private acting: { text: string; run: number } | null = null;
+  private readonly pending = new Set<Promise<unknown>>();
+
+  constructor(private readonly deps: PipelineDeps) {
+    this.ctx = {
+      mind: deps.mind,
+      model: deps.model,
+      tools: deps.tools,
+      assets: deps.assets,
+      settings: deps.settings,
+      newId: deps.newId,
+      now: deps.now,
+      note: (role, message) => deps.emit({ t: 'note', role, message }),
+    };
+    for (const node of deps.mind.nodes.values()) {
+      if (node.status === 'pick') this.scouted.add(node.parent ?? node.id);
+    }
+  }
+
+  /** Resolves when every piece of background work started so far has finished. For tests and scripts. */
+  async idle(): Promise<void> {
+    while (this.pending.size > 0 || this.scoutsRunning > 0 || this.scoutQueue.length > 0) {
+      await Promise.allSettled([...this.pending]);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
+  // ---- what a user can do
+
+  /** Anything dropped into the mindstorm: Intake reads it, the Filer places it, the Scout brings picks. */
+  async dump(dumps: RawDump[]): Promise<Id[]> {
+    return this.work('intake', `Reading ${dumps.length === 1 ? 'what you dropped' : `${dumps.length} things`}`, undefined, async () => {
+      const items = await this.deps.roles.intake(this.ctx, dumps);
+      if (items.length === 0) return [];
+      return this.file(items);
+    });
+  }
+
+  /**
+   * Speech, as it arrives. A partial that holds still for a moment is acted on early.
+   * The final transcript confirms it, or replaces it and the earlier work is dropped.
+   */
+  utter(text: string, scene: Scene, final: boolean): void {
+    const clean = text.trim();
+    if (!clean) return;
+    this.deps.emit({ t: 'heard', text: clean, final });
+    if (this.settle) clearTimeout(this.settle);
+    this.settle = null;
+    if (final) {
+      if (this.acting && normal(this.acting.text) === normal(clean)) return;
+      this.track(this.act(clean, scene));
+      return;
+    }
+    if (clean.split(/\s+/).length < 4) return;
+    this.settle = setTimeout(() => {
+      this.settle = null;
+      this.track(this.act(clean, scene));
+    }, this.deps.settleMs ?? 900);
+  }
+
+  /** The user looked at a node. If nothing has been scouted for it yet, scout now. */
+  focus(nodeId: Id): void {
+    if (!this.deps.mind.nodes.has(nodeId) || this.scouted.has(nodeId)) return;
+    if (this.deps.mind.node(nodeId).status === 'pick') return;
+    this.queueScout(nodeId, undefined, 'refresh');
+  }
+
+  ask(anchor: Id, need: string): Promise<void> {
+    return this.runScout(anchor, need, 'refresh');
+  }
+
+  more(anchor: Id, need?: string): Promise<void> {
+    return this.runScout(anchor, need, 'more');
+  }
+
+  keep(nodeIds: Id[]): void {
+    const ids = nodeIds.filter((id) => this.deps.mind.nodes.get(id)?.status === 'pick');
+    if (ids.length === 0) return;
+    this.apply(USER, ids.length === 1 ? 'Keep a pick' : `Keep ${ids.length} picks`, ids.map((id) => ({ type: 'keepPick', id })));
+  }
+
+  /** Direct manipulation from a client: drag to move, edit text, delete. */
+  userCommands(label: string, commands: Command[]): ChangeSet | null {
+    const set = this.apply(USER, label, commands);
+    if (set) this.afterContent(set);
+    return set;
+  }
+
+  undo(id?: Id): ChangeSet | null {
+    try {
+      const set = this.deps.mind.undo(id);
+      this.commit(set);
+      return set;
+    } catch (err) {
+      this.fail('undo', err);
+      return null;
+    }
+  }
+
+  async organize(request: string, scope: Scope, focus?: Id): Promise<string> {
+    return this.work('organizer', 'Reorganizing', focus, async () => {
+      const { commands, summary } = await this.deps.roles.organizer(this.ctx, { request, scope, focus });
+      if (commands.length > 0) {
+        const set = this.apply(AGENT('organizer'), `Organize: ${request}`.slice(0, 120), commands);
+        if (!set) return 'I could not make that change. Nothing was moved.';
+        this.afterContent(set);
+      }
+      return summary;
+    });
+  }
+
+  async handoff(scope: Scope, note?: string): Promise<Handoff> {
+    return this.work('packager', 'Packaging a handoff', undefined, async () => {
+      const handoff = await this.deps.roles.packager(this.ctx, { scope, note });
+      this.deps.emit({ t: 'handoff', handoff });
+      return handoff;
+    });
+  }
+
+  setSettings(patch: Partial<Settings>): void {
+    Object.assign(this.deps.settings, patch);
+    this.deps.emit({ t: 'settings', settings: this.deps.settings });
+  }
+
+  // ---- voice
+
+  private async act(text: string, scene: Scene): Promise<void> {
+    const run = ++this.voiceRun;
+    this.acting = { text, run };
+    try {
+      const { intent, say } = await this.work('conductor', 'Listening', scene.focus, () =>
+        this.deps.roles.conductor(this.ctx, { utterance: text, scene, history: this.history.slice(-6) }),
+      );
+      if (run !== this.voiceRun) return;
+      this.history.push({ who: 'user', text });
+      if (say) this.say(say);
+      await this.dispatch(intent, scene);
+    } catch (err) {
+      this.fail('conductor', err);
+    } finally {
+      if (this.acting?.run === run) this.acting = null;
+    }
+  }
+
+  private async dispatch(intent: Intent, scene: Scene): Promise<void> {
+    switch (intent.kind) {
+      case 'ask':
+        return this.ask(intent.anchor, intent.need);
+      case 'more':
+        return this.more(intent.anchor, intent.need);
+      case 'navigate':
+        this.deps.emit({ t: 'navigate', nodeId: intent.nodeId, treeId: intent.treeId });
+        if (intent.nodeId) this.focus(intent.nodeId);
+        return;
+      case 'organize':
+        this.say(await this.organize(intent.request, intent.scope, scene.focus));
+        return;
+      case 'handoff': {
+        const made = await this.handoff(intent.scope, intent.note || undefined);
+        this.say(`Your handoff is ready: ${made.name}.`);
+        return;
+      }
+      case 'capture':
+        await this.dump([{ kind: 'text', text: intent.text }]);
+        return;
+      case 'keep':
+        this.keep(intent.nodeIds);
+        return;
+      case 'undo':
+        this.undo();
+        return;
+      case 'reply':
+        return;
+    }
+  }
+
+  private say(text: string): void {
+    this.history.push({ who: 'agent', text });
+    this.deps.emit({ t: 'say', text });
+  }
+
+  // ---- content flow
+
+  private file(items: Item[]): Promise<Id[]> {
+    return this.work('filer', `Finding a place for ${items.length === 1 ? `"${items[0]!.title}"` : `${items.length} items`}`, undefined, async () => {
+      const placing = await this.deps.roles.filer(this.ctx, items);
+      const set = this.apply(AGENT('filer'), items.length === 1 ? `Add "${items[0]!.title}"` : `Add ${items.length} items`, [
+        ...items.map((item): Command => ({ type: 'addItem', item })),
+        ...placing,
+      ]);
+      if (!set) return [];
+      const nodeIds = newNodeIds(set);
+      this.afterContent(set);
+      if (this.deps.settings.scoutOnDump) {
+        const roots = nodeIds.filter((id) => {
+          const parent = this.deps.mind.node(id).parent;
+          return parent === null || !nodeIds.includes(parent);
+        });
+        for (const id of roots.slice(0, EAGER_SCOUTS)) this.queueScout(id, undefined, 'refresh');
+      }
+      return nodeIds;
+    });
+  }
+
+  private queueScout(anchor: Id, need: string | undefined, mode: 'refresh' | 'more'): void {
+    this.scouted.add(anchor);
+    this.scoutQueue.push(() => this.runScout(anchor, need, mode));
+    this.drainScouts();
+  }
+
+  private drainScouts(): void {
+    while (this.scoutsRunning < MAX_PARALLEL_SCOUTS && this.scoutQueue.length > 0) {
+      const next = this.scoutQueue.shift()!;
+      this.scoutsRunning++;
+      void next().finally(() => {
+        this.scoutsRunning--;
+        this.drainScouts();
+      });
+    }
+  }
+
+  /** A newer request for the same anchor wins. The older one's results are dropped when they arrive. */
+  private async runScout(anchor: Id, need: string | undefined, mode: 'refresh' | 'more'): Promise<void> {
+    if (!this.deps.mind.nodes.has(anchor)) return;
+    this.scouted.add(anchor);
+    const run = (this.scoutRun.get(anchor) ?? 0) + 1;
+    this.scoutRun.set(anchor, run);
+    const title = this.deps.mind.itemOf(anchor).title;
+    try {
+      await this.work('scout', need ? `Looking for: ${need}` : `Finding more around "${title}"`, anchor, async () => {
+        const commands = await this.deps.roles.scout(this.ctx, { anchor, need, mode });
+        if (this.scoutRun.get(anchor) !== run || commands.length === 0) return;
+        const set = this.apply(AGENT('scout'), need ? `Picks for: ${need}`.slice(0, 120) : `Picks for "${title}"`, commands);
+        if (set) this.afterContent(set);
+      });
+    } catch (err) {
+      this.fail('scout', err);
+    }
+  }
+
+  /** New or changed content goes to the Renderer, and the trees it touched get fresh digests. */
+  private afterContent(set: ChangeSet): void {
+    const mind = this.deps.mind;
+    const nodeIds = [
+      ...new Set(
+        set.patches.flatMap((p) => {
+          if (p.after === null) return [];
+          if (p.entity === 'node') return [p.id];
+          if (p.entity === 'item') return mind.nodesOfItem(p.id).map((n) => n.id);
+          return [];
+        }),
+      ),
+    ].filter((id) => mind.nodes.has(id));
+    this.digest(set);
+    if (nodeIds.length === 0) return;
+    this.track(
+      this.work('renderer', 'Choosing how to show this', nodeIds[0], async () => {
+        const commands = await this.deps.roles.renderer(this.ctx, { nodeIds: nodeIds.filter((id) => mind.nodes.has(id)) });
+        if (commands.length > 0) this.apply(AGENT('renderer'), 'Choose formats', commands);
+      }).catch((err) => this.fail('renderer', err)),
+    );
+  }
+
+  /** The Archivist: a plain-code description of each touched tree, kept current for filing and retrieval. */
+  private digest(set: ChangeSet): void {
+    const mind = this.deps.mind;
+    const treeIds = new Set<Id>();
+    for (const p of set.patches) {
+      const value = p.after ?? p.before;
+      if (p.entity === 'node' && value && 'treeId' in value) treeIds.add(value.treeId);
+    }
+    const commands: Command[] = [];
+    for (const id of treeIds) {
+      const tree = mind.trees.get(id);
+      if (!tree) continue;
+      const nodes = mind.treeNodes(id).filter((n) => n.status === 'kept');
+      const counts = new Map<string, number>();
+      for (const n of nodes) for (const tag of mind.item(n.itemId).tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      const tags = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([t]) => t);
+      const titles = nodes.slice(0, 8).map((n) => mind.item(n.itemId).title);
+      const digest = `${titles.join('; ')}${tags.length ? ` [${tags.join(', ')}]` : ''}`.slice(0, 400);
+      if (digest !== tree.digest) commands.push({ type: 'setDigest', id, digest });
+    }
+    if (commands.length > 0) this.apply(AGENT('archivist'), 'Update tree digests', commands);
+  }
+
+  // ---- plumbing
+
+  private apply(origin: Origin, label: string, commands: Command[]): ChangeSet | null {
+    if (commands.length === 0) return null;
+    try {
+      const set = this.deps.mind.apply({ origin, label, commands });
+      this.commit(set);
+      return set;
+    } catch (err) {
+      this.fail(origin.role ?? 'user', err);
+      return null;
+    }
+  }
+
+  private commit(set: ChangeSet): void {
+    if (set.patches.length === 0 && !set.undoes) return;
+    this.deps.store.append(set);
+    this.deps.emit({ t: 'change', set });
+  }
+
+  private async work<T>(role: string, message: string, nodeId: Id | undefined, body: () => Promise<T>): Promise<T> {
+    const id = this.deps.newId();
+    this.deps.emit({ t: 'activity', activity: { id, role, state: 'start', message, nodeId } });
+    try {
+      const result = await body();
+      this.deps.emit({ t: 'activity', activity: { id, role, state: 'done', message, nodeId } });
+      return result;
+    } catch (err) {
+      this.deps.emit({ t: 'activity', activity: { id, role, state: 'error', message: describe(err), nodeId } });
+      throw err;
+    }
+  }
+
+  private fail(role: string, err: unknown): void {
+    this.deps.emit({ t: 'note', role, message: `failed: ${describe(err)}` });
+  }
+
+  private track(p: Promise<unknown>): void {
+    const guarded = p.catch((err) => this.fail('pipeline', err));
+    this.pending.add(guarded);
+    void guarded.finally(() => this.pending.delete(guarded));
+  }
+}
+
+function newNodeIds(set: ChangeSet): Id[] {
+  return set.patches.filter((p) => p.entity === 'node' && p.before === null && p.after !== null).map((p) => p.id);
+}
+
+function normal(text: string): string {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+function describe(err: unknown): string {
+  if (err instanceof CommandError) return `${err.code}: ${err.message}`;
+  return err instanceof Error ? err.message : String(err);
+}
