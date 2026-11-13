@@ -73,25 +73,37 @@ export class Mindstorm {
     });
   }
 
-  /** Undoes one change set, the most recent one still standing unless `id` names another. */
-  undo(id?: Id, origin: Origin = { by: 'user' }): ChangeSet {
-    const target = id
-      ? this.history.find((c) => c.id === id)
-      : [...this.history].reverse().find((c) => !c.undoes && !this.undone.has(c.id));
+  /**
+   * Undoes one change set: the most recent one still standing, unless `id` names another.
+   * `housekeeping` marks sets that only follow from others (formats, digests). They are never the target,
+   * and the ones made after the target are undone with it, so one press takes back one real change.
+   */
+  undo(id?: Id, origin: Origin = { by: 'user' }, housekeeping: (set: ChangeSet) => boolean = () => false): ChangeSet {
+    const target = id ? this.history.find((c) => c.id === id) : this.undoTarget(housekeeping);
     if (!target) throw new CommandError('missing', id ? `no change set ${id}` : 'nothing to undo');
     if (this.undone.has(target.id)) throw new CommandError('conflict', `${target.id} is already undone`);
+    const followers = this.history.filter((c) => c.seq > target.seq && !c.undoes && !this.undone.has(c.id) && housekeeping(c));
+    const reverting = [...followers.reverse(), target];
     const set = this.commit({ origin, label: `Undo: ${target.label}`, commands: [] }, () => {
-      for (const p of [...target.patches].reverse()) {
-        const current = this.maps[p.entity].get(p.id) ?? null;
-        if (!same(current, p.after)) {
-          throw new CommandError('conflict', `${p.entity} ${p.id} changed since "${target.label}"`);
+      for (const one of reverting) {
+        for (const p of [...one.patches].reverse()) {
+          const current = this.maps[p.entity].get(p.id) ?? null;
+          if (!same(current, p.after)) {
+            throw new CommandError('conflict', `${p.entity} ${p.id} changed since "${target.label}"`);
+          }
+          this.write(p.entity, p.id, p.before);
         }
-        this.write(p.entity, p.id, p.before);
       }
     });
     set.undoes = target.id;
-    this.undone.add(target.id);
+    set.alsoUndoes = followers.map((c) => c.id);
+    for (const one of reverting) this.undone.add(one.id);
     return set;
+  }
+
+  /** The change set a plain undo would take back now. */
+  undoTarget(housekeeping: (set: ChangeSet) => boolean = () => false): ChangeSet | undefined {
+    return [...this.history].reverse().find((c) => !c.undoes && !this.undone.has(c.id) && !housekeeping(c));
   }
 
   /** Rebuilds the state from stored change sets. */
@@ -102,6 +114,7 @@ export class Mindstorm {
       this.working = null;
       this.history.push(set);
       if (set.undoes) this.undone.add(set.undoes);
+      for (const id of set.alsoUndoes ?? []) this.undone.add(id);
       this.seq = set.seq;
     }
   }

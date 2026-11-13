@@ -124,3 +124,26 @@ test('speech that settles is acted on once, and the final transcript does not re
   c.ws.close();
   await run.close();
 });
+
+test('one undo takes back one real change, along with the format choices that followed it', async () => {
+  const { run } = await boot();
+  const c = await connect(run);
+  c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Rack focus pulls the eye across the frame' }] }));
+  await c.until((m) => m.t === 'change');
+  await run.pipeline.idle();
+  await new Promise((r) => setTimeout(r, 1200));
+  await run.pipeline.idle();
+  const root = [...run.mind.trees.values()][0]!.rootId;
+  assert.equal(run.mind.picks(root).length, 4);
+  const last = c.seen.filter((m) => m.t === 'change').at(-1)!;
+  assert.equal((last.set as { label: string }).label, 'Choose formats', 'the latest change is housekeeping');
+  assert.match(last.undo as string, /^Picks for/, 'but undo names the real change before it');
+
+  c.ws.send(JSON.stringify({ t: 'undo' }));
+  await c.until((m) => m.t === 'change' && typeof (m.set as { undoes?: string }).undoes === 'string');
+  assert.equal(run.mind.picks(root).length, 0, 'the picks are gone in one press');
+  assert.equal(run.mind.trees.size, 1);
+  await run.pipeline.idle();
+  c.ws.close();
+  await run.close();
+});

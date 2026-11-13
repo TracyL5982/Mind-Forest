@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0d11">
+<title>Mind Palace</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main id="field" aria-label="The mindstorm"></main>
+
+<section id="empty" class="empty" hidden>
+  <h1>Nothing here yet</h1>
+  <p>Drop a file, paste a link, or type a thought below. The librarian files it into a tree and brings picks: new things worth a look, drawn dashed until you keep them.</p>
+</section>
+
+<header class="bar">
+  <div class="bar-main">
+    <button id="status" class="status" type="button" data-state="connecting" aria-live="polite"><i></i><span>Connecting</span></button>
+    <nav id="trees" class="trees" aria-label="Trees"></nav>
+  </div>
+  <div class="tools">
+    <button id="undo" class="btn" type="button" title="Undo the last change">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5M4 12h10a6 6 0 0 1 0 12"/></svg>
+      <span id="undo-label">Undo</span>
+    </button>
+    <button id="handoff-open" class="btn" type="button" title="Package cards to hand off">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 19h14"/></svg>
+      <span>Handoff</span>
+    </button>
+    <button id="mute" class="btn" type="button" aria-pressed="false" title="Speak the librarian's replies">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6L8 10H4Z"/><path class="waves" d="M16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11"/><path class="cross" d="m17 9 5 6m0-6-5 6"/></svg>
+      <span>Voice</span>
+    </button>
+    <button id="settings-open" class="btn" type="button" aria-expanded="false" aria-controls="settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10m4 0h2M4 17h2m4 0h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+      <span>Settings</span>
+    </button>
+  </div>
+</header>
+
+<section id="log" class="log" aria-label="Work log">
+  <button id="log-open" class="log-ticker" type="button" aria-expanded="false" aria-controls="log-list">
+    <i></i><span id="log-latest">The librarian is idle</span><b aria-hidden="true">▾</b>
+  </button>
+  <ol id="log-list" class="log-list" hidden></ol>
+</section>
+
+<section id="settings" class="pop" hidden aria-label="Settings">
+  <h2>Picks</h2>
+  <div class="seg" role="radiogroup" aria-label="How picks arrive">
+    <button type="button" role="radio" data-mode="provisional">Dashed until kept</button>
+    <button type="button" role="radio" data-mode="immediate">Keep everything at once</button>
+  </div>
+  <div class="stepper">
+    <span>Picks each time</span>
+    <button id="picks-less" class="btn" type="button" aria-label="Fewer picks">−</button>
+    <output id="picks-count">4</output>
+    <button id="picks-more" class="btn" type="button" aria-label="More picks">+</button>
+  </div>
+</section>
+
+<aside id="panel" class="panel" hidden aria-label="Opened card"></aside>
+
+<footer class="dock">
+  <div id="caption" class="caption" aria-live="polite"></div>
+  <form id="dump" class="dock-row">
+    <label class="dump-target" for="file-pick" title="Choose files to add">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5m0 0-4 4m4-4 4 4M5 19h14"/></svg>
+      <span><b>Mindstorm</b><small>Drop anything, or tap to choose</small></span>
+    </label>
+    <input id="file-pick" type="file" multiple hidden>
+    <textarea id="dump-text" rows="1" placeholder="Type or paste a thought or a link" aria-label="A thought for the mindstorm" enterkeyhint="send"></textarea>
+    <button id="dump-send" class="btn primary" type="submit">Add</button>
+  </form>
+  <form id="talk" class="dock-row">
+    <button id="mic" class="btn mic" type="button" aria-label="Talk" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+    </button>
+    <input id="talk-text" type="text" placeholder="Ask or tell the librarian" aria-label="Talk to the librarian" autocomplete="off" enterkeyhint="send">
+    <button id="talk-send" class="btn" type="submit">Send</button>
+  </form>
+</footer>
+
+<dialog id="handoff" class="sheet" aria-labelledby="handoff-title">
+  <form id="handoff-form" method="dialog">
+    <h2 id="handoff-title">Handoff</h2>
+    <p class="sheet-about">Package cards as files another person or tool can pick up.</p>
+    <fieldset id="handoff-scope" class="choices"><legend>What to package</legend></fieldset>
+    <label for="handoff-note">A note to go with it (optional)</label>
+    <textarea id="handoff-note" rows="3" placeholder="What should happen next?"></textarea>
+    <div class="sheet-row">
+      <button id="handoff-go" class="btn primary" type="button">Package</button>
+      <button class="btn" type="submit">Close</button>
+    </div>
+  </form>
+  <div id="handoff-result" hidden>
+    <a id="handoff-link" class="btn accent" download>Download</a>
+    <p id="handoff-files" class="sheet-about"></p>
+    <pre id="handoff-preview" class="preview" tabindex="0"></pre>
+  </div>
+</dialog>
+
+<section id="gate" class="gate" hidden aria-label="Access key">
+  <form id="gate-form">
+    <h2>Mind Palace</h2>
+    <p id="gate-why">Paste the access key the service printed when it started. It is the part after <code>#token=</code>.</p>
+    <input id="gate-token" type="text" autocomplete="off" spellcheck="false" aria-label="Access key" placeholder="Access key">
+    <button class="btn primary" type="submit">Connect</button>
+  </form>
+</section>
+
+<div id="veil" class="veil" aria-hidden="true"><div>Drop it into the mindstorm</div></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

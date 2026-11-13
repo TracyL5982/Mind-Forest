@@ -168,6 +168,8 @@ export interface ChangeSet {
   patches: Patch[];
   /** Set when this change set is the undo of another. */
   undoes?: Id;
+  /** Housekeeping sets that followed it and were undone in the same step. */
+  alsoUndoes?: Id[];
 }
 
 export interface Snapshot {

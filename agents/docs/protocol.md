@@ -30,8 +30,8 @@ Drawing rules:
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `hello` | `protocol`, `snapshot`, `settings` | Sent once on connect. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. |
-| `change` | `set` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. |
+| `hello` | `protocol`, `snapshot`, `settings`, `undo` | Sent once on connect. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
+| `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
 | `activity` | `activity` | Work state: `id`, `role`, `state` (`start`, `done`, `error`), `message`, optional `nodeId`. Show a thinking mark on `nodeId` between `start` and `done`. |
 | `say` | `text` | One short line for the agent to speak. |
 | `heard` | `text`, `final` | The transcript the service is acting on. |
@@ -53,7 +53,7 @@ Drawing rules:
 | `ask` | `nodeId`, `need` | A typed question about a node. |
 | `more` | `nodeId`, `need?` | More picks for a node. |
 | `keep` | `nodeIds` | Keep picks. |
-| `undo` | `id?` | Undo the latest change set, or the named one. |
+| `undo` | `id?` | Undo the latest real change, or the named one. Format choices and digests that followed it are undone with it. |
 | `commands` | `label`, `commands` | Direct manipulation: any commands from `src/core/domain.ts`, such as `moveNode`, `editItem`, `deleteNode`. Applied as one undoable set. |
 | `organize` | `request`, `scope`, `focus?` | A typed organizing request. `scope` is `{treeIds, nodeIds}`. |
 | `handoff` | `scope`, `note?` | Package a handoff. An empty scope means everything. |

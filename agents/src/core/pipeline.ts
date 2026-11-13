@@ -157,8 +157,9 @@ export class Pipeline {
 
   undo(id?: Id): ChangeSet | null {
     try {
-      const set = this.deps.mind.undo(id);
+      const set = this.deps.mind.undo(id, USER, isHousekeeping);
       this.commit(set);
+      this.afterContent(set);
       return set;
     } catch (err) {
       this.fail('undo', err);
@@ -184,6 +185,11 @@ export class Pipeline {
       this.deps.emit({ t: 'handoff', handoff });
       return handoff;
     });
+  }
+
+  /** What the next undo would take back, for a client's undo button. */
+  undoLabel(): string | null {
+    return this.deps.mind.undoTarget(isHousekeeping)?.label ?? null;
   }
 
   setSettings(patch: Partial<Settings>): void {
@@ -395,6 +401,11 @@ export class Pipeline {
     this.pending.add(guarded);
     void guarded.finally(() => this.pending.delete(guarded));
   }
+}
+
+/** Formats and digests follow from content. They are not something a user thinks of undoing. */
+function isHousekeeping(set: ChangeSet): boolean {
+  return set.origin.role === 'renderer' || set.origin.role === 'archivist';
 }
 
 function newNodeIds(set: ChangeSet): Id[] {

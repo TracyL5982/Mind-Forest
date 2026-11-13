@@ -74,7 +74,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     }
     if (message.t === 'note') log(`[${message.role}] ${message.message}`);
     if (message.t === 'activity') log(`[${message.activity.role}] ${message.activity.state}: ${message.activity.message}`);
-    broadcast(message);
+    broadcast(message.t === 'change' ? { ...message, undo: pipeline.undoLabel() } : message);
   };
 
   const pipeline = new Pipeline({
@@ -172,7 +172,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
 
   wss.on('connection', (ws: WebSocket) => {
     sockets.add(ws);
-    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings }));
+    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, undo: pipeline.undoLabel() }));
     ws.on('close', () => sockets.delete(ws));
     ws.on('message', (raw) => {
       let message: ClientMessage;
