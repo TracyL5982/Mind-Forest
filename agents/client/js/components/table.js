@@ -11,15 +11,24 @@ const MOST_ROWS = 6;
 const ROW = 24;
 /** What a column of words is left with at least, when the columns are counted. */
 const WORDS_FLOOR = 44;
-/** What the first column is given at least, or all it needs when that is less, because it names each row. */
+/**
+ * What the first column is given at least, or all it needs when that is less, because it names each
+ * row. It gives way, down to `WORDS_FLOOR`, to what the second column needs at least.
+ */
 const FIRST_FLOOR = 120;
-/** A number is never cut, so it is no wider than this. Anything wider is read as words. */
-const NUMBER_MOST = 160;
-const NUMERAL = /^[-+−–~≈<>≤≥±]?\s?\p{Sc}?\s?\d[\d.,:/\s]*\s?[\p{L}\p{Sc}%°‰µ²³]{0,5}$/u;
+/**
+ * A number: a sign, a currency (`$`, `US$`, `€`, `HK$`, or a code of three capitals and a space, as
+ * `RMB ` and `USD `) and a sign again, each when it is there, then digits with separators and at
+ * most one decimal point, a percent sign, and a unit of at most two words.
+ */
+const NUMERAL = /^(?:[-+−–~≈<>≤≥±]\s?)?(?:[A-Z]{0,3}\p{Sc}\s?|[A-Z]{3}\s)?[-+−–]?\d[\d,'’:/\s]*(?:\.\d[\d,'’:/\s]*)?[%％‰]?(?:\s?[\p{L}\p{Sc}°µ²³/]+(?:\s[\p{L}\p{Sc}°µ²³/]+)?)?$/u;
 /** In the opened table a column is at least as wide as its widest early cell, up to this, so its words are not set one to a line. */
 const OPENED = { rows: 20, most: 220, text: 13 };
 
-const isNumber = (cell) => NUMERAL.test(cell) && textWidth(cell) <= NUMBER_MOST;
+/** The px a column gives a cell: its count and 1 px more, because a string can draw up to 0.4 px wider than it counts. */
+const cellWidth = (cell) => textWidth(cell) + 1;
+/** A number is never cut, so one too wide to stand beside a first column of words is read as words. */
+const isNumber = (cell) => NUMERAL.test(cell) && cellWidth(cell) <= ROOM - BETWEEN - WORDS_FLOOR;
 
 /** A column holds numbers when every cell of it that says something is a number. Its numbers are set to the right. */
 function numeric(rows, column) {
@@ -36,20 +45,22 @@ const grid = (props) => ({
  * The first rows and columns, as many as fit. No number is cut, in a column of numbers or beside
  * words: a column is at least as wide as the widest number it shows, and the words share what is
  * left. The first column, which names each row, is at least `FIRST_FLOOR` px wide or as wide as it
- * needs. Columns are dropped from the end until each one that holds words can have `WORDS_FLOOR`
+ * needs, unless a number in the second column needs the room. Columns are dropped from the end until each one that holds words can have `WORDS_FLOOR`
  * px or all it needs, and the card counts the columns it drops as it does the rows. `room` is the
  * column the cells share: a table card's, or a sheet's.
  */
 export function plan(item, props, room = ROOM) {
   const { heads, rows } = grid(props);
   const shown = rows.slice(0, MOST_ROWS);
-  const columns = heads.map((head, i) => {
+  const measured = heads.map((head, i) => {
     const cells = shown.map((row) => row[i] ?? '');
-    const want = Math.max(textWidth(head), ...cells.map(textWidth));
-    const numbers = Math.max(0, ...cells.filter(isNumber).map(textWidth));
-    const floor = i === 0 ? Math.max(numbers, Math.min(want, FIRST_FLOOR)) : numbers;
-    const number = numeric(shown, i);
-    return { number, floor, want, least: number ? floor : Math.max(floor, Math.min(want, WORDS_FLOOR)) };
+    return { number: numeric(shown, i), want: Math.max(cellWidth(head), ...cells.map(cellWidth)), numbers: Math.max(0, ...cells.filter(isNumber).map(cellWidth)) };
+  });
+  const leastOf = (column, floor) => (column.number ? floor : Math.max(floor, Math.min(column.want, WORDS_FLOOR)));
+  const second = measured[1] ? leastOf(measured[1], measured[1].numbers) : 0;
+  const columns = measured.map((column, i) => {
+    const floor = i === 0 ? Math.max(column.numbers, Math.min(column.want, FIRST_FLOOR, Math.max(WORDS_FLOOR, room - BETWEEN - second))) : column.numbers;
+    return { ...column, floor, least: leastOf(column, floor) };
   });
   const least = (count) => columns.slice(0, count).reduce((sum, column) => sum + column.least, BETWEEN * (count - 1));
   let count = Math.min(columns.length, MOST_COLUMNS);

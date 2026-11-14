@@ -204,7 +204,7 @@ test('a table cuts no number, beside words or alone, and shows fewer columns whe
   type Plan = { heads: string[]; rows: string[][]; widths: number[]; numbers: boolean[]; foot: string; width: number };
   const { plan } = (await load('components/table.js')) as { plan: (item: unknown, props: unknown) => Plan };
   const { textWidth } = (await load('components/shared.js')) as { textWidth: (str: string) => number };
-  const whole = (given: Plan) => given.rows.forEach((row) => row.forEach((cell, i) => { if (/^[\d$]/.test(cell)) assert.ok(given.widths[i]! >= textWidth(cell), `${cell} has ${given.widths[i]} of ${textWidth(cell)}`); }));
+  const whole = (given: Plan) => given.rows.forEach((row) => row.forEach((cell, i) => { if (/^(?:[\d$]|US\$)/.test(cell)) assert.ok(given.widths[i]! > textWidth(cell), `${cell} has ${given.widths[i]} of ${textWidth(cell)}`); }));
   const mixed = plan(blank, { heads: ['Region', 'Q1', 'Q2', 'Note'], rows: [['North', '1,234,567.89', 'n/a', 'a new office by the harbour'], ['South', '–', '2,345,678.90', 'closed in May after the flood']] });
   assert.deepEqual(mixed.numbers, [false, false, false, false], 'a column with a word in it is no column of numbers');
   whole(mixed);
@@ -220,6 +220,15 @@ test('a table cuts no number, beside words or alone, and shows fewer columns whe
   assert.deepEqual(short.rows, [['1', '2', ''], ['3', '4', '5']], 'a table has as many columns as heads');
   const zh = plan({ ...blank, title: '城市比较', text: '' }, { heads: ['城市', '月租'], rows: Array.from({ length: 8 }, () => ['杭州', '¥6,500']) });
   assert.equal(zh.foot, '还有 2 行');
+  const small = plan(blank, { heads: ['Name', 'Age', 'City'], rows: [['Ann', '34', 'Leeds'], ['Bo', '7', 'York']] });
+  small.heads.forEach((head, i) => assert.ok(small.widths[i]! > textWidth(head), `a head that fits by the count has a px more than it counts: ${head} has ${small.widths[i]} of ${textWidth(head)}`));
+  const money = plan(blank, { heads: ['Fund', 'Assets', 'Fee', 'Region'], rows: [['Global', '$1,234,567,890,123.45 USD', 'US$ 1,200', 'World']] });
+  assert.deepEqual(money.numbers, [false, true, true], 'an amount with a currency before or after it is a number');
+  assert.equal(money.foot, 'and 1 more column', 'and a column is dropped and counted before a number is cut');
+  whole(money);
+  const named = plan(blank, { heads: ['Name', 'Value'], rows: [['Avogadro', '602,214,076,000,000,000,000,000'], ['Seconds in a year', '31,556,952']] });
+  assert.deepEqual(named.numbers, [false, true], 'the first column gives way to a long number beside it, and the card keeps both');
+  whole(named);
 });
 
 test('a card draws its fixed words in Chinese when its item is written in Chinese, and sizes itself with them', async () => {
@@ -233,6 +242,7 @@ test('a card draws its fixed words in Chinese when its item is written in Chines
   const palette = '雾蓝 #A9BCCF\n米白 #FAF7EF\n胡桃 #8B5A2B\n墨绿 #2F4F3E\n砖红 #B5523B\n燕麦 #DCCFB8\n石灰 #C9C5BA\n深棕 #4E3B2A';
   assert.equal(wordsOf({ title: '客厅配色', text: palette }).more(2), '还有 2 项', 'the letters of a hex colour are not English');
   assert.equal(wordsOf({ title: '', text: '读书笔记 https://example.com/books/the-poetics-of-space-by-gaston-bachelard' }).untitled, '未命名', 'nor are a web address');
+  assert.equal(wordsOf({ title: '配色', text: '雾蓝 rgb(169, 188, 207)\n砖红 RGBA(181, 82, 59, 0.9)\n墨绿 hsl(147 25% 25%)' }).untitled, '未命名', 'nor a colour written as rgb() or hsl()');
   assert.equal(wordsOf({ title: '', text: '' }).untitled, 'Untitled');
   assert.equal(wordsOf({}).untitled, 'Untitled');
   const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Kind> };
@@ -248,7 +258,8 @@ test('a facts card sets every figure in one size, trims what it is given, and ma
   const facts = (...values: string[]) => COMPONENTS.facts!.size(blank, { facts: values.map((value, i) => ({ label: `L${i}`, value })) });
   assert.deepEqual(facts('330 m', '1889'), [320, 30 + 21 + 12 + 28 + 17], 'two short figures in the middle size');
   assert.deepEqual(facts('330 m', '1889', '3', 'Stephen Sauvestre'), [320, 30 + 21 + 12 + 3 * (28 + 17) + 2 * 12], 'a name too long for half a row has a row of its own, and its neighbour too, in the middle size');
-  assert.deepEqual(facts('330 m', '1889', 'Gustave Eiffel and Stephen Sauvestre'), [320, 30 + 21 + 12 + (21 + 17) + 12 + (21 + 17)], 'only a value too long for a whole row sets the card in the smallest size');
+  assert.deepEqual(facts('330 m', '1889', 'Gustave Eiffel and Stephen Sauvestre'), [320, 30 + 21 + 12 + (28 + 17) + 12 + (2 * 28 + 17)], 'a value too long for a whole row wraps onto a second line there, and the figures beside it keep the middle size');
+  assert.deepEqual(facts('330 m', '1889', 'Gustave Eiffel, Stephen Sauvestre and Maurice Koechlin'), [320, 30 + 21 + 12 + (21 + 17) + 12 + (2 * 21 + 17)], 'only a value that needs more than two lines of a whole row sets the card in the smallest size');
   assert.deepEqual(COMPONENTS.facts!.size(blank, { facts: [{ label: ' Height ', value: '  330 m  ' }, { label: 'Built', value: '\t1889\n' }] }), facts('330 m', '1889'), 'padding around a label or a value counts nothing');
   const passage = 'a room that is too large for its purpose makes those in it speak as if to a crowd '.repeat(6);
   assert.deepEqual(facts(passage, '1889'), [320, 30 + 21 + 12 + (8 * 21 + 17) + 12 + (21 + 17)], 'a passage is given eight lines and no more');
@@ -277,4 +288,11 @@ test('a sheet is one card: its heading is its title, a picture leads it, each pa
   const named = { view: { component: 'sheet', props: { sections: [{ kind: 'heading', text: 'Porto' }, text, list] } } };
   assert.deepEqual(chipsOf(named, item).map((chip) => chip.kind), ['when', 'people'], 'the place chip would say the heading again');
   assert.equal(sizeOf(node, item)[1], COMPONENTS.sheet!.size(item, node.view.props)[1]! + 28);
+});
+
+test('an excerpt whose source is its title writes it once', async () => {
+  const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Kind> };
+  const excerpt = (source: string) => COMPONENTS.excerpt!.size({ ...blank, title: '鲁迅《故乡》' }, { text: '世界上本没有路，走的人多了，也便成了路。', source });
+  assert.deepEqual(excerpt(' 鲁迅《故乡》 '), excerpt(''));
+  assert.equal(excerpt('example.org')[1], excerpt('')[1]! + 17);
 });

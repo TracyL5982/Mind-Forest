@@ -21,13 +21,15 @@ function passage(item, props) {
 
 const flat = (words) => words.replace(/\s+/g, ' ');
 
+/** The passage, the item's title under it, and where it is from, without a part that is the title again. */
 function plan(item, props) {
   const words = flat(passage(item, props));
+  const title = item.title || '';
   return {
     words,
     lines: wrap(words, LINE, PASSAGE_LETTER, MOST_LINES),
-    title: item.title || '',
-    where: [text(props.at).trim(), text(props.source).trim()].filter(Boolean).join(' · '),
+    title,
+    where: [text(props.at).trim(), text(props.source).trim()].filter((part) => part && part !== title.trim()).join(' · '),
   };
 }
 

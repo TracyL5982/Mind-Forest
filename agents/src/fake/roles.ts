@@ -60,8 +60,8 @@ export const fakeRoles: Roles = {
         // The real rules caption a picture with its summary, so the summary names the file as a description would.
         return makeItem(ctx, { kind, title, summary: `${title}, a ${kind} you dropped in.`, tags: [kind], origin: { by: 'user' }, source: { from: 'drop', asset: d.asset } });
       }
-      const first = d.text.split('\n')[0]!.slice(0, 60);
-      return makeItem(ctx, { kind: 'text', title: first, text: d.text, summary: d.text.slice(0, 160), data: { ...structure(describe(d.text), d.text), ...(codeIn(d.text) ? { code: codeIn(d.text) } : {}) }, tags: first.toLowerCase().split(/\W+/).filter((w) => w.length > 4).slice(0, 3), origin: { by: 'user' }, source: { from: 'paste' } });
+      const described = describe(d.text);
+      return makeItem(ctx, { kind: 'text', title: described.title, text: d.text, summary: d.text.slice(0, 160), data: { ...structure(described, d.text), ...(codeIn(d.text) ? { code: codeIn(d.text) } : {}) }, tags: described.tags, origin: { by: 'user' }, source: { from: 'paste' } });
     });
   },
 
