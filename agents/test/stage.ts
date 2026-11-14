@@ -137,6 +137,29 @@ export function showcase(image: string, other?: string, { structured = true } = 
   return commands;
 }
 
+/** The tree of `assembled`: its root, the siblings the stand-in lays out by their facets, and a column of five that is drawn as a cluster. */
+export const ASSEMBLED = { root: 'assembled-0', facets: ['assembled-1', 'assembled-2', 'assembled-3', 'assembled-4', 'assembled-5', 'assembled-6'], column: 'assembled-group-layout' } as const;
+
+/**
+ * A trip whose kept siblings open with the facets Eat, See and Stay, which the stand-in Renderer lays out as a row of three labelled
+ * columns, and under the last of them a layout of one tall column, which fails its shape check and is drawn as a cluster.
+ */
+export function assembled(): Command[] {
+  const { commands, add, group } = planting('assembled', 'Lisbon in three days');
+  const root = add(null, 'note', 'Lisbon in three days', { summary: 'A long weekend in June, planned on the train.', text: 'A long weekend in June, planned on the train.' });
+  const facets = [
+    ['Eat: grilled sardines in Alfama', 'Smoke on every corner in June.'],
+    ['Eat: pastéis de nata at Belém', 'Warm from the oven, with cinnamon.'],
+    ['See: Tram 28 at dawn', 'Before the crowds get on.'],
+    ['See: the tiled station at São Bento', 'Twenty thousand tiles of battles and harvests.'],
+    ['Stay: a room above the river', 'Two nights, breakfast on the roof.'],
+    ['Stay: the late train home', 'Sunday at nine from Santa Apolónia.'],
+  ].map(([title, summary]) => add(root, 'note', title!, { summary, text: summary }));
+  const steps = Array.from({ length: 5 }, (_, i) => add(facets[5]!, 'note', `Step ${i + 1} of the walk`, { summary: 'One stop on the river path, with what to look for there.', text: 'One stop on the river path, with what to look for there.' }));
+  group(facets[5]!, 'layout', 'The walk', steps, { tree: { kind: 'column', children: steps.map((id) => ({ kind: 'card', id, role: 'normal' })) } });
+  return commands;
+}
+
 /** The ids of the cards in `chipped`, by what each one is there to show. */
 export const CHIPPED = { photo: 'chips-1', plainPhoto: 'chips-2', people: 'chips-3', longPlace: 'chips-4', museum: 'chips-5', link: 'chips-6', four: 'chips-7', plainNote: 'chips-8', pileTop: 'chips-12', pileUnder: ['chips-13', 'chips-14'], paper: 'chips-16' } as const;
 

@@ -31,9 +31,11 @@
  *                      A card shows chips for what its item's data holds: card=note:{"item":{"data":{"when":"1958","where":"Rome"}}}
  *                      The step prints the card's footprint and the text of each chip.
  *   group=<kind>:<json> arrange the cards added since the last group as a gallery, timeline,
- *                      comparison, sequence, cluster or stack. The JSON is the group's props, and
+ *                      comparison, sequence, cluster, stack or layout. The JSON is the group's props, and
  *                      may hold a title. A key $0, $1, ... stands for the first, second, ... card:
  *                      group=timeline:{"title":"Years","labels":{"$0":"1958","$1":"1975","$2":"1990"}}
+ *                      A value "$0" stands for a card too, as a layout's tree names its members:
+ *                      group=layout:{"tree":{"kind":"row","label":"Two","children":[{"kind":"card","id":"$0","role":"lead"},{"kind":"card","id":"$1","role":"normal"},{"kind":"card","id":"$2","role":"minor"}]}}
  *   tree=<text>        go to the tree whose name holds this text. The field zooms out to fit it,
  *                      and never zooms in past 100 percent.
  *   zoom=<percent>     zoom the field about the middle of the page
@@ -127,6 +129,7 @@ function loneCard(type: string, { item: fields = {}, props = {}, pick = false }:
 
 /** Swaps a key `$n` for the id of the nth loose card, at any depth. */
 function named(value: unknown): unknown {
+  if (typeof value === 'string' && /^\$\d+$/.test(value)) return loose[Number(value.slice(1))] ?? value;
   if (Array.isArray(value)) return value.map(named);
   if (value === null || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value).map(([key, inner]) => [/^\$\d+$/.test(key) ? (loose[Number(key.slice(1))] ?? key) : key, named(inner)]));
