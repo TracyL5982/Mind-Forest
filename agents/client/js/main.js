@@ -98,6 +98,7 @@ function receive(message) {
       store.replace(message.snapshot, message.undo ?? null);
       store.settings = message.settings;
       voiced = message.voice === true;
+      voice.serviceHears = message.hearing === 'service';
       showSettings(store.settings);
       log.reset();
       for (const id of field.thinking.keys()) field.thinking.set(id, 0);
@@ -276,7 +277,7 @@ const voice = new Voice({
     $('mic').dataset.state = state;
     $('mic').setAttribute('aria-pressed', String(state === 'listening'));
   },
-  transcribe: (blob) => conn.transcribe(blob),
+  transcribe: (blob) => conn.transcribe(blob, currentTree()),
 });
 $('mic').addEventListener('click', () => voice.toggle());
 

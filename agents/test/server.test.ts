@@ -174,3 +174,34 @@ test('a reply is read aloud by the service voice when it has one, and the client
   assert.equal((await fetch(`${silent.url}/api/speak?token=secret&text=hello`)).status, 404);
   await silent.close();
 });
+
+test('recorded speech is transcribed with the card titles as hints, and the client is told who hears', async () => {
+  const asked: { mime: string; context: string }[] = [];
+  const { run } = await boot(undefined, {
+    transcribe: async (_audio, mime, context) => {
+      asked.push({ mime, context });
+      return 'undo that, I meant the sourdough tree';
+    },
+  });
+  const c = await connect(run);
+  assert.equal((await c.until((m) => m.t === 'hello')).hearing, 'service');
+  await run.pipeline.dump([{ kind: 'text', text: 'Sourdough rises slowly in winter' }]);
+  await run.pipeline.idle();
+  const tree = [...run.mind.trees.values()][0]!;
+  const res = await fetch(`${run.url}/api/transcribe?tree=${tree.id}`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer secret', 'Content-Type': 'audio/webm;codecs=opus' },
+    body: new Uint8Array([1, 2, 3]),
+  });
+  assert.deepEqual(await res.json(), { text: 'undo that, I meant the sourdough tree' });
+  assert.equal(asked[0]!.mime, 'audio/webm;codecs=opus');
+  assert.match(asked[0]!.context, /sourdough/i);
+  c.ws.close();
+  await run.close();
+
+  const { run: plain } = await boot();
+  const p = await connect(plain);
+  assert.equal((await p.until((m) => m.t === 'hello')).hearing, 'browser');
+  p.ws.close();
+  await plain.close();
+});

@@ -102,8 +102,8 @@ export class Connection {
     return `/api/speak?token=${encodeURIComponent(this.token)}&text=${encodeURIComponent(text)}`;
   }
 
-  async transcribe(blob) {
-    const reply = await fetch('/api/transcribe', {
+  async transcribe(blob, treeId) {
+    const reply = await fetch(`/api/transcribe${treeId ? `?tree=${encodeURIComponent(treeId)}` : ''}`, {
       method: 'POST',
       headers: { ...this.auth(), 'Content-Type': blob.type.split(';')[0] || 'audio/webm' },
       body: blob,

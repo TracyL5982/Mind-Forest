@@ -9,7 +9,7 @@ import { DEFAULT_SETTINGS, type Handoff, type Roles, type Settings } from '../co
 import { Mindstorm } from '../core/state.ts';
 import { DiskAssets } from './assets.ts';
 import { ClientMessage, PROTOCOL_VERSION } from './protocol.ts';
-import type { Speak } from './speech-openai.ts';
+import type { Speak, Transcribe } from './speech-openai.ts';
 import { SqliteStore } from './store.ts';
 import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
@@ -27,6 +27,8 @@ export interface ServerOptions {
   keys?: Record<string, string | undefined>;
   /** Reads a reply aloud. Without it the client uses the browser's own voice. */
   speak?: Speak;
+  /** Turns recorded speech into text, told the card titles. When present the client records instead of using the browser's recognition. */
+  transcribe?: Transcribe;
   settings?: Partial<Settings>;
   log?: (line: string) => void;
 }
@@ -140,7 +142,10 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     }
     if (req.method === 'POST' && path === '/api/transcribe') {
       const audio = await body(req, 25 * 1024 * 1024);
-      const text = await opts.model.transcribe({ audio, mime: req.headers['content-type'] ?? 'audio/wav' });
+      const mime = req.headers['content-type'] ?? 'audio/wav';
+      const text = opts.transcribe
+        ? await opts.transcribe(audio, mime, likelyWords(mind, url.searchParams.get('tree')))
+        : await opts.model.transcribe({ audio, mime });
       return json(res, 200, { text });
     }
     if (req.method === 'GET' && path === '/api/speak') {
@@ -193,7 +198,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
 
   wss.on('connection', (ws: WebSocket) => {
     sockets.add(ws);
-    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, undo: pipeline.undoLabel(), voice: Boolean(opts.speak) }));
+    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser' }));
     ws.on('close', () => sockets.delete(ws));
     ws.on('message', (raw) => {
       let message: ClientMessage;
@@ -317,4 +322,21 @@ function serveStatic(res: ServerResponse, dir: string, path: string): void {
   if (!file.startsWith(root) || !existsSync(file) || !statSync(file).isFile()) return json(res, 404, { error: 'not found' });
   res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-cache' });
   res.end(readFileSync(file));
+}
+
+const LIKELY_WORDS = 900;
+
+/** Card titles the user is likely to say: the tree in view first, then every tree, then the newest cards. */
+export function likelyWords(mind: Mindstorm, treeId: string | null): string {
+  const inView = treeId && mind.trees.has(treeId) ? mind.treeNodes(treeId).map((n) => mind.item(n.itemId).title) : [];
+  const trees = [...mind.trees.values()].map((t) => t.title);
+  const newest = [...mind.items.values()].slice(-40).reverse().map((i) => i.title);
+  const titles: string[] = [];
+  let length = 0;
+  for (const title of new Set([...inView, ...trees, ...newest].map((t) => t.trim()).filter(Boolean))) {
+    if (length + title.length + 2 > LIKELY_WORDS) break;
+    titles.push(title);
+    length += title.length + 2;
+  }
+  return titles.join('; ');
 }
