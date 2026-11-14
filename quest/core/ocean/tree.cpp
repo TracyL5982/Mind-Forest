@@ -280,7 +280,8 @@ Tree::Change Tree::focus(int id) {
     stand = id;
     current = id;
     focused = true;
-    std::vector<int> added = n.children.empty() ? grow(id) : std::vector<int>{};
+    // AGENT: a tree the agent service grows brings its own picks (`grows`).
+    std::vector<int> added = n.children.empty() && grows ? grow(id) : std::vector<int>{};
     relayout();
     return {added, {}};
 }
@@ -1015,3 +1016,27 @@ std::shared_ptr<Tree> Tree::replay(const SavedSpec& spec, const std::shared_ptr<
     tree->maker = spec.maker;
     return tree;
 }
+
+// AGENT: see tree.h.
+int Tree::graft(const Ref& ref, int parent, const std::string& why, Tone tone, bool kept, std::optional<float> imp) {
+    if (!find(nodes, parent)) return -1;
+    std::vector<int> slots = freeSlots(parent);
+    if (slots.empty()) slots = freeSlots(parent, true);
+    int slot = slots.empty() ? int(find(nodes, parent)->children.size()) : slots.front();
+    int id = add(ref, parent, why, tone, false, slot);
+    if (TreeNode* n = find(nodes, id)) {
+        n->kept = kept;
+        n->imp = imp;
+    }
+    relayout();
+    return id;
+}
+
+void Tree::revise(int id, const std::string& why, bool kept, std::optional<float> imp) {
+    TreeNode* n = find(nodes, id);
+    if (!n) return;
+    n->why = why;
+    n->kept = kept;
+    n->imp = imp;
+}
+

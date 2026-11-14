@@ -17,7 +17,7 @@ sources=(main.cpp platform_mac.mm net_mac.mm $CORE/base.cpp $CORE/json.cpp $CORE
 if [ "$1" = "--host-only" ]; then
   FLAGS="$FLAGS -DOCEAN_NO_SCENE"
 else
-  sources+=(canvas_mac.mm $CORE/canvas.cpp $CORE/ocean/*.cpp)
+  sources+=(canvas_mac.mm $CORE/canvas.cpp $CORE/ocean/*.cpp $CORE/agent/*.cpp)
 fi
 objects=()
 pids=()

@@ -2,6 +2,8 @@
 // `// MARK: - The shelf of covers` and `// MARK: - The strip: what you can say and do`.
 #include "oceanmodel.h"
 
+#include "../agent/bridge.h"
+
 #include <cmath>
 #include <cstdio>
 
@@ -214,6 +216,7 @@ void OceanModel::pressTree(bool send) {
     stir();
     double now = time;
     if (send) tree->sent = true;
+    if (agentBridge) agentBridge->pressed(*tree, send);     // AGENT
     // The cards whose pictures the cover shows go to where those float; the rest give way.
     CoverPlan plan = coverPlan(*tree);
     std::vector<int> ids;
