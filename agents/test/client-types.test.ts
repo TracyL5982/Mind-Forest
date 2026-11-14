@@ -218,6 +218,9 @@ test('a table cuts no number, beside words or alone, and shows fewer columns whe
   assert.deepEqual(money.numbers, [false, true, true], 'an amount with a currency before or after it is a number');
   assert.equal(money.foot, 'and 1 more column', 'and a column is dropped and counted before a number is cut');
   whole(money);
+  const named = plan(blank, { heads: ['Name', 'Value'], rows: [['Avogadro', '602,214,076,000,000,000,000,000'], ['Seconds in a year', '31,556,952']] });
+  assert.deepEqual(named.numbers, [false, true], 'the first column gives way to a long number beside it, and the card keeps both');
+  whole(named);
 });
 
 test('a card draws its fixed words in Chinese when its item is written in Chinese, and sizes itself with them', async () => {
