@@ -1,4 +1,5 @@
 import { h, put, safeUrl } from './dom.js';
+import { chipSources } from './chips.js';
 import { drawDetail } from './components/index.js';
 
 const HOW = { paste: 'You pasted this', drop: 'You dropped this in', voice: 'You said this', link: 'A link you added', web: 'Found on the web', instagram: 'Found on Instagram', 'image-gen': 'Made for you as a picture', idea: 'An idea from the librarian' };
@@ -92,6 +93,7 @@ export class Panel {
       item.text && item.text !== item.summary && item.text !== item.title && h('p', { class: 'panel-text', dir: 'auto', text: item.text }),
       item.tags.length > 0 && h('div', { class: 'tags' }, item.tags.map((tag) => h('span', { class: 'tag', text: tag }))),
       h('dl', { class: 'facts' },
+        chipSources(item, node).map(({ kind, label, text }) => [h('dt', { text: label }), h('dd', { data: { chip: kind }, text })]),
         h('dt', { text: 'From' }), h('dd', { text: cameFrom(item) }),
         url && [h('dt', { text: 'Source' }), h('dd', null, h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', text: url.replace(/^https?:\/\//, '') }))],
         when(item.source.capturedAt) && [h('dt', { text: 'Added' }), h('dd', { text: when(item.source.capturedAt) })],

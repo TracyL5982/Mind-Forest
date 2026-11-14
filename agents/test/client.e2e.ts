@@ -329,6 +329,13 @@ async function main(): Promise<void> {
       assert.deepEqual(await overlaps(page), []);
       assert.deepEqual(await spills(page), []);
 
+      await card(CHIPPED.four).click();
+      const facts = page.locator('#panel .facts');
+      assert.deepEqual(await facts.locator('dd[data-chip]').allTextContents(), ['Summer 1958', 'Bodega Bay', 'Ada Lovelace, Grace Hopper, Edsger Dijkstra', 'Bancroft Library'], 'the opened card lists every source in full');
+      assert.deepEqual((await facts.locator('dt').allTextContents()).slice(0, 4), ['When', 'Where', 'People', 'Origin']);
+      await card(CHIPPED.plainNote).click();
+      assert.equal(await facts.locator('dd[data-chip]').count(), 0);
+
       await card(CHIPPED.museum).click();
       await page.locator('#panel').getByRole('button', { name: 'Keep', exact: true }).click();
       await until('the kept card to drop its origin chip', async () => (await chips(CHIPPED.museum)).join() === '1857');
