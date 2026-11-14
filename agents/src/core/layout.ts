@@ -265,11 +265,19 @@ export function place(measured: Measured): Placed {
   return { w: measured.w, h: measured.h, cards, marks };
 }
 
-/** The share of the content that cards cover. */
+/**
+ * The share of the content that cards cover, leaving out the room labels and frames take by design, so a hole counts and a frame
+ * does not: a label's line, and a frame's inset on each side.
+ */
 export function filled(placed: Placed): number {
-  let area = 0;
-  for (const card of placed.cards.values()) area += card.w * card.h;
-  return area / (placed.w * placed.h);
+  let cards = 0;
+  for (const card of placed.cards.values()) cards += card.w * card.h;
+  let framing = 0;
+  for (const { kind, at } of placed.marks) {
+    if (kind === 'label') framing += at.w * at.h;
+    if (kind === 'frame') framing += at.w * at.h - (at.w - 2 * SPACE.inset) * (at.h - 2 * SPACE.inset);
+  }
+  return cards / (placed.w * placed.h - framing);
 }
 
 /** Whether a placed block looks right: within the most room, neither far wider than tall nor far taller than wide, and well filled. */
