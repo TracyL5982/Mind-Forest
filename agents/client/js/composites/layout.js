@@ -15,7 +15,9 @@ export function laidOut(group, ids, sizes) {
   return shapeOk(placed) ? placed : null;
 }
 
-const box = ({ x, y, w, h: tall }) => ({ left: `${PAD + x}px`, top: `${HEAD + y}px`, width: `${w}px`, height: `${tall}px` });
+/** A mark is placed inside the pane's 1 px border, and cards are not, so a mark moves 1 px up and left to line up with them. */
+const BORDER = 1;
+const box = ({ x, y, w, h: tall }) => ({ left: `${PAD + x - BORDER}px`, top: `${HEAD + y - BORDER}px`, width: `${w}px`, height: `${tall}px` });
 
 const MARKS = {
   label: (mark) => h('div', { class: 'lay-label', dir: 'auto', style: box(mark.at), text: mark.text }),
