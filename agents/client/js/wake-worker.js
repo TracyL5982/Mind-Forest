@@ -68,6 +68,8 @@ function ready() {
 }
 
 function build() {
+  stream?.free();
+  stream = null;
   kws?.free();
   kws = createKws(self.Module, {
     featConfig: { samplingRate: RATE, featureDim: 80 },

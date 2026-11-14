@@ -35,10 +35,14 @@ export class HandsFree {
     this.set('starting');
     const worker = new Worker('js/wake-worker.js');
     const channel = new MessageChannel();
-    const parts = { worker, stream: null, context: null };
+    const parts = { worker, stream: null, context: null, cancel: null };
     this.parts = parts;
+    const current = () => {
+      if (this.parts !== parts) throw new Error('stopped while starting');
+    };
     try {
       await new Promise((ready, failed) => {
+        parts.cancel = failed;
         worker.onmessage = (event) => {
           if (event.data.t === 'ready') ready();
           if (event.data.t === 'failed') failed(new Error(event.data.message));
@@ -46,20 +50,24 @@ export class HandsFree {
         worker.onerror = (event) => failed(new Error(event.message || 'the listener did not load'));
         worker.postMessage({ t: 'start', name, tuning: TUNING, audio: channel.port2 }, [channel.port2]);
       });
+      current();
       parts.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      current();
       const source = microphoneAt16k(parts);
       await parts.context.audioWorklet.addModule('js/wake-tap.js');
+      current();
       const tap = new AudioWorkletNode(parts.context, 'wake-tap');
       const silent = parts.context.createGain();
       silent.gain.value = 0;
       source.connect(tap).connect(silent).connect(parts.context.destination);
       tap.port.postMessage(channel.port1, [channel.port1]);
     } catch (err) {
+      // Pressed off while starting: whatever this start opened is closed, and a newer start is left alone.
+      if (this.parts !== parts) return release(parts);
       this.stop();
       this.onProblem(err?.name === 'NotAllowedError' ? 'The microphone is blocked for this page.' : `Listening could not start: ${err?.message ?? err}`);
       return;
     }
-    if (this.parts !== parts) return;
     worker.onmessage = (event) => this.heard(event.data);
     this.set('waiting');
     this.sync();
@@ -67,13 +75,8 @@ export class HandsFree {
 
   stop() {
     clearTimeout(this.resume);
-    const parts = this.parts;
+    if (this.parts) release(this.parts);
     this.parts = null;
-    if (parts) {
-      parts.worker.terminate();
-      for (const track of parts.stream?.getTracks() ?? []) track.stop();
-      void parts.context?.close();
-    }
     this.set('off');
   }
 
@@ -144,6 +147,16 @@ export class HandsFree {
     this.state = state;
     this.onState(state);
   }
+}
+
+/** Closes what a start opened. Safe to call again on the same parts. */
+function release(parts) {
+  parts.cancel?.(new Error('stopped'));
+  parts.worker.terminate();
+  for (const track of parts.stream?.getTracks() ?? []) track.stop();
+  void parts.context?.close().catch(() => {});
+  parts.stream = null;
+  parts.context = null;
 }
 
 /** The microphone at the spotter's own rate where the browser can resample it, and at the device's rate where it cannot (the tap then averages it down). */
