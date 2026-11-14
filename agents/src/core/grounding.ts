@@ -19,6 +19,8 @@ export interface Grounding {
   quotes(passage: string): boolean;
   /** The text writes this number, in any grouping. */
   writes(value: number): boolean;
+  /** The text writes every number these words write. Words that write no number tally. */
+  tallies(words: string): boolean;
   /** The text writes this hex colour, with its "#", as a whole value. */
   paints(hex: string): boolean;
   /** The check mark on the line whose own text is these words: done, not done, or none. */
@@ -515,6 +517,11 @@ class Source implements Grounding {
   writes(value: number): boolean {
     this.numbers ??= new Set(this.tokens.list.flatMap((token) => (typeof token === 'object' ? token.readings : [])));
     return Number.isFinite(value) && this.numbers.has(value);
+  }
+
+  tallies(words: string): boolean {
+    // A form with no one value, such as a date, tallies when each of its groups is written.
+    return tokenize(uniform(words)).list.every((token) => typeof token !== 'object' || (Number.isNaN(token.value) ? token.readings : [token.value]).every((value) => this.writes(value)));
   }
 
   paints(hex: string): boolean {

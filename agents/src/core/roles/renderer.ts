@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
-import { COMPONENTS, isValidGroup, isValidView, siteOf, type ComponentId, type CompositeId } from '../views.ts';
+import { grounding, type Grounding } from '../grounding.ts';
+import { CHECKS, isValidGroup, isValidView, siteOf, type Check, type ComponentId, type CompositeId, type Stated } from '../views.ts';
 import type { RoleContext, Roles } from './types.ts';
 
 const ROLE = 'renderer';
@@ -98,29 +99,6 @@ function clip(text: string, max: number): string {
   return t.length <= max ? t : `${t.slice(0, max - 1).trimEnd()}…`;
 }
 
-function flat(text: string): string {
-  return text
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-
-function holds(text: string, claim: string): boolean {
-  const c = flat(claim);
-  return c.length > 0 && flat(text).includes(c);
-}
-
-function numbersIn(text: string): Set<number> {
-  return new Set((text.match(/\d[\d,]*(?:\.\d+)?/g) ?? []).map((n) => Number(n.replace(/,/g, ''))));
-}
-
-function numbersHeld(text: string, claim: string): boolean {
-  const known = numbersIn(text);
-  return [...numbersIn(claim)].every((n) => known.has(n));
-}
-
 function compact(props: Props): Props {
   return Object.fromEntries(Object.entries(props).filter(([, v]) => v !== undefined && v !== ''));
 }
@@ -151,6 +129,36 @@ function inTimeOrder(labels: string[]): boolean {
 /** The words a claim about an item is checked against. The summary is left out: a model wrote it. */
 function body(item: Item): string {
   return `${item.title}\n${item.text}`;
+}
+
+/** Every string and number an item's data holds, at any depth. */
+function held(value: unknown, out: string[] = []): string[] {
+  if (typeof value === 'string') out.push(value);
+  else if (typeof value === 'number') out.push(String(value));
+  else if (value && typeof value === 'object') for (const inner of Object.values(value)) held(inner, out);
+  return out;
+}
+
+/** What a view of one item is checked against. */
+interface Content {
+  /** The title, the text and each value of the data. A data value is a list item, so no claim runs from one into the next. */
+  text: Grounding;
+  /** The value is one the item holds outside its words, whole or cut short with an ellipsis. */
+  own(value: string): boolean;
+}
+
+function contentOf(item: Item, assetUrl: (id: string) => string): Content {
+  const data = held(item.data);
+  const { url, asset, from } = item.source;
+  const owned = [item.text, item.summary, url, url && siteOf(url), asset && assetUrl(asset), from.replace(/^chat-export:/, ''), ...data].flatMap((value) => value?.trim() || []);
+  return {
+    text: grounding([body(item), ...data.map((value) => `• ${value}`)].join('\n')),
+    own(value) {
+      const whole = value.trim();
+      const cut = whole.endsWith('…') ? whole.slice(0, -1).trimEnd() : '';
+      return owned.some((one) => one === whole || (cut !== '' && one.startsWith(cut)));
+    },
+  };
 }
 
 // ---- components by rule
@@ -306,46 +314,36 @@ export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
 
 // ---- components by model
 
-/** Whether everything the view shows really stands in the item's own text. */
-function grounded(view: { component: string; props: unknown }, item: Item): boolean {
-  if (!isValidView(view)) return false;
-  const text = body(item);
-  switch (view.component as ComponentId) {
-    case 'quote': {
-      const p = COMPONENTS.quote.parse(view.props);
-      return holds(text, p.text) && (p.by === undefined || holds(text, p.by));
-    }
-    case 'fact': {
-      const p = COMPONENTS.fact.parse(view.props);
-      return p.value.length <= 32 && holds(text, p.value) && p.label.trim() !== '';
-    }
-    case 'steps': {
-      const p = COMPONENTS.steps.parse(view.props);
-      return p.steps.length >= 2 && p.steps.every((s) => holds(text, s));
-    }
-    case 'chart': {
-      const p = COMPONENTS.chart.parse(view.props);
-      const known = numbersIn(text);
-      return (
-        p.labels.length >= 2 &&
-        p.labels.length === p.values.length &&
-        p.values.every((v) => known.has(Math.abs(v))) &&
-        p.labels.every((l) => holds(text, l)) &&
-        (p.unit === undefined || holds(text, p.unit))
-      );
-    }
-    case 'note': {
-      const p = COMPONENTS.note.parse(view.props);
-      return p.emphasis === undefined || holds(text, p.emphasis);
-    }
-    default:
-      return false;
-  }
+const STANDS: Record<Stated, (value: unknown, content: Content) => boolean> = {
+  says: (value, { text }) => typeof value === 'string' && text.says(value),
+  cell: (value, { text }) => typeof value === 'string' && (value.trim() === '' || text.says(value)),
+  quotes: (value, { text }) => typeof value === 'string' && text.quotes(value),
+  writes: (value, { text }) => typeof value === 'number' && text.writes(value),
+  paints: (value, { text }) => typeof value === 'string' && (value.trim().startsWith('#') ? text.paints(value) : text.says(value)),
+  own: (value, content) => typeof value === 'string' && content.own(value),
+  label: (value) => typeof value === 'string' && value.trim() !== '',
+  choice: () => true,
+};
+
+function stands(value: unknown, check: Check, content: Content): boolean {
+  if (Array.isArray(value)) return value.every((one) => stands(one, check, content));
+  if (typeof check === 'string') return STANDS[check](value, content);
+  return typeof value === 'object' && value !== null && Object.entries(value).every(([key, inner]) => key in check && stands(inner, check[key]!, content));
 }
 
-function claimed(reply: ComponentsReply['items'][number], item: Item): Draw {
-  const text = body(item);
-  const kept = (value: string) => (holds(text, value) ? value.trim() : undefined);
+function shown(view: { component: string; props: unknown }, item: Item, content: Content): boolean {
+  if (!isValidView(view)) return false;
+  const { props, also } = CHECKS[view.component as ComponentId] as { props: Check; also?: (props: never, item: Item, text: Grounding) => boolean };
+  return stands(view.props, props, content) && (also?.(view.props as never, item, content.text) ?? true);
+}
+
+/** Whether everything the view shows really stands in its item: each prop the way `CHECKS` says it must. */
+export function grounded(view: { component: string; props: unknown }, item: Item, assetUrl: (id: string) => string): boolean {
+  return shown(view, item, contentOf(item, assetUrl));
+}
+
+function claimed(reply: ComponentsReply['items'][number], text: Grounding): Draw {
+  const kept = (value: string) => (text.says(value) ? value.trim() : undefined);
   switch (reply.component) {
     case 'quote':
       return {
@@ -404,8 +402,9 @@ async function askComponents(ctx: RoleContext, open: { node: Node; item: Item }[
     for (const entry of reply.items) {
       const item = byId.get(entry.id);
       if (!item || out.has(entry.id)) continue;
-      const draw = claimed(entry, item);
-      if (grounded(draw, item)) out.set(entry.id, draw);
+      const content = contentOf(item, (id) => ctx.assets.url(id));
+      const draw = claimed(entry, content.text);
+      if (shown(draw, item, content)) out.set(entry.id, draw);
     }
   } catch (err) {
     ctx.note(ROLE, `The model could not choose components (${message(err)}). Kept the rule-based views.`);
@@ -558,9 +557,11 @@ ${blocks.join('\n\n')}`;
 }
 
 function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], ids: Id[]): GroupDraft | null {
+  const read = new Map<Id, Grounding>();
   const content = (id: Id) => {
     const item = ctx.mind.itemOf(id);
-    return `${item.title}\n${item.text}\n${item.summary}\n${str(item.data.when) ?? ''}`;
+    if (!read.has(id)) read.set(id, grounding(`${item.title}\n${item.text}\n${item.summary}\n${str(item.data.when) ?? ''}`));
+    return read.get(id)!;
   };
   const title = clip(g.title, 40);
   switch (g.composite) {
@@ -568,7 +569,7 @@ function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], ids: 
       const label = new Map(g.members.map((id, i) => [id, (g.labels[i] ?? '').trim()]));
       const dated = ids.filter((id) => {
         const l = label.get(id)!;
-        return l !== '' && (/\d/.test(l) ? numbersHeld(content(id), l) : holds(content(id), l));
+        return l !== '' && (/\d/.test(l) ? content(id).tallies(l) : content(id).says(l));
       });
       if (dated.length < 3) return null;
       return { composite: 'timeline', title, members: dated, props: { labels: Object.fromEntries(dated.map((id) => [id, clip(label.get(id)!, 40)])) } };
@@ -585,7 +586,7 @@ function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], ids: 
           criteria.map((_c, i) => {
             const cell = clip(rows.get(id)![i] ?? '', 80);
             // A number the member's own content does not hold was made up.
-            return numbersHeld(content(id), cell) ? cell : '';
+            return content(id).tallies(cell) ? cell : '';
           }),
         ]),
       );
@@ -669,13 +670,14 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds }) => {
   const nodes = [...new Set(nodeIds)].flatMap((id) => ctx.mind.nodes.get(id) ?? []);
   const draws = new Map<Id, Draw>();
   const open: { node: Node; item: Item }[] = [];
+  const assetUrl = (id: string) => ctx.assets.url(id);
   for (const node of nodes) {
     const item = ctx.mind.items.get(node.itemId);
     if (!item) continue;
-    const draw = byRule(item, (id) => ctx.assets.url(id));
+    const draw = byRule(item, assetUrl);
     const ambiguous = draw.component === 'note' && item.kind === 'text' && item.text.trim().length >= AMBIGUOUS_FROM;
     // An earlier choice that still stands in the text is kept, so a second pass costs no model call and cannot lose it.
-    if (ambiguous && node.view.by === 'renderer' && grounded(node.view, item)) continue;
+    if (ambiguous && node.view.by === 'renderer' && grounded(node.view, item, assetUrl)) continue;
     draws.set(node.id, draw);
     if (ambiguous) open.push({ node, item });
   }
