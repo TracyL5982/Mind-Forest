@@ -87,8 +87,12 @@ const DRAWN: ((n: number) => Partial<Item>)[] = [
     origin: { by: 'agent', role: 'scout' }, data: { kind: 'paper', by: 'M. Okafor et al.', date: '2011', authors: ['M. Okafor', 'L. Haas'], authorsCut: true, venue: 'Journal of Example Vision' },
     source: { from: 'web', url: `https://doi.example/${n}`, capturedAt: '2026-11-14T00:00:00.000Z' },
   }),
-  (n) => ({ title: `Lisbon ${n}`, data: { where: 'Lisbon' } }),
-  (n) => ({ title: `A thought ${n}`, text: '' }),
+  () => ({ title: 'Lisbon', data: { where: 'Lisbon, Portugal' } }),
+  () => ({ title: 'Move the study to the attic', text: '' }),
+  (n) => ({ kind: 'video', summary: 'First steps on the beach.', data: { where: 'Brighton' }, source: { from: 'drop', asset: `asset-${n}`, capturedAt: '2026-11-14T00:00:00.000Z' } }),
+  () => ({ text: 'const a = 1;\nconst b = a + 1;\nconsole.log(b);', data: { code: { source: 'const a = 1;\nconst b = a + 1;\nconsole.log(b);' } } }),
+  // Small structure in a long text: every row it could draw is measured against the text and passed over.
+  (n) => ({ text: pasted(n), data: { quote: { text: 'salt it like the sea', by: 'Nonna' }, facts: [{ label: 'Seats', value: '100' }], where: 'Lisbon', pros: ['fast builds'], cons: ['a steep start'] } }),
   (n) => ({ kind: 'image', title: `beach-${n}.jpg`, data: { where: '杭州西湖' }, source: { from: 'drop', asset: `asset-${n}`, capturedAt: '2026-11-14T00:00:00.000Z' } }),
 ];
 

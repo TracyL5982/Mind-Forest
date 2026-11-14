@@ -61,12 +61,10 @@ const ITEMS: Record<StructuredId, Item> = {
     text: 'Feed it once a day with equal parts flour and water. Never rinse the jar with hot water. Anything above 40 °C kills the yeast.',
   }),
   excerpt: item('excerpt', {
-    kind: 'link',
     title: 'The Poetics of Space',
-    text: 'A reading of the house as the first universe of a child.',
+    text: 'Copied out of Chapter 1, on the house as the first universe of a child.\n\nThe house shelters day-dreaming, the house protects the dreamer.',
     summary: 'Bachelard on how rooms hold memory.',
     data: { excerpt: { text: 'The house shelters day-dreaming, the house protects the dreamer.', at: 'Chapter 1' }, site: 'example.org' },
-    source: { from: 'link', url: 'https://example.org/poetics-of-space', capturedAt: CAPTURED },
   }),
   definition: item('definition', {
     title: 'Parallax',
@@ -105,12 +103,10 @@ const ITEMS: Record<StructuredId, Item> = {
     source: { from: 'web', url: 'https://doi.example/10.1000/zoom.2011', capturedAt: CAPTURED },
   }),
   place: item('place', {
-    kind: 'image',
-    title: '杭州西湖',
+    title: '西湖',
     text: '清晨的西湖，断桥上还没有游人，湖面起了一层薄雾。',
     summary: '清晨的西湖。',
-    data: { where: '西湖' },
-    source: { from: 'drop', asset: 'sample-west-lake', capturedAt: CAPTURED },
+    data: { where: '西湖', image: 'https://example.org/west-lake.jpg' },
   }),
 };
 

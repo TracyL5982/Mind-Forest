@@ -103,7 +103,7 @@ test('a title that merely starts with a number is no fact', async () => {
   const k = kit();
   const { ids } = grow(k, [{ title: '12 Angry Men', text: '12 Angry Men' }, { title: 'Chapter 3', text: 'Chapter 3' }, { title: '12 Angry Men', text: PLAIN }]);
   await render(k, ids);
-  assert.deepEqual(ids.map((id) => view(k, id).component), ['idea', 'idea', 'note']);
+  assert.deepEqual(ids.map((id) => view(k, id).component), ['note', 'note', 'note']);
 });
 
 test('media, links and chats are drawn from where their content lives', async () => {
@@ -392,6 +392,11 @@ function ruled(fields: Partial<Item> & { title: string }) {
 }
 const chosen = (fields: Partial<Item> & { title: string }) => ruled(fields).component;
 
+const LINKED = { kind: 'link' as const, source: { from: 'link', url: 'https://example.com/a', capturedAt: '' } };
+const PHOTO = { kind: 'image' as const, source: { from: 'drop', asset: 'a1', capturedAt: '' } };
+const CLIP = { kind: 'video' as const, source: { from: 'drop', asset: 'v1', capturedAt: '' } };
+const ESSAY = `${LONG} `.repeat(9).trim();
+
 test('each structured type is chosen from the data that holds it, and a near miss is not', () => {
   const facts = [{ label: 'Height', value: '330 m' }, { label: 'Built', value: 1889 }];
   assert.deepEqual(ruled({ title: 'Tower', data: { facts } }), { component: 'facts', props: { facts: [{ label: 'Height', value: '330 m' }, { label: 'Built', value: '1889' }] } });
@@ -463,46 +468,145 @@ test('a pick is drawn as what its source catalogued it as', () => {
   assert.equal(chosen({ title: 'An essay', origin: SCOUT, data: { kind: 'article', by: 'A. Writer' } }), 'note');
 });
 
-test('a place is an item whose title names where it is, and a photo that merely has a place stays an image', () => {
-  const photo = { kind: 'image' as const, source: { from: 'drop', asset: 'a1', capturedAt: '' } };
+test('a place is a note whose title is the place and nothing more', () => {
+  const place = (title: string, where: string, more: Partial<Item> = {}) => chosen({ title, data: { where }, ...more });
   assert.deepEqual(ruled({ title: 'Lisbon', data: { where: 'Lisbon' } }), { component: 'place', props: { name: 'Lisbon' } });
-  assert.deepEqual(ruled({ ...photo, title: '杭州西湖', data: { where: '西湖' } }), { component: 'place', props: { name: '西湖', src: '/assets/a1' } });
-  assert.equal(chosen({ title: 'Belém', data: { where: 'Belém, Lisbon' } }), 'place', 'the place states the title');
-  assert.equal(chosen({ ...photo, title: 'beach.jpg', data: { where: 'Porto' } }), 'image');
-  assert.equal(chosen({ title: 'Portobello mushrooms', data: { where: 'Porto' } }), 'note', 'a place inside another word is not named');
+  assert.deepEqual(ruled({ title: 'Lisbon', data: { where: 'Lisbon, Portugal', image: 'https://example.com/lisbon.jpg' } }).props, { name: 'Lisbon, Portugal', src: 'https://example.com/lisbon.jpg' });
+  for (const [title, where] of [['LISBON', 'lisbon'], ['Lisbon, Portugal', 'Lisbon'], ['Ｌｉｓｂｏｎ', 'Lisbon'], ['  West   Lake ', 'West Lake'], ['西湖', '西湖']] as const) {
+    assert.equal(place(title, where), 'place', `${title} is ${where}`);
+  }
+  for (const [title, where] of [
+    ['Dinner in Lisbon', 'Lisbon'],
+    ['Lisbon vs Porto', 'Lisbon'],
+    ['Leaving home', 'home'],
+    ['The', 'The Hague'],
+    ['在西湖边吃的那顿饭', '西湖'],
+    ['Portobello mushrooms', 'Porto'],
+    ['里斯本', 'Lisbon'],
+  ] as const) {
+    assert.equal(place(title, where), 'note', `${title} is not ${where}`);
+  }
+  assert.equal(place('Lisbon', 'Lisbon', PHOTO), 'image');
+  assert.equal(place('Lisbon', 'Lisbon', CLIP), 'video');
+  assert.equal(place('Lisbon', 'Lisbon', LINKED), 'link');
+  assert.equal(place('Lisbon', 'Lisbon', { kind: 'file' }), 'note');
 });
 
-test('an idea is a short thought the user typed, and nothing else', () => {
+test('an idea is a phrase the user wrote, and a label is a note', () => {
+  const typed = (text: string, title = text) => chosen({ title, text });
   assert.deepEqual(ruled({ title: 'Build a treehouse', text: 'Build a treehouse' }), { component: 'idea', props: {} });
-  assert.equal(chosen({ title: '把书房搬到阁楼', text: '' }), 'idea');
+  for (const thought of ['Why do users churn?', '把客厅改成工作室！', '把书房搬到阁楼', 'A map that redraws itself as you learn']) assert.equal(typed(thought), 'idea', thought);
+  assert.equal(typed('Why do users churn?', 'Why do users churn'), 'idea', 'a title without the end punctuation');
+  assert.equal(typed('把客厅改成工作室！', '把客厅改成工作室'), 'idea');
+  assert.equal(typed('  build a   treehouse. ', 'Build a treehouse'), 'idea', 'case and spacing do not count');
+  assert.equal(typed('', 'Build a treehouse'), 'idea', 'a title alone');
+  assert.equal(typed('Build a treehouse', ''), 'idea', 'a text alone');
+
+  for (const label of ['TODO', '🎉', '灵感', 'Buy milk', 'Room 204', 'example.com/pricing', 'Maria Chen', 'Q3 Roadmap', '例子.中国/价格表单页面', '第3章的想法和笔记', 'NASA', '周五见']) {
+    assert.equal(typed(label), 'note', label);
+  }
+  assert.equal(typed('Why do users churn?', 'Why users churn'), 'note', 'a title in other words');
+  assert.equal(typed('With a rope ladder.', 'Build a treehouse'), 'note', 'a title with more text under it');
+  assert.equal(typed('Build a treehouse in the old oak by the river'), 'note', 'forty characters or more');
   assert.equal(chosen({ title: 'Build a treehouse', text: 'Build a treehouse', origin: SCOUT }), 'note', 'a thought an agent brought');
-  assert.equal(chosen({ title: 'Build a treehouse', text: 'With a rope ladder.' }), 'note', 'a title with more text under it');
-  assert.equal(chosen({ title: 'Build a treehouse in the old oak by the river', text: '' }), 'note', 'forty characters or more');
-  assert.equal(chosen({ title: 'treehouse.pdf', text: '', kind: 'file' }), 'note', 'a file');
+  assert.equal(chosen({ title: 'treehouse plans.pdf', text: '', kind: 'file' }), 'note', 'a file');
+});
+
+/** One small piece of each structure a row draws, with the type that row draws. */
+const PIECES: [string, Record<string, unknown>][] = [
+  ['breakdown', { chart: { labels: ['Rent', 'Food'], values: [60, 40], unit: '%' } }],
+  ['chart', { chart: { labels: ['May', 'June'], values: [12, 15] } }],
+  ['table', { table: { heads: ['Plan', 'Price'], rows: [['Solo', '$8'], ['Team', '$20']] } }],
+  ['proscons', { pros: ['fast'], cons: ['slow builds'] }],
+  ['qa', { question: 'Why is the sky blue?', answer: 'Air scatters blue light.' }],
+  ['definition', { term: 'Parallax', definition: 'an apparent shift' }],
+  ['steps', { steps: ['Boil water', 'Add pasta'] }],
+  ['list', { items: ['tent', 'stove'] }],
+  ['quote', { quote: { text: 'Invent the future.', by: 'Alan Kay' } }],
+  ['person', { person: { name: 'Agnès Varda', role: 'Director' } }],
+  ['swatch', { colours: [{ name: 'Ember', value: '#E4572E' }, { name: 'navy', value: 'navy' }] }],
+  ['code', { code: { language: 'ts', source: 'const a = 1;' } }],
+  ['facts', { facts: [{ label: 'Height', value: '330 m' }, { label: 'Built', value: '1889' }] }],
+  ['fact', { facts: [{ label: 'Height', value: '330 m' }] }],
+  ['excerpt', { excerpt: { text: 'The house shelters day-dreaming.', at: 'Chapter 1' } }],
+];
+
+test('a structure draws its item only when it is at least a fifth of the item, and a long item keeps the drawing of its kind', () => {
+  for (const [type, data] of PIECES) {
+    assert.equal(chosen({ title: 'Short', data }), type, `${type} of a short note`);
+    assert.equal(chosen({ title: 'Essay', text: ESSAY, data }), 'note', `${type} inside an essay`);
+    assert.equal(chosen({ ...LINKED, title: 'Article', text: ESSAY, data }), 'link', `${type} inside a saved page`);
+  }
+  const long = kit().item({ title: 'Essay', text: ESSAY, data: { facts: [{ label: 'Height', value: '330 m' }] } });
+  assert.deepEqual(byRule(long, url), { component: 'note', props: {} });
+  assert.deepEqual(long.data.facts, [{ label: 'Height', value: '330 m' }], 'the structure stays with the item');
+});
+
+test('the share a structure covers is counted in characters of one written form, against the title and the text', () => {
+  const quoting = (said: string, text: string) => chosen({ title: 'Ten chars!', text, data: { quote: { text: said } } });
+  assert.equal(quoting('y'.repeat(20), 'x'.repeat(90)), 'quote', 'twenty of a hundred');
+  assert.equal(quoting('y'.repeat(19), 'x'.repeat(90)), 'note', 'nineteen of a hundred');
+  assert.equal(quoting('y'.repeat(20), `${'x'.repeat(44)}${' '.repeat(40)}\n\n${'x'.repeat(45)}`), 'quote', 'a run of white space counts once');
+  assert.equal(quoting('y'.repeat(20), 'ｘ'.repeat(90)), 'quote', 'a full-width letter is one character');
+  assert.equal(quoting('字'.repeat(20), '文'.repeat(90)), 'quote');
+  assert.equal(quoting('字'.repeat(19), '文'.repeat(90)), 'note');
+  const eight = Array.from({ length: 8 }, (_v, n) => ({ label: 'L', value: `${n}` }));
+  assert.equal(chosen({ title: '', text: 'x'.repeat(61), data: { facts: eight } }), 'note', 'only the six facts the card shows are counted');
+  assert.equal(chosen({ title: '', text: 'x'.repeat(60), data: { facts: eight } }), 'facts');
+  assert.equal(chosen({ title: '', text: '', data: { steps: ['Boil', 'Stir'] } }), 'steps', 'an item with no words of its own hides none');
 });
 
 test('when an item satisfies two rules, the earlier one draws it', () => {
   const percent = { labels: ['Rent', 'Food'], values: [60, 40], unit: '%' };
   const table = { heads: ['Plan', 'Price'], rows: [['Solo', '$8']] };
-  const link = { kind: 'link' as const, source: { from: 'link', url: 'https://example.com/a', capturedAt: '' } };
-  const photo = { kind: 'image' as const, source: { from: 'drop', asset: 'a1', capturedAt: '' } };
+  const paper = { kind: 'paper', by: 'M. Okafor' };
+  const facts = [{ label: 'a', value: '1' }, { label: 'b', value: '2' }];
   const pairs: [string, string, Partial<Item>][] = [
+    ['artwork', 'image', { ...PHOTO, data: { kind: 'artwork' } }],
+    ['artwork', 'steps', { ...PHOTO, data: { kind: 'artwork', steps: ['Boil', 'Stir'] } }],
+    ['reference', 'chart', { origin: SCOUT, data: { ...paper, chart: { labels: ['2019', '2020'], values: [12, 15] } } }],
+    ['reference', 'facts', { origin: SCOUT, data: { ...paper, facts } }],
+    ['reference', 'image', { ...PHOTO, origin: SCOUT, data: { kind: 'book', by: 'Gaston Bachelard' } }],
+    ['image', 'place', { ...PHOTO, title: 'Lisbon', data: { where: 'Lisbon' } }],
+    ['image', 'steps', { ...PHOTO, data: { steps: ['Boil the water', 'Stir it in'] } }],
+    ['image', 'facts', { ...PHOTO, title: 'Receipt', data: { facts: [{ label: 'Total', value: '$12' }, { label: 'Tip', value: '$2' }] } }],
+    ['video', 'place', { ...CLIP, title: 'Lisbon', data: { where: 'Lisbon' } }],
+    ['video', 'steps', { ...CLIP, data: { steps: ['Boil the water', 'Stir it in'] } }],
     ['breakdown', 'chart', { data: { chart: percent } }],
     ['breakdown', 'table', { data: { chart: percent, table } }],
-    ['table', 'link', { ...link, data: { table } }],
-    ['table', 'facts', { data: { table, facts: [{ label: 'a', value: '1' }, { label: 'b', value: '2' }] } }],
+    ['table', 'link', { ...LINKED, data: { table } }],
+    ['table', 'facts', { data: { table, facts } }],
     ['proscons', 'list', { data: { pros: ['fast'], cons: ['slow'], items: ['fast', 'slow'] } }],
     ['qa', 'definition', { data: { question: 'What is parallax?', answer: 'A shift.', term: 'Parallax', definition: 'A shift.' } }],
     ['steps', 'list', { data: { steps: ['Boil', 'Stir'], items: ['Boil', 'Stir'] } }],
+    ['steps', 'link', { ...LINKED, data: { steps: ['Boil the water', 'Stir it in'] } }],
     ['quote', 'excerpt', { data: { quote: { text: 'Invent the future.' }, excerpt: { text: 'Invent the future.' } } }],
-    ['facts', 'reference', { origin: SCOUT, data: { kind: 'paper', facts: [{ label: 'n', value: '40' }, { label: 'p', value: '0.01' }] } }],
+    ['table', 'code', { data: { table, code: { source: 'Plan | Price' } } }],
+    ['code', 'facts', { data: { code: { source: 'const a = 1;' }, facts } }],
     ['fact', 'idea', { title: 'Budget: $1.2M', text: 'Budget: $1.2M' }],
-    ['artwork', 'place', { ...photo, title: 'Lisbon', data: { kind: 'artwork', where: 'Lisbon' } }],
-    ['place', 'image', { ...photo, title: 'Lisbon', data: { where: 'Lisbon' } }],
-    ['place', 'link', { ...link, title: 'Lisbon', data: { where: 'Lisbon' } }],
+    ['link', 'excerpt', { ...LINKED, data: { excerpt: { text: 'Some words about it.' } } }],
+    ['link', 'place', { ...LINKED, title: 'Lisbon', data: { where: 'Lisbon' } }],
+    ['excerpt', 'place', { title: 'Lisbon', data: { where: 'Lisbon', excerpt: { text: 'Some words about it.' } } }],
     ['list', 'idea', { title: 'Bring', text: '', data: { items: ['tent', 'stove'] } }],
+    ['place', 'idea', { title: 'West Lake Hangzhou', text: '', data: { where: 'West Lake Hangzhou' } }],
   ];
   for (const [first, second, fields] of pairs) assert.equal(chosen({ title: 'Both', ...fields }), first, `${first} before ${second}`);
+
+  assert.equal(chosen({ ...LINKED, title: 'Article', text: ESSAY, data: { table } }), 'link', 'a table gives way to the link below the floor');
+  const source = 'def rate(tier):\n    # tier | rate\n    return RATES[tier]\n\nprint(rate("pro"))\nprint(rate("free"))';
+  assert.equal(chosen({ title: 'rate', text: source, data: { table: { heads: ['tier', 'rate'], rows: [['pro', '']] }, code: { source } } }), 'code', 'and to the code it sits in');
+});
+
+test('three sibling pictures become a gallery whether a rule draws them as images, videos or artworks', async () => {
+  const k = kit();
+  const { ids } = grow(k, [
+    { ...PHOTO, title: 'Stairwell', origin: SCOUT, data: { kind: 'artwork', by: 'Ilse Brandt' } },
+    { ...PHOTO, title: 'Beach' },
+    { ...CLIP, title: 'Waves' },
+  ]);
+  await render(k, ids);
+  assert.deepEqual(ids.map((id) => view(k, id).component), ['artwork', 'image', 'video']);
+  assert.deepEqual(groups(k).map((g) => [g.composite, g.members]), [['gallery', ids]]);
 });
 
 test('a conversation stays a chat whatever else its data holds', () => {
@@ -599,6 +703,21 @@ test('what the rules draw for the older kinds stands in the item too', () => {
   ];
   assert.deepEqual(made.map((item) => byRule(item, url).component), ['image', 'video', 'link', 'chat', 'code', 'person', 'chart', 'quote', 'steps', 'fact']);
   for (const item of made) assert.ok(grounded(byRule(item, url), item, url), `${byRule(item, url).component} stands`);
+});
+
+test('a time or a date is no fact', () => {
+  for (const text of ['Flight home at 10:45', 'Dinner 7:30', 'Meeting: 3pm', 'Doors: 9 a.m.', 'Due: 15 March', 'Born: 3/15/1990', 'Launch 2024-03: 15']) {
+    assert.equal(chosen({ title: text, text }), 'note', text);
+  }
+  assert.deepEqual(ruled({ title: 'Budget', text: 'Budget: $1.2M' }).props, { value: '$1.2M', label: 'Budget' });
+  assert.deepEqual(ruled({ title: 'Seats', text: 'Seats = 40' }).props, { value: '40', label: 'Seats' });
+});
+
+test('a fact with no value is passed over, and the facts that have one are drawn', () => {
+  const facts = [{ label: 'Height', value: '330 m' }, { label: 'Built', value: '' }, { label: 'Floors', value: '3' }];
+  assert.deepEqual(ruled({ title: 'Tower', data: { facts } }).props, { facts: [{ label: 'Height', value: '330 m' }, { label: 'Floors', value: '3' }] });
+  assert.deepEqual(ruled({ title: 'Tower', data: { facts: facts.slice(0, 2) } }), { component: 'fact', props: { value: '330 m', label: 'Height' } });
+  assert.equal(chosen({ title: 'Tower', data: { facts: facts.slice(1, 2) } }), 'note');
 });
 
 test('a chart keeps a unit the text writes against its values, and a value written in its magnitude', async () => {

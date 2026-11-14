@@ -38,6 +38,10 @@ const MAX_ASKED_SIBLINGS = 12;
 const STACK_ABOVE = 9;
 const STACK_KEEPS = 6;
 const FACTS_SHOWN = 6;
+/** The least share of an item's title and text that a card drawn from its extracted structure must show. */
+const COVERAGE_FLOOR = 0.2;
+/** The cards that lead with a picture, which a gallery sets side by side. */
+const PICTURE_LED = new Set(['image', 'video', 'artwork']);
 
 // ---- reply schemas. Structured output wants every key present, so an empty string or list means "none".
 
@@ -173,13 +177,30 @@ function contentOf(item: Item, assetUrl: (id: string) => string): Content {
 interface Asked {
   assetUrl: (id: string) => string;
 }
-interface Rule {
+interface Row {
   component: ComponentId;
   when(item: Item, asked: Asked): boolean;
   props(item: Item, asked: Asked): Props;
 }
+/**
+ * A row of the rule table, with what it reads: `catalogue` is what the Scout copied from a source's record, `kind` the item's own kind,
+ * `structure` what Intake extracted from the content, and `text` the item's own words.
+ */
+type Rule = Row & ({ reads: 'catalogue' | 'kind' | 'text' } | { reads: 'structure'; /** The strings the card would show. */ shown(item: Item): string[] });
 
 const str = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value : undefined);
+
+/** One written form, with each run of white space as one space. */
+const uniform = (text: string): string => text.normalize('NFKC').replace(/\s+/g, ' ').trim();
+
+/** How many characters a text has in that form. */
+const sizeOf = (text: string): number => {
+  const written = uniform(text);
+  let size = written.length;
+  // A character outside the basic plane takes two code units and is one character.
+  for (let at = 0; at < written.length; at++) if (written.charCodeAt(at) >= 0xd800 && written.charCodeAt(at) <= 0xdbff) size--;
+  return size;
+};
 
 function chartProps(labels: string[], values: number[], unit?: string): Props {
   return compact({ chart: inTimeOrder(labels) ? 'line' : 'bar', labels, values, unit });
@@ -192,6 +213,8 @@ const unitStands = (unit: string, values: unknown, text: Grounding): boolean =>
 const VALUE_FIRST =
   /^((?:[$€£¥]\d[\d,.]*(?:k|m|b|bn)?(?: (?:thousand|million|billion))?)|(?:\d[\d,.]*(?:%|x|k|m|b|bn))|(?:\d[\d,.]* (?:percent|thousand|million|billion)))\s+(\S.{1,60})$/i;
 const LABEL_FIRST = /^([^:=\n]{2,60})[:=]\s*([$€£¥]?\d[\d,.]*\s?[%\w/°]{0,12})$/;
+/** A clock time or a calendar date, which is no figure: "3pm", "15 March", "3/15/2024". */
+const TIME_OR_DATE = /^\d{1,2}\s?(?:[ap]\.?m\.?|(?:st|nd|rd|th)?\s?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)$|^\d{1,4}\/\d{1,2}\/\d{1,4}$/i;
 
 function factInText(item: Item): { value: string; label: string } | undefined {
   if (item.kind !== 'text') return undefined;
@@ -200,8 +223,10 @@ function factInText(item: Item): { value: string; label: string } | undefined {
   const valueFirst = VALUE_FIRST.exec(text);
   if (valueFirst) return { value: valueFirst[1]!, label: valueFirst[2]!.replace(/[.\s]+$/, '') };
   const labelFirst = LABEL_FIRST.exec(text);
-  if (labelFirst) return { value: labelFirst[2]!.trim(), label: labelFirst[1]!.trim() };
-  return undefined;
+  if (!labelFirst) return undefined;
+  const [label, value] = [labelFirst[1]!.trim(), labelFirst[2]!.trim()];
+  // A label that ends in a digit is the first half of a time or a date the colon split, as in "Flight home at 10:45".
+  return /\d$/.test(label) || TIME_OR_DATE.test(value) ? undefined : { value, label };
 }
 
 function excerpt(messages: { role: string; text: string }[]): { role: string; text: string }[] {
@@ -243,9 +268,17 @@ function codeOf(item: Item) {
   return source || item.kind === 'code' ? { language: code?.language || 'text', source } : undefined;
 }
 
+/** The facts that have both a label and a value. */
+const factsIn = (item: Item) => read(FactsData, item.data.facts)?.filter((fact) => fact.label.trim() && fact.value.trim()) ?? [];
+
 function factOf(item: Item) {
-  const facts = read(FactsData, item.data.facts);
-  return facts?.length === 1 ? { value: facts[0]!.value, label: facts[0]!.label } : factInText(item);
+  const facts = factsIn(item);
+  return facts.length === 1 ? { value: facts[0]!.value, label: facts[0]!.label } : factInText(item);
+}
+
+function factsOf(item: Item) {
+  const facts = factsIn(item);
+  return facts.length > 1 ? facts : undefined;
 }
 
 /** Where a picture or a recording plays from. A stored asset outlives a social network's media address, which expires. */
@@ -272,6 +305,17 @@ function tableOf(item: Item) {
 /** The entries of a list of strings that say something. */
 const entriesOf = (value: unknown) => read(StepsData, value)?.filter((entry) => entry.trim()) ?? [];
 
+function sidesOf(item: Item) {
+  const [pros, cons] = [entriesOf(item.data.pros), entriesOf(item.data.cons)];
+  return pros.length > 0 && cons.length > 0 ? { pros, cons } : undefined;
+}
+
+/** Two strings the data holds only together, under the names the card gives them. */
+const pairOf = <A extends string, B extends string>(first: A, second: B) => (item: Item) => {
+  const [a, b] = [str(item.data[first]), str(item.data[second])];
+  return a !== undefined && b !== undefined ? ({ [first]: a, [second]: b } as Record<A | B, string>) : undefined;
+};
+
 function listOf(item: Item) {
   const items = read(StepsData, item.data.items);
   if (!items || items.length < 2 || items.some((entry) => !entry.trim())) return undefined;
@@ -284,11 +328,6 @@ function coloursOf(item: Item) {
   return colours && colours.length >= 2 ? colours : undefined;
 }
 
-function factsOf(item: Item) {
-  const facts = read(FactsData, item.data.facts);
-  return facts && facts.length > 1 ? facts : undefined;
-}
-
 /** The still picture an item has: itself when it is one, a recording's poster, a page's own picture. */
 function pictureOf(item: Item, asked: Asked): string | undefined {
   if (item.kind === 'image') return mediaOf(item, 'image', asked);
@@ -297,104 +336,69 @@ function pictureOf(item: Item, asked: Asked): string | undefined {
 
 const referenceKind = (item: Item) => (item.data.kind === 'paper' || item.data.kind === 'book' ? item.data.kind : undefined);
 
-/** The place an item is about, when its title names that place and does not merely have one. */
+/** A place name as it is compared: one written form and one case, without the region after its last comma. */
+const placeName = (name: string): string => uniform(name).toLowerCase().replace(/\s*,[^,]*$/, '');
+
+/** The place a note is, when its title is that place's name and nothing more. */
 function placeOf(item: Item): string | undefined {
   const where = str(item.data.where)?.trim();
-  if (!where || !item.title.trim()) return undefined;
-  return grounding(item.title).says(where) || grounding(where).says(item.title) ? where : undefined;
+  if (item.kind !== 'text' || !where || !item.title.trim()) return undefined;
+  return placeName(item.title) === placeName(where) ? where : undefined;
 }
 
 const IDEA_BELOW = 40;
+const IDEA_WORDS = 3;
+/** In a script written without spaces a word cannot be counted, so the thought is measured in characters. */
+const IDEA_CHARACTERS = 6;
+const SPACELESS = /[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Thai}]/u;
+const ADDRESS = /^(?:[a-z][a-z\d+.-]*:\/\/)?(?:[^\s/.]+\.)+[^\s/.\d]{2,}(?:[/?#]\S*)?$/iu;
 
-/** A short thought the user typed: a title and nothing more. */
+/** A phrase as it is compared: one written form and one case, with no white space and no punctuation at its end. */
+const phraseKey = (phrase: string): string => uniform(phrase).toLowerCase().replace(/\s+/g, '').replace(/\p{P}+$/u, '');
+
+/** A thought the user wrote out as a phrase, and not a label: a chore, a name, a room number, an address. */
 function isIdea(item: Item): boolean {
-  const [title, text] = [item.title.trim(), item.text.trim()];
-  return item.kind === 'text' && item.origin.by === 'user' && title !== '' && [...title].length < IDEA_BELOW && (text === '' || text === title);
+  const [title, text] = [uniform(item.title), uniform(item.text)];
+  const phrase = text || title;
+  if (item.kind !== 'text' || item.origin.by !== 'user' || phrase === '' || (title !== '' && text !== '' && phraseKey(title) !== phraseKey(text))) return false;
+  if ([...phrase].length >= IDEA_BELOW || /\p{Nd}/u.test(phrase) || ADDRESS.test(phrase.replace(/\p{P}+$/u, ''))) return false;
+  if (SPACELESS.test(phrase)) return (phrase.match(/\p{L}/gu)?.length ?? 0) >= IDEA_CHARACTERS;
+  return phrase.split(' ').filter((word) => /\p{L}/u.test(word)).length >= IDEA_WORDS;
 }
 
 const captionOf = (item: Item) => (item.summary.trim() && item.summary.trim().length <= CAPTION ? item.summary.trim() : undefined);
 
 const spokenOf = (item: Item) => (item.kind === 'chat' ? excerpt(read(MessagesData, item.data.messages) ?? []) : []);
 
-/** First match wins. Structured data a content role filled in outranks the item's kind. */
+/**
+ * A row that draws one piece of structure Intake extracted: it holds when the item has the piece, and its props are made from the piece.
+ * The card shows every string and number of the piece, unless `shows` names the part of it that the card shows.
+ */
+function extracted<T>(component: ComponentId, of: (item: Item) => T | undefined, props: (piece: T, item: Item) => Props, shows: (piece: T) => unknown = (piece) => piece): Rule {
+  return {
+    component,
+    reads: 'structure',
+    when: (item) => of(item) !== undefined,
+    props: (item) => props(of(item)!, item),
+    shown: (item) => held(shows(of(item)!), false),
+  };
+}
+
+/**
+ * First match wins. What a source catalogued comes first, because it is a record and no guess. A picture or a recording stays one,
+ * whatever was read off it. Then the structure Intake extracted, the most particular shape first, and then the item's kind and its own words.
+ */
 const RULES: Rule[] = [
   {
-    component: 'breakdown',
-    when: (item) => breakdownOf(item) !== undefined,
-    props: (item) => {
-      const { labels, values, unit } = breakdownOf(item)!;
-      return { labels, values, unit };
-    },
-  },
-  {
-    component: 'chart',
-    when: (item) => chartOf(item) !== undefined,
-    props: (item) => {
-      const { labels, values, unit } = chartOf(item)!;
-      return chartProps(labels, values, unit);
-    },
-  },
-  { component: 'table', when: (item) => tableOf(item) !== undefined, props: (item) => tableOf(item)! },
-  {
-    component: 'proscons',
-    when: (item) => entriesOf(item.data.pros).length > 0 && entriesOf(item.data.cons).length > 0,
-    props: (item) => ({ pros: entriesOf(item.data.pros), cons: entriesOf(item.data.cons) }),
-  },
-  {
-    component: 'qa',
-    when: (item) => str(item.data.question) !== undefined && str(item.data.answer) !== undefined,
-    props: (item) => ({ question: str(item.data.question), answer: str(item.data.answer) }),
-  },
-  {
-    component: 'definition',
-    when: (item) => str(item.data.term) !== undefined && str(item.data.definition) !== undefined,
-    props: (item) => ({ term: str(item.data.term), definition: str(item.data.definition) }),
-  },
-  { component: 'steps', when: (item) => stepsOf(item) !== undefined, props: (item) => ({ steps: stepsOf(item)! }) },
-  { component: 'list', when: (item) => listOf(item) !== undefined, props: (item) => compact(listOf(item)!) },
-  {
-    component: 'quote',
-    when: (item) => read(QuoteData, item.data.quote) !== undefined,
-    props: (item) => {
-      const { text, by } = read(QuoteData, item.data.quote)!;
-      return compact({ text, by });
-    },
-  },
-  {
-    component: 'excerpt',
-    when: (item) => read(ExcerptData, item.data.excerpt) !== undefined,
-    props: (item) => {
-      const { text, at } = read(ExcerptData, item.data.excerpt)!;
-      return compact({ text, at, source: str(item.data.site) ?? str(item.data.from) });
-    },
-  },
-  {
-    component: 'person',
-    when: (item) => read(PersonData, item.data.person) !== undefined,
-    props: (item) => {
-      const { name, role, image } = read(PersonData, item.data.person)!;
-      return compact({ name, role, image: image ?? str(item.data.image) });
-    },
-  },
-  { component: 'swatch', when: (item) => coloursOf(item) !== undefined, props: (item) => ({ colours: coloursOf(item)! }) },
-  { component: 'code', when: (item) => codeOf(item) !== undefined, props: (item) => codeOf(item)! },
-  {
-    component: 'facts',
-    when: (item) => factsOf(item) !== undefined,
-    props: (item) => {
-      const facts = factsOf(item)!;
-      return compact({ facts: facts.slice(0, FACTS_SHOWN), more: facts.length - FACTS_SHOWN > 0 ? facts.length - FACTS_SHOWN : undefined });
-    },
-  },
-  { component: 'fact', when: (item) => factOf(item) !== undefined, props: (item) => factOf(item)! },
-  {
     component: 'artwork',
+    reads: 'catalogue',
     when: (item, asked) => item.data.kind === 'artwork' && pictureOf(item, asked) !== undefined,
     props: (item, asked) =>
       compact({ src: pictureOf(item, asked), maker: str(item.data.by), date: str(item.data.date), medium: str(item.data.medium), holder: str(item.data.holder) }),
   },
   {
     component: 'reference',
+    reads: 'catalogue',
     when: (item) => referenceKind(item) !== undefined,
     props: (item) => {
       const listed = entriesOf(item.data.authors);
@@ -410,44 +414,78 @@ const RULES: Rule[] = [
     },
   },
   {
-    component: 'place',
-    when: (item) => placeOf(item) !== undefined,
-    props: (item, asked) => compact({ name: placeOf(item), src: pictureOf(item, asked) }),
-  },
-  {
     component: 'image',
+    reads: 'kind',
     when: (item, asked) => mediaOf(item, 'image', asked) !== undefined,
     props: (item, asked) => compact({ src: mediaOf(item, 'image', asked), caption: captionOf(item) }),
   },
   {
     component: 'video',
+    reads: 'kind',
     when: (item, asked) => mediaOf(item, 'video', asked) !== undefined,
     props: (item, asked) => compact({ src: mediaOf(item, 'video', asked), poster: str(item.data.thumbnailUrl), caption: captionOf(item) }),
   },
+  extracted('breakdown', breakdownOf, ({ labels, values, unit }) => ({ labels, values, unit })),
+  extracted('chart', chartOf, ({ labels, values, unit }) => chartProps(labels, values, unit)),
+  extracted('table', tableOf, (table) => table),
+  extracted('proscons', sidesOf, (sides) => sides),
+  extracted('qa', pairOf('question', 'answer'), (pair) => pair),
+  extracted('definition', pairOf('term', 'definition'), (pair) => pair),
+  extracted('steps', stepsOf, (steps) => ({ steps })),
+  extracted('list', listOf, (list) => compact(list)),
+  extracted('quote', (item) => read(QuoteData, item.data.quote), ({ text, by }) => compact({ text, by })),
+  extracted('person', (item) => read(PersonData, item.data.person), ({ name, role, image }, item) => compact({ name, role, image: image ?? str(item.data.image) })),
+  extracted('swatch', coloursOf, (colours) => ({ colours })),
+  extracted('code', codeOf, (code) => code, (code) => code.source),
+  extracted(
+    'facts',
+    factsOf,
+    (facts) => compact({ facts: facts.slice(0, FACTS_SHOWN), more: facts.length - FACTS_SHOWN > 0 ? facts.length - FACTS_SHOWN : undefined }),
+    (facts) => facts.slice(0, FACTS_SHOWN),
+  ),
+  extracted('fact', factOf, (fact) => fact),
   {
     component: 'link',
+    reads: 'kind',
     when: (item) => item.kind === 'link' && Boolean(item.source.url),
     props: (item) => {
       const url = item.source.url!;
       return compact({ url, site: str(item.data.site) ?? siteOf(url), description: item.summary.trim(), image: str(item.data.image) });
     },
   },
+  extracted('excerpt', (item) => read(ExcerptData, item.data.excerpt), ({ text, at }, item) => compact({ text, at, source: str(item.data.site) ?? str(item.data.from) })),
+  {
+    component: 'place',
+    reads: 'text',
+    when: (item) => placeOf(item) !== undefined,
+    props: (item, asked) => compact({ name: placeOf(item), src: pictureOf(item, asked) }),
+  },
   {
     component: 'chat',
+    reads: 'kind',
     when: (item) => spokenOf(item).length > 0,
     props: (item) => compact({ messages: spokenOf(item), source: item.source.from.replace(/^chat-export:/, '') }),
   },
-  { component: 'idea', when: isIdea, props: () => ({}) },
-  { component: 'note', when: () => true, props: () => ({}) },
+  { component: 'idea', reads: 'text', when: isIdea, props: () => ({}) },
+  { component: 'note', reads: 'text', when: () => true, props: () => ({}) },
 ];
 
 /** A conversation's data is its messages, so no rule that reads structure may take one. */
 const CHAT_RULES = RULES.filter((rule) => rule.component === 'chat' || rule.component === 'note');
 
+/**
+ * The first row that holds draws the item. A row that reads extracted structure holds only when what its card would show
+ * is at least `COVERAGE_FLOOR` of the item's title and text, so a small structure never stands in for a long item.
+ */
 export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
   const asked = { assetUrl };
+  let whole: number | undefined;
   for (const rule of item.kind === 'chat' ? CHAT_RULES : RULES) {
     if (!rule.when(item, asked)) continue;
+    if (rule.reads === 'structure') {
+      whole ??= sizeOf(item.title) + sizeOf(item.text);
+      if (rule.shown(item).reduce((sum, value) => sum + sizeOf(value), 0) < COVERAGE_FLOOR * whole) continue;
+    }
     const draw = { component: rule.component, props: rule.props(item, asked) };
     if (isValidView(draw)) return draw;
   }
@@ -628,7 +666,7 @@ function survey(ctx: RoleContext, parents: Node[], componentOf: (node: Node) => 
         pool,
         out,
         'gallery',
-        (n) => componentOf(n) === 'image' || componentOf(n) === 'video',
+        (n) => PICTURE_LED.has(componentOf(n)),
         (nodes) => (nodes.length >= 3 ? { composite: 'gallery', title: '', members: nodes.map((n) => n.id), props: {} } : null),
       );
       settle(
