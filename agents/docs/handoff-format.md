@@ -118,6 +118,7 @@ interface HandoffNode {
 | `authorsCut` | `true` | Present when the source cut `authors` short, so the work has more authors than the list. |
 | `venue` | `string` | The journal, conference or repository of a paper. |
 | `by`, `date`, `from` | `string` | The maker, the date and the source of a pick, as the source gives them. |
+| `fromChat` | `string` | On a takeaway the agents drew from an imported conversation: the id of the chat item it came from. |
 | `embed` | `string` | The address of the player for a video pick, to show in a frame. |
 | `mediaUrl` | `string` | The address of the picture or recording itself, for a pick that is one. |
 | `thumbnailUrl` | `string` | The address of a small still picture for a video or media pick. |
