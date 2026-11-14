@@ -1,0 +1,369 @@
+// The scene graph: the part of RealityKit the ocean sources use, under the
+// same names, so they port line for line. Nothing here touches OpenGL; the
+// renderer (render.cpp) reads these objects and keeps its own GPU copies.
+//
+//   Entity / ModelEntity            -> Entity (EntityRef); a model is `entity->model`
+//   ModelComponent                  -> ModelComponent
+//   MeshResource                    -> Mesh (MeshRef)
+//   LowLevelMesh                    -> LowLevelMesh (it is a Mesh)
+//   UnlitMaterial, ShaderGraphMaterial, VideoMaterial -> Material
+//   TextureResource                 -> Texture (TextureRef)
+//   CGImage / UIImage               -> Image (ImageRef)
+//   UIColor                         -> Color
+//   ShapeResource                   -> Shape
+//   components.set(OpacityComponent(opacity: x))   -> entity->opacity = x
+//   components.remove(OpacityComponent.self)       -> entity->opacity.reset()
+//   components.set(CollisionComponent(shapes: s))  -> entity->collision = s
+//   components.remove(CollisionComponent.self)     -> entity->collision.clear()
+//   components.set(InputTargetComponent())         -> entity->inputTarget = true
+//   components.set(Art.gaze / Art.hover)           -> entity->hover = Hover::shader() / Hover::highlight(...)
+//   components.remove(HoverEffectComponent.self)   -> entity->hover = Hover::none()
+#pragma once
+#include <functional>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include "vecmath.h"
+
+// MARK: - Color
+
+/// UIColor: sRGB components, 0...1, not premultiplied.
+struct Color {
+    float r = 1, g = 1, b = 1, a = 1;
+    constexpr Color() = default;
+    constexpr Color(float r, float g, float b, float a = 1) : r(r), g(g), b(b), a(a) {}
+    /// UIColor(hex:alpha:)
+    static constexpr Color hex(uint32_t hex, float alpha = 1) {
+        return {float((hex >> 16) & 0xFF) / 255, float((hex >> 8) & 0xFF) / 255, float(hex & 0xFF) / 255, alpha};
+    }
+    /// UIColor(white:alpha:)
+    static constexpr Color white(float w = 1, float alpha = 1) { return {w, w, w, alpha}; }
+    static constexpr Color black(float alpha = 1) { return {0, 0, 0, alpha}; }
+    static constexpr Color clear() { return {0, 0, 0, 0}; }
+    constexpr Color withAlphaComponent(float alpha) const { return {r, g, b, alpha}; }
+    /// Linear RGB, for shader parameters.
+    Vec3 linear() const {
+        auto lin = [](float s) { return s <= 0.04045f ? s / 12.92f : std::pow((s + 0.055f) / 1.055f, 2.4f); };
+        return {lin(r), lin(g), lin(b)};
+    }
+};
+
+// MARK: - Images and textures
+
+/// A picture in memory: 8-bit RGBA, premultiplied, row 0 at the top (as
+/// CGImage and Android's Bitmap give it). `scale` is pixels per point, so
+/// `width / scale` is its size as a UIImage would report it.
+struct Image {
+    int width = 0, height = 0;
+    float scale = 1;
+    std::vector<uint8_t> rgba;
+    Vec2 size() const { return {float(width) / scale, float(height) / scale}; }
+};
+using ImageRef = std::shared_ptr<Image>;
+
+/// TextureResource. Made from an image; the renderer uploads it on first
+/// use and frees the GPU copy when the last reference goes.
+class Texture {
+public:
+    /// TextureResource(image:options:); `mipmaps` is `.allocateAndGenerateAll`.
+    static std::shared_ptr<Texture> make(const ImageRef& image, bool mipmaps = false);
+    ~Texture();
+    int width = 0, height = 0;
+    bool mipmaps = false;
+    /// Kept until uploaded, then dropped.
+    ImageRef pending;
+    /// Renderer's: the GL name, and for a video, that it is an external texture.
+    unsigned gl = 0;
+    bool external = false;
+    /// For a video frame: the 4x4 that takes mesh uv to texture uv, column-major.
+    float uvTransform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+};
+using TextureRef = std::shared_ptr<Texture>;
+
+// MARK: - Meshes
+
+/// MeshResource. Positions are in the entity's own space, m. Texture
+/// coordinates follow RealityKit: (0, 0) is the picture's bottom-left
+/// corner and v grows upward, so an image's top row is at v = 1.
+class Mesh {
+public:
+    virtual ~Mesh();
+    /// MeshResource.generate(from: [MeshDescriptor]) with positions, textureCoordinates and .triangles(indices).
+    static std::shared_ptr<Mesh> generate(std::vector<Vec3> positions, std::vector<Vec2> uvs, std::vector<uint32_t> indices);
+    /// MeshResource.generatePlane(width:height:): upright in XY, facing +Z, centred.
+    static std::shared_ptr<Mesh> generatePlane(float width, float height);
+    /// MeshResource.generateBox(size:): centred.
+    static std::shared_ptr<Mesh> generateBox(Vec3 size);
+    /// MeshResource.replace(with:)
+    void replace(std::vector<Vec3> positions, std::vector<Vec2> uvs, std::vector<uint32_t> indices);
+
+    /// What the mesh was made from (MeshResource.contents): empty for a LowLevelMesh.
+    std::vector<Vec3> positions;
+    std::vector<Vec2> uvs;
+    std::vector<uint32_t> indices;
+    BoundingBox bounds;
+
+    /// Renderer's.
+    unsigned vao = 0, vbo = 0, ibo = 0;
+    int uploadedVertexBytes = 0, uploadedIndexCount = 0;
+    bool verticesDirty = true, indicesDirty = true;
+    virtual bool isLowLevel() const { return false; }
+};
+using MeshRef = std::shared_ptr<Mesh>;
+
+/// LowLevelMesh: vertex and index memory the app writes into directly, a
+/// frame at a time. `MeshResource(from: lowLevelMesh)` is the mesh itself here.
+class LowLevelMesh : public Mesh {
+public:
+    enum class Semantic { position, uv0, uv1 };
+    struct Attribute {
+        Semantic semantic;
+        int components;         // .float2 -> 2, .float3 -> 3
+        size_t offset;          // within one vertex, bytes
+    };
+    struct Descriptor {
+        int vertexCapacity = 0;
+        int indexCapacity = 0;
+        std::vector<Attribute> vertexAttributes;
+        size_t stride = 0;      // vertexLayouts[0].bufferStride
+    };
+    static std::shared_ptr<LowLevelMesh> make(const Descriptor& d);
+
+    /// mesh.withUnsafeMutableBytes(bufferIndex: 0) { raw in let v = raw.bindMemory(to: V.self) ... }
+    /// `body` gets a pointer to `vertexCapacity` vertices of type V.
+    template <class V, class F>
+    void withUnsafeMutableBytes(F&& body) {
+        body(reinterpret_cast<V*>(vertexData.data()), descriptor.vertexCapacity);
+        verticesDirty = true;
+    }
+    /// mesh.withUnsafeMutableIndices { raw in let idx = raw.bindMemory(to: UInt32.self) ... }
+    template <class F>
+    void withUnsafeMutableIndices(F&& body) {
+        body(indexData.data(), descriptor.indexCapacity);
+        indicesDirty = true;
+    }
+    /// mesh.parts.replaceAll([LowLevelMesh.Part(indexCount: n, topology: .triangle, bounds: b)])
+    void setPart(int indexCount, const BoundingBox& bounds) {
+        this->indexCount = indexCount;
+        this->bounds = bounds;
+    }
+
+    Descriptor descriptor;
+    std::vector<uint8_t> vertexData;
+    std::vector<uint32_t> indexData;
+    int indexCount = 0;
+    /// Renderer's: how many vertices the drawn indices reach, and for which index count that was worked out.
+    int usedVertices = 0, usedFor = -1;
+    bool isLowLevel() const override { return true; }
+};
+using LowLevelMeshRef = std::shared_ptr<LowLevelMesh>;
+
+// MARK: - Materials
+
+class VideoPlayer;
+
+/// Every material the ocean uses, as one value type (materials are structs
+/// in RealityKit too: change a copy, then set it back on the model).
+struct Material {
+    enum class Kind {
+        unlit,          // UnlitMaterial
+        line,           // LineMaterial.usda: colour in uv0 (r, g) and uv1.x (b), opacity in uv1.y, linear
+        dust,           // DustMaterial.usda: specks moved in the vertex shader; parameters "Shift", "Center"
+        hoverGlow,      // HoverGlowMaterial.usda: warm light, opacity = uv0.x * how strongly it is hovered
+        video,          // VideoMaterial(avPlayer:)
+    };
+    Kind kind = Kind::unlit;
+
+    /// UnlitMaterial(color:) or `m.color = .init(tint: c, texture: .init(t))`: the tint and the texture.
+    Color color;
+    TextureRef texture;
+    /// `m.blending = .transparent(opacity: x)`: transparent = true, opacity = x. Opaque otherwise.
+    bool transparent = false;
+    float opacity = 1;
+    /// `m.opacityThreshold`: texels more see-through than this are not drawn at all.
+    float opacityThreshold = 0;
+    /// `m.faceCulling = .none` -> cull = false.
+    bool cull = true;
+    bool writesDepth = true;
+    /// ShaderGraphMaterial.setParameter(name:value:): a float is stored in x.
+    std::map<std::string, Vec4> parameters;
+    /// For Kind::video.
+    std::shared_ptr<VideoPlayer> video;
+
+    static Material unlit(Color color = {}) {
+        Material m;
+        m.color = color;
+        return m;
+    }
+    static Material unlit(Color tint, TextureRef texture) {
+        Material m;
+        m.color = tint;
+        m.texture = std::move(texture);
+        return m;
+    }
+    /// The three shader-graph materials, as PalaceModel.loadLineMaterial and OceanModel.start load them.
+    static Material line() {
+        Material m;
+        m.kind = Kind::line;
+        m.transparent = true;
+        m.cull = false;
+        m.writesDepth = false;
+        return m;
+    }
+    static Material dust() {
+        Material m;
+        m.kind = Kind::dust;
+        m.transparent = true;
+        return m;
+    }
+    static Material hoverGlow() {
+        Material m;
+        m.kind = Kind::hoverGlow;
+        m.transparent = true;
+        return m;
+    }
+    static Material videoMaterial(std::shared_ptr<VideoPlayer> player) {
+        Material m;
+        m.kind = Kind::video;
+        m.video = std::move(player);
+        return m;
+    }
+    void setParameter(const std::string& name, float value) { parameters[name] = {value, 0, 0, 0}; }
+    void setParameter(const std::string& name, Vec3 value) { parameters[name] = {value, 0}; }
+};
+
+struct ModelComponent {
+    MeshRef mesh;
+    std::vector<Material> materials;
+};
+
+// MARK: - Picking and hover
+
+/// ShapeResource: only boxes are used.
+struct Shape {
+    Vec3 size;
+    Vec3 translation;
+    Quat rotation;
+    /// ShapeResource.generateBox(size:)
+    static Shape generateBox(Vec3 size) { return {size, {}, {}}; }
+    /// .offsetBy(translation:) and .offsetBy(rotation:translation:)
+    Shape offsetBy(Vec3 t) const { return {size, translation + t, rotation}; }
+    Shape offsetBy(Quat r, Vec3 t) const { return {size, r.act(translation) + t, r * rotation}; }
+    /// shape.bounds
+    BoundingBox bounds() const;
+};
+
+/// HoverEffectComponent. On the Quest there is no system gaze: an entity is
+/// "hovered" while a hand ray rests on it (input.cpp), and the renderer
+/// draws the effect.
+struct Hover {
+    enum class Kind { none, shader, highlight };
+    Kind kind = Kind::none;
+    Color color;
+    float strength = 1;
+    static Hover none() { return {}; }
+    /// HoverEffectComponent(.shader(.default)): the entity's hoverGlow materials read how strongly it is hovered.
+    static Hover shader() { return {Kind::shader, {}, 1}; }
+    /// HoverEffectComponent(.highlight(.init(color:strength:)))
+    static Hover highlight(Color color, float strength) { return {Kind::highlight, color, strength}; }
+};
+
+// MARK: - Entities
+
+class Entity;
+using EntityRef = std::shared_ptr<Entity>;
+
+class Entity : public std::enable_shared_from_this<Entity> {
+public:
+    /// Entity()
+    static EntityRef make();
+    /// ModelEntity(mesh:materials:)
+    static EntityRef make(MeshRef mesh, std::vector<Material> materials);
+    ~Entity();
+
+    std::string name;
+    bool isEnabled = true;
+    Vec3 position;
+    Quat orientation;
+    Vec3 scale{1, 1, 1};
+    Transform transform() const { return {scale, orientation, position}; }
+    void setTransform(const Transform& t) {
+        scale = t.scale;
+        orientation = t.rotation;
+        position = t.translation;
+    }
+
+    std::optional<ModelComponent> model;
+    /// OpacityComponent: fades this entity and everything under it.
+    std::optional<float> opacity;
+    /// CollisionComponent: empty when it has none.
+    std::vector<Shape> collision;
+    bool inputTarget = false;
+    Hover hover;
+    /// Quest only: the pointer's dot rests on this entity's mesh instead of flying on to whatever is
+    /// behind it, though a pinch still passes through to what it would have landed on (input.cpp).
+    bool stopsPointer = false;
+
+    Entity* parent = nullptr;
+    std::vector<EntityRef> children;
+    void addChild(const EntityRef& child);
+    void removeChild(const EntityRef& child);
+    void removeFromParent();
+
+    /// Whether it and everything above it is enabled.
+    bool isEnabledInHierarchy() const;
+    /// transformMatrix(relativeTo:); nullptr means world space, as nil does.
+    Mat4 transformMatrix(const Entity* relativeTo = nullptr) const;
+    Mat4 transformMatrix(const EntityRef& relativeTo) const { return transformMatrix(relativeTo.get()); }
+    /// convert(position: p, from: other): a point in `from`'s space (world if nullptr), in this entity's space.
+    Vec3 convertFrom(Vec3 position, const Entity* from) const;
+    Vec3 convertFrom(Vec3 position, const EntityRef& from) const { return convertFrom(position, from.get()); }
+    /// convert(position: p, to: other): a point in this entity's space, in `to`'s space (world if nullptr).
+    Vec3 convertTo(Vec3 position, const Entity* to) const;
+    Vec3 convertTo(Vec3 position, const EntityRef& to) const { return convertTo(position, to.get()); }
+    /// position(relativeTo:) and setPosition(_:relativeTo:); nullptr is world space.
+    Vec3 positionRelativeTo(const Entity* other) const;
+    void setPosition(Vec3 p, const Entity* relativeTo);
+    /// visualBounds(relativeTo: nil): the box round every enabled mesh under it, in world space.
+    BoundingBox visualBounds() const;
+
+    /// Renderer's and the input system's: how strongly a hand ray rests on it, 0...1.
+    float hovered = 0;
+
+private:
+    Entity() = default;
+};
+
+/// What the immersive space runs: App/PalaceScene.swift's protocol.
+class PalaceScene {
+public:
+    virtual ~PalaceScene() = default;
+    virtual EntityRef root() = 0;
+    /// `start() async`: loads everything. It runs on the frame thread and may take a while.
+    virtual void start() = 0;
+    virtual void update(float dt) = 0;
+    /// A pinch on `entity`, from the moment it lands, and every time the hand moves: where the
+    /// pinched point is now and where it was when the pinch landed, in world space.
+    virtual void pinchChanged(const EntityRef& entity, Vec3 at, Vec3 start) = 0;
+    virtual void pinchEnded(Vec3 at) = 0;
+    /// Both hands pinching: how far apart they are now, as a ratio of where they started.
+    virtual void magnifyChanged(float ratio) = 0;
+    virtual void magnifyEnded() = 0;
+    /// Quest only: whether a hand's ray and dot should not be drawn or used right now (0 left, 1 right),
+    /// because that hand is doing something its fingers do themselves.
+    virtual bool pointerHidden(int hand) { return false; }
+    /// How much the room around is dimmed, 0...1 (visionOS: preferredSurroundingsEffect); 0 leaves it alone.
+    virtual float surroundingsDim() { return 0; }
+};
+
+/// GPU objects whose owners have gone, for the renderer to free at the start
+/// of its next frame (destructors run on the frame thread, but not always
+/// with the GL context in a state to delete things).
+namespace gpu {
+std::vector<unsigned>& deadTextures();
+std::vector<unsigned>& deadBuffers();
+std::vector<unsigned>& deadVertexArrays();
+}
