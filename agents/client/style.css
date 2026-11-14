@@ -238,8 +238,11 @@ button, input, textarea { font: inherit; color: inherit; }
 .steps.is-full li { align-items: flex-start; font-size: 14px; line-height: 20px; }
 
 /* The fourteen structured types count their lines word by word from the width of each character, in components/shared.js.
-   Kerning is off in them, so a word is exactly as wide as its characters add up to and a line ends where it was counted to end. */
+   Kerning is off in them, so a word is exactly as wide as its characters add up to and a line ends where it was counted to end.
+   A figure set at 24 px and up is kerned, because Ta and Wa gape there unkerned. Kerning only draws a line narrower than its
+   characters add up to, so the count still holds. */
 .c-facts, .c-table, .c-list, .c-breakdown, .c-qa, .c-callout, .c-excerpt, .c-definition, .c-idea, .c-proscons, .c-swatch, .c-artwork, .c-reference, .c-place { font-kerning: none; }
+:is(.c-facts, .c-idea, .c-definition, .c-place) .fact-value:not(.is-small) { font-kerning: normal; }
 
 /* list: a dot before each entry, or a tick box when the list is a checklist. A tick box shows a mark and takes no click. */
 .list-head { display: flex; align-items: baseline; gap: 10px; }
