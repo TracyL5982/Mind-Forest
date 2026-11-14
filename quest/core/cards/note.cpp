@@ -48,8 +48,9 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
 
 void detail(Sheet&, const Item&, const Json&) {}
 
-}  // namespace
+const Kind kind{"note", size, {}, draw, detail};
+const Registered registered{kind};
 
-const Kind kinds::note{"note", size, {}, draw, detail};
+}  // namespace
 
 }  // namespace cards

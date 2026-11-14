@@ -72,8 +72,9 @@ Kind make() {
     return k;
 }
 
-}  // namespace
+const Kind kind = make();
+const Registered registered{kind};
 
-const Kind kinds::image = make();
+}  // namespace
 
 }  // namespace cards

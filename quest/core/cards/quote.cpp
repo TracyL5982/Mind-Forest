@@ -83,8 +83,9 @@ Kind make() {
     return k;
 }
 
-}  // namespace
+const Kind kind = make();
+const Registered registered{kind};
 
-const Kind kinds::quote = make();
+}  // namespace
 
 }  // namespace cards

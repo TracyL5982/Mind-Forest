@@ -74,7 +74,7 @@ node quest/tools/cards_compare.mjs --faces /tmp/faces --out /tmp/compare --playw
 | --- | --- |
 | `cards.h`, `cards.cpp` | The calls above: the cards notes show, and their faces, small and opened. |
 | `kind.h`, `kinds.cpp` | One card type, as one `components/<type>.js` is, and the registry of types. |
-| `note.cpp`, `quote.cpp`, `image.cpp` | The types drawn so far. Each file has the footprint, the small face and the type's part of the opened card. |
+| `note.cpp`, `quote.cpp`, `image.cpp` | The types drawn so far. Each file has the footprint, the small face and the type's part of the opened card, and puts its type in the registry. A new type is one new file. |
 | `measure.h`, `measure.cpp` | The footprint arithmetic of `libraries.md` and `components/shared.js`: `span`, `fold`, `wrap`, `advance`. |
 | `item.h`, `item.cpp` | The item as a card reads it, the fixed words in English or Chinese (`words.js`), and the chips (`chips.js`). |
 | `said.h`, `said.cpp` | What the opened card still prints of the item's text (`said.js`). |

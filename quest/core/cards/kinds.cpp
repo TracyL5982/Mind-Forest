@@ -2,18 +2,25 @@
 #include "kind.h"
 
 #include <cmath>
+#include <map>
 
 namespace cards {
 
+namespace {
+std::map<std::string, const Kind*>& registry() {
+    static std::map<std::string, const Kind*> all;
+    return all;
+}
+}  // namespace
+
+Registered::Registered(const Kind& kind) { registry()[kind.name] = &kind; }
+
 const Kind* kindNamed(const std::string& component) {
-    static const Kind* const all[] = {&kinds::note, &kinds::quote, &kinds::image};
-    for (const Kind* kind : all) {
-        if (component == kind->name) return kind;
-    }
-    return nullptr;
+    auto it = registry().find(component);
+    return it == registry().end() ? nullptr : it->second;
 }
 
-const Kind& note() { return kinds::note; }
+const Kind& note() { return *kindNamed("note"); }
 
 void Sheet::part(float height, std::function<void(const Pen&, float top)> draw) {
     if (!first) y += gap;

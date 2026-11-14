@@ -65,12 +65,13 @@ struct Kind {
     int chipInset = 15, chipBottom = 12;
 };
 
-/// The registry. An unknown component is drawn as a note with no props.
+/// Puts a type in the registry. Each type's file holds one, after its `Kind`.
+struct Registered {
+    explicit Registered(const Kind& kind);
+};
+
+/// The registry: the type named so, or null. An unknown component is drawn as a note with no props.
 const Kind* kindNamed(const std::string& component);
 const Kind& note();
-
-namespace kinds {
-extern const Kind note, image, quote;
-}
 
 }  // namespace cards
