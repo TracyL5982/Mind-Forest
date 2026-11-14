@@ -97,7 +97,8 @@ function opened(detail) {
 }
 
 const cell = (label, ...kids) => h('div', { class: 'lib-cell' }, h('div', { class: 'lib-label', text: label }), kids);
-const who = (by) => h('span', { class: `lib-who ${by === 'model' ? 'is-model' : ''}`, text: by === 'model' ? 'chosen by the model' : 'chosen by rules' });
+const WHO = { model: 'chosen by the model', rules: 'chosen by rules', nobody: 'not chosen yet' };
+const who = (by) => h('span', { class: `lib-who ${by === 'model' ? 'is-model' : ''}`, text: WHO[by] });
 const props = (label, value) => h('details', { class: 'lib-props' }, h('summary', { text: label }), h('pre', { text: JSON.stringify(value, null, 2) }));
 
 const COMPONENT_SAMPLES = [
@@ -139,7 +140,7 @@ const STRUCTURED_SAMPLES = [
   ['artwork', 'rules', 'A work a museum holds, shown whole on a mat over what the collection records.', drawn('artwork')],
   ['breakdown', 'rules', 'The parts of one whole as bars, with each share written beside its bar.', drawn('breakdown')],
   ['qa', 'rules', 'One question and its answer.', drawn('qa')],
-  ['callout', 'model', 'A caveat or a remark set apart from the rest of a note. The words must be a passage of the card\'s own text.', drawn('callout')],
+  ['callout', 'nobody', 'A caveat or a remark set apart from the rest of a note. The words must be a passage of the card\'s own text. The service holds its schema and its content check, and neither a rule nor the model chooses it yet.', drawn('callout')],
   ['definition', 'rules', 'A term and what it means, set like a dictionary entry.', drawn('definition')],
   ['proscons', 'rules', 'The points for and the points against, side by side.', drawn('proscons')],
   ['swatch', 'rules', 'Colours with their names and values.', drawn('swatch')],

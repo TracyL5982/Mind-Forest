@@ -53,7 +53,7 @@ const CHIP_FLOOR = 72;
 const CHIP_PAD = 28;
 const CHIP_GAP = 6;
 /** The margin each side of the line, inside the card's 1 px border. `drawCard` hands it to style.css. */
-const CHIP_INSET = { quote: 19, image: 12, video: 12 };
+const CHIP_INSET = { quote: 19, image: 12, video: 12, callout: 21 };
 const CHIP_INSET_ELSE = 15;
 
 /** How a people chip writes the people it leaves unnamed. */

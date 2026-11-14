@@ -124,7 +124,7 @@ test('the boxes on a line never outgrow the card, and a people chip always has r
     { people: ['Bartholomew Montgomery-Featherstonehaugh', 'Maximiliana Wolfeschlegelsteinhausen', 'C', 'D'] },
     { people: Array.from({ length: 1002 }, (_, i) => `Person number ${i}`) },
   ];
-  const sides: Record<string, number> = { quote: 40, image: 26, video: 26 };
+  const sides: Record<string, number> = { quote: 40, image: 26, video: 26, callout: 44 };
   let narrow = 0;
   for (const component of Object.keys(COMPONENTS)) {
     for (const data of cases) {

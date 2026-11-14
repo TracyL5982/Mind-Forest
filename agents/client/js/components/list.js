@@ -1,5 +1,5 @@
 import { h, s } from '../dom.js';
-import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, andMore, list, say, textWidth, wrap } from './shared.js';
+import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, andMore, list, say, text, textWidth, wrap } from './shared.js';
 
 const WIDTH = 256;
 const COLUMN = WIDTH - SIDES;
@@ -9,7 +9,7 @@ const MARK = 20;
 const GAP = 5;
 
 function plan(item, props) {
-  const entries = list(props.items).map(String);
+  const entries = list(props.items).map((entry) => text(entry).trim());
   const marks = list(props.checked);
   const checked = marks.length === entries.length && entries.length > 0 ? marks.map(Boolean) : null;
   const tally = checked ? `${checked.filter(Boolean).length}/${entries.length}` : '';
