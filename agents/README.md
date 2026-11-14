@@ -74,7 +74,7 @@ Over plain `http://` on a local network address, browsers refuse the microphone.
 ## Not verified
 
 - Nothing has run on a Quest or a Vision Pro.
-- The microphone, live speech recognition and spoken replies in the web client have not been exercised.
-- The wake phrase was measured on synthetic voices and a fake microphone only (DECISIONS.md 23). Speech-to-text through the service was checked once with a synthesized recording.
+- The microphone, live speech recognition and spoken replies in the web client have not been exercised. Speech-to-text through the service was checked once with a synthesized recording.
+- The wake phrase was measured on synthetic voices and a fake microphone only (DECISIONS.md 23).
 - The Ocean adapter was typechecked against an older visionOS SDK and exercised on macOS. It has not been built for visionOS 26.
 - Reading your Instagram posts and reading a web page were each checked live once. Image generation was seen live in a pick. Video understanding and code sketches are written and unit-tested but were not triggered in a live run.
