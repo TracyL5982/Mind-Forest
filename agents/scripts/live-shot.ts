@@ -41,14 +41,26 @@ const settle = async () => {
   await page.waitForTimeout(1500);
 };
 
-await run.pipeline.dump([{ kind: 'text', text: 'I want to design a small ceramic lamp that glows like a paper lantern. Warm, uneven, hand-made.' }]);
+// A picture dropped with no explanation, then a request typed while that picture is open.
+const picture = process.argv[2];
+if (!picture) throw new Error('usage: tsx scripts/live-shot.ts <path to a picture>');
+const started = Date.now();
+await page.locator('#file-pick').setInputFiles(picture);
+await page.locator('.card').first().waitFor({ timeout: 60_000 });
+await page.locator('.card.is-pick, .card[data-status="pick"]').first().waitFor({ timeout: 120_000 }).catch(() => {});
+console.log(`first pick on screen after ${((Date.now() - started) / 1000).toFixed(1)}s`);
 await settle();
-await shot('live-1-thought-with-picks');
+await shot('live-1-picture-with-picks');
 
 const rootId = [...run.mind.trees.values()][0]!.rootId;
-run.pipeline.utter('show me what this could look like, and how do potters make porcelain thin enough to glow', { focus: rootId, selection: [], treeId: run.mind.node(rootId).treeId }, true);
+await page.locator(`.card[data-id="${rootId}"]`).click();
+await page.getByLabel('A thought for the mindstorm').fill('I want to brainstorm world building');
+await page.getByLabel('A thought for the mindstorm').press('Enter');
+await page.waitForTimeout(3000);
 await settle();
+await page.keyboard.press('Escape');
 await shot('live-2-after-asking');
+console.log(`trees after asking: ${run.mind.trees.size}`);
 
 for (const tree of run.mind.trees.values()) {
   console.log(`TREE ${tree.title}`);

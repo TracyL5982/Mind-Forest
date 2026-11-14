@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Assets, ModelClient, Page, SocialPost, Tools } from '../core/ports.ts';
+import type { Assets, ModelClient, Page, Playable, Reference, SocialPost, Tools } from '../core/ports.ts';
 import { siteOf } from '../core/views.ts';
 
 export interface ToolOptions {
@@ -17,6 +17,9 @@ export function makeTools(opts: ToolOptions): Tools {
     web: {
       search: (query, max) => opts.model.search({ role: 'tool.web', query, max }),
       read: (url) => readPage(send, url),
+      lookup: (name) => lookup(send, name),
+      picture: (url) => storePicture(send, opts.assets, url),
+      video: (url) => playable(send, url),
     },
     instagram: {
       async recent(limit = 12): Promise<SocialPost[]> {
@@ -59,6 +62,61 @@ export function makeTools(opts: ToolOptions): Tools {
         }),
     },
   };
+}
+
+const AGENT_NAME = 'MindPalace/0.1 (local prototype)';
+
+async function lookup(send: typeof fetch, name: string): Promise<Reference | null> {
+  try {
+    const query = new URLSearchParams({
+      action: 'query', format: 'json', generator: 'search', gsrsearch: name, gsrlimit: '1',
+      prop: 'pageimages|extracts|info', piprop: 'thumbnail', pithumbsize: '960',
+      exintro: '1', explaintext: '1', exsentences: '4', inprop: 'url', redirects: '1',
+    });
+    const res = await send(`https://en.wikipedia.org/w/api.php?${query}`, { headers: { 'User-Agent': AGENT_NAME }, signal: AbortSignal.timeout(8_000) });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { query?: { pages?: Record<string, { title?: string; extract?: string; fullurl?: string; thumbnail?: { source?: string } }> } };
+    const page = Object.values(json.query?.pages ?? {})[0];
+    if (!page?.title || !page.fullurl) return null;
+    // The search always returns its nearest page, so a result that shares no real word with the name is a different thing.
+    const words = (text: string) => new Set(text.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []);
+    const asked = words(name);
+    const shared = [...words(page.title)].filter((w) => asked.has(w)).length;
+    if (asked.size > 0 && shared === 0) return null;
+    return { title: page.title, url: page.fullurl, extract: (page.extract ?? '').trim(), ...(page.thumbnail?.source ? { image: page.thumbnail.source } : {}) };
+  } catch {
+    return null;
+  }
+}
+
+const MIN_PICTURE_BYTES = 4_000;
+const MAX_PICTURE_BYTES = 8_000_000;
+
+async function storePicture(send: typeof fetch, assets: Assets, url: string): Promise<{ asset: string } | null> {
+  try {
+    const res = await send(url, { headers: { 'User-Agent': AGENT_NAME, Accept: 'image/*' }, redirect: 'follow', signal: AbortSignal.timeout(12_000) });
+    const mime = (res.headers.get('content-type') ?? '').split(';')[0]!.trim();
+    if (!res.ok || !/^image\/(jpeg|png|webp|gif)$/.test(mime)) return null;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length < MIN_PICTURE_BYTES || bytes.length > MAX_PICTURE_BYTES) return null;
+    return { asset: (await assets.put(bytes, mime, 'found')).id };
+  } catch {
+    return null;
+  }
+}
+
+async function playable(send: typeof fetch, url: string): Promise<Playable | null> {
+  const id = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{11})/.exec(url)?.[1];
+  if (!id) return null;
+  try {
+    const watch = `https://www.youtube.com/watch?v=${id}`;
+    const res = await send(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(watch)}`, { signal: AbortSignal.timeout(8_000) });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { title?: string; thumbnail_url?: string };
+    return { title: json.title ?? '', url: watch, embed: `https://www.youtube.com/embed/${id}`, ...(json.thumbnail_url ? { poster: json.thumbnail_url } : {}) };
+  } catch {
+    return null;
+  }
 }
 
 const MAX_PAGE_BYTES = 2_000_000;

@@ -107,7 +107,7 @@ check(film !== undefined, 'the thought became a tree');
 const filmRoot = film!.rootId;
 const firstPicks = mind.picks(filmRoot);
 check(firstPicks.length >= 3, `the agent hung new picks off it (${firstPicks.length})`);
-check(firstPicks.every((p) => mind.item(p.itemId).origin.by === 'agent' && (mind.item(p.itemId).source.url ?? mind.item(p.itemId).source.asset)), 'every pick is new outside content with a source');
+check(firstPicks.every((p) => mind.item(p.itemId).origin.by === 'agent' && mind.item(p.itemId).kind !== 'link'), 'every pick is new content from the agent, and none is a bare link');
 check(mind.picks(filmRoot).every((p) => p.status === 'pick'), 'picks are provisional (dashed) until kept');
 
 step('2. Dump an unrelated thought, a link, a picture and a chat transcript');

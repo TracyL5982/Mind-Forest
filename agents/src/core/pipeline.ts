@@ -303,10 +303,12 @@ export class Pipeline {
     const title = this.deps.mind.itemOf(anchor).title;
     try {
       await this.work('scout', need ? `Looking for: ${need}` : `Finding more around "${title}"`, anchor, async () => {
-        const commands = await this.deps.roles.scout(this.ctx, { anchor, need, mode });
-        if (this.scoutRun.get(anchor) !== run || commands.length === 0) return;
-        const set = this.apply(AGENT('scout'), need ? `Picks for: ${need}`.slice(0, 120) : `Picks for "${title}"`, commands);
-        if (set) this.afterContent(set);
+        const bring = (commands: Command[]) => {
+          if (this.scoutRun.get(anchor) !== run || commands.length === 0) return;
+          const set = this.apply(AGENT('scout'), need ? `Picks for: ${need}`.slice(0, 120) : `Picks for "${title}"`, commands);
+          if (set) this.afterContent(set);
+        };
+        bring(await this.deps.roles.scout(this.ctx, { anchor, need, mode, history: this.history.slice(-6), deliver: bring }));
       });
     } catch (err) {
       this.fail('scout', err);

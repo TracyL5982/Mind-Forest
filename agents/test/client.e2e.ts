@@ -324,7 +324,7 @@ async function main(): Promise<void> {
       await page.getByRole('radio', { name: 'Keep everything at once' }).click();
       await page.locator('[data-mode="immediate"][aria-checked="true"]').waitFor();
       await page.getByRole('button', { name: 'Fewer picks' }).click();
-      await until('three picks each time', async () => (await page.locator('#picks-count').textContent()) === '3');
+      await until('four picks each time', async () => (await page.locator('#picks-count').textContent()) === '4');
       await shot(page, 'desktop-5-settings');
       await page.getByRole('radio', { name: 'Dashed until kept' }).click();
       await page.locator('[data-mode="provisional"][aria-checked="true"]').waitFor();

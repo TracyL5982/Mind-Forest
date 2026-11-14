@@ -162,6 +162,13 @@ function choose(ids) {
   selection = ids;
   field.select(ids);
   panel.selection = new Set(ids);
+  const about = ids.length > 0;
+  $('dump-text').placeholder = about ? 'Ask for something about this card, or paste to add' : 'Type or paste a thought or a link';
+}
+
+/** With a card chosen, a short typed line is about that card, so the librarian reads it. Anything else is a new thought. */
+function aboutChosen(what) {
+  return selection.length > 0 && what.text && what.text.length <= 280 && !what.text.includes('\n');
 }
 
 function openCard(id, { add = false, glide = false } = {}) {
@@ -234,7 +241,7 @@ bindDump({ veil: $('veil'), onDump: dump });
 $('dump').addEventListener('submit', async (e) => {
   e.preventDefault();
   const what = textDump($('dump-text').value);
-  if (what && (await dump(what))) {
+  if (what && (aboutChosen(what) ? utter(what.text, true) : await dump(what))) {
     $('dump-text').value = '';
     $('dump-text').style.height = '';
   }

@@ -177,7 +177,12 @@ export function drawDetail(node, item, ctx) {
   const props = node.view?.props ?? {};
   const parts = [];
   if (name === 'image') parts.push(h('div', { class: 'detail-media' }, picture(text(props.src), item.title, ctx)));
-  if (name === 'video') parts.push(h('div', { class: 'detail-media' }, h('video', { src: ctx.asset(text(props.src)), controls: true, playsinline: true, preload: 'metadata' })));
+  if (name === 'video') {
+    const embed = /^https:\/\/www\.youtube\.com\/embed\/[\w-]{11}$/.test(text(item.data?.embed)) ? item.data.embed : '';
+    parts.push(h('div', { class: 'detail-media' }, embed
+      ? h('iframe', { src: embed, title: item.title, allow: 'accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen', referrerpolicy: 'strict-origin-when-cross-origin', loading: 'lazy' })
+      : h('video', { src: ctx.asset(text(props.src)), controls: true, playsinline: true, preload: 'metadata' })));
+  }
   if (name === 'quote') parts.push(h('blockquote', { class: 'detail-quote', text: text(props.text) }), text(props.by) && h('div', { class: 'quote-by', text: `— ${props.by}` }));
   if (name === 'fact') parts.push(h('div', { class: 'detail-fact' }, h('span', { class: 'fact-value', text: text(props.value) }), h('span', { class: 'fact-label', text: text(props.label) })));
   if (name === 'chart') parts.push(h('div', { class: 'detail-chart' }, chart(props, 320, 150), text(props.unit) && h('div', { class: 'chart-unit', text: props.unit })));

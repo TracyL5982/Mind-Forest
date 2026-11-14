@@ -18,7 +18,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   picksMode: 'provisional',
-  picksPerRun: 4,
+  picksPerRun: 5,
   maxLinksPerRun: 2,
   linkThreshold: 0.8,
   scoutOnDump: true,
@@ -101,8 +101,20 @@ export interface Roles {
    * Brings new content to the anchor.
    * 'refresh' replaces the anchor's unkept picks. 'more' adds to them.
    * Returns addItem + addNode for each pick, deleteNode for replaced picks, and at most `maxLinksPerRun` links.
+   * Picks that are ready early may be handed to `deliver` so the user sees them sooner; the rest are returned.
    */
-  scout(ctx: RoleContext, input: { anchor: Id; need?: string; mode: 'refresh' | 'more'; count?: number }): Promise<Command[]>;
+  scout(
+    ctx: RoleContext,
+    input: {
+      anchor: Id;
+      need?: string;
+      mode: 'refresh' | 'more';
+      count?: number;
+      /** The recent conversation, so a need is read in context. */
+      history?: Turn[];
+      deliver?: (commands: Command[]) => void;
+    },
+  ): Promise<Command[]>;
   organizer(ctx: RoleContext, input: { request: string; scope: Scope; focus?: Id }): Promise<{ commands: Command[]; summary: string }>;
   /** Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup. */
   renderer(ctx: RoleContext, input: { nodeIds: Id[] }): Promise<Command[]>;

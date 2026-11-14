@@ -165,6 +165,11 @@ Choose "kind":
 - "undo": the user wants the last change reverted.
 - "reply": a greeting, thanks, or something that cannot be acted on.
 
+What the user is looking at decides what they mean:
+- When there is a focus node or a selection, what the user says is about that node unless they clearly name something else. A stated want or topic ("I want to brainstorm world building", "let's think about the soundtrack", "characters") is an "ask" anchored on that node. It is never a "capture" and never a new thought of its own.
+- For "ask", write need as what the user wants for that node, in their own words made complete: "world building for this aerial illustration of a car on a winding road", not just "world building".
+- Use "capture" only when nothing is in focus and nothing is selected, or when the user says outright to add, note or remember something.
+
 Rules:
 - Use ids exactly as given. Never invent an id. When the utterance names nothing, leave anchorId empty and the focus is used.
 - Prefer nodes in the focus tree when several match.
@@ -195,7 +200,8 @@ function describe(ctx: RoleContext, input: { utterance: string; history: Turn[] 
       `Focus node: ${seen.focus.id}: ${title(seen.focus)}` +
         `\nTree: ${seen.focus.treeId}: ${mind.tree(seen.focus.treeId).title}` +
         `\nPath from the root: ${path}` +
-        `\nSummary: ${clip(item.summary || item.text, 300) || '(none)'}` +
+        `\nKind: ${item.kind}, ${item.origin.by === 'user' ? 'dropped in by the user' : 'brought by an agent'}` +
+        `\nSummary: ${clip(item.summary || item.text, 400) || '(none)'}` +
         `\nKept children:\n${list(kept.map(line))}`,
     );
   } else if (seen.treeId) {
