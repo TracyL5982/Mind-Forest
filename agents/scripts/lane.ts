@@ -22,7 +22,9 @@
  *                      other card a date and a place.
  *   card=<type>:<json> add one kept card of that type in a tree named Lane. The JSON is the card's
  *                      props, or { item, props, pick } to also set the item's title, summary,
- *                      text or data, or to add the card as a pick: card=fact:{"item":{"title":"Budget"},"props":{"value":"$1.2M","label":"spent"},"pick":true}
+ *                      text, data or origin, or to add the card as a pick: card=fact:{"item":{"title":"Budget"},"props":{"value":"$1.2M","label":"spent"},"pick":true}
+ *                      A card shows chips for what its item's data holds: card=note:{"item":{"data":{"when":"1958","where":"Rome"}}}
+ *                      The step prints the card's footprint and the text of each chip.
  *   group=<kind>:<json> arrange the cards added since the last group as a gallery, timeline,
  *                      comparison, sequence, cluster or stack. The JSON is the group's props, and
  *                      may hold a title. A key $0, $1, ... stands for the first, second, ... card:
