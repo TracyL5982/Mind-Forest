@@ -19,6 +19,7 @@ if [ "$1" = "--host-only" ]; then
 else
   sources+=(canvas_mac.mm $CORE/canvas.cpp $CORE/ocean/*.cpp $CORE/agent/*.cpp)
 fi
+[ "$1" = "--host-only" ] || sources+=($CORE/cards/*.cpp)
 objects=()
 pids=()
 for s in "${sources[@]}"; do

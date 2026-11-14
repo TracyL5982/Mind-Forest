@@ -85,7 +85,7 @@ FontMetrics platform::fontMetrics(const Font& font) {
     const Renderer& r = renderer();
     if (!r.ok) return fallback;
     JNIEnv* env = jni::env();
-    jfloatArray made = jfloatArray(env->CallStaticObjectMethod(r.cls, r.fontMetrics, jfloat(font.pointSize), jint(int(font.weight))));
+    jfloatArray made = jfloatArray(env->CallStaticObjectMethod(r.cls, r.fontMetrics, jfloat(font.pointSize), jint(faceCode(font))));
     if (threw(env, "fontMetrics") || !made) return fallback;
     FontMetrics m = fallback;
     if (env->GetArrayLength(made) >= 3) {
@@ -106,7 +106,7 @@ TextFrame platform::layoutText(const std::string& text, const Font& font, std::o
     JNIEnv* env = jni::env();
     jstring string = javaString(env, text);
     jfloatArray made = jfloatArray(env->CallStaticObjectMethod(
-        r.cls, r.layoutText, string, jfloat(font.pointSize), jint(int(font.weight)), jboolean(kern ? JNI_TRUE : JNI_FALSE),
+        r.cls, r.layoutText, string, jfloat(font.pointSize), jint(faceCode(font)), jboolean(kern ? JNI_TRUE : JNI_FALSE),
         jfloat(kern.value_or(0)), jfloat(lineHeight), jfloat(width), jint(maxLines), jboolean(carets ? JNI_TRUE : JNI_FALSE)));
     env->DeleteLocalRef(string);
     if (threw(env, "layoutText") || !made) return frame;

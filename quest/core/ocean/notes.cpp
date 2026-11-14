@@ -5,6 +5,7 @@
 #include <algorithm>
 
 #include "../platform.h"
+#include "../cards/ocean.h"
 #include "diagrams.h"
 
 // MARK: - TextBlock
@@ -121,6 +122,8 @@ std::string Art::kickerWords(const OceanNote& note) const {
 
 /// The body of a note, small: a picture for the notes that have one, a panel for the rest.
 Vec2 Art::noteSmallSize(const OceanNote& note, const std::shared_ptr<Catalog>& catalog) const {
+    // NOTE(port): added for Quest. A note with an agent's card is drawn as the web client draws it (core/cards).
+    if (std::optional<Vec2> card = cards::ocean::smallSize(note.id)) return *card;
     switch (note.kind()) {
     case OceanNote::Kind::image:
     case OceanNote::Kind::video:
@@ -135,6 +138,7 @@ Vec2 Art::noteSmallSize(const OceanNote& note, const std::shared_ptr<Catalog>& c
 }
 
 std::optional<Piece> Art::noteSmall(const OceanNote& note, const std::shared_ptr<Catalog>& catalog) {
+    if (cards::has(note.id)) return cards::ocean::small(*this, note.id);    // NOTE(port): added for Quest (core/cards).
     Vec2 size = noteSmallSize(note, catalog);
     float w = px(size.x), h = px(size.y);
     switch (note.kind()) {
@@ -199,6 +203,7 @@ std::optional<Piece> Art::noteSmall(const OceanNote& note, const std::shared_ptr
 
 /// Where an open note's parts sit. Worked out once per note.
 NoteLayout Art::noteLayout(const OceanNote& note, const std::shared_ptr<Catalog>& catalog) const {
+    if (std::optional<NoteLayout> card = cards::ocean::layout(note.id)) return *card;    // NOTE(port): added for Quest (core/cards).
     auto hit = layouts.find(note.id);
     if (hit != layouts.end()) return hit->second;
     Vec2 size = catalog->openSize(note);
@@ -293,6 +298,7 @@ NoteLayout Art::noteLayout(const OceanNote& note, const std::shared_ptr<Catalog>
 
 /// A note, open.
 std::optional<Piece> Art::noteOpen(const OceanNote& note, const std::shared_ptr<Catalog>& catalog) {
+    if (cards::has(note.id)) return cards::ocean::open(*this, note.id);    // NOTE(port): added for Quest (core/cards).
     NoteLayout layout = noteLayout(note, catalog);
     float w = layout.size.width, h = layout.size.height;
     return piece("note-o:" + note.id, w, h, [&](Canvas& ctx, CGSize) {
