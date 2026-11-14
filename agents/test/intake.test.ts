@@ -16,6 +16,21 @@ const NOTHING = {
   personName: '',
   personRole: '',
   when: '',
+  where: '',
+  people: [],
+  pros: [],
+  cons: [],
+  tableHeads: [],
+  tableRows: [],
+  question: '',
+  answer: '',
+  term: '',
+  definition: '',
+  items: [],
+  checklist: [],
+  colours: [],
+  excerptText: '',
+  excerptAt: '',
 };
 const described = (title: string, more: object = {}) => ({
   title,
@@ -222,6 +237,117 @@ test('structure is kept only when the content holds it', async () => {
   assert.equal(item!.data.chart, undefined, 'a chart value the text does not state is dropped');
   assert.equal('when' in item!.data, false);
   assert.equal('person' in item!.data, false);
+});
+
+/** The data Intake keeps when the model answers a pasted `text` with `reply`. */
+async function extracted(text: string, reply: object): Promise<Item['data']> {
+  const k = kit();
+  k.model.on('intake.text', () => ({ entries: [{ dump: 0, text: '', ...described('Pasted', reply) }] }));
+  const [item] = await intake(k.ctx, [{ kind: 'text', text }]);
+  return item!.data;
+}
+
+const STRUCTURED: { field: string; text: string; reply: object; kept: object; wrong: object; left?: object }[] = [
+  {
+    field: 'where',
+    text: 'We stayed two nights in Lisbon, near the river.',
+    reply: { where: 'Lisbon' },
+    kept: { where: 'Lisbon' },
+    wrong: { where: 'Porto' },
+  },
+  {
+    field: 'people',
+    text: 'Dinner with Ana Lima and Ben Okri after the talk.',
+    reply: { people: ['Ana Lima', 'Ben Okri'] },
+    kept: { people: ['Ana Lima', 'Ben Okri'] },
+    wrong: { people: ['Ana Lima', 'Carl Jung'] },
+    left: { people: ['Ana Lima'] },
+  },
+  {
+    field: 'pros',
+    text: 'Moving to Rust.\nPros: no data races, one binary.\nCons: slow builds.',
+    reply: { pros: ['No data races', 'one binary'] },
+    kept: { pros: ['No data races', 'one binary'] },
+    wrong: { pros: ['It is fashionable'] },
+  },
+  {
+    field: 'cons',
+    text: 'Moving to Rust.\nPros: no data races, one binary.\nCons: slow builds.',
+    reply: { cons: ['slow builds'] },
+    kept: { cons: ['slow builds'] },
+    wrong: { cons: ['Nobody knows it'] },
+  },
+  {
+    field: 'table',
+    text: 'Plan | Price | Seats\nSolo | $8 | 1\nTeam | $20 | 5\nOrg | $1,200 | 100',
+    reply: { tableHeads: ['Plan', 'Price', 'Seats'], tableRows: ['Solo | $8 | 1', '| Team | $20 | 5 |', 'Org | $1,200 | 100'] },
+    kept: { table: { heads: ['Plan', 'Price', 'Seats'], rows: [['Solo', '$8', '1'], ['Team', '$20', '5'], ['Org', '$1,200', '100']] } },
+    wrong: { tableHeads: ['Plan', 'Price', 'Seats'], tableRows: ['Solo | $8 | 1', 'Team | $45 | 5', 'Org | $1,200'] },
+    left: { table: { heads: ['Plan', 'Price', 'Seats'], rows: [['Solo', '$8', '1']] } },
+  },
+  {
+    field: 'question and answer',
+    text: 'Why is the sky blue? Air scatters short wavelengths the most.',
+    reply: { question: 'Why is the sky blue?', answer: 'Air scatters short wavelengths the most.' },
+    kept: { question: 'Why is the sky blue?', answer: 'Air scatters short wavelengths the most.' },
+    wrong: { question: 'Why is the sky blue?', answer: 'Because it reflects the sea.' },
+  },
+  {
+    field: 'term and definition',
+    text: 'Parallax: the apparent shift of an object when the viewer moves.',
+    reply: { term: 'Parallax', definition: 'the apparent shift of an object when the viewer moves' },
+    kept: { term: 'Parallax', definition: 'the apparent shift of an object when the viewer moves' },
+    wrong: { term: 'Parallax', definition: 'an error in a viewfinder' },
+  },
+  {
+    field: 'items and checklist',
+    text: 'Packing:\n[x] passport\n[ ] charger\n[x] rain coat',
+    reply: { items: ['passport', 'charger', 'rain coat'], checklist: [true, false, true] },
+    kept: { items: ['passport', 'charger', 'rain coat'], checklist: [true, false, true] },
+    wrong: { items: ['passport', 'sunglasses', 'rain coat'], checklist: [true, false, true] },
+    left: { items: ['passport', 'rain coat'], checklist: [true, true] },
+  },
+  {
+    field: 'colours',
+    text: 'Palette: Ember #E4572E, #17BEBB and plain navy.',
+    reply: { colours: [{ name: 'Ember', value: '#E4572E' }, { name: 'Lagoon', value: '#17BEBB' }, { name: '', value: 'Navy' }] },
+    kept: { colours: [{ name: 'Ember', value: '#E4572E' }, { name: '#17BEBB', value: '#17BEBB' }, { name: 'navy', value: 'navy' }] },
+    wrong: { colours: [{ name: 'Gold', value: '#FFC914' }, { name: 'Ember', value: 'ember' }] },
+  },
+  {
+    field: 'excerpt',
+    text: 'Chapter 3. The house remembers. Every stair keeps the weight of who climbed it.',
+    reply: { excerptText: 'Every stair keeps the weight of who climbed it.', excerptAt: 'Chapter 3' },
+    kept: { excerpt: { text: 'Every stair keeps the weight of who climbed it.', at: 'Chapter 3' } },
+    wrong: { excerptText: 'Every wall keeps a secret.', excerptAt: 'Chapter 3' },
+  },
+];
+
+for (const { field, text, reply, kept, wrong, left = {} } of STRUCTURED) {
+  test(`${field} is kept when the text states it and dropped when it does not`, async () => {
+    assert.deepEqual(await extracted(text, reply), kept);
+    assert.deepEqual(await extracted(text, wrong), left);
+  });
+}
+
+test('where an excerpt sits is dropped alone when the text does not say it', async () => {
+  const data = await extracted('The house remembers. Every stair keeps the weight.', { excerptText: 'Every stair keeps the weight.', excerptAt: 'the closing page' });
+  assert.deepEqual(data, { excerpt: { text: 'Every stair keeps the weight.' } });
+});
+
+test('a list is a checklist only when every item has a mark', async () => {
+  const data = await extracted('Bring: tent, stove, map.', { items: ['tent', 'stove', 'map'], checklist: [true] });
+  assert.deepEqual(data, { items: ['tent', 'stove', 'map'] });
+});
+
+test('a photo has no text to check against, so what the model reads in it is kept', async () => {
+  const k = kit();
+  const { id } = await k.assets.put(new Uint8Array([1, 2, 3]), 'image/jpeg', 'beach.jpg');
+  k.model.on('intake.image', () => ({ ...described('Two friends on a beach', { where: 'Nazaré', people: ['Ana Lima', 'Ben Okri'] }), description: 'Two people on sand.' }));
+
+  const [photo] = await intake(k.ctx, [{ kind: 'asset', asset: id, mime: 'image/jpeg', name: 'beach.jpg' }]);
+
+  assert.deepEqual(photo!.data, { where: 'Nazaré', people: ['Ana Lima', 'Ben Okri'] });
 });
 
 const CHATGPT_EXPORT = [

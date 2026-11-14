@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ItemData } from '../../domain.ts';
+import { asColour } from './colours.ts';
 import { clip, squash, tidyTags, TITLE_MAX, type Described } from './plain.ts';
 
 type Shape = Record<string, z.ZodType>;
@@ -19,6 +20,30 @@ interface Field<S extends Shape> {
 }
 
 const field = <S extends Shape>(f: Field<S>): Field<S> => f;
+
+/** A list the content states entry by entry. An entry the text does not hold is dropped. */
+const listed = <K extends string>(key: K, max: number) =>
+  field({
+    reply: { [key]: z.array(z.string()) } as Record<K, z.ZodArray<z.ZodString>>,
+    keep(r, text) {
+      const entries = [...new Set((r[key] as string[]).map(squash))].filter((entry) => entry && text.says(entry)).slice(0, max);
+      return entries.length > 0 ? { [key]: entries } : undefined;
+    },
+  });
+
+/** Two strings that mean something only together, such as a question and its answer. */
+const pair = <A extends string, B extends string>(first: A, second: B) =>
+  field({
+    reply: { [first]: z.string(), [second]: z.string() } as Record<A | B, z.ZodString>,
+    keep(r, text) {
+      const [a, b] = [squash(r[first]), (r[second] as string).trim()];
+      return a && b && text.says(a) && text.says(b) ? { [first]: a, [second]: b } : undefined;
+    },
+  });
+
+const MAX_COLUMNS = 8;
+const MAX_ROWS = 40;
+const MAX_ITEMS = 30;
 
 /** Every piece of structure Intake extracts. The reply schema and `structure()` are both built from this table. */
 const EXTRACTED = [
@@ -59,6 +84,68 @@ const EXTRACTED = [
     reply: { when: z.string() },
     keep: (r) => (r.when.trim() ? { when: r.when.trim() } : undefined),
   }),
+  field({
+    reply: { where: z.string() },
+    keep(r, text) {
+      const where = squash(r.where);
+      return where && text.says(where) ? { where } : undefined;
+    },
+  }),
+  listed('people', 12),
+  listed('pros', 12),
+  listed('cons', 12),
+  field({
+    // A row is one string with its cells separated by "|", so the schema nests no deeper than a list of strings.
+    reply: { tableHeads: z.array(z.string()), tableRows: z.array(z.string()) },
+    keep(r, text) {
+      const heads = r.tableHeads.map(squash);
+      if (heads.length < 2 || heads.length > MAX_COLUMNS || heads.some((head) => !head || !text.says(head))) return undefined;
+      const rows = r.tableRows
+        .map((row) => {
+          const cells = row.split('|').map(squash);
+          const fenced = cells.length === heads.length + 2 && !cells[0] && !cells.at(-1);
+          return fenced ? cells.slice(1, -1) : cells;
+        })
+        .filter((cells) => cells.length === heads.length && cells.some(Boolean) && cells.every((cell) => !cell || text.says(cell)))
+        .slice(0, MAX_ROWS);
+      return rows.length > 0 ? { table: { heads, rows } } : undefined;
+    },
+  }),
+  pair('question', 'answer'),
+  pair('term', 'definition'),
+  field({
+    reply: { items: z.array(z.string()), checklist: z.array(z.boolean()) },
+    keep(r, text) {
+      const ticked = r.checklist.length === r.items.length;
+      const kept = r.items
+        .map((item, n) => ({ item: squash(item), done: r.checklist[n] }))
+        .filter((entry) => entry.item && text.says(entry.item))
+        .slice(0, MAX_ITEMS);
+      if (kept.length < 2) return undefined;
+      return { items: kept.map((entry) => entry.item), ...(ticked ? { checklist: kept.map((entry) => entry.done) } : {}) };
+    },
+  }),
+  field({
+    reply: { colours: z.array(z.object({ name: z.string(), value: z.string() })) },
+    keep(r, text) {
+      const colours = new Map<string, { name: string; value: string }>();
+      for (const colour of r.colours) {
+        const value = asColour(colour.value);
+        if (!value || !text.says(colour.value) || colours.has(value.toLowerCase())) continue;
+        const name = squash(colour.name);
+        colours.set(value.toLowerCase(), { name: name && text.says(name) ? name : value, value });
+      }
+      return colours.size > 0 ? { colours: [...colours.values()].slice(0, 12) } : undefined;
+    },
+  }),
+  field({
+    reply: { excerptText: z.string(), excerptAt: z.string() },
+    keep(r, text) {
+      const passage = r.excerptText.trim();
+      const at = squash(r.excerptAt);
+      return passage && text.says(passage) ? { excerpt: { text: passage, ...(at && text.says(at) ? { at } : {}) } } : undefined;
+    },
+  }),
 ];
 
 type Merged<U> = (U extends unknown ? (u: U) => void : never) extends (u: infer I) => void ? { [K in keyof I]: I[K] } : never;
@@ -96,7 +183,18 @@ The remaining fields hold structure a card can draw. Fill one only when the cont
 - quoteText and quoteBy: a quotation the content contains, word for word, and who said it.
 - chartLabels, chartValues, chartUnit: a numeric series the content states, one value per label.
 - personName and personRole: when the content is about one named person.
-- when: a date or time the content is about, as written.`;
+- when: a date or time the content is about, as written.
+
+The fields below are checked against the content. Copy its own words into them: a value that is not written in the content is thrown away.
+- where: the place the content is about, as written.
+- people: every person the content names.
+- pros and cons: the points for and the points against, when the content weighs a choice.
+- tableHeads and tableRows: a table the content holds. tableHeads has the column heads. Each entry of tableRows is one row, with its cells in column order separated by " | ".
+- question and answer: when the content asks one question and answers it.
+- term and definition: when the content defines one term.
+- items and checklist: a list in no particular order. Leave checklist empty unless the content marks items as done or not done. Then give true or false for each item, in the same order.
+- colours: each colour the content gives as a hex value or a plain colour name, with the name the content calls it, or an empty name.
+- excerptText and excerptAt: one passage of a longer source that is worth quoting, word for word, and where it sits as the source itself says (a heading, a chapter, a page).`;
 
 export const TEXT_SYSTEM = `You are the intake clerk of a brainstorming app. You label what the user drops in so it can be filed and found later.
 
