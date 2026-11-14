@@ -102,7 +102,7 @@ export function showcase(image: string, other?: string, { structured = true, sou
     source: { from: 'chat-export:claude', capturedAt: new Date().toISOString() },
   });
   const codeCard = add(root, 'code', 'Field of view', { data: { code: { language: 'js', source: 'const fov = 2 * Math.atan(width / (2 * distance));\ncamera.zoom = base / Math.tan(fov / 2);\nrender();' } } });
-  add(root, 'steps', 'How to try it', { data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] } });
+  add(root, 'steps', 'How to try it', { text: 'How to try it:\n1. Pick a subject\n2. Move away while zooming in\n3. Keep the subject the same size', data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] } });
 
   const gallery = [1, 2, 3].map((i) => add(quote, 'image', `Frame ${i}`, picture(image)));
   group(quote, 'gallery', 'Frames', gallery, {});
@@ -128,13 +128,14 @@ export function showcase(image: string, other?: string, { structured = true, sou
     if (id === 'place') seed.data = { ...data, image };
     if (id === 'callout') {
       seed.text = 'Feed it once a day with equal parts flour and water.\nCaution: anything above 40 °C kills the yeast.';
-      seed.view = { component: 'callout', props: { text: 'anything above 40 °C kills the yeast.', tone: 'caution' } };
+      seed.view = { component: 'callout', props: { text: 'Caution: anything above 40 °C kills the yeast.', tone: 'caution' } };
     }
     // The stand-in assembles a sheet from a sentence and lines that each set a figure beside its label.
     if (id === 'sheet') {
       const opening = 'Children aged six months to five years with pneumonia that did not need hospital care were given amoxicillin for five days or for ten.';
       const figures = [{ label: 'Children randomised', value: '824' }, { label: 'Failed in five days', value: '12.6%' }, { label: 'Failed in ten days', value: '12.4%' }];
-      seed.text = [title, opening, ...figures.map(({ label, value }) => `${label}: ${value}`)].join('\n');
+      // A heading line ends no sentence, so an empty line sets it apart from the opening.
+      seed.text = [`${title}\n`, opening, ...figures.map(({ label, value }) => `${label}: ${value}`)].join('\n');
       seed.view = { component: 'sheet', props: { sections: [{ kind: 'heading', text: title }, { kind: 'text', text: opening }, { kind: 'figures', facts: figures }] } };
     }
     // The stand-in reads a slider from a formula in backticks that names its quantity, and sentences that each write a value and its result.

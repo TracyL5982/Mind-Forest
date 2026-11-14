@@ -17,7 +17,7 @@ async function pasted(text: string) {
 }
 
 test('the fake clerk reads each kind of structure from its plain written form, and the real Intake keeps it', async () => {
-  assert.deepEqual(await pasted('Moving to Rust\nWhere: Lisbon\nPeople: Ana Lima, Ben Okri\nPros:\n- no data races\n- one binary\nCons: slow builds, a steep start.'), {
+  assert.deepEqual(await pasted('Moving to Rust\nWhere: Lisbon\nPeople: Ana Lima, Ben Okri\nPros:\n- no data races\n- one binary\nCons:\n- slow builds\n- a steep start'), {
     where: 'Lisbon',
     people: ['Ana Lima', 'Ben Okri'],
     pros: ['no data races', 'one binary'],
@@ -26,12 +26,13 @@ test('the fake clerk reads each kind of structure from its plain written form, a
   assert.deepEqual(await pasted('| Plan | Price |\n| --- | --- |\n| Solo | $8 |\n| Team | $20 |'), {
     table: { heads: ['Plan', 'Price'], rows: [['Solo', '$8'], ['Team', '$20']] },
   });
-  assert.deepEqual(await pasted('Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.\nTerm: Parallax\nDefinition: the apparent shift of an object when the viewer moves'), {
+  assert.deepEqual(await pasted('Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.\nParallax means the apparent shift of an object when the viewer moves'), {
     question: 'Why is the sky blue?',
     answer: 'Air scatters short wavelengths the most.',
     term: 'Parallax',
-    definition: 'the apparent shift of an object when the viewer moves',
+    definition: 'Parallax means the apparent shift of an object when the viewer moves',
   });
+  assert.deepEqual(await pasted('Moving to Rust\nPros: no data races, one binary'), {}, 'a point written inline among others is a piece of a sentence');
   assert.deepEqual(await pasted('Packing\n[x] passport\n[ ] charger'), { items: ['passport', 'charger'], checklist: [true, false] });
   assert.deepEqual(await pasted('Bring\n- tent\n- stove'), { items: ['tent', 'stove'] });
   assert.deepEqual(await pasted('Palette: Ember #E4572E, #17BEBB and #fff.'), {
@@ -93,9 +94,9 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
     qa: await paste('Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.'),
     callout: await paste('Sourdough\nCaution: water above 40 °C kills the yeast.'),
     excerpt: await paste('The house remembers.\n> Every stair keeps the weight of who climbed it.\nAt: Chapter 3'),
-    definition: await paste('Term: Parallax\nDefinition: the apparent shift of an object when the viewer moves'),
+    definition: await paste('Parallax means the apparent shift of an object when the viewer moves'),
     idea: await paste('Build a treehouse'),
-    proscons: await paste('Moving to Rust\nPros: no data races, one binary\nCons: slow builds'),
+    proscons: await paste('Moving to Rust\nPros:\n- no data races\n- one binary\nCons:\n- slow builds'),
     swatch: await paste('Palette: Ember #E4572E, Lagoon #17BEBB'),
     artwork: await ask('find a museum painting of stairs'),
     reference: await ask('find a paper on the dolly zoom'),
@@ -106,13 +107,11 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
 
   const plain: [string, string][] = [
     ['Eiffel Tower\nHeight: 330 m\nBuilt: 1889\nFloors: 3', 'facts'],
-    ['Question: Why is the sky blue?\nAnswer: Air scatters short wavelengths the most.', 'qa'],
     ['问：为什么天空是蓝色的？\n答：因为空气分子对蓝光散射得最强。', 'qa'],
     ['Bokeh: the quality of the blur in the parts of a picture that are out of focus', 'definition'],
     ['Rent 45%, food 25%, transport 10% and savings 20%.', 'breakdown'],
     ['City,Rent,Commute\nLisbon,900,25 min\nPorto,700,20 min', 'table'],
     ['City\tRent\nLisbon\t900\nPorto\t700', 'table'],
-    ['> Every stair keeps the weight\n> of who climbed it.\nAt: p. 41', 'excerpt'],
     ['Our budget this year: rent 45%, food 25%, transport 10%, savings 20%', 'breakdown'],
   ];
   for (const [text, type] of plain) assert.equal(await paste(text), type, `the plain form ${JSON.stringify(text)}`);
@@ -135,14 +134,19 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
     'Today: finished the report and sent it to the whole team',
     'Dinner, drinks, dancing\nthen home, bed, sleep\nwhat a night, truly, wow',
     'If x > 5 then the loop exits early.\n> not sure this is right though',
+    // "Answer:" is no marker a passage opens after, so the answer is a piece of its line.
+    'Question: Why is the sky blue?\nAnswer: Air scatters short wavelengths the most.',
+    // A quotation over two lines that each open with ">" is no run of whole units, so it is no passage.
+    '> Every stair keeps the weight\n> of who climbed it.\nAt: p. 41',
   ];
   for (const text of ordinary) assert.ok(['note', 'idea'].includes((await paste(text))!), `ordinary text stays a note: ${JSON.stringify(text)} is drawn as ${await paste(text)}`);
 });
 
+// A heading line ends no sentence, so an empty line sets it apart from the passage that follows it.
 const PORTO =
-  'Weekend in Porto\n' +
+  'Weekend in Porto\n\n' +
   'We took the early train on Friday and walked the river both days, and when it rained on Saturday we sat in the bookshop until it closed and nobody minded. Next time we go in May, before the crowds, and stay an extra night.\n' +
-  'Cost: €240\nNights: 2\nBest: the bridge at dusk; the tiled station; grilled sardines';
+  'Cost: €240\nNights: 2\nBest:\n- the bridge at dusk\n- the tiled station\n- grilled sardines';
 const PORTO_SHEET = {
   sections: [
     { kind: 'heading', text: 'Weekend in Porto' },
@@ -164,8 +168,8 @@ test('the fake chooses a callout, a sheet or a note for a text the rules left as
   };
 
   assert.deepEqual(await paste(PORTO), { component: 'sheet', props: PORTO_SHEET, by: 'renderer' });
-  assert.deepEqual(await paste('Sourdough\nNote: the starter doubles in about six hours.'), { component: 'callout', props: { text: 'the starter doubles in about six hours.', tone: 'note' }, by: 'renderer' });
-  assert.equal((await paste('The tower, 2019\nBest: the view at night; the lift; the gardens below it')).component, 'note', 'a list with no sentence beside it is no sheet');
+  assert.deepEqual(await paste('Sourdough\nNote: the starter doubles in about six hours.'), { component: 'callout', props: { text: 'Note: the starter doubles in about six hours.', tone: 'note' }, by: 'renderer' });
+  assert.equal((await paste('The tower, 2019\nBest:\n- the view at night\n- the lift\n- the gardens below it')).component, 'list', 'a list with no sentence beside it is no sheet, and the rules draw the list');
   assert.deepEqual(k.notes, []);
 
   assert.equal((await paste('Survey of 40 viewers\nWhat they noticed in the scene, in their own words. fake:invent')).component, 'note');

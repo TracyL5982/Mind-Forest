@@ -55,7 +55,7 @@ const EAGER_SCOUTS = 3;
 const MAX_PARALLEL_SCOUTS = 2;
 /**
  * The most passes the Renderer makes over what one change brought in. One pass asks the model about 24 items, so four passes answer
- * for a drop of up to 96. Past that, and when the model fails four times running, an item keeps its plain card until it is next touched.
+ * for a drop of up to 96. Past that, and after a pass in which every call failed, an item keeps its plain card until it is next touched.
  */
 const RENDER_PASSES = 4;
 

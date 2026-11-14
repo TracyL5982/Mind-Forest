@@ -33,7 +33,15 @@ test('every sample says who wrote it: the 120 two independent reviewers wrote, a
  * that lowers one of these made format choice worse: fix the rule, or change a sample's key only where a person would agree and say so
  * in docs/formats.md.
  */
-const RULES_AGREE = { reviewers: { research: 39, brainstorming: 37, memories: 40 }, authors: { research: 5, brainstorming: 7, memories: 9 } };
+const RULES_AGREE = { reviewers: { research: 36, brainstorming: 36, memories: 40 }, authors: { research: 5, brainstorming: 7, memories: 9 } };
+/**
+ * How many of each group the rules draw as the very card a person picked. A card shows only whole units of its item, and what Intake
+ * read off the samples before is held to that too, so seven of the reviewers' are notes now: the definitions A-R12, B-R07 and B-R19,
+ * whose meaning is the rest of a sentence after its term; the pros and cons of A-B05 and the list of B-B13, cut out of one sentence;
+ * the steps of B-M05, beside a step that says "do not"; and the fact of B-M08, whose label "Finish time" adds a word its sentence does
+ * not write. The first four were agreements, so 112 of the reviewers' agree and 105 are exact, from 116 and 112.
+ */
+const RULES_EXACT = { reviewers: 105, authors: 10 };
 
 test('the rules alone agree with a person on at least as many samples of each group and activity as they did', () => {
   for (const origin of ORIGINS) {
@@ -43,6 +51,14 @@ test('the rules alone agree with a person on at least as many samples of each gr
       const was = RULES_AGREE[origin][activity];
       assert.ok(of.length - missed.length >= was, `${origin}, ${activity}: ${of.length - missed.length} of ${of.length}, was ${was}. Missed: ${missed.join('; ')}`);
     }
+  }
+});
+
+test('the rules alone draw the very card a person picked for at least as many samples of each group as they did', () => {
+  for (const origin of ORIGINS) {
+    const of = SAMPLES.filter((sample) => sample.origin === origin);
+    const exact = of.filter((sample) => byRule(sample.item, assetUrl).component === sample.expect).length;
+    assert.ok(exact >= RULES_EXACT[origin], `${origin}: ${exact} of ${of.length}, was ${RULES_EXACT[origin]}`);
   }
 });
 

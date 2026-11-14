@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
 import { parse } from '../formula.ts';
-import { grounding, type Grounding } from '../grounding.ts';
+import { grounding, type Grounding, type Passage } from '../grounding.ts';
 import { cardsOf, collapse, JOINS, KINDS, LIMITS, parseFlat, ROLES, type Box, type Part as LayoutPart } from '../layout.ts';
+import { Unreadable } from '../ports.ts';
 import { CHECKS, isValidGroup, isValidView, misses, recording, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type PropsOf, type Section, type Stated } from '../views.ts';
 import type { RoleContext, Roles } from './types.ts';
 
@@ -286,7 +287,8 @@ function factInText(item: Item): { value: string; label: string } | undefined {
   const text = (item.text.trim() || item.title).trim();
   if (text.length > 80 || text.includes('\n')) return undefined;
   const valueFirst = VALUE_FIRST.exec(text);
-  if (valueFirst) return { value: valueFirst[1]!, label: valueFirst[2]!.replace(/[.\s]+$/, '') };
+  // "42% of users leave" labels its value "users leave": a label that opens with "of" is a piece of a phrase.
+  if (valueFirst) return { value: valueFirst[1]!, label: valueFirst[2]!.replace(/[.\s]+$/, '').replace(/^(?:of|in|at|on|for|per|from|to|by|with)\s+/i, '') };
   const labelFirst = LABEL_FIRST.exec(text);
   if (!labelFirst) return undefined;
   const [label, value] = [labelFirst[1]!.trim(), labelFirst[2]!.trim()];
@@ -640,31 +642,41 @@ export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
 
 // ---- components by model
 
+/** A passage that is no run of whole units, or is one with a reversing word beside it, as the reason a card may not show it. `beside` lets the word stand. */
+const passed = (passage: Passage | 'apart', beside = false): Why | undefined => (passage === 'whole' || (beside && passage === 'turned') ? undefined : passage);
+const fails = (stands: boolean, why: Why = 'unstated'): Why | undefined => (stands ? undefined : why);
+
 /**
- * How each kind of check reads one value. `beside` is the object the value sits in and `at` the value's place in its list,
- * for a check that reads a value against its neighbours.
+ * How each kind of check reads one value, and why the value may not be shown when it fails. `beside` is the object the value sits in
+ * and `at` the value's place in its list, for a check that reads a value against its neighbours.
  */
-const STANDS: Record<Stated, (value: unknown, content: Content, beside: Props, at: number) => boolean> = {
-  says: (value, { text }) => typeof value === 'string' && text.says(value),
-  cell: (value, { text }) => typeof value === 'string' && (value.trim() === '' || (!/[|\t]/.test(value) && text.says(value))),
-  quotes: (value, { text }) => typeof value === 'string' && text.quotes(value),
-  whole: (value, { text }) => typeof value === 'string' && text.whole(value),
-  lead: (value, { text }) => typeof value === 'string' && (text.whole(value) || (value.trimEnd().endsWith('…') && text.leads(value.trimEnd().slice(0, -1)))),
-  meaning: (value, { text }, { term }) => typeof value === 'string' && typeof term === 'string' && text.defines(term, value),
-  writes: (value, { text }, { unit }) => typeof value === 'number' && text.writes(value, typeof unit === 'string' ? unit : undefined),
-  unit: (value, { text }, { values }) => typeof value === 'string' && unitStands(value, values, text),
-  paints: (value, { text }) => typeof value === 'string' && (value.trim().startsWith('#') ? text.paints(value) : text.says(value)),
-  own: (value, content) => (typeof value === 'string' || typeof value === 'number') && content.own(String(value)),
+const STANDS: Record<Stated, (value: unknown, content: Content, beside: Props, at: number) => Why | undefined> = {
+  says: (value, { text }) => fails(typeof value === 'string' && text.says(value)),
+  cell: (value, { text }) => fails(typeof value === 'string' && (value.trim() === '' || (!/[|\t]/.test(value) && text.says(value)))),
+  whole: (value, { text }) => (typeof value === 'string' ? passed(text.passage(value)) : 'unstated'),
+  units: (value, { text }) => (typeof value === 'string' ? passed(text.passage(value), true) : 'unstated'),
+  said: (value, { text }) => (typeof value === 'string' ? passed(text.said(value)) : 'unstated'),
+  lead: (value, { text }) => {
+    if (typeof value !== 'string') return 'unstated';
+    const why = passed(text.passage(value));
+    return why && value.trimEnd().endsWith('…') ? passed(text.leads(value.trimEnd().slice(0, -1))) : why;
+  },
+  meaning: (value, { text }, { term }) => (typeof value === 'string' && typeof term === 'string' ? passed(text.defines(term, value)) : 'unstated'),
+  writes: (value, { text }, { unit }) => fails(typeof value === 'number' && text.writes(value, typeof unit === 'string' ? unit : undefined)),
+  unit: (value, { text }, { values }) => fails(typeof value === 'string' && unitStands(value, values, text)),
+  paints: (value, { text }) => fails(typeof value === 'string' && (value.trim().startsWith('#') ? text.paints(value) : text.says(value))),
+  own: (value, content) => fails((typeof value === 'string' || typeof value === 'number') && content.own(String(value))),
   // A value the content does not state fails its own check, and its label has then nothing to stand beside.
-  label: (value, { text }, { value: named }) => typeof value === 'string' && value.trim() !== '' && typeof named === 'string' && (text.names(value, named) || !text.says(named)),
+  label: (value, { text }, { value: named }) =>
+    fails(typeof value === 'string' && value.trim() !== '' && typeof named === 'string' && (text.names(value, named) || !text.says(named)), 'label'),
   // A label with no number at its place is a chart of unequal lists, which the chart's own check refuses.
   point: (value, { text }, { values, unit: given }, at) => {
     const named: unknown = Array.isArray(values) ? values[at] : undefined;
     const unit = typeof given === 'string' ? given : undefined;
-    return typeof value === 'string' && value.trim() !== '' && (typeof named !== 'number' || text.names(value, named, unit) || !text.writes(named, unit));
+    return fails(typeof value === 'string' && value.trim() !== '' && (typeof named !== 'number' || text.names(value, named, unit) || !text.writes(named, unit)), 'label');
   },
-  choice: () => true,
-  computes: () => true,
+  choice: () => undefined,
+  computes: () => undefined,
 };
 
 interface Leaf {
@@ -702,25 +714,29 @@ const checksOf = (component: string) => CHECKS[component as ComponentId] as { pr
  * Why a card may not show a value.
  * - `unstated`: the content does not state it.
  * - `label`: it names a value in words the content does not set beside that value.
- * - `cut`: it is a passage cut out of a sentence of the content.
+ * - `cut`: the content holds its words, but not as whole sentences, lines or cells.
+ * - `turned`: it is whole units, and a word beside them in the content, such as "false" or "Do not", may turn them around.
  * - `apart`: it is a meaning the content does not give the term.
  * - `long`: it is longer than a card has room for. Only a card built from a model's reply is held to this.
  */
-export type Why = 'unstated' | 'label' | 'cut' | 'apart' | 'long';
+export type Why = 'unstated' | 'label' | Exclude<Passage, 'whole' | 'unstated'> | 'apart' | 'long';
 /** One value a card may not show, by its path in the props. */
 export interface Fault {
   prop: string;
   why: Why;
 }
 
-/** The kinds of check that read how words stand together in the item, with what a value that fails one is. */
-const TOGETHER: Partial<Record<Stated, Why>> = { label: 'label', point: 'label', whole: 'cut', lead: 'cut', meaning: 'apart' };
+/**
+ * The kinds of check that read how words stand together in the item, which a card a rule drew from what Intake extracted is held to as
+ * well: Intake keeps none that fails them now, and an item it described before may still hold one.
+ */
+const BY_RULE = new Set<Stated>(['label', 'point', 'whole', 'units', 'said', 'lead', 'meaning']);
 
 const kindsIn = (check: Check): Stated[] => (typeof check === 'string' ? [check] : Object.values(check).flatMap(kindsIn));
 /** The cards with a value that such a check reads. */
-const READS_WORDS = new Set<string>(Object.entries(CHECKS).flatMap(([component, { props }]) => (kindsIn(props).some((kind) => kind in TOGETHER) ? [component] : [])));
+const READS_WORDS = new Set<string>(Object.entries(CHECKS).flatMap(([component, { props }]) => (kindsIn(props).some((kind) => BY_RULE.has(kind)) ? [component] : [])));
 
-const tooLong = (how: Stated, value: string): boolean => (how === 'label' ? value.trim().length > ROOM.label : how === 'whole' && value.trim().length > roomOf(ROOM.passage, value));
+const tooLong = (how: Stated, value: string): boolean => (how === 'label' ? value.trim().length > ROOM.label : (how === 'whole' || how === 'said') && value.trim().length > roomOf(ROOM.passage, value));
 
 /**
  * Every value of a view that may not be shown. For a view built from a model's reply, each value is read, and held to its length.
@@ -729,13 +745,12 @@ const tooLong = (how: Stated, value: string): boolean => (how === 'label' ? valu
 function* faults(view: Draw, content: Content, by: 'model' | 'rule'): Generator<Fault> {
   const chosen = by === 'model';
   for (const { value, how, beside, at, path } of leaves(view.props, checksOf(view.component).props)) {
-    if (!chosen && !(how && how in TOGETHER)) continue;
+    if (!chosen && !(how && BY_RULE.has(how))) continue;
     if (!how) yield { prop: path, why: 'unstated' };
     else if (chosen && typeof value === 'string' && tooLong(how, value)) yield { prop: path, why: 'long' };
-    else if (!STANDS[how](value, content, beside, at)) {
-      // A passage the content does not hold at all is unstated, whatever else it would have had to be.
-      const held = how === 'label' || how === 'point' || (typeof value === 'string' && content.text.quotes(value.replace(/…\s*$/, '')));
-      yield { prop: path, why: (held && TOGETHER[how]) || 'unstated' };
+    else {
+      const why = STANDS[how](value, content, beside, at);
+      if (why) yield { prop: path, why };
     }
   }
 }
@@ -774,7 +789,7 @@ function mended(view: Draw, content: Content, by: 'model' | 'rule'): { draw: Dra
 
 /** The first prop of a view that does not stand in the content, by its path in the props. */
 function unstated(view: Draw, content: Content): string | undefined {
-  for (const { value, how, beside, at, path } of leaves(view.props, checksOf(view.component).props)) if (!how || !STANDS[how](value, content, beside, at)) return path;
+  for (const { value, how, beside, at, path } of leaves(view.props, checksOf(view.component).props)) if (!how || STANDS[how](value, content, beside, at)) return path;
   return undefined;
 }
 
@@ -849,7 +864,8 @@ const entriesIn = (lines: string[]): string[] => distinct(each(lines));
 /** How each kind of section is built from its part of a reply, whole. `fitted` cuts it to the room a sheet has. */
 const SECTIONS: Record<Section['kind'], (part: Part, reading: Reading) => Props> = {
   heading: ({ text }) => ({ text: text.trim() }),
-  text: ({ text }) => ({ text: text.trim() }),
+  // A text the reply cut short is no passage of the item: only `fitted` cuts, after the checks, to the room a sheet has.
+  text: ({ text }) => ({ text: text.trim().replace(/\s*…$/, '') }),
   figures: ({ lines }) => ({ facts: pairsOf(lines) }),
   list: ({ lines }) => ({ items: entriesIn(lines) }),
   table: ({ lines }) => tableIn(lines),
@@ -907,7 +923,8 @@ function dedicated(section: Section): Draw | undefined {
  * A row copies and tidies; whether the card is valid, stated and large enough is judged afterwards, the same way for every row.
  */
 const BUILT: Record<Chosen, (reply: Entry, reading: Reading) => Props> = {
-  note: ({ emphasis }, { kept }) => compact({ emphasis: emphasis.trim().length <= 120 ? kept(emphasis) : undefined }),
+  // Words set large above a note are whole units of it, or the note is drawn without them.
+  note: ({ emphasis }, { text }) => compact({ emphasis: emphasis.trim().length <= 120 && !passed(text.passage(emphasis), true) ? emphasis.trim() : undefined }),
   idea: () => ({}),
   quote: ({ passage, by }, { kept }) => compact({ text: unquoted(passage), by: kept(by) }),
   fact: ({ subject, passage }) => ({ value: passage.trim(), label: subject.trim() }),
@@ -1008,7 +1025,8 @@ const opensItem = (section: Section, content: Content): boolean =>
 function assembled(sections: Section[], item: Item, content: Content): Verdict {
   const given = distinct(sections, (section) => folded(stable(section)));
   const headings = given.filter((section) => section.kind === 'heading').length;
-  if (given.length > ROOM.sections || headings > 1 || (headings === 1 && given[0]!.kind !== 'heading')) return { refused: 'invalid', component: 'sheet' };
+  const allowed = checksOf('sheet').also?.({ sections: given } as never, item, content.text) ?? true;
+  if (!allowed || given.length > ROOM.sections || headings > 1 || (headings === 1 && given[0]!.kind !== 'heading')) return { refused: 'invalid', component: 'sheet' };
 
   const alone = given
     .flatMap((section) => dedicated(section) ?? [])
@@ -1076,22 +1094,22 @@ function componentsPrompt(open: Open[], asked: Asked): string {
   return `Below are items from a user's canvas. Each is currently drawn as a plain note: its title and the first lines of its text. One marked "now: idea" is drawn as an idea instead: its words alone, set large. For each item, choose the card that presents it best.
 
 Cards, and the fields each one uses:
-- note: prose that holds nothing a reader would want to see at a glance, such as a reflection, an argument, a description or a story. You may give emphasis: one short phrase copied from the text that deserves to stand out.
+- note: prose that holds nothing a reader would want to see at a glance, such as a reflection, an argument, a description or a story. You may give emphasis: one short sentence or line of the text, copied whole, that deserves to stand out.
 - idea: the item is one short thought or what-if of the user's own, in a phrase or a sentence. A chore, a name, a caution or a definition is not an idea.
 - quote: the item is mainly someone's words. passage is the words, whole and at most ${ROOM.passage.spaced} characters (${ROOM.passage.spaceless} in Chinese or Japanese), and by the speaker when the text names one.
 - fact: the item is mainly one number or short value. passage is the value as the text writes it, and subject its label: a few words of the same sentence that say what it measures.
 - facts: the item is mainly two to six figures or attributes. lines has one "label | value" for each, the value as the text writes it.
-- steps: the item is an ordered procedure. lines has one step each, without its number.
-- list: the item is mainly a list of things in no particular order. lines has one entry each, without its bullet.
+- steps: the item is an ordered procedure. lines has one step each, a whole line or sentence of the item, without its number.
+- list: the item is mainly a list of things in no particular order. lines has one entry each, a whole line or sentence of the item, without its bullet.
 - chart: the item is mainly several numbers of the same kind that are worth comparing. labels and numbers have equal length, and unit is given when the text states one.
 - breakdown: the item is mainly the shares of one whole, in percent, adding up to a hundred. labels, numbers and unit, as for chart.
 - table: the item is mainly rows and columns. lines has the row of column heads first and then one row each, with " | " between cells.
-- qa: the item asks one question and answers it. subject is the question and passage the answer.
-- definition: the item says what one term means. subject is the term and passage the meaning, from the sentence that holds the term or the one next to it, up to the end of a sentence.
-- proscons: the item weighs one choice. left has the points for and right the points against.
-- callout: the item is mainly a warning, a caveat or a reminder the reader must not miss. passage is that sentence, whole, and tone is "caution" for a warning or "note" for a remark.
+- qa: the item asks one question and answers it. subject is the question and passage the answer: the whole sentences that give it.
+- definition: the item says what one term means, in a sentence that opens with the term. subject is the term and passage the meaning: that whole sentence, the term included.
+- proscons: the item weighs one choice. left has the points for and right the points against, each a whole line or sentence.
+- callout: the item is mainly a warning, a caveat or a reminder the reader must not miss. passage is that sentence, whole, with any word before a colon that opens it, such as "Note:", and tone is "caution" for a warning or "note" for a remark.
 - excerpt: the item is mainly a passage copied out of a longer source. passage is the passage, whole and no longer than a quote, and by where it sits in the source when the text says.
-- explorable: the item explains how something works by relating quantities or by contrasting states, so a reader learns more by changing it. To contrast two to four states of one thing, controls has one control of kind "segmented", or "toggle" for two, with label naming what changes, states the name of each state, and texts the sentence or sentences that say each state, copied whole and in the same order. To relate quantities, controls has one control of kind "slider", with label and unit, name (a short name for the quantity, used in formula), min and max (the range worth exploring), and values (each value of it the item states); formula gives the result from name, written with numbers, + - * / ^, brackets and min, max, round, sqrt, exp, ln and atan (in radians), and nothing else; subject is the result's label, unit its unit, and numbers the result the item states at each of those values, in the same order.
+- explorable: the item explains how something works by relating quantities or by contrasting states, so a reader learns more by changing it. To contrast two to four states of one thing, controls has one control of kind "segmented", or "toggle" for two, with label naming what changes, states the name of each state, and texts the whole line or sentences that say each state, copied whole with any name and colon that opens them, and in the same order. To relate quantities, controls has one control of kind "slider", with label and unit, name (a short name for the quantity, used in formula), min and max (the range worth exploring), and values (each value of it the item states); formula gives the result from name, written with numbers, + - * / ^, brackets and min, max, round, sqrt, exp, ln and atan (in radians), and nothing else; subject is the result's label, unit its unit, and numbers the result the item states at each of those values, in the same order.
 - sheet: an assembled card, for an item with two or more kinds of part worth showing that no card above covers. sections has two to four parts in reading order, a heading counted. Each has a kind:
   - heading: text is a few words from the item that name it. At most one, and first.
   - text: text is the item's opening, copied from its first word: one or two whole sentences, and at least ${ROOM.opening.spaced} characters of a long item (${ROOM.opening.spaceless} in Chinese or Japanese).
@@ -1106,7 +1124,7 @@ How to choose:
 - Choose sheet only when the item has two or more kinds of part worth showing and no dedicated card covers at least a fifth of it. For a longer item, ask what a reader coming back to it would want to see at a glance: the figures it reports, the things it lists such as decisions, next steps or open questions, a line someone said. When it holds at least one of these among its prose, choose sheet, with a text part for the sentence that says what the item is about and a part for each of them. A sheet needs at least one part that is not text.
 - Choose note when nothing fits. Do not force a structure onto prose, and do not pick out a passing number, date or name: a year or an age in a story is not a figure.
 - Copy every value from the item's own text, word for word and in its language: a passage with its punctuation, a number as it is written. Never add, estimate, convert, translate or round.
-- A passage is whole sentences or whole lines: it begins where one begins and ends where one ends. Never cut words off a sentence.
+- Every passage, answer, meaning, list entry, step and point is whole sentences or whole lines of the item: it begins where one begins and ends where one ends, with any word before a colon that opens it. Never cut words off a sentence, and never make one part of a sentence an entry.
 - The label of a figure, and of a number in a chart or a breakdown, is made only of words that stand in the same sentence, line or table row as its value: pick a few of them, at most ${ROOM.label} characters, and add no word of your own.
 - Write each figure, list entry and table row once.
 - Return one entry per item, with the id exactly as given. Fill only the fields named for the chosen card, and leave every other field as an empty string or an empty list. The card already has the item's title and text: never copy either into a field. An idea fills nothing, and a note nothing but emphasis.
@@ -1121,7 +1139,8 @@ const REFUSED: Record<Extract<Verdict, { refused: string }>['refused'], (prop?: 
   formula: (_prop, because) => `has a formula that ${because}`,
   unstated: (prop) => `shows ${prop}, which the content does not state`,
   label: (prop) => `names a value at ${prop} in words the content does not set beside it`,
-  cut: (prop) => `shows ${prop}, which is not a whole passage of the content`,
+  cut: (prop) => `shows ${prop}, which is not whole sentences or lines of the content`,
+  turned: (prop) => `shows ${prop}, which a word beside it in the content may turn around`,
   apart: (prop) => `gives its term a meaning at ${prop} that the content does not give it`,
   long: (prop) => `shows ${prop}, which is longer than a card has room for`,
   small: () => 'would show under a fifth of it',
@@ -1129,7 +1148,8 @@ const REFUSED: Record<Extract<Verdict, { refused: string }>['refused'], (prop?: 
 const LEFT: Record<Why, string> = {
   unstated: 'the content does not state it',
   label: 'the content does not set its label beside its value',
-  cut: 'it is not a whole passage of the content',
+  cut: 'it is not whole sentences or lines of the content',
+  turned: 'a word beside it in the content may turn it around',
   apart: 'the content does not give the term this meaning',
   long: 'it is longer than a card has room for',
 };
@@ -1161,38 +1181,45 @@ export const unsure = (item: Item, draw: Draw): boolean => {
 
 /**
  * What the model answered for the unsure items of one pass, by node: the card that stands, or nothing when its answer was refused.
- * An item with no entry here got no answer, because its call failed, the reply left it out, or the pass was full.
+ * An item with no entry here got no answer, because its call failed, the reply left it out, or the pass was full. `replied` is
+ * whether any call of the pass got an answer back.
  */
-async function askComponents(ctx: RoleContext, open: Open[]): Promise<Map<Id, Draw | undefined>> {
-  const out = new Map<Id, Draw | undefined>();
+async function askComponents(ctx: RoleContext, open: Open[]): Promise<{ answers: Map<Id, Draw | undefined>; replied: boolean }> {
+  const answers = new Map<Id, Draw | undefined>();
   const asked = open.slice(0, MAX_ASKED_ITEMS);
   const asset = { assetUrl: (id: string) => ctx.assets.url(id) };
+  let replied = false;
 
-  /** One call. A call that fails or times out is tried once more as two halves, since a smaller call is a faster one. */
+  /**
+   * One call. A call whose answer came back unreadable is asked once more as two halves, one after the other, since a smaller
+   * question is answered more often. A call that got no answer is not: the model is slow or down, and two calls wait on it as one does.
+   */
   const ask = async (part: Open[], again: boolean): Promise<void> => {
     let reply: ComponentsReply;
     try {
       reply = await ctx.model.json({ role: `${ROLE}.components`, system: COMPONENTS_SYSTEM, user: componentsPrompt(part, asset), schema: ComponentsReply, effort: 'low' });
     } catch (err) {
+      const halves = again && err instanceof Unreadable;
       const items = `${part.length} ${part.length === 1 ? 'item' : 'items'}`;
-      ctx.note(ROLE, `A call to choose components for ${items} failed (${message(err)}). ${again ? 'Asking once more.' : `Kept the rule-based views of ${part.length === 1 ? 'it' : 'them'}.`}`);
-      if (!again) return;
+      ctx.note(ROLE, `A call to choose components for ${items} failed (${message(err)}). ${halves ? 'Asking once more, in two halves.' : `Kept the rule-based views of ${part.length === 1 ? 'it' : 'them'}.`}`);
+      if (!halves) return;
       const half = Math.ceil(part.length / 2);
-      await Promise.all([part.slice(0, half), part.slice(half)].filter((some) => some.length > 0).map((some) => ask(some, false)));
+      for (const some of [part.slice(0, half), part.slice(half)]) if (some.length > 0) await ask(some, false);
       return;
     }
+    replied = true;
     // An entry counts once, and only for an item this call asked about.
     const waiting = new Map(part.map(({ node, item }) => [node.id, item]));
     for (const entry of reply.items) {
       const item = waiting.get(entry.id);
-      if (item && waiting.delete(entry.id)) out.set(entry.id, drawn(ctx, entry, item));
+      if (item && waiting.delete(entry.id)) answers.set(entry.id, drawn(ctx, entry, item));
     }
   };
 
   const calls = Math.ceil(asked.length / ASKED_PER_CALL);
   const each = Math.ceil(asked.length / calls);
   await Promise.all(Array.from({ length: calls }, (_v, n) => ask(asked.slice(n * each, (n + 1) * each), true)));
-  return out;
+  return { answers, replied };
 }
 
 // ---- composites
@@ -1424,10 +1451,10 @@ function membersContent(ctx: RoleContext): (id: Id) => Grounding {
 function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], members: Id[], ids: Id[], status: Node['status']): GroupDraft | null {
   const content = membersContent(ctx);
   const title = clip(g.title, 40);
-  /** A line set beside a member stands when it is a whole sentence or line of one of these members' content, and short enough. */
+  /** A line set beside a member stands when it is whole units of one of these members' content with no reversing word beside them, and short enough. */
   const line = (said: string | undefined, ...of: Id[]) => {
     const text = (said ?? '').trim();
-    return text !== '' && text.length <= roomOf(ROOM.reason, text) && of.some((id) => content(id).whole(text)) ? text : '';
+    return text !== '' && text.length <= roomOf(ROOM.reason, text) && of.some((id) => content(id).passage(text) === 'whole') ? text : '';
   };
   const whole = ids.length === members.length;
   switch (g.composite) {
@@ -1556,7 +1583,8 @@ function sameView(a: { component: string; props: unknown }, b: { component: stri
 /**
  * Chooses a component for each given node and composites for their siblings. Rules first, the model only where rules cannot tell.
  * On an unsure item, `by: 'renderer'` says the model answered for the item as it is, so it is not asked again until the item changes.
- * An unsure item the pass got no answer for keeps `by: 'default'`, and `later` is told of it.
+ * An unsure item the pass got no answer for keeps `by: 'default'`, and `later` is told of it, unless no call of the pass got an
+ * answer back: then the model is down, and the item waits for its next change.
  */
 export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], again = false, later }) => {
   const nodes = [...new Set(nodeIds)].flatMap((id) => ctx.mind.nodes.get(id) ?? []);
@@ -1583,7 +1611,7 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
   const look: Look = { component: componentOf, when: (node) => str(ctx.mind.items.get(node.itemId)?.data.when) };
   const pools = survey(ctx, parents, look, groups);
 
-  const [answers] = await Promise.all([askComponents(ctx, open), again ? undefined : askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);
+  const [{ answers, replied }] = await Promise.all([askComponents(ctx, open), again ? undefined : askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);
   for (const [id, draw] of answers) if (draw) draws.set(id, draw);
   for (const pool of pools) ARRANGED.forEach((rule, row) => rule.late && settle(ctx, pool, groups, row, look));
 
@@ -1599,7 +1627,7 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
     views.push({ type: 'setView', id: node.id, view });
   }
   const owed = open.flatMap(({ node }) => (answers.has(node.id) ? [] : [node.id]));
-  if (owed.length > 0) later?.(owed);
+  if (owed.length > 0 && replied) later?.(owed);
   // Two parents of one pass may each find that a group no longer holds.
   const removals = [...new Map(groups.flatMap((c) => (c.type === 'removeGroup' ? [[c.id, c] as const] : []))).values()];
   return [...views, ...removals, ...groups.filter((c) => c.type !== 'removeGroup')];

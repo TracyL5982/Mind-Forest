@@ -461,11 +461,11 @@ async function main(): Promise<void> {
         ['qa', 'Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.', 'Air scatters', '.qa-voice', 2],
         ['callout', 'Varnishing the table\nCaution: wet varnish scratches for a week.', 'wet varnish', '.callout.is-caution', 1],
         ['excerpt', 'The house remembers.\n> Every stair keeps the weight of who climbed it.\nAt: Chapter 3', 'Every stair keeps', '.excerpt-where', 1],
-        ['definition', 'Term: Bokeh\nDefinition: the look of the parts of a picture that are out of focus', 'out of focus', '.definition-text', 1],
+        ['definition', 'Bokeh: the look of the parts of a picture that are out of focus', 'out of focus', '.definition-text', 1],
         ['idea', 'Build a treehouse', 'Build a treehouse', '.idea-spark', 1],
-        ['proscons', 'Buying the van\nPros: room for the dog, cheap to insure\nCons: slow uphill', 'slow uphill', '.proscons-mark', 3],
+        ['proscons', 'Buying the van\nPros:\n- room for the dog\n- cheap to insure\nCons:\n- slow uphill', 'slow uphill', '.proscons-mark', 3],
         ['swatch', 'Palette: Rust #B7410E, Moss #8A9A5B', '#8A9A5B', '.swatch-block', 2],
-        ['sheet', 'Weekend in Porto\nWe took the early train on Friday and walked the river both days, and sat in the bookshop when it rained.\nCost: €240\nNights: 2\nBest: the bridge at dusk; the tiled station; grilled sardines', 'grilled sardines', '.sheet-part', 3],
+        ['sheet', 'Weekend in Porto\n\nWe took the early train on Friday and walked the river both days, and when it rained on Saturday we sat in the bookshop until it closed and nobody minded. Next time we go in May, before the crowds, and stay an extra night.\nCost: €240\nNights: 2\nBest:\n- the bridge at dusk\n- the tiled station\n- grilled sardines', 'grilled sardines', '.sheet-part', 3],
         // The place comes last, because a request is then asked about it.
         ['place', 'Lisbon\nWhere: Lisbon', 'Lisbon', '.place-pin', 1],
       ];
@@ -570,7 +570,7 @@ async function main(): Promise<void> {
       const states = panel.getByRole('radio');
       assert.equal(await states.count(), 3);
       const shown = () => panel.locator('.explore-state-text:visible').allInnerTexts();
-      for (const [n, words] of [[1, 'the camera moves in'], [2, 'the camera pulls back'], [0, 'the lens zooms in while']] as const) {
+      for (const [n, words] of [[1, 'Dolly only: the camera moves in'], [2, 'Both: the camera pulls back'], [0, 'Zoom only: the lens zooms in while']] as const) {
         await states.nth(n).click();
         const visible = await shown();
         assert.ok(visible.length === 1 && visible[0]!.startsWith(words), `state ${n} shows its own text, not ${visible}`);

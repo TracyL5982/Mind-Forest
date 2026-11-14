@@ -286,7 +286,7 @@ export const SAMPLES = {
     "item": {
       "id": "sample-callout",
       "kind": "text",
-      "text": "Feed it once a day with equal parts flour and water. Never rinse the jar with hot water. Anything above 40 °C kills the yeast.",
+      "text": "Feed it once a day with equal parts flour and water. Rinse the jar with cold water only. Anything above 40 °C kills the yeast.",
       "summary": "",
       "tags": [],
       "data": {},
@@ -346,7 +346,7 @@ export const SAMPLES = {
       "tags": [],
       "data": {
         "term": "Parallax",
-        "definition": "the apparent shift of an object against its background when the viewer moves"
+        "definition": "Parallax: the apparent shift of an object against its background when the viewer moves."
       },
       "source": {
         "from": "paste",
@@ -361,7 +361,7 @@ export const SAMPLES = {
     },
     "props": {
       "term": "Parallax",
-      "definition": "the apparent shift of an object against its background when the viewer moves"
+      "definition": "Parallax: the apparent shift of an object against its background when the viewer moves."
     }
   },
   "idea": {
@@ -389,7 +389,7 @@ export const SAMPLES = {
     "item": {
       "id": "sample-proscons",
       "kind": "text",
-      "text": "Pros: no data races, one small binary, fast at run time. Cons: slow builds, a steep start.",
+      "text": "Pros:\n- no data races\n- one small binary\n- fast at run time\n\nCons:\n- slow builds\n- a steep start",
       "summary": "",
       "tags": [],
       "data": {
@@ -752,7 +752,7 @@ export const SHEETS = [
     "item": {
       "id": "sample-sheet-trip",
       "kind": "text",
-      "text": "We took the early train on Friday and walked the river both days. It rained on Saturday afternoon, so we sat in the bookshop until it closed and nobody minded. Two nights at the guesthouse came to €240 with breakfast, and the train was €38 each. Ines said, \"I would come back just for the sardines.\" We agreed on what was best: the bridge at dusk, the tiled station, grilled sardines by the water. Next time we go in May, before the crowds, and stay an extra night.",
+      "text": "We took the early train on Friday and walked the river both days. It rained on Saturday afternoon, so we sat in the bookshop until it closed and nobody minded. Two nights at the guesthouse came to €240 with breakfast, and the train was €38 each. Ines said, \"I would come back just for the sardines.\" We agreed on what was best:\n- the bridge at dusk\n- the tiled station\n- grilled sardines by the water\n\nNext time we go in May, before the crowds, and stay an extra night.",
       "summary": "",
       "tags": [],
       "data": {},
@@ -806,7 +806,7 @@ export const SHEETS = [
     "item": {
       "id": "sample-sheet-outing",
       "kind": "text",
-      "text": "下个月的团建要在周五前定下来，预算是每人三百元以内，一共二十二个人。行政部先给了三个方案，大家可以在群里投票。\n\n方案 | 人均 | 时长\n爬山加农家菜 | 180元 | 一整天\n陶艺体验 | 260元 | 半天\n剧本杀 | 150元 | 四小时\n\n还没有落实的事：包车、忌口统计、下雨的备选。去年有人说活动太赶，今年尽量不要安排在周末，结束后也不强制聚餐。",
+      "text": "下个月的团建要在周五前定下来，预算是每人三百元以内，一共二十二个人。行政部先给了三个方案，大家可以在群里投票。\n\n方案 | 人均 | 时长\n爬山加农家菜 | 180元 | 一整天\n陶艺体验 | 260元 | 半天\n剧本杀 | 150元 | 四小时\n\n还没有落实的事：\n- 包车\n- 忌口统计\n- 下雨的备选\n\n去年有人说活动太赶，今年尽量不要安排在周末，结束后也不强制聚餐。",
       "summary": "",
       "tags": [],
       "data": {},
@@ -955,15 +955,15 @@ export const EXPLORABLES = [
           "states": [
             {
               "name": "Zoom only",
-              "text": "the lens zooms in while the camera stays put, so the background grows with the subject."
+              "text": "Zoom only: the lens zooms in while the camera stays put, so the background grows with the subject."
             },
             {
               "name": "Dolly only",
-              "text": "the camera moves in on a fixed lens, so the subject grows and the background barely changes."
+              "text": "Dolly only: the camera moves in on a fixed lens, so the subject grows and the background barely changes."
             },
             {
               "name": "Both",
-              "text": "the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it."
+              "text": "Both: the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it."
             }
           ]
         }
@@ -1000,11 +1000,11 @@ export const EXPLORABLES = [
           "states": [
             {
               "name": "大光圈",
-              "text": "背景虚化得很厉害，只有对焦的那一层是清楚的。"
+              "text": "大光圈：背景虚化得很厉害，只有对焦的那一层是清楚的。"
             },
             {
               "name": "小光圈",
-              "text": "从前景到远山都清楚，但快门要放慢。"
+              "text": "小光圈：从前景到远山都清楚，但快门要放慢。"
             }
           ]
         }

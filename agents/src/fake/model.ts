@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { LIMITS, type Flat } from '../core/layout.ts';
-import type { JsonRequest, ModelClient, WebResult } from '../core/ports.ts';
+import { Unreadable, type JsonRequest, type ModelClient, type WebResult } from '../core/ports.ts';
 import { LinkReply, type Description } from '../core/roles/intake/describe.ts';
 import type { ComponentsReply, Entry } from '../core/roles/renderer.ts';
 
@@ -8,7 +8,8 @@ type JsonHandler = (req: JsonRequest<unknown>) => unknown;
 
 /**
  * A scripted model for tests. Register a handler per role; a request for a role with none throws.
- * Every reply is checked against the request's schema, as the real model's is.
+ * Every reply is checked against the request's schema, as the real model's is, and one that is not of it is `Unreadable`.
+ * A handler that throws is a request that got no answer.
  */
 export class FakeModel implements ModelClient {
   readonly calls: { kind: 'json' | 'search' | 'image' | 'transcribe'; role: string; detail: string }[] = [];
@@ -59,7 +60,10 @@ export class FakeModel implements ModelClient {
     this.calls.push({ kind: 'json', role: req.role, detail: req.user });
     const handler = this.json_.get(req.role);
     if (!handler) throw new Error(`FakeModel has no script for role "${req.role}"`);
-    return req.schema.parse(await handler(req as JsonRequest<unknown>));
+    const reply = await handler(req as JsonRequest<unknown>);
+    const parsed = req.schema.safeParse(reply);
+    if (!parsed.success) throw new Unreadable(req.role, parsed.error.issues);
+    return parsed.data;
   }
   async search(req: { role: string; query: string; max?: number }): Promise<WebResult[]> {
     this.calls.push({ kind: 'search', role: req.role, detail: req.query });
@@ -139,12 +143,6 @@ const RESERVED = new Set([
   'where', 'people', 'pros', 'cons', 'q', 'a', 'question', 'answer', 'term', 'definition', 'at', 'chart', 'palette', 'caution', 'warning', 'note', 'when', '问', '答',
   'remember', 'reminder', 'todo', 'to do', 'tip', 'idea', 'update', 'ps', 'fyi', 're', 'subject', 'title', 'summary',
 ]);
-/** Words that open a remark and name nothing, so `Note to self: call the plumber` and `Mum said: bring chairs` are no term. */
-const LEAD_IN = new Set([
-  'note to self', 'notes', 'ingredients', 'budget', 'packing', 'shopping', 'plan', 'plans', 'status', 'meeting', 'agenda', 'tips',
-  'today', 'tonight', 'tomorrow', 'yesterday',
-]);
-const leadsIn = (term: string): boolean => LEAD_IN.has(term.toLowerCase()) || /\b(?:said|says)$/i.test(term);
 /**
  * A figure: a number, with a sign or a currency before it, and after it a unit or at most two words, as `330 m`, `€29.40`,
  * `2.1 million` and `7/10`. A clock time and a date are no figure, and neither is a clause, as in `6 is better`.
@@ -156,6 +154,12 @@ function isFigure(value: string): boolean {
   const words = FIGURE.exec(value)?.[1];
   return words !== undefined && !TIME_OR_DATE.test(value) && !words.trim().split(/\s+/).some((word) => CLAUSE.has(word));
 }
+/** Words that open a remark and name nothing, so `Note to self: call the plumber` and `Mum said: bring chairs` are no term. */
+const LEAD_IN = new Set([
+  'note to self', 'notes', 'ingredients', 'budget', 'packing', 'shopping', 'plan', 'plans', 'status', 'meeting', 'agenda', 'tips',
+  'today', 'tonight', 'tomorrow', 'yesterday',
+]);
+const leadsIn = (term: string): boolean => LEAD_IN.has(term.toLowerCase()) || /\b(?:said|says)$/i.test(term);
 const fewWords = (label: string, most: number): boolean => label.length <= 30 && label.split(/\s+/).length <= most;
 /** Words a sentence has and a row of heads does not. */
 const SENTENCE_WORD = /^(?:then|what|when|so|the|a|an|and|but|is|are|was|were|i|we|you|it|truly|really)$/i;
@@ -237,12 +241,11 @@ function titleFrom(line: string): string {
 /**
  * What a model would say about a text, read by pattern instead. Each kind of structure is read from the plain ways a person writes it:
  *   Where: Lisbon                     People: Ana Lima, Ben Okri
- *   Pros: fast, small                 Cons: (or either label followed by bulleted lines)
+ *   Pros:                             Cons: each followed by bulleted lines, one point each
  *   Plan | Price                      a table: a head line and two rows or more, parted by |, tabs or commas, and by
  *                                     commas only when the head has no word of a sentence and a column is mostly numbers
- *   Q: ...   A: ...                   also Question: and Answer:, 问： and 答：
- *   Term: ...   Definition: ...       or one line, "Bokeh: the quality of the blur in a picture", when the term is no
- *                                     lead-in such as "Note to self" or "Mum said" and the meaning one sentence with no list"
+ *   Q: ...   A: ...                   also 问： and 答：. "Question:" opens no passage, so its answer would be a piece of its line
+ *   Parallax means the shift of …     a term and its meaning, the line whole, and so is a one-line entry "Bokeh: the blur …"
  *   - one / - two                     a list, and a checklist when every line starts [ ] or [x]
  *   Ember #E4572E                     a colour, named by the capitalised word before it
  *   > a passage of six words or more  an excerpt over one or more such lines, with an optional line "At: Chapter 3"
@@ -269,8 +272,10 @@ export function describe(text: string): Description {
     return lines.slice(at + 1, end < 0 ? undefined : end).map((line) => BULLET.exec(line)![2]!);
   };
 
-  const pros = list('pros');
-  const cons = list('cons');
+  // A point is a whole line: one written inline among others is a piece of a sentence.
+  const points = (label: string) => (labelled(label) ? [] : list(label));
+  const pros = points('pros');
+  const cons = points('cons');
   const bullets = pros.length + cons.length > 0 ? [] : lines.filter(isBullet).map((line) => BULLET.exec(line)!);
   const table = tableIn(lines);
   const first = lines.find((line) => line && !line.startsWith('>')) ?? '';
@@ -278,8 +283,8 @@ export function describe(text: string): Description {
   const shares = series.length === 0 ? sharesIn(text) : undefined;
   const said = lines.filter(Boolean);
   const entry = said.length === 1 ? /^(\p{L}[\p{L}\p{N} -]*):\s+(\p{L}.{14,})$/u.exec(said[0]!) : null;
-  const meaning = entry?.[2] ?? '';
-  const oneSentence = !/[.!?。！？]\s+\S/.test(meaning) && (meaning.match(/[,，、;；]/g)?.length ?? 0) < 2 && !/\d\s?[%％]/.test(meaning);
+  const told = entry?.[2] ?? '';
+  const oneSentence = !/[.!?。！？]\s+\S/.test(told) && (told.match(/[,，、;；]/g)?.length ?? 0) < 2 && !/\d\s?[%％]/.test(told);
   const defined = entry && fewWords(entry[1]!, 4) && !RESERVED.has(entry[1]!.toLowerCase()) && !leadsIn(entry[1]!) && oneSentence ? entry : null;
   const passage = quotedIn(lines).find((words) => words.split(/\s+/).length >= 6 || (words.match(/\p{Script=Han}/gu)?.length ?? 0) >= 12) ?? '';
 
@@ -293,10 +298,10 @@ export function describe(text: string): Description {
     pros,
     cons,
     ...(table ? { tableHeads: table.heads, tableRows: table.rows } : {}),
-    question: labelled('q', 'question', '问'),
-    answer: labelled('a', 'answer', '答'),
-    term: labelled('term') || (defined?.[1] ?? ''),
-    definition: labelled('definition') || (defined?.[2] ?? ''),
+    question: labelled('q', '问'),
+    answer: labelled('a', '答'),
+    // A one-line entry's meaning is its whole line, the term included, because a card shows only whole units of the text.
+    ...(defined ? { term: defined[1]!, definition: defined[0] } : meaning(lines)),
     ...(bullets.length >= 2 ? { items: bullets.map((b) => b[2]!), checklist: bullets.every((b) => b[1]) ? bullets.map((b) => b[1] !== ' ') : [] } : {}),
     colours: [...text.matchAll(/(?:([A-Z][\w-]*) )?(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3}))\b/g)].map((m) => ({ name: m[1] ?? '', value: m[2]! })),
     facts: lines.flatMap((line) => {
@@ -311,6 +316,12 @@ export function describe(text: string): Description {
     excerptText: passage,
     excerptAt: labelled('at'),
   };
+}
+
+/** The first line that says what a term means, as "Parallax means the apparent shift of an object" does, the line whole. */
+function meaning(lines: string[]): { term: string; definition: string } | Record<string, never> {
+  const said = lines.map((line) => /^(\p{L}[\p{L} ]{0,39}?) means (\S.*)$/u.exec(line)).find(Boolean);
+  return said ? { term: said[1]!, definition: said[0] } : {};
 }
 
 type Control = Entry['controls'][number];
@@ -333,7 +344,7 @@ function explored(text: string, lines: string[]): Omit<Entry, 'id'> | undefined 
   const states = lines.slice(1).map((line) => STATE.exec(line)).filter((found) => found !== null);
   if (states.length >= 2 && states.length <= 4 && states.length === lines.length - 1 && lines[0]!.length <= 40) {
     const label = lines[0]!.replace(/[.。:：]$/, '');
-    const control: Control = { kind: states.length === 2 ? 'toggle' : 'segmented', label, states: states.map((found) => found[1]!.trim()), texts: states.map((found) => found[2]!.trim()), name: '', unit: '', min: 0, max: 0, values: [] };
+    const control: Control = { kind: states.length === 2 ? 'toggle' : 'segmented', label, states: states.map((found) => found[1]!.trim()), texts: states.map((found) => found[0]), name: '', unit: '', min: 0, max: 0, values: [] };
     return { ...NOTE, component: 'explorable', controls: [control] };
   }
   const formula = FORMULA.exec(text)?.[1];
@@ -365,9 +376,9 @@ const NUMBER_FIRST = /^[$€£¥]?\d/;
 
 /**
  * What a model would choose for a text the rules drew as a note or an idea, read by pattern instead:
- *   Caution: hot oil spits            a callout, and so is "Warning:". "Note:" makes a remark of it
+ *   Caution: hot oil spits            a callout of the whole line, and so is "Warning:". "Note:" makes a remark of it
  *   Cost: €240                        a figure of a sheet, when the value starts with a number
- *   Best: the bridge; the bookshop    a list of a sheet, its entries set apart by ";"
+ *   Best:  - the bridge  - the shop   a list of a sheet, a line that ends in a colon with bulleted lines under it
  * A sheet is a text with a figure or a list written so, and a sentence beside them. Its first line is the heading.
  * An explorable is a text in one of two forms, as `explored` reads them.
  * A text holding "fake:invent" is given a figure it never states, to show the content check keeping the note.
@@ -377,7 +388,7 @@ export function choose(text: string, now: 'note' | 'idea' = 'note'): Omit<Entry,
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (/fake:invent/.test(text)) return { ...NOTE, component: 'fact', subject: 'Share', passage: '99%' };
   const marked = lines.map((line) => MARKED.exec(line)).find(Boolean);
-  if (marked) return { ...NOTE, component: 'callout', passage: marked[2]!.trim(), tone: marked[1]!.toLowerCase() === 'note' ? 'note' : 'caution' };
+  if (marked) return { ...NOTE, component: 'callout', passage: marked[0], tone: marked[1]!.toLowerCase() === 'note' ? 'note' : 'caution' };
   const explorable = explored(text, lines);
   if (explorable) return explorable;
 
@@ -386,8 +397,9 @@ export function choose(text: string, now: 'note' | 'idea' = 'note'): Omit<Entry,
     return found ? [{ label: found[1]!, value: found[2]! }] : [];
   });
   const figures = labelled.filter(({ value }) => NUMBER_FIRST.test(value)).map(({ label, value }) => `${label} | ${value}`);
-  const listed = labelled.find(({ value }) => value.includes(';'))?.value.split(/;\s*/).filter(Boolean) ?? [];
-  const prose = lines.slice(1).find((line) => !LABELLED.test(line));
+  const label = lines.findIndex((line) => /:$/.test(line));
+  const listed = label < 0 ? [] : lines.slice(label + 1).filter(isBullet).map((line) => BULLET.exec(line)![2]!);
+  const prose = lines.slice(1).find((line) => !LABELLED.test(line) && !isBullet(line) && !/:$/.test(line));
   if (figures.length + listed.length === 0 || !prose) return { ...NOTE, component: now };
   const part = (kind: Entry['sections'][number]['kind'], text: string, lines: string[] = []) => ({ kind, text, by: '', lines });
   return {

@@ -264,14 +264,14 @@ test('a long text with separate ideas is split, and a short one never is', async
 
 test('structure is kept only when the content holds it', async () => {
   const k = kit();
-  const text = 'Recipe: 1. Boil water. 2. Add 200 g of pasta. 3. Drain. As Nonna says, "salt it like the sea". Cost: Jan 12, Feb 15.';
+  const text = 'Recipe:\n1. Boil water.\n2. Add 200 g of pasta.\n3. Drain.\n\nAs Nonna says, "salt it like the sea". Cost: Jan 12, Feb 15.';
   k.model.on('intake.text', () => ({
     entries: [
       {
         dump: 0,
         text: '',
         ...described('Pasta', {
-          steps: ['Boil water', 'Add pasta', 'Drain'],
+          steps: ['Boil water.', 'Add 200 g of pasta.', 'Drain'],
           facts: [{ label: 'Pasta', value: '200 g' }, { label: '', value: 'x' }],
           quoteText: 'Salt it like the sea',
           quoteBy: 'Nonna',
@@ -285,12 +285,13 @@ test('structure is kept only when the content holds it', async () => {
 
   const [item] = await intake(k.ctx, [{ kind: 'text', text }]);
 
-  assert.deepEqual(item!.data.steps, ['Boil water', 'Add pasta', 'Drain']);
+  assert.deepEqual(item!.data.steps, ['Boil water.', 'Add 200 g of pasta.', 'Drain']);
   assert.deepEqual(item!.data.facts, [{ label: 'Pasta', value: '200 g' }]);
   assert.deepEqual(item!.data.quote, { text: 'Salt it like the sea', by: 'Nonna' });
   assert.equal(item!.data.chart, undefined, 'a chart value the text does not state is dropped');
   assert.equal('when' in item!.data, false);
   assert.equal('person' in item!.data, false);
+  assert.equal((await extracted(text, { steps: ['Boil water.', 'Add pasta', 'Drain.'] })).steps, undefined, 'a step in other words leaves another procedure, so none is kept');
 });
 
 /** The data Intake keeps when the model answers a pasted `text` with `reply`. */
@@ -319,14 +320,14 @@ const STRUCTURED: { field: string; text: string; reply: object; kept: object; wr
   },
   {
     field: 'pros',
-    text: 'Moving to Rust.\nPros: no data races, one binary.\nCons: slow builds.',
+    text: 'Moving to Rust.\nPros:\n- no data races\n- one binary\nCons:\n- slow builds',
     reply: { pros: ['No data races', 'one binary'] },
     kept: { pros: ['No data races', 'one binary'] },
     wrong: { pros: ['It is fashionable'] },
   },
   {
     field: 'cons',
-    text: 'Moving to Rust.\nPros: no data races, one binary.\nCons: slow builds.',
+    text: 'Moving to Rust.\nPros:\n- no data races\n- one binary\nCons:\n- slow builds',
     reply: { cons: ['slow builds'] },
     kept: { cons: ['slow builds'] },
     wrong: { cons: ['Nobody knows it'] },
@@ -349,9 +350,9 @@ const STRUCTURED: { field: string; text: string; reply: object; kept: object; wr
   {
     field: 'term and definition',
     text: 'Parallax: the apparent shift of an object when the viewer moves.',
-    reply: { term: 'Parallax', definition: 'the apparent shift of an object when the viewer moves' },
-    kept: { term: 'Parallax', definition: 'the apparent shift of an object when the viewer moves' },
-    wrong: { term: 'Parallax', definition: 'an error in a viewfinder' },
+    reply: { term: 'Parallax', definition: 'Parallax: the apparent shift of an object when the viewer moves.' },
+    kept: { term: 'Parallax', definition: 'Parallax: the apparent shift of an object when the viewer moves.' },
+    wrong: { term: 'Parallax', definition: 'the apparent shift of an object when the viewer moves' },
   },
   {
     field: 'items and checklist',
@@ -390,14 +391,15 @@ test('where an excerpt sits is dropped alone when the text does not say it', asy
 });
 
 test('a list is a checklist only when the text itself marks each item, and the marks are the text\'s', async () => {
-  assert.deepEqual(await extracted('Bring: tent, stove, map.', { items: ['tent', 'stove', 'map'], checklist: [true, true, false] }), { items: ['tent', 'stove', 'map'] });
+  assert.deepEqual(await extracted('Bring:\n- tent\n- stove\n- map', { items: ['tent', 'stove', 'map'], checklist: [true, true, false] }), { items: ['tent', 'stove', 'map'] });
+  assert.deepEqual(await extracted('Bring: tent, stove, map.', { items: ['tent', 'stove', 'map'] }), {}, 'an entry is a whole line or sentence, never a piece of one');
   assert.deepEqual(await extracted('☑ tent\n☐ stove\nmap', { items: ['tent', 'stove', 'map'], checklist: [true, false, false] }), { items: ['tent', 'stove', 'map'] });
   assert.deepEqual(await extracted('[x] tent\n[ ] stove', { items: ['tent', 'stove'], checklist: [false, true] }), { items: ['tent', 'stove'], checklist: [true, false] });
   assert.deepEqual(await extracted('[x] tent\n[ ] stove', { items: ['tent', 'stove'], checklist: [] }), { items: ['tent', 'stove'] });
 });
 
 test('a list needs two different entries, whatever their case', async () => {
-  const text = 'Bring: passport, charger.';
+  const text = 'Bring:\n- passport\n- charger';
   assert.deepEqual(await extracted(text, { items: ['passport'] }), {});
   assert.deepEqual(await extracted(text, { items: ['passport', 'Passport', 'PASSPORT'] }), {});
   assert.deepEqual(await extracted(text, { items: ['passport', 'umbrella'] }), {});
@@ -419,7 +421,7 @@ test('a word, a number or a symbol the text only holds inside something else is 
     definition: '—',
   };
   assert.deepEqual(await extracted(text, reply), {});
-  assert.deepEqual(await extracted(text, { where: 'the Manager', cons: ['1200', '1950'], pros: ['hundred page report'] }), { where: 'the Manager', cons: ['1200', '1950'], pros: ['hundred page report'] });
+  assert.deepEqual(await extracted(text, { where: 'the Manager', cons: ['1200', '1950'], pros: ['hundred page report'] }), { where: 'the Manager' }, 'a point is a whole sentence, never words inside one');
   assert.deepEqual(await extracted('Call 555 about the coffee.', { colours: [{ name: '', value: '#555' }, { name: '', value: '#fee' }] }), {}, 'a hex colour needs its "#" in the text');
   assert.deepEqual(await extracted('北京是中国的首都，人口2189万。', { where: '北京', people: ['上海'], cons: ['189'] }), { where: '北京' });
 });
@@ -432,9 +434,9 @@ test('both halves of a pair must be in the text', async () => {
 
 test('a fact, a date and a named person are kept only when the text writes them', async () => {
   const text = 'Ada Lovelace wrote the first program in 1843. The notes ran to 65 pages.';
-  const stated = { facts: [{ label: 'The notes', value: '65 pages' }], when: '1843', personName: 'Ada Lovelace', personRole: 'Mathematician' };
-  assert.deepEqual(await extracted(text, stated), { facts: [{ label: 'The notes', value: '65 pages' }], when: '1843', person: { name: 'Ada Lovelace', role: 'Mathematician' } });
-  assert.deepEqual(await extracted(text, { facts: [{ label: 'The notes', value: '5 pages' }, { label: 'First program', value: '1843' }], when: '4 July 1843', personName: 'Charles Babbage', personRole: 'Engineer' }), {
+  const stated = { facts: [{ label: 'Notes', value: '65 pages' }], when: '1843', personName: 'Ada Lovelace', personRole: 'Mathematician' };
+  assert.deepEqual(await extracted(text, stated), { facts: [{ label: 'Notes', value: '65 pages' }], when: '1843', person: { name: 'Ada Lovelace', role: 'Mathematician' } });
+  assert.deepEqual(await extracted(text, { facts: [{ label: 'Notes', value: '5 pages' }, { label: 'First program', value: '1843' }], when: '4 July 1843', personName: 'Charles Babbage', personRole: 'Engineer' }), {
     facts: [{ label: 'First program', value: '1843' }],
   });
 });
@@ -442,7 +444,17 @@ test('a fact, a date and a named person are kept only when the text writes them'
 test('a fact or a point of a series is kept only under a label whose words stand in the sentence, the line or the row of its value', async () => {
   const text = 'Ada Lovelace wrote the first program in 1843. The notes ran to 65 pages.\nRent: 980 euros\nFood: 240 euros';
   const facts = [{ label: 'Length', value: '65 pages' }, { label: 'First program', value: '65 pages' }, { label: 'Notes', value: '65 pages' }, { label: 'Year', value: '1843' }, { label: 'Food', value: '980 euros' }];
-  assert.deepEqual(await extracted(text, { facts }), { facts: [{ label: 'Notes', value: '65 pages' }] }, 'a word of its own, a word of another sentence and a word of another line are each no label');
+  assert.deepEqual(
+    await extracted(text, { facts }),
+    { facts: [{ label: 'Notes', value: '65 pages' }] },
+    'a word of another sentence, a word of another line, and a word for a kind of value its unit does not write are each no label',
+  );
+  const honest = [{ label: 'One-to-one, per hour', value: '£40' }, { label: 'Finished half marathon', value: '1:52:40' }, { label: 'Sleeps', value: 'six people' }, { label: 'of the group', value: '£25' }];
+  assert.deepEqual(
+    await extracted('Charge £40 an hour for one-to-one and £25 a head for groups of three. Finished the half marathon in 1:52:40. The cottage slept six people.', { facts: honest }),
+    { facts: honest.slice(0, 3) },
+    'a label in other forms of the text\'s words is kept, and a piece cut out of a phrase is not',
+  );
   assert.deepEqual(await extracted(text, { chartLabels: ['Rent', 'Food'], chartValues: [980, 240], chartUnit: 'euros' }), { chart: { labels: ['Rent', 'Food'], values: [980, 240], unit: 'euros' } });
   assert.deepEqual(await extracted(text, { chartLabels: ['Rent', 'Food'], chartValues: [240, 980], chartUnit: 'euros' }), {}, 'a series with its values under the wrong labels');
   assert.deepEqual(await extracted(text, { chartLabels: ['Housing', 'Food'], chartValues: [980, 240], chartUnit: 'euros' }), {});
@@ -641,9 +653,10 @@ test('a long paste of code stays one item, and code is kept when the model fails
 test('a quotation or an excerpt cannot be stitched across two sentences or two lines', async () => {
   const text = 'Air scatters short blue wavelengths more than long red ones.\nRayleigh scattering: scattering of light by small particles. It is why the sky is blue.';
   assert.deepEqual(await extracted(text, { excerptText: 'red ones Rayleigh scattering', quoteText: 'small particles it is why' }), {});
-  assert.deepEqual(await extracted(text, { excerptText: 'scattering of light by small particles. It is why the sky is blue.' }), {
-    excerpt: { text: 'scattering of light by small particles. It is why the sky is blue.' },
+  assert.deepEqual(await extracted(text, { excerptText: 'Rayleigh scattering: scattering of light by small particles. It is why the sky is blue.' }), {
+    excerpt: { text: 'Rayleigh scattering: scattering of light by small particles. It is why the sky is blue.' },
   });
+  assert.deepEqual(await extracted(text, { excerptText: 'scattering of light by small particles. It is why the sky is blue.' }), {}, 'nor begin after the words that open its sentence');
 });
 
 test('a table is read from fenced rows without shifting a column, and its divider and repeated heads are left out', async () => {

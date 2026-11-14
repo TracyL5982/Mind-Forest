@@ -17,24 +17,37 @@ const LONG = 'A plain paragraph about how the camera moves through the house, lo
 type Fields = Partial<Item> & { title: string } & { status?: Node['status']; why?: string; importance?: number };
 
 /**
- * The words a person would have written for a figure, a series, a quotation, a passage or a term that an item's data holds, one line
- * for each. A card that shows such a piece is held to the item's words, so an item that carries the piece says it too.
+ * The words a person would have written for each piece an item's data holds, a line or a list line for each: a figure, a series, a
+ * quotation, a passage, a term and its meaning, a question and its answer, steps, a list, pros and cons. A card that shows such a piece
+ * is held to the item's words, so an item that carries the piece says it too.
  */
 function saying(data: Record<string, unknown> = {}): string {
-  const { chart, facts, quote, excerpt, term, definition } = data as {
+  const { chart, facts, quote, excerpt, term, definition, question, answer, steps, items, pros, cons } = data as {
     chart?: { labels: (string | number)[]; values: number[]; unit?: string };
     facts?: { label: string; value: string | number }[];
     quote?: { text: string };
     excerpt?: { text: string };
     term?: string;
     definition?: string;
+    question?: string;
+    answer?: string;
+    steps?: string[];
+    items?: string[];
+    pros?: string[];
+    cons?: string[];
   };
+  const listed = (entries: string[] | undefined) => entries?.map((entry) => `- ${entry}`) ?? [];
   return [
     ...(chart?.labels.map((label, n) => `${label}: ${chart.values[n]}${chart.unit ? ` ${chart.unit}` : ''}`) ?? []),
     ...(facts?.map(({ label, value }) => `${label}: ${value}`) ?? []),
     ...(quote ? [quote.text] : []),
     ...(excerpt ? [excerpt.text] : []),
-    ...(term !== undefined && definition !== undefined ? [`${term}: ${definition}`] : []),
+    ...(term !== undefined && definition !== undefined ? [definition] : []),
+    ...(question !== undefined && answer !== undefined ? [question, answer] : []),
+    ...(steps?.map((step, n) => `${n + 1}. ${step}`) ?? []),
+    ...listed(items),
+    ...(pros ? ['Pros:', ...listed(pros)] : []),
+    ...(cons ? ['Cons:', ...listed(cons)] : []),
   ].join('\n');
 }
 
@@ -105,7 +118,7 @@ test('structured data picks the component without asking the model', async () =>
   assert.deepEqual(view(k, code).props, { language: 'ts', source: 'const a = 1;' });
   assert.equal(view(k, script).component, 'code');
   assert.deepEqual(view(k, fact), { component: 'fact', props: { value: '4.2', label: 'Monthly churn' }, by: 'renderer' });
-  assert.deepEqual(view(k, valueFirst).props, { value: '42%', label: 'of users leave in month one' });
+  assert.deepEqual(view(k, valueFirst).props, { value: '42%', label: 'users leave in month one' }, 'a label does not open with "of"');
   assert.deepEqual(view(k, labelFirst).props, { value: '$1.2M', label: 'Budget' });
   assert.equal(k.model.calls.filter((c) => c.role === 'renderer.components').length, 0);
 });
@@ -170,12 +183,12 @@ test('media, links and chats are drawn from where their content lives', async ()
 
 test('the model upgrades a text item to a quote that is in its text', async () => {
   const k = kit();
-  const text = 'Somebody once told me that “the best way to predict\nthe future is to invent it”, which Alan Kay said in 1971.';
+  const text = 'In 1971 Alan Kay said, “the best way to predict\nthe future is to invent it”.';
   const { ids } = grow(k, [{ title: 'On the future', text }, { title: 'Plain', text: LONG }]);
   k.model.on('renderer.components', () => ({
     items: [
       entry({ id: ids[0]!, component: 'quote', passage: '"the best way to predict the future is to invent it"', by: 'Alan Kay' }),
-      entry({ id: ids[1]!, component: 'note', emphasis: 'the camera moves through the house' }),
+      entry({ id: ids[1]!, component: 'note', emphasis: LONG }),
       entry({ id: 'nobody', component: 'fact', passage: '1', subject: 'x' }),
     ],
   }));
@@ -186,7 +199,7 @@ test('the model upgrades a text item to a quote that is in its text', async () =
     props: { text: 'the best way to predict the future is to invent it', by: 'Alan Kay' },
     by: 'renderer',
   });
-  assert.deepEqual(view(k, ids[1]!).props, { emphasis: 'the camera moves through the house' });
+  assert.deepEqual(view(k, ids[1]!).props, { emphasis: LONG });
   assert.equal(commands.length, 2);
   assert.match(k.model.calls[0]!.detail, new RegExp(`id: ${ids[0]}`));
 
@@ -418,12 +431,8 @@ test('when the model fails, the rule-based views and groups still come back', as
     commands.map((c) => c.type),
     ['setView', 'setGroup'],
   );
-  assert.deepEqual(
-    k.model.calls.map((c) => c.role).sort(),
-    ['renderer.components', 'renderer.components', 'renderer.composites'],
-  );
+  assert.deepEqual(k.model.calls.map((c) => c.role).sort(), ['renderer.components', 'renderer.composites'], 'a call that got no answer is not asked again in halves');
   assert.deepEqual(k.notes.map((n) => n.replace(/\(.*\)/, '()')).sort(), [
-    'renderer: A call to choose components for 1 item failed (). Asking once more.',
     'renderer: A call to choose components for 1 item failed (). Kept the rule-based views of it.',
     'renderer: The model could not look for composites (). Kept the rule-based groups.',
   ]);
@@ -446,7 +455,7 @@ test('three facts and a chart under one parent are an overview with the figures 
   assert.deepEqual(arranged(k), [['overview', [ids[0], ids[2], ids[3], ids[1]]]]);
   assert.deepEqual(await render(k, ids), [], 'an overview that still holds is left alone');
 
-  for (const pool of [[figure('Height', '330 m'), figure('Built', '1889'), chart('Visitors'), chart('Tickets')], [...['a', 'b', 'c', 'd', 'e', 'f'].map((n) => figure(`Floor ${n}`, '3')), chart('Visitors')], [figure('Height', '330 m'), chart('Visitors')]]) {
+  for (const pool of [[figure('Height', '330 m'), figure('Built', '1889'), chart('Visitors'), chart('Tickets')], [...['b', 'c', 'd', 'e', 'f', 'g'].map((n) => figure(`Floor ${n}`, '3')), chart('Visitors')], [figure('Height', '330 m'), chart('Visitors')]]) {
     const none = kit();
     none.model.on('renderer.composites', () => ({ groups: [] }));
     await render(none, grow(none, pool).ids);
@@ -636,7 +645,7 @@ test('each structured type is chosen from the data that holds it, and a near mis
 
   assert.deepEqual(ruled({ title: 'Sky', data: { question: 'Why is the sky blue?', answer: 'Air scatters blue light.' } }).component, 'qa');
   assert.equal(chosen({ title: 'Sky', data: { question: 'Why is the sky blue?' } }), 'note');
-  assert.deepEqual(ruled({ title: 'Parallax', data: { term: 'Parallax', definition: 'an apparent shift' } }), { component: 'definition', props: { term: 'Parallax', definition: 'an apparent shift' } });
+  assert.deepEqual(ruled({ title: 'Parallax', data: { term: 'Parallax', definition: 'Parallax is an apparent shift.' } }), { component: 'definition', props: { term: 'Parallax', definition: 'Parallax is an apparent shift.' } });
   assert.equal(chosen({ title: 'Parallax', data: { term: 'Parallax', definition: ' ' } }), 'note');
 
   assert.deepEqual(ruled({ title: 'Space', data: { excerpt: { text: 'The house shelters day-dreaming.', at: 'Chapter 1' }, site: 'example.org', from: 'Books' } }).props, {
@@ -740,7 +749,7 @@ const PIECES: [string, Record<string, unknown>][] = [
   ['table', { table: { heads: ['Plan', 'Price'], rows: [['Solo', '$8'], ['Team', '$20']] } }],
   ['proscons', { pros: ['fast'], cons: ['slow builds'] }],
   ['qa', { question: 'Why is the sky blue?', answer: 'Air scatters blue light.' }],
-  ['definition', { term: 'Parallax', definition: 'an apparent shift' }],
+  ['definition', { term: 'Parallax', definition: 'Parallax is an apparent shift.' }],
   ['steps', { steps: ['Boil water', 'Add pasta'] }],
   ['list', { items: ['tent', 'stove'] }],
   ['quote', { quote: { text: 'Invent the future.', by: 'Alan Kay' } }],
@@ -764,11 +773,11 @@ test('a structure draws its item only when it is at least a fifth of the item, a
 
 test('the share a structure covers is counted in characters of one written form, against the text the user wrote, or the title and text of anything else', () => {
   /** A text of `size` characters in all that ends in a line of its own with the words quoted. */
-  const around = (said: string, size: number, filler = 'x') => `${filler.repeat(size - said.length - 1)}\n${said}`;
+  const around = (said: string, size: number, filler = 'x') => `${filler.repeat(size - said.length - 1)}\n\n${said}`;
   const quoting = (said: string, text: string) => chosen({ title: 'A title the model wrote', text, data: { quote: { text: said } } });
   assert.equal(quoting('y'.repeat(20), around('y'.repeat(20), 100)), 'quote', 'twenty of a hundred');
   assert.equal(quoting('y'.repeat(19), around('y'.repeat(19), 100)), 'note', 'nineteen of a hundred');
-  assert.equal(quoting('y'.repeat(20), `${'x'.repeat(39)}${' '.repeat(40)}\n\n${'x'.repeat(39)}\n${'y'.repeat(20)}`), 'quote', 'a run of white space counts once');
+  assert.equal(quoting('y'.repeat(20), `${'x'.repeat(39)}${' '.repeat(40)}\n\n${'x'.repeat(39)}\n\n${'y'.repeat(20)}`), 'quote', 'a run of white space counts once');
   assert.equal(quoting('y'.repeat(20), around('y'.repeat(20), 100, 'ｘ')), 'quote', 'a full-width letter is one character');
   assert.equal(quoting('字'.repeat(20), around('字'.repeat(20), 100, '文')), 'quote');
   assert.equal(quoting('字'.repeat(19), around('字'.repeat(19), 100, '文')), 'note');
@@ -778,7 +787,7 @@ test('the share a structure covers is counted in characters of one written form,
   assert.deepEqual([saved('y'.repeat(20)), saved('y'.repeat(19))], ['quote', 'link'], 'a saved page has its own title, which counts');
   const brought = (said: string) => chosen({ title: 'Ten chars!', text: around(said, 90), origin: SCOUT, data: { quote: { text: said } } });
   assert.deepEqual([brought('y'.repeat(20)), brought('y'.repeat(19))], ['quote', 'note'], 'and so does the title of what an agent brought');
-  const titled = (said: string) => chosen({ title: `${'x'.repeat(98 - said.length)}: ${said}`, text: '', data: { quote: { text: said } } });
+  const titled = (said: string) => chosen({ title: `${'x'.repeat(98 - said.length)}. ${said}`, text: '', data: { quote: { text: said } } });
   assert.deepEqual([titled('y'.repeat(20)), titled('y'.repeat(19))], ['quote', 'note'], 'a title alone is all the item says');
 });
 
@@ -825,7 +834,8 @@ test('a structure with more entries than its card shows is measured by what the 
   assert.equal(written(20).replace(/\n/g, ' ').length, 60, 'eight lines of four characters after twenty');
   assert.equal(chosen({ title: '', text: written(21), data: { facts: eight } }), 'note', 'only the six facts the card shows are counted: twelve characters of sixty-one');
   assert.equal(chosen({ title: '', text: written(20), data: { facts: eight } }), 'facts');
-  assert.equal(chosen({ title: '', text: '', data: { steps: ['Boil', 'Stir'] } }), 'steps', 'an item with no words of its own hides none');
+  assert.equal(chosen({ title: '', text: '1. Boil\n2. Stir', data: { steps: ['Boil', 'Stir'] } }), 'steps', 'steps that are all of the words');
+  assert.equal(chosen({ title: '', text: '', data: { steps: ['Boil', 'Stir'] } }), 'note', 'an item with no words of its own states no step');
 });
 
 test('a place written after its region, or with its kind of district, is that place in a script without spaces', () => {
@@ -873,7 +883,7 @@ test('when an item satisfies two rules, the earlier one draws it', () => {
     ['table', 'link', { ...LINKED, data: { table } }],
     ['table', 'facts', { data: { table, facts } }],
     ['proscons', 'list', { data: { pros: ['fast'], cons: ['slow'], items: ['fast', 'slow'] } }],
-    ['qa', 'definition', { data: { question: 'What is parallax?', answer: 'A shift.', term: 'Parallax', definition: 'A shift.' } }],
+    ['qa', 'definition', { data: { question: 'What is parallax?', answer: 'A shift.', term: 'Parallax', definition: 'Parallax is a shift.' } }],
     ['steps', 'list', { data: { steps: ['Boil', 'Stir'], items: ['Boil', 'Stir'] } }],
     ['steps', 'link', { ...LINKED, data: { steps: ['Boil the water', 'Stir it in'] } }],
     ['quote', 'excerpt', { data: { quote: { text: 'Invent the future.' }, excerpt: { text: 'Invent the future.' } } }],
@@ -886,7 +896,7 @@ test('when an item satisfies two rules, the earlier one draws it', () => {
     ['link', 'excerpt', { ...LINKED, data: { excerpt: { text: 'Some words about it.' } } }],
     ['link', 'place', { ...LINKED, title: 'Lisbon', data: { where: 'Lisbon' } }],
     ['excerpt', 'place', { title: 'Lisbon', data: { where: 'Lisbon', excerpt: { text: 'Some words about it.' } } }],
-    ['list', 'idea', { title: 'Bring', text: '', data: { items: ['tent', 'stove'] } }],
+    ['list', 'idea', { title: 'Bring', text: '- tent\n- stove', data: { items: ['tent', 'stove'] } }],
     ['place', 'idea', { title: 'West Lake Hangzhou', text: '', data: { where: 'West Lake Hangzhou' } }],
   ];
   for (const [first, second, fields] of pairs) assert.equal(chosen({ title: 'Both', ...fields }), first, `${first} before ${second}`);
@@ -910,7 +920,7 @@ test('an item that is code draws as code, whatever was read off it and however l
   assert.equal(chosen({ ...LINKED, title: 'Gist', data: { code: { source: 'const a = 1;' } } }), 'code');
   assert.equal(chosen({ title: 'Empty', kind: 'code', text: '' }), 'note', 'code with no source is a note');
   assert.equal(chosen({ title: 'Empty', kind: 'code', text: '', data: { code: { source: '' } } }), 'note');
-  assert.equal(chosen({ title: 'Empty', kind: 'code', text: '', data: { steps: ['Boil', 'Stir'] } }), 'steps', 'and what it carries still draws it');
+  assert.equal(chosen({ title: 'Varda', kind: 'code', text: '', data: { person: { name: 'Agnès Varda', role: 'Director' } } }), 'person', 'and what it carries still draws it');
 });
 
 test('three sibling pictures become a gallery whether a rule draws them as images, videos or artworks', async () => {
@@ -1041,10 +1051,12 @@ test('a view of an older type is checked the same way, and a prop no schema desc
   assert.equal(ok('fact', { value: '4.2%', label: 'Monthly churn' }), false, 'a label with a word the sentence does not hold');
   assert.equal(ok('fact', { value: '2%', label: 'Churn in March' }), false, 'a number inside another number');
   assert.equal(ok('fact', { value: '4.2%', label: ' ' }), false);
-  assert.ok(ok('note', { emphasis: 'fell to 4.2%' }));
+  assert.ok(ok('note', { emphasis: 'Churn fell to 4.2% in March, from 14.2% a year before.' }));
+  assert.equal(ok('note', { emphasis: 'fell to 4.2%' }), false, 'words set large are whole sentences');
   assert.equal(ok('note', { emphasis: 'arch' }), false, 'letters inside another word');
   assert.equal(ok('chart', { chart: 'bar', labels: ['March', 'a year before'], values: [4.2, 14] }), false);
-  assert.ok(ok('chart', { chart: 'bar', labels: ['March', 'a year before'], values: [4.2, 14.2] }));
+  assert.ok(ok('chart', { chart: 'bar', labels: ['March', 'year before'], values: [4.2, 14.2] }), 'a chart its sentence states');
+  assert.equal(ok('chart', { chart: 'bar', labels: ['March', 'a year before'], values: [4.2, 14.2] }), false, 'a label that opens with an article');
   assert.equal(ok('link', { url: 'https://elsewhere.example', site: 'elsewhere.example' }), false, 'an address the item does not have');
   assert.equal(ok('idea', {}), true);
   assert.equal(ok('idea', { size: 'huge' }), false);
@@ -1063,7 +1075,7 @@ test('what the rules draw for the older kinds stands in the item too', () => {
     k.item({ title: 'Director', data: { person: { name: 'Agnès Varda', role: 'Director' } } }),
     k.item({ title: 'Sales', text: 'North: 4 units\nSouth: -9 units', data: { chart: { labels: ['North', 'South'], values: [4, -9], unit: 'units' } } }),
     k.item({ title: 'Kay', text: 'Alan Kay said, "Invent the future."', data: { quote: { text: 'Invent the future.', by: 'Alan Kay' } } }),
-    k.item({ title: 'Recipe', data: { steps: ['Boil water', 'Add pasta'] } }),
+    k.item({ title: 'Recipe', text: '1. Boil water\n2. Add pasta', data: { steps: ['Boil water', 'Add pasta'] } }),
     k.item({ title: 'Churn', text: 'Monthly churn is at 4.2 now.', data: { facts: [{ label: 'Monthly churn', value: 4.2 }] } }),
   ];
   assert.deepEqual(made.map((item) => byRule(item, url).component), ['image', 'video', 'link', 'chat', 'code', 'person', 'chart', 'quote', 'steps', 'fact']);
@@ -1163,7 +1175,7 @@ test('an address in the data states nothing, a table cell holds no cell break, a
   const essay = k.item({ title: 'Trams', kind: 'link', text: 'A photo essay about the tram lines and the hills they climb.', data: { image: 'https://cdn.example/img/2048/photo.jpg', date: '1928' }, source: { from: 'link', url: 'https://example.com/trams/77', capturedAt: '' } });
   assert.equal(grounded({ component: 'fact', props: { value: '2048', label: 'Width' } }, essay, url), false, 'a number inside a picture address');
   assert.equal(grounded({ component: 'fact', props: { value: '77', label: 'Page' } }, essay, url), false);
-  assert.ok(grounded({ component: 'list', props: { items: ['1928', 'tram lines'] } }, essay, url), 'a date the data holds');
+  assert.equal(grounded({ component: 'list', props: { items: ['1928', 'tram lines'] } }, essay, url), false, 'a list entry is a whole sentence or line of the words, and neither is one');
   assert.equal(grounded({ component: 'fact', props: { value: '1928', label: 'Year' } }, essay, url), false, 'which the words set beside no label');
   assert.ok(grounded(byRule(essay, url), essay, url), 'the picture is still the link card\'s own');
 
@@ -1180,9 +1192,9 @@ test('an address in the data states nothing, a table cell holds no cell break, a
 // ---- the cards the model chooses
 
 type Control = ComponentsReply['items'][number]['controls'][number];
-/** A toggle or segmented control of a reply, with each state's name and its text. */
+/** A toggle or segmented control of a reply, with each state's name and its text: the whole line that opens with the name. */
 const control = (kind: 'toggle' | 'segmented', label: string, states: [string, string][]): Control => ({
-  kind, label, states: states.map(([name]) => name), texts: states.map(([, text]) => text), name: '', unit: '', min: 0, max: 0, values: [],
+  kind, label, states: states.map(([name]) => name), texts: states.map(([name, text]) => `${name}: ${text}`), name: '', unit: '', min: 0, max: 0, values: [],
 });
 const slider = (fields: Partial<Control>): Control => ({ kind: 'slider', label: '', states: [], texts: [], name: '', unit: '', min: 0, max: 0, values: [], ...fields });
 const DOLLY_STATES: [string, string][] = [
@@ -1200,7 +1212,7 @@ const part = (kind: Part['kind'], slots: Partial<Part> = {}): Part => ({ kind, t
 /** For each card: a text, a claim the text holds with the props it draws, and a claim it does not hold with the prop that fails. */
 const CLAIMS: Record<Exclude<Chosen, 'note' | 'idea' | 'sheet'>, { text: string; held: Partial<ComponentsReply['items'][number]>; props: Record<string, unknown>; lacked: Partial<ComponentsReply['items'][number]>; fails: string }> = {
   quote: {
-    text: 'Nonna never measured anything. "Salt it like the sea," she said, and tasted the water.',
+    text: 'Nonna measured nothing. "Salt it like the sea," she said.',
     held: { passage: '"Salt it like the sea,"', by: 'Nonna' },
     props: { text: 'Salt it like the sea,', by: 'Nonna' },
     lacked: { passage: 'Salt it like the ocean' },
@@ -1215,9 +1227,9 @@ const CLAIMS: Record<Exclude<Chosen, 'note' | 'idea' | 'sheet'>, { text: string;
   },
   facts: {
     text: 'The flat is 62 square metres, costs €1,450 a month and is 12 minutes from the station.',
-    held: { lines: ['The flat | 62 square metres', 'Costs | €1,450 a month', 'From the station | 12 minutes'] },
-    props: { facts: [{ label: 'The flat', value: '62 square metres' }, { label: 'Costs', value: '€1,450 a month' }, { label: 'From the station', value: '12 minutes' }] },
-    lacked: { lines: ['The flat | 62 square metres', 'Costs | €1,540 a month'] },
+    held: { lines: ['Flat | 62 square metres', 'Costs | €1,450 a month', 'Station | 12 minutes'] },
+    props: { facts: [{ label: 'Flat', value: '62 square metres' }, { label: 'Costs', value: '€1,450 a month' }, { label: 'Station', value: '12 minutes' }] },
+    lacked: { lines: ['Flat | 62 square metres', 'Costs | €1,540 a month'] },
     fails: 'shows facts[1].value, which the content does not state',
   },
   steps: {
@@ -1228,7 +1240,7 @@ const CLAIMS: Record<Exclude<Chosen, 'note' | 'idea' | 'sheet'>, { text: string;
     fails: 'shows steps[2], which the content does not state',
   },
   list: {
-    text: 'For the weekend we still need a tent, two sleeping bags, a head torch and something for the mosquitoes.',
+    text: 'For the weekend we still need:\n- a tent\n- two sleeping bags\n- a head torch\n- something for the mosquitoes',
     held: { lines: ['a tent', 'two sleeping bags', 'a head torch'] },
     props: { items: ['a tent', 'two sleeping bags', 'a head torch'] },
     lacked: { lines: ['a tent', 'a stove'] },
@@ -1264,13 +1276,13 @@ const CLAIMS: Record<Exclude<Chosen, 'note' | 'idea' | 'sheet'>, { text: string;
   },
   definition: {
     text: 'Parallax is the apparent shift of an object against its background when the viewer moves.',
-    held: { subject: 'Parallax', passage: 'the apparent shift of an object against its background when the viewer moves' },
-    props: { term: 'Parallax', definition: 'the apparent shift of an object against its background when the viewer moves' },
-    lacked: { subject: 'Paradox', passage: 'the apparent shift of an object against its background when the viewer moves' },
+    held: { subject: 'Parallax', passage: 'Parallax is the apparent shift of an object against its background when the viewer moves.' },
+    props: { term: 'Parallax', definition: 'Parallax is the apparent shift of an object against its background when the viewer moves.' },
+    lacked: { subject: 'Paradox', passage: 'Parallax is the apparent shift of an object against its background when the viewer moves.' },
     fails: 'shows term, which the content does not state',
   },
   proscons: {
-    text: 'Moving to Rust would mean no data races and one small binary, but slow builds and a steep start for the team.',
+    text: 'Moving to Rust\nPros:\n- no data races\n- one small binary\nCons:\n- slow builds\n- a steep start',
     held: { left: ['no data races', 'one small binary'], right: ['slow builds', 'a steep start'] },
     props: { pros: ['no data races', 'one small binary'], cons: ['slow builds', 'a steep start'] },
     lacked: { left: ['no data races'], right: ['hard to hire for'] },
@@ -1293,7 +1305,7 @@ const CLAIMS: Record<Exclude<Chosen, 'note' | 'idea' | 'sheet'>, { text: string;
   explorable: {
     text: DOLLY,
     held: { controls: [control('segmented', 'Three ways to shoot a dolly zoom', DOLLY_STATES)] },
-    props: { controls: [{ kind: 'segmented', label: 'Three ways to shoot a dolly zoom', states: DOLLY_STATES.map(([name, text]) => ({ name, text })) }], output: { kind: 'text' } },
+    props: { controls: [{ kind: 'segmented', label: 'Three ways to shoot a dolly zoom', states: DOLLY_STATES.map(([name, text]) => ({ name, text: `${name}: ${text}` })) }], output: { kind: 'text' } },
     lacked: { controls: [control('segmented', 'Three ways to shoot a dolly zoom', [...DOLLY_STATES.slice(0, 2), ['Both', 'The camera and the lens both stay put.']])] },
     fails: 'shows controls[0].states[2].text, which the content does not state',
   },
@@ -1412,7 +1424,7 @@ test('the model may keep an idea, or make a note, a callout or a definition of i
       entry({ id: ids[2]!, component: 'callout', passage: lines[2]!, tone: 'caution' }),
       entry({ id: ids[3]!, component: 'idea' }),
       entry({ id: ids[4]!, component: 'idea' }),
-      entry({ id: ids[5]!, component: 'callout', passage: '奶奶对花生过敏，家里聚餐千万不要用花生油', tone: 'caution' }),
+      entry({ id: ids[5]!, component: 'callout', passage: '注意：奶奶对花生过敏，家里聚餐千万不要用花生油', tone: 'caution' }),
       entry({ id: ids[6]!, component: 'idea' }),
     ],
   })).on('renderer.composites', () => ({ groups: [] }));
@@ -1490,31 +1502,38 @@ test('the pipeline tells the Renderer which items changed in what a card is draw
   assert.equal(await edit({ data: { where: 'Lisbon' } }), 4, 'the same data again is not');
 });
 
-test('one pass asks about 24 items at most in calls of eight, and a call that fails is asked once more as two halves', async () => {
+test('one pass asks about 24 items at most in calls of eight, a call answered unreadably is asked again in two halves one after the other, and a call that got no answer is not', async () => {
   const k = kit();
   const { ids } = grow(k, Array.from({ length: 30 }, (_v, n) => ({ title: `Note ${n}`, text: `${LONG} We paid 12 euros for the ferry.` })));
+  const running = { now: 0, most: 0 };
   k.model
-    .on('renderer.components', (req) => {
+    .on('renderer.components', async (req) => {
       const asked = idsIn(req.user);
-      // The second call of eight fails whole, and then its second half fails again.
-      if (asked.length === 8 ? asked.includes(ids[8]!) : asked.includes(ids[12]!)) throw new Error('timed out');
+      running.most = Math.max(running.most, ++running.now);
+      await new Promise((done) => setTimeout(done, 1));
+      running.now--;
+      // The second call of eight is answered in a shape the schema refuses, and so is the second of its halves. The third gets no answer.
+      if ((asked.length === 8 && asked.includes(ids[8]!)) || asked.includes(ids[12]!)) return { items: 'not a list' };
+      if (asked.includes(ids[16]!)) throw new Error('timed out');
       return { items: asked.map((id) => entry({ id, emphasis: 'We paid 12 euros for the ferry' })) };
     })
     .on('renderer.composites', () => ({ groups: [] }));
   await render(k, ids);
   assert.deepEqual(components(k).map((made) => idsIn(made.detail).length), [8, 8, 8, 4, 4]);
-  const answered = (n: number) => n < 24 && !(n >= 12 && n < 16);
+  assert.equal(running.most, 3, 'never more calls at once than the three of the pass');
+  const answered = (n: number) => n < 12;
   assert.deepEqual(ids.map((id) => 'emphasis' in view(k, id).props), ids.map((_id, n) => answered(n)));
   assert.deepEqual(ids.map((id) => view(k, id).by), ids.map((_id, n) => (answered(n) ? 'renderer' : 'default')), 'an item with no answer keeps its rule card as a default');
-  assert.deepEqual(k.notes, [
-    'renderer: A call to choose components for 8 items failed (timed out). Asking once more.',
-    'renderer: A call to choose components for 4 items failed (timed out). Kept the rule-based views of them.',
+  assert.deepEqual(k.notes.map((note) => note.replace(/\(.*\)/, '()')).sort(), [
+    'renderer: A call to choose components for 4 items failed (). Kept the rule-based views of them.',
+    'renderer: A call to choose components for 8 items failed (). Asking once more, in two halves.',
+    'renderer: A call to choose components for 8 items failed (). Kept the rule-based views of them.',
   ]);
 
   const before = components(k).length;
   k.model.on('renderer.components', (req) => ({ items: idsIn(req.user).map((id) => entry({ id })) }));
   await render(k, ids);
-  assert.deepEqual(components(k).slice(before).flatMap((made) => idsIn(made.detail)), [...ids.slice(12, 16), ...ids.slice(24)], 'the next pass asks about the ten that got no answer, and no other');
+  assert.deepEqual(components(k).slice(before).flatMap((made) => idsIn(made.detail)), ids.slice(12), 'the next pass asks about the eighteen that got no answer, and no other');
 });
 
 test('the pipeline runs the Renderer again over the items a pass left unanswered, one pass after another, and stops after four', async () => {
@@ -1560,12 +1579,23 @@ test('the pipeline runs the Renderer again over the items a pass left unanswered
   assert.ok(sixty.ids.every((id) => view(sixty.k, id).by === 'renderer'), 'sixty are answered for in three passes');
   assert.deepEqual([components(sixty.k).length, busy.most], [8, 3], 'eight calls in all, and never more than the three of one pass at a time');
 
-  const failing = dropped(4);
-  answering(failing.k, { now: 0, most: 0 }, (asked) => asked.includes(failing.ids[3]!));
+  const failing = dropped(12);
+  answering(failing.k, { now: 0, most: 0 }, (asked) => asked.includes(failing.ids[11]!));
   failing.drop();
   await failing.pipeline.idle();
-  assert.deepEqual(failing.ids.map((id) => view(failing.k, id).by), ['renderer', 'renderer', 'renderer', 'default'], 'an item whose calls keep failing stays a plain card');
-  assert.deepEqual(components(failing.k).map((made) => idsIn(made.detail).length), [4, 2, 2, 2, 1, 1, 1, 1, 1, 1], 'it is asked about in four passes and no more, each of which asks once more after a call fails');
+  assert.deepEqual(failing.ids.map((id) => view(failing.k, id).by), failing.ids.map((_id, n) => (n < 6 ? 'renderer' : 'default')), 'the items of a call that keeps failing stay plain cards');
+  assert.deepEqual(components(failing.k).map((made) => idsIn(made.detail).length), [6, 6, 6], 'they are asked about once more, and a pass in which every call failed is the last');
+
+  const down = dropped(30);
+  const waiting = { now: 0, most: 0 };
+  answering(down.k, waiting, () => true);
+  down.drop();
+  await down.pipeline.idle();
+  assert.deepEqual([components(down.k).map((made) => idsIn(made.detail).length), waiting.most], [[8, 8, 8], 3], 'a model that is down costs one pass of three calls');
+  assert.ok(down.ids.every((id) => view(down.k, id).by === 'default'));
+  down.pipeline.userCommands('Why', [{ type: 'setWhy', id: down.ids[0]!, why: 'touched' }]);
+  await down.pipeline.idle();
+  assert.equal(components(down.k).length, 4, 'an item is asked about again when it is next touched');
 
   const hundred = dropped(100);
   answering(hundred.k, { now: 0, most: 0 });
@@ -1577,7 +1607,7 @@ test('the pipeline runs the Renderer again over the items a pass left unanswered
 test('a card the model chose that an edit left unstated falls back to a default note when the call about it fails, so the next pass asks again', async () => {
   const k = kit();
   const { ids } = grow(k, [{ title: 'House', text: 'Caution: the stairs are steep and the rail is loose, so hold on to the wall.' }]);
-  k.model.on('renderer.components', () => ({ items: [entry({ id: ids[0]!, component: 'callout', passage: 'the stairs are steep and the rail is loose, so hold on to the wall.', tone: 'caution' })] }));
+  k.model.on('renderer.components', () => ({ items: [entry({ id: ids[0]!, component: 'callout', passage: 'Caution: the stairs are steep and the rail is loose, so hold on to the wall.', tone: 'caution' })] }));
   await render(k, ids);
   assert.equal(view(k, ids[0]!).component, 'callout');
 
@@ -1593,15 +1623,15 @@ test('a figure label of over forty characters is refused in a fact, and dropped 
   const flat = 'The flat is 62 square metres, costs €1,450 a month and is 12 minutes from the station.';
   const long = 'the flat costs a month and is from the station';
   const short = 'the flat costs a month and is the station';
-  const fits = 'the flat costs a month and is 12 minutes';
+  const fits = 'flat is 62 square metres, and 12 minutes';
   assert.deepEqual([long.length, short.length, fits.length], [46, 41, 40]);
   assert.deepEqual(verdict(flat, 'fact', { passage: '62 square metres', subject: long }), { refused: 'long', component: 'fact', prop: 'label' });
   assert.deepEqual(verdict(flat, 'fact', { passage: '62 square metres', subject: short }), { refused: 'long', component: 'fact', prop: 'label' });
   assert.ok('draw' in verdict(flat, 'fact', { passage: '62 square metres', subject: fits }), 'forty characters are allowed');
   const left = [{ prop: 'facts[1].label', why: 'long' }];
-  assert.deepEqual(verdict(flat, 'facts', { lines: ['The flat | 62 square metres', `${long} | €1,450 a month`] }), { refused: 'long', component: 'facts', prop: 'facts[1].label', left }, 'one figure is no facts card');
-  assert.deepEqual(verdict(flat, 'facts', { lines: ['The flat | 62 square metres', `${long} | €1,450 a month`, 'from the station | 12 minutes'] }), {
-    draw: { component: 'facts', props: { facts: [{ label: 'The flat', value: '62 square metres' }, { label: 'from the station', value: '12 minutes' }] } },
+  assert.deepEqual(verdict(flat, 'facts', { lines: ['Flat | 62 square metres', `${long} | €1,450 a month`] }), { refused: 'long', component: 'facts', prop: 'facts[1].label', left }, 'one figure is no facts card');
+  assert.deepEqual(verdict(flat, 'facts', { lines: ['Flat | 62 square metres', `${long} | €1,450 a month`, 'station | 12 minutes'] }), {
+    draw: { component: 'facts', props: { facts: [{ label: 'Flat', value: '62 square metres' }, { label: 'station', value: '12 minutes' }] } },
     left,
   });
   assert.ok('draw' in verdict('公寓六十二平方米，月租一千四百五十欧元，离车站十二分钟。', 'fact', { passage: '六十二平方米', subject: '公'.repeat(40) }), 'counted in characters, whatever the script');
@@ -1631,8 +1661,8 @@ const REPORT =
   'In the end the repair was costed at £48,000 and the pool will close for 6 weeks from March. ' +
   `${CLUB} ` +
   'Mrs Adeyemi said, "We have patched that roof for twenty years, and it has cost us more than a new one." ' +
-  'Three things are still open: the contractor, the dates for the school, and who pays for the minibus.';
-const COSTS = ['Repair | £48,000', 'Pool will close for | 6 weeks'];
+  'Three things are still open:\n- the contractor\n- the dates for the school\n- who pays for the minibus\n';
+const COSTS = ['Repair | £48,000', 'Pool will close | 6 weeks'];
 
 const verdict = (text: string, component: Chosen, slots: Partial<ComponentsReply['items'][number]>, title = 'Card') => byModel(said(component, slots), kit().item({ title, text }), url);
 
@@ -1650,7 +1680,7 @@ test('a sheet is assembled from the sections the text states', () => {
         sections: [
           { kind: 'heading', text: 'The pool roof' },
           { kind: 'text', text: COUNCIL },
-          { kind: 'figures', facts: [{ label: 'Repair', value: '£48,000' }, { label: 'Pool will close for', value: '6 weeks' }] },
+          { kind: 'figures', facts: [{ label: 'Repair', value: '£48,000' }, { label: 'Pool will close', value: '6 weeks' }] },
           { kind: 'excerpt', text: 'We have patched that roof for twenty years, and it has cost us more than a new one.', by: 'Mrs Adeyemi' },
         ],
       },
@@ -1666,15 +1696,15 @@ test('a sheet shows a fifth of its item, a heading not counted, and under that i
     return 'draw' in got ? 'sheet' : got.refused;
   };
   assert.equal(made(`Notes from the council. ${COUNCIL}`), 'sheet', 'the first two sentences, 147 characters');
-  assert.equal(made('Notes from the council. The council met on Tuesday to settle the budget for the pool, and the meeting ran long because nobody…'), 'sheet', 'the opening cut short with an ellipsis');
+  assert.equal(made('Notes from the council. The council met on Tuesday to settle the budget for the pool, and the meeting ran long because nobody…'), 'cut', 'an opening the reply cut short is no passage: only the room a sheet has cuts it, after the checks');
   assert.equal(made('Notes from the council.'), 'small', 'an opening of under 120 characters');
   assert.equal(made(CLUB), 'small', 'a sentence from the middle, however long');
   assert.equal(made(COUNCIL), 'small', 'the second sentence is not the opening');
   assert.equal(made('the council met on Tuesday to settle the budget for the pool, and the meeting ran long because nobody agreed about the roof…'), 'small');
-  assert.equal(made(`${CLUB} ${'Three things are still open: the contractor, the dates for the school, and who pays for the minibus.'}`), 'unstated', 'two sentences that do not follow one another are no passage of it');
+  assert.equal(made(`${CLUB} ${COUNCIL}`), 'unstated', 'two sentences that do not follow one another are no passage of it');
   assert.equal(made(CLUB, part('list', { lines: ['the contractor', 'the dates for the school', 'who pays for the minibus'] }), part('excerpt', { text: 'We have patched that roof for twenty years, and it has cost us more than a new one.', by: 'Mrs Adeyemi' })), 'sheet', 'four sections that show a fifth of it between them');
 
-  const heading = verdict(REPORT, 'sheet', { sections: [part('heading', { text: COUNCIL.slice(0, 60) }), part('text', { text: 'Three things are still open: the contractor, the dates for the school, and who pays for the minibus.' }), part('figures', { lines: ['Repair | £48,000'] })] });
+  const heading = verdict(REPORT, 'sheet', { sections: [part('heading', { text: COUNCIL.slice(0, 60) }), part('text', { text: CLUB }), part('figures', { lines: ['Repair | £48,000'] })] });
   assert.ok('draw' in heading, 'a fifth of a shorter item without its heading');
   const zh = '上个月我们走访了城东的六家社区老年食堂，和四十多位老人、十几位工作人员聊了聊，想弄清楚这些食堂到底是谁在用、钱从哪里来、还能撑多久。';
   const visit = `${zh}${'总体的感受是，老人对食堂的需要是真实的。'.repeat(20)}六家里有四家在亏损，一份午餐平均卖12元。`;
@@ -1704,7 +1734,7 @@ test('a figure, a list entry or a table row the text does not state is dropped a
     'renderer: Left sections[1].facts[2].label out of the sheet for "Mixed": the content does not set its label beside its value.',
   ]);
 
-  const camp = 'For the weekend we still need a tent, two sleeping bags and a head torch.';
+  const camp = 'For the weekend we still need:\n- a tent\n- two sleeping bags\n- a head torch';
   assert.deepEqual(verdict(camp, 'list', { lines: ['a tent', 'a stove', 'two sleeping bags', 'a head torch'] }), {
     draw: { component: 'list', props: { items: ['a tent', 'two sleeping bags', 'a head torch'] } },
     left: [{ prop: 'items[1]', why: 'unstated' }],
@@ -1728,7 +1758,7 @@ test('an entry written twice counts once: thirty lines of two entries are a list
   assert.deepEqual(byModel(said('list', { lines: twice }), porto, url), { refused: 'small', component: 'list' }, 'and two entries are under a fifth of the item');
   const list = part('list', { lines: ['the bridge at dusk', 'the tiled station'] });
   assert.deepEqual(byModel(said('sheet', { sections: [list, list] }), porto, url), { refused: 'invalid', component: 'sheet' }, 'the same section twice is one section');
-  const figures = verdict('The flat is 62 square metres, costs €1,450 a month and is 12 minutes from the station.', 'facts', { lines: ['The flat | 62 square metres', 'the flat | 62 square  metres', 'costs | €1,450 a month'] });
+  const figures = verdict('The flat is 62 square metres, costs €1,450 a month and is 12 minutes from the station.', 'facts', { lines: ['Flat | 62 square metres', 'flat | 62 square  metres', 'costs | €1,450 a month'] });
   assert.deepEqual('draw' in figures && (figures.draw.props.facts as unknown[]).length, 2);
   const table = verdict('Plan | Price\nSolo | $8\nTeam | $20', 'table', { lines: ['Plan | Price', 'Solo | $8', 'solo | $8', 'Team | $20'] });
   assert.deepEqual('draw' in table && table.draw.props.rows, [['Solo', '$8'], ['Team', '$20']]);
@@ -1761,35 +1791,40 @@ test('a passage is whole: a callout, a quote, an excerpt and a meaning begin and
   assert.deepEqual(cut('callout', 'Take ibuprofen with warfarin.'), { refused: 'unstated', component: 'callout', prop: 'text' }, 'words the text does not hold are unstated, not cut');
 
   const marked = 'Caution: the stairs to the cellar are steep and the rail is loose.\n注意：地窖的楼梯很陡。';
-  assert.ok('draw' in verdict(marked, 'callout', { passage: 'the stairs to the cellar are steep and the rail is loose.' }), 'after a marker and its colon');
-  assert.ok('draw' in verdict('注意：地窖的楼梯很陡，扶手也松了。', 'callout', { passage: '地窖的楼梯很陡，扶手也松了。' }));
+  assert.ok('draw' in verdict(marked, 'callout', { passage: 'Caution: the stairs to the cellar are steep and the rail is loose.' }), 'with its marker');
+  assert.deepEqual(verdict(marked, 'callout', { passage: 'the stairs to the cellar are steep and the rail is loose.' }), { refused: 'cut', component: 'callout', prop: 'text' }, 'and never without it');
+  assert.ok('draw' in verdict('注意：地窖的楼梯很陡，扶手也松了。', 'callout', { passage: '注意：地窖的楼梯很陡，扶手也松了。' }));
   assert.deepEqual(verdict(marked, 'callout', { passage: 'the rail is loose.' }), { refused: 'cut', component: 'callout', prop: 'text' });
-  const spoken = 'Nonna never measured anything. "Salt it like the sea," she said, and tasted the water.';
-  assert.ok('draw' in verdict(spoken, 'quote', { passage: 'Salt it like the sea', by: 'Nonna' }), 'words the text sets in quotation marks are whole');
+  const spoken = 'Nonna measured nothing. "Salt it like the sea," she said.';
+  assert.ok('draw' in verdict(spoken, 'quote', { passage: 'Salt it like the sea', by: 'Nonna' }), 'the words in quotation marks, in a sentence that says no more than who said them');
+  assert.deepEqual(verdict(`${spoken} Then she tasted it.`.replace('she said.', 'she said, and tasted the water.'), 'quote', { passage: 'Salt it like the sea', by: 'Nonna' }), { refused: 'cut', component: 'quote', prop: 'text' }, 'a sentence that says more');
   assert.deepEqual(verdict(spoken, 'quote', { passage: 'Salt it like', by: 'Nonna' }), { refused: 'cut', component: 'quote', prop: 'text' });
   assert.deepEqual(verdict('爸爸为什么总在车里坐一会儿才上楼？他说那几分钟是只属于他自己的。', 'quote', { passage: '那几分钟是只属于他自己的。', by: '爸爸' }), { refused: 'cut', component: 'quote', prop: 'text' }, 'reported speech with no marks is part of its sentence');
 });
 
-test('a meaning belongs to its term: it follows the term in its sentence, or is whole and stands in the term\'s sentence or the next one over', () => {
+test('a meaning belongs to its term: it is whole sentences, the first of which opens with the term', () => {
   const essay =
     'When a factory vents its waste into a river, the cost does not vanish. ' +
-    'It lands on the people downstream, who pay in dirty water and never see an invoice. Costs of this kind are called externalities. The lunch was never free.';
+    'It lands on the people downstream, who pay in dirty water and see no invoice. Costs of this kind are called externalities. The lunch was not free.';
   const meant = (term: string, meaning: string, text = essay) => {
     const made = verdict(text, 'definition', { subject: term, passage: meaning });
     return 'draw' in made ? 'definition' : made.refused;
   };
-  assert.equal(meant('lunch', 'who pay in dirty water and never see an invoice. Costs of this kind are called externalities.'), 'apart', 'a passage from the middle of another sentence');
+  assert.equal(meant('lunch', 'who pay in dirty water and see no invoice. Costs of this kind are called externalities.'), 'cut', 'a passage from the middle of another sentence');
   assert.equal(meant('factory', 'Costs of this kind are called externalities.'), 'apart', 'a whole sentence two sentences away');
-  assert.equal(meant('externalities', 'It lands on the people downstream, who pay in dirty water and never see an invoice.'), 'definition', 'the sentence before the term');
-  assert.equal(meant('externalities', 'Costs of this kind are called externalities.'), 'definition', 'the term\'s own sentence');
+  assert.equal(meant('externalities', 'It lands on the people downstream, who pay in dirty water and see no invoice.'), 'apart', 'the sentence before the term');
+  assert.equal(meant('externalities', 'Costs of this kind are called externalities.'), 'apart', 'a sentence that holds the term and does not open with it');
+  assert.equal(meant('externalities', 'Externalities are costs that land on people who agreed to none of them.', 'Externalities are costs that land on people who agreed to none of them. The lunch was not free.'), 'definition', 'the sentence that opens with it');
+  assert.equal(meant('mindfulness', 'Some say mindfulness is just relaxation.', 'Some say mindfulness is just relaxation. It is a practice of attention.'), 'apart', 'a sentence that reports what some say');
   assert.equal(meant('externalities', 'The cost of pollution that others bear.'), 'unstated');
 
-  assert.equal(meant('Parallax', 'the apparent shift of an object when the viewer moves', 'Parallax is the apparent shift of an object when the viewer moves.'), 'definition');
-  assert.equal(meant('Parallax', 'the apparent shift of an object', 'Parallax is the apparent shift of an object when the viewer moves.'), 'apart', 'a meaning cut short');
-  assert.equal(meant('A tomato', 'a vegetable', 'A tomato is not a vegetable.'), 'apart', 'the words between a term and its meaning are a link and nothing more');
-  assert.equal(meant('幸存者偏差', '只看到经过筛选留下来的人或事，而忽略了被淘汰的那些。', '幸存者偏差：只看到经过筛选留下来的人或事，而忽略了被淘汰的那些。'), 'definition');
-  assert.equal(meant('沉没成本', '已经付出而且无论如何都收不回来的成本', '沉没成本，指的是已经付出而且无论如何都收不回来的成本。'), 'definition');
-  assert.equal(meant('最小可行产品', '只做核心功能、能拿去给真实用户试的第一个版本。', '最小可行产品，就是只做核心功能、能拿去给真实用户试的第一个版本。'), 'definition');
+  assert.equal(meant('Parallax', 'Parallax is the apparent shift of an object when the viewer moves.', 'Parallax is the apparent shift of an object when the viewer moves.'), 'definition');
+  assert.equal(meant('Parallax', 'the apparent shift of an object when the viewer moves', 'Parallax is the apparent shift of an object when the viewer moves.'), 'cut', 'the rest of the sentence after the term');
+  assert.equal(meant('A tomato', 'a vegetable', 'A tomato is not a vegetable.'), 'cut');
+  assert.equal(meant('theory', "The term 'theory' means a hunch.", "The term 'theory' means a hunch. Scientists would say that is wrong."), 'turned', 'a sentence the next one calls wrong');
+  assert.equal(meant('幸存者偏差', '幸存者偏差：只看到经过筛选留下来的人或事，而忽略了被淘汰的那些。', '幸存者偏差：只看到经过筛选留下来的人或事，而忽略了被淘汰的那些。'), 'definition');
+  assert.equal(meant('沉没成本', '沉没成本，指的是已经付出而且无论如何都收不回来的成本。', '沉没成本，指的是已经付出而且无论如何都收不回来的成本。'), 'definition');
+  assert.equal(meant('最小可行产品', '只做核心功能、能拿去给真实用户试的第一个版本。', '最小可行产品，就是只做核心功能、能拿去给真实用户试的第一个版本。'), 'cut');
 });
 
 test('a label names its value: its words stand in the sentence, the line or the table row that holds the value, and a label the text does not set there is dropped', () => {
@@ -1815,9 +1850,11 @@ test('a label names its value: its words stand in the sentence, the line or the 
 
   const tutoring = kit().item({ title: 'Tutoring', text: 'Pricing: charge £40 an hour for one-to-one and £25 a head for groups of three, and aim for 10 hours a week.' });
   const facts = (labels: string[]) => byRule({ ...tutoring, data: { facts: [{ label: labels[0]!, value: '£40' }, { label: labels[1]!, value: '£25' }, { label: labels[2]!, value: '10' }] } }, url);
-  assert.deepEqual(facts(['one-to-one, an hour', 'a head, groups of three', 'hours a week']).component, 'facts', 'the rules hold a label that a role extracted to the same words');
-  assert.deepEqual(facts(['One-to-one, per hour', 'a head, groups of three', 'Hours a week']).props, { facts: [{ label: 'a head, groups of three', value: '£25' }, { label: 'Hours a week', value: '10' }] }, 'and drop the figure whose label adds a word');
-  assert.equal(facts(['One-to-one, per hour', 'Group of three, per head', 'Hours a week']).component, 'note', 'one figure of three is no facts card');
+  assert.deepEqual(facts(['one-to-one, an hour', 'groups of three, a head', 'hours a week']).component, 'facts', 'the rules hold a label that a role extracted to the same words');
+  assert.equal(facts(['One-to-one, per hour', 'Group of three, per head', 'Hours a week']).component, 'facts', 'or to their other forms, with "per" that only ties them');
+  assert.deepEqual(facts(['One-to-one lessons, per hour', 'groups of three, a head', 'Hours a week']).props, { facts: [{ label: 'groups of three, a head', value: '£25' }, { label: 'Hours a week', value: '10' }] }, 'and drop the figure whose label adds a word');
+  assert.deepEqual(facts(['One-to-one, per hour', 'A head, groups of three', 'Hours a week']).props, { facts: [{ label: 'One-to-one, per hour', value: '£40' }, { label: 'Hours a week', value: '10' }] }, 'and the figure whose label opens with an article');
+  assert.equal(facts(['Private lessons', 'Group lessons', 'Hours a week']).component, 'note', 'one figure of three is no facts card');
 });
 
 test('a dedicated card always wins: a section that alone is half of its item is drawn as its own type, and a smaller one stays in the sheet', () => {
@@ -1829,18 +1866,58 @@ test('a dedicated card always wins: a section that alone is half of its item is 
   const about = part('text', { text: 'The tower in short.' });
   assert.equal(component(tower, [about, part('figures', { lines: ['Height | 330 m', 'Built | 1889', 'Steps | 1,665'] })]), 'facts');
   assert.equal(component('Height of the tower: 330 m', [part('heading', { text: 'the tower' }), part('figures', { lines: ['Height of the tower | 330 m'] })]), 'fact');
-  assert.equal(component('Bring a tent, two sleeping bags and a head torch for the weekend.', [part('text', { text: 'for the weekend' }), part('list', { lines: ['a tent', 'two sleeping bags', 'a head torch'] })]), 'list');
+  assert.equal(component('Bring for the weekend:\n- a tent\n- two sleeping bags\n- a head torch', [part('text', { text: 'Bring for the weekend:' }), part('list', { lines: ['a tent', 'two sleeping bags', 'a head torch'] })]), 'list');
   assert.equal(component('Per seat.\nPlan | Price\nSolo | $8\nTeam | $20\nOrg | $90', [part('text', { text: 'Per seat.' }), part('table', { lines: ['Plan | Price', 'Solo | $8', 'Team | $20', 'Org | $90'] })]), 'table');
   assert.equal(component('Nonna said, "Salt it like the sea, and taste the water."', [part('text', { text: 'Nonna said' }), part('excerpt', { text: 'Salt it like the sea, and taste the water.', by: 'Nonna' })]), 'quote');
-  assert.equal(component('The page reads: every stair keeps the weight of who climbed it.', [part('text', { text: 'The page reads' }), part('excerpt', { text: 'every stair keeps the weight of who climbed it' })]), 'excerpt');
+  assert.equal(component('From chapter 3.\nEvery stair keeps the weight of who climbed it, and every door the hands that held it.', [part('text', { text: 'From chapter 3.' }), part('excerpt', { text: 'Every stair keeps the weight of who climbed it, and every door the hands that held it.' })]), 'excerpt');
 
+  const plan =
+    'Maria Chen, head of design at Orbit, has said her team will test the onboarding flow. For that we need:\n' +
+    '- the build ready by the first week of December\n- a short script for the sessions\n- someone to take notes\nThe five customers who offered in the spring can come in the week after.';
+  const needs = { lines: ['the build ready by the first week of December', 'a short script for the sessions', 'someone to take notes'] };
+  assert.equal(component(plan, [part('text', { text: 'Maria Chen, head of design at Orbit, has said her team will test the onboarding flow.' }), part('list', needs)]), 'sheet', 'three tenths of the plan: the sheet keeps the sentence the list hangs from');
+  const list = verdict(plan, 'list', needs);
+  assert.ok('draw' in list && list.draw.component === 'list', 'the model may still choose the list by itself, above the floor');
+});
+
+test('an entry is whole units, so the condition a sentence opens with stays with it, and a card of pieces is refused', async () => {
   const plan =
     'Ask Maria Chen, head of design at Orbit, whether her team would test the onboarding flow. If she agrees we need the build ready by the first week of December, ' +
     'a short script for the sessions, and someone to take notes. If she does not, fall back to the five customers who offered in the spring.';
-  const needs = { lines: ['the build ready by the first week of December', 'a short script for the sessions', 'someone to take notes'] };
-  assert.equal(component(plan, [part('text', { text: 'Ask Maria Chen, head of design at Orbit, whether her team would test the onboarding flow.' }), part('list', needs)]), 'sheet', 'three tenths of the plan: the sheet keeps the sentence the list hangs from');
-  const list = verdict(plan, 'list', needs);
-  assert.ok('draw' in list && list.draw.component === 'list', 'the model may still choose the list by itself, above the floor');
+  const needs = ['the build ready by the first week of December', 'a short script for the sessions', 'someone to take notes'];
+  const left = needs.map((_entry, n) => ({ prop: `items[${n}]`, why: 'cut' }));
+  assert.deepEqual(verdict(plan, 'list', { lines: needs }), { refused: 'cut', component: 'list', prop: 'items[0]', left });
+  assert.deepEqual(verdict(plan, 'steps', { lines: ['Ask Maria Chen, head of design at Orbit, whether her team would test the onboarding flow.', ...needs] }), { refused: 'cut', component: 'steps', prop: 'steps[1]' });
+  const sheet = verdict(plan, 'sheet', { sections: [part('text', { text: 'Ask Maria Chen, head of design at Orbit, whether her team would test the onboarding flow.' }), part('list', { lines: needs })] });
+  assert.equal('refused' in sheet && sheet.refused, 'cut');
+  const branches = verdict(plan, 'steps', { lines: plan.split(/(?<=\.) /) });
+  assert.ok('draw' in branches, 'the sentences whole, each with its condition');
+  for (const [text, entries] of [['When you arrive, collect your badge, your key and the map.', ['your badge', 'your key', 'the map']], ['Unless it rains, bring a hat, a towel and sun cream.', ['a hat', 'a towel', 'sun cream']], ['如果下雨，就带伞、雨衣和雨靴。', ['伞', '雨衣', '雨靴']], ['要是她同意，我们需要场地、投影和茶点。', ['场地', '投影', '茶点']]] as const) {
+    assert.equal('refused' in verdict(text, 'list', { lines: [...entries] }), true, text);
+  }
+  assert.ok('draw' in verdict('Bring:\n- a hat\n- a towel\n- sun cream', 'list', { lines: ['a hat', 'a towel', 'sun cream'] }));
+
+  const k = kit();
+  const { ids } = grow(k, [{ title: 'Orbit', text: plan }]);
+  k.model.on('renderer.components', () => ({ items: [{ ...said('list', { lines: needs }), id: ids[0]! }] })).on('renderer.composites', () => ({ groups: [] }));
+  await render(k, ids);
+  assert.equal(k.notes.at(-1), 'renderer: Kept "Orbit" as the rules drew it: the model\'s list shows items[0], which is not whole sentences or lines of the content.');
+});
+
+test('the model may not take a conversation apart: a dialogue keeps its note', () => {
+  const chat = 'Mum: Has anyone seen the photo of Grandad on the tractor?\nBen: I think it is in the blue album\nMum: I looked. It is not there\nCaz: I have it! I will bring it Sunday\nBen: Scan it first this time';
+  for (const [component, slots] of [
+    ['qa', { subject: 'Has anyone seen the photo of Grandad on the tractor?', passage: 'I think it is in the blue album' }],
+    ['list', { lines: ['I will bring it Sunday', 'Scan it first this time'] }],
+    ['steps', { lines: ['I will bring it Sunday', 'Scan it first this time'] }],
+    ['sheet', { sections: [part('text', { text: 'Has anyone seen the photo of Grandad on the tractor?' }), part('list', { lines: ['I will bring it Sunday', 'Scan it first this time'] })] }],
+  ] as const) {
+    assert.ok('refused' in verdict(chat, component, slots as never), component);
+  }
+  assert.ok('draw' in verdict(chat, 'note', { emphasis: 'I have it!' }));
+  const zh = '用户：孩子七岁，游泳和围棋选哪个好？\n\n助手：先看孩子自己的意愿。\n\n用户：她比较好动。\n\n助手：那建议先学游泳。';
+  assert.ok('refused' in verdict(zh, 'qa', { subject: '孩子七岁，游泳和围棋选哪个好？', passage: '先看孩子自己的意愿。' }));
+  assert.deepEqual(verdict(zh, 'qa', { subject: '孩子七岁，游泳和围棋选哪个好？', passage: '助手：先看孩子自己的意愿。' }), { refused: 'invalid', component: 'qa' }, 'whole lines too');
 });
 
 test('a sheet keeps its shape: one heading and it first, four sections at most, each cut to its room, and never text alone', () => {
@@ -1862,7 +1939,7 @@ test('a sheet keeps its shape: one heading and it first, four sections at most, 
   assert.equal(shape([lines[0]!, figure, open, lines[1]!, part('excerpt', { text: 'We have patched that roof for twenty years, and it has cost us more than a new one.', by: 'Mrs Adeyemi' })]), 'invalid');
 
   const diary = 'Rain by month, in millimetres, at the allotment, which we wrote down every morning before work for the whole of last year, mostly out of stubbornness and partly to settle an argument about whether the summer was really as wet as it felt at the time.';
-  const months = `${diary}\nMonth | Rain\nJan | 81\nFeb | 60\nMar | 55\nApr | 41\nMay | 47\nJun | 52\nThe names were: Ada, Ben, Cy, Di, Ed, Flo, Gus, Hal, Ivy, Jo.`;
+  const months = `${diary}\nMonth | Rain\nJan | 81\nFeb | 60\nMar | 55\nApr | 41\nMay | 47\nJun | 52\nThe names were:\n${['Ada', 'Ben', 'Cy', 'Di', 'Ed', 'Flo', 'Gus', 'Hal', 'Ivy', 'Jo'].map((name) => `- ${name}`).join('\n')}`;
   const made = verdict(months, 'sheet', {
     sections: [
       part('text', { text: diary }),
@@ -1900,4 +1977,46 @@ test('a card the model chose is held to the floor a rule is held to, and a pictu
   assert.deepEqual(byModel(said('sheet', { sections: [part('picture'), part('text', { text: LONG }), ferry] }), item, url), {
     draw: { component: 'sheet', props: { sections: [{ kind: 'picture', src: 'https://example.org/harbour.jpg' }, { kind: 'text', text: LONG }, { kind: 'figures', facts: [{ label: 'Ferry', value: '12 euros' }] }] } },
   });
+});
+
+test('a card that would turn a text around is not drawn: a passage after a lead that denies it, a wrapped sentence, a label of another line, a meaning someone else gave', () => {
+  const callout = (passage: string) => said('callout', { passage, tone: 'caution' });
+  const cases: [string, ComponentsReply['items'][number], string][] = [
+    ['Wrong: store the vaccine in the freezer. Right: store it in the fridge door, never the freezer.', callout('store the vaccine in the freezer.'), 'store the vaccine in the freezer.'],
+    ['Not recommended: giving honey to babies under one year old.', callout('giving honey to babies under one year old.'), 'giving honey'],
+    ['禁止：在加油站吸烟或打电话。', callout('在加油站吸烟或打电话。'), '吸烟'],
+    ['错误：发烧时多穿衣服捂汗。正确：适当减少衣物，多喝水。', callout('发烧时多穿衣服捂汗。'), '捂汗'],
+    ['Claim: the drug is safe in pregnancy. Evidence: none so far, and two case reports suggest harm.', said('excerpt', { passage: 'the drug is safe in pregnancy.' }), 'safe in pregnancy'],
+    ['It is not true that "the vaccine changes your DNA." It does not.', callout('the vaccine changes your DNA.'), 'DNA'],
+    ['"Sugar makes children hyperactive" is a myth that a dozen trials have failed to support.', said('quote', { passage: 'Sugar makes children hyperactive' }), 'hyperactive'],
+    ['"Never," she said, "take the pills with alcohol."', callout('take the pills with alcohol.'), 'alcohol'],
+    ['Do not\ntake ibuprofen while you are on warfarin. Together they raise the risk of bleeding.', callout('take ibuprofen while you are on warfarin.'), 'take ibuprofen'],
+    ['服药期间请勿\n饮酒或驾驶机动车，以免发生危险。', callout('饮酒或驾驶机动车，以免发生危险。'), '饮酒'],
+    ['身高88厘米\n体重12.5公斤\n头围47厘米', said('facts', { lines: ['身高 | 12.5公斤', '体重 | 12.5公斤', '头围 | 47厘米'] }), '"身高","value":"12.5'],
+    ['Rent is due on the 1st. The deposit is £900. Bills are £120.', said('facts', { lines: ['Rent | £900', 'Deposit | £900', 'Bills | £120'] }), '"Rent"'],
+    ['2022年 卖了120台\n2023年 卖了95台\n2024年 卖了140台', said('chart', { labels: ['2022年', '2023年', '2024年'], numbers: [95, 120, 140], unit: '台' }), '[95,120,140]'],
+    ['Inflation is a general rise in prices. Deflation is the opposite, a general fall.', said('definition', { subject: 'inflation', passage: 'Deflation is the opposite, a general fall.' }), 'Deflation'],
+    ['有人说内卷是指努力工作。这是误解，内卷是指无效的过度竞争。', said('definition', { subject: '内卷', passage: '努力工作。' }), '努力工作'],
+    ["A common mistake is thinking that 'literally' means 'figuratively'.", said('definition', { subject: 'literally', passage: "'figuratively'." }), 'figuratively'],
+    [
+      'Take two tablets only if a doctor says so.\nDose: 500 mg per tablet\nStore below 25°C\nKeep away from children',
+      said('sheet', { sections: [part('text', { text: 'Take two tablets…' }), part('list', { lines: ['Store below 25°C', 'Keep away from children'] }), part('figures', { lines: ['Dose | 500 mg per tablet'] })] }),
+      'Take two tablets…',
+    ],
+  ];
+  for (const [text, reply, shown] of cases) {
+    const made = byModel(reply, kit().item({ title: 'Untitled', text }), url);
+    assert.ok(!('draw' in made) || !JSON.stringify(made.draw.props).includes(shown), `${text}: ${'draw' in made ? JSON.stringify(made.draw.props) : made.refused}`);
+  }
+});
+
+test('a figure whose label is a piece cut out of a phrase is left out with a line in the run log, and the card stands without it', async () => {
+  const k = kit();
+  const { ids } = grow(k, [{ title: 'Lunch', text: `上个月我们走访了六家食堂。一份午餐平均卖12元，成本却要16元左右。每家每天的就餐人数大多在80人上下。${'老人对食堂的需要是真实的。'.repeat(2)}` }]);
+  k.model
+    .on('renderer.components', () => ({ items: [{ ...said('facts', { lines: ['一份午餐平均卖 | 12元', '成本却要 | 16元左右', '每天就餐人数 | 80人上下'] }), id: ids[0]! }] }))
+    .on('renderer.composites', () => ({ groups: [] }));
+  await render(k, ids);
+  assert.deepEqual(view(k, ids[0]!).props, { facts: [{ label: '一份午餐平均卖', value: '12元' }, { label: '每天就餐人数', value: '80人上下' }] });
+  assert.deepEqual(k.notes, ['renderer: Left facts[1].label out of the facts for "Lunch": the content does not set its label beside its value.']);
 });

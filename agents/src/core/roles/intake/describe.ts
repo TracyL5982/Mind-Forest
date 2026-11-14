@@ -22,25 +22,30 @@ function distinct(entries: string[]): string[] {
   return entries.map(squash).filter((entry) => entry && !seen.has(entry.toLowerCase()) && seen.add(entry.toLowerCase()));
 }
 
-/** A list the content states entry by entry. An entry the text does not hold is dropped. */
-const listed = <K extends string>(key: K, max: number) =>
+/** A list the content states entry by entry, each as `stands` reads it. An entry that does not stand is dropped. */
+const listed = <K extends string>(key: K, max: number, stands: (entry: string, text: Grounding) => boolean) =>
   field({
     reply: { [key]: z.array(z.string()) } as Record<K, z.ZodArray<z.ZodString>>,
     keep(r, text) {
-      const entries = distinct(r[key] as string[]).filter((entry) => text.says(entry)).slice(0, max);
+      const entries = distinct(r[key] as string[]).filter((entry) => stands(entry, text)).slice(0, max);
       return entries.length > 0 ? { [key]: entries } : undefined;
     },
   });
 
-/** Two strings that mean something only together, such as a question and its answer. */
-const pair = <A extends string, B extends string>(first: A, second: B) =>
+/** Two strings that mean something only together, such as a question and its answer: the first stated, the second as `stands` reads it beside it. */
+const pair = <A extends string, B extends string>(first: A, second: B, stands: (b: string, a: string, text: Grounding) => boolean) =>
   field({
     reply: { [first]: z.string(), [second]: z.string() } as Record<A | B, z.ZodString>,
     keep(r, text) {
       const [a, b] = [squash(r[first]), (r[second] as string).trim()];
-      return a && b && text.says(a) && text.says(b) ? { [first]: a, [second]: b } : undefined;
+      return a && b && text.says(a) && stands(b, a, text) ? { [first]: a, [second]: b } : undefined;
     },
   });
+
+/** A passage, an entry or a step is whole units of the text, as the card it feeds holds it: see `Grounding.passage`. */
+const whole = (passage: string, text: Grounding) => text.passage(passage) === 'whole';
+/** A point for or against is whole units, whatever stands beside it, as a pros and cons card holds it. */
+const units = (passage: string, text: Grounding) => ['whole', 'turned'].includes(text.passage(passage));
 
 const MAX_COLUMNS = 8;
 const MAX_ROWS = 40;
@@ -50,9 +55,10 @@ const MAX_ITEMS = 30;
 const EXTRACTED = [
   field({
     reply: { steps: z.array(z.string()) },
-    keep(r) {
+    // A procedure with a step left out is another procedure, so one step that does not stand drops them all.
+    keep(r, text) {
       const steps = r.steps.map(squash).filter(Boolean).slice(0, 12);
-      return steps.length >= 2 ? { steps } : undefined;
+      return steps.length >= 2 && steps.every((step) => whole(step, text)) ? { steps } : undefined;
     },
   }),
   field({
@@ -67,7 +73,7 @@ const EXTRACTED = [
     reply: { quoteText: z.string(), quoteBy: z.string() },
     keep(r, text) {
       const quote = r.quoteText.trim();
-      return quote && text.quotes(quote) ? { quote: { text: quote, ...(r.quoteBy.trim() ? { by: r.quoteBy.trim() } : {}) } } : undefined;
+      return quote && text.said(quote) === 'whole' ? { quote: { text: quote, ...(r.quoteBy.trim() ? { by: r.quoteBy.trim() } : {}) } } : undefined;
     },
   }),
   field({
@@ -101,9 +107,9 @@ const EXTRACTED = [
       return where && text.says(where) ? { where } : undefined;
     },
   }),
-  listed('people', 12),
-  listed('pros', 12),
-  listed('cons', 12),
+  listed('people', 12, (name, text) => text.says(name)),
+  listed('pros', 12, units),
+  listed('cons', 12, units),
   field({
     // A row is one string with its cells separated by "|", so the schema nests no deeper than a list of strings.
     reply: { tableHeads: z.array(z.string()), tableRows: z.array(z.string()) },
@@ -124,12 +130,12 @@ const EXTRACTED = [
       return rows.length > 0 ? { table: { heads, rows } } : undefined;
     },
   }),
-  pair('question', 'answer'),
-  pair('term', 'definition'),
+  pair('question', 'answer', (answer, _question, text) => whole(answer, text)),
+  pair('term', 'definition', (meaning, term, text) => text.defines(term, meaning) === 'whole'),
   field({
     reply: { items: z.array(z.string()), checklist: z.array(z.boolean()) },
     keep(r, text) {
-      const items = distinct(r.items).filter((item) => text.says(item)).slice(0, MAX_ITEMS);
+      const items = distinct(r.items).filter((item) => whole(item, text)).slice(0, MAX_ITEMS);
       if (items.length < 2) return undefined;
       // The model only says the list is a checklist. Each mark is read off the text, so a mark the text does not carry is never shown.
       const marks = r.checklist.length > 0 ? items.map((item) => text.ticks(item)) : [];
@@ -154,7 +160,7 @@ const EXTRACTED = [
     keep(r, text) {
       const passage = r.excerptText.trim();
       const at = squash(r.excerptAt);
-      return passage && text.quotes(passage) ? { excerpt: { text: passage, ...(at && text.says(at) ? { at } : {}) } } : undefined;
+      return passage && whole(passage, text) ? { excerpt: { text: passage, ...(at && text.says(at) ? { at } : {}) } } : undefined;
     },
   }),
 ];
@@ -189,9 +195,9 @@ const FIELDS = `For each thing you describe, return:
 Write in the language of the content.
 
 The remaining fields hold structure a card can draw. Fill one only when the content itself states it, and leave it empty (an empty string or an empty list) otherwise. Never invent structure.
-- steps: the ordered steps, when the content is a procedure or a sequence.
 
-The fields below are checked against the content. Copy its own words and numbers into them: a value that is not written in the content is thrown away.
+They are checked against the content. Copy its own words and numbers into them: a value that is not written in the content is thrown away. A step, a list item, a point, an answer, a definition and an excerpt are each whole sentences or whole lines of the content, copied word for word: never one part of a sentence.
+- steps: the ordered steps, when the content is a procedure or a sequence.
 - facts: label and value pairs, when the content lists figures or attributes. Each value as the content writes it, and each label in words of the sentence, line or row that holds the value: add none of your own.
 - quoteText and quoteBy: a quotation the content contains, word for word with its punctuation, and who said it.
 - chartLabels, chartValues, chartUnit: a numeric series the content states, one value per label. Each value is a number the content writes, and each label the words the content writes beside it.
@@ -201,8 +207,8 @@ The fields below are checked against the content. Copy its own words and numbers
 - people: every person the content names.
 - pros and cons: the points for and the points against, when the content weighs a choice.
 - tableHeads and tableRows: a table the content holds. tableHeads has the column heads. Each entry of tableRows is one row, with its cells in column order separated by " | ". Leave out the heads row and any divider line of dashes.
-- question and answer: when the content asks one question and answers it.
-- term and definition: when the content defines one term.
+- question and answer: when the content asks one question and answers it. The answer is the whole sentences that give it.
+- term and definition: when the content defines one term. The definition is the whole sentence that opens with the term, the term included.
 - items and checklist: a list in no particular order. Leave checklist empty unless the content puts a check mark or a tick box beside each item. Then give true or false for each item, in the same order.
 - colours: each colour the content presents as a colour (a palette entry, a swatch, the colour of something), as a hex value or a plain colour name, with the name the content calls it, or an empty name. A colour word used for something else, such as the fruit in "an orange", is not a colour.
 - excerptText and excerptAt: one passage of a longer source that is worth quoting, word for word with its punctuation, and where it sits as the source itself says (a heading, a chapter, a page).`;
