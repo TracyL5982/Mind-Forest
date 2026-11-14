@@ -1,0 +1,103 @@
+#include "gallery.h"
+
+#include <cstdlib>
+
+#include "../base.h"
+#include "../ocean/catalog.h"
+#include "cards.h"
+
+namespace cards {
+
+namespace {
+
+/// How many of a note's links come up round it (Catalog::offers).
+constexpr size_t RING = 7;
+/// The library page's tree colour.
+constexpr Color TINT = Color::hex(0x9FC3FF);
+
+Color colour(const std::string& hex) {
+    return hex.size() == 7 && hex[0] == '#' ? Color::hex(uint32_t(std::strtoul(hex.c_str() + 1, nullptr, 16))) : palette::trunk;
+}
+
+struct Link {
+    std::string id, why;
+};
+
+/// A note for one card, with the card put for it.
+void add(Catalog& catalog, const std::string& id, const Json& view, const Json& item, const Node& node) {
+    OceanNote note;
+    note.id = id;
+    note.kicker = text(view["component"]);
+    note.headline = text(item["title"]);
+    note.summary = text(item["summary"]);
+    catalog.notes[id] = note;
+    put(id, view, item, node);
+}
+
+/// A plain note that says what is round it.
+void addLabel(Catalog& catalog, const std::string& id, const std::string& title, const std::string& summary, bool root) {
+    Json view = Json::object(), item = Json::object(), source = Json::object();
+    view.set("component", "note");
+    item.set("title", title).set("summary", summary).set("text", "");
+    source.set("from", "paste");
+    item.set("source", source);
+    add(catalog, id, view, item, Node{.pick = false, .root = root, .accent = TINT});
+}
+
+/// Links `parent` to `links`. More than a ring holds go round a card that says so, at the ring's end.
+void hang(Catalog& catalog, const std::string& parent, std::vector<Link> links, const std::string& more) {
+    std::vector<Link> ring = links;
+    if (links.size() > RING) {
+        ring.assign(links.begin(), links.begin() + RING - 1);
+        std::string id = parent + "-more";
+        addLabel(catalog, id, more, std::to_string(links.size() - ring.size()) + " more round this card.", false);
+        hang(catalog, id, std::vector<Link>(links.begin() + RING - 1, links.end()), more);
+        ring.push_back({id, more});
+    }
+    for (const Link& link : ring) catalog.notes[parent].links.push_back(NoteLink{"note:" + link.id, link.why});
+}
+
+}  // namespace
+
+std::optional<Json> readSamples() {
+    std::optional<Json> samples = Json::parse(samplesJson);
+    if (!samples) return std::nullopt;
+    for (const auto& [name, p] : (*samples)["pictures"].members()) {
+        setSample(name, Sample{colour(p["a"].string("")), colour(p["b"].string("")), p["w"].real(640), p["h"].real(440)});
+    }
+    return samples;
+}
+
+int gallery(Catalog& catalog) {
+    std::optional<Json> samples = readSamples();
+    if (!samples) return -1;
+    const std::string root = "cards-root";
+    addLabel(catalog, root, "Card library", "Every card type the Quest draws so far, from the web client's library page. Pinch a type to see its other samples round it.", true);
+    std::vector<Link> types;
+    int count = 0;
+    for (const Json& type : (*samples)["types"].array()) {
+        std::string name = type["type"].string("");
+        if (!draws(name)) continue;
+        std::vector<Link> samplesOfType;
+        int i = 0;
+        for (const Json& card : type["cards"].array()) {
+            std::string id = "cards-" + name + "-" + std::to_string(i++);
+            add(catalog, id, card["view"], card["item"], Node{.pick = card["status"].string("") == "pick", .root = false, .accent = TINT});
+            for (const std::string& src : pictures(id)) {
+                if (src.rfind("sample:", 0) != 0) picture(src, nullptr);
+            }
+            samplesOfType.push_back({id, card["label"].string("")});
+            count++;
+        }
+        if (samplesOfType.empty()) continue;
+        const std::string head = samplesOfType.front().id;
+        hang(catalog, head, std::vector<Link>(samplesOfType.begin() + 1, samplesOfType.end()), "More " + name);
+        types.push_back({head, name});
+    }
+    hang(catalog, root, types, "More types");
+    catalog.briefs.push_back(Brief{"cards", "Every card the agents draw, as the web client draws them", "Card library", "note:" + root});
+    logLine(fmt("[cards] the gallery: %d types, %d cards", int(types.size()), count));
+    return int(catalog.briefs.size()) - 1;
+}
+
+}  // namespace cards
