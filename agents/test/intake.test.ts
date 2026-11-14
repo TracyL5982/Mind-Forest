@@ -391,6 +391,17 @@ test('a chart value is a whole number of the text, not digits inside another', a
   for (const chartValues of [[200, 3.5], [1200, 35], [1200, 5], [1200, -3.5]]) assert.deepEqual(await extracted(text, { chartLabels: ['May', 'June'], chartValues }), {}, String(chartValues));
 });
 
+test('a chart value written in a magnitude is kept with the unit that carries it', async () => {
+  const text = '人口：北京2189万，上海2487万。';
+  const chart = { labels: ['北京', '上海'], values: [2189, 2487], unit: '万' };
+  assert.deepEqual(await extracted(text, { chartLabels: chart.labels, chartValues: chart.values, chartUnit: '万' }), { chart });
+  assert.deepEqual(await extracted(text, { chartLabels: chart.labels, chartValues: chart.values }), {}, 'without the unit the bare numbers are not written');
+  assert.deepEqual(await extracted(text, { chartLabels: chart.labels, chartValues: chart.values, chartUnit: '亿' }), {});
+  assert.deepEqual(await extracted('Revenue was $120k in Q1 and $140k in Q2.', { chartLabels: ['Q1', 'Q2'], chartValues: [120, 140], chartUnit: 'k' }), {
+    chart: { labels: ['Q1', 'Q2'], values: [120, 140], unit: 'k' },
+  });
+});
+
 test('a quotation or an excerpt cannot be stitched across two sentences or two lines', async () => {
   const text = 'Air scatters short blue wavelengths more than long red ones.\nRayleigh scattering: scattering of light by small particles. It is why the sky is blue.';
   assert.deepEqual(await extracted(text, { excerptText: 'red ones Rayleigh scattering', quoteText: 'small particles it is why' }), {});

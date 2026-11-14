@@ -72,9 +72,11 @@ const EXTRACTED = [
   field({
     reply: { chartLabels: z.array(z.string()), chartValues: z.array(z.number()), chartUnit: z.string() },
     keep(r, text) {
-      const stated = r.chartValues.every((v) => text.writes(v));
+      const unit = r.chartUnit.trim();
+      // "2189万" writes 2189 in 万, and not the bare number 2189.
+      const stated = r.chartValues.every((v) => text.writes(v, unit));
       if (r.chartLabels.length < 2 || r.chartLabels.length !== r.chartValues.length || !stated) return undefined;
-      return { chart: { labels: r.chartLabels.map(squash), values: r.chartValues, ...(r.chartUnit.trim() ? { unit: r.chartUnit.trim() } : {}) } };
+      return { chart: { labels: r.chartLabels.map(squash), values: r.chartValues, ...(unit ? { unit } : {}) } };
     },
   }),
   field({

@@ -136,28 +136,30 @@ function body(item: Item): string {
   return `${item.title}\n${item.text}`;
 }
 
-/** Every string and number an item's data holds, at any depth. */
-function held(value: unknown, out: string[] = []): string[] {
+/** The `data` keys that hold an address, at any depth. An address is the item's own, and holds no words to check a claim against. */
+const ADDRESSES = new Set(['image', 'mediaUrl', 'thumbnailUrl', 'embed', 'url', 'src']);
+
+/** Every string and number a value holds, at any depth, with or without the addresses. */
+function held(value: unknown, addresses: boolean, out: string[] = []): string[] {
   if (typeof value === 'string') out.push(value);
   else if (typeof value === 'number') out.push(String(value));
-  else if (value && typeof value === 'object') for (const inner of Object.values(value)) held(inner, out);
+  else if (value && typeof value === 'object') for (const [key, inner] of Object.entries(value)) if (addresses || !ADDRESSES.has(key)) held(inner, addresses, out);
   return out;
 }
 
 /** What a view of one item is checked against. */
 interface Content {
-  /** The title, the text and each value of the data. A data value is a list item, so no claim runs from one into the next. */
+  /** The title, the text and each value of the data that is no address. A data value is a list item, so no claim runs from one into the next. */
   text: Grounding;
   /** The value is one the item holds outside its words, whole or cut short with an ellipsis. */
   own(value: string): boolean;
 }
 
 function contentOf(item: Item, assetUrl: (id: string) => string): Content {
-  const data = held(item.data);
   const { url, asset, from } = item.source;
-  const owned = [item.text, item.summary, url, url && siteOf(url), asset && assetUrl(asset), from.replace(/^chat-export:/, ''), ...data].flatMap((value) => value?.trim() || []);
+  const owned = [item.text, item.summary, url, url && siteOf(url), asset && assetUrl(asset), from.replace(/^chat-export:/, ''), ...held(item.data, true)].flatMap((value) => value?.trim() || []);
   return {
-    text: grounding([body(item), ...data.map((value) => `• ${value}`)].join('\n')),
+    text: grounding([body(item), ...held(item.data, false).map((value) => `• ${value}`)].join('\n')),
     own(value) {
       const whole = value.trim();
       const cut = whole.endsWith('…') ? whole.slice(0, -1).trimEnd() : '';
@@ -182,6 +184,10 @@ const str = (value: unknown): string | undefined => (typeof value === 'string' &
 function chartProps(labels: string[], values: number[], unit?: string): Props {
   return compact({ chart: inTimeOrder(labels) ? 'line' : 'bar', labels, values, unit });
 }
+
+/** A unit stands when the text states it in words, or writes it against one of the values it measures: "%" in "45%", "万" in "2189万". */
+const unitStands = (unit: string, values: unknown, text: Grounding): boolean =>
+  text.says(unit) || (Array.isArray(values) && values.some((value) => typeof value === 'number' && text.measures(value, unit)));
 
 const VALUE_FIRST =
   /^((?:[$€£¥]\d[\d,.]*(?:k|m|b|bn)?(?: (?:thousand|million|billion))?)|(?:\d[\d,.]*(?:%|x|k|m|b|bn))|(?:\d[\d,.]* (?:percent|thousand|million|billion)))\s+(\S.{1,60})$/i;
@@ -450,21 +456,23 @@ export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
 
 // ---- components by model
 
-const STANDS: Record<Stated, (value: unknown, content: Content) => boolean> = {
+/** How each kind of check reads one value. `beside` is the object the value sits in, for a check that reads a value against its neighbours. */
+const STANDS: Record<Stated, (value: unknown, content: Content, beside: Props) => boolean> = {
   says: (value, { text }) => typeof value === 'string' && text.says(value),
-  cell: (value, { text }) => typeof value === 'string' && (value.trim() === '' || text.says(value)),
+  cell: (value, { text }) => typeof value === 'string' && (value.trim() === '' || (!/[|\t]/.test(value) && text.says(value))),
   quotes: (value, { text }) => typeof value === 'string' && text.quotes(value),
-  writes: (value, { text }) => typeof value === 'number' && text.writes(value),
+  writes: (value, { text }, { unit }) => typeof value === 'number' && text.writes(value, typeof unit === 'string' ? unit : undefined),
+  unit: (value, { text }, { values }) => typeof value === 'string' && unitStands(value, values, text),
   paints: (value, { text }) => typeof value === 'string' && (value.trim().startsWith('#') ? text.paints(value) : text.says(value)),
   own: (value, content) => typeof value === 'string' && content.own(value),
   label: (value) => typeof value === 'string' && value.trim() !== '',
   choice: () => true,
 };
 
-function stands(value: unknown, check: Check, content: Content): boolean {
-  if (Array.isArray(value)) return value.every((one) => stands(one, check, content));
-  if (typeof check === 'string') return STANDS[check](value, content);
-  return typeof value === 'object' && value !== null && Object.entries(value).every(([key, inner]) => key in check && stands(inner, check[key]!, content));
+function stands(value: unknown, check: Check, content: Content, beside: Props = {}): boolean {
+  if (Array.isArray(value)) return value.every((one) => stands(one, check, content, beside));
+  if (typeof check === 'string') return STANDS[check](value, content, beside);
+  return typeof value === 'object' && value !== null && Object.entries(value).every(([key, inner]) => key in check && stands(inner, check[key]!, content, value as Props));
 }
 
 function shown(view: { component: string; props: unknown }, item: Item, content: Content): boolean {
@@ -490,8 +498,10 @@ function claimed(reply: ComponentsReply['items'][number], text: Grounding): Draw
       return { component: 'fact', props: { value: reply.factValue.trim(), label: clip(reply.factLabel, 80) } };
     case 'steps':
       return { component: 'steps', props: { steps: reply.steps.map((s) => s.trim()).filter(Boolean) } };
-    case 'chart':
-      return { component: 'chart', props: chartProps(reply.chartLabels.map((l) => l.trim()), reply.chartValues, kept(reply.chartUnit)) };
+    case 'chart': {
+      const unit = reply.chartUnit.trim();
+      return { component: 'chart', props: chartProps(reply.chartLabels.map((l) => l.trim()), reply.chartValues, unit && unitStands(unit, reply.chartValues, text) ? unit : undefined) };
+    }
     case 'note':
       return { component: 'note', props: compact({ emphasis: reply.emphasis.trim().length <= 120 ? kept(reply.emphasis) : undefined }) };
   }

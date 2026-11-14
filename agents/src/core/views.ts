@@ -2,6 +2,9 @@ import { z } from 'zod';
 import type { Item, View } from './domain.ts';
 import type { Grounding } from './grounding.ts';
 
+/** A string a card shows as words: at least one character that is not white space. */
+const words = z.string().regex(/\S/);
+
 /**
  * The component library: every way one item can be drawn.
  * Props carry only what the item itself does not already hold. A client draws from the item plus these props.
@@ -36,7 +39,7 @@ export const COMPONENTS = {
   steps: z.object({ steps: z.array(z.string()) }),
   /** Two to six figures with their labels. `more` counts the further facts the item holds. */
   facts: z.strictObject({
-    facts: z.array(z.strictObject({ label: z.string(), value: z.string() })).min(2).max(6),
+    facts: z.array(z.strictObject({ label: words, value: words })).min(2).max(6),
     more: z.number().int().positive().optional(),
   }),
   /** A table: every row has one cell for each head, and a cell may be empty. All rows are here; a client shows what fits. */
@@ -45,7 +48,7 @@ export const COMPONENTS = {
     .refine((p) => p.rows.every((row) => row.length === p.heads.length)),
   /** A list in no particular order. With `checked`, a checklist: one mark for each item. */
   list: z
-    .strictObject({ items: z.array(z.string()).min(2), checked: z.array(z.boolean()).optional() })
+    .strictObject({ items: z.array(words).min(2), checked: z.array(z.boolean()).optional() })
     .refine((p) => p.checked === undefined || p.checked.length === p.items.length),
   /** Parts of a whole: two to eight shares, one value for each label. */
   breakdown: z
@@ -62,9 +65,9 @@ export const COMPONENTS = {
   /** A short thought. The client draws the item's title large. */
   idea: z.strictObject({}),
   /** The points for and the points against, side by side. */
-  proscons: z.strictObject({ pros: z.array(z.string()).min(1), cons: z.array(z.string()).min(1) }),
+  proscons: z.strictObject({ pros: z.array(words).min(1), cons: z.array(words).min(1) }),
   /** Colours with their names. `value` is a hex colour or a CSS colour name. */
-  swatch: z.strictObject({ colours: z.array(z.strictObject({ name: z.string(), value: z.string().min(1) })).min(2) }),
+  swatch: z.strictObject({ colours: z.array(z.strictObject({ name: words, value: z.string().min(1) })).min(2) }),
   /** A work to look at, with what its collection records. `src` is its picture. */
   artwork: z.strictObject({
     src: z.string().min(1),
@@ -91,16 +94,17 @@ export type PropsOf<C extends ComponentId> = z.infer<(typeof COMPONENTS)[C]>;
 
 /**
  * How one value in a view's props must stand in its item before a card may show it.
- * The content is the item's title and text and the values of its `data`.
- * - `says`: the content states these words. `cell` is the same, and may be empty.
+ * The content is the item's title and text and the values of its `data`, without the addresses `data` holds.
+ * - `says`: the content states these words. `cell` is the same, may be empty, and holds no "|" or tab, which would make it two cells.
  * - `quotes`: the content holds this passage as one stretch.
- * - `writes`: the content writes this number.
+ * - `writes`: the content writes this number. When the `unit` beside it in the props scales it, as 万 and k do, the content writes it with that unit: "2189万" for 2189 in 万.
+ * - `unit`: the content states these words, or writes them against one of the `values` beside them in the props, as "45%" writes "%".
  * - `paints`: the content writes this colour, a hex value as a whole or a colour name as words.
  * - `own`: one of the item's own values, whole or cut short with an ellipsis: an address, its site, its source, its summary, its text, a value in its `data`.
  * - `label`: words that name a value beside them. Not checked against the content, and never empty.
  * - `choice`: how to draw, not what to show.
  */
-export type Stated = 'says' | 'cell' | 'quotes' | 'writes' | 'paints' | 'own' | 'label' | 'choice';
+export type Stated = 'says' | 'cell' | 'quotes' | 'writes' | 'unit' | 'paints' | 'own' | 'label' | 'choice';
 
 /** One way of standing for a plain value, the same shape as the props for an object, and the element's shape for a list. */
 export type Check<T = unknown> = unknown extends T
@@ -128,7 +132,7 @@ export const CHECKS: ContentChecks = {
   video: { props: { src: 'own', poster: 'own', caption: 'own' } },
   link: { props: { url: 'own', site: 'own', description: 'own', image: 'own' } },
   chart: {
-    props: { chart: 'choice', labels: 'says', values: 'writes', unit: 'says', mark: 'choice' },
+    props: { chart: 'choice', labels: 'says', values: 'writes', unit: 'unit', mark: 'choice' },
     also: (p) => p.labels.length >= 2 && p.labels.length === p.values.length,
   },
   person: { props: { name: 'says', role: 'says', image: 'own' } },
@@ -149,7 +153,7 @@ export const CHECKS: ContentChecks = {
       return p.checked === undefined || p.checked.every((mark, n) => text.ticks(p.items[n]!) === mark || kept(p.items[n]!) === mark);
     },
   },
-  breakdown: { props: { labels: 'says', values: 'writes', unit: 'says' } },
+  breakdown: { props: { labels: 'says', values: 'writes', unit: 'unit' } },
   qa: { props: { question: 'says', answer: 'says' } },
   callout: { props: { text: 'quotes', tone: 'choice' } },
   excerpt: { props: { text: 'quotes', at: 'says', source: 'own' } },

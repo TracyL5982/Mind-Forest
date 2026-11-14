@@ -600,3 +600,88 @@ test('what the rules draw for the older kinds stands in the item too', () => {
   assert.deepEqual(made.map((item) => byRule(item, url).component), ['image', 'video', 'link', 'chat', 'code', 'person', 'chart', 'quote', 'steps', 'fact']);
   for (const item of made) assert.ok(grounded(byRule(item, url), item, url), `${byRule(item, url).component} stands`);
 });
+
+test('a chart keeps a unit the text writes against its values, and a value written in its magnitude', async () => {
+  const k = kit();
+  const revenue = 'Revenue was $120k in Q1, $140k in Q2 and $90k in Q3 of last year.';
+  const { ids } = grow(k, [
+    { title: 'Month', text: 'Where the month goes: rent 45%, food 25%, transport 10% and the rest is saved.' },
+    { title: 'Prices', text: 'Prices: basic €5, plus €9, pro €19 a month, billed once a year.' },
+    { title: '人口', text: '人口：北京2189万，上海2487万，广州1868万，都是大城市，而且这些年还在慢慢变多，没有停下来的意思。' },
+    { title: 'Revenue', text: revenue },
+    { title: 'Noon', text: 'Temps: Oslo 5°, Rome 12°, Cairo 24° at noon on that day there.' },
+    { title: 'Bare', text: revenue },
+    { title: 'Weights', text: 'Where the month goes: rent 45%, food 25%, transport 10% and the rest is saved.' },
+  ]);
+  const chart = (n: number, chartLabels: string[], chartValues: number[], chartUnit: string) => entry({ id: ids[n]!, component: 'chart', chartLabels, chartValues, chartUnit });
+  k.model.on('renderer.components', () => ({
+    items: [
+      chart(0, ['rent', 'food', 'transport'], [45, 25, 10], '%'),
+      chart(1, ['basic', 'plus', 'pro'], [5, 9, 19], '€'),
+      chart(2, ['北京', '上海', '广州'], [2189, 2487, 1868], '万'),
+      chart(3, ['Q1', 'Q2', 'Q3'], [120, 140, 90], 'k'),
+      chart(4, ['Oslo', 'Rome', 'Cairo'], [5, 12, 24], '°'),
+      chart(5, ['Q1', 'Q2', 'Q3'], [120, 140, 90], ''),
+      chart(6, ['rent', 'food', 'transport'], [45, 25, 10], 'kg'),
+    ],
+  }));
+  await render(k, ids);
+  const drawn = (n: number) => [view(k, ids[n]!).component, view(k, ids[n]!).props.values, view(k, ids[n]!).props.unit];
+  assert.deepEqual(drawn(0), ['chart', [45, 25, 10], '%']);
+  assert.deepEqual(drawn(1), ['chart', [5, 9, 19], '€']);
+  assert.deepEqual(drawn(2), ['chart', [2189, 2487, 1868], '万']);
+  assert.deepEqual(drawn(3), ['chart', [120, 140, 90], 'k']);
+  assert.deepEqual(drawn(4), ['chart', [5, 12, 24], '°']);
+  assert.equal(view(k, ids[5]!).component, 'note', 'a hundred and twenty is not what "120k" writes');
+  assert.deepEqual(drawn(6), ['chart', [45, 25, 10], undefined], 'a unit the text does not write is left out');
+});
+
+test('a stored chart or breakdown stands with the unit the text writes against a value, and falls with one it does not', () => {
+  const stands = (text: string, props: Record<string, unknown>, component = 'chart') => grounded({ component, props }, kit().item({ title: 'Card', text }), url);
+  const bar = (labels: string[], values: number[], unit?: string) => ({ chart: 'bar', labels, values, ...(unit ? { unit } : {}) });
+  assert.ok(stands('Rent 45%, food 25% of the month.', bar(['Rent', 'food'], [45, 25], '%')));
+  assert.ok(stands('Rent 45%, food 55% of the month.', { labels: ['Rent', 'food'], values: [45, 55], unit: '%' }, 'breakdown'));
+  assert.ok(stands('Prices: basic €5, pro €19 a month.', bar(['basic', 'pro'], [5, 19], '€')));
+  assert.ok(stands('Revenue was $120 in Q1 and $140 in Q2.', bar(['Q1', 'Q2'], [120, 140], '$')));
+  assert.ok(stands('人口：北京2189万，上海2487万。', bar(['北京', '上海'], [2189, 2487], '万')));
+  assert.ok(stands('人口：北京2189万，上海2487万。', bar(['北京', '上海'], [21890000, 24870000])));
+  assert.ok(stands('Revenue was $120k in Q1 and $140k in Q2.', bar(['Q1', 'Q2'], [120, 140], 'k')));
+  assert.ok(stands('We found 12 films in 2019 and 15 in 2020.', bar(['2019', '2020'], [12, 15], 'films')));
+
+  assert.equal(stands('Rent 45, food 25 of the month.', bar(['Rent', 'food'], [45, 25], '%')), false);
+  assert.equal(stands('Rent 45%, food 55% of the month.', { labels: ['Rent', 'food'], values: [45, 55], unit: 'kg' }, 'breakdown'), false);
+  assert.equal(stands('人口：北京2189万，上海2487万。', bar(['北京', '上海'], [2189, 2487])), false, 'the bare number is not what the text writes');
+  assert.equal(stands('人口：北京2189万，上海2487万。', bar(['北京', '上海'], [2189, 2487], '亿')), false);
+  assert.equal(stands('Revenue was $120k in Q1 and $140k in Q2.', bar(['Q1', 'Q2'], [120, 140])), false);
+  assert.equal(stands('Revenue was $120k in Q1 and $140 in Q2.', bar(['Q1', 'Q2'], [120, 140], 'k')), false, 'every value is written, bare or in the unit');
+});
+
+test('a card shows no blank label, value, list entry, point or colour name', () => {
+  const blank: [string, Record<string, unknown>][] = [
+    ['facts', { facts: [{ label: 'a', value: ' ' }, { label: 'b', value: '2' }] }],
+    ['facts', { facts: [{ label: '', value: '1' }, { label: 'b', value: '2' }] }],
+    ['list', { items: ['tent', ' '] }],
+    ['proscons', { pros: ['fast'], cons: [''] }],
+    ['proscons', { pros: ['\t'], cons: ['slow'] }],
+    ['swatch', { colours: [{ name: '', value: '#fff' }, { name: 'navy', value: 'navy' }] }],
+  ];
+  for (const [component, props] of blank) assert.equal(isValidView({ component, props }), false, `${component} ${JSON.stringify(props)}`);
+});
+
+test('an address in the data states nothing, a table cell holds no cell break, and a quotation may run over a tab', () => {
+  const k = kit();
+  const essay = k.item({ title: 'Trams', kind: 'link', text: 'A photo essay about the tram lines and the hills they climb.', data: { image: 'https://cdn.example/img/2048/photo.jpg', date: '1928' }, source: { from: 'link', url: 'https://example.com/trams/77', capturedAt: '' } });
+  assert.equal(grounded({ component: 'fact', props: { value: '2048', label: 'Width' } }, essay, url), false, 'a number inside a picture address');
+  assert.equal(grounded({ component: 'fact', props: { value: '77', label: 'Page' } }, essay, url), false);
+  assert.ok(grounded({ component: 'fact', props: { value: '1928', label: 'Year' } }, essay, url), 'a date the data holds');
+  assert.ok(grounded(byRule(essay, url), essay, url), 'the picture is still the link card\'s own');
+
+  const plans = k.item({ title: 'Plans', text: 'Plan | Price | Seats\nSolo | $8 | 1' });
+  const table = (rows: string[][], heads = ['Plan', 'Price', 'Seats']) => grounded({ component: 'table', props: { heads, rows } }, plans, url);
+  assert.ok(table([['Solo', '$8', '1']]));
+  assert.equal(table([['Solo | $8', '', '1']]), false, 'one cell that spans two');
+  assert.equal(table([['Solo', '$8', '1']], ['Plan | Price', 'Price', 'Seats']), false);
+
+  const said = k.item({ title: 'Cameras', text: 'The   best  camera\tis the one you have with you, people say.' });
+  assert.ok(grounded({ component: 'quote', props: { text: 'The best camera is the one you have with you' } }, said, url));
+});
