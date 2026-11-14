@@ -39,6 +39,8 @@ struct Setting {
     float size, lead;
     Font::Weight weight = Font::Weight::regular;
     bool serif = false, italic = false;
+    /// Fixed-width (`ui-monospace`), as code is set.
+    bool mono = false;
 };
 namespace setting {
 constexpr Setting title{16, 21, Font::Weight::semibold};

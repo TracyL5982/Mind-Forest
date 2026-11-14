@@ -11,7 +11,8 @@ Color mix(Color a, float share, Color b) {
 }
 
 TextAttributes attributes(const Setting& t, Color color, float k) {
-    Font font = t.serif ? Font::serifFont(t.size * k, t.weight, t.italic) : Font{t.size * k, t.weight, Font::Design::system, t.italic};
+    Font::Design design = t.mono ? Font::Design::mono : t.serif ? Font::Design::serif : Font::Design::system;
+    Font font{t.size * k, t.weight, design, t.italic};
     TextAttributes a{.font = font, .foregroundColor = color};
     a.paragraphStyle.minimumLineHeight = t.lead * k;
     a.paragraphStyle.maximumLineHeight = t.lead * k;
