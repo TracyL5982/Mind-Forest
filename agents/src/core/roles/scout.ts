@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Command, Id, Item, Node } from '../domain.ts';
-import type { Artwork } from '../ports.ts';
+import type { Found, Source } from '../ports.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
 import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles, type Turn } from './types.ts';
@@ -8,23 +8,26 @@ import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles, ty
 const ROLE = 'scout';
 const MAX_GENERATED_IMAGES = 4;
 const GALLERY_SIZE = 3;
-const ARTWORK_CANDIDATES = 12;
-const ARTWORKS_PER_DIRECTION = 3;
+const FOUND_SHOWN_TO_MODEL = 8;
+const VISUAL_SHOWN_TO_MODEL = 6;
+const EXCERPT = 900;
 const MAX_LINK_CANDIDATES = 5;
 const LINK_COVERAGE = 0.5;
 const HISTORY_TURNS = 6;
 
 const Ideas = z.object({
+  reading: z.string(),
   directions: z.array(
     z.object({
       angle: z.string(),
-      format: z.enum(['note', 'steps', 'image', 'gallery', 'artwork', 'video']),
+      format: z.enum(['note', 'steps', 'image', 'gallery', 'find', 'video']),
       title: z.string(),
       body: z.string(),
       why: z.string(),
       tags: z.array(z.string()),
       steps: z.array(z.string()),
       images: z.array(z.object({ title: z.string(), prompt: z.string() })),
+      source: z.string(),
       lookup: z.string(),
     }),
   ),
@@ -47,7 +50,7 @@ interface Run {
 
 /**
  * Extends the anchor in several different directions and brings each back as content the user can take in on the spot:
- * a written idea, a generated picture, a set of pictures, real works from museum collections, a video that plays in place.
+ * a written idea, a generated picture, a set of pictures, real material found in a source that suits the subject, a video that plays in place.
  * Nothing it brings is a bare link out of the app.
  */
 export const scout: Roles['scout'] = async (ctx, input) => {
@@ -125,9 +128,9 @@ export const scout: Roles['scout'] = async (ctx, input) => {
   return commands;
 };
 
-const SYSTEM = `You are the Scout of Mind Palace, a spatial brainstorming app. The user drops things in, often a picture or a single line with no explanation. You look closely at what they dropped and bring back new material that extends it in different directions, so they can see where it could go.
+const SYSTEM = `You are the Scout of Mind Palace, a spatial brainstorming app. People think with it about anything: a product, a research question, a business, a trip, a story, a design, a decision, something to learn. The user drops things in, often a single line or a picture with no explanation. You work out what the thing is and what they are likely doing with it, then bring back new material that extends it in different directions, so they can see where it could go.
 
-You are a well-read creative partner who knows art, film, design, writing, music, science, history and craft. You are not a search engine. Everything you bring is shown as a card inside the app, so each card must be the content itself: something to read, look at or watch on the spot. Never tell the user to go and look something up.`;
+You are a widely read partner, as at home in science, technology, business and history as in art, film and craft. You are not a search engine. Everything you bring is shown as a card inside the app, so each card must be the content itself: something to read, look at, listen to or watch on the spot. Never tell the user to go and look something up.`;
 
 function describe(ctx: RoleContext, anchor: Node, item: Item, need: string, history: Turn[]): string {
   const { mind } = ctx;
@@ -190,34 +193,43 @@ async function ideate(ctx: RoleContext, run: Run, count: number): Promise<Direct
       '',
       asked,
       '',
+      'First, in reading, say in one sentence what kind of thing this is, what field it belongs to, and what the user is most likely doing with it. Let that decide the angles, the formats and the sources. A startup idea wants evidence, numbers, people who tried it and what they learned. A research question wants studies and counter-evidence. A picture wants things to look at. A trip wants places and practicalities.',
+      '',
       `Return exactly ${count} directions.`,
       'Diversity rules:',
-      '- No two directions share an angle. Angles to draw from: the world or story it implies, a real work or artist or place or tradition it echoes, the technique behind it, its opposite or a counterpoint, a what-if that changes one thing, a detail worth zooming into, the same idea in another medium or sense, where it comes from historically, a concrete next step to make something.',
-      '- A direction that would fit any picture or any idea is a failure. Name specifics.',
-      count >= 3
-        ? '- Mix the formats: at least one to look at ("image" or "gallery"), at least one "artwork", at least one "note". At most one "gallery" and one "video".'
-        : '- Prefer different formats.',
+      '- No two directions share an angle. Angles to draw from: the evidence or data behind it, how others have built or solved it, the strongest objection or a counterexample, a neighbouring field that met the same problem, a what-if that changes one thing, a detail worth zooming into, where it comes from historically, the people working on it, what it would look or sound like, the same idea in another medium, a concrete next step.',
+      '- A direction that would fit any subject is a failure. Name specifics.',
+      count >= 4
+        ? '- Mix the formats: at least two "find" directions that use different sources, and at least one "note". At most one "gallery" and one "video".'
+        : count === 3
+          ? '- Mix the formats: at least one "find" and at least one "note".'
+          : '- Prefer different formats.',
+      '- Use "image" or "gallery" when seeing something new helps: the user has a picture or a visual subject, or asked to see something. Then include at least one. For a subject that is not visual, leave them out.',
       '',
       'For each direction:',
       '- angle: two to five words naming the direction.',
       '- format: one of the formats below.',
       '- title: under 60 characters, specific, no trailing period.',
-      '- why: under eight words, shown on the thread that joins this card to the original. It names where this direction goes ("the town beyond the frame").',
+      '- why: under eight words, shown on the thread that joins this card to the original. It names where this direction goes ("what the studies found").',
       '- tags: 2 to 4 short lowercase words.',
-      '- body, steps, images, lookup: as the format says. Leave the ones a format does not use empty.',
+      '- body, steps, images, source, lookup: as the format says. Leave the ones a format does not use empty.',
       '',
       'Formats:',
-      '- "note": body is two to four sentences of real substance: a concrete idea, a what-if, a provocation, a piece of knowledge. Not a description of what the user already has, and not advice to explore something.',
+      '- "note": body is two to four sentences of real substance: a concrete idea, a what-if, an objection, a piece of knowledge. Not a description of what the user already has, and not advice to explore something.',
       '- "steps": steps is three to six short steps for making or trying something. body is one sentence saying what the steps achieve.',
       '- "image": images has one entry. Its prompt is a complete prompt for an image generator: subject, composition, style, palette, light. When it extends a picture the user dropped, carry over that picture\'s style and palette so it reads as the same world. body is one sentence saying what it shows.',
-      `- "gallery": images has exactly ${GALLERY_SIZE} entries, variations on one theme (three places, three moods, three characters), each with its own short title and full prompt. title names the set.`,
-      '- "artwork": real works from museum collections (Art Institute of Chicago, The Met, Cleveland Museum of Art, V&A): paintings, prints, photographs, textiles, design objects. The app searches the collections and shows the works it finds. lookup is the catalogue search, two to four plain words: an artist\'s name, or a subject, or a kind of object with a place or period ("Hiroshige rain", "crazy quilt", "Hokusai wave", "art deco poster"). title names the thread. body is one or two sentences on what ties such works to what the user has and what to look for in them.',
+      `- "gallery": images has exactly ${GALLERY_SIZE} entries, variations on one theme, each with its own short title and full prompt. title names the set.`,
+      '- "find": real material from one source. source is one id from the list of sources, chosen for what this direction needs. lookup is the search, written the way that source asks. title names what you hope to find. body is one or two sentences on what the user should get from it.',
       '- "video": only when seeing motion matters. lookup is a search phrase for one specific well-known video. body is one sentence on what to watch for.',
+      '',
+      'Sources for "find":',
+      ...ctx.tools.sources.list().map((src) => `- ${src.id}: ${src.name}. ${src.goodFor} Search: ${src.query}`),
     ].join('\n'),
     schema: Ideas,
     images: run.picture ? [run.picture] : undefined,
     effort: 'low',
   });
+  if (answer.reading.trim()) ctx.note(ROLE, `reads it as: ${oneLine(answer.reading, 200)}`);
   const seen = new Set<string>();
   return answer.directions
     .filter((d) => {
@@ -282,32 +294,49 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
       );
       return made.flatMap((m) => m ?? []);
     }
-    case 'artwork': {
-      const query = oneLine(d.lookup || d.title, 80);
-      const found = (await ctx.tools.art.search(query, ARTWORK_CANDIDATES)).filter((w) => !taken.has(urlKey(w.url)));
+    case 'find': {
+      const sources = ctx.tools.sources.list();
+      const source = sources.find((src) => src.id === d.source.trim()) ?? sources.find((src) => src.id === 'web');
+      const query = oneLine(d.lookup || d.title, 120);
+      if (!source) return [];
+      const fresh = (await ctx.tools.sources.search(source.id, query)).filter((f) => !taken.has(urlKey(f.url)));
+      // Things to look at are brought in first, so the model chooses among them by sight and a missing picture is never shown.
+      const found = source.visual
+        ? (await Promise.all(fresh.slice(0, VISUAL_SHOWN_TO_MODEL).map(async (f) => ({ ...f, stored: f.image ? await ctx.tools.web.picture(f.image) : null })))).filter((f) => f.stored)
+        : fresh.slice(0, FOUND_SHOWN_TO_MODEL).map((f) => ({ ...f, stored: null }));
       if (found.length === 0) {
-        ctx.note(ROLE, `no museum holds a match for "${query}", left out`);
+        ctx.note(ROLE, `${source.name} has nothing for "${query}", left out`);
         return [];
       }
-      // A catalogue search matches words, so the model picks the works that carry the direction before any is shown.
-      const chosen = await curate(ctx, d, found);
+      // A search matches words, so the model picks the records that carry the direction before any is shown.
+      const chosen = await curate(ctx, d, source, found, source.visual ? await dataUrls(ctx, found.map((f) => f.stored!.asset)) : undefined);
+      if (chosen.length === 0) ctx.note(ROLE, `none of the ${found.length} records ${source.name} returned for "${query}" fit, left out`);
       const made = await Promise.all(
-        chosen.map(async ({ work, note }): Promise<Made | null> => {
-          if (taken.has(urlKey(work.url))) return null;
-          taken.add(urlKey(work.url));
-          const stored = await ctx.tools.web.picture(work.image);
-          if (!stored) return null;
-          const label = [work.maker, work.date, work.medium, work.museum].filter(Boolean).join(', ');
+        chosen.map(async ({ index, note, excerpt }): Promise<Made | null> => {
+          const record = found[index]!;
+          if (taken.has(urlKey(record.url))) return null;
+          taken.add(urlKey(record.url));
+          const picture = record.stored ?? (record.image && !record.media ? await ctx.tools.web.picture(record.image) : null);
+          const label = [...new Set([record.by, record.date, record.from ?? source.name].filter(Boolean))].join(', ');
+          const passage = excerpt || clipText(record.text, EXCERPT);
           return {
-            tool: 'museum',
+            tool: source.id,
             item: makeItem(ctx, {
-              ...common(d, 'museum'),
-              title: oneLine(work.title, 120),
-              kind: 'image',
-              text: [note, label].filter(Boolean).join('\n\n'),
-              summary: oneLine(note || `${work.title}, ${label}`, 400),
-              data: { site: siteOf(work.url), maker: work.maker, date: work.date, medium: work.medium, museum: work.museum },
-              source: { from: 'web', url: work.url, asset: stored.asset },
+              ...common(d, source.id),
+              title: oneLine(record.title, 120),
+              kind: record.media ? 'video' : picture ? 'image' : 'text',
+              text: [passage, label].filter(Boolean).join('\n\n'),
+              summary: oneLine(note || passage || label, 400),
+              data: {
+                site: siteOf(record.url),
+                by: record.by,
+                date: record.date,
+                from: record.from ?? source.name,
+                ...(record.chart ? { chart: record.chart } : {}),
+                ...(record.steps && !picture ? { steps: record.steps } : {}),
+                ...(record.media ? { mediaUrl: record.media, ...(record.image ? { thumbnailUrl: record.image } : {}) } : {}),
+              },
+              source: { from: 'web', url: record.url, ...(picture ? { asset: picture.asset } : {}) },
             }),
           };
         }),
@@ -344,36 +373,66 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
   }
 }
 
-const Chosen = z.object({ chosen: z.array(z.object({ number: z.number(), note: z.string() })) });
+const Chosen = z.object({ chosen: z.array(z.object({ number: z.number(), note: z.string(), excerpt: z.string() })) });
 
-async function curate(ctx: RoleContext, d: Direction, found: Artwork[]): Promise<{ work: Artwork; note: string }[]> {
-  try {
-    const answer = await ctx.model.json({
+async function dataUrls(ctx: RoleContext, assets: string[]): Promise<string[] | undefined> {
+  const files = await Promise.all(assets.map((id) => ctx.assets.get(id).catch(() => null)));
+  return files.every(Boolean) ? files.map((file) => `data:${file!.mime};base64,${toBase64(file!.bytes)}`) : undefined;
+}
+
+async function curate(ctx: RoleContext, d: Direction, source: Source, found: Found[], pictures?: string[]): Promise<{ index: number; note: string; excerpt: string }[]> {
+  const perRecord = Math.floor(9000 / found.length);
+  const ask = (images?: string[]) =>
+    ctx.model.json({
       role: `${ROLE}.curate`,
       system: SYSTEM,
       user: [
         `You are extending what the user has in this direction: ${oneLine(d.angle, 80)}. ${oneLine(d.title, 120)}. ${oneLine(d.body, 400)}`,
         '',
-        'A museum catalogue search returned these works:',
-        ...found.map((w, i) => `${i + 1}. "${oneLine(w.title, 100)}" by ${w.maker || 'an unknown maker'}, ${w.date || 'undated'}, ${oneLine(w.medium, 80) || 'medium not given'} (${w.museum})`),
+        `A search of ${source.name} returned these records:`,
+        ...found.map((f, i) => `${i + 1}. "${oneLine(f.title, 140)}"${f.by ? ` by ${oneLine(f.by, 80)}` : ''}${f.date ? `, ${f.date}` : ''}${f.from ? ` (${f.from})` : ''}${f.text ? `\n   ${oneLine(f.text, perRecord)}` : ''}`),
+        ...(images ? ['', 'Their pictures are attached in the same order. Look at them and judge by what you see.'] : []),
         '',
-        `Choose up to ${ARTWORKS_PER_DIRECTION} that truly carry this direction, best first, and prefer different makers. A work that only shares a word with the search does not belong. Choose none when none fit.`,
-        'For each: number, and note, one or two sentences on what to notice in this work and how it speaks to what the user has. Say only what you know about the work or can tell from its record.',
+        `Choose up to ${source.show} that truly carry this direction, best first, and prefer different makers. A record that only shares a word with the search does not belong. Choose none when none fit.`,
+        'For each:',
+        '- number.',
+        `- note: one or two sentences on what the user should take from it and how it bears on what they have. Say only what the record ${images ? 'or its picture ' : ''}supports.`,
+        '- excerpt: the passage of the record\'s text that carries the point, copied exactly, one to four sentences. Empty when the record has no such passage.',
       ].join('\n'),
       schema: Chosen,
+      ...(images ? { images } : {}),
       effort: 'low',
     });
+  try {
+    const answer = pictures
+      ? await ask(pictures).catch((err) => {
+          ctx.note(ROLE, `the model could not look at the pictures (${message(err)}), choosing from the records alone`);
+          return ask();
+        })
+      : await ask();
     const seen = new Set<number>();
-    return answer.chosen.flatMap(({ number, note }) => {
-      const work = found[Math.round(number) - 1];
-      if (!work || seen.has(number)) return [];
-      seen.add(number);
-      return [{ work, note: note.trim() }];
-    }).slice(0, ARTWORKS_PER_DIRECTION);
+    return answer.chosen
+      .flatMap(({ number, note, excerpt }) => {
+        const index = Math.round(number) - 1;
+        const record = found[index];
+        if (!record || seen.has(index)) return [];
+        seen.add(index);
+        // Only words that are really in the record are shown as its words.
+        const quoted = excerpt.trim();
+        return [{ index, note: note.trim(), excerpt: quoted && squash(record.text).includes(squash(quoted)) ? clipText(quoted, EXCERPT) : '' }];
+      })
+      .slice(0, source.show);
   } catch (err) {
-    ctx.note(ROLE, `could not choose among the museum works (${message(err)}), left out`);
+    ctx.note(ROLE, `could not choose among what ${source.name} returned (${message(err)}), left out`);
     return [];
   }
+}
+
+const squash = (text: string): string => text.replace(/\s+/g, ' ').trim().toLowerCase();
+
+function clipText(text: string, max: number): string {
+  const t = text.trim();
+  return t.length <= max ? t : `${t.slice(0, max - 1).trimEnd()}…`;
 }
 
 function knownUrls(ctx: RoleContext): Set<string> {

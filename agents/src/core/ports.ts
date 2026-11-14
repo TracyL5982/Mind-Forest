@@ -37,16 +37,36 @@ export interface Page {
   image?: string;
 }
 
-/** A work held by a museum, from its open online collection. */
-export interface Artwork {
+/** A place the Scout can search for real material: the web, papers, books, museums and so on. */
+export interface Source {
+  id: string;
+  name: string;
+  /** What kind of direction this source serves, told to the model. */
+  goodFor: string;
+  /** How a search of this source should be written, told to the model. */
+  query: string;
+  /** How many of its records one direction may show. */
+  show: number;
+  /** Its records are things to look at, so one without a picture is not shown. */
+  visual?: boolean;
+}
+
+/** One record a source returned. */
+export interface Found {
   title: string;
-  maker: string;
+  /** Who made or wrote it. */
+  by: string;
   date: string;
-  medium: string;
-  museum: string;
-  /** The museum's own page for the work. */
+  /** The words of the record itself: an abstract, a description, a page's text, a comment thread. */
+  text: string;
   url: string;
-  image: string;
+  /** The collection or channel it came from, when that is narrower than the source. */
+  from?: string;
+  image?: string;
+  /** Audio or video that plays in place. */
+  media?: string;
+  steps?: string[];
+  chart?: { labels: string[]; values: number[]; unit?: string };
 }
 
 /** A video that can be played inside a client. */
@@ -77,9 +97,10 @@ export interface Tools {
     /** Confirms a video address is real and returns how to play it in place. */
     video(url: string): Promise<Playable | null>;
   };
-  art: {
-    /** Works with a picture from museum collections that match a short catalogue search. */
-    search(query: string, max?: number): Promise<Artwork[]>;
+  sources: {
+    list(): Source[];
+    /** Searches one source. An unknown source or a failed search gives an empty list or throws. */
+    search(id: string, query: string): Promise<Found[]>;
   };
   instagram: {
     /** The connected account's own recent posts. */

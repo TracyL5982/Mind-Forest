@@ -1,9 +1,10 @@
 /**
  * Runs the Scout once against the saved mindstorm and prints what it would bring. Nothing is saved to the mindstorm.
  * Usage: tsx scripts/scout-probe.ts "<words from a card title>" ["what the user asks for"]
+ *    or: tsx scripts/scout-probe.ts "new:<a thought to drop in>" ["what the user asks for"]
  */
 import { join } from 'node:path';
-import { DEFAULT_SETTINGS, type RoleContext } from '../src/core/roles/types.ts';
+import { DEFAULT_SETTINGS, makeItem, makeNode, type RoleContext } from '../src/core/roles/types.ts';
 import { scout } from '../src/core/roles/scout.ts';
 import { Mindstorm } from '../src/core/state.ts';
 import { DiskAssets } from '../src/node/assets.ts';
@@ -24,24 +25,32 @@ const now = () => new Date().toISOString();
 const mind = new Mindstorm({ now, newId });
 mind.load(new SqliteStore(join(dataDir, 'mindstorm.sqlite')).all());
 
-const wanted = (process.argv[2] ?? '').toLowerCase();
-const anchor = [...mind.nodes.values()].find((node) => node.status === 'kept' && mind.itemOf(node.id).title.toLowerCase().includes(wanted));
-if (!anchor) throw new Error(`no kept card with "${wanted}" in its title`);
-console.log(`anchor: "${mind.itemOf(anchor.id).title}" (${mind.itemOf(anchor.id).kind})`);
-
 const ctx: RoleContext = {
   mind, model, assets, newId, now,
   tools: makeTools({ model, assets }),
   settings: { ...DEFAULT_SETTINGS },
   note: (role, message) => console.log(`  note ${role}: ${message}`),
 };
+const wanted = process.argv[2] ?? '';
+let anchor = [...mind.nodes.values()].find((node) => node.status === 'kept' && mind.itemOf(node.id).title.toLowerCase().includes(wanted.toLowerCase()));
+if (wanted.startsWith('new:')) {
+  const USER = { by: 'user' as const };
+  const item = makeItem(ctx, { kind: 'text', title: wanted.slice(4).slice(0, 80), text: wanted.slice(4), origin: USER, source: { from: 'paste' } });
+  const treeId = newId();
+  const root = makeNode(ctx, item, { treeId, parent: null, status: 'kept', why: '', origin: USER });
+  mind.apply({ origin: USER, label: 'probe', commands: [{ type: 'addItem', item }, { type: 'createTree', tree: { id: treeId, title: item.title, rootId: root.id, digest: item.title, createdAt: now() }, root }] });
+  anchor = root;
+}
+if (!anchor) throw new Error(`no kept card with "${wanted}" in its title`);
+console.log(`anchor: "${mind.itemOf(anchor.id).title}" (${mind.itemOf(anchor.id).kind})`);
+
 const show = (label: string, commands: Awaited<ReturnType<typeof scout>>) => {
   console.log(`\n== ${label} at ${at()}`);
   const whys = new Map(commands.flatMap((c) => (c.type === 'addNode' ? [[c.node.itemId, c.node.why] as const] : [])));
   for (const c of commands) {
     if (c.type === 'addItem') {
       const i = c.item;
-      console.log(`- [${i.kind} via ${i.origin.tool}] ${i.title}\n    thread: ${whys.get(i.id)}\n    ${i.summary}${i.source.url ? `\n    source: ${i.source.url}` : ''}${i.source.asset ? `\n    asset: ${assets.url(i.source.asset)}` : ''}${i.data.steps ? `\n    steps: ${JSON.stringify(i.data.steps)}` : ''}`);
+      console.log(`- [${i.kind} via ${i.origin.tool}] ${i.title}\n    thread: ${whys.get(i.id)}\n    ${i.summary}${i.source.url ? `\n    source: ${i.source.url}` : ''}${i.source.asset ? `\n    asset: ${assets.url(i.source.asset)}` : ''}${i.data.steps ? `\n    steps: ${JSON.stringify(i.data.steps)}` : ''}${i.data.chart ? `\n    chart: ${JSON.stringify(i.data.chart)}` : ''}\n    text: ${i.text.replace(/\s+/g, ' ').slice(0, 260)}`);
     } else if (c.type !== 'addNode') console.log(`- ${c.type}`);
   }
 };

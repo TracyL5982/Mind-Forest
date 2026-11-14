@@ -7,7 +7,7 @@ import { AGENT, kit, type Kit } from './kit.ts';
 
 const USER = { by: 'user' as const };
 
-type Format = 'note' | 'steps' | 'image' | 'gallery' | 'artwork' | 'video';
+type Format = 'note' | 'steps' | 'image' | 'gallery' | 'find' | 'video';
 
 function direction(format: Format, title: string, more: Record<string, unknown> = {}) {
   return {
@@ -19,6 +19,7 @@ function direction(format: Format, title: string, more: Record<string, unknown> 
     tags: ['Film'],
     steps: [],
     images: [],
+    source: '',
     lookup: '',
     ...more,
   };
@@ -27,8 +28,12 @@ function direction(format: Format, title: string, more: Record<string, unknown> 
 const NOTE = direction('note', 'The house at the bend');
 const STEPS = direction('steps', 'Shoot it yourself', { steps: ['Pick a subject', 'Pull back while zooming in', 'Hold the subject size'] });
 const IMAGE = direction('image', 'The same shot at night', { images: [{ title: 'Night', prompt: 'the same staircase at night, flat illustration' }] });
-const ARTWORK = direction('artwork', 'Staircases that pull the eye down', { lookup: 'spiral staircase' });
-const work = (n: number, title: string) => ({ title, maker: `Maker ${n}`, date: '1920', medium: 'Gelatin silver print', museum: 'A Museum', url: `https://museum.example/works/${n}`, image: `https://img.example/work-${n}.jpg` });
+const ARTWORK = direction('find', 'Staircases that pull the eye down', { source: 'museums', lookup: 'spiral staircase' });
+const work = (n: number, title: string) => ({ title, by: `Maker ${n}`, date: '1920', text: 'Gelatin silver print', from: 'A Museum', url: `https://museum.example/works/${n}`, image: `https://img.example/work-${n}.jpg` });
+const MUSEUMS = { id: 'museums', name: 'Museum collections', goodFor: 'Works to look at.', query: 'Catalogue words.', show: 3, visual: true };
+const PAPERS = { id: 'papers', name: 'Research papers', goodFor: 'What studies found.', query: 'Title words.', show: 2 };
+const WEB = { id: 'web', name: 'The web', goodFor: 'Anything current.', query: 'A web search.', show: 1 };
+const PAPER = { title: 'Vertigo and the dolly zoom', by: 'A. Researcher', date: '2011', text: 'We measured viewer discomfort. Discomfort peaked when the background grew by half. The effect faded after two seconds.', url: 'https://doi.example/10.1/zoom' };
 const WORKS = [work(1, 'Stairwell, Berlin'), work(2, 'Teapot with spiral handle'), work(3, 'The Long Descent')];
 const VIDEO = direction('video', 'Watch the Jaws beach shot', { lookup: 'Jaws beach dolly zoom' });
 const MIX = [NOTE, STEPS, IMAGE, ARTWORK, VIDEO];
@@ -37,14 +42,15 @@ const MIX = [NOTE, STEPS, IMAGE, ARTWORK, VIDEO];
 function setup(settings: Partial<Settings> = {}, directions: unknown[] = MIX) {
   const k = kit(settings);
   const film = k.seedTree('Film', ['Dolly zoom', 'Vertigo staircase']);
-  k.world.artworks.set('spiral staircase', WORKS);
+  k.world.sources = [WEB, PAPERS, MUSEUMS];
+  k.world.found.set('museums:spiral staircase', WORKS);
   for (const w of WORKS) k.world.pictures.add(w.image);
   k.world.web = [
     { title: 'An article', url: 'https://example.com/article', snippet: '' },
     { title: 'Jaws beach scene', url: 'https://www.youtube.com/watch?v=abcdefghijk', snippet: '' },
   ];
   k.world.videos.set('https://www.youtube.com/watch?v=abcdefghijk', { title: 'Jaws beach scene', url: 'https://www.youtube.com/watch?v=abcdefghijk', embed: 'https://www.youtube.com/embed/abcdefghijk', poster: 'https://img.example/jaws.jpg' });
-  k.model.on('scout.ideate', () => ({ directions })).on('scout.curate', () => ({ chosen: [{ number: 1, note: 'The rail leads the eye to the floor.' }] }));
+  k.model.on('scout.ideate', () => ({ reading: 'A film technique the user is studying.', directions })).on('scout.curate', () => ({ chosen: [{ number: 1, note: 'The rail leads the eye to the floor.', excerpt: '' }] }));
   return { k, film, anchor: film.nodeIds[0]! };
 }
 
@@ -85,8 +91,8 @@ test('each direction becomes content of its own kind, shown in place', async () 
   assert.equal(artwork.kind, 'image');
   assert.ok(k.assets.files.has(artwork.source.asset!), 'the picture was brought in, not pointed at');
   assert.equal(artwork.source.url, 'https://museum.example/works/1');
-  assert.match(artwork.text, /The rail leads the eye/);
-  assert.match(artwork.text, /Maker 1, 1920, Gelatin silver print, A Museum/);
+  assert.equal(artwork.summary, 'The rail leads the eye to the floor.');
+  assert.match(artwork.text, /Gelatin silver print\n\nMaker 1, 1920, A Museum/);
 
   const video = byTitle.get(VIDEO.title)!;
   assert.equal(video.kind, 'video');
@@ -138,7 +144,7 @@ test('"more" deletes nothing and is told what already hangs there', async () => 
   let prompt = '';
   k.model.on('scout.ideate', (req) => {
     prompt = req.user;
-    return { directions: MIX };
+    return { reading: '', directions: MIX };
   });
 
   const commands = await scout(k.ctx, { anchor, mode: 'more' });
@@ -172,10 +178,10 @@ test('written ideas are delivered first and the made ones follow', async () => {
 });
 
 test('a museum search with no match is left out, and so is a work the mindstorm already holds', async () => {
-  const unmatched = direction('artwork', 'Works nobody holds', { lookup: 'nothing at all' });
+  const unmatched = direction('find', 'Works nobody holds', { source: 'museums', lookup: 'nothing at all' });
   const { k, anchor } = setup({}, [NOTE, ARTWORK, unmatched]);
   hang(k, anchor, 'Stairwell, saved earlier', 'kept', { source: { from: 'web', url: 'https://museum.example/works/1', capturedAt: '' } });
-  k.model.on('scout.curate', () => ({ chosen: [{ number: 1, note: '' }] }));
+  k.model.on('scout.curate', () => ({ chosen: [{ number: 1, note: '', excerpt: '' }] }));
 
   apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
 
@@ -185,7 +191,7 @@ test('a museum search with no match is left out, and so is a work the mindstorm 
 
 test('only the works the model chooses are shown, up to three, each once', async () => {
   const { k, anchor } = setup({}, [ARTWORK]);
-  k.model.on('scout.curate', () => ({ chosen: [{ number: 3, note: 'a' }, { number: 1, note: 'b' }, { number: 3, note: 'again' }, { number: 9, note: 'not in the list' }] }));
+  k.model.on('scout.curate', () => ({ chosen: [{ number: 3, note: 'a', excerpt: '' }, { number: 1, note: 'b', excerpt: '' }, { number: 3, note: 'again', excerpt: '' }, { number: 9, note: 'not in the list', excerpt: '' }] }));
 
   apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
 
@@ -202,6 +208,69 @@ test('no work is shown when the model finds none that fit, or cannot be asked', 
   k.model.on('scout.curate', () => { throw new Error('down'); });
   apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
   assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title]);
+});
+
+test('a record is shown in its own words, and only words that are really in it', async () => {
+  const find = direction('find', 'What the studies measured', { source: 'papers', lookup: 'dolly zoom discomfort' });
+  const { k, anchor } = setup({}, [find]);
+  k.world.found.set('papers:dolly zoom discomfort', [PAPER, { ...PAPER, title: 'A second study', url: 'https://doi.example/10.1/second' }]);
+  k.model.on('scout.curate', () => ({
+    chosen: [
+      { number: 1, note: 'The effect has a measured peak.', excerpt: 'Discomfort peaked when the   background grew by half.' },
+      { number: 2, note: 'A replication.', excerpt: 'Viewers fainted in the aisles.' },
+    ],
+  }));
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const [first, second] = picked(k, anchor);
+  assert.equal(first!.kind, 'text', 'a record with no picture is still brought');
+  assert.equal(first!.summary, 'The effect has a measured peak.');
+  assert.match(first!.text, /^Discomfort peaked when the {3}background grew by half\.\n\nA\. Researcher, 2011, Research papers$/);
+  assert.equal(first!.source.url, PAPER.url);
+  assert.ok(!second!.text.includes('fainted'), 'an excerpt the record does not contain is not shown as its words');
+  assert.match(second!.text, /^We measured viewer discomfort/);
+});
+
+test('a chart, steps and a recording a source returns reach the card', async () => {
+  const find = direction('find', 'The numbers', { source: 'papers', lookup: 'numbers' });
+  const { k, anchor } = setup({}, [find]);
+  k.world.found.set('papers:numbers', [
+    { ...PAPER, url: 'https://x.example/chart', chart: { labels: ['2000', '2010'], values: [1, 2], unit: 'billions' } },
+    { ...PAPER, url: 'https://x.example/steps', steps: ['Chop', 'Stir'] },
+    { ...PAPER, url: 'https://x.example/episode', media: 'https://cdn.example/episode.mp3', image: 'https://img.example/cover.jpg' },
+  ]);
+  k.world.sources = [{ ...PAPERS, show: 3 }];
+  k.model.on('scout.curate', () => ({ chosen: [1, 2, 3].map((number) => ({ number, note: '', excerpt: '' })) }));
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const [chart, steps, episode] = picked(k, anchor);
+  assert.deepEqual(chart!.data.chart, { labels: ['2000', '2010'], values: [1, 2], unit: 'billions' });
+  assert.deepEqual(steps!.data.steps, ['Chop', 'Stir']);
+  assert.equal(episode!.kind, 'video');
+  assert.equal(episode!.data.mediaUrl, 'https://cdn.example/episode.mp3');
+  assert.equal(episode!.data.thumbnailUrl, 'https://img.example/cover.jpg');
+});
+
+test('a direction that names no known source is searched on the web', async () => {
+  const find = direction('find', 'A case study', { source: 'encyclopedia', lookup: 'dolly zoom case study' });
+  const { k, anchor } = setup({}, [find]);
+  k.world.found.set('web:dolly zoom case study', [PAPER]);
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), [PAPER.title]);
+});
+
+test('the model is told which sources exist and how to search each', async () => {
+  const { k, anchor } = setup();
+
+  await scout(k.ctx, { anchor, mode: 'refresh' });
+
+  const asked = k.model.calls.find((c) => c.role === 'scout.ideate')!.detail;
+  assert.match(asked, /papers: Research papers\. What studies found\. Search: Title words\./);
+  assert.match(asked, /museums: Museum collections/);
 });
 
 test('a work whose picture cannot be brought in is left out', async () => {
@@ -243,7 +312,7 @@ test('the model is shown the picture the user dropped, also when asked about a c
   const shown: (string[] | undefined)[] = [];
   k.model.on('scout.ideate', (req) => {
     shown.push(req.images);
-    return { directions: [NOTE] };
+    return { reading: '', directions: [NOTE] };
   });
 
   await scout(k.ctx, { anchor: tree.nodeIds[0]!, mode: 'refresh' });
@@ -257,7 +326,7 @@ test('the request and the conversation reach the model with the card they are ab
   let prompt = '';
   k.model.on('scout.ideate', (req) => {
     prompt = req.user;
-    return { directions: [NOTE] };
+    return { reading: '', directions: [NOTE] };
   });
 
   await scout(k.ctx, { anchor, need: 'world building', mode: 'refresh', history: [{ who: 'user', text: 'I like the staircase' }] });
