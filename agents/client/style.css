@@ -265,17 +265,18 @@ button, input, textarea { font: inherit; color: inherit; }
 .detail-figures dt { color: var(--ink-2); overflow-wrap: anywhere; }
 .detail-figures dd { font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
-/* table: one line a row under a rule, numbers set to the right. components/table.js gives each column its width. */
+/* table: one line a row under a rule. components/table.js gives each column its width. A number is whole wherever it stands, and set to the right in a column of numbers. */
 .table { margin-top: 2px; display: grid; grid-auto-rows: 24px; column-gap: 14px; justify-content: space-between; background: repeating-linear-gradient(to bottom, transparent 0 23px, var(--line) 23px 24px); font-size: var(--type-text); line-height: 23px; }
 .table-cell { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .table-cell.is-head { color: var(--ink-2); }
-.table-cell.is-number { text-align: right; font-variant-numeric: tabular-nums; }
-.table-cell.is-number:not(.is-head) { overflow: visible; text-overflow: clip; }
+.table-cell.is-right { text-align: right; }
+.table-cell.is-number { overflow: visible; text-overflow: clip; font-variant-numeric: tabular-nums; }
 .detail-table { max-height: 46vh; overflow: auto; border-radius: 12px; border: 1px solid var(--line); background: var(--face); }
 .detail-table table { min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; line-height: 18px; }
-.detail-table th, .detail-table td { padding: 6px 12px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: top; max-width: 240px; overflow-wrap: break-word; }
-.detail-table th { position: sticky; top: 0; background: var(--face); border-bottom-color: var(--line-2); font-weight: 400; color: var(--ink-2); white-space: nowrap; }
-.detail-table .is-number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.detail-table th, .detail-table td { box-sizing: border-box; padding: 6px 12px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: top; max-width: 244px; overflow-wrap: anywhere; }
+.detail-table th { position: sticky; top: 0; background: var(--face); border-bottom-color: var(--line-2); font-weight: 400; color: var(--ink-2); overflow-wrap: normal; max-width: none; }
+.detail-table .is-right { text-align: right; }
+.detail-table .is-number { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .detail-table tbody tr:last-child td { border-bottom: 0; }
 
 /* excerpt: a passage in an upright serif beside a rule, over the name of what it is from. A quote is a person's words, in italics on a washed face. */

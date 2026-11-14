@@ -191,3 +191,43 @@ test('wrap ends a line where a page does: between Han characters, after their st
   assert.equal(wrap('', 100, 72, 9), 1);
   assert.equal(wrap('a b c d e f g h', 10, 72, 3), 3, 'never more than the most lines');
 });
+
+test('a table cuts no number, beside words or alone, and shows fewer columns when its numbers need the room', async () => {
+  type Plan = { heads: string[]; rows: string[][]; widths: number[]; numbers: boolean[]; foot: string; width: number };
+  const { plan } = (await load('components/table.js')) as { plan: (item: unknown, props: unknown) => Plan };
+  const { textWidth } = (await load('components/shared.js')) as { textWidth: (str: string) => number };
+  const whole = (given: Plan) => given.rows.forEach((row) => row.forEach((cell, i) => { if (/^[\d$]/.test(cell)) assert.ok(given.widths[i]! >= textWidth(cell), `${cell} has ${given.widths[i]} of ${textWidth(cell)}`); }));
+  const mixed = plan(blank, { heads: ['Region', 'Q1', 'Q2', 'Note'], rows: [['North', '1,234,567.89', 'n/a', 'a new office by the harbour'], ['South', '–', '2,345,678.90', 'closed in May after the flood']] });
+  assert.deepEqual(mixed.numbers, [false, false, false, false], 'a column with a word in it is no column of numbers');
+  whole(mixed);
+  const long = plan(blank, { heads: ['Body', 'Mass kg'], rows: [['Sun', '1,988,500,000,000,000'], ['Moon', '73,460,000,000']] });
+  assert.deepEqual(long.numbers, [false, true], 'a number of more than fourteen characters is still a number');
+  whole(long);
+  const wide = plan(blank, { heads: ['A', 'B', 'C', 'D', 'E'], rows: [['1,234,567.89', '2,345,678.90', '3,456,789.01', '4,567,890.12', '5,678,901.23']] });
+  assert.equal(wide.heads.length, 3);
+  assert.equal(wide.foot, 'and 2 more columns');
+  whole(wide);
+  assert.ok(wide.widths.reduce((sum, each) => sum + each, 14 * 2) <= 319);
+  const short = plan(blank, { heads: ['a', 'b', 'c'], rows: [['1', '2'], ['3', '4', '5', '6']] });
+  assert.deepEqual(short.rows, [['1', '2', ''], ['3', '4', '5']], 'a table has as many columns as heads');
+  const zh = plan({ ...blank, title: '城市比较', text: '' }, { heads: ['城市', '月租'], rows: Array.from({ length: 8 }, () => ['杭州', '¥6,500']) });
+  assert.equal(zh.foot, '还有 2 行');
+});
+
+test('a card draws its fixed words in Chinese when its item is written in Chinese, and sizes itself with them', async () => {
+  const { wordsOf } = (await load('words.js')) as { wordsOf: (item: unknown) => Record<string, unknown> & { more: (n: number) => string; moreOf: (r: number, c: number) => string } };
+  const zh = { title: '周末露营清单', text: '[x] 帐篷' };
+  assert.equal(wordsOf(zh).more(3), '还有 3 项');
+  assert.equal(wordsOf(zh).moreOf(34, 1), '还有 34 行、1 列');
+  assert.equal(wordsOf({ title: 'Packing', text: '' }).moreOf(1, 2), 'and 1 more row, 2 more columns');
+  assert.equal(wordsOf({ title: 'Quest 3 的定位', text: '' }).untitled, 'Untitled', 'more Latin letters than Han characters is English');
+  assert.equal(wordsOf({ title: 'AI 记忆宫殿', text: '' }).untitled, '未命名');
+  assert.equal(wordsOf({ title: '', text: '' }).untitled, 'Untitled');
+  assert.equal(wordsOf({}).untitled, 'Untitled');
+  const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Kind> };
+  const names = ['王晓明', '李静', '陈思远', '赵一凡', '周子涵', '吴雨桐', '郑浩然', '冯梓萱'];
+  const paper = (title: string) => COMPONENTS.reference!.size({ ...blank, title }, { kind: 'paper', authors: names, more: true });
+  const { wrap } = (await load('components/shared.js')) as { wrap: (str: string, width: number, letter: number, max: number) => number };
+  assert.equal(paper('古籍自动标点方法研究')[1], 62 + 21 + 6 + 17 * wrap(`${names.join(', ')} 等`, 255, 72, 2));
+  assert.equal(paper('Punctuating old books')[1], 62 + 21 + 6 + 17 * wrap(`${names.join(', ')} and others`, 255, 72, 2));
+});

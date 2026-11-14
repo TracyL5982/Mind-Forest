@@ -42,6 +42,7 @@ export class Panel {
     Object.assign(this, { el, store, send, asset, onClose });
     this.nodeId = null;
     this.editing = false;
+    this.drawn = null;
     this.selection = new Set();
 
     this.badge = h('span', { class: 'badge' });
@@ -77,6 +78,7 @@ export class Panel {
     if (this.nodeId === null) return;
     this.nodeId = null;
     this.editing = false;
+    this.drawn = null;
     this.el.hidden = true;
     this.onClose();
   }
@@ -103,6 +105,9 @@ export class Panel {
       this.deleteButton(node),
     );
     if (this.editing && this.scroll.querySelector('form')) return;
+    // The store hands out a new node or item only when one changed, so the same two mean the same view, and its scroll place is kept.
+    if (!this.editing && this.drawn?.node === node && this.drawn.item === item) return;
+    this.drawn = this.editing ? null : { node, item };
 
     const url = safeUrl(item.source.url ?? '');
     const sources = chipSources(item);

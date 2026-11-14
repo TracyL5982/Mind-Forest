@@ -1,5 +1,6 @@
 import { h, clamp } from '../dom.js';
-import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, graphemes, list, say, spread, text, textWidth, wrap } from './shared.js';
+import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, list, say, spread, text, textWidth, titleOf, wrap } from './shared.js';
+import { wordsOf } from '../words.js';
 
 const NARROW = 200;
 const WIDE = 352;
@@ -10,15 +11,17 @@ const MOST_ROWS = 6;
 const ROW = 24;
 /** What a column of words is left with at least, when the columns are counted. */
 const WORDS_FLOOR = 44;
-/** A number is short. Anything longer or wider than this is read as words, and may be cut. */
-const NUMBER = { characters: 14, px: 120 };
+/** A number is never cut, so it is no wider than this. Anything wider is read as words. */
+const NUMBER_MOST = 160;
 const NUMERAL = /^[-+−–~≈<>≤≥±]?\s?\p{Sc}?\s?\d[\d.,:/\s]*\s?[\p{L}\p{Sc}%°‰µ²³]{0,5}$/u;
+/** In the opened table a column is at least as wide as its widest early cell, up to this, so its words are not set one to a line. */
+const OPENED = { rows: 20, most: 220, text: 13 };
 
-const isNumber = (cell) => graphemes(cell).length <= NUMBER.characters && NUMERAL.test(cell) && textWidth(cell) <= NUMBER.px;
+const isNumber = (cell) => NUMERAL.test(cell) && textWidth(cell) <= NUMBER_MOST;
 
-/** A column holds numbers when every cell of it that says something is a number. */
+/** A column holds numbers when every cell of it that says something is a number. Its numbers are set to the right. */
 function numeric(rows, column) {
-  const said = rows.map((row) => row[column]).filter((cell) => cell !== '');
+  const said = rows.map((row) => row[column] ?? '').filter((cell) => cell !== '');
   return said.length > 0 && said.every(isNumber);
 }
 
@@ -28,35 +31,37 @@ const grid = (props) => ({
 });
 
 /**
- * The first rows and columns, as many as fit. A column of numbers is as wide as its widest number,
- * so no number is cut, and the columns of words share what is left. Columns are dropped from the
- * end until every column of words can have `WORDS_FLOOR` px or all it needs.
+ * The first rows and columns, as many as fit. No number is cut, in a column of numbers or beside
+ * words: a column is at least as wide as the widest number it shows, and the words share what is
+ * left. Columns are dropped from the end until each one that holds words can have `WORDS_FLOOR` px
+ * or all it needs, and the card counts the columns it drops as it does the rows.
  */
-function plan(item, props) {
+export function plan(item, props) {
   const { heads, rows } = grid(props);
   const shown = rows.slice(0, MOST_ROWS);
   const columns = heads.map((head, i) => {
-    const cells = Math.max(0, ...shown.map((row) => textWidth(row[i] ?? '')));
+    const cells = shown.map((row) => row[i] ?? '');
+    const floor = Math.max(0, ...cells.filter(isNumber).map(textWidth));
+    const want = Math.max(textWidth(head), ...cells.map(textWidth));
     const number = numeric(shown, i);
-    return { number, floor: number ? cells : 0, want: Math.max(textWidth(head), cells) };
+    return { number, floor, want, least: number ? floor : Math.max(floor, Math.min(want, WORDS_FLOOR)) };
   });
-  const least = (count) => columns.slice(0, count).reduce((sum, column) => sum + (column.number ? column.floor : Math.min(column.want, WORDS_FLOOR)), BETWEEN * (count - 1));
+  const least = (count) => columns.slice(0, count).reduce((sum, column) => sum + column.least, BETWEEN * (count - 1));
   let count = Math.min(columns.length, MOST_COLUMNS);
-  while (count > 2 && least(count) > ROOM) count -= 1;
+  while (count > 1 && least(count) > ROOM) count -= 1;
   const kept = columns.slice(0, count);
   const floors = kept.reduce((sum, column) => sum + column.floor, 0);
   const extra = spread(kept.map((column) => column.want - column.floor), ROOM - BETWEEN * (count - 1) - floors);
   const widths = kept.map((column, i) => column.floor + extra[i]);
   const width = clamp(SIDES + widths.reduce((sum, wide) => sum + wide, BETWEEN * (count - 1)), NARROW, WIDE);
   const [moreRows, moreColumns] = [rows.length - shown.length, heads.length - count];
-  const counted = (n, one) => `${n} more ${one}${n === 1 ? '' : 's'}`;
   return {
     heads: heads.slice(0, count),
-    rows: shown.map((row) => row.slice(0, count)),
+    rows: shown.map((row) => kept.map((_, i) => row[i] ?? '')),
     numbers: kept.map((column) => column.number),
     widths, width,
-    titleLines: wrap(item.title || 'Untitled', width - SIDES, TITLE_LETTER, 2),
-    foot: [moreRows > 0 && counted(moreRows, 'row'), moreColumns > 0 && counted(moreColumns, 'column')].filter(Boolean).join(', '),
+    titleLines: wrap(titleOf(item), width - SIDES, TITLE_LETTER, 2),
+    foot: moreRows > 0 || moreColumns > 0 ? wordsOf(item).moreOf(moreRows, moreColumns) : '',
   };
 }
 
@@ -67,24 +72,34 @@ export function size(item, props) {
   return [width, FRAME + titleLines * TITLE + 8 + ROW * (1 + rows.length) + (foot ? 8 + TEXT : 0)];
 }
 
-const cell = (words, number, head) => h('div', { class: `table-cell${number ? ' is-number' : ''}${head ? ' is-head' : ''}`, dir: number ? false : 'auto', text: words });
+/** A cell. A number is drawn whole wherever it stands, and to the right in a column of numbers. */
+const cell = (words, right, head) => h('div', { class: `table-cell${right ? ' is-right' : ''}${head ? ' is-head' : isNumber(words) ? ' is-number' : ''}`, dir: !head && isNumber(words) ? false : 'auto', text: words });
 
 export function draw(item, props) {
   const { heads, rows, numbers, widths, titleLines, foot } = plan(item, props);
   return [
-    say('div', `card-title clamp-${titleLines}`, item.title || 'Untitled'),
+    say('div', `card-title clamp-${titleLines}`, titleOf(item)),
     h('div', { class: 'table', role: 'table', style: { gridTemplateColumns: widths.map((wide) => `${wide}px`).join(' ') } },
       heads.map((head, i) => cell(head, numbers[i], true)),
-      rows.map((row) => row.map((words, i) => cell(words ?? '', numbers[i], false)))),
-    foot && h('div', { class: 'card-foot', text: `and ${foot}` }),
+      rows.map((row) => row.map((words, i) => cell(words, numbers[i], false)))),
+    foot && h('div', { class: 'card-foot', text: foot }),
   ];
 }
 
-/** Every row and column. The view scrolls both ways, under heads that stay in place. */
+/**
+ * Every row and column, with heads that stay in place and wrap on whole words. The view scrolls
+ * both ways inside its own box, and each column is given the width of its widest early cell, so a
+ * wide table scrolls sideways and its cells are not squeezed to a word a line.
+ */
 export function detail(item, props) {
   const { heads, rows } = grid(props);
   const numbers = heads.map((_, i) => numeric(rows, i));
-  const row = (tag, cells) => h('tr', null, heads.map((_, i) => h(tag, { class: numbers[i] ? 'is-number' : false, dir: numbers[i] ? false : 'auto', text: cells[i] ?? '' })));
+  const least = heads.map((_, i) => Math.min(OPENED.most, Math.max(0, ...rows.slice(0, OPENED.rows).map((row) => Math.ceil((textWidth(row[i] ?? '') * OPENED.text) / 12.5)))));
+  const row = (tag, cells) => h('tr', null, heads.map((_, i) => {
+    const words = cells[i] ?? '';
+    const number = tag === 'td' && isNumber(words);
+    return h(tag, { class: `${numbers[i] ? 'is-right' : ''}${number ? ' is-number' : ''}` || false, dir: number ? false : 'auto', text: words, style: tag === 'th' ? { minWidth: `${least[i] + 24}px` } : null });
+  }));
   return [
     h('div', { class: 'detail-table', tabindex: 0 },
       h('table', null, h('thead', null, row('th', heads)), h('tbody', null, rows.map((cells) => row('td', cells))))),
