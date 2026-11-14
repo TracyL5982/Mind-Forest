@@ -85,4 +85,5 @@ test('a source that needs a key is only offered when its key is there', () => {
   assert.ok(!ids().includes('films') && !ids().includes('heritage'));
   assert.ok(ids({ TMDB_API_KEY: 'k' }).includes('films'));
   assert.ok(ids({ EUROPEANA_API_KEY: 'k' }).includes('heritage'));
+  assert.ok(!ids().includes('news') && ids({ GUARDIAN_API_KEY: 'k' }).includes('news'));
 });

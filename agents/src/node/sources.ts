@@ -387,7 +387,23 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     },
   };
 
-  const adapters: Adapter[] = [web, papers, books, data, discussions, code, answers, museums, boards, podcasts, recipes, ...(tmdbKey ? [films] : []), ...(europeanaKey ? [heritage] : [])];
+  const guardianKey = opts.keys?.GUARDIAN_API_KEY;
+  const news: Adapter = {
+    id: 'news',
+    name: 'The Guardian',
+    goodFor: 'Reporting and analysis from a newspaper: current events, politics, business, cities, science, the environment, culture, long reads. The article is read and the passage that matters is shown.',
+    query: 'Two to four words a headline on this would use.',
+    show: 1,
+    async search(query) {
+      const json = await ask(`https://content.guardianapis.com/search?q=${q(query)}&order-by=relevance&page-size=${PER_SEARCH}&show-fields=headline,byline,bodyText&api-key=${q(guardianKey ?? '')}`);
+      return list(json.response?.results).filter((a) => str(a.fields?.bodyText).length > 600).map((a): Found => ({
+        title: plain(str(a.fields?.headline) || str(a.webTitle)), by: str(a.fields?.byline), date: str(a.webPublicationDate).slice(0, 10),
+        text: str(a.fields.bodyText).slice(0, 5000), url: str(a.webUrl),
+      }));
+    },
+  };
+
+  const adapters: Adapter[] = [web, papers, books, data, discussions, code, answers, museums, boards, podcasts, recipes, ...(guardianKey ? [news] : []), ...(tmdbKey ? [films] : []), ...(europeanaKey ? [heritage] : [])];
   const byId = new Map(adapters.map((a) => [a.id, a]));
 
   return {

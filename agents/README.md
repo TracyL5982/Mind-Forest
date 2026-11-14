@@ -14,7 +14,7 @@ npm start
 
 It prints an address such as `http://localhost:8787/#token=…`. Open it. Type a thought into the box and press Add.
 
-Keys are read from `~/.muse-garden.env`. `MODEL_API_KEY` is required. Optional keys switch sources on: `YOUTUBE_API_KEY` (direct video search), `TMDB_API_KEY` (film and television), `EUROPEANA_API_KEY` (European museums and archives), and `META_IG_TOKEN` with `META_IG_USER_ID` (Instagram). Nothing is copied into the repo. Your mindstorm is saved in `agents/data/`.
+Keys are read from `~/.muse-garden.env`. `MODEL_API_KEY` is required. Optional keys switch sources on: `YOUTUBE_API_KEY` (direct video search), `TMDB_API_KEY` (film and television), `EUROPEANA_API_KEY` (European museums and archives), `GUARDIAN_API_KEY` (news), and `META_IG_TOKEN` with `META_IG_USER_ID` (Instagram). Nothing is copied into the repo. Your mindstorm is saved in `agents/data/`.
 
 To try the client with no model and no cost: `npm run dev:fake`.
 
@@ -45,7 +45,7 @@ You talk to one voice. Content roles decide what exists. The Renderer decides ho
 | Conductor | Hears each utterance with what you are looking at, and routes it: ask, more, navigate, organize, handoff, capture, keep, undo. | `src/core/roles/conductor.ts` |
 | Intake | Turns a dump into items: text, links, pictures, video, files, and chat exports from ChatGPT, Claude, Muse or a pasted transcript. | `src/core/roles/intake.ts` |
 | Filer | Places each new item in an existing tree or starts a new one. | `src/core/roles/filer.ts` |
-| Scout | Works out what a card is and what you are doing with it, then extends it in several different directions. Each comes back as content shown in place: a written idea, steps, a generated picture or set, a video that plays in the card, or real material found in a source that suits the subject. Sources: the web (the page is read and the passage shown), research papers, books (Apple Books), world data as charts, Hacker News threads, GitHub projects, Stack Overflow, museum collections, Are.na, podcasts, recipes, and with their keys film and television (TMDB) and Europeana. It looks at a dropped picture itself. Never a bare link. Links to existing content only when the tie is strong. | `src/core/roles/scout.ts`, `src/node/sources.ts` |
+| Scout | Works out what a card is and what you are doing with it, then extends it in several different directions. Each comes back as content shown in place: a written idea, steps, a generated picture or set, a video that plays in the card, or real material found in a source that suits the subject. Sources: the web (the page is read and the passage shown), research papers, books (Apple Books), world data as charts, Hacker News threads, GitHub projects, Stack Overflow, museum collections, Are.na, podcasts, recipes, and with their keys news (The Guardian), film and television (TMDB) and Europeana. It looks at a dropped picture itself. Never a bare link. Links to existing content only when the tie is strong. | `src/core/roles/scout.ts`, `src/node/sources.ts` |
 | Organizer | Moves, groups, renames, merges, splits and deletes on request, as one undoable step. | `src/core/roles/organizer.ts` |
 | Renderer | Picks a component for each card and a composite for groups of cards. Never invents data. | `src/core/roles/renderer.ts` |
 | Archivist | Plain code. Keeps the change log, the search index and each tree's digest current. | `src/core/pipeline.ts`, `src/core/state.ts` |
