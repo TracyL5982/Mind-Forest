@@ -7,6 +7,8 @@
 // headset's own library. A pick is a node that is not kept: its thread is dashed until a pinch keeps it.
 #pragma once
 #include <map>
+#include <mutex>
+#include <set>
 #include <memory>
 #include <optional>
 #include <string>
@@ -73,8 +75,22 @@ private:
     std::optional<int> graft(Planted& p, const Node& node);
     /// Takes a service node, and what hangs from it, out of the scene.
     void remove(const std::string& nodeId);
-    /// The scene's reference for an item: its film or work, or a note made for it in the catalog.
-    Ref refFor(const Item& item);
+    /// The scene's reference for a node: its library film, work, tag or note, or a note made for it in the
+    /// catalog ("agent-<node id>"), drawn by the card library (core/cards) in the web client's look.
+    Ref refFor(const Item& item, const Node& node);
+    /// Hands a node's view and item to the card library. True when what its card draws changed.
+    bool paint(const Item& item, const Node& node);
+    /// Draws a card already in the standing tree again, from where it is, after its content changed.
+    void redraw(int localId);
+    /// Fetches the pictures a card shows from the service, off the frame thread.
+    void fetchPictures(const std::string& noteID);
+    /// Pictures fetched and unpacked on a host thread, waiting for the frame thread.
+    struct Pictures {
+        std::mutex lock;
+        std::vector<std::pair<std::string, ImageRef>> arrived;
+    };
+    std::shared_ptr<Pictures> pictures = std::make_shared<Pictures>();
+    std::set<std::string> asked;                    // picture addresses already fetched or on their way
     Planted* plantedOf(const Tree& tree);
     Planted* holding(const std::string& nodeId);
     bool standing(const Planted& p) const;

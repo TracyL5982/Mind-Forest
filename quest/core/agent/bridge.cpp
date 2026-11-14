@@ -6,6 +6,7 @@
 
 #include "base.h"
 #include "platform.h"
+#include "cards/cards.h"
 #include "ocean/oceanmodel.h"
 
 namespace agent {
@@ -114,6 +115,18 @@ void Bridge::frame(double t) {
                    },
                    event);
     }
+    std::vector<std::pair<std::string, ImageRef>> arrived;
+    {
+        std::lock_guard<std::mutex> g(pictures->lock);
+        arrived.swap(pictures->arrived);
+    }
+    Planted* standingTree = model.tree ? plantedOf(*model.tree) : nullptr;
+    for (auto& [src, image] : arrived) {
+        for (const std::string& noteID : cards::picture(src, image)) {
+            std::string nodeId = noteID.substr(std::string("agent-").size());
+            if (standingTree && standingTree->local.count(nodeId)) redraw(standingTree->local[nodeId]);
+        }
+    }
     reportFocus();
     for (auto& [id, t] : thinking) {
         if (now - t.shown < thinkAgain) continue;
@@ -187,7 +200,12 @@ void Bridge::changed(const Delta& delta, bool animate) {
 
     for (const ItemId& id : delta.items.changed) {
         const Item* item = mirror.item(id);
-        if (item && model.catalog && model.catalog->notes.count("agent-" + id.value)) refFor(*item);
+        if (!item) continue;
+        for (const auto& [nodeId, n] : mirror.nodes()) {
+            if (n.itemId != id || !holding(nodeId.value)) continue;
+            Planted* p = holding(nodeId.value);
+            if (paint(*item, n) && standing(*p)) redraw(p->local[nodeId.value]);
+        }
     }
 
     // Nodes come in the order the service made them, so a parent is usually there before its child;
@@ -221,6 +239,8 @@ void Bridge::changed(const Delta& delta, bool animate) {
         if (!n || !p) continue;
         p->tree->revise(p->local[id.value], n->why, n->status == Node::Status::kept, float(n->importance));
         touched = touched || standing(*p);
+        const Item* item = mirror.item(n->itemId);
+        if (item && paint(*item, *n) && standing(*p)) redraw(p->local[id.value]);
     }
 
     for (auto& [p, ids] : arrived) {
@@ -261,7 +281,7 @@ Bridge::Planted* Bridge::plant(const TreeInfo& info) {
     const Node* root = mirror.node(info.rootId);
     const Item* item = root ? mirror.item(root->itemId) : nullptr;
     if (!root || !item || !model.catalog) return nullptr;
-    auto tree = std::make_shared<Tree>(refFor(*item), info.title, Maker::both, model.catalog, false);
+    auto tree = std::make_shared<Tree>(refFor(*item, *root), info.title, Maker::both, model.catalog, false);
     Planted& p = trees[info.id.value];
     p = Planted{tree, {{root->id.value, tree->root}}, {{tree->root, root->id.value}}};
     int count = 1;
@@ -278,7 +298,7 @@ std::optional<int> Bridge::graft(Planted& p, const Node& node) {
     auto parent = p.local.find(node.parent->value);
     const Item* item = client.mirror().item(node.itemId);
     if (parent == p.local.end() || !item) return std::nullopt;
-    int id = p.tree->graft(refFor(*item), parent->second, node.why, Tone::note, node.status == Node::Status::kept, float(node.importance));
+    int id = p.tree->graft(refFor(*item, node), parent->second, node.why, Tone::note, node.status == Node::Status::kept, float(node.importance));
     if (id < 0) return std::nullopt;
     p.local[node.id.value] = id;
     p.service[id] = node.id.value;
@@ -292,13 +312,14 @@ void Bridge::remove(const std::string& nodeId) {
     for (const TreeNode& g : gone) {
         auto s = p->service.find(g.id);
         if (s == p->service.end()) continue;
+        cards::drop("agent-" + s->second);
         p->local.erase(s->second);
         p->service.erase(s);
     }
     if (standing(*p) && !gone.empty()) model.dismiss(gone, true);
 }
 
-Ref Bridge::refFor(const Item& item) {
+Ref Bridge::refFor(const Item& item, const Node& node) {
     const Catalog& catalog = *model.catalog;
     if (item.source.from == "library" && item.data.has("library")) {
         const Json& library = item.data["library"];
@@ -316,7 +337,7 @@ Ref Bridge::refFor(const Item& item) {
         if (kind == "note" && library["key"].isString() && catalog.notes.count(library["key"].string())) return Ref::note(library["key"].string());
     }
     OceanNote note;
-    note.id = "agent-" + item.id.value;
+    note.id = "agent-" + node.id.value;
     // A small card and a crumb show the kicker alone: where the thing comes from, or what it is.
     note.kicker = firstString(item.data, {"from", "site"});
     if (note.kicker.empty()) note.kicker = kindWord(item.kind);
@@ -335,7 +356,83 @@ Ref Bridge::refFor(const Item& item) {
         if (!spec.labels.empty() && spec.labels.size() == spec.values.size()) note.chart = spec;
     }
     model.catalog->notes[note.id] = note;
+    paint(item, node);
     return Ref::note(note.id);
+}
+
+namespace {
+
+/// The item as the card library reads it: the service's field names (agents/src/core/domain.ts).
+Json cardItem(const Item& item) {
+    Json tags = Json::list();
+    for (const std::string& t : item.tags) tags.push(t);
+    Json source = Json::object();
+    source.set("from", item.source.from);
+    if (item.source.url) source.set("url", *item.source.url);
+    source.set("capturedAt", item.source.capturedAt);
+    Json out = Json::object();
+    out.set("title", item.title);
+    out.set("text", item.text);
+    out.set("summary", item.summary);
+    out.set("tags", tags);
+    out.set("data", Json(item.data));
+    out.set("origin", Json::object().set("by", item.origin.by == Origin::By::agent ? "agent" : "user"));
+    out.set("source", source);
+    return out;
+}
+
+}  // namespace
+
+bool Bridge::paint(const Item& item, const Node& node) {
+    if (item.source.from == "library") return false;
+    std::string noteID = "agent-" + node.id.value;
+    Json view = Json::object();
+    view.set("component", node.view.component);
+    view.set("props", Json(node.view.props));
+    bool changed = cards::put(noteID, view, cardItem(item), cards::Node{node.status == Node::Status::pick, !node.parent, node.why});
+    fetchPictures(noteID);
+    return changed;
+}
+
+void Bridge::fetchPictures(const std::string& noteID) {
+    for (const std::string& src : cards::pictures(noteID)) {
+        if (src.rfind("sample:", 0) == 0 || !asked.insert(src).second) continue;
+        std::string file = platform::dataDirectory() + "/agent-picture-" + std::to_string(std::hash<std::string>{}(src));
+        platform::Request request;
+        request.url = client.address().resolve(src);
+        request.saveTo = file;
+        std::weak_ptr<Pictures> inbox = pictures;
+        platform::fetch(request, [inbox, src, file](platform::Response r) {
+            ImageRef image = r.status >= 200 && r.status < 300 && r.error.empty() ? platform::decodeImage(file, 1024) : nullptr;
+            if (auto box = inbox.lock()) {
+                std::lock_guard<std::mutex> g(box->lock);
+                box->arrived.emplace_back(src, image);
+            }
+        });
+    }
+}
+
+void Bridge::redraw(int localId) {
+    auto found = model.cards.find(localId);
+    const TreeNode* n = model.tree ? model.find(*model.tree, localId) : nullptr;
+    if (!n || found == model.cards.end()) return;
+    OceanModel::CardRef old = found->second;
+    model.cards.erase(found);
+    for (const Entity* e : old->extras) model.picks.erase(e);
+    old->root->inputTarget = false;
+    old->alpha.go(0, model.time, 0.15f);
+    old->goneAt = model.time + 0.16;
+    old->home = std::nullopt;
+    model.leaving.push_back(old);
+    model.buildQueue.erase(std::remove(model.buildQueue.begin(), model.buildQueue.end(), localId), model.buildQueue.end());
+    model.makeCard(*n, 0);
+    // The same card with new content carries on from where the old one was, and does not arrive again.
+    if (OceanModel::CardRef made = model.card(localId)) {
+        made->source = old->source;
+        made->sourceScale = old->sourceScale;
+        made->emerge = old->emerge;
+        made->bornAt = old->bornAt;
+    }
 }
 
 Bridge::Planted* Bridge::plantedOf(const Tree& tree) {
@@ -406,6 +503,7 @@ void Bridge::pruned(int nodeID, const std::vector<TreeNode>& gone) {
     for (const TreeNode& g : gone) {
         auto found = p->service.find(g.id);
         if (found == p->service.end()) continue;
+        cards::drop("agent-" + found->second);
         p->local.erase(found->second);
         p->service.erase(found);
     }
