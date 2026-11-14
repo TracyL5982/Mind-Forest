@@ -9,7 +9,7 @@ The set has two groups, and every score is given for each group apart.
 
 On the reviewers' items the model does not beat the rules. Its gain is on the authors' items, which are the content it was added to draw: sheets, callouts, and structure that Intake did not extract. Never add the two groups into one score. The sum says how many items of each kind the set holds, and little about the model.
 
-A change to a rule, to a check or to the Renderer's prompt must not lower the rules' score or the model's score in either group. If a score drops, fix the change.
+A change to a rule, to a check or to the Renderer's prompt must not lower the rules' score or the model's score in either group. If a score drops, fix the change. The one exception is a card that changes what its item says: [the fourth round](#the-fourth-round-whole-units) lowered both scores to refuse every such card, and its numbers are the floor now.
 
 ## What the set holds
 
@@ -63,10 +63,10 @@ npm test
 
 | Rules alone | All | Exactly as picked | Research | Brainstorming | Memories |
 |---|---|---|---|---|---|
-| Reviewers | 116 of 120 | 112 of 120 | 39 of 40 | 37 of 40 | 40 of 40 |
+| Reviewers | 112 of 120 | 105 of 120 | 36 of 40 | 36 of 40 | 40 of 40 |
 | Authors | 21 of 47 | 10 of 47 | 5 of 18 | 7 of 15 | 9 of 14 |
 
-The second round of checks had made `B-B12` and `B-M08` notes, because their labels add "per" and "time" to the text's words, and the rules drew 110 of the reviewers' items exactly as picked. The label check now reads a label's words in their other forms and passes over the words that only tie it, and the two are facts and a fact again.
+Before the fourth round the rules drew 116 of the reviewers' as a person would and 112 exactly as picked. The fourth round holds what Intake read off the samples to whole units too, so seven of the reviewers' are notes now: the definitions `A-R12`, `B-R07` and `B-R19`, whose meaning is the rest of a sentence after its term; the pros and cons of `A-B05` and the list of `B-B13`, cut out of one sentence; the steps of `B-M05`, beside a step that says "do not"; and the fact of `B-M08`, whose label "Finish time" adds a word its sentence does not write. The first four were agreements. See [the fourth round](#the-fourth-round-whole-units).
 
 ## Score the Renderer with the live model
 
@@ -93,7 +93,46 @@ Three options help.
 
 The Renderer asks the model only about text that the rules drew as a `note` or an `idea`, with at least 40 characters, or at least 16 in a script written without spaces. That is 70 of the 167 samples: 23 of the reviewers' and all 47 of the authors'.
 
-## The scores
+## The fourth round: whole units
+
+Three rounds of checks each let through a card that changed what its item says, and each was found by the next verifier. The last found 34 in 50 fresh probes, such as "Do not take ibuprofen with warfarin." shown as the list entry "take ibuprofen with warfarin". Every round had assumed the same thing: that a card may show part of a sentence, a passage without its lead, or a label word the text does not write, and that a check on strings can tell when that part keeps the item's meaning. It cannot. "take ibuprofen with warfarin", "You can" of "You can, unless…", a sentence the next one calls false, and "3%" of "-3%" each pass any reasonable test of substrings.
+
+Since 14 November 2026 every text a card shows, on the model's path and in what Intake keeps, is whole units of its item, as the text writes them once white space is folded.
+
+- A unit is one whole sentence, one list line without its bullet or number, one table cell, or a line that stands by itself. A line with no end punctuation ends its unit at the line break, unless the next line opens in lower case or with a joining word, or the line opens with a condition or ends with a word that ties. A short line that stands by itself is a heading. A line that ends in a colon labels the lines under it.
+- A full stop after an abbreviation ends a sentence only before a capital that opens no other abbreviation. "Dr." and "e.g." end none. After a number and its unit, a full stop ends a sentence before a capital, a digit or a CJK character.
+- A callout, an excerpt, a list entry, a step, a question's answer, a sheet's text and a quote are refused when the unit before them or after them in the same paragraph, or the heading or label they sit under, holds a word of the table `REVERSING` in `grounding.ts`. The table has one list for English and one for Chinese, and each word is tested. It over-refuses on purpose. A refused card falls back to the rules' card.
+- A meaning is whole sentences, the first of which opens with its term. A quote may also be the whole of a quotation inside a sentence that says no more than who said it.
+- A point for or against and the words a note sets large are whole units too, whatever stands beside them.
+- A label stands only in words of its value's own unit, or in the head of a table cell's column, in their other forms. It may not open or end with a word that ties, an article included. No word for a kind of value is allowed in its place: "Height" names no "330 m long".
+- A minus sign, "负", "零下", "minus", brackets around money and a magnitude word after the number belong to the number. "3%" is not stated by "-3%", "£1.3m" not by "(£1.3m)", and "800" not by "800 thousand".
+- A figure, a list entry or a row that fails is left out and the card is kept if it still stands. A callout, a meaning or an answer that fails sends the card back to the rules'.
+
+The model's prompt and Intake's now ask for whole sentences and lines. No live run was allowed in this round, so the prompts are unmeasured.
+
+### What it closed and what it cost
+
+The replacement was first measured as a filter after the third round's checks, over every probe set and saved reply, before any code changed. In the round-three verifier's probes it closed 41 of 42 leaks. The one left drew a note without the emphasis that dropped "not", which is the note itself. It refused 4 honest probes there, each a callout given without its "Results:" or "NB:".
+
+After the change, no probe in any set reaches a view with a meaning its item does not have. The first verifier's hostile set draws 11 cards, against 13 before. Two are the accepted class of a stated value under the wrong label of one sentence (`H19`, `H20`). The swapped pros and cons of `H28` are refused now. Two probes found leaks in the brief's line rule, "You may drive⏎only after the drowsiness has passed." and "服药期间请勿⏎饮酒…". The line rule now joins such lines, and 勿 is in the table. Honest probes refused by design: passages given without their marker, meanings given as the rest of a sentence, lists cut out of one sentence, and labels that relied on a word for a kind of value.
+
+Three saved runs were replayed: the two live runs of the third round and the first verifier's run.
+
+| Saved run | Reviewers, rules | Reviewers, with the model | Authors, rules | Authors, with the model |
+|---|---|---|---|---|
+| Third round, first live run | 112 | 112 | 21 | 36 |
+| Third round, second live run | 112 | 111 | 21 | 35 |
+| First verifier's run | 112 | 112 | 21 | 36 |
+
+The model's score on the reviewers' 120 is below the 116 the rules drew before this round. It is not below the rules' 112 now, except by one card in one run. The rules' card is the fallback, so the drop is a safe outcome, and it is a drop. On the authors' 47 the model falls from 45 to 47 to 35 or 36, because the saved replies give meanings as the rest of a sentence, lists and points cut out of one, quotes without their speaker's sentence, and callouts without their marker. A live run with the new prompt is the next measure.
+
+Intake keeps 32 of 55 honest figures in the 40 replies of `/tmp/swarm-g5/a-round2-worker-1b/s/intake.mts`, against 44 before. The labels it loses are synonyms or add a word for a kind of value. All 12 charts are kept.
+
+One option was measured and not adopted: when a figure's label fails, take the words just before its value in its unit as the label. It restored five of the six cards the verifier found worse than before G5, with good labels in Chinese (月租, 利润, 半马用时). In English it built labels out of verb phrases whose trimmed word carried the sense, "bill went up | £82" from "went up from £82", and labels that say nothing, "It | 1,149 m".
+
+`C24` draws no facts card in two of the three runs: two of its three labels end with "is", which ties, and one figure is no facts card. Its card falls back to the note, as before this round.
+
+## The scores before the fourth round
 
 Measured on 14 November 2026 with `muse-spark-1.3`, in two runs of the same code, after the third round of checks.
 
@@ -167,7 +206,7 @@ The checks changed again on 14 November 2026, after a verifier showed that the s
 
 Runs 2 to 5 hold answers for 31 of the authors' 47, so their authors' column is low in both rounds. On the reviewers' items the model now matches the rules in eight runs of nine. It makes a reviewers' card worse in one saved reply, `B-B14` drawn as a question and its answer. The second round let twelve through: `A-B15` in eight, `B-M11` in three and `B-B14` in one.
 
-Of the 566 saved replies, 497 now draw a card, against 515 in the second round. 22 that drew then are refused now, each a card that changed what its text says: `A-B15` as a list, steps or a sheet without its conditions in eight replies, `B-B24` and `B-M11` taken apart in ten, `C36` defined from a sentence that does not open with the term in three, and `C24` in one, whose labels "a day there is" and "gravity at the surface is" are pieces cut out of the sentence. 4 that were refused then draw now: `B-R03`'s sheet after "Background:", and `C03`, `C06` and `C24`, whose labels are in other forms of the text's words.
+Of the 566 saved replies, 497 now draw a card, against 515 in the second round. 22 that drew then are refused now. 21 are cards that changed what their text says: `A-B15` as a list, steps or a sheet without its conditions in eight replies, `B-B24` and `B-M11` taken apart in ten, and `C36` defined from a sentence that does not open with the term in three. The 22nd, `C24` in one reply, was stated: its labels "a day there is" and "gravity at the surface is" end with a word that ties, so two of its three figures are left out, and one figure is no facts card. 4 that were refused then draw now: `B-R03`'s sheet after "Background:", and `C03`, `C06` and `C24`, whose labels are in other forms of the text's words.
 
 The second round refused 19 stated cards, counting each saved reply once. 4 of them draw now. 4 are sheets of `C09` that the verifiers judged bad, which the floor below still refuses, and 2 are sheets of `C03` whose text opens after "总体的感受是，" and are under the floor without it. 9 stated cards are still refused. Three are refused by a check: `C11`, whose caution follows "Reminder for whoever is on call:", a lead that is no marker; `C01` in one run, whose labels are the model's own words ("increase", "weekly", "before"); and `C07` in one run, whose text opens after a comma. Six are sheets under a fifth of their item whose opening is too short at every floor tried below: `C07` in four runs opens with 13 characters, and `C04` with its second sentence. `C06` in one run opens with 83, and only a floor of 60 or less draws it.
 
@@ -192,14 +231,16 @@ One more rule was tried on the saved replies of the second round: a card from th
 
 ### What no check can tell
 
-A check reads whether words stand in the item and where. It does not read what they mean. These cards pass every check and are still worse than the note, or could be.
+A check reads which units of the item a card shows and what stands beside them. It does not read what they mean. These cards pass every check and are still worse than the note, or could be.
 
 - `A-B18`. An assistant's answer drawn as the definition of "Three tiers", from the sentence that opens with it.
 - `B-B14`. Open questions drawn as a question and its answer.
-- Points for and points against on the wrong sides. Each point is stated.
-- A stated value under the label of another value of the same sentence, as in a chart whose numbers are in another order than their months.
-- A word for a kind of value on a value of that kind that the text calls something else: "Price" for "The deposit is £900", or "Height" for "30 cm wide".
-- A line that ends no sentence runs on into the next, so a heading line with no full stop, as "Weekend in Porto⏎We took the early train", opens no passage after it. 22 of the 167 items hold such a line. No saved reply was refused for it.
+- Points for and points against on the wrong sides. Each point is whole.
+- A stated value under the label of another value of the same unit, as in a chart whose numbers are in another order than their months.
+- A unit denied in words the table does not hold, as "Results: it did not." after "Background: daily aspirin prevents a first heart attack." The table holds "do not" and not "did not".
+- A quotation whose sentence says who said it in a word the speech table does not hold.
+
+Before the fourth round three more classes passed these checks: a sentence its neighbour denies, including after the markers "Background:", "Results:" and "结论："; an entry or an answer cut before "not", "never", "unless" or 除非; and a sign or a magnitude outside the value. A heading line with no full stop also ran on into the sentence under it, which hid an opening "If" or "如果" from the entries cut out of it and lent a heading term the next sentence as its meaning. The fourth round closes all four.
 
 ## The earlier scores
 
