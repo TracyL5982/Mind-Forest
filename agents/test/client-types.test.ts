@@ -155,3 +155,14 @@ test('every structured type has a growing run here and four golden footprints, o
     assert.ok(mine.some((sample) => /\p{Script=Han}/u.test(JSON.stringify([sample.item, sample.props]))), `${id} has a Chinese footprint`);
   }
 });
+
+test('the bars of a breakdown are shares of the whole, and a share written as 0 has no bar', async () => {
+  const { parts } = (await load('components/breakdown.js')) as { parts: (props: unknown) => { rows: { bar: number; written: string }[] } };
+  const bars = (values: number[], unit = '%') => parts({ labels: values.map(String), values, unit }).rows.map((row) => row.bar);
+  assert.deepEqual(bars([45, 25, 10, 20]), [0.45, 0.25, 0.1, 0.2]);
+  assert.deepEqual(bars([3, 1], 'votes'), [0.75, 0.25]);
+  assert.deepEqual(bars([0, 0]), [0, 0], 'a whole of 0 draws empty tracks');
+  const tiny = parts({ labels: ['a', 'b'], values: [100, 0.0000001], unit: '%' }).rows;
+  assert.deepEqual([tiny[1]!.written, tiny[1]!.bar], ['0%', 0]);
+  assert.deepEqual(bars([-5, Number.NaN, 5]), [0, 0, 1]);
+});
