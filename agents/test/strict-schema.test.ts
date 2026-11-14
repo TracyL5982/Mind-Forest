@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { z } from 'zod';
 import { ChatReply, LinkReply, MediaReply, TextReply } from '../src/core/roles/intake/describe.ts';
+import { CHOSEN, ComponentsReply, CompositesReply } from '../src/core/roles/renderer.ts';
 import { strictSchema } from '../src/node/model-meta.ts';
 
 test('a schema with optional keys is sent closed, with every key required and optional ones nullable', () => {
@@ -38,4 +39,38 @@ test('every Intake reply is flat: each key required, none nullable, no recursion
       if (node.type === 'array' && node.items.type === 'object') assert.deepEqual(node.items.required, Object.keys(node.items.properties));
     }
   }
+});
+
+test('every Renderer reply is flat: each key required, none nullable, no recursion, and no list of objects holds a list of objects', () => {
+  const plain = (node: any) => ['string', 'number', 'boolean'].includes(node.type);
+  const plainList = (node: any) => node.type === 'array' && plain(node.items);
+  const closed = (node: any, name: string) => {
+    assert.equal(node.additionalProperties, false, `${name} is open`);
+    assert.deepEqual(node.required, Object.keys(node.properties), `${name} leaves a key optional`);
+  };
+
+  for (const [name, reply, list] of [['ComponentsReply', ComponentsReply, 'items'], ['CompositesReply', CompositesReply, 'groups']] as const) {
+    const strict = strictSchema(z.toJSONSchema(reply, { io: 'input' })) as any;
+    const text = JSON.stringify(strict);
+    assert.ok(!text.includes('$ref') && !text.includes('anyOf') && !text.includes('null'), `${name} has a reference or a nullable key`);
+    closed(strict, name);
+
+    const entry = strict.properties[list].items;
+    closed(entry, `${name}.${list}`);
+    for (const [key, node] of Object.entries<any>(entry.properties)) {
+      if (plain(node) || plainList(node)) continue;
+      assert.ok(node.type === 'array' && node.items.type === 'object', `${name}.${key} is neither a plain value, a list of them, nor a list of objects`);
+      closed(node.items, `${name}.${key}`);
+      for (const [inner, leaf] of Object.entries<any>(node.items.properties)) assert.ok(plain(leaf) || plainList(leaf), `${name}.${key}.${inner} nests deeper than a list of plain values`);
+    }
+  }
+
+  const entry = (strictSchema(z.toJSONSchema(ComponentsReply, { io: 'input' })) as any).properties.items.items.properties;
+  assert.deepEqual(entry.component.enum, [...CHOSEN]);
+  assert.deepEqual(
+    Object.keys(entry),
+    ['id', 'component', 'title', 'body', 'by', 'tone', 'lines', 'labels', 'numbers', 'left', 'right', 'unit', 'emphasis', 'sections'],
+    'a card the model may choose is built from these slots, and adding one adds no key',
+  );
+  assert.deepEqual(Object.keys(entry.sections.items.properties), ['kind', 'text', 'by', 'lines']);
 });

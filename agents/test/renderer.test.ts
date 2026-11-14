@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Command, Group, Id, Item, Node, View } from '../src/core/domain.ts';
-import { byRule, grounded, renderer, type ComponentsReply, type CompositesReply } from '../src/core/roles/renderer.ts';
-import { SAMPLES, STRUCTURED_IDS, sampleAssetUrl, type StructuredId } from '../src/core/samples.ts';
+import { byModel, byRule, CHOSEN, grounded, renderer, type Chosen, type ComponentsReply, type CompositesReply } from '../src/core/roles/renderer.ts';
+import { SAMPLES, SHEETS, STRUCTURED_IDS, sampleAssetUrl, type StructuredId } from '../src/core/samples.ts';
 import { makeNode } from '../src/core/roles/types.ts';
 import { CHECKS, COMPONENT_IDS, isValidGroup, isValidView } from '../src/core/views.ts';
 import { kit, type Kit } from './kit.ts';
@@ -49,19 +49,7 @@ const view = (k: Kit, id: Id): View => k.mind.node(id).view;
 const groups = (k: Kit): Group[] => [...k.mind.groups.values()];
 
 function entry(fields: Partial<ComponentsReply['items'][number]> & { id: Id }): ComponentsReply['items'][number] {
-  return {
-    component: 'note',
-    quoteText: '',
-    quoteBy: '',
-    factValue: '',
-    factLabel: '',
-    steps: [],
-    chartLabels: [],
-    chartValues: [],
-    chartUnit: '',
-    emphasis: '',
-    ...fields,
-  };
+  return { component: 'note', title: '', body: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [], ...fields };
 }
 
 function proposal(fields: Partial<CompositesReply['groups'][number]> & { parent: Id; members: Id[] }): CompositesReply['groups'][number] {
@@ -163,9 +151,9 @@ test('the model upgrades a text item to a quote that is in its text', async () =
   const { ids } = grow(k, [{ title: 'On the future', text }, { title: 'Plain', text: LONG }]);
   k.model.on('renderer.components', () => ({
     items: [
-      entry({ id: ids[0]!, component: 'quote', quoteText: '"the best way to predict the future is to invent it"', quoteBy: 'Alan Kay' }),
+      entry({ id: ids[0]!, component: 'quote', body: '"the best way to predict the future is to invent it"', by: 'Alan Kay' }),
       entry({ id: ids[1]!, component: 'note', emphasis: 'the camera moves through the house' }),
-      entry({ id: 'nobody', component: 'fact', factValue: '1', factLabel: 'x' }),
+      entry({ id: 'nobody', component: 'fact', body: '1', title: 'x' }),
     ],
   }));
   const commands = await render(k, ids);
@@ -193,10 +181,10 @@ test('a quote, a fact, steps or a chart the text does not hold is refused', asyn
   ]);
   k.model.on('renderer.components', () => ({
     items: [
-      entry({ id: ids[0]!, component: 'quote', quoteText: 'Cinema is truth at 24 frames a second', quoteBy: 'Godard' }),
-      entry({ id: ids[1]!, component: 'chart', chartLabels: ['March', 'April', 'May'], chartValues: [12, 30, 45] }),
-      entry({ id: ids[2]!, component: 'fact', factValue: '33%', factLabel: 'Failure rate' }),
-      entry({ id: ids[3]!, component: 'steps', steps: ['scout the house', 'light it', 'shoot it'] }),
+      entry({ id: ids[0]!, component: 'quote', body: 'Cinema is truth at 24 frames a second', by: 'Godard' }),
+      entry({ id: ids[1]!, component: 'chart', labels: ['March', 'April', 'May'], numbers: [12, 30, 45] }),
+      entry({ id: ids[2]!, component: 'fact', body: '33%', title: 'Failure rate' }),
+      entry({ id: ids[3]!, component: 'steps', lines: ['scout the house', 'light it', 'shoot it'] }),
     ],
   }));
   assert.deepEqual(await render(k, ids), []);
@@ -211,8 +199,8 @@ test('a chart and steps taken from the text are accepted', async () => {
   ]);
   k.model.on('renderer.components', () => ({
     items: [
-      entry({ id: ids[0]!, component: 'chart', chartLabels: ['March', 'April'], chartValues: [1200, 3050], chartUnit: 'builds' }),
-      entry({ id: ids[1]!, component: 'steps', steps: ['Scout the house', 'Light it', 'Shoot at dusk'] }),
+      entry({ id: ids[0]!, component: 'chart', labels: ['March', 'April'], numbers: [1200, 3050], unit: 'builds' }),
+      entry({ id: ids[1]!, component: 'steps', lines: ['Scout the house', 'Light it', 'Shoot at dusk'] }),
     ],
   }));
   await render(k, ids);
@@ -718,16 +706,24 @@ test('a conversation stays a chat whatever else its data holds', () => {
 
 test('every sample is drawn as its type, with props the library accepts and the item states', () => {
   assert.deepEqual(Object.keys(CHECKS), COMPONENT_IDS, 'every component has a content check');
-  assert.equal(COMPONENT_IDS.length, 25);
+  assert.equal(COMPONENT_IDS.length, 26);
   for (const id of STRUCTURED_IDS) {
     const { item, props } = SAMPLES[id];
     const made = byRule(item, sampleAssetUrl);
-    if (id === 'callout') assert.notEqual(made.component, 'callout', 'no rule chooses a callout');
+    if (id === 'callout' || id === 'sheet') assert.equal(made.component, 'note', `no rule chooses a ${id}`);
     else assert.deepEqual(made, { component: id, props });
     assert.ok(isValidView({ component: id, props }), `${id} props are valid`);
     assert.ok(grounded({ component: id, props }, item, sampleAssetUrl), `${id} props stand in the item`);
   }
   assert.ok(/[一-鿿]/.test(SAMPLES.list.item.title + SAMPLES.qa.item.title + SAMPLES.idea.item.title + SAMPLES.place.item.title));
+
+  assert.equal(SHEETS.length, 3);
+  for (const { item, props } of SHEETS) {
+    assert.ok(isValidView({ component: 'sheet', props }), `the sheet for ${item.title} is valid`);
+    assert.ok(grounded({ component: 'sheet', props }, item, sampleAssetUrl), `the sheet for ${item.title} stands in the item`);
+  }
+  assert.ok(SHEETS.some(({ item }) => /[一-鿿]/.test(item.title)));
+  assert.deepEqual([...new Set(SHEETS.flatMap(({ props }) => props.sections.map((section) => section.kind)))].sort(), ['excerpt', 'figures', 'heading', 'list', 'table', 'text']);
 });
 
 test('a prop the item does not state is refused, for every structured type', () => {
@@ -761,6 +757,15 @@ test('a prop the item does not state is refused, for every structured type', () 
       { ...p('reference'), url: 'https://elsewhere.example/' },
     ],
     place: [{ ...p('place'), name: '太湖' }, { ...p('place'), src: 'https://elsewhere.example/x.jpg' }],
+    sheet: [
+      { sections: [{ kind: 'heading', text: 'Ten days is safer' }, ...p('sheet').sections.slice(1)] },
+      { sections: [p('sheet').sections[0], { kind: 'text', text: 'The authors conclude that ten days is enough for a child treated at home.' }, p('sheet').sections[2]] },
+      { sections: [...p('sheet').sections.slice(0, 2), { kind: 'figures', facts: [{ label: 'Children randomised', value: '842' }] }] },
+      { sections: [...p('sheet').sections.slice(0, 2), { kind: 'list', items: ['amoxicillin', 'penicillin'] }] },
+      { sections: [...p('sheet').sections.slice(0, 2), { kind: 'table', heads: ['Group', 'Failed'], rows: [['five days', '12.6%'], ['ten days', '21.4%']] }] },
+      { sections: [...p('sheet').sections.slice(0, 2), { kind: 'excerpt', text: 'five days is enough', by: 'The Lancet' }] },
+      { sections: [...p('sheet').sections.slice(0, 2), { kind: 'picture', src: 'https://elsewhere.example/x.jpg' }] },
+    ],
   };
   for (const id of STRUCTURED_IDS) {
     assert.ok(unstated[id].length > 0);
@@ -832,7 +837,7 @@ test('a chart keeps a unit the text writes against its values, and a value writt
     { title: 'Bare', text: revenue },
     { title: 'Weights', text: 'Where the month goes: rent 45%, food 25%, transport 10% and the rest is saved.' },
   ]);
-  const chart = (n: number, chartLabels: string[], chartValues: number[], chartUnit: string) => entry({ id: ids[n]!, component: 'chart', chartLabels, chartValues, chartUnit });
+  const chart = (n: number, labels: string[], numbers: number[], unit: string) => entry({ id: ids[n]!, component: 'chart', labels, numbers, unit });
   k.model.on('renderer.components', () => ({
     items: [
       chart(0, ['rent', 'food', 'transport'], [45, 25, 10], '%'),
@@ -903,4 +908,264 @@ test('an address in the data states nothing, a table cell holds no cell break, a
 
   const said = k.item({ title: 'Cameras', text: 'The   best  camera\tis the one you have with you, people say.' });
   assert.ok(grounded({ component: 'quote', props: { text: 'The best camera is the one you have with you' } }, said, url));
+});
+
+// ---- the cards the model chooses
+
+const said = (component: Chosen, slots: Partial<ComponentsReply['items'][number]>) => entry({ id: '', component, ...slots });
+type Part = ComponentsReply['items'][number]['sections'][number];
+const part = (kind: Part['kind'], slots: Partial<Part> = {}): Part => ({ kind, text: '', by: '', lines: [], ...slots });
+
+/** For each card: a text, a claim the text holds with the props it draws, and a claim it does not hold with the prop that fails. */
+const CLAIMS: Record<Exclude<Chosen, 'note' | 'sheet'>, { text: string; held: Partial<ComponentsReply['items'][number]>; props: Record<string, unknown>; lacked: Partial<ComponentsReply['items'][number]>; fails: string }> = {
+  quote: {
+    text: 'Nonna never measured anything. "Salt it like the sea," she said, and tasted the water.',
+    held: { body: '"Salt it like the sea,"', by: 'Nonna' },
+    props: { text: 'Salt it like the sea,', by: 'Nonna' },
+    lacked: { body: 'Salt it like the ocean' },
+    fails: 'text',
+  },
+  fact: {
+    text: 'Churn fell to 4.2% in March, the lowest it has been since launch.',
+    held: { body: '4.2%', title: 'Churn in March' },
+    props: { value: '4.2%', label: 'Churn in March' },
+    lacked: { body: '4.5%', title: 'Churn in March' },
+    fails: 'value',
+  },
+  facts: {
+    text: 'The flat is 62 square metres, costs €1,450 a month and is 12 minutes from the station.',
+    held: { lines: ['Size | 62 square metres', 'Rent | €1,450 a month', 'To the station | 12 minutes'] },
+    props: { facts: [{ label: 'Size', value: '62 square metres' }, { label: 'Rent', value: '€1,450 a month' }, { label: 'To the station', value: '12 minutes' }] },
+    lacked: { lines: ['Size | 62 square metres', 'Rent | €1,540 a month'] },
+    fails: 'facts[1].value',
+  },
+  steps: {
+    text: 'How we do it:\n1. Scout the house\n2. Light it\n3. Shoot at dusk',
+    held: { lines: ['Scout the house', 'Light it', 'Shoot at dusk'] },
+    props: { steps: ['Scout the house', 'Light it', 'Shoot at dusk'] },
+    lacked: { lines: ['Scout the house', 'Light it', 'Strike the set'] },
+    fails: 'steps[2]',
+  },
+  list: {
+    text: 'For the weekend we still need a tent, two sleeping bags, a head torch and something for the mosquitoes.',
+    held: { lines: ['a tent', 'two sleeping bags', 'a head torch'] },
+    props: { items: ['a tent', 'two sleeping bags', 'a head torch'] },
+    lacked: { lines: ['a tent', 'a stove', 'a head torch'] },
+    fails: 'items[1]',
+  },
+  chart: {
+    text: 'We shipped 1,200 builds in March and 3,050 builds in April.',
+    held: { labels: ['March', 'April'], numbers: [1200, 3050], unit: 'builds' },
+    props: { chart: 'bar', labels: ['March', 'April'], values: [1200, 3050], unit: 'builds' },
+    lacked: { labels: ['March', 'April'], numbers: [1200, 3500] },
+    fails: 'values[1]',
+  },
+  breakdown: {
+    text: 'Where the month goes: rent 45%, food 25%, transport 10% and savings 20%.',
+    held: { labels: ['rent', 'food', 'transport', 'savings'], numbers: [45, 25, 10, 20], unit: '%' },
+    props: { labels: ['rent', 'food', 'transport', 'savings'], values: [45, 25, 10, 20], unit: '%' },
+    lacked: { labels: ['rent', 'food', 'transport', 'fun'], numbers: [45, 25, 10, 20], unit: '%' },
+    fails: 'labels[3]',
+  },
+  table: {
+    text: 'Plan | Price | Seats\nSolo | $8 | 1\nTeam | $20 | 5\nOrg | $1,200 | 100',
+    held: { lines: ['| Plan | Price | Seats |', '|---|---|---|', 'Solo | $8 | 1', 'Team | $20 | 5'] },
+    props: { heads: ['Plan', 'Price', 'Seats'], rows: [['Solo', '$8', '1'], ['Team', '$20', '5']] },
+    lacked: { lines: ['Plan | Price | Seats', 'Solo | $9 | 1'] },
+    fails: 'rows[0][1]',
+  },
+  qa: {
+    text: 'Why does bread go stale faster in the fridge? Because the starch recrystallises fastest just above freezing.',
+    held: { title: 'Why does bread go stale faster in the fridge?', body: 'Because the starch recrystallises fastest just above freezing.' },
+    props: { question: 'Why does bread go stale faster in the fridge?', answer: 'Because the starch recrystallises fastest just above freezing.' },
+    lacked: { title: 'Why does bread go stale faster in the fridge?', body: 'Because the fridge dries it out.' },
+    fails: 'answer',
+  },
+  definition: {
+    text: 'Parallax is the apparent shift of an object against its background when the viewer moves.',
+    held: { title: 'Parallax', body: 'the apparent shift of an object against its background when the viewer moves' },
+    props: { term: 'Parallax', definition: 'the apparent shift of an object against its background when the viewer moves' },
+    lacked: { title: 'Paradox', body: 'the apparent shift of an object against its background when the viewer moves' },
+    fails: 'term',
+  },
+  proscons: {
+    text: 'Moving to Rust would mean no data races and one small binary, but slow builds and a steep start for the team.',
+    held: { left: ['no data races', 'one small binary'], right: ['slow builds', 'a steep start'] },
+    props: { pros: ['no data races', 'one small binary'], cons: ['slow builds', 'a steep start'] },
+    lacked: { left: ['no data races'], right: ['hard to hire for'] },
+    fails: 'cons[0]',
+  },
+  callout: {
+    text: 'Feed the starter once a day with flour and water. Never rinse the jar with hot water.',
+    held: { body: 'Never rinse the jar with hot water.', tone: 'caution' },
+    props: { text: 'Never rinse the jar with hot water.', tone: 'caution' },
+    lacked: { body: 'Never rinse the jar with hot water. Feed the starter once a day', tone: 'caution' },
+    fails: 'text',
+  },
+  excerpt: {
+    text: 'Copied from Chapter 1 of the handbook. The house shelters day-dreaming, the house protects the dreamer.',
+    held: { body: 'The house shelters day-dreaming, the house protects the dreamer.', by: 'Chapter 1' },
+    props: { text: 'The house shelters day-dreaming, the house protects the dreamer.', at: 'Chapter 1' },
+    lacked: { body: 'The house protects day-dreaming.' },
+    fails: 'text',
+  },
+};
+
+test('each card the model may choose is drawn from a claim its text holds, and one the text does not hold keeps the note and names the prop in the run log', async () => {
+  const types = Object.keys(CLAIMS) as (keyof typeof CLAIMS)[];
+  assert.deepEqual([...types, 'note', 'sheet'].sort(), [...CHOSEN].sort(), 'every card the model may choose is here');
+
+  const asked = async (which: 'held' | 'lacked') => {
+    const k = kit();
+    const { ids } = grow(k, types.map((type) => ({ title: `${type} ${which}`, text: CLAIMS[type].text })));
+    for (const id of ids) assert.equal(view(k, id).component, 'note', 'the rules are unsure of each');
+    k.model.on('renderer.components', () => ({ items: types.map((type, n) => ({ ...said(type, CLAIMS[type][which]), id: ids[n]! })) })).on('renderer.composites', () => ({ groups: [] }));
+    await render(k, ids);
+    assert.equal(k.model.calls.filter((call) => call.role === 'renderer.components').length, 1, 'all in one call');
+    return { k, ids };
+  };
+
+  const held = await asked('held');
+  types.forEach((type, n) => assert.deepEqual(view(held.k, held.ids[n]!), { component: type, props: CLAIMS[type].props, by: 'renderer' }, `${type} is drawn`));
+  assert.deepEqual(held.k.notes, [], 'a card that was drawn leaves no line');
+
+  const lacked = await asked('lacked');
+  for (const id of lacked.ids) assert.deepEqual(view(lacked.k, id), { component: 'note', props: {}, by: 'default' });
+  assert.deepEqual(lacked.k.notes, types.map((type) => `renderer: Kept "${type} lacked" as a note: the model's ${type} shows ${CLAIMS[type].fails}, which the content does not state.`));
+});
+
+test('the model is asked only about text the rules left as a note: no link, picture, conversation, code, idea, short line or structure a rule drew', async () => {
+  const k = kit();
+  const { ids } = grow(k, [
+    { title: 'Long', text: LONG },
+    { title: 'Pick', text: LONG, origin: { by: 'agent', role: 'scout' } },
+    { title: 'Short', text: 'A short remark with a number, 12.' },
+    { title: 'Page', kind: 'link', text: LONG, source: { from: 'link', url: 'https://example.com/a', capturedAt: '' } },
+    { title: 'Photo', kind: 'image', text: LONG, source: { from: 'drop', asset: 'a1', capturedAt: '' } },
+    { title: 'Talk', kind: 'chat', text: LONG, data: { messages: [{ role: 'user', text: 'Hello there' }] } },
+    { title: 'Script', kind: 'code', text: `print(1)  # ${LONG}` },
+    { title: 'Recipe', text: 'Boil the water, then add the pasta.', data: { steps: ['Boil the water', 'add the pasta'] } },
+  ]);
+  k.model.on('renderer.components', () => ({ items: [] }));
+  await render(k, ids);
+  const asked = k.model.calls.find((call) => call.role === 'renderer.components')!.detail;
+  assert.deepEqual([...asked.matchAll(/^id: (.+)$/gm)].map((found) => found[1]), [ids[0], ids[1]]);
+});
+
+const REPORT =
+  'The council met on Tuesday to settle the budget for the pool, and the meeting ran long because nobody agreed about the roof. ' +
+  'In the end the repair was costed at £48,000 and the pool will close for 6 weeks from March. ' +
+  'The swimming club asked whether lessons could move to the school in the meantime, and the head teacher said she would ask the governors. ' +
+  'Mrs Adeyemi said, "We have patched that roof for twenty years, and it has cost us more than a new one." ' +
+  'Three things are still open: the contractor, the dates for the school, and who pays for the minibus.';
+
+const verdict = (text: string, component: Chosen, slots: Partial<ComponentsReply['items'][number]>, title = 'Card') => byModel(said(component, slots), kit().item({ title, text }), url);
+
+test('a sheet is assembled from the sections the text states, however small a share of a long item its figures are', () => {
+  const sections = [
+    part('heading', { text: 'The pool roof' }),
+    part('text', { text: 'The council met on Tuesday to settle the budget for the pool, and the meeting ran long because nobody agreed about the roof.' }),
+    part('figures', { lines: ['Repair | £48,000', 'Closed for | 6 weeks'] }),
+    part('excerpt', { text: '"We have patched that roof for twenty years, and it has cost us more than a new one."', by: 'Mrs Adeyemi' }),
+  ];
+  assert.deepEqual(verdict(REPORT, 'sheet', { sections }, 'The pool roof'), {
+    draw: {
+      component: 'sheet',
+      props: {
+        sections: [
+          { kind: 'heading', text: 'The pool roof' },
+          { kind: 'text', text: 'The council met on Tuesday to settle the budget for the pool, and the meeting ran long because nobody agreed about the roof.' },
+          { kind: 'figures', facts: [{ label: 'Repair', value: '£48,000' }, { label: 'Closed for', value: '6 weeks' }] },
+          { kind: 'excerpt', text: 'We have patched that roof for twenty years, and it has cost us more than a new one.', by: 'Mrs Adeyemi' },
+        ],
+      },
+    },
+  });
+
+  const figures = verdict(REPORT, 'sheet', { sections: [sections[1]!, sections[2]!] }, 'The pool roof');
+  assert.ok('draw' in figures && figures.draw.component === 'sheet', 'a short passage beside two figures is a sheet');
+  assert.deepEqual(verdict(REPORT, 'facts', { lines: ['Repair | £48,000', 'Closed for | 6 weeks'] }), { refused: 'small', component: 'facts' }, 'the same two figures alone are under a fifth of it');
+});
+
+test('a section the text does not state is left out and named, and what is left must still be a sheet', async () => {
+  const stated = [part('text', { text: 'The swimming club asked whether lessons could move to the school in the meantime' }), part('list', { lines: ['the contractor', 'the dates for the school', 'who pays for the minibus'] })];
+  const invented = part('figures', { lines: ['Repair | £84,000'] });
+
+  const k = kit();
+  const { ids } = grow(k, [{ title: 'Three parts', text: REPORT }, { title: 'Two parts', text: REPORT }]);
+  k.model.on('renderer.components', () => ({
+    items: [{ ...said('sheet', { sections: [...stated, invented] }), id: ids[0]! }, { ...said('sheet', { sections: [stated[0]!, invented] }), id: ids[1]! }],
+  }));
+  await render(k, ids);
+  assert.deepEqual((view(k, ids[0]!).props.sections as { kind: string }[]).map((section) => section.kind), ['text', 'list']);
+  assert.equal(view(k, ids[1]!).component, 'note');
+  assert.deepEqual(k.notes, [
+    'renderer: Left sections[2].facts[0].value out of the sheet for "Three parts": the content does not state it.',
+    'renderer: Kept "Two parts" as a note: the model\'s sheet shows sections[1].facts[0].value, which the content does not state.',
+  ]);
+});
+
+test('a dedicated card always wins: a section that alone covers a fifth of its item is drawn as its own type', () => {
+  const component = (text: string, sections: Part[]) => {
+    const made = verdict(text, 'sheet', { sections });
+    return 'draw' in made ? made.draw.component : made.refused;
+  };
+  const tower = 'The Eiffel Tower is 330 m tall, was built in 1889 and has 1,665 steps to the top.';
+  const about = part('text', { text: 'The Eiffel Tower is 330 m tall' });
+  assert.equal(component(tower, [about, part('figures', { lines: ['Height | 330 m', 'Built | 1889', 'Steps | 1,665'] })]), 'facts');
+  assert.equal(component(tower, [about, part('figures', { lines: ['Height of the tower in metres | 330 m'] })]), 'fact');
+  assert.equal(component('Bring a tent, two sleeping bags and a head torch for the weekend.', [part('text', { text: 'for the weekend' }), part('list', { lines: ['a tent', 'two sleeping bags', 'a head torch'] })]), 'list');
+  assert.equal(component('Plan | Price\nSolo | $8\nTeam | $20\nBilled once a year.', [part('text', { text: 'Billed once a year.' }), part('table', { lines: ['Plan | Price', 'Solo | $8', 'Team | $20'] })]), 'table');
+  assert.equal(component('Nonna said, "Salt it like the sea," and tasted the water.', [part('text', { text: 'and tasted the water' }), part('excerpt', { text: 'Salt it like the sea,', by: 'Nonna' })]), 'quote');
+  assert.equal(component('The page reads: every stair keeps the weight of who climbed it.', [part('text', { text: 'The page reads' }), part('excerpt', { text: 'every stair keeps the weight of who climbed it' })]), 'excerpt');
+
+  const long = verdict(REPORT, 'sheet', { sections: [part('text', { text: 'The council met on Tuesday' }), part('list', { lines: ['the contractor', 'the dates for the school', 'who pays for the minibus'] })] });
+  assert.ok('draw' in long && long.draw.component === 'sheet', 'under a fifth, the list stays a section');
+});
+
+test('a sheet keeps its shape: one heading and it first, four sections at most, each cut to its room, and never text alone', () => {
+  const shape = (sections: Part[], text = REPORT) => {
+    const made = verdict(text, 'sheet', { sections });
+    return 'draw' in made ? (made.draw.props.sections as { kind: string }[]).map((section) => section.kind) : made.refused;
+  };
+  const lines = [part('text', { text: 'The council met on Tuesday' }), part('text', { text: 'the pool will close for 6 weeks from March' })];
+  const figure = part('figures', { lines: ['Repair | £48,000'] });
+  const open = part('list', { lines: ['the contractor', 'the dates for the school', 'who pays for the minibus'] });
+  assert.equal(shape(lines), 'invalid', 'text alone is a note');
+  assert.equal(shape([part('heading', { text: 'the budget for the pool' }), figure]), 'invalid', 'a heading and one section is no sheet');
+  assert.equal(shape([part('picture'), figure]), 'unstated', 'an item with no picture has none to show');
+  assert.deepEqual(shape([lines[0]!, figure, part('heading', { text: 'the budget for the pool' }), part('heading', { text: 'the roof' }), open, lines[1]!]), ['heading', 'text', 'figures', 'list']);
+
+  const months = 'Rain by month, in millimetres, at the allotment, which we wrote down every morning before work for the whole of last year, mostly out of stubbornness and partly to settle an argument about whether the summer was really as wet as it felt at the time.\n' +
+    'Month | Rain\nJan | 81\nFeb | 60\nMar | 55\nApr | 41\nMay | 47\nJun | 52\nThe names were: Ada, Ben, Cy, Di, Ed, Flo, Gus, Hal, Ivy, Jo.';
+  const made = verdict(months, 'sheet', {
+    sections: [
+      part('text', { text: 'Rain by month, in millimetres, at the allotment' }),
+      part('table', { lines: ['Month | Rain', 'Jan | 81', 'Feb | 60', 'Mar | 55', 'Apr | 41', 'May | 47', 'Jun | 52'] }),
+      part('list', { lines: ['Ada', 'Ben', 'Cy', 'Di', 'Ed', 'Flo', 'Gus', 'Hal', 'Ivy', 'Jo'] }),
+      part('figures', { lines: ['Jan | 81', 'Feb | 60', 'Mar | 55', 'Apr | 41', 'May | 47'] }),
+    ],
+  });
+  assert.ok('draw' in made);
+  const [, table, list, figures] = made.draw.props.sections as any[];
+  assert.deepEqual([table.rows.length, list.items.length, figures.facts.length], [5, 8, 4]);
+
+  const passage = `${LONG} `.repeat(4).trim();
+  const cut = verdict(`${passage} It cost £48,000.`, 'sheet', { sections: [part('text', { text: passage }), figure] });
+  assert.ok('draw' in cut);
+  const text = (cut.draw.props.sections as any[])[0].text as string;
+  assert.ok(text.length <= 280 && text.endsWith('…') && passage.startsWith(text.slice(0, -1)), 'a long passage is cut at the end of a word');
+  assert.ok(grounded(cut.draw, kit().item({ title: 'Card', text: `${passage} It cost £48,000.` }), url));
+});
+
+test('a card the model chose is held to the floor a rule is held to, and a picture section shows the picture the item has', () => {
+  const diary = `${LONG} ${LONG} We paid 12 euros for the ferry. ${LONG}`;
+  assert.deepEqual(verdict(diary, 'fact', { body: '12 euros', title: 'Ferry' }), { refused: 'small', component: 'fact' });
+  assert.deepEqual(verdict(diary, 'note', { emphasis: 'We paid 12 euros for the ferry' }), { draw: { component: 'note', props: { emphasis: 'We paid 12 euros for the ferry' } } });
+  assert.deepEqual(verdict(diary, 'fact', { body: '', title: 'Ferry' }), { refused: 'unstated', component: 'fact', prop: 'value' });
+  assert.deepEqual(verdict(diary, 'steps', { lines: ['We paid 12 euros for the ferry'] }), { refused: 'invalid', component: 'steps' });
+
+  const item = kit().item({ title: 'The harbour', text: `${LONG} We paid 12 euros for the ferry.`, data: { image: 'https://example.org/harbour.jpg' } });
+  const made = byModel(said('sheet', { sections: [part('picture'), part('figures', { lines: ['Ferry | 12 euros'] })] }), item, url);
+  assert.deepEqual(made, { draw: { component: 'sheet', props: { sections: [{ kind: 'picture', src: 'https://example.org/harbour.jpg' }, { kind: 'figures', facts: [{ label: 'Ferry', value: '12 euros' }] }] } } });
 });

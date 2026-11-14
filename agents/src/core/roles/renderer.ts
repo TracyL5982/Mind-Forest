@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
 import { grounding, type Grounding } from '../grounding.ts';
-import { CHECKS, isValidGroup, isValidView, siteOf, type Check, type ComponentId, type CompositeId, type Stated } from '../views.ts';
+import { CHECKS, isValidGroup, isValidView, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type Section, type Stated } from '../views.ts';
 import type { RoleContext, Roles } from './types.ts';
 
 const ROLE = 'renderer';
@@ -45,20 +45,36 @@ const PICTURE_LED = new Set(['image', 'video', 'artwork']);
 
 // ---- reply schemas. Structured output wants every key present, so an empty string or list means "none".
 
+/** The cards that can be built from an item's own words, which the model chooses among. */
+export const CHOSEN = [
+  'note', 'quote', 'fact', 'facts', 'steps', 'list', 'chart', 'breakdown', 'table', 'qa', 'definition', 'proscons', 'callout', 'excerpt', 'sheet',
+] as const satisfies readonly ComponentId[];
+export type Chosen = (typeof CHOSEN)[number];
+
+const SECTION_KINDS = ['heading', 'text', 'figures', 'list', 'table', 'picture', 'excerpt'] as const satisfies readonly Section['kind'][];
+
+/**
+ * One entry for each item, in a few slots that every card shares, so a new card adds a row to `BUILT` and no key here.
+ * `title` is a heading, a term, a question or what a value measures. `body` is a passage, an answer, a meaning or a value.
+ * `lines` are steps, list entries, "label | value" pairs, or table rows with "|" between their cells and the heads row first.
+ */
 export const ComponentsReply = z.object({
   items: z.array(
     z.object({
       id: z.string(),
-      component: z.enum(['note', 'quote', 'fact', 'steps', 'chart']),
-      quoteText: z.string(),
-      quoteBy: z.string(),
-      factValue: z.string(),
-      factLabel: z.string(),
-      steps: z.array(z.string()),
-      chartLabels: z.array(z.string()),
-      chartValues: z.array(z.number()),
-      chartUnit: z.string(),
+      component: z.enum(CHOSEN),
+      title: z.string(),
+      body: z.string(),
+      by: z.string(),
+      tone: z.string(),
+      lines: z.array(z.string()),
+      labels: z.array(z.string()),
+      numbers: z.array(z.number()),
+      left: z.array(z.string()),
+      right: z.array(z.string()),
+      unit: z.string(),
       emphasis: z.string(),
+      sections: z.array(z.object({ kind: z.enum(SECTION_KINDS), text: z.string(), by: z.string(), lines: z.array(z.string()) })),
     }),
   ),
 });
@@ -562,88 +578,310 @@ const STANDS: Record<Stated, (value: unknown, content: Content, beside: Props) =
   choice: () => true,
 };
 
-function stands(value: unknown, check: Check, content: Content, beside: Props = {}): boolean {
-  if (Array.isArray(value)) return value.every((one) => stands(one, check, content, beside));
-  if (typeof check === 'string') return STANDS[check](value, content, beside);
-  return typeof value === 'object' && value !== null && Object.entries(value).every(([key, inner]) => key in check && stands(inner, check[key]!, content, value as Props));
+interface Leaf {
+  value: unknown;
+  /** How the value must stand, or nothing when no check describes it. */
+  how: Stated | undefined;
+  /** The object the value sits in. */
+  beside: Props;
+  path: string;
 }
 
-function shown(view: { component: string; props: unknown }, item: Item, content: Content): boolean {
+/** Each plain value a view's props hold, with the check that reads it. */
+function* leaves(value: unknown, check: Check | undefined, beside: Props = {}, path = ''): Generator<Leaf> {
+  if (Array.isArray(value)) {
+    for (const [n, one] of value.entries()) yield* leaves(one, check, beside, `${path}[${n}]`);
+    return;
+  }
+  if (check === undefined || typeof check === 'string' || typeof value !== 'object' || value === null) {
+    yield { value, how: typeof check === 'string' ? check : undefined, beside, path };
+    return;
+  }
+  let [fields, of] = [value as Props, check as { readonly [key: string]: Check }];
+  if (typeof of.byKind === 'object') {
+    const { kind, ...rest } = fields;
+    [fields, of] = [rest, (of.byKind[String(kind)] as { readonly [key: string]: Check } | undefined) ?? {}];
+  }
+  for (const [key, inner] of Object.entries(fields)) yield* leaves(inner, of[key], fields, path ? `${path}.${key}` : key);
+}
+
+const checksOf = (component: string) => CHECKS[component as ComponentId] as { props: Check; also?: (props: never, item: Item, text: Grounding) => boolean };
+
+/** The first prop of a view that does not stand in the content, by its path in the props. */
+function unstated(view: Draw, content: Content): string | undefined {
+  for (const { value, how, beside, path } of leaves(view.props, checksOf(view.component).props)) if (!how || !STANDS[how](value, content, beside)) return path;
+  return undefined;
+}
+
+function stated(view: { component: string; props: unknown }, item: Item, content: Content): boolean {
   if (!isValidView(view)) return false;
-  const { props, also } = CHECKS[view.component as ComponentId] as { props: Check; also?: (props: never, item: Item, text: Grounding) => boolean };
-  return stands(view.props, props, content) && (also?.(view.props as never, item, content.text) ?? true);
+  const draw = view as Draw;
+  return unstated(draw, content) === undefined && (checksOf(draw.component).also?.(draw.props as never, item, content.text) ?? true);
 }
 
 /** Whether everything the view shows really stands in its item: each prop the way `CHECKS` says it must. */
 export function grounded(view: { component: string; props: unknown }, item: Item, assetUrl: (id: string) => string): boolean {
-  return shown(view, item, contentOf(item, assetUrl));
+  return stated(view, item, contentOf(item, assetUrl));
 }
 
-function claimed(reply: ComponentsReply['items'][number], text: Grounding): Draw {
-  const kept = (value: string) => (text.says(value) ? value.trim() : undefined);
-  switch (reply.component) {
-    case 'quote':
-      return {
-        component: 'quote',
-        props: compact({ text: reply.quoteText.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, ''), by: kept(reply.quoteBy) }),
-      };
-    case 'fact':
-      return { component: 'fact', props: { value: reply.factValue.trim(), label: clip(reply.factLabel, 80) } };
-    case 'steps':
-      return { component: 'steps', props: { steps: reply.steps.map((s) => s.trim()).filter(Boolean) } };
-    case 'chart': {
-      const unit = reply.chartUnit.trim();
-      return { component: 'chart', props: chartProps(reply.chartLabels.map((l) => l.trim()), reply.chartValues, unit && unitStands(unit, reply.chartValues, text) ? unit : undefined) };
-    }
-    case 'note':
-      return { component: 'note', props: compact({ emphasis: reply.emphasis.trim().length <= 120 ? kept(reply.emphasis) : undefined }) };
+/** How much of its item a view shows, counted as a rule counts a structure: every value but a choice of how to draw and what the item owns outside its words. */
+function sizeShown(view: Draw): number {
+  let size = 0;
+  for (const { value, how } of leaves(view.props, checksOf(view.component).props)) if (how && how !== 'choice' && how !== 'own') size += sizeOf(String(value));
+  return size;
+}
+
+export type Entry = ComponentsReply['items'][number];
+type Part = Entry['sections'][number];
+
+/** What building a card from a reply may read beside the reply. */
+interface Reading {
+  item: Item;
+  asked: Asked;
+  text: Grounding;
+  /** The value when the content states it. A card is not refused for a speaker, a position or a unit the model added: it is drawn without. */
+  kept(value: string): string | undefined;
+}
+
+const each = (lines: string[]): string[] => lines.map((line) => line.trim()).filter(Boolean);
+const unquoted = (passage: string): string => passage.trim().replace(/^["'“”‘’「『]+|["'“”‘’」』]+$/g, '');
+
+/** The cells of one row. A fence of "|" at both ends is taken off, as Intake takes it off. */
+const cellsOf = (row: string): string[] => (/^\s*[|｜].*[|｜]\s*$/s.test(row) ? row.trim().slice(1, -1) : row).split(/[|｜]/).map((cell) => cell.trim());
+
+function pairsOf(lines: string[]): { label: string; value: string }[] {
+  return each(lines).flatMap((line) => {
+    const [label, ...value] = cellsOf(line);
+    return value.length > 0 ? [{ label: label!, value: value.join(' ') }] : [];
+  });
+}
+
+function tableIn(lines: string[]): { heads: string[]; rows: string[][] } {
+  const [heads = [], ...rows] = each(lines).map(cellsOf).filter((cells) => !cells.every((cell) => /^[-:\s]*$/.test(cell)));
+  return { heads, rows };
+}
+
+const SECTION_ROOM = { figures: 4, list: 8, rows: 5, sections: 4 };
+
+/** How each kind of section is built from its part of a reply, whole. `fitted` cuts it to the room a sheet has. */
+const SECTIONS: Record<Section['kind'], (part: Part, reading: Reading) => Props> = {
+  heading: ({ text }) => ({ text: text.trim() }),
+  text: ({ text }) => ({ text: text.trim() }),
+  figures: ({ lines }) => ({ facts: pairsOf(lines) }),
+  list: ({ lines }) => ({ items: each(lines) }),
+  table: ({ lines }) => tableIn(lines),
+  picture: (_part, { item, asked }) => ({ src: pictureOf(item, asked) ?? '' }),
+  excerpt: ({ text, by }, { kept }) => compact({ text: unquoted(text), by: kept(by) }),
+};
+
+/** A passage cut to a length at the end of a word, so what is left is still a run of the text's own words. */
+function lead(text: string, max: number): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  const inWord = /[\p{L}\p{N}]$/u.test(cut) && /^[\p{L}\p{N}]/u.test(t.slice(max - 1)) && !SPACELESS.test(cut.slice(-1));
+  return `${(inWord ? cut.replace(/\s*\S+$/, '') : cut).trimEnd()}…`;
+}
+
+/** A section cut to the room a sheet has. The opened card shows the item whole. */
+function fitted(section: Section): Section {
+  switch (section.kind) {
+    case 'heading':
+      return { ...section, text: lead(section.text, 80) };
+    case 'text':
+      return { ...section, text: lead(section.text, EXCERPT) };
+    case 'figures':
+      return { ...section, facts: section.facts.slice(0, SECTION_ROOM.figures) };
+    case 'list':
+      return { ...section, items: section.items.slice(0, SECTION_ROOM.list) };
+    case 'table':
+      return { ...section, rows: section.rows.slice(0, SECTION_ROOM.rows) };
+    default:
+      return section;
   }
 }
 
+/** The card of its own that a section could be, when its kind has one. */
+function dedicated(section: Section): Draw | undefined {
+  const { kind, ...props } = section;
+  switch (kind) {
+    case 'figures': {
+      const { facts } = props as Extract<Section, { kind: 'figures' }>;
+      return facts.length === 1 ? { component: 'fact', props: { value: facts[0]!.value, label: facts[0]!.label } } : { component: 'facts', props: { facts: facts.slice(0, FACTS_SHOWN) } };
+    }
+    case 'list':
+    case 'table':
+      return { component: kind, props };
+    case 'excerpt':
+      return { component: 'by' in props ? 'quote' : 'excerpt', props };
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * How each card the model may choose is built from the slots of its reply. Adding a card the model may choose is one row here.
+ * A row copies and tidies; whether the card is valid, stated and large enough is judged afterwards, the same way for every row.
+ */
+const BUILT: Record<Chosen, (reply: Entry, reading: Reading) => Props> = {
+  note: ({ emphasis }, { kept }) => compact({ emphasis: emphasis.trim().length <= 120 ? kept(emphasis) : undefined }),
+  quote: ({ body, by }, { kept }) => compact({ text: unquoted(body), by: kept(by) }),
+  fact: ({ title, body }) => ({ value: body.trim(), label: clip(title, 80) }),
+  facts: ({ lines }) => ({ facts: pairsOf(lines).slice(0, FACTS_SHOWN) }),
+  steps: ({ lines }) => ({ steps: each(lines) }),
+  list: ({ lines }) => ({ items: each(lines) }),
+  chart: ({ labels, numbers, unit }, { text }) => chartProps(each(labels), numbers, unit.trim() && unitStands(unit.trim(), numbers, text) ? unit.trim() : undefined),
+  breakdown: ({ labels, numbers, unit }, { text }) => compact({ labels: each(labels), values: numbers, unit: unit.trim() && unitStands(unit.trim(), numbers, text) ? unit.trim() : undefined }),
+  table: ({ lines }) => tableIn(lines),
+  qa: ({ title, body }) => ({ question: title.trim(), answer: body.trim() }),
+  definition: ({ title, body }) => ({ term: title.trim(), definition: body.trim() }),
+  proscons: ({ left, right }) => ({ pros: each(left), cons: each(right) }),
+  callout: ({ body, tone }) => ({ text: body.trim(), tone: tone.trim().toLowerCase() === 'note' ? 'note' : 'caution' }),
+  excerpt: ({ body, by }, { kept, item }) => compact({ text: unquoted(body), at: kept(by), source: str(item.data.site) ?? str(item.data.from) }),
+  sheet: ({ sections }, reading) => ({ sections: sections.map((part) => ({ kind: part.kind, ...SECTIONS[part.kind](part, reading) })) }),
+};
+
+/**
+ * What became of one reply: the card it draws, or why it draws none and the rule's card stays.
+ * - `invalid`: the library has no such card with such props.
+ * - `unstated`: `prop` shows what the content does not state.
+ * - `small`: the card would show less than `COVERAGE_FLOOR` of the item.
+ */
+export type Verdict = { draw: Draw; left?: string } | { refused: 'invalid' | 'unstated' | 'small'; component: Chosen; prop?: string };
+
+function judged(draw: Draw, component: Chosen, item: Item, content: Content): Verdict {
+  if (!isValidView(draw)) return { refused: 'invalid', component };
+  const prop = unstated(draw, content);
+  if (prop !== undefined) return { refused: 'unstated', component, prop };
+  if (!(checksOf(draw.component).also?.(draw.props as never, item, content.text) ?? true)) return { refused: 'invalid', component };
+  // A note draws the item itself, so it has no share to fall short of.
+  return draw.component === 'note' || sizeShown(draw) >= COVERAGE_FLOOR * wholeOf(item) ? { draw } : { refused: 'small', component };
+}
+
+/** The sections that carry a structure the content states, which a sheet may show however small a share of a long item they are. */
+const STRUCTURED = new Set<Section['kind']>(['figures', 'list', 'table', 'excerpt']);
+
+/**
+ * A sheet from the sections a reply gave. When one section alone would stand as its own card above the floor, that card
+ * is drawn: a dedicated type always wins. Otherwise each section is cut to its room, and one the content does not state is left out.
+ */
+function assembled(given: Section[], item: Item, content: Content): Verdict {
+  const alone = given
+    .flatMap((section) => dedicated(section) ?? [])
+    .filter((draw) => 'draw' in judged(draw, 'sheet', item, content))
+    .sort((a, b) => sizeShown(b) - sizeShown(a))[0];
+  if (alone) return { draw: alone };
+
+  let left: string | undefined;
+  const stand = given.flatMap((section, n) => {
+    const parsed = SECTION.safeParse(fitted(section));
+    const prop = parsed.success ? unstated({ component: 'sheet', props: { sections: [parsed.data] } }, content)?.replace('[0]', `[${n}]`) : `sections[${n}]`;
+    if (prop !== undefined) left ??= prop;
+    return parsed.success && prop === undefined ? [parsed.data] : [];
+  });
+  const sections = [...stand.filter((section) => section.kind === 'heading').slice(0, 1), ...stand.filter((section) => section.kind !== 'heading')].slice(0, SECTION_ROOM.sections);
+  const sheet: Draw = { component: 'sheet', props: { sections } };
+  if (!isValidView(sheet)) return left === undefined ? { refused: 'invalid', component: 'sheet' } : { refused: 'unstated', component: 'sheet', prop: left };
+  if (!sections.some((section) => STRUCTURED.has(section.kind)) && sizeShown(sheet) < COVERAGE_FLOOR * wholeOf(item)) return { refused: 'small', component: 'sheet' };
+  return { draw: sheet, ...(left === undefined ? {} : { left }) };
+}
+
+/** The card one reply of the model draws for its item, after every check a card must pass, or why it draws none. */
+export function byModel(reply: Entry, item: Item, assetUrl: (id: string) => string): Verdict {
+  const content = contentOf(item, assetUrl);
+  const reading: Reading = { item, asked: { assetUrl }, text: content.text, kept: (value) => (value.trim() && content.text.says(value) ? value.trim() : undefined) };
+  const props = BUILT[reply.component](reply, reading);
+  return reply.component === 'sheet' ? assembled(props.sections as Section[], item, content) : judged({ component: reply.component, props }, reply.component, item, content);
+}
+
 const COMPONENTS_SYSTEM =
-  'You are the Renderer of Mind Palace, a spatial brainstorming app. You choose the visual component that presents each piece of text most accurately.';
+  'You are the Renderer of Mind Palace, a canvas for research, brainstorming and memories. You choose the card that presents each piece of text most accurately.';
 
-function componentsPrompt(open: { node: Node; item: Item }[]): string {
-  const items = open.map(({ node, item }) => `id: ${node.id}\ntitle: ${item.title}\ntext: ${clip(item.text, TEXT_SENT)}`).join('\n\n');
-  return `Below are text items from a user's brainstorm. Each is currently drawn as a plain note. For each item, decide whether another component is its truer form.
+function componentsPrompt(open: { node: Node; item: Item }[], asked: Asked): string {
+  const items = open
+    .map(({ node, item }) => {
+      const cut = item.text.trim().length > TEXT_SENT ? `\nlength: ${item.text.trim().length} characters, of which the first ${TEXT_SENT} are below` : '';
+      return `id: ${node.id}\ntitle: ${item.title}${cut}${pictureOf(item, asked) ? '\npicture: yes' : ''}\ntext: ${clip(item.text, TEXT_SENT)}`;
+    })
+    .join('\n\n');
+  return `Below are items from a user's canvas. Each is currently drawn as a plain note: its title and the first lines of its text. For each item, choose the card that presents it best.
 
-Components:
-- note: a title and a few lines of text. The right answer for most items.
-- quote: the item is mainly someone's words. Give quoteText, and quoteBy when the text names the speaker.
-- fact: the item is mainly one number or short value. Give factValue as it is written in the text, and a factLabel of a few words saying what it measures.
-- steps: the item is an ordered procedure of two or more steps. Give each step in steps.
-- chart: the item gives several numbers of the same kind that are worth comparing. Give chartLabels and chartValues of equal length, and chartUnit when the text states one.
+Cards, and the fields each one uses:
+- note: prose with no structure worth setting apart, such as a diary entry, an argument, a description or a story. The right answer for most prose. You may give emphasis: one short phrase copied from the text that deserves to stand out.
+- quote: the item is mainly someone's words. body is the words, and by the speaker when the text names one.
+- fact: the item is mainly one number or short value. body is the value as the text writes it, and title a few words saying what it measures.
+- facts: the item is mainly two to six figures or attributes. lines has one "label | value" for each, the value as the text writes it.
+- steps: the item is an ordered procedure. lines has one step each, without its number.
+- list: the item is mainly a list of things in no particular order. lines has one entry each, without its bullet.
+- chart: the item is mainly several numbers of the same kind that are worth comparing. labels and numbers have equal length, and unit is given when the text states one.
+- breakdown: the item is mainly the shares of one whole, in percent, adding up to a hundred. labels, numbers and unit, as for chart.
+- table: the item is mainly rows and columns. lines has the row of column heads first and then one row each, with " | " between cells.
+- qa: the item asks one question and answers it. title is the question and body the answer.
+- definition: the item says what one term means. title is the term and body the meaning.
+- proscons: the item weighs one choice. left has the points for and right the points against.
+- callout: the item is mainly a warning, a caveat or a reminder the reader must not miss. body is that sentence, and tone is "caution" for a warning or "note" for a remark.
+- excerpt: the item is mainly a passage copied out of a longer source. body is the passage, and by where it sits in the source when the text says.
+- sheet: an assembled card, for an item with two or more kinds of part worth showing that no card above covers. sections has two to four parts in reading order. Each has a kind:
+  - heading: text is a few words from the item that name it. At most one, and first.
+  - text: text is a sentence or two copied from the item that say what it is about.
+  - figures: lines has one to four "label | value", the value as the text writes it.
+  - list: lines has two to eight entries.
+  - table: lines has the row of heads first, then up to five rows of up to four cells, with " | " between cells.
+  - excerpt: text is words the item quotes, and by who said them when the text names them.
+  - picture: the item's own picture. Only for an item marked "picture: yes".
 
-Rules:
-- Take every value from the item's own text. Copy quoteText, factValue, each step, each chart label and the unit word for word. Leave out step numbers and bullets. Chart values must be numbers that appear in the text.
-- Never add, estimate, convert or round a value. When the text does not hold what a component needs, choose note.
-- For a note you may give emphasis: one short phrase copied from the text that deserves to stand out. Otherwise leave it empty.
-- Return one entry per item, with the id exactly as given. Fill only the fields of the chosen component. Leave every other field as an empty string or an empty list.
+How to choose:
+- Prefer a dedicated card. Choose one when its structure is what the item mainly is: at least a fifth of the text.
+- Choose sheet only when the item has two or more kinds of part worth showing and no dedicated card covers at least a fifth of it: a long report with a few key figures, an account with one line worth quoting, notes with a short list and a number. A sheet needs at least one part that is not text.
+- Choose note when nothing fits. Do not force a structure onto prose, and do not pick out a passing number or name.
+- Copy every value from the item's own text, word for word and in its language: a passage with its punctuation, a number as it is written. Never add, estimate, convert, translate or round. Only the label of a figure may be your own words, in the language of the content.
+- Return one entry per item, with the id exactly as given. Fill only the fields of the chosen card. Leave every other field as an empty string or an empty list.
 
 Items:
 
 ${items}`;
 }
 
+const REFUSED: Record<Extract<Verdict, { refused: string }>['refused'], (prop?: string) => string> = {
+  invalid: () => 'is not one the library accepts',
+  unstated: (prop) => `shows ${prop}, which the content does not state`,
+  small: () => 'would show under a fifth of it',
+};
+
+/** The card a reply draws for its item, or nothing, with a line in the run log that names the item and the prop that failed. */
+export function drawn(ctx: RoleContext, reply: Entry, item: Item): Draw | undefined {
+  const verdict = byModel(reply, item, (id) => ctx.assets.url(id));
+  const name = `"${clip(item.title, 40)}"`;
+  if ('refused' in verdict) {
+    ctx.note(ROLE, `Kept ${name} as a note: the model's ${verdict.component} ${REFUSED[verdict.refused](verdict.prop)}.`);
+    return undefined;
+  }
+  if (verdict.left !== undefined) ctx.note(ROLE, `Left ${verdict.left} out of the sheet for ${name}: the content does not state it.`);
+  return verdict.draw;
+}
+
+/** Whether the rules are unsure of an item they drew as a note, so the model is asked: text of some length that is no link, picture, recording, conversation or code. */
+export const unsure = (item: Item, draw: Draw): boolean => draw.component === 'note' && (item.kind === 'text' || item.kind === 'file') && item.text.trim().length >= AMBIGUOUS_FROM;
+
 async function askComponents(ctx: RoleContext, open: { node: Node; item: Item }[]): Promise<Map<Id, Draw>> {
   const out = new Map<Id, Draw>();
   const asked = open.slice(0, MAX_ASKED_ITEMS);
   if (asked.length === 0) return out;
   const byId = new Map(asked.map((o) => [o.node.id, o.item]));
+  const assetUrl = (id: string) => ctx.assets.url(id);
   try {
     const reply = await ctx.model.json({
       role: `${ROLE}.components`,
       system: COMPONENTS_SYSTEM,
-      user: componentsPrompt(asked),
+      user: componentsPrompt(asked, { assetUrl }),
       schema: ComponentsReply,
       effort: 'low',
     });
     for (const entry of reply.items) {
       const item = byId.get(entry.id);
       if (!item || out.has(entry.id)) continue;
-      const content = contentOf(item, (id) => ctx.assets.url(id));
-      const draw = claimed(entry, content.text);
-      if (shown(draw, item, content)) out.set(entry.id, draw);
+      const draw = drawn(ctx, entry, item);
+      if (draw) out.set(entry.id, draw);
     }
   } catch (err) {
     ctx.note(ROLE, `The model could not choose components (${message(err)}). Kept the rule-based views.`);
@@ -914,7 +1152,7 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds }) => {
     const item = ctx.mind.items.get(node.itemId);
     if (!item) continue;
     const draw = byRule(item, assetUrl);
-    const ambiguous = draw.component === 'note' && item.kind === 'text' && item.text.trim().length >= AMBIGUOUS_FROM;
+    const ambiguous = unsure(item, draw);
     // An earlier choice that still stands in the text is kept, so a second pass costs no model call and cannot lose it.
     if (ambiguous && node.view.by === 'renderer' && grounded(node.view, item, assetUrl)) continue;
     draws.set(node.id, draw);

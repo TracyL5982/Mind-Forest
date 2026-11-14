@@ -5,6 +5,23 @@ import type { Grounding } from './grounding.ts';
 /** A string a card shows as words: at least one character that is not white space. */
 const words = z.string().regex(/\S/);
 
+/** One section of a `sheet`. A list or a table past its size is cut by whoever builds the sheet; the opened card shows the item whole. */
+export const SECTION = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('heading'), text: words }),
+  /** A passage of the item, which may be its opening lines cut short with an ellipsis. */
+  z.strictObject({ kind: z.literal('text'), text: words }),
+  z.strictObject({ kind: z.literal('figures'), facts: z.array(z.strictObject({ label: words, value: words })).min(1).max(4) }),
+  z.strictObject({ kind: z.literal('list'), items: z.array(words).min(2).max(8) }),
+  z
+    .strictObject({ kind: z.literal('table'), heads: z.array(z.string()).min(2).max(4), rows: z.array(z.array(z.string())).min(1).max(5) })
+    .refine((table) => table.rows.every((row) => row.length === table.heads.length)),
+  /** The item's own picture. */
+  z.strictObject({ kind: z.literal('picture'), src: z.string().min(1) }),
+  /** Words quoted in the item, and who said them or where they stand. */
+  z.strictObject({ kind: z.literal('excerpt'), text: words, by: z.string().optional() }),
+]);
+export type Section = z.infer<typeof SECTION>;
+
 /**
  * The component library: every way one item can be drawn.
  * Props carry only what the item itself does not already hold. A client draws from the item plus these props.
@@ -87,6 +104,14 @@ export const COMPONENTS = {
   }),
   /** A place by name. `src` is the item's picture, when it has one. */
   place: z.strictObject({ name: z.string().min(1), src: z.string().optional() }),
+  /**
+   * A card assembled from two to four sections, for content no single type covers. A heading, when there is one, comes first and
+   * is not counted among them; a sheet of nothing but passages of text is a note, so one section at least is of another kind.
+   */
+  sheet: z.strictObject({ sections: z.array(SECTION).min(1).max(4) }).refine(({ sections }) => {
+    const parts = sections.filter((section) => section.kind !== 'heading');
+    return sections.length - parts.length <= 1 && sections.slice(1).every((section) => section.kind !== 'heading') && parts.length >= 2 && parts.some((section) => section.kind !== 'text');
+  }),
 } as const;
 export type ComponentId = keyof typeof COMPONENTS;
 export const COMPONENT_IDS = Object.keys(COMPONENTS) as ComponentId[];
@@ -106,13 +131,23 @@ export type PropsOf<C extends ComponentId> = z.infer<(typeof COMPONENTS)[C]>;
  */
 export type Stated = 'says' | 'cell' | 'quotes' | 'writes' | 'unit' | 'paints' | 'own' | 'label' | 'choice';
 
-/** One way of standing for a plain value, the same shape as the props for an object, and the element's shape for a list. */
+type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never;
+type Fields<T> = { readonly [K in keyof T]-?: Check<NonNullable<T[K]>> };
+
+/**
+ * One way of standing for a plain value, the same shape as the props for an object, and the element's shape for a list.
+ * An object that is one of several shapes told apart by `kind` has a check for each kind under `byKind`, over its other keys.
+ */
 export type Check<T = unknown> = unknown extends T
   ? Stated | { readonly [key: string]: Check }
-  : T extends readonly (infer E)[]
+  : [T] extends [readonly (infer E)[]]
     ? Check<E>
-    : T extends object
-      ? { readonly [K in keyof T]-?: Check<NonNullable<T[K]>> }
+    : [T] extends [object]
+      ? IsUnion<T> extends true
+        ? [T] extends [{ kind: string }]
+          ? { readonly byKind: { readonly [K in T['kind']]: Fields<Omit<Extract<T, { kind: K }>, 'kind'>> } }
+          : never
+        : Fields<T>
       : Stated;
 
 type ContentChecks = {
@@ -167,6 +202,21 @@ export const CHECKS: ContentChecks = {
     also: (p, item) => p.more === undefined || item.data.authorsCut === true,
   },
   place: { props: { name: 'says', src: 'own' } },
+  sheet: {
+    props: {
+      sections: {
+        byKind: {
+          heading: { text: 'says' },
+          text: { text: 'quotes' },
+          figures: { facts: { label: 'label', value: 'says' } },
+          list: { items: 'says' },
+          table: { heads: 'cell', rows: 'cell' },
+          picture: { src: 'own' },
+          excerpt: { text: 'quotes', by: 'says' },
+        },
+      },
+    },
+  },
 };
 
 /**
