@@ -50,7 +50,7 @@ export const SHEETS: { item: Item; props: PropsOf<'sheet'> }[] = [
       sections: [
         { kind: 'heading', text: 'Five days of amoxicillin against ten' },
         { kind: 'text', text: 'The authors conclude that five days is enough for a child treated at home, and that guidelines asking for longer should be revisited.' },
-        { kind: 'figures', facts: [{ label: 'Children randomised', value: '824' }, { label: 'Failed, five days', value: '12.6%' }, { label: 'Failed, ten days', value: '12.4%' }] },
+        { kind: 'figures', facts: [{ label: 'Children randomised', value: '824' }, { label: 'Failed, five-day group', value: '12.6%' }, { label: 'Failed, ten-day group', value: '12.4%' }] },
       ],
     },
   },

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
 import { grounding, type Grounding } from '../grounding.ts';
-import { CHECKS, isValidGroup, isValidView, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type Section, type Stated } from '../views.ts';
+import { CHECKS, isValidGroup, isValidView, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type Section, type Stated } from '../views.ts';
 import type { RoleContext, Roles } from './types.ts';
 
 const ROLE = 'renderer';
@@ -42,8 +42,6 @@ const MAX_ASKED_ITEMS = 24;
  * limit of 120, and one run lost a call to three timeouts in a row.
  */
 const ASKED_PER_CALL = 8;
-/** The longest label the model may write for a figure, in characters. A longer one does not read at a glance beside its value. */
-const LABEL_MAX = 40;
 const MAX_ASKED_POOLS = 8;
 const MAX_ASKED_SIBLINGS = 12;
 const STACK_ABOVE = 9;
@@ -163,11 +161,6 @@ function inTimeOrder(labels: string[]): boolean {
   return times.every((t, i) => t !== null && (i === 0 || t > times[i - 1]!));
 }
 
-/** The words a claim about an item is checked against. The summary is left out: a model wrote it. */
-function body(item: Item): string {
-  return `${item.title}\n${item.text}`;
-}
-
 /** The `data` keys that hold an address, at any depth. An address is the item's own, and holds no words to check a claim against. */
 const ADDRESSES = new Set(['image', 'mediaUrl', 'thumbnailUrl', 'embed', 'url', 'src']);
 
@@ -181,22 +174,40 @@ function held(value: unknown, addresses: boolean, out: string[] = []): string[] 
 
 /** What a view of one item is checked against. */
 interface Content {
-  /** The title, the text and each value of the data that is no address. A data value is a list item, so no claim runs from one into the next. */
+  /**
+   * The item's words, which are its title and its text, and each value of its data that is no address. The title is a paragraph of its own
+   * and a data value a list item, so no claim runs from one into the next. The summary is left out: a model wrote it.
+   */
   text: Grounding;
   /** The value is one the item holds outside its words, whole or cut short with an ellipsis. */
   own(value: string): boolean;
+  /** The item's text opens with these words. */
+  opens(passage: string): boolean;
 }
 
-function contentOf(item: Item, assetUrl: (id: string) => string): Content {
+/**
+ * The series a source's record carried, as rows of a table after the item's words. A record is no guess, so each of its numbers
+ * stands beside its label as surely as if the text wrote them so. What a role read off a user's text is not a record.
+ */
+function recordOf(item: Item): string {
+  const chart = item.origin.by === 'agent' ? read(ChartData, item.data.chart) : undefined;
+  return chart ? `\n\n${chart.labels.map((label, n) => `${label} | ${chart.values[n] ?? ''}${chart.unit ?? ''}`).join('\n')}` : '';
+}
+
+/** `wordsOnly` leaves the data out, for a check that reads nothing but how the item's words stand together. */
+function contentOf(item: Item, assetUrl: (id: string) => string, wordsOnly = false): Content {
   const { url, asset, from } = item.source;
-  const owned = [item.text, item.summary, url, url && siteOf(url), asset && assetUrl(asset), from.replace(/^chat-export:/, ''), ...held(item.data, true)].flatMap((value) => value?.trim() || []);
+  let owned: string[] | undefined;
+  let opening: Grounding | undefined;
   return {
-    text: grounding([body(item), ...held(item.data, false).map((value) => `• ${value}`)].join('\n')),
+    text: grounding(`${item.title}\n\n${item.text}${recordOf(item)}`, wordsOnly ? [] : held(item.data, false)),
     own(value) {
       const whole = value.trim();
       const cut = whole.endsWith('…') ? whole.slice(0, -1).trimEnd() : '';
+      owned ??= [item.text, item.summary, url, url && siteOf(url), asset && assetUrl(asset), from.replace(/^chat-export:/, ''), ...held(item.data, true)].flatMap((value) => value?.trim() || []);
       return owned.some((one) => one === whole || (cut !== '' && one.startsWith(cut)));
     },
+    opens: (passage) => (opening ??= grounding(item.text)).begins(passage),
   };
 }
 
@@ -566,18 +577,26 @@ const wholeOf = (item: Item): number => (item.kind === 'text' && !byAgent(item) 
 
 /**
  * The first row that holds draws the item. A row that reads extracted structure holds only when what its card would show
- * is at least `COVERAGE_FLOOR` of what the item says, so a small structure never stands in for a long item.
+ * is at least `COVERAGE_FLOOR` of what the item says, so a small structure never stands in for a long item. A card that names
+ * a value, or shows a passage or a meaning, is also held to the item's own words: the role that extracted the piece checked that
+ * the item states each value, and not how the values stand together. A figure the words do not name so is dropped from the card.
  */
 export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
   const asked = { assetUrl };
   let whole: number | undefined;
+  let content: Content | undefined;
   for (const rule of item.kind === 'chat' ? CHAT_RULES : RULES) {
     if (!rule.when(item, asked)) continue;
+    let draw: Draw = { component: rule.component, props: rule.props(item, asked) };
     if (rule.reads === 'structure') {
       whole ??= wholeOf(item);
       if (rule.shown(item).reduce((sum, value) => sum + sizeOf(value), 0) < COVERAGE_FLOOR * whole) continue;
+      if (READS_WORDS.has(rule.component)) {
+        const mend = mended(draw, (content ??= contentOf(item, assetUrl, true)), 'rule');
+        if ('fault' in mend || (mend.dropped.length > 0 && sizeShown(mend.draw) < COVERAGE_FLOOR * whole)) continue;
+        draw = mend.draw;
+      }
     }
-    const draw = { component: rule.component, props: rule.props(item, asked) };
     if (isValidView(draw)) return draw;
   }
   return { component: 'note', props: {} };
@@ -585,16 +604,29 @@ export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
 
 // ---- components by model
 
-/** How each kind of check reads one value. `beside` is the object the value sits in, for a check that reads a value against its neighbours. */
-const STANDS: Record<Stated, (value: unknown, content: Content, beside: Props) => boolean> = {
+/**
+ * How each kind of check reads one value. `beside` is the object the value sits in and `at` the value's place in its list,
+ * for a check that reads a value against its neighbours.
+ */
+const STANDS: Record<Stated, (value: unknown, content: Content, beside: Props, at: number) => boolean> = {
   says: (value, { text }) => typeof value === 'string' && text.says(value),
   cell: (value, { text }) => typeof value === 'string' && (value.trim() === '' || (!/[|\t]/.test(value) && text.says(value))),
   quotes: (value, { text }) => typeof value === 'string' && text.quotes(value),
+  whole: (value, { text }) => typeof value === 'string' && text.whole(value),
+  lead: (value, { text }) => typeof value === 'string' && (text.whole(value) || (value.trimEnd().endsWith('…') && text.leads(value.trimEnd().slice(0, -1)))),
+  meaning: (value, { text }, { term }) => typeof value === 'string' && typeof term === 'string' && text.defines(term, value),
   writes: (value, { text }, { unit }) => typeof value === 'number' && text.writes(value, typeof unit === 'string' ? unit : undefined),
   unit: (value, { text }, { values }) => typeof value === 'string' && unitStands(value, values, text),
   paints: (value, { text }) => typeof value === 'string' && (value.trim().startsWith('#') ? text.paints(value) : text.says(value)),
   own: (value, content) => typeof value === 'string' && content.own(value),
-  label: (value) => typeof value === 'string' && value.trim() !== '',
+  // A value the content does not state fails its own check, and its label has then nothing to stand beside.
+  label: (value, { text }, { value: named }) => typeof value === 'string' && value.trim() !== '' && typeof named === 'string' && (text.names(value, named) || !text.says(named)),
+  // A label with no number at its place is a chart of unequal lists, which the chart's own check refuses.
+  point: (value, { text }, { values, unit: given }, at) => {
+    const named: unknown = Array.isArray(values) ? values[at] : undefined;
+    const unit = typeof given === 'string' ? given : undefined;
+    return typeof value === 'string' && value.trim() !== '' && (typeof named !== 'number' || text.names(value, named, unit) || !text.writes(named, unit));
+  },
   choice: () => true,
 };
 
@@ -604,17 +636,19 @@ interface Leaf {
   how: Stated | undefined;
   /** The object the value sits in. */
   beside: Props;
+  /** The value's place in the list that holds it, or -1. */
+  at: number;
   path: string;
 }
 
 /** Each plain value a view's props hold, with the check that reads it. */
-function* leaves(value: unknown, check: Check | undefined, beside: Props = {}, path = ''): Generator<Leaf> {
+function* leaves(value: unknown, check: Check | undefined, beside: Props = {}, path = '', at = -1): Generator<Leaf> {
   if (Array.isArray(value)) {
-    for (const [n, one] of value.entries()) yield* leaves(one, check, beside, `${path}[${n}]`);
+    for (const [n, one] of value.entries()) yield* leaves(one, check, beside, `${path}[${n}]`, n);
     return;
   }
   if (check === undefined || typeof check === 'string' || typeof value !== 'object' || value === null) {
-    yield { value, how: typeof check === 'string' ? check : undefined, beside, path };
+    yield { value, how: typeof check === 'string' ? check : undefined, beside, at, path };
     return;
   }
   let [fields, of] = [value as Props, check as { readonly [key: string]: Check }];
@@ -627,9 +661,83 @@ function* leaves(value: unknown, check: Check | undefined, beside: Props = {}, p
 
 const checksOf = (component: string) => CHECKS[component as ComponentId] as { props: Check; also?: (props: never, item: Item, text: Grounding) => boolean };
 
+/**
+ * Why a card may not show a value.
+ * - `unstated`: the content does not state it.
+ * - `label`: it names a value in words the content does not set beside that value.
+ * - `cut`: it is a passage cut out of a sentence of the content.
+ * - `apart`: it is a meaning the content does not give the term.
+ * - `long`: it is longer than a card has room for. Only a card built from a model's reply is held to this.
+ */
+export type Why = 'unstated' | 'label' | 'cut' | 'apart' | 'long';
+/** One value a card may not show, by its path in the props. */
+export interface Fault {
+  prop: string;
+  why: Why;
+}
+
+/** The kinds of check that read how words stand together in the item, with what a value that fails one is. */
+const TOGETHER: Partial<Record<Stated, Why>> = { label: 'label', point: 'label', whole: 'cut', lead: 'cut', meaning: 'apart' };
+
+const kindsIn = (check: Check): Stated[] => (typeof check === 'string' ? [check] : Object.values(check).flatMap(kindsIn));
+/** The cards with a value that such a check reads. */
+const READS_WORDS = new Set<string>(Object.entries(CHECKS).flatMap(([component, { props }]) => (kindsIn(props).some((kind) => kind in TOGETHER) ? [component] : [])));
+
+const tooLong = (how: Stated, value: string): boolean => (how === 'label' ? value.trim().length > ROOM.label : how === 'whole' && value.trim().length > roomOf(ROOM.passage, value));
+
+/**
+ * Every value of a view that may not be shown. For a view built from a model's reply, each value is read, and held to its length.
+ * For one a rule built from a piece a role extracted, only the values are read that say how words stand together.
+ */
+function* faults(view: Draw, content: Content, by: 'model' | 'rule'): Generator<Fault> {
+  const chosen = by === 'model';
+  for (const { value, how, beside, at, path } of leaves(view.props, checksOf(view.component).props)) {
+    if (!chosen && !(how && how in TOGETHER)) continue;
+    if (!how) yield { prop: path, why: 'unstated' };
+    else if (chosen && typeof value === 'string' && tooLong(how, value)) yield { prop: path, why: 'long' };
+    else if (!STANDS[how](value, content, beside, at)) {
+      // A passage the content does not hold at all is unstated, whatever else it would have had to be.
+      const held = how === 'label' || how === 'point' || (typeof value === 'string' && content.text.quotes(value.replace(/…\s*$/, '')));
+      yield { prop: path, why: (held && TOGETHER[how]) || 'unstated' };
+    }
+  }
+}
+
+/** A figure, a list entry or a table row, by its path in the props: a part of a card that may be dropped alone. */
+const ENTRY = /^((?:sections\[\d+\]\.)?(?:facts|items|rows))\[(\d+)\]/;
+
+/**
+ * The view without each figure, list entry and table row that holds a fault, with the first fault of each one dropped.
+ * A fault anywhere else is one no dropping mends, and it is returned alone. What is left may no longer be a valid card.
+ */
+function mended(view: Draw, content: Content, by: 'model' | 'rule'): { draw: Draw; dropped: Fault[] } | { fault: Fault } {
+  const dropped: Fault[] = [];
+  const gone = new Map<string, Set<number>>();
+  for (const fault of faults(view, content, by)) {
+    const entry = ENTRY.exec(fault.prop);
+    if (!entry) return { fault };
+    const [, list, n] = entry as unknown as [string, string, string];
+    if (gone.get(list)?.has(Number(n))) continue;
+    gone.set(list, (gone.get(list) ?? new Set()).add(Number(n)));
+    dropped.push(fault);
+  }
+  if (dropped.length === 0) return { draw: view, dropped };
+  const props = structuredClone(view.props);
+  for (const [list, indexes] of gone) {
+    const [, section, key] = /^(?:sections\[(\d+)\]\.)?(\w+)$/.exec(list) as unknown as [string, string | undefined, string];
+    const holder = section === undefined ? props : (props.sections as Props[])[Number(section)]!;
+    const stays = (_entry: unknown, n: number) => !indexes.has(n);
+    holder[key] = (holder[key] as unknown[]).filter(stays);
+    // A list's marks go with their entries, and a fact left out is one more that the card does not show.
+    if (key === 'items' && Array.isArray(holder.checked)) holder.checked = holder.checked.filter(stays);
+    if (key === 'facts' && typeof holder.more === 'number') holder.more += indexes.size;
+  }
+  return { draw: { component: view.component, props }, dropped };
+}
+
 /** The first prop of a view that does not stand in the content, by its path in the props. */
 function unstated(view: Draw, content: Content): string | undefined {
-  for (const { value, how, beside, path } of leaves(view.props, checksOf(view.component).props)) if (!how || !STANDS[how](value, content, beside)) return path;
+  for (const { value, how, beside, at, path } of leaves(view.props, checksOf(view.component).props)) if (!how || !STANDS[how](value, content, beside, at)) return path;
   return undefined;
 }
 
@@ -644,10 +752,24 @@ export function grounded(view: { component: string; props: unknown }, item: Item
   return stated(view, item, contentOf(item, assetUrl));
 }
 
-/** How much of its item a view shows, counted as a rule counts a structure: every value but a choice of how to draw and what the item owns outside its words. */
+/** A text as it is compared with another: one written form and one case. */
+const folded = (text: string): string => uniform(text).toLowerCase();
+
+/** The entries without those that repeat an earlier one. */
+function distinct<T>(entries: T[], key: (entry: T) => string = (entry) => folded(String(entry))): T[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => !seen.has(key(entry)) && seen.add(key(entry)));
+}
+
+/**
+ * How much of its item a view shows, counted as a rule counts a structure: every value but a choice of how to draw and what the item
+ * owns outside its words. A value shown twice is counted once.
+ */
 function sizeShown(view: Draw): number {
+  const shown = new Set<string>();
+  for (const { value, how } of leaves(view.props, checksOf(view.component).props)) if (how && how !== 'choice' && how !== 'own') shown.add(folded(String(value)));
   let size = 0;
-  for (const { value, how } of leaves(view.props, checksOf(view.component).props)) if (how && how !== 'choice' && how !== 'own') size += sizeOf(String(value));
+  for (const value of shown) size += sizeOf(value);
   return size;
 }
 
@@ -669,26 +791,30 @@ const unquoted = (passage: string): string => passage.trim().replace(/^["'“”
 /** The cells of one row. A fence of "|" at both ends is taken off, as Intake takes it off. */
 const cellsOf = (row: string): string[] => (/^\s*[|｜].*[|｜]\s*$/s.test(row) ? row.trim().slice(1, -1) : row).split(/[|｜]/).map((cell) => cell.trim());
 
+/** The figures a reply wrote as "label | value" lines. A figure written twice is one figure. */
 function pairsOf(lines: string[]): { label: string; value: string }[] {
-  return each(lines).flatMap((line) => {
+  const pairs = each(lines).flatMap((line) => {
     const [label, ...value] = cellsOf(line);
     return value.length > 0 ? [{ label: label!, value: value.join(' ') }] : [];
   });
+  return distinct(pairs, ({ label, value }) => `${folded(label)}|${folded(value)}`);
 }
 
+/** The table a reply wrote as lines of cells, the heads first. A row written twice is one row. */
 function tableIn(lines: string[]): { heads: string[]; rows: string[][] } {
   const [heads = [], ...rows] = each(lines).map(cellsOf).filter((cells) => !cells.every((cell) => /^[-:\s]*$/.test(cell)));
-  return { heads, rows };
+  return { heads, rows: distinct(rows, (row) => row.map(folded).join('|')) };
 }
 
-const SECTION_ROOM = { figures: 4, list: 8, rows: 5, sections: 4 };
+/** The entries of a list a reply wrote one to a line. An entry written twice is one entry. */
+const entriesIn = (lines: string[]): string[] => distinct(each(lines));
 
 /** How each kind of section is built from its part of a reply, whole. `fitted` cuts it to the room a sheet has. */
 const SECTIONS: Record<Section['kind'], (part: Part, reading: Reading) => Props> = {
   heading: ({ text }) => ({ text: text.trim() }),
   text: ({ text }) => ({ text: text.trim() }),
   figures: ({ lines }) => ({ facts: pairsOf(lines) }),
-  list: ({ lines }) => ({ items: each(lines) }),
+  list: ({ lines }) => ({ items: entriesIn(lines) }),
   table: ({ lines }) => tableIn(lines),
   picture: (_part, { item, asked }) => ({ src: pictureOf(item, asked) ?? '' }),
   excerpt: ({ text, by }, { kept }) => compact({ text: unquoted(text), by: kept(by) }),
@@ -707,15 +833,15 @@ function lead(text: string, max: number): string {
 function fitted(section: Section): Section {
   switch (section.kind) {
     case 'heading':
-      return { ...section, text: lead(section.text, 80) };
+      return { ...section, text: lead(section.text, ROOM.heading) };
     case 'text':
-      return { ...section, text: lead(section.text, EXCERPT) };
+      return { ...section, text: lead(section.text, ROOM.text) };
     case 'figures':
-      return { ...section, facts: section.facts.slice(0, SECTION_ROOM.figures) };
+      return { ...section, facts: section.facts.slice(0, ROOM.figures) };
     case 'list':
-      return { ...section, items: section.items.slice(0, SECTION_ROOM.list) };
+      return { ...section, items: section.items.slice(0, ROOM.list) };
     case 'table':
-      return { ...section, rows: section.rows.slice(0, SECTION_ROOM.rows) };
+      return { ...section, rows: section.rows.slice(0, ROOM.rows) };
     default:
       return section;
   }
@@ -750,13 +876,13 @@ const BUILT: Record<Chosen, (reply: Entry, reading: Reading) => Props> = {
   fact: ({ subject, passage }) => ({ value: passage.trim(), label: subject.trim() }),
   facts: ({ lines }) => ({ facts: pairsOf(lines).slice(0, FACTS_SHOWN) }),
   steps: ({ lines }) => ({ steps: each(lines) }),
-  list: ({ lines }) => ({ items: each(lines) }),
+  list: ({ lines }) => ({ items: entriesIn(lines) }),
   chart: ({ labels, numbers, unit }, { text }) => chartProps(each(labels), numbers, unit.trim() && unitStands(unit.trim(), numbers, text) ? unit.trim() : undefined),
   breakdown: ({ labels, numbers, unit }, { text }) => compact({ labels: each(labels), values: numbers, unit: unit.trim() && unitStands(unit.trim(), numbers, text) ? unit.trim() : undefined }),
   table: ({ lines }) => tableIn(lines),
   qa: ({ subject, passage }) => ({ question: subject.trim(), answer: passage.trim() }),
   definition: ({ subject, passage }) => ({ term: subject.trim(), definition: passage.trim() }),
-  proscons: ({ left, right }) => ({ pros: each(left), cons: each(right) }),
+  proscons: ({ left, right }) => ({ pros: entriesIn(left), cons: entriesIn(right) }),
   callout: ({ passage, tone }) => ({ text: passage.trim(), tone: tone.trim().toLowerCase() === 'note' ? 'note' : 'caution' }),
   excerpt: ({ passage, by }, { kept, item }) => compact({ text: unquoted(passage), at: kept(by), source: str(item.data.site) ?? str(item.data.from) }),
   sheet: ({ sections }, reading) => ({ sections: sections.map((part) => ({ kind: part.kind, ...SECTIONS[part.kind](part, reading) })) }),
@@ -765,36 +891,27 @@ const BUILT: Record<Chosen, (reply: Entry, reading: Reading) => Props> = {
 /**
  * What became of one reply: the card it draws, or why it draws none and the rule's card stays.
  * - `invalid`: the library has no such card with such props.
- * - `unstated`: `prop` shows what the content does not state.
- * - `long`: the figure label at `prop` is over `LABEL_MAX` characters.
+ * - a `Why`: `prop` may not be shown, and the card does not stand without it.
  * - `small`: the card would show less than `COVERAGE_FLOOR` of the item.
- * `left` is the first section a sheet was drawn without, and why.
+ * `left` are the figures, list entries, table rows and sections the card was drawn without, or lost before it was refused, and why.
  */
-export type Verdict =
-  | { draw: Draw; left?: { prop: string; why: 'unstated' | 'long' } }
-  | { refused: 'invalid' | 'unstated' | 'long' | 'small'; component: Chosen; prop?: string };
+export type Verdict = { draw: Draw; left?: Fault[] } | { refused: 'invalid' | 'small' | Why; component: Chosen; prop?: string; left?: Fault[] };
 
 /** The cards that draw the item itself, so they have no share of it to fall short of, and nothing that an edit could leave standing. */
 const WHOLE = new Set<string>(['note', 'idea']);
 
-/** The first figure label of a card that is too long, by its path in the props. */
-function longLabel(draw: Draw): string | undefined {
-  for (const { value, how, path } of leaves(draw.props, checksOf(draw.component).props)) if (how === 'label' && sizeOf(String(value)) > LABEL_MAX) return path;
-  return undefined;
-}
-
 function judged(draw: Draw, component: Chosen, item: Item, content: Content): Verdict {
   if (!isValidView(draw) || (draw.component === 'idea' && !isIdea(item, true))) return { refused: 'invalid', component };
-  const long = longLabel(draw);
-  if (long !== undefined) return { refused: 'long', component, prop: long };
-  const prop = unstated(draw, content);
-  if (prop !== undefined) return { refused: 'unstated', component, prop };
-  if (!(checksOf(draw.component).also?.(draw.props as never, item, content.text) ?? true)) return { refused: 'invalid', component };
-  return WHOLE.has(draw.component) || sizeShown(draw) >= COVERAGE_FLOOR * wholeOf(item) ? { draw } : { refused: 'small', component };
+  const mend = mended(draw, content, 'model');
+  if ('fault' in mend) return { refused: mend.fault.why, component, prop: mend.fault.prop };
+  const { draw: card, dropped } = mend;
+  // Without the parts that failed, the card must still be one: a list of one entry is no list.
+  const left = dropped.length > 0 ? { left: dropped } : {};
+  if (dropped.length > 0 && !isValidView(card)) return { refused: dropped[0]!.why, component, prop: dropped[0]!.prop, ...left };
+  if (!(checksOf(card.component).also?.(card.props as never, item, content.text) ?? true)) return { refused: 'invalid', component, ...left };
+  if (!WHOLE.has(card.component) && sizeShown(card) < COVERAGE_FLOOR * wholeOf(item)) return { refused: 'small', component, ...left };
+  return { draw: card, ...left };
 }
-
-/** The sections that carry a structure the content states, which a sheet may show however small a share of a long item they are. */
-const STRUCTURED = new Set<Section['kind']>(['figures', 'list', 'table', 'excerpt']);
 
 /**
  * The least share of its item a section must show for its own card to be drawn in place of the sheet. It is not the floor:
@@ -802,32 +919,50 @@ const STRUCTURED = new Set<Section['kind']>(['figures', 'list', 'table', 'excerp
  */
 const ALONE_FROM = 0.5;
 
+/** A sheet's text section that is the opening of its item and long enough to stand for it, as a note's first lines do. */
+const opensItem = (section: Section, content: Content): boolean =>
+  section.kind === 'text' && section.text.length >= roomOf(ROOM.opening, section.text) && content.opens(section.text.replace(/…$/, ''));
+
 /**
- * A sheet from the sections a reply gave. When one section alone is at least `ALONE_FROM` of the item and stands as its own card,
- * that card is drawn: a dedicated type always wins. Otherwise each section is cut to its room, and one the content does not state,
- * or whose label is too long, is left out.
+ * A sheet from the sections a reply gave. More than `ROOM.sections` of them, two headings, or a heading that is not first, is no sheet.
+ * When one section alone is at least `ALONE_FROM` of the item and stands as its own card, that card is drawn: a dedicated type always wins.
+ * Otherwise a figure, a list entry or a table row that may not be shown is dropped, each section is cut to its room, and a section
+ * that does not stand is left out. The sheet must show `COVERAGE_FLOOR` of the item, a heading not counted. Under it, a sheet is
+ * drawn only for what it exists for, a key figure or line of a long item: it opens with the item's own opening, as a note would.
  */
-function assembled(given: Section[], item: Item, content: Content): Verdict {
+function assembled(sections: Section[], item: Item, content: Content): Verdict {
+  const given = distinct(sections, (section) => folded(stable(section)));
+  const headings = given.filter((section) => section.kind === 'heading').length;
+  if (given.length > ROOM.sections || headings > 1 || (headings === 1 && given[0]!.kind !== 'heading')) return { refused: 'invalid', component: 'sheet' };
+
   const alone = given
     .flatMap((section) => dedicated(section) ?? [])
-    .filter((draw) => sizeShown(draw) >= ALONE_FROM * wholeOf(item) && 'draw' in judged(draw, 'sheet', item, content))
-    .sort((a, b) => sizeShown(b) - sizeShown(a))[0];
-  if (alone) return { draw: alone };
+    .filter((draw) => sizeShown(draw) >= ALONE_FROM * wholeOf(item))
+    .sort((a, b) => sizeShown(b) - sizeShown(a))
+    .map((draw) => judged(draw, 'sheet', item, content))
+    .find((verdict) => 'draw' in verdict);
+  if (alone) return alone;
 
-  let left: { prop: string; why: 'unstated' | 'long' } | undefined;
+  const left: Fault[] = [];
   const stand = given.flatMap((section, n) => {
-    const parsed = SECTION.safeParse(fitted(section));
-    const one: Draw | undefined = parsed.success ? { component: 'sheet', props: { sections: [parsed.data] } } : undefined;
-    const long = one && longLabel(one);
-    const prop = one ? (long ?? unstated(one, content))?.replace('[0]', `[${n}]`) : `sections[${n}]`;
-    if (prop !== undefined) left ??= { prop, why: long === undefined ? 'unstated' : 'long' };
-    return parsed.success && prop === undefined ? [parsed.data] : [];
+    const here = ({ prop, why }: Fault): Fault => ({ prop: prop.replace('sections[0]', `sections[${n}]`), why });
+    const mend = mended({ component: 'sheet', props: { sections: [section] } }, content, 'model');
+    if ('fault' in mend) {
+      left.push(here(mend.fault));
+      return [];
+    }
+    left.push(...mend.dropped.map(here));
+    const parsed = SECTION.safeParse(fitted((mend.draw.props.sections as Section[])[0]!));
+    if (!parsed.success && mend.dropped.length === 0) left.push({ prop: `sections[${n}]`, why: 'unstated' });
+    return parsed.success ? [parsed.data] : [];
   });
-  const sections = [...stand.filter((section) => section.kind === 'heading').slice(0, 1), ...stand.filter((section) => section.kind !== 'heading')].slice(0, SECTION_ROOM.sections);
-  const sheet: Draw = { component: 'sheet', props: { sections } };
-  if (!isValidView(sheet)) return left === undefined ? { refused: 'invalid', component: 'sheet' } : { refused: left.why, component: 'sheet', prop: left.prop };
-  if (!sections.some((section) => STRUCTURED.has(section.kind)) && sizeShown(sheet) < COVERAGE_FLOOR * wholeOf(item)) return { refused: 'small', component: 'sheet' };
-  return { draw: sheet, ...(left === undefined ? {} : { left }) };
+  const sheet: Draw = { component: 'sheet', props: { sections: stand } };
+  const lost = left.length > 0 ? { left } : {};
+  if (!isValidView(sheet)) return left.length === 0 ? { refused: 'invalid', component: 'sheet' } : { refused: left[0]!.why, component: 'sheet', prop: left[0]!.prop, ...lost };
+  const parts = stand.filter((section) => section.kind !== 'heading');
+  const small = sizeShown({ component: 'sheet', props: { sections: parts } }) < COVERAGE_FLOOR * wholeOf(item);
+  if (small && !parts.some((section) => opensItem(section, content))) return { refused: 'small', component: 'sheet', ...lost };
+  return { draw: sheet, ...lost };
 }
 
 /** The card one reply of the model draws for its item, after every check a card must pass, or why it draws none. */
@@ -860,8 +995,8 @@ function componentsPrompt(open: Open[], asked: Asked): string {
 Cards, and the fields each one uses:
 - note: prose that holds nothing a reader would want to see at a glance, such as a reflection, an argument, a description or a story. You may give emphasis: one short phrase copied from the text that deserves to stand out.
 - idea: the item is one short thought or what-if of the user's own, in a phrase or a sentence. A chore, a name, a caution or a definition is not an idea.
-- quote: the item is mainly someone's words. passage is the words, and by the speaker when the text names one.
-- fact: the item is mainly one number or short value. passage is the value as the text writes it, and subject a few words saying what it measures.
+- quote: the item is mainly someone's words. passage is the words, whole and at most ${ROOM.passage.spaced} characters (${ROOM.passage.spaceless} in Chinese or Japanese), and by the speaker when the text names one.
+- fact: the item is mainly one number or short value. passage is the value as the text writes it, and subject its label: a few words of the same sentence that say what it measures.
 - facts: the item is mainly two to six figures or attributes. lines has one "label | value" for each, the value as the text writes it.
 - steps: the item is an ordered procedure. lines has one step each, without its number.
 - list: the item is mainly a list of things in no particular order. lines has one entry each, without its bullet.
@@ -869,13 +1004,13 @@ Cards, and the fields each one uses:
 - breakdown: the item is mainly the shares of one whole, in percent, adding up to a hundred. labels, numbers and unit, as for chart.
 - table: the item is mainly rows and columns. lines has the row of column heads first and then one row each, with " | " between cells.
 - qa: the item asks one question and answers it. subject is the question and passage the answer.
-- definition: the item says what one term means. subject is the term and passage the meaning.
+- definition: the item says what one term means. subject is the term and passage the meaning, from the sentence that holds the term or the one next to it, up to the end of a sentence.
 - proscons: the item weighs one choice. left has the points for and right the points against.
-- callout: the item is mainly a warning, a caveat or a reminder the reader must not miss. passage is that sentence, and tone is "caution" for a warning or "note" for a remark.
-- excerpt: the item is mainly a passage copied out of a longer source. passage is the passage, and by where it sits in the source when the text says.
-- sheet: an assembled card, for an item with two or more kinds of part worth showing that no card above covers. sections has two to four parts in reading order. Each has a kind:
+- callout: the item is mainly a warning, a caveat or a reminder the reader must not miss. passage is that sentence, whole, and tone is "caution" for a warning or "note" for a remark.
+- excerpt: the item is mainly a passage copied out of a longer source. passage is the passage, whole and no longer than a quote, and by where it sits in the source when the text says.
+- sheet: an assembled card, for an item with two or more kinds of part worth showing that no card above covers. sections has two to four parts in reading order, a heading counted. Each has a kind:
   - heading: text is a few words from the item that name it. At most one, and first.
-  - text: text is a sentence or two copied from the item that say what it is about.
+  - text: text is the item's opening, copied from its first word: one or two whole sentences, and at least ${ROOM.opening.spaced} characters of a long item (${ROOM.opening.spaceless} in Chinese or Japanese).
   - figures: lines has one to four "label | value", the value as the text writes it.
   - list: lines has two to eight entries.
   - table: lines has the row of heads first, then up to five rows of up to four cells, with " | " between cells.
@@ -886,7 +1021,10 @@ How to choose:
 - Prefer a dedicated card. Choose one when its structure is what the item mainly is: at least a fifth of the text.
 - Choose sheet only when the item has two or more kinds of part worth showing and no dedicated card covers at least a fifth of it. For a longer item, ask what a reader coming back to it would want to see at a glance: the figures it reports, the things it lists such as decisions, next steps or open questions, a line someone said. When it holds at least one of these among its prose, choose sheet, with a text part for the sentence that says what the item is about and a part for each of them. A sheet needs at least one part that is not text.
 - Choose note when nothing fits. Do not force a structure onto prose, and do not pick out a passing number, date or name: a year or an age in a story is not a figure.
-- Copy every value from the item's own text, word for word and in its language: a passage with its punctuation, a number as it is written. Never add, estimate, convert, translate or round. Only the label of a figure may be your own words, in the language of the content and at most ${LABEL_MAX} characters.
+- Copy every value from the item's own text, word for word and in its language: a passage with its punctuation, a number as it is written. Never add, estimate, convert, translate or round.
+- A passage is whole sentences or whole lines: it begins where one begins and ends where one ends. Never cut words off a sentence.
+- The label of a figure, and of a number in a chart or a breakdown, is made only of words that stand in the same sentence, line or table row as its value: pick a few of them, at most ${ROOM.label} characters, and add no word of your own.
+- Write each figure, list entry and table row once.
 - Return one entry per item, with the id exactly as given. Fill only the fields named for the chosen card, and leave every other field as an empty string or an empty list. The card already has the item's title and text: never copy either into a field. An idea fills nothing, and a note nothing but emphasis.
 
 Items:
@@ -897,20 +1035,31 @@ ${items}`;
 const REFUSED: Record<Extract<Verdict, { refused: string }>['refused'], (prop?: string) => string> = {
   invalid: () => 'is not one the library accepts',
   unstated: (prop) => `shows ${prop}, which the content does not state`,
-  long: (prop) => `has a label of over ${LABEL_MAX} characters at ${prop}`,
+  label: (prop) => `names a value at ${prop} in words the content does not set beside it`,
+  cut: (prop) => `shows ${prop}, which is not a whole passage of the content`,
+  apart: (prop) => `gives its term a meaning at ${prop} that the content does not give it`,
+  long: (prop) => `shows ${prop}, which is longer than a card has room for`,
   small: () => 'would show under a fifth of it',
 };
-const LEFT = { unstated: 'the content does not state it', long: `its label is over ${LABEL_MAX} characters` };
+const LEFT: Record<Why, string> = {
+  unstated: 'the content does not state it',
+  label: 'the content does not set its label beside its value',
+  cut: 'it is not a whole passage of the content',
+  apart: 'the content does not give the term this meaning',
+  long: 'it is longer than a card has room for',
+};
 
 /** The card a reply draws for its item, or nothing, with a line in the run log that names the item and the prop that failed. */
 export function drawn(ctx: RoleContext, reply: Entry, item: Item): Draw | undefined {
   const verdict = byModel(reply, item, (id) => ctx.assets.url(id));
   const name = `"${clip(item.title, 40)}"`;
+  const card = 'refused' in verdict ? verdict.component : verdict.draw.component;
+  // What a refusal names needs no second line.
+  for (const { prop, why } of verdict.left ?? []) if (!('refused' in verdict) || prop !== verdict.prop) ctx.note(ROLE, `Left ${prop} out of the ${card} for ${name}: ${LEFT[why]}.`);
   if ('refused' in verdict) {
     ctx.note(ROLE, `Kept ${name} as the rules drew it: the model's ${verdict.component} ${REFUSED[verdict.refused](verdict.prop)}.`);
     return undefined;
   }
-  if (verdict.left !== undefined) ctx.note(ROLE, `Left ${verdict.left.prop} out of the sheet for ${name}: ${LEFT[verdict.left.why]}.`);
   return verdict.draw;
 }
 
