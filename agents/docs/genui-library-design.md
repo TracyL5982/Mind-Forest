@@ -34,7 +34,7 @@ The prompt for this pass was a gallery of another product's generative UI (65 bu
 
 ## Constraints
 
-- A card's footprint is a pure function of the item and props (`size()` in `client/js/components.js`). The field is laid out without measuring the page. This holds for every new type, including the assembled card.
+- A card's footprint is a pure function of the item and props (`size()` in each module of `client/js/components/`). The field is laid out without measuring the page. This holds for every new type, including the assembled card.
 - The model API rejects recursive reply schemas and optional keys. Replies are flat, with every key present and empty meaning absent.
 - `isValidView` and `isValidGroup` reject anything a schema does not describe. A client that meets an unknown component draws a note, and an unknown composite draws a cluster. Both stay true.
 - Views already stored stay valid. No migration.
@@ -208,7 +208,7 @@ Two more card types and one more arrangement: 28 types and 14 arrangements in al
 - `src/core/roles/renderer.ts`: rules, prompts, reply schemas, checks.
 - `src/core/roles/intake/describe.ts`: extraction (step 2).
 - `src/core/ports.ts`, `src/node/sources.ts`, `src/core/roles/scout.ts`: the extra record fields (step 2).
-- `client/js/components.js`, `client/js/composites.js`, `client/style.css`: drawing.
+- `client/js/components/`, `client/js/composites/`, `client/style.css`: drawing.
 - `client/library.html`: a sample of every type and arrangement, plus assembled examples.
 - `test/renderer.test.ts`, `test/intake.test.ts`, a new layout test, the sample set.
 - `src/core/domain.ts`, `src/core/roles/intake.ts`, `client/js/input.js`: the audio kind (step 5).

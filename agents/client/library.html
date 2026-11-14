@@ -19,15 +19,19 @@
   .lib-who.is-model { color: var(--pick); border-color: color-mix(in srgb, var(--pick) 45%, transparent); }
   .lib-when { color: var(--ink-2); font-size: 13.5px; max-width: 80ch; margin-bottom: 16px; }
   .lib-row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .lib-more { margin-top: 22px; }
   .lib-cell { display: flex; flex-direction: column; gap: 8px; }
   .lib-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
   .lib-stage { position: relative; }
   .lib-stage .card, .lib-stage .pane { animation: none; }
-  .lib-detail { width: 340px; padding: 16px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+  .lib-size { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .lib-size b { font-weight: 600; color: var(--ink-2); }
+  .lib-detail { --accent: var(--tint); width: min(340px, calc(100vw - 32px)); padding: 16px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
   .lib-props { margin-top: 14px; }
   .lib-props summary { cursor: pointer; color: var(--ink-3); font-size: 12px; }
   .lib-props pre { margin-top: 8px; padding: 12px; border-radius: 10px; background: #111317; color: var(--ink-2); font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; max-width: 760px; overflow: auto; }
-  .lib-scroll { overflow-x: auto; padding-bottom: 6px; }
+  .lib-scroll { overflow-x: auto; padding-bottom: 6px; flex-wrap: nowrap; }
+  @media (max-width: 759px) { body { padding: 24px 16px 60px; } }
 </style>
 </head>
 <body>
@@ -35,6 +39,7 @@
   <h1>View library</h1>
   <p>Every way the Renderer can draw one card (components) and every way it can arrange several sibling cards (composites). This page draws them with the same code and styles as the live client, from sample data.</p>
   <p>Solid cards are yours. Dashed amber cards are picks the librarian brought and you have not kept.</p>
+  <p>Under each sample is its type name and its footprint in pixels, which is worked out from the content and never measured.</p>
 </header>
 
 <div class="lib-h2">Components</div>
@@ -71,9 +76,11 @@ function card({ node, item }, status = 'kept', at = null) {
   return { el, w, hgt };
 }
 
+const footprint = (name, w, hgt) => h('div', { class: 'lib-size' }, h('b', { text: name }), ` ${Math.round(w)} by ${Math.round(hgt)}`);
+
 function staged(made, status) {
   const { el, w, hgt } = card(made, status);
-  return h('div', { class: 'lib-stage', style: { width: `${w}px`, height: `${hgt}px` } }, el);
+  return [h('div', { class: 'lib-stage', style: { width: `${w}px`, height: `${hgt}px` } }, el), footprint(made.node.view.component, w, hgt)];
 }
 
 const cell = (label, ...kids) => h('div', { class: 'lib-cell' }, h('div', { class: 'lib-label', text: label }), kids);
@@ -105,6 +112,44 @@ const COMPONENT_SAMPLES = [
     make('steps', { steps: ['Trace the road as one wavy spine', 'Fill fields with flat yellow', 'Add hedges as double green strokes', 'Place the car, the house, the tree', 'Export at three scales', 'Test it as a poster'] }, { title: 'Redraw this map in vector' })],
 ];
 
+/** The same types with other content, to show how each footprint follows what the card holds. */
+const VARIANTS = {
+  note: [
+    ['Title only', make('note', {}, { title: 'Pick the hamlet' })],
+    ['Long text', make('note', {}, { title: 'What the river carries past the red house every morning', summary: 'Grain barges, the post, a doctor on Thursdays and, twice a year, the surveyors who redraw the parish map and argue about where the yellow ends.' })],
+  ],
+  quote: [
+    ['Long, no speaker', make('quote', { text: 'We shape our buildings, and afterwards our buildings shape us, and then the streets between them, and at last the map of the whole town, until nobody remembers which came first.' }, { title: 'On buildings' })],
+  ],
+  fact: [
+    ['A word as the value', make('fact', { value: 'Vertigo', label: 'what it evokes' }, { title: 'Vertigo' })],
+    ['A long value', make('fact', { value: '$1.2 million', label: 'spent on the second unit' }, { title: 'Budget' })],
+  ],
+  image: [
+    ['Wide', make('image', { src: PIC.river, aspect: 1.85 }, { title: 'River delta' })],
+    ['Picture that fails to load', make('image', { src: 'data:image/png;base64,AAAA', caption: 'A print the museum has taken down' }, { title: 'Missing print' })],
+  ],
+  link: [
+    ['No picture', make('link', { url: 'https://example.org/lenses', site: 'example.org' }, { title: 'A field guide to long lenses and what they flatten', summary: 'Why distant hills stack up behind the subject.' })],
+  ],
+  chart: [
+    ['Line, one value marked', make('chart', { chart: 'line', labels: ['1960', '1980', '2000', '2020'], values: [3, 9, 14, 11], unit: 'films', mark: 2 }, { title: 'Use by decade' })],
+    ['Many values, no unit', make('chart', { chart: 'bar', labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], values: [120, 180, 420, 900, 1400, 1150, 800, 760, 520, 300, 160, 110], mark: 4 }, { title: 'Visitors by month' })],
+  ],
+  person: [
+    ['No picture', make('person', { name: 'Irmin Roberts', role: 'Second-unit cameraman' }, { title: 'Who built it' })],
+  ],
+  chat: [
+    ['One message, no source', make('chat', { messages: [{ role: 'user', text: 'Why does the room seem to stretch?' }] }, { title: 'Asking about the stretch' })],
+  ],
+  code: [
+    ['One line, no language', make('code', { source: 'render(fields);' }, { title: 'Draw it' })],
+  ],
+  steps: [
+    ['Two steps', make('steps', { steps: ['Zoom in', 'Pull back'] }, { title: 'The move' })],
+  ],
+};
+
 const componentsEl = document.getElementById('components');
 for (const [name, by, when, made] of COMPONENT_SAMPLES) {
   const detail = drawDetail(made.node, made.item, ctx).flat(Infinity).filter(Boolean);
@@ -114,7 +159,8 @@ for (const [name, by, when, made] of COMPONENT_SAMPLES) {
     h('div', { class: 'lib-row' },
       cell('Kept', staged(made, 'kept')),
       cell('Pick', staged(made, 'pick')),
-      detail.length > 0 && cell('Opened', h('div', { class: 'lib-detail' }, detail))),
+      detail.length > 0 && cell('Opened', h('div', { class: 'lib-detail', style: { '--tint': TINT } }, detail))),
+    (VARIANTS[name] ?? []).length > 0 && h('div', { class: 'lib-row lib-more' }, VARIANTS[name].map(([label, variant]) => cell(label, staged(variant, 'kept')))),
     props('Props', made.node.view.props)));
 }
 
@@ -156,7 +202,7 @@ function composite(name, members, makeProps, status, open) {
     el.classList.toggle('is-buried', arr.buried.has(m.node.id));
     return el;
   });
-  return { el: h('div', { class: 'lib-stage', style: { width: `${arr.w}px`, height: `${arr.h}px` } }, pane, cards), group };
+  return { el: [h('div', { class: 'lib-stage', style: { width: `${arr.w}px`, height: `${arr.h}px` } }, pane, cards), footprint(name, arr.w, arr.h)], group };
 }
 
 const compositesEl = document.getElementById('composites');

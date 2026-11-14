@@ -375,6 +375,20 @@ async function main(): Promise<void> {
       }
     });
 
+    await check('the library page draws every card type inside the footprint it states, at both widths', async () => {
+      for (const view of [page, small]) {
+        await view.goto(`${run.url}/library.html`);
+        await view.locator('#composites .lib-entry').last().waitFor();
+        const stated = await view.locator('#components .lib-size').allTextContents();
+        for (const type of ['note', 'quote', 'fact', 'image', 'video', 'link', 'chart', 'person', 'chat', 'code', 'steps']) {
+          assert.ok(stated.some((line) => new RegExp(`^${type} \\d+ by \\d+$`).test(line)), `${type} states its footprint`);
+        }
+        assert.deepEqual(await spills(view), []);
+        const size = await view.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+        assert.equal(size[0], size[1], 'the page does not scroll sideways');
+      }
+    });
+
     await check('nothing was written to the console as an error', async () => {
       assert.deepEqual(problems, []);
     });

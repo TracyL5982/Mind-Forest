@@ -234,7 +234,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .cmp-row { position: absolute; border-top: 1px solid var(--line); }
 .cmp-label { position: absolute; left: 0; top: 5px; font-size: var(--type-text); line-height: var(--lead-text); color: var(--ink-2); }
 .cmp-cell { position: absolute; top: 5px; padding: 0 8px; font-size: var(--type-text); line-height: var(--lead-text); text-align: center; }
-.seq-arrow { position: absolute; text-align: center; font-size: var(--type-title); line-height: 1; color: var(--tint); }
+.seq-arrow { position: absolute; text-align: center; font-size: var(--type-title); line-height: 1; transform: translateY(-50%); color: var(--tint); }
 
 /* ---- controls */
 

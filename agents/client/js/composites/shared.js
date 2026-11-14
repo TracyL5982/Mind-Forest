@@ -15,16 +15,19 @@ export function row(ids, sizes, { gap, left = PAD, top = HEAD }) {
   return { at, right: x - gap, tall };
 }
 
+/** Members in rows of `columns`. Columns share one width. Each row is as tall as its tallest card. */
 export function grid(ids, sizes, { columns, gap }) {
   const cellW = Math.max(...ids.map((id) => sizes.get(id)[0]));
-  const cellH = Math.max(...ids.map((id) => sizes.get(id)[1]));
   const at = new Map();
-  ids.forEach((id, i) => {
-    at.set(id, { x: PAD + (i % columns) * (cellW + gap) + cellW / 2, y: HEAD + Math.floor(i / columns) * (cellH + gap) + cellH / 2 });
-  });
-  const rows = Math.ceil(ids.length / columns);
+  let top = HEAD;
+  for (let start = 0; start < ids.length; start += columns) {
+    const row = ids.slice(start, start + columns);
+    const rowH = Math.max(...row.map((id) => sizes.get(id)[1]));
+    row.forEach((id, i) => at.set(id, { x: PAD + i * (cellW + gap) + cellW / 2, y: top + rowH / 2 }));
+    top += rowH + gap;
+  }
   const used = Math.min(columns, ids.length);
-  return { at, w: PAD * 2 + used * cellW + (used - 1) * gap, h: HEAD + rows * cellH + (rows - 1) * gap + PAD };
+  return { at, w: PAD * 2 + used * cellW + (used - 1) * gap, h: top - gap + PAD };
 }
 
 export const squarish = (n) => (n <= 3 ? n : n === 4 ? 2 : 3);

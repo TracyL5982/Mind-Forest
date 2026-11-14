@@ -15,6 +15,18 @@ A view is `{ component, props, by }`. Props carry only what the item does not al
 
 A group is `{ id, treeId, anchor, composite, title, members, props }`. `anchor` is the parent node. `members` are node ids, in drawing order. `title` may be empty.
 
+## How the web client draws them
+
+`client/library.html` draws every component and composite from sample data with the live client's code. Open it to see the current look. Under each sample it states the type name and the footprint.
+
+- Each component is one module, `client/js/components/<type>.js`, that exports `size`, `draw` and `detail`. Each composite is one module in `client/js/composites/`. The `index.js` in each folder is the registry.
+- `size(item, props)` is the card's footprint in px. It is worked out from the content and never measured, so the field can be laid out before anything is drawn. A card whose text is longer gets a taller footprint, up to a cap, and the text is cut with an ellipsis past that.
+- Text on the field is set in three sizes, named `--type-display`, `--type-title` and `--type-text` in `client/style.css`.
+- Each type has its own face, so types can be told apart when zoomed out. A note is plain. A quote is a serif on a face washed with the tree's colour. A fact is one large figure on a darker face. A picture or clip has square corners and its caption on a plate below. A link sits under an address bar. A chart has gridlines and a scale. A person is a name tag with a round end. A chat is speech bubbles. Code is fixed-width with a numbered gutter. Steps are numbers down a rail.
+- A card's marks take its tree's colour. While the card is a pick they are amber and its border is dashed. Teal is used only for links between cards.
+- A small badge names the kind where the look alone would leave it unclear: on a group frame, a clip, a chat and a code card.
+- A group frame is a faint wash and a hairline.
+
 ## Rules the Renderer follows
 
 - Rules in plain code run first. Structured data in `item.data` outranks the item's kind.
@@ -74,6 +86,7 @@ A web page preview.
 
 - **Chosen when** `item.data.chart` holds at least two labels and as many values, or the model finds several comparable numbers in a text item.
 - **Props.** `chart`: `bar` or `line`. `labels`. `values`. `unit?`. `mark?`: index of a bar or point to call out, not set today.
+- **Drawn as** bars or a line over gridlines, with a scale down the left side. The marked bar or point is brighter and carries its value. With six values or fewer every value is written. With more than eight, the card writes only the first, last and marked labels, and the opened card writes them all.
 - **Item holds.** `data.chart = { labels, values, unit? }`, or the numbers inside `text`.
 
 The chart is a `line` when every label is a year or a full date and they ascend. Otherwise it is a `bar`.
@@ -179,4 +192,4 @@ Many similar members, piled so only the top shows until opened.
 
 ## Adding to a library
 
-Add the schema to `COMPONENTS` or `COMPOSITES` in `src/core/views.ts`, add a rule or a model option in `renderer.ts`, add a test in `test/renderer.test.ts`, and add a section here. `isValidView` and `isValidGroup` reject anything a schema does not describe, so the client can trust the props it receives.
+Add the schema to `COMPONENTS` or `COMPOSITES` in `src/core/views.ts`, add a rule or a model option in `renderer.ts`, add a test in `test/renderer.test.ts`, and add a section here. For the web client, add a module to `client/js/components/` or `client/js/composites/`, list it in that folder's `index.js`, and add a sample to `client/library.html`. `isValidView` and `isValidGroup` reject anything a schema does not describe, so the client can trust the props it receives.

@@ -18,10 +18,11 @@
  *   shapes             load the Every shape tree: each card type, each arrangement, one unknown type
  *   crowd=<n>          load a tree of n note cards. Default 200.
  *   card=<type>:<json> add one kept card of that type with those props, in a tree named Lane
- *   tree=<text>        go to the tree whose name holds this text
+ *   tree=<text>        go to the tree whose name holds this text. The field zooms out to fit it,
+ *                      and never zooms in past 100 percent.
  *   zoom=<percent>     zoom the field about the middle of the page
  *   pan=<dx>,<dy>      drag the field by this many page pixels
- *   open=<what>        click a card. <what> is a card type, or text on the card.
+ *   open=<what>        click a card. <what> is a card type, or text on the card or in its title.
  *   press=<name>       click the button with this name in the opened card
  *   close              close the opened card
  *   wait=<ms>          wait
@@ -149,6 +150,7 @@ const STEPS: Record<string, Step> = {
   async tree(value, page) {
     await page.locator('.tree-chip', { hasText: value }).first().click();
     await settle(page);
+    return `the field is at ${Math.round((await zoomOf(page)) * 100)} percent`;
   },
   async zoom(value, page) {
     const want = Number(value) / 100;
@@ -177,7 +179,7 @@ const STEPS: Record<string, Step> = {
   },
   async open(value, page) {
     const byType = page.locator(`.card[data-id][data-component="${value}"]`);
-    const wanted = /^[a-z-]+$/.test(value) && (await byType.count()) > 0 ? byType : cards(page).filter({ hasText: value });
+    const wanted = /^[a-z-]+$/.test(value) && (await byType.count()) > 0 ? byType : cards(page).filter({ hasText: value }).or(page.locator(`.card[data-id][aria-label*=${JSON.stringify(value)}]`));
     // Several trees can hold a card that matches. Take the first whose middle can be clicked.
     const reachable = await wanted.evaluateAll((els) => els.findIndex((el) => {
       const r = el.getBoundingClientRect();
@@ -215,6 +217,17 @@ const STEPS: Record<string, Step> = {
     await settle(page);
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
     const path = join(out, `${name}.png`);
+    if (mode === 'full') {
+      // Pictures load when they scroll into view, so walk the page once before the shot.
+      await page.evaluate(`(async () => {
+        for (let y = 0; y < document.documentElement.scrollHeight; y += innerHeight) {
+          scrollTo(0, y);
+          await new Promise((done) => setTimeout(done, 80));
+        }
+        scrollTo(0, 0);
+      })()`);
+      await page.waitForTimeout(300);
+    }
     await page.screenshot({ path, fullPage: mode === 'full' });
     return path;
   },
