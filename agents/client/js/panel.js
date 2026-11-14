@@ -38,6 +38,7 @@ export class Panel {
     this.count = h('span', { class: 'panel-count' });
     this.scroll = h('div', { class: 'panel-scroll' });
     this.actions = h('div', { class: 'panel-actions' });
+    this.questions = h('div', { class: 'panel-questions', role: 'group', 'aria-label': 'Suggested questions', hidden: true });
     this.askText = h('input', { id: 'ask-text', type: 'text', placeholder: 'Ask about this card', 'aria-label': 'Ask about this card', autocomplete: 'off', enterkeyhint: 'send' });
     const ask = h('form', { class: 'panel-ask', onsubmit: (e) => {
       e.preventDefault();
@@ -48,19 +49,31 @@ export class Panel {
     el.append(
       h('div', { class: 'panel-head' }, this.badge, this.count,
         h('button', { class: 'btn icon', type: 'button', 'aria-label': 'Close', text: '✕', onclick: () => this.close() })),
-      this.scroll, this.actions, ask);
+      this.scroll, this.actions, this.questions, ask);
   }
 
   open(nodeId, selection) {
-    if (this.nodeId !== nodeId) {
+    const other = this.nodeId !== nodeId;
+    if (other) {
       this.editing = false;
       this.askText.value = '';
       this.scroll.scrollTop = 0;
     }
     this.nodeId = nodeId;
+    if (other) this.offer(nodeId, []);
     this.selection = new Set(selection);
     this.el.hidden = false;
     this.refresh();
+    this.send({ t: 'questions', nodeId });
+  }
+
+  /** The librarian's guesses at what to ask next about the open card. Picking one asks it. */
+  offer(nodeId, questions) {
+    if (nodeId !== this.nodeId) return;
+    put(this.questions, questions.map((question) => h('button', { class: 'btn', type: 'button', dir: 'auto', text: question, onclick: () => {
+      if (this.send({ t: 'ask', nodeId, need: question })) this.offer(nodeId, questions.filter((q) => q !== question));
+    } })));
+    this.questions.hidden = questions.length === 0;
   }
 
   close() {

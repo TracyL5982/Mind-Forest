@@ -155,6 +155,9 @@ function receive(message) {
     case 'error':
       toast(message.message);
       return;
+    case 'questions':
+      panel.offer(message.nodeId, message.questions);
+      return;
   }
 }
 const activityNode = new Map();
