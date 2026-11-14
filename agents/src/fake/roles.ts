@@ -116,7 +116,7 @@ export const fakeRoles: Roles = {
       if (!node || !item) return [];
       const ruled = byRule(item, assetUrl);
       // Where the real Renderer would ask the model, the fake's own choice goes through the same checks.
-      const draw = (unsure(item, ruled) && drawn(ctx, { id, ...choose(item.text) }, item)) || ruled;
+      const draw = (unsure(item, ruled) && drawn(ctx, { id, ...choose(item.text, ruled.component === 'idea' ? 'idea' : 'note') }, item)) || ruled;
       // A demo tree arrives with its views already chosen and no data to draw them from, so a view is only replaced by one the item's structure gives.
       const plain = node.view.by === 'renderer' && (draw.component === 'note' || draw.component === 'idea');
       const same = draw.component === node.view.component && JSON.stringify(draw.props) === JSON.stringify(node.view.props);

@@ -116,8 +116,11 @@ export interface Roles {
     },
   ): Promise<Command[]>;
   organizer(ctx: RoleContext, input: { request: string; scope: Scope; focus?: Id }): Promise<{ commands: Command[]; summary: string }>;
-  /** Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup. */
-  renderer(ctx: RoleContext, input: { nodeIds: Id[] }): Promise<Command[]>;
+  /**
+   * Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup.
+   * `edited` names the nodes whose item's title, text or data changed since it was last drawn.
+   */
+  renderer(ctx: RoleContext, input: { nodeIds: Id[]; edited?: Id[] }): Promise<Command[]>;
   packager(ctx: RoleContext, input: { scope: Scope; note?: string }): Promise<Handoff>;
 }
 

@@ -1,4 +1,4 @@
-import { CommandError, type ChangeSet, type Command, type Id, type Item, type Origin } from './domain.ts';
+import { CommandError, type ChangeSet, type Command, type Id, type Item, type Origin, type Patch } from './domain.ts';
 import type { Assets, ModelClient, Store, Tools } from './ports.ts';
 import {
   AGENT,
@@ -328,11 +328,12 @@ export class Pipeline {
         }),
       ),
     ].filter((id) => mind.nodes.has(id));
+    const edited = set.patches.flatMap((p) => (p.entity === 'item' && saysOtherwise(p as Patch<'item'>) ? mind.nodesOfItem(p.id).map((n) => n.id) : []));
     this.digest(set);
     if (nodeIds.length === 0) return;
     this.track(
       this.work('renderer', 'Choosing how to show this', nodeIds[0], async () => {
-        const commands = await this.deps.roles.renderer(this.ctx, { nodeIds: nodeIds.filter((id) => mind.nodes.has(id)) });
+        const commands = await this.deps.roles.renderer(this.ctx, { nodeIds: nodeIds.filter((id) => mind.nodes.has(id)), edited });
         if (commands.length > 0) this.apply(AGENT('renderer'), 'Choose formats', commands);
       }).catch((err) => this.fail('renderer', err)),
     );
@@ -408,6 +409,11 @@ export class Pipeline {
 /** Formats and digests follow from content. They are not something a user thinks of undoing. */
 function isHousekeeping(set: ChangeSet): boolean {
   return set.origin.role === 'renderer' || set.origin.role === 'archivist';
+}
+
+/** Whether an item that was there before now has another title, text or data: what a card is drawn from. Its summary and tags are not. */
+function saysOtherwise({ before, after }: Patch<'item'>): boolean {
+  return before !== null && after !== null && (before.title !== after.title || before.text !== after.text || JSON.stringify(before.data) !== JSON.stringify(after.data));
 }
 
 function newNodeIds(set: ChangeSet): Id[] {

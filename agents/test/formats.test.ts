@@ -42,10 +42,10 @@ test('what the rules draw for every sample is a card the library accepts and the
   }
 });
 
-test('the samples the model is asked about are text the rules left as a note, and there are enough of them to measure it', () => {
+test('the samples the model is asked about are text the rules left as a note or an idea, and there are enough of them to measure it', () => {
   const open = SAMPLES.filter((sample) => unsure(sample.item, byRule(sample.item, assetUrl)));
   assert.ok(open.length >= 50, `${open.length} samples go to the model`);
-  for (const sample of open) assert.ok(sample.item.kind === 'text' && byRule(sample.item, assetUrl).component === 'note', sample.key);
+  for (const sample of open) assert.ok(sample.item.kind === 'text' && ['note', 'idea'].includes(byRule(sample.item, assetUrl).component), sample.key);
   assert.deepEqual([...new Set(SAMPLES.map((sample) => sample.item.kind))].sort(), ['chat', 'image', 'link', 'text', 'video']);
 });
 
@@ -54,7 +54,8 @@ test('the whole set runs through the real Renderer with the fake model, which ch
   const { outcomes } = await run(model);
   assert.equal(outcomes.length, SAMPLES.length);
   const asked = outcomes.filter((outcome) => outcome.asked);
-  assert.equal(model.calls.length, Math.ceil(asked.length / 12), 'one call for each 12 unsure items');
+  assert.equal(model.calls.length, Math.ceil(asked.length / 8), 'one call for each 8 unsure items');
   assert.deepEqual(asked.filter((outcome) => !outcome.reply).map((outcome) => outcome.sample.key), [], 'the fake answers for every item it is asked about');
   for (const outcome of outcomes) if (!outcome.asked) assert.equal(outcome.drawn, outcome.ruled, outcome.sample.key);
+  for (const outcome of asked) if (outcome.ruled === 'idea') assert.equal(outcome.drawn, 'idea', `${outcome.sample.key}: the fake keeps an idea`);
 });

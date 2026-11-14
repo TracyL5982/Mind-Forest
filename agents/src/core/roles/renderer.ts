@@ -31,13 +31,19 @@ interface Pool {
 const TEXT_SENT = 1200;
 const EXCERPT = 280;
 const CAPTION = 140;
-const AMBIGUOUS_FROM = 40;
+/**
+ * The least a text must say for the model to be asked about it, in characters. A script written without spaces says in 16 characters
+ * about what a spaced one says in 40.
+ */
+const AMBIGUOUS_FROM = { spaced: 40, spaceless: 16 };
 const MAX_ASKED_ITEMS = 24;
 /**
- * The most items one call asks about, so a call that fails costs half a pass. Measured live on the 24 longest samples:
- * one call took 83 seconds and two calls of 12 took 70, against the model client's limit of 120.
+ * The most items one call asks about. Measured live, a call for 12 long samples took up to 70 seconds against the model client's
+ * limit of 120, and one run lost a call to three timeouts in a row.
  */
-const ASKED_PER_CALL = 12;
+const ASKED_PER_CALL = 8;
+/** The longest label the model may write for a figure, in characters. A longer one does not read at a glance beside its value. */
+const LABEL_MAX = 40;
 const MAX_ASKED_POOLS = 8;
 const MAX_ASKED_SIBLINGS = 12;
 const STACK_ABOVE = 9;
@@ -52,7 +58,7 @@ const PICTURE_LED = new Set(['image', 'video', 'artwork']);
 
 /** The cards that can be built from an item's own words, which the model chooses among. */
 export const CHOSEN = [
-  'note', 'quote', 'fact', 'facts', 'steps', 'list', 'chart', 'breakdown', 'table', 'qa', 'definition', 'proscons', 'callout', 'excerpt', 'sheet',
+  'note', 'idea', 'quote', 'fact', 'facts', 'steps', 'list', 'chart', 'breakdown', 'table', 'qa', 'definition', 'proscons', 'callout', 'excerpt', 'sheet',
 ] as const satisfies readonly ComponentId[];
 export type Chosen = (typeof CHOSEN)[number];
 
@@ -390,7 +396,11 @@ function placeOf(item: Item): string | undefined {
   return namesPlace(placeName(item.title), placeName(where)) ? where : undefined;
 }
 
-const IDEA_BELOW = 60;
+/**
+ * An idea is shorter than this, in characters. A rule cannot tell a thought from a caution or a definition, and in a script written
+ * without spaces 24 characters are already room for either, so there the rule stops at 24 and the model may call a text up to 60 an idea.
+ */
+const IDEA_BELOW = { spaced: 60, spaceless: 24 };
 const IDEA_WORDS = 3;
 /** In a script written without spaces a word cannot be counted, so the thought is measured in characters. */
 const IDEA_CHARACTERS = 6;
@@ -400,13 +410,17 @@ const ADDRESS = /^(?:[a-z][a-z\d+.-]*:\/\/)?(?:[^\s/.]+\.)+[^\s/.\d]{2,}(?:[/?#]
 /** A phrase as it is compared: one written form and one case, with no white space and no punctuation at its end. */
 const phraseKey = (phrase: string): string => uniform(phrase).toLowerCase().replace(/\s+/g, '').replace(/\p{P}+$/u, '');
 
-/** A thought the user wrote out as a phrase, and not a label: a chore, a name, a room number, an address. */
-function isIdea(item: Item): boolean {
+/**
+ * A thought the user wrote out as a phrase, and not a label: a chore, a name, a room number, an address.
+ * `chosen` is for a text the model called an idea, which may be as long in a script without spaces as in one with.
+ */
+function isIdea(item: Item, chosen = false): boolean {
   const [title, text] = [uniform(item.title), uniform(item.text)];
   const phrase = text || title;
   if (item.kind !== 'text' || item.origin.by !== 'user' || phrase === '' || (title !== '' && text !== '' && phraseKey(title) !== phraseKey(text))) return false;
-  if ([...phrase].length >= IDEA_BELOW || /\p{Nd}/u.test(phrase) || ADDRESS.test(phrase.replace(/\p{P}+$/u, ''))) return false;
-  if (SPACELESS.test(phrase)) return (phrase.match(/\p{L}/gu)?.length ?? 0) >= IDEA_CHARACTERS;
+  const spaceless = SPACELESS.test(phrase);
+  if ([...phrase].length >= (spaceless && !chosen ? IDEA_BELOW.spaceless : IDEA_BELOW.spaced) || /\p{Nd}/u.test(phrase) || ADDRESS.test(phrase.replace(/\p{P}+$/u, ''))) return false;
+  if (spaceless) return (phrase.match(/\p{L}/gu)?.length ?? 0) >= IDEA_CHARACTERS;
   return phrase.split(' ').filter((word) => /\p{L}/u.test(word)).length >= IDEA_WORDS;
 }
 
@@ -537,7 +551,7 @@ const RULES: Rule[] = [
     when: (item) => spokenOf(item).length > 0,
     props: (item) => compact({ messages: spokenOf(item), source: item.source.from.replace(/^chat-export:/, '') }),
   },
-  { component: 'idea', reads: 'text', when: isIdea, props: () => ({}) },
+  { component: 'idea', reads: 'text', when: (item) => isIdea(item), props: () => ({}) },
   { component: 'note', reads: 'text', when: () => true, props: () => ({}) },
 ];
 
@@ -731,8 +745,9 @@ function dedicated(section: Section): Draw | undefined {
  */
 const BUILT: Record<Chosen, (reply: Entry, reading: Reading) => Props> = {
   note: ({ emphasis }, { kept }) => compact({ emphasis: emphasis.trim().length <= 120 ? kept(emphasis) : undefined }),
+  idea: () => ({}),
   quote: ({ passage, by }, { kept }) => compact({ text: unquoted(passage), by: kept(by) }),
-  fact: ({ subject, passage }) => ({ value: passage.trim(), label: clip(subject, 80) }),
+  fact: ({ subject, passage }) => ({ value: passage.trim(), label: subject.trim() }),
   facts: ({ lines }) => ({ facts: pairsOf(lines).slice(0, FACTS_SHOWN) }),
   steps: ({ lines }) => ({ steps: each(lines) }),
   list: ({ lines }) => ({ items: each(lines) }),
@@ -751,17 +766,31 @@ const BUILT: Record<Chosen, (reply: Entry, reading: Reading) => Props> = {
  * What became of one reply: the card it draws, or why it draws none and the rule's card stays.
  * - `invalid`: the library has no such card with such props.
  * - `unstated`: `prop` shows what the content does not state.
+ * - `long`: the figure label at `prop` is over `LABEL_MAX` characters.
  * - `small`: the card would show less than `COVERAGE_FLOOR` of the item.
+ * `left` is the first section a sheet was drawn without, and why.
  */
-export type Verdict = { draw: Draw; left?: string } | { refused: 'invalid' | 'unstated' | 'small'; component: Chosen; prop?: string };
+export type Verdict =
+  | { draw: Draw; left?: { prop: string; why: 'unstated' | 'long' } }
+  | { refused: 'invalid' | 'unstated' | 'long' | 'small'; component: Chosen; prop?: string };
+
+/** The cards that draw the item itself, so they have no share of it to fall short of, and nothing that an edit could leave standing. */
+const WHOLE = new Set<string>(['note', 'idea']);
+
+/** The first figure label of a card that is too long, by its path in the props. */
+function longLabel(draw: Draw): string | undefined {
+  for (const { value, how, path } of leaves(draw.props, checksOf(draw.component).props)) if (how === 'label' && sizeOf(String(value)) > LABEL_MAX) return path;
+  return undefined;
+}
 
 function judged(draw: Draw, component: Chosen, item: Item, content: Content): Verdict {
-  if (!isValidView(draw)) return { refused: 'invalid', component };
+  if (!isValidView(draw) || (draw.component === 'idea' && !isIdea(item, true))) return { refused: 'invalid', component };
+  const long = longLabel(draw);
+  if (long !== undefined) return { refused: 'long', component, prop: long };
   const prop = unstated(draw, content);
   if (prop !== undefined) return { refused: 'unstated', component, prop };
   if (!(checksOf(draw.component).also?.(draw.props as never, item, content.text) ?? true)) return { refused: 'invalid', component };
-  // A note draws the item itself, so it has no share to fall short of.
-  return draw.component === 'note' || sizeShown(draw) >= COVERAGE_FLOOR * wholeOf(item) ? { draw } : { refused: 'small', component };
+  return WHOLE.has(draw.component) || sizeShown(draw) >= COVERAGE_FLOOR * wholeOf(item) ? { draw } : { refused: 'small', component };
 }
 
 /** The sections that carry a structure the content states, which a sheet may show however small a share of a long item they are. */
@@ -775,7 +804,8 @@ const ALONE_FROM = 0.5;
 
 /**
  * A sheet from the sections a reply gave. When one section alone is at least `ALONE_FROM` of the item and stands as its own card,
- * that card is drawn: a dedicated type always wins. Otherwise each section is cut to its room, and one the content does not state is left out.
+ * that card is drawn: a dedicated type always wins. Otherwise each section is cut to its room, and one the content does not state,
+ * or whose label is too long, is left out.
  */
 function assembled(given: Section[], item: Item, content: Content): Verdict {
   const alone = given
@@ -784,16 +814,18 @@ function assembled(given: Section[], item: Item, content: Content): Verdict {
     .sort((a, b) => sizeShown(b) - sizeShown(a))[0];
   if (alone) return { draw: alone };
 
-  let left: string | undefined;
+  let left: { prop: string; why: 'unstated' | 'long' } | undefined;
   const stand = given.flatMap((section, n) => {
     const parsed = SECTION.safeParse(fitted(section));
-    const prop = parsed.success ? unstated({ component: 'sheet', props: { sections: [parsed.data] } }, content)?.replace('[0]', `[${n}]`) : `sections[${n}]`;
-    if (prop !== undefined) left ??= prop;
+    const one: Draw | undefined = parsed.success ? { component: 'sheet', props: { sections: [parsed.data] } } : undefined;
+    const long = one && longLabel(one);
+    const prop = one ? (long ?? unstated(one, content))?.replace('[0]', `[${n}]`) : `sections[${n}]`;
+    if (prop !== undefined) left ??= { prop, why: long === undefined ? 'unstated' : 'long' };
     return parsed.success && prop === undefined ? [parsed.data] : [];
   });
   const sections = [...stand.filter((section) => section.kind === 'heading').slice(0, 1), ...stand.filter((section) => section.kind !== 'heading')].slice(0, SECTION_ROOM.sections);
   const sheet: Draw = { component: 'sheet', props: { sections } };
-  if (!isValidView(sheet)) return left === undefined ? { refused: 'invalid', component: 'sheet' } : { refused: 'unstated', component: 'sheet', prop: left };
+  if (!isValidView(sheet)) return left === undefined ? { refused: 'invalid', component: 'sheet' } : { refused: left.why, component: 'sheet', prop: left.prop };
   if (!sections.some((section) => STRUCTURED.has(section.kind)) && sizeShown(sheet) < COVERAGE_FLOOR * wholeOf(item)) return { refused: 'small', component: 'sheet' };
   return { draw: sheet, ...(left === undefined ? {} : { left }) };
 }
@@ -806,20 +838,28 @@ export function byModel(reply: Entry, item: Item, assetUrl: (id: string) => stri
   return reply.component === 'sheet' ? assembled(props.sections as Section[], item, content) : judged({ component: reply.component, props }, reply.component, item, content);
 }
 
+/** An item the rules are unsure of, with the card they drew it as `now`. */
+interface Open {
+  node: Node;
+  item: Item;
+  now: ComponentId;
+}
+
 const COMPONENTS_SYSTEM =
   'You are the Renderer of Mind Palace, a canvas for research, brainstorming and memories. You choose the card that presents each piece of text most accurately.';
 
-function componentsPrompt(open: { node: Node; item: Item }[], asked: Asked): string {
+function componentsPrompt(open: Open[], asked: Asked): string {
   const items = open
-    .map(({ node, item }) => {
+    .map(({ node, item, now }) => {
       const cut = item.text.trim().length > TEXT_SENT ? `\nlength: ${item.text.trim().length} characters, of which the first ${TEXT_SENT} are below` : '';
-      return `id: ${node.id}\ntitle: ${item.title}${cut}${pictureOf(item, asked) ? '\npicture: yes' : ''}\ntext: ${clip(item.text, TEXT_SENT)}`;
+      return `id: ${node.id}\ntitle: ${item.title}${now === 'idea' ? '\nnow: idea' : ''}${cut}${pictureOf(item, asked) ? '\npicture: yes' : ''}\ntext: ${clip(item.text, TEXT_SENT)}`;
     })
     .join('\n\n');
-  return `Below are items from a user's canvas. Each is currently drawn as a plain note: its title and the first lines of its text. For each item, choose the card that presents it best.
+  return `Below are items from a user's canvas. Each is currently drawn as a plain note: its title and the first lines of its text. One marked "now: idea" is drawn as an idea instead: its words alone, set large. For each item, choose the card that presents it best.
 
 Cards, and the fields each one uses:
 - note: prose that holds nothing a reader would want to see at a glance, such as a reflection, an argument, a description or a story. You may give emphasis: one short phrase copied from the text that deserves to stand out.
+- idea: the item is one short thought or what-if of the user's own, in a phrase or a sentence. A chore, a name, a caution or a definition is not an idea.
 - quote: the item is mainly someone's words. passage is the words, and by the speaker when the text names one.
 - fact: the item is mainly one number or short value. passage is the value as the text writes it, and subject a few words saying what it measures.
 - facts: the item is mainly two to six figures or attributes. lines has one "label | value" for each, the value as the text writes it.
@@ -846,8 +886,8 @@ How to choose:
 - Prefer a dedicated card. Choose one when its structure is what the item mainly is: at least a fifth of the text.
 - Choose sheet only when the item has two or more kinds of part worth showing and no dedicated card covers at least a fifth of it. For a longer item, ask what a reader coming back to it would want to see at a glance: the figures it reports, the things it lists such as decisions, next steps or open questions, a line someone said. When it holds at least one of these among its prose, choose sheet, with a text part for the sentence that says what the item is about and a part for each of them. A sheet needs at least one part that is not text.
 - Choose note when nothing fits. Do not force a structure onto prose, and do not pick out a passing number, date or name: a year or an age in a story is not a figure.
-- Copy every value from the item's own text, word for word and in its language: a passage with its punctuation, a number as it is written. Never add, estimate, convert, translate or round. Only the label of a figure may be your own words, in the language of the content.
-- Return one entry per item, with the id exactly as given. Fill only the fields named for the chosen card, and leave every other field as an empty string or an empty list. The card already has the item's title and text: never copy either into a field. A note fills nothing but emphasis.
+- Copy every value from the item's own text, word for word and in its language: a passage with its punctuation, a number as it is written. Never add, estimate, convert, translate or round. Only the label of a figure may be your own words, in the language of the content and at most ${LABEL_MAX} characters.
+- Return one entry per item, with the id exactly as given. Fill only the fields named for the chosen card, and leave every other field as an empty string or an empty list. The card already has the item's title and text: never copy either into a field. An idea fills nothing, and a note nothing but emphasis.
 
 Items:
 
@@ -857,55 +897,67 @@ ${items}`;
 const REFUSED: Record<Extract<Verdict, { refused: string }>['refused'], (prop?: string) => string> = {
   invalid: () => 'is not one the library accepts',
   unstated: (prop) => `shows ${prop}, which the content does not state`,
+  long: (prop) => `has a label of over ${LABEL_MAX} characters at ${prop}`,
   small: () => 'would show under a fifth of it',
 };
+const LEFT = { unstated: 'the content does not state it', long: `its label is over ${LABEL_MAX} characters` };
 
 /** The card a reply draws for its item, or nothing, with a line in the run log that names the item and the prop that failed. */
 export function drawn(ctx: RoleContext, reply: Entry, item: Item): Draw | undefined {
   const verdict = byModel(reply, item, (id) => ctx.assets.url(id));
   const name = `"${clip(item.title, 40)}"`;
   if ('refused' in verdict) {
-    ctx.note(ROLE, `Kept ${name} as a note: the model's ${verdict.component} ${REFUSED[verdict.refused](verdict.prop)}.`);
+    ctx.note(ROLE, `Kept ${name} as the rules drew it: the model's ${verdict.component} ${REFUSED[verdict.refused](verdict.prop)}.`);
     return undefined;
   }
-  if (verdict.left !== undefined) ctx.note(ROLE, `Left ${verdict.left} out of the sheet for ${name}: the content does not state it.`);
+  if (verdict.left !== undefined) ctx.note(ROLE, `Left ${verdict.left.prop} out of the sheet for ${name}: ${LEFT[verdict.left.why]}.`);
   return verdict.draw;
 }
 
-/** Whether the rules are unsure of an item they drew as a note, so the model is asked: text of some length that is no link, picture, recording, conversation or code. */
-export const unsure = (item: Item, draw: Draw): boolean => draw.component === 'note' && (item.kind === 'text' || item.kind === 'file') && item.text.trim().length >= AMBIGUOUS_FROM;
+/**
+ * Whether the rules are unsure of an item, so the model is asked: text of some length that is no link, picture, recording, conversation
+ * or code, which the rules drew as a note, or as an idea, where the model can tell a thought from a chore, a caution or a definition.
+ */
+export const unsure = (item: Item, draw: Draw): boolean => {
+  if (!WHOLE.has(draw.component) || (item.kind !== 'text' && item.kind !== 'file')) return false;
+  const said = item.text.trim() || (draw.component === 'idea' ? item.title : '');
+  return sizeOf(said) >= (SPACELESS.test(said) ? AMBIGUOUS_FROM.spaceless : AMBIGUOUS_FROM.spaced);
+};
 
-async function askComponents(ctx: RoleContext, open: { node: Node; item: Item }[]): Promise<Map<Id, Draw>> {
-  const out = new Map<Id, Draw>();
+
+/**
+ * What the model answered for the unsure items of one pass, by node: the card that stands, or nothing when its answer was refused.
+ * An item with no entry here got no answer, because its call failed, the reply left it out, or the pass was full.
+ */
+async function askComponents(ctx: RoleContext, open: Open[]): Promise<Map<Id, Draw | undefined>> {
+  const out = new Map<Id, Draw | undefined>();
   const asked = open.slice(0, MAX_ASKED_ITEMS);
-  if (asked.length === 0) return out;
+  const asset = { assetUrl: (id: string) => ctx.assets.url(id) };
+
+  /** One call. A call that fails or times out is tried once more as two halves, since a smaller call is a faster one. */
+  const ask = async (part: Open[], again: boolean): Promise<void> => {
+    let reply: ComponentsReply;
+    try {
+      reply = await ctx.model.json({ role: `${ROLE}.components`, system: COMPONENTS_SYSTEM, user: componentsPrompt(part, asset), schema: ComponentsReply, effort: 'low' });
+    } catch (err) {
+      const items = `${part.length} ${part.length === 1 ? 'item' : 'items'}`;
+      ctx.note(ROLE, `A call to choose components for ${items} failed (${message(err)}). ${again ? 'Asking once more.' : `Kept the rule-based views of ${part.length === 1 ? 'it' : 'them'}.`}`);
+      if (!again) return;
+      const half = Math.ceil(part.length / 2);
+      await Promise.all([part.slice(0, half), part.slice(half)].filter((some) => some.length > 0).map((some) => ask(some, false)));
+      return;
+    }
+    // An entry counts once, and only for an item this call asked about.
+    const waiting = new Map(part.map(({ node, item }) => [node.id, item]));
+    for (const entry of reply.items) {
+      const item = waiting.get(entry.id);
+      if (item && waiting.delete(entry.id)) out.set(entry.id, drawn(ctx, entry, item));
+    }
+  };
+
   const calls = Math.ceil(asked.length / ASKED_PER_CALL);
   const each = Math.ceil(asked.length / calls);
-  const parts = Array.from({ length: calls }, (_v, n) => asked.slice(n * each, (n + 1) * each));
-  const replies = await Promise.allSettled(
-    parts.map(async (part) =>
-      ctx.model.json({
-        role: `${ROLE}.components`,
-        system: COMPONENTS_SYSTEM,
-        user: componentsPrompt(part, { assetUrl: (id) => ctx.assets.url(id) }),
-        schema: ComponentsReply,
-        effort: 'low',
-      }),
-    ),
-  );
-  replies.forEach((reply, n) => {
-    if (reply.status === 'rejected') return;
-    // An entry counts once, and only for an item this call asked about.
-    const open = new Map(parts[n]!.map(({ node, item }) => [node.id, item]));
-    for (const entry of reply.value.items) {
-      const item = open.get(entry.id);
-      if (!item || !open.delete(entry.id)) continue;
-      const draw = drawn(ctx, entry, item);
-      if (draw) out.set(entry.id, draw);
-    }
-  });
-  const failed = replies.find((reply) => reply.status === 'rejected');
-  if (failed) ctx.note(ROLE, `The model could not choose components (${message(failed.reason)}). Kept the rule-based views.`);
+  await Promise.all(Array.from({ length: calls }, (_v, n) => ask(asked.slice(n * each, (n + 1) * each), true)));
   return out;
 }
 
@@ -1162,21 +1214,26 @@ function sameView(a: { component: string; props: unknown }, b: { component: stri
   return a.component === b.component && stable(a.props) === stable(b.props);
 }
 
-/** Chooses a component for each given node and composites for their siblings. Rules first, the model only where rules cannot tell. */
-export const renderer: Roles['renderer'] = async (ctx, { nodeIds }) => {
+/**
+ * Chooses a component for each given node and composites for their siblings. Rules first, the model only where rules cannot tell.
+ * On an unsure item, `by: 'renderer'` says the model answered for the item as it is, so it is not asked again until the item changes.
+ */
+export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [] }) => {
   const nodes = [...new Set(nodeIds)].flatMap((id) => ctx.mind.nodes.get(id) ?? []);
+  const changed = new Set(edited);
   const draws = new Map<Id, Draw>();
-  const open: { node: Node; item: Item }[] = [];
+  const open: Open[] = [];
   const assetUrl = (id: string) => ctx.assets.url(id);
   for (const node of nodes) {
     const item = ctx.mind.items.get(node.itemId);
     if (!item) continue;
     const draw = byRule(item, assetUrl);
     const ambiguous = unsure(item, draw);
-    // An earlier choice that still stands in the text is kept, so a second pass costs no model call and cannot lose it.
-    if (ambiguous && node.view.by === 'renderer' && grounded(node.view, item, assetUrl)) continue;
+    // An earlier answer that still stands in the text is kept, so a second pass costs no model call and cannot lose it.
+    // A note or an idea shows nothing an edit could contradict, so after an edit the model is asked about it again.
+    if (ambiguous && node.view.by === 'renderer' && grounded(node.view, item, assetUrl) && !(WHOLE.has(node.view.component) && changed.has(node.id))) continue;
     draws.set(node.id, draw);
-    if (ambiguous) open.push({ node, item });
+    if (ambiguous) open.push({ node, item, now: draw.component });
   }
   const componentOf = (node: Node) => draws.get(node.id)?.component ?? node.view.component;
 
@@ -1185,15 +1242,19 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds }) => {
   const groups: Command[] = [];
   const pools = survey(ctx, parents, componentOf, groups);
 
-  const [chosen] = await Promise.all([askComponents(ctx, open), askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);
-  for (const [id, draw] of chosen) draws.set(id, draw);
+  const [answers] = await Promise.all([askComponents(ctx, open), askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);
+  for (const [id, draw] of answers) if (draw) draws.set(id, draw);
   for (const pool of pools) stack(ctx, pool, componentOf, groups);
 
+  const asked = new Set(open.map(({ node }) => node.id));
   const views: Command[] = [];
   for (const node of nodes) {
     const draw = draws.get(node.id);
-    if (!draw || sameView(draw, node.view)) continue;
-    const view: View = { ...draw, by: 'renderer' };
+    if (!draw) continue;
+    // An unsure item the model did not answer for keeps the rule's card as a default, so the next pass asks again.
+    const by = asked.has(node.id) && !answers.has(node.id) ? 'default' : 'renderer';
+    if (sameView(draw, node.view) && (!asked.has(node.id) || node.view.by === by)) continue;
+    const view: View = { ...draw, by };
     views.push({ type: 'setView', id: node.id, view });
   }
   const removals = groups.filter((c) => c.type === 'removeGroup');

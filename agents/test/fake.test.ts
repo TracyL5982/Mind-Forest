@@ -135,7 +135,7 @@ test('the fake chooses a callout, a sheet or a note for a text the rules left as
   assert.deepEqual(k.notes, []);
 
   assert.equal((await paste('Survey of 40 viewers\nWhat they noticed in the scene, in their own words. fake:invent')).component, 'note');
-  assert.deepEqual(k.notes, ['renderer: Kept "Survey of 40 viewers" as a note: the model\'s fact shows value, which the content does not state.']);
+  assert.deepEqual(k.notes, ['renderer: Kept "Survey of 40 viewers" as the rules drew it: the model\'s fact shows value, which the content does not state.']);
 });
 
 test('the fake model answers the real Renderer about cards, one valid entry for each item it is asked about', async () => {

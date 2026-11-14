@@ -46,7 +46,10 @@ export class FakeModel implements ModelClient {
   /** Answers the Renderer's question about cards as `choose` does, so the real Renderer runs with no model behind it. */
   choosing(): this {
     return this.on('renderer.components', (req): ComponentsReply => ({
-      items: [...req.user.matchAll(/^id: (.+)\ntitle: (.*)\n(?:(?:length|picture): .*\n)*text: ([\s\S]*?)(?=\n\nid: |(?![\s\S]))/gm)].map((asked) => ({ id: asked[1]!, ...choose(asked[3]!) })),
+      items: [...req.user.matchAll(/^id: (.+)\ntitle: (.*)\n(now: idea\n)?(?:(?:length|picture): .*\n)*text: ([\s\S]*?)(?=\n\nid: |(?![\s\S]))/gm)].map((asked) => ({
+        id: asked[1]!,
+        ...choose(asked[4]!, asked[3] ? 'idea' : 'note'),
+      })),
     }));
   }
 
@@ -151,14 +154,15 @@ const LABELLED = /^(\p{L}[\p{L} ]{1,29}):\s+(\S.*)$/u;
 const FIGURE = /^[$€£¥]?\d/;
 
 /**
- * What a model would choose for a text the rules drew as a note, read by pattern instead:
+ * What a model would choose for a text the rules drew as a note or an idea, read by pattern instead:
  *   Caution: hot oil spits            a callout, and so is "Warning:". "Note:" makes a remark of it
  *   Cost: €240                        a figure of a sheet, when the value starts with a number
  *   Best: the bridge; the bookshop    a list of a sheet, its entries set apart by ";"
  * A sheet is a text with a figure or a list written so, and a sentence beside them. Its first line is the heading.
  * A text holding "fake:invent" is given a figure it never states, to show the content check keeping the note.
+ * A text in none of these forms keeps the card it has `now`.
  */
-export function choose(text: string): Omit<Entry, 'id'> {
+export function choose(text: string, now: 'note' | 'idea' = 'note'): Omit<Entry, 'id'> {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (/fake:invent/.test(text)) return { ...NOTE, component: 'fact', subject: 'Share', passage: '99%' };
   const marked = lines.map((line) => MARKED.exec(line)).find(Boolean);
@@ -171,7 +175,7 @@ export function choose(text: string): Omit<Entry, 'id'> {
   const figures = labelled.filter(({ value }) => FIGURE.test(value)).map(({ label, value }) => `${label} | ${value}`);
   const listed = labelled.find(({ value }) => value.includes(';'))?.value.split(/;\s*/).filter(Boolean) ?? [];
   const prose = lines.slice(1).find((line) => !LABELLED.test(line));
-  if (figures.length + listed.length === 0 || !prose) return NOTE;
+  if (figures.length + listed.length === 0 || !prose) return { ...NOTE, component: now };
   const part = (kind: Entry['sections'][number]['kind'], text: string, lines: string[] = []) => ({ kind, text, by: '', lines });
   return {
     ...NOTE,
