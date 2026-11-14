@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { JsonRequest, ModelClient, WebResult } from '../core/ports.ts';
 import { LinkReply, type Description } from '../core/roles/intake/describe.ts';
+import type { ComponentsReply, Entry } from '../core/roles/renderer.ts';
 
 type JsonHandler = (req: JsonRequest<unknown>) => unknown;
 
@@ -40,6 +41,13 @@ export class FakeModel implements ModelClient {
       .on('intake.link', (req) => describe(quoted(req.user)))
       .on('intake.image', named)
       .on('intake.video', named);
+  }
+
+  /** Answers the Renderer's question about cards as `choose` does, so the real Renderer runs with no model behind it. */
+  choosing(): this {
+    return this.on('renderer.components', (req): ComponentsReply => ({
+      items: [...req.user.matchAll(/^id: (.+)\ntitle: (.*)\n(?:(?:length|picture): .*\n)*text: ([\s\S]*?)(?=\n\nid: |(?![\s\S]))/gm)].map((asked) => ({ id: asked[1]!, ...choose(asked[3]!) })),
+    }));
   }
 
   async json<T>(req: JsonRequest<T>): Promise<T> {
@@ -133,5 +141,41 @@ export function describe(text: string): Description {
       : {}),
     excerptText: lines.find((line) => line.startsWith('> '))?.slice(2).trim() ?? '',
     excerptAt: labelled('at'),
+  };
+}
+
+const NOTE: Omit<Entry, 'id'> = { component: 'note', title: '', body: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [] };
+
+const MARKED = /^(caution|warning|note):\s*(\S.*)$/i;
+const LABELLED = /^([^:|=]{2,30}):\s+(\S.*)$/;
+const FIGURE = /^[$€£¥]?\d/;
+
+/**
+ * What a model would choose for a text the rules drew as a note, read by pattern instead:
+ *   Caution: hot oil spits            a callout, and so is "Warning:". "Note:" makes a remark of it
+ *   Cost: €240                        a figure of a sheet, when the value starts with a number
+ *   Best: the bridge; the bookshop    a list of a sheet, its entries set apart by ";"
+ * A sheet is a text with a figure or a list written so, and a sentence beside them. Its first line is the heading.
+ * A text holding "fake:invent" is given a figure it never states, to show the content check keeping the note.
+ */
+export function choose(text: string): Omit<Entry, 'id'> {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (/fake:invent/.test(text)) return { ...NOTE, component: 'fact', title: 'Share', body: '99%' };
+  const marked = lines.map((line) => MARKED.exec(line)).find(Boolean);
+  if (marked) return { ...NOTE, component: 'callout', body: marked[2]!.trim(), tone: marked[1]!.toLowerCase() === 'note' ? 'note' : 'caution' };
+
+  const labelled = lines.flatMap((line) => {
+    const found = LABELLED.exec(line);
+    return found ? [{ label: found[1]!, value: found[2]! }] : [];
+  });
+  const figures = labelled.filter(({ value }) => FIGURE.test(value)).map(({ label, value }) => `${label} | ${value}`);
+  const listed = labelled.find(({ value }) => value.includes(';'))?.value.split(/;\s*/).filter(Boolean) ?? [];
+  const prose = lines.slice(1).find((line) => !LABELLED.test(line));
+  if (figures.length + listed.length === 0 || !prose) return NOTE;
+  const part = (kind: Entry['sections'][number]['kind'], text: string, lines: string[] = []) => ({ kind, text, by: '', lines });
+  return {
+    ...NOTE,
+    component: 'sheet',
+    sections: [part('heading', lines[0]!), part('text', prose), ...(figures.length > 0 ? [part('figures', '', figures)] : []), ...(listed.length > 1 ? [part('list', '', listed)] : [])],
   };
 }

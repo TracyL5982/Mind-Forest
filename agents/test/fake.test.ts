@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Id } from '../src/core/domain.ts';
 import { intake } from '../src/core/roles/intake.ts';
+import { ComponentsReply, renderer } from '../src/core/roles/renderer.ts';
 import { makeNode } from '../src/core/roles/types.ts';
+import { choose } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { kit } from './kit.ts';
 
@@ -101,4 +103,51 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
   };
   assert.deepEqual(made, Object.fromEntries(Object.keys(made).map((id) => [id, id])));
   assert.equal(await paste('function add(a, b) {\n  return a + b;\n}'), 'code', 'pasted code is drawn as code');
+});
+
+const PORTO =
+  'Weekend in Porto\n' +
+  'We took the early train on Friday and walked the river both days, and when it rained on Saturday we sat in the bookshop until it closed and nobody minded. Next time we go in May, before the crowds, and stay an extra night.\n' +
+  'Cost: €240\nNights: 2\nBest: the bridge at dusk; the tiled station; grilled sardines';
+const PORTO_SHEET = {
+  sections: [
+    { kind: 'heading', text: 'Weekend in Porto' },
+    { kind: 'text', text: 'We took the early train on Friday and walked the river both days, and when it rained on Saturday we sat in the bookshop until it closed and nobody minded. Next time we go in May, before the crowds, and stay an extra night.' },
+    { kind: 'figures', facts: [{ label: 'Cost', value: '€240' }, { label: 'Nights', value: '2' }] },
+    { kind: 'list', items: ['the bridge at dusk', 'the tiled station', 'grilled sardines'] },
+  ],
+};
+
+test('the fake chooses a callout, a sheet or a note for a text the rules left as a note, and its choice passes the real checks', async () => {
+  const k = kit();
+  const { treeId, nodeIds } = k.seedTree('Tree', ['Root']);
+  const paste = async (text: string) => {
+    const [item] = await fakeRoles.intake(k.ctx, [{ kind: 'text', text }]);
+    const node = makeNode(k.ctx, item!, { treeId, parent: nodeIds[0]!, status: 'kept', why: '', origin: item!.origin });
+    k.mind.apply({ origin: item!.origin, label: 'paste', commands: [{ type: 'addItem', item: item! }, { type: 'addNode', node }] });
+    k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands: await fakeRoles.renderer(k.ctx, { nodeIds: [node.id] }) });
+    return k.mind.node(node.id).view;
+  };
+
+  assert.deepEqual(await paste(PORTO), { component: 'sheet', props: PORTO_SHEET, by: 'renderer' });
+  assert.deepEqual(await paste('Sourdough\nNote: the starter doubles in about six hours.'), { component: 'callout', props: { text: 'the starter doubles in about six hours.', tone: 'note' }, by: 'renderer' });
+  assert.equal((await paste('The tower, 2019\nBest: the view at night; the lift; the gardens below it')).component, 'note', 'a list with no sentence beside it is no sheet');
+  assert.deepEqual(k.notes, []);
+
+  assert.equal((await paste('Survey of 40 viewers\nWhat they noticed in the scene, in their own words. fake:invent')).component, 'note');
+  assert.deepEqual(k.notes, ['renderer: Kept "Survey of 40 viewers" as a note: the model\'s fact shows value, which the content does not state.']);
+});
+
+test('the fake model answers the real Renderer about cards, one valid entry for each item it is asked about', async () => {
+  const k = kit();
+  k.model.choosing();
+  const long = 'A plain paragraph about how the camera moves through the house, long enough to be worth a second look. '.repeat(14);
+  const { nodeIds } = k.seedTree('Tree', ['Root', 'Porto', 'Kitchen', 'Essay'], { Porto: PORTO, Kitchen: 'Frying\nWarning: hot oil spits when water touches it.', Essay: long });
+  const commands = await renderer(k.ctx, { nodeIds });
+  k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands });
+
+  assert.deepEqual(nodeIds.slice(1).map((id) => k.mind.node(id).view.component), ['sheet', 'callout', 'note']);
+  assert.deepEqual(k.mind.node(nodeIds[1]!).view.props, PORTO_SHEET);
+  assert.deepEqual(k.notes, []);
+  assert.ok(ComponentsReply.safeParse({ items: [{ id: 'a', ...choose(PORTO) }, { id: 'b', ...choose('fake:invent') }, { id: 'c', ...choose('') }] }).success);
 });
