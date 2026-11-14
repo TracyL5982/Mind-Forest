@@ -25,21 +25,32 @@ float raised(const Setting& t, float k) {
     return (t.lead * k - (m.ascent + m.descent)) / 2;
 }
 
-/// |value| as forty significant digits, and the power of ten of the first.
-std::pair<std::string, int> expanded(double a) {
+/// |value| as decimal digits, and the power of ten of the first: the shortest digits that read back as
+/// the same double, which is the number `Intl` rounds, or forty digits of its `exact` value, which is
+/// the number `toFixed` rounds.
+std::pair<std::string, int> digitsOf(double a, bool exact) {
     char buf[64];
-    snprintf(buf, sizeof buf, "%.39e", a);
+    if (exact) {
+        snprintf(buf, sizeof buf, "%.39e", a);
+    } else {
+        for (int p = 0; p <= 16; p++) {
+            snprintf(buf, sizeof buf, "%.*e", p, a);
+            if (strtod(buf, nullptr) == a) break;
+        }
+    }
     const char* e = strchr(buf, 'e');
-    return {std::string(1, buf[0]) + std::string(buf + 2, size_t(e - buf - 2)), atoi(e + 1)};
+    std::string digits(1, buf[0]);
+    if (buf[1] == '.') digits += std::string(buf + 2, size_t(e - buf - 2));
+    return {digits, atoi(e + 1)};
 }
 
 /// `value` rounded half away from zero, keeping the digit worth 10^`last` and none after it.
-Decimal roundedAt(double value, int last) {
+Decimal roundedAt(double value, int last, bool exact) {
     Decimal d;
     d.negative = std::signbit(value);
     double a = std::fabs(value);
     if (a == 0) return d;
-    auto [all, e] = expanded(a);
+    auto [all, e] = digitsOf(a, exact);
     int keep = e - last + 1;
     if (keep < 0) return d;
     std::string kept = all.substr(0, size_t(std::min(keep, int(all.size()))));
@@ -98,11 +109,13 @@ void box(const Pen& pen, float x, float y, float width, float height, Color fill
     pen.ctx.strokePath();
 }
 
-Decimal fixed(double value, int places) { return roundedAt(value, -places); }
+Decimal fixed(double value, int places) { return roundedAt(value, -places, false); }
+
+Decimal toFixed(double value, int places) { return roundedAt(value, -places, true); }
 
 Decimal significant(double value, int figures) {
-    if (value == 0) return roundedAt(value, 0);
-    return roundedAt(value, expanded(std::fabs(value)).second - figures + 1);
+    if (value == 0) return roundedAt(value, 0, false);
+    return roundedAt(value, digitsOf(std::fabs(value), false).second - figures + 1, false);
 }
 
 std::string written(const Decimal& d, int grouped) {

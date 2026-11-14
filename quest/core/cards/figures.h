@@ -32,9 +32,12 @@ struct Decimal {
     int exponent = 0;
     bool negative = false;
 };
-/// `value` rounded half away from zero to `places` decimals, as `toFixed` and `Intl` round.
+/// `value` rounded half away from zero to `places` decimals, as `Intl` rounds it: from the shortest
+/// digits that read back as the same double, so 0.0012345 is 0.001235 to six places.
 Decimal fixed(double value, int places);
-/// `value` rounded half away from zero to `figures` significant digits.
+/// The same as `toFixed` rounds it: from the double's exact value, so 1.005 is 1.00 to two places.
+Decimal toFixed(double value, int places);
+/// `value` rounded half away from zero to `figures` significant digits, as `Intl` rounds it.
 Decimal significant(double value, int figures);
 /// Written out with no exponent and no trailing zero after the point, with a comma between thousands
 /// when the whole part has at least `grouped` digits.

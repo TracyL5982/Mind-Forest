@@ -107,7 +107,7 @@ void detail(Sheet& sheet, const Item&, const Json& props) {
     Parts p = parts(props);
     bool percent = std::any_of(p.rows.begin(), p.rows.end(), [](const Part& row) { return row.written.back() == '%'; });
     if (!percent) {
-        for (Part& row : p.rows) row.written += " \xC2\xB7 " + written(fixed(row.value / (p.total ? p.total : 1) * 100, 1), 4) + "%";
+        for (Part& row : p.rows) row.written += " \xC2\xB7 " + written(toFixed(row.value / (p.total ? p.total : 1) * 100, 1), 4) + "%";
     }
     float k = sheet.k, inner = Sheet::width - 24, labels = 0, shares = 0;
     for (const Part& row : p.rows) {
