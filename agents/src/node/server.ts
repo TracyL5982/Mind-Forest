@@ -8,6 +8,7 @@ import { Pipeline, type Outbound } from '../core/pipeline.ts';
 import { DEFAULT_SETTINGS, type Handoff, type Roles, type Settings } from '../core/roles/types.ts';
 import { Mindstorm } from '../core/state.ts';
 import { DiskAssets } from './assets.ts';
+import type { Maps } from './geocoder.ts';
 import { ClientMessage, PROTOCOL_VERSION } from './protocol.ts';
 import { SqliteStore } from './store.ts';
 import { makeTools } from './tools.ts';
@@ -24,6 +25,8 @@ export interface ServerOptions {
   token?: string;
   instagram?: { token: string; userId: string };
   settings?: Partial<Settings>;
+  /** Maps switched on. Without it no place is looked up and clients are told to load no tiles. */
+  maps?: Maps;
   log?: (line: string) => void;
 }
 
@@ -58,6 +61,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID() });
   mind.load(store.all());
   const settings: Settings = { ...DEFAULT_SETTINGS, ...opts.settings };
+  const maps = opts.maps ? { tiles: opts.maps.tiles, credit: opts.maps.credit, link: opts.maps.link } : null;
   const sockets = new Set<WebSocket>();
   const broadcast = (message: unknown) => {
     const text = JSON.stringify(message);
@@ -81,7 +85,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     mind,
     roles: opts.roles,
     model: opts.model,
-    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram }),
+    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, geocoder: opts.maps?.geocoder }),
     assets,
     store,
     settings,
@@ -138,7 +142,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       const text = await opts.model.transcribe({ audio, mime: req.headers['content-type'] ?? 'audio/wav' });
       return json(res, 200, { text });
     }
-    if (req.method === 'GET' && path === '/api/state') return json(res, 200, { snapshot: mind.snapshot(), settings });
+    if (req.method === 'GET' && path === '/api/state') return json(res, 200, { snapshot: mind.snapshot(), settings, maps });
     if (req.method === 'GET' && path.startsWith('/assets/')) {
       const id = path.slice('/assets/'.length);
       const asset = await assets.get(id);
@@ -172,7 +176,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
 
   wss.on('connection', (ws: WebSocket) => {
     sockets.add(ws);
-    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, undo: pipeline.undoLabel() }));
+    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, maps, undo: pipeline.undoLabel() }));
     ws.on('close', () => sockets.delete(ws));
     ws.on('message', (raw) => {
       let message: ClientMessage;

@@ -3,6 +3,7 @@ import type { Found, ModelClient } from '../core/ports.ts';
 import { intake } from '../core/roles/intake.ts';
 import { codeIn } from '../core/roles/intake/code.ts';
 import { structure } from '../core/roles/intake/describe.ts';
+import { located } from '../core/roles/intake/located.ts';
 import { byRule, drawn, layoutDraft, unsure } from '../core/roles/renderer.ts';
 import { catalogued } from '../core/roles/scout.ts';
 import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles } from '../core/roles/types.ts';
@@ -82,7 +83,7 @@ export const fakeRoles: Roles = {
     const describer = new FakeModel().describing();
     const model: ModelClient = { json: (req) => describer.json(req), search: (req) => describer.search(req), image: (req) => describer.image(req), transcribe: (req) => ctx.model.transcribe(req) };
     const heard = await Promise.all(dumps.map((d) => (d.kind === 'asset' && d.mime.startsWith('audio/') ? intake({ ...ctx, model }, [d]) : undefined)));
-    return dumps.flatMap((d, n): Item[] | Item => {
+    return located(ctx, dumps.flatMap((d, n): Item[] | Item => {
       if (heard[n]) return heard[n];
       if (d.kind === 'link') {
         return makeItem(ctx, { kind: 'link', title: d.url.replace(/^https?:\/\//, '').slice(0, 60), summary: 'A page you dropped in.', tags: ['link'], origin: { by: 'user' }, source: { from: 'link', url: d.url } });
@@ -95,7 +96,7 @@ export const fakeRoles: Roles = {
       }
       const described = describe(d.text);
       return makeItem(ctx, { kind: 'text', title: described.title, text: d.text, summary: d.text.slice(0, 160), data: { ...structure(described, d.text), ...(codeIn(d.text) ? { code: codeIn(d.text) } : {}) }, tags: described.tags, origin: { by: 'user' }, source: { from: 'paste' } });
-    });
+    }));
   },
 
   async filer(ctx, items) {

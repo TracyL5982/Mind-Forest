@@ -420,6 +420,19 @@ button, input, textarea { font: inherit; color: inherit; }
 .place-head .fact-value, .place-head .card-title { min-width: 0; }
 .detail-place .place-head .fact-value, .detail-place .place-head .card-title { overflow-wrap: anywhere; }
 
+/* A map: its tiles in a layer at the middle of a plain ground, a pin at each point, and the provider's credit in a corner. */
+.map { position: relative; flex: none; overflow: hidden; background: #20262c; }
+.map-layer { position: absolute; left: 50%; top: 50%; }
+.map-tiles { position: absolute; inset: 0; background-repeat: no-repeat; background-size: 256px 256px; filter: saturate(0.7) brightness(0.86); }
+.map-pin { position: absolute; overflow: visible; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); }
+.map-pin path { fill: var(--accent); stroke: rgba(0, 0, 0, 0.6); stroke-width: 1.2; }
+.map-pin circle { fill: var(--face); }
+.map-credit { position: absolute; right: 0; bottom: 0; padding: 0 5px; border-top-left-radius: 5px; color: #24272b; background: rgba(255, 255, 255, 0.78); font-size: 10px; line-height: 14px; white-space: nowrap; }
+a.map-credit { text-decoration: none; }
+a.map-credit:hover { text-decoration: underline; }
+.place-map { box-shadow: inset 0 -1px 0 var(--line); }
+.detail-map { border-radius: 14px; }
+
 /* sheet: one card assembled from parts under one title, each part drawn as the card of its own kind draws it, and each after
    the first under a hairline. components/sheet.js sets the room around each part, so the footprint and the page agree. */
 .c-sheet { padding: 0; gap: 0; }

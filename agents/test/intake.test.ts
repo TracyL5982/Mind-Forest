@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Item } from '../src/core/domain.ts';
+import { gpsOf } from '../src/core/exif.ts';
 import type { JsonRequest } from '../src/core/ports.ts';
 import { intake } from '../src/core/roles/intake.ts';
 import { byRule } from '../src/core/roles/renderer.ts';
@@ -935,4 +936,84 @@ test('when the model throws, every dump still becomes an item described in plain
   assert.equal((items[3]!.data.messages as unknown[]).length, 2);
   assert.ok(k.notes.some((n) => n.startsWith('intake:') && n.includes('4 of 4')));
   assertWellFormed(items);
+});
+
+/** A JPEG that holds nothing but an Exif block with the given GPS position, written in either byte order. */
+function located(lat: number, lon: number, order: 'II' | 'MM' = 'II'): Uint8Array {
+  const little = order === 'II';
+  const tiff = new DataView(new ArrayBuffer(128));
+  const u16 = (at: number, v: number) => tiff.setUint16(at, v, little);
+  const u32 = (at: number, v: number) => tiff.setUint32(at, v, little);
+  const entry = (at: number, tag: number, type: number, count: number, value: number) => (u16(at, tag), u16(at + 2, type), u32(at + 4, count), u32(at + 8, value));
+  const dms = (at: number, degrees: number) => {
+    const whole = Math.abs(degrees);
+    const minutes = (whole % 1) * 60;
+    [[Math.floor(whole), 1], [Math.floor(minutes), 1], [Math.round((minutes % 1) * 60 * 1000), 1000]].forEach(([top, below], n) => (u32(at + n * 8, top!), u32(at + n * 8 + 4, below!)));
+  };
+  tiff.setUint16(0, little ? 0x4949 : 0x4d4d);
+  u16(2, 42);
+  u32(4, 8);
+  u16(8, 1);
+  entry(10, 0x8825, 4, 1, 26);
+  u16(26, 4);
+  entry(28, 1, 2, 2, 0);
+  tiff.setUint8(36, (lat < 0 ? 'S' : 'N').charCodeAt(0));
+  entry(40, 2, 5, 3, 80);
+  entry(52, 3, 2, 2, 0);
+  tiff.setUint8(60, (lon < 0 ? 'W' : 'E').charCodeAt(0));
+  entry(64, 4, 5, 3, 104);
+  dms(80, lat);
+  dms(104, lon);
+  const exif = [...bytes('Exif\0\0'), ...new Uint8Array(tiff.buffer)];
+  return Uint8Array.from([0xff, 0xd8, 0xff, 0xe1, (exif.length + 2) >> 8, (exif.length + 2) & 0xff, ...exif, 0xff, 0xd9]);
+}
+
+const near = (at: unknown, lat: number, lon: number) => {
+  const { lat: y, lon: x } = at as { lat: number; lon: number };
+  assert.ok(Math.abs(y - lat) < 1e-5 && Math.abs(x - lon) < 1e-5, `${JSON.stringify(at)} is ${lat}, ${lon}`);
+};
+
+test('a JPEG\'s own GPS position is read in either byte order, and a picture without one has none', () => {
+  near(gpsOf(located(38.7223, -9.1393)), 38.7223, -9.1393);
+  near(gpsOf(located(-33.8568, 151.2153, 'MM')), -33.8568, 151.2153);
+  assert.equal(gpsOf(Uint8Array.from([0xff, 0xd8, 0xff, 0xd9])), null);
+  assert.equal(gpsOf(Uint8Array.from([137, 80, 78, 71])), null);
+  assert.equal(gpsOf(located(38.7223, -9.1393).slice(0, 60)), null, 'a block cut short');
+});
+
+test('a dropped photo is placed where it was taken, with maps on or off, and nothing is looked up for it', async () => {
+  const k = kit();
+  const asked: string[] = [];
+  const photo = await k.assets.put(located(41.1496, -8.611), 'image/jpeg', 'ribeira.jpg');
+  const png = await k.assets.put(Uint8Array.from([137, 80, 78, 71]), 'image/png', 'plan.png');
+  k.model.on('intake.image', () => ({ ...described('A river front', { where: 'ribeira' }), description: 'Houses on a river front.' }));
+
+  const off = await intake(k.ctx, [{ kind: 'asset', asset: photo.id, mime: 'image/jpeg', name: 'ribeira.jpg' }, { kind: 'asset', asset: png.id, mime: 'image/png', name: 'plan.png' }]);
+  k.ctx.tools.geocoder = { locate: async (name) => (asked.push(name), { lat: 1, lon: 2 }) };
+  const [on] = await intake(k.ctx, [{ kind: 'asset', asset: photo.id, mime: 'image/jpeg', name: 'ribeira.jpg' }]);
+
+  near(off[0]!.data.at, 41.1496, -8.611);
+  assert.equal(off[1]!.data.at, undefined);
+  near(on!.data.at, 41.1496, -8.611);
+  assert.deepEqual(asked, [], 'the photo says where it is, so its place name is not looked up');
+});
+
+test('a place a text names is looked up only when maps are on, and a place the geocoder does not know is left without one', async () => {
+  const k = kit();
+  const asked: string[] = [];
+  const text = 'Three days in Lisbon in March.\n\nA week on Atlantis.';
+  k.model.on('intake.text', () => ({
+    entries: [
+      { dump: 0, text: 'Three days in Lisbon in March.', ...described('Lisbon', { where: 'Lisbon' }) },
+      { dump: 0, text: 'A week on Atlantis.', ...described('Atlantis', { where: 'Atlantis' }) },
+    ],
+  }));
+
+  const off = await intake(k.ctx, [{ kind: 'text', text: `${text}\n\n${'More. '.repeat(300)}` }]);
+  k.ctx.tools.geocoder = { locate: async (name) => (asked.push(name), name === 'Lisbon' ? { lat: 38.7223, lon: -9.1393 } : null) };
+  const on = await intake(k.ctx, [{ kind: 'text', text: `${text}\n\n${'More. '.repeat(300)}` }]);
+
+  assert.deepEqual(off.map((item) => item.data.at), [undefined, undefined]);
+  assert.deepEqual(on.map((item) => item.data.at), [{ lat: 38.7223, lon: -9.1393 }, undefined]);
+  assert.deepEqual(asked.sort(), ['Atlantis', 'Lisbon']);
 });

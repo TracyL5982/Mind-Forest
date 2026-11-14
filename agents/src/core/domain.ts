@@ -41,7 +41,8 @@ export type Source = z.infer<typeof Source>;
  * Known keys: chart {labels, values, unit?}, steps string[], messages {role, text}[], facts {label, value}[],
  * person {name, role?}, quote {text, by?}, code {language?, source}, when string (a date), site string,
  * where string, people string[], pros string[], cons string[], table {heads, rows string[][]}, question and answer,
- * term and definition, items string[] with checklist boolean[], colours {name, value}[], excerpt {text, at?}.
+ * term and definition, items string[] with checklist boolean[], colours {name, value}[], excerpt {text, at?},
+ * at {lat, lon} (where the item is, in degrees, from a photo's GPS position or a lookup of `where`).
  * A Scout pick also carries what its source catalogued: kind (artwork, paper or book), medium, holder, authors string[],
  * authorsCut true (when the source lists only the first of them), venue.
  * A recording carries sound (a `Sound`), and its text is its transcript.

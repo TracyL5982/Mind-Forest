@@ -127,6 +127,20 @@ export interface Tools {
   code: {
     generate(prompt: string): Promise<{ title: string; language: string; source: string }>;
   };
+  /** Present only when maps are switched on, because a lookup sends a place's name off the machine. */
+  geocoder?: Geocoder;
+}
+
+/** A point on the earth in degrees, as GPS gives it: `lat` from -90 to 90, north positive, and `lon` from -180 to 180, east positive. */
+export interface LatLon {
+  lat: number;
+  lon: number;
+}
+
+/** Finds where a named place is. */
+export interface Geocoder {
+  /** Null when the place is not known or the lookup failed. Never throws. */
+  locate(name: string): Promise<LatLon | null>;
 }
 
 export interface Assets {
