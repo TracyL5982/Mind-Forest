@@ -1,5 +1,5 @@
 import { h, s } from '../dom.js';
-import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, andMore, fold, list, say, textWidth } from './shared.js';
+import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, andMore, list, say, textWidth, wrap } from './shared.js';
 
 const WIDTH = 256;
 const COLUMN = WIDTH - SIDES;
@@ -15,8 +15,8 @@ function plan(item, props) {
   const tally = checked ? `${checked.filter(Boolean).length}/${entries.length}` : '';
   return {
     entries, checked, tally,
-    titleLines: fold(item.title || 'Untitled', COLUMN - (tally ? 10 + textWidth(tally) : 0), TITLE_LETTER, 2),
-    rows: entries.slice(0, SHOWN).map((entry) => fold(entry, COLUMN - MARK, TEXT_LETTER, 2)),
+    titleLines: wrap(item.title || 'Untitled', COLUMN - (tally ? 10 + textWidth(tally) : 0), TITLE_LETTER, 2),
+    rows: entries.slice(0, SHOWN).map((entry) => wrap(entry, COLUMN - MARK, TEXT_LETTER, 2)),
   };
 }
 

@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, andMore, figureNeed, fold, list, say, text, wrap } from './shared.js';
+import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, andMore, figureNeed, list, say, text, wrap } from './shared.js';
 
 const WIDTH = 320;
 const COLUMN = WIDTH - SIDES;
@@ -13,18 +13,23 @@ const MOST_LINES = 8;
 
 const pairs = (props) => list(props.facts).map((fact) => ({ label: text(fact?.label), value: text(fact?.value) }));
 
+/** A value that needs more than two lines in half a row is given a row of its own. */
+const isLong = (fact) => wrap(fact.value, HALF, TITLE_LETTER, 3) > 2;
+
 /**
- * Facts sit two to a row, and a last one left alone has the whole row. A row is set in the largest
- * size that holds each of its values on one line. Past the smallest a value wraps and the row grows
- * with it. The smallest size is the title's, set a little tighter, so its lines are counted in the
- * title face. A value is drawn whole whatever the estimate, and never ended with an ellipsis.
+ * Facts sit two to a row. One with a long value, or with no short neighbour after it, has the
+ * whole row. A row is set in the largest size that holds each of its values on one line. Past the
+ * smallest a value wraps and the row grows with it. The smallest size is the title's, set a little
+ * tighter, so its lines are counted in the title face. A value is drawn whole whatever the
+ * estimate, and never ended with an ellipsis.
  */
 function plan(item, props) {
   const facts = pairs(props);
   const rows = [];
-  for (let i = 0; i < facts.length; i += 2) {
-    const cells = facts.slice(i, i + 2);
-    const room = cells.length === 1 ? COLUMN : HALF;
+  for (let i = 0; i < facts.length; i += rows.at(-1).cells.length) {
+    const paired = i + 1 < facts.length && !isLong(facts[i]) && !isLong(facts[i + 1]);
+    const cells = facts.slice(i, i + (paired ? 2 : 1));
+    const room = paired ? HALF : COLUMN;
     const size = SIZES.find((step) => cells.every((cell) => figureNeed(cell.value, step) <= room * 100));
     const [cls, lead] = size ?? SIZES.at(-1);
     const drawn = cells.map((cell) => {
@@ -35,7 +40,7 @@ function plan(item, props) {
     rows.push({ cls, cells: drawn, height: Math.max(...drawn.map((cell) => cell.height)) });
   }
   const more = Number.isInteger(props.more) && props.more > 0 ? props.more : 0;
-  return { rows, more, titleLines: fold(item.title || 'Untitled', COLUMN, TITLE_LETTER, 2) };
+  return { rows, more, titleLines: wrap(item.title || 'Untitled', COLUMN, TITLE_LETTER, 2) };
 }
 
 export const shows = [];

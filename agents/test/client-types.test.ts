@@ -37,6 +37,13 @@ const GROWING: Record<string, Given[]> = {
     { props: { heads: ['a', 'b', 'c'], rows: Array.from({ length: 6 }, () => ['1', '2', words(3)]) } },
     { props: { heads: ['a', 'b', 'c'], rows: Array.from({ length: 40 }, () => ['1', '2', words(3)]) } },
   ],
+  excerpt: [
+    { item: { title: '' }, props: { text: 'A short passage.' } },
+    { props: { text: 'A short passage.' } },
+    { props: { text: 'A short passage.', at: 'Chapter 1' } },
+    { props: { text: words(14), at: 'Chapter 1', source: 'example.org' } },
+    { props: { text: words(40), at: 'Chapter 1', source: 'example.org' } },
+  ],
 };
 
 test('the footprint of each structured card type is whole, the same each time it is asked, and grows with what the card holds', async () => {

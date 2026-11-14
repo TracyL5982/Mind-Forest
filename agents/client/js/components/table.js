@@ -1,5 +1,5 @@
 import { h, clamp } from '../dom.js';
-import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, fold, graphemes, list, say, spread, text, textWidth } from './shared.js';
+import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, graphemes, list, say, spread, text, textWidth, wrap } from './shared.js';
 
 const NARROW = 200;
 const WIDE = 360;
@@ -55,7 +55,7 @@ function plan(item, props) {
     rows: shown.map((row) => row.slice(0, count)),
     numbers: kept.map((column) => column.number),
     widths, width,
-    titleLines: fold(item.title || 'Untitled', width - SIDES, TITLE_LETTER, 2),
+    titleLines: wrap(item.title || 'Untitled', width - SIDES, TITLE_LETTER, 2),
     foot: [moreRows > 0 && counted(moreRows, 'row'), moreColumns > 0 && counted(moreColumns, 'column')].filter(Boolean).join(', '),
   };
 }

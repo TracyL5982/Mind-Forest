@@ -1,0 +1,53 @@
+import { h } from '../dom.js';
+import { FRAME, PASSAGE_LETTER, SIDES, TEXT, TITLE, say, text, wrap } from './shared.js';
+
+const WIDTH = 288;
+/** The rule down the passage's left side and the gap after it. */
+const RULE = 14;
+const COLUMN = WIDTH - SIDES - RULE;
+const MOST_LINES = 6;
+
+/** The line the Scout ends a page's text with: who made it, when, and the source it searched. */
+function label(item) {
+  return [...new Set([item.data?.by, item.data?.date, item.data?.from].filter((part) => typeof part === 'string' && part.trim()))].join(', ');
+}
+
+/** The passage without that line, which the chips and the source line say again. */
+function passage(item, props) {
+  const whole = text(props.text).trim();
+  const ending = label(item);
+  return ending && whole.endsWith(`\n\n${ending}`) ? whole.slice(0, -ending.length).trim() : whole;
+}
+
+const flat = (words) => words.replace(/\s+/g, ' ');
+
+function plan(item, props) {
+  const words = flat(passage(item, props));
+  return {
+    words,
+    lines: wrap(words, COLUMN, PASSAGE_LETTER, MOST_LINES),
+    title: item.title || '',
+    where: [text(props.at).trim(), text(props.source).trim()].filter(Boolean).join(' · '),
+  };
+}
+
+export const shows = ['site', 'from'];
+
+export function size(item, props) {
+  const { lines, title, where } = plan(item, props);
+  return [WIDTH, FRAME + lines * TITLE + (title || where ? 10 + (title ? TEXT : 0) + (where ? TEXT : 0) : 0)];
+}
+
+const from = (title, where, clamped) => (title || where) && h('div', { class: 'excerpt-from' },
+  title && say('div', `excerpt-title ${clamped}`, title),
+  where && say('div', `excerpt-where ${clamped}`, where));
+
+export function draw(item, props) {
+  const { words, lines, title, where } = plan(item, props);
+  return [say('blockquote', `excerpt-text clamp-${lines}`, words), from(title, where, 'clamp-1')];
+}
+
+export function detail(item, props) {
+  const { where } = plan(item, props);
+  return [h('div', { class: 'detail-excerpt' }, say('blockquote', 'excerpt-text', passage(item, props)), from('', where, ''))];
+}

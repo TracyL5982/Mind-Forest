@@ -113,7 +113,7 @@ export const TITLE_LETTER = 93;
 export const TEXT_LETTER = 72;
 export const QUOTE_LETTER = 78;
 /** One letter of the same serif set upright, as a passage and a definition are. It counts in the quote's column. */
-export const PASSAGE_LETTER = 87;
+export const PASSAGE_LETTER = 92;
 
 /** A letter width names its face. Any letter but these is one of a figure's sizes. */
 const FACES = [[TITLE_LETTER], [TEXT_LETTER], [QUOTE_LETTER, PASSAGE_LETTER]];
