@@ -1,6 +1,7 @@
 import type { Command, Item } from '../core/domain.ts';
 import type { Found } from '../core/ports.ts';
 import { structure } from '../core/roles/intake/describe.ts';
+import { byRule, grounded } from '../core/roles/renderer.ts';
 import { catalogued } from '../core/roles/scout.ts';
 import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles } from '../core/roles/types.ts';
 import { describe } from './model.ts';
@@ -105,15 +106,18 @@ export const fakeRoles: Roles = {
   },
 
   async renderer(ctx, { nodeIds }) {
-    const commands: Command[] = [];
-    for (const id of nodeIds) {
-      const item = ctx.mind.itemOf(id);
-      const d = item.data as { facts?: { label: string; value: string }[]; steps?: string[]; chart?: { labels: string[]; values: number[]; unit?: string } };
-      if (d.facts?.[0]) commands.push({ type: 'setView', id, view: { component: 'fact', props: d.facts[0], by: 'renderer' } });
-      else if (d.steps) commands.push({ type: 'setView', id, view: { component: 'steps', props: { steps: d.steps }, by: 'renderer' } });
-      else if (d.chart) commands.push({ type: 'setView', id, view: { component: 'chart', props: { chart: 'bar', ...d.chart }, by: 'renderer' } });
-    }
-    return commands;
+    const assetUrl = (id: string) => ctx.assets.url(id);
+    return nodeIds.flatMap((id): Command[] => {
+      const node = ctx.mind.nodes.get(id);
+      const item = node && ctx.mind.items.get(node.itemId);
+      if (!node || !item) return [];
+      // No rule draws a callout, so the fake draws one from a line that opens "Caution:", "Warning:" or "Note:".
+      const marked = /^(caution|warning|note):\s*(\S.*)$/im.exec(item.text);
+      const callout = { component: 'callout', props: { text: marked?.[2]?.trim(), tone: marked?.[1]!.toLowerCase() === 'note' ? 'note' : 'caution' } };
+      const draw = marked && grounded(callout, item, assetUrl) ? callout : byRule(item, assetUrl);
+      const same = draw.component === node.view.component && JSON.stringify(draw.props) === JSON.stringify(node.view.props);
+      return same ? [] : [{ type: 'setView', id, view: { ...draw, by: 'renderer' } }];
+    });
   },
 
   async packager(ctx, { scope, note }) {

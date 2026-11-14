@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import type { Id } from '../src/core/domain.ts';
 import { intake } from '../src/core/roles/intake.ts';
+import { makeNode } from '../src/core/roles/types.ts';
+import { fakeRoles } from '../src/fake/roles.ts';
 import { kit } from './kit.ts';
 
 /** What the real Intake keeps of a pasted text when the fake clerk describes it. */
@@ -54,4 +57,47 @@ test('the fake clerk answers for a link and a photo with a full reply', async ()
   assert.deepEqual(link!.data, { where: 'Porto', site: 'example.com' });
   assert.equal(photo!.title, 'beach.jpg');
   assert.equal(k.notes.length, 0, 'no reply was refused by its schema');
+});
+
+test('the fake clerk reads facts and a series, and the fake Renderer draws every structured type from a pasted text or a request', async () => {
+  assert.deepEqual(await pasted('Eiffel Tower\nHeight = 330 m\nBuilt = 1889'), { facts: [{ label: 'Height', value: '330 m' }, { label: 'Built', value: '1889' }] });
+  assert.deepEqual(await pasted('Budget\nChart: Rent 50%, Food 30%, Other 20%'), { chart: { labels: ['Rent', 'Food', 'Other'], values: [50, 30, 20], unit: '%' } });
+  assert.deepEqual(await pasted('Films\nChart: 1960s 3, 1980s 9'), { chart: { labels: ['1960s', '1980s'], values: [3, 9] } });
+
+  const k = kit({ picksPerRun: 1 });
+  const { treeId, nodeIds } = k.seedTree('Tree', ['Root']);
+  const root = nodeIds[0]!;
+  const drawn = async (ids: Id[]) => {
+    k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands: await fakeRoles.renderer(k.ctx, { nodeIds: ids }) });
+    return ids.map((id) => k.mind.node(id).view.component);
+  };
+  const paste = async (text: string) => {
+    const [item] = await fakeRoles.intake(k.ctx, [{ kind: 'text', text }]);
+    const node = makeNode(k.ctx, item!, { treeId, parent: root, status: 'kept', why: '', origin: item!.origin });
+    k.mind.apply({ origin: item!.origin, label: 'paste', commands: [{ type: 'addItem', item: item! }, { type: 'addNode', node }] });
+    return (await drawn([node.id]))[0];
+  };
+  const ask = async (need: string) => {
+    const commands = await fakeRoles.scout(k.ctx, { anchor: root, need, mode: 'more' });
+    k.mind.apply({ origin: { by: 'agent', role: 'scout' }, label: 'scout', commands });
+    return (await drawn(commands.flatMap((c) => (c.type === 'addNode' ? [c.node.id] : []))))[0];
+  };
+
+  const made = {
+    facts: await paste('Eiffel Tower\nHeight = 330 m\nBuilt = 1889\nFloors = 3'),
+    table: await paste('Plan | Price\nSolo | $8\nTeam | $20'),
+    list: await paste('Packing\n[x] passport\n[ ] charger'),
+    breakdown: await paste('Budget\nChart: Rent 50%, Food 30%, Other 20%'),
+    qa: await paste('Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.'),
+    callout: await paste('Sourdough\nCaution: water above 40 °C kills the yeast.'),
+    excerpt: await paste('The house remembers.\n> Every stair keeps the weight of who climbed it.\nAt: Chapter 3'),
+    definition: await paste('Term: Parallax\nDefinition: the apparent shift of an object when the viewer moves'),
+    idea: await paste('Build a treehouse'),
+    proscons: await paste('Moving to Rust\nPros: no data races, one binary\nCons: slow builds'),
+    swatch: await paste('Palette: Ember #E4572E, Lagoon #17BEBB'),
+    artwork: await ask('find a museum painting of stairs'),
+    reference: await ask('find a paper on the dolly zoom'),
+    place: await paste('Lisbon\nWhere: Lisbon'),
+  };
+  assert.deepEqual(made, Object.fromEntries(Object.keys(made).map((id) => [id, id])));
 });

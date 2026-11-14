@@ -85,6 +85,8 @@ const isBullet = (line: string) => /^(?:[-*•]\s|\[[ xX]\]\s)/.test(line);
  *   - one / - two                     a list, and a checklist when every line starts [ ] or [x]
  *   Ember #E4572E                     a colour, named by the capitalised word before it
  *   > a passage                       an excerpt, with an optional line "At: Chapter 3"
+ *   Height = 330 m                    a fact, one for each such line
+ *   Chart: Rent 50%, Food 30%         a series, in percent when every entry is
  * A text holding "fake:invent" is also given a place it never names, to show the grounding check dropping it.
  */
 export function describe(text: string): Description {
@@ -104,6 +106,7 @@ export function describe(text: string): Description {
   const bullets = pros.length + cons.length > 0 ? [] : lines.filter(isBullet).map((line) => BULLET.exec(line)!);
   const rows = lines.filter((line) => line.includes('|'));
   const first = lines.find(Boolean) ?? '';
+  const series = list('chart').map((entry) => /^(.+?)\s+(-?\d+(?:\.\d+)?)(%?)$/.exec(entry));
 
   return {
     ...blank(),
@@ -121,6 +124,13 @@ export function describe(text: string): Description {
     definition: labelled('definition'),
     ...(bullets.length >= 2 ? { items: bullets.map((b) => b[2]!), checklist: bullets.every((b) => b[1]) ? bullets.map((b) => b[1] !== ' ') : [] } : {}),
     colours: [...text.matchAll(/(?:([A-Z][\w-]*) )?(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3}))\b/g)].map((m) => ({ name: m[1] ?? '', value: m[2]! })),
+    facts: lines.flatMap((line) => {
+      const fact = /^([^=|]+?)\s*=\s*(\S.*)$/.exec(line);
+      return fact ? [{ label: fact[1]!, value: fact[2]! }] : [];
+    }),
+    ...(series.length >= 2 && series.every(Boolean)
+      ? { chartLabels: series.map((entry) => entry![1]!), chartValues: series.map((entry) => Number(entry![2])), chartUnit: series.every((entry) => entry![3]) ? '%' : '' }
+      : {}),
     excerptText: lines.find((line) => line.startsWith('> '))?.slice(2).trim() ?? '',
     excerptAt: labelled('at'),
   };
