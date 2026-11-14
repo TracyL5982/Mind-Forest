@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Item } from '../src/core/domain.ts';
-import { byRule, grounded, unsure } from '../src/core/roles/renderer.ts';
+import { byRule, grounded, renderer, unsure } from '../src/core/roles/renderer.ts';
+import { makeNode } from '../src/core/roles/types.ts';
+import { kit } from './kit.ts';
 import { COMPONENT_IDS, isValidView } from '../src/core/views.ts';
 import { FakeModel } from '../src/fake/model.ts';
-import { ACTIVITIES, agrees, assetUrl, ORIGINS, run, samples } from './formats.ts';
+import { ACTIVITIES, agrees, assetUrl, ORIGINS, pools, run, samples } from './formats.ts';
 
 const SAMPLES = samples();
 
@@ -70,4 +72,28 @@ test('the whole set runs through the real Renderer with the fake model, which ch
   assert.deepEqual(asked.filter((outcome) => !outcome.reply).map((outcome) => outcome.sample.key), [], 'the fake answers for every item it is asked about');
   for (const outcome of outcomes) if (!outcome.asked) assert.equal(outcome.drawn, outcome.ruled, outcome.sample.key);
   for (const outcome of asked) if (outcome.ruled === 'idea') assert.equal(outcome.drawn, 'idea', `${outcome.sample.key}: the fake keeps an idea`);
+});
+
+/** The arrangements plain code makes. The others are the model's to propose, so the rules alone leave their pools ungrouped. */
+const RULED = ['overview', 'moodboard', 'gallery', 'timeline', 'stack'];
+
+test('each pool of siblings is arranged by the rules as a person would, or left for the model, and four pools want no group at all', async () => {
+  const POOLS = pools();
+  assert.ok(POOLS.length >= 10);
+  assert.ok(POOLS.filter((pool) => pool.expect === 'none').length >= 4);
+  for (const pool of POOLS) {
+    const k = kit();
+    k.model.choosing().on('renderer.composites', () => ({ groups: [] }));
+    const { treeId, nodeIds } = k.seedTree(pool.key, ['Parent']);
+    const ids = pool.siblings.map(({ status, item }) => {
+      assert.ok(Item.safeParse(item).success, `${pool.key}: ${item.title} is an item`);
+      const node = makeNode(k.ctx, item, { treeId, parent: nodeIds[0]!, status, why: '', origin: item.origin });
+      k.mind.apply({ origin: item.origin, label: 'sibling', commands: [{ type: 'addItem', item }, { type: 'addNode', node }] });
+      return node.id;
+    });
+    const commands = await renderer(k.ctx, { nodeIds: ids });
+    k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands });
+    const drawn = [...k.mind.groups.values()].map((g) => [g.composite, g.members.length]);
+    assert.deepEqual(drawn, RULED.includes(pool.expect) ? [[pool.expect, ids.length]] : [], `${pool.key}: ${pool.what}`);
+  }
 });

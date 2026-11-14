@@ -53,6 +53,8 @@ The 47 items written for the model are of five kinds:
 - Nine pieces of prose where `note` is right and the model must not find a structure.
 - Ten Chinese texts of 21 to 33 characters, the `D` items: three cautions, two definitions, two questions with their answers and three ideas. Intake extracted nothing from any of them. A rule cannot tell them apart, so the model must.
 
+Beside the items, `pools` holds ten sets of siblings under one parent, each with the arrangement a person would draw them as: an `overview` in English and in Chinese, a `moodboard`, a `gallery`, a `ranked` set of picks, a Chinese `matrix`, and four where no group is right. `npm test` runs each through the real Renderer with a model that proposes no group, and checks that the rules make the expected arrangement where plain code makes it and no group anywhere else. The `ranked` and `matrix` pools are the model's to arrange. `npm run formats` does not score pools yet.
+
 ## Score the rules
 
 ```

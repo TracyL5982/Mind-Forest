@@ -70,7 +70,7 @@ test('500 member sets of each new arrangement place no card over another or outs
       const count = fewest + Math.floor(next() * (Math.min(most, 12) - fewest + 1));
       const ids = Array.from({ length: count }, (_, i) => `m${i}`);
       const scale = next() < 0.5 ? 0.86 : 1;
-      const sizes = new Map(ids.map((id) => [id, [(119 + Math.floor(next() * 400)) * scale, (40 + Math.floor(next() * 560)) * scale]]));
+      const sizes = new Map(ids.map((id): [string, [number, number]] => [id, [(119 + Math.floor(next() * 400)) * scale, (40 + Math.floor(next() * 560)) * scale]]));
       const group = { id: 'g', composite, title: '', members: ids, props: propsFor(composite, ids, next) };
       const arr = arrange(group, ids, sizes, false);
       const told = `${composite} run ${run}: ${JSON.stringify([...sizes.values()])} ${JSON.stringify(group.props)}`;

@@ -820,12 +820,21 @@ A composite groups siblings under one parent. These rules hold for all of them.
 
 - Kept nodes group only with kept nodes. Picks group only with picks. A composite never mixes the two.
 - A node belongs to at most one group.
-- A composite needs at least 3 members. A comparison needs 2 to 4.
+- A composite needs at least 3 members. A comparison or a beforeafter needs 2 to 4, and a matrix exactly 4.
 - No group is the usual answer. Most siblings stay ungrouped.
 - A group whose members are unchanged is left alone and keeps its id. When membership changes, the old group is removed and a new one with a new id is set in the same change set.
 - When the user keeps one pick from a group of picks, the group no longer holds. The Renderer removes it on its next pass.
+- No card is drawn larger or smaller inside a group than outside it. An arrangement places cards. It never scales them.
 
-The model is asked about a parent only when changed siblings are among at least 4 ungrouped ones, or when a sibling's `why` hints at structure (words such as "alternative", "versus", "step 2").
+The service holds every group to these rules. It refuses a `setGroup` whose composite it does not know, whose props its schema does not take, whose member count is outside the bounds above, that mixes picks with kept cards, or that names a node another group already holds. Setting a group again under its own id is how a group is changed.
+
+**Plain-code arrangements.** Five arrangements are made by plain code, from one ordered table in `renderer.ts`: `overview`, `moodboard`, `gallery`, `timeline`, `stack`. Each looks at the siblings no group the model made has taken, and an earlier one goes first. An earlier one may take a sibling out of a group a later one made, and that later group is then made again from what is left, or removed. A plain-code group whose rule no longer holds, such as an overview after a second chart arrives, is removed. The stack runs after the model's groups are made, so it piles only what no group took. The others run before the model is asked.
+
+The model is asked about a parent only when changed siblings are among at least 4 ungrouped ones, or when a sibling's `why` hints at structure (words such as "alternative", "versus", "step 2"). It may propose `timeline`, `comparison`, `sequence`, `cluster`, `ranked`, `beforeafter`, `lead` and `matrix`.
+
+**Words the model sets beside a member.** A ranked member's reason and the change between two states must each be a whole sentence or a whole line of the member's content, as the content check's `whole` reads it, and at most 140 characters, or 70 in a script written without spaces. The content is the member's title, text, summary and `data.when`. A reason is read against its own member, and a change against either of the two states it joins. One that fails is left empty, and the group still stands. A matrix's axis name is at most 32 characters and must be words, as `says` reads them, of at least two of its four members. A matrix whose axis name fails is not made.
+
+**Layout.** In every arrangement `PAD = 18` is the frame's padding on the left, right and bottom, and `HEAD = 40` is the band at the top that holds the frame's kind and title. Cards are placed by their drawn size, which is a pick's footprint times 0.86. A line of words an arrangement sets beside a card is drawn at the text size, without kerning, and is given `wrap(words, floor(width), 72, no limit)` lines of 17 px: the same count the structured cards use, so it is never cut. Arrangements that set words this way are `ranked`, `beforeafter` and `matrix`.
 
 ### gallery
 
@@ -881,6 +890,60 @@ Many similar members, piled so only the top shows until opened.
 - **Props.** None. `title` reads like `5 more`.
 - **Members.** Most important first.
 - **Drawn closed as** the first member with the edges of up to two more behind it, each 7 px further down and to the right. The block is sized from the first member's drawn size alone. Each member behind it is drawn at the first member's drawn size with its content hidden, so a taller or wider card behind a smaller one shows only that edge. A fourth member and any after it are not drawn.
+
+### ranked
+
+Picks that each answer one question, best first.
+
+- **Chosen when** the model finds 3 or more picks that answer the same question. Never for kept cards.
+- **Props.** `reasons`: a map from member node id to one line of why it stands there. An empty string means none.
+- **Members.** Best first.
+- **Drawn as** the members side by side, 16 px apart, under a band 30 px tall that holds each one's number, 1 first, in a 22 px circle at its card's left edge. The first number is filled. Each reason sits 8 px under the row of cards, at its card's left edge and as wide as the card, so all reasons start on one line. The frame is `HEAD + 30 + tallest card + PAD`, and with any reason `8 + 17 * (the most lines any reason takes)` more.
+
+### beforeafter
+
+One thing in two to four states, in order, with the change that led to each named between them.
+
+- **Chosen when** the model finds members that are one thing at different times or in different states.
+- **Props.** `changes`: a map from each member after the first to the change that led to it. An empty string means the arrow stands alone.
+- **Members.** In order, earliest first.
+- **Drawn as** the members side by side, with a step 148 px wide between each two. A step holds an arrow on a line of 24 px and, under it, the change, centred, in a column of 124 px. A step is as tall as `24 + 17 * its lines` and sits in the middle of the shorter of the two cards it joins, or from the top of the row when it is taller than that card. The frame is `HEAD + PAD` plus the tallest card or the lowest step bottom, whichever is more.
+
+### lead
+
+One member that the others support, explain or give evidence for.
+
+- **Chosen when** the model finds such a member among 3 or more.
+- **Props.** None.
+- **Members.** The lead first, then its support in sibling order.
+- **Drawn as** the lead alone on the first row, and its support in rows of up to 4 beneath it, 16 px apart. The space between the lead and the first support row is 28 px, with a hairline across its middle. A row is as tall as its tallest card rounded up to a whole px. The block's inner width is the wider of the lead and the widest row, and the lead and each row are centred in it.
+
+### overview
+
+Figures in a row above one chart.
+
+- **Chosen when**, among the siblings no group has taken, exactly one is drawn as a `chart` or `breakdown` and two to five as `fact` or `facts`. Plain code. Every one of them goes in.
+- **Props.** None.
+- **Members.** The figures in sibling order, then the chart last.
+- **Drawn as** the figures side by side, 12 px apart, and the chart under them at the left, 12 px below the tallest figure rounded up to a whole px. The block is as wide as the wider of the row and the chart.
+
+### moodboard
+
+Pictures, swatches and ideas, packed in columns, each at its own size.
+
+- **Chosen when**, among the siblings no group has taken, four or more are drawn as `image`, `video`, `artwork`, `swatch` or `idea`, at least two of them are pictures (`image`, `video`, `artwork`) and at least one is not. Plain code. Every one of them goes in. Pictures and clips alone are a gallery, so a gallery that gains an idea becomes a moodboard.
+- **Props.** None.
+- **Members.** In sibling order.
+- **Drawn as** columns: 2 for up to 4 members, 3 for up to 9, 4 past that. Take the members in order and put each under the column whose height so far is least, the leftmost of equals. A card adds its height rounded up to a whole px and 12 px to its column. A column is as wide as its widest card rounded up, and columns are 12 px apart. Each card sits at the left of its column.
+
+### matrix
+
+Four members on a 2 by 2 with two named axes.
+
+- **Chosen when** the model finds 4 members that differ along two measures.
+- **Props.** `x`: the name of the measure that grows to the right. `y`: the one that grows upwards. Each 1 to 32 characters.
+- **Members.** Exactly 4, in the order top left, top right, bottom left, bottom right.
+- **Drawn as** a grid of two columns and two rows, 20 px apart. A column is as wide as its wider card and a row as tall as its taller card, each rounded up to a whole px, and each card sits in the middle of its cell. A hairline runs down the middle of the gap between the columns and across the middle of the gap between the rows. The grid starts `PAD + 24` from the left, which leaves a gutter for the upright axis, and `HEAD + 23` from the top when `y` is set, which leaves a line of 17 px and 6 px for its name. The upright axis runs up the middle of the gutter from 9 px under the grid to the grid's top, with an arrowhead there, and `y` is set above it at the left. The level axis runs from the same corner to the grid's right edge, with an arrowhead there, and `x` is set 18 px under the grid, ending at the grid's right edge, or starting at `PAD` when it is wider than the gutter and the grid together. Each name is one line `textWidth(name)` wide. The block's inner width is the most of `24 + grid width`, `textWidth(x)` and `textWidth(y)`, and its height is `grid bottom + 18 + PAD`, and 17 more when `x` is set.
 
 ## Adding to a library
 
