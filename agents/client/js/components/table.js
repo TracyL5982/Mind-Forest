@@ -13,16 +13,19 @@ const ROW = 24;
 const WORDS_FLOOR = 44;
 /** What the first column is given at least, or all it needs when that is less, because it names each row. */
 const FIRST_FLOOR = 120;
-/** A number is never cut, so it is no wider than this. Anything wider is read as words. */
-const NUMBER_MOST = 160;
-const NUMERAL = /^[-+−–~≈<>≤≥±]?\s?\p{Sc}?\s?\d[\d.,:/\s]*\s?[\p{L}\p{Sc}%°‰µ²³]{0,5}$/u;
+/**
+ * A number: a sign, a currency (`$`, `US$`, `€`, `HK$`, or a code of three capitals and a space, as
+ * `RMB ` and `USD `) and a sign again, each when it is there, then digits with separators and at
+ * most one decimal point, a percent sign, and a unit of at most two words.
+ */
+const NUMERAL = /^(?:[-+−–~≈<>≤≥±]\s?)?(?:[A-Z]{0,3}\p{Sc}\s?|[A-Z]{3}\s)?[-+−–]?\d[\d,'’:/\s]*(?:\.\d[\d,'’:/\s]*)?[%％‰]?(?:\s?[\p{L}\p{Sc}°µ²³/]+(?:\s[\p{L}\p{Sc}°µ²³/]+)?)?$/u;
 /** In the opened table a column is at least as wide as its widest early cell, up to this, so its words are not set one to a line. */
 const OPENED = { rows: 20, most: 220, text: 13 };
 
 /** The px a column gives a cell: its count and 1 px more, because a string can draw up to 0.4 px wider than it counts. */
 const cellWidth = (cell) => textWidth(cell) + 1;
-
-const isNumber = (cell) => NUMERAL.test(cell) && textWidth(cell) <= NUMBER_MOST;
+/** A number is never cut, so one too wide for a row of the widest card is read as words. */
+const isNumber = (cell) => NUMERAL.test(cell) && cellWidth(cell) <= ROOM;
 
 /** A column holds numbers when every cell of it that says something is a number. Its numbers are set to the right. */
 function numeric(rows, column) {
