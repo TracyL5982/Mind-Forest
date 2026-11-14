@@ -433,7 +433,7 @@ function composite(name, members, makeProps, status, open) {
       h('span', { class: 'kind', text: arr.label }),
       arr.title !== arr.label && h('span', { class: 'pane-title clamp-1', text: arr.title }),
       arr.canOpen && h('span', { class: 'pane-open', style: { display: 'inline-flex', alignItems: 'center' }, text: open ? 'Close' : `Open ${ids.length}` })),
-    arr.marks);
+    h('div', { class: 'pane-marks' }, arr.marks));
   pane.style.setProperty('--tint', TINT);
   const cards = members.map((m) => {
     const { el } = card(m, status, arr.at.get(m.node.id));

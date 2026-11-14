@@ -428,6 +428,8 @@ button, input, textarea { font: inherit; color: inherit; }
   animation: arrive 0.4s both;
 }
 .pane.is-pick { border-style: dashed; border-color: color-mix(in srgb, var(--pick) 30%, transparent); background: color-mix(in srgb, var(--pick) 2.5%, transparent); }
+/* Cards are placed from the frame's outer edge and an absolute child from inside its 1 px border, so the marks get a layer that starts at the outer edge too. */
+.pane-marks { position: absolute; inset: -1px; pointer-events: none; }
 .pane-head { position: absolute; left: 18px; right: 12px; top: 6px; height: 30px; display: flex; align-items: center; gap: 9px; }
 .pane-head .kind { color: var(--tint); }
 .pane.is-pick .kind { color: var(--pick); }

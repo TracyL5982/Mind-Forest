@@ -185,7 +185,7 @@ export class Field {
               this.render();
             },
           })),
-        arr.marks);
+        h('div', { class: 'pane-marks' }, arr.marks));
     }
     for (const [id, pane] of this.panes) {
       if (seen.has(id)) continue;
