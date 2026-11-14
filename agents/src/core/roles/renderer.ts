@@ -256,7 +256,7 @@ const RULES: Rule[] = [
   },
 ];
 
-function byRule(item: Item, assetUrl: (id: string) => string): Draw {
+export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
   for (const rule of RULES) {
     const draw = rule(item, assetUrl);
     if (draw && isValidView(draw)) return draw;
