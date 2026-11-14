@@ -854,6 +854,9 @@ const CLOSE_QUOTES = /["'»」』]+$/u;
 /** A passage without the marks around it that change nothing it says: quotation marks, and a closing full stop, comma or semicolon. */
 const bare = (folded: string): string =>
   folded.replace(OPEN_QUOTES, '').replace(CLOSE_QUOTES, '').trim().replace(/[.。,;、]$/u, '').replace(CLOSE_QUOTES, '').trim();
+/** A mark that may open a unit and that `bare` takes off, and one that may open a quotation. */
+const OPEN_MARK = /["'‘“«「『]/u;
+const QUOTE_MARK = /["“”«「『]/u;
 /** Each quotation inside a sentence: the words between an opening mark and its closing one, and where they start and end. */
 const QUOTATION = /"([^"]+)"|「([^」]+)」|『([^』]+)』|«([^»]+)»/gu;
 
@@ -865,7 +868,7 @@ class Source implements Grounding {
   private numbers: Set<number> | undefined;
   private hexes: Set<string> | undefined;
   private lines: ReturnType<typeof marked> | undefined;
-  private split: { units: Unit[]; folded: string[]; bared: string[]; unitOf: Int32Array; first: Int32Array; last: Int32Array; turns: Int8Array } | undefined;
+  private split: { units: Unit[]; folded: (string | undefined)[]; bared: (string | undefined)[]; unitOf: Int32Array; first: Int32Array; last: Int32Array; turns: Int8Array } | undefined;
   /** Each claim read so far. A card asks about the same value more than once: as a value, and as what its label names. */
   private readonly claims = new Map<string, Tokens>();
 
@@ -880,8 +883,8 @@ class Source implements Grounding {
   }
 
   /**
-   * The units of the words, each folded, and bare too; the unit each token stands in, or -1; the first token of each unit and the one
-   * past its last; and which units hold a reversing word, or -1 before that is read.
+   * The units of the words, each folded and bare once asked for; the unit each token stands in, or -1; the first token of each unit and
+   * the one past its last; and which units hold a reversing word, or -1 before that is read.
    */
   private get units() {
     if (this.split) return this.split;
@@ -896,8 +899,16 @@ class Source implements Grounding {
       last[unit] = at + 1;
       unitOf[at] = unit;
     }
-    const folded = units.map(({ from, to }) => fold(this.text.slice(from, to)));
-    return (this.split = { units, folded, bared: folded.map(bare), unitOf, first, last, turns: new Int8Array(units.length).fill(-1) });
+    return (this.split = { units, folded: [], bared: [], unitOf, first, last, turns: new Int8Array(units.length).fill(-1) });
+  }
+
+  private folded(unit: number): string {
+    const { folded, units } = this.units;
+    return (folded[unit] ??= fold(this.text.slice(units[unit]!.from, units[unit]!.to)));
+  }
+
+  private bared(unit: number): string {
+    return (this.units.bared[unit] ??= bare(this.folded(unit)));
   }
 
   /**
@@ -1009,7 +1020,10 @@ class Source implements Grounding {
     const run = this.run(passage);
     if (run) return this.turned(...run) ? 'turned' : 'whole';
     const asked = bare(fold(passage));
-    for (const [at, sentence] of this.units.folded.entries()) {
+    const { units } = this.units;
+    for (let at = 0; at < units.length; at++) {
+      if (!QUOTE_MARK.test(this.text.slice(units[at]!.from, units[at]!.to))) continue;
+      const sentence = this.folded(at);
       for (const quotation of sentence.matchAll(QUOTATION)) {
         if (bare(quotation.slice(1).find(Boolean) ?? '') !== asked) continue;
         // The rest of the sentence only says who said it: before the quotation with nothing after it, or after it in four words at
@@ -1054,9 +1068,12 @@ class Source implements Grounding {
   private run(passage: string): [number, number] | undefined {
     const asked = bare(fold(passage));
     if (asked === '') return undefined;
-    const { units, bared } = this.units;
+    const { units } = this.units;
     for (let first = 0; first < units.length; first++) {
-      const opening = bared[first]!;
+      // A unit that opens with another letter opens no run of this passage, and is never folded for it.
+      const head = this.text[units[first]!.from]!;
+      if (!OPEN_MARK.test(head) && head.toLowerCase() !== asked[0]) continue;
+      const opening = this.bared(first);
       if (opening === '' || !asked.startsWith(opening.slice(0, 12))) continue;
       for (let last = first; last < units.length; last++) {
         const span = last === first ? opening : bare(fold(this.text.slice(units[first]!.from, units[last]!.to)));
