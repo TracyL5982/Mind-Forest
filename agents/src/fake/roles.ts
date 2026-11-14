@@ -1,5 +1,31 @@
 import type { Command, Item } from '../core/domain.ts';
-import { AGENT, makeItem, makeNode, pickStatus, type Roles } from '../core/roles/types.ts';
+import type { Found } from '../core/ports.ts';
+import { structure } from '../core/roles/intake/describe.ts';
+import { catalogued } from '../core/roles/scout.ts';
+import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles } from '../core/roles/types.ts';
+import { describe } from './model.ts';
+
+const WORK: Found = {
+  kind: 'artwork', title: 'Stairwell, seen from above', by: 'Ilse Brandt', date: '1928', text: 'Gelatin silver print',
+  medium: 'Gelatin silver print', holder: 'The Example Museum of Art', from: 'The Example Museum of Art', url: 'https://museum.example/works/1928-14',
+};
+const PAPER: Found = {
+  kind: 'paper', title: 'Perceived depth under opposed zoom and camera motion', by: 'M. Okafor et al.', date: '2011',
+  text: 'Viewers judged the room to stretch by half when the lens zoomed in as the camera pulled back.',
+  authors: ['M. Okafor', 'L. Haas', 'R. Itō'], venue: 'Journal of Example Vision', url: 'https://doi.example/10.1000/zoom.2011',
+};
+const STAIRS = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240"><rect width="320" height="240" fill="#1d1b1a"/>${Array.from({ length: 9 }, (_v, n) => `<rect x="${40 + n * 14}" y="${20 + n * 12}" width="${240 - n * 28}" height="${200 - n * 24}" fill="none" stroke="#d8cfc0" stroke-opacity="${1 - n * 0.09}" stroke-width="3" transform="rotate(${n * 7} 160 120)"/>`).join('')}</svg>`;
+
+/** One pick made from a source record the way the Scout makes it, with a stored picture when the record is a work to look at. */
+async function found(ctx: RoleContext, record: Found, source: { id: string; name: string }): Promise<Item> {
+  const picture = record.kind === 'artwork' ? await ctx.assets.put(new TextEncoder().encode(STAIRS), 'image/svg+xml', 'stairwell.svg') : null;
+  const from = record.from ?? source.name;
+  return makeItem(ctx, {
+    kind: picture ? 'image' : 'text', title: record.title, text: `${record.text}\n\n${record.by}, ${record.date}, ${from}`, summary: record.text, tags: [record.kind ?? 'find'],
+    data: { site: new URL(record.url).hostname, by: record.by, date: record.date, from, ...catalogued(record) },
+    origin: AGENT('scout', source.id), source: { from: 'web', url: record.url, ...(picture ? { asset: picture.id } : {}) },
+  });
+}
 
 /**
  * Stand-in roles with no model behind them, for building and testing clients offline.
@@ -31,7 +57,7 @@ export const fakeRoles: Roles = {
         return makeItem(ctx, { kind, title: d.name ?? 'Dropped file', summary: `A ${kind} you dropped in.`, tags: [kind], origin: { by: 'user' }, source: { from: 'drop', asset: d.asset } });
       }
       const first = d.text.split('\n')[0]!.slice(0, 60);
-      return makeItem(ctx, { kind: 'text', title: first, text: d.text, summary: d.text.slice(0, 160), tags: first.toLowerCase().split(/\W+/).filter((w) => w.length > 4).slice(0, 3), origin: { by: 'user' }, source: { from: 'paste' } });
+      return makeItem(ctx, { kind: 'text', title: first, text: d.text, summary: d.text.slice(0, 160), data: structure(describe(d.text), d.text), tags: first.toLowerCase().split(/\W+/).filter((w) => w.length > 4).slice(0, 3), origin: { by: 'user' }, source: { from: 'paste' } });
     });
   },
 
@@ -56,7 +82,9 @@ export const fakeRoles: Roles = {
     const node = ctx.mind.node(anchor);
     const topic = need ?? ctx.mind.itemOf(anchor).title;
     const n = ctx.mind.children(anchor).length;
-    const drafts: Item[] = [
+    // Asked for a museum work or a paper, the fake brings one, so a card that draws a source's own record can be seen offline.
+    const asked = /\b(museum|artwork|painting)/i.test(need ?? '') ? await found(ctx, WORK, { id: 'museums', name: 'Museum collections' }) : /\b(paper|study|research)/i.test(need ?? '') ? await found(ctx, PAPER, { id: 'papers', name: 'Research papers' }) : null;
+    const drafts: Item[] = asked ? [asked] : [
       makeItem(ctx, { kind: 'link', title: `An essay on ${topic}`, summary: 'A long read that argues the idea from first principles.', tags: ['essay'], origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/essay-${n}` } }),
       makeItem(ctx, { kind: 'text', title: '7 in 10 notice it without naming it', text: 'In a small survey, 7 in 10 viewers noticed the effect without being able to name it.', summary: 'A survey figure.', tags: ['data'], data: { facts: [{ label: 'viewers who notice it', value: '70%' }] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/survey-${n}` } }),
       makeItem(ctx, { kind: 'text', title: 'How to try it', summary: 'Three steps.', tags: ['how-to'], data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/howto-${n}` } }),

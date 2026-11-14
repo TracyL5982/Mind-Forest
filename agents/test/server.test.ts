@@ -125,6 +125,42 @@ test('speech that settles is acted on once, and the final transcript does not re
   await run.close();
 });
 
+test('the fake service files pasted structure as item data, and brings a museum work or a paper when asked for one', async () => {
+  const { run } = await boot();
+  const c = await connect(run);
+  const settled = async () => {
+    await run.pipeline.idle();
+    await new Promise((r) => setTimeout(r, 1200));
+    await run.pipeline.idle();
+  };
+  c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Moving the service to Rust\nPros: no data races, one binary\nCons: slow builds' }] }));
+  await c.until((m) => m.t === 'change');
+  await settled();
+
+  const state = (await (await fetch(`${run.url}/api/state`, { headers: { Authorization: 'Bearer secret' } })).json()) as { snapshot: { items: { title: string; data: Record<string, unknown> }[] } };
+  const pasted = state.snapshot.items.find((i) => i.title === 'Moving the service to Rust')!;
+  assert.deepEqual(pasted.data, { pros: ['no data races', 'one binary'], cons: ['slow builds'] });
+
+  const root = [...run.mind.trees.values()][0]!.rootId;
+  c.ws.send(JSON.stringify({ t: 'ask', nodeId: root, need: 'a museum work with a staircase' }));
+  await c.until(() => run.mind.picks(root).some((p) => run.mind.itemOf(p.id).data.kind === 'artwork'));
+  const work = run.mind.picks(root).map((p) => run.mind.itemOf(p.id)).find((i) => i.data.kind === 'artwork')!;
+  assert.deepEqual(
+    { by: work.data.by, date: work.data.date, medium: work.data.medium, holder: work.data.holder },
+    { by: 'Ilse Brandt', date: '1928', medium: 'Gelatin silver print', holder: 'The Example Museum of Art' },
+  );
+  assert.equal(work.kind, 'image');
+  assert.equal((await fetch(`${run.url}/assets/${work.source.asset}`, { headers: { Authorization: 'Bearer secret' } })).headers.get('content-type'), 'image/svg+xml');
+
+  c.ws.send(JSON.stringify({ t: 'more', nodeId: root, need: 'a research paper on it' }));
+  await c.until(() => run.mind.picks(root).some((p) => run.mind.itemOf(p.id).data.kind === 'paper'));
+  const paper = run.mind.picks(root).map((p) => run.mind.itemOf(p.id)).find((i) => i.data.kind === 'paper')!;
+  assert.deepEqual(paper.data.authors, ['M. Okafor', 'L. Haas', 'R. Itō']);
+  assert.equal(paper.data.venue, 'Journal of Example Vision');
+  c.ws.close();
+  await run.close();
+});
+
 test('one undo takes back one real change, along with the format choices that followed it', async () => {
   const { run } = await boot();
   const c = await connect(run);
