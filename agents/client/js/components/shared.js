@@ -201,9 +201,10 @@ const ANYWHERE = /[\u3041-\u3096\u30a1-\u30fa\u30fc\u3400-\u9fff\uac00-\ud7af]/;
  * between two characters that can each end a line, and nowhere else, which is at most where a page
  * breaks. A word wider than a line starts a line of its own and is broken wherever a line ends. One
  * letter of each line is kept spare, because a short word can draw a little wider than it counts.
+ * A figure's letter is already the widest any character runs, so its lines keep nothing spare.
  */
 export function wrap(str, width, letter, max) {
-  const room = width * 100 - 10 * letter;
+  const room = width * 100 - (FACE_OF.has(letter) ? 10 * letter : 0);
   const space = span(' ', letter) * letter;
   let lines = 1;
   let used = 0;

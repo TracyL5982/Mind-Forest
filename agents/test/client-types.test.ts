@@ -44,7 +44,16 @@ const GROWING: Record<string, Given[]> = {
     { props: { text: words(14), at: 'Chapter 1', source: 'example.org' } },
     { props: { text: words(40), at: 'Chapter 1', source: 'example.org' } },
   ],
+  idea: [
+    { item: { title: 'Go' }, props: {} },
+    { item: { title: 'Build a treehouse' }, props: {} },
+    { item: { title: 'Build a treehouse in the old oak' }, props: {} },
+    { item: { title: 'Build a treehouse in the old oak behind the shed by June' }, props: {} },
+  ],
 };
+
+/** A type that sets longer words in a smaller size, so a card that holds a little more can be a little shorter. */
+const STEPS_DOWN = new Set(['idea']);
 
 test('the footprint of each structured card type is whole, the same each time it is asked, and grows with what the card holds', async () => {
   const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Kind> };
@@ -58,7 +67,7 @@ test('the footprint of each structured card type is whole, the same each time it
       assert.equal(JSON.stringify([given, props]), frozen, `${type} leaves what it was given alone`);
       return size as [number, number];
     });
-    sizes.slice(1).forEach(([wide, tall], i) => assert.ok(wide >= sizes[i]![0] && tall >= sizes[i]![1], `${type} step ${i + 1}: ${sizes[i]} then ${[wide, tall]}`));
+    if (!STEPS_DOWN.has(type)) sizes.slice(1).forEach(([wide, tall], i) => assert.ok(wide >= sizes[i]![0] && tall >= sizes[i]![1], `${type} step ${i + 1}: ${sizes[i]} then ${[wide, tall]}`));
     const [first, last] = [sizes[0]!, sizes.at(-1)!];
     assert.ok(last[0] * last[1] > first[0] * first[1], `${type}: ${first} grows to ${last}`);
   }

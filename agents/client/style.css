@@ -281,6 +281,11 @@ button, input, textarea { font: inherit; color: inherit; }
 .excerpt-where { color: var(--ink-3); }
 .detail-excerpt .excerpt-text { font-size: 17px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* idea: a thought set large under a spark, and nothing else. */
+.c-idea { gap: 8px; }
+.idea-spark { flex: none; fill: var(--accent); }
+.idea-text { text-wrap: balance; }
+
 /* ---- groups */
 
 /* A frame is a faint wash and a hairline, so the cards inside it carry the weight. */

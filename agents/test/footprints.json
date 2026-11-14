@@ -186,6 +186,12 @@
     {"type":"excerpt","item":{"title":"Why coastal fog comes in at dusk","summary":"","text":"","data":{"site":"example.com","by":"example.com","date":"2019","from":"The web"},"origin":{"by":"agent","role":"scout"}},"props":{"text":"Fog forms when warm, moist air moves over the cold water of the bay and cools to its dew point.\n\nexample.com, 2019, The web","source":"example.com"},"size":[288,186],"chips":[{"kind":"when","text":"2019","width":60}]},
     {"type":"excerpt","item":{"title":"空间的诗学","summary":"","text":""},"props":{"text":"家宅庇护着梦想，家宅保护着梦想者，家宅让我们能够在安详中做梦。","at":"第一章","source":"上海译文出版社"},"size":[288,137]},
     {"type":"excerpt","item":{"title":"","summary":"","text":""},"props":{"text":"We shape our buildings, and afterwards our buildings shape us, and then the streets between them, and at last the map of the whole town, until nobody remembers which came first, the wall or the habit of walking around it, the square or the market that needed somewhere to stand, the bridge or the two villages that had always meant to meet."},"size":[288,156]},
-    {"type":"excerpt","item":{"title":"A passage of two paragraphs counts as one","summary":"","text":""},"props":{"text":"The first paragraph ends here.\n\nThe second begins.","at":"p. 12"},"size":[288,116]}
+    {"type":"excerpt","item":{"title":"A passage of two paragraphs counts as one","summary":"","text":""},"props":{"text":"The first paragraph ends here.\n\nThe second begins.","at":"p. 12"},"size":[288,116]},
+    {"type":"idea","item":{"title":"把书房搬到阁楼","summary":"","text":""},"props":{},"size":[272,88]},
+    {"type":"idea","item":{"title":"Build a treehouse","summary":"","text":""},"props":{},"size":[272,124]},
+    {"type":"idea","item":{"title":"Film the whole street in one take at dawn","summary":"","text":"","data":{"when":"昨晚","where":"阁楼"}},"props":{},"size":[272,164],"chips":[{"kind":"when","text":"昨晚","width":54},{"kind":"where","text":"阁楼","width":54}]},
+    {"type":"idea","item":{"title":"Turn the attic into a reading room with a window for stars","summary":"","text":""},"props":{},"size":[272,164]},
+    {"type":"idea","item":{"title":"给每一位来访的朋友拍一张站在门口的照片，年底做成一本册子","summary":"","text":""},"props":{},"size":[272,164]},
+    {"type":"idea","item":{"title":"","summary":"","text":""},"props":{},"size":[272,88]}
   ]
 }
