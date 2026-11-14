@@ -17,8 +17,8 @@ The set is `test/fixtures/formats.json`. Each entry has these fields.
 
 | Field | Meaning |
 |---|---|
-| `key` | A short name. `A-` and `B-` items come from two reviewers who each wrote sixty items. `C` and `D` items were written for the model. |
-| `origin` | `reviewers` for the `A-` and `B-` items, `authors` for the `C` and `D` items. |
+| `key` | A short name. `A-` and `B-` items come from two reviewers who each wrote sixty items. `C`, `D` and `E` items were written for the model. |
+| `origin` | `reviewers` for the `A-` and `B-` items, `authors` for the `C`, `D` and `E` items. |
 | `activity` | `research`, `brainstorming` or `memories`. |
 | `language` | `en` or `zh`. |
 | `what` | What the user did to make the item. |
@@ -52,6 +52,8 @@ The 47 items written for the model are of five kinds:
 - Thirteen paragraphs that hold a definition, a question and its answer, points for and against, a list, figures, a series or a quotation that Intake did not extract.
 - Nine pieces of prose where `note` is right and the model must not find a structure.
 - Ten Chinese texts of 21 to 33 characters, the `D` items: three cautions, two definitions, two questions with their answers and three ideas. Intake extracted nothing from any of them. A rule cannot tell them apart, so the model must.
+
+Six more, the `E` items, were written with the explorable card on 14 November 2026, after every run this page reports, so the counts and scores here are of the 167 before them and no live run has scored them yet. They are explainers, one for each activity in each language: a value that follows from another by a formula, as the field of view follows the focal length, or one thing in two to four states, as a dolly zoom shot three ways. The expected card is `explorable`. Intake extracted nothing from any of them, so the rules draw each as a note.
 
 ## Score the rules
 

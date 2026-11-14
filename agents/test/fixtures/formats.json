@@ -6638,6 +6638,198 @@
     "archived": false,
     "revision": 0
    }
+  },
+  {
+   "key": "E01",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted notes: how the field of view follows the focal length",
+   "expect": "explorable",
+   "accept": [
+    "chart"
+   ],
+   "item": {
+    "id": "formats-E01",
+    "kind": "text",
+    "title": "On a full-frame camera the sensor is 36 mm wide, so the field of vie…",
+    "text": "On a full-frame camera the sensor is 36 mm wide, so the field of view narrows as the focal length grows. At 24 mm the field of view is 73.7°, at 50 mm it is 39.6°, and at 200 mm it is 10.3°.",
+    "summary": "On a full-frame camera the sensor is 36 mm wide, so the field of view narrows as the focal length grows. At 24 mm the field of view is 73.7°, at 50 mm it is 39.6°, and at 200 mm it is 10.3°.",
+    "tags": [
+     "field",
+     "view"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "E02",
+   "origin": "authors",
+   "activity": "research",
+   "language": "zh",
+   "what": "粘贴的笔记：光圈大小怎样改变景深",
+   "expect": "explorable",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-E02",
+    "kind": "text",
+    "title": "光圈开大还是收小，决定了照片里有多少是清楚的。",
+    "text": "光圈开大还是收小，决定了照片里有多少是清楚的。\n大光圈：背景虚化得很厉害，只有对焦的那一层是清楚的。\n小光圈：从前景到远山都清楚，但快门要放慢。",
+    "summary": "光圈开大还是收小，决定了照片里有多少是清楚的。 大光圈：背景虚化得很厉害，只有对焦的那一层是清楚的。 小光圈：从前景到远山都清楚，但快门要放慢。",
+    "tags": [
+     "光圈",
+     "清楚"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "E03",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "typed notes: three ways to shoot one shot",
+   "expect": "explorable",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-E03",
+    "kind": "text",
+    "title": "Three ways to shoot a dolly zoom.",
+    "text": "Three ways to shoot a dolly zoom.\nZoom only: the lens zooms in while the camera stays put, so the background grows with the subject.\nDolly only: the camera moves in on a fixed lens, so the subject grows and the background barely changes.\nBoth: the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it.",
+    "summary": "Three ways to shoot a dolly zoom. Zoom only: the lens zooms in while the camera stays put, so the background grows with the subject. Dolly only: the camera moves in on a fixed lens, so the subject gr…",
+    "tags": [
+     "lens",
+     "camera"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "E04",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "打字记下的：复利怎么算",
+   "expect": "explorable",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-E04",
+    "kind": "text",
+    "title": "复利就是利息也生利息。一万元本金，年利率百分之五，每年复利一次，存十年变成16289元，存二十年变成26533元，所以越早开始存越划算。",
+    "text": "复利就是利息也生利息。一万元本金，年利率百分之五，每年复利一次，存十年变成16289元，存二十年变成26533元，所以越早开始存越划算。",
+    "summary": "复利就是利息也生利息。一万元本金，年利率百分之五，每年复利一次，存十年变成16289元，存二十年变成26533元，所以越早开始存越划算。",
+    "tags": [
+     "复利",
+     "利息"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "E05",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "en",
+   "what": "typed memory: how fast the dough rose",
+   "expect": "explorable",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-E05",
+    "kind": "text",
+    "title": "Grandma said the dough tells you the weather. In the cold kitchen at…",
+    "text": "Grandma said the dough tells you the weather. In the cold kitchen at 20 °C it rose in about 4 hours, but on a summer day at 30 °C it was ready in 2 hours, so in August she baked twice a day.",
+    "summary": "Grandma said the dough tells you the weather. In the cold kitchen at 20 °C it rose in about 4 hours, but on a summer day at 30 °C it was ready in 2 hours, so in August she baked twice a day.",
+    "tags": [
+     "hours",
+     "day"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "E06",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "zh",
+   "what": "打字记下的回忆：学骑车",
+   "expect": "explorable",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-E06",
+    "kind": "text",
+    "title": "学骑车那年夏天，爸爸一直扶着后座。",
+    "text": "学骑车那年夏天，爸爸一直扶着后座。\n扶着的时候：车子很稳，可我总想回头看他还在不在。\n松开以后：我反而骑得更直，因为只能看着前面的路。",
+    "summary": "学骑车那年夏天，爸爸一直扶着后座。 扶着的时候：车子很稳，可我总想回头看他还在不在。 松开以后：我反而骑得更直，因为只能看着前面的路。",
+    "tags": [
+     "骑车",
+     "夏天"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
   }
  ]
 }

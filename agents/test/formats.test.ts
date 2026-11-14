@@ -22,7 +22,7 @@ test('the sample set is whole: built items, a known card expected of each, and a
 
 test('every sample says who wrote it: the 120 two independent reviewers wrote, and those the authors wrote for the cards the model draws', () => {
   for (const sample of SAMPLES) assert.equal(sample.origin, /^[AB]-/.test(sample.key) ? 'reviewers' : 'authors', sample.key);
-  assert.deepEqual(ORIGINS.map((origin) => SAMPLES.filter((sample) => sample.origin === origin).length), [120, 47]);
+  assert.deepEqual(ORIGINS.map((origin) => SAMPLES.filter((sample) => sample.origin === origin).length), [120, 53]);
 });
 
 /**
