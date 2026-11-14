@@ -43,7 +43,7 @@
   <p>Every way the Renderer can draw one card (components) and every way it can arrange several sibling cards (composites). This page draws them with the same code and styles as the live client, from sample data.</p>
   <p>Solid cards are yours. Dashed amber cards are picks the librarian brought and you have not kept.</p>
   <p>Under each sample is its type name and its footprint in pixels, which is worked out from the content and never measured.</p>
-  <p>The first eleven types are drawn from an item's kind and its words. The fourteen after them are drawn from structure the item carries: its facts, its rows, its entries, a catalogue's record. Each is shown from the sample the service's own rules give it, then with other content, in Chinese, and at its extremes, some of them opened.</p>
+  <p>The first eleven types are drawn from an item's kind and its words. The fourteen after them are drawn from structure the item carries, such as its facts, its rows, its entries or a catalogue's record, or from a passage of its words. The last, a sheet, is assembled from parts of those kinds when no one card covers the item. Each is shown from the sample the service gives it, then with other content, in Chinese, and at its extremes, some of them opened.</p>
   <p>Any card can carry one line of chips under its content: a date, a place, people and, for what the agents brought, where it came from. A date is always whole, and a longer place, name or source is clipped inside its chip. Each type is shown once without chips and once with them. The line adds 28 pixels and nothing else changes.</p>
 </header>
 
@@ -57,7 +57,7 @@ import { h } from './js/dom.js';
 import { drawCard, sizeOf } from './js/components/index.js';
 import { arrange } from './js/composites/index.js';
 import { Panel } from './js/panel.js';
-import { SAMPLES } from './library-samples.js';
+import { SAMPLES, SHEETS } from './library-samples.js';
 
 const TINT = '#9fc3ff';
 
@@ -109,7 +109,7 @@ function opened(made, status = 'kept') {
 }
 
 const cell = (label, ...kids) => h('div', { class: 'lib-cell' }, h('div', { class: 'lib-label', text: label }), kids);
-const WHO = { model: 'chosen by the model', rules: 'chosen by rules', nobody: 'not chosen yet' };
+const WHO = { model: 'chosen by the model', rules: 'chosen by rules' };
 const who = (by) => h('span', { class: `lib-who ${by === 'model' ? 'is-model' : ''}`, text: WHO[by] });
 const props = (label, value) => h('details', { class: 'lib-props' }, h('summary', { text: label }), h('pre', { text: JSON.stringify(value, null, 2) }));
 
@@ -152,11 +152,12 @@ const STRUCTURED_SAMPLES = [
   ['artwork', 'rules', 'A work a museum holds, shown whole on a mat over what the collection records.', drawn('artwork')],
   ['breakdown', 'rules', 'The parts of one whole as bars, with each share written beside its bar.', drawn('breakdown')],
   ['qa', 'rules', 'One question and its answer.', drawn('qa')],
-  ['callout', 'nobody', 'A caveat or a remark set apart from the rest of a note. The words must be a passage of the card\'s own text. The service holds its schema and its content check, and neither a rule nor the model chooses it yet.', drawn('callout')],
+  ['callout', 'model', 'A caveat or a remark set apart from the rest of a note. The words must be a whole passage of the card\'s own text.', drawn('callout')],
   ['definition', 'rules', 'A term and what it means, set like a dictionary entry.', drawn('definition')],
   ['proscons', 'rules', 'The points for and the points against, side by side.', drawn('proscons')],
   ['swatch', 'rules', 'Colours with their names and values.', drawn('swatch')],
   ['place', 'rules', 'A short note whose title is the name of a place, with its picture when it has one.', drawn('place')],
+  ['sheet', 'model', 'A card assembled from two to four parts, for an item with more than one kind of thing worth seeing that no card of its own covers: its opening beside a few figures, a list, a small table or words someone said. Each part is drawn as the card of its kind draws it, under one title, each after the first under a hairline.', drawn('sheet')],
 ];
 
 /** The same types with other content, to show how each footprint follows what the card holds. */
@@ -227,6 +228,47 @@ const VARIANTS = {
     ['Eight colours', make('swatch', { colours: [{ name: 'Ink', value: '#0B0D11' }, { name: 'Slate', value: '#1B1D23' }, { name: 'Fog', value: '#A3A39C' }, { name: 'Paper', value: '#ECEBE6' }, { name: 'Amber', value: '#F2C27A' }, { name: 'Teal', value: '#62D6C3' }, { name: 'Coral', value: '#FF9A92' }, { name: 'Light goldenrod', value: 'lightgoldenrodyellow' }] }, { title: 'Mind Palace, as drawn' }), 'kept', true],
     ['Chinese', make('swatch', { colours: [{ name: '宫墙红', value: '#C8102E' }, { name: '琉璃黄', value: '#F2B824' }, { name: '汉白玉', value: '#F4F1E8' }, { name: '青金', value: '#1F3A6E' }] }, { title: '故宫配色' })],
     ['Two, one a name the browser does not know', make('swatch', { colours: [{ name: 'Night', value: 'black' }, { name: 'Dusk at the bay', value: 'duskblue' }] }, { title: 'Bay' })],
+  ],
+  sheet: [
+    ['A heading, the opening, four figures and eight entries', make('sheet', { sections: [
+      { kind: 'heading', text: 'Bird survey, week 3' },
+      { kind: 'text', text: 'Counts were taken at dawn on four transects along the estuary, in light rain on Tuesday and under clear skies for the rest of the week.' },
+      { kind: 'figures', facts: [{ label: 'Species recorded on the four transects', value: '47' }, { label: 'Birds counted', value: '1,382' }, { label: 'New to the survey this year', value: 'Spotted redshank' }, { label: 'Hours in the field', value: '26.5 h' }] },
+      { kind: 'list', items: ['Repeat transect B on a dry morning', 'Ask the warden about the closed hide', 'Order two more tally counters', 'Check the tide tables before Saturday', 'Send the week 2 sheets to the county recorder', 'Photograph the ringed godwit if it is still on the mudflats by the old sluice gate', 'Replace the batteries in the thermal camera', 'Book the minibus for the volunteers'] },
+    ] }, { title: 'Field notes from the bird survey' }), 'kept', true],
+    ['The opening, a table of four columns and five rows, words someone said, a list', make('sheet', { sections: [
+      { kind: 'text', text: 'We need one lens that covers the interviews indoors and the long walk along the river, on the budget the producer has already set.' },
+      { kind: 'table', heads: ['Lens', 'Focal', 'Stop', 'Price'], rows: [['Sigma Art', '18–35 mm', 'f/1.8', '$799'], ['Canon L', '24–70 mm', 'f/2.8', '$1,899'], ['Sony G Master', '24–70 mm', 'f/2.8', '$2,298'], ['Tamron', '28–75 mm', 'f/2.8', '$879'], ['Zeiss Batis', '40 mm', 'f/2', '$1,299']] },
+      { kind: 'excerpt', text: 'Whatever you choose, it has to survive rain on the river walk.', by: 'Mara, the producer' },
+      { kind: 'list', items: ['Rent before we buy', 'Test the autofocus on the gimbal', 'Ask about the insurance excess'] },
+    ] }, { title: 'Choosing a lens for the documentary' }), 'kept', true],
+    ['A picture with one figure, as a pick', make('sheet', { sections: [
+      { kind: 'picture', src: PIC.river },
+      { kind: 'heading', text: 'The reading room on the third floor' },
+      { kind: 'text', text: 'The library opened the room above the old map hall on Monday, with long oak tables and a window onto the square.' },
+      { kind: 'figures', facts: [{ label: 'Seats', value: '120' }] },
+    ] }, { title: 'The new reading room' }), 'pick', true],
+    ['The longest heading and text, and a long passage', make('sheet', { sections: [
+      { kind: 'heading', text: 'What the council decided about the harbour wall, the ferry and the fish market' },
+      { kind: 'text', text: 'The council met on Thursday evening in the old customs house and voted, after three hours and two adjournments, to rebuild the harbour wall in stone, to keep the ferry running through the winter on a reduced timetable, and to turn the empty fish market into a covered hall for…' },
+      { kind: 'figures', facts: [{ label: 'Cost of the new wall', value: '€4.2 million' }, { label: 'Years to build', value: '3' }] },
+      { kind: 'excerpt', text: 'We have patched that wall every spring for thirty years, and every winter the sea takes the patch back. If we build it again, we build it once, in stone, and we build it high enough that the boats can shelter behind it in a north-easterly without anybody standing on the quay at three in the morning with a rope in each hand, which is what I did last February, and what my father did before me.', by: 'The harbour master' },
+    ] }, { title: 'Council meeting, 14 March' }), 'kept', true],
+    ['Chinese, words someone said', make('sheet', { sections: [
+      { kind: 'heading', text: '读书会：《额尔古纳河右岸》' },
+      { kind: 'text', text: '这个月的读书会读的是迟子建的《额尔古纳河右岸》，大家都说开头那一句最难忘。讨论从鄂温克人的迁徙一直聊到每个人自己老家的冬天，结束时已经快十点了。' },
+      { kind: 'figures', facts: [{ label: '参加人数', value: '14人' }, { label: '下次时间', value: '3月21日' }] },
+      { kind: 'excerpt', text: '我是雨和雪的老熟人了，我有九十岁了。', by: '迟子建' },
+    ] }, { title: '三月读书会' })],
+    ['Two parts, the fewest', make('sheet', { sections: [
+      { kind: 'text', text: 'The plumber can come on Thursday morning, and the boiler needs a new pump before the cold sets in.' },
+      { kind: 'list', items: ['Clear the cupboard under the stairs', 'Leave the side gate open'] },
+    ] }, { title: 'Before the plumber comes' })],
+    ['A picture that fails to load', make('sheet', { sections: [
+      { kind: 'picture', src: 'data:image/png;base64,AAAA' },
+      { kind: 'text', text: 'The print came back from the framer with a scratch across the glass, and the shop will replace it at no cost.' },
+      { kind: 'figures', facts: [{ label: 'Framing', value: '£85' }, { label: 'Ready again', value: '10 days' }] },
+    ] }, { title: 'The framed print' })],
   ],
   place: [
     ['No picture', make('place', { name: 'Lisbon' }, { title: 'Lisbon', summary: 'Three days in March. The tram up to Graça, and the light on the river at six.' })],
@@ -301,25 +343,38 @@ const CHIPS = {
   proscons: { data: { when: 'Q1 2027', people: ['Ana Lima', 'Ben Okri', 'Chen Wei'] } },
   swatch: { data: { where: 'The kitchen' } },
   place: { data: { when: '清晨', people: ['小林', '阿青'] } },
+  sheet: { data: { when: 'March 2025', where: 'Nine clinics', people: ['A. Mensah', 'K. Osei', 'L. Boateng'] } },
+};
+
+/**
+ * More samples of a type that are drawn in full: kept, as a pick, with chips and opened. A chip
+ * is left out when the card already draws its words, as the people chip is beside Ines's words.
+ */
+const ROWS = {
+  sheet: [
+    [SHEETS[1], { data: { when: 'Last May', where: 'Porto', people: ['Ines'] } }],
+    [SHEETS[2], { data: { when: '下周五', where: '行政部', people: ['小林', '阿青'] } }],
+  ].map(([{ item, props }, chips]) => [item.title, make('sheet', props, item), chips]),
 };
 const CHIP_LABEL = { pick: 'Pick with chips', kept: 'The same pick, kept' };
 
-function withChips(name, made) {
-  const { data, brought } = CHIPS[name];
+function withChips(name, made, { data, brought } = CHIPS[name]) {
   const item = { ...made.item, data: { ...made.item.data, ...data }, origin: { by: brought ? 'agent' : 'user' } };
   return brought ? brought.map((status) => cell(CHIP_LABEL[status], staged({ node: made.node, item }, status))) : cell('With chips', staged({ node: made.node, item }, 'kept'));
 }
 
 const componentsEl = document.getElementById('components');
+const full = (name, made, chips) => h('div', { class: 'lib-row' },
+  cell('Kept', staged(made, 'kept')),
+  cell('Pick', staged(made, 'pick')),
+  withChips(name, made, chips),
+  cell('Opened', opened(made)));
 for (const [name, by, when, made] of [...COMPONENT_SAMPLES, ...STRUCTURED_SAMPLES]) {
   componentsEl.append(h('section', { class: 'lib-entry' },
     h('div', { class: 'lib-name' }, h('h3', { text: name }), who(by)),
     h('p', { class: 'lib-when', text: when }),
-    h('div', { class: 'lib-row' },
-      cell('Kept', staged(made, 'kept')),
-      cell('Pick', staged(made, 'pick')),
-      withChips(name, made),
-      cell('Opened', opened(made))),
+    full(name, made),
+    (ROWS[name] ?? []).map(([label, more, chips]) => [h('div', { class: 'lib-label lib-more', text: label }), h('div', { class: 'lib-more' }, full(name, more, chips))]),
     (VARIANTS[name] ?? []).length > 0 && h('div', { class: 'lib-row lib-more' }, VARIANTS[name].map(([label, variant, status = 'kept', open = false]) => [
       cell(label, staged(variant, status)),
       open && cell(`${label}, opened`, opened(variant, status)),
