@@ -126,18 +126,17 @@ button, input, textarea { font: inherit; color: inherit; }
 @keyframes think { 0%, 100% { opacity: 0.25; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1.15); } }
 
 /* chips: one line under any card's content that says when, where, who and, for what the agents brought, from where.
-   components/shared.js adds CHIP_LINE to the footprint of a card that has them. */
+   components/shared.js adds CHIP_LINE to the footprint of a card that has them. components/index.js gives the line
+   its inset for the card's type and each chip the width of its box, and the text is clipped here to that box.
+   The widths are counted, and text draws a little narrower than it counts, so a chip closes up to its text
+   and a clipped chip grows into the room that frees. No chip is ever given less than its box or its text. */
 .card-body:has(+ .chip-line) { height: calc(100% - 28px); }
-.chip-line { position: absolute; left: 15px; right: 15px; bottom: 12px; height: 20px; display: flex; gap: 6px; }
-/* components/index.js cuts each chip's text to its share of the line. The ellipsis here is for a
-   font that draws wider than the client counts. */
-.chip { flex: 0 1 auto; min-width: 0; padding: 0 7px 0 5px; display: flex; align-items: center; gap: 4px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); color: var(--ink-2); font-size: var(--type-text); line-height: 20px; }
+.chip-line { position: absolute; left: var(--chip-inset); right: var(--chip-inset); bottom: 12px; height: 20px; display: flex; gap: 6px; }
+.chip { flex: 1 0 auto; min-width: 0; max-width: max-content; box-sizing: border-box; padding: 0 7px 0 5px; display: flex; align-items: center; gap: 4px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); color: var(--ink-2); font-size: var(--type-text); line-height: 20px; }
 .chip-glyph { flex: none; fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
 .chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chip-keep { flex: none; font-variant-numeric: tabular-nums; }
-[data-component='quote'] .chip-line { left: 19px; right: 19px; }
-[data-component='image'] .chip-line, [data-component='video'] .chip-line { left: 12px; right: 12px; bottom: 10px; }
-[data-component='person'] .chip-line { left: 22px; right: 16px; }
+.chip-count { flex: none; font-variant-numeric: tabular-nums; }
+[data-component='image'] .chip-line, [data-component='video'] .chip-line { bottom: 10px; }
 
 /* note: plain paper. The one line the model sets apart hangs from a rule. */
 .note-emphasis { padding-left: 9px; border-left: 2px solid var(--accent); color: var(--ink); font-style: italic; font-size: var(--type-text); line-height: var(--lead-text); }

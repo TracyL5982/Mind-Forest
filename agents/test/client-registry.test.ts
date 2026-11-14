@@ -51,9 +51,9 @@ test('a card with chips is taller by one fixed line, whatever its type, its stat
 
 test('what the agents brought keeps its origin chip and its size when the pick is kept, and a link does not repeat its site', async () => {
   const { sizeOf, chipsOf } = await load('components/index.js');
-  const item = { title: 'A page', text: '', summary: '', data: { site: 'example.com' }, origin: { by: 'agent', role: 'scout' } };
+  const item = { title: 'A page', text: '', summary: '', data: { site: 'example.com', from: 'The web' }, origin: { by: 'agent', role: 'scout' } };
   const as = (component: string, status: string) => ({ status, view: { component, props: { site: 'example.com' } } });
-  const origin = [{ kind: 'origin', text: 'example.com', full: 'example.com' }];
+  const origin = [{ kind: 'origin', text: 'example.com', width: 108 }];
   assert.deepEqual(chipsOf(as('note', 'pick'), item), origin);
   assert.deepEqual(chipsOf(as('note', 'kept'), item), origin);
   assert.deepEqual(sizeOf(as('note', 'kept'), item), sizeOf(as('note', 'pick'), item));
@@ -63,43 +63,52 @@ test('what the agents brought keeps its origin chip and its size when the pick i
   assert.deepEqual(sizeOf(as('link', 'pick'), item), sizeOf(as('link', 'pick'), { ...item, data: {} }));
 });
 
-type Drawn = { kind: string; text: string; full: string; keep?: string };
+type Drawn = { kind: string; text: string; width: number; count?: number };
 
-test('a card draws its first chip, then each next one only while each can have 84 px or its whole text', async () => {
+const drawnOn = async (component: string, data: Record<string, unknown>, origin = { by: 'user' }): Promise<Drawn[]> => {
   const { chipsOf } = await load('components/index.js');
-  const full = (component: string, data: Record<string, unknown>) =>
-    chipsOf({ status: 'kept', view: { component, props: {} } }, { title: 'A title', text: '', summary: '', data }).map((chip: Drawn) => chip.full);
+  return chipsOf({ status: 'kept', view: { component, props: {} } }, { title: 'A title', text: '', summary: '', data, origin });
+};
+const texts = async (component: string, data: Record<string, unknown>) => (await drawnOn(component, data)).map((chip) => chip.text);
+
+test('a card draws its first chip, then each next one only while each can have 72 px or its whole text', async () => {
   const short = { when: '1958', where: 'Rome', people: ['Ada'] };
   const long = { when: 'Summer 1958', where: 'Bodega Bay', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'] };
-  assert.deepEqual(full('note', short), ['1958', 'Rome', 'Ada']);
-  assert.deepEqual(full('note', long), ['Summer 1958', 'Bodega Bay']);
-  assert.deepEqual(full('fact', long), ['Summer 1958']);
-  assert.deepEqual(full('chart', { ...long, when: '1958' }), ['1958', 'Bodega Bay', 'Ada Lovelace, Grace Hopper +1']);
-  assert.deepEqual(full('fact', { where: 'The upper reading room of the old municipal library, Vilnius' }), ['The upper reading room of the old municipal library, Vilnius']);
+  assert.deepEqual(await texts('note', short), ['1958', 'Rome', 'Ada']);
+  assert.deepEqual(await texts('note', long), ['Summer 1958', 'Bodega Bay']);
+  assert.deepEqual(await texts('fact', long), ['Summer 1958']);
+  assert.deepEqual(await texts('chart', { ...long, when: '1958' }), ['1958', 'Bodega Bay', 'Ada Lovelace, Grace Hopper']);
+  assert.deepEqual(await texts('fact', { where: 'The upper reading room of the old municipal library, Vilnius' }), ['The upper reading room of the old municipal library, Vilnius']);
+  assert.deepEqual(await texts('note', { when: 'Early September 1958', where: 'Bodega Bay' }), ['Early September 1958'], 'a place with less than 72 px left is left out');
 });
 
-test('a photo 240 px wide shows a full date and a place whole', async () => {
-  const { chipsOf } = await load('components/index.js');
-  const drawn = chipsOf({ status: 'kept', view: { component: 'image', props: {} } }, { title: 'Harbour', data: { when: '12 May 1958', where: 'Bodega Bay' } });
-  assert.deepEqual(drawn.map((chip: Drawn) => chip.text), ['12 May 1958', 'Bodega Bay']);
-});
-
-test('a date chip is drawn whole before the other chips share what is left', async () => {
-  const { chipsOf } = await load('components/index.js');
-  const drawn = (component: string, data: Record<string, unknown>): string[] =>
-    chipsOf({ status: 'kept', view: { component, props: {} } }, { title: 'A title', text: '', summary: '', data }).map((chip: Drawn) => chip.text);
+test('a chip is given its whole text and the width of its box, and no text is cut', async () => {
   const place = 'The upper reading room of the old municipal library, Vilnius';
-  assert.deepEqual(drawn('note', { when: 'Spring 1958', where: 'Sonoma county' }), ['Spring 1958', 'Sonoma c…'], 'two chips of middling length: the date is whole');
-  assert.deepEqual(drawn('note', { when: '12 May 1958', where: place }), ['12 May 1958', 'The upp…'], 'the long place is cut, not the date');
-  assert.deepEqual(drawn('note', { when: 'Early September 1958', where: 'Bodega Bay' }), ['Early September 1958'], 'a place with less than 84 px left is left out');
-  assert.deepEqual(drawn('image', { when: '2024年5月12日', where: '上海市黄浦区中山东一路外滩观景平台' }), ['2024年5月12日', '上海市…']);
-  assert.deepEqual(drawn('note', { when: 'Some time between the spring of 1958 and the autumn of 1961', where: 'Bodega Bay' }), ['Some time between the spri…'], 'a date wider than the line is cut and has the line');
-  assert.deepEqual(drawn('note', { where: 'Spring 1958', people: ['Sonoma county'] }), ['Spring 19…', 'Sonoma c…'], 'only a date goes first');
+  assert.deepEqual(await drawnOn('note', { when: '1958', where: 'Rome' }), [{ kind: 'when', text: '1958', width: 60 }, { kind: 'where', text: 'Rome', width: 62 }]);
+  assert.deepEqual(await drawnOn('note', { when: '12 May 1958', where: place }), [{ kind: 'when', text: '12 May 1958', width: 108 }, { kind: 'where', text: place, width: 94 }], 'the long place has what the date leaves');
+  assert.deepEqual(await drawnOn('note', { where: place }), [{ kind: 'where', text: place, width: 208 }], 'one long chip has the line');
+  assert.deepEqual(await drawnOn('image', { when: '12 May 1958', where: 'Bodega Bay' }), [{ kind: 'when', text: '12 May 1958', width: 108 }, { kind: 'where', text: 'Bodega Bay', width: 100 }], 'a photo 240 px wide has a full date and a place whole');
 });
 
-test('a chip too long for its share is cut at a whole character, and the line never outgrows the card', async () => {
+test('a date chip has the width of its whole text before the other chips share what is left', async () => {
+  const widths = async (component: string, data: Record<string, unknown>) => (await drawnOn(component, data)).map((chip) => [chip.kind, chip.width]);
+  assert.deepEqual(await widths('note', { when: 'Spring 1958', where: 'Sonoma county' }), [['when', 103], ['where', 99]], 'the date is whole and the place has the rest');
+  assert.deepEqual(await widths('image', { when: '2024年5月12日', where: '上海市黄浦区中山东一路外滩观景平台' }), [['when', 123], ['where', 85]]);
+  assert.deepEqual(await widths('note', { when: 'Some time between the spring of 1958 and the autumn of 1961', where: 'Bodega Bay' }), [['when', 208]], 'a date wider than the line has the line');
+  assert.deepEqual(await widths('note', { where: 'Spring 1958', people: ['Sonoma county'] }), [['where', 101], ['people', 101]], 'only a date goes first');
+});
+
+test('what the agents brought draws its date, then its origin, before a place or people', async () => {
+  const scout = { by: 'agent', role: 'scout' };
+  const paper = { site: 'doi.org', by: 'T. Screech et al.', date: '2019', from: 'Research papers', venue: 'Journal of Japanese Studies', authors: ['T. Screech', 'M. Forrer', 'H. Smith'] };
+  assert.deepEqual((await drawnOn('note', paper, scout)).map((chip) => [chip.kind, chip.text]), [['when', '2019'], ['origin', 'Journal of Japanese Studies']], 'a note has no room for the authors after the venue');
+  assert.deepEqual((await drawnOn('chart', paper, scout)).map((chip) => [chip.kind, chip.text, chip.count]), [['when', '2019', undefined], ['origin', 'Journal of Japanese Studies', undefined], ['people', 'T. Screech, M. Forrer', 1]]);
+  assert.deepEqual((await drawnOn('note', paper)).map((chip) => chip.kind), ['when', 'people'], 'the same data on what the user made has no origin');
+});
+
+test('the boxes on a line never outgrow the card, and a people chip always has room for its count', async () => {
   const { chipsOf, sizeOf, COMPONENTS } = await load('components/index.js');
-  const { graphemes, textWidth } = await load('components/shared.js');
+  const { textWidth } = await load('components/shared.js');
   const place = 'The upper reading room of the old municipal library, Vilnius';
   const crew = ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra', 'Barbara Liskov', 'Alan Kay'];
   const cases: Record<string, unknown>[] = [
@@ -107,43 +116,36 @@ test('a chip too long for its share is cut at a whole character, and the line ne
     { when: '1958', where: place },
     { where: place, people: crew },
     { when: 'The long summer of 1958', where: place, people: crew },
+    { date: '2019', venue: 'Journal of Japanese Studies', authors: crew, where: place },
     { where: '上海市黄浦区中山东一路外滩观景平台', people: ['李白', '杜甫'] },
     { where: '👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦👨‍👩‍👧‍👦' },
-    { where: 'Zoe\u0308 '.repeat(20) },
+    { where: 'Zoë '.repeat(20) },
     { people: ['Bartholomew Montgomery-Featherstonehaugh', 'Maximiliana Wolfeschlegelsteinhausen', 'C', 'D'] },
+    { people: Array.from({ length: 1002 }, (_, i) => `Person number ${i}`) },
   ];
-  let cuts = 0;
+  const sides: Record<string, number> = { quote: 40, image: 26, video: 26 };
+  let narrow = 0;
   for (const component of Object.keys(COMPONENTS)) {
     for (const data of cases) {
-      const node = { status: 'kept', view: { component, props: {} } };
-      const item = { title: 'A title', text: '', summary: '', data };
-      const drawn: Drawn[] = chipsOf(node, item);
-      const said = `${component} ${JSON.stringify(data).slice(0, 60)}`;
-      assert.ok(drawn.length >= 1, said);
-      const line = drawn.reduce((sum, chip) => sum + 28 + textWidth(chip.text), 6 * (drawn.length - 1));
-      assert.ok(line <= sizeOf(node, item)[0] - 26, `${said}: the line is ${line} px`);
-      for (const chip of drawn) {
-        const keep = chip.keep ?? '';
-        assert.ok(chip.text.endsWith(keep), `${said}: ${chip.text} keeps its count`);
-        if (chip.text === chip.full) continue;
-        cuts += 1;
-        const start = chip.text.slice(0, chip.text.length - keep.length);
-        assert.ok(start.endsWith('…'), `${said}: ${chip.text} ends its words with an ellipsis`);
-        const kept = start.slice(0, -1);
-        const whole: string[] = graphemes(chip.full);
-        assert.ok(kept.length > 0, `${said}: something is left of ${chip.full}`);
-        assert.ok(whole.some((_, n) => whole.slice(0, n + 1).join('').trimEnd() === kept), `${said}: ${chip.text} is whole characters of ${chip.full}`);
+      for (const by of ['user', 'agent']) {
+        const node = { status: 'kept', view: { component, props: {} } };
+        const item = { title: 'A title', text: '', summary: '', data, origin: { by } };
+        const drawn: Drawn[] = chipsOf(node, item);
+        const told = `${component} ${by} ${JSON.stringify(data).slice(0, 60)}`;
+        assert.ok(drawn.length >= 1 && drawn.length <= 3, told);
+        const line = drawn.reduce((sum, chip) => sum + chip.width, 6 * (drawn.length - 1));
+        assert.ok(line <= sizeOf(node, item)[0] - (sides[component] ?? 32), `${told}: the line is ${line} px`);
+        for (const chip of drawn) {
+          assert.ok(Number.isInteger(chip.width), `${told}: ${chip.width} is whole px`);
+          const need = 28 + textWidth(chip.text) + (chip.count ? textWidth(` +${chip.count}`) : 0);
+          assert.ok(chip.width <= need, `${told}: ${chip.text} is no wider than its text`);
+          if (chip.width < need) narrow += 1;
+          if (chip.count) assert.ok(chip.width >= 28 + textWidth(` +${chip.count}`), `${told}: +${chip.count} fits in ${chip.width} px`);
+        }
       }
     }
   }
-  assert.ok(cuts > 40, `${cuts} chips were cut`);
-});
-
-test('a people chip that is cut loses letters from its names and keeps its count', async () => {
-  const { chipsOf } = await load('components/index.js');
-  const [chip]: Drawn[] = chipsOf({ status: 'kept', view: { component: 'note', props: {} } }, { title: 'The crew', data: { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra', 'Barbara Liskov', 'Alan Kay'] } });
-  assert.match(chip!.text, /^Ada Lovelace, Grace H\p{L}*… \+3$/u);
-  assert.equal(chip!.full, 'Ada Lovelace, Grace Hopper +3');
+  assert.ok(narrow > 40, `${narrow} chips have less than their text needs`);
 });
 
 test('every arrangement in the client registry has a name and can arrange', async () => {
@@ -155,7 +157,7 @@ test('every arrangement in the client registry has a name and can arrange', asyn
   }
 });
 
-type Sample = { type: string; item: Record<string, unknown>; props: Record<string, unknown>; size: number[]; chips?: string[] };
+type Sample = { type: string; item: Record<string, unknown>; props: Record<string, unknown>; size: number[]; chips?: Drawn[] };
 
 test('every sample in footprints.json gets the footprint and the chips written there', async () => {
   const { COMPONENTS, sizeOf, chipsOf } = await load('components/index.js');
@@ -168,7 +170,7 @@ test('every sample in footprints.json gets the footprint and the chips written t
     const said = `${sample.type} ${JSON.stringify(sample.item.title)} ${JSON.stringify(sample.props).slice(0, 80)}`;
     assert.deepEqual(sizeOf(node, sample.item), sample.size, said);
     if (COMPONENTS[sample.type] && !sample.chips?.length) assert.deepEqual(COMPONENTS[sample.type].size(sample.item, sample.props), sample.size, `${said}: no chips, so the type's own size`);
-    if (sample.chips) assert.deepEqual(chipsOf(node, sample.item).map((chip: { text: string }) => chip.text), sample.chips, said);
+    if (sample.chips) assert.deepEqual(chipsOf(node, sample.item), sample.chips, said);
   }
 });
 

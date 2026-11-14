@@ -316,26 +316,51 @@ async function main(): Promise<void> {
       const [photo, plain] = [await tall(CHIPPED.photo), await tall(CHIPPED.plainPhoto)];
       assert.deepEqual(photo, [plain[0], plain[1]! + 28], 'the photo with chips is taller by the chip line and no wider');
       assert.equal(await card(CHIPPED.plainNote).locator('.chip-line').count(), 0, 'a card with nothing to say has no chip line');
-      assert.match((await chips(CHIPPED.people)).join(), /^Ada Lovelace, Grace H\p{L}*…\+3$/u, 'five people are two names, cut before the count');
-      assert.deepEqual(await chips(CHIPPED.link), ['2019'], 'a link does not repeat its site');
+      assert.deepEqual(await chips(CHIPPED.link), ['2019'], 'a link does not repeat its site, as its origin or as its author');
       const museum = await chips(CHIPPED.museum);
-      assert.match(museum.join('|'), /^1857\|The Metropolitan\p{L}*…$/u, 'a pick the Scout brought says where it came from');
-      assert.equal(await card(CHIPPED.museum).locator('.chip').last().getAttribute('title'), 'From: The Metropolitan Museum of Art');
-      assert.deepEqual(await chips(CHIPPED.four), ['Summer 1958', 'Bodega Bay'], 'a card too narrow for a third chip leaves it to the opened card');
+      assert.deepEqual(museum.slice(0, 2), ['1857', 'metmuseum.org'], 'a pick the Scout brought says when it is from, then where it came from');
+      assert.equal(await card(CHIPPED.museum).locator('.chip[data-kind="origin"]').getAttribute('title'), 'Origin: metmuseum.org');
+      assert.deepEqual(await chips(CHIPPED.four), ['Summer 1958', 'Bancroft Library'], 'the origin comes straight after the date, and what has no room is left to the opened card');
 
-      const long = (await card(CHIPPED.longPlace).locator('.chip-text').textContent())!;
-      assert.ok(long.endsWith('…') && LONG_PLACE.startsWith(long.slice(0, -1)) && long.length > 20, `a long place is cut with an ellipsis, got ${long}`);
-      const squeezed = await page.locator('.card[data-id^="chips-"] .chip-text').evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).map((el) => el.textContent));
-      assert.deepEqual(squeezed, [], 'every chip has room for the text it was cut to');
+      const clipped = (el: HTMLElement) => el.scrollWidth > el.clientWidth && getComputedStyle(el).textOverflow === 'ellipsis';
+      const crew = card(CHIPPED.people).locator('.chip');
+      assert.equal(await crew.locator('.chip-text').textContent(), 'Ada Lovelace, Grace Hopper');
+      assert.equal(await crew.locator('.chip-count').textContent(), '+3');
+      assert.ok(await crew.locator('.chip-text').evaluate(clipped), 'five people on a note: the names are clipped with an ellipsis');
+      assert.ok(await crew.evaluate((el) => el.querySelector('.chip-count')!.getBoundingClientRect().right <= el.getBoundingClientRect().right), 'and the count is whole inside the chip');
+      const long = card(CHIPPED.longPlace).locator('.chip-text');
+      assert.equal(await long.textContent(), LONG_PLACE);
+      assert.ok(await long.evaluate(clipped), 'a long place is clipped with an ellipsis');
+      const dates = await page.locator('.card[data-id^="chips-"] .chip[data-kind="when"] .chip-text').evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).map((el) => el.textContent));
+      assert.deepEqual(dates, [], 'every date is whole');
+      const loose = await page.locator('.card[data-id^="chips-"] .chip').evaluateAll((els) => els.flatMap((el) => {
+        const chip = el as HTMLElement;
+        const line = chip.parentElement!;
+        const scale = line.getBoundingClientRect().width / line.offsetWidth;
+        const wide = chip.getBoundingClientRect().width / scale;
+        const text = chip.querySelector('.chip-text')!;
+        const past = chip.getBoundingClientRect().right > line.getBoundingClientRect().right + 0.5;
+        const short = text.scrollWidth > text.clientWidth && wide < parseFloat(chip.style.flexBasis) - 0.5;
+        return past || short ? [`${chip.textContent} is ${wide.toFixed(1)} px for a box of ${chip.style.flexBasis}`] : [];
+      }));
+      assert.deepEqual(loose, [], 'no chip runs past its line, and a clipped chip has at least its box');
       const lines = await page.locator('.card[data-id^="chips-"] .chip-line').evaluateAll((els) => els.map((el) => (el as HTMLElement).offsetHeight));
       assert.ok(lines.length >= 9 && lines.every((height) => height === 20), `every chip line is one line tall, got ${lines}`);
       assert.deepEqual(await overlaps(page), []);
       assert.deepEqual(await spills(page), []);
 
+      const box = (id: string) => card(id).evaluate((el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+      const top = await box(CHIPPED.pileTop);
+      for (const [i, id] of CHIPPED.pileUnder.entries()) {
+        const under = await box(id);
+        assert.ok(Math.abs(under[2]! - top[2]!) < 0.5 && Math.abs(under[3]! - top[3]!) < 0.5, 'a card under a plain top card is cut to the top card, though its own chips make it taller');
+        assert.ok(under[0]! > top[0]! + i && under[1]! > top[1]! + i, 'and shows only below and to the right of it');
+      }
+
       await card(CHIPPED.four).click();
       const facts = page.locator('#panel .facts');
-      assert.deepEqual(await facts.locator('dd[data-chip]').allTextContents(), ['Summer 1958', 'Bodega Bay', 'Ada Lovelace, Grace Hopper, Edsger Dijkstra', 'Bancroft Library'], 'the opened card lists every source in full');
-      assert.deepEqual((await facts.locator('dt').allTextContents()).slice(0, 4), ['When', 'Where', 'People', 'Origin']);
+      assert.deepEqual(await facts.locator('dd[data-chip]').allTextContents(), ['Summer 1958', 'Bancroft Library', 'Bodega Bay', 'Ada Lovelace, Grace Hopper, Edsger Dijkstra'], 'the opened card lists every source in full');
+      assert.deepEqual((await facts.locator('dt').allTextContents()).slice(0, 4), ['When', 'Origin', 'Where', 'People']);
       assert.ok(!(await facts.locator('dt').allTextContents()).includes('From'), 'what the agents brought names its origin, and no second place it came from');
       await card(CHIPPED.plainNote).click();
       assert.equal(await facts.locator('dd[data-chip]').count(), 0);
@@ -348,7 +373,7 @@ async function main(): Promise<void> {
       await settle(page);
       assert.deepEqual(await chips(CHIPPED.museum), museum, 'a kept pick still says where it came from');
       assert.deepEqual(await tall(CHIPPED.museum), size, 'and is the size it was as a pick');
-      assert.deepEqual(await facts.locator('dd[data-chip="origin"]').allTextContents(), ['The Metropolitan Museum of Art']);
+      assert.deepEqual(await facts.locator('dd[data-chip="origin"]').allTextContents(), ['metmuseum.org']);
       await page.keyboard.press('Escape');
     });
 

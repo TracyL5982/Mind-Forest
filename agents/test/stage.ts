@@ -87,14 +87,15 @@ export function showcase(image: string, other?: string): Command[] {
 }
 
 /** The ids of the cards in `chipped`, by what each one is there to show. */
-export const CHIPPED = { photo: 'chips-1', plainPhoto: 'chips-2', people: 'chips-3', longPlace: 'chips-4', museum: 'chips-5', link: 'chips-6', four: 'chips-7', plainNote: 'chips-8' } as const;
+export const CHIPPED = { photo: 'chips-1', plainPhoto: 'chips-2', people: 'chips-3', longPlace: 'chips-4', museum: 'chips-5', link: 'chips-6', four: 'chips-7', plainNote: 'chips-8', pileTop: 'chips-12', pileUnder: ['chips-13', 'chips-14'] } as const;
 
 export const LONG_PLACE = 'The upper reading room of the old municipal library, Vilnius';
 
 /**
  * One tree of cards whose items carry a date, a place, people or an origin, beside twins that carry
- * none, under a first card that has chips too, and a timeline whose members have chips. These `item.data` keys are what intake and the
- * Scout write, so the stand-in agents do not have to.
+ * none, under a first card that has chips too, a timeline whose members have chips, and a pile
+ * whose top card has none over cards that do. What the Scout brought holds the `item.data` keys
+ * the Scout writes.
  */
 export function chipped(image: string): Command[] {
   const { commands, add, group } = planting('chips', 'With chips');
@@ -104,13 +105,15 @@ export function chipped(image: string): Command[] {
   add(root, 'image', { src: image, caption: 'Fog over the harbour' }, 'Harbour in fog, undated', { kind: 'image' });
   add(root, 'note', {}, 'The crew at the wrap party', { summary: 'Everyone who stayed to the end.', data: { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra', 'Barbara Liskov', 'Alan Kay'] } });
   add(root, 'note', {}, 'Where the notes were found', { summary: 'A box of index cards under the stairs.', data: { where: LONG_PLACE } });
-  add(root, 'image', { src: image, caption: 'Sudden shower over a bridge' }, 'Sudden Shower over Shin-Ohashi Bridge', { kind: 'image', data: { when: '1857', from: 'The Metropolitan Museum of Art', site: 'metmuseum.org' }, origin: { by: 'agent', role: 'scout', tool: 'met' }, source: found('https://www.metmuseum.org/art/collection/search/36461') }, 'pick');
-  add(root, 'link', { url: 'https://example.com/fog', site: 'example.com', description: 'Why coastal fog comes in at dusk.' }, 'Reading the fog', { kind: 'link', data: { when: '2019', site: 'example.com' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/fog') }, 'pick');
-  add(root, 'quote', { text: 'We looked at the water until the water looked back.', by: 'A diary' }, 'From the diary', { data: { when: 'Summer 1958', where: 'Bodega Bay', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'], holder: 'Bancroft Library' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/diary') }, 'pick');
+  add(root, 'image', { src: image, caption: 'Sudden shower over a bridge' }, 'Sudden Shower over Shin-Ohashi Bridge', { kind: 'image', data: { site: 'metmuseum.org', by: 'Utagawa Hiroshige', date: '1857', from: 'The Metropolitan Museum of Art' }, origin: { by: 'agent', role: 'scout', tool: 'met' }, source: found('https://www.metmuseum.org/art/collection/search/36461') }, 'pick');
+  add(root, 'link', { url: 'https://example.com/fog', site: 'example.com', description: 'Why coastal fog comes in at dusk.' }, 'Reading the fog', { kind: 'link', data: { site: 'example.com', by: 'example.com', date: '2019', from: 'The web' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/fog') }, 'pick');
+  add(root, 'quote', { text: 'We looked at the water until the water looked back.', by: 'A diary' }, 'From the diary', { data: { site: 'example.com', by: 'A diary', date: 'Summer 1958', from: 'The web', where: 'Bodega Bay', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'], holder: 'Bancroft Library' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/diary') }, 'pick');
   const plain = add(root, 'note', {}, 'A plain note', { summary: 'No date, no place, nobody named.' });
   const years = ['1958', '1963', '1975'];
   const timeline = years.map((year, i) => add(plain, 'note', {}, `The shoot in ${year}`, { summary: 'One visit to the bay.', data: { when: year, where: ['Bodega Bay', 'Point Reyes', 'Tomales'][i], ...(i === 1 ? { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'] } : {}) } }));
   group(plain, 'timeline', 'Visits', timeline, { labels: Object.fromEntries(timeline.map((id, i) => [id, years[i]])) });
+  const pile = ['', '1958', '1963', '1975'].map((year) => add(CHIPPED.longPlace, 'note', {}, year ? `A roll from ${year}` : 'Rolls not yet dated', { data: year ? { when: year, where: 'Bodega Bay' } : {} }));
+  group(CHIPPED.longPlace, 'stack', '4 rolls', pile, {});
   return commands;
 }
 

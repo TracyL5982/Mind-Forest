@@ -10,8 +10,8 @@ import * as chat from './chat.js';
 import * as code from './code.js';
 import * as steps from './steps.js';
 import { h, s } from '../dom.js';
-import { chips } from '../chips.js';
-import { CHIP_LINE, TEXT_LETTER, cut, say, textWidth } from './shared.js';
+import { LABEL, chips } from '../chips.js';
+import { CHIP_LINE, say, textWidth } from './shared.js';
 
 /**
  * Every way one card can be drawn, one module per type. `size` works the card's footprint out
@@ -30,83 +30,78 @@ function resolve(node) {
   return { kind: COMPONENTS[name], props: name === node.view?.component ? (node.view.props ?? {}) : {} };
 }
 
-/** A chip that is cut is never given less than this, in px. */
-const CHIP_FLOOR = 84;
+/** A chip that is not the date is drawn only while each such chip can have this many px, or its whole text. */
+const CHIP_FLOOR = 72;
 /** A chip's glyph and padding, and the gap between two chips. */
 const CHIP_PAD = 28;
 const CHIP_GAP = 6;
-/** The card's border plus the margin each side of the line, which is `.chip-line` in style.css. */
-const CHIP_SIDES = { quote: 40, image: 26, video: 26, person: 40 };
-const CHIP_SIDES_ELSE = 32;
+/** The margin each side of the line, inside the card's 1 px border. `drawCard` hands it to style.css. */
+const CHIP_INSET = { quote: 19, image: 12, video: 12 };
+const CHIP_INSET_ELSE = 15;
 
-const needOf = (chip) => CHIP_PAD + textWidth(chip.text);
+/** How a people chip writes the people it leaves unnamed. */
+const counted = (chip) => `+${chip.count}`;
+/** What a chip takes beside its text: the glyph and padding, and a count, which is never clipped. */
+const padOf = (chip) => CHIP_PAD + (chip.count ? textWidth(` ${counted(chip)}`) : 0);
+const needOf = (chip) => padOf(chip) + textWidth(chip.text);
 
 /**
- * The chips that go on a line `room` px wide: the first `must`, then each next one while every
- * chip can still have its whole text or CHIP_FLOOR, whichever is less. The rest are left to the
- * opened card.
+ * The chips that go on a line `room` px wide: the first `must`, then each next one while the
+ * text of every chip can still be whole or have what CHIP_FLOOR leaves it, whichever is less. The
+ * rest are left to the opened card.
  */
 function fitting(line, room, must) {
   let left = room + CHIP_GAP;
   return line.filter((chip, i) => {
-    left -= CHIP_GAP + Math.min(CHIP_FLOOR, needOf(chip));
+    left -= CHIP_GAP + padOf(chip) + Math.min(CHIP_FLOOR - CHIP_PAD, textWidth(chip.text));
     return i < must || left >= 0;
   });
 }
 
 /**
- * How wide each chip is drawn when the line has `room` px for them. The room is shared out
- * equally. A chip that needs no more than its share takes what it needs, and the others share
- * what is left, so a short date is whole beside a long place that is cut.
+ * How wide each chip's box is when the line has `room` px for them. What the chips do not take
+ * beside their text is shared out equally among the texts. A text that needs no more than its
+ * share takes what it needs, and the others share what is left, so a short place is whole beside
+ * a long one that is clipped.
  */
-function shares(needs, room) {
-  const widths = needs.map(() => 0);
+function shares(line, room) {
+  const needs = line.map((chip) => textWidth(chip.text));
+  const widths = line.map(padOf);
+  room -= widths.reduce((sum, pad) => sum + pad, 0);
   let open = needs.map((_, i) => i);
   while (open.length > 0) {
     const each = Math.floor(room / open.length);
     const whole = open.filter((i) => needs[i] <= each);
-    if (whole.length === 0) {
-      for (const i of open) widths[i] = each;
-      break;
+    for (const i of whole.length > 0 ? whole : open) {
+      const given = whole.length > 0 ? needs[i] : each;
+      widths[i] += given;
+      room -= given;
     }
-    for (const i of whole) {
-      widths[i] = needs[i];
-      room -= needs[i];
-    }
-    open = open.filter((i) => !whole.includes(i));
+    open = whole.length > 0 ? open.filter((i) => !whole.includes(i)) : [];
   }
   return widths;
 }
 
-/** The chip as it is drawn in `wide` px: whole, or its start with an ellipsis. A count is never cut. */
-function trimmed({ kind, text, keep = '' }, wide) {
-  const start = text.slice(0, text.length - keep.length);
-  const drawn = needOf({ text }) <= wide ? text : cut(start, wide - CHIP_PAD - textWidth(keep), TEXT_LETTER) + keep;
-  return { kind, text: drawn, full: text, ...(keep && { keep }) };
-}
+const insetOf = (node) => CHIP_INSET[componentOf(node)] ?? CHIP_INSET_ELSE;
 
 /**
- * A date that is cut says little, so a `when` chip takes its whole text, or the whole line when
- * it is wider than that, before the others are fitted to what is left.
+ * The chips under a card's content, as they are drawn: `{ kind, text, width }`, and `count` on a
+ * people chip that leaves some unnamed. `width` is the chip's box in px, and the page clips `text`
+ * inside it, so no text is cut here. A date that is clipped says little, so a `when` chip takes
+ * what its whole text needs, or the whole line when it needs more, before the others are fitted to
+ * what is left. Any type may carry chips, so they are worked out here and not by a type.
  */
-function lineOf(node, item) {
+export function chipsOf(node, item) {
   const { kind, props } = resolve(node);
-  const room = kind.size(item, props)[0] - (CHIP_SIDES[componentOf(node)] ?? CHIP_SIDES_ELSE);
+  const room = kind.size(item, props)[0] - 2 - 2 * insetOf(node);
   const all = chips(item, kind.shows);
   const dated = all[0]?.kind === 'when' ? [all[0]] : [];
   const taken = dated.map((chip) => Math.min(needOf(chip), room));
   const rest = room - taken.reduce((sum, wide) => sum + wide + CHIP_GAP, 0);
   const others = fitting(all.slice(dated.length), rest, 1 - dated.length);
-  const widths = [...taken, ...shares(others.map(needOf), rest - CHIP_GAP * (others.length - 1))];
-  return [...dated, ...others].map((chip, i) => trimmed(chip, widths[i]));
+  const widths = [...taken, ...shares(others, rest - CHIP_GAP * (others.length - 1))];
+  return [...dated, ...others].map(({ kind: of, text, count }, i) => ({ kind: of, text, width: widths[i], ...(count && { count }) }));
 }
-
-/**
- * The chips under a card's content, as they are drawn: `{ kind, text, full }`, where `text` is cut
- * to the chip's share of the line and `full` is not. Any type may carry them, so they are worked
- * out here and not by a type.
- */
-export const chipsOf = lineOf;
 
 export function sizeOf(node, item) {
   const { kind, props } = resolve(node);
@@ -114,28 +109,30 @@ export function sizeOf(node, item) {
   return [wide, tall + (chips(item, kind.shows).length > 0 ? CHIP_LINE : 0)];
 }
 
-const CHIP = {
-  when: { says: 'When', glyph: 'M6 1.5a4.5 4.5 0 1 0 0 9a4.5 4.5 0 1 0 0-9M6 3.6V6l1.7 1.2' },
-  where: { says: 'Where', glyph: 'M6 10.8C3.9 8.6 2.7 6.8 2.7 5.1a3.3 3.3 0 0 1 6.6 0c0 1.7-1.2 3.5-3.3 5.7ZM6 4.1a1 1 0 1 0 0 2a1 1 0 1 0 0-2' },
-  people: { says: 'People', glyph: 'M6 1.8a2 2 0 1 0 0 4a2 2 0 1 0 0-4M2.2 10.4c.3-2 1.8-3 3.8-3s3.5 1 3.8 3' },
-  origin: { says: 'From', glyph: 'M2.5 2v4.5h6.5M6.8 4.2 9.2 6.5 6.8 8.8' },
+const GLYPH = {
+  when: 'M6 1.5a4.5 4.5 0 1 0 0 9a4.5 4.5 0 1 0 0-9M6 3.6V6l1.7 1.2',
+  where: 'M6 10.8C3.9 8.6 2.7 6.8 2.7 5.1a3.3 3.3 0 0 1 6.6 0c0 1.7-1.2 3.5-3.3 5.7ZM6 4.1a1 1 0 1 0 0 2a1 1 0 1 0 0-2',
+  people: 'M6 1.8a2 2 0 1 0 0 4a2 2 0 1 0 0-4M2.2 10.4c.3-2 1.8-3 3.8-3s3.5 1 3.8 3',
+  origin: 'M2.5 2v4.5h6.5M6.8 4.2 9.2 6.5 6.8 8.8',
 };
 
-function chipLine(line) {
-  return h('div', { class: 'chip-line' }, line.map(({ kind, text, full, keep = '' }) => h('span', { class: 'chip', data: { kind }, title: `${CHIP[kind].says}: ${full}` },
-    s('svg', { class: 'chip-glyph', viewBox: '0 0 12 12', width: 12, height: 12, 'aria-hidden': 'true' }, s('path', { d: CHIP[kind].glyph })),
-    say('span', 'chip-text', text.slice(0, text.length - keep.length)),
-    keep && h('span', { class: 'chip-keep', text: keep.trim() }))));
+function chipLine(line, inset) {
+  const el = h('div', { class: 'chip-line' }, line.map((chip) => h('span', { class: 'chip', data: { kind: chip.kind }, title: `${LABEL[chip.kind]}: ${chip.text}${chip.count ? ` ${counted(chip)}` : ''}`, style: { flexBasis: `${chip.width}px` } },
+    s('svg', { class: 'chip-glyph', viewBox: '0 0 12 12', width: 12, height: 12, 'aria-hidden': 'true' }, s('path', { d: GLYPH[chip.kind] })),
+    say('span', 'chip-text', chip.text),
+    chip.count && h('span', { class: 'chip-count', text: counted(chip) }))));
+  el.style.setProperty('--chip-inset', `${inset}px`);
+  return el;
 }
 
 /** What goes on a card's face: its body, drawn by its type, and under that its chips when it has any. */
 export function drawCard(node, item, ctx) {
   const name = componentOf(node);
   const { kind, props } = resolve(node);
-  const line = lineOf(node, item);
+  const line = chipsOf(node, item);
   return [
     h('div', { class: `card-body c-${name}` }, kind.draw(item, props, ctx)),
-    line.length > 0 && chipLine(line),
+    line.length > 0 && chipLine(line, insetOf(node)),
   ];
 }
 
