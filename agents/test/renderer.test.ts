@@ -615,6 +615,8 @@ test('a place written after its region, or with its kind of district, is that pl
   const same: [string, string][] = [['杭州西湖', '西湖'], ['上海外滩', '外滩'], ['北京市', '北京'], ['北京', '北京市'], ['东京都', '东京'], ['浙江省杭州市西湖', '西湖'], ['京都清水寺', '清水寺'], ['杭州西湖，浙江', '西湖']];
   for (const [title, where] of same) assert.equal(place(title, where), 'place', `${title} is ${where}`);
   assert.deepEqual(ruled({ title: '杭州西湖', data: { where: '西湖' } }).props, { name: '西湖' });
+  const kinds: [string, string][] = [['周庄镇', '周庄'], ['沙溪', '沙溪乡'], ['西递村', '西递'], ['大理州', '大理'], ['大阪府', '大阪'], ['北海道', '北海'], ['箱根町', '箱根'], ['부산시', '부산'], ['제주', '제주도'], ['해운대구', '해운대']];
+  for (const [title, where] of kinds) assert.equal(place(title, where), 'place', `${title} is ${where}, with a town, a prefecture or a Korean district at its end`);
   const other: [string, string][] = [
     ['东京都', '京都'],
     ['杭州西湖', '湖'],

@@ -344,7 +344,7 @@ const PLACE_TEXT_BELOW = 280;
 /** The longest region written in front of a place, as 杭州 is in 杭州西湖, and the shortest: one character in front makes another name, as 东 does of 京都. */
 const REGION = { min: 2, max: 6 };
 /** What a name takes at its end to say which kind of district it is: 北京 and 北京市 are one place. */
-const DISTRICT = /^[市区县省都]$/u;
+const DISTRICT = /^[市区县省都镇乡村州府道町시도구]$/u;
 const SPACELESS_ONLY = /^[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Thai}]+$/u;
 
 /**
