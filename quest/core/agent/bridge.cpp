@@ -148,18 +148,34 @@ void Bridge::changed(const Delta& delta, bool animate) {
         trees.erase(p);
     }
 
-    std::vector<Planted*> planted;
+    std::vector<std::pair<Planted*, const TreeInfo*>> planted;
     for (const TreeId& id : delta.trees.added) {
         if (const TreeInfo* info = mirror.tree(id)) {
-            if (Planted* p = plant(*info)) planted.push_back(p);
+            if (Planted* p = plant(*info)) planted.emplace_back(p, info);
         }
     }
-    // The newest tree stands when nothing does; every other new one hangs on the shelf.
-    for (size_t i = planted.size(); i-- > 0;) {
-        if (!model.tree && !model.pressing) {
-            model.stand(planted[i]->tree);
+    // When nothing stands, the user's own newest tree stands; a tree from the headset's library only when
+    // there is no other. Every other new tree hangs on the shelf.
+    auto own = [&](const TreeInfo* info) {
+        const Item* root = mirror.itemOf(info->rootId);
+        return root && root->source.from != "library";
+    };
+    std::optional<size_t> stands;
+    for (size_t i = 0; i < planted.size(); i++) {
+        if (!stands) {
+            stands = i;
+            continue;
+        }
+        const TreeInfo* best = planted[*stands].second;
+        const TreeInfo* next = planted[i].second;
+        if (own(next) != own(best) ? own(next) : next->createdAt >= best->createdAt) stands = i;
+    }
+    if (model.tree || model.pressing) stands.reset();
+    for (size_t i = 0; i < planted.size(); i++) {
+        if (stands == i) {
+            model.stand(planted[i].first->tree);
         } else {
-            model.shelve(planted[i]->tree, std::nullopt);
+            model.shelve(planted[i].first->tree, std::nullopt);
             model.shelfDirty = true;
         }
     }
