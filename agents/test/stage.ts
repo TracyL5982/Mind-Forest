@@ -7,7 +7,8 @@ import type { Command, Item, Node } from '../src/core/domain.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { byRule } from '../src/core/roles/renderer.ts';
 import type { Roles } from '../src/core/roles/types.ts';
-import { SAMPLES, STRUCTURED_IDS } from '../src/core/samples.ts';
+import { COMPONENT_IDS, SAMPLES, STRUCTURED_IDS } from '../src/core/samples.ts';
+import { COMPOSITE_IDS } from '../src/core/views.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running } from '../src/node/server.ts';
 
@@ -79,26 +80,28 @@ export const STRUCTURED = Object.fromEntries(STRUCTURED_IDS.map((id, i) => [id, 
 
 /**
  * One tree that holds every component and every composite, and a link to a card in another tree when one is given. Every item holds
- * what the Renderer's rules draw its card from, so the tree looks the same after the stand-in Renderer has been over it. `structured: false` leaves out the fourteen types drawn from structure.
- * `sound` is the address of a recording the service holds, which adds a recording at the end, after the types drawn from structure.
+ * what the Renderer's rules draw its card from, so the tree looks the same after the stand-in Renderer has been over it. `structured: false` leaves out the types
+ * of `STRUCTURED_IDS` and the arrangements added after them. `sound` is the address of a recording the service holds, which adds a recording after the types
+ * drawn from structure.
  */
 export function showcase(image: string, other?: string, { structured = true, sound = '' } = {}): Command[] {
   const { commands, add, group } = planting('show', 'Every shape');
 
-  const root = add(null, 'note', 'Every way a card can be drawn', { summary: 'Twenty-five components and six ways to arrange them.', text: 'Twenty-five components and six ways to arrange them.' });
+  const counted = `${COMPONENT_IDS.length} components and ${COMPOSITE_IDS.length} ways to arrange them.`;
+  const root = add(null, 'note', 'Every way a card can be drawn', { summary: counted, text: counted });
   const quote = add(root, 'quote', 'Lange on seeing', { text: '"The camera is a tool for learning how to see without a camera." Dorothea Lange', data: { quote: { text: 'The camera is a tool for learning how to see without a camera.', by: 'Dorothea Lange' } } });
   add(root, 'fact', 'Drop-off in minute one', { data: { facts: [{ label: 'of viewers leave in the first minute', value: '42%' }] } });
-  add(root, 'image', 'Beach still', { ...picture(image), summary: 'A still from the beach scene' });
-  add(root, 'video', 'Dolly zoom clip', { kind: 'video', data: { mediaUrl: image, thumbnailUrl: image }, summary: 'The dolly zoom, slowed down' });
-  add(root, 'link', 'The Vertigo effect, explained', { kind: 'link', summary: 'How one shot changed the grammar of suspense.', source: { from: 'link', url: 'https://example.com/vertigo', capturedAt: new Date().toISOString() } });
-  add(root, 'chart', 'Use by decade', { data: { chart: { labels: ['1960', '1980', '2000', '2020'], values: [3, 9, 14, 11], unit: 'films' } } });
-  add(root, 'person', 'Who built it', { data: { person: { name: 'Irmin Roberts', role: 'Second-unit cameraman' } } });
-  add(root, 'chat', 'Asking about the stretch', {
+  const imageCard = add(root, 'image', 'Beach still', { ...picture(image), summary: 'A still from the beach scene' });
+  const videoCard = add(root, 'video', 'Dolly zoom clip', { kind: 'video', data: { mediaUrl: image, thumbnailUrl: image }, summary: 'The dolly zoom, slowed down' });
+  const linkCard = add(root, 'link', 'The Vertigo effect, explained', { kind: 'link', summary: 'How one shot changed the grammar of suspense.', source: { from: 'link', url: 'https://example.com/vertigo', capturedAt: new Date().toISOString() } });
+  const chartCard = add(root, 'chart', 'Use by decade', { data: { chart: { labels: ['1960', '1980', '2000', '2020'], values: [3, 9, 14, 11], unit: 'films' } } });
+  const personCard = add(root, 'person', 'Who built it', { data: { person: { name: 'Irmin Roberts', role: 'Second-unit cameraman' } } });
+  const chatCard = add(root, 'chat', 'Asking about the stretch', {
     kind: 'chat',
     data: { messages: [{ role: 'user', text: 'Why does the room seem to stretch?' }, { role: 'assistant', text: 'The lens zooms in while the camera pulls back, so the subject holds still and the background rushes away.' }] },
     source: { from: 'chat-export:claude', capturedAt: new Date().toISOString() },
   });
-  add(root, 'code', 'Field of view', { data: { code: { language: 'js', source: 'const fov = 2 * Math.atan(width / (2 * distance));\ncamera.zoom = base / Math.tan(fov / 2);\nrender();' } } });
+  const codeCard = add(root, 'code', 'Field of view', { data: { code: { language: 'js', source: 'const fov = 2 * Math.atan(width / (2 * distance));\ncamera.zoom = base / Math.tan(fov / 2);\nrender();' } } });
   add(root, 'steps', 'How to try it', { data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] } });
 
   const gallery = [1, 2, 3].map((i) => add(quote, 'image', `Frame ${i}`, picture(image)));
@@ -116,7 +119,8 @@ export function showcase(image: string, other?: string, { structured = true, sou
   if (other) commands.push({ type: 'link', link: { id: 'show-link', a: quote, b: other, why: 'Same shot', strength: 0.9 } });
   if (!structured) return commands;
 
-  const carried = add(root, 'note', 'What an item can carry', { summary: 'Fourteen more types, each drawn from structure its item holds.', text: 'Fourteen more types, each drawn from structure its item holds.' });
+  const more = `${STRUCTURED_IDS.length} more types, each drawn from structure its item holds or assembled from its parts.`;
+  const carried = add(root, 'note', 'What an item can carry', { summary: more, text: more });
   for (const id of STRUCTURED_IDS) {
     const { title, kind, text, summary, data, source, origin } = SAMPLES[id].item;
     const seed: Seed = { kind, text, summary, data, source: { ...source, asset: undefined }, origin };
@@ -147,6 +151,56 @@ export function showcase(image: string, other?: string, { structured = true, sou
       source: { from: 'drop', capturedAt: new Date().toISOString() },
     });
   }
+
+  const note = (parent: string, title: string, text: string, status: Node['status'] = 'kept') => add(parent, 'note', title, { text, summary: text, ...(status === 'pick' ? { origin: SCOUT } : {}) }, status);
+  const lenses = [
+    ['A 24 to 70 mm zoom', 'It covers the whole pull in one lens.'],
+    ['A 28 to 135 mm zoom', 'It reaches further, and it breathes a little.'],
+    ['Two primes and a cut', 'It needs no zoom at all.'],
+  ].map(([title, text]) => note(chatCard, title!, text!, 'pick'));
+  group(chatCard, 'ranked', 'Lenses to try it with', lenses, { reasons: Object.fromEntries(lenses.map((id, i) => [id, ['It covers the whole pull in one lens.', 'It reaches further, and it breathes a little.', ''][i]])) });
+  const takes = [
+    ['The storyboard', 'Six frames drawn by hand.'],
+    ['The rehearsal', 'The pull was too fast, so it was slowed to four seconds.'],
+    ['The take', 'Four seconds, and the subject holds still.'],
+  ].map(([title, text]) => note(codeCard, title!, text!));
+  group(codeCard, 'beforeafter', 'From board to take', takes, { changes: { [takes[1]!]: 'The pull was too fast, so it was slowed to four seconds.', [takes[2]!]: '' } });
+  const support = [
+    ['Keep the subject the same size', 'Everything else in the shot follows from this.'],
+    ['Mark the floor', 'Tape where the dolly starts and stops.'],
+    ['Count the pull', 'Say the seconds out loud.'],
+    ['Watch the eyes', 'They should not drift in the frame.'],
+  ].map(([title, text]) => note(personCard, title!, text!));
+  group(personCard, 'lead', 'What matters most', support, {});
+  const shoot = [
+    ['Takes', 'Takes: 42', [{ label: 'Takes', value: '42' }]],
+    ['Days on set', 'Days on set: 3', [{ label: 'Days on set', value: '3' }]],
+    ['Crew', 'Crew: 11', [{ label: 'Crew', value: '11' }]],
+  ].map(([title, text, facts]) => add(linkCard, 'fact', title as string, { text: text as string, data: { facts } }));
+  const perDay = add(linkCard, 'chart', 'Takes by day', { data: { chart: { labels: ['Day 1', 'Day 2', 'Day 3'], values: [9, 21, 12], unit: 'takes' } } });
+  group(linkCard, 'overview', 'The shoot', [...shoot, perDay], {});
+  const board = [
+    add(videoCard, 'image', 'Low light on the stairs', picture(image)),
+    add(videoCard, 'image', 'The bell tower', picture(image)),
+    add(videoCard, 'swatch', SAMPLES.swatch.item.title, { kind: SAMPLES.swatch.item.kind, text: SAMPLES.swatch.item.text, summary: SAMPLES.swatch.item.summary, data: SAMPLES.swatch.item.data }),
+    add(videoCard, 'idea', 'Paint the stairwell green', { text: 'Paint the stairwell green' }),
+  ];
+  group(videoCard, 'moodboard', 'The look', board, {});
+  const effort = [
+    ['Light the background', 'Little effort, and a large impact on the shot.'],
+    ['Build a longer track', 'Much effort, and a large impact on the shot.'],
+    ['Change the lens cap', 'Little effort and little impact.'],
+    ['Repaint the set', 'Much effort for little impact.'],
+  ].map(([title, text]) => note(imageCard, title!, text!));
+  group(imageCard, 'matrix', 'What to fix first', effort, { x: 'Effort', y: 'Impact', reasons: Object.fromEntries(effort.map((id, i) => [id, i === 0 ? 'Little effort, and a large impact on the shot.' : ''])) });
+  const rigs = [
+    ['Zoom in on a tripod', 'On a tripod the camera stays put.'],
+    ['Pan on a tripod', 'On a tripod the camera turns in place.'],
+    ['Push in on a dolly', 'On a dolly the camera moves in.'],
+    ['Pull back on a dolly', 'On a dolly the camera moves away.'],
+  ].map(([title, text]) => note(chartCard, title!, text!));
+  const column = (label: string, ids: string[]) => ({ kind: 'column', label, children: ids.map((id) => ({ kind: 'card', id, role: 'normal' })) });
+  group(chartCard, 'layout', 'Two rigs', rigs, { tree: { kind: 'row', children: [column('On a tripod', rigs.slice(0, 2)), column('On a dolly', rigs.slice(2))] } });
   return commands;
 }
 

@@ -16,8 +16,9 @@
  *   app                open the app and connect to the service
  *   think=<text>       type a thought into the dock and wait for its picks
  *   shapes             load the Every shape tree: each card type and each arrangement. `shapes=eleven`
- *                      leaves out the fourteen types drawn from structure and the recording, to compare
- *                      with a client that does not draw them.
+ *                      leaves out the types drawn from structure or assembled from parts, the recording
+ *                      and the arrangements added after the first six, to compare with a client that
+ *                      does not draw them.
  *   chips              load the With chips tree: cards whose items carry a date, a place, people
  *                      or an origin, twins that carry none, and a timeline of cards with chips
  *   crowd=<n>          load a tree of n note cards. Default 200. `crowd=<n>:chips` gives every

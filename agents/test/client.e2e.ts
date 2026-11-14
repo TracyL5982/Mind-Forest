@@ -12,6 +12,7 @@ import { join, resolve } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
 import type { Running } from '../src/node/server.ts';
 import { COMPONENT_IDS, STRUCTURED_IDS } from '../src/core/samples.ts';
+import { COMPOSITE_IDS } from '../src/core/views.ts';
 import { DEMO_MEMO, tones } from '../src/fake/model.ts';
 import { ASSEMBLED, CHIPPED, LONG_PLACE, PLACED, PNG, STRUCTURED, assembled, bootFake, browserPath, chipped, crowd, showcase, spills, stored, unknownShape } from './stage.ts';
 
@@ -332,7 +333,7 @@ async function main(): Promise<void> {
       await run.pipeline.idle();
       assert.equal(run.mind.treeNodes(PLACED)[0]!.view.component, 'hologram');
       assert.equal(await unknown.getAttribute('data-component'), 'note');
-      for (const composite of ['gallery', 'timeline', 'comparison', 'sequence', 'cluster', 'stack']) {
+      for (const composite of COMPOSITE_IDS) {
         assert.equal(await count(page, `.pane[data-composite="${composite}"]`), 1, `${composite} is drawn`);
       }
       assert.ok(await page.locator('.pane[data-composite="timeline"]').getByText('1975').isVisible());
