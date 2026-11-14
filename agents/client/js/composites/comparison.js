@@ -19,7 +19,7 @@ export function arrange(group, ids, sizes) {
     ...ids.map((id) => fold(cell(id, i), Math.floor(sizes.get(id)[0]) - INSET, TEXT_LETTER, 2))));
   const tops = rows.map((_, i) => HEAD + tall + 12 + rows.slice(0, i).reduce((sum, tallness) => sum + tallness, 0));
   return {
-    at, w: right + PAD, h: HEAD + tall + 12 + rows.reduce((sum, tallness) => sum + tallness, 0) + (rows.length ? 8 : PAD - 12),
+    at, w: right + PAD, h: HEAD + tall + 12 + rows.reduce((sum, tallness) => sum + tallness, 0) + (rows.length ? PAD : PAD - 12),
     marks: criteria.map((criterion, i) =>
       h('div', { class: 'cmp-row', style: { left: `${PAD}px`, top: `${tops[i]}px`, width: `${right - PAD}px`, height: `${rows[i]}px` } },
         h('div', { class: 'cmp-label clamp-2', dir: 'auto', style: { width: `${LABEL - 10}px` }, text: criterion }),
