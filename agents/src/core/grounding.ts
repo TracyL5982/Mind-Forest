@@ -17,8 +17,10 @@ export interface Grounding {
   says(claim: string): boolean;
   /** As `says`, and the words are one stretch of the text: a sentence end or an empty line breaks the passage too. A line break inside a sentence does not. */
   quotes(passage: string): boolean;
-  /** The text writes this number, in any grouping. */
-  writes(value: number): boolean;
+  /** The text writes this number, in any grouping. Counted in a unit that scales it, as 万, 亿, 千, k, M and bn do, it is written with that unit against it: 2189 in 万 is "2189万". */
+  writes(value: number, unit?: string): boolean;
+  /** The text writes this number with this unit set against it, before or after: "45%", "$120", "12 films", and "2189万" for 2189 in 万. */
+  measures(value: number, unit: string): boolean;
   /** The text writes every number these words write. Words that write no number tally. */
   tallies(words: string): boolean;
   /** The text writes this hex colour, with its "#", as a whole value. */
@@ -34,16 +36,18 @@ const enum Break {
   FullStop = 2,
   /** An empty line. */
   Blank = 4,
-  /** A tab or "|" between two cells of a table row. */
+  /** A "|" between two cells of a table row. */
   Cell = 8,
   /** The start of a line that opens with a bullet, a number and a dot, a check box or "|". */
   Item = 16,
   /** The line break before or after a line that holds table cells. */
   Row = 32,
+  /** A tab inside a line: a cell break to a short claim. Prose holds tabs too, so a passage reads one as white space. */
+  Tab = 64,
 }
 
-const SHORT = Break.FullStop | Break.Cell | Break.Item | Break.Row;
-const PASSAGE = SHORT | Break.Sentence | Break.Blank;
+const SHORT = Break.FullStop | Break.Cell | Break.Item | Break.Row | Break.Tab;
+const PASSAGE = Break.FullStop | Break.Cell | Break.Item | Break.Row | Break.Sentence | Break.Blank;
 
 /** A number as a text writes it. */
 interface Num {
@@ -53,7 +57,7 @@ interface Num {
   readings: number[];
   /** The groups of a form with no one value, without their leading zeros: "2024.3.15". Empty otherwise. */
   literal: string;
-  /** The currency sign, percent sign and comparator written against the number, which a claim that carries them asks for. */
+  /** The currency sign, percent sign, degree sign and comparator written against the number, which a claim that carries them asks for. */
   glued: string;
 }
 
@@ -245,7 +249,7 @@ class Reader implements Tokens {
     else {
       if (kind === Char.FullStop) this.pending |= Break.FullStop;
       else if (kind === Char.Cell) {
-        this.pending |= Break.Cell;
+        this.pending |= text[at] === '\t' ? Break.Tab : Break.Cell;
         this.cells = true;
       }
       this.stopped = kind === Char.Stop || (kind === Char.Closer && this.stopped);
@@ -419,7 +423,7 @@ class Reader implements Tokens {
     }
 
     const after = text[to] === ' ' ? to + 1 : to;
-    if (text[after] === '%' || (isCurrency(text[after]) && !isDigit(text, after + 1))) {
+    if (text[after] === '%' || text[after] === '°' || (isCurrency(text[after]) && !isDigit(text, after + 1))) {
       glued += text[after];
       to = after + 1;
     }
@@ -491,6 +495,18 @@ function marked(text: string): { item: Tokens; done: boolean }[] {
   return lines;
 }
 
+/**
+ * The ways a text may set a unit against a number, each as a claim: the unit after the number, before it,
+ * and around it when a currency sign leads the unit, as "$120k" writes 120 in "$k".
+ */
+function against(value: number, unit: string): Tokens[] {
+  const sign = uniform(unit).trim();
+  if (sign === '') return [];
+  const written = [`${value}${sign}`, `${sign}${value}`];
+  if (sign.length > 1 && isCurrency(sign[0])) written.push(`${sign[0]}${value}${sign.slice(1)}`);
+  return written.map(tokenize).filter((asked) => asked.list.length > 0);
+}
+
 class Source implements Grounding {
   private readonly text: string;
   private read: Tokens | undefined;
@@ -514,9 +530,22 @@ class Source implements Grounding {
     return this.stated(passage, PASSAGE);
   }
 
-  writes(value: number): boolean {
+  writes(value: number, unit?: string): boolean {
+    if (!Number.isFinite(value)) return false;
+    const scaled = unit === undefined ? [] : against(value, unit).filter(({ list: [first] }) => typeof first === 'object' && !Number.isNaN(first.value) && first.value !== value);
+    if (scaled.length > 0) return scaled.some((asked) => this.holds(asked, SHORT));
     this.numbers ??= new Set(this.tokens.list.flatMap((token) => (typeof token === 'object' ? token.readings : [])));
-    return Number.isFinite(value) && this.numbers.has(value);
+    return this.numbers.has(value);
+  }
+
+  measures(value: number, unit: string): boolean {
+    if (!Number.isFinite(value)) return false;
+    return against(value, unit).some((asked) => {
+      const [only] = asked.list;
+      // A sign the reading drops, as "%" before a number, leaves the bare number, which is measured in nothing.
+      const bare = asked.list.length === 1 && typeof only === 'object' && only.glued === '' && only.value === value;
+      return !bare && this.holds(asked, SHORT);
+    });
   }
 
   tallies(words: string): boolean {

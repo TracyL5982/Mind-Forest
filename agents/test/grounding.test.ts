@@ -449,3 +449,62 @@ test('an empty text states nothing', () => {
   assert.equal(text.writes(0), false);
   assert.equal(text.paints('#fff'), false);
 });
+
+test('a tab inside a line is white space to a passage and a cell break to a short claim', () => {
+  const said = 'The   best  camera\tis the one you have with you, people say.';
+  assert.equal(quotes(said, 'The best camera is the one you have with you'), true);
+  assert.equal(says(said, 'best camera is the one'), false);
+  assert.equal(quotes('Plan | Price', 'Plan Price'), false, 'a "|" still parts two cells');
+  assert.equal(quotes('Stay hungry.\n\nStay foolish.', 'Stay hungry. Stay foolish.'), false, 'and an empty line still ends a passage');
+});
+
+test('a degree sign on a claim number must be on the number in the text', () => {
+  assert.equal(says('Oslo 5°, Rome 12° at noon.', '12°'), true);
+  assert.equal(says('It boils at 100 °C.', '100°C'), true);
+  assert.equal(says('Oslo 5, Rome 12 at noon.', '12°'), false);
+});
+
+test('a number is measured in a unit when the text sets the unit against it', () => {
+  for (const [text, value, unit] of [
+    ['Rent 45%, food 25%.', 45, '%'],
+    ['Rent 45 %, food 25 %.', 25, '%'],
+    ['Basic €5, pro €19 a month.', 19, '€'],
+    ['Revenue was $120k in Q1.', 120, 'k'],
+    ['Revenue was $120k in Q1.', 120, '$k'],
+    ['Oslo 5°, Rome 12°.', 5, '°'],
+    ['北京2189万，上海2487万。', 2189, '万'],
+    ['北京２１８９万，上海2487万。', 2189, '万'],
+    ['产值3亿，利润2千。', 3, '亿'],
+    ['It drew 1.5M views and is worth 2bn.', 1.5, 'M'],
+    ['It drew 1.5M views and is worth 2bn.', 2, 'bn'],
+    ['We found 12 films in 2019.', 12, 'films'],
+    ['Sales were 1,200 units in May.', 1200, 'units'],
+  ] as const) {
+    assert.equal(grounding(text).measures(value, unit), true, `${value} ${unit} in "${text}"`);
+  }
+  for (const [text, value, unit] of [
+    ['Rent 45, food 25.', 45, '%'],
+    ['Rent 45%, food 25.', 25, '%'],
+    ['Basic $5, pro $19 a month.', 19, '€'],
+    ['Revenue was $120 in Q1.', 120, 'k'],
+    ['Revenue was €120k in Q1.', 120, '$k'],
+    ['北京2189人，上海2487万。', 2189, '万'],
+    ['北京2189万。', 189, '万'],
+    ['We found 12 dogs and some films.', 12, 'films'],
+    ['Rent 45%.', 45, ' '],
+  ] as const) {
+    assert.equal(grounding(text).measures(value, unit), false, `${value} ${unit} in "${text}"`);
+  }
+});
+
+test('a number counted in a unit that scales it is written only with that unit against it', () => {
+  const cities = grounding('北京2189万，上海2487万，深圳1756人。');
+  assert.equal(cities.writes(2189, '万'), true);
+  assert.equal(cities.writes(2189), false);
+  assert.equal(cities.writes(1756, '万'), false, 'a number the text writes bare is not that many 万');
+  assert.equal(cities.writes(2189, '亿'), false);
+  assert.equal(cities.writes(1756, '人'), true, 'a unit that scales nothing asks only for the number');
+  const revenue = grounding('Revenue was $120k in Q1, $1.5M in Q2 and $90 in Q3.');
+  assert.deepEqual([revenue.writes(120, 'k'), revenue.writes(1.5, 'M'), revenue.writes(90, 'k'), revenue.writes(90, '$'), revenue.writes(120)], [true, true, false, true, false]);
+  assert.deepEqual([revenue.writes(120, '$k'), revenue.writes(90, '$k'), revenue.writes(120, '€k')], [true, false, false], 'a currency sign may lead the unit');
+});
