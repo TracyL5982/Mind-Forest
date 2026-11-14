@@ -261,5 +261,5 @@ test('an excerpt whose source is its title writes it once', async () => {
   const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Kind> };
   const excerpt = (source: string) => COMPONENTS.excerpt!.size({ ...blank, title: '鲁迅《故乡》' }, { text: '世界上本没有路，走的人多了，也便成了路。', source });
   assert.deepEqual(excerpt(' 鲁迅《故乡》 '), excerpt(''));
-  assert.equal(excerpt('example.org')[1], excerpt('')[1] + 17);
+  assert.equal(excerpt('example.org')[1], excerpt('')[1]! + 17);
 });
