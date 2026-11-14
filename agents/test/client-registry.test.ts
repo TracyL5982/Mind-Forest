@@ -84,6 +84,15 @@ test('a fact value takes the largest size its digits fit at, and is never given 
   assert.deepEqual(size('12345678901234567890123456789'), [320, height(21, 2)], 'past one line at the smallest size it wraps');
 });
 
+test('a fact card grows a line for each line its value needs, up to eight', async () => {
+  const { COMPONENTS } = await load('components/index.js');
+  const height = (value: string) => (COMPONENTS.fact.size({ title: '' }, { value, label: '' }) as [number, number])[1];
+  assert.equal(height('1'.repeat(46)), 40 + 21 * 2, 'forty-six digits at 11.55 px each fit two lines of 266 px');
+  assert.equal(height('1'.repeat(47)), 40 + 21 * 3, 'forty-seven need three');
+  assert.equal(height('忆'.repeat(35)), 40 + 21 * 3, 'thirty-five Han at seventeen a line need three');
+  assert.equal(height('1'.repeat(400)), 40 + 21 * 8, 'a paragraph stops at eight');
+});
+
 test('a sign or a unit is counted at least as wide as it draws', async () => {
   const { span, QUOTE_LETTER } = await load('components/shared.js');
   /** Widths in px measured in the page: a fact value at its largest size, and a quote. */

@@ -13,21 +13,23 @@ const RULE = 10;
  */
 const STEPS = [['', 36, 210, 2148], ['is-mid', 28, 149, 1506], ['is-small', 21, 105, 1001]];
 const DIGIT = 11;
+/** The most lines a value is sized for, so a paragraph filed as a value cannot make a tower. */
+const MOST_LINES = 8;
 
 /** A value's width on one line in hundredths of a px. */
 const need = (value, letter, digit) => span(value, letter) * letter - (value.match(/[0-9]/g)?.length ?? 0) * (DIGIT * letter - digit);
 
 /**
- * A value takes the largest size that holds it on one line. Past the smallest, it wraps to two.
- * It is drawn whole whatever the estimate: a value wider than it was counted wraps, and is never
- * clamped or ended with an ellipsis.
+ * A value takes the largest size that holds it on one line. Past the smallest, it wraps and the
+ * card grows with it, up to `MOST_LINES`. It is drawn whole whatever the estimate: a value wider
+ * than it was counted wraps, and is never clamped or ended with an ellipsis.
  */
 function plan(item, props) {
   const value = text(props.value) || '–';
   const label = text(props.label);
   const fits = STEPS.find((step) => need(value, step[2], step[3]) <= COLUMN * 100);
   const [cls, lead, letter, digit] = fits ?? STEPS.at(-1);
-  const lines = fits ? 1 : fold(value, COLUMN, letter, 2);
+  const lines = fits ? 1 : fold(value, COLUMN, letter, MOST_LINES);
   const valueWidth = lines > 1 ? COLUMN : up(need(value, letter, digit), 100);
   const width = clamp(SIDES + Math.max(valueWidth, textWidth(label)), NARROW, WIDE);
   return {
