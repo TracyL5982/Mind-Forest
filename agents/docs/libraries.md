@@ -20,7 +20,7 @@ A group is `{ id, treeId, anchor, composite, title, members, props }`. `anchor` 
 `client/library.html` draws every component and composite from sample data with the live client's code. Open it to see the current look. Under each sample it states the type name and the footprint.
 
 - Each component is one module, `client/js/components/<type>.js`, that exports `size`, `draw` and `detail`. Each composite is one module in `client/js/composites/`. The `index.js` in each folder is the registry.
-- `size(item, props)` is the card's footprint in px. It is worked out from the content and never measured, so the field can be laid out before anything is drawn. The next section gives the rule. The registry adds the chip line to it.
+- `size(item, props)` is the card's footprint in px. It is worked out from the content and never measured, so the field can be laid out before anything is drawn. The next section gives the rule. The registry adds 28 px to the height of a card that has chips.
 - `shows` lists the chip sources the type already draws, as `item.data` keys. See Chips.
 - Text on the field is set in three sizes, named `--type-display`, `--type-title` and `--type-text` in `client/style.css`. A fact's value that is too long for its card steps down to a middle size, then to the title size.
 - Each type has its own face, so types can be told apart when zoomed out. A note is plain. A quote is a serif on a face washed with the tree's colour. A fact is one large figure on a darker face. A picture or clip has tight corners and its caption on a plate below. A link sits under an address bar. A chart has gridlines and a scale. A person has a round face beside the name. A chat is speech bubbles. Code is fixed-width with a numbered gutter. Steps are numbers down a rail.
@@ -35,7 +35,7 @@ A group is `{ id, treeId, anchor, composite, title, members, props }`. `anchor` 
 
 A second client must give every card the same footprint as the web client, because the field is laid out from footprints alone. This section is the whole rule. `test/footprints.json` holds sample cards with the footprint each must get. `npm test` checks the web client against it, and a second client should run the same file through its own code.
 
-All arithmetic is in whole numbers. `up(a, b)` is `a / b` rounded up. `clamp(v, lo, hi)` holds `v` between `lo` and `hi`. A prop that is not a string counts as an empty string. A prop "is set" when it is a string that is not empty, so a string of spaces is set. A card whose component is unknown is sized as a note with no props.
+All arithmetic is in whole numbers. `up(a, b)` is `a / b` rounded up. `clamp(v, lo, hi)` holds `v` between `lo` and `hi`. A prop that is not a string counts as an empty string. A prop "is set" when it is a string that is not empty, so a string of spaces is set. A card whose component is unknown is sized as a note with no props. `textWidth(str)` is `up(span(str) * 72, 100)`, the px a string is given at the text size.
 
 ### The width of a string
 
@@ -116,15 +116,30 @@ A string that needs more lines than `max` is drawn cut with an ellipsis. A fact'
 - **code.** Width 304. The lines are `props.source` split at each line feed. Height is `59 + 17 * clamp(lineCount, 1, 7)`.
 - **steps.** Width 256. `rows` is the number of steps, at most 5. Height is 51, plus `10 + 20 * rows + 8 * (rows - 1)` when there is a step, plus 25 when there are more than 5 steps.
 
+### The chip line
+
+A card's footprint is its type's footprint, and 28 px taller when the card has at least one chip. The width never changes, and neither does the height with the number of chips. Whether the node is a pick or kept changes nothing. The Chips section says which chips an item has, and that rule gives at most three, in order. Call them the candidates. A card has chips when it has at least one candidate.
+
+The line draws some of the candidates and cuts their text. This changes what is drawn and never the footprint.
+
+`room` is the card's width less 40 for a quote or a person, less 26 for an image or a video, and less 32 for every other type. That is the border and the margin each side of the line. `need(chip) = 28 + textWidth(chip.text)`, where 28 is the chip's glyph and padding. Chips are 6 px apart.
+
+1. **How many are drawn.** The first candidate is always drawn. Walk the candidates in order with `left = room + 6`. For each, `left = left - 6 - min(84, need)`. A candidate after the first is drawn only when `left >= 0` after its own step. A candidate that is left out still takes its step, so no later one is drawn. The opened card lists what the line leaves out.
+2. **How wide each is.** Start with `free = room - 6 * (drawn - 1)` and every drawn chip without a width. Repeat: `each = floor(free / chips without a width)`. Every chip without a width whose `need <= each` gets its `need` as its width, and `free` drops by that. When no chip does, every chip without a width gets `each`, and the rule ends. It also ends when every chip has a width.
+3. **How a chip is cut.** A chip whose `need` is no more than its width is drawn whole. Any other chip is cut by the rule in Text cut to a width, with `letter = 72` and `room = width - 28`.
+4. **The people chip's count.** A people chip for three or more people ends in ` +N`. That end, with its space, is `keep`. When the chip is cut, only the text before `keep` is cut, with `room = width - 28 - textWidth(keep)`, and `keep` is put back after the ellipsis: `Ada Lovelace, Grace Ho… +3`. The web client draws the count without its space, 4 px after the names.
+
+A sample in `test/footprints.json` whose item has `data` lists in `chips` the text of each chip its card draws, after cutting. `origin` in a sample's item is `item.origin`.
+
 ### Text cut to a width
 
-Where the web client shortens a string itself, as it does for a chart's labels, it keeps whole characters (grapheme clusters) while `span(kept + '…') * letter <= room * 100` and adds the ellipsis. It never cuts inside an emoji or between a letter and its accent. The first letter on a link's address bar and a person's initials are whole characters too.
+Where the web client shortens a string itself, as it does for a chart's labels and for chips, it keeps whole characters (grapheme clusters) while `span(kept + '…') * letter <= room * 100` and adds the ellipsis. It never cuts inside an emoji or between a letter and its accent. The first letter on a link's address bar and a person's initials are whole characters too.
 
 ## Chips
 
-Any card may show one line of chips under its content. A chip is a short fact about the item: when, where, who, or where a pick came from. A photo with a date and a place reads as a memory without a card type of its own.
+Any card may show one line of chips under its content. A chip is a short fact about the item: when, where, who, or where the agents found it. A photo with a date and a place reads as a memory without a card type of its own.
 
-Chips are read from the item and from whether the node is a pick. They never come from `view.props`, so the Renderer and the model have no part in them. `client/js/chips.js` is the whole rule and has no drawing code.
+Chips are read from the item alone. They never come from `view.props`, so the Renderer and the model have no part in them, and they do not depend on the node, so a card keeps its chips and its size when a pick is kept. `client/js/chips.js` is the whole rule for which chips an item has and has no drawing code. `client/js/components/index.js` fits them to a card.
 
 **Sources, in this order.**
 
@@ -132,17 +147,16 @@ Chips are read from the item and from whether the node is a pick. They never com
 | --- | --- | --- |
 | `when` | `item.data.when`, a string | The string. |
 | `where` | `item.data.where`, a string | The string. |
-| `people` | `item.data.people`, an array of strings | The first two names joined by a comma, then ` +N` for the N left unnamed: `Ada, Grace +3`. |
-| `origin` | The first of `item.data.from`, `item.data.holder` and `item.data.site` that is a string | The string. Only while `node.status` is `pick`. |
+| `people` | `item.data.people`, an array of strings | The first two names joined by a comma and a space, then ` +N` for the N left unnamed: `Ada, Grace +3`. |
+| `origin` | The first of `item.data.from`, `item.data.holder` and `item.data.site` that is a string | The string. Only when the agents brought the item, which is `item.origin.by === 'agent'`. |
 
 A value is trimmed. An empty string, a value of another type, or an empty array is no source. A name that is not a string or is empty is skipped.
 
-**Which chips a card draws.**
+**Which chips a card has.**
 
 1. Take the sources the item holds, in the order above.
 2. Drop each one whose `item.data` key the card's type already shows. The table below lists these.
-3. Keep the first three. `chips(item, node, shown)` returns these as `{ kind, text }`. A people chip that counts the unnamed also has `keep`, the end of `text` that holds the count.
-4. Draw the first. Draw each next one only while every chip drawn can have its whole text or 84 px, whichever is less. The web client works this out from the card's width less 38 px, with 6 px between chips, 28 px for a chip's glyph and padding, and 7.4 px a letter (`span` in `components/shared.js`). A chip that does not fit is left to the opened card.
+3. Keep the first three. `chips(item, shown)` returns these as `{ kind, text }`. A people chip that counts the unnamed also has `keep`, the end of `text` that holds the count.
 
 **What each type already shows.**
 
@@ -151,17 +165,19 @@ A value is trimmed. An empty string, a value of another type, or an empty array 
 | `link` | `site`, in its address bar |
 | every other type | nothing |
 
-So a link pick whose only origin is its site gets no origin chip. A link pick with `data.from` gets that as its origin chip.
+So a link the Scout brought whose only origin is its site gets no origin chip. One with `data.from` gets that as its origin chip.
 
 **The line.**
 
-- A card with at least one chip is 28 px taller than the same card without. A card with none has the footprint its type gives it, and no line. The number of chips never changes the height.
-- The line never wraps. Its width is shared out equally. A chip that needs less than its share takes what it needs and the others share the rest. A chip that gets less than it needs is cut with an ellipsis. A people chip cuts its names and keeps its count.
+- A card with at least one chip is 28 px taller than the same card without. A card with none has the footprint its type gives it, no line, and the same markup as before chips existed.
+- The line never wraps. A card draws fewer than three chips when three would crowd, and cuts a chip that is longer than its share of the line. The chip line in the footprint section gives the numbers. `chipsOf(node, item)` returns the chips as drawn, `{ kind, text, full }`, where `text` is cut and `full` is not. A hover on a chip shows `full`.
 - A chip is 20 px tall and set in the text size. It starts with a glyph for its kind, so the kinds are told apart without colour: a clock for `when`, a pin for `where`, a figure for `people`, a turned arrow for `origin`.
 - The glyph takes the card's accent. That is the tree's colour, or amber while the card is a pick. Teal is not used.
-- Keeping a pick removes its origin chip. If that was its only chip, the card gets 28 px shorter.
+- The origin chip follows the item. A museum pick shows `The Metropolitan…` as a pick and after it is kept, at the same size. An item the user added shows no origin chip, whatever its data holds.
 
-**The opened card** lists every source in full, with no limit of three and without leaving out what the type shows: `When`, `Where`, `People` with every name, and `Origin` while the card is a pick. `chipSources(item, node)` returns these as `{ kind, label, text }`.
+**The opened card** lists every source in full, with no limit of three and without leaving out what the type shows: `When`, `Where`, `People` with every name, and `Origin` for an item the agents brought. `chipSources(item)` returns these as `{ kind, label, text }`.
+
+**A known limit.** A card in a timeline shows its year on the axis and again on its `when` chip. The chip stays, because a card's footprint is worked out from its item and props alone. If the chip depended on the group, a card would change size when it joined or left a timeline, and the field could not be laid out from footprints.
 
 ## Rules the Renderer follows
 
