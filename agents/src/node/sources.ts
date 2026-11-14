@@ -20,6 +20,14 @@ const str = (value: unknown): string => (typeof value === 'string' ? value.trim(
 const list = (value: unknown): any[] => (Array.isArray(value) ? value : []);
 const q = encodeURIComponent;
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', hellip: '…', mdash: ', ', ndash: '-', rsquo: "'", lsquo: "'", rdquo: '"', ldquo: '"' };
 
 /** Markup from an API reduced to the words a person would read. */
@@ -54,11 +62,14 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     show: 1,
     async search(query) {
       const hits = await opts.model.search({ role: 'tool.web', query, max: PER_SEARCH });
+      // Encyclopedia entries are left out: the user asked for sources with a point of view or first-hand detail.
+      const usable = hits.filter((hit) => !/(^|\.)(wikipedia|wikimedia|fandom)\.org$|(^|\.)fandom\.com$/.test(hostOf(hit.url)));
       const pages = await Promise.all(
-        hits.slice(0, 4).map(async (hit): Promise<Found | null> => {
+        usable.slice(0, 4).map(async (hit): Promise<Found | null> => {
           const page = await opts.read(hit.url).catch(() => null);
-          if (!page || page.text.length < 400) return null;
-          return { title: page.title || hit.title, by: page.site, date: '', text: page.text.slice(0, 5000), url: hit.url };
+          const title = [page?.title, hit.title].map((t) => str(t)).find((t) => t && !/^https?:\/\//i.test(t));
+          if (!page || !title || page.text.length < 400) return null;
+          return { title, by: page.site, date: '', text: page.text.slice(0, 5000), url: hit.url };
         }),
       );
       return pages.flatMap((p) => p ?? []);
@@ -118,7 +129,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
   const papers: Adapter = {
     id: 'papers',
     name: 'Research papers',
-    goodFor: 'What research has found: studies, evidence, methods and surveys in any academic field, with the abstract.',
+    goodFor: 'What research has found: studies, evidence, methods and surveys in any academic field, with the abstract. Not for practical advice, prices, places or current events.',
     query: 'Three to six words a paper on this would have in its title or abstract.',
     show: 2,
     async search(query) {
@@ -144,7 +155,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
   const books: Adapter = {
     id: 'books',
     name: 'Books',
-    goodFor: 'A book that treats the subject at length, with its cover and description.',
+    goodFor: 'A well-known book that treats the subject at length, with its cover. Search by title or author when you know one.',
     query: 'A title, an author, or two to four subject words.',
     show: 2,
     async search(query) {
@@ -164,7 +175,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
   const discussions: Adapter = {
     id: 'discussions',
     name: 'Hacker News',
-    goodFor: 'What builders, founders and engineers say from experience about a tool, a company, a technique or an idea in technology and startups.',
+    goodFor: 'What builders, founders and engineers say from experience about a tool, a company, a technique or an idea. Technology, software and startups only.',
     query: 'Two to four words naming the topic.',
     show: 1,
     async search(query) {
@@ -224,7 +235,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
   const data: Adapter = {
     id: 'data',
     name: 'Our World in Data',
-    goodFor: 'A world statistic over time, drawn as a chart: population, economy, energy, health, education, technology use, emissions, food, work.',
+    goodFor: 'A world total over the years, drawn as a chart: population, economy, energy, health, education, technology use, emissions, food, work. World figures only: nothing about one country, city, company, month or season.',
     query: 'Two to four words naming what is measured ("internet users", "solar energy cost", "life expectancy").',
     show: 1,
     async search(query) {
@@ -255,7 +266,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
   const podcasts: Adapter = {
     id: 'podcasts',
     name: 'Podcasts',
-    goodFor: 'An episode where people who know the subject talk it through. It plays inside the card.',
+    goodFor: 'An episode where people who know the subject talk it through. It plays inside the card. Good for broad subjects, poor for narrow or personal ones.',
     query: 'Two to four words naming the topic or a guest.',
     show: 1,
     async search(query) {

@@ -156,25 +156,40 @@ test('"more" deletes nothing and is told what already hangs there', async () => 
   assert.match(prompt, /Do not repeat these[\s\S]*An earlier pick/);
 });
 
-test('written ideas are delivered first and the made ones follow', async () => {
+test('written ideas are delivered first, then each made direction as it is ready', async () => {
   const { k, anchor } = setup();
   const old = hang(k, anchor, 'An earlier pick', 'pick');
-  const early: Command[][] = [];
+  const early: string[][] = [];
 
   const rest = await scout(k.ctx, {
     anchor,
     mode: 'refresh',
     deliver: (commands) => {
-      early.push(commands);
+      early.push(commands.flatMap((c) => (c.type === 'addItem' ? [c.item.title] : [])));
       apply(k, commands);
+      if (early.length === 1) assert.ok(!k.mind.nodes.has(old.id), 'the old picks leave with the first delivery');
     },
   });
 
-  assert.equal(early.length, 1);
-  assert.ok(!k.mind.nodes.has(old.id), 'the old picks leave with the first delivery');
-  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), [NOTE.title, STEPS.title].sort());
+  assert.deepEqual(early[0]!.sort(), [NOTE.title, STEPS.title].sort());
+  assert.equal(early.length, 4, 'the picture, the museum work and the video each arrive on their own');
+  assert.ok(early.slice(1).every((titles) => titles.length === 1));
   apply(k, rest);
   assert.equal(k.mind.picks(anchor).length, 5);
+});
+
+test('a find that comes back with nothing is tried once on the web', async () => {
+  const find = direction('find', 'What the studies measured', { source: 'papers', lookups: ['dolly zoom'] });
+  const { k, anchor } = setup({}, [find]);
+  k.world.found.set('papers:dolly zoom', [{ ...PAPER, title: 'Off the subject', url: 'https://doi.example/10.1/off' }]);
+  k.world.found.set('web:What the studies measured', [PAPER]);
+  let asked = 0;
+  k.model.on('scout.curate', () => ({ chosen: asked++ === 0 ? [] : [{ number: 1, note: '', excerpt: '' }] }));
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), [PAPER.title]);
+  assert.equal(picked(k, anchor)[0]!.origin.tool, 'web');
 });
 
 test('a museum search with no match is left out, and so is a work the mindstorm already holds', async () => {

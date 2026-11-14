@@ -18,6 +18,20 @@ const dataDir = env.MIND_PALACE_DATA ?? join(import.meta.dirname, '../data');
 const started = Date.now();
 const at = () => `${((Date.now() - started) / 1000).toFixed(1)}s`;
 const model = new MetaModel({ apiKey: env.MODEL_API_KEY ?? '', onCall: (c) => console.log(`  [${at()}] ${c.kind} ${c.role} ${c.ok ? 'ok' : 'FAILED'} ${c.ms}ms ${c.tokens ?? ''}`) });
+if (process.env.SHOW_CHOICES) {
+  // Prints what the model was offered and what it chose, to judge whether a rejection was fair.
+  const json = model.json.bind(model);
+  model.json = (async (req: Parameters<typeof json>[0]) => {
+    const out = await json(req);
+    if (req.role === 'scout.curate') {
+      const lines = req.user.split('\n');
+      console.log(`\n## CHOICE ${lines[0]!.slice(0, 260)}\n   ${lines.find((l) => l.startsWith('A search of'))}`);
+      lines.forEach((l, i) => /^\d+\. /.test(l) && console.log(`   ${l.slice(0, 150)}\n        ${(lines[i + 1] ?? '').trim().slice(0, 240)}`));
+      console.log(`   => ${JSON.stringify(out).slice(0, 500)}`);
+    }
+    return out;
+  }) as typeof model.json;
+}
 const assets = new DiskAssets(join(dataDir, 'assets'));
 let n = 0;
 const newId = () => `probe-${++n}`;

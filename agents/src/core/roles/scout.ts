@@ -103,30 +103,33 @@ export const scout: Roles['scout'] = async (ctx, input) => {
     ...replaced.map((n): Command => ({ type: 'deleteNode', id: n.id })),
     ...written.flatMap((d) => hang(writtenItem(ctx, d), d, 'idea')),
   ];
-  // Written ideas need no tool, so the user gets them while the pictures and references are still being fetched.
-  if (input.deliver && written.length > 0 && made.length > 0) {
+  const flush = () => {
+    if (!input.deliver || commands.length === 0) return;
     input.deliver(commands);
     commands = [];
     placed = 0;
-  }
+  };
+  // Written ideas need no tool, so the user gets them while the rest is still being fetched.
+  if (written.length > 0 && made.length > 0) flush();
 
   let imagesLeft = MAX_GENERATED_IMAGES;
   const taken = knownUrls(ctx);
   // Links are rated while the pictures are made, so they never hold the new content back.
   const linking = links(ctx, run);
-  const results = await Promise.all(
-    made.map((d) => {
+  await Promise.all(
+    made.map(async (d) => {
       const budget = d.format === 'gallery' ? Math.min(GALLERY_SIZE, imagesLeft) : d.format === 'image' ? Math.min(1, imagesLeft) : 0;
       imagesLeft -= budget;
-      return realize(ctx, d, budget, taken).catch((err) => {
+      const items = await realize(ctx, d, budget, taken).catch((err) => {
         ctx.note(ROLE, `"${oneLine(d.title, 60)}" could not be made (${message(err)})`);
         return [] as Made[];
       });
+      if (items.length === 0) return;
+      for (const { item: pick, tool } of items) commands.push(...hang(pick, d, tool));
+      // Each direction is shown the moment it is ready, so a slow search never holds back a finished picture.
+      flush();
     }),
   );
-  results.forEach((items, i) => {
-    for (const { item: pick, tool } of items) commands.push(...hang(pick, made[i]!, tool));
-  });
   commands.push(...(await linking));
   return commands;
 };
@@ -299,71 +302,15 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
     }
     case 'find': {
       const sources = ctx.tools.sources.list();
-      const source = sources.find((src) => src.id === d.source.trim()) ?? sources.find((src) => src.id === 'web');
+      const web = sources.find((src) => src.id === 'web');
+      const source = sources.find((src) => src.id === d.source.trim()) ?? web;
       if (!source) return [];
       const wanted = d.lookups.map((l) => oneLine(l, 120)).filter(Boolean);
-      // The web search is slow and costly, so it runs once. Catalogues answer in under a second, so every wording is tried.
-      const queries = (wanted.length > 0 ? wanted : [oneLine(d.title, 120)]).slice(0, source.id === 'web' ? 1 : SEARCHES_PER_FIND);
-      const query = queries.join('" or "');
-      // The broadest wording goes first. The next is only tried while the pool is thin, which keeps the load on each source light.
-      const fresh: Found[] = [];
-      let failed = '';
-      for (const each of queries) {
-        if (fresh.length >= ENOUGH_FOUND) break;
-        try {
-          for (const record of await ctx.tools.sources.search(source.id, each)) {
-            if (!taken.has(urlKey(record.url)) && !fresh.some((f) => urlKey(f.url) === urlKey(record.url))) fresh.push(record);
-          }
-        } catch (err) {
-          failed = message(err);
-        }
-      }
-      if (fresh.length === 0 && failed) {
-        ctx.note(ROLE, `${source.name} could not be reached (${failed}), "${oneLine(d.title, 60)}" left out`);
-        return [];
-      }
-      // Things to look at are brought in first, so the model chooses among them by sight and a missing picture is never shown.
-      const found = source.visual
-        ? (await Promise.all(fresh.slice(0, VISUAL_SHOWN_TO_MODEL).map(async (f) => ({ ...f, stored: f.image ? await ctx.tools.web.picture(f.image) : null })))).filter((f) => f.stored)
-        : fresh.slice(0, FOUND_SHOWN_TO_MODEL).map((f) => ({ ...f, stored: null }));
-      if (found.length === 0) {
-        ctx.note(ROLE, `${source.name} has nothing for "${query}", left out`);
-        return [];
-      }
-      // A search matches words, so the model picks the records that carry the direction before any is shown.
-      const chosen = await curate(ctx, d, source, found, source.visual ? await dataUrls(ctx, found.map((f) => f.stored!.asset)) : undefined);
-      if (chosen.length === 0) ctx.note(ROLE, `none of the ${found.length} records ${source.name} returned for "${query}" fit, left out`);
-      const made = await Promise.all(
-        chosen.map(async ({ index, note, excerpt }): Promise<Made | null> => {
-          const record = found[index]!;
-          if (taken.has(urlKey(record.url))) return null;
-          taken.add(urlKey(record.url));
-          const picture = record.stored ?? (record.image && !record.media ? await ctx.tools.web.picture(record.image) : null);
-          const label = [...new Set([record.by, record.date, record.from ?? source.name].filter(Boolean))].join(', ');
-          const passage = excerpt || clipText(record.text, EXCERPT);
-          return {
-            tool: source.id,
-            item: makeItem(ctx, {
-              ...common(d, source.id),
-              title: oneLine(record.title, 120),
-              kind: record.media ? 'video' : picture ? 'image' : 'text',
-              text: [passage, label].filter(Boolean).join('\n\n'),
-              summary: oneLine(note || passage || label, 400),
-              data: {
-                site: siteOf(record.url),
-                by: record.by,
-                date: record.date,
-                from: record.from ?? source.name,
-                ...(record.chart ? { chart: record.chart } : {}),
-                ...(record.steps && !picture ? { steps: record.steps } : {}),
-                ...(record.media ? { mediaUrl: record.media, ...(record.image ? { thumbnailUrl: record.image } : {}) } : {}),
-              },
-              source: { from: 'web', url: record.url, ...(picture ? { asset: picture.asset } : {}) },
-            }),
-          };
-        }),
-      );
-      return made.flatMap((m) => m ?? []);
+      const first = await find(ctx, d, source, wanted.length > 0 ? wanted : [oneLine(d.title, 120)], taken);
+      if (first.length > 0 || !web || source.id === 'web') return first;
+      // A catalogue only holds what it holds. The open web is asked once before the direction is given up.
+      ctx.note(ROLE, `trying the web for "${oneLine(d.title, 60)}"`);
+      return find(ctx, d, web, [oneLine(d.title, 120)], taken);
     }
     case 'video': {
       const hits = await ctx.tools.web.search(`${oneLine(d.lookups[0] || d.title, 160)} youtube`, 6);
@@ -395,6 +342,72 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
   }
 }
 
+/** Searches one source for a direction and returns what the model chose from it, as items. Empty when nothing fit. */
+async function find(ctx: RoleContext, d: Direction, source: Source, wanted: string[], taken: Set<string>): Promise<Made[]> {
+  // The web search is slow and costly, so it runs once. Catalogues answer in under a second, so every wording is tried.
+  const queries = wanted.slice(0, source.id === 'web' ? 1 : SEARCHES_PER_FIND);
+  const query = queries.join('" or "');
+  // The broadest wording goes first. The next is only tried while the pool is thin, which keeps the load on each source light.
+  const fresh: Found[] = [];
+  let failed = '';
+  for (const each of queries) {
+    if (fresh.length >= ENOUGH_FOUND) break;
+    try {
+      for (const record of await ctx.tools.sources.search(source.id, each)) {
+        if (!taken.has(urlKey(record.url)) && !fresh.some((f) => urlKey(f.url) === urlKey(record.url))) fresh.push(record);
+      }
+    } catch (err) {
+      failed = message(err);
+    }
+  }
+  if (fresh.length === 0 && failed) {
+    ctx.note(ROLE, `${source.name} could not be reached (${failed}), "${oneLine(d.title, 60)}" left out`);
+    return [];
+  }
+  // Things to look at are brought in first, so the model chooses among them by sight and a missing picture is never shown.
+  const found = source.visual
+    ? (await Promise.all(fresh.slice(0, VISUAL_SHOWN_TO_MODEL).map(async (f) => ({ ...f, stored: f.image ? await ctx.tools.web.picture(f.image) : null })))).filter((f) => f.stored)
+    : fresh.slice(0, FOUND_SHOWN_TO_MODEL).map((f) => ({ ...f, stored: null }));
+  if (found.length === 0) {
+    ctx.note(ROLE, `${source.name} has nothing for "${query}", left out`);
+    return [];
+  }
+  // A search matches words, so the model picks the records that carry the direction before any is shown.
+  const chosen = await curate(ctx, d, source, found, source.visual ? await dataUrls(ctx, found.map((f) => f.stored!.asset)) : undefined);
+  if (chosen.length === 0) ctx.note(ROLE, `none of the ${found.length} records ${source.name} returned for "${query}" fit, left out`);
+  const made = await Promise.all(
+    chosen.map(async ({ index, note, excerpt }): Promise<Made | null> => {
+      const record = found[index]!;
+      if (taken.has(urlKey(record.url))) return null;
+      taken.add(urlKey(record.url));
+      const picture = record.stored ?? (record.image && !record.media ? await ctx.tools.web.picture(record.image) : null);
+      const label = [...new Set([record.by, record.date, record.from ?? source.name].filter(Boolean))].join(', ');
+      const passage = excerpt || clipText(record.text, EXCERPT);
+      return {
+        tool: source.id,
+        item: makeItem(ctx, {
+          ...common(d, source.id),
+          title: oneLine(record.title, 120),
+          kind: record.media ? 'video' : picture ? 'image' : 'text',
+          text: [passage, label].filter(Boolean).join('\n\n'),
+          summary: oneLine(note || passage || label, 400),
+          data: {
+            site: siteOf(record.url),
+            by: record.by,
+            date: record.date,
+            from: record.from ?? source.name,
+            ...(record.chart ? { chart: record.chart } : {}),
+            ...(record.steps && !picture ? { steps: record.steps } : {}),
+            ...(record.media ? { mediaUrl: record.media, ...(record.image ? { thumbnailUrl: record.image } : {}) } : {}),
+          },
+          source: { from: 'web', url: record.url, ...(picture ? { asset: picture.asset } : {}) },
+        }),
+      };
+    }),
+  );
+  return made.flatMap((m) => m ?? []);
+}
+
 const Chosen = z.object({ chosen: z.array(z.object({ number: z.number(), note: z.string(), excerpt: z.string() })) });
 
 async function dataUrls(ctx: RoleContext, assets: string[]): Promise<string[] | undefined> {
@@ -415,7 +428,7 @@ async function curate(ctx: RoleContext, d: Direction, source: Source, found: Fou
         ...found.map((f, i) => `${i + 1}. "${oneLine(f.title, 140)}"${f.by ? ` by ${oneLine(f.by, 80)}` : ''}${f.date ? `, ${f.date}` : ''}${f.from ? ` (${f.from})` : ''}${f.text ? `\n   ${oneLine(f.text, perRecord)}` : ''}`),
         ...(images ? ['', 'Their pictures are attached in the same order. Look at them and judge by what you see.'] : []),
         '',
-        `Choose up to ${source.show} that truly carry this direction, best first, and prefer different makers. A record that only shares a word with the search does not belong. Choose none when none fit.`,
+        `Choose up to ${source.show} that would really help the user in this direction, best first, and prefer different makers. The direction was written before the search, so a strong record that comes at it from a slightly different side still belongs. Leave out records that are off the subject, thin, promotional, or that only share a word with the search. Choose none when none are worth the user's time.`,
         'For each:',
         '- number.',
         `- note: one or two sentences on what the user should take from it and how it bears on what they have. Say only what the record ${images ? 'or its picture ' : ''}supports.`,
