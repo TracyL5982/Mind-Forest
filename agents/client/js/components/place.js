@@ -47,8 +47,9 @@ export function draw(item, props, ctx) {
   ];
 }
 
-/** The picture whole, and the name when the opened card's own title is not already the name. */
+/** The picture whole, and the name when neither the opened card's own title nor its `Where` source is already the name. */
 export function detail(item, props, ctx) {
   const { name, large, src } = plan(item, props);
-  return [src && h('div', { class: 'detail-media' }, picture(src, name, ctx)), name !== item.title && h('div', { class: 'detail-place' }, head(name, large, 0))];
+  const said = name === item.title || name === text(item.data?.where).trim();
+  return [src && h('div', { class: 'detail-media' }, picture(src, name, ctx)), !said && h('div', { class: 'detail-place' }, head(name, large, 0))];
 }

@@ -19,6 +19,8 @@ const STRETCH = 20;
 const OPENS = /["'“‘«「『（(]/;
 const CLOSES = /["'”’»」』）).!?。！？,，;；:：]/;
 const ENDS = /[.!?。！？:：;；]/;
+/** An aside in brackets after a drawn sentence stays, without the sentence, as `(n = 212)` does after a caption the title says. */
+const ASIDE = /^\s*[(（]/;
 
 /** Whether `words` are already among `said`, whole or shortened with an ellipsis. */
 export function isSaid(words, said) {
@@ -78,8 +80,8 @@ export function rest(text, said, mark = MARK) {
 
 /**
  * `line` without each run of drawn characters that is a sentence of its own: twenty characters or
- * more, from the start of the line or of a sentence to the end of one. The quote marks around it
- * and the stop after it go with it. Nothing is returned when no run is one.
+ * more, from the start of the line or of a sentence to the end of one or to an opening bracket. The
+ * quote marks around it and the stop after it go with it. Nothing is returned when no run is one.
  */
 function withoutSentences(line, drawn) {
   let out = '';
@@ -93,7 +95,7 @@ function withoutSentences(line, drawn) {
     while (stop < line.length && CLOSES.test(line[stop])) stop += 1;
     const before = line.slice(from, start).trimEnd();
     const begins = before === '' || ENDS.test(before.at(-1));
-    const finishes = stop === line.length || stop > end || ENDS.test(line[end - 1]);
+    const finishes = stop === line.length || stop > end || ENDS.test(line[end - 1]) || ASIDE.test(line.slice(stop));
     if (end - at >= STRETCH && begins && finishes) {
       out += line.slice(from, start);
       from = stop;

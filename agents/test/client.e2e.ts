@@ -422,10 +422,19 @@ async function main(): Promise<void> {
         const made = page.locator(`.card.is-kept[data-component="${type}"]`, { hasText: shown }).last();
         await made.waitFor();
         assert.equal(await made.locator(part).count(), parts, `${type} draws ${parts} of ${part}`);
-        if (type !== 'table' && type !== 'callout') continue;
+        // A paste the filer puts under an earlier card makes no tree to glide to, so each tree is visited until the card is on screen.
+        for (const chip of [null, ...(await page.locator('.tree-chip').all())]) {
+          if (chip) await chip.click();
+          await settle(page);
+          const box = await made.boundingBox();
+          const view = page.viewportSize()!;
+          if (box && box.x >= 0 && box.y >= 0 && box.x + box.width <= view.width && box.y + box.height <= view.height) break;
+        }
         await made.click();
+        const printed = (await page.locator('#panel .panel-summary, #panel .panel-text').allInnerTexts()).join('\n');
+        assert.ok(!printed.includes(shown), `an opened ${type} does not print "${shown}" again under its own form`);
         const opened = await page.locator('#panel .panel-scroll').innerText();
-        assert.equal(opened.split(shown).length, 2, `an opened ${type} says "${shown}" once`);
+        if (type === 'table' || type === 'callout') assert.equal(opened.split(shown).length, 2, `an opened ${type} says "${shown}" once`);
         if (type === 'table') assert.equal(await page.locator('#panel .panel-text').count(), 0, 'an opened table does not print the pasted rows again under its cells');
         if (type === 'table') {
           const drawn = await page.locator('#panel .detail-table').elementHandle();

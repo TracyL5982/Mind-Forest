@@ -49,7 +49,20 @@ export function draw(item, props) {
   ];
 }
 
+/** A pasted line's bullet, number or tick box. */
+const BULLET = /^(?:(?:[-*•·]|\d+[.)、]|\[[ xX]\])\s*)+/;
+
+/**
+ * Each entry as the item's text writes it: a line of the text that has a bullet and starts with
+ * the entry as a whole word, but says more, stands in for it, as `- Her ration book from 1946 (two
+ * coupons still attached)` does for `Her ration book from 1946`. So the opened list says it whole, and once.
+ */
+function written(item, entries) {
+  const lines = text(item.text).split('\n').map((line) => line.trim()).filter((line) => BULLET.test(line)).map((line) => line.replace(BULLET, '').trim());
+  return entries.map((label) => (!label || lines.includes(label) ? label : lines.find((line) => line.startsWith(label) && !/[\p{L}\p{N}]/u.test(line[label.length])) ?? label));
+}
+
 export function detail(item, props) {
   const { entries, checked } = plan(item, props);
-  return [h('ul', { class: 'list is-full' }, entries.map((label, i) => entry(label, checked?.[i], '', wordsOf(item))))];
+  return [h('ul', { class: 'list is-full' }, written(item, entries).map((label, i) => entry(label, checked?.[i], '', wordsOf(item))))];
 }

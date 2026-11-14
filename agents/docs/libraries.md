@@ -415,7 +415,7 @@ An opened card says each thing once. From top to bottom it has the item's title,
 2. A line that is inside one string of `said` is left out.
 3. Mark every place in the line where a string of `said` stands as whole words, the longest strings first. A string stands as whole words when the character before it and the character after it are not letters or digits, or are characters of a script written without spaces (U+3040 to 30FF, U+3400 to 9FFF, U+AC00 to D7AF), or the string itself starts or ends with one.
 4. `left` is the weight of what is not marked, where a letter or digit weighs 1 and a character of a script written without spaces weighs 2, and `lead` is the weight of what comes before the first marked character. The line is left out when something is marked, `left` equals `lead`, and `lead` is at most 12 and less than the weight of what is marked. So `Solo | $8 | 1`, `[x] passport` and `Definition: …` are left out once the form has drawn their words, and `Table 2. Mean recall (n = 212)` is not, because a letter after the first marked character is never a mark.
-5. Any other line is printed. A marked run of 20 characters or more is first cut out of it when the run is a sentence of its own: it starts the line or follows a `.` `!` `?` `:` `;` or their full-width forms, and it ends the line, ends with one of those, or is followed by a closing quote mark, bracket, stop or comma. The quote marks and brackets around the run and the stops after it go with it.
+5. Any other line is printed. A marked run of 20 characters or more is first cut out of it when the run is a sentence of its own: it starts the line or follows a `.` `!` `?` `:` `;` or their full-width forms, and it ends the line, ends with one of those, or is followed by a closing quote mark, bracket, stop or comma, or by white space and an opening bracket, so `Table 2. Mean recall (n = 212)` under the title `Mean recall` prints `Table 2. (n = 212)`. The quote marks and brackets around the run and the stops after it go with it.
 
 Three or more line feeds in a row become two, and the result is trimmed. Nothing is printed when nothing is left.
 
@@ -638,7 +638,7 @@ Entries in no particular order, or a checklist.
 
 - **Chosen when** `item.data.items` holds two or more entries, none of them empty, and they pass the coverage floor. An ordered procedure is `steps`, which comes first in the table.
 - **Props.** `items`: the entries. `checked?`: one mark for each entry, from `data.checklist` when it is as long as the entries.
-- **Drawn as** the title, then up to six entries of up to two lines each, with a dot before each. With `checked`, a tick box stands in place of the dot, filled and ticked when the entry is done, the done entries are dimmer, and the title carries a count such as `2/4`. A tick box shows a mark and takes no click. The card writes `and N more`, and the opened card lists every entry whole.
+- **Drawn as** the title, then up to six entries of up to two lines each, with a dot before each. With `checked`, a tick box stands in place of the dot, filled and ticked when the entry is done, the done entries are dimmer, and the title carries a count such as `2/4`. A tick box shows a mark and takes no click. The card writes `and N more`, and the opened card lists every entry whole. A line of `item.text` that starts with a bullet, a number and `.` `)` or `、`, or a tick box, and then with the entry followed by anything but a letter or digit, stands in for the entry in the opened card, so `- Her ration book from 1946 (two coupons still attached)` is written whole there and once.
 - **Item holds.** `data.items = string[]`, and `data.checklist = boolean[]` for a checklist.
 
 ### breakdown
@@ -656,7 +656,7 @@ One question and its answer.
 
 - **Chosen when** `item.data.question` and `item.data.answer` are both set, and they pass the coverage floor.
 - **Props.** `question`. `answer`.
-- **Drawn as** two voices. The question is set as a title beside a `Q`, on up to four lines. Under a rule, the answer is set as text beside an `A`, on up to six. The opened card has both whole.
+- **Drawn as** two voices. The question is set as a title beside a `Q`, on up to four lines. Under a rule, the answer is set as text beside an `A`, on up to six. The opened card has both whole, and leaves out the `Q` and the question when the question is the item's title, which the opened card has just written.
 - **Item holds.** `data.question` and `data.answer`.
 
 ### callout
@@ -737,7 +737,7 @@ A place by name.
 
 - **Chosen when** the item is a short note whose title names the place in `data.where`, as A place above says.
 - **Props.** `name`: `data.where`. `src?`: the item's picture, from `data.image`.
-- **Drawn as** the name set large beside a round pin, with the item's summary or text on up to three lines under it. With `src`, the picture fills a frame 120 px tall across the top of the card. The opened card has the picture whole, and the name when its own title is not already the name. No chip repeats the place.
+- **Drawn as** the name set large beside a round pin, with the item's summary or text on up to three lines under it. With `src`, the picture fills a frame 120 px tall across the top of the card. The opened card has the picture whole, and the name when neither its own title nor the `Where` of its list of sources is already the name. No chip repeats the place.
 - **Item holds.** `data.where`, and `data.image` for a picture.
 
 ## Composites

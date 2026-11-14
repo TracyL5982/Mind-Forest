@@ -32,11 +32,12 @@ export function draw(item, props) {
   ];
 }
 
+/** Both whole. A question that is the opened card's own title is not asked again. */
 export function detail(item, props) {
   const { question, answer } = plan(props);
   return [
     h('div', { class: 'detail-qa' },
-      voice(wordsOf(item).question, 'is-question', say('div', 'card-title', question)),
+      question !== item.title && voice(wordsOf(item).question, 'is-question', say('div', 'card-title', question)),
       voice(wordsOf(item).answer, 'is-answer', say('div', 'qa-answer', answer))),
   ];
 }
