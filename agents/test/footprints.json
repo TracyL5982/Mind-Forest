@@ -85,6 +85,21 @@
     {"type":"steps","item":{"title":"The move","summary":"","text":""},"props":{"steps":["Zoom in","Pull back"]},"size":[256,109]},
     {"type":"steps","item":{"title":"None","summary":"","text":""},"props":{"steps":[]},"size":[256,51]},
     {"type":"steps","item":{"title":"Five","summary":"","text":""},"props":{"steps":["一","二","三","四","五"]},"size":[256,193]},
-    {"type":"steps","item":{"title":"One","summary":"","text":""},"props":{"steps":["The memory palace puts every thought on a card so research notes and sparks can be rearranged freely."]},"size":[256,81]}
+    {"type":"steps","item":{"title":"One","summary":"","text":""},"props":{"steps":["The memory palace puts every thought on a card so research notes and sparks can be rearranged freely."]},"size":[256,81]},
+    {"type":"note","item":{"title":"记忆宫殿里的十三个汉字标题","summary":"","text":""},"props":{},"size":[240,51]},
+    {"type":"note","item":{"title":"记忆宫殿里的十四个汉字的标题","summary":"","text":""},"props":{},"size":[240,72]},
+    {"type":"note","item":{"title":"外滩的早晨","summary":"上海市黄浦区中山东一路外滩观景平台，清晨六点人最少，适合拍摄对岸的天际线。","text":""},"props":{},"size":[240,108]},
+    {"type":"note","item":{"title":"カードの並べ替えについてのメモ","summary":"ノートやひらめきを自由に並べ替えることができます。","text":""},"props":{},"size":[240,112]},
+    {"type":"note","item":{"title":"기억의 궁전 연구 노트","summary":"모든 생각을 카드 한 장에 올려 두고 자유롭게 다시 배열합니다.","text":""},"props":{},"size":[240,91]},
+    {"type":"fact","item":{"title":"长江","summary":"","text":""},"props":{"value":"约6300公里","label":"长江干流全长"},"size":[220,118]},
+    {"type":"fact","item":{"title":"","summary":"","text":""},"props":{"value":"百分之九十九点五","label":"准点率"},"size":[302,93]},
+    {"type":"link","item":{"title":"记忆宫殿：把想法放在卡片上的研究画布","summary":"","text":""},"props":{"url":"https://example.com/zh","site":"example.com","description":"研究笔记与灵感可以自由排列组合，随时回到当初的思路。"},"size":[272,136]},
+    {"type":"chat","item":{"title":"关于外滩的对话","summary":"","text":""},"props":{"messages":[{"role":"user","text":"外滩什么时候人最少？"},{"role":"assistant","text":"清晨六点前后人最少，上海市黄浦区中山东一路外滩观景平台此时视野最好。"}],"source":"claude"},"size":[288,163]},
+    {"type":"video","item":{"title":"外滩","summary":"","text":""},"props":{"src":"","caption":"上海市黄浦区中山东一路外滩观景平台"},"size":[272,191]},
+    {"type":"quote","item":{"title":"Two lines","summary":"","text":""},"props":{"text":"The only way to do great work is to love what you do."},"size":[288,94]},
+    {"type":"quote","item":{"title":"Four lines","summary":"","text":""},"props":{"text":"It is not the strongest of the species that survives, nor the most intelligent — it is the one most adaptable to change.","by":"Often credited to Darwin"},"size":[288,161]},
+    {"type":"quote","item":{"title":"Capitals","summary":"","text":""},"props":{"text":"WE HOLD THESE TRUTHS TO BE SELF-EVIDENT","by":"1776"},"size":[288,119]},
+    {"type":"quote","item":{"title":"Mixed","summary":"","text":""},"props":{"text":"Quest 上的记忆宫殿 lets you walk through 200 张卡片 at once."},"size":[288,94]},
+    {"type":"quote","item":{"title":"学而","summary":"","text":""},"props":{"text":"学而时习之，不亦说乎？有朋自远方来，不亦乐乎？","by":"孔子"},"size":[288,119]}
   ]
 }
