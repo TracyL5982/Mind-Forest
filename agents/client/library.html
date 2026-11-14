@@ -59,7 +59,7 @@ import { arrange } from './js/composites/index.js';
 import { Panel } from './js/panel.js';
 import { measure } from './js/input.js';
 import { useMaps } from './js/map.js';
-import { SAMPLES, SHEETS } from './library-samples.js';
+import { MAPS, SAMPLES, SHEETS } from './library-samples.js';
 
 const TINT = '#9fc3ff';
 
@@ -457,7 +457,18 @@ const COMPOSITE_SAMPLES = [
   ['matrix', 'model', 'Four siblings on a 2 by 2 with two named axes, one in each corner, each with a line of why it sits there. Each axis name must be words at least two of the four use, and each line a whole sentence or line of its own card\'s words, or it is left out.',
     [note('Fix the onboarding email', 'Little effort. A large impact on sign-ups.'), note('Rebuild the editor', 'Months of effort, and a large impact.'), note('Rename the settings tab', 'Little effort and little impact.'), note('Port to the watch', 'Much effort for little impact.')],
     (ids) => ({ x: 'Effort', y: 'Impact', reasons: { [ids[0]]: 'Little effort.', [ids[1]]: 'Months of effort, and a large impact.', [ids[2]]: 'Little effort and little impact.', [ids[3]]: '' } })],
+  ['map', 'rules', 'Three or more siblings whose data holds where they are, at two or more places: a map with a numbered pin for each place, and the members beside it in pin order. Members a few px apart on the map share a pin. It comes before a gallery and a timeline, so located photos and located, dated notes are a map.',
+    ...mapSample(MAPS[0]), [[MAPS[1].label, ...mapSample(MAPS[1])]]],
 ];
+
+/** The members of a sample map from the service's samples, each as a picture or a note, and the props its rule gives them. */
+function mapSample({ members, props, status }) {
+  const made = members.map(({ id, picture, item }) => {
+    const member = picture ? make('image', { src: PIC[picture] }, item) : make('note', {}, item);
+    return { ...member, node: { ...member.node, id } };
+  });
+  return [made, () => props, status];
+}
 
 function composite(name, members, makeProps, status, open) {
   const ids = members.map((m) => m.node.id);

@@ -810,3 +810,333 @@ export const SHEETS = [
     }
   }
 ];
+
+export const MAPS = [
+  {
+    "label": "Four photos from three places",
+    "status": "kept",
+    "members": [
+      {
+        "id": "sample-map-alfama",
+        "item": {
+          "id": "sample-map-alfama",
+          "kind": "image",
+          "text": "",
+          "summary": "",
+          "tags": [],
+          "data": {
+            "where": "Lisbon",
+            "at": {
+              "lat": 38.7139,
+              "lon": -9.1334
+            }
+          },
+          "source": {
+            "from": "paste",
+            "capturedAt": "2026-11-14T00:00:00.000Z"
+          },
+          "origin": {
+            "by": "user"
+          },
+          "archived": false,
+          "revision": 0,
+          "title": "Washing lines in Alfama"
+        },
+        "picture": "river"
+      },
+      {
+        "id": "sample-map-alfama-2",
+        "item": {
+          "id": "sample-map-alfama-2",
+          "kind": "image",
+          "text": "",
+          "summary": "",
+          "tags": [],
+          "data": {
+            "where": "Lisbon",
+            "at": {
+              "lat": 38.7141,
+              "lon": -9.1337
+            }
+          },
+          "source": {
+            "from": "paste",
+            "capturedAt": "2026-11-14T00:00:00.000Z"
+          },
+          "origin": {
+            "by": "user"
+          },
+          "archived": false,
+          "revision": 0,
+          "title": "The tram up to Graça"
+        },
+        "picture": "quilt"
+      },
+      {
+        "id": "sample-map-porto",
+        "item": {
+          "id": "sample-map-porto",
+          "kind": "image",
+          "text": "",
+          "summary": "",
+          "tags": [],
+          "data": {
+            "where": "Porto",
+            "at": {
+              "lat": 41.1406,
+              "lon": -8.611
+            }
+          },
+          "source": {
+            "from": "paste",
+            "capturedAt": "2026-11-14T00:00:00.000Z"
+          },
+          "origin": {
+            "by": "user"
+          },
+          "archived": false,
+          "revision": 0,
+          "title": "The bridge at dusk"
+        },
+        "picture": "night"
+      },
+      {
+        "id": "sample-map-evora",
+        "item": {
+          "id": "sample-map-evora",
+          "kind": "image",
+          "text": "",
+          "summary": "",
+          "tags": [],
+          "data": {
+            "at": {
+              "lat": 38.5714,
+              "lon": -7.9135
+            }
+          },
+          "source": {
+            "from": "paste",
+            "capturedAt": "2026-11-14T00:00:00.000Z"
+          },
+          "origin": {
+            "by": "user"
+          },
+          "archived": false,
+          "revision": 0,
+          "title": "Cork oaks outside Évora"
+        },
+        "picture": "fields"
+      }
+    ],
+    "props": {
+      "centre": {
+        "lat": 39.868026,
+        "lon": -8.5236
+      },
+      "zoom": 6,
+      "pins": [
+        {
+          "lat": 38.7139,
+          "lon": -9.1334,
+          "members": [
+            "sample-map-alfama",
+            "sample-map-alfama-2"
+          ]
+        },
+        {
+          "lat": 41.1406,
+          "lon": -8.611,
+          "members": [
+            "sample-map-porto"
+          ]
+        },
+        {
+          "lat": 38.5714,
+          "lon": -7.9135,
+          "members": [
+            "sample-map-evora"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "label": "Five places in Chinese, as picks",
+    "status": "pick",
+    "members": [
+      {
+        "id": "sample-map-xihu",
+        "item": {
+          "id": "sample-map-xihu",
+          "kind": "text",
+          "text": "",
+          "summary": "从断桥骑到苏堤，大约一个小时。",
+          "tags": [],
+          "data": {
+            "where": "杭州",
+            "at": {
+              "lat": 30.2431,
+              "lon": 120.15
+            }
+          },
+          "source": {
+            "from": "paste",
+            "capturedAt": "2026-11-14T00:00:00.000Z"
+          },
+          "origin": {
+            "by": "user"
+          },
+          "archived": false,
+          "revision": 0,
+          "title": "西湖骑车"
+        }
+      },
+      {
+        "id": "sample-map-lingyin",
+        "item": {
+          "id": "sample-map-lingyin",
+          "kind": "text",
+          "text": "",
+          "summary": "早点去，人少。",
+          "tags": [],
+          "data": {
+            "where": "杭州",
+            "at": {
+              "lat": 30.2408,
+              "lon": 120.1017
+            }
+          },
+          "source": {
+            "from": "paste",
+            "capturedAt": "2026-11-14T00:00:00.000Z"
+          },
+          "origin": {
+            "by": "user"
+          },
+          "archived": false,
+          "revision": 0,
+          "title": "灵隐寺"
+        }
+      },
+      {
+        "id": "sample-map-suzhou",
+        "item": {
+          "id": "sample-map-suzhou",
+          "kind": "text",
+          "text": "",
+          "summary": "拙政园早上八点开门，人少。",
+          "tags": [],
+          "data": {
+            "where": "苏州",
+            "at": {
+              "lat": 31.299,
+              "lon": 120.5853
+            }
+          },
+          "source": {
+            "from": "paste",
+            "capturedAt": "2026-11-14T00:00:00.000Z"
+          },
+          "origin": {
+            "by": "user"
+          },
+          "archived": false,
+          "revision": 0,
+          "title": "苏州园林"
+        }
+      },
+      {
+        "id": "sample-map-bund",
+        "item": {
+          "id": "sample-map-bund",
+          "kind": "text",
+          "text": "",
+          "summary": "晚上七点以后灯才全亮。",
+          "tags": [],
+          "data": {
+            "where": "上海",
+            "at": {
+              "lat": 31.2304,
+              "lon": 121.4737
+            }
+          },
+          "source": {
+            "from": "paste",
+            "capturedAt": "2026-11-14T00:00:00.000Z"
+          },
+          "origin": {
+            "by": "user"
+          },
+          "archived": false,
+          "revision": 0,
+          "title": "外滩夜景"
+        }
+      },
+      {
+        "id": "sample-map-moganshan",
+        "item": {
+          "id": "sample-map-moganshan",
+          "kind": "text",
+          "text": "",
+          "summary": "竹林里的小路，一直走到山顶的老别墅。",
+          "tags": [],
+          "data": {
+            "where": "莫干山",
+            "at": {
+              "lat": 30.6086,
+              "lon": 119.8664
+            }
+          },
+          "source": {
+            "from": "paste",
+            "capturedAt": "2026-11-14T00:00:00.000Z"
+          },
+          "origin": {
+            "by": "user"
+          },
+          "archived": false,
+          "revision": 0,
+          "title": "莫干山民宿"
+        }
+      }
+    ],
+    "props": {
+      "centre": {
+        "lat": 30.771355,
+        "lon": 120.67005
+      },
+      "zoom": 8,
+      "pins": [
+        {
+          "lat": 30.2431,
+          "lon": 120.15,
+          "members": [
+            "sample-map-xihu",
+            "sample-map-lingyin"
+          ]
+        },
+        {
+          "lat": 31.299,
+          "lon": 120.5853,
+          "members": [
+            "sample-map-suzhou"
+          ]
+        },
+        {
+          "lat": 31.2304,
+          "lon": 121.4737,
+          "members": [
+            "sample-map-bund"
+          ]
+        },
+        {
+          "lat": 30.6086,
+          "lon": 119.8664,
+          "members": [
+            "sample-map-moganshan"
+          ]
+        }
+      ]
+    }
+  }
+];
