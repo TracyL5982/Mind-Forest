@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { SAMPLES_PATH, samplesFile } from '../scripts/samples.ts';
+import { STRUCTURED_IDS } from '../src/core/samples.ts';
+import { CHECKS, COMPONENT_IDS } from '../src/core/views.ts';
 
 type Kind = { size: (item: unknown, props: unknown) => number[] };
 type Given = { item?: Record<string, unknown>; props: Record<string, unknown> };
@@ -129,4 +131,27 @@ test('the footprint of each structured card type is whole, the same each time it
 
 test('the library page draws the samples the rules give today', () => {
   assert.equal(readFileSync(SAMPLES_PATH, 'utf8'), samplesFile(), 'run scripts/samples.ts');
+});
+
+test('every component the service can choose has a client module, a content check and its two parts of the libraries page', async () => {
+  const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Record<string, unknown>> };
+  const page = readFileSync(new URL('../docs/libraries.md', import.meta.url), 'utf8');
+  assert.deepEqual(Object.keys(COMPONENTS), COMPONENT_IDS, 'the client registry holds the service\'s components, in its order');
+  for (const id of COMPONENT_IDS) {
+    for (const part of ['size', 'draw', 'detail']) assert.equal(typeof COMPONENTS[id]![part], 'function', `${id}.${part}`);
+    assert.ok(Array.isArray(COMPONENTS[id]!.shows), `${id}.shows`);
+    assert.ok(Object.hasOwn(CHECKS, id) && typeof CHECKS[id].props === 'object', `${id} has a content check`);
+    assert.ok(page.includes(`\n### ${id}\n`), `docs/libraries.md has a section for ${id}`);
+    assert.ok(page.includes(`\n- **${id}.** `), `docs/libraries.md gives the footprint of ${id}`);
+  }
+});
+
+test('every structured type has a growing run here and four golden footprints, one of them in Chinese', () => {
+  const { samples } = JSON.parse(readFileSync(new URL('./footprints.json', import.meta.url), 'utf8')) as { samples: { type: string; item: unknown; props: unknown }[] };
+  assert.deepEqual(Object.keys(GROWING).sort(), [...STRUCTURED_IDS].sort());
+  for (const id of STRUCTURED_IDS) {
+    const mine = samples.filter((sample) => sample.type === id);
+    assert.ok(mine.length >= 4, `${id} has ${mine.length} golden footprints`);
+    assert.ok(mine.some((sample) => /\p{Script=Han}/u.test(JSON.stringify([sample.item, sample.props]))), `${id} has a Chinese footprint`);
+  }
 });
