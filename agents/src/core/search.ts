@@ -84,7 +84,7 @@ export class SearchIndex {
     this.docs.delete(id);
   }
 
-  search(query: string, opts: { limit?: number; exclude?: ReadonlySet<Id> } = {}): Hit[] {
+  search(query: string, opts: { limit?: number; skip?: (id: Id) => boolean } = {}): Hit[] {
     const terms = [...new Set(tokenize(query))];
     if (terms.length === 0 || this.docs.size === 0) return [];
     const avg = this.totalLength / this.docs.size;
@@ -94,7 +94,7 @@ export class SearchIndex {
       if (!ids) continue;
       const idf = Math.log(1 + (this.docs.size - ids.size + 0.5) / (ids.size + 0.5));
       for (const id of ids) {
-        if (opts.exclude?.has(id)) continue;
+        if (opts.skip?.(id)) continue;
         const doc = this.docs.get(id)!;
         const tf = doc.terms.get(term)!;
         const part = (idf * (tf * (K1 + 1))) / (tf + K1 * (1 - B + (B * doc.length) / avg));

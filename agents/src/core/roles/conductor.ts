@@ -216,7 +216,7 @@ function describe(ctx: RoleContext, input: { utterance: string; history: Turn[] 
   out.push(`Trees:\n${list([...mind.trees.values()].slice(0, MAX_TREES).map((t) => `- ${t.id}: ${t.title}`))}`);
 
   const matches = mind
-    .search(input.utterance, { limit: SHORTLIST * 2 })
+    .search(input.utterance, { limit: SHORTLIST * 2, placed: true })
     .flatMap((hit) => mind.nodesOfItem(hit.id))
     .sort((a, b) => Number(b.treeId === seen.treeId) - Number(a.treeId === seen.treeId))
     .slice(0, SHORTLIST);

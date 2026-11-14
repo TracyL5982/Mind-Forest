@@ -1,6 +1,7 @@
 import {
   Command,
   CommandError,
+  inLibrary,
   type ChangeSet,
   type EntityName,
   type EntityOf,
@@ -202,9 +203,9 @@ export class Mindstorm {
   nodesOfItem(itemId: Id): Node[] {
     return [...(this.itemNodes.get(itemId) ?? [])].map((id) => this.maps.node.get(id)!);
   }
-  /** Items that are not archived and sit in no tree. */
+  /** Items that are not archived and sit in no tree, waiting to be filed. The library is not waiting. */
   inbox(): Item[] {
-    return [...this.maps.item.values()].filter((i) => !i.archived && !this.itemNodes.get(i.id)?.size);
+    return [...this.maps.item.values()].filter((i) => !i.archived && !inLibrary(i) && !this.itemNodes.get(i.id)?.size);
   }
   linksOf(nodeId: Id): Link[] {
     return [...this.maps.link.values()].filter((l) => l.a === nodeId || l.b === nodeId);
@@ -213,9 +214,10 @@ export class Mindstorm {
     return this.children(parent).reduce((max, n) => Math.max(max, n.order), -1) + 1;
   }
 
-  /** Full-text search over items that are not archived. */
-  search(query: string, opts: { limit?: number; exclude?: ReadonlySet<Id> } = {}): (Hit & { item: Item })[] {
-    return this.index.search(query, opts).map((h) => ({ ...h, item: this.item(h.id) }));
+  /** Full-text search over items that are not archived. `placed` leaves out items that no tree holds, such as most of the library. */
+  search(query: string, opts: { limit?: number; exclude?: ReadonlySet<Id>; placed?: boolean } = {}): (Hit & { item: Item })[] {
+    const skip = (id: Id) => Boolean(opts.exclude?.has(id)) || (Boolean(opts.placed) && !this.itemNodes.get(id)?.size);
+    return this.index.search(query, { limit: opts.limit, skip }).map((h) => ({ ...h, item: this.item(h.id) }));
   }
 
   // ---- internals
@@ -424,7 +426,7 @@ export class Mindstorm {
     for (const n of [...gone].reverse()) this.del('node', n.id);
     for (const itemId of new Set(gone.map((n) => n.itemId))) {
       const item = this.item(itemId);
-      if (!this.itemNodes.get(itemId)?.size && !item.archived) this.put('item', { ...item, archived: true });
+      if (!this.itemNodes.get(itemId)?.size && !item.archived && !inLibrary(item)) this.put('item', { ...item, archived: true });
     }
     if (root.parent === null) this.del('tree', root.treeId);
   }

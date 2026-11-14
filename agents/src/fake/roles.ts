@@ -38,7 +38,7 @@ export const fakeRoles: Roles = {
   async filer(ctx, items) {
     const commands: Command[] = [];
     for (const item of items) {
-      const hit = ctx.mind.search(`${item.title} ${item.tags.join(' ')}`, { limit: 1 })[0];
+      const hit = ctx.mind.search(`${item.title} ${item.tags.join(' ')}`, { limit: 1, placed: true })[0];
       const home = hit && hit.coverage >= 0.5 ? ctx.mind.nodesOfItem(hit.id)[0] : undefined;
       if (home) {
         commands.push({ type: 'addNode', node: makeNode(ctx, item, { treeId: home.treeId, parent: home.id, status: 'kept', why: 'Same topic', origin: item.origin }) });

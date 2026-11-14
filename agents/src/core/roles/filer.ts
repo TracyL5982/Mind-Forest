@@ -121,7 +121,7 @@ function shortlist(ctx: RoleContext, items: Item[]): Shortlisted[] {
 
   for (const item of items) {
     const terms = new Set(tokenize(`${item.title} ${item.tags.join(' ')}`));
-    for (const hit of ctx.mind.search(`${item.title} ${item.tags.join(' ')} ${oneLine(item.summary, 300)}`, { limit: 8 })) {
+    for (const hit of ctx.mind.search(`${item.title} ${item.tags.join(' ')} ${oneLine(item.summary, 300)}`, { limit: 8, placed: true })) {
       for (const node of ctx.mind.nodesOfItem(hit.id)) {
         if (node.status !== 'kept') continue;
         bump(treeScore, node.treeId, hit.coverage);
@@ -173,7 +173,7 @@ function validate(ctx: RoleContext, answer: Answer, batch: ReadonlyMap<Id, Item>
 }
 
 function fallback(ctx: RoleContext, item: Item): Placement {
-  for (const hit of ctx.mind.search(`${item.title} ${item.tags.join(' ')}`, { limit: 5 })) {
+  for (const hit of ctx.mind.search(`${item.title} ${item.tags.join(' ')}`, { limit: 5, placed: true })) {
     if (hit.coverage <= FIT) continue;
     const parent = ctx.mind.nodesOfItem(hit.id).find((n) => n.status === 'kept');
     if (parent) return { at: 'node', parent: parent.id, why: `close to "${oneLine(hit.item.title, 40)}"` };
