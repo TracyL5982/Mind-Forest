@@ -70,6 +70,23 @@ const GROWING: Record<string, Given[]> = {
     { props: { labels: ['Yes', 'No', 'Maybe'], values: [3, 1, 2], unit: 'votes' } },
     { item: { title: words(10) }, props: { labels: ['Yes', 'No', 'Maybe', 'Later', 'Never'], values: [3, 1, 2, 1, 1], unit: 'votes' } },
   ],
+  qa: [
+    { props: { question: 'Why?', answer: 'Because.' } },
+    { props: { question: 'Why?', answer: words(12) } },
+    { props: { question: words(8), answer: words(12) } },
+    { props: { question: words(8), answer: words(40) } },
+  ],
+  callout: [
+    { item: { title: '' }, props: { text: 'Mind the step.', tone: 'caution' } },
+    { props: { text: 'Mind the step.', tone: 'caution' } },
+    { props: { text: words(8), tone: 'caution' } },
+    { props: { text: words(20), tone: 'note' } },
+  ],
+  definition: [
+    { props: { term: 'Bokeh', definition: 'blur' } },
+    { props: { term: 'Bokeh', definition: words(8) } },
+    { props: { term: 'Bokeh', definition: words(24) } },
+  ],
 };
 
 /** A type that sets longer words in a smaller size, so a card that holds a little more can be a little shorter. */
