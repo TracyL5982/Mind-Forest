@@ -314,4 +314,51 @@ void Pen::chips(const std::vector<Chip>& line, float x, float y, const Look& loo
     }
 }
 
+// MARK: - Labels
+
+namespace {
+
+/// A label as the canvas sets it: its letters, their size, and the `letter-spacing` after each, px.
+struct Set {
+    std::string shown;
+    Setting setting;
+    float spacing;
+};
+
+constexpr Setting SMALL_CAPITALS{11, 17};
+
+Set setOf(const std::string& label) {
+    Text written = points(label);
+    if (std::any_of(written.begin(), written.end(), han)) return {label, setting::text, 0.04f * setting::text.size};
+    std::string shown = label;
+    for (char& c : shown) {
+        if (c >= 'a' && c <= 'z') c = char(c - 32);
+    }
+    return {shown, SMALL_CAPITALS, 0.07f * setting::text.size};
+}
+
+TextAttributes attributesOf(const Set& set, Color color, float k) {
+    TextAttributes a = attributes(set.setting, color, k);
+    a.kern = set.spacing * k;
+    return a;
+}
+
+}  // namespace
+
+float baseline(const Setting& t, float k) {
+    FontMetrics m = attributes(t, Color::white(), k).font.metrics();
+    return t.lead / 2 + (m.ascent - m.descent) / 2 / k;
+}
+
+float labelWidth(const std::string& label, float k) {
+    Set set = setOf(label);
+    return stringSize(set.shown, attributesOf(set, Color::white(), k)).width / k;
+}
+
+void label(const Pen& pen, const std::string& label, float x, float y, Color color) {
+    Set set = setOf(label);
+    float k = pen.k, drop = baseline(setting::text, k) - baseline(set.setting, k);
+    pen.ctx.drawText(set.shown, CGPoint{x * k, (y + drop) * k - lift(set.setting, k)}, attributesOf(set, color, k), (labelWidth(label, k) + 1) * k, 1);
+}
+
 }  // namespace cards

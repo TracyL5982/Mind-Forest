@@ -106,6 +106,14 @@ struct Pen {
     void chips(const std::vector<Chip>& line, float x, float y, const Look& look) const;
 };
 
+/// How far below the top of its line a setting's baseline is, px: where `align-items: baseline` lines things up.
+float baseline(const Setting& t, float k);
+/// `.kind`, in the text's line, its top-left at (x, y) px: a short label set in small capitals, or as
+/// written when it holds Han. The canvas has no small capitals, so it sets capitals a size down on the
+/// text's baseline.
+float labelWidth(const std::string& label, float k);
+void label(const Pen& pen, const std::string& label, float x, float y, Color color);
+
 /// A picture a card shows, as the caller has it.
 struct Picture {
     ImageRef image;
