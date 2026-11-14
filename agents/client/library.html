@@ -40,6 +40,7 @@
   <p>Every way the Renderer can draw one card (components) and every way it can arrange several sibling cards (composites). This page draws them with the same code and styles as the live client, from sample data.</p>
   <p>Solid cards are yours. Dashed amber cards are picks the librarian brought and you have not kept.</p>
   <p>Under each sample is its type name and its footprint in pixels, which is worked out from the content and never measured.</p>
+  <p>The first eleven types are drawn from an item's kind and its words. The fourteen after them are drawn from structure the item carries: its facts, its rows, its entries, a catalogue's record. Each is shown from the sample the service's own rules give it, then with other content, in Chinese, and at its extremes, some of them opened.</p>
   <p>Any card can carry one line of chips under its content: a date, a place, people and, for what the agents brought, where it came from. A date is always whole, and a longer place, name or source is clipped inside its chip. Each type is shown once without chips and once with them. The line adds 28 pixels and nothing else changes.</p>
 </header>
 
@@ -143,23 +144,23 @@ const STRUCTURED_SAMPLES = [
   ['proscons', 'rules', 'The points for and the points against, side by side.', drawn('proscons')],
   ['swatch', 'rules', 'Colours with their names and values.', drawn('swatch')],
   ['place', 'rules', 'A short note whose title is the name of a place, with its picture when it has one.', drawn('place')],
-].filter(([name]) => name in COMPONENTS);
+];
 
 /** The same types with other content, to show how each footprint follows what the card holds. */
 const VARIANTS = {
   list: [
     ['Bullets', make('list', { items: ['Tent', 'Stove and two gas canisters', 'Two head torches and spare batteries for the walk back after dark', 'Water filter'] }, { title: 'Bring to the lake' })],
-    ['Twelve entries', make('list', { items: ['Passport', 'Visa printout', 'Travel insurance', 'Chargers', 'Adapter', 'Camera', 'Film', 'Notebook', 'Rain jacket', 'Walking boots', 'First aid kit', 'House keys to the neighbour'], checked: [true, true, true, true, false, true, false, false, false, false, false, false] }, { title: 'Before the flight to Lisbon' })],
+    ['Twelve entries', make('list', { items: ['Passport', 'Visa printout', 'Travel insurance', 'Chargers', 'Adapter', 'Camera', 'Film', 'Notebook', 'Rain jacket', 'Walking boots', 'First aid kit', 'House keys to the neighbour'], checked: [true, true, true, true, false, true, false, false, false, false, false, false] }, { title: 'Before the flight to Lisbon' }), 'kept', true],
     ['Two short entries', make('list', { items: ['牛奶', '鸡蛋'] }, { title: '要买' })],
   ],
   facts: [
     ['Two facts', make('facts', { facts: [{ label: 'Height', value: '330 m' }, { label: 'Built', value: '1889' }] }, { title: 'Eiffel Tower' })],
     ['Three, the last alone on its row', make('facts', { facts: [{ label: 'Orbit', value: '687 days' }, { label: 'Moons', value: '2' }, { label: 'Tallest mountain', value: 'Olympus Mons, 21.9 km' }] }, { title: 'Mars' })],
-    ['Six long values', make('facts', { facts: [{ label: 'Engineers', value: 'Maurice Koechlin and Émile Nouguier' }, { label: 'Built in', value: '2 years, 2 months and 5 days' }, { label: 'Iron', value: '7,300 tonnes of puddled iron' }, { label: 'Rivets', value: '2,500,000' }, { label: 'Cost', value: '7,799,401.31 gold francs' }, { label: 'Repainted', value: 'every seven years, by hand' }], more: 3 }, { title: 'How the tower was built' })],
+    ['Six long values', make('facts', { facts: [{ label: 'Engineers', value: 'Maurice Koechlin and Émile Nouguier' }, { label: 'Built in', value: '2 years, 2 months and 5 days' }, { label: 'Iron', value: '7,300 tonnes of puddled iron' }, { label: 'Rivets', value: '2,500,000' }, { label: 'Cost', value: '7,799,401.31 gold francs' }, { label: 'Repainted', value: 'every seven years, by hand' }], more: 3 }, { title: 'How the tower was built' }), 'kept', true],
     ['Chinese', make('facts', { facts: [{ label: '建成', value: '1420年' }, { label: '占地', value: '72万平方米' }, { label: '房间', value: '9,371间' }, { label: '年参观人数', value: '1,700万人次' }] }, { title: '故宫' })],
   ],
   table: [
-    ['Forty rows', make('table', { heads: ['Year', 'Film', 'Director', 'Gross'], rows: films }, { title: 'Forty years of the shot' })],
+    ['Forty rows', make('table', { heads: ['Year', 'Film', 'Director', 'Gross'], rows: films }, { title: 'Forty years of the shot' }), 'kept', true],
     ['Seven columns', make('table', { heads: ['Lens', 'Mount', 'Focal', 'Stop', 'Weight', 'Filter', 'Price'], rows: [['Summicron', 'M', '35 mm', 'f/2', '255 g', '39 mm', '$3,895'], ['Nokton', 'M', '40 mm', 'f/1.2', '315 g', '52 mm', '$999'], ['Planar', 'ZM', '50 mm', 'f/2', '230 g', '43 mm', '$930']] }, { title: 'Lenses for the trip' })],
     ['Chinese', make('table', { heads: ['城市', '人口', '面积', '地铁里程'], rows: [['上海', '2,487万', '6,341 km²', '831 km'], ['北京', '2,185万', '16,410 km²', '836 km'], ['成都', '2,140万', '14,335 km²', '601 km'], ['杭州', '1,252万', '16,850 km²', '516 km']] }, { title: '四座城市' })],
     ['Long cells', make('table', { heads: ['Shot', 'What it does to the room', 'First seen'], rows: [['Dolly zoom', 'The subject holds still while the background rushes away or closes in', '1958'], ['Whip pan', 'The room smears into streaks between two framings', '1927'], ['Split diopter', 'Near and far are both sharp, with a soft seam between them', '1941']] }, { title: 'Three shots that bend a room' })],
@@ -193,7 +194,7 @@ const VARIANTS = {
   ],
   qa: [
     ['English', make('qa', { question: 'Why does the room seem to stretch?', answer: 'The lens zooms in while the camera pulls back, so the subject holds its size and the background rushes away.' }, { title: 'Asking about the stretch' })],
-    ['Long', make('qa', { question: 'If the camera pulls back at the same rate as the lens zooms in, why does anything in the frame change at all?', answer: 'Because zooming magnifies everything by the same amount, while moving the camera changes the size of near things far more than far ones. The two cancel only at the distance of the subject. Everything behind it grows, everything in front of it shrinks, and the eye reads that as the room itself changing shape, which no real room does, and that is where the dread comes from.' }, { title: 'The geometry of it' })],
+    ['Long', make('qa', { question: 'If the camera pulls back at the same rate as the lens zooms in, why does anything in the frame change at all?', answer: 'Because zooming magnifies everything by the same amount, while moving the camera changes the size of near things far more than far ones. The two cancel only at the distance of the subject. Everything behind it grows, everything in front of it shrinks, and the eye reads that as the room itself changing shape, which no real room does, and that is where the dread comes from.' }, { title: 'The geometry of it' }), 'kept', true],
   ],
   callout: [
     ['A remark', make('callout', { text: 'The second unit shot this on a miniature of the stairwell laid on its side.', tone: 'note' }, { title: 'How the tower shot was made' })],
@@ -207,10 +208,10 @@ const VARIANTS = {
   ],
   proscons: [
     ['Chinese', make('proscons', { pros: ['房价低', '美食多', '生活节奏慢'], cons: ['夏天潮湿', '离家人远'] }, { title: '要不要搬去成都' })],
-    ['Many long points', make('proscons', { pros: ['One binary to ship, with no runtime to install on the render nodes', 'No data races', 'The compiler finds what review misses', 'Fast at run time', 'Good tooling', 'Friendly community'], cons: ['Slow builds on the old laptops', 'A steep start for the two juniors who joined in spring', 'Fewer libraries for colour science', 'Hiring is harder', 'The rewrite stalls features'] }, { title: 'Moving the render queue to Rust before the autumn release' })],
+    ['Many long points', make('proscons', { pros: ['One binary to ship, with no runtime to install on the render nodes', 'No data races', 'The compiler finds what review misses', 'Fast at run time', 'Good tooling', 'Friendly community'], cons: ['Slow builds on the old laptops', 'A steep start for the two juniors who joined in spring', 'Fewer libraries for colour science', 'Hiring is harder', 'The rewrite stalls features'] }, { title: 'Moving the render queue to Rust before the autumn release' }), 'kept', true],
   ],
   swatch: [
-    ['Eight colours', make('swatch', { colours: [{ name: 'Ink', value: '#0B0D11' }, { name: 'Slate', value: '#1B1D23' }, { name: 'Fog', value: '#A3A39C' }, { name: 'Paper', value: '#ECEBE6' }, { name: 'Amber', value: '#F2C27A' }, { name: 'Teal', value: '#62D6C3' }, { name: 'Coral', value: '#FF9A92' }, { name: 'Light goldenrod', value: 'lightgoldenrodyellow' }] }, { title: 'Mind Palace, as drawn' })],
+    ['Eight colours', make('swatch', { colours: [{ name: 'Ink', value: '#0B0D11' }, { name: 'Slate', value: '#1B1D23' }, { name: 'Fog', value: '#A3A39C' }, { name: 'Paper', value: '#ECEBE6' }, { name: 'Amber', value: '#F2C27A' }, { name: 'Teal', value: '#62D6C3' }, { name: 'Coral', value: '#FF9A92' }, { name: 'Light goldenrod', value: 'lightgoldenrodyellow' }] }, { title: 'Mind Palace, as drawn' }), 'kept', true],
     ['Chinese', make('swatch', { colours: [{ name: '宫墙红', value: '#C8102E' }, { name: '琉璃黄', value: '#F2B824' }, { name: '汉白玉', value: '#F4F1E8' }, { name: '青金', value: '#1F3A6E' }] }, { title: '故宫配色' })],
     ['Two, one a name the browser does not know', make('swatch', { colours: [{ name: 'Night', value: 'black' }, { name: 'Dusk at the bay', value: 'duskblue' }] }, { title: 'Bay' })],
   ],
@@ -307,7 +308,10 @@ for (const [name, by, when, made] of [...COMPONENT_SAMPLES, ...STRUCTURED_SAMPLE
       cell('Pick', staged(made, 'pick')),
       withChips(name, made),
       detail.length > 0 && cell('Opened', opened(detail))),
-    (VARIANTS[name] ?? []).length > 0 && h('div', { class: 'lib-row lib-more' }, VARIANTS[name].map(([label, variant, status = 'kept']) => cell(label, staged(variant, status)))),
+    (VARIANTS[name] ?? []).length > 0 && h('div', { class: 'lib-row lib-more' }, VARIANTS[name].map(([label, variant, status = 'kept', open = false]) => [
+      cell(label, staged(variant, status)),
+      open && cell(`${label}, opened`, opened(drawDetail(variant.node, variant.item, ctx))),
+    ])),
     props('Props', made.node.view.props)));
 }
 

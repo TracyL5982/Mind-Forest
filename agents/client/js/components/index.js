@@ -9,19 +9,19 @@ import * as person from './person.js';
 import * as chat from './chat.js';
 import * as code from './code.js';
 import * as steps from './steps.js';
-import * as list from './list.js';
 import * as facts from './facts.js';
 import * as table from './table.js';
-import * as excerpt from './excerpt.js';
-import * as idea from './idea.js';
-import * as reference from './reference.js';
-import * as artwork from './artwork.js';
+import * as list from './list.js';
 import * as breakdown from './breakdown.js';
 import * as qa from './qa.js';
 import * as callout from './callout.js';
+import * as excerpt from './excerpt.js';
 import * as definition from './definition.js';
+import * as idea from './idea.js';
 import * as proscons from './proscons.js';
 import * as swatch from './swatch.js';
+import * as artwork from './artwork.js';
+import * as reference from './reference.js';
 import * as place from './place.js';
 import { h, s } from '../dom.js';
 import { LABEL, chips } from '../chips.js';
@@ -36,7 +36,7 @@ import { CHIP_LINE, say, textWidth } from './shared.js';
  */
 export const COMPONENTS = {
   note, quote, fact, image, video, link, chart, person, chat, code, steps,
-  list, facts, table, excerpt, idea, reference, artwork, breakdown, qa, callout, definition, proscons, swatch, place,
+  facts, table, list, breakdown, qa, callout, excerpt, definition, idea, proscons, swatch, artwork, reference, place,
 };
 
 export const componentOf = (node) => (Object.hasOwn(COMPONENTS, node.view?.component) ? node.view.component : 'note');

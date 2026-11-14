@@ -118,10 +118,8 @@ export const fakeRoles: Roles = {
       const marked = /^(caution|warning|note):\s*(\S.*)$/im.exec(item.text);
       const callout = { component: 'callout', props: { text: marked?.[2]?.trim(), tone: marked?.[1]!.toLowerCase() === 'note' ? 'note' : 'caution' } };
       const draw = marked && grounded(callout, item, assetUrl) ? callout : byRule(item, assetUrl);
-      // A demo tree arrives with its views already chosen and no data to draw them from, so a view is only replaced by one the item's structure gives.
-      const plain = node.view.by === 'renderer' && (draw.component === 'note' || draw.component === 'idea');
       const same = draw.component === node.view.component && JSON.stringify(draw.props) === JSON.stringify(node.view.props);
-      return plain || same ? [] : [{ type: 'setView', id, view: { ...draw, by: 'renderer' } }];
+      return same ? [] : [{ type: 'setView', id, view: { ...draw, by: 'renderer' } }];
     });
   },
 

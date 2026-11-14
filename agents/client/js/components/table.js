@@ -2,7 +2,7 @@ import { h, clamp } from '../dom.js';
 import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, graphemes, list, say, spread, text, textWidth, wrap } from './shared.js';
 
 const NARROW = 200;
-const WIDE = 360;
+const WIDE = 352;
 const ROOM = WIDE - SIDES;
 const BETWEEN = 14;
 const MOST_COLUMNS = 5;

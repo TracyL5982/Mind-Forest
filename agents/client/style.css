@@ -269,7 +269,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .table-cell.is-number:not(.is-head) { overflow: visible; text-overflow: clip; }
 .detail-table { max-height: 46vh; overflow: auto; border-radius: 12px; border: 1px solid var(--line); background: var(--face); }
 .detail-table table { min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; line-height: 18px; }
-.detail-table th, .detail-table td { padding: 6px 12px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: top; max-width: 240px; overflow-wrap: anywhere; }
+.detail-table th, .detail-table td { padding: 6px 12px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: top; max-width: 240px; overflow-wrap: break-word; }
 .detail-table th { position: sticky; top: 0; background: var(--face); border-bottom-color: var(--line-2); font-weight: 400; color: var(--ink-2); white-space: nowrap; }
 .detail-table .is-number { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .detail-table tbody tr:last-child td { border-bottom: 0; }
@@ -303,7 +303,7 @@ button, input, textarea { font: inherit; color: inherit; }
 [data-component='artwork'] .card-face { border-radius: 4px; }
 .c-artwork { padding: 0; gap: 0; }
 .artwork-mat { flex: none; padding: 14px; display: grid; place-items: center; background: #0c0e11; }
-.artwork-mat img { min-width: 0; min-height: 0; max-width: 100%; max-height: 100%; object-fit: contain; display: block; pointer-events: none; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 6px 18px rgba(0, 0, 0, 0.5); }
+.artwork-mat img { min-width: 0; min-height: 0; width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)) drop-shadow(0 6px 12px rgba(0, 0, 0, 0.55)); }
 .artwork-plate { padding: 10px 15px 12px; font-size: var(--type-text); line-height: var(--lead-text); }
 .artwork-by { margin-top: 2px; }
 .artwork-medium { color: var(--ink-2); }

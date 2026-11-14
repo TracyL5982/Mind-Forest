@@ -15,12 +15,17 @@
  *   library            open library.html
  *   app                open the app and connect to the service
  *   think=<text>       type a thought into the dock and wait for its picks
- *   shapes             load the Every shape tree: each card type, each arrangement, one unknown type
+ *   shapes             load the Every shape tree: each card type and each arrangement. `shapes=eleven`
+ *                      leaves out the fourteen types drawn from structure, to compare with a client
+ *                      that does not draw them.
  *   chips              load the With chips tree: cards whose items carry a date, a place, people
  *                      or an origin, twins that carry none, and a timeline of cards with chips
  *   crowd=<n>          load a tree of n note cards. Default 200. `crowd=<n>:chips` gives every
  *                      other card a date and a place.
- *   card=<type>:<json> add one kept card of that type in a tree named Lane. The JSON is the card's
+ *   card=<type>:<json> add one kept card of that type in a tree named Lane. The type is any of the
+ *                      twenty-five in docs/libraries.md, or one no client knows. The card keeps the
+ *                      view it is given, whatever its item holds: the stand-in Renderer redraws every
+ *                      other tree by the rules and leaves this one as placed. The JSON is the card's
  *                      props, or { item, props, pick } to also set the item's title, summary,
  *                      text, data or origin, or to add the card as a pick: card=fact:{"item":{"title":"Budget"},"props":{"value":"$1.2M","label":"spent"},"pick":true}
  *                      A card shows chips for what its item's data holds: card=note:{"item":{"data":{"when":"1958","where":"Rome"}}}
@@ -43,6 +48,7 @@
  *
  * Example
  *   node --no-warnings --import tsx scripts/lane.ts --out /tmp/lane app shapes tree=Every zoom=50 shot=zoom-50 open=chart shot=chart-open
+ *   node --no-warnings --import tsx scripts/lane.ts --out /tmp/lane app 'card=table:{"item":{"title":"Plans"},"props":{"heads":["Plan","Price"],"rows":[["Solo","$8"],["Team","$20"]]}}' fits open=table shot=table-open
  *
  * Each step prints one line. The run exits 1 when a step fails or the page logs an error. A file
  * that fails to load is printed and does not fail the run, so a lane can show a missing picture.
@@ -160,9 +166,9 @@ const STEPS: Record<string, Step> = {
     await settle(page);
     return `${(await cards(page).count()) - before} cards arrived`;
   },
-  async shapes(_, page, run) {
+  async shapes(value, page, run) {
     const other = [...run.mind.trees.values()][0]?.rootId;
-    if (!run.pipeline.userCommands('Add every shape', showcase(await still(page, run), other))) throw new Error('the service refused the Every shape tree');
+    if (!run.pipeline.userCommands('Add every shape', showcase(await still(page, run), other, { structured: value !== 'eleven' }))) throw new Error('the service refused the Every shape tree');
     await page.locator('.tree-chip', { hasText: 'Every shape' }).waitFor();
     await run.pipeline.idle();
   },

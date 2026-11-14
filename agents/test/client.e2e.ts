@@ -11,7 +11,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
 import type { Running } from '../src/node/server.ts';
-import { CHIPPED, LONG_PLACE, PNG, bootFake, browserPath, chipped, crowd, showcase, spills } from './stage.ts';
+import { COMPONENT_IDS, STRUCTURED_IDS } from '../src/core/samples.ts';
+import { CHIPPED, LONG_PLACE, PLACED, PNG, STRUCTURED, bootFake, browserPath, chipped, crowd, showcase, spills, unknownShape } from './stage.ts';
 
 const shots = process.env.MIND_PALACE_SHOTS ? resolve(process.env.MIND_PALACE_SHOTS) : mkdtempSync(join(tmpdir(), 'mp-shots-'));
 mkdirSync(shots, { recursive: true });
@@ -282,10 +283,19 @@ async function main(): Promise<void> {
       const image = ((await up.json()) as { url: string }).url;
       assert.ok(run.pipeline.userCommands('Add every shape', showcase(image, rootId)));
       await page.locator('.tree-chip', { hasText: 'Every shape' }).waitFor();
-      for (const component of ['note', 'quote', 'fact', 'image', 'video', 'link', 'chart', 'person', 'chat', 'code', 'steps']) {
-        assert.ok((await count(page, `.card[data-component="${component}"]`)) > 0, `${component} is drawn`);
+      for (const component of COMPONENT_IDS) {
+        assert.ok((await count(page, `.card[data-id^="show-"][data-component="${component}"]`)) > 0, `${component} is drawn`);
       }
-      assert.equal(await page.locator('.card', { hasText: 'A shape this client has never heard of' }).getAttribute('data-component'), 'note');
+      for (const id of STRUCTURED_IDS) assert.equal(await page.locator(`.card[data-id="${STRUCTURED[id]}"]`).getAttribute('data-component'), id);
+      await run.pipeline.idle();
+      assert.equal(run.mind.treeNodes('show').filter((node) => node.view.by !== 'renderer').length, 0);
+      assert.equal(run.pipeline.undoLabel(), 'Add every shape', 'the stand-in Renderer, which draws by the real rules, found no card of the tree to redraw');
+      assert.ok(run.pipeline.userCommands('Add an unknown shape', unknownShape()));
+      const unknown = page.locator('.card', { hasText: 'A shape this client has never heard of' });
+      await unknown.waitFor();
+      await run.pipeline.idle();
+      assert.equal(run.mind.treeNodes(PLACED)[0]!.view.component, 'hologram');
+      assert.equal(await unknown.getAttribute('data-component'), 'note');
       for (const composite of ['gallery', 'timeline', 'comparison', 'sequence', 'cluster', 'stack']) {
         assert.equal(await count(page, `.pane[data-composite="${composite}"]`), 1, `${composite} is drawn`);
       }
@@ -317,11 +327,15 @@ async function main(): Promise<void> {
       assert.deepEqual(photo, [plain[0], plain[1]! + 28], 'the photo with chips is taller by the chip line and no wider');
       assert.equal(await card(CHIPPED.plainNote).locator('.chip-line').count(), 0, 'a card with nothing to say has no chip line');
       assert.deepEqual(await chips(CHIPPED.link), ['2019'], 'a link does not repeat its site, as its origin or as its author');
-      const museum = await chips(CHIPPED.museum);
-      assert.deepEqual(museum, ['1857', 'The Metropolitan Museum of Art'], 'a pick the Scout brought says when it is from, then who holds it');
-      assert.deepEqual(await chips(CHIPPED.paper), ['2019', 'Journal of Japanese Studies'], 'a paper says its year and its journal, and a note has no room for its authors after them');
-      assert.equal(await card(CHIPPED.museum).locator('.chip[data-kind="origin"]').getAttribute('title'), 'Origin: The Metropolitan Museum of Art');
-      assert.deepEqual(await chips(CHIPPED.four), ['Summer 1958', 'Bancroft Library'], 'the origin comes straight after the date, and what has no room is left to the opened card');
+      assert.equal(await card(CHIPPED.museum).getAttribute('data-component'), 'artwork', 'a work a museum holds is drawn as an artwork');
+      assert.deepEqual(await card(CHIPPED.museum).locator('.artwork-by, .artwork-holder').allTextContents(), ['Utagawa Hiroshige, 1857', 'The Metropolitan Museum of Art']);
+      assert.deepEqual(await chips(CHIPPED.museum), [], 'and no chip repeats the date and the holder on its plate');
+      assert.equal(await card(CHIPPED.paper).getAttribute('data-component'), 'reference', 'a paper is drawn as a reference');
+      assert.deepEqual(await card(CHIPPED.paper).locator('.reference-year, .reference-authors, .reference-venue').allTextContents(), ['2019', 'T. Screech, M. Forrer, H. Smith', 'Journal of Japanese Studies']);
+      assert.deepEqual(await chips(CHIPPED.paper), [], 'and no chip repeats its year, its authors or its journal');
+      const four = await chips(CHIPPED.four);
+      assert.deepEqual(four, ['Summer 1958', 'Bancroft Library'], 'the origin comes straight after the date, and what has no room is left to the opened card');
+      assert.equal(await card(CHIPPED.four).locator('.chip[data-kind="origin"]').getAttribute('title'), 'Origin: Bancroft Library');
 
       const clipped = (el: HTMLElement) => el.scrollWidth > el.clientWidth && getComputedStyle(el).textOverflow === 'ellipsis';
       const crew = card(CHIPPED.people).locator('.chip');
@@ -346,7 +360,7 @@ async function main(): Promise<void> {
       }));
       assert.deepEqual(loose, [], 'no chip runs past its line, and a clipped chip has at least its box');
       const lines = await page.locator('.card[data-id^="chips-"] .chip-line').evaluateAll((els) => els.map((el) => (el as HTMLElement).offsetHeight));
-      assert.ok(lines.length >= 9 && lines.every((height) => height === 20), `every chip line is one line tall, got ${lines}`);
+      assert.ok(lines.length >= 7 && lines.every((height) => height === 20), `every chip line is one line tall, got ${lines}`);
       assert.deepEqual(await overlaps(page), []);
       assert.deepEqual(await spills(page), []);
 
@@ -367,15 +381,67 @@ async function main(): Promise<void> {
       assert.equal(await facts.locator('dd[data-chip]').count(), 0);
       assert.deepEqual((await facts.locator('dt').allTextContents()).slice(0, 1), ['From'], 'what the user added says how it arrived');
 
-      const size = await tall(CHIPPED.museum);
       await card(CHIPPED.museum).click();
+      assert.deepEqual(await facts.locator('dd[data-chip]').allTextContents(), ['1857', 'The Metropolitan Museum of Art'], 'the opened artwork still lists its date and its holder');
+
+      const size = await tall(CHIPPED.four);
+      await card(CHIPPED.four).click();
       await page.locator('#panel').getByRole('button', { name: 'Keep', exact: true }).click();
-      await until('the card to be kept', async () => (await card(CHIPPED.museum).getAttribute('aria-label'))!.startsWith('Card:'));
+      await until('the card to be kept', async () => (await card(CHIPPED.four).getAttribute('aria-label'))!.startsWith('Card:'));
       await settle(page);
-      assert.deepEqual(await chips(CHIPPED.museum), museum, 'a kept pick still says where it came from');
-      assert.deepEqual(await tall(CHIPPED.museum), size, 'and is the size it was as a pick');
-      assert.deepEqual(await facts.locator('dd[data-chip="origin"]').allTextContents(), ['The Metropolitan Museum of Art']);
+      assert.deepEqual(await chips(CHIPPED.four), four, 'a kept pick still says where it came from');
+      assert.deepEqual(await tall(CHIPPED.four), size, 'and is the size it was as a pick');
+      assert.deepEqual(await facts.locator('dd[data-chip="origin"]').allTextContents(), ['Bancroft Library']);
       await page.keyboard.press('Escape');
+    });
+
+    await check('each of the fourteen structured types is drawn from what the service makes of a pasted text or a request', async () => {
+      const paste = (text: string) => page.evaluate((pasted) => {
+        const data = new DataTransfer();
+        data.setData('text/plain', pasted);
+        document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+      }, text);
+      /** What to paste for each type, words its card then shows, and a part only that type draws, with how many of it. */
+      const pasted: [string, string, string, string, number][] = [
+        ['facts', 'Tokyo Tower\nHeight = 333 m\nBuilt = 1958\nFloors = 2', '333 m', '.figure', 3],
+        ['table', 'Tier | Cost\nBasic | $5\nPlus | $12', 'Basic', '.table-cell.is-number:not(.is-head)', 2],
+        ['list', 'Packing\n[x] passport\n[ ] charger', 'passport', '.list-box', 2],
+        ['breakdown', 'Budget\nChart: Rent 50%, Food 30%, Other 20%', '50%', '.breakdown-bar', 3],
+        ['qa', 'Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.', 'Air scatters', '.qa-voice', 2],
+        ['callout', 'Varnishing the table\nCaution: wet varnish scratches for a week.', 'wet varnish', '.callout.is-caution', 1],
+        ['excerpt', 'The house remembers.\n> Every stair keeps the weight of who climbed it.\nAt: Chapter 3', 'Every stair keeps', '.excerpt-where', 1],
+        ['definition', 'Term: Bokeh\nDefinition: the look of the parts of a picture that are out of focus', 'out of focus', '.definition-text', 1],
+        ['idea', 'Build a treehouse', 'Build a treehouse', '.idea-spark', 1],
+        ['proscons', 'Buying the van\nPros: room for the dog, cheap to insure\nCons: slow uphill', 'slow uphill', '.proscons-mark', 3],
+        ['swatch', 'Palette: Rust #B7410E, Moss #8A9A5B', '#8A9A5B', '.swatch-block', 2],
+        ['place', 'Lisbon\nWhere: Lisbon', 'Lisbon', '.place-pin', 1],
+      ];
+      await page.keyboard.press('Escape');
+      for (const [type, text, shown, part, parts] of pasted) {
+        await paste(text);
+        const made = page.locator(`.card.is-kept[data-component="${type}"]`, { hasText: shown }).last();
+        await made.waitFor();
+        assert.equal(await made.locator(part).count(), parts, `${type} draws ${parts} of ${part}`);
+      }
+      await run.pipeline.idle();
+      const asked: [string, string, string, string][] = [
+        ['artwork', 'find a museum painting of stairs', 'Stairwell, seen from above', '.artwork-mat img'],
+        ['reference', 'find a paper on the dolly zoom', 'Perceived depth under opposed zoom and camera motion', '.reference-head'],
+      ];
+      for (const [type, need, title, part] of asked) {
+        await page.locator('.card.is-kept[data-component="place"]', { hasText: 'Lisbon' }).last().click();
+        await page.getByLabel('Ask about this card').fill(need);
+        await page.getByRole('button', { name: 'Ask', exact: true }).click();
+        const brought = page.locator(`.card.is-pick[data-component="${type}"]`, { hasText: title });
+        await brought.waitFor();
+        assert.equal(await brought.locator(part).count(), 1, `${type} draws ${part}`);
+        assert.deepEqual(await brought.locator('.chip').allTextContents(), [], `no chip repeats what the ${type} shows`);
+        await run.pipeline.idle();
+      }
+      await until('the museum picture to load', () => page.locator('.card[data-component="artwork"] .artwork-mat img').last().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0));
+      await page.keyboard.press('Escape');
+      await settle(page);
+      assert.deepEqual(await spills(page), []);
     });
 
     await check('every card type in the registry can be sized, drawn and opened', async () => {
@@ -456,10 +522,10 @@ async function main(): Promise<void> {
         await view.goto(`${run.url}/library.html`);
         await view.locator('#composites .lib-entry').last().waitFor();
         const stated = await view.locator('#components .lib-size').allTextContents();
-        for (const type of ['note', 'quote', 'fact', 'image', 'video', 'link', 'chart', 'person', 'chat', 'code', 'steps']) {
+        for (const type of COMPONENT_IDS) {
           assert.ok(stated.some((line) => new RegExp(`^${type} \\d+ by \\d+$`).test(line)), `${type} states its footprint`);
         }
-        for (const type of ['note', 'quote', 'fact', 'image', 'video', 'link', 'chart', 'person', 'chat', 'code', 'steps']) {
+        for (const type of COMPONENT_IDS) {
           const cards = view.locator(`#components .card[data-component="${type}"]`);
           assert.ok((await cards.filter({ has: view.locator('.chip-line') }).count()) > 0, `${type} is shown with chips`);
           assert.ok((await cards.filter({ hasNot: view.locator('.chip-line') }).count()) > 0, `${type} is shown without chips`);
@@ -479,7 +545,7 @@ async function main(): Promise<void> {
 }
 
 const dataDir = mkdtempSync(join(tmpdir(), 'mp-e2e-'));
-const boot = (port: number) => bootFake({ port, dataDir });
+const boot = (port: number) => bootFake({ port, dataDir, asPlaced: (treeId) => treeId === PLACED });
 let run: Running = await boot(0);
 try {
   await main();
