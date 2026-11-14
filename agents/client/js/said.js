@@ -27,6 +27,18 @@ export function isSaid(words, said) {
 }
 
 /**
+ * What an opened card prints of its item under the type's own opened form, where `said` is every
+ * string the title, the form and the sources draw: the lines of the text they leave unsaid, and the
+ * summary only when neither they nor the text say it. A summary clipped from the text, as one made
+ * without the model is, is said by the text.
+ */
+export function leftover(item, said) {
+  const text = rest(item.text, said);
+  const summary = isSaid(item.summary, [item.text, ...said]) || rest(item.summary, said, 0) === '' ? '' : item.summary;
+  return { summary, text };
+}
+
+/**
  * The lines of `text` that `said` does not already say, where `said` is every string the opened
  * card draws. A string is matched as whole words, whatever its case and however its white space
  * runs. A line is left out when one of those strings holds it, or when all it adds to them is

@@ -409,7 +409,7 @@ An opened card says each thing once. From top to bottom it has the item's title,
 
 `client/js/said.js` is the whole rule for the summary and the text, and has no drawing code. `said` is every string the card has drawn by then: the title, each string the type's opened form writes, and the text of each source in the list.
 
-**The text.** It is not printed when it equals the summary. Otherwise split it at each line feed and take each line with its runs of white space turned into one space and its ends trimmed. Matching ignores case.
+**The text.** Split it at each line feed and take each line with its runs of white space turned into one space and its ends trimmed. Matching ignores case.
 
 1. A line with no letter or digit is kept as an empty line.
 2. A line that is inside one string of `said` is left out.
@@ -419,9 +419,9 @@ An opened card says each thing once. From top to bottom it has the item's title,
 
 Three or more line feeds in a row become two, and the result is trimmed. Nothing is printed when nothing is left.
 
-**The summary.** It is printed whole, unless a string of `said` or the text as printed holds it, or the rule for the text, given the summary and `said` and with 0 in place of the 12 of step 4, leaves nothing of it: every letter and digit of the summary is already drawn. An ellipsis at its end (`…` or `...`) is taken off before it is looked for in a string, and case and runs of white space are ignored.
+**The summary.** It is printed whole, unless the item's text or a string of `said` holds it, or the rule for the text, given the summary and `said` and with 0 in place of the 12 of step 4, leaves nothing of it: every letter and digit of the summary is already drawn. An ellipsis at its end (`…` or `...`) is taken off before it is looked for in a string, and case and runs of white space are ignored.
 
-So an opened table shows its grid and not the pasted rows again, a page the Scout picked shows its passage once, and a paragraph beside a small table is still printed.
+So an opened table shows its grid and not the pasted rows again, a page the Scout picked shows its passage once, and a paragraph beside a small table is still printed. A summary made without the model is the start of the text, cut with an ellipsis, so the text holds it and only the text's unsaid lines are printed.
 
 A type's opened form leaves to the list of sources what the list says in the same words: an artwork its holder, a reference its venue, and its authors when the list is not cut short.
 

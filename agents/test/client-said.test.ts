@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-type Said = { rest: (text: string, said: string[]) => string; isSaid: (words: string, said: string[]) => boolean };
-const { rest, isSaid } = (await import(new URL('../client/js/said.js', import.meta.url).href)) as Said;
+type Said = {
+  rest: (text: string, said: string[]) => string;
+  isSaid: (words: string, said: string[]) => boolean;
+  leftover: (item: { text: string; summary: string }, said: string[]) => { summary: string; text: string };
+};
+const { rest, isSaid, leftover } = (await import(new URL('../client/js/said.js', import.meta.url).href)) as Said;
 
 test('an opened card does not print again the lines of its text that its own form has drawn', () => {
   assert.equal(rest('Plan | Price\nSolo | $8\nTeam | $20', ['Plans', 'Plan', 'Price', 'Solo', '$8', 'Team', '$20']), '');
@@ -35,4 +39,15 @@ test('a summary the opened card already says is not printed again', () => {
   assert.ok(isSaid('The house shelters day-dreaming…', ['Bachelard', 'The house  shelters day-dreaming, the house protects the dreamer.']));
   assert.ok(isSaid('gelatin silver print', ['Gelatin silver print']));
   assert.equal(isSaid('Bachelard on how rooms hold memory.', ['The house shelters day-dreaming.']), false);
+});
+
+test('a summary clipped from the text is said by the text, and the text prints only what the form leaves unsaid', () => {
+  const text = 'Q: Why is the sky blue?\nA: Air scatters short waves most.\n\nMira asked this at breakfast.';
+  const said = ['Why is the sky blue?', 'Q', 'Why is the sky blue?', 'A', 'Air scatters short waves most.'];
+  const printed = { summary: '', text: 'Mira asked this at breakfast.' };
+  assert.deepEqual(leftover({ text, summary: 'Q: Why is the sky blue? A: Air scatters short waves most. Mira asked…' }, said), printed, 'a clip of the folded text with an ellipsis');
+  assert.deepEqual(leftover({ text, summary: text.slice(0, 40) }, said), printed, 'the first characters of the text, cut inside a word');
+  assert.deepEqual(leftover({ text, summary: text }, said), printed, 'a summary that is the text');
+  assert.deepEqual(leftover({ text: '周末露营要带的东西。\n- 帐篷', summary: '周末露营要带的东西。 - 帐篷' }, ['周末露营清单', '帐篷']), { summary: '', text: '周末露营要带的东西。' });
+  assert.deepEqual(leftover({ text, summary: 'A question a child asked.' }, said), { summary: 'A question a child asked.', text: 'Mira asked this at breakfast.' }, 'a summary of its own is printed');
 });
