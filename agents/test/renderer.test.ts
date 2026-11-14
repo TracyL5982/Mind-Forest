@@ -486,6 +486,13 @@ test('a place is a note whose title is the place and nothing more', () => {
   ] as const) {
     assert.equal(place(title, where), 'note', `${title} is not ${where}`);
   }
+  assert.equal(place('Lisbon', 'Lisbon', { text: '' }), 'place', 'a place with no note');
+  assert.equal(place('Lisbon', 'Lisbon', { text: 'x'.repeat(279) }), 'place');
+  assert.equal(place('Lisbon', 'Lisbon', { text: 'x'.repeat(280) }), 'note', 'a long note is not hidden behind the name of its place');
+  assert.equal(place('Lisbon', 'Lisbon', { text: `${LONG} `.repeat(8) }), 'note');
+  assert.equal(place('西湖', '西湖', { text: '字'.repeat(279) }), 'place');
+  assert.equal(place('西湖', '西湖', { text: '字'.repeat(280) }), 'note');
+  assert.equal(place('Lisbon', 'Lisbon', { text: `${'x'.repeat(140)}${' '.repeat(50)}\n\n${'ｘ'.repeat(130)}` }), 'place', 'counted in one written form, a run of white space once');
   assert.equal(place('Lisbon', 'Lisbon', PHOTO), 'image');
   assert.equal(place('Lisbon', 'Lisbon', CLIP), 'video');
   assert.equal(place('Lisbon', 'Lisbon', LINKED), 'link');
@@ -553,6 +560,28 @@ test('the share a structure covers is counted in characters of one written form,
   assert.equal(chosen({ title: '', text: 'x'.repeat(61), data: { facts: eight } }), 'note', 'only the six facts the card shows are counted');
   assert.equal(chosen({ title: '', text: 'x'.repeat(60), data: { facts: eight } }), 'facts');
   assert.equal(chosen({ title: '', text: '', data: { steps: ['Boil', 'Stir'] } }), 'steps', 'an item with no words of its own hides none');
+});
+
+test('a place written after its region, or with its kind of district, is that place in a script without spaces', () => {
+  const place = (title: string, where: string) => chosen({ title, data: { where } });
+  const same: [string, string][] = [['杭州西湖', '西湖'], ['上海外滩', '外滩'], ['北京市', '北京'], ['北京', '北京市'], ['东京都', '东京'], ['浙江省杭州市西湖', '西湖'], ['京都清水寺', '清水寺'], ['杭州西湖，浙江', '西湖']];
+  for (const [title, where] of same) assert.equal(place(title, where), 'place', `${title} is ${where}`);
+  assert.deepEqual(ruled({ title: '杭州西湖', data: { where: '西湖' } }).props, { name: '西湖' });
+  const other: [string, string][] = [
+    ['东京都', '京都'],
+    ['杭州西湖', '湖'],
+    ['京都', '京'],
+    ['北京站', '北京'],
+    ['北京市区', '北京'],
+    ['西湖边', '西湖'],
+    ['西湖杭州', '西湖'],
+    ['在杭州西湖边的茶馆西湖', '西湖'],
+    ['Old Lisbon', 'Lisbon'],
+    ['Lisbonne', 'Lisbon'],
+    ['Lisbon西湖', '西湖'],
+    ['杭州 西湖', '西湖'],
+  ];
+  for (const [title, where] of other) assert.equal(place(title, where), 'note', `${title} is not ${where}`);
 });
 
 test('when an item satisfies two rules, the earlier one draws it', () => {

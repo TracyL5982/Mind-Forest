@@ -339,11 +339,33 @@ const referenceKind = (item: Item) => (item.data.kind === 'paper' || item.data.k
 /** A place name as it is compared: one written form and one case, without the region after its last comma. */
 const placeName = (name: string): string => uniform(name).toLowerCase().replace(/\s*,[^,]*$/, '');
 
-/** The place a note is, when its title is that place's name and nothing more. */
+/** A note longer than this is read as a note, and its place is a chip on it. */
+const PLACE_TEXT_BELOW = 280;
+/** The longest region written in front of a place, as 杭州 is in 杭州西湖, and the shortest: one character in front makes another name, as 东 does of 京都. */
+const REGION = { min: 2, max: 6 };
+/** What a name takes at its end to say which kind of district it is: 北京 and 北京市 are one place. */
+const DISTRICT = /^[市区县省都]$/u;
+const SPACELESS_ONLY = /^[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Thai}]+$/u;
+
+/**
+ * Whether a title names a place. The two are equal, or, in a script written without spaces, where a region stands in front of
+ * a place with no comma, the title is the place after its region, or one is the other with its kind of district at the end.
+ */
+function namesPlace(title: string, place: string): boolean {
+  if (title === place) return true;
+  const [named, sought] = [[...title], [...place]];
+  if (Math.min(named.length, sought.length) < 2 || !SPACELESS_ONLY.test(title) || !SPACELESS_ONLY.test(place)) return false;
+  const region = named.length - sought.length;
+  if (title.endsWith(place) && region >= REGION.min && region <= REGION.max) return true;
+  const [short, long] = region > 0 ? [place, title] : [title, place];
+  return Math.abs(region) === 1 && long.startsWith(short) && DISTRICT.test(long.slice(short.length));
+}
+
+/** The place a short note is, when its title is that place's name and nothing more. */
 function placeOf(item: Item): string | undefined {
   const where = str(item.data.where)?.trim();
-  if (item.kind !== 'text' || !where || !item.title.trim()) return undefined;
-  return placeName(item.title) === placeName(where) ? where : undefined;
+  if (item.kind !== 'text' || !where || !item.title.trim() || sizeOf(item.text) >= PLACE_TEXT_BELOW) return undefined;
+  return namesPlace(placeName(item.title), placeName(where)) ? where : undefined;
 }
 
 const IDEA_BELOW = 40;
