@@ -17,11 +17,12 @@ export const COMPOSITES = { gallery, timeline, comparison, sequence, cluster, st
 export function arrange(group, ids, sizes, open) {
   const kind = Object.hasOwn(COMPOSITES, group.composite) ? COMPOSITES[group.composite] : cluster;
   const made = kind.arrange(group, ids, sizes, open);
+  const label = made.label ?? kind.name;
   return {
     under: new Set(), buried: new Set(), cover: null, marks: [],
     ...made,
-    label: made.label ?? kind.name,
-    title: (kind.title ? kind.title(group) : group.title) || kind.name,
+    label,
+    title: (kind.title ? kind.title(group) : group.title) || label,
     canOpen: Boolean(kind.canOpen),
   };
 }
