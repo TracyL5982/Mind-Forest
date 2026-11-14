@@ -548,14 +548,42 @@ test('a structure draws its item only when it is at least a fifth of the item, a
   assert.deepEqual(long.data.facts, [{ label: 'Height', value: '330 m' }], 'the structure stays with the item');
 });
 
-test('the share a structure covers is counted in characters of one written form, against the title and the text', () => {
-  const quoting = (said: string, text: string) => chosen({ title: 'Ten chars!', text, data: { quote: { text: said } } });
-  assert.equal(quoting('y'.repeat(20), 'x'.repeat(90)), 'quote', 'twenty of a hundred');
-  assert.equal(quoting('y'.repeat(19), 'x'.repeat(90)), 'note', 'nineteen of a hundred');
-  assert.equal(quoting('y'.repeat(20), `${'x'.repeat(44)}${' '.repeat(40)}\n\n${'x'.repeat(45)}`), 'quote', 'a run of white space counts once');
-  assert.equal(quoting('y'.repeat(20), 'ｘ'.repeat(90)), 'quote', 'a full-width letter is one character');
-  assert.equal(quoting('字'.repeat(20), '文'.repeat(90)), 'quote');
-  assert.equal(quoting('字'.repeat(19), '文'.repeat(90)), 'note');
+test('the share a structure covers is counted in characters of one written form, against the text the user wrote, or the title and text of anything else', () => {
+  const quoting = (said: string, text: string) => chosen({ title: 'A title the model wrote', text, data: { quote: { text: said } } });
+  assert.equal(quoting('y'.repeat(20), 'x'.repeat(100)), 'quote', 'twenty of a hundred');
+  assert.equal(quoting('y'.repeat(19), 'x'.repeat(100)), 'note', 'nineteen of a hundred');
+  assert.equal(quoting('y'.repeat(20), `${'x'.repeat(49)}${' '.repeat(40)}\n\n${'x'.repeat(50)}`), 'quote', 'a run of white space counts once');
+  assert.equal(quoting('y'.repeat(20), 'ｘ'.repeat(100)), 'quote', 'a full-width letter is one character');
+  assert.equal(quoting('字'.repeat(20), '文'.repeat(100)), 'quote');
+  assert.equal(quoting('字'.repeat(19), '文'.repeat(100)), 'note');
+
+  const saved = (said: string) => chosen({ ...LINKED, title: 'Ten chars!', text: 'x'.repeat(90), data: { quote: { text: said } } });
+  assert.deepEqual([saved('y'.repeat(20)), saved('y'.repeat(19))], ['quote', 'link'], 'a saved page has its own title, which counts');
+  const brought = (said: string) => chosen({ title: 'Ten chars!', text: 'x'.repeat(90), origin: SCOUT, data: { quote: { text: said } } });
+  assert.deepEqual([brought('y'.repeat(20)), brought('y'.repeat(19))], ['quote', 'note'], 'and so does the title of what an agent brought');
+  const titled = (said: string) => chosen({ title: 'x'.repeat(100), text: '', data: { quote: { text: said } } });
+  assert.deepEqual([titled('y'.repeat(20)), titled('y'.repeat(19))], ['quote', 'note'], 'a title alone is all the item says');
+});
+
+test('the same lines are the same card whatever title the model gave them', () => {
+  for (const title of ['Milk and eggs', "Things to pick up for Saturday's dinner party"]) assert.equal(chosen({ title, text: 'Milk\nEggs', data: { items: ['Milk', 'Eggs'] } }), 'list', title);
+  for (const title of ['买菜', '明天去超市要买的两样东西']) assert.equal(chosen({ title, text: '酱油\n姜', data: { items: ['酱油', '姜'] } }), 'list', title);
+});
+
+test('a chart or a breakdown a source carried draws its pick however long the words beside it, and one read off a long text the user made does not', () => {
+  const years = ['2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022'];
+  const values = [12.1, 12.4, 12.9, 13.3, 13.8, 14.6, 15.2, 15.9];
+  const text = `${LONG} ${LONG}\n\nMeasured: share of electricity from wind, percent\n\n${years.map((year, n) => `${year}: ${values[n]}`).join(', ')}`;
+  const pick = { title: 'Share of electricity from wind', text, origin: SCOUT, source: { ...WEB, url: 'https://data.example.org/grapher/wind-share' } };
+  assert.deepEqual(ruled({ ...pick, data: { chart: { labels: years, values }, site: 'data.example.org' } }), { component: 'chart', props: { chart: 'line', labels: years, values } });
+  assert.equal(chosen({ title: pick.title, text, data: { chart: { labels: years, values } } }), 'note', 'the same chart, read off a text the user pasted, is under the floor');
+
+  const shares = { labels: ['Coal', 'Gas', 'Wind', 'Other'], values: [40, 30, 20, 10], unit: '%' };
+  assert.equal(chosen({ ...pick, text: ESSAY, data: { chart: shares } }), 'breakdown');
+  assert.equal(chosen({ title: pick.title, text: ESSAY, data: { chart: shares } }), 'note');
+});
+
+test('a structure with more entries than its card shows is measured by what the card shows', () => {
   const eight = Array.from({ length: 8 }, (_v, n) => ({ label: 'L', value: `${n}` }));
   assert.equal(chosen({ title: '', text: 'x'.repeat(61), data: { facts: eight } }), 'note', 'only the six facts the card shows are counted');
   assert.equal(chosen({ title: '', text: 'x'.repeat(60), data: { facts: eight } }), 'facts');

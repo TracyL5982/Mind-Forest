@@ -388,6 +388,8 @@ function isIdea(item: Item): boolean {
   return phrase.split(' ').filter((word) => /\p{L}/u.test(word)).length >= IDEA_WORDS;
 }
 
+const byAgent = (item: Item) => item.origin.by === 'agent';
+
 const captionOf = (item: Item) => (item.summary.trim() && item.summary.trim().length <= CAPTION ? item.summary.trim() : undefined);
 
 const spokenOf = (item: Item) => (item.kind === 'chat' ? excerpt(read(MessagesData, item.data.messages) ?? []) : []);
@@ -405,6 +407,12 @@ function extracted<T>(component: ComponentId, of: (item: Item) => T | undefined,
     shown: (item) => held(shows(of(item)!), false),
   };
 }
+
+/**
+ * The row for the same piece when a source's record carried it. Such a piece is the record and no guess, so the row has no floor:
+ * a dataset's chart draws however long the words beside it are.
+ */
+const carried = (rule: Rule): Rule => ({ component: rule.component, reads: 'catalogue', when: (item, asked) => byAgent(item) && rule.when(item, asked), props: rule.props });
 
 /**
  * First match wins. What a source catalogued comes first, because it is a record and no guess. A picture, a recording or a piece of code
@@ -448,8 +456,10 @@ const RULES: Rule[] = [
     props: (item, asked) => compact({ src: mediaOf(item, 'video', asked), poster: str(item.data.thumbnailUrl), caption: captionOf(item) }),
   },
   { component: 'code', reads: 'kind', when: (item) => codeOf(item) !== undefined, props: (item) => codeOf(item)! },
-  extracted('breakdown', breakdownOf, ({ labels, values, unit }) => ({ labels, values, unit })),
-  extracted('chart', chartOf, ({ labels, values, unit }) => chartProps(labels, values, unit)),
+  ...[
+    extracted('breakdown', breakdownOf, ({ labels, values, unit }) => ({ labels, values, unit })),
+    extracted('chart', chartOf, ({ labels, values, unit }) => chartProps(labels, values, unit)),
+  ].flatMap((rule) => [carried(rule), rule]),
   extracted('table', tableOf, (table) => table),
   extracted('proscons', sidesOf, (sides) => sides),
   extracted('qa', pairOf('question', 'answer'), (pair) => pair),
@@ -496,8 +506,14 @@ const RULES: Rule[] = [
 const CHAT_RULES = RULES.filter((rule) => rule.component === 'chat' || rule.component === 'note');
 
 /**
+ * How much an item says, which a structure is measured against. The model wrote the title of a text the user made,
+ * so the same two lines must not be a list under a short title and a note under a long one: there the text alone counts.
+ */
+const wholeOf = (item: Item): number => (item.kind === 'text' && !byAgent(item) && item.text.trim() ? sizeOf(item.text) : sizeOf(item.title) + sizeOf(item.text));
+
+/**
  * The first row that holds draws the item. A row that reads extracted structure holds only when what its card would show
- * is at least `COVERAGE_FLOOR` of the item's title and text, so a small structure never stands in for a long item.
+ * is at least `COVERAGE_FLOOR` of what the item says, so a small structure never stands in for a long item.
  */
 export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
   const asked = { assetUrl };
@@ -505,7 +521,7 @@ export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
   for (const rule of item.kind === 'chat' ? CHAT_RULES : RULES) {
     if (!rule.when(item, asked)) continue;
     if (rule.reads === 'structure') {
-      whole ??= sizeOf(item.title) + sizeOf(item.text);
+      whole ??= wholeOf(item);
       if (rule.shown(item).reduce((sum, value) => sum + sizeOf(value), 0) < COVERAGE_FLOOR * whole) continue;
     }
     const draw = { component: rule.component, props: rule.props(item, asked) };
