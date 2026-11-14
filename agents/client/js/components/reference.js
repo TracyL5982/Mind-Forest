@@ -16,7 +16,7 @@ function plan(item, props) {
   return {
     authors, venue,
     label: wordsOf(item)[KINDS.includes(props.kind) ? props.kind : 'paper'],
-    year: text(props.year).trim(),
+    year: text(props.year).trim() || text(item.data?.date).trim(),
     titleLines: wrap(titleOf(item), COLUMN, TITLE_LETTER, 3),
     authorLines: authors ? wrap(authors, COLUMN, TEXT_LETTER, 2) : 0,
     venueLines: venue ? wrap(venue, COLUMN, TEXT_LETTER, 2) : 0,

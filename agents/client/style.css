@@ -105,6 +105,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .card-head .card-title { flex: 1; }
 /* Names what the look alone cannot: a code card's language, where a chat came from, a kind of group. */
 .kind { flex: none; color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); font-variant-caps: all-small-caps; letter-spacing: 0.07em; white-space: nowrap; }
+/* Small capitals shrink a Han character, which has no capital, so a Chinese label is set plain. */
+.kind.is-han { font-variant-caps: normal; letter-spacing: 0.04em; }
 .card-tag { flex: none; color: var(--ink-3); font-size: var(--type-text); line-height: var(--lead-text); }
 
 .card.is-root .card-face { border-color: rgba(255, 255, 255, 0.5); }
@@ -255,12 +257,11 @@ button, input, textarea { font: inherit; color: inherit; }
 .list.is-full li { font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
 .list.is-full .list-dot, .list.is-full .list-box { margin-top: 4px; }
 
-/* facts: figures two to a row on a fact's sunk face, each over its label. A figure is never clamped, as on a fact. */
+/* facts: figures two to a row on a fact's sunk face, each over its label, all of one card in one size. */
 [data-component='facts'] .card-face { background: var(--sunk); }
 .figures { margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 17px; }
 .figure { min-width: 0; }
 .figure.is-alone { grid-column: 1 / -1; }
-.figure .fact-value { overflow: hidden; }
 .detail-figures { padding: 13px 15px; border-radius: 12px; background: var(--sunk); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 8px 16px; font-size: 14px; line-height: 20px; }
 .detail-figures dt { color: var(--ink-2); overflow-wrap: anywhere; }
 .detail-figures dd { font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -285,6 +286,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .excerpt-from { margin-top: auto; padding-top: 10px; font-size: var(--type-text); line-height: var(--lead-text); }
 .excerpt-where { color: var(--ink-3); }
 .detail-excerpt .excerpt-text { font-size: 17px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.detail-excerpt .excerpt-from { overflow-wrap: anywhere; }
 
 /* idea: a thought set large under a spark, and nothing else. */
 .c-idea { gap: 8px; }
@@ -294,7 +296,7 @@ button, input, textarea { font: inherit; color: inherit; }
 /* reference: a library card. Its kind and year over a rule, then the title, who wrote it and where it appeared. */
 .c-reference { gap: 0; }
 .reference-head { flex: none; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line-2); }
-.reference-year { color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); font-variant-numeric: tabular-nums; }
+.reference-year { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); font-variant-numeric: tabular-nums; }
 .c-reference .card-title { margin-top: 8px; }
 .reference-authors, .reference-venue { font-size: var(--type-text); line-height: var(--lead-text); overflow-wrap: anywhere; }
 .reference-authors { margin-top: 6px; color: var(--ink-2); }
@@ -304,10 +306,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .detail-reference .reference-authors { margin-top: 10px; color: var(--ink); }
 .detail-reference .reference-venue { color: var(--ink-2); }
 
-/* artwork: the work whole on a dark mat, over a plate that reads like a museum label. A plain picture fills its frame and has one caption. */
+/* artwork: the work whole on a mat a shade lighter than the card, so the mat reads as a mount and never as a hole in the field, over a plate that reads like a museum label. A plain picture fills its frame and has one caption. */
 [data-component='artwork'] .card-face { border-radius: 4px; }
 .c-artwork { padding: 0; gap: 0; }
-.artwork-mat { flex: none; padding: 14px; display: grid; place-items: center; background: #0c0e11; }
+.artwork-mat { flex: none; padding: 14px; display: grid; place-items: center; background: color-mix(in srgb, #fff 7%, var(--face)); box-shadow: inset 0 -1px 0 var(--line); }
 .artwork-mat img { min-width: 0; min-height: 0; width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)) drop-shadow(0 6px 12px rgba(0, 0, 0, 0.55)); }
 .artwork-plate { padding: 10px 15px 12px; font-size: var(--type-text); line-height: var(--lead-text); }
 .artwork-by { margin-top: 2px; }
@@ -322,7 +324,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .breakdown-bar { min-width: 2px; height: 100%; border-radius: 4px; background: color-mix(in srgb, var(--accent) 62%, var(--face)); }
 .breakdown-share { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .detail-breakdown .breakdown { margin-top: 0; align-items: start; }
-.detail-breakdown .breakdown-label { overflow-wrap: anywhere; }
+.detail-breakdown .breakdown-label, .detail-breakdown .card-tag { overflow-wrap: anywhere; }
 .detail-breakdown .breakdown-track { margin-top: 4.5px; }
 
 /* qa: two voices, each named by a letter. The question is set as a title and the answer as text under a rule. */
@@ -344,8 +346,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .c-callout { padding-left: 21px; }
 .callout-head { display: flex; align-items: center; gap: 6px; }
 .callout-head .kind { color: var(--tone); }
-.callout-glyph { flex: none; fill: none; stroke: var(--tone); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
-.callout-text { font-size: var(--type-title); line-height: var(--lead-title); font-weight: 500; }
+.callout-glyph { flex: none; fill: none; stroke: var(--tone); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+.callout-text { font-size: var(--type-title); line-height: var(--lead-title); font-weight: 620; letter-spacing: -0.006em; }
 .detail-callout { padding: 13px 15px 13px 17px; border-radius: 12px; border-left: 4px solid var(--tone); background: var(--face); }
 .detail-callout .callout-text { overflow-wrap: anywhere; }
 
@@ -378,7 +380,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .swatch-under { padding: 12px 15px 13px; display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .swatch-rows { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: var(--type-text); line-height: var(--lead-text); }
 .swatch-rows li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: start; column-gap: 8px; }
-.swatch-dot { width: 10px; height: 10px; margin-top: 3.5px; border-radius: 3px; background-image: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22); }
+.swatch-dot { width: 10px; height: 10px; margin-top: 3.5px; border-radius: 4px; background-image: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22); }
 .swatch-value { color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .swatch-under .card-foot { margin-top: 8px; }
 .swatch-rows.is-full { margin-top: 0; gap: 9px; font-size: 14px; line-height: 20px; }
@@ -391,7 +393,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .place-under { padding: 13px 15px; display: flex; flex-direction: column; gap: 8px; }
 .place-head { display: flex; align-items: center; gap: 10px; min-height: 28px; }
 .place-pin { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 18%, var(--face)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
-.place-pin svg { fill: none; stroke: var(--accent); stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; }
+.place-pin svg { fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
 .place-head .fact-value, .place-head .card-title { min-width: 0; }
 .detail-place .place-head .fact-value, .detail-place .place-head .card-title { overflow-wrap: anywhere; }
 

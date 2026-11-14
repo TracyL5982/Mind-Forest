@@ -18,7 +18,7 @@ function plan(item, props) {
   const about = said && said !== name && said !== item.title ? said : '';
   return {
     name, large, nameLines, about,
-    src: text(props.src),
+    src: text(props.src).trim(),
     headHeight: Math.max(PIN, large ? LEAD : nameLines * TITLE),
     aboutLines: about ? wrap(about.replace(/\s+/g, ' '), COLUMN, TEXT_LETTER, 3) : 0,
   };

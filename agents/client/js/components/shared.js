@@ -351,7 +351,7 @@ export const titleOf = (item) => item.title || wordsOf(item).untitled;
 export const title = (item, lines = 2) => say('div', `card-title clamp-${lines}`, titleOf(item));
 
 /** A short label that names what a card is: a language, where a chat came from, a kind of group. */
-export const kind = (label) => h('span', { class: 'kind', text: label });
+export const kind = (label) => h('span', { class: /\p{Script=Han}/u.test(label) ? 'kind is-han' : 'kind', text: label });
 
 /** A picture. When it fails to load, `missing()` is drawn in its place. `ctx.words` are the fixed words of the card it is on. */
 export function picture(src, alt, ctx, missing = () => h('div', { class: 'media-missing', text: (ctx.words ?? wordsOf()).noPicture })) {

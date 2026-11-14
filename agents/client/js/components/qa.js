@@ -12,7 +12,7 @@ const RULE = 17;
 function plan(props) {
   const question = text(props.question).trim();
   const answer = text(props.answer).trim();
-  return { question, answer, questionLines: wrap(question, COLUMN, TITLE_LETTER, 3), answerLines: wrap(answer, COLUMN, TEXT_LETTER, 6) };
+  return { question, answer, questionLines: wrap(question, COLUMN, TITLE_LETTER, 4), answerLines: wrap(answer, COLUMN, TEXT_LETTER, 6) };
 }
 
 export const shows = [];

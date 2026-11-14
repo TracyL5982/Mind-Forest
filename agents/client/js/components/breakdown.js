@@ -25,7 +25,7 @@ export function parts(props) {
   const values = list(props.values);
   const rows = list(props.labels).slice(0, MOST).map((label, i) => {
     const value = Number.isFinite(values[i]) && values[i] > 0 ? values[i] : 0;
-    return { label: text(label), value, written: `${exact(value)}${percent ? '%' : ''}` };
+    return { label: text(label).trim(), value, written: `${exact(value)}${percent ? '%' : ''}` };
   });
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   return { rows: rows.map((row) => ({ ...row, bar: exact(row.value) === '0' ? 0 : row.value / total })), unit: percent ? '' : unit, total };

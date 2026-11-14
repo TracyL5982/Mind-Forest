@@ -7,7 +7,8 @@ const COLUMN = WIDTH - SIDES;
 const MARK = 22;
 /**
  * The thought steps down as it grows: the largest size for up to two lines, the middle size for up
- * to four, then the smallest.
+ * to four, then the smallest. A thought too long for five lines there is cut with an ellipsis, so
+ * a view sent straight to a client cannot spill.
  */
 const STEPS = [[FIGURES[0], 2], [FIGURES[1], 4], [FIGURES[2], 5]];
 
@@ -15,7 +16,7 @@ function plan(item) {
   const thought = titleOf(item);
   for (const [[cls, lead, letter], most] of STEPS) {
     const lines = wrap(thought, COLUMN, letter, most + 1);
-    if (lines <= most || most === STEPS.at(-1)[1]) return { thought, cls, lead, lines: Math.min(lines, most) };
+    if (lines <= most || most === STEPS.at(-1)[1]) return { thought, cls, lead, lines: Math.min(lines, most), cut: lines > most };
   }
   return undefined;
 }
@@ -31,8 +32,8 @@ export function size(item) {
 }
 
 export function draw(item) {
-  const { thought, cls } = plan(item);
-  return [spark(), say('div', cls ? `fact-value idea-text ${cls}` : 'fact-value idea-text', thought)];
+  const { thought, cls, lines, cut } = plan(item);
+  return [spark(), say('div', `fact-value idea-text ${cls}${cut ? ` clamp-${lines}` : ''}`, thought)];
 }
 
 export const detail = () => [];

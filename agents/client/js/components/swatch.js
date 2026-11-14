@@ -13,14 +13,19 @@ const GAP = 5;
 
 const colours = (props) => list(props.colours).map((colour) => ({ name: text(colour?.name).trim(), value: text(colour?.value).trim() }));
 
-/** A block of one colour. A value the page cannot paint leaves the hatching behind it showing. */
+/** A hex colour of 3, 4, 6 or 8 digits, or a colour name: the only values the service sends, and the only ones painted. */
+const PAINTS = /^(?:#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|[a-z]{1,30})$/i;
+
+/** A block of one colour. Any value but a hex colour or a colour name, and a name the page does not know, leaves the hatching behind it showing. */
 function paint(cls, value) {
   const el = h('span', { class: cls });
-  el.style.backgroundColor = value;
+  if (PAINTS.test(value)) el.style.backgroundColor = value;
   return el;
 }
 
-const row = (colour, clamped) => h('li', null, paint('swatch-dot', colour.value), say('span', `swatch-name ${clamped}`, colour.name), h('span', { class: 'swatch-value', text: colour.value }));
+/** A colour by name with its value at the right. A colour pasted without a name has its value for a name, and is written once. */
+const row = (colour, clamped) => h('li', null, paint('swatch-dot', colour.value), say('span', `swatch-name ${clamped}`, colour.name),
+  colour.name !== colour.value && h('span', { class: 'swatch-value', text: colour.value }));
 
 export const shows = [];
 
