@@ -452,7 +452,8 @@ test('a pick is drawn as what its source catalogued it as', () => {
     component: 'artwork',
     props: { src: '/assets/a1', maker: 'Ilse Brandt', date: '1928', medium: 'Gelatin silver print', holder: 'The Example Museum' },
   });
-  assert.equal(chosen({ title: 'Stairwell', origin: SCOUT, data: work, source: { ...WEB, url: page } }), 'note', 'an artwork whose picture could not be stored');
+  assert.equal(chosen({ title: 'Stairwell', origin: SCOUT, data: work, source: { ...WEB, url: page } }), 'excerpt', 'an artwork whose picture could not be stored is the passage of its record');
+  assert.equal(chosen({ title: 'Stairwell', origin: SCOUT, data: work, source: WEB }), 'note', 'and a note when it has no address either');
   assert.equal(chosen({ title: 'Stairwell', kind: 'image', origin: SCOUT, data: { ...work, kind: undefined }, source: { ...WEB, url: page, asset: 'a1' } }), 'image', 'a picture no source catalogued');
 
   const paper = { kind: 'paper', by: 'M. Okafor et al.', date: '2011-05-03', authors: ['M. Okafor', 'L. Haas'], authorsCut: true, venue: 'Journal of Example Vision' };
@@ -581,6 +582,25 @@ test('a chart or a breakdown a source carried draws its pick however long the wo
   const shares = { labels: ['Coal', 'Gas', 'Wind', 'Other'], values: [40, 30, 20, 10], unit: '%' };
   assert.equal(chosen({ ...pick, text: ESSAY, data: { chart: shares } }), 'breakdown');
   assert.equal(chosen({ title: pick.title, text: ESSAY, data: { chart: shares } }), 'note');
+  assert.equal(chosen({ ...pick, text: ESSAY, data: { steps: ['Boil', 'Stir'] } }), 'excerpt', 'steps beside a long passage keep their floor');
+});
+
+test('a page the Scout picked draws as the passage it chose, with the site it is from', () => {
+  const passage = 'Lime raises the pH slowly, over a season, and works faster when it is dug in than when it is left on the surface.';
+  const data = { site: 'www.rhs.example', by: 'Royal Horticultural Society', date: '2024', from: 'Web' };
+  const pick = { title: 'Soil pH: why it matters', text: `${passage}\n\nRoyal Horticultural Society, 2024, Web`, origin: SCOUT, data, source: { ...WEB, url: 'https://www.rhs.example/soil-ph' } };
+  const drawn = ruled(pick);
+  assert.deepEqual(drawn, { component: 'excerpt', props: { text: pick.text, source: 'www.rhs.example' } });
+  assert.ok(grounded(drawn, kit().item(pick), url));
+  assert.equal((ruled({ ...pick, data: { ...data, site: undefined } }).props as { source: string }).source, 'Web', 'the source that found it, when the site is not known');
+
+  assert.equal(chosen({ ...pick, text: 'Royal Horticultural Society, 2024, Web' }), 'note', 'a pick with no passage, only the line that says who made it');
+  assert.equal(chosen({ ...pick, text: '' }), 'note');
+  assert.equal(chosen({ ...pick, source: WEB }), 'note', 'a thought the Scout wrote has no address');
+  assert.equal(chosen({ ...pick, origin: { by: 'user' } }), 'note', 'a text the user made is not a passage of a page');
+  assert.equal(chosen({ ...pick, kind: 'image', source: { ...pick.source, asset: 'a1' } }), 'image');
+  assert.equal(chosen({ ...pick, data: { ...data, kind: 'paper' } }), 'reference', 'a catalogued record comes first');
+  assert.equal(chosen({ ...pick, data: { ...data, chart: { labels: ['2019', '2020'], values: [12, 15] } } }), 'chart');
 });
 
 test('a structure with more entries than its card shows is measured by what the card shows', () => {

@@ -390,6 +390,17 @@ function isIdea(item: Item): boolean {
 
 const byAgent = (item: Item) => item.origin.by === 'agent';
 
+/**
+ * The passage of a page the Scout picked: the text of a pick that has an address and is no picture, when it holds more than
+ * the line that says who made the page and when.
+ */
+function passageOf(item: Item): string | undefined {
+  if (item.kind !== 'text' || !byAgent(item) || !item.source.url) return undefined;
+  const label = [...new Set([item.data.by, item.data.date, item.data.from].flatMap((part) => str(part) ?? []))].join(', ');
+  const text = item.text.trim();
+  return text && uniform(text) !== uniform(label) ? text : undefined;
+}
+
 const captionOf = (item: Item) => (item.summary.trim() && item.summary.trim().length <= CAPTION ? item.summary.trim() : undefined);
 
 const spokenOf = (item: Item) => (item.kind === 'chat' ? excerpt(read(MessagesData, item.data.messages) ?? []) : []);
@@ -486,6 +497,12 @@ const RULES: Rule[] = [
     },
   },
   extracted('excerpt', (item) => read(ExcerptData, item.data.excerpt), ({ text, at }, item) => compact({ text, at, source: str(item.data.site) ?? str(item.data.from) })),
+  {
+    component: 'excerpt',
+    reads: 'catalogue',
+    when: (item) => passageOf(item) !== undefined,
+    props: (item) => compact({ text: passageOf(item), source: str(item.data.site) ?? str(item.data.from) }),
+  },
   {
     component: 'place',
     reads: 'text',
