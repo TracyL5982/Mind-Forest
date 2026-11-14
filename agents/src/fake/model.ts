@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { JsonRequest, ModelClient, WebResult } from '../core/ports.ts';
+import { Unreadable, type JsonRequest, type ModelClient, type WebResult } from '../core/ports.ts';
 import { LinkReply, type Description } from '../core/roles/intake/describe.ts';
 import type { ComponentsReply, Entry } from '../core/roles/renderer.ts';
 
@@ -7,7 +7,8 @@ type JsonHandler = (req: JsonRequest<unknown>) => unknown;
 
 /**
  * A scripted model for tests. Register a handler per role; a request for a role with none throws.
- * Every reply is checked against the request's schema, as the real model's is.
+ * Every reply is checked against the request's schema, as the real model's is, and one that is not of it is `Unreadable`.
+ * A handler that throws is a request that got no answer.
  */
 export class FakeModel implements ModelClient {
   readonly calls: { kind: 'json' | 'search' | 'image' | 'transcribe'; role: string; detail: string }[] = [];
@@ -57,7 +58,10 @@ export class FakeModel implements ModelClient {
     this.calls.push({ kind: 'json', role: req.role, detail: req.user });
     const handler = this.json_.get(req.role);
     if (!handler) throw new Error(`FakeModel has no script for role "${req.role}"`);
-    return req.schema.parse(await handler(req as JsonRequest<unknown>));
+    const reply = await handler(req as JsonRequest<unknown>);
+    const parsed = req.schema.safeParse(reply);
+    if (!parsed.success) throw new Unreadable(req.role, parsed.error.issues);
+    return parsed.data;
   }
   async search(req: { role: string; query: string; max?: number }): Promise<WebResult[]> {
     this.calls.push({ kind: 'search', role: req.role, detail: req.query });

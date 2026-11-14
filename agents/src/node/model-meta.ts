@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { JsonRequest, ModelClient, WebResult } from '../core/ports.ts';
+import { Unreadable, type JsonRequest, type ModelClient, type WebResult } from '../core/ports.ts';
 
 export interface MetaModelOptions {
   apiKey: string;
@@ -57,8 +57,16 @@ export class MetaModel implements ModelClient {
     };
     const output = await this.responses('json', req.role, body);
     const text = finalText(output);
-    if (!text) throw new Error(`${req.role}: the model returned no text`);
-    return req.schema.parse(dropNulls(JSON.parse(text)));
+    if (!text) throw new Unreadable(req.role, 'no text');
+    let json: unknown;
+    try {
+      json = JSON.parse(text);
+    } catch (err) {
+      throw new Unreadable(req.role, err instanceof Error ? err.message : String(err));
+    }
+    const parsed = req.schema.safeParse(dropNulls(json));
+    if (!parsed.success) throw new Unreadable(req.role, parsed.error.issues);
+    return parsed.data;
   }
 
   async search(req: { role: string; query: string; max?: number }): Promise<WebResult[]> {

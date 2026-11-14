@@ -384,12 +384,8 @@ test('when the model fails, the rule-based views and groups still come back', as
     commands.map((c) => c.type),
     ['setView', 'setGroup'],
   );
-  assert.deepEqual(
-    k.model.calls.map((c) => c.role).sort(),
-    ['renderer.components', 'renderer.components', 'renderer.composites'],
-  );
+  assert.deepEqual(k.model.calls.map((c) => c.role).sort(), ['renderer.components', 'renderer.composites'], 'a call that got no answer is not asked again in halves');
   assert.deepEqual(k.notes.map((n) => n.replace(/\(.*\)/, '()')).sort(), [
-    'renderer: A call to choose components for 1 item failed (). Asking once more.',
     'renderer: A call to choose components for 1 item failed (). Kept the rule-based views of it.',
     'renderer: The model could not look for composites (). Kept the rule-based groups.',
   ]);
@@ -1201,31 +1197,38 @@ test('the pipeline tells the Renderer which items changed in what a card is draw
   assert.equal(await edit({ data: { where: 'Lisbon' } }), 4, 'the same data again is not');
 });
 
-test('one pass asks about 24 items at most in calls of eight, and a call that fails is asked once more as two halves', async () => {
+test('one pass asks about 24 items at most in calls of eight, a call answered unreadably is asked again in two halves one after the other, and a call that got no answer is not', async () => {
   const k = kit();
   const { ids } = grow(k, Array.from({ length: 30 }, (_v, n) => ({ title: `Note ${n}`, text: `${LONG} We paid 12 euros for the ferry.` })));
+  const running = { now: 0, most: 0 };
   k.model
-    .on('renderer.components', (req) => {
+    .on('renderer.components', async (req) => {
       const asked = idsIn(req.user);
-      // The second call of eight fails whole, and then its second half fails again.
-      if (asked.length === 8 ? asked.includes(ids[8]!) : asked.includes(ids[12]!)) throw new Error('timed out');
+      running.most = Math.max(running.most, ++running.now);
+      await new Promise((done) => setTimeout(done, 1));
+      running.now--;
+      // The second call of eight is answered in a shape the schema refuses, and so is the second of its halves. The third gets no answer.
+      if ((asked.length === 8 && asked.includes(ids[8]!)) || asked.includes(ids[12]!)) return { items: 'not a list' };
+      if (asked.includes(ids[16]!)) throw new Error('timed out');
       return { items: asked.map((id) => entry({ id, emphasis: 'We paid 12 euros for the ferry' })) };
     })
     .on('renderer.composites', () => ({ groups: [] }));
   await render(k, ids);
   assert.deepEqual(components(k).map((made) => idsIn(made.detail).length), [8, 8, 8, 4, 4]);
-  const answered = (n: number) => n < 24 && !(n >= 12 && n < 16);
+  assert.equal(running.most, 3, 'never more calls at once than the three of the pass');
+  const answered = (n: number) => n < 12;
   assert.deepEqual(ids.map((id) => 'emphasis' in view(k, id).props), ids.map((_id, n) => answered(n)));
   assert.deepEqual(ids.map((id) => view(k, id).by), ids.map((_id, n) => (answered(n) ? 'renderer' : 'default')), 'an item with no answer keeps its rule card as a default');
-  assert.deepEqual(k.notes, [
-    'renderer: A call to choose components for 8 items failed (timed out). Asking once more.',
-    'renderer: A call to choose components for 4 items failed (timed out). Kept the rule-based views of them.',
+  assert.deepEqual(k.notes.map((note) => note.replace(/\(.*\)/, '()')).sort(), [
+    'renderer: A call to choose components for 4 items failed (). Kept the rule-based views of them.',
+    'renderer: A call to choose components for 8 items failed (). Asking once more, in two halves.',
+    'renderer: A call to choose components for 8 items failed (). Kept the rule-based views of them.',
   ]);
 
   const before = components(k).length;
   k.model.on('renderer.components', (req) => ({ items: idsIn(req.user).map((id) => entry({ id })) }));
   await render(k, ids);
-  assert.deepEqual(components(k).slice(before).flatMap((made) => idsIn(made.detail)), [...ids.slice(12, 16), ...ids.slice(24)], 'the next pass asks about the ten that got no answer, and no other');
+  assert.deepEqual(components(k).slice(before).flatMap((made) => idsIn(made.detail)), ids.slice(12), 'the next pass asks about the eighteen that got no answer, and no other');
 });
 
 test('the pipeline runs the Renderer again over the items a pass left unanswered, one pass after another, and stops after four', async () => {
@@ -1271,12 +1274,23 @@ test('the pipeline runs the Renderer again over the items a pass left unanswered
   assert.ok(sixty.ids.every((id) => view(sixty.k, id).by === 'renderer'), 'sixty are answered for in three passes');
   assert.deepEqual([components(sixty.k).length, busy.most], [8, 3], 'eight calls in all, and never more than the three of one pass at a time');
 
-  const failing = dropped(4);
-  answering(failing.k, { now: 0, most: 0 }, (asked) => asked.includes(failing.ids[3]!));
+  const failing = dropped(12);
+  answering(failing.k, { now: 0, most: 0 }, (asked) => asked.includes(failing.ids[11]!));
   failing.drop();
   await failing.pipeline.idle();
-  assert.deepEqual(failing.ids.map((id) => view(failing.k, id).by), ['renderer', 'renderer', 'renderer', 'default'], 'an item whose calls keep failing stays a plain card');
-  assert.deepEqual(components(failing.k).map((made) => idsIn(made.detail).length), [4, 2, 2, 2, 1, 1, 1, 1, 1, 1], 'it is asked about in four passes and no more, each of which asks once more after a call fails');
+  assert.deepEqual(failing.ids.map((id) => view(failing.k, id).by), failing.ids.map((_id, n) => (n < 6 ? 'renderer' : 'default')), 'the items of a call that keeps failing stay plain cards');
+  assert.deepEqual(components(failing.k).map((made) => idsIn(made.detail).length), [6, 6, 6], 'they are asked about once more, and a pass in which every call failed is the last');
+
+  const down = dropped(30);
+  const waiting = { now: 0, most: 0 };
+  answering(down.k, waiting, () => true);
+  down.drop();
+  await down.pipeline.idle();
+  assert.deepEqual([components(down.k).map((made) => idsIn(made.detail).length), waiting.most], [[8, 8, 8], 3], 'a model that is down costs one pass of three calls');
+  assert.ok(down.ids.every((id) => view(down.k, id).by === 'default'));
+  down.pipeline.userCommands('Why', [{ type: 'setWhy', id: down.ids[0]!, why: 'touched' }]);
+  await down.pipeline.idle();
+  assert.equal(components(down.k).length, 4, 'an item is asked about again when it is next touched');
 
   const hundred = dropped(100);
   answering(hundred.k, { now: 0, most: 0 });

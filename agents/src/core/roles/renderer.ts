@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
 import { grounding, type Grounding } from '../grounding.ts';
+import { Unreadable } from '../ports.ts';
 import { CHECKS, isValidGroup, isValidView, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type Section, type Stated } from '../views.ts';
 import type { RoleContext, Roles } from './types.ts';
 
@@ -1089,38 +1090,45 @@ export const unsure = (item: Item, draw: Draw): boolean => {
 
 /**
  * What the model answered for the unsure items of one pass, by node: the card that stands, or nothing when its answer was refused.
- * An item with no entry here got no answer, because its call failed, the reply left it out, or the pass was full.
+ * An item with no entry here got no answer, because its call failed, the reply left it out, or the pass was full. `replied` is
+ * whether any call of the pass got an answer back.
  */
-async function askComponents(ctx: RoleContext, open: Open[]): Promise<Map<Id, Draw | undefined>> {
-  const out = new Map<Id, Draw | undefined>();
+async function askComponents(ctx: RoleContext, open: Open[]): Promise<{ answers: Map<Id, Draw | undefined>; replied: boolean }> {
+  const answers = new Map<Id, Draw | undefined>();
   const asked = open.slice(0, MAX_ASKED_ITEMS);
   const asset = { assetUrl: (id: string) => ctx.assets.url(id) };
+  let replied = false;
 
-  /** One call. A call that fails or times out is tried once more as two halves, since a smaller call is a faster one. */
+  /**
+   * One call. A call whose answer came back unreadable is asked once more as two halves, one after the other, since a smaller
+   * question is answered more often. A call that got no answer is not: the model is slow or down, and two calls wait on it as one does.
+   */
   const ask = async (part: Open[], again: boolean): Promise<void> => {
     let reply: ComponentsReply;
     try {
       reply = await ctx.model.json({ role: `${ROLE}.components`, system: COMPONENTS_SYSTEM, user: componentsPrompt(part, asset), schema: ComponentsReply, effort: 'low' });
     } catch (err) {
+      const halves = again && err instanceof Unreadable;
       const items = `${part.length} ${part.length === 1 ? 'item' : 'items'}`;
-      ctx.note(ROLE, `A call to choose components for ${items} failed (${message(err)}). ${again ? 'Asking once more.' : `Kept the rule-based views of ${part.length === 1 ? 'it' : 'them'}.`}`);
-      if (!again) return;
+      ctx.note(ROLE, `A call to choose components for ${items} failed (${message(err)}). ${halves ? 'Asking once more, in two halves.' : `Kept the rule-based views of ${part.length === 1 ? 'it' : 'them'}.`}`);
+      if (!halves) return;
       const half = Math.ceil(part.length / 2);
-      await Promise.all([part.slice(0, half), part.slice(half)].filter((some) => some.length > 0).map((some) => ask(some, false)));
+      for (const some of [part.slice(0, half), part.slice(half)]) if (some.length > 0) await ask(some, false);
       return;
     }
+    replied = true;
     // An entry counts once, and only for an item this call asked about.
     const waiting = new Map(part.map(({ node, item }) => [node.id, item]));
     for (const entry of reply.items) {
       const item = waiting.get(entry.id);
-      if (item && waiting.delete(entry.id)) out.set(entry.id, drawn(ctx, entry, item));
+      if (item && waiting.delete(entry.id)) answers.set(entry.id, drawn(ctx, entry, item));
     }
   };
 
   const calls = Math.ceil(asked.length / ASKED_PER_CALL);
   const each = Math.ceil(asked.length / calls);
   await Promise.all(Array.from({ length: calls }, (_v, n) => ask(asked.slice(n * each, (n + 1) * each), true)));
-  return out;
+  return { answers, replied };
 }
 
 // ---- composites
@@ -1379,7 +1387,8 @@ function sameView(a: { component: string; props: unknown }, b: { component: stri
 /**
  * Chooses a component for each given node and composites for their siblings. Rules first, the model only where rules cannot tell.
  * On an unsure item, `by: 'renderer'` says the model answered for the item as it is, so it is not asked again until the item changes.
- * An unsure item the pass got no answer for keeps `by: 'default'`, and `later` is told of it.
+ * An unsure item the pass got no answer for keeps `by: 'default'`, and `later` is told of it, unless no call of the pass got an
+ * answer back: then the model is down, and the item waits for its next change.
  */
 export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], again = false, later }) => {
   const nodes = [...new Set(nodeIds)].flatMap((id) => ctx.mind.nodes.get(id) ?? []);
@@ -1405,7 +1414,7 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
   const groups: Command[] = [];
   const pools = survey(ctx, parents, componentOf, groups);
 
-  const [answers] = await Promise.all([askComponents(ctx, open), again ? undefined : askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);
+  const [{ answers, replied }] = await Promise.all([askComponents(ctx, open), again ? undefined : askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);
   for (const [id, draw] of answers) if (draw) draws.set(id, draw);
   for (const pool of pools) stack(ctx, pool, componentOf, groups);
 
@@ -1421,7 +1430,7 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
     views.push({ type: 'setView', id: node.id, view });
   }
   const owed = open.flatMap(({ node }) => (answers.has(node.id) ? [] : [node.id]));
-  if (owed.length > 0) later?.(owed);
+  if (owed.length > 0 && replied) later?.(owed);
   const removals = groups.filter((c) => c.type === 'removeGroup');
   return [...views, ...removals, ...groups.filter((c) => c.type !== 'removeGroup')];
 };

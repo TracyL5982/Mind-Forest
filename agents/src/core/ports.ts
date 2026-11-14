@@ -19,6 +19,17 @@ export interface WebResult {
   snippet: string;
 }
 
+/**
+ * The model answered, and its answer is not of the schema asked for: empty, no JSON, or of another shape. A smaller question may
+ * be answered where this one was not. A request that got no answer, as after a timeout or a lost connection, fails with any other error.
+ */
+export class Unreadable extends Error {
+  /** For a role whose reply did not parse, or broke the schema where these issues say. */
+  constructor(role: string, why: string | { path: PropertyKey[]; message: string }[]) {
+    super(`${role}: the reply is unreadable (${typeof why === 'string' ? why : why.slice(0, 2).map(({ path, message }) => `${path.join('.') || 'reply'}: ${message}`).join('; ')})`);
+  }
+}
+
 /** The model. Hosts provide the real one; tests provide a scripted one. */
 export interface ModelClient {
   /** One reply, constrained to the schema and parsed. */
