@@ -1228,6 +1228,63 @@ test('one pass asks about 24 items at most in calls of eight, and a call that fa
   assert.deepEqual(components(k).slice(before).flatMap((made) => idsIn(made.detail)), [...ids.slice(12, 16), ...ids.slice(24)], 'the next pass asks about the ten that got no answer, and no other');
 });
 
+test('the pipeline runs the Renderer again over the items a pass left unanswered, one pass after another, and stops after four', async () => {
+  const dropped = (count: number) => {
+    const k = kit();
+    const pipeline = new Pipeline({
+      mind: k.mind, roles: { ...fakeRoles, renderer }, model: k.model, tools: k.ctx.tools, assets: k.assets, store: { append: () => {}, all: () => [] },
+      settings: k.ctx.settings, newId: k.ctx.newId, now: k.ctx.now, emit: () => {},
+    });
+    const { treeId, nodeIds } = k.seedTree('Tree', ['Root']);
+    const made = Array.from({ length: count }, (_v, n) => {
+      const item = k.item({ title: `Note ${n}`, text: `${LONG} We paid 12 euros for the ferry.` });
+      return { item, node: makeNode(k.ctx, item, { treeId, parent: nodeIds[0]!, status: 'kept', why: '', origin: USER }) };
+    });
+    const drop = () => pipeline.userCommands('Drop', made.flatMap(({ item, node }): Command[] => [{ type: 'addItem', item }, { type: 'addNode', node }]));
+    return { k, pipeline, ids: made.map(({ node }) => node.id), drop };
+  };
+  const answering = (k: Kit, running: { now: number; most: number }, fails: (asked: Id[]) => boolean = () => false) =>
+    k.model
+      .on('renderer.components', async (req) => {
+        running.most = Math.max(running.most, ++running.now);
+        await new Promise((done) => setTimeout(done, 1));
+        running.now--;
+        if (fails(idsIn(req.user))) throw new Error('timed out');
+        return { items: idsIn(req.user).map((id) => entry({ id, emphasis: 'We paid 12 euros for the ferry' })) };
+      })
+      .on('renderer.composites', () => ({ groups: [] }));
+
+  const thirty = dropped(30);
+  const running = { now: 0, most: 0 };
+  answering(thirty.k, running);
+  thirty.drop();
+  await thirty.pipeline.idle();
+  assert.deepEqual(thirty.ids.map((id) => view(thirty.k, id)), thirty.ids.map(() => ({ component: 'note', props: { emphasis: 'We paid 12 euros for the ferry' }, by: 'renderer' })), 'all thirty are answered for');
+  assert.deepEqual(components(thirty.k).map((made) => idsIn(made.detail).length), [8, 8, 8, 6], 'three calls for twenty-four, then one for the six left');
+  assert.equal(thirty.k.model.calls.filter((made) => made.role === 'renderer.composites').length, 1, 'the siblings are looked at for an arrangement once');
+
+  const sixty = dropped(60);
+  const busy = { now: 0, most: 0 };
+  answering(sixty.k, busy);
+  sixty.drop();
+  await sixty.pipeline.idle();
+  assert.ok(sixty.ids.every((id) => view(sixty.k, id).by === 'renderer'), 'sixty are answered for in three passes');
+  assert.deepEqual([components(sixty.k).length, busy.most], [8, 3], 'eight calls in all, and never more than the three of one pass at a time');
+
+  const failing = dropped(4);
+  answering(failing.k, { now: 0, most: 0 }, (asked) => asked.includes(failing.ids[3]!));
+  failing.drop();
+  await failing.pipeline.idle();
+  assert.deepEqual(failing.ids.map((id) => view(failing.k, id).by), ['renderer', 'renderer', 'renderer', 'default'], 'an item whose calls keep failing stays a plain card');
+  assert.deepEqual(components(failing.k).map((made) => idsIn(made.detail).length), [4, 2, 2, 2, 1, 1, 1, 1, 1, 1], 'it is asked about in four passes and no more, each of which asks once more after a call fails');
+
+  const hundred = dropped(100);
+  answering(hundred.k, { now: 0, most: 0 });
+  hundred.drop();
+  await hundred.pipeline.idle();
+  assert.equal(hundred.ids.filter((id) => view(hundred.k, id).by === 'renderer').length, 96, 'four passes of twenty-four');
+});
+
 test('a card the model chose that an edit left unstated falls back to a default note when the call about it fails, so the next pass asks again', async () => {
   const k = kit();
   const { ids } = grow(k, [{ title: 'House', text: 'Caution: the stairs are steep and the rail is loose, so hold on to the wall.' }]);

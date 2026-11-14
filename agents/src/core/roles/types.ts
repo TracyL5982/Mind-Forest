@@ -119,8 +119,11 @@ export interface Roles {
   /**
    * Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup.
    * `edited` names the nodes whose item's title, text or data changed since it was last drawn.
+   * One pass asks the model about a bounded number of items. `later` is told the nodes it still owes an answer, because the pass was
+   * full or a call failed, so the caller can run another pass over them. `again` marks such a pass: it looks at cards alone, since the
+   * first pass already looked for arrangements among the siblings.
    */
-  renderer(ctx: RoleContext, input: { nodeIds: Id[]; edited?: Id[] }): Promise<Command[]>;
+  renderer(ctx: RoleContext, input: { nodeIds: Id[]; edited?: Id[]; again?: boolean; later?: (nodeIds: Id[]) => void }): Promise<Command[]>;
   packager(ctx: RoleContext, input: { scope: Scope; note?: string }): Promise<Handoff>;
 }
 

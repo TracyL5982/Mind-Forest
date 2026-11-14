@@ -53,6 +53,11 @@ const USER: Origin = { by: 'user' };
 /** Dumped nodes scouted straight away. The rest get picks when the user first looks at them. */
 const EAGER_SCOUTS = 3;
 const MAX_PARALLEL_SCOUTS = 2;
+/**
+ * The most passes the Renderer makes over what one change brought in. One pass asks the model about 24 items, so four passes answer
+ * for a drop of up to 96. Past that, and when the model fails four times running, an item keeps its plain card until it is next touched.
+ */
+const RENDER_PASSES = 4;
 
 /**
  * The one place roles are run and their commands applied.
@@ -330,11 +335,22 @@ export class Pipeline {
     ].filter((id) => mind.nodes.has(id));
     const edited = set.patches.flatMap((p) => (p.entity === 'item' && saysOtherwise(p as Patch<'item'>) ? mind.nodesOfItem(p.id).map((n) => n.id) : []));
     this.digest(set);
-    if (nodeIds.length === 0) return;
+    if (nodeIds.length > 0) this.render(nodeIds, edited, 1);
+  }
+
+  /**
+   * One pass of the Renderer over these nodes. The nodes it still owes an answer go into another pass, which starts only when this
+   * one has ended: a drop of sixty items is asked about in three passes one after another, never in all their calls at once.
+   */
+  private render(nodeIds: Id[], edited: Id[], pass: number): void {
+    const mind = this.deps.mind;
     this.track(
       this.work('renderer', 'Choosing how to show this', nodeIds[0], async () => {
-        const commands = await this.deps.roles.renderer(this.ctx, { nodeIds: nodeIds.filter((id) => mind.nodes.has(id)), edited });
+        let owed: Id[] = [];
+        const commands = await this.deps.roles.renderer(this.ctx, { nodeIds: nodeIds.filter((id) => mind.nodes.has(id)), edited, again: pass > 1, later: (ids) => (owed = ids) });
         if (commands.length > 0) this.apply(AGENT('renderer'), 'Choose formats', commands);
+        const left = owed.filter((id) => mind.nodes.has(id));
+        if (left.length > 0 && pass < RENDER_PASSES) this.render(left, [], pass + 1);
       }).catch((err) => this.fail('renderer', err)),
     );
   }

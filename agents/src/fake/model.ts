@@ -57,7 +57,7 @@ export class FakeModel implements ModelClient {
     this.calls.push({ kind: 'json', role: req.role, detail: req.user });
     const handler = this.json_.get(req.role);
     if (!handler) throw new Error(`FakeModel has no script for role "${req.role}"`);
-    return req.schema.parse(handler(req as JsonRequest<unknown>));
+    return req.schema.parse(await handler(req as JsonRequest<unknown>));
   }
   async search(req: { role: string; query: string; max?: number }): Promise<WebResult[]> {
     this.calls.push({ kind: 'search', role: req.role, detail: req.query });

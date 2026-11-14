@@ -1366,8 +1366,9 @@ function sameView(a: { component: string; props: unknown }, b: { component: stri
 /**
  * Chooses a component for each given node and composites for their siblings. Rules first, the model only where rules cannot tell.
  * On an unsure item, `by: 'renderer'` says the model answered for the item as it is, so it is not asked again until the item changes.
+ * An unsure item the pass got no answer for keeps `by: 'default'`, and `later` is told of it.
  */
-export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [] }) => {
+export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], again = false, later }) => {
   const nodes = [...new Set(nodeIds)].flatMap((id) => ctx.mind.nodes.get(id) ?? []);
   const changed = new Set(edited);
   const draws = new Map<Id, Draw>();
@@ -1391,7 +1392,7 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [] })
   const groups: Command[] = [];
   const pools = survey(ctx, parents, componentOf, groups);
 
-  const [answers] = await Promise.all([askComponents(ctx, open), askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);
+  const [answers] = await Promise.all([askComponents(ctx, open), again ? undefined : askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);
   for (const [id, draw] of answers) if (draw) draws.set(id, draw);
   for (const pool of pools) stack(ctx, pool, componentOf, groups);
 
@@ -1406,6 +1407,8 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [] })
     const view: View = { ...draw, by };
     views.push({ type: 'setView', id: node.id, view });
   }
+  const owed = open.flatMap(({ node }) => (answers.has(node.id) ? [] : [node.id]));
+  if (owed.length > 0) later?.(owed);
   const removals = groups.filter((c) => c.type === 'removeGroup');
   return [...views, ...removals, ...groups.filter((c) => c.type !== 'removeGroup')];
 };
