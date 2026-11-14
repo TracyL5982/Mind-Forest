@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { FRAME, SIDES, TEXT, TITLE, plot, say, series, text, title } from './shared.js';
+import { wordsOf } from '../words.js';
 
 const WIDTH = 300;
 const PLOT = 136;
@@ -12,7 +13,7 @@ export const draw = (item, props) => [
   h('div', { class: 'chart-head' },
     title(item, 1),
     text(props.unit) && say('div', 'card-tag clamp-1', props.unit)),
-  plot(props, WIDTH - SIDES, PLOT).el,
+  plot(props, WIDTH - SIDES, PLOT, { words: wordsOf(item) }).el,
 ];
 
 const exact = (value) => value.toLocaleString('en', { maximumFractionDigits: 6 });
@@ -27,7 +28,7 @@ function table(props) {
 }
 
 export function detail(item, props) {
-  const { el, whole } = plot(props, 324, 200, { opened: true });
+  const { el, whole } = plot(props, 324, 200, { opened: true, words: wordsOf(item) });
   return [
     h('div', { class: 'detail-chart' },
       text(props.unit) && say('div', 'card-tag', props.unit),

@@ -1,5 +1,5 @@
 import { h, s } from '../dom.js';
-import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, figureNeed, picture, say, text, wrap } from './shared.js';
+import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, figureNeed, picture, say, text, wrap, titleOf } from './shared.js';
 
 const WIDTH = 256;
 const COLUMN = WIDTH - SIDES;
@@ -11,7 +11,7 @@ const NAME = COLUMN - PIN - 10;
 const [LARGE, LEAD] = FIGURES[1];
 
 function plan(item, props) {
-  const name = text(props.name).trim() || item.title || 'Untitled';
+  const name = text(props.name).trim() || titleOf(item);
   const large = figureNeed(name, FIGURES[1]) <= NAME * 100;
   const nameLines = large ? 1 : wrap(name, NAME, TITLE_LETTER, 2);
   const said = item.summary || item.text || '';

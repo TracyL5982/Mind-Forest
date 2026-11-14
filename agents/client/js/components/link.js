@@ -1,13 +1,14 @@
 import { h, safeUrl } from '../dom.js';
-import { SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, fold, graphemes, picture, say, text, title } from './shared.js';
+import { SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, fold, graphemes, picture, say, text, title, titleOf } from './shared.js';
+import { wordsOf } from '../words.js';
 
 const BAR = 30;
 const THUMB = 64;
 
-const siteOf = (props) => text(props.site) || 'link';
-const bar = (props) => h('div', { class: 'link-site' },
-  h('span', { class: 'link-dot', text: graphemes(siteOf(props))[0].toUpperCase() }),
-  say('span', 'link-host clamp-1', siteOf(props)),
+const siteOf = (item, props) => text(props.site) || wordsOf(item).link;
+const bar = (item, props) => h('div', { class: 'link-site' },
+  h('span', { class: 'link-dot', text: graphemes(siteOf(item, props))[0].toUpperCase() }),
+  say('span', 'link-host clamp-1', siteOf(item, props)),
   h('span', { class: 'link-out', 'aria-hidden': 'true', text: '↗' }));
 
 function plan(item, props) {
@@ -19,7 +20,7 @@ function plan(item, props) {
     thumb,
     about,
     width,
-    titleLines: fold(item.title || 'Untitled', column, TITLE_LETTER, 2),
+    titleLines: fold(titleOf(item), column, TITLE_LETTER, 2),
     aboutLines: about ? fold(about, column, TEXT_LETTER, 2) : 0,
   };
 }
@@ -35,7 +36,7 @@ export function size(item, props) {
 export function draw(item, props, ctx) {
   const { thumb, about, titleLines, aboutLines } = plan(item, props);
   return [
-    bar(props),
+    bar(item, props),
     h('div', { class: 'link-row' },
       h('div', { class: 'link-main' },
         title(item, titleLines),
@@ -46,7 +47,7 @@ export function draw(item, props, ctx) {
 
 export const detail = (item, props, ctx) => [
   h('div', { class: 'detail-link' },
-    bar(props),
+    bar(item, props),
     safeUrl(text(props.url)) && text(props.image) && h('div', { class: 'detail-media' }, picture(props.image, '', ctx)),
     text(props.description) && props.description !== item.summary && say('p', 'detail-caption', props.description)),
 ];

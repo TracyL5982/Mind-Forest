@@ -1,4 +1,5 @@
 import { h, s, clamp } from '../dom.js';
+import { wordsOf } from '../words.js';
 
 /**
  * The line heights and card padding in style.css, in px. A card's footprint is worked out from
@@ -323,7 +324,7 @@ export const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).
 export const say = (tag, cls, str) => h(tag, { class: cls, dir: 'auto', text: str });
 
 /** What a card writes under the rows it shows when it holds more. */
-export const andMore = (count) => h('div', { class: 'card-foot', text: `and ${count} more` });
+export const andMore = (count, item) => h('div', { class: 'card-foot', text: wordsOf(item).more(count) });
 
 /**
  * Shares `room` px among columns that need `needs`. A column that needs no more than an equal
@@ -344,13 +345,16 @@ export function spread(needs, room) {
   return widths;
 }
 
-export const title = (item, lines = 2) => say('div', `card-title clamp-${lines}`, item.title || 'Untitled');
+/** The item's title, or the word for one that is missing. */
+export const titleOf = (item) => item.title || wordsOf(item).untitled;
+
+export const title = (item, lines = 2) => say('div', `card-title clamp-${lines}`, titleOf(item));
 
 /** A short label that names what a card is: a language, where a chat came from, a kind of group. */
 export const kind = (label) => h('span', { class: 'kind', text: label });
 
-/** A picture. When it fails to load, `missing()` is drawn in its place. */
-export function picture(src, alt, ctx, missing = () => h('div', { class: 'media-missing', text: 'Picture unavailable' })) {
+/** A picture. When it fails to load, `missing()` is drawn in its place. `ctx.words` are the fixed words of the card it is on. */
+export function picture(src, alt, ctx, missing = () => h('div', { class: 'media-missing', text: (ctx.words ?? wordsOf()).noPicture })) {
   const img = h('img', { src: ctx.asset(src), alt, loading: 'lazy', draggable: 'false' });
   img.addEventListener('error', () => img.replaceWith(missing()));
   return img;
@@ -396,12 +400,12 @@ export function series(props) {
  * cut. On a card, values are written for six points or fewer. `whole` says every label and value
  * is on the plot in full.
  */
-export function plot(props, width, height, { opened = false } = {}) {
+export function plot(props, width, height, { opened = false, words = wordsOf() } = {}) {
   const { values, labels, mark } = series(props);
   const n = values.length;
-  const root = s('svg', { class: 'chart', viewBox: `0 0 ${width} ${height}`, width, height, role: 'img', 'aria-label': 'Chart' });
+  const root = s('svg', { class: 'chart', viewBox: `0 0 ${width} ${height}`, width, height, role: 'img', 'aria-label': words.chart });
   if (n === 0) {
-    root.append(s('text', { class: 'chart-empty', x: width / 2, y: height / 2 + 4, 'text-anchor': 'middle', text: 'No data' }));
+    root.append(s('text', { class: 'chart-empty', x: width / 2, y: height / 2 + 4, 'text-anchor': 'middle', text: words.noData }));
     return { el: root, whole: true };
   }
   const line = props.chart === 'line';

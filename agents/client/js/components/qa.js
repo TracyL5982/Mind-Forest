@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, say, text, wrap } from './shared.js';
+import { wordsOf } from '../words.js';
 
 const WIDTH = 272;
 /** The letter that names each voice, and the gap after it. */
@@ -26,8 +27,8 @@ const voice = (mark, cls, words) => h('div', { class: `qa-voice ${cls}` }, h('sp
 export function draw(item, props) {
   const { question, answer, questionLines, answerLines } = plan(props);
   return [
-    voice('Q', 'is-question', say('div', `card-title clamp-${questionLines}`, question)),
-    voice('A', 'is-answer', say('div', `qa-answer clamp-${answerLines}`, answer)),
+    voice(wordsOf(item).question, 'is-question', say('div', `card-title clamp-${questionLines}`, question)),
+    voice(wordsOf(item).answer, 'is-answer', say('div', `qa-answer clamp-${answerLines}`, answer)),
   ];
 }
 
@@ -35,7 +36,7 @@ export function detail(item, props) {
   const { question, answer } = plan(props);
   return [
     h('div', { class: 'detail-qa' },
-      voice('Q', 'is-question', say('div', 'card-title', question)),
-      voice('A', 'is-answer', say('div', 'qa-answer', answer))),
+      voice(wordsOf(item).question, 'is-question', say('div', 'card-title', question)),
+      voice(wordsOf(item).answer, 'is-answer', say('div', 'qa-answer', answer))),
   ];
 }

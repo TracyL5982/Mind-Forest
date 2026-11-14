@@ -1,4 +1,4 @@
-import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, fold, say, text, title } from './shared.js';
+import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, fold, say, text, title, titleOf } from './shared.js';
 
 const WIDTH = 240;
 const COLUMN = WIDTH - SIDES;
@@ -10,7 +10,7 @@ function plan(item, props) {
   return {
     emphasis,
     body: shown,
-    titleLines: fold(item.title || 'Untitled', COLUMN, TITLE_LETTER, 2),
+    titleLines: fold(titleOf(item), COLUMN, TITLE_LETTER, 2),
     bodyLines: shown ? fold(shown, COLUMN, TEXT_LETTER, emphasis ? 2 : 3) : 0,
   };
 }

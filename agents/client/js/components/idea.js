@@ -1,5 +1,5 @@
 import { s } from '../dom.js';
-import { FIGURES, FRAME, SIDES, say, wrap } from './shared.js';
+import { FIGURES, FRAME, SIDES, say, wrap, titleOf } from './shared.js';
 
 const WIDTH = 272;
 const COLUMN = WIDTH - SIDES;
@@ -12,7 +12,7 @@ const MARK = 22;
 const STEPS = [[FIGURES[0], 2], [FIGURES[1], 4], [FIGURES[2], 5]];
 
 function plan(item) {
-  const thought = item.title || 'Untitled';
+  const thought = titleOf(item);
   for (const [[cls, lead, letter], most] of STEPS) {
     const lines = wrap(thought, COLUMN, letter, most + 1);
     if (lines <= most || most === STEPS.at(-1)[1]) return { thought, cls, lead, lines: Math.min(lines, most) };

@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, list, say, text, textWidth, wrap } from './shared.js';
+import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, list, say, text, textWidth, wrap, titleOf } from './shared.js';
 
 const WIDTH = 300;
 const COLUMN = WIDTH - SIDES;
@@ -35,7 +35,7 @@ export const shows = [];
 
 export function size(item, props) {
   const { rows, unit } = parts(props);
-  return [WIDTH, FRAME + wrap(item.title || 'Untitled', COLUMN, TITLE_LETTER, 2) * TITLE + (unit ? TEXT : 0) + (rows.length ? 10 + rows.length * TEXT + (rows.length - 1) * GAP : 0)];
+  return [WIDTH, FRAME + wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) * TITLE + (unit ? TEXT : 0) + (rows.length ? 10 + rows.length * TEXT + (rows.length - 1) * GAP : 0)];
 }
 
 const bars = (rows, columns, clamped) => h('div', { class: 'breakdown', style: { gridTemplateColumns: columns } }, rows.map((row) => [
@@ -51,7 +51,7 @@ export function draw(item, props) {
   const labels = Math.min(Math.max(0, ...rows.map((row) => textWidth(row.label))), LABEL.most, Math.max(LABEL.least, COLUMN - 2 * BESIDE - shares - BAR));
   return [
     h('div', { class: 'chart-head' },
-      say('div', `card-title clamp-${wrap(item.title || 'Untitled', COLUMN, TITLE_LETTER, 2)}`, item.title || 'Untitled'),
+      say('div', `card-title clamp-${wrap(titleOf(item), COLUMN, TITLE_LETTER, 2)}`, titleOf(item)),
       unit && say('div', 'card-tag clamp-1', unit)),
     rows.length > 0 && bars(rows, `${labels}px minmax(0, 1fr) ${shares}px`, 'clamp-1'),
   ];

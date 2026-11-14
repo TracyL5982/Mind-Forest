@@ -24,7 +24,8 @@ import * as artwork from './artwork.js';
 import * as reference from './reference.js';
 import * as place from './place.js';
 import { h, s } from '../dom.js';
-import { LABEL, chips } from '../chips.js';
+import { chips } from '../chips.js';
+import { wordsOf } from '../words.js';
 import { CHIP_LINE, say, textWidth } from './shared.js';
 
 /**
@@ -133,8 +134,8 @@ const GLYPH = {
   origin: 'M2.5 2v4.5h6.5M6.8 4.2 9.2 6.5 6.8 8.8',
 };
 
-function chipLine(line, inset) {
-  const el = h('div', { class: 'chip-line' }, line.map((chip) => h('span', { class: 'chip', data: { kind: chip.kind }, title: `${LABEL[chip.kind]}: ${chip.text}${chip.count ? ` ${counted(chip)}` : ''}`, style: { flexBasis: `${chip.width}px` } },
+function chipLine(line, inset, words) {
+  const el = h('div', { class: 'chip-line' }, line.map((chip) => h('span', { class: 'chip', data: { kind: chip.kind }, title: `${words[chip.kind]}: ${chip.text}${chip.count ? ` ${counted(chip)}` : ''}`, style: { flexBasis: `${chip.width}px` } },
     s('svg', { class: 'chip-glyph', viewBox: '0 0 12 12', width: 12, height: 12, 'aria-hidden': 'true' }, s('path', { d: GLYPH[chip.kind] })),
     say('span', 'chip-text', chip.text),
     chip.count && h('span', { class: 'chip-count', text: counted(chip) }))));
@@ -148,12 +149,12 @@ export function drawCard(node, item, ctx) {
   const { kind, props } = resolve(node);
   const line = chipsOf(node, item);
   return [
-    h('div', { class: `card-body c-${name}` }, kind.draw(item, props, ctx)),
-    line.length > 0 && chipLine(line, insetOf(node)),
+    h('div', { class: `card-body c-${name}` }, kind.draw(item, props, { ...ctx, words: wordsOf(item) })),
+    line.length > 0 && chipLine(line, insetOf(node), wordsOf(item)),
   ];
 }
 
 export function drawDetail(node, item, ctx) {
   const { kind, props } = resolve(node);
-  return kind.detail(item, props, ctx, node);
+  return kind.detail(item, props, { ...ctx, words: wordsOf(item) }, node);
 }

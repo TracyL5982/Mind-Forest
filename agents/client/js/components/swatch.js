@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { SIDES, TEXT, TITLE, TITLE_LETTER, andMore, list, say, text, wrap } from './shared.js';
+import { SIDES, TEXT, TITLE, TITLE_LETTER, andMore, list, say, text, wrap, titleOf } from './shared.js';
 
 const WIDTH = 256;
 const COLUMN = WIDTH - SIDES;
@@ -27,7 +27,7 @@ export const shows = [];
 export function size(item, props) {
   const all = colours(props);
   const rows = Math.min(all.length, SHOWN);
-  return [WIDTH, STRIP + FRAME_UNDER + wrap(item.title || 'Untitled', COLUMN, TITLE_LETTER, 2) * TITLE + (rows ? 8 + rows * TEXT + (rows - 1) * GAP : 0) + (all.length > SHOWN ? 8 + TEXT : 0)];
+  return [WIDTH, STRIP + FRAME_UNDER + wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) * TITLE + (rows ? 8 + rows * TEXT + (rows - 1) * GAP : 0) + (all.length > SHOWN ? 8 + TEXT : 0)];
 }
 
 export function draw(item, props) {
@@ -35,9 +35,9 @@ export function draw(item, props) {
   return [
     h('div', { class: 'swatch-strip', style: { height: `${STRIP}px` }, 'aria-hidden': 'true' }, all.slice(0, STRIP_MOST).map((colour) => paint('swatch-block', colour.value))),
     h('div', { class: 'swatch-under' },
-      say('div', `card-title clamp-${wrap(item.title || 'Untitled', COLUMN, TITLE_LETTER, 2)}`, item.title || 'Untitled'),
+      say('div', `card-title clamp-${wrap(titleOf(item), COLUMN, TITLE_LETTER, 2)}`, titleOf(item)),
       all.length > 0 && h('ul', { class: 'swatch-rows' }, all.slice(0, SHOWN).map((colour) => row(colour, 'clamp-1'))),
-      all.length > SHOWN && andMore(all.length - SHOWN)),
+      all.length > SHOWN && andMore(all.length - SHOWN, item)),
   ];
 }
 

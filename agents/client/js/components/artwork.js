@@ -1,6 +1,6 @@
 import { h } from '../dom.js';
 import { chipSources } from '../chips.js';
-import { SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, picture, say, text, wrap } from './shared.js';
+import { SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, picture, say, text, wrap, titleOf } from './shared.js';
 
 const WIDTH = 264;
 const COLUMN = WIDTH - SIDES;
@@ -15,7 +15,7 @@ function plan(item, props) {
   const holder = text(props.holder).trim();
   return {
     by, medium, holder,
-    titleLines: wrap(item.title || 'Untitled', COLUMN, TITLE_LETTER, 2),
+    titleLines: wrap(titleOf(item), COLUMN, TITLE_LETTER, 2),
     byLines: by ? wrap(by, COLUMN, TEXT_LETTER, 2) : 0,
     mediumLines: medium ? wrap(medium, COLUMN, TEXT_LETTER, 2) : 0,
   };
@@ -33,7 +33,7 @@ export function draw(item, props, ctx) {
   return [
     h('div', { class: 'artwork-mat', style: { height: `${MAT}px` } }, picture(text(props.src), item.title, ctx)),
     h('div', { class: 'artwork-plate' },
-      say('div', `card-title clamp-${titleLines}`, item.title || 'Untitled'),
+      say('div', `card-title clamp-${titleLines}`, titleOf(item)),
       by && say('div', `artwork-by clamp-${byLines}`, by),
       medium && say('div', `artwork-medium clamp-${mediumLines}`, medium),
       holder && say('div', 'artwork-holder clamp-1', holder)),

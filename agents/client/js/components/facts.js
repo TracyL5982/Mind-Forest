@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, andMore, figureNeed, list, say, text, wrap } from './shared.js';
+import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, andMore, figureNeed, list, say, text, wrap, titleOf } from './shared.js';
 
 const WIDTH = 320;
 const COLUMN = WIDTH - SIDES;
@@ -40,7 +40,7 @@ function plan(item, props) {
     rows.push({ cls, cells: drawn, height: Math.max(...drawn.map((cell) => cell.height)) });
   }
   const more = Number.isInteger(props.more) && props.more > 0 ? props.more : 0;
-  return { rows, more, titleLines: wrap(item.title || 'Untitled', COLUMN, TITLE_LETTER, 2) };
+  return { rows, more, titleLines: wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) };
 }
 
 export const shows = [];
@@ -54,12 +54,12 @@ export function size(item, props) {
 export function draw(item, props) {
   const { rows, more, titleLines } = plan(item, props);
   return [
-    say('div', `card-title clamp-${titleLines}`, item.title || 'Untitled'),
+    say('div', `card-title clamp-${titleLines}`, titleOf(item)),
     rows.length > 0 && h('div', { class: 'figures' }, rows.map((row) => row.cells.map((cell) =>
       h('div', { class: row.cells.length === 1 ? 'figure is-alone' : 'figure' },
         h('div', { class: `fact-value ${row.cls}`, dir: 'auto', text: cell.value, style: { maxHeight: `${cell.most}px` } }),
         say('div', `fact-label clamp-${cell.labelLines}`, cell.label))))),
-    more > 0 && andMore(more),
+    more > 0 && andMore(more, item),
   ];
 }
 

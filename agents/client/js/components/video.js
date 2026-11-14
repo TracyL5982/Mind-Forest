@@ -1,5 +1,6 @@
 import { h } from '../dom.js';
 import { SIDES, TEXT_LETTER, fold, framed, framedHeight, picture, say, text } from './shared.js';
+import { wordsOf } from '../words.js';
 
 const WIDTH = 272;
 const POSTER = 153;
@@ -23,7 +24,7 @@ function player(item, props, ctx) {
   if (embed) return h('iframe', { src: embed, title: item.title, allow: 'accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen', referrerpolicy: 'strict-origin-when-cross-origin', loading: 'lazy' });
   const poster = text(props.poster) && ctx.asset(props.poster);
   if (text(props.src)) return h('video', { src: ctx.asset(props.src), poster, controls: true, playsinline: true, preload: 'metadata' });
-  return [poster && picture(props.poster, item.title, ctx), h('div', { class: 'detail-note', text: 'This clip has no file to play.' })];
+  return [poster && picture(props.poster, item.title, ctx), h('div', { class: 'detail-note', text: wordsOf(item).noClip })];
 }
 
 export const detail = (item, props, ctx) => [

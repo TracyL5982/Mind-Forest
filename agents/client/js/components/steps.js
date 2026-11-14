@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { FRAME, TEXT, TITLE, list, say, title } from './shared.js';
+import { FRAME, TEXT, TITLE, andMore, list, say, title } from './shared.js';
 
 const SHOWN = 5;
 const ROW = 20;
@@ -20,7 +20,7 @@ export function draw(item, props) {
   return [
     title(item, 1),
     steps.length > 0 && h('ol', { class: 'steps' }, steps.slice(0, SHOWN).map((label, i) => step(label, i, 'clamp-1'))),
-    steps.length > SHOWN && h('div', { class: 'card-foot', text: `and ${steps.length - SHOWN} more` }),
+    steps.length > SHOWN && andMore(steps.length - SHOWN, item),
   ];
 }
 
