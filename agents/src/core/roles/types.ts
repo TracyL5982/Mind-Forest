@@ -24,6 +24,14 @@ export const DEFAULT_SETTINGS: Settings = {
   scoutOnDump: true,
 };
 
+/** What the connected clients can play: player pages from other sites (embeds), and which file types. */
+export interface Playback {
+  /** False while any connected client cannot show an embedded player, such as the headset. */
+  embeds: boolean;
+  /** File extensions every client that said so can play. Empty when no client has said. */
+  files: string[];
+}
+
 /** What every role is handed. Roles read `mind` and return commands. Only the pipeline applies them. */
 export interface RoleContext {
   mind: Mindstorm;
@@ -31,6 +39,8 @@ export interface RoleContext {
   tools: Tools;
   assets: Assets;
   settings: Settings;
+  /** Asked at the moment of choosing, because clients come and go. */
+  playback: () => Playback;
   newId: () => Id;
   now: () => string;
   /** A line for the run log. Shown to the user as the agent's work state. */

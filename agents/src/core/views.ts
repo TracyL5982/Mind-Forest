@@ -68,15 +68,27 @@ export function isValidGroup(group: { composite: string; props: unknown }): bool
   return schema !== undefined && schema.safeParse(group.props).success;
 }
 
+/**
+ * A picture's or a video's file and still. The item's own stored file comes first, then a file the service streams (`mediaUrl`),
+ * and only then the page it came from, for a video that only plays embedded. The still is always a service asset.
+ */
+export function mediaOf(item: Item, assetUrl: (id: string) => string): { src: string; poster?: string } | null {
+  const named = (value: unknown) => (typeof value === 'string' && value.trim() ? value : undefined);
+  const src = item.source.asset ? assetUrl(item.source.asset) : (named(item.data.mediaUrl) ?? named(item.source.url));
+  if (!src) return null;
+  const poster = item.kind === 'video' ? named(item.data.thumbnailUrl) : undefined;
+  return poster ? { src, poster } : { src };
+}
+
 /** The view a node gets the moment it exists, before the Renderer has looked at it. */
 export function defaultView(item: Item, assetUrl: (id: string) => string): View {
-  const src = item.source.asset ? assetUrl(item.source.asset) : (item.source.url ?? '');
+  const media = mediaOf(item, assetUrl);
   const view = (component: ComponentId, props: Record<string, unknown>): View => ({ component, props, by: 'default' });
   switch (item.kind) {
     case 'image':
-      return src ? view('image', { src }) : view('note', {});
+      return media ? view('image', { src: media.src }) : view('note', {});
     case 'video':
-      return src ? view('video', { src }) : view('note', {});
+      return media ? view('video', media) : view('note', {});
     case 'link':
       return item.source.url
         ? view('link', { url: item.source.url, site: siteOf(item.source.url), description: item.summary || undefined })

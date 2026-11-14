@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 import type { Assets } from '../core/ports.ts';
 
 const EXT: Record<string, string> = {
@@ -12,6 +12,8 @@ const EXT: Record<string, string> = {
   'video/mp4': 'mp4',
   'video/quicktime': 'mov',
   'video/webm': 'webm',
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
   'audio/wav': 'wav',
   'audio/webm': 'webm',
   'application/pdf': 'pdf',
@@ -20,7 +22,17 @@ const EXT: Record<string, string> = {
   'text/markdown': 'md',
 };
 
-/** Dropped and generated files on disk, each beside a small JSON record of its type and name. */
+interface Meta {
+  mime: string;
+  name?: string;
+  /** A linked asset's bytes: the absolute path of a file on this host, or a remote address. */
+  from?: string;
+}
+
+/** What `/assets/<id>` sends: bytes held here, a file on this host, or a remote address relayed as it streams. */
+export type Stored = { mime: string } & ({ bytes: Uint8Array } | { file: string; size: number } | { url: string });
+
+/** Dropped and generated files on disk, each beside a small JSON record of its type and name. A linked asset is the record alone. */
 export class DiskAssets implements Assets {
   constructor(
     private readonly dir: string,
@@ -30,19 +42,37 @@ export class DiskAssets implements Assets {
   }
 
   async put(bytes: Uint8Array, mime: string, name?: string): Promise<{ id: string }> {
-    const type = mime.split(';')[0]!.trim().toLowerCase();
-    const ext = EXT[type] ?? name?.match(/\.([a-z0-9]{1,5})$/i)?.[1]?.toLowerCase() ?? 'bin';
-    const id = `${randomBytes(8).toString('hex')}.${ext}`;
+    const id = newId(mime, name);
     writeFileSync(join(this.dir, id), bytes);
-    writeFileSync(join(this.dir, `${id}.json`), JSON.stringify({ mime: type, name }));
+    this.write(id, { mime: bare(mime), name });
+    return { id };
+  }
+
+  async link(from: string, mime: string, name?: string): Promise<{ id: string }> {
+    if (!isAbsolute(from) && !/^https?:\/\//i.test(from)) throw new Error(`an asset links to an absolute path or a web address, not "${from}"`);
+    const id = newId(mime, name ?? from);
+    this.write(id, { mime: bare(mime), name, from });
     return { id };
   }
 
   async get(id: string): Promise<{ bytes: Uint8Array; mime: string; name?: string } | null> {
-    if (!/^[a-f0-9]{16}\.[a-z0-9]{1,5}$/.test(id)) return null;
+    const stored = this.open(id);
+    if (!stored || 'url' in stored) return null;
     try {
-      const meta = JSON.parse(readFileSync(join(this.dir, `${id}.json`), 'utf8')) as { mime: string; name?: string };
-      return { bytes: new Uint8Array(readFileSync(join(this.dir, id))), mime: meta.mime, name: meta.name };
+      const bytes = 'bytes' in stored ? stored.bytes : new Uint8Array(readFileSync(stored.file));
+      return { bytes, mime: stored.mime, name: this.read(id)?.name };
+    } catch {
+      return null;
+    }
+  }
+
+  open(id: string): Stored | null {
+    const meta = this.read(id);
+    if (!meta) return null;
+    try {
+      if (!meta.from) return { mime: meta.mime, bytes: new Uint8Array(readFileSync(join(this.dir, id))) };
+      if (/^https?:\/\//i.test(meta.from)) return { mime: meta.mime, url: meta.from };
+      return { mime: meta.mime, file: meta.from, size: statSync(meta.from).size };
     } catch {
       return null;
     }
@@ -51,4 +81,26 @@ export class DiskAssets implements Assets {
   url(id: string): string {
     return `${this.baseUrl}/assets/${id}`;
   }
+
+  private read(id: string): Meta | null {
+    if (!/^[a-f0-9]{16}\.[a-z0-9]{1,5}$/.test(id)) return null;
+    try {
+      return JSON.parse(readFileSync(join(this.dir, `${id}.json`), 'utf8')) as Meta;
+    } catch {
+      return null;
+    }
+  }
+
+  private write(id: string, meta: Meta): void {
+    writeFileSync(join(this.dir, `${id}.json`), JSON.stringify(meta));
+  }
+}
+
+function newId(mime: string, name?: string): string {
+  const ext = EXT[bare(mime)] ?? name?.match(/\.([a-z0-9]{1,5})(?:[?#].*)?$/i)?.[1]?.toLowerCase() ?? 'bin';
+  return `${randomBytes(8).toString('hex')}.${ext}`;
+}
+
+function bare(mime: string): string {
+  return mime.split(';')[0]!.trim().toLowerCase();
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
-import { COMPONENTS, isValidGroup, isValidView, siteOf, type ComponentId, type CompositeId } from '../views.ts';
+import { COMPONENTS, isValidGroup, isValidView, mediaOf, siteOf, type ComponentId, type CompositeId } from '../views.ts';
 import type { RoleContext, Roles } from './types.ts';
 
 const ROLE = 'renderer';
@@ -231,13 +231,12 @@ const RULES: Rule[] = [
   },
   (item, assetUrl) => {
     if (item.kind !== 'image' && item.kind !== 'video') return null;
-    // A stored asset outlives a social network's media address, which expires.
-    const src = item.source.asset ? assetUrl(item.source.asset) : (str(item.data.mediaUrl) ?? item.source.url);
-    if (!src) return null;
+    const media = mediaOf(item, assetUrl);
+    if (!media) return null;
     const caption = item.summary.trim() && item.summary.trim().length <= CAPTION ? item.summary.trim() : undefined;
     return item.kind === 'image'
-      ? { component: 'image', props: compact({ src, caption }) }
-      : { component: 'video', props: compact({ src, poster: str(item.data.thumbnailUrl), caption }) };
+      ? { component: 'image', props: compact({ src: media.src, caption }) }
+      : { component: 'video', props: compact({ ...media, caption }) };
   },
   (item) => {
     const url = item.source.url;

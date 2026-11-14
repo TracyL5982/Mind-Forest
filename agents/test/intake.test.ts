@@ -123,6 +123,7 @@ test('a small video is watched and a large one is filed by name with a note', as
   assert.match(sent[0]![0]!, /^data:video\/mp4;base64,/);
   assert.deepEqual(items.map((i) => [i.kind, i.title]), [['video', 'A short clip'], ['video', 'beach walk take2']]);
   assert.equal(items[1]!.source.asset, large.id);
+  assert.deepEqual(items.map((i) => i.data.mediaUrl), [`/assets/${small.id}`, `/assets/${large.id}`], 'each plays from the service');
   assert.ok(k.notes.some((n) => n.includes('beach-walk_take2.mp4') && n.includes('15 MB')));
   assertWellFormed(items);
 });

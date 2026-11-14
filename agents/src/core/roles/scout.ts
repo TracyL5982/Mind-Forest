@@ -322,6 +322,8 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
       for (const video of await ctx.tools.web.videos(oneLine(d.lookups[0] || d.title, 160))) {
         if (taken.has(urlKey(video.url))) continue;
         taken.add(urlKey(video.url));
+        // A client that cannot embed a player shows the still, so it is brought in like any other picture.
+        const still = video.poster ? await ctx.tools.web.picture(video.poster) : null;
         return [
           {
             tool: 'web',
@@ -331,7 +333,7 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
               kind: 'video',
               text: [d.body.trim(), video.title].filter(Boolean).join('\n\n'),
               summary: oneLine(d.body || video.title, 400),
-              data: { site: siteOf(video.url), embed: video.embed, ...(video.poster ? { thumbnailUrl: video.poster } : {}) },
+              data: { site: siteOf(video.url), embed: video.embed, ...(still ? { thumbnailUrl: ctx.assets.url(still.asset) } : {}) },
               source: { from: 'web', url: video.url },
             }),
           },
@@ -393,7 +395,9 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
       const record = found[index]!;
       if (taken.has(urlKey(record.url))) return null;
       taken.add(urlKey(record.url));
-      const picture = record.stored ?? (record.image && !record.media ? await ctx.tools.web.picture(record.image) : null);
+      const picture = record.stored ?? (record.image ? await ctx.tools.web.picture(record.image) : null);
+      // A recording plays from the service, which streams it from its source, so a client only ever fetches from the service.
+      const media = record.media ? await ctx.assets.link(record.media, mediaType(record.media)) : null;
       const label = [...new Set([record.by, record.date, record.from ?? source.name].filter(Boolean))].join(', ');
       const passage = excerpt || clipText(record.text, EXCERPT);
       return {
@@ -401,7 +405,7 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
         item: makeItem(ctx, {
           ...common(d, source.id),
           title: oneLine(record.title, 120),
-          kind: record.media ? 'video' : picture ? 'image' : 'text',
+          kind: media ? 'video' : picture ? 'image' : 'text',
           text: [passage, label].filter(Boolean).join('\n\n'),
           summary: oneLine(note || passage || label, 400),
           data: {
@@ -411,9 +415,9 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
             from: record.from ?? source.name,
             ...(record.chart ? { chart: record.chart } : {}),
             ...(record.steps && !picture ? { steps: record.steps } : {}),
-            ...(record.media ? { mediaUrl: record.media, ...(record.image ? { thumbnailUrl: record.image } : {}) } : {}),
+            ...(media ? { mediaUrl: ctx.assets.url(media.id), ...(picture ? { thumbnailUrl: ctx.assets.url(picture.asset) } : {}) } : {}),
           },
-          source: { from: 'web', url: record.url, ...(picture ? { asset: picture.asset } : {}) },
+          source: { from: 'web', url: record.url, ...(picture && !media ? { asset: picture.asset } : {}) },
         }),
       };
     }),
@@ -481,6 +485,12 @@ const squash = (text: string): string => text.replace(/\s+/g, ' ').trim().toLowe
 function clipText(text: string, max: number): string {
   const t = text.trim();
   return t.length <= max ? t : `${t.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** The type a recording is served as until its source says otherwise. */
+function mediaType(url: string): string {
+  const ext = /\.([a-z0-9]{2,4})$/i.exec(url.split(/[?#]/)[0]!)?.[1]?.toLowerCase();
+  return { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', m4a: 'audio/mp4', ogg: 'audio/ogg' }[ext ?? ''] ?? 'audio/mpeg';
 }
 
 function knownUrls(ctx: RoleContext): Set<string> {

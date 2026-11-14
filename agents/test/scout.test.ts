@@ -50,6 +50,7 @@ function setup(settings: Partial<Settings> = {}, directions: unknown[] = MIX) {
     { title: 'Jaws beach scene', url: 'https://www.youtube.com/watch?v=abcdefghijk', snippet: '' },
   ];
   k.world.videos.set('https://www.youtube.com/watch?v=abcdefghijk', { title: 'Jaws beach scene', url: 'https://www.youtube.com/watch?v=abcdefghijk', embed: 'https://www.youtube.com/embed/abcdefghijk', poster: 'https://img.example/jaws.jpg' });
+  k.world.pictures.add('https://img.example/jaws.jpg');
   k.model.on('scout.ideate', () => ({ reading: 'A film technique the user is studying.', directions })).on('scout.curate', () => ({ chosen: [{ number: 1, note: 'The rail leads the eye to the floor.', excerpt: '' }] }));
   return { k, film, anchor: film.nodeIds[0]! };
 }
@@ -67,6 +68,14 @@ function hang(k: Kit, anchor: Id, title: string, status: Node['status'], fields:
 
 function picked(k: Kit, anchor: Id): Item[] {
   return k.mind.picks(anchor).map((n) => k.mind.itemOf(n.id));
+}
+
+/** The asset behind a service address, so a test can say what the service holds or streams there. */
+function served(k: Kit, address: unknown): string {
+  assert.equal(typeof address, 'string');
+  const id = /^\/assets\/(.+)$/.exec(address as string)?.[1];
+  assert.ok(id && (k.assets.files.has(id) || k.assets.links.has(id)), `${String(address)} is an asset of the service`);
+  return id;
 }
 
 test('each direction becomes content of its own kind, shown in place', async () => {
@@ -97,7 +106,7 @@ test('each direction becomes content of its own kind, shown in place', async () 
   const video = byTitle.get(VIDEO.title)!;
   assert.equal(video.kind, 'video');
   assert.equal(video.data.embed, 'https://www.youtube.com/embed/abcdefghijk');
-  assert.equal(video.data.thumbnailUrl, 'https://img.example/jaws.jpg');
+  assert.ok(k.assets.files.has(served(k, video.data.thumbnailUrl)), 'its still was brought in, not pointed at');
 });
 
 test('no pick is ever a bare link out of the app', async () => {
@@ -250,6 +259,7 @@ test('a record is shown in its own words, and only words that are really in it',
 test('a chart, steps and a recording a source returns reach the card', async () => {
   const find = direction('find', 'The numbers', { source: 'papers', lookups: ['numbers'] });
   const { k, anchor } = setup({}, [find]);
+  k.world.pictures.add('https://img.example/cover.jpg');
   k.world.found.set('papers:numbers', [
     { ...PAPER, url: 'https://x.example/chart', chart: { labels: ['2000', '2010'], values: [1, 2], unit: 'billions' } },
     { ...PAPER, url: 'https://x.example/steps', steps: ['Chop', 'Stir'] },
@@ -264,8 +274,8 @@ test('a chart, steps and a recording a source returns reach the card', async () 
   assert.deepEqual(chart!.data.chart, { labels: ['2000', '2010'], values: [1, 2], unit: 'billions' });
   assert.deepEqual(steps!.data.steps, ['Chop', 'Stir']);
   assert.equal(episode!.kind, 'video');
-  assert.equal(episode!.data.mediaUrl, 'https://cdn.example/episode.mp3');
-  assert.equal(episode!.data.thumbnailUrl, 'https://img.example/cover.jpg');
+  assert.equal(k.assets.links.get(served(k, episode!.data.mediaUrl)), 'https://cdn.example/episode.mp3', 'the recording streams through the service');
+  assert.ok(k.assets.files.has(served(k, episode!.data.thumbnailUrl)), 'its cover was brought in');
 });
 
 test('a search that finds little is tried in other words, and the records are pooled without repeats', async () => {
@@ -454,4 +464,25 @@ test('never more links than the setting allows, and only to items that were offe
     [lenses.nodeIds[3], lenses.nodeIds[4]].sort(),
     'the two strongest are the ones drawn',
   );
+});
+
+test('every picture and recording a pick shows is fetched from the service, never from where it was found', async () => {
+  const podcast = direction('find', 'Hear it explained', { source: 'podcasts', lookups: ['dolly zoom'] });
+  const { k, anchor } = setup({}, [...MIX, podcast]);
+  k.world.sources.push({ id: 'podcasts', name: 'Podcasts', goodFor: 'Episodes.', query: 'Topic words.', show: 1 });
+  k.world.found.set('podcasts:dolly zoom', [{ ...PAPER, url: 'https://podcasts.example/ep', media: 'https://cdn.example/ep.mp3', image: 'https://img.example/ep.jpg' }]);
+  k.world.pictures.add('https://img.example/ep.jpg');
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const items = picked(k, anchor);
+  assert.equal(items.length, 6);
+  for (const item of items) {
+    for (const address of [item.data.thumbnailUrl, item.data.mediaUrl].filter((a) => a !== undefined)) served(k, address);
+    if (item.source.asset) served(k, `/assets/${item.source.asset}`);
+    for (const node of k.mind.nodesOfItem(item.id)) {
+      for (const key of ['poster', 'image'] as const) if (node.view.props[key] !== undefined) served(k, node.view.props[key]);
+    }
+  }
+  assert.ok(items.some((i) => i.data.mediaUrl), 'the episode plays');
 });

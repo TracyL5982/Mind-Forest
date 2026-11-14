@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
+import { DiskAssets } from '../src/node/assets.ts';
 import { startServer, type Running, type ServerOptions } from '../src/node/server.ts';
 
 interface Msg {
@@ -204,4 +206,60 @@ test('recorded speech is transcribed with the card titles as hints, and the clie
   assert.equal((await p.until((m) => m.t === 'hello')).hearing, 'browser');
   p.ws.close();
   await plain.close();
+});
+
+test('a linked file and a linked remote file are streamed through the service, by byte range, with the token', async () => {
+  const bytes = new Uint8Array(Array.from({ length: 64 }, (_v, i) => i));
+  const remote = createServer((req, res) => {
+    const [, from, to] = /^bytes=(\d+)-(\d+)$/.exec(req.headers.range ?? '') ?? [];
+    if (!from) {
+      res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Content-Length': bytes.length });
+      return void res.end(bytes);
+    }
+    res.writeHead(206, { 'Content-Type': 'audio/mpeg', 'Content-Range': `bytes ${from}-${to}/${bytes.length}`, 'Accept-Ranges': 'bytes' });
+    res.end(bytes.subarray(Number(from), Number(to) + 1));
+  });
+  await new Promise<void>((ready) => remote.listen(0, '127.0.0.1', ready));
+  const port = (remote.address() as { port: number }).port;
+  const dataDir = mkdtempSync(join(tmpdir(), 'mp-'));
+  const file = join(dataDir, 'clip.mp4');
+  writeFileSync(file, bytes);
+  const assets = new DiskAssets(join(dataDir, 'assets'));
+  const film = await assets.link(file, 'video/mp4');
+  const episode = await assets.link(`http://127.0.0.1:${port}/episode.mp3`, 'audio/mpeg');
+  const { run } = await boot(dataDir);
+
+  assert.equal((await fetch(`${run.url}${assets.url(film.id)}`)).status, 401);
+  const whole = await fetch(`${run.url}${assets.url(film.id)}?token=secret`);
+  assert.equal(whole.headers.get('content-type'), 'video/mp4');
+  assert.deepEqual(new Uint8Array(await whole.arrayBuffer()), bytes);
+  const part = await fetch(`${run.url}${assets.url(film.id)}?token=secret`, { headers: { Range: 'bytes=10-13' } });
+  assert.equal(part.status, 206);
+  assert.equal(part.headers.get('content-range'), 'bytes 10-13/64');
+  assert.deepEqual([...new Uint8Array(await part.arrayBuffer())], [10, 11, 12, 13]);
+
+  const relayed = await fetch(`${run.url}${assets.url(episode.id)}?token=secret`, { headers: { Range: 'bytes=60-63' } });
+  assert.equal(relayed.status, 206);
+  assert.equal(relayed.headers.get('content-range'), 'bytes 60-63/64');
+  assert.deepEqual([...new Uint8Array(await relayed.arrayBuffer())], [60, 61, 62, 63]);
+  assert.equal(await assets.get(episode.id), null, 'a remote file is never copied into the service');
+
+  await run.close();
+  remote.close();
+});
+
+test('the service knows while a client that cannot show an embedded player is connected', async () => {
+  const { run } = await boot();
+  const browser = await connect(run);
+  browser.ws.send(JSON.stringify({ t: 'client', media: { embeds: true, files: ['mp4', 'webm', 'mp3'] } }));
+  const headset = await connect(run);
+  headset.ws.send(JSON.stringify({ t: 'client', media: { embeds: false, files: ['mp4', 'mp3'] } }));
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(run.pipeline.ctx.playback(), { embeds: false, files: ['mp4', 'mp3'] });
+
+  headset.ws.close();
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(run.pipeline.ctx.playback(), { embeds: true, files: ['mp4', 'webm', 'mp3'] });
+  browser.ws.close();
+  await run.close();
 });

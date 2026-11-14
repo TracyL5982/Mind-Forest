@@ -43,6 +43,8 @@ const ctx: RoleContext = {
   mind, model, assets, newId, now,
   tools: makeTools({ model, assets, keys: env }),
   settings: { ...DEFAULT_SETTINGS },
+  // NO_EMBEDS=1 stands for a headset connected: videos are looked for as files that play directly.
+  playback: () => ({ embeds: !process.env.NO_EMBEDS, files: [] }),
   note: (role, message) => console.log(`  note ${role}: ${message}`),
 };
 const wanted = process.argv[2] ?? '';
