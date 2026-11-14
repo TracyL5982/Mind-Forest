@@ -497,8 +497,11 @@ void OceanModel::saveShelf() {
     std::string url = shelfURL();
     if (url.empty() || !catalog) return;
     std::vector<ShelfFile::Item> items = shelfWaiting;     // (none, by the time anything is written: see `update`)
-    for (const Shelved& cover : shelf) items.push_back(ShelfFile::Item{cover.tree->saved(), cover.spot});
-    if (tree && standingSpot) items.push_back(ShelfFile::Item{tree->saved(), *standingSpot});
+    // AGENT: a tree the agent service grows is kept by the service, and comes back with the next connection (`grows`).
+    for (const Shelved& cover : shelf) {
+        if (cover.tree->grows) items.push_back(ShelfFile::Item{cover.tree->saved(), cover.spot});
+    }
+    if (tree && tree->grows && standingSpot) items.push_back(ShelfFile::Item{tree->saved(), *standingSpot});
     std::string data = ShelfFile(int(catalog->clips.size()), catalog->worksKey, items).json().dump();
     platform::writeFile(url, data);
 }
