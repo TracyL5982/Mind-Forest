@@ -16,8 +16,8 @@
  *   app                open the app and connect to the service
  *   think=<text>       type a thought into the dock and wait for its picks
  *   shapes             load the Every shape tree: each card type and each arrangement. `shapes=eleven`
- *                      leaves out the fourteen types drawn from structure, to compare with a client
- *                      that does not draw them.
+ *                      leaves out the fourteen types drawn from structure and the recording, to compare
+ *                      with a client that does not draw them.
  *   chips              load the With chips tree: cards whose items carry a date, a place, people
  *                      or an origin, twins that carry none, and a timeline of cards with chips
  *   crowd=<n>          load a tree of n note cards. Default 200. `crowd=<n>:chips` gives every
@@ -60,7 +60,8 @@ import { parseArgs } from 'node:util';
 import { chromium, type Page } from 'playwright-core';
 import type { Command, Item, Node } from '../src/core/domain.ts';
 import type { Running } from '../src/node/server.ts';
-import { PNG, TOKEN, bootFake, browserPath, chipped, crowd, showcase, spills } from '../test/stage.ts';
+import { PNG, TOKEN, bootFake, browserPath, chipped, crowd, showcase, spills, stored } from '../test/stage.ts';
+import { tones } from '../src/fake/model.ts';
 
 const { values: flags, positionals: steps } = parseArgs({
   allowPositionals: true,
@@ -168,7 +169,7 @@ const STEPS: Record<string, Step> = {
   },
   async shapes(value, page, run) {
     const other = [...run.mind.trees.values()][0]?.rootId;
-    if (!run.pipeline.userCommands('Add every shape', showcase(await still(page, run), other, { structured: value !== 'eleven' }))) throw new Error('the service refused the Every shape tree');
+    if (!run.pipeline.userCommands('Add every shape', showcase(await still(page, run), other, value === 'eleven' ? { structured: false } : { sound: await stored(page, run, tones(4), 'audio/wav', 'memo.wav') }))) throw new Error('the service refused the Every shape tree');
     await page.locator('.tree-chip', { hasText: 'Every shape' }).waitFor();
     await run.pipeline.idle();
   },
