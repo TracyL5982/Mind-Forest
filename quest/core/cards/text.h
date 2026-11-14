@@ -21,6 +21,8 @@ constexpr Fixed question{"Q", "问"};
 constexpr Fixed answer{"A", "答"};
 constexpr Fixed caution{"Caution", "注意"};
 constexpr Fixed note{"Note", "备注"};
+constexpr Fixed pros{"For", "优点"};
+constexpr Fixed cons{"Against", "缺点"};
 }  // namespace fixed
 
 /// words.js `moreOf`: what a table writes under the rows and columns it leaves out.
