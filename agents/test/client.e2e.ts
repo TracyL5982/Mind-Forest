@@ -395,7 +395,7 @@ async function main(): Promise<void> {
       await page.keyboard.press('Escape');
     });
 
-    await check('each of the fourteen structured types is drawn from what the service makes of a pasted text or a request', async () => {
+    await check('each of the fifteen structured types is drawn from what the service makes of a pasted text or a request', async () => {
       const paste = (text: string) => page.evaluate((pasted) => {
         const data = new DataTransfer();
         data.setData('text/plain', pasted);
@@ -414,6 +414,8 @@ async function main(): Promise<void> {
         ['idea', 'Build a treehouse', 'Build a treehouse', '.idea-spark', 1],
         ['proscons', 'Buying the van\nPros: room for the dog, cheap to insure\nCons: slow uphill', 'slow uphill', '.proscons-mark', 3],
         ['swatch', 'Palette: Rust #B7410E, Moss #8A9A5B', '#8A9A5B', '.swatch-block', 2],
+        ['sheet', 'Weekend in Porto\nWe took the early train on Friday and walked the river both days, and sat in the bookshop when it rained.\nCost: €240\nNights: 2\nBest: the bridge at dusk; the tiled station; grilled sardines', 'grilled sardines', '.sheet-part', 3],
+        // The place comes last, because a request is then asked about it.
         ['place', 'Lisbon\nWhere: Lisbon', 'Lisbon', '.place-pin', 1],
       ];
       await page.keyboard.press('Escape');
@@ -434,7 +436,11 @@ async function main(): Promise<void> {
         const printed = (await page.locator('#panel .panel-summary, #panel .panel-text').allInnerTexts()).join('\n');
         assert.ok(!printed.includes(shown), `an opened ${type} does not print "${shown}" again under its own form`);
         const opened = await page.locator('#panel .panel-scroll').innerText();
-        if (type === 'table' || type === 'callout') assert.equal(opened.split(shown).length, 2, `an opened ${type} says "${shown}" once`);
+        if (type === 'table' || type === 'callout' || type === 'sheet') assert.equal(opened.split(shown).length, 2, `an opened ${type} says "${shown}" once`);
+        if (type === 'sheet') {
+          assert.equal(await made.locator('.card-title').innerText(), 'Weekend in Porto', 'the heading is the title of the sheet');
+          assert.deepEqual(await page.locator('#panel .detail-figures dd').allInnerTexts(), ['€240', '2'], 'the opened sheet lists its figures');
+        }
         if (type === 'table') assert.equal(await page.locator('#panel .panel-text').count(), 0, 'an opened table does not print the pasted rows again under its cells');
         if (type === 'table') {
           const drawn = await page.locator('#panel .detail-table').elementHandle();
