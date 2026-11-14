@@ -491,3 +491,26 @@ test('never more links than the setting allows, and only to items that were offe
     'the two strongest are the ones drawn',
   );
 });
+test('a card deleted while the Scout works on it ends the run without an unhandled failure', async () => {
+  const { k, anchor } = setup();
+  k.model.on('scout.ideate', () => {
+    k.mind.apply({ origin: USER, label: 'cut', commands: [{ type: 'deleteNode', id: anchor }] });
+    return { reading: 'A film technique the user is studying.', directions: MIX };
+  });
+  // A real run waits on the network between steps; the failure only goes unhandled across such a wait.
+  const search = k.ctx.tools.sources.search.bind(k.ctx.tools.sources);
+  k.ctx.tools.sources.search = async (id, query) => {
+    await new Promise((r) => setTimeout(r, 20));
+    return search(id, query);
+  };
+  const unhandled: unknown[] = [];
+  const listen = (err: unknown) => unhandled.push(err);
+  process.on('unhandledRejection', listen);
+  try {
+    await scout(k.ctx, { anchor, mode: 'refresh', deliver: () => {} }).catch(() => {});
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+  } finally {
+    process.off('unhandledRejection', listen);
+  }
+  assert.deepEqual(unhandled.map(String), [], 'no failure is left for the process to die of');
+});
