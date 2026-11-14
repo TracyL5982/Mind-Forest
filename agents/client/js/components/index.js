@@ -42,14 +42,15 @@ const CHIP_SIDES_ELSE = 32;
 const needOf = (chip) => CHIP_PAD + textWidth(chip.text);
 
 /**
- * The chips that go on a line `room` px wide: the first, then each next one while every chip can
- * still have its whole text or CHIP_FLOOR, whichever is less. The rest are left to the opened card.
+ * The chips that go on a line `room` px wide: the first `must`, then each next one while every
+ * chip can still have its whole text or CHIP_FLOOR, whichever is less. The rest are left to the
+ * opened card.
  */
-function fitting(line, room) {
+function fitting(line, room, must) {
   let left = room + CHIP_GAP;
   return line.filter((chip, i) => {
     left -= CHIP_GAP + Math.min(CHIP_FLOOR, needOf(chip));
-    return i === 0 || left >= 0;
+    return i < must || left >= 0;
   });
 }
 
@@ -84,12 +85,20 @@ function trimmed({ kind, text, keep = '' }, wide) {
   return { kind, text: drawn, full: text, ...(keep && { keep }) };
 }
 
+/**
+ * A date that is cut says little, so a `when` chip takes its whole text, or the whole line when
+ * it is wider than that, before the others are fitted to what is left.
+ */
 function lineOf(node, item) {
   const { kind, props } = resolve(node);
   const room = kind.size(item, props)[0] - (CHIP_SIDES[componentOf(node)] ?? CHIP_SIDES_ELSE);
-  const line = fitting(chips(item, kind.shows), room);
-  const widths = shares(line.map(needOf), room - CHIP_GAP * (line.length - 1));
-  return line.map((chip, i) => trimmed(chip, widths[i]));
+  const all = chips(item, kind.shows);
+  const dated = all[0]?.kind === 'when' ? [all[0]] : [];
+  const taken = dated.map((chip) => Math.min(needOf(chip), room));
+  const rest = room - taken.reduce((sum, wide) => sum + wide + CHIP_GAP, 0);
+  const others = fitting(all.slice(dated.length), rest, 1 - dated.length);
+  const widths = [...taken, ...shares(others.map(needOf), rest - CHIP_GAP * (others.length - 1))];
+  return [...dated, ...others].map((chip, i) => trimmed(chip, widths[i]));
 }
 
 /**

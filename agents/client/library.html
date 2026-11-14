@@ -40,7 +40,7 @@
   <p>Every way the Renderer can draw one card (components) and every way it can arrange several sibling cards (composites). This page draws them with the same code and styles as the live client, from sample data.</p>
   <p>Solid cards are yours. Dashed amber cards are picks the librarian brought and you have not kept.</p>
   <p>Under each sample is its type name and its footprint in pixels, which is worked out from the content and never measured.</p>
-  <p>Any card can carry one line of chips under its content: a date, a place, people and, while it is a pick, where it came from. Each type is shown once without chips and once with them. The line adds 28 pixels and nothing else changes.</p>
+  <p>Any card can carry one line of chips under its content: a date, a place, people and, for what the agents brought, where it came from. A date is never cut to make room for the others. Each type is shown once without chips and once with them. The line adds 28 pixels and nothing else changes.</p>
 </header>
 
 <div class="lib-h2">Components</div>
@@ -166,7 +166,7 @@ const VARIANTS = {
  * pick, and the image also as that pick once kept, since the origin chip stays with the item.
  */
 const CHIPS = {
-  note: { data: { when: '12 May 1958', where: 'Bodega Bay' } },
+  note: { data: { when: 'Spring 1958', where: 'Sonoma county, California' } },
   quote: { data: { when: '1931', where: 'New Orleans' } },
   fact: { data: { when: '1833' } },
   image: { brought: ['pick', 'kept'], data: { when: '1857', from: 'The Metropolitan Museum of Art', site: 'metmuseum.org' } },

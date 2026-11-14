@@ -84,6 +84,19 @@ test('a photo 240 px wide shows a full date and a place whole', async () => {
   assert.deepEqual(drawn.map((chip: Drawn) => chip.text), ['12 May 1958', 'Bodega Bay']);
 });
 
+test('a date chip is drawn whole before the other chips share what is left', async () => {
+  const { chipsOf } = await load('components/index.js');
+  const drawn = (component: string, data: Record<string, unknown>): string[] =>
+    chipsOf({ status: 'kept', view: { component, props: {} } }, { title: 'A title', text: '', summary: '', data }).map((chip: Drawn) => chip.text);
+  const place = 'The upper reading room of the old municipal library, Vilnius';
+  assert.deepEqual(drawn('note', { when: 'Spring 1958', where: 'Sonoma county' }), ['Spring 1958', 'Sonoma c…'], 'two chips of middling length: the date is whole');
+  assert.deepEqual(drawn('note', { when: '12 May 1958', where: place }), ['12 May 1958', 'The upp…'], 'the long place is cut, not the date');
+  assert.deepEqual(drawn('note', { when: 'Early September 1958', where: 'Bodega Bay' }), ['Early September 1958'], 'a place with less than 84 px left is left out');
+  assert.deepEqual(drawn('image', { when: '2024年5月12日', where: '上海市黄浦区中山东一路外滩观景平台' }), ['2024年5月12日', '上海市…']);
+  assert.deepEqual(drawn('note', { when: 'Some time between the spring of 1958 and the autumn of 1961', where: 'Bodega Bay' }), ['Some time between the spri…'], 'a date wider than the line is cut and has the line');
+  assert.deepEqual(drawn('note', { where: 'Spring 1958', people: ['Sonoma county'] }), ['Spring 19…', 'Sonoma c…'], 'only a date goes first');
+});
+
 test('a chip too long for its share is cut at a whole character, and the line never outgrows the card', async () => {
   const { chipsOf, sizeOf, COMPONENTS } = await load('components/index.js');
   const { graphemes, textWidth } = await load('components/shared.js');
