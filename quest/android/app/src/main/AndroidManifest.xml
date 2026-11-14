@@ -29,7 +29,7 @@
     <application
         android:allowBackup="false"
         android:hasCode="true"
-        android:label="Mind Palace Ocean"
+        android:label="${appLabel}"
         android:networkSecurityConfig="@xml/network_security_config">
 
         <!-- Lets simpleperf and Perfetto profile the release build from the shell. -->
