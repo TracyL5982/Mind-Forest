@@ -86,6 +86,7 @@ const FactsData = z.array(z.object({ label: z.string().min(1), value: Label }));
 const MessagesData = z.array(z.object({ role: z.string(), text: z.string() }));
 
 function read<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
+  if (value === undefined) return undefined;
   const parsed = schema.safeParse(value);
   return parsed.success ? parsed.data : undefined;
 }
@@ -154,27 +155,34 @@ function body(item: Item): string {
 
 // ---- components by rule
 
-type Rule = (item: Item, assetUrl: (id: string) => string) => Draw | null;
+interface Asked {
+  assetUrl: (id: string) => string;
+}
+interface Rule {
+  component: ComponentId;
+  when(item: Item, asked: Asked): boolean;
+  props(item: Item, asked: Asked): Props;
+}
 
 const str = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value : undefined);
 
-function chartDraw(labels: string[], values: number[], unit?: string): Draw {
-  return { component: 'chart', props: compact({ chart: inTimeOrder(labels) ? 'line' : 'bar', labels, values, unit }) };
+function chartProps(labels: string[], values: number[], unit?: string): Props {
+  return compact({ chart: inTimeOrder(labels) ? 'line' : 'bar', labels, values, unit });
 }
 
 const VALUE_FIRST =
   /^((?:[$€£¥]\d[\d,.]*(?:k|m|b|bn)?(?: (?:thousand|million|billion))?)|(?:\d[\d,.]*(?:%|x|k|m|b|bn))|(?:\d[\d,.]* (?:percent|thousand|million|billion)))\s+(\S.{1,60})$/i;
 const LABEL_FIRST = /^([^:=\n]{2,60})[:=]\s*([$€£¥]?\d[\d,.]*\s?[%\w/°]{0,12})$/;
 
-function factInText(item: Item): Draw | null {
-  if (item.kind !== 'text') return null;
+function factInText(item: Item): { value: string; label: string } | undefined {
+  if (item.kind !== 'text') return undefined;
   const text = (item.text.trim() || item.title).trim();
-  if (text.length > 80 || text.includes('\n')) return null;
+  if (text.length > 80 || text.includes('\n')) return undefined;
   const valueFirst = VALUE_FIRST.exec(text);
-  if (valueFirst) return { component: 'fact', props: { value: valueFirst[1]!, label: valueFirst[2]!.replace(/[.\s]+$/, '') } };
+  if (valueFirst) return { value: valueFirst[1]!, label: valueFirst[2]!.replace(/[.\s]+$/, '') };
   const labelFirst = LABEL_FIRST.exec(text);
-  if (labelFirst) return { component: 'fact', props: { value: labelFirst[2]!.trim(), label: labelFirst[1]!.trim() } };
-  return null;
+  if (labelFirst) return { value: labelFirst[2]!.trim(), label: labelFirst[1]!.trim() };
+  return undefined;
 }
 
 function excerpt(messages: { role: string; text: string }[]): { role: string; text: string }[] {
@@ -198,68 +206,100 @@ function excerpt(messages: { role: string; text: string }[]): { role: string; te
     .map((i) => ({ role: spoken[i]!.role, text: clip(spoken[i]!.text, EXCERPT) }));
 }
 
+// ---- what each rule reads off an item, or undefined when the item does not hold it
+
+function chartOf(item: Item) {
+  const chart = read(ChartData, item.data.chart);
+  return chart && chart.labels.length >= 2 && chart.labels.length === chart.values.length ? chart : undefined;
+}
+
+function stepsOf(item: Item) {
+  const steps = read(StepsData, item.data.steps)?.filter((s) => s.trim());
+  return steps && steps.length >= 2 ? steps : undefined;
+}
+
+function codeOf(item: Item) {
+  const code = read(CodeData, item.data.code);
+  const source = code?.source || (item.kind === 'code' ? item.text : '');
+  return source || item.kind === 'code' ? { language: code?.language || 'text', source } : undefined;
+}
+
+function factOf(item: Item) {
+  const facts = read(FactsData, item.data.facts);
+  return facts?.length === 1 ? { value: facts[0]!.value, label: facts[0]!.label } : factInText(item);
+}
+
+/** Where a picture or a recording plays from. A stored asset outlives a social network's media address, which expires. */
+function mediaOf(item: Item, kind: 'image' | 'video', { assetUrl }: Asked): string | undefined {
+  if (item.kind !== kind) return undefined;
+  return (item.source.asset ? assetUrl(item.source.asset) : (str(item.data.mediaUrl) ?? item.source.url)) || undefined;
+}
+
+const captionOf = (item: Item) => (item.summary.trim() && item.summary.trim().length <= CAPTION ? item.summary.trim() : undefined);
+
+const spokenOf = (item: Item) => (item.kind === 'chat' ? excerpt(read(MessagesData, item.data.messages) ?? []) : []);
+
 /** First match wins. Structured data a content role filled in outranks the item's kind. */
 const RULES: Rule[] = [
-  (item) => {
-    const chart = read(ChartData, item.data.chart);
-    return chart && chart.labels.length >= 2 && chart.labels.length === chart.values.length
-      ? chartDraw(chart.labels, chart.values, chart.unit)
-      : null;
+  {
+    component: 'chart',
+    when: (item) => chartOf(item) !== undefined,
+    props: (item) => {
+      const { labels, values, unit } = chartOf(item)!;
+      return chartProps(labels, values, unit);
+    },
   },
-  (item) => {
-    const steps = read(StepsData, item.data.steps)?.filter((s) => s.trim());
-    return steps && steps.length >= 2 ? { component: 'steps', props: { steps } } : null;
+  { component: 'steps', when: (item) => stepsOf(item) !== undefined, props: (item) => ({ steps: stepsOf(item)! }) },
+  {
+    component: 'quote',
+    when: (item) => read(QuoteData, item.data.quote) !== undefined,
+    props: (item) => {
+      const { text, by } = read(QuoteData, item.data.quote)!;
+      return compact({ text, by });
+    },
   },
-  (item) => {
-    const quote = read(QuoteData, item.data.quote);
-    return quote ? { component: 'quote', props: compact({ text: quote.text, by: quote.by }) } : null;
+  {
+    component: 'person',
+    when: (item) => read(PersonData, item.data.person) !== undefined,
+    props: (item) => {
+      const { name, role, image } = read(PersonData, item.data.person)!;
+      return compact({ name, role, image: image ?? str(item.data.image) });
+    },
   },
-  (item) => {
-    const person = read(PersonData, item.data.person);
-    return person
-      ? { component: 'person', props: compact({ name: person.name, role: person.role, image: person.image ?? str(item.data.image) }) }
-      : null;
+  { component: 'code', when: (item) => codeOf(item) !== undefined, props: (item) => codeOf(item)! },
+  { component: 'fact', when: (item) => factOf(item) !== undefined, props: (item) => factOf(item)! },
+  {
+    component: 'image',
+    when: (item, asked) => mediaOf(item, 'image', asked) !== undefined,
+    props: (item, asked) => compact({ src: mediaOf(item, 'image', asked), caption: captionOf(item) }),
   },
-  (item) => {
-    const code = read(CodeData, item.data.code);
-    const source = code?.source || (item.kind === 'code' ? item.text : '');
-    return source || item.kind === 'code' ? { component: 'code', props: { language: code?.language || 'text', source } } : null;
+  {
+    component: 'video',
+    when: (item, asked) => mediaOf(item, 'video', asked) !== undefined,
+    props: (item, asked) => compact({ src: mediaOf(item, 'video', asked), poster: str(item.data.thumbnailUrl), caption: captionOf(item) }),
   },
-  (item) => {
-    const facts = read(FactsData, item.data.facts);
-    return facts?.length === 1 ? { component: 'fact', props: { value: facts[0]!.value, label: facts[0]!.label } } : factInText(item);
+  {
+    component: 'link',
+    when: (item) => item.kind === 'link' && Boolean(item.source.url),
+    props: (item) => {
+      const url = item.source.url!;
+      return compact({ url, site: str(item.data.site) ?? siteOf(url), description: item.summary.trim(), image: str(item.data.image) });
+    },
   },
-  (item, assetUrl) => {
-    if (item.kind !== 'image' && item.kind !== 'video') return null;
-    // A stored asset outlives a social network's media address, which expires.
-    const src = item.source.asset ? assetUrl(item.source.asset) : (str(item.data.mediaUrl) ?? item.source.url);
-    if (!src) return null;
-    const caption = item.summary.trim() && item.summary.trim().length <= CAPTION ? item.summary.trim() : undefined;
-    return item.kind === 'image'
-      ? { component: 'image', props: compact({ src, caption }) }
-      : { component: 'video', props: compact({ src, poster: str(item.data.thumbnailUrl), caption }) };
+  {
+    component: 'chat',
+    when: (item) => spokenOf(item).length > 0,
+    props: (item) => compact({ messages: spokenOf(item), source: item.source.from.replace(/^chat-export:/, '') }),
   },
-  (item) => {
-    const url = item.source.url;
-    if (item.kind !== 'link' || !url) return null;
-    return {
-      component: 'link',
-      props: compact({ url, site: str(item.data.site) ?? siteOf(url), description: item.summary.trim(), image: str(item.data.image) }),
-    };
-  },
-  (item) => {
-    if (item.kind !== 'chat') return null;
-    const messages = excerpt(read(MessagesData, item.data.messages) ?? []);
-    if (messages.length === 0) return null;
-    const source = item.source.from.replace(/^chat-export:/, '');
-    return { component: 'chat', props: compact({ messages, source }) };
-  },
+  { component: 'note', when: () => true, props: () => ({}) },
 ];
 
 export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
+  const asked = { assetUrl };
   for (const rule of RULES) {
-    const draw = rule(item, assetUrl);
-    if (draw && isValidView(draw)) return draw;
+    if (!rule.when(item, asked)) continue;
+    const draw = { component: rule.component, props: rule.props(item, asked) };
+    if (isValidView(draw)) return draw;
   }
   return { component: 'note', props: {} };
 }
@@ -317,11 +357,7 @@ function claimed(reply: ComponentsReply['items'][number], item: Item): Draw {
     case 'steps':
       return { component: 'steps', props: { steps: reply.steps.map((s) => s.trim()).filter(Boolean) } };
     case 'chart':
-      return chartDraw(
-        reply.chartLabels.map((l) => l.trim()),
-        reply.chartValues,
-        kept(reply.chartUnit),
-      );
+      return { component: 'chart', props: chartProps(reply.chartLabels.map((l) => l.trim()), reply.chartValues, kept(reply.chartUnit)) };
     case 'note':
       return { component: 'note', props: compact({ emphasis: reply.emphasis.trim().length <= 120 ? kept(reply.emphasis) : undefined }) };
   }
