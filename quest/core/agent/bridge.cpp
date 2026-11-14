@@ -245,6 +245,16 @@ void Bridge::changed(const Delta& delta, bool animate) {
 
     for (auto& [p, ids] : arrived) {
         if (!standing(*p)) continue;
+        // Suggestions for the card open where it stands come from a conversation about it, so it starts its layer.
+        std::optional<int> opened = p->tree->focus();
+        if (opened && !p->tree->nodes[*opened].head) {
+            for (int id : ids) {
+                if (p->tree->nodes[id].parent != *opened) continue;
+                Tree::Change moved = p->tree->focus(*opened);
+                model.arrive(moved.added);
+                break;
+            }
+        }
         model.arrive(ids, animate ? 0.1 : 0.0);
         logLine(fmt("[agent] %d new cards", int(ids.size())));
         touched = true;
@@ -255,6 +265,13 @@ void Bridge::changed(const Delta& delta, bool animate) {
             int pick = ids.front();
             model.after(1.5, [this, pick] {
                 if (model.tree && model.tree->nodes.count(pick)) model.take(pick);
+            });
+            model.after(3.0, [this, pick] {
+                if (!model.tree || model.tree->focus() != pick) return;
+                const auto& c = model.card(pick);
+                for (int k = 0; c && k < int(c->asks.size()); k++) {
+                    if (c->asks[k].key == "deeper") model.askGardener(pick, k);
+                }
             });
         }
     }
@@ -451,16 +468,31 @@ Bridge::Planted* Bridge::holding(const std::string& nodeId) {
 
 bool Bridge::standing(const Planted& p) const { return model.tree && model.tree.get() == p.tree.get(); }
 
-void Bridge::took(int nodeID, bool wasPick) {
+bool Bridge::opens(int nodeID) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
-    if (!p || !p->service.count(nodeID) || !wasPick) return;
-    client.send(Outbound::keep({NodeId{p->service[nodeID]}}));
-    logLine("[agent] kept " + model.catalog->title(p->tree->nodes[nodeID].ref));
+    if (!p || !p->service.count(nodeID)) return false;
+    const TreeNode& n = p->tree->nodes[nodeID];
+    // A card that already leads a layer, or one on another layer, is gone to as before.
+    if (n.head || p->tree->seat(n).depth != p->tree->standDepth()) return false;
+    p->tree->open(nodeID);
+    logLine("[agent] opened " + model.catalog->title(n.ref));
+    return true;
+}
+
+void Bridge::rows(const TreeNode& node, std::vector<Ask>& asks) {
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    if (!p || !p->service.count(node.id)) return;
+    asks.clear();
+    if (!node.kept) asks.push_back(Ask{"keep", "Keep this"});
+    asks.push_back(Ask{"more", "What else is like this?"});
+    asks.push_back(Ask{"deeper", "Tell me more about this"});
 }
 
 void Bridge::reportFocus() {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
     std::optional<int> open = p ? p->tree->focus() : std::nullopt;
+    // A card opened where it stands is only being looked at; the service hears of a card once it leads a layer.
+    if (open && !p->tree->nodes[*open].head) return;
     if (!open || !p->service.count(*open)) {
         focusSent.reset();
         return;
@@ -478,9 +510,27 @@ bool Bridge::ask(int nodeID, int k) {
     auto s = p->service.find(nodeID);
     const auto& c = model.card(nodeID);
     if (s == p->service.end() || !c || k < 0 || k >= int(c->asks.size())) return true;
-    const std::string& question = c->asks[k].question;
-    client.send(Outbound::ask(NodeId{s->second}, question));
-    logLine("[agent] asked: " + question);
+    const Ask row = c->asks[k];
+    NodeId id{s->second};
+    TreeNode& n = p->tree->nodes[nodeID];
+    if (!n.kept) {
+        client.send(Outbound::keep({id}));
+        n.kept = true;
+        logLine("[agent] kept " + model.catalog->title(n.ref));
+    }
+    if (row.key == "keep") {
+        redraw(nodeID);
+        model.restyle();
+        return true;
+    }
+    // A conversation about the card: it now leads a layer of its own, where what the service brings for it stands.
+    if (!n.head) {
+        Tree::Change moved = p->tree->focus(nodeID);
+        model.arrive(moved.added);
+        model.restyle();
+    }
+    client.send(Outbound::ask(id, row.question));
+    logLine("[agent] asked: " + row.question);
     return true;
 }
 

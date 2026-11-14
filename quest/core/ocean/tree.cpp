@@ -1040,3 +1040,10 @@ void Tree::revise(int id, const std::string& why, bool kept, std::optional<float
     n->imp = imp;
 }
 
+bool Tree::open(int id) {
+    if (!find(nodes, id)) return false;
+    current = id;
+    focused = true;
+    relayout();
+    return true;
+}

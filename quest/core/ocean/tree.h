@@ -330,6 +330,8 @@ public:
     int graft(const Ref& ref, int parent, const std::string& why, Tone tone, bool kept, std::optional<float> imp);
     /// What a node says on its thread, whether it is kept, and how much it matters.
     void revise(int id, const std::string& why, bool kept, std::optional<float> imp);
+    /// Opens a card where it stands, to show what it holds, without starting a layer from it.
+    bool open(int id);
 
     /// Puts a card somewhere else in its group, by hand. Returns what moved.
     std::vector<int> place(int id, Vec2 xy);

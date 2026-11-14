@@ -30,9 +30,14 @@ public:
 
     /// Once a frame, on the frame thread: what the service sent since the last frame reaches the scene.
     void frame(double now);
-    /// A card was asked about (`take`). `wasPick`: it was a suggestion until this pinch kept it.
-    void took(int nodeID, bool wasPick);
-    /// One of the open card's questions was picked. True when the service takes it (the tree is the service's).
+    /// A pinch on a card of a service tree on the layer you work on: it opens where it stands, to show its details.
+    /// True when it did; otherwise the scene does what it always did (going back to a card's own layer).
+    bool opens(int nodeID);
+    /// The rows under an open card of a service tree: "Keep this" for a suggestion, then what can be asked about it.
+    void rows(const TreeNode& node, std::vector<Ask>& asks);
+    /// One of the open card's rows was picked. A question is a conversation about the card: the card starts a layer
+    /// (keeping it, if it was a suggestion) and the service brings related suggestions round it. True when the
+    /// service takes it (the tree is the service's).
     bool ask(int nodeID, int k);
     /// The marked part of the open card was asked about. True when the service takes it.
     bool askMark(int nodeID, const Mark& mark);

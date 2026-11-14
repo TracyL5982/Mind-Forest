@@ -103,9 +103,13 @@ void OceanModel::take(int id) {
     if (tree->condensed(*node) && !node->head && node->parent) target = *node->parent;
     const TreeNode* asked = find(*tree, target);
     bool fresh = asked ? asked->children.empty() : true;
-    bool wasPick = asked && !asked->kept;     // AGENT
+    // AGENT: in a tree the agent service grows, a pinch opens a card where it stands, to show its details; a layer
+    // starts from it only when there is a conversation about it (agent::Bridge::ask).
+    if (agentBridge && agentBridge->opens(target)) {
+        restyle();
+        return;
+    }
     Tree::Change moved = tree->focus(target);
-    if (agentBridge) agentBridge->took(target, wasPick);     // AGENT
     if (fresh && !moved.added.empty()) {
         think(target, Pace::think);
         arrive(moved.added, double(Pace::think));
