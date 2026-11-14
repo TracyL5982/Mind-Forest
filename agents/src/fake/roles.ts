@@ -82,10 +82,10 @@ export const fakeRoles: Roles = {
     const node = ctx.mind.node(anchor);
     const topic = need ?? ctx.mind.itemOf(anchor).title;
     const n = ctx.mind.children(anchor).length;
-    // Asked for a museum work or a paper, the fake brings one, so a card that draws a source's own record can be seen offline.
+    // Asked for a museum work or a paper, the fake brings one as its first pick, so a card that draws a source's own record can be seen offline.
     const asked = /\b(museum|artwork|painting)/i.test(need ?? '') ? await found(ctx, WORK, { id: 'museums', name: 'Museum collections' }) : /\b(paper|study|research)/i.test(need ?? '') ? await found(ctx, PAPER, { id: 'papers', name: 'Research papers' }) : null;
-    const drafts: Item[] = asked ? [asked] : [
-      makeItem(ctx, { kind: 'link', title: `An essay on ${topic}`, summary: 'A long read that argues the idea from first principles.', tags: ['essay'], origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/essay-${n}` } }),
+    const drafts: Item[] = [
+      asked ?? makeItem(ctx, { kind: 'link', title: `An essay on ${topic}`, summary: 'A long read that argues the idea from first principles.', tags: ['essay'], origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/essay-${n}` } }),
       makeItem(ctx, { kind: 'text', title: '7 in 10 notice it without naming it', text: 'In a small survey, 7 in 10 viewers noticed the effect without being able to name it.', summary: 'A survey figure.', tags: ['data'], data: { facts: [{ label: 'viewers who notice it', value: '70%' }] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/survey-${n}` } }),
       makeItem(ctx, { kind: 'text', title: 'How to try it', summary: 'Three steps.', tags: ['how-to'], data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/howto-${n}` } }),
       makeItem(ctx, { kind: 'text', title: 'Use over the decades', summary: 'How often it appears.', tags: ['history'], data: { chart: { labels: ['1960s', '1980s', '2000s', '2020s'], values: [3, 9, 14, 11], unit: 'films' } }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/chart-${n}` } }),

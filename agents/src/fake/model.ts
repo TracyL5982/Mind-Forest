@@ -102,7 +102,7 @@ export function describe(text: string): Description {
   const pros = list('pros');
   const cons = list('cons');
   const bullets = pros.length + cons.length > 0 ? [] : lines.filter(isBullet).map((line) => BULLET.exec(line)!);
-  const rows = lines.filter((line) => line.includes('|') && !/^[\s|:-]+$/.test(line));
+  const rows = lines.filter((line) => line.includes('|'));
   const first = lines.find(Boolean) ?? '';
 
   return {
