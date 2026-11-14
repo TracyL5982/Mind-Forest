@@ -1,5 +1,5 @@
 import { h, put, safeUrl } from './dom.js';
-import { drawDetail } from './components.js';
+import { drawDetail } from './components/index.js';
 
 const HOW = { paste: 'You pasted this', drop: 'You dropped this in', voice: 'You said this', link: 'A link you added', web: 'Found on the web', instagram: 'Found on Instagram', 'image-gen': 'Made for you as a picture', idea: 'An idea from the librarian' };
 

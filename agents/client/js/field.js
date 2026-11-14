@@ -1,6 +1,6 @@
 import { h, put, s, clamp, ease } from './dom.js';
-import { componentOf, drawCard, sizeOf } from './components.js';
-import { arrange } from './composites.js';
+import { componentOf, drawCard, sizeOf } from './components/index.js';
+import { arrange } from './composites/index.js';
 import { Layout } from './layout.js';
 
 const PICK_SCALE = 0.86;

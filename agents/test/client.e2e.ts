@@ -381,6 +381,12 @@ async function main(): Promise<void> {
       await until('the pile to close', async () => (await count(page, '.card.is-under')) === 4);
     });
 
+    await check('every card type in the registry can be sized, drawn and opened', async () => {
+      const missing = await page.evaluate<string[]>(`import('/js/components/index.js').then(({ COMPONENTS }) =>
+        Object.entries(COMPONENTS).flatMap(([name, kind]) => ['size', 'draw', 'detail'].filter((part) => typeof kind[part] !== 'function').map((part) => name + '.' + part)))`);
+      assert.deepEqual(missing, []);
+    });
+
     await check('the service can move the view to a card', async () => {
       const target = 'show-2';
       run.pipeline['deps'].emit({ t: 'navigate', nodeId: target });
