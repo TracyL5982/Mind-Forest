@@ -26,7 +26,10 @@
   .lib-stage .card, .lib-stage .pane { animation: none; }
   .lib-size { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
   .lib-size b { font-weight: 600; color: var(--ink-2); }
-  .lib-detail { --accent: var(--tint); width: min(340px, calc(100vw - 32px)); padding: 16px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+  /* The live client's own opened card, set in the page where the live client pins it to the side. What it offers to do is left out. */
+  .lib-opened.panel { position: static; width: min(384px, calc(100vw - 32px)); height: auto; }
+  .lib-opened .panel-scroll { max-height: 640px; }
+  .lib-opened .panel-actions, .lib-opened .panel-ask, .lib-opened .panel-head .btn { display: none; }
   .lib-props { margin-top: 14px; }
   .lib-props summary { cursor: pointer; color: var(--ink-3); font-size: 12px; }
   .lib-props pre { margin-top: 8px; padding: 12px; border-radius: 10px; background: #111317; color: var(--ink-2); font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; max-width: 760px; overflow: auto; }
@@ -51,8 +54,9 @@
 
 <script type="module">
 import { h } from './js/dom.js';
-import { COMPONENTS, drawCard, drawDetail, sizeOf } from './js/components/index.js';
+import { drawCard, sizeOf } from './js/components/index.js';
 import { arrange } from './js/composites/index.js';
+import { Panel } from './js/panel.js';
 import { SAMPLES } from './library-samples.js';
 
 const TINT = '#9fc3ff';
@@ -90,9 +94,17 @@ function staged(made, status) {
   return [h('div', { class: 'lib-stage', style: { width: `${w}px`, height: `${hgt}px` } }, el), footprint(made.node.view.component, w, hgt)];
 }
 
-function opened(detail) {
-  const el = h('div', { class: 'lib-detail' }, detail);
-  el.style.setProperty('--tint', TINT);
+const store = { node: new Map(), item: new Map(), view: { colour: new Map() } };
+
+/** The opened card as the live client draws it: its own panel, fed this one card. */
+function opened(made, status = 'kept') {
+  const item = { id: `item-${made.node.id}`, origin: { by: 'user' }, ...made.item };
+  const node = { ...made.node, id: `${made.node.id}-${status}`, itemId: item.id, status, parent: 'none', why: '' };
+  store.node.set(node.id, node);
+  store.item.set(item.id, item);
+  store.view.colour.set(node.id, TINT);
+  const el = h('div', { class: 'panel lib-opened' });
+  new Panel({ el, store, send: () => false, asset: ctx.asset, onClose() {} }).open(node.id, [node.id]);
   return el;
 }
 
@@ -300,7 +312,6 @@ function withChips(name, made) {
 
 const componentsEl = document.getElementById('components');
 for (const [name, by, when, made] of [...COMPONENT_SAMPLES, ...STRUCTURED_SAMPLES]) {
-  const detail = drawDetail(made.node, made.item, ctx).flat(Infinity).filter(Boolean);
   componentsEl.append(h('section', { class: 'lib-entry' },
     h('div', { class: 'lib-name' }, h('h3', { text: name }), who(by)),
     h('p', { class: 'lib-when', text: when }),
@@ -308,10 +319,10 @@ for (const [name, by, when, made] of [...COMPONENT_SAMPLES, ...STRUCTURED_SAMPLE
       cell('Kept', staged(made, 'kept')),
       cell('Pick', staged(made, 'pick')),
       withChips(name, made),
-      detail.length > 0 && cell('Opened', opened(detail))),
+      cell('Opened', opened(made))),
     (VARIANTS[name] ?? []).length > 0 && h('div', { class: 'lib-row lib-more' }, VARIANTS[name].map(([label, variant, status = 'kept', open = false]) => [
       cell(label, staged(variant, status)),
-      open && cell(`${label}, opened`, opened(drawDetail(variant.node, variant.item, ctx))),
+      open && cell(`${label}, opened`, opened(variant, status)),
     ])),
     props('Props', made.node.view.props)));
 }
