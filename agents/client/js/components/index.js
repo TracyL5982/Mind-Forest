@@ -14,6 +14,7 @@ import * as facts from './facts.js';
 import * as table from './table.js';
 import * as excerpt from './excerpt.js';
 import * as idea from './idea.js';
+import * as reference from './reference.js';
 import { h, s } from '../dom.js';
 import { LABEL, chips } from '../chips.js';
 import { CHIP_LINE, say, textWidth } from './shared.js';
@@ -27,7 +28,7 @@ import { CHIP_LINE, say, textWidth } from './shared.js';
  */
 export const COMPONENTS = {
   note, quote, fact, image, video, link, chart, person, chat, code, steps,
-  list, facts, table, excerpt, idea,
+  list, facts, table, excerpt, idea, reference,
 };
 
 export const componentOf = (node) => (Object.hasOwn(COMPONENTS, node.view?.component) ? node.view.component : 'note');

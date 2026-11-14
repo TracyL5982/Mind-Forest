@@ -286,6 +286,19 @@ button, input, textarea { font: inherit; color: inherit; }
 .idea-spark { flex: none; fill: var(--accent); }
 .idea-text { text-wrap: balance; }
 
+/* reference: a library card. Its kind and year over a rule, then the title, who wrote it and where it appeared. */
+.c-reference { gap: 0; }
+.reference-head { flex: none; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line-2); }
+.reference-year { color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); font-variant-numeric: tabular-nums; }
+.c-reference .card-title { margin-top: 8px; }
+.reference-authors, .reference-venue { font-size: var(--type-text); line-height: var(--lead-text); overflow-wrap: anywhere; }
+.reference-authors { margin-top: 6px; color: var(--ink-2); }
+.reference-venue { margin-top: 2px; color: var(--ink-3); }
+.detail-reference { padding: 13px 15px; border-radius: 12px; background: var(--face); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+.detail-reference .reference-authors, .detail-reference .reference-venue { font-size: 13.5px; line-height: 19px; }
+.detail-reference .reference-authors { margin-top: 10px; color: var(--ink); }
+.detail-reference .reference-venue { color: var(--ink-2); }
+
 /* ---- groups */
 
 /* A frame is a faint wash and a hairline, so the cards inside it carry the weight. */

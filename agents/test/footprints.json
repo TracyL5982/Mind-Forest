@@ -192,6 +192,11 @@
     {"type":"idea","item":{"title":"Film the whole street in one take at dawn","summary":"","text":"","data":{"when":"昨晚","where":"阁楼"}},"props":{},"size":[272,164],"chips":[{"kind":"when","text":"昨晚","width":54},{"kind":"where","text":"阁楼","width":54}]},
     {"type":"idea","item":{"title":"Turn the attic into a reading room with a window for stars","summary":"","text":""},"props":{},"size":[272,164]},
     {"type":"idea","item":{"title":"给每一位来访的朋友拍一张站在门口的照片，年底做成一本册子","summary":"","text":""},"props":{},"size":[272,164]},
-    {"type":"idea","item":{"title":"","summary":"","text":""},"props":{},"size":[272,88]}
+    {"type":"idea","item":{"title":"","summary":"","text":""},"props":{},"size":[272,88]},
+    {"type":"reference","item":{"title":"Perceived depth under opposed zoom and camera motion","summary":"","text":"","data":{"kind":"paper","site":"doi.example","by":"M. Okafor et al.","date":"2011-05-03","from":"Research papers","authors":["M. Okafor","L. Haas","R. Itō"],"authorsCut":true,"venue":"Journal of Example Vision"},"origin":{"by":"agent","role":"scout"}},"props":{"kind":"paper","authors":["M. Okafor","L. Haas","R. Itō"],"more":true,"year":"2011","venue":"Journal of Example Vision","url":"https://doi.example/10.1000/zoom.2011"},"size":[288,146],"chips":[]},
+    {"type":"reference","item":{"title":"The Poetics of Space","summary":"","text":"","data":{"where":"Cited in the lighting notes"}},"props":{"kind":"book","authors":["Gaston Bachelard"],"year":"1958","venue":"Presses Universitaires de France"},"size":[288,153],"chips":[{"kind":"where","text":"Cited in the lighting notes","width":183}]},
+    {"type":"reference","item":{"title":"基于注意力机制的长文本摘要方法综述","summary":"","text":""},"props":{"kind":"paper","authors":["张伟","李娜","王芳"],"more":true,"year":"2021","venue":"计算机学报"},"size":[288,146]},
+    {"type":"reference","item":{"title":"Attention is all you need","summary":"","text":""},"props":{"kind":"paper","authors":["A. Vaswani","N. Shazeer","N. Parmar","J. Uszkoreit","L. Jones","A. N. Gomez","Ł. Kaiser","I. Polosukhin"],"year":"2017","venue":"Advances in Neural Information Processing Systems 30: Annual Conference on Neural Information Processing Systems"},"size":[288,159]},
+    {"type":"reference","item":{"title":"A field guide to getting lost","summary":"","text":""},"props":{"kind":"book","authors":[]},"size":[288,83]}
   ]
 }
