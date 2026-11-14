@@ -310,7 +310,8 @@ export class Pipeline {
         // The picks of one run arrive in several deliveries. They share a part, so one undo takes the whole run back.
         const part = this.deps.newId();
         const bring = (commands: Command[]) => {
-          if (this.scoutRun.get(anchor) !== run || commands.length === 0) return;
+          // A card deleted while its picks were being found takes the run with it.
+          if (this.scoutRun.get(anchor) !== run || commands.length === 0 || !this.deps.mind.nodes.has(anchor)) return;
           const set = this.apply(AGENT('scout'), need ? `Picks for: ${need}`.slice(0, 120) : `Picks for "${title}"`, commands, part);
           if (set) this.afterContent(set);
         };

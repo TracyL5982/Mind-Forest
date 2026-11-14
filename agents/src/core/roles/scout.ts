@@ -115,8 +115,12 @@ export const scout: Roles['scout'] = async (ctx, input) => {
 
   let imagesLeft = MAX_GENERATED_IMAGES;
   const taken = knownUrls(ctx);
-  // Links are rated while the pictures are made, so they never hold the new content back.
-  const linking = links(ctx, run);
+  // Links are rated while the pictures are made, so they never hold the new content back. Its failure is caught
+  // here, where it starts: awaited only after the pictures, it would otherwise go unhandled while they are made.
+  const linking = links(ctx, run).catch((err): Tie[] => {
+    ctx.note(ROLE, `ties to what is already here were not rated (${message(err)})`);
+    return [];
+  });
   await Promise.all(
     made.map(async (d) => {
       const budget = d.format === 'gallery' ? Math.min(GALLERY_SIZE, imagesLeft) : d.format === 'image' ? Math.min(1, imagesLeft) : 0;

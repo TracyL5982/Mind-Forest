@@ -34,6 +34,9 @@ if (fake) {
   roles = (await import('../core/roles/index.ts')).roles;
 }
 
+// One role's failure that nothing caught must not take the whole service down with the user's session.
+process.on('unhandledRejection', (err) => console.error(`[service] a failure nothing caught: ${err instanceof Error ? err.stack : String(err)}`));
+
 const running = await startServer({
   port: Number(env.MIND_PALACE_PORT ?? 8787),
   host: env.MIND_PALACE_HOST ?? '0.0.0.0',
