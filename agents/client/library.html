@@ -16,7 +16,7 @@
   .lib-name { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
   .lib-name h3 { margin: 0; font-size: 18px; font-weight: 620; }
   .lib-who { font-size: 11.5px; padding: 2px 9px; border-radius: 10px; border: 1px solid var(--line-2); color: var(--ink-2); }
-  .lib-who.is-model { color: var(--pick); border-color: color-mix(in srgb, var(--pick) 45%, transparent); }
+  .lib-who.is-model { color: var(--ink); }
   .lib-when { color: var(--ink-2); font-size: 13.5px; max-width: 80ch; margin-bottom: 16px; }
   .lib-row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
   .lib-more { margin-top: 22px; }
@@ -83,6 +83,12 @@ function staged(made, status) {
   return [h('div', { class: 'lib-stage', style: { width: `${w}px`, height: `${hgt}px` } }, el), footprint(made.node.view.component, w, hgt)];
 }
 
+function opened(detail) {
+  const el = h('div', { class: 'lib-detail' }, detail);
+  el.style.setProperty('--tint', TINT);
+  return el;
+}
+
 const cell = (label, ...kids) => h('div', { class: 'lib-cell' }, h('div', { class: 'lib-label', text: label }), kids);
 const who = (by) => h('span', { class: `lib-who ${by === 'model' ? 'is-model' : ''}`, text: by === 'model' ? 'chosen by the model' : 'chosen by rules' });
 const props = (label, value) => h('details', { class: 'lib-props' }, h('summary', { text: label }), h('pre', { text: JSON.stringify(value, null, 2) }));
@@ -124,6 +130,7 @@ const VARIANTS = {
   fact: [
     ['A word as the value', make('fact', { value: 'Vertigo', label: 'what it evokes' }, { title: 'Vertigo' })],
     ['A long value', make('fact', { value: '$1.2 million', label: 'spent on the second unit' }, { title: 'Budget' })],
+    ['A value too long for the large size', make('fact', { value: '1,234,567,890 km', label: 'travelled by the probe so far' }, { title: 'Distance' })],
   ],
   image: [
     ['Wide', make('image', { src: PIC.river, aspect: 1.85 }, { title: 'River delta' })],
@@ -134,6 +141,7 @@ const VARIANTS = {
   ],
   chart: [
     ['Line, one value marked', make('chart', { chart: 'line', labels: ['1960', '1980', '2000', '2020'], values: [3, 9, 14, 11], unit: 'films', mark: 2 }, { title: 'Use by decade' })],
+    ['No values', make('chart', { chart: 'bar', labels: [], values: [] }, { title: 'Nothing counted yet' })],
     ['Many values, no unit', make('chart', { chart: 'bar', labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], values: [120, 180, 420, 900, 1400, 1150, 800, 760, 520, 300, 160, 110], mark: 4 }, { title: 'Visitors by month' })],
   ],
   person: [
@@ -159,7 +167,7 @@ for (const [name, by, when, made] of COMPONENT_SAMPLES) {
     h('div', { class: 'lib-row' },
       cell('Kept', staged(made, 'kept')),
       cell('Pick', staged(made, 'pick')),
-      detail.length > 0 && cell('Opened', h('div', { class: 'lib-detail', style: { '--tint': TINT } }, detail))),
+      detail.length > 0 && cell('Opened', opened(detail))),
     (VARIANTS[name] ?? []).length > 0 && h('div', { class: 'lib-row lib-more' }, VARIANTS[name].map(([label, variant]) => cell(label, staged(variant, 'kept')))),
     props('Props', made.node.view.props)));
 }
