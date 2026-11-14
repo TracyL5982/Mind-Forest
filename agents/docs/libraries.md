@@ -427,7 +427,7 @@ A type's opened form leaves to the list of sources what the list says in the sam
 
 ## Rules the Renderer follows
 
-Rules in plain code choose first, from one ordered table in `renderer.ts`. The model is asked only about what the rules leave as a note.
+Rules in plain code choose first, from one ordered table in `renderer.ts`. The model is asked only about what the rules leave as a note or an idea.
 
 ### The rule table
 
@@ -477,47 +477,93 @@ Row 22 holds when the item's kind is `text`, `data.where` is set, the title is n
 
 ### An idea
 
-Row 24 holds when the user made the item, its kind is `text`, and it is one phrase: the text, or the title when there is no text. When both are set they must be the same phrase, whatever the case, the white space and the punctuation at the end. The phrase is under 60 characters, holds no digit, and is no web address. In a script written without spaces it holds at least 6 letters. In any other it holds at least 3 words with a letter in them, so a chore, a name or a room number stays a note.
+Row 24 holds when the user made the item, its kind is `text`, and it is one phrase: the text, or the title when there is no text. When both are set they must be the same phrase, whatever the case, the white space and the punctuation at the end. The phrase is under 60 characters, or under 24 in a script written without spaces, holds no digit, and is no web address. In a script written without spaces it holds at least 6 letters. In any other it holds at least 3 words with a letter in them, so a chore, a name or a room number stays a note.
 
 ### The model
+A row whose card names a value or shows a passage or a meaning is also held to the item's own words: its title and text, without its `data`. The role that extracted the piece checked that the item states each value, and not how the values stand together. So the checks `label`, `point`, `whole`, `lead` and `meaning` of the content check below are read for it. A figure, an entry or a row that fails one is dropped from the card. The row is passed over when any other value fails, when the card is no longer valid, or when what is left shows under 20 percent of the item.
 
-- The model is asked about an item whose kind is `text`, whose text is 40 characters or more, and that the rules left as a note. A view the Renderer chose earlier that still stands in the item is kept without asking again.
-- It may choose `quote`, `fact`, `steps` or `chart`, or leave the note and give it an emphasis. It is offered none of the fourteen structured types.
-- When the model fails, the rule-based result is returned and a line goes to the run log.
+
+The model is asked only about items the rules are unsure of, and only to choose among cards built from the item's own words. What it answers is a proposal. Every card it proposes is held to the checks below, and where one fails the rules' card stands. `renderer.ts` holds all of this.
+
+**Which items are asked about.** An item whose kind is `text` or `file`, which the rules drew as a note or an idea, and which says enough: its text, or its title when the rules drew an idea and it has no text, is at least 40 characters, or 16 when it holds a character of a script written without spaces (Han, kana, hangul, Thai). Characters are counted after Unicode NFKC, with each run of white space as one space and the ends trimmed. A view the Renderer chose for the item earlier (`view.by` is `renderer`) that still passes the content check is kept without asking again. The one exception is a note or an idea whose item's title, text or data changed since: a note or an idea shows nothing an edit could contradict, so the model is asked again.
+
+**What it is sent.** For each item, its node id, its title, `now: idea` when the rules drew an idea, `picture: yes` when the item has a picture of its own, and its text. A text over 1,200 characters is sent as its first 1,200, with a line that gives its whole length. The prompt names each card and the slots it fills, and says how to choose: a card of its own when its structure is what the item mainly is, at least a fifth of the text; a sheet only when the item has two or more kinds of part worth seeing and no card of its own covers a fifth of it; a note when nothing fits. It also says that every value is copied word for word in the item's language, that a passage is whole sentences or whole lines, that a label is a few words of its value's own sentence, line or table row and at most 40 characters, and that each figure, entry and row is written once.
+
+**What it may answer.** One entry for each item, all in one flat shape: `id`, `component`, and the slots `subject`, `passage`, `by`, `tone`, `lines`, `labels`, `numbers`, `left`, `right`, `unit`, `emphasis` and `sections`, each an empty string or an empty list when the card does not use it. `component` is one of sixteen: `note`, `idea`, `quote`, `fact`, `facts`, `steps`, `list`, `chart`, `breakdown`, `table`, `qa`, `definition`, `proscons`, `callout`, `excerpt` and `sheet`. One builder for each card turns the slots into props.
+
+| Card | Built from |
+|---|---|
+| `note` | `emphasis`, when it is at most 120 characters |
+| `idea` | nothing |
+| `quote` | `passage` without the quote marks at its ends, and `by` |
+| `fact` | `passage` as the value and `subject` as the label |
+| `facts` | the first six of `lines`, each written `label \| value` |
+| `steps`, `list` | `lines`, one step or entry each |
+| `chart`, `breakdown` | `labels`, `numbers` and `unit`. A chart is a line when every label is a year or a full date and they ascend |
+| `table` | `lines`, the heads first, with `\|` between cells |
+| `qa`, `definition` | `subject` as the question or the term, and `passage` as the answer or the meaning |
+| `proscons` | `left` as the points for and `right` as the points against |
+| `callout` | `passage`, with the tone `note` when `tone` says so and `caution` otherwise |
+| `excerpt` | `passage` without the quote marks at its ends, `by` as `at`, and `data.site`, else `data.from`, as `source` |
+| `sheet` | `sections`, each `{ kind, text, by, lines }`: a heading's, a text's and an excerpt's words in `text`, who said an excerpt in `by`, and figures, entries and table rows in `lines` as for the cards above. A picture is the item's own picture |
+
+Each list drops its empty lines and any line written twice. An emphasis, a speaker, an excerpt's `at` and a unit that the content does not state are left off, and the card is kept without them.
+
+**The checks.** A card the model proposes is drawn only when all of these hold:
+
+1. The library has it: its props pass the component's schema, and an `idea` is a phrase the user wrote, as An idea above says, but under 60 characters in any script.
+2. Everything it shows stands in its item, by the content check below. The label of a figure may be at most 40 characters, and a passage that must be whole at most 400, or 200 in a script written without spaces. A figure, a list entry or a table row that fails is dropped, and the card is drawn without it when it is still a valid card. Any other value that fails refuses the card.
+3. The component's own condition holds, such as a fact's value of at most 32 characters or a breakdown's shares that add up to 100.
+4. It shows at least 20 percent of the item, counted as the coverage floor counts: every value it shows, once each, without the choices and the item's own addresses. A note and an idea draw the item itself and are not held to this.
+
+Every value dropped and every card refused writes one line to the run log that names the item and the value.
+
+**A sheet.** The sections of a `sheet` answer become a card in four steps.
+
+1. A section that repeats one before it is dropped. More than four sections, two headings, or a heading that is not first, and the answer is refused.
+2. The half rule. When one section alone shows at least half of the item, counted as the floor counts, and passes every check above as the card of its own kind, that card is drawn in place of the sheet: figures as a `fact` or a `facts`, a list as a `list`, a table as a `table`, words someone said as a `quote` when they have a speaker the content states and as an `excerpt` when not. When more than one does, the one that shows the most is drawn. A card of its own always wins over a sheet.
+3. Otherwise each section is checked alone. A figure, entry or row that fails is dropped, and a section that still fails is left out. Each is then cut to the room a sheet has: a heading to 80 characters and a text to 280, at the end of a word and with an ellipsis, and four figures, eight entries and five rows. A section that is then no longer valid is left out.
+4. What is left must be a valid sheet, of two to four sections with at most one heading and that first, two that are no heading, and one that is no text. It must show 20 percent of the item, its heading not counted. A sheet that shows less is still drawn when one of its text parts is the item's own opening: the text begins with it, and it is at least 120 characters, or 60 in a script written without spaces. That is what a sheet is for: a long item's opening beside a key figure or a key line.
+
+**Passes.** One pass of the Renderer asks about at most 24 unsure items, in calls of at most 8 made at once and split evenly, so ten items go in two calls of five. A call that fails or times out is tried once more as two halves. An item the model answered for gets `view.by` set to `renderer`, with the model's card or, when that was refused, the rules' card, and is not asked about again until it changes. An item with no answer, because its call failed, the reply left it out or the pass was full, keeps the rules' card with `view.by` set to `default`. When the pass ends, the pipeline runs another over those items, one pass after another and four at most for one change, so a drop of up to 96 items is answered for. A later pass looks at cards alone, since the first one already looked for arrangements. Past four passes an item keeps its plain card until it is next touched.
 
 ### The content check
 
-A view the model proposes is kept only when everything it shows stands in its item, and the stand-in service checks the callout it draws the same way. `CHECKS` in `src/core/views.ts` names a check for every prop of every component, and its type refuses a component or a prop with no entry. The content is the item's title and text and the values of its `data`, without the addresses.
+A card the model proposes is kept only when everything it shows stands in its item, and the stand-in service's choices pass the same checks. `CHECKS` in `src/core/views.ts` names a check for every prop of every component, and its type refuses a component or a prop with no entry. A sheet's sections have a check for each kind. The content is the item's title and text and the values of its `data`, without the addresses. For an item the agents brought, the series in `data.chart` is read as rows of a table after the text, because a source's record is no guess. Words are compared after Unicode NFKC, whatever their case, their spacing and the quote marks and punctuation between them. A number matches any way its written form may be read, and a character of a script written without spaces matches anywhere in a word.
 
 | Check | The value stands when |
 |---|---|
-| `says` | the content states these words |
-| `cell` | the same, and it may be empty, and it holds no `\|` or tab |
-| `quotes` | the content holds this passage as one stretch |
+| `says` | the content states these words, inside one table cell, one list item and, in a script written without spaces, one sentence |
+| `cell` | the same, or it is empty, and it holds no `\|` or tab |
+| `quotes` | the content holds this passage as one stretch, with no sentence end or empty line inside it |
+| `whole` | the same, and it begins where a sentence, a line, a table cell or quoted words begin and ends where one ends |
+| `lead` | it is whole, or it ends with an ellipsis and what comes before it is a stretch that begins where a sentence, a line, a cell or quoted words begin |
+| `meaning` | it is whole and the content gives it as the meaning of the `term` beside it: the term stands in its sentence or the one next to it, or it follows the term with nothing between them but punctuation or a linking word |
 | `writes` | the content writes this number, with the unit beside it when the unit scales it, as 万 and k do |
 | `unit` | the content states these words, or writes them against one of the values |
 | `paints` | the content writes this colour: a hex value whole, or a colour name as words |
 | `own` | it is one of the item's own values, whole or cut short with an ellipsis: an address, a site, a source, the summary, the text, a value in `data` |
-| `label` | it is not empty. It names a value beside it and is not checked against the content |
+| `label` | every word of it stands in the sentence, the line or the table row that holds the `value` beside it, or in the head of that value's column. When the content does not state the value at all, the value fails its own check instead |
+| `point` | the same, for the number at the same place in the `values` beside it |
 | `choice` | always. It says how to draw, not what to show |
 
 | Component | Checks |
 |---|---|
 | `note` | `emphasis` says |
-| `quote` | `text` quotes, `by` says |
+| `quote` | `text` is whole, `by` says |
 | `fact` | `value` says and is at most 32 characters, `label` is a label |
 | `image`, `video`, `link`, `chat`, `code` | every prop is the item's own, but `aspect` and `language`, which are choices |
-| `chart` | `labels` say, `values` write, `unit` is a unit, and there are at least two labels and as many values |
+| `chart` | `labels` are points, `values` write, `unit` is a unit, and there are at least two labels and as many values |
 | `person` | `name` and `role` say, `image` is the item's own |
 | `steps` | each step says, and there are at least two |
 | `facts` | each `value` says, each `label` is a label, and `more` is the number of facts in `data.facts` past those shown |
 | `table` | every head and cell is a cell |
 | `list` | each entry says, and each mark is the one the text carries on that entry's line or `data.checklist` holds for it |
-| `breakdown` | `labels` say, `values` write, `unit` is a unit |
+| `breakdown` | `labels` are points, `values` write, `unit` is a unit, and the values add up to 100, give or take 1 |
 | `qa` | `question` and `answer` say |
-| `callout` | `text` quotes, `tone` is a choice |
-| `excerpt` | `text` quotes, `at` says, `source` is the item's own |
-| `definition` | `term` and `definition` say |
+| `callout` | `text` is whole, `tone` is a choice |
+| `excerpt` | `text` is whole, `at` says, `source` is the item's own |
+| `definition` | `term` says, `definition` is its meaning |
 | `idea` | nothing to check |
 | `proscons` | each point says |
 | `swatch` | each `name` says, each `value` paints |
@@ -533,9 +579,12 @@ The fallback. A title and a few lines of text.
 
 - **Chosen when** nothing else fits.
 - **Props.** `emphasis?`: one short phrase from the text to set apart. Only the model sets it.
+| `sheet` | a heading says, a text is a lead, each figure's `value` says and `label` is a label, each entry says, every table head and cell is a cell, a picture is the item's own, and an excerpt's `text` is whole and its `by` says |
 - **Item holds.** `title`, and `text` or `summary`.
 
 ### quote
+Each type below says when a rule chooses it. Beyond those rules, the model may choose any of the sixteen cards that The model lists for an item the rules are unsure of, and the card is drawn when it passes the checks there.
+
 
 Someone's words, set large.
 
@@ -663,8 +712,8 @@ One question and its answer.
 
 A caveat or a remark set apart from the rest.
 
-- **Chosen when** nothing chooses it yet. It has a schema and a content check, no row of the rule table gives it, and the model's reply cannot name it. The stand-in service draws one from a line that opens `Caution:`, `Warning:` or `Note:`, so clients can be built against it.
-- **Props.** `text`: a passage of the item's own text. `tone`: `caution` or `note`.
+- **Chosen when** the model finds that a text item is mainly a warning, a caveat or a reminder the reader must not miss. No row of the rule table gives it. The stand-in service chooses one for a line that opens `Caution:`, `Warning:` or `Note:`, so clients can be built against it.
+- **Props.** `text`: a whole passage of the item's own text. `tone`: `caution` or `note`.
 - **Drawn as** a band down the left edge of the card in the colour of the tone, coral for a caution and grey for a remark, a glyph and the tone in words, the text on up to five lines, and the item's title as a foot. The tone is never amber, which is a pick's, or teal, which is a link's.
 - **Item holds.** The passage inside `text`.
 
