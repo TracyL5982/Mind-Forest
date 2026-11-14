@@ -98,7 +98,7 @@ interface HandoffNode {
 | `facts` | `{ label: string, value: string }[]` | Figures or attributes. |
 | `person` | `{ name: string, role?: string }` | The one person the item is about. |
 | `quote` | `{ text: string, by?: string }` | A quotation and who said it. |
-| `code` | `{ language?: string, source: string }` | A piece of code. A pasted text has it when the text is one fenced block or reads as code. `language` is the name on the fence, and is absent when the fence has none or the code has no fence. |
+| `code` | `{ language?: string, source: string }` | A piece of code. A pasted text has it when the text is one fenced block, a JSON object or array written over three lines or more, a terminal transcript that opens with a `$ ` prompt, or lines that read as code. `language` is the name on the fence, `json` for the JSON and `sh` for the transcript. It is absent when the fence has none and for other code with no fence. YAML, HTML and code on one line are code only inside a fence. |
 | `when` | `string` | A date or time, as the content writes it. |
 | `site` | `string` | The host name of a link or of a pick's source. |
 | `where` | `string` | The place the item is about. |

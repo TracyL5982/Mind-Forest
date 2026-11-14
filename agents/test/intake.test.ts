@@ -490,6 +490,76 @@ test('a document with headings, or with a comment in it, is not code', async () 
   items.forEach((item, n) => assert.equal(item.data.code, undefined, DOCUMENTS[n]));
 });
 
+const EVERYDAY: [what: string, text: string][] = [
+  ['quantities in brackets', 'Milk (2 pints)\nEggs (a dozen)\nBread (wholemeal)\nButter (unsalted)\nApples (six)'],
+  ['phone numbers with a label in brackets', 'Mum 07700 900123 (mobile)\nDad 07700 900456 (work)\nDr Patel 0161 496 0000 (surgery)\nSchool office 0161 496 0111 (mornings only)'],
+  ['books with a year in brackets', 'The Body Keeps the Score, van der Kolk (2014)\nWhy We Sleep, Walker (2017)\nBreath, Nestor (2020)\nBeing Mortal, Gawande (2014)'],
+  ['Chinese lines ending in a half-width bracket', '牛奶(两盒)\n鸡蛋(一打)\n豆腐(老的)\n小葱(一把)'],
+  ['lines ending in a smiley', 'First day at the new school went fine :)\nShe already has a friend called Noor :)\nForgot her lunch box, the office lent her one :)'],
+  ['arrows written as =>', 'rent goes up => we move further out\nfurther out => longer commute for both of us\nlonger commute => we need the second car after all'],
+  ['chores that begin with a keyword', 'return library books\nclass photo money due friday\nlet the plumber in at ten\nimport contacts to the new phone'],
+  ['a recipe with bracketed remarks', 'Roast the squash at 200 (fan 180)\nToast the seeds in a dry pan (watch them)\nBlend with the stock (about 800 ml)'],
+  ['sentences ending in a semicolon', 'Things the solicitor said;\nthe searches take three weeks;\nthe seller has not answered the enquiries;\nwe should not book the removal van yet;'],
+  ['a budget written with equals signs', 'rent = 800\nfood = 300\nfun = 100'],
+  ['chores that begin as a query does', 'update the mailing list\ncreate a logo for the choir\njoin the gym before March\nselect a venue'],
+  ['names with an at sign', '@ana\n@ben\n@carl'],
+  ['prices with a dollar sign set apart', '$ 5 for coffee\n$ 12 for lunch\n$ 40 for the train'],
+  ['a to-do list with headings', '# Today\ncall the bank\n# Tomorrow\npost the forms'],
+];
+
+test('everyday notes with brackets, arrows, smileys, semicolons or equals signs are not code', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Words') })) }));
+  const items = await intake(k.ctx, EVERYDAY.map(([, text]) => ({ kind: 'text' as const, text })));
+  assert.equal(items.length, EVERYDAY.length);
+  items.forEach((item, n) => assert.equal(item.data.code, undefined, EVERYDAY[n]![0]));
+});
+
+const UNFENCED: [what: string, language: string | undefined, source: string][] = [
+  ['a Python function with a docstring, assignments and a loop', undefined, 'def amortise(principal, annual_rate, years):\n    """Monthly payment and total interest for a repayment loan."""\n    r = annual_rate / 12\n    n = years * 12\n    if r == 0:\n        return principal / n, 0.0\n    payment = principal * r / (1 - (1 + r) ** -n)\n    total = payment * n\n    return payment, total - principal\n\n\nfor rate in (0.0419, 0.0445):\n    monthly, interest = amortise(250_000, rate, 25)\n    print(f"{rate:.2%}: {monthly:,.0f} a month, {interest:,.0f} interest")'],
+  ['Python with a decorator and typed assignments', undefined, '@dataclass\nclass Loan:\n    principal: float = 0.0\n    years: int = 25\n\nloan = Loan()\nrate: float = 0.04\ntry:\n    check(loan)\nexcept ValueError:\n    raise'],
+  ['a SQL query with no semicolon inside it', undefined, "SELECT m.name, COUNT(p.id) AS payments, SUM(p.amount) AS total\nFROM members m\nLEFT JOIN payments p ON p.member_id = m.id\nWHERE p.paid_on >= DATE '2026-01-01'\nGROUP BY m.name\nHAVING SUM(p.amount) > 100\nORDER BY total DESC\nLIMIT 20;"],
+  ['a SQL query in lower case', undefined, 'select name, email\nfrom members\nwhere joined > 2020\norder by name;'],
+  ['a JSON object over lines', 'json', '{\n  "compilerOptions": {\n    "target": "ES2022",\n    "strict": true\n  },\n  "include": ["src", "test"]\n}'],
+  ['a JSON array over lines', 'json', '[\n  { "name": "Ana", "paid": true },\n  { "name": "Ben", "paid": false }\n]'],
+  ['a terminal transcript that is mostly output', 'sh', "$ git status\nOn branch main\nYour branch is ahead of 'origin/main' by 2 commits.\n$ git log --oneline -2\n3f2a1bc Fix the date parser\n9e0d7aa Add tests for leap years\n$ git push"],
+];
+
+test('code with no fence is code: Python with a docstring, SQL, a JSON file as json and a terminal transcript as sh', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Snippet') })) }));
+  const items = await intake(k.ctx, UNFENCED.map(([, , source]) => ({ kind: 'text' as const, text: source })));
+  items.forEach((item, n) => {
+    const [what, language, source] = UNFENCED[n]!;
+    assert.deepEqual(item.data.code, { ...(language ? { language } : {}), source }, what);
+  });
+  const [oneLine, broken, scalar, command] = await intake(k.ctx, [
+    { kind: 'text', text: '{"name": "config", "retries": 3}' },
+    { kind: 'text', text: '{\n  name: config,\n  retries: three\n}' },
+    { kind: 'text', text: '"just\\na\\nstring"' },
+    { kind: 'text', text: 'Run this first\n$ npm install\nand tell me what it prints' },
+  ]);
+  assert.equal(oneLine!.data.code, undefined, 'JSON on one line');
+  assert.equal(broken!.data.code, undefined, 'braces around words that are not JSON');
+  assert.equal(scalar!.data.code, undefined, 'a JSON string');
+  assert.equal(command!.data.code, undefined, 'one command inside a note');
+});
+
+const LEFT_AS_NOTES: [what: string, language: string, source: string][] = [
+  ['YAML', 'yaml', 'services:\n  web:\n    image: nginx:1.27\n    ports:\n      - "8080:80"\n  db:\n    image: postgres:16\n    restart: unless-stopped'],
+  ['HTML', 'html', '<form action="/join" method="post">\n  <label for="email">Email</label>\n  <input id="email" name="email" type="email" required>\n  <button type="submit">Join the choir list</button>\n</form>'],
+  ['minified JavaScript', 'js', '!function(){var e=document.querySelectorAll("[data-toggle]");for(var t=0;t<e.length;t++)e[t].addEventListener("click",function(n){n.preventDefault();this.classList.toggle("open")})}();'],
+];
+
+test('YAML, HTML and one line of minified JavaScript are notes unless fenced, since YAML reads as a plain list', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Config') })) }));
+  const bare = await intake(k.ctx, LEFT_AS_NOTES.map(([, , source]) => ({ kind: 'text' as const, text: source })));
+  bare.forEach((item, n) => assert.equal(item.data.code, undefined, LEFT_AS_NOTES[n]![0]));
+  const fenced = await intake(k.ctx, LEFT_AS_NOTES.map(([, language, source]) => ({ kind: 'text' as const, text: `\`\`\`${language}\n${source}\n\`\`\`` })));
+  assert.deepEqual(fenced.map((item) => item.data.code), LEFT_AS_NOTES.map(([, language, source]) => ({ language, source })));
+});
+
 test('a long paste of code stays one item, and code is kept when the model fails', async () => {
   const k = kit();
   const long = Array.from({ length: 80 }, (_v, n) => `const value${n} = compute(${n});`).join('\n');
