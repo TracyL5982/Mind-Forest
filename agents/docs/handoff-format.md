@@ -98,7 +98,7 @@ interface HandoffNode {
 | `facts` | `{ label: string, value: string }[]` | Figures or attributes. |
 | `person` | `{ name: string, role?: string }` | The one person the item is about. |
 | `quote` | `{ text: string, by?: string }` | A quotation and who said it. |
-| `code` | `{ language: string, source: string }` | A piece of code. |
+| `code` | `{ language?: string, source: string }` | A piece of code. A pasted text has it when the text is one fenced block or reads as code. `language` is the name on the fence, and is absent when the fence has none or the code has no fence. |
 | `when` | `string` | A date or time, as the content writes it. |
 | `site` | `string` | The host name of a link or of a pick's source. |
 | `where` | `string` | The place the item is about. |
@@ -122,7 +122,7 @@ interface HandoffNode {
 | `mediaUrl` | `string` | The address of the picture or recording itself, for a pick that is one. |
 | `thumbnailUrl` | `string` | The address of a small still picture for a video or media pick. |
 
-For an item the user brought in, a value in `chart`, `facts`, `person`, `quote`, `when` and the keys from `where` to `excerpt` is kept only when the content of the item states it. For a picture or a video, the content is the description in `text` and the file name. The labels of `facts` and `chart`, the unit of `chart`, the wording of `steps`, `quote.by` and `person.role` are not checked.
+For an item the user brought in, a value in `chart`, `facts`, `person`, `quote`, `when` and the keys from `where` to `excerpt` is kept only when the content of the item states it. For a picture or a video, the content is the description in `text` and the file name. The labels of `facts` and `chart`, the unit of `chart`, the wording of `steps`, `quote.by` and `person.role` are not checked. A `chart` value is a number the content writes. When the unit scales the values, as `万`, `亿`, `千`, `k`, `M` and `bn` do, each value is the number the content writes before that unit: `2189` with the unit `万` for "2189万".
 
 If two branches of one tree are in the handoff, `trees` has two entries with the same `id`.
 
