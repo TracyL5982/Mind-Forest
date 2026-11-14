@@ -1,6 +1,6 @@
 import { h, put, s, clamp, ease } from './dom.js';
-import { componentOf, drawCard, sizeOf } from './components.js';
-import { arrange } from './composites.js';
+import { componentOf, drawCard, sizeOf } from './components/index.js';
+import { arrange } from './composites/index.js';
 import { Layout } from './layout.js';
 
 const PICK_SCALE = 0.86;
@@ -94,7 +94,8 @@ export class Field {
       if (!card) {
         const from = (node.parent && this.cards.get(node.parent)?.cur) || target;
         const face = h('div', { class: 'card-face' });
-        const el = h('div', { class: 'card', data: { id: node.id } }, face);
+        const el = h('div', { class: 'card', data: { id: node.id } }, face,
+          h('div', { class: 'think', 'aria-label': 'Working on this' }, h('i'), h('i'), h('i')));
         card = { el, face, sig: '', cur: instant ? { ...target } : { ...from }, tween: null, target: null };
         this.cards.set(node.id, card);
         this.cardLayer.append(el);
@@ -103,7 +104,9 @@ export class Field {
           face.addEventListener('animationend', () => face.classList.remove('is-arriving'), { once: true });
         }
       }
-      Object.assign(card, { w: sh.w, h: sh.h, scale: sh.scale, treeId: node.treeId });
+      const cover = arr?.under.has(node.id) ? arr.cover : null;
+      const [w, hgt] = cover ? [cover[0] / sh.scale, cover[1] / sh.scale] : [sh.w, sh.h];
+      Object.assign(card, { w, h: hgt, scale: sh.scale, treeId: node.treeId });
 
       if (!card.target || card.target.x !== target.x || card.target.y !== target.y) {
         card.target = { x: target.x, y: target.y };
@@ -113,16 +116,13 @@ export class Field {
       }
 
       const component = componentOf(node);
-      const sig = `${sh.item.revision}|${JSON.stringify(node.view)}|${sh.w}x${sh.h}`;
+      const sig = `${sh.item.revision}|${JSON.stringify(node.view)}|${w}x${hgt}`;
       if (sig !== card.sig) {
         card.sig = sig;
-        card.el.style.width = `${sh.w}px`;
-        card.el.style.height = `${sh.h}px`;
+        card.el.style.width = `${w}px`;
+        card.el.style.height = `${hgt}px`;
         card.el.dataset.component = component;
-        put(card.face,
-          h('div', { class: `card-body c-${component}` }, drawCard(node, sh.item, { asset: this.asset })),
-          h('div', { class: 'think', 'aria-label': 'Working on this' }, h('i'), h('i'), h('i')),
-        );
+        put(card.face, drawCard(node, sh.item, { asset: this.asset }));
       }
       card.el.setAttribute('aria-label', `${node.status === 'pick' ? 'Pick' : 'Card'}: ${sh.item.title}`);
       card.el.style.setProperty('--tint', view.colour.get(node.id));
@@ -175,7 +175,7 @@ export class Field {
       pane.el.dataset.composite = group.composite;
       put(pane.el,
         h('div', { class: 'pane-head' },
-          h('span', { class: 'pane-kind', text: arr.label }),
+          h('span', { class: 'kind', text: arr.label }),
           arr.title !== arr.label && h('span', { class: 'pane-title clamp-1', text: arr.title }),
           arr.canOpen && h('button', {
             class: 'pane-open', type: 'button', text: arr.open ? 'Close' : `Open ${group.members.length}`,

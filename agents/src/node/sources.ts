@@ -89,12 +89,14 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
   // ---- museums
 
   type Museum = (query: string, max: number) => Promise<Found[]>;
-  const work = (title: string, by: string, date: string, medium: string, from: string, url: string, image: string): Found => ({ title, by, date, text: medium, from, url, image });
+  /** `said` is what the catalogue says the work is, shown as its text. `medium` is only what it is made of. */
+  const work = (title: string, by: string, date: string, said: string, medium: string, holder: string, url: string, image: string): Found =>
+    ({ title, by, date, text: said, from: holder, url, image, kind: 'artwork', holder, ...(medium ? { medium } : {}) });
 
   const chicago: Museum = async (query, max) => {
     const json = await ask(`https://api.artic.edu/api/v1/artworks/search?q=${q(query)}&limit=${max}&fields=id,title,artist_title,date_display,medium_display,image_id`);
     return list(json.data).filter((w) => str(w.image_id)).map((w) =>
-      work(str(w.title), str(w.artist_title), str(w.date_display), str(w.medium_display), 'Art Institute of Chicago', `https://www.artic.edu/artworks/${w.id}`, `https://www.artic.edu/iiif/2/${str(w.image_id)}/full/843,/0/default.jpg`));
+      work(str(w.title), str(w.artist_title), str(w.date_display), str(w.medium_display), str(w.medium_display), 'Art Institute of Chicago', `https://www.artic.edu/artworks/${w.id}`, `https://www.artic.edu/iiif/2/${str(w.image_id)}/full/843,/0/default.jpg`));
   };
   const met: Museum = async (query, max) => {
     const base = 'https://collectionapi.metmuseum.org/public/collection';
@@ -102,18 +104,19 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     // The search answers with ids only, and works still in copyright come back without a picture.
     const works = await Promise.all(list(found.objectIDs).slice(0, max * 2).map((id) => ask(`${base}/v1/objects/${id}`).catch(() => null)));
     return works.flatMap((w) => (w && str(w.primaryImageSmall)
-      ? [work(str(w.title), str(w.artistDisplayName), str(w.objectDate), str(w.medium), 'The Metropolitan Museum of Art', str(w.objectURL), str(w.primaryImageSmall))]
+      ? [work(str(w.title), str(w.artistDisplayName), str(w.objectDate), str(w.medium), str(w.medium), 'The Metropolitan Museum of Art', str(w.objectURL), str(w.primaryImageSmall))]
       : [])).slice(0, max);
   };
   const cleveland: Museum = async (query, max) => {
     const json = await ask(`https://openaccess-api.clevelandart.org/api/artworks/?q=${q(query)}&has_image=1&limit=${max}`);
     return list(json.data).filter((w) => str(w.images?.web?.url)).map((w) =>
-      work(str(w.title), str(w.creators?.[0]?.description), str(w.creation_date), str(w.technique) || str(w.type), 'Cleveland Museum of Art', str(w.url), str(w.images.web.url)));
+      work(str(w.title), str(w.creators?.[0]?.description), str(w.creation_date), str(w.technique) || str(w.type), str(w.technique), 'Cleveland Museum of Art', str(w.url), str(w.images.web.url)));
   };
+  // The V&A search says what kind of object a work is ("Teapot"), never what it is made of, so it gives no medium.
   const victoriaAndAlbert: Museum = async (query, max) => {
     const json = await ask(`https://api.vam.ac.uk/v2/objects/search?q=${q(query)}&images_exist=1&page_size=${max}`);
     return list(json.records).filter((w) => str(w._images?._iiif_image_base_url)).map((w) =>
-      work(str(w._primaryTitle) || str(w.objectType), str(w._primaryMaker?.name), str(w._primaryDate), str(w.objectType), 'Victoria and Albert Museum', `https://collections.vam.ac.uk/item/${w.systemNumber}`, `${str(w._images._iiif_image_base_url)}full/!960,960/0/default.jpg`));
+      work(str(w._primaryTitle) || str(w.objectType), str(w._primaryMaker?.name), str(w._primaryDate), str(w.objectType), '', 'Victoria and Albert Museum', `https://collections.vam.ac.uk/item/${w.systemNumber}`, `${str(w._images._iiif_image_base_url)}full/!960,960/0/default.jpg`));
   };
   const MUSEUMS = [chicago, met, cleveland, victoriaAndAlbert];
   const PER_MUSEUM = 4;
@@ -136,6 +139,10 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
 
   // ---- research
 
+  /** What OpenAlex calls a work, as the kind a card draws. A chapter, a dataset or anything else gets no kind. */
+  const WORK_KINDS: Record<string, Found['kind']> = { article: 'paper', preprint: 'paper', review: 'paper', letter: 'paper', dissertation: 'paper', book: 'book', monograph: 'book' };
+  const OPENALEX_AUTHORS = 100;
+
   const papers: Adapter = {
     id: 'papers',
     name: 'Research papers',
@@ -143,13 +150,21 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     query: 'Three to six words a paper on this would have in its title or abstract.',
     show: 2,
     async search(query) {
-      const json = await ask(`https://api.openalex.org/works?search=${q(query)}&filter=cited_by_count:>10&per-page=8&select=id,doi,title,publication_year,authorships,abstract_inverted_index,cited_by_count`);
+      const json = await ask(`https://api.openalex.org/works?search=${q(query)}&filter=cited_by_count:>10&per-page=8&select=id,doi,title,type,publication_year,authorships,is_authors_truncated,primary_location,abstract_inverted_index,cited_by_count`);
       return list(json.results).map((w): Found => {
         const words: string[] = [];
         for (const [word, places] of Object.entries((w.abstract_inverted_index ?? {}) as Record<string, number[]>)) for (const at of places) words[at] = word;
         const authors = list(w.authorships).map((a) => str(a.author?.display_name)).filter(Boolean);
         const cited = Number(w.cited_by_count) || 0;
+        const venue = str(w.primary_location?.source?.display_name);
+        const kind = WORK_KINDS[str(w.type)];
+        // The search lists at most 100 authors. Eight live records with a cut list all came without `is_authors_truncated`, so the count decides.
+        const authorsCut = w.is_authors_truncated === true || list(w.authorships).length >= OPENALEX_AUTHORS;
         return {
+          ...(kind ? { kind } : {}),
+          ...(authors.length > 0 ? { authors } : {}),
+          ...(authorsCut ? { authorsCut } : {}),
+          ...(venue ? { venue } : {}),
           title: plain(str(w.title)),
           by: authors.length > 2 ? `${authors[0]} et al.` : authors.join(' and '),
           date: str(w.publication_year),
@@ -162,6 +177,9 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
 
   // ---- books
 
+  /** Apple names several authors in one string, as "A, B & C". */
+  const authorsOf = (names: string): string[] => names.split(/\s+&\s+|,\s+(?!(?:Jr|Sr|II|III|IV)\b)/).map((n) => n.trim()).filter(Boolean);
+
   const books: Adapter = {
     id: 'books',
     name: 'Books',
@@ -170,12 +188,16 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     show: 2,
     async search(query) {
       const json = await ask(`https://itunes.apple.com/search?term=${q(query)}&media=ebook&limit=${PER_SEARCH}`);
-      return list(json.results).map((b): Found => ({
-        title: str(b.trackName), by: str(b.artistName), date: str(b.releaseDate).slice(0, 4),
-        text: [plain(str(b.description)).slice(0, 1500), list(b.genres).length > 0 ? `Shelved under: ${list(b.genres).filter((g) => g !== 'Books').slice(0, 5).join(', ')}.` : ''].filter(Boolean).join('\n'),
-        url: str(b.trackViewUrl),
-        ...(str(b.artworkUrl100) ? { image: str(b.artworkUrl100).replace('100x100bb', '600x600bb') } : {}),
-      })).filter((f) => f.text.length > 120);
+      return list(json.results).map((b): Found => {
+        const authors = authorsOf(str(b.artistName));
+        return {
+          kind: 'book', ...(authors.length > 0 ? { authors } : {}),
+          title: str(b.trackName), by: str(b.artistName), date: str(b.releaseDate).slice(0, 4),
+          text: [plain(str(b.description)).slice(0, 1500), list(b.genres).length > 0 ? `Shelved under: ${list(b.genres).filter((g) => g !== 'Books').slice(0, 5).join(', ')}.` : ''].filter(Boolean).join('\n'),
+          url: str(b.trackViewUrl),
+          ...(str(b.artworkUrl100) ? { image: str(b.artworkUrl100).replace('100x100bb', '600x600bb') } : {}),
+        };
+      }).filter((f) => f.text.length > 120);
     },
   };
 
@@ -386,7 +408,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
       const one = (value: unknown) => str(list(value)[0]);
       return list(json.items).filter((r) => one(r.edmIsShownBy) || one(r.edmPreview)).map((r): Found => ({
         title: plain(one(r.title)), by: /^https?:/.test(one(r.dcCreator)) ? '' : one(r.dcCreator), date: one(r.year),
-        text: plain(one(r.dcDescription)).slice(0, 600), from: one(r.dataProvider) || 'Europeana',
+        text: plain(one(r.dcDescription)).slice(0, 600), from: one(r.dataProvider) || 'Europeana', ...(one(r.dataProvider) ? { holder: one(r.dataProvider) } : {}),
         url: str(r.guid).split('?')[0]!, image: one(r.edmIsShownBy) || one(r.edmPreview),
       }));
     },
