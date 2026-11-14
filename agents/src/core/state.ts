@@ -206,9 +206,18 @@ export class Mindstorm {
   nodesOfItem(itemId: Id): Node[] {
     return [...(this.itemNodes.get(itemId) ?? [])].map((id) => this.maps.node.get(id)!);
   }
-  /** Items that are not archived and sit in no tree, waiting to be filed. The library is not waiting. */
-  inbox(): Item[] {
+  /** What the user dropped that no tree holds: the loose part of their knowledge base. The library is not listed. */
+  unplaced(): Item[] {
     return [...this.maps.item.values()].filter((i) => !i.archived && !inLibrary(i) && !this.itemNodes.get(i.id)?.size);
+  }
+  /**
+   * Whether the item is something the user knows, to draw on when a tree is grown: what they dropped, the library, and anything
+   * they kept. An agent's unkept pick is a suggestion, not knowledge yet.
+   */
+  known(itemId: Id): boolean {
+    const item = this.maps.item.get(itemId);
+    if (!item || item.archived) return false;
+    return inLibrary(item) || item.origin.by === 'user' || [...(this.itemNodes.get(itemId) ?? [])].some((id) => this.maps.node.get(id)!.status === 'kept');
   }
   linksOf(nodeId: Id): Link[] {
     return [...this.maps.link.values()].filter((l) => l.a === nodeId || l.b === nodeId);
@@ -432,7 +441,9 @@ export class Mindstorm {
     for (const n of [...gone].reverse()) this.del('node', n.id);
     for (const itemId of new Set(gone.map((n) => n.itemId))) {
       const item = this.item(itemId);
-      if (!this.itemNodes.get(itemId)?.size && !item.archived && !inLibrary(item)) this.put('item', { ...item, archived: true });
+      // Taking away an agent's suggestion of something the user dropped leaves it in their knowledge base.
+      const suggested = item.origin.by === 'user' && gone.every((n) => n.itemId !== itemId || (n.status === 'pick' && n.origin.by === 'agent'));
+      if (!this.itemNodes.get(itemId)?.size && !item.archived && !inLibrary(item) && !suggested) this.put('item', { ...item, archived: true });
     }
     if (root.parent === null) this.del('tree', root.treeId);
   }

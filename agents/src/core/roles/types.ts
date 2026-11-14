@@ -6,21 +6,18 @@ import { defaultView } from '../views.ts';
 export interface Settings {
   /** 'provisional': agent picks stay dashed until the user keeps them. 'immediate': they arrive kept. */
   picksMode: 'provisional' | 'immediate';
-  /** New picks the Scout brings per run. */
+  /** New picks the Scout asks for per run, beside what the user already has that it brings into the round. */
   picksPerRun: number;
-  /** Most links to existing content the Scout may draw per run. */
-  maxLinksPerRun: number;
-  /** A link to existing content needs at least this strength, 0…1. */
-  linkThreshold: number;
-  /** Whether filing a dump also scouts picks for it. */
+  /** A tie to something the user already has is strong, and brings it into a round or files a dump under a card, at this rating or above, 0…1. */
+  strongTie: number;
+  /** Whether a tree the user asks for gets its first round of picks straight away. */
   scoutOnDump: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   picksMode: 'provisional',
   picksPerRun: 5,
-  maxLinksPerRun: 2,
-  linkThreshold: 0.8,
+  strongTie: 0.8,
   scoutOnDump: true,
 };
 
@@ -81,6 +78,8 @@ export type Intent =
   | { kind: 'handoff'; scope: Scope; note: string }
   /** The user is dictating something to keep. */
   | { kind: 'capture'; text: string }
+  /** A new tree: about `subject`, or grown from items the user already has, such as what they just dropped or the card they have open. */
+  | { kind: 'tree'; subject: string; itemIds: Id[] }
   | { kind: 'keep'; nodeIds: Id[] }
   | { kind: 'undo' }
   /** Nothing to do but reply. */
@@ -101,16 +100,26 @@ export interface Handoff {
   assets: string[];
 }
 
+/** The user asked for a tree to be made of what they dropped. `title` is what they called it, or empty. */
+export interface TreeRequest {
+  title: string;
+}
+
 export interface Roles {
-  conductor(ctx: RoleContext, input: { utterance: string; scene: Scene; history: Turn[] }): Promise<Conducted>;
+  /** `dropped` is what the user dropped last, so "start a tree on this" can mean it. */
+  conductor(ctx: RoleContext, input: { utterance: string; scene: Scene; history: Turn[]; dropped?: Id[] }): Promise<Conducted>;
   /** Turns dumps into items. Does not add them. */
   intake(ctx: RoleContext, dumps: RawDump[]): Promise<Item[]>;
-  /** Places items that are not in the mindstorm yet. Returns createTree and addNode commands; the pipeline adds the items first. */
-  filer(ctx: RoleContext, items: Item[]): Promise<Command[]>;
   /**
-   * Brings new content to the anchor.
-   * 'refresh' replaces the anchor's unkept picks. 'more' adds to them.
-   * Returns addItem + addNode for each pick, deleteNode for replaced picks, and at most `maxLinksPerRun` links.
+   * Places what was dropped. Every item joins the knowledge base whether placed or not; the pipeline adds those that are new.
+   * Asked for a tree, the items become one new tree. Otherwise an item with a strong fit under a card of a tree is hung there as a pick,
+   * and the rest are placed nowhere. Returns createTree and addNode commands.
+   */
+  filer(ctx: RoleContext, items: Item[], request?: TreeRequest): Promise<Command[]>;
+  /**
+   * Brings content to the anchor: what the user already has that is strongly tied to it, and new content.
+   * 'refresh' replaces the anchor's unkept picks. 'more' adds to them; the pipeline then lets the oldest give way to keep the round.
+   * Returns addItem + addNode for each new pick, addNode alone for what the user already has, and deleteNode for replaced picks.
    * Picks that are ready early may be handed to `deliver` so the user sees them sooner; the rest are returned.
    */
   scout(

@@ -97,7 +97,7 @@ test('films, works, notes and tags become library items the headset can draw fro
   assert.equal(k.mind.item('library:note:shark').data.mediaUrl, k.mind.item('library:film:1').data.mediaUrl, 'a note that shows a film plays that film');
   assert.match(k.mind.item('library:tag:hitchcock').text, /Vertigo \(1958\)/);
 
-  assert.deepEqual(k.mind.inbox(), [], 'the library is not waiting to be filed');
+  assert.deepEqual(k.mind.unplaced(), [], 'the library is not listed as unplaced');
   assert.equal(k.mind.search('vertigo')[0]?.item.id, 'library:film:0', 'the library is searched');
 });
 

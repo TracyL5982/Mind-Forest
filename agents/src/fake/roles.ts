@@ -1,5 +1,8 @@
 import type { Command, Item } from '../core/domain.ts';
 import type { Found } from '../core/ports.ts';
+import { MINDSTORM } from '../core/round.ts';
+import { treeIntent } from '../core/roles/conductor.ts';
+import { filer } from '../core/roles/filer.ts';
 import { codeIn } from '../core/roles/intake/code.ts';
 import { structure } from '../core/roles/intake/describe.ts';
 import { byRule, grounded } from '../core/roles/renderer.ts';
@@ -34,7 +37,9 @@ async function found(ctx: RoleContext, record: Found, source: { id: string; name
  * They return plausible content of every kind so each component and composite gets drawn.
  */
 export const fakeRoles: Roles = {
-  async conductor(_ctx, { utterance, scene }) {
+  async conductor(ctx, { utterance, scene, dropped }) {
+    const tree = treeIntent(ctx, utterance, scene, dropped);
+    if (tree) return tree;
     const anchor = scene.selection[0] ?? scene.focus;
     const text = utterance.toLowerCase();
     if (/^undo\b/.test(text)) return { intent: { kind: 'undo' }, say: 'Undone.' };
@@ -65,18 +70,14 @@ export const fakeRoles: Roles = {
     });
   },
 
-  async filer(ctx, items) {
+  /** A tree the user asked for is grown as the real Filer grows it, which needs no model. Otherwise a card that shares most of an item's title words is a strong fit. */
+  async filer(ctx, items, request) {
+    if (request) return filer(ctx, items, request);
     const commands: Command[] = [];
     for (const item of items) {
       const hit = ctx.mind.search(`${item.title} ${item.tags.join(' ')}`, { limit: 1, placed: true })[0];
-      const home = hit && hit.coverage >= 0.5 ? ctx.mind.nodesOfItem(hit.id)[0] : undefined;
-      if (home) {
-        commands.push({ type: 'addNode', node: makeNode(ctx, item, { treeId: home.treeId, parent: home.id, status: 'kept', why: 'Same topic', origin: item.origin }) });
-      } else {
-        const treeId = ctx.newId();
-        const root = makeNode(ctx, item, { treeId, parent: null, status: 'kept', why: '', origin: item.origin });
-        commands.push({ type: 'createTree', tree: { id: treeId, title: item.title.slice(0, 40), rootId: root.id, digest: item.summary, createdAt: ctx.now() }, root });
-      }
+      const home = hit && hit.coverage >= 0.75 ? ctx.mind.nodesOfItem(hit.id).find((n) => n.status === 'kept') : undefined;
+      if (home) commands.push({ type: 'addNode', node: makeNode(ctx, item, { treeId: home.treeId, parent: home.id, status: pickStatus(ctx), why: 'Same topic', origin: AGENT('filer', MINDSTORM) }) });
     }
     return commands;
   },

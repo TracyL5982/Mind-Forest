@@ -149,7 +149,7 @@ export const Command = z.discriminatedUnion('type', [
   z.object({ type: z.literal('addNode'), node: Node }),
   /** Moves the node and everything under it. `treeId` moves it into another tree. */
   z.object({ type: z.literal('moveNode'), id: Id, parent: Id, treeId: Id.optional(), order: z.number().optional() }),
-  /** Removes the node and everything under it. Items left with no node are archived. */
+  /** Removes the node and everything under it. Items left with no node are archived, except the library's and what the user dropped that only an agent's unkept pick held. */
   z.object({ type: z.literal('deleteNode'), id: Id }),
   z.object({ type: z.literal('keepPick'), id: Id }),
   z.object({ type: z.literal('setWhy'), id: Id, why: z.string(), importance: z.number().min(0).max(1).optional() }),

@@ -297,9 +297,9 @@ test('a chart, steps and a recording a source returns reach the card', async () 
   const { k, anchor } = setup({}, [find]);
   k.world.pictures.add('https://img.example/cover.jpg');
   k.world.found.set('papers:numbers', [
-    { ...PAPER, url: 'https://x.example/chart', chart: { labels: ['2000', '2010'], values: [1, 2], unit: 'billions' } },
-    { ...PAPER, url: 'https://x.example/steps', steps: ['Chop', 'Stir'] },
-    { ...PAPER, url: 'https://x.example/episode', media: 'https://cdn.example/episode.mp3', image: 'https://img.example/cover.jpg' },
+    { ...PAPER, title: 'The numbers by decade', url: 'https://x.example/chart', chart: { labels: ['2000', '2010'], values: [1, 2], unit: 'billions' } },
+    { ...PAPER, title: 'Two steps', url: 'https://x.example/steps', steps: ['Chop', 'Stir'] },
+    { ...PAPER, title: 'An episode', url: 'https://x.example/episode', media: 'https://cdn.example/episode.mp3', image: 'https://img.example/cover.jpg' },
   ]);
   k.world.sources = [{ ...PAPERS, show: 3 }];
   k.model.on('scout.curate', () => ({ chosen: [1, 2, 3].map((number) => ({ number, note: '', excerpt: '' })) }));
@@ -441,70 +441,92 @@ test('a node that is gone yields nothing', async () => {
   assert.deepEqual(await scout(k.ctx, { anchor: 'nope', mode: 'refresh' }), []);
 });
 
-test('an unrelated existing item is never linked, and the model is not even asked', async () => {
+test('an unrelated thing the user has never comes into the round, and the model is not even asked', async () => {
   const { k, anchor } = setup();
   k.seedTree('Baking', ['Sourdough starter', 'Rye bread']);
 
   const commands = await scout(k.ctx, { anchor, mode: 'refresh' });
   apply(k, commands);
 
-  assert.equal(commands.filter((c) => c.type === 'link').length, 0);
-  assert.ok(!k.model.calls.some((c) => c.role === 'scout.links'));
+  assert.ok(!k.model.calls.some((c) => c.role === 'scout.known'));
   assert.equal(k.mind.picks(anchor).length, 5);
+  assert.ok(k.mind.picks(anchor).every((n) => k.mind.itemOf(n.id).origin.by === 'agent'));
 });
 
-test('a strongly related existing item is linked at 0.9 and not at 0.6', async () => {
-  for (const [strength, expected] of [
-    [0.9, 1],
-    [0.6, 0],
+test('a card of another tree strongly tied to the card comes into its round at 0.9 and not at 0.6, as itself and not a copy', async () => {
+  for (const [strength, shown] of [
+    [0.9, true],
+    [0.6, false],
   ] as const) {
     const { k, anchor, film } = setup();
     const lenses = k.seedTree('Lenses', ['Lens notes', 'Dolly zoom lens choice']);
     const related = k.mind.node(lenses.nodeIds[1]!).itemId;
-    k.model.on('scout.links', (req) => {
-      assert.ok(!req.user.includes(`item ${k.mind.node(film.nodeIds[1]!).itemId}`), 'what hangs under the anchor is not a link candidate');
+    k.model.on('scout.known', (req) => {
+      assert.ok(!req.user.includes(`item ${k.mind.node(film.nodeIds[1]!).itemId}`), 'what the tree already holds is not offered');
       return { ratings: [{ itemId: related, strength, why: 'same technique' }] };
     });
 
-    apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+    const commands = await scout(k.ctx, { anchor, mode: 'refresh' });
+    apply(k, commands);
 
-    assert.equal(k.mind.links.size, expected, `rated ${strength}`);
-    assert.equal(k.mind.picks(anchor).length, 5, 'links never cost a pick');
-    if (expected) {
-      const link = [...k.mind.links.values()][0]!;
-      assert.deepEqual([link.a, link.b], [anchor, lenses.nodeIds[1]]);
-      assert.equal(link.why, 'same technique');
-
+    const there = k.mind.picks(anchor).filter((n) => n.itemId === related);
+    assert.equal(there.length, shown ? 1 : 0, `rated ${strength}`);
+    assert.equal(k.mind.picks(anchor).length - there.length, 5, 'the new picks all came');
+    assert.ok(!commands.some((c) => c.type === 'addItem' && c.item.id === related), 'it is shown, not copied');
+    assert.equal(k.mind.links.size, 0, 'no line is drawn to the other tree');
+    if (shown) {
+      assert.deepEqual([there[0]!.why, there[0]!.origin], ['same technique', AGENT('scout', 'mindstorm')]);
       const again = await scout(k.ctx, { anchor, mode: 'more' });
-      assert.equal(again.filter((c) => c.type === 'link').length, 0, 'what is already linked is not linked twice');
+      assert.ok(!again.some((c) => c.type === 'addNode' && c.node.itemId === related), 'what the tree holds is not brought twice');
     }
   }
 });
 
-test('never more links than the setting allows, and only to items that were offered', async () => {
-  const { k, anchor } = setup({ maxLinksPerRun: 2 });
-  const lenses = k.seedTree('Lenses', ['Lens notes', 'Dolly zoom lens', 'Dolly zoom history', 'Dolly zoom rig', 'Zoom dolly track']);
+test('what the user has comes first in a round, the strongest first, at most eight, and new content still comes', async () => {
+  const { k, anchor } = setup({}, [NOTE, ARTWORK, STEPS, IMAGE, VIDEO]);
+  const lenses = k.seedTree('Lenses', ['Lens notes', ...Array.from({ length: 11 }, (_, i) => `Dolly zoom note ${i + 1}`)]);
   const rated = lenses.nodeIds.slice(1).map((id) => k.mind.node(id).itemId);
-  k.model.on('scout.links', () => ({
+  k.model.on('scout.known', () => ({
     ratings: [
-      ...rated.map((itemId, i) => ({ itemId, strength: 0.85 + i * 0.03, why: 'same technique' })),
+      ...rated.map((itemId, i) => ({ itemId, strength: 0.8 + i * 0.01, why: `tie ${i + 1}` })),
       { itemId: 'item-that-is-not-there', strength: 1, why: 'invented' },
     ],
   }));
+  const early: Command[][] = [];
+
+  const rest = await scout(k.ctx, { anchor, mode: 'refresh', deliver: (commands) => (early.push(commands), apply(k, commands)) });
+  apply(k, rest);
+
+  const known = k.mind.picks(anchor).filter((n) => n.origin.tool === 'mindstorm');
+  assert.deepEqual(known.map((n) => n.why), ['tie 11', 'tie 10', 'tie 9', 'tie 8', 'tie 7', 'tie 6', 'tie 5', 'tie 4']);
+  assert.ok(early[0]!.some((c) => c.type === 'addNode' && c.node.origin.tool === 'mindstorm'), 'they arrive with the first delivery');
+  const fresh = k.mind.picks(anchor).filter((n) => n.origin.tool !== 'mindstorm');
+  assert.equal(fresh.length, 2, 'the round keeps room for two new things');
+  assert.equal(k.mind.picks(anchor).length, 10);
+});
+
+test('a new find that repeats what the tree holds by address or by title is left out', async () => {
+  const find = direction('find', 'What the studies measured', { source: 'papers', lookups: ['dolly zoom'] });
+  const { k, anchor } = setup({}, [NOTE, find]);
+  hang(k, anchor, 'The house at the bend', 'kept');
+  k.world.sources = [{ ...PAPERS, show: 3 }];
+  k.world.found.set('papers:dolly zoom', [
+    { ...PAPER, title: 'Vertigo  and the Dolly-Zoom', url: 'https://doi.example/10.1/other' },
+    { ...PAPER, title: 'A second study', url: 'https://doi.example/10.1/second' },
+  ]);
+  k.model.on('scout.curate', () => ({ chosen: [1, 2].map((number) => ({ number, note: '', excerpt: '' })) }));
+  k.seedTree('Reading', ['Papers', 'Vertigo and the dolly zoom']);
+  const held = [...k.mind.items.values()].find((i) => i.title === 'Vertigo and the dolly zoom')!;
+  k.mind.apply({ origin: USER, label: 'pin', commands: [{ type: 'addNode', node: makeNode(k.ctx, held, { treeId: k.mind.node(anchor).treeId, parent: anchor, status: 'kept', why: '', origin: USER }) }] });
 
   apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
 
-  assert.equal(k.mind.links.size, 2);
-  assert.deepEqual(
-    [...k.mind.links.values()].map((l) => l.b).sort(),
-    [lenses.nodeIds[3], lenses.nodeIds[4]].sort(),
-    'the two strongest are the ones drawn',
-  );
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['A second study'], 'the note of the same title and the paper of the same title are both left out');
 });
 
 test('every picture and recording a pick shows is fetched from the service, never from where it was found', async () => {
   const podcast = direction('find', 'Hear it explained', { source: 'podcasts', lookups: ['dolly zoom'] });
-  const { k, anchor } = setup({}, [...MIX, podcast]);
+  const { k, anchor } = setup({ picksPerRun: 6 }, [...MIX, podcast]);
   k.world.sources.push({ id: 'podcasts', name: 'Podcasts', goodFor: 'Episodes.', query: 'Topic words.', show: 1 });
   k.world.found.set('podcasts:dolly zoom', [{ ...PAPER, url: 'https://podcasts.example/ep', media: 'https://cdn.example/ep.mp3', image: 'https://img.example/ep.jpg' }]);
   k.world.pictures.add('https://img.example/ep.jpg');
@@ -595,7 +617,7 @@ test('a library film that no tree holds is hung under the card only for a strong
   ] as const) {
     const { k, anchor } = setup();
     const vertigo = libraryFilm(k, 'Vertigo', 'Scottie climbs the bell tower stairs: the dolly zoom.', ['dolly zoom']);
-    k.model.on('scout.links', () => ({ ratings: [{ itemId: vertigo.id, strength, why: 'where the dolly zoom began' }] }));
+    k.model.on('scout.known', () => ({ ratings: [{ itemId: vertigo.id, strength, why: 'where the dolly zoom began' }] }));
 
     const commands = await scout(k.ctx, { anchor, mode: 'refresh' });
     apply(k, commands);
@@ -614,21 +636,21 @@ test('a library film that shares nothing with the card is never offered to the m
 
   apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
 
-  assert.ok(!k.model.calls.some((c) => c.role === 'scout.links'), 'the model was not asked to rate it');
+  assert.ok(!k.model.calls.some((c) => c.role === 'scout.known'), 'the model was not asked to rate it');
 });
 
 test('a refresh takes a library pick away and the film stays in the library', async () => {
   const { k, anchor } = setup();
   const vertigo = libraryFilm(k, 'Vertigo', 'Scottie climbs the bell tower stairs: the dolly zoom.', ['dolly zoom']);
-  k.model.on('scout.links', () => ({ ratings: [{ itemId: vertigo.id, strength: 0.9, why: 'where it began' }] }));
+  k.model.on('scout.known', () => ({ ratings: [{ itemId: vertigo.id, strength: 0.9, why: 'where it began' }] }));
   apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
-  k.model.on('scout.links', () => ({ ratings: [] }));
+  k.model.on('scout.known', () => ({ ratings: [] }));
 
   apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
 
   assert.equal(k.mind.picks(anchor).filter((n) => n.itemId === vertigo.id).length, 0);
   assert.equal(k.mind.item(vertigo.id).archived, false);
-  assert.deepEqual(k.mind.inbox(), []);
+  assert.deepEqual(k.mind.unplaced(), []);
 });
 
 test('a card deleted while the Scout works on it ends the run without an unhandled failure', async () => {
