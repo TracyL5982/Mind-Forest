@@ -36,6 +36,20 @@ A client fetches only from the service. Every address in an item or a view that 
 - `data.embed`: a player page on another site, such as `https://www.youtube.com/embed/<id>`. Only a browser can show it. A client that cannot shows `data.thumbnailUrl` and the title instead.
 - `source.url`: where the item was found. A record of its origin, not something a client loads.
 
+## Library items
+
+`npm run import-library` adds the headset's own library as items: 100 films, 750 works, the notes and tags of `ocean.json`, and the 2 saved trees.
+
+- `source.from` is `library`. `data.library` is `{kind, key}`:
+  - `film`: `key` is the film's `index` in `public/clips/clips.json`, a number.
+  - `work`: `key` is the work's `id` in `public/works/works.json`, such as `met-258425`. It is not the work's place in the file. Find the place by matching `id`.
+  - `note`: `key` is the note's `id` in `ocean.json`.
+  - `tag`: `key` is the tag's `id` in `ocean.json` or `works.json`.
+- A headset draws a library item from its own media by `data.library`. A web client draws it like any other item: a film plays `data.mediaUrl` with `data.thumbnailUrl` as its still, and a work shows `source.asset`, a JPEG.
+- Most library items are in no tree. They arrive in `snapshot.items` with no node. Keep them in the item map, and draw one only where a node holds it: in a saved tree, or as a pick under a card.
+- The Scout hangs a library item under a card only when the tie is strong. The `change` adds a node whose `itemId` is the library item's id and adds no item. The node's `origin` is `{by: 'agent', role: 'scout', tool: 'library'}`.
+- Deleting a library item's last node leaves the item in the library. It is never archived.
+
 ## Service to client
 
 | `t` | Fields | Meaning |
