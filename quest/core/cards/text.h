@@ -14,6 +14,11 @@ struct Fixed {
     std::string in(const Words& words) const { return words.chinese ? chinese : english; }
 };
 
+namespace fixed {
+constexpr Fixed question{"Q", "问"};
+constexpr Fixed answer{"A", "答"};
+}  // namespace fixed
+
 /// words.js `moreOf`: what a table writes under the rows and columns it leaves out.
 std::string moreOf(const Words& words, int rows, int columns);
 
