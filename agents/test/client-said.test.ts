@@ -21,6 +21,8 @@ test('an opened card still prints what its text says beyond its form', () => {
   assert.equal(rest('There are 53 stations on the road, each drawn in rain.', ['53', 'stations on the road']), 'There are 53 stations on the road, each drawn in rain.', 'words lifted from inside a sentence leave it whole');
   assert.equal(rest('“妈妈，云是不是天空盖的被子？”——豆豆，三岁半，早上去幼儿园的路上', ['妈妈，云是不是天空盖的被子？', '豆豆']), '“妈妈，云是不是天空盖的被子？”——豆豆，三岁半，早上去幼儿园的路上');
   assert.equal(rest('Catalogue', ['cat']), 'Catalogue', 'a drawn string is matched as whole words');
+  assert.equal(rest('Table 2. Mean recall by hours of sleep (n = 212)', ['Mean recall by hours of sleep']), 'Table 2. Mean recall by hours of sleep (n = 212)', 'words after what is drawn are not a mark');
+  assert.equal(rest('Eiffel Tower notes for the trip\nHeight: 330 m', ['Eiffel Tower notes', 'Height', '330 m']), 'Eiffel Tower notes for the trip');
 });
 
 test('a sentence the form has drawn is cut out of a line that says more', () => {

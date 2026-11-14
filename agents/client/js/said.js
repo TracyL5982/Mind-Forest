@@ -29,11 +29,13 @@ export function isSaid(words, said) {
 /**
  * The lines of `text` that `said` does not already say, where `said` is every string the opened
  * card draws. A string is matched as whole words, whatever its case and however its white space
- * runs. A line is left out when one of those strings holds it, or when all it adds to them is a
- * mark of at most twelve letters and fewer than they give it, as the cells of a pasted table row
- * add `|` and a ticked entry adds `[x]`. Any other line is printed, without each sentence of twenty characters or more that
- * is already drawn. A character of a script written without spaces counts as two letters. `mark`
- * is the most letters a line may add and still be left out.
+ * runs. A line is left out when one of those strings holds it, or when all it adds to them is
+ * signs between them and a mark before them of at most twelve letters and fewer than they give
+ * it, as the cells of a pasted table row add `|` and a ticked entry adds `[x]`. A letter after the
+ * first drawn string is never a mark, so `(n = 212)` after a drawn title keeps its line. Any other
+ * line is printed, without each sentence of twenty characters or more that is already drawn. A
+ * character of a script written without spaces counts as two letters. `mark` is the most letters
+ * a line may add and still be left out.
  */
 export function rest(text, said, mark = MARK) {
   const shown = [...new Set(said.map((part) => lower(fold(part))).filter(Boolean))].sort((a, b) => b.length - a.length);
@@ -53,8 +55,10 @@ export function rest(text, said, mark = MARK) {
         if ((edge(part[0]) || edge(low[at - 1])) && (edge(part.at(-1)) || edge(low[end]))) drawn.fill(true, at, end);
       }
     }
-    const left = weight([...line].filter((_, i) => !drawn[i]).join(''));
-    if (left <= mark && left < weight(line) - left) continue;
+    const first = drawn.indexOf(true);
+    const lead = weight(line.slice(0, Math.max(0, first)));
+    const left = weight(line.split('').filter((_, i) => !drawn[i]).join(''));
+    if (first >= 0 && left === lead && lead <= mark && lead < weight(line) - lead) continue;
     kept.push(withoutSentences(line, drawn) ?? raw.trim());
   }
   return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
