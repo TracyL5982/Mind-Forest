@@ -1,12 +1,16 @@
 import { h, clamp } from '../dom.js';
-import { picture, text } from './shared.js';
+import { TEXT_LETTER, fold, framed, framedHeight, picture, text } from './shared.js';
 
-export const size = (item, props) => [236, clamp(Math.round(236 / (Number(props.aspect) || 1.35)), 130, 260)];
+const WIDTH = 240;
 
-export const draw = (item, props, ctx) => [
-  picture(text(props.src), item.title, ctx),
-  h('div', { class: 'media-caption clamp-2', text: text(props.caption) || item.title }),
-];
+const pictureHeight = (props) => clamp(Math.round(WIDTH / (Number(props.aspect) || 1.35)), 130, 260);
+const caption = (item, props) => text(props.caption) || item.title || '';
+const captionLines = (item, props) => fold(caption(item, props), WIDTH - 27, TEXT_LETTER, 2);
+
+export const size = (item, props) => [WIDTH, framedHeight(pictureHeight(props), captionLines(item, props))];
+
+export const draw = (item, props, ctx) => framed(pictureHeight(props), caption(item, props), captionLines(item, props),
+  picture(text(props.src), item.title, ctx));
 
 export const detail = (item, props, ctx) => [
   h('div', { class: 'detail-media' }, picture(text(props.src), item.title, ctx)),

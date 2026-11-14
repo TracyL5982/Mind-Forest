@@ -1,15 +1,19 @@
 import { h } from '../dom.js';
-import { picture, text } from './shared.js';
+import { TEXT_LETTER, fold, framed, framedHeight, picture, text } from './shared.js';
 
-export const size = () => [264, 172];
+const WIDTH = 272;
+const POSTER = 153;
 
-export const draw = (item, props, ctx) => [
+const caption = (item, props) => text(props.caption) || item.title || '';
+const captionLines = (item, props) => fold(caption(item, props), WIDTH - 27, TEXT_LETTER, 2);
+
+export const size = (item, props) => [WIDTH, framedHeight(POSTER, captionLines(item, props))];
+
+export const draw = (item, props, ctx) => framed(POSTER, caption(item, props), captionLines(item, props),
   text(props.poster)
     ? picture(props.poster, item.title, ctx)
     : h('video', { src: ctx.asset(text(props.src)), preload: 'metadata', muted: true, playsinline: true, tabindex: '-1' }),
-  h('div', { class: 'media-play', 'aria-hidden': 'true' }),
-  h('div', { class: 'media-caption clamp-2', text: text(props.caption) || item.title }),
-];
+  h('div', { class: 'media-play', 'aria-hidden': 'true' }));
 
 export function detail(item, props, ctx) {
   const embed = /^https:\/\/www\.youtube\.com\/embed\/[\w-]{11}$/.test(text(item.data?.embed)) ? item.data.embed : '';

@@ -69,6 +69,8 @@ export class Panel {
 
     this.badge.textContent = pick ? 'Pick from the librarian' : node.parent === null ? 'Start of a tree' : 'Kept';
     this.badge.classList.toggle('is-pick', pick);
+    this.el.classList.toggle('is-pick', pick);
+    this.el.style.setProperty('--tint', this.store.view.colour.get(node.id) ?? '');
     this.count.textContent = this.selection.size > 1 ? `${this.selection.size} cards selected` : '';
 
     const picks = [...this.selection].filter((id) => this.store.node.get(id)?.status === 'pick');

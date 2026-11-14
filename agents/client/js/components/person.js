@@ -1,12 +1,14 @@
 import { h } from '../dom.js';
 import { initials, picture, text } from './shared.js';
 
-export const size = () => [236, 92];
+const face = (name, props, ctx) => h('div', { class: 'person-face' }, text(props.image) ? picture(props.image, name, ctx) : initials(name));
+
+export const size = () => [252, 88];
 
 export function draw(item, props, ctx) {
-  const name = text(props.name) || item.title;
+  const name = text(props.name) || item.title || '';
   return [
-    h('div', { class: 'person-face' }, text(props.image) ? picture(props.image, name, ctx) : initials(name)),
+    face(name, props, ctx),
     h('div', { class: 'person-main' },
       h('div', { class: 'card-title clamp-1', text: name }),
       text(props.role) && h('div', { class: 'card-text clamp-1', text: props.role }),
@@ -17,6 +19,6 @@ export function draw(item, props, ctx) {
 
 export const detail = (item, props, ctx) => [
   h('div', { class: 'detail-person' },
-    h('div', { class: 'person-face' }, text(props.image) ? picture(props.image, text(props.name), ctx) : initials(text(props.name) || item.title)),
+    face(text(props.name) || item.title || '', props, ctx),
     h('div', null, h('div', { class: 'card-title', text: text(props.name) }), h('div', { class: 'card-text', text: text(props.role) }))),
 ];

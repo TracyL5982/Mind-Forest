@@ -20,6 +20,7 @@
  *   card=<type>:<json> add one kept card of that type with those props, in a tree named Lane
  *   tree=<text>        go to the tree whose name holds this text
  *   zoom=<percent>     zoom the field about the middle of the page
+ *   pan=<dx>,<dy>      drag the field by this many page pixels
  *   open=<what>        click a card. <what> is a card type, or text on the card.
  *   press=<name>       click the button with this name in the opened card
  *   close              close the opened card
@@ -164,6 +165,15 @@ const STEPS: Record<string, Step> = {
     await page.keyboard.up('Control');
     if (Math.abs(got - want) > 0.005) throw new Error(`asked for ${want}, the field is at ${got.toFixed(3)}`);
     return `the field is at ${Math.round(got * 100)} percent`;
+  },
+  async pan(value, page) {
+    const [dx, dy] = value.split(',').map(Number) as [number, number];
+    // The top left corner of the field is clear of the bars, the dock and, at most zooms, the cards.
+    const from = { x: 8, y: Math.round(height * 0.62) };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + dx, from.y + dy, { steps: 6 });
+    await page.mouse.up();
   },
   async open(value, page) {
     const byType = page.locator(`.card[data-id][data-component="${value}"]`);

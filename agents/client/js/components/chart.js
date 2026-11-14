@@ -1,13 +1,20 @@
 import { h } from '../dom.js';
-import { chart, head, text } from './shared.js';
+import { FRAME, TEXT, TITLE, chart, text, title } from './shared.js';
 
-export const size = () => [276, 180];
+const WIDTH = 300;
+const PLOT = 136;
+
+export const size = (item, props) => [WIDTH, FRAME + TITLE + (text(props.unit) ? TEXT : 0) + 8 + PLOT];
 
 export const draw = (item, props) => [
-  head(item, text(props.unit)),
-  chart(props, 244, 112),
+  h('div', { class: 'chart-head' },
+    title(item, 1),
+    text(props.unit) && h('div', { class: 'card-tag clamp-1', text: props.unit })),
+  chart(props, WIDTH - 33, PLOT),
 ];
 
 export const detail = (item, props) => [
-  h('div', { class: 'detail-chart' }, chart(props, 320, 150), text(props.unit) && h('div', { class: 'chart-unit', text: props.unit })),
+  h('div', { class: 'detail-chart' },
+    text(props.unit) && h('div', { class: 'card-tag', text: props.unit }),
+    chart(props, 324, 200, { every: true })),
 ];
