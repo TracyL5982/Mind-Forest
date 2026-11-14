@@ -12,6 +12,12 @@ export const TEXT = 17;
 export const FRAME = 30;
 /** Left and right padding plus the border of a padded card, and 1 px to spare. */
 export const SIDES = 33;
+/**
+ * The same without the px to spare: a passage in the serif counts its lines in the whole line box,
+ * because a character set with Han draws exactly 16 px there, so fifteen of them fill a 240 px line
+ * to the last px and a px held back would push the fifteenth onto a line of its own.
+ */
+export const PADDING = 32;
 /** What a card with chips adds to its height: the line of chips and the gap above it. */
 export const CHIP_LINE = 28;
 

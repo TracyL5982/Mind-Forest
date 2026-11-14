@@ -1,8 +1,9 @@
 import { h } from '../dom.js';
-import { FIGURES, FRAME, PASSAGE_LETTER, SIDES, TITLE, TITLE_LETTER, figureNeed, say, text, wrap } from './shared.js';
+import { FIGURES, FRAME, PADDING, PASSAGE_LETTER, SIDES, TITLE, TITLE_LETTER, figureNeed, say, text, wrap } from './shared.js';
 
 const WIDTH = 272;
 const COLUMN = WIDTH - SIDES;
+const LINE = WIDTH - PADDING;
 const RULE = 10;
 /** The headword is set in a figure's middle size while it fits on one line, and in the title's size on up to two when it does not. */
 const [LARGE, LEAD] = FIGURES[1];
@@ -12,7 +13,7 @@ function plan(props) {
   const meaning = text(props.definition).trim();
   const large = figureNeed(term, FIGURES[1]) <= COLUMN * 100;
   const termLines = large ? 1 : wrap(term, COLUMN, TITLE_LETTER, 2);
-  return { term, meaning, large, termLines, termHeight: large ? LEAD : termLines * TITLE, lines: wrap(meaning, COLUMN, PASSAGE_LETTER, 6) };
+  return { term, meaning, large, termLines, termHeight: large ? LEAD : termLines * TITLE, lines: wrap(meaning, LINE, PASSAGE_LETTER, 6) };
 }
 
 export const shows = [];

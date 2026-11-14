@@ -1,10 +1,10 @@
 import { h } from '../dom.js';
-import { FRAME, PASSAGE_LETTER, SIDES, TEXT, TITLE, say, text, wrap } from './shared.js';
+import { FRAME, PADDING, PASSAGE_LETTER, TEXT, TITLE, say, text, wrap } from './shared.js';
 
 const WIDTH = 288;
 /** The rule down the passage's left side and the gap after it. */
 const RULE = 14;
-const COLUMN = WIDTH - SIDES - RULE;
+const LINE = WIDTH - PADDING - RULE;
 const MOST_LINES = 6;
 
 /** The line the Scout ends a page's text with: who made it, when, and the source it searched. */
@@ -25,7 +25,7 @@ function plan(item, props) {
   const words = flat(passage(item, props));
   return {
     words,
-    lines: wrap(words, COLUMN, PASSAGE_LETTER, MOST_LINES),
+    lines: wrap(words, LINE, PASSAGE_LETTER, MOST_LINES),
     title: item.title || '',
     where: [text(props.at).trim(), text(props.source).trim()].filter(Boolean).join(' · '),
   };
