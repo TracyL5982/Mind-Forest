@@ -348,6 +348,46 @@ button, input, textarea { font: inherit; color: inherit; }
 .detail-definition .definition-text { font-size: 17px; line-height: 1.45; overflow-wrap: anywhere; }
 .detail-definition .fact-value, .detail-definition .card-title { overflow-wrap: anywhere; }
 
+/* proscons: the points for and against, side by side under their names. A plus or a minus marks each point, so the sides are told apart without colour. */
+.proscons { margin-top: 4px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 17px; font-size: var(--type-text); line-height: var(--lead-text); }
+.proscons-side { position: relative; min-width: 0; display: flex; flex-direction: column; }
+.proscons-side + .proscons-side::before { content: ''; position: absolute; left: -9px; top: 2px; bottom: 0; width: 1px; background: var(--line); }
+.proscons-side .kind { margin-bottom: 4px; }
+.proscons-side ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.proscons-side li { display: flex; align-items: flex-start; gap: 6px; }
+.proscons-side .card-foot { margin-top: 5px; }
+.proscons-mark { flex: none; margin-top: 3.5px; fill: none; stroke: var(--ink-2); stroke-width: 1.6; stroke-linecap: round; }
+.proscons-mark.is-pros { stroke: var(--accent); }
+.detail-proscons { display: flex; flex-direction: column; gap: 14px; font-size: 14px; line-height: 20px; }
+.detail-proscons ul { gap: 7px; }
+.detail-proscons li { overflow-wrap: anywhere; }
+.detail-proscons .proscons-mark { margin-top: 5px; }
+.detail-proscons .proscons-side + .proscons-side::before { content: none; }
+
+/* swatch: the colours in a band across the top, then each by name with its value. No label is set on a colour, so each reads on any of them. */
+.c-swatch { padding: 0; gap: 0; }
+.swatch-strip { flex: none; display: flex; background: repeating-linear-gradient(135deg, #131519 0 6px, #1d2026 6px 12px); box-shadow: inset 0 -1px 0 var(--line); }
+.swatch-block { flex: 1; }
+.swatch-under { padding: 12px 15px 13px; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.swatch-rows { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: var(--type-text); line-height: var(--lead-text); }
+.swatch-rows li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: start; column-gap: 8px; }
+.swatch-dot { width: 10px; height: 10px; margin-top: 3.5px; border-radius: 3px; background-image: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22); }
+.swatch-value { color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.swatch-under .card-foot { margin-top: 8px; }
+.swatch-rows.is-full { margin-top: 0; gap: 9px; font-size: 14px; line-height: 20px; }
+.swatch-rows.is-full li { grid-template-columns: 20px minmax(0, 1fr) auto; column-gap: 10px; }
+.swatch-rows.is-full .swatch-dot { width: 20px; height: 20px; margin-top: 0; border-radius: 5px; }
+.swatch-rows.is-full .swatch-name { overflow-wrap: anywhere; }
+
+/* place: a name set large beside a round pin, under its picture when it has one. */
+.c-place { padding: 0; gap: 0; }
+.place-under { padding: 13px 15px; display: flex; flex-direction: column; gap: 8px; }
+.place-head { display: flex; align-items: center; gap: 10px; min-height: 28px; }
+.place-pin { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 18%, var(--face)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+.place-pin svg { fill: none; stroke: var(--accent); stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; }
+.place-head .fact-value, .place-head .card-title { min-width: 0; }
+.detail-place .place-head .fact-value, .detail-place .place-head .card-title { overflow-wrap: anywhere; }
+
 /* ---- groups */
 
 /* A frame is a faint wash and a hairline, so the cards inside it carry the weight. */

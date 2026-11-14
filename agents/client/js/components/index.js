@@ -20,6 +20,9 @@ import * as breakdown from './breakdown.js';
 import * as qa from './qa.js';
 import * as callout from './callout.js';
 import * as definition from './definition.js';
+import * as proscons from './proscons.js';
+import * as swatch from './swatch.js';
+import * as place from './place.js';
 import { h, s } from '../dom.js';
 import { LABEL, chips } from '../chips.js';
 import { CHIP_LINE, say, textWidth } from './shared.js';
@@ -33,7 +36,7 @@ import { CHIP_LINE, say, textWidth } from './shared.js';
  */
 export const COMPONENTS = {
   note, quote, fact, image, video, link, chart, person, chat, code, steps,
-  list, facts, table, excerpt, idea, reference, artwork, breakdown, qa, callout, definition,
+  list, facts, table, excerpt, idea, reference, artwork, breakdown, qa, callout, definition, proscons, swatch, place,
 };
 
 export const componentOf = (node) => (Object.hasOwn(COMPONENTS, node.view?.component) ? node.view.component : 'note');

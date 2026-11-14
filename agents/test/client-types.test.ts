@@ -87,6 +87,23 @@ const GROWING: Record<string, Given[]> = {
     { props: { term: 'Bokeh', definition: words(8) } },
     { props: { term: 'Bokeh', definition: words(24) } },
   ],
+  proscons: [
+    { props: { pros: ['cheap'], cons: ['slow'] } },
+    { props: { pros: ['cheap', 'small'], cons: ['slow'] } },
+    { props: { pros: ['cheap', 'small'], cons: ['slow', words(8), 'loud'] } },
+    { props: { pros: ['cheap', 'small', 'a', 'b', 'c', 'd'], cons: ['slow', words(8), 'loud', 'e', 'f'] } },
+  ],
+  swatch: [
+    { props: { colours: [{ name: 'Night', value: 'black' }, { name: 'Day', value: 'white' }] } },
+    { props: { colours: [{ name: 'Night', value: 'black' }, { name: 'Day', value: 'white' }, { name: 'Dusk', value: '#334' }] } },
+    { item: { title: words(10) }, props: { colours: Array.from({ length: 9 }, (_, i) => ({ name: `Colour ${i}`, value: `#${i}${i}${i}` })) } },
+  ],
+  place: [
+    { item: { title: 'Lisbon' }, props: { name: 'Lisbon' } },
+    { item: { title: 'Lisbon', summary: 'Three days.' }, props: { name: 'Lisbon' } },
+    { item: { title: 'Lisbon', summary: words(30) }, props: { name: 'Lisbon' } },
+    { item: { title: 'Lisbon', summary: words(30) }, props: { name: 'Lisbon', src: 'a.png' } },
+  ],
 };
 
 /** A type that sets longer words in a smaller size, so a card that holds a little more can be a little shorter. */
