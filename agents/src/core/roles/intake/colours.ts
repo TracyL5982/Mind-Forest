@@ -14,7 +14,7 @@ const NAMED = new Set(
   whitesmoke yellow yellowgreen`.split(/\s+/),
 );
 
-const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
 /** A colour a browser can paint: a hex value as written, or a CSS colour name. Null for anything else. */
 export function asColour(written: string): string | null {

@@ -106,15 +106,17 @@ const EXTRACTED = [
     reply: { tableHeads: z.array(z.string()), tableRows: z.array(z.string()) },
     keep(r, text) {
       const heads = r.tableHeads.map(squash);
-      if (heads.length < 2 || heads.length > MAX_COLUMNS || heads.some((head) => !text.quotes(head))) return undefined;
+      // The corner of a table with a head for each row and each column is empty, so the first head may be.
+      if (heads.length < 2 || heads.length > MAX_COLUMNS || heads.some((head, n) => (head || n > 0) && !text.says(head))) return undefined;
       const same = (cells: string[]) => cells.every((cell, n) => cell.toLowerCase() === heads[n]!.toLowerCase());
       const rows = r.tableRows
         .map((row) => {
           // A leading "|" with no trailing one, or the reverse, may be an empty cell, so the two are only taken off together.
           const fenced = /^\s*\|.*\|\s*$/s.test(row) ? row.trim().slice(1, -1) : row;
-          return fenced.split('|').map(squash);
+          // A dash the text does not write is the model's way of showing an empty cell.
+          return fenced.split('|').map((cell) => (/^\s*[-–—]\s*$/.test(cell) && !text.says(cell) ? '' : squash(cell)));
         })
-        .filter((cells) => cells.length === heads.length && !cells.every((cell) => /^[-:\s]*$/.test(cell)) && !same(cells) && cells.every((cell) => !cell || text.quotes(cell)))
+        .filter((cells) => cells.length === heads.length && !cells.every((cell) => /^[-:\s]*$/.test(cell)) && !same(cells) && cells.every((cell) => !cell || text.says(cell)))
         .slice(0, MAX_ROWS);
       return rows.length > 0 ? { table: { heads, rows } } : undefined;
     },

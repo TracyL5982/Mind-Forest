@@ -420,6 +420,28 @@ test('every usual way to write a check mark is read, before the item, after it, 
   assert.equal(numbered.ticks('stove'), false);
 });
 
+test('a table may leave its first head empty, and a dash the text does not write is an empty cell', () => {
+  const rows = [['North', '10', '12'], ['South', '7', '9']];
+  const said = { tableHeads: ['', 'Q1', 'Q2'], tableRows: ['North | 10 | 12', 'South | 7 | 9'] };
+  assert.deepEqual(kept('| | Q1 | Q2 |\n|---|---|---|\n| North | 10 | 12 |\n| South | 7 | 9 |', said).table, { heads: ['', 'Q1', 'Q2'], rows });
+  assert.deepEqual(kept('\tQ1\tQ2\nNorth\t10\t12\nSouth\t7\t9', said).table, { heads: ['', 'Q1', 'Q2'], rows });
+  assert.equal(kept('Plan\tPrice\t\nSolo\t$8\t1', { tableHeads: ['Plan', 'Price', ''], tableRows: ['Solo | $8 | 1'] }).table, undefined, 'only the first head');
+
+  const text = 'Plan\tPrice\tSeats\nPro\t$1,200\t\nTeam Plus\t\t10';
+  for (const dash of ['-', '–', '—']) {
+    assert.deepEqual(kept(text, { tableHeads: ['Plan', 'Price', 'Seats'], tableRows: [`Pro | $1,200 | ${dash}`, `Team Plus | ${dash} | 10`] }).table?.rows, [['Pro', '$1,200', ''], ['Team Plus', '', '10']], dash);
+  }
+  assert.deepEqual(kept('Camera | Price\nQ2 | —', { tableHeads: ['Camera', 'Price'], tableRows: ['Q2 | —'] }).table?.rows, [['Q2', '—']], 'a dash the text writes is kept');
+  assert.deepEqual(kept('| City | Founded |\n| St. Petersburg | 1703 |', { tableHeads: ['City', 'Founded'], tableRows: ['St Petersburg | 1703'] }).table?.rows, [['St Petersburg', '1703']]);
+  assert.equal(kept('| City | State |\n| Paris | Texas |', { tableHeads: ['City', 'State'], tableRows: ['Paris Texas | Texas'] }).table, undefined, 'a cell does not span two cells');
+});
+
+test('a hex colour of three, four, six or eight digits is kept', () => {
+  const said = { colours: ['#fff', '#ABCD', '#e4572e', '#11223344', '#abcde'].map((value) => ({ name: '', value })) };
+  assert.deepEqual(kept('Palette: #FFF, #abcd, #E4572E, #11223344, #abcde.', said).colours?.map((colour: { value: string }) => colour.value), ['#fff', '#ABCD', '#e4572e', '#11223344']);
+  assert.equal(kept('Brand #abcd.', { colours: [{ name: '', value: '#abc' }] }).colours, undefined);
+});
+
 test('an empty text states nothing', () => {
   const text = grounding('');
   assert.equal(text.says('anything'), false);
