@@ -19,6 +19,9 @@ const NUMERAL = /^[-+−–~≈<>≤≥±]?\s?\p{Sc}?\s?\d[\d.,:/\s]*\s?[\p{L}\p
 /** In the opened table a column is at least as wide as its widest early cell, up to this, so its words are not set one to a line. */
 const OPENED = { rows: 20, most: 220, text: 13 };
 
+/** The px a column gives a cell: its count and 1 px more, because a string can draw up to 0.4 px wider than it counts. */
+const cellWidth = (cell) => textWidth(cell) + 1;
+
 const isNumber = (cell) => NUMERAL.test(cell) && textWidth(cell) <= NUMBER_MOST;
 
 /** A column holds numbers when every cell of it that says something is a number. Its numbers are set to the right. */
@@ -44,8 +47,8 @@ export function plan(item, props) {
   const shown = rows.slice(0, MOST_ROWS);
   const columns = heads.map((head, i) => {
     const cells = shown.map((row) => row[i] ?? '');
-    const want = Math.max(textWidth(head), ...cells.map(textWidth));
-    const numbers = Math.max(0, ...cells.filter(isNumber).map(textWidth));
+    const want = Math.max(cellWidth(head), ...cells.map(cellWidth));
+    const numbers = Math.max(0, ...cells.filter(isNumber).map(cellWidth));
     const floor = i === 0 ? Math.max(numbers, Math.min(want, FIRST_FLOOR)) : numbers;
     const number = numeric(shown, i);
     return { number, floor, want, least: number ? floor : Math.max(floor, Math.min(want, WORDS_FLOOR)) };

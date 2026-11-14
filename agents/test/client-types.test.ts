@@ -196,7 +196,7 @@ test('a table cuts no number, beside words or alone, and shows fewer columns whe
   type Plan = { heads: string[]; rows: string[][]; widths: number[]; numbers: boolean[]; foot: string; width: number };
   const { plan } = (await load('components/table.js')) as { plan: (item: unknown, props: unknown) => Plan };
   const { textWidth } = (await load('components/shared.js')) as { textWidth: (str: string) => number };
-  const whole = (given: Plan) => given.rows.forEach((row) => row.forEach((cell, i) => { if (/^[\d$]/.test(cell)) assert.ok(given.widths[i]! >= textWidth(cell), `${cell} has ${given.widths[i]} of ${textWidth(cell)}`); }));
+  const whole = (given: Plan) => given.rows.forEach((row) => row.forEach((cell, i) => { if (/^[\d$]/.test(cell)) assert.ok(given.widths[i]! > textWidth(cell), `${cell} has ${given.widths[i]} of ${textWidth(cell)}`); }));
   const mixed = plan(blank, { heads: ['Region', 'Q1', 'Q2', 'Note'], rows: [['North', '1,234,567.89', 'n/a', 'a new office by the harbour'], ['South', '–', '2,345,678.90', 'closed in May after the flood']] });
   assert.deepEqual(mixed.numbers, [false, false, false, false], 'a column with a word in it is no column of numbers');
   whole(mixed);
@@ -212,6 +212,8 @@ test('a table cuts no number, beside words or alone, and shows fewer columns whe
   assert.deepEqual(short.rows, [['1', '2', ''], ['3', '4', '5']], 'a table has as many columns as heads');
   const zh = plan({ ...blank, title: '城市比较', text: '' }, { heads: ['城市', '月租'], rows: Array.from({ length: 8 }, () => ['杭州', '¥6,500']) });
   assert.equal(zh.foot, '还有 2 行');
+  const small = plan(blank, { heads: ['Name', 'Age', 'City'], rows: [['Ann', '34', 'Leeds'], ['Bo', '7', 'York']] });
+  small.heads.forEach((head, i) => assert.ok(small.widths[i]! > textWidth(head), `a head that fits by the count has a px more than it counts: ${head} has ${small.widths[i]} of ${textWidth(head)}`));
 });
 
 test('a card draws its fixed words in Chinese when its item is written in Chinese, and sizes itself with them', async () => {
