@@ -118,6 +118,9 @@ interface HandoffNode {
 | `authorsCut` | `true` | Present when the source cut `authors` short, so the work has more authors than the list. |
 | `venue` | `string` | The journal, conference or repository of a paper. |
 | `by`, `date`, `from` | `string` | The maker, the date and the source of a pick, as the source gives them. |
+| `embed` | `string` | The address of the player for a video pick, to show in a frame. |
+| `mediaUrl` | `string` | The address of the picture or recording itself, for a pick that is one. |
+| `thumbnailUrl` | `string` | The address of a small still picture for a video or media pick. |
 
 For an item the user brought in, a value in `chart`, `facts`, `person`, `quote`, `when` and the keys from `where` to `excerpt` is kept only when the content of the item states it. For a picture or a video, the content is the description in `text` and the file name. The labels of `facts` and `chart`, the unit of `chart`, the wording of `steps`, `quote.by` and `person.role` are not checked.
 
