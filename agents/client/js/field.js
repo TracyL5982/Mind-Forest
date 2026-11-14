@@ -104,7 +104,9 @@ export class Field {
           face.addEventListener('animationend', () => face.classList.remove('is-arriving'), { once: true });
         }
       }
-      Object.assign(card, { w: sh.w, h: sh.h, scale: sh.scale, treeId: node.treeId });
+      const cover = arr?.under.has(node.id) ? arr.cover : null;
+      const [w, hgt] = cover ? [cover[0] / sh.scale, cover[1] / sh.scale] : [sh.w, sh.h];
+      Object.assign(card, { w, h: hgt, scale: sh.scale, treeId: node.treeId });
 
       if (!card.target || card.target.x !== target.x || card.target.y !== target.y) {
         card.target = { x: target.x, y: target.y };
@@ -114,11 +116,11 @@ export class Field {
       }
 
       const component = componentOf(node);
-      const sig = `${sh.item.revision}|${JSON.stringify(node.view)}|${sh.w}x${sh.h}`;
+      const sig = `${sh.item.revision}|${JSON.stringify(node.view)}|${w}x${hgt}`;
       if (sig !== card.sig) {
         card.sig = sig;
-        card.el.style.width = `${sh.w}px`;
-        card.el.style.height = `${sh.h}px`;
+        card.el.style.width = `${w}px`;
+        card.el.style.height = `${hgt}px`;
         card.el.dataset.component = component;
         put(card.face, drawCard(node, sh.item, { asset: this.asset }));
       }

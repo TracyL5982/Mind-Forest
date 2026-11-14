@@ -7,7 +7,9 @@ import * as stack from './stack.js';
 
 /**
  * Every way several sibling cards can be drawn as one arrangement, one module per arrangement.
- * Each returns the block's size, where each member sits, and the marks drawn behind the cards.
+ * Each returns the block's size, where each member sits, and the marks drawn behind the cards. One
+ * that lays members under another also returns `cover`, the drawn size each of those is cut to, so
+ * a card under a smaller one shows only its edge.
  */
 export const COMPOSITES = { gallery, timeline, comparison, sequence, cluster, stack };
 
@@ -15,7 +17,7 @@ export function arrange(group, ids, sizes, open) {
   const kind = Object.hasOwn(COMPOSITES, group.composite) ? COMPOSITES[group.composite] : cluster;
   const made = kind.arrange(group, ids, sizes, open);
   return {
-    under: new Set(), buried: new Set(), marks: [],
+    under: new Set(), buried: new Set(), cover: null, marks: [],
     ...made,
     label: kind.name,
     title: (kind.title ? kind.title(group) : group.title) || kind.name,
