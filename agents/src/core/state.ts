@@ -70,8 +70,12 @@ export class Mindstorm {
     return this.maps.group;
   }
 
+  /**
+   * A draft that changes nothing comes back with no patches and is not numbered or kept: it takes no seq and can never be undone.
+   * So `seq` rises by exactly one for every set a client is sent.
+   */
   apply(draft: Draft): ChangeSet {
-    return this.commit(draft, () => {
+    return this.commit(draft, {}, () => {
       for (const raw of draft.commands) this.run(Command.parse(raw));
     });
   }
@@ -100,7 +104,8 @@ export class Mindstorm {
     const first = Math.min(...whole.map((c) => c.seq));
     const followers = this.history.filter((c) => c.seq > first && !c.undoes && !this.undone.has(c.id) && !whole.includes(c) && housekeeping(c));
     const reverting = [...followers, ...whole].sort((x, y) => y.seq - x.seq);
-    const set = this.commit({ origin, label: `Undo: ${target.label}`, commands: [] }, () => {
+    const undoing = { undoes: target.id, alsoUndoes: reverting.filter((c) => c !== target).map((c) => c.id) };
+    const set = this.commit({ origin, label: `Undo: ${target.label}`, commands: [] }, undoing, () => {
       for (const one of reverting) {
         for (const p of [...one.patches].reverse()) {
           const current = this.maps[p.entity].get(p.id) ?? null;
@@ -111,8 +116,6 @@ export class Mindstorm {
         }
       }
     });
-    set.undoes = target.id;
-    set.alsoUndoes = reverting.filter((c) => c !== target).map((c) => c.id);
     for (const one of reverting) this.undone.add(one.id);
     return set;
   }
@@ -222,7 +225,7 @@ export class Mindstorm {
 
   // ---- internals
 
-  private commit(draft: Draft, body: () => void): ChangeSet {
+  private commit(draft: Draft, undoing: Pick<ChangeSet, 'undoes' | 'alsoUndoes'>, body: () => void): ChangeSet {
     if (this.working) throw new CommandError('invalid', 'apply is not re-entrant');
     this.working = [];
     try {
@@ -234,18 +237,21 @@ export class Mindstorm {
       this.working = null;
       throw err;
     }
+    const patches = squash(this.working);
+    this.working = null;
+    const counts = patches.length > 0 || undoing.undoes !== undefined;
     const set: ChangeSet = {
       id: this.opts.newId(),
-      seq: ++this.seq,
+      seq: counts ? ++this.seq : this.seq,
       at: this.opts.now(),
       origin: draft.origin,
       label: draft.label,
       commands: draft.commands,
       ...(draft.part ? { part: draft.part } : {}),
-      patches: squash(this.working),
+      patches,
+      ...undoing,
     };
-    this.working = null;
-    this.history.push(set);
+    if (counts) this.history.push(set);
     return set;
   }
 

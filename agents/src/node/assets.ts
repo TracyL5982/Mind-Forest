@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
 import type { Assets } from '../core/ports.ts';
 
 const EXT: Record<string, string> = {
@@ -29,14 +29,21 @@ interface Meta {
   from?: string;
 }
 
+/** The headset's films, played from the repository. The only folder a linked file may be in. */
+export const LIBRARY_FILMS = resolve(import.meta.dirname, '../../../public/clips/full');
+
 /** What `/assets/<id>` sends: bytes held here, a file on this host, or a remote address relayed as it streams. */
 export type Stored = { mime: string } & ({ bytes: Uint8Array } | { file: string; size: number } | { url: string });
 
-/** Dropped and generated files on disk, each beside a small JSON record of its type and name. A linked asset is the record alone. */
+/**
+ * Dropped and generated files on disk, each beside a small JSON record of its type and name. A linked asset is the record alone.
+ * A linked file must be inside `files`, checked when it is linked and again when it is served, so an edited record cannot reach the rest of the disk.
+ */
 export class DiskAssets implements Assets {
   constructor(
     private readonly dir: string,
     private readonly baseUrl = '',
+    private readonly files = LIBRARY_FILMS,
   ) {
     mkdirSync(dir, { recursive: true });
   }
@@ -49,7 +56,7 @@ export class DiskAssets implements Assets {
   }
 
   async link(from: string, mime: string, name?: string): Promise<{ id: string }> {
-    if (!isAbsolute(from) && !/^https?:\/\//i.test(from)) throw new Error(`an asset links to an absolute path or a web address, not "${from}"`);
+    if (!/^https?:\/\//i.test(from) && !this.inside(from)) throw new Error(`an asset links to a web address or a file in ${this.files}, not "${from}"`);
     const id = newId(mime, name ?? from);
     this.write(id, { mime: bare(mime), name, from });
     return { id };
@@ -72,6 +79,7 @@ export class DiskAssets implements Assets {
     try {
       if (!meta.from) return { mime: meta.mime, bytes: new Uint8Array(readFileSync(join(this.dir, id))) };
       if (/^https?:\/\//i.test(meta.from)) return { mime: meta.mime, url: meta.from };
+      if (!this.inside(meta.from)) return null;
       return { mime: meta.mime, file: meta.from, size: statSync(meta.from).size };
     } catch {
       return null;
@@ -80,6 +88,15 @@ export class DiskAssets implements Assets {
 
   url(id: string): string {
     return `${this.baseUrl}/assets/${id}`;
+  }
+
+  /** Whether a path, with every link and `..` followed, is a file in the folder linked files may come from. */
+  private inside(path: string): boolean {
+    try {
+      return realpathSync(path).startsWith(realpathSync(this.files) + sep) && statSync(path).isFile();
+    } catch {
+      return false;
+    }
   }
 
   private read(id: string): Meta | null {

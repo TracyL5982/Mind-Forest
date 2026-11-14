@@ -55,7 +55,7 @@ A client fetches only from the service. Every address in an item or a view that 
 | `t` | Fields | Meaning |
 |---|---|---|
 | `hello` | `protocol`, `snapshot`, `settings`, `undo`, `voice` | Sent once on connect. `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
-| `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
+| `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. `set.seq` is exactly one more than the last `seq` the client holds, from `hello.snapshot.seq` or the previous `change`. Any other value means the client missed a change: reconnect for a fresh `hello`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
 | `activity` | `activity` | Work state: `id`, `role`, `state` (`start`, `done`, `error`), `message`, optional `nodeId`. Show a thinking mark on `nodeId` between `start` and `done`. |
 | `say` | `text` | One short line for the agent to speak. |
 | `heard` | `text`, `final` | The transcript the service is acting on. |
@@ -91,7 +91,7 @@ A client fetches only from the service. Every address in an item or a view that 
 | Request | Body | Reply |
 |---|---|---|
 | `POST /api/assets?name=<file name>` | The file's bytes, with its `Content-Type` | `{id, url, mime}` |
-| `GET /assets/<id>` | | The bytes. Supports byte ranges for video. A file the service streams from its source answers with the source's status and range. |
+| `GET /assets/<id>` | | The bytes. Supports byte ranges for video. A file the service streams from its source answers with the source's status and range. The service streams only the address it stored for that asset, never one named in the request, and a file on its own disk only from `public/clips/full`. |
 | `POST /api/transcribe?tree=<id>` | Audio bytes, with `Content-Type` (`audio/wav`, `audio/webm`, `audio/mp4`, `audio/mpeg`, `audio/ogg`) | `{text}`. The titles of the cards in `tree`, then of every tree and the newest cards, are given to the recognizer as words the user is likely to say. |
 | `GET /handoffs/<name>.zip` | | The bundle. |
 | `GET /api/speak?text=<reply>` | | MP3 of the reply read aloud, streamed as it is made. 404 when the service has no voice. Takes the token as `?token=` so an audio element can play it directly. |

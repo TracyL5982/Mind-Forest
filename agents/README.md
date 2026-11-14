@@ -34,7 +34,7 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 ## Check it
 
 ```bash
-npm test                 # 154 tests on scripted models, no network
+npm test                 # 157 tests on scripted models, no network
 npx tsc --noEmit
 node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 23 checks
 npm run scenario         # everything against the live model, 25 checks, about 160,000 tokens

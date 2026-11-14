@@ -31,6 +31,8 @@ export interface ServerOptions {
   /** Turns recorded speech into text, told the card titles. When present the client records instead of using the browser's recognition. */
   transcribe?: Transcribe;
   settings?: Partial<Settings>;
+  /** The only folder a linked file may be served from. Defaults to the repository's `public/clips/full`. */
+  films?: string;
   log?: (line: string) => void;
 }
 
@@ -59,7 +61,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   mkdirSync(opts.dataDir, { recursive: true });
   const token = opts.token ?? savedToken(join(opts.dataDir, 'token'));
   const store = new SqliteStore(join(opts.dataDir, 'mindstorm.sqlite'));
-  const assets = new DiskAssets(join(opts.dataDir, 'assets'));
+  const assets = new DiskAssets(join(opts.dataDir, 'assets'), '', opts.films);
   const handoffDir = join(opts.dataDir, 'handoffs');
   mkdirSync(handoffDir, { recursive: true });
 
