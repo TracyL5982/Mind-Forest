@@ -231,3 +231,13 @@ test('a card draws its fixed words in Chinese when its item is written in Chines
   assert.equal(paper('古籍自动标点方法研究')[1], 62 + 21 + 6 + 17 * wrap(`${names.join(', ')} 等`, 255, 72, 2));
   assert.equal(paper('Punctuating old books')[1], 62 + 21 + 6 + 17 * wrap(`${names.join(', ')} and others`, 255, 72, 2));
 });
+
+test('a facts card sets every figure in one size, trims what it is given, and marks a value too long to show', async () => {
+  const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Kind> };
+  const facts = (...values: string[]) => COMPONENTS.facts!.size(blank, { facts: values.map((value, i) => ({ label: `L${i}`, value })) });
+  assert.deepEqual(facts('330 m', '1889'), [320, 30 + 21 + 12 + 28 + 17], 'two short figures in the middle size');
+  assert.deepEqual(facts('330 m', '1889', '3', 'Stephen Sauvestre'), [320, 30 + 21 + 12 + (21 + 17) + 12 + (2 * 21 + 17)], 'one long name sets the whole card in the smallest size');
+  assert.deepEqual(COMPONENTS.facts!.size(blank, { facts: [{ label: ' Height ', value: '  330 m  ' }, { label: 'Built', value: '\t1889\n' }] }), facts('330 m', '1889'), 'padding around a label or a value counts nothing');
+  const passage = 'a room that is too large for its purpose makes those in it speak as if to a crowd '.repeat(6);
+  assert.deepEqual(facts(passage, '1889'), [320, 30 + 21 + 12 + (8 * 21 + 17) + 12 + (21 + 17)], 'a passage is given eight lines and no more');
+});
