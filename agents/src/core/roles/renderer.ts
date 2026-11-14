@@ -1322,7 +1322,7 @@ export function layoutDraft(ctx: RoleContext, g: Pick<CompositesReply['groups'][
     ctx.note(ROLE, `Set aside the layout the model gave under ${g.parent}: ${parsed.why}.`);
     return null;
   }
-  const said = new Map(ids.map((id) => {
+  const said = new Map(cardsOf(parsed.tree).map((id) => {
     const item = ctx.mind.itemOf(id);
     return [id, grounding(`${item.title}\n${item.text}\n${item.summary}\n${str(item.data.when) ?? ''}`)];
   }));
