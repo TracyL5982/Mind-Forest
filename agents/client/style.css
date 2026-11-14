@@ -125,13 +125,13 @@ button, input, textarea { font: inherit; color: inherit; }
 .think i:nth-child(3) { animation-delay: 0.36s; }
 @keyframes think { 0%, 100% { opacity: 0.25; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1.15); } }
 
-/* chips: one line under any card's content that says when, where, who and, for a pick, from where.
+/* chips: one line under any card's content that says when, where, who and, for what the agents brought, from where.
    components/shared.js adds CHIP_LINE to the footprint of a card that has them. */
 .card-body:has(+ .chip-line) { height: calc(100% - 28px); }
 .chip-line { position: absolute; left: 15px; right: 15px; bottom: 12px; height: 20px; display: flex; gap: 6px; }
-/* The line is shared out equally. A chip that needs less than its share takes only what it needs,
-   and the rest goes to the others, so a short date is whole beside a long place that is cut. */
-.chip { flex: 1 1 0; max-width: max-content; min-width: 0; padding: 0 7px 0 5px; display: flex; align-items: center; gap: 4px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); color: var(--ink-2); font-size: var(--type-text); line-height: 20px; }
+/* components/index.js cuts each chip's text to its share of the line. The ellipsis here is for a
+   font that draws wider than the client counts. */
+.chip { flex: 0 1 auto; min-width: 0; padding: 0 7px 0 5px; display: flex; align-items: center; gap: 4px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); color: var(--ink-2); font-size: var(--type-text); line-height: 20px; }
 .chip-glyph { flex: none; fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
 .chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chip-keep { flex: none; font-variant-numeric: tabular-nums; }

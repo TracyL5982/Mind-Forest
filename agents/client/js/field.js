@@ -1,5 +1,5 @@
 import { h, put, s, clamp, ease } from './dom.js';
-import { chipsOf, componentOf, drawCard, sizeOf } from './components/index.js';
+import { componentOf, drawCard, sizeOf } from './components/index.js';
 import { arrange } from './composites/index.js';
 import { Layout } from './layout.js';
 
@@ -114,7 +114,7 @@ export class Field {
       }
 
       const component = componentOf(node);
-      const sig = `${sh.item.revision}|${JSON.stringify(node.view)}|${sh.w}x${sh.h}|${JSON.stringify(chipsOf(node, sh.item))}`;
+      const sig = `${sh.item.revision}|${JSON.stringify(node.view)}|${sh.w}x${sh.h}`;
       if (sig !== card.sig) {
         card.sig = sig;
         card.el.style.width = `${sh.w}px`;

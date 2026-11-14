@@ -93,12 +93,12 @@ export const LONG_PLACE = 'The upper reading room of the old municipal library, 
 
 /**
  * One tree of cards whose items carry a date, a place, people or an origin, beside twins that carry
- * none, and a timeline whose members have chips. These `item.data` keys are what intake and the
+ * none, under a first card that has chips too, and a timeline whose members have chips. These `item.data` keys are what intake and the
  * Scout write, so the stand-in agents do not have to.
  */
 export function chipped(image: string): Command[] {
   const { commands, add, group } = planting('chips', 'With chips');
-  const root = add(null, 'note', {}, 'Cards that say when, where and who', { summary: 'One line of chips under a card, only when its item holds them.' });
+  const root = add(null, 'note', {}, 'Cards that say when, where and who', { summary: 'One line of chips under a card, only when its item holds them.', data: { when: 'Spring 1958', where: 'Sonoma coast' } });
   add(root, 'image', { src: image, caption: 'Fog over the harbour' }, 'Harbour in fog', { kind: 'image', data: { when: '12 May 1958', where: 'Bodega Bay' } });
   add(root, 'image', { src: image, caption: 'Fog over the harbour' }, 'Harbour in fog, undated', { kind: 'image' });
   add(root, 'note', {}, 'The crew at the wrap party', { summary: 'Everyone who stayed to the end.', data: { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra', 'Barbara Liskov', 'Alan Kay'] } });

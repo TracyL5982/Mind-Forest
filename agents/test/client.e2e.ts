@@ -316,14 +316,17 @@ async function main(): Promise<void> {
       const [photo, plain] = [await tall(CHIPPED.photo), await tall(CHIPPED.plainPhoto)];
       assert.deepEqual(photo, [plain[0], plain[1]! + 28], 'the photo with chips is taller by the chip line and no wider');
       assert.equal(await card(CHIPPED.plainNote).locator('.chip-line').count(), 0, 'a card with nothing to say has no chip line');
-      assert.deepEqual(await chips(CHIPPED.people), ['Ada Lovelace, Grace Hopper+3']);
+      assert.match((await chips(CHIPPED.people)).join(), /^Ada Lovelace, Grace H\p{L}*…\+3$/u, 'five people are two names, cut before the count');
       assert.deepEqual(await chips(CHIPPED.link), ['2019'], 'a link does not repeat its site');
-      assert.equal((await chips(CHIPPED.museum)).at(-1), 'The Metropolitan Museum of Art');
+      const museum = await chips(CHIPPED.museum);
+      assert.match(museum.join('|'), /^1857\|The Metropolitan\p{L}*…$/u, 'a pick the Scout brought says where it came from');
+      assert.equal(await card(CHIPPED.museum).locator('.chip').last().getAttribute('title'), 'From: The Metropolitan Museum of Art');
       assert.deepEqual(await chips(CHIPPED.four), ['Summer 1958', 'Bodega Bay'], 'a card too narrow for a third chip leaves it to the opened card');
 
-      const long = card(CHIPPED.longPlace).locator('.chip-text');
-      assert.equal(await long.textContent(), LONG_PLACE);
-      assert.ok(await long.evaluate((el: HTMLElement) => el.scrollWidth > el.clientWidth && getComputedStyle(el).textOverflow === 'ellipsis'), 'a long place is cut with an ellipsis');
+      const long = (await card(CHIPPED.longPlace).locator('.chip-text').textContent())!;
+      assert.ok(long.endsWith('…') && LONG_PLACE.startsWith(long.slice(0, -1)) && long.length > 20, `a long place is cut with an ellipsis, got ${long}`);
+      const squeezed = await page.locator('.card[data-id^="chips-"] .chip-text').evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).map((el) => el.textContent));
+      assert.deepEqual(squeezed, [], 'every chip has room for the text it was cut to');
       const lines = await page.locator('.card[data-id^="chips-"] .chip-line').evaluateAll((els) => els.map((el) => (el as HTMLElement).offsetHeight));
       assert.ok(lines.length >= 9 && lines.every((height) => height === 20), `every chip line is one line tall, got ${lines}`);
       assert.deepEqual(await overlaps(page), []);
@@ -336,9 +339,14 @@ async function main(): Promise<void> {
       await card(CHIPPED.plainNote).click();
       assert.equal(await facts.locator('dd[data-chip]').count(), 0);
 
+      const size = await tall(CHIPPED.museum);
       await card(CHIPPED.museum).click();
       await page.locator('#panel').getByRole('button', { name: 'Keep', exact: true }).click();
-      await until('the kept card to drop its origin chip', async () => (await chips(CHIPPED.museum)).join() === '1857');
+      await until('the card to be kept', async () => (await card(CHIPPED.museum).getAttribute('aria-label'))!.startsWith('Card:'));
+      await settle(page);
+      assert.deepEqual(await chips(CHIPPED.museum), museum, 'a kept pick still says where it came from');
+      assert.deepEqual(await tall(CHIPPED.museum), size, 'and is the size it was as a pick');
+      assert.deepEqual(await facts.locator('dd[data-chip="origin"]').allTextContents(), ['The Metropolitan Museum of Art']);
       await page.keyboard.press('Escape');
     });
 

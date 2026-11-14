@@ -161,24 +161,29 @@ const VARIANTS = {
   ],
 };
 
-/** What each type's sample item holds for its chips, and whether that sample is a pick. */
+/**
+ * What each type's sample item holds for its chips. A sample the agents brought is drawn as a
+ * pick, and the image also as that pick once kept, since the origin chip stays with the item.
+ */
 const CHIPS = {
-  note: ['kept', { when: '12 May 1958', where: 'Bodega Bay' }],
-  quote: ['kept', { when: '1931', where: 'New Orleans' }],
-  fact: ['kept', { when: '1833' }],
-  image: ['pick', { when: '1857', from: 'The Metropolitan Museum of Art', site: 'metmuseum.org' }],
-  video: ['kept', { when: '3 Aug 2024', where: 'Route 1, Big Sur' }],
-  link: ['pick', { when: '2019', site: 'example.com' }],
-  chart: ['kept', { when: '2024', where: 'Lincolnshire', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra', 'Barbara Liskov', 'Alan Kay'] }],
-  person: ['kept', { when: '1832', where: 'Edo' }],
-  chat: ['kept', { when: '2 Mar 2025' }],
-  code: ['kept', { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra', 'Barbara Liskov', 'Alan Kay'] }],
-  steps: ['pick', { where: 'The upper reading room of the old municipal library, Vilnius', from: 'Are.na' }],
+  note: { data: { when: '12 May 1958', where: 'Bodega Bay' } },
+  quote: { data: { when: '1931', where: 'New Orleans' } },
+  fact: { data: { when: '1833' } },
+  image: { brought: ['pick', 'kept'], data: { when: '1857', from: 'The Metropolitan Museum of Art', site: 'metmuseum.org' } },
+  video: { data: { when: '3 Aug 2024', where: 'Route 1, Big Sur' } },
+  link: { brought: ['pick'], data: { when: '2019', site: 'example.com' } },
+  chart: { data: { when: '2024', where: 'Lincolnshire', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra', 'Barbara Liskov', 'Alan Kay'] } },
+  person: { data: { when: '1832', where: 'Edo' } },
+  chat: { data: { when: '2 Mar 2025' } },
+  code: { data: { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra', 'Barbara Liskov', 'Alan Kay'] } },
+  steps: { brought: ['pick'], data: { where: 'The upper reading room of the old municipal library, Vilnius', from: 'Are.na' } },
 };
+const CHIP_LABEL = { pick: 'Pick with chips', kept: 'The same pick, kept' };
 
 function withChips(name, made) {
-  const [status, data] = CHIPS[name];
-  return cell(status === 'pick' ? 'Pick with chips' : 'With chips', staged({ node: made.node, item: { ...made.item, data: { ...made.item.data, ...data } } }, status));
+  const { data, brought } = CHIPS[name];
+  const item = { ...made.item, data: { ...made.item.data, ...data }, origin: { by: brought ? 'agent' : 'user' } };
+  return brought ? brought.map((status) => cell(CHIP_LABEL[status], staged({ node: made.node, item }, status))) : cell('With chips', staged({ node: made.node, item }, 'kept'));
 }
 
 const componentsEl = document.getElementById('components');

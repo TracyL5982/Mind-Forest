@@ -1,11 +1,12 @@
 /**
- * The short facts a card can carry on one line under its content: when, where, who, and for a pick
- * where it came from. They are read from the item alone, so no model output is involved.
+ * The short facts a card can carry on one line under its content: when, where, who, and, for an
+ * item the agents brought, where it came from. They are read from the item alone, so no model
+ * output is involved and a card keeps its chips when a pick is kept.
  */
 
 export const CHIP_LIMIT = 3;
 
-/** The first of these the item holds names where a pick came from. */
+/** The first of these the item holds names where the agents found it. */
 const ORIGIN = ['from', 'holder', 'site'];
 
 const LABEL = { when: 'When', where: 'Where', people: 'People', origin: 'Origin' };
@@ -17,10 +18,10 @@ const names = (value) => (Array.isArray(value) ? value.map(str).filter(Boolean) 
 const rest = (people) => (people.length > 2 ? ` +${people.length - 2}` : '');
 
 /** Every source the item holds, in chip order. `key` is the `item.data` key the value was read from. */
-function sources(item, node) {
+function sources(item) {
   const data = item?.data ?? {};
   const people = names(data.people);
-  const origin = node?.status === 'pick' ? ORIGIN.find((key) => str(data[key])) : undefined;
+  const origin = item?.origin?.by === 'agent' ? ORIGIN.find((key) => str(data[key])) : undefined;
   return [
     str(data.when) && { kind: 'when', key: 'when', text: str(data.when), full: str(data.when) },
     str(data.where) && { kind: 'where', key: 'where', text: str(data.where), full: str(data.where) },
@@ -35,14 +36,14 @@ function sources(item, node) {
  * people chip that counts the unnamed also has `keep`, the end of its text that says how many, so
  * a card that cuts the chip short can cut the names and keep the count.
  */
-export function chips(item, node, shown = []) {
-  return sources(item, node)
+export function chips(item, shown = []) {
+  return sources(item)
     .filter((source) => !shown.includes(source.key))
     .slice(0, CHIP_LIMIT)
     .map(({ kind, text, keep }) => (keep ? { kind, text, keep } : { kind, text }));
 }
 
 /** Every source in full, for the opened card: `{ kind, label, text }`, with each person named. */
-export function chipSources(item, node) {
-  return sources(item, node).map(({ kind, full }) => ({ kind, label: LABEL[kind], text: full }));
+export function chipSources(item) {
+  return sources(item).map(({ kind, full }) => ({ kind, label: LABEL[kind], text: full }));
 }
