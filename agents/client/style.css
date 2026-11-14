@@ -479,6 +479,13 @@ a.map-credit:hover { text-decoration: underline; }
 .pane.is-pick .rank-n { color: var(--pick); background: color-mix(in srgb, var(--pick) 16%, transparent); }
 .pane.is-pick .rank-n.is-first { color: var(--bg); background: var(--pick); }
 .rank-why, .mx-why { color: var(--ink-2); }
+/* A map arrangement: the map in the tree's colour, a number in each pin's head, and the same number filled above each member. */
+.arr-map { position: absolute; --accent: var(--tint); }
+.pane.is-pick .arr-map { --accent: var(--pick); }
+.arr-map .map { border-radius: 12px; box-shadow: 0 0 0 1px var(--line); }
+.map-pin text { fill: var(--face); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.map-n { position: absolute; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: var(--type-text); line-height: 1; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--bg); background: var(--tint); }
+.pane.is-pick .map-n { background: var(--pick); }
 .ba-step { position: absolute; padding: 0 12px; display: flex; flex-direction: column; align-items: center; }
 .ba-arrow { height: 24px; font-size: var(--type-title); line-height: 24px; color: var(--tint); }
 .ba-change { position: static; width: 100%; text-align: center; color: var(--ink); }

@@ -488,6 +488,55 @@ test('an overview or a moodboard whose rule no longer holds is removed', async (
   assert.deepEqual(arranged(k), []);
 });
 
+const ALFAMA = { lat: 38.7139, lon: -9.1334 };
+/** About 35 m from ALFAMA, as a second photo taken on the same street is. */
+const ALFAMA_TOO = { lat: 38.7141, lon: -9.1337 };
+const PORTO_AT = { lat: 41.1406, lon: -8.611 };
+const EVORA = { lat: 38.5714, lon: -7.9135 };
+const photo = (title: string, at: { lat: number; lon: number }): Fields => ({ title, kind: 'image', source: { from: 'drop', asset: title, capturedAt: '' }, data: { at } });
+
+test('four photos from three places are a map before they are a gallery, with one pin for each place and the photos in pin order', async () => {
+  const k = kit();
+  const { root, ids } = grow(k, [photo('Alfama', ALFAMA), photo('Porto', PORTO_AT), photo('Alfama again', ALFAMA_TOO), photo('Évora', EVORA), { title: 'A note', text: PLAIN }]);
+  await render(k, ids);
+  const [alfama, porto, again, evora] = ids as [Id, Id, Id, Id];
+
+  assert.deepEqual(arranged(k), [['map', [alfama, again, porto, evora]]]);
+  const map = groups(k)[0]!;
+  assert.equal(map.anchor, root);
+  assert.deepEqual(map.props.pins, [{ ...ALFAMA, members: [alfama, again] }, { ...PORTO_AT, members: [porto] }, { ...EVORA, members: [evora] }]);
+  assert.equal(map.props.zoom, 6, 'the largest zoom at which Porto and Évora both fit');
+  assert.deepEqual(await render(k, ids), [], 'a map that still holds is left alone');
+});
+
+test('three photos taken at one place are no map, and stay a gallery', async () => {
+  const k = kit();
+  const { ids } = grow(k, [photo('Door', ALFAMA), photo('Window', ALFAMA_TOO), photo('Tiles', { lat: 38.7137, lon: -9.1331 })]);
+  await render(k, ids);
+  assert.deepEqual(arranged(k), [['gallery', ids]]);
+});
+
+test('siblings with both a date and a place are a map before they are a timeline, pinned in date order', async () => {
+  const k = kit();
+  const event = (title: string, when: string, at: { lat: number; lon: number }): Fields => ({ title, text: PLAIN, data: { when, at } });
+  const { ids } = grow(k, [
+    event('The earthquake', '1755', ALFAMA),
+    event('The first shipment of port', '1678', PORTO_AT),
+    event('The university moves to Coimbra', '1537', { lat: 40.2033, lon: -8.4103 }),
+    event('The Pena Palace is built', '1854', { lat: 38.7876, lon: -9.3906 }),
+    event('The Roman temple is restored', '1871', EVORA),
+  ]);
+  await render(k, ids);
+  const [lisbon, port, coimbra, sintra, evora] = ids as [Id, Id, Id, Id, Id];
+
+  assert.deepEqual(arranged(k), [['map', [coimbra, port, lisbon, sintra, evora]]]);
+  assert.deepEqual(
+    (groups(k)[0]!.props.pins as { members: Id[] }[]).map((pin) => pin.members),
+    [[coimbra], [port], [lisbon, sintra], [evora]],
+    'Sintra is under the pin of Lisbon, a few px away on a map of all of Portugal',
+  );
+});
+
 /** Five picks that each answer which lens to take, and a model that ranks them. */
 function lenses(status: Node['status'] = 'pick') {
   const k = kit();

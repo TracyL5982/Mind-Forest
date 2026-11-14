@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Sound, type Item, type View } from './domain.ts';
 import type { Grounding } from './grounding.ts';
 import { JOINS, KINDS, LIMITS, ROLES, withinLimits, type Box, type Part } from './layout.ts';
+import { MAP } from './map.ts';
 
 /** A string a card shows as words: at least one character that is not white space. */
 const words = z.string().regex(/\S/);
@@ -261,6 +262,9 @@ export const CHECKS: ContentChecks = {
   },
 };
 
+/** A point on the earth in degrees, north and east positive, as an item's `data.at` holds it. */
+export const POINT = z.strictObject({ lat: z.number().min(-90).max(90), lon: z.number().min(-180).max(180) });
+
 /** A part of an assembled arrangement: a member, or a row, column or grid of parts. */
 const LAYOUT_PART: z.ZodType<Part> = z.lazy(() =>
   z.union([
@@ -301,6 +305,15 @@ export const COMPOSITES = {
    * `reasons[memberId]` is one line of why it sits in its corner, a whole sentence or line of its content, or empty.
    */
   matrix: z.object({ x: words.max(ROOM.axis), y: words.max(ROOM.axis), reasons: z.record(z.string(), z.string().refine((text) => text.length <= roomOf(ROOM.reason, text))) }),
+  /**
+   * Members at two or more places on a map, beside it in pin order. `centre` and `zoom` are fitted to the members' points for a map
+   * of the size `MAP` in map.ts gives, and `pins[n].members` are the members at the place of pin n + 1, in the order the group lists them.
+   */
+  map: z.strictObject({
+    centre: POINT,
+    zoom: z.number().int().min(0).max(MAP.most),
+    pins: z.array(POINT.extend({ members: z.array(z.string().min(1)).min(1) })).min(2),
+  }),
   /** Members set out by a structure the model describes when no arrangement above fits: rows, columns and grids, nested up to four deep. */
   layout: z.strictObject({ tree: LAYOUT_PART }).refine(({ tree }) => tree.kind !== 'card' && withinLimits(tree as Box)),
 } as const;
@@ -321,6 +334,7 @@ export const MEMBERS: { readonly [C in CompositeId]: readonly [number, number] }
   overview: [3, Infinity],
   moodboard: [3, Infinity],
   matrix: [4, 4],
+  map: [3, Infinity],
   layout: [LIMITS.least, LIMITS.cards],
 };
 

@@ -10,6 +10,7 @@ import * as lead from './lead.js';
 import * as overview from './overview.js';
 import * as moodboard from './moodboard.js';
 import * as matrix from './matrix.js';
+import * as map from './map.js';
 import * as layout from './layout.js';
 
 /**
@@ -18,7 +19,7 @@ import * as layout from './layout.js';
  * that lays members under another also returns `cover`, the drawn size each of those is cut to, so
  * a card under a smaller one shows only its edge. One drawn as another arrangement instead names it in `label`.
  */
-export const COMPOSITES = { gallery, timeline, comparison, sequence, cluster, stack, ranked, beforeafter, lead, overview, moodboard, matrix, layout };
+export const COMPOSITES = { gallery, timeline, comparison, sequence, cluster, stack, ranked, beforeafter, lead, overview, moodboard, matrix, map, layout };
 
 export function arrange(group, ids, sizes, open) {
   const kind = Object.hasOwn(COMPOSITES, group.composite) ? COMPOSITES[group.composite] : cluster;
