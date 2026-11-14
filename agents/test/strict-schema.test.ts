@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { z } from 'zod';
-import { LinkReply, MediaReply, TextReply } from '../src/core/roles/intake/describe.ts';
+import { ChatReply, LinkReply, MediaReply, TextReply } from '../src/core/roles/intake/describe.ts';
 import { strictSchema } from '../src/node/model-meta.ts';
 
 test('a schema with optional keys is sent closed, with every key required and optional ones nullable', () => {
@@ -24,7 +24,7 @@ test('every Intake reply is flat: each key required, none nullable, no recursion
   const plain = (node: any) => ['string', 'number', 'boolean'].includes(node.type);
   const flatObject = (node: any) => node.type === 'object' && Object.values(node.properties).every(plain);
 
-  for (const [name, reply] of Object.entries({ LinkReply, MediaReply, TextReply })) {
+  for (const [name, reply] of Object.entries({ LinkReply, MediaReply, TextReply, ChatReply })) {
     const strict = strictSchema(z.toJSONSchema(reply, { io: 'input' })) as any;
     const text = JSON.stringify(strict);
     assert.ok(!text.includes('$ref') && !text.includes('anyOf') && !text.includes('null'), `${name} has a reference or a nullable key`);
