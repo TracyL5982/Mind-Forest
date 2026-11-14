@@ -58,4 +58,6 @@ android {
 
 dependencies {
     implementation("org.khronos.openxr:openxr_loader_for_android:1.1.58")
+    // The agent service's WebSocket and HTTP (Net.kt).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
