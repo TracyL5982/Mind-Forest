@@ -588,5 +588,54 @@ export const SAMPLES = {
       "name": "西湖",
       "src": "https://example.org/west-lake.jpg"
     }
+  },
+  "sheet": {
+    "item": {
+      "id": "sample-sheet-report",
+      "kind": "text",
+      "text": "Children aged six months to five years with pneumonia that did not need hospital care were given amoxicillin for five days or for ten. In all, 824 children were randomised across nine clinics. Treatment had failed by day 30 in 12.6% of the five-day group and 12.4% of the ten-day group, a difference well inside the margin set in advance. Side effects were mild and no more common in either group, and parents in the shorter arm missed fewer days of work. The authors conclude that five days is enough for a child treated at home, and that guidelines asking for longer should be revisited.",
+      "summary": "",
+      "tags": [],
+      "data": {},
+      "source": {
+        "from": "paste",
+        "capturedAt": "2026-11-14T00:00:00.000Z"
+      },
+      "origin": {
+        "by": "user"
+      },
+      "archived": false,
+      "revision": 0,
+      "title": "Five days of amoxicillin against ten"
+    },
+    "props": {
+      "sections": [
+        {
+          "kind": "heading",
+          "text": "Five days of amoxicillin against ten"
+        },
+        {
+          "kind": "text",
+          "text": "The authors conclude that five days is enough for a child treated at home, and that guidelines asking for longer should be revisited."
+        },
+        {
+          "kind": "figures",
+          "facts": [
+            {
+              "label": "Children randomised",
+              "value": "824"
+            },
+            {
+              "label": "Failed, five-day group",
+              "value": "12.6%"
+            },
+            {
+              "label": "Failed, ten-day group",
+              "value": "12.4%"
+            }
+          ]
+        }
+      ]
+    }
   }
 };

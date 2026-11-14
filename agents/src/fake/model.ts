@@ -252,7 +252,7 @@ const NOTE: Omit<Entry, 'id'> = { component: 'note', subject: '', passage: '', b
 
 const MARKED = /^(caution|warning|note):\s*(\S.*)$/i;
 const LABELLED = /^(\p{L}[\p{L} ]{1,29}):\s+(\S.*)$/u;
-const FIGURE = /^[$€£¥]?\d/;
+const NUMBER_FIRST = /^[$€£¥]?\d/;
 
 /**
  * What a model would choose for a text the rules drew as a note or an idea, read by pattern instead:
@@ -273,7 +273,7 @@ export function choose(text: string, now: 'note' | 'idea' = 'note'): Omit<Entry,
     const found = LABELLED.exec(line);
     return found ? [{ label: found[1]!, value: found[2]! }] : [];
   });
-  const figures = labelled.filter(({ value }) => FIGURE.test(value)).map(({ label, value }) => `${label} | ${value}`);
+  const figures = labelled.filter(({ value }) => NUMBER_FIRST.test(value)).map(({ label, value }) => `${label} | ${value}`);
   const listed = labelled.find(({ value }) => value.includes(';'))?.value.split(/;\s*/).filter(Boolean) ?? [];
   const prose = lines.slice(1).find((line) => !LABELLED.test(line));
   if (figures.length + listed.length === 0 || !prose) return { ...NOTE, component: now };

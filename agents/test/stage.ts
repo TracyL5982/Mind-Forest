@@ -85,7 +85,7 @@ export function showcase(image: string, other?: string, { structured = true } = 
   const { commands, add, group } = planting('show', 'Every shape');
 
   const root = add(null, 'note', 'Every way a card can be drawn', { summary: 'Twenty-five components and six ways to arrange them.', text: 'Twenty-five components and six ways to arrange them.' });
-  const quote = add(root, 'quote', 'Lange on seeing', { data: { quote: { text: 'The camera is a tool for learning how to see without a camera.', by: 'Dorothea Lange' } } });
+  const quote = add(root, 'quote', 'Lange on seeing', { text: '"The camera is a tool for learning how to see without a camera." Dorothea Lange', data: { quote: { text: 'The camera is a tool for learning how to see without a camera.', by: 'Dorothea Lange' } } });
   add(root, 'fact', 'Drop-off in minute one', { data: { facts: [{ label: 'of viewers leave in the first minute', value: '42%' }] } });
   add(root, 'image', 'Beach still', { ...picture(image), summary: 'A still from the beach scene' });
   add(root, 'video', 'Dolly zoom clip', { kind: 'video', data: { mediaUrl: image, thumbnailUrl: image }, summary: 'The dolly zoom, slowed down' });
@@ -108,7 +108,7 @@ export function showcase(image: string, other?: string, { structured = true } = 
   group(timeline[2]!, 'comparison', 'Two ways to shoot it', compared, { criteria: ['Cost', 'Look'], cells: { [compared[0]!]: ['Low', 'Slight breathing'], [compared[1]!]: ['High', 'Clean'] } });
   const sequence = ['Frame the subject', 'Start the pull', 'Land the zoom'].map((name) => add(compared[1]!, 'note', name, { text: 'One beat of the move, in the order it is shot.' }));
   group(compared[1]!, 'sequence', 'The move', sequence, {});
-  const cluster = ['Unease', 'Vertigo', 'Dread'].map((name) => add(sequence[2]!, 'fact', name, { data: { facts: [{ label: 'what it evokes', value: name }] } }));
+  const cluster = ['Unease', 'Vertigo', 'Dread'].map((name) => add(sequence[2]!, 'fact', name, { text: `What it evokes: ${name}`, data: { facts: [{ label: 'what it evokes', value: name }] } }));
   group(sequence[2]!, 'cluster', '', cluster, { theme: 'Feelings' });
   const pile = Array.from({ length: 5 }, (_, i) => add(cluster[2]!, 'note', `Another example ${i + 1}`, { summary: 'One more film that uses it.' }));
   group(cluster[2]!, 'stack', '5 more', pile, {});
@@ -124,6 +124,13 @@ export function showcase(image: string, other?: string, { structured = true } = 
     if (id === 'callout') {
       seed.text = 'Feed it once a day with equal parts flour and water.\nCaution: anything above 40 °C kills the yeast.';
       seed.view = { component: 'callout', props: { text: 'anything above 40 °C kills the yeast.', tone: 'caution' } };
+    }
+    // The stand-in assembles a sheet from a sentence and lines that each set a figure beside its label.
+    if (id === 'sheet') {
+      const opening = 'Children aged six months to five years with pneumonia that did not need hospital care were given amoxicillin for five days or for ten.';
+      const figures = [{ label: 'Children randomised', value: '824' }, { label: 'Failed in five days', value: '12.6%' }, { label: 'Failed in ten days', value: '12.4%' }];
+      seed.text = [title, opening, ...figures.map(({ label, value }) => `${label}: ${value}`)].join('\n');
+      seed.view = { component: 'sheet', props: { sections: [{ kind: 'heading', text: title }, { kind: 'text', text: opening }, { kind: 'figures', facts: figures }] } };
     }
     if (add(carried, id, title, seed) !== STRUCTURED[id]) throw new Error(`the ${id} card is not ${STRUCTURED[id]}`);
   }
@@ -154,7 +161,7 @@ export function chipped(image: string): Command[] {
   add(root, 'note', 'Where the notes were found', note('A box of index cards under the stairs.', { where: LONG_PLACE }));
   add(root, 'artwork', 'Sudden Shower over Shin-Ohashi Bridge', { ...picture(image, { site: 'metmuseum.org', by: 'Utagawa Hiroshige', date: '1857', from: 'The Metropolitan Museum of Art', kind: 'artwork', medium: 'Woodblock print; ink and color on paper', holder: 'The Metropolitan Museum of Art' }), summary: 'Sudden shower over a bridge', origin: { by: 'agent', role: 'scout', tool: 'met' }, source: found('https://www.metmuseum.org/art/collection/search/36461') }, 'pick');
   add(root, 'link', 'Reading the fog', { kind: 'link', summary: 'Why coastal fog comes in at dusk.', data: { site: 'example.com', by: 'example.com', date: '2019', from: 'The web' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/fog') }, 'pick');
-  add(root, 'quote', 'From the diary', { data: { quote: { text: 'We looked at the water until the water looked back.', by: 'A diary' }, site: 'example.com', by: 'A diary', date: 'Summer 1958', from: 'The web', where: 'Bodega Bay', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'], holder: 'Bancroft Library' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/diary') }, 'pick');
+  add(root, 'quote', 'From the diary', { text: 'We looked at the water until the water looked back.\n\nA diary, Summer 1958, The web', data: { quote: { text: 'We looked at the water until the water looked back.', by: 'A diary' }, site: 'example.com', by: 'A diary', date: 'Summer 1958', from: 'The web', where: 'Bodega Bay', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'], holder: 'Bancroft Library' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/diary') }, 'pick');
   const plain = add(root, 'note', 'A plain note', note('No date, no place, nobody named.'));
   const years = ['1958', '1963', '1975'];
   const timeline = years.map((year, i) => add(plain, 'note', `The shoot in ${year}`, { summary: 'One visit to the bay.', data: { when: year, where: ['Bodega Bay', 'Point Reyes', 'Tomales'][i], ...(i === 1 ? { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'] } : {}) } }));
