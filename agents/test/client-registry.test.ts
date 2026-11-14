@@ -29,7 +29,7 @@ test('a card footprint is two whole numbers that depend only on the item and pro
 test('every card type says which chip sources it already shows', async () => {
   const { COMPONENTS } = await load('components/index.js');
   const shows = Object.fromEntries(Object.entries<{ shows: string[] }>(COMPONENTS).flatMap(([name, kind]) => (kind.shows.length > 0 ? [[name, kind.shows]] : [])));
-  assert.deepEqual(shows, { link: ['site'], excerpt: ['site', 'from'], reference: ['venue', 'date', 'authors'] });
+  assert.deepEqual(shows, { link: ['site'], excerpt: ['site', 'from'], reference: ['venue', 'date', 'authors'], artwork: ['holder', 'date'] });
   for (const [name, kind] of Object.entries<{ shows: unknown }>(COMPONENTS)) assert.ok(Array.isArray(kind.shows), `${name}.shows`);
 });
 

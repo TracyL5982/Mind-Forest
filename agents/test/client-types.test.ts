@@ -50,6 +50,20 @@ const GROWING: Record<string, Given[]> = {
     { item: { title: 'Build a treehouse in the old oak' }, props: {} },
     { item: { title: 'Build a treehouse in the old oak behind the shed by June' }, props: {} },
   ],
+  reference: [
+    { props: { kind: 'book', authors: [] } },
+    { props: { kind: 'book', authors: ['A. Lima'] } },
+    { props: { kind: 'book', authors: ['A. Lima'], venue: 'Example Press' } },
+    { props: { kind: 'book', authors: ['A. Lima', 'B. Okri', 'C. Wei', 'D. Haas', 'E. Itō', 'F. Brandt'], more: true, venue: 'Example Press' } },
+    { item: { title: words(12) }, props: { kind: 'book', authors: ['A. Lima', 'B. Okri', 'C. Wei', 'D. Haas', 'E. Itō', 'F. Brandt'], more: true, venue: words(12) } },
+  ],
+  artwork: [
+    { props: { src: 'a.png' } },
+    { props: { src: 'a.png', maker: 'Ilse Brandt' } },
+    { props: { src: 'a.png', maker: 'Ilse Brandt', date: '1928', medium: 'Gelatin silver print' } },
+    { props: { src: 'a.png', maker: 'Ilse Brandt', date: '1928', medium: 'Gelatin silver print', holder: 'The Example Museum of Art' } },
+    { item: { title: words(10) }, props: { src: 'a.png', maker: words(10), date: '1928', medium: words(10), holder: 'The Example Museum of Art' } },
+  ],
 };
 
 /** A type that sets longer words in a smaller size, so a card that holds a little more can be a little shorter. */

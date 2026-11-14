@@ -299,6 +299,17 @@ button, input, textarea { font: inherit; color: inherit; }
 .detail-reference .reference-authors { margin-top: 10px; color: var(--ink); }
 .detail-reference .reference-venue { color: var(--ink-2); }
 
+/* artwork: the work whole on a dark mat, over a plate that reads like a museum label. A plain picture fills its frame and has one caption. */
+[data-component='artwork'] .card-face { border-radius: 4px; }
+.c-artwork { padding: 0; gap: 0; }
+.artwork-mat { flex: none; padding: 14px; display: grid; place-items: center; background: #0c0e11; }
+.artwork-mat img { min-width: 0; min-height: 0; max-width: 100%; max-height: 100%; object-fit: contain; display: block; pointer-events: none; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16), 0 6px 18px rgba(0, 0, 0, 0.5); }
+.artwork-plate { padding: 10px 15px 12px; font-size: var(--type-text); line-height: var(--lead-text); }
+.artwork-by { margin-top: 2px; }
+.artwork-medium { color: var(--ink-2); }
+.artwork-holder { color: var(--ink-3); }
+.detail-artwork { font-size: 13.5px; line-height: 19px; overflow-wrap: anywhere; }
+
 /* ---- groups */
 
 /* A frame is a faint wash and a hairline, so the cards inside it carry the weight. */
