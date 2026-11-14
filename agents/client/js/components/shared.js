@@ -194,18 +194,72 @@ export function fold(str, width, letter, max) {
 }
 
 const ANYWHERE = /[\u3041-\u3096\u30a1-\u30fa\u30fc\u3400-\u9fff\uac00-\ud7af]/;
+/** Punctuation set with Han that a line may end after, and the brackets one may start with. */
+const CLOSER = /[\u3001\u3002\uff0c\uff1b\uff1a\uff1f\uff01\uff09\u300b]/;
+const OPENER = /[\uff08\u300a]/;
+const WORD = /[0-9A-Za-z]/;
+const LATIN = /[A-Za-z]/;
+/**
+ * Whether a line may end after `chars[i]`, inside a word: between two characters that can each end
+ * a line, after a comma or a stop set with Han, before a bracket set with Han, between a Han
+ * character and a Latin letter or digit, and after a hyphen that joins two Latin letters.
+ */
+function parts(chars, i) {
+  const [before, ch, next] = [chars[i - 1] ?? '', chars[i], chars[i + 1]];
+  return ((ANYWHERE.test(ch) || CLOSER.test(ch)) && (ANYWHERE.test(next) || OPENER.test(next)))
+    || (ANYWHERE.test(ch) && WORD.test(next)) || (WORD.test(ch) && ANYWHERE.test(next))
+    || (ch === '-' && LATIN.test(before) && LATIN.test(next));
+}
+
+/**
+ * How wide each character from U+0020 to U+007E draws, in hundredths of a px, in the faces `wrap`
+ * counts in: the title, the text, the upright serif of a passage, and a figure's three sizes. `WIDTHS` weighs these characters for a whole sentence. Here each has its own width, so a
+ * line counted word by word ends where the page ends it. Each is the width the character draws
+ * with kerning off, rounded up, and 0.02 px more. style.css sets the fourteen structured types
+ * without kerning, so a word is exactly as wide as its characters. docs/libraries.md repeats the
+ * table.
+ */
+export const ADVANCES = new Map([
+  [TITLE_LETTER, [384, 512, 833, 1018, 1018, 1572, 1139, 496, 627, 627, 731, 1018, 496, 731, 496, 484, 1034, 760, 973, 1014, 1042, 1004, 1035, 914, 1048, 1035, 496, 496, 1018, 1018, 1018, 834, 1441, 1109, 1055, 1137, 1148, 945, 907, 1173, 1198, 449, 897, 1075, 901, 1398, 1180, 1213, 1023, 1213, 1055, 1026, 1007, 1168, 1095, 1559, 1107, 1072, 1037, 627, 484, 627, 1018, 947, 762, 889, 988, 890, 988, 910, 594, 979, 955, 404, 404, 899, 416, 1426, 947, 941, 981, 981, 634, 850, 601, 947, 876, 1286, 866, 894, 856, 627, 423, 627, 1018]],
+  [TEXT_LETTER, [350, 388, 596, 786, 786, 1155, 888, 370, 476, 476, 588, 786, 370, 588, 370, 380, 786, 579, 753, 782, 803, 771, 795, 710, 797, 795, 370, 370, 786, 786, 786, 640, 1146, 841, 820, 894, 907, 743, 714, 932, 927, 333, 671, 822, 709, 1091, 927, 963, 793, 963, 815, 795, 791, 920, 841, 1209, 847, 818, 826, 476, 380, 476, 786, 728, 624, 688, 767, 698, 767, 713, 451, 760, 734, 308, 307, 677, 315, 1086, 728, 737, 762, 760, 475, 653, 453, 728, 676, 967, 654, 677, 673, 476, 322, 476, 786]],
+  [PASSAGE_LETTER, [447, 542, 532, 892, 892, 1410, 1332, 274, 673, 673, 729, 1335, 447, 563, 447, 740, 892, 892, 892, 892, 892, 892, 892, 892, 892, 892, 447, 447, 1335, 1335, 1335, 755, 1602, 1158, 998, 1134, 1252, 1017, 938, 1190, 1273, 546, 534, 1111, 917, 1459, 1295, 1285, 945, 1285, 1127, 868, 1012, 1262, 1149, 1662, 1140, 1057, 1070, 673, 740, 673, 1602, 802, 802, 772, 892, 717, 902, 783, 501, 828, 940, 477, 441, 876, 470, 1410, 937, 884, 899, 895, 627, 711, 578, 943, 788, 1242, 850, 780, 758, 673, 802, 673, 1335]],
+  [FIGURES[0][2], [649, 1021, 1493, 2125, 2150, 2953, 2341, 883, 1239, 1239, 1473, 2150, 777, 1466, 777, 990, 2150, 2150, 2150, 2150, 2150, 2150, 2150, 2150, 2150, 2150, 777, 777, 2150, 2150, 2150, 1763, 2983, 2294, 2128, 2381, 2341, 1909, 1826, 2434, 2437, 850, 1835, 2165, 1810, 2884, 2394, 2520, 2050, 2519, 2127, 2099, 2007, 2372, 2253, 3232, 2274, 2205, 2110, 1239, 990, 1239, 2150, 1904, 1674, 1808, 1977, 1801, 1974, 1836, 1154, 1964, 1934, 772, 770, 1773, 775, 2875, 1904, 1898, 1966, 1964, 1179, 1695, 1151, 1904, 1743, 2618, 1733, 1776, 1670, 1239, 780, 1239, 2150]],
+  [FIGURES[1][2], [467, 719, 1081, 1494, 1508, 2126, 1651, 634, 876, 876, 1038, 1508, 573, 1034, 573, 692, 1508, 1508, 1508, 1508, 1508, 1508, 1508, 1508, 1508, 1508, 573, 573, 1508, 1508, 1508, 1235, 2104, 1617, 1506, 1672, 1654, 1349, 1290, 1712, 1723, 604, 1294, 1533, 1279, 2036, 1692, 1774, 1452, 1774, 1505, 1480, 1422, 1677, 1589, 2281, 1606, 1555, 1490, 876, 692, 876, 1508, 1347, 1162, 1275, 1401, 1270, 1398, 1297, 818, 1390, 1367, 545, 544, 1259, 550, 2039, 1347, 1341, 1391, 1390, 844, 1200, 818, 1347, 1235, 1853, 1227, 1259, 1186, 876, 556, 876, 1508]],
+  [FIGURES[2][2], [358, 497, 825, 1002, 1002, 1567, 1121, 482, 613, 613, 711, 1002, 482, 711, 482, 467, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 482, 482, 1002, 1002, 1002, 819, 1420, 1095, 1039, 1118, 1129, 927, 888, 1152, 1181, 435, 885, 1060, 884, 1381, 1161, 1193, 1006, 1193, 1039, 1010, 988, 1149, 1081, 1543, 1093, 1058, 1017, 613, 467, 613, 1002, 931, 739, 873, 971, 872, 971, 892, 580, 962, 939, 388, 388, 886, 400, 1414, 931, 923, 965, 965, 621, 834, 586, 931, 861, 1275, 853, 881, 838, 613, 407, 613, 1002]],
+]);
+/** How wide a character set with Han draws in each of those faces, in hundredths of a px: the size the face is set in, less its letter spacing. */
+const EM = new Map([[TITLE_LETTER, 1591], [TEXT_LETTER, 1250], [PASSAGE_LETTER, 1600], [FIGURES[0][2], 3332], [FIGURES[1][2], 2352], [FIGURES[2][2], 1568]]);
+const SQUARE = /[\u3000-\u30ff\u3400-\u9fff\uff01-\uff60\uffe0-\uffe6]/;
+
+/**
+ * A string's width on one line in hundredths of a px, counted for `wrap`: each character from
+ * U+0020 to U+007E by `ADVANCES`, each character set with Han by `EM`,
+ * and the rest of the string, with those taken out, by `span`.
+ */
+export function advance(str, letter) {
+  const widths = ADVANCES.get(letter);
+  if (!widths) return span(str, letter) * letter;
+  let wide = 0;
+  let others = '';
+  for (const ch of str) {
+    const cp = ch.codePointAt(0);
+    if (cp >= 0x20 && cp <= 0x7e) wide += widths[cp - 0x20];
+    else if (SQUARE.test(ch)) wide += EM.get(letter);
+    else others += ch;
+  }
+  return wide + span(others, letter) * letter;
+}
 
 /**
  * How many lines a string is given in a column too narrow for `fold`, where one long word can
- * leave half a line empty. The words are laid out one by one. A line may end at white space and
- * between two characters that can each end a line, and nowhere else, which is at most where a page
- * breaks. A word wider than a line starts a line of its own and is broken wherever a line ends. One
- * letter of each line is kept spare, because a short word can draw a little wider than it counts.
- * A figure's letter is already the widest any character runs, so its lines keep nothing spare.
+ * leave half a line empty. The words are laid out one by one, each as wide as `advance` counts it.
+ * A line may end at white space and where `parts` says a word parts, and nowhere else, which is at
+ * most where a page breaks. A word wider than a line
+ * starts a line of its own and is broken wherever a line ends.
  */
 export function wrap(str, width, letter, max) {
-  const room = width * 100 - (FACE_OF.has(letter) ? 10 * letter : 0);
-  const space = span(' ', letter) * letter;
+  const room = width * 100;
+  const space = advance(' ', letter);
   let lines = 1;
   let used = 0;
   const place = (wide, gap) => {
@@ -222,10 +276,10 @@ export function wrap(str, width, letter, max) {
     chars.forEach((ch, i) => {
       unit += ch;
       const next = chars[i + 1];
-      if (next !== undefined && !(ANYWHERE.test(ch) && ANYWHERE.test(next))) return;
-      const wide = span(unit, letter) * letter;
+      if (next !== undefined && !parts(chars, i)) return;
+      const wide = advance(unit, letter);
       if (wide <= room) place(wide, gap);
-      else [...unit].forEach((part, k) => place(span(part, letter) * letter, k === 0 ? room : 0));
+      else [...unit].forEach((part, k) => place(advance(part, letter), k === 0 ? room : 0));
       gap = 0;
       unit = '';
     });

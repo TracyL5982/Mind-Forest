@@ -166,3 +166,28 @@ test('the bars of a breakdown are shares of the whole, and a share written as 0 
   assert.deepEqual([tiny[1]!.written, tiny[1]!.bar], ['0%', 0]);
   assert.deepEqual(bars([-5, Number.NaN, 5]), [0, 0, 1]);
 });
+
+test('docs/libraries.md repeats the width wrap gives each character, as the client holds it', async () => {
+  const { ADVANCES, TITLE_LETTER, TEXT_LETTER, PASSAGE_LETTER, FIGURES } = (await load('components/shared.js')) as { ADVANCES: Map<number, number[]>; TITLE_LETTER: number; TEXT_LETTER: number; PASSAGE_LETTER: number; FIGURES: [string, number, number, number][] };
+  const page = readFileSync(new URL('../docs/libraries.md', import.meta.url), 'utf8');
+  const rows = [...page.matchAll(/^\| .+ \| U\+(00[2-7][0-9A-F]) \| (\d+) \| (\d+) \| (\d+) \| (\d+) \| (\d+) \| (\d+) \|$/gm)];
+  assert.equal(rows.length, 95);
+  const letters = [TITLE_LETTER, TEXT_LETTER, PASSAGE_LETTER, FIGURES[0]![2], FIGURES[1]![2], FIGURES[2]![2]];
+  assert.deepEqual([...ADVANCES.keys()], letters);
+  for (const [, code, ...widths] of rows) assert.deepEqual(widths.map(Number), letters.map((letter) => ADVANCES.get(letter)![parseInt(code!, 16) - 0x20]), `U+${code}`);
+});
+
+test('wrap ends a line where a page does: between Han characters, after their stops, beside a Latin word and after a joining hyphen', async () => {
+  const { wrap, advance, ADVANCES } = (await load('components/shared.js')) as { wrap: (str: string, width: number, letter: number, max: number) => number; advance: (str: string, letter: number) => number; ADVANCES: Map<number, number[]> };
+  assert.equal(advance('记忆', 93), 3182);
+  assert.equal(advance('a 记', 72), ADVANCES.get(72)![0x61 - 0x20]! + ADVANCES.get(72)![0]! + 1250, 'each English character by the table, and a Han character as one square');
+  assert.equal(advance('é', 72), 11 * 72, 'any other character as the width table counts it');
+  assert.equal(wrap('记'.repeat(18), 287, 93, 9), 1, 'eighteen Han characters fit a title line of 287 px');
+  assert.equal(wrap('记'.repeat(19), 287, 93, 9), 2);
+  assert.equal(wrap(`${'记'.repeat(17)}，记`, 287, 93, 9), 2, 'a comma stays with the character before it');
+  assert.equal(wrap(`${'记'.repeat(17)}WWW`, 287, 93, 9), 2, 'a Latin word goes to the next line whole');
+  assert.equal(wrap('state-of-the-art thinking', 60, 72, 9), 3, 'a hyphen between letters can end a line');
+  assert.equal(wrap('-5 to -9', 20, 72, 9), 3, 'a hyphen before a digit cannot');
+  assert.equal(wrap('', 100, 72, 9), 1);
+  assert.equal(wrap('a b c d e f g h', 10, 72, 3), 3, 'never more than the most lines');
+});

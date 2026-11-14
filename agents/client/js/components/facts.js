@@ -8,19 +8,19 @@ const HALF = (COLUMN - BETWEEN) / 2;
 const ROW_GAP = 12;
 /** A row of figures is set in the middle size or the smallest, never the largest, which is a lone fact's. */
 const SIZES = FIGURES.slice(1);
+const SMALL_LETTER = FIGURES[2][2];
 /** The most lines a value is sized for, as on a fact card. */
 const MOST_LINES = 8;
 
 const pairs = (props) => list(props.facts).map((fact) => ({ label: text(fact?.label), value: text(fact?.value) }));
 
 /** A value that needs more than two lines in half a row is given a row of its own. */
-const isLong = (fact) => wrap(fact.value, HALF, TITLE_LETTER, 3) > 2;
+const isLong = (fact) => wrap(fact.value, HALF, SMALL_LETTER, 3) > 2;
 
 /**
  * Facts sit two to a row. One with a long value, or with no short neighbour after it, has the
  * whole row. A row is set in the largest size that holds each of its values on one line. Past the
- * smallest a value wraps and the row grows with it. The smallest size is the title's, set a little
- * tighter, so its lines are counted in the title face. A value is drawn whole whatever the
+ * smallest a value wraps and the row grows with it. A value is drawn whole whatever the
  * estimate, and never ended with an ellipsis.
  */
 function plan(item, props) {
@@ -33,7 +33,7 @@ function plan(item, props) {
     const size = SIZES.find((step) => cells.every((cell) => figureNeed(cell.value, step) <= room * 100));
     const [cls, lead] = size ?? SIZES.at(-1);
     const drawn = cells.map((cell) => {
-      const lines = size ? 1 : wrap(cell.value, room, TITLE_LETTER, MOST_LINES);
+      const lines = size ? 1 : wrap(cell.value, room, SMALL_LETTER, MOST_LINES);
       const labelLines = wrap(cell.label, room, TEXT_LETTER, 2);
       return { ...cell, lines, labelLines, height: lines * lead + labelLines * TEXT, most: MOST_LINES * lead };
     });
