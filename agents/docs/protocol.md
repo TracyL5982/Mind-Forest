@@ -30,7 +30,7 @@ Drawing rules:
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `hello` | `protocol`, `snapshot`, `settings`, `undo` | Sent once on connect. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
+| `hello` | `protocol`, `snapshot`, `settings`, `maps`, `undo` | Sent once on connect. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `maps` is the map tile provider, `{ tiles, credit, link? }`, or null when maps are off, in which case a client asks no tile server for anything. See Maps in `docs/libraries.md`. `undo` is the label of what an undo would take back now, or null. |
 | `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
 | `activity` | `activity` | Work state: `id`, `role`, `state` (`start`, `done`, `error`), `message`, optional `nodeId`. Show a thinking mark on `nodeId` between `start` and `done`. |
 | `say` | `text` | One short line for the agent to speak. |

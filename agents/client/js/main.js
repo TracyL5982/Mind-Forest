@@ -2,6 +2,7 @@ import { Connection, readToken, saveToken } from './connection.js';
 import { Store } from './store.js';
 import { Field } from './field.js';
 import { Panel } from './panel.js';
+import { useMaps } from './map.js';
 import { bindField, bindDump, textDump } from './input.js';
 import { Voice, speak, hush } from './voice.js';
 import { HandoffSheet, WorkLog, bindGate, bindSettings, caption, showGate, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
@@ -94,6 +95,7 @@ function receive(message) {
   switch (message.t) {
     case 'hello': {
       const first = field.cards.size === 0;
+      useMaps(message.maps ?? null);
       store.replace(message.snapshot, message.undo ?? null);
       store.settings = message.settings;
       showSettings(store.settings);
