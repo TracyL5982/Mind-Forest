@@ -1,11 +1,11 @@
 import { h, clamp } from '../dom.js';
-import { TEXT_LETTER, fold, framed, framedHeight, picture, text } from './shared.js';
+import { SIDES, TEXT_LETTER, fold, framed, framedHeight, picture, say, text } from './shared.js';
 
 const WIDTH = 240;
 
 const pictureHeight = (props) => clamp(Math.round(WIDTH / (Number(props.aspect) || 1.35)), 130, 260);
 const caption = (item, props) => text(props.caption) || item.title || '';
-const captionLines = (item, props) => fold(caption(item, props), WIDTH - 27, TEXT_LETTER, 2);
+const captionLines = (item, props) => (caption(item, props) ? fold(caption(item, props), WIDTH - SIDES, TEXT_LETTER, 2) : 0);
 
 export const size = (item, props) => [WIDTH, framedHeight(pictureHeight(props), captionLines(item, props))];
 
@@ -14,4 +14,5 @@ export const draw = (item, props, ctx) => framed(pictureHeight(props), caption(i
 
 export const detail = (item, props, ctx) => [
   h('div', { class: 'detail-media' }, picture(text(props.src), item.title, ctx)),
+  text(props.caption) && props.caption !== item.title && props.caption !== item.summary && say('p', 'detail-caption', props.caption),
 ];

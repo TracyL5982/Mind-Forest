@@ -85,11 +85,11 @@ export class Panel {
 
     const url = safeUrl(item.source.url ?? '');
     const parts = this.editing ? [this.editForm(item)] : [
-      h('h2', { class: 'panel-title', text: item.title || 'Untitled' }),
+      h('h2', { class: 'panel-title', dir: 'auto', text: item.title || 'Untitled' }),
       node.why && h('p', { class: `panel-why ${pick ? 'is-pick' : ''}` }, h('span', { text: 'Why it is here' }), node.why),
       drawDetail(node, item, { asset: this.asset }),
-      item.summary && item.summary !== item.title && h('p', { class: 'panel-summary', text: item.summary }),
-      item.text && item.text !== item.summary && item.text !== item.title && h('p', { class: 'panel-text', text: item.text }),
+      item.summary && item.summary !== item.title && h('p', { class: 'panel-summary', dir: 'auto', text: item.summary }),
+      item.text && item.text !== item.summary && item.text !== item.title && h('p', { class: 'panel-text', dir: 'auto', text: item.text }),
       item.tags.length > 0 && h('div', { class: 'tags' }, item.tags.map((tag) => h('span', { class: 'tag', text: tag }))),
       h('dl', { class: 'facts' },
         h('dt', { text: 'From' }), h('dd', { text: cameFrom(item) }),

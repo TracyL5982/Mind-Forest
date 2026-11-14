@@ -94,7 +94,8 @@ export class Field {
       if (!card) {
         const from = (node.parent && this.cards.get(node.parent)?.cur) || target;
         const face = h('div', { class: 'card-face' });
-        const el = h('div', { class: 'card', data: { id: node.id } }, face);
+        const el = h('div', { class: 'card', data: { id: node.id } }, face,
+          h('div', { class: 'think', 'aria-label': 'Working on this' }, h('i'), h('i'), h('i')));
         card = { el, face, sig: '', cur: instant ? { ...target } : { ...from }, tween: null, target: null };
         this.cards.set(node.id, card);
         this.cardLayer.append(el);
@@ -119,10 +120,7 @@ export class Field {
         card.el.style.width = `${sh.w}px`;
         card.el.style.height = `${sh.h}px`;
         card.el.dataset.component = component;
-        put(card.face,
-          h('div', { class: `card-body c-${component}` }, drawCard(node, sh.item, { asset: this.asset })),
-          h('div', { class: 'think', 'aria-label': 'Working on this' }, h('i'), h('i'), h('i')),
-        );
+        put(card.face, h('div', { class: `card-body c-${component}` }, drawCard(node, sh.item, { asset: this.asset })));
       }
       card.el.setAttribute('aria-label', `${node.status === 'pick' ? 'Pick' : 'Card'}: ${sh.item.title}`);
       card.el.style.setProperty('--tint', view.colour.get(node.id));

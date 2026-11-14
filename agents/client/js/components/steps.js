@@ -1,11 +1,11 @@
 import { h } from '../dom.js';
-import { FRAME, TEXT, TITLE, list, title } from './shared.js';
+import { FRAME, TEXT, TITLE, list, say, title } from './shared.js';
 
 const SHOWN = 5;
 const ROW = 20;
 const GAP = 8;
 
-const step = (label, i, lines) => h('li', null, h('span', { class: 'step-n', text: String(i + 1) }), h('span', { class: lines, text: String(label) }));
+const step = (label, i, lines) => h('li', null, h('span', { class: 'step-n', text: String(i + 1) }), say('span', lines, String(label)));
 
 export function size(item, props) {
   const n = list(props.steps).length;
@@ -23,5 +23,5 @@ export function draw(item, props) {
 }
 
 export const detail = (item, props) => [
-  h('ol', { class: 'steps is-full' }, list(props.steps).map((label, i) => step(label, i, false))),
+  h('ol', { class: 'steps is-full' }, list(props.steps).map((label, i) => step(label, i, ''))),
 ];

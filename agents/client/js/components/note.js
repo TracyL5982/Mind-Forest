@@ -1,8 +1,7 @@
-import { h } from '../dom.js';
-import { FRAME, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, fold, text, title } from './shared.js';
+import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, fold, say, text, title } from './shared.js';
 
 const WIDTH = 240;
-const COLUMN = WIDTH - 33;
+const COLUMN = WIDTH - SIDES;
 
 function plan(item, props) {
   const emphasis = text(props.emphasis);
@@ -25,8 +24,8 @@ export function draw(item, props) {
   const { emphasis, body, titleLines, bodyLines } = plan(item, props);
   return [
     title(item, titleLines),
-    emphasis && h('div', { class: 'note-emphasis clamp-1', text: emphasis }),
-    body && h('div', { class: `card-text clamp-${bodyLines}`, text: body }),
+    emphasis && say('div', 'note-emphasis clamp-1', emphasis),
+    body && say('div', `card-text clamp-${bodyLines}`, body),
   ];
 }
 

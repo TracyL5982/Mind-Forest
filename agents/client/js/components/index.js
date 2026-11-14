@@ -11,9 +11,10 @@ import * as code from './code.js';
 import * as steps from './steps.js';
 
 /**
- * Every way one card can be drawn, one module per type. `size` is the card's fixed footprint, so
- * the field can be laid out without measuring the page. `draw` returns the card's contents from
- * the item plus the props. `detail` returns the longer form shown when the card is opened.
+ * Every way one card can be drawn, one module per type. `size` works the card's footprint out
+ * from the item and the props, so the field can be laid out without measuring the page. `draw`
+ * returns the card's contents. `detail` returns the longer form shown when the card is opened,
+ * and may return nothing.
  */
 export const COMPONENTS = { note, quote, fact, image, video, link, chart, person, chat, code, steps };
 

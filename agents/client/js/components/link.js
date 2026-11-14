@@ -1,14 +1,20 @@
 import { h, safeUrl } from '../dom.js';
-import { TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, fold, picture, text, title } from './shared.js';
+import { SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, fold, graphemes, picture, say, text, title } from './shared.js';
 
 const BAR = 30;
 const THUMB = 64;
+
+const siteOf = (props) => text(props.site) || 'link';
+const bar = (props) => h('div', { class: 'link-site' },
+  h('span', { class: 'link-dot', text: graphemes(siteOf(props))[0].toUpperCase() }),
+  say('span', 'link-host clamp-1', siteOf(props)),
+  h('span', { class: 'link-out', 'aria-hidden': 'true', text: '↗' }));
 
 function plan(item, props) {
   const thumb = text(props.image);
   const about = text(props.description) || item.summary || '';
   const width = thumb ? 316 : 272;
-  const column = width - 33 - (thumb ? 96 : 0);
+  const column = width - SIDES - (thumb ? 96 : 0);
   return {
     thumb,
     about,
@@ -26,20 +32,19 @@ export function size(item, props) {
 
 export function draw(item, props, ctx) {
   const { thumb, about, titleLines, aboutLines } = plan(item, props);
-  const site = text(props.site) || 'link';
   return [
-    h('div', { class: 'link-site' },
-      h('span', { class: 'link-dot', text: site[0].toUpperCase() }),
-      h('span', { class: 'link-host clamp-1', text: site }),
-      h('span', { class: 'link-out', 'aria-hidden': 'true', text: '↗' })),
+    bar(props),
     h('div', { class: 'link-row' },
       h('div', { class: 'link-main' },
         title(item, titleLines),
-        about && h('div', { class: `card-text clamp-${aboutLines}`, text: about })),
+        about && say('div', `card-text clamp-${aboutLines}`, about)),
       thumb && h('div', { class: 'link-thumb' }, picture(thumb, '', ctx))),
   ];
 }
 
 export const detail = (item, props, ctx) => [
-  safeUrl(text(props.url)) && text(props.image) && h('div', { class: 'detail-media' }, picture(props.image, '', ctx)),
+  h('div', { class: 'detail-link' },
+    bar(props),
+    safeUrl(text(props.url)) && text(props.image) && h('div', { class: 'detail-media' }, picture(props.image, '', ctx)),
+    text(props.description) && props.description !== item.summary && say('p', 'detail-caption', props.description)),
 ];

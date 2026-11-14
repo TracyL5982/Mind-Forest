@@ -1,24 +1,28 @@
 import { h } from '../dom.js';
-import { initials, picture, text } from './shared.js';
+import { initials, picture, say, text } from './shared.js';
 
-const face = (name, props, ctx) => h('div', { class: 'person-face' }, text(props.image) ? picture(props.image, name, ctx) : initials(name));
+const nameOf = (item, props) => text(props.name) || item.title || '';
+
+/** A round face: the picture, or the initials when there is none or it fails to load. */
+const face = (name, props, ctx) => h('div', { class: 'person-face' },
+  text(props.image) ? picture(props.image, name, ctx, () => initials(name)) : initials(name));
 
 export const size = () => [252, 88];
 
 export function draw(item, props, ctx) {
-  const name = text(props.name) || item.title || '';
+  const name = nameOf(item, props);
   return [
     face(name, props, ctx),
     h('div', { class: 'person-main' },
-      h('div', { class: 'card-title clamp-1', text: name }),
-      text(props.role) && h('div', { class: 'card-text clamp-1', text: props.role }),
-      item.title !== name && h('div', { class: 'card-foot clamp-1', text: item.title }),
+      say('div', 'card-title clamp-1', name),
+      text(props.role) && say('div', 'card-text clamp-1', props.role),
+      item.title !== name && say('div', 'card-foot clamp-1', item.title),
     ),
   ];
 }
 
 export const detail = (item, props, ctx) => [
   h('div', { class: 'detail-person' },
-    face(text(props.name) || item.title || '', props, ctx),
-    h('div', null, h('div', { class: 'card-title', text: text(props.name) }), h('div', { class: 'card-text', text: text(props.role) }))),
+    face(nameOf(item, props), props, ctx),
+    h('div', null, say('div', 'card-title', nameOf(item, props)), say('div', 'card-text', text(props.role)))),
 ];
