@@ -85,7 +85,9 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
     if (p.aboutLines) pen.words(p.about, x, y + titleTall + 4, column, p.aboutLines, setting::text, look.ink2);
     if (p.thumb.empty()) return;
     CGRect thumb = pen.px(width - 16 - 84, y, 84, body - 1 - BAR - 10 - 13 - 1);
-    pen.picture(p.thumb, thumb, true, item.words);
+    std::optional<Picture> known = pictureAt(p.thumb);
+    if (known && known->missing) unavailable(pen, thumb, item.words);
+    else pen.picture(p.thumb, thumb, true, item.words);
     pen.mask(thumb, 6 * pen.k, look.fill);
 }
 

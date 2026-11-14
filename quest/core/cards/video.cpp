@@ -48,10 +48,7 @@ void draw(const Pen& pen, const Look&, const Item& item, const Json& props, floa
     std::optional<Picture> known = pictureAt(poster);
     if (known && known->missing) {
         // A clip whose poster is missing keeps its play mark, with the words below it.
-        hatch(pen, frame, Color::hex(0x131519), Color::hex(0x17191E), 10);
-        std::string said = item.words.noPicture();
-        float w = pen.width(said, setting::text);
-        pen.words(said, width / 2 - w / 2, 1 + POSTER - 14 - TEXT, w + 1, 1, setting::text, palette::ink3);
+        unavailable(pen, frame, item.words, 14);
     } else if (!poster.empty()) {
         pen.picture(poster, frame, true, item.words);
     }
@@ -68,7 +65,9 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     std::optional<Picture> known = pictureAt(poster);
     bool missing = known && known->missing;
     std::optional<float> aspect = embedded ? std::optional(16.f / 9) : aspectOf(poster);
-    float tall = poster.empty() && !plays ? 0 : missing ? 120 : std::min(Sheet::width / aspect.value_or(16.f / 9), 420.f);
+    // A player shows a poster it cannot have as no picture at all; a picture shows it as one unavailable.
+    bool shown = !poster.empty() && !(plays && missing);
+    float tall = !plays && poster.empty() ? 0 : !plays && missing ? 120 : std::min(Sheet::width / aspect.value_or(16.f / 9), 420.f);
     std::string note = plays ? "" : item.words.chinese ? "这段视频没有可播放的文件。" : "This clip has no file to play.";
     float noteTall = note.empty() ? 0 : 12 + heightOf(note, Sheet::width - 28, 0, NOTE, sheet.k) + 12;
     if (tall > 0) sheet.picture = CGRect{Sheet::left * sheet.k, (sheet.y + Sheet::gap) * sheet.k, Sheet::width * sheet.k, tall * sheet.k};
@@ -78,7 +77,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
         pen.ctx.setFillColor(Color::hex(0x0F1115));
         pen.ctx.fill(box);
         CGRect frame = pen.px(Sheet::left, y, Sheet::width, tall);
-        if (!poster.empty()) pen.picture(poster, aspect && !missing ? contained(frame, *aspect) : frame, false, words);
+        if (shown) pen.picture(poster, aspect && !missing ? contained(frame, *aspect) : frame, false, words);
         if (plays) playMark(pen, Sheet::left + Sheet::width / 2, y + tall / 2);
         pen.words(note, Sheet::left + 14, y + tall + 12, Sheet::width - 28, 0, NOTE, palette::ink2);
         pen.mask(box, 14 * pen.k, palette::glass);
