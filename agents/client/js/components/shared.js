@@ -143,15 +143,37 @@ export const up = (a, b) => Math.floor((a + b - 1) / b);
 export const textWidth = (str) => up(span(str) * TEXT_LETTER, 100);
 
 /**
+ * Han, hangul syllables and kana letters. A line may end after any of them, so a string made only
+ * of these fills each line to the last character that fits.
+ */
+const BREAKS_ANYWHERE = /^[\u3041-\u3096\u30a1-\u30fa\u30fc\u3400-\u9fff\uac00-\ud7af]+$/;
+
+/** The lines `str` takes when each line holds every character that fits in `room` hundredths of a px. */
+function packed(str, room, letter) {
+  let lines = 1;
+  let used = 0;
+  for (const ch of str) {
+    const wide = span(ch, letter) * letter;
+    if (used > 0 && used + wide > room) {
+      lines += 1;
+      used = 0;
+    }
+    used += wide;
+  }
+  return lines;
+}
+
+/**
  * How many lines a string is given in a column `width` px wide, when one letter is `letter` tenths
  * of a px wide. A card draws the string clamped to this many lines, so a wrong guess shows an
  * ellipsis or a blank line and never spills. Two letters a line are allowed for breaking between
- * words. Every step is in whole hundredths of a px.
+ * words, except in a string that can break anywhere. Every step is in whole hundredths of a px.
  */
 export function fold(str, width, letter, max) {
   const need = span(str, letter) * letter;
   const room = width * 100;
-  return need <= room ? 1 : clamp(up(need, room - 20 * letter), 1, max);
+  if (need <= room) return 1;
+  return clamp(BREAKS_ANYWHERE.test(str) ? packed(str, room, letter) : up(need, room - 20 * letter), 1, max);
 }
 
 const segmenter = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;

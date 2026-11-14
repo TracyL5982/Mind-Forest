@@ -93,6 +93,16 @@ test('a sign or a unit is counted at least as wide as it draws', async () => {
   for (const [ch, px] of Object.entries(quote)) assert.ok(span(ch, QUOTE_LETTER) * QUOTE_LETTER >= px * 100, `${ch} in a quote`);
 });
 
+test('text that can break anywhere fills each line, and other text keeps room to break between words', async () => {
+  const { fold, QUOTE_LETTER } = await load('components/shared.js');
+  assert.equal(fold('学'.repeat(15), 247, QUOTE_LETTER, 5), 1);
+  assert.equal(fold('学'.repeat(30), 247, QUOTE_LETTER, 5), 2, 'fifteen Han to a line');
+  assert.equal(fold('学'.repeat(31), 247, QUOTE_LETTER, 5), 3);
+  assert.equal(fold('学かナ한'.repeat(40), 247, QUOTE_LETTER, 5), 5, 'never more than the cap');
+  assert.equal(fold(`${'学'.repeat(14)}，${'学'.repeat(15)}`, 247, QUOTE_LETTER, 5), 3, 'a comma may not start a line, so it is counted as words are');
+  assert.equal(fold('word '.repeat(12), 247, QUOTE_LETTER, 5), 2);
+});
+
 test('a string cut to a width keeps whole characters and fits the width', async () => {
   const { cut, span, initials, TEXT_LETTER } = await load('components/shared.js');
   const whole = new Set(['🎉', '👨‍👩‍👧‍👦', '🏳️‍🌈', '🇯🇵', 'é', '记', 'a']);
