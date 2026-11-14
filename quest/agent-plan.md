@@ -84,11 +84,14 @@ Each one ends in a check. Labels: **Now** starts at once, in parallel. **After t
 - An item with `data.mediaUrl` plays in the scene's video player, from the service's address with `?token=`. A video with only an embed shows its still and its title.
 - **Check.** A Scout run's picture cards appear in the preview; a podcast pick plays on the headset.
 
-### WS7. Voice. After WS4 (plumbing); After you (the gesture)
-- Record with Android's `AudioRecord` (the `RECORD_AUDIO` permission), stop 1.2 s after the speaker goes quiet (the web client's rule), post to `/api/transcribe?tree=<tree in view>`, send the text as a final `utter`.
-- A `say` plays `/api/speak` in the video player's audio path; recording stops while it plays.
-- Until you choose the gesture, `-agentListen` starts one recording.
-- **Check.** On the headset, a spoken command reaches the service and its reply is heard.
+### WS7. Voice, woken by name. Now (measuring, web client, service); After WS4 (Quest)
+- **Decided by the user.** The agent is called Momo by default. Saying "hey momo" or "hi momo" wakes it; it listens until you finish talking; otherwise it does not listen. The web client behaves the same.
+- **On the device, before anything is sent.** An on-device keyword spotter (sherpa-onnx, Apache-2.0, a 15.7 MB English model) waits for the phrase. No audio leaves the device until it hears it. Measured first on synthetic speech: detection rate and false wakes per hour, with near misses ("hey mama", "memo") and the agent's own replies.
+- **After the phrase.** A short sound, then recording from a little before the phrase ends until a 1.2 s pause, posted to `/api/transcribe?tree=<tree in view>`; the text goes as a final `utter`. The service strips the wake phrase.
+- **The name** is the service setting `agentName` (default `momo`), in `hello.settings`. The Conductor answers to it and the transcription hints include it.
+- **The agent's own voice.** A `say` plays `/api/speak`; the spotter does not listen while it plays, so a reply that says "Momo" cannot wake it.
+- **Quest.** Android's `AudioRecord` (the `RECORD_AUDIO` permission) at 16 kHz into the spotter on its own thread, the C API of sherpa-onnx's Android build (35.1 MB), the model pushed with the media. `-agentListen` records once without the phrase, for scripted runs.
+- **Check.** Web: a fake microphone plays a clip with the phrase and a command, and the service acts on the command without the phrase; a clip without the phrase sends nothing. Quest: a spoken "hey momo, ..." reaches the service and its reply is heard, and the perf gate holds while it waits for its name.
 
 ### WS8. Wireless adb. After headset
 - `agent-wifi.sh`, measured: how long the connection lasts, what breaks when the headset sleeps, and how long the app takes to be live again.
@@ -103,13 +106,12 @@ Each one ends in a check. Labels: **Now** starts at once, in parallel. **After t
 |---|---|---|
 | M1, USB | See your trees, pinch for new picks, keep, cut | WS1, WS2, WS4, WS5 |
 | M2, untethered at home | The same over wireless adb, with pictures, playable audio and the library | WS3, WS6, WS8 |
-| M3, voice | Talk to it and hear replies | WS7 and your gesture |
+| M3, voice | Say "hey momo, ..." and hear the reply | WS7 |
 | M4, anywhere | The same away from home | WS9 |
 
 Started in parallel now: WS2 (agent core), WS3 (service), WS4 and WS5 on the Mac side, and WS1's scripts. Each runs on its own branch off `tracy/quest-agents` and is merged after review.
 
 ## Open, yours to decide
 
-- The gesture that starts talking.
-- Whether trees already saved on the headset are sent to the service once.
-- Permission to download the build tools on this Mac, or the machine that builds the APK.
+- Trees already saved on the headset stay where they are for now (the user's call).
+- The build runs on this Mac. Its debug key differs from the one that signed the installed app, so this build installs beside it as "Mind Palace Ocean (agents)" (`QUEST_APP_SUFFIX=.agents`), with its own media.
