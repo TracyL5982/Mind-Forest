@@ -456,6 +456,55 @@ for (const [name, by, when, members, makeProps, status = 'kept', more = []] of C
     more.map(([label, others, othersProps, othersStatus = 'kept']) => h('div', { class: 'lib-row lib-scroll lib-more' }, cell(label, composite(name, others, othersProps, othersStatus, false).el))),
     props('Props', closed.group.props)));
 }
+
+/** A layout's tree from a nested list: [kind, { label, join }?, ...parts], where a part is a member's index, or { lead: i } or { minor: i }. */
+function treeOf(spec, ids) {
+  if (typeof spec === 'number') return { kind: 'card', id: ids[spec], role: 'normal' };
+  if (!Array.isArray(spec)) {
+    const [role, i] = Object.entries(spec)[0];
+    return { kind: 'card', id: ids[i], role };
+  }
+  const [kind, ...parts] = spec;
+  const set = parts[0] && !Array.isArray(parts[0]) && typeof parts[0] === 'object' && ('label' in parts[0] || 'join' in parts[0]) ? parts.shift() : {};
+  return { kind, ...set, children: parts.map((part) => treeOf(part, ids)) };
+}
+
+const fact = (title, value, label) => make('fact', { value, label }, { title });
+const LAYOUT_SAMPLES = [
+  ['Depth 2: Lisbon in three days, a column for each facet',
+    [note('Eat: grilled sardines in Alfama', 'Smoke on every corner in June.'), note('Eat: pastéis de nata at Belém', 'Warm from the oven, with cinnamon.'),
+      pic('See: Tram 28 at dawn', PIC.river), note('See: the tiled station at São Bento', 'Twenty thousand tiles of battles and harvests.')],
+    ['row', ['column', { label: 'Eat' }, 0, 1], ['column', { label: 'See' }, 2, 3]]],
+  ['Depth 2: a lead with a row to itself, the case for and against under it',
+    [make('quote', { text: 'We got the same work done in four days, and nobody wanted to go back.', by: 'A team lead in the trial' }, { title: 'From the trial' }),
+      fact('Output in the trial', '+2%', 'output, against the year before'), note('Fewer sick days', 'Down by a third over six months.'),
+      note('Cover on Fridays', 'Someone still has to answer the phone.'), note('Longer days', 'Four days of nine hours tire some people more.')],
+    ['row', { lead: 0 }, ['column', { label: 'For' }, 1, 2], ['column', { label: 'Against' }, 3, 4]]],
+  ['Depth 3: a day at the museum, morning above afternoon',
+    [note('Morning: the print room', 'Hokusai and Hiroshige side by side.'), note('Morning: the map gallery', 'Old roads drawn as strings of weather.'),
+      pic('Afternoon: the garden prints', PIC.fields), note('Afternoon: the bridge in the rain', 'Hiroshige, 1857.'), note('Afternoon: lunch in the courtyard', 'Soup and bread under the plane trees.')],
+    ['column', ['row', { label: 'Morning' }, 0, 1], ['row', { label: 'Afternoon' }, ['column', { label: 'Prints' }, 2, 3], 4]]],
+  ['Depth 3: 周末去杭州, in Chinese',
+    [note('周六上午：西湖骑车', '从断桥骑到苏堤，大约一个小时。'), note('周六中午：楼外楼', '西湖醋鱼和东坡肉。'), note('周六晚上：河坊街', '买点龙井带回去。'),
+      note('周日上午：灵隐寺', '早点去，人少。'), note('周日下午：回上海', '高铁一个小时。')],
+    ['row', ['column', { label: '周六' }, ['row', 0, 1], 2], ['column', { label: '周日', join: 'arrow' }, 3, 4]]],
+  ['Depth 4: two ways to the coast, each a route and its cost, with an aside last',
+    [note('By train: the 7:40 to Faro', 'Change at Tunes.'), note('By train: the bus to the beach', 'Every half hour from the station.'), fact('By train', '€38', 'return, each'),
+      note('By car: the A2 south', 'Two and a half hours with one stop.'), note('By car: parking by the dunes', 'Free before nine.'), fact('By car', '€52', 'tolls and fuel'),
+      note('Either way, pack lunch', 'The beach bar closes in May.')],
+    ['column', ['row', { label: 'Two ways' }, ['column', { label: 'By train' }, ['column', { join: 'arrow' }, 0, 1], 2], ['column', { label: 'By car' }, ['column', { join: 'arrow' }, 3, 4], 5]], { minor: 6 }]],
+  ['A column of five, which its shape check sends back to a cluster',
+    Array.from({ length: 5 }, (_, i) => note(`Step ${i + 1} of the walk`, 'One stop on the river path, with what to look for there.')),
+    ['column', 0, 1, 2, 3, 4]],
+];
+
+compositesEl.append(h('section', { class: 'lib-entry' },
+  h('div', { class: 'lib-name' }, h('h3', { text: 'layout' }), who('model')),
+  h('p', { class: 'lib-when', text: 'When members fall into a structure no arrangement above draws: rows, columns and grids nested up to four deep, a label over a set, a lead with a line to itself, an aside last, arrows between steps. The model describes the structure and the client places every card. A block whose shape fails the check is drawn as a cluster.' }),
+  LAYOUT_SAMPLES.map(([label, members, spec]) => {
+    const made = composite('layout', members, (ids) => ({ tree: treeOf(spec, ids) }), 'kept', false);
+    return [h('div', { class: 'lib-row lib-scroll lib-more' }, cell(label, made.el)), props('Props', made.group.props)];
+  })));
 </script>
 </body>
 </html>

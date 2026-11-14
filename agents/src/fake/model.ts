@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIMITS, type Flat } from '../core/layout.ts';
 import type { JsonRequest, ModelClient, WebResult } from '../core/ports.ts';
 import { LinkReply, type Description } from '../core/roles/intake/describe.ts';
 import type { ComponentsReply, Entry } from '../core/roles/renderer.ts';
@@ -302,4 +303,25 @@ export function choose(text: string, now: 'note' | 'idea' = 'note'): Omit<Entry,
     component: 'sheet',
     sections: [part('heading', lines[0]!), part('text', prose), ...(figures.length > 0 ? [part('figures', '', figures)] : []), ...(listed.length > 1 ? [part('list', '', listed)] : [])],
   };
+}
+
+const FACET = /^(\p{L}[\p{L}\p{N} ]{0,29}?)\s*[:：]\s*\S/u;
+
+/**
+ * The structure a model would give siblings whose titles open with one of a few facets, as "Eat: grilled sardines" and "See: Tram 28
+ * at dawn" do: a row with a column for each facet two siblings or more open with, labelled with the facet. Other siblings stay out.
+ * None when fewer than two facets are shared, or the row would pass the layout's limits.
+ */
+export function assemble(siblings: readonly { id: string; title: string }[]): Flat[] | null {
+  const facets = new Map<string, { label: string; ids: string[] }>();
+  for (const { id, title } of siblings) {
+    const facet = FACET.exec(title.trim())?.[1];
+    if (!facet) continue;
+    const had = facets.get(facet.toLowerCase());
+    facets.set(facet.toLowerCase(), { label: had?.label ?? facet, ids: [...(had?.ids ?? []), id] });
+  }
+  const shared = [...facets.values()].filter((facet) => facet.ids.length >= 2);
+  if (shared.length < 2 || shared.length + 1 > LIMITS.boxes || shared.reduce((sum, facet) => sum + facet.ids.length, 0) > LIMITS.cards) return null;
+  const part = (id: string, parent: string, kind: Flat['kind'], label = ''): Flat => ({ id, parent, kind, role: 'normal', label, join: 'none' });
+  return [part('all', '', 'row'), ...shared.flatMap((facet, n) => [part(`facet-${n}`, 'all', 'column', facet.label), ...facet.ids.map((id) => part(id, `facet-${n}`, 'card'))])];
 }

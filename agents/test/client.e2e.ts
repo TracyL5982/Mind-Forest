@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
 import type { Running } from '../src/node/server.ts';
 import { COMPONENT_IDS, STRUCTURED_IDS } from '../src/core/samples.ts';
-import { CHIPPED, LONG_PLACE, PLACED, PNG, STRUCTURED, bootFake, browserPath, chipped, crowd, showcase, spills, unknownShape } from './stage.ts';
+import { ASSEMBLED, CHIPPED, LONG_PLACE, PLACED, PNG, STRUCTURED, assembled, bootFake, browserPath, chipped, crowd, showcase, spills, unknownShape } from './stage.ts';
 
 const shots = process.env.MIND_PALACE_SHOTS ? resolve(process.env.MIND_PALACE_SHOTS) : mkdtempSync(join(tmpdir(), 'mp-shots-'));
 mkdirSync(shots, { recursive: true });
@@ -311,6 +311,20 @@ async function main(): Promise<void> {
       await until('the pile to open', async () => (await count(page, '.card.is-under')) === 0);
       await page.getByRole('button', { name: 'Close', exact: true }).click();
       await until('the pile to close', async () => (await count(page, '.card.is-under')) === 4);
+    });
+
+    await check('siblings whose titles share facets are laid out in labelled columns, and a layout of one tall column is drawn as a cluster', async () => {
+      assert.ok(run.pipeline.userCommands('Add a trip', assembled()));
+      const laid = page.locator(`.pane[data-group="${ASSEMBLED.root}-layout"]`);
+      await laid.waitFor();
+      await page.locator('.tree-chip', { hasText: 'Lisbon in three days' }).click();
+      assert.deepEqual(await laid.locator('.lay-label').allTextContents(), ['Eat', 'See', 'Stay']);
+      assert.equal(await laid.locator('.pane-head .kind').textContent(), 'Layout');
+      assert.deepEqual(run.mind.groups.get(`${ASSEMBLED.root}-layout`)!.members, [...ASSEMBLED.facets], 'the stand-in Renderer laid out every sibling by its facet');
+      assert.equal(await page.locator(`.pane[data-group="${ASSEMBLED.column}"] .pane-head .kind`).textContent(), 'Cluster');
+      assert.deepEqual(await overlaps(page), []);
+      assert.deepEqual(await spills(page), []);
+      await shot(page, 'desktop-assembled');
     });
 
     await check('a card whose item holds a date, a place, people or an origin shows them as one line of chips', async () => {

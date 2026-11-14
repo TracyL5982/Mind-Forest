@@ -156,7 +156,7 @@ test('the boxes on a line never outgrow the card, and a people chip always has r
 
 test('every arrangement in the client registry has a name and can arrange', async () => {
   const { COMPOSITES } = await load('composites/index.js');
-  assert.deepEqual(Object.keys(COMPOSITES), ['gallery', 'timeline', 'comparison', 'sequence', 'cluster', 'stack', 'ranked', 'beforeafter', 'lead', 'overview', 'moodboard', 'matrix']);
+  assert.deepEqual(Object.keys(COMPOSITES), ['gallery', 'timeline', 'comparison', 'sequence', 'cluster', 'stack', 'ranked', 'beforeafter', 'lead', 'overview', 'moodboard', 'matrix', 'layout']);
   for (const [name, kind] of Object.entries<Record<string, unknown>>(COMPOSITES)) {
     assert.equal(typeof kind.name, 'string', `${name}.name`);
     assert.equal(typeof kind.arrange, 'function', `${name}.arrange`);

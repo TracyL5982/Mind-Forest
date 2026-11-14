@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
 import { grounding, type Grounding } from '../grounding.ts';
+import { cardsOf, collapse, JOINS, KINDS, LIMITS, parseFlat, ROLES, type Box, type Part as LayoutPart } from '../layout.ts';
 import { CHECKS, isValidGroup, isValidView, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type Section, type Stated } from '../views.ts';
 import type { RoleContext, Roles } from './types.ts';
 
@@ -93,7 +94,7 @@ export const ComponentsReply = z.object({
 export type ComponentsReply = z.infer<typeof ComponentsReply>;
 
 /** The arrangements the model may propose. */
-const ASKED = ['timeline', 'comparison', 'sequence', 'cluster', 'ranked', 'beforeafter', 'lead', 'matrix'] as const satisfies readonly CompositeId[];
+const ASKED = ['timeline', 'comparison', 'sequence', 'cluster', 'ranked', 'beforeafter', 'lead', 'matrix', 'layout'] as const satisfies readonly CompositeId[];
 
 export const CompositesReply = z.object({
   groups: z.array(
@@ -109,6 +110,7 @@ export const CompositesReply = z.object({
       reasons: z.array(z.string()),
       changes: z.array(z.string()),
       axes: z.array(z.string()),
+      parts: z.array(z.object({ id: z.string(), parent: z.string(), kind: z.enum(['card', ...KINDS]), role: z.enum(ROLES), label: z.string(), join: z.enum(['none', ...JOINS]) })),
     }),
   ),
 });
@@ -1316,6 +1318,7 @@ Arrangements:
 - beforeafter: 2 to 4 members that are one thing at different times or in different states. Give members in order, and in changes one entry for each step from one member to the next, so one fewer than the members: a sentence or line copied whole from the content of either member that names what changed, or an empty string.
 - lead: one member that the others support, explain or give evidence for. Give that member first.
 - matrix: exactly 4 members that differ along two measures, one member in each corner. Give axes as two names of 1 to 3 words, the horizontal measure first, each in words the members' content uses. Give members in the order top left, top right, bottom left, bottom right, where the horizontal measure grows to the right and the vertical one grows upwards.
+${LAYOUT_OPTION}
 
 Rules:
 - A comparison or a beforeafter needs 2 to 4 members, a matrix exactly 4, and every other arrangement at least 3.
@@ -1325,6 +1328,7 @@ Rules:
 - Use the parent and member ids exactly as given.
 - title is a few words: the theme, or what is being compared.
 - Fill only the fields of the chosen arrangement. Leave the others as an empty string or an empty list.
+- Choose layout only when no other arrangement fits.
 
 ${blocks.join('\n\n')}`;
 }
@@ -1396,7 +1400,37 @@ function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], membe
       const theme = (g.theme.trim() || g.title.trim()).split(/\s+/).slice(0, 3).join(' ');
       return ids.length >= 3 && theme ? { composite: 'cluster', title: title || theme, members: ids, props: { theme } } : null;
     }
+    case 'layout':
+      return layoutDraft(ctx, g, ids);
   }
+}
+
+const LAYOUT_OPTION = `- layout: only when none of the arrangements above fits, members that fall into a structure of their own, such as two or three labelled sets side by side, or one member the others serve. Describe it in parts, one for each container and one for each member, each naming the id of the container it sits in. A container is a row, a column or a grid, with an id you make up; the outermost one has parent "". A member's part has kind card and its node id as id. Give each member a role: lead for the one member the others serve, minor for an aside, otherwise normal. A container may carry a label of 1 to 4 words taken from its members' content. Set join to arrow when a row's or a column's members follow one another, line when they only belong together, otherwise none. At most ${LIMITS.cards} members, ${LIMITS.boxes} containers, and containers ${LIMITS.depth} deep. Leave members empty; the parts name them.`;
+
+/**
+ * The structure the model gave for a layout, as a tree whose labels stand in its members' content, or null with a note that says why
+ * it was set aside. A label stands when one member under it states it, or when every member under it states each of its words.
+ */
+export function layoutDraft(ctx: RoleContext, g: Pick<CompositesReply['groups'][number], 'parent' | 'title' | 'parts'>, ids: Id[]): GroupDraft | null {
+  const parsed = parseFlat(g.parts, new Set(ids));
+  if ('why' in parsed) {
+    ctx.note(ROLE, `Set aside the layout the model gave under ${g.parent}: ${parsed.why}.`);
+    return null;
+  }
+  const said = new Map(cardsOf(parsed.tree).map((id) => {
+    const item = ctx.mind.itemOf(id);
+    return [id, grounding(`${item.title}\n${item.text}\n${item.summary}\n${str(item.data.when) ?? ''}`)];
+  }));
+  const stands = (label: string, under: string[]) =>
+    label.length <= LIMITS.label && (under.some((id) => said.get(id)!.says(label)) || label.split(/\s+/).every((word) => under.every((id) => said.get(id)!.says(word))));
+  const grounded = (part: LayoutPart): LayoutPart => {
+    if (part.kind === 'card') return part;
+    const { label, ...rest } = part;
+    const children = part.children.map(grounded);
+    return label && stands(label, cardsOf(part)) ? { ...rest, label, children } : { ...rest, children };
+  };
+  const tree = collapse(grounded(parsed.tree) as Box);
+  return { composite: 'layout', title: clip(g.title, 40), members: cardsOf(tree), props: { tree } };
 }
 
 async function askComposites(ctx: RoleContext, pools: Pool[], changed: ReadonlySet<Id>, out: Command[]): Promise<void> {
@@ -1424,7 +1458,7 @@ async function askComposites(ctx: RoleContext, pools: Pool[], changed: ReadonlyS
     return;
   }
   for (const g of reply.groups) {
-    const members = [...new Set(g.members)];
+    const members = [...new Set(g.composite === 'layout' ? g.parts.filter((part) => part.kind === 'card').map((part) => part.id) : g.members)];
     const pool = asked.find((p) => p.parent.id === g.parent && members.length > 0 && members.every((id) => p.asked.includes(id)));
     if (!pool) continue;
     const draft = draftFrom(ctx, g, members, members.filter((id) => !pool.taken.has(id)), pool.nodes[0]!.status);
