@@ -33,6 +33,11 @@ const EXCERPT = 280;
 const CAPTION = 140;
 const AMBIGUOUS_FROM = 40;
 const MAX_ASKED_ITEMS = 24;
+/**
+ * The most items one call asks about, so a call that fails costs half a pass. Measured live on the 24 longest samples:
+ * one call took 83 seconds and two calls of 12 took 70, against the model client's limit of 120.
+ */
+const ASKED_PER_CALL = 12;
 const MAX_ASKED_POOLS = 8;
 const MAX_ASKED_SIBLINGS = 12;
 const STACK_ABOVE = 9;
@@ -55,7 +60,8 @@ const SECTION_KINDS = ['heading', 'text', 'figures', 'list', 'table', 'picture',
 
 /**
  * One entry for each item, in a few slots that every card shares, so a new card adds a row to `BUILT` and no key here.
- * `title` is a heading, a term, a question or what a value measures. `body` is a passage, an answer, a meaning or a value.
+ * `subject` is a term, a question or what a value measures. `passage` is words of the item: a quotation, an answer, a meaning, a value.
+ * Neither is named after a part of an item, because the model copied every item's title and whole text into slots called `title` and `body`.
  * `lines` are steps, list entries, "label | value" pairs, or table rows with "|" between their cells and the heads row first.
  */
 export const ComponentsReply = z.object({
@@ -63,8 +69,8 @@ export const ComponentsReply = z.object({
     z.object({
       id: z.string(),
       component: z.enum(CHOSEN),
-      title: z.string(),
-      body: z.string(),
+      subject: z.string(),
+      passage: z.string(),
       by: z.string(),
       tone: z.string(),
       lines: z.array(z.string()),
@@ -725,19 +731,19 @@ function dedicated(section: Section): Draw | undefined {
  */
 const BUILT: Record<Chosen, (reply: Entry, reading: Reading) => Props> = {
   note: ({ emphasis }, { kept }) => compact({ emphasis: emphasis.trim().length <= 120 ? kept(emphasis) : undefined }),
-  quote: ({ body, by }, { kept }) => compact({ text: unquoted(body), by: kept(by) }),
-  fact: ({ title, body }) => ({ value: body.trim(), label: clip(title, 80) }),
+  quote: ({ passage, by }, { kept }) => compact({ text: unquoted(passage), by: kept(by) }),
+  fact: ({ subject, passage }) => ({ value: passage.trim(), label: clip(subject, 80) }),
   facts: ({ lines }) => ({ facts: pairsOf(lines).slice(0, FACTS_SHOWN) }),
   steps: ({ lines }) => ({ steps: each(lines) }),
   list: ({ lines }) => ({ items: each(lines) }),
   chart: ({ labels, numbers, unit }, { text }) => chartProps(each(labels), numbers, unit.trim() && unitStands(unit.trim(), numbers, text) ? unit.trim() : undefined),
   breakdown: ({ labels, numbers, unit }, { text }) => compact({ labels: each(labels), values: numbers, unit: unit.trim() && unitStands(unit.trim(), numbers, text) ? unit.trim() : undefined }),
   table: ({ lines }) => tableIn(lines),
-  qa: ({ title, body }) => ({ question: title.trim(), answer: body.trim() }),
-  definition: ({ title, body }) => ({ term: title.trim(), definition: body.trim() }),
+  qa: ({ subject, passage }) => ({ question: subject.trim(), answer: passage.trim() }),
+  definition: ({ subject, passage }) => ({ term: subject.trim(), definition: passage.trim() }),
   proscons: ({ left, right }) => ({ pros: each(left), cons: each(right) }),
-  callout: ({ body, tone }) => ({ text: body.trim(), tone: tone.trim().toLowerCase() === 'note' ? 'note' : 'caution' }),
-  excerpt: ({ body, by }, { kept, item }) => compact({ text: unquoted(body), at: kept(by), source: str(item.data.site) ?? str(item.data.from) }),
+  callout: ({ passage, tone }) => ({ text: passage.trim(), tone: tone.trim().toLowerCase() === 'note' ? 'note' : 'caution' }),
+  excerpt: ({ passage, by }, { kept, item }) => compact({ text: unquoted(passage), at: kept(by), source: str(item.data.site) ?? str(item.data.from) }),
   sheet: ({ sections }, reading) => ({ sections: sections.map((part) => ({ kind: part.kind, ...SECTIONS[part.kind](part, reading) })) }),
 };
 
@@ -762,13 +768,19 @@ function judged(draw: Draw, component: Chosen, item: Item, content: Content): Ve
 const STRUCTURED = new Set<Section['kind']>(['figures', 'list', 'table', 'excerpt']);
 
 /**
- * A sheet from the sections a reply gave. When one section alone would stand as its own card above the floor, that card
- * is drawn: a dedicated type always wins. Otherwise each section is cut to its room, and one the content does not state is left out.
+ * The least share of its item a section must show for its own card to be drawn in place of the sheet. It is not the floor:
+ * measured live, a list of about three tenths of its item, drawn alone, dropped the sentence the list hung from in three sheets of three.
+ */
+const ALONE_FROM = 0.5;
+
+/**
+ * A sheet from the sections a reply gave. When one section alone is at least `ALONE_FROM` of the item and stands as its own card,
+ * that card is drawn: a dedicated type always wins. Otherwise each section is cut to its room, and one the content does not state is left out.
  */
 function assembled(given: Section[], item: Item, content: Content): Verdict {
   const alone = given
     .flatMap((section) => dedicated(section) ?? [])
-    .filter((draw) => 'draw' in judged(draw, 'sheet', item, content))
+    .filter((draw) => sizeShown(draw) >= ALONE_FROM * wholeOf(item) && 'draw' in judged(draw, 'sheet', item, content))
     .sort((a, b) => sizeShown(b) - sizeShown(a))[0];
   if (alone) return { draw: alone };
 
@@ -807,20 +819,20 @@ function componentsPrompt(open: { node: Node; item: Item }[], asked: Asked): str
   return `Below are items from a user's canvas. Each is currently drawn as a plain note: its title and the first lines of its text. For each item, choose the card that presents it best.
 
 Cards, and the fields each one uses:
-- note: prose with no structure worth setting apart, such as a diary entry, an argument, a description or a story. The right answer for most prose. You may give emphasis: one short phrase copied from the text that deserves to stand out.
-- quote: the item is mainly someone's words. body is the words, and by the speaker when the text names one.
-- fact: the item is mainly one number or short value. body is the value as the text writes it, and title a few words saying what it measures.
+- note: prose that holds nothing a reader would want to see at a glance, such as a reflection, an argument, a description or a story. You may give emphasis: one short phrase copied from the text that deserves to stand out.
+- quote: the item is mainly someone's words. passage is the words, and by the speaker when the text names one.
+- fact: the item is mainly one number or short value. passage is the value as the text writes it, and subject a few words saying what it measures.
 - facts: the item is mainly two to six figures or attributes. lines has one "label | value" for each, the value as the text writes it.
 - steps: the item is an ordered procedure. lines has one step each, without its number.
 - list: the item is mainly a list of things in no particular order. lines has one entry each, without its bullet.
 - chart: the item is mainly several numbers of the same kind that are worth comparing. labels and numbers have equal length, and unit is given when the text states one.
 - breakdown: the item is mainly the shares of one whole, in percent, adding up to a hundred. labels, numbers and unit, as for chart.
 - table: the item is mainly rows and columns. lines has the row of column heads first and then one row each, with " | " between cells.
-- qa: the item asks one question and answers it. title is the question and body the answer.
-- definition: the item says what one term means. title is the term and body the meaning.
+- qa: the item asks one question and answers it. subject is the question and passage the answer.
+- definition: the item says what one term means. subject is the term and passage the meaning.
 - proscons: the item weighs one choice. left has the points for and right the points against.
-- callout: the item is mainly a warning, a caveat or a reminder the reader must not miss. body is that sentence, and tone is "caution" for a warning or "note" for a remark.
-- excerpt: the item is mainly a passage copied out of a longer source. body is the passage, and by where it sits in the source when the text says.
+- callout: the item is mainly a warning, a caveat or a reminder the reader must not miss. passage is that sentence, and tone is "caution" for a warning or "note" for a remark.
+- excerpt: the item is mainly a passage copied out of a longer source. passage is the passage, and by where it sits in the source when the text says.
 - sheet: an assembled card, for an item with two or more kinds of part worth showing that no card above covers. sections has two to four parts in reading order. Each has a kind:
   - heading: text is a few words from the item that name it. At most one, and first.
   - text: text is a sentence or two copied from the item that say what it is about.
@@ -832,10 +844,10 @@ Cards, and the fields each one uses:
 
 How to choose:
 - Prefer a dedicated card. Choose one when its structure is what the item mainly is: at least a fifth of the text.
-- Choose sheet only when the item has two or more kinds of part worth showing and no dedicated card covers at least a fifth of it: a long report with a few key figures, an account with one line worth quoting, notes with a short list and a number. A sheet needs at least one part that is not text.
-- Choose note when nothing fits. Do not force a structure onto prose, and do not pick out a passing number or name.
+- Choose sheet only when the item has two or more kinds of part worth showing and no dedicated card covers at least a fifth of it. For a longer item, ask what a reader coming back to it would want to see at a glance: the figures it reports, the things it lists such as decisions, next steps or open questions, a line someone said. When it holds at least one of these among its prose, choose sheet, with a text part for the sentence that says what the item is about and a part for each of them. A sheet needs at least one part that is not text.
+- Choose note when nothing fits. Do not force a structure onto prose, and do not pick out a passing number, date or name: a year or an age in a story is not a figure.
 - Copy every value from the item's own text, word for word and in its language: a passage with its punctuation, a number as it is written. Never add, estimate, convert, translate or round. Only the label of a figure may be your own words, in the language of the content.
-- Return one entry per item, with the id exactly as given. Fill only the fields of the chosen card. Leave every other field as an empty string or an empty list.
+- Return one entry per item, with the id exactly as given. Fill only the fields named for the chosen card, and leave every other field as an empty string or an empty list. The card already has the item's title and text: never copy either into a field. A note fills nothing but emphasis.
 
 Items:
 
@@ -867,25 +879,33 @@ async function askComponents(ctx: RoleContext, open: { node: Node; item: Item }[
   const out = new Map<Id, Draw>();
   const asked = open.slice(0, MAX_ASKED_ITEMS);
   if (asked.length === 0) return out;
-  const byId = new Map(asked.map((o) => [o.node.id, o.item]));
-  const assetUrl = (id: string) => ctx.assets.url(id);
-  try {
-    const reply = await ctx.model.json({
-      role: `${ROLE}.components`,
-      system: COMPONENTS_SYSTEM,
-      user: componentsPrompt(asked, { assetUrl }),
-      schema: ComponentsReply,
-      effort: 'low',
-    });
-    for (const entry of reply.items) {
-      const item = byId.get(entry.id);
-      if (!item || out.has(entry.id)) continue;
+  const calls = Math.ceil(asked.length / ASKED_PER_CALL);
+  const each = Math.ceil(asked.length / calls);
+  const parts = Array.from({ length: calls }, (_v, n) => asked.slice(n * each, (n + 1) * each));
+  const replies = await Promise.allSettled(
+    parts.map(async (part) =>
+      ctx.model.json({
+        role: `${ROLE}.components`,
+        system: COMPONENTS_SYSTEM,
+        user: componentsPrompt(part, { assetUrl: (id) => ctx.assets.url(id) }),
+        schema: ComponentsReply,
+        effort: 'low',
+      }),
+    ),
+  );
+  replies.forEach((reply, n) => {
+    if (reply.status === 'rejected') return;
+    // An entry counts once, and only for an item this call asked about.
+    const open = new Map(parts[n]!.map(({ node, item }) => [node.id, item]));
+    for (const entry of reply.value.items) {
+      const item = open.get(entry.id);
+      if (!item || !open.delete(entry.id)) continue;
       const draw = drawn(ctx, entry, item);
       if (draw) out.set(entry.id, draw);
     }
-  } catch (err) {
-    ctx.note(ROLE, `The model could not choose components (${message(err)}). Kept the rule-based views.`);
-  }
+  });
+  const failed = replies.find((reply) => reply.status === 'rejected');
+  if (failed) ctx.note(ROLE, `The model could not choose components (${message(failed.reason)}). Kept the rule-based views.`);
   return out;
 }
 

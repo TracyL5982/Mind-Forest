@@ -54,7 +54,7 @@ test('the whole set runs through the real Renderer with the fake model, which ch
   const { outcomes } = await run(model);
   assert.equal(outcomes.length, SAMPLES.length);
   const asked = outcomes.filter((outcome) => outcome.asked);
-  assert.equal(model.calls.length, Math.ceil(asked.length / 24), 'one call for each 24 unsure items');
+  assert.equal(model.calls.length, Math.ceil(asked.length / 12), 'one call for each 12 unsure items');
   assert.deepEqual(asked.filter((outcome) => !outcome.reply).map((outcome) => outcome.sample.key), [], 'the fake answers for every item it is asked about');
   for (const outcome of outcomes) if (!outcome.asked) assert.equal(outcome.drawn, outcome.ruled, outcome.sample.key);
 });

@@ -144,10 +144,10 @@ export function describe(text: string): Description {
   };
 }
 
-const NOTE: Omit<Entry, 'id'> = { component: 'note', title: '', body: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [] };
+const NOTE: Omit<Entry, 'id'> = { component: 'note', subject: '', passage: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [] };
 
 const MARKED = /^(caution|warning|note):\s*(\S.*)$/i;
-const LABELLED = /^([^:|=]{2,30}):\s+(\S.*)$/;
+const LABELLED = /^(\p{L}[\p{L} ]{1,29}):\s+(\S.*)$/u;
 const FIGURE = /^[$€£¥]?\d/;
 
 /**
@@ -160,9 +160,9 @@ const FIGURE = /^[$€£¥]?\d/;
  */
 export function choose(text: string): Omit<Entry, 'id'> {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (/fake:invent/.test(text)) return { ...NOTE, component: 'fact', title: 'Share', body: '99%' };
+  if (/fake:invent/.test(text)) return { ...NOTE, component: 'fact', subject: 'Share', passage: '99%' };
   const marked = lines.map((line) => MARKED.exec(line)).find(Boolean);
-  if (marked) return { ...NOTE, component: 'callout', body: marked[2]!.trim(), tone: marked[1]!.toLowerCase() === 'note' ? 'note' : 'caution' };
+  if (marked) return { ...NOTE, component: 'callout', passage: marked[2]!.trim(), tone: marked[1]!.toLowerCase() === 'note' ? 'note' : 'caution' };
 
   const labelled = lines.flatMap((line) => {
     const found = LABELLED.exec(line);

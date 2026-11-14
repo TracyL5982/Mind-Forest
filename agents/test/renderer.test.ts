@@ -49,7 +49,7 @@ const view = (k: Kit, id: Id): View => k.mind.node(id).view;
 const groups = (k: Kit): Group[] => [...k.mind.groups.values()];
 
 function entry(fields: Partial<ComponentsReply['items'][number]> & { id: Id }): ComponentsReply['items'][number] {
-  return { component: 'note', title: '', body: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [], ...fields };
+  return { component: 'note', subject: '', passage: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [], ...fields };
 }
 
 function proposal(fields: Partial<CompositesReply['groups'][number]> & { parent: Id; members: Id[] }): CompositesReply['groups'][number] {
@@ -151,9 +151,9 @@ test('the model upgrades a text item to a quote that is in its text', async () =
   const { ids } = grow(k, [{ title: 'On the future', text }, { title: 'Plain', text: LONG }]);
   k.model.on('renderer.components', () => ({
     items: [
-      entry({ id: ids[0]!, component: 'quote', body: '"the best way to predict the future is to invent it"', by: 'Alan Kay' }),
+      entry({ id: ids[0]!, component: 'quote', passage: '"the best way to predict the future is to invent it"', by: 'Alan Kay' }),
       entry({ id: ids[1]!, component: 'note', emphasis: 'the camera moves through the house' }),
-      entry({ id: 'nobody', component: 'fact', body: '1', title: 'x' }),
+      entry({ id: 'nobody', component: 'fact', passage: '1', subject: 'x' }),
     ],
   }));
   const commands = await render(k, ids);
@@ -181,9 +181,9 @@ test('a quote, a fact, steps or a chart the text does not hold is refused', asyn
   ]);
   k.model.on('renderer.components', () => ({
     items: [
-      entry({ id: ids[0]!, component: 'quote', body: 'Cinema is truth at 24 frames a second', by: 'Godard' }),
+      entry({ id: ids[0]!, component: 'quote', passage: 'Cinema is truth at 24 frames a second', by: 'Godard' }),
       entry({ id: ids[1]!, component: 'chart', labels: ['March', 'April', 'May'], numbers: [12, 30, 45] }),
-      entry({ id: ids[2]!, component: 'fact', body: '33%', title: 'Failure rate' }),
+      entry({ id: ids[2]!, component: 'fact', passage: '33%', subject: 'Failure rate' }),
       entry({ id: ids[3]!, component: 'steps', lines: ['scout the house', 'light it', 'shoot it'] }),
     ],
   }));
@@ -920,16 +920,16 @@ const part = (kind: Part['kind'], slots: Partial<Part> = {}): Part => ({ kind, t
 const CLAIMS: Record<Exclude<Chosen, 'note' | 'sheet'>, { text: string; held: Partial<ComponentsReply['items'][number]>; props: Record<string, unknown>; lacked: Partial<ComponentsReply['items'][number]>; fails: string }> = {
   quote: {
     text: 'Nonna never measured anything. "Salt it like the sea," she said, and tasted the water.',
-    held: { body: '"Salt it like the sea,"', by: 'Nonna' },
+    held: { passage: '"Salt it like the sea,"', by: 'Nonna' },
     props: { text: 'Salt it like the sea,', by: 'Nonna' },
-    lacked: { body: 'Salt it like the ocean' },
+    lacked: { passage: 'Salt it like the ocean' },
     fails: 'text',
   },
   fact: {
     text: 'Churn fell to 4.2% in March, the lowest it has been since launch.',
-    held: { body: '4.2%', title: 'Churn in March' },
+    held: { passage: '4.2%', subject: 'Churn in March' },
     props: { value: '4.2%', label: 'Churn in March' },
-    lacked: { body: '4.5%', title: 'Churn in March' },
+    lacked: { passage: '4.5%', subject: 'Churn in March' },
     fails: 'value',
   },
   facts: {
@@ -976,16 +976,16 @@ const CLAIMS: Record<Exclude<Chosen, 'note' | 'sheet'>, { text: string; held: Pa
   },
   qa: {
     text: 'Why does bread go stale faster in the fridge? Because the starch recrystallises fastest just above freezing.',
-    held: { title: 'Why does bread go stale faster in the fridge?', body: 'Because the starch recrystallises fastest just above freezing.' },
+    held: { subject: 'Why does bread go stale faster in the fridge?', passage: 'Because the starch recrystallises fastest just above freezing.' },
     props: { question: 'Why does bread go stale faster in the fridge?', answer: 'Because the starch recrystallises fastest just above freezing.' },
-    lacked: { title: 'Why does bread go stale faster in the fridge?', body: 'Because the fridge dries it out.' },
+    lacked: { subject: 'Why does bread go stale faster in the fridge?', passage: 'Because the fridge dries it out.' },
     fails: 'answer',
   },
   definition: {
     text: 'Parallax is the apparent shift of an object against its background when the viewer moves.',
-    held: { title: 'Parallax', body: 'the apparent shift of an object against its background when the viewer moves' },
+    held: { subject: 'Parallax', passage: 'the apparent shift of an object against its background when the viewer moves' },
     props: { term: 'Parallax', definition: 'the apparent shift of an object against its background when the viewer moves' },
-    lacked: { title: 'Paradox', body: 'the apparent shift of an object against its background when the viewer moves' },
+    lacked: { subject: 'Paradox', passage: 'the apparent shift of an object against its background when the viewer moves' },
     fails: 'term',
   },
   proscons: {
@@ -997,16 +997,16 @@ const CLAIMS: Record<Exclude<Chosen, 'note' | 'sheet'>, { text: string; held: Pa
   },
   callout: {
     text: 'Feed the starter once a day with flour and water. Never rinse the jar with hot water.',
-    held: { body: 'Never rinse the jar with hot water.', tone: 'caution' },
+    held: { passage: 'Never rinse the jar with hot water.', tone: 'caution' },
     props: { text: 'Never rinse the jar with hot water.', tone: 'caution' },
-    lacked: { body: 'Never rinse the jar with hot water. Feed the starter once a day', tone: 'caution' },
+    lacked: { passage: 'Never rinse the jar with hot water. Feed the starter once a day', tone: 'caution' },
     fails: 'text',
   },
   excerpt: {
     text: 'Copied from Chapter 1 of the handbook. The house shelters day-dreaming, the house protects the dreamer.',
-    held: { body: 'The house shelters day-dreaming, the house protects the dreamer.', by: 'Chapter 1' },
+    held: { passage: 'The house shelters day-dreaming, the house protects the dreamer.', by: 'Chapter 1' },
     props: { text: 'The house shelters day-dreaming, the house protects the dreamer.', at: 'Chapter 1' },
-    lacked: { body: 'The house protects day-dreaming.' },
+    lacked: { passage: 'The house protects day-dreaming.' },
     fails: 'text',
   },
 };
@@ -1021,7 +1021,7 @@ test('each card the model may choose is drawn from a claim its text holds, and o
     for (const id of ids) assert.equal(view(k, id).component, 'note', 'the rules are unsure of each');
     k.model.on('renderer.components', () => ({ items: types.map((type, n) => ({ ...said(type, CLAIMS[type][which]), id: ids[n]! })) })).on('renderer.composites', () => ({ groups: [] }));
     await render(k, ids);
-    assert.equal(k.model.calls.filter((call) => call.role === 'renderer.components').length, 1, 'all in one call');
+    assert.equal(k.model.calls.filter((call) => call.role === 'renderer.components').length, 2, 'thirteen items in two calls');
     return { k, ids };
   };
 
@@ -1050,6 +1050,23 @@ test('the model is asked only about text the rules left as a note: no link, pict
   await render(k, ids);
   const asked = k.model.calls.find((call) => call.role === 'renderer.components')!.detail;
   assert.deepEqual([...asked.matchAll(/^id: (.+)$/gm)].map((found) => found[1]), [ids[0], ids[1]]);
+});
+
+test('one pass asks about 24 items at most, in two calls, and a call that fails costs only its own items and one line in the run log', async () => {
+  const k = kit();
+  const { ids } = grow(k, Array.from({ length: 30 }, (_v, n) => ({ title: `Note ${n}`, text: `${LONG} We paid 12 euros for the ferry.` })));
+  let call = 0;
+  k.model
+    .on('renderer.components', (req) => {
+      if (call++ === 1) throw new Error('timed out');
+      return { items: [...req.user.matchAll(/^id: (.+)$/gm)].map((found) => entry({ id: found[1]!, emphasis: 'We paid 12 euros for the ferry' })) };
+    })
+    .on('renderer.composites', () => ({ groups: [] }));
+  await render(k, ids);
+  const calls = k.model.calls.filter((made) => made.role === 'renderer.components');
+  assert.deepEqual(calls.map((made) => [...made.detail.matchAll(/^id: (.+)$/gm)].length), [12, 12]);
+  assert.deepEqual(ids.map((id) => 'emphasis' in view(k, id).props), [...Array(12).fill(true), ...Array(18).fill(false)]);
+  assert.deepEqual(k.notes, ['renderer: The model could not choose components (timed out). Kept the rule-based views.']);
 });
 
 const REPORT =
@@ -1105,22 +1122,27 @@ test('a section the text does not state is left out and named, and what is left 
   ]);
 });
 
-test('a dedicated card always wins: a section that alone covers a fifth of its item is drawn as its own type', () => {
+test('a dedicated card always wins: a section that alone is half of its item is drawn as its own type, and a smaller one stays in the sheet', () => {
   const component = (text: string, sections: Part[]) => {
     const made = verdict(text, 'sheet', { sections });
     return 'draw' in made ? made.draw.component : made.refused;
   };
-  const tower = 'The Eiffel Tower is 330 m tall, was built in 1889 and has 1,665 steps to the top.';
-  const about = part('text', { text: 'The Eiffel Tower is 330 m tall' });
+  const tower = 'The tower in short.\nHeight: 330 m\nBuilt: 1889\nSteps: 1,665';
+  const about = part('text', { text: 'The tower in short.' });
   assert.equal(component(tower, [about, part('figures', { lines: ['Height | 330 m', 'Built | 1889', 'Steps | 1,665'] })]), 'facts');
-  assert.equal(component(tower, [about, part('figures', { lines: ['Height of the tower in metres | 330 m'] })]), 'fact');
+  assert.equal(component('Height of the tower: 330 m', [part('heading', { text: 'the tower' }), part('figures', { lines: ['Height of the tower | 330 m'] })]), 'fact');
   assert.equal(component('Bring a tent, two sleeping bags and a head torch for the weekend.', [part('text', { text: 'for the weekend' }), part('list', { lines: ['a tent', 'two sleeping bags', 'a head torch'] })]), 'list');
-  assert.equal(component('Plan | Price\nSolo | $8\nTeam | $20\nBilled once a year.', [part('text', { text: 'Billed once a year.' }), part('table', { lines: ['Plan | Price', 'Solo | $8', 'Team | $20'] })]), 'table');
-  assert.equal(component('Nonna said, "Salt it like the sea," and tasted the water.', [part('text', { text: 'and tasted the water' }), part('excerpt', { text: 'Salt it like the sea,', by: 'Nonna' })]), 'quote');
+  assert.equal(component('Per seat.\nPlan | Price\nSolo | $8\nTeam | $20\nOrg | $90', [part('text', { text: 'Per seat.' }), part('table', { lines: ['Plan | Price', 'Solo | $8', 'Team | $20', 'Org | $90'] })]), 'table');
+  assert.equal(component('Nonna said, "Salt it like the sea, and taste the water."', [part('text', { text: 'Nonna said' }), part('excerpt', { text: 'Salt it like the sea, and taste the water.', by: 'Nonna' })]), 'quote');
   assert.equal(component('The page reads: every stair keeps the weight of who climbed it.', [part('text', { text: 'The page reads' }), part('excerpt', { text: 'every stair keeps the weight of who climbed it' })]), 'excerpt');
 
-  const long = verdict(REPORT, 'sheet', { sections: [part('text', { text: 'The council met on Tuesday' }), part('list', { lines: ['the contractor', 'the dates for the school', 'who pays for the minibus'] })] });
-  assert.ok('draw' in long && long.draw.component === 'sheet', 'under a fifth, the list stays a section');
+  const plan =
+    'Ask Maria Chen, head of design at Orbit, whether her team would test the onboarding flow. If she agrees we need the build ready by the first week of December, ' +
+    'a short script for the sessions, and someone to take notes. If she does not, fall back to the five customers who offered in the spring.';
+  const needs = { lines: ['the build ready by the first week of December', 'a short script for the sessions', 'someone to take notes'] };
+  assert.equal(component(plan, [part('text', { text: 'Ask Maria Chen, head of design at Orbit, whether her team would test the onboarding flow.' }), part('list', needs)]), 'sheet', 'three tenths of the plan: the sheet keeps the sentence the list hangs from');
+  const list = verdict(plan, 'list', needs);
+  assert.ok('draw' in list && list.draw.component === 'list', 'the model may still choose the list by itself, above the floor');
 });
 
 test('a sheet keeps its shape: one heading and it first, four sections at most, each cut to its room, and never text alone', () => {
@@ -1160,9 +1182,9 @@ test('a sheet keeps its shape: one heading and it first, four sections at most, 
 
 test('a card the model chose is held to the floor a rule is held to, and a picture section shows the picture the item has', () => {
   const diary = `${LONG} ${LONG} We paid 12 euros for the ferry. ${LONG}`;
-  assert.deepEqual(verdict(diary, 'fact', { body: '12 euros', title: 'Ferry' }), { refused: 'small', component: 'fact' });
+  assert.deepEqual(verdict(diary, 'fact', { passage: '12 euros', subject: 'Ferry' }), { refused: 'small', component: 'fact' });
   assert.deepEqual(verdict(diary, 'note', { emphasis: 'We paid 12 euros for the ferry' }), { draw: { component: 'note', props: { emphasis: 'We paid 12 euros for the ferry' } } });
-  assert.deepEqual(verdict(diary, 'fact', { body: '', title: 'Ferry' }), { refused: 'unstated', component: 'fact', prop: 'value' });
+  assert.deepEqual(verdict(diary, 'fact', { passage: '', subject: 'Ferry' }), { refused: 'unstated', component: 'fact', prop: 'value' });
   assert.deepEqual(verdict(diary, 'steps', { lines: ['We paid 12 euros for the ferry'] }), { refused: 'invalid', component: 'steps' });
 
   const item = kit().item({ title: 'The harbour', text: `${LONG} We paid 12 euros for the ferry.`, data: { image: 'https://example.org/harbour.jpg' } });
