@@ -366,6 +366,7 @@ test('a word, a number or a symbol the text only holds inside something else is 
   };
   assert.deepEqual(await extracted(text, reply), {});
   assert.deepEqual(await extracted(text, { where: 'the Manager', cons: ['1200', '1950'], pros: ['hundred page report'] }), { where: 'the Manager', cons: ['1200', '1950'], pros: ['hundred page report'] });
+  assert.deepEqual(await extracted('Call 555 about the coffee.', { colours: [{ name: '', value: '#555' }, { name: '', value: '#fee' }] }), {}, 'a hex colour needs its "#" in the text');
   assert.deepEqual(await extracted('北京是中国的首都，人口2189万。', { where: '北京', people: ['上海'], cons: ['189'] }), { where: '北京' });
 });
 
