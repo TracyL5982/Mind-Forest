@@ -158,6 +158,25 @@ function quotedIn(lines: string[]): string[] {
   return passages.filter((words) => /^(?!\p{Ll})\p{L}/u.test(words));
 }
 
+const TITLE_MOST = 60;
+/** Where a clause ends inside a line. A full stop is left out, because `Dr.` and `e.g.` end no clause. */
+const CLAUSE_END = /[:;,—：；，]/;
+const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
+/**
+ * A title cut from a line, as a model would write one: the line when it is short enough, else its first clause, else as many
+ * whole words as fit. A line written without spaces is cut between any two of its characters.
+ */
+function titleFrom(line: string): string {
+  const chars = [...line];
+  if (chars.length <= TITLE_MOST) return line;
+  const clause = chars.findIndex((ch, i) => i >= 4 && i < TITLE_MOST && CLAUSE_END.test(ch));
+  if (clause > 0) return chars.slice(0, clause).join('').trim();
+  let end = TITLE_MOST;
+  while (end > 1 && !/\s/.test(chars[end]!) && !UNSPACED.test(chars[end - 1]!) && !UNSPACED.test(chars[end]!)) end -= 1;
+  return chars.slice(0, end > 1 ? end : TITLE_MOST).join('').trim();
+}
+
 /**
  * What a model would say about a text, read by pattern instead. Each kind of structure is read from the plain ways a person writes it:
  *   Where: Lisbon                     People: Ana Lima, Ben Okri
@@ -197,7 +216,7 @@ export function describe(text: string): Description {
   const cons = list('cons');
   const bullets = pros.length + cons.length > 0 ? [] : lines.filter(isBullet).map((line) => BULLET.exec(line)!);
   const table = tableIn(lines);
-  const first = lines.find(Boolean) ?? '';
+  const first = lines.find((line) => line && !line.startsWith('>')) ?? '';
   const series = list('chart').map((entry) => /^(.+?)\s+(-?\d+(?:\.\d+)?)(%?)$/.exec(entry));
   const shares = series.length === 0 ? sharesIn(text) : undefined;
   const said = lines.filter(Boolean);
@@ -209,7 +228,7 @@ export function describe(text: string): Description {
 
   return {
     ...blank(),
-    title: first.slice(0, 60),
+    title: titleFrom(first),
     summary: text.trim().slice(0, 160),
     tags: first.toLowerCase().split(/\W+/).filter((word) => word.length > 4).slice(0, 3),
     where: /fake:invent/.test(text) ? 'Atlantis' : labelled('where'),
