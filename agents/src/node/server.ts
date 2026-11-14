@@ -7,6 +7,7 @@ import type { ModelClient } from '../core/ports.ts';
 import { Pipeline, type Outbound } from '../core/pipeline.ts';
 import { DEFAULT_SETTINGS, type Handoff, type Roles, type Settings } from '../core/roles/types.ts';
 import { Mindstorm } from '../core/state.ts';
+import { spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
 import { ClientMessage, PROTOCOL_VERSION } from './protocol.ts';
 import type { Speak, Transcribe } from './speech-openai.ts';
@@ -143,10 +144,10 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     if (req.method === 'POST' && path === '/api/transcribe') {
       const audio = await body(req, 25 * 1024 * 1024);
       const mime = req.headers['content-type'] ?? 'audio/wav';
-      const text = opts.transcribe
-        ? await opts.transcribe(audio, mime, likelyWords(mind, url.searchParams.get('tree')))
+      const heard = opts.transcribe
+        ? await opts.transcribe(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, url.searchParams.get('tree')) })
         : await opts.model.transcribe({ audio, mime });
-      return json(res, 200, { text });
+      return json(res, 200, { text: withoutWakePhrase(heard, settings.agentName).trim() });
     }
     if (req.method === 'GET' && path === '/api/speak') {
       const text = (url.searchParams.get('text') ?? '').slice(0, MAX_SPOKEN).trim();

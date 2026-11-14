@@ -267,3 +267,13 @@ test('a model reply that breaks the schema is treated as a failure', async () =>
   assert.deepEqual(out.intent, { kind: 'ask', anchor: f.dolly, need: 'what is the opposite of this?' });
   assert.equal(k.notes.length, 1);
 });
+
+test('the model is told what the user calls the agent', async () => {
+  const k = kit({ agentName: 'juno' });
+  const f = film(k);
+  let system = '';
+  k.model.on('conductor', (req) => ((system = req.system), { ...EMPTY, kind: 'reply', say: "I'm Juno." }));
+  const heard = await hear(k, 'What should I call you?', { selection: [], treeId: f.treeId });
+  assert.match(system, /the user calls you Juno\b/);
+  assert.equal(heard.say, "I'm Juno.");
+});

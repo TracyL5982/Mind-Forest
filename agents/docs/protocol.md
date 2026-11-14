@@ -30,7 +30,7 @@ Drawing rules:
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `hello` | `protocol`, `snapshot`, `settings`, `undo`, `voice` | Sent once on connect. `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
+| `hello` | `protocol`, `snapshot`, `settings`, `undo`, `voice`, `hearing` | Sent once on connect. `settings.agentName` is what the user calls the agent, `momo` unless renamed (see Voice). `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
 | `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
 | `activity` | `activity` | Work state: `id`, `role`, `state` (`start`, `done`, `error`), `message`, optional `nodeId`. Show a thinking mark on `nodeId` between `start` and `done`. |
 | `say` | `text` | One short line for the agent to speak. |
@@ -48,7 +48,7 @@ Drawing rules:
 | `t` | Fields | Meaning |
 |---|---|---|
 | `dump` | `dumps` | Things dropped into the mindstorm. Each is `{kind:'text', text, name?}`, `{kind:'link', url}`, or `{kind:'asset', asset, mime, name?}`. Upload files first (below). |
-| `utter` | `text`, `final`, `scene` | Speech as text. Send partials with `final: false` as they arrive and the last one with `final: true`. |
+| `utter` | `text`, `final`, `scene` | Speech as text. Send partials with `final: false` as they arrive and the last one with `final: true`. A leading wake phrase is dropped before the service acts, and an utterance that is only the phrase asks nothing (see Voice). |
 | `focus` | `nodeId` | The user opened or looked at a node. The agent brings picks for it if it has none. |
 | `ask` | `nodeId`, `need` | A typed question about a node. |
 | `more` | `nodeId`, `need?` | More picks for a node. |
@@ -57,7 +57,7 @@ Drawing rules:
 | `commands` | `label`, `commands` | Direct manipulation: any commands from `src/core/domain.ts`, such as `moveNode`, `editItem`, `deleteNode`. Applied as one undoable set. |
 | `organize` | `request`, `scope`, `focus?` | A typed organizing request. `scope` is `{treeIds, nodeIds}`. |
 | `handoff` | `scope`, `note?` | Package a handoff. An empty scope means everything. |
-| `settings` | `patch` | `picksMode` (`provisional` or `immediate`), `picksPerRun`, `scoutOnDump`. |
+| `settings` | `patch` | `picksMode` (`provisional` or `immediate`), `picksPerRun`, `scoutOnDump`, `agentName` (1 to 32 characters: a letter, then letters, digits, spaces, hyphens or apostrophes). |
 
 `scene` is `{focus?, selection, treeId?}`: the node the user has open, the nodes they have selected, and the tree they are in. The agent uses it to resolve "this" and "that".
 
@@ -67,7 +67,7 @@ Drawing rules:
 |---|---|---|
 | `POST /api/assets?name=<file name>` | The file's bytes, with its `Content-Type` | `{id, url, mime}` |
 | `GET /assets/<id>` | | The bytes. Supports byte ranges for video. |
-| `POST /api/transcribe?tree=<id>` | Audio bytes, with `Content-Type` (`audio/wav`, `audio/webm`, `audio/mp4`, `audio/mpeg`, `audio/ogg`) | `{text}`. The titles of the cards in `tree`, then of every tree and the newest cards, are given to the recognizer as words the user is likely to say. |
+| `POST /api/transcribe?tree=<id>` | Audio bytes, with `Content-Type` (`audio/wav`, `audio/webm`, `audio/mp4`, `audio/mpeg`, `audio/ogg`) | `{text}`, without a leading wake phrase, so `""` when only the phrase was said. The agent's name and the titles of the cards in `tree`, then of every tree and the newest cards, are given to the recognizer as words the user is likely to say. |
 | `GET /handoffs/<name>.zip` | | The bundle. |
 | `GET /api/speak?text=<reply>` | | MP3 of the reply read aloud, streamed as it is made. 404 when the service has no voice. Takes the token as `?token=` so an audio element can play it directly. |
 | `GET /api/state` | | `{snapshot, settings}` |
@@ -76,3 +76,15 @@ Drawing rules:
 ## Voice
 
 A client can turn speech into text itself and send `utter` messages. Or it can record audio, post it to `/api/transcribe`, and send the returned text as a final `utter`. The service speaks through `say` messages. The client turns them into sound, with `GET /api/speak` when `hello.voice` is true and its own voice otherwise.
+
+### The wake phrase
+
+The user wakes the agent by saying "hey" or "hi" and its name, `settings.agentName` ("hey Momo", "hi Momo"). A client that listens for it:
+
+- Spots the phrase on the device. No audio leaves the device before the phrase is heard.
+- Then records until the speaker pauses for 1.2 seconds, or for 8 seconds when nothing more is said, and sends nothing in that case. The recording starts a moment before the phrase, so words said straight after it are kept.
+- Posts that recording to `/api/transcribe` and sends the text as a final `utter`.
+- Does not listen while a reply is playing.
+
+The service drops a leading wake phrase from `/api/transcribe` replies and from `utter` text: "hey" or "hi", then the name, in any case, with any punctuation around them and a space or hyphen allowed inside the name ("Hi, Mo-mo!"). "Hey Momo, undo that" is acted on as "Undo that". The phrase anywhere else, or another greeting ("hello Momo"), is left as it was.
+

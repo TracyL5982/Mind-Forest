@@ -7,6 +7,7 @@ import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running, type ServerOptions } from '../src/node/server.ts';
+import type { Hints } from '../src/node/speech-openai.ts';
 
 interface Msg {
   t: string;
@@ -175,12 +176,12 @@ test('a reply is read aloud by the service voice when it has one, and the client
   await silent.close();
 });
 
-test('recorded speech is transcribed with the card titles as hints, and the client is told who hears', async () => {
-  const asked: { mime: string; context: string }[] = [];
+test('recorded speech is transcribed with the name and the card titles as hints, and the client is told who hears', async () => {
+  const asked: { mime: string; hints: Hints }[] = [];
   const { run } = await boot(undefined, {
-    transcribe: async (_audio, mime, context) => {
-      asked.push({ mime, context });
-      return 'undo that, I meant the sourdough tree';
+    transcribe: async (_audio, mime, hints) => {
+      asked.push({ mime, hints });
+      return 'Hey Momo, undo that, I meant the sourdough tree';
     },
   });
   const c = await connect(run);
@@ -193,9 +194,10 @@ test('recorded speech is transcribed with the card titles as hints, and the clie
     headers: { Authorization: 'Bearer secret', 'Content-Type': 'audio/webm;codecs=opus' },
     body: new Uint8Array([1, 2, 3]),
   });
-  assert.deepEqual(await res.json(), { text: 'undo that, I meant the sourdough tree' });
+  assert.deepEqual(await res.json(), { text: 'Undo that, I meant the sourdough tree' });
   assert.equal(asked[0]!.mime, 'audio/webm;codecs=opus');
-  assert.match(asked[0]!.context, /sourdough/i);
+  assert.equal(asked[0]!.hints.name, 'Momo');
+  assert.match(asked[0]!.hints.words, /sourdough/i);
   c.ws.close();
   await run.close();
 
@@ -204,4 +206,36 @@ test('recorded speech is transcribed with the card titles as hints, and the clie
   assert.equal((await p.until((m) => m.t === 'hello')).hearing, 'browser');
   p.ws.close();
   await plain.close();
+});
+
+test('the agent is called Momo until renamed, and a leading "hey" and its name are dropped from what it acts on', async () => {
+  const acted: string[] = [];
+  const { run } = await boot(undefined, {
+    roles: { ...fakeRoles, conductor: async (ctx, input) => (acted.push(input.utterance), fakeRoles.conductor(ctx, input)) },
+  });
+  const c = await connect(run);
+  assert.equal(((await c.until((m) => m.t === 'hello')).settings as { agentName: string }).agentName, 'momo');
+  const scene = { selection: [] };
+  const said = async (text: string) => {
+    c.ws.send(JSON.stringify({ t: 'utter', text, final: true, scene }));
+    await new Promise((r) => setTimeout(r, 50));
+    await run.pipeline.idle();
+  };
+
+  await said('Hey Momo, remember the onsen in Kiso.');
+  await said('Hey Momo.');
+  c.ws.send(JSON.stringify({ t: 'settings', patch: { agentName: 'Juno' } }));
+  assert.equal(((await c.until((m) => m.t === 'settings')).settings as { agentName: string }).agentName, 'Juno');
+  await said('hi juno: remember the night train');
+  await said('Hey Momo, remember the ferry.');
+  assert.deepEqual(acted, ['Remember the onsen in Kiso.', 'Remember the night train', 'Hey Momo, remember the ferry.']);
+  assert.deepEqual(c.seen.filter((m) => m.t === 'heard').map((m) => m.text), acted);
+
+  c.ws.send(JSON.stringify({ t: 'settings', patch: { agentName: '  ' } }));
+  assert.match(String((await c.until((m) => m.t === 'error')).message), /bad message/);
+  const later = await connect(run);
+  assert.equal(((await later.until((m) => m.t === 'hello')).settings as { agentName: string }).agentName, 'Juno');
+  later.ws.close();
+  c.ws.close();
+  await run.close();
 });

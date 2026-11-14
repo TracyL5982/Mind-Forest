@@ -21,20 +21,27 @@ export function openaiSpeech(send: typeof fetch, opts: { apiKey: string; model?:
 const HEARING_MODEL = 'gpt-4o-transcribe';
 const EXTENSION: Record<string, string> = { 'audio/webm': 'webm', 'audio/mp4': 'mp4', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/mpeg': 'mp3' };
 
-/** Turns recorded speech into text. `context` is words the user is likely to say, such as the titles of their cards. */
-export type Transcribe = (audio: Uint8Array, mime: string, context: string) => Promise<string>;
+/** Words the user is likely to say: what they call the agent, and the titles of their cards. */
+export interface Hints {
+  name: string;
+  words: string;
+}
+
+/** Turns recorded speech into text, told the words the user is likely to say. */
+export type Transcribe = (audio: Uint8Array, mime: string, hints: Hints) => Promise<string>;
 
 /**
- * Speech to text with OpenAI's transcription model, told what the user's cards are called.
+ * Speech to text with OpenAI's transcription model, told what the user calls it and what their cards are called.
  * Measured on 24 spoken commands: names and topic words were the only errors, and the card titles removed nearly all of them.
  */
 export function openaiTranscribe(send: typeof fetch, opts: { apiKey: string; model?: string }): Transcribe {
-  return async (audio, mime, context) => {
+  return async (audio, mime, hints) => {
     const type = mime.split(';')[0]!.trim();
     const form = new FormData();
     form.append('model', opts.model || HEARING_MODEL);
     form.append('file', new Blob([audio as BlobPart], { type }), `speech.${EXTENSION[type] ?? 'webm'}`);
-    if (context) form.append('prompt', `Someone is talking to their brainstorming app. Their cards include: ${context}.`);
+    const cards = hints.words ? ` Their cards include: ${hints.words}.` : '';
+    form.append('prompt', `Someone is talking to their brainstorming app, which they call ${hints.name}, and may begin with "Hey ${hints.name}".${cards}`);
     const res = await send('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${opts.apiKey}` },

@@ -13,6 +13,7 @@ import {
   type Turn,
 } from './roles/types.ts';
 import type { Mindstorm } from './state.ts';
+import { withoutWakePhrase } from './wake.ts';
 
 export interface Activity {
   id: Id;
@@ -108,9 +109,10 @@ export class Pipeline {
   /**
    * Speech, as it arrives. A partial that holds still for a moment is acted on early.
    * The final transcript confirms it, or replaces it and the earlier work is dropped.
+   * A leading "hey <name>" is not part of what was asked, so it is dropped, and the phrase alone asks nothing.
    */
   utter(text: string, scene: Scene, final: boolean): void {
-    const clean = text.trim();
+    const clean = withoutWakePhrase(text, this.deps.settings.agentName).trim();
     if (!clean) return;
     this.deps.emit({ t: 'heard', text: clean, final });
     if (this.settle) clearTimeout(this.settle);

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Id, Node } from '../domain.ts';
+import { spokenName } from '../wake.ts';
 import type { Conducted, Intent, RoleContext, Roles, Scene, Scope, Turn } from './types.ts';
 
 const ROLE = 'conductor';
@@ -150,7 +151,7 @@ const Reply = z.object({
 });
 type Reply = z.infer<typeof Reply>;
 
-const SYSTEM = `You are the Conductor of Mind Palace, a spatial brainstorming app. You are the one voice the user talks to.
+const system = (name: string) => `You are the Conductor of Mind Palace, a spatial brainstorming app. You are the one voice the user talks to, and the user calls you ${name}.
 
 You are given what the user just said, the recent conversation, the scene (what the user is looking at), the titles of their trees, and a shortlist of nodes whose content matches words in the utterance. Decide what the utterance means and return one intent and one short line to say back. You do not do the work yourself. Other roles act on the intent.
 
@@ -314,7 +315,7 @@ export const conductor: Roles['conductor'] = async (ctx, { utterance, scene, his
   try {
     reply = await ctx.model.json({
       role: ROLE,
-      system: SYSTEM,
+      system: system(spokenName(ctx.settings.agentName)),
       user: describe(ctx, { utterance, history }, seen),
       schema: Reply,
       effort: 'low',

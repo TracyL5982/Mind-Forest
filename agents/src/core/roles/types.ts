@@ -14,6 +14,8 @@ export interface Settings {
   linkThreshold: number;
   /** Whether filing a dump also scouts picks for it. */
   scoutOnDump: boolean;
+  /** What the user calls the agent. "Hey" or "hi" and this name wake it. */
+  agentName: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -22,6 +24,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxLinksPerRun: 2,
   linkThreshold: 0.8,
   scoutOnDump: true,
+  agentName: 'momo',
 };
 
 /** What every role is handed. Roles read `mind` and return commands. Only the pipeline applies them. */
