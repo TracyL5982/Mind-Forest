@@ -7,33 +7,33 @@ const BETWEEN = 17;
 const HALF = (COLUMN - BETWEEN) / 2;
 const ROW_GAP = 12;
 /** A row of figures is set in the middle size or the smallest, never the largest, which is a lone fact's. */
-const SIZES = FIGURES.slice(1);
-const SMALL_LETTER = FIGURES[2][2];
+const [MIDDLE, SMALL] = FIGURES.slice(1);
+const SMALL_LETTER = SMALL[2];
 /** The most lines a value is given, as on a fact card. */
 const MOST_LINES = 8;
 
 const pairs = (props) => list(props.facts).map((fact) => ({ label: text(fact?.label).trim(), value: text(fact?.value).trim() }));
 
-/** A value that needs more than two lines in half a row is given a row of its own. */
-const isLong = (fact) => wrap(fact.value, HALF, SMALL_LETTER, 3) > 2;
+/** Whether a value is on one line in `room` px at the middle size. */
+const fitsMiddle = (fact, room) => figureNeed(fact.value, MIDDLE) <= room * 100;
 
 /**
- * Facts sit two to a row. One with a long value, or with no short neighbour after it, has the
- * whole row. Every figure of a card is set in one size: the largest that holds each value on one
- * line of its room, so figures side by side and one under another are the same size. At the
- * smallest size a value that needs more wraps and its row grows with it, up to `MOST_LINES`. A
- * value that needs more lines still is a passage, not a figure: it is cut there with an ellipsis,
- * and the opened card has it whole.
+ * Facts sit two to a row when both values fit half a row at the middle size. Any other has the
+ * whole row. Every figure of a card is set in one size, so figures side by side and one under
+ * another match: the middle size while each value fits its room there, and the smallest when one
+ * does not fit even a whole row. At the smallest size a value that needs more wraps and its row
+ * grows with it, up to `MOST_LINES`. A value that needs more lines still is a passage, not a
+ * figure: it is cut there with an ellipsis, and the opened card has it whole.
  */
 function plan(item, props) {
   const facts = pairs(props);
   const rows = [];
   for (let i = 0; i < facts.length; i += rows.at(-1).cells.length) {
-    const paired = i + 1 < facts.length && !isLong(facts[i]) && !isLong(facts[i + 1]);
+    const paired = i + 1 < facts.length && fitsMiddle(facts[i], HALF) && fitsMiddle(facts[i + 1], HALF);
     rows.push({ room: paired ? HALF : COLUMN, cells: facts.slice(i, i + (paired ? 2 : 1)) });
   }
   const fits = (step, row, cell) => figureNeed(cell.value, step) <= row.room * 100;
-  const size = SIZES.find((step) => rows.every((row) => row.cells.every((cell) => fits(step, row, cell)))) ?? SIZES.at(-1);
+  const size = rows.every((row) => row.cells.every((cell) => fits(MIDDLE, row, cell))) ? MIDDLE : SMALL;
   const [cls, lead] = size;
   const drawn = rows.map((row) => {
     const cells = row.cells.map((cell) => {

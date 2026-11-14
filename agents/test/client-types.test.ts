@@ -239,7 +239,8 @@ test('a facts card sets every figure in one size, trims what it is given, and ma
   const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Kind> };
   const facts = (...values: string[]) => COMPONENTS.facts!.size(blank, { facts: values.map((value, i) => ({ label: `L${i}`, value })) });
   assert.deepEqual(facts('330 m', '1889'), [320, 30 + 21 + 12 + 28 + 17], 'two short figures in the middle size');
-  assert.deepEqual(facts('330 m', '1889', '3', 'Stephen Sauvestre'), [320, 30 + 21 + 12 + (21 + 17) + 12 + (2 * 21 + 17)], 'one long name sets the whole card in the smallest size');
+  assert.deepEqual(facts('330 m', '1889', '3', 'Stephen Sauvestre'), [320, 30 + 21 + 12 + 3 * (28 + 17) + 2 * 12], 'a name too long for half a row has a row of its own, and its neighbour too, in the middle size');
+  assert.deepEqual(facts('330 m', '1889', 'Gustave Eiffel and Stephen Sauvestre'), [320, 30 + 21 + 12 + (21 + 17) + 12 + (21 + 17)], 'only a value too long for a whole row sets the card in the smallest size');
   assert.deepEqual(COMPONENTS.facts!.size(blank, { facts: [{ label: ' Height ', value: '  330 m  ' }, { label: 'Built', value: '\t1889\n' }] }), facts('330 m', '1889'), 'padding around a label or a value counts nothing');
   const passage = 'a room that is too large for its purpose makes those in it speak as if to a crowd '.repeat(6);
   assert.deepEqual(facts(passage, '1889'), [320, 30 + 21 + 12 + (8 * 21 + 17) + 12 + (21 + 17)], 'a passage is given eight lines and no more');
