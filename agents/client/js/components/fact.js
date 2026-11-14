@@ -1,23 +1,12 @@
 import { h, clamp } from '../dom.js';
-import { FRAME, SIDES, TEXT, TEXT_LETTER, fold, say, span, text, textWidth, up } from './shared.js';
+import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, figureNeed, fold, say, text, textWidth, up } from './shared.js';
 
 const NARROW = 200;
 const WIDE = 320;
 const COLUMN = WIDE - SIDES;
 const RULE = 10;
-/**
- * The sizes a value can be set in, largest first: the class that sets it, its line height in px,
- * one letter in tenths of a px, and one digit in hundredths of a px. A letter here is the widest
- * any one character runs, because a figure cut short would mislead. Digits are all one width, so
- * each is counted at exactly that.
- */
-const STEPS = [['', 36, 210, 2148], ['is-mid', 28, 149, 1506], ['is-small', 21, 105, 1001]];
-const DIGIT = 11;
 /** The most lines a value is sized for, so a paragraph filed as a value cannot make a tower. */
 const MOST_LINES = 8;
-
-/** A value's width on one line in hundredths of a px. */
-const need = (value, letter, digit) => span(value, letter) * letter - (value.match(/[0-9]/g)?.length ?? 0) * (DIGIT * letter - digit);
 
 /**
  * A value takes the largest size that holds it on one line. Past the smallest, it wraps and the
@@ -27,10 +16,10 @@ const need = (value, letter, digit) => span(value, letter) * letter - (value.mat
 function plan(item, props) {
   const value = text(props.value) || '–';
   const label = text(props.label);
-  const fits = STEPS.find((step) => need(value, step[2], step[3]) <= COLUMN * 100);
-  const [cls, lead, letter, digit] = fits ?? STEPS.at(-1);
-  const lines = fits ? 1 : fold(value, COLUMN, letter, MOST_LINES);
-  const valueWidth = lines > 1 ? COLUMN : up(need(value, letter, digit), 100);
+  const step = FIGURES.find((size) => figureNeed(value, size) <= COLUMN * 100);
+  const [cls, lead, letter] = step ?? FIGURES.at(-1);
+  const lines = step ? 1 : fold(value, COLUMN, letter, MOST_LINES);
+  const valueWidth = lines > 1 ? COLUMN : up(figureNeed(value, step), 100);
   const width = clamp(SIDES + Math.max(valueWidth, textWidth(label)), NARROW, WIDE);
   return {
     value, label, width, cls, lines,

@@ -287,7 +287,7 @@ const STEPS: Record<string, Step> = {
   },
 };
 
-const run = await bootFake(flags.client ? { clientDir: resolve(flags.client) } : {});
+const run = await bootFake({ ...(flags.client ? { clientDir: resolve(flags.client) } : {}), asPlaced: (treeId) => treeId === 'lane' });
 const browser = await chromium.launch({ executablePath: browserPath(), headless: true });
 const context = await browser.newContext({
   viewport: { width, height },

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { Page } from 'playwright-core';
 import type { Command, Item, Node } from '../src/core/domain.ts';
 import { FakeModel } from '../src/fake/model.ts';
+import type { Roles } from '../src/core/roles/types.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running } from '../src/node/server.ts';
 
@@ -27,9 +28,16 @@ export function browserPath(): string {
   throw new Error('No Chromium found. Set MIND_PALACE_CHROMIUM to a browser executable.');
 }
 
-/** The service with stand-in agents. Port 0 takes any free port. */
-export function bootFake({ port = 0, dataDir = mkdtempSync(join(tmpdir(), 'mp-stage-')), clientDir = join(import.meta.dirname, '../client') } = {}): Promise<Running> {
-  return startServer({ port, host: '127.0.0.1', dataDir, clientDir, model: new FakeModel(), roles: fakeRoles, token: TOKEN });
+/**
+ * The service with stand-in agents. Port 0 takes any free port. The stand-in Renderer redraws every card by the rules, as the real one
+ * does, so a script that wants to look at a view the rules would not give its item names the trees whose cards stay as they were placed.
+ */
+export function bootFake({ port = 0, dataDir = mkdtempSync(join(tmpdir(), 'mp-stage-')), clientDir = join(import.meta.dirname, '../client'), asPlaced = (_treeId: string): boolean => false } = {}): Promise<Running> {
+  const roles: Roles = {
+    ...fakeRoles,
+    renderer: (ctx, { nodeIds }) => fakeRoles.renderer(ctx, { nodeIds: nodeIds.filter((id) => !asPlaced(ctx.mind.nodes.get(id)?.treeId ?? '')) }),
+  };
+  return startServer({ port, host: '127.0.0.1', dataDir, clientDir, model: new FakeModel(), roles, token: TOKEN });
 }
 
 export const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAHUlEQVQI12NkYPjPgA0wYRWlqgTj////cRhFJzsAGGgEB+4vOSMAAAAASUVORK5CYII='), (c) => c.charCodeAt(0));

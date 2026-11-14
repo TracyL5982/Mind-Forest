@@ -112,10 +112,13 @@ function tenthsOf(cp, face) {
 export const TITLE_LETTER = 93;
 export const TEXT_LETTER = 72;
 export const QUOTE_LETTER = 78;
+/** One letter of the same serif set upright, as a passage and a definition are. It counts in the quote's column. */
+export const PASSAGE_LETTER = 87;
 
-/** A letter width names its face. Any letter but these three is one of a fact's value sizes. */
-const FACES = [TITLE_LETTER, TEXT_LETTER, QUOTE_LETTER];
-const faceOf = (letter) => (FACES.includes(letter) ? FACES.indexOf(letter) : FACES.length);
+/** A letter width names its face. Any letter but these is one of a figure's sizes. */
+const FACES = [[TITLE_LETTER], [TEXT_LETTER], [QUOTE_LETTER, PASSAGE_LETTER]];
+const FACE_OF = new Map(FACES.flatMap((letters, face) => letters.map((letter) => [letter, face])));
+const faceOf = (letter) => FACE_OF.get(letter) ?? FACES.length;
 
 /**
  * A string's width in tenths of an average lowercase letter, always a whole number, in the face
@@ -140,6 +143,18 @@ export function span(str, letter = TEXT_LETTER) {
 
 /** a / b rounded up, for whole numbers. */
 export const up = (a, b) => Math.floor((a + b - 1) / b);
+
+/**
+ * The sizes a figure can be set in, largest first: the class that sets it, its line height in px,
+ * one letter in tenths of a px, and one digit in hundredths of a px. A letter here is the widest
+ * any one character runs, because a figure cut short would mislead. Digits are all one width, so
+ * each is counted at exactly that.
+ */
+export const FIGURES = [['', 36, 210, 2148], ['is-mid', 28, 149, 1506], ['is-small', 21, 105, 1001]];
+const DIGIT = 11;
+
+/** A figure's width on one line in hundredths of a px, at one of `FIGURES`. */
+export const figureNeed = (value, [, , letter, digit]) => span(value, letter) * letter - (value.match(/[0-9]/g)?.length ?? 0) * (DIGIT * letter - digit);
 
 /** The px a string is given at the text size. Most strings draw a little narrower. */
 export const textWidth = (str) => up(span(str) * TEXT_LETTER, 100);
@@ -212,6 +227,28 @@ export const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).
 
 /** Text in its own element. `dir` lets Arabic and Hebrew align and shorten from their own side. */
 export const say = (tag, cls, str) => h(tag, { class: cls, dir: 'auto', text: str });
+
+/** What a card writes under the rows it shows when it holds more. */
+export const andMore = (count) => h('div', { class: 'card-foot', text: `and ${count} more` });
+
+/**
+ * Shares `room` px among columns that need `needs`. A column that needs no more than an equal
+ * share of what is left takes what it needs, and the others share the rest equally.
+ */
+export function spread(needs, room) {
+  const widths = needs.map(() => 0);
+  let open = needs.map((_, i) => i);
+  while (open.length > 0) {
+    const each = Math.max(0, Math.floor(room / open.length));
+    const whole = open.filter((i) => needs[i] <= each);
+    for (const i of whole.length > 0 ? whole : open) {
+      widths[i] = whole.length > 0 ? needs[i] : each;
+      room -= widths[i];
+    }
+    open = whole.length > 0 ? open.filter((i) => !whole.includes(i)) : [];
+  }
+  return widths;
+}
 
 export const title = (item, lines = 2) => say('div', `card-title clamp-${lines}`, item.title || 'Untitled');
 
