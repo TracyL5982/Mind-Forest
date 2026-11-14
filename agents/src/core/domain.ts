@@ -26,10 +26,27 @@ export type Source = z.infer<typeof Source>;
 /**
  * Structured content a component can draw. Content roles fill it; the Renderer only reads it.
  * Known keys: chart {labels, values, unit?}, steps string[], messages {role, text}[], facts {label, value}[],
- * person {name, role?}, quote {text, by?}, code {language, source}, when string (a date), site string.
+ * person {name, role?}, quote {text, by?}, code {language, source}, when string (a date), site string,
+ * mediaUrl and thumbnailUrl (service addresses of a playable file and its still), embed (a player only a browser can show),
+ * library (a LibraryRef).
  */
 export const ItemData = z.record(z.string(), z.unknown());
 export type ItemData = z.infer<typeof ItemData>;
+
+/**
+ * Where a library item lives in the headset's own media, so a headset draws it from there:
+ * a film by its index in clips.json, a work by its id in works.json, a note or a tag of ocean.json by its id.
+ */
+export const LibraryRef = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('film'), key: z.number().int().nonnegative() }),
+  z.object({ kind: z.literal('work'), key: z.string().min(1) }),
+  z.object({ kind: z.literal('note'), key: z.string().min(1) }),
+  z.object({ kind: z.literal('tag'), key: z.string().min(1) }),
+]);
+export type LibraryRef = z.infer<typeof LibraryRef>;
+
+/** `source.from` of the headset's films, works, notes and tags. */
+export const LIBRARY = 'library';
 
 export const Item = z.object({
   id: Id,
@@ -45,6 +62,11 @@ export const Item = z.object({
   revision: z.number().int().nonnegative(),
 });
 export type Item = z.infer<typeof Item>;
+
+/** A library item lives in the library whether or not a tree holds it. */
+export function inLibrary(item: Item): boolean {
+  return item.source.from === LIBRARY;
+}
 
 export const View = z.object({
   component: z.string(),

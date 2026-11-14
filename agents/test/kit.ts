@@ -1,14 +1,21 @@
 import type { Id, Item } from '../src/core/domain.ts';
 import type { Assets, Page, Found, Playable, SocialPost, Source, Tools, WebResult } from '../src/core/ports.ts';
-import { AGENT, DEFAULT_SETTINGS, makeItem, makeNode, type RoleContext, type Settings } from '../src/core/roles/types.ts';
+import { AGENT, DEFAULT_SETTINGS, makeItem, makeNode, type Playback, type RoleContext, type Settings } from '../src/core/roles/types.ts';
 import { Mindstorm } from '../src/core/state.ts';
 import { FakeModel } from '../src/fake/model.ts';
 
 export class MemoryAssets implements Assets {
   readonly files = new Map<string, { bytes: Uint8Array; mime: string; name?: string }>();
+  /** Linked assets: where each one's bytes stay. */
+  readonly links = new Map<string, string>();
   async put(bytes: Uint8Array, mime: string, name?: string) {
-    const id = `asset-${this.files.size + 1}`;
+    const id = `asset-${this.files.size + this.links.size + 1}`;
     this.files.set(id, { bytes, mime, name });
+    return { id };
+  }
+  async link(from: string) {
+    const id = `asset-${this.files.size + this.links.size + 1}`;
+    this.links.set(id, from);
     return { id };
   }
   async get(id: string) {
@@ -39,6 +46,8 @@ export interface Kit {
   assets: MemoryAssets;
   world: FakeWorld;
   notes: string[];
+  /** What the connected clients can play. Change it to stand for a headset. */
+  playback: Playback;
   /** Adds a user tree with one kept node per title, the first as root, the rest as its children. */
   seedTree(title: string, titles: string[], texts?: Record<string, string>): { treeId: Id; nodeIds: Id[] };
   item(fields: Partial<Item> & { title: string }): Item;
@@ -55,6 +64,7 @@ export function kit(settings: Partial<Settings> = {}): Kit {
   const assets = new MemoryAssets();
   const world: FakeWorld = { pages: new Map(), posts: [], web: [], sources: [], found: new Map(), pictures: new Set(), videos: new Map() };
   const notes: string[] = [];
+  const playback: Playback = { embeds: true, files: [] };
   const tools: Tools = {
     web: {
       search: async (query, max = 5) => {
@@ -81,6 +91,7 @@ export function kit(settings: Partial<Settings> = {}): Kit {
     tools,
     assets,
     settings: { ...DEFAULT_SETTINGS, ...settings },
+    playback: () => playback,
     newId,
     now,
     note: (role, message) => notes.push(`${role}: ${message}`),
@@ -97,6 +108,7 @@ export function kit(settings: Partial<Settings> = {}): Kit {
     assets,
     world,
     notes,
+    playback,
     item,
     seedTree(title, titles, texts = {}) {
       const treeId = newId();

@@ -26,12 +26,36 @@ Drawing rules:
 - `view.component` and `view.props` say how to draw a node. `group.composite` says how to arrange its members. Both libraries are documented in `docs/libraries.md`. A client that does not know a component draws it as `note`.
 - An asset address such as `/assets/<id>` is relative to the service.
 
+## Pictures and media
+
+A client fetches only from the service. Every address in an item or a view that a client loads is a service address such as `/assets/<id>`. A client that cannot send the `Authorization` header adds `?token=<token>`.
+
+- `source.asset`: the item's own file, as an asset id: a picture, or a video or recording that plays.
+- `data.thumbnailUrl`: a video's still, as a service address.
+- `data.mediaUrl`: a file that plays (MP4, MP3 and the like), as a service address. Every item that plays has it. The service holds the file, or streams it from where it was found, with byte ranges either way.
+- `data.embed`: a player page on another site, such as `https://www.youtube.com/embed/<id>`. Only a browser can show it. A client that cannot shows `data.thumbnailUrl` and the title instead.
+- `source.url`: where the item was found. A record of its origin, not something a client loads.
+
+## Library items
+
+`npm run import-library` adds the headset's own library as items: 100 films, 750 works, the notes and tags of `ocean.json`, and the 2 saved trees.
+
+- `source.from` is `library`. `data.library` is `{kind, key}`:
+  - `film`: `key` is the film's `index` in `public/clips/clips.json`, a number.
+  - `work`: `key` is the work's `id` in `public/works/works.json`, such as `met-258425`. It is not the work's place in the file. Find the place by matching `id`.
+  - `note`: `key` is the note's `id` in `ocean.json`.
+  - `tag`: `key` is the tag's `id` in `ocean.json` or `works.json`.
+- A headset draws a library item from its own media by `data.library`. A web client draws it like any other item: a film plays `data.mediaUrl` with `data.thumbnailUrl` as its still, and a work shows `source.asset`, a JPEG.
+- Most library items are in no tree. They arrive in `snapshot.items` with no node. Keep them in the item map, and draw one only where a node holds it: in a saved tree, or as a pick under a card.
+- The Scout hangs a library item under a card only when the tie is strong. The `change` adds a node whose `itemId` is the library item's id and adds no item. The node's `origin` is `{by: 'agent', role: 'scout', tool: 'library'}`.
+- Deleting a library item's last node leaves the item in the library. It is never archived.
+
 ## Service to client
 
 | `t` | Fields | Meaning |
 |---|---|---|
 | `hello` | `protocol`, `snapshot`, `settings`, `undo`, `voice` | Sent once on connect. `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
-| `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
+| `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. `set.seq` is exactly one more than the last `seq` the client holds, from `hello.snapshot.seq` or the previous `change`. Any other value means the client missed a change: reconnect for a fresh `hello`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
 | `activity` | `activity` | Work state: `id`, `role`, `state` (`start`, `done`, `error`), `message`, optional `nodeId`. Show a thinking mark on `nodeId` between `start` and `done`. |
 | `say` | `text` | One short line for the agent to speak. |
 | `heard` | `text`, `final` | The transcript the service is acting on. |
@@ -58,6 +82,7 @@ Drawing rules:
 | `organize` | `request`, `scope`, `focus?` | A typed organizing request. `scope` is `{treeIds, nodeIds}`. |
 | `handoff` | `scope`, `note?` | Package a handoff. An empty scope means everything. |
 | `settings` | `patch` | `picksMode` (`provisional` or `immediate`), `picksPerRun`, `scoutOnDump`. |
+| `client` | `media` | What this connection can play, sent right after connecting: `{embeds, files}`. `embeds` is false for a client that cannot show a player from another site, such as the headset. `files` lists the file extensions it plays, such as `["mp4", "mp3"]`. A connection that never sends it is taken to be a browser that shows embeds. While any connected client cannot show embeds, the Scout looks for each video as a file that plays from the service first, and leaves out recordings whose type a connected client did not list. |
 
 `scene` is `{focus?, selection, treeId?}`: the node the user has open, the nodes they have selected, and the tree they are in. The agent uses it to resolve "this" and "that".
 
@@ -66,7 +91,7 @@ Drawing rules:
 | Request | Body | Reply |
 |---|---|---|
 | `POST /api/assets?name=<file name>` | The file's bytes, with its `Content-Type` | `{id, url, mime}` |
-| `GET /assets/<id>` | | The bytes. Supports byte ranges for video. |
+| `GET /assets/<id>` | | The bytes. Supports byte ranges for video. A file the service streams from its source answers with the source's status and range. The service streams only the address it stored for that asset, never one named in the request, and a file on its own disk only from `public/clips/full`. |
 | `POST /api/transcribe?tree=<id>` | Audio bytes, with `Content-Type` (`audio/wav`, `audio/webm`, `audio/mp4`, `audio/mpeg`, `audio/ogg`) | `{text}`. The titles of the cards in `tree`, then of every tree and the newest cards, are given to the recognizer as words the user is likely to say. |
 | `GET /handoffs/<name>.zip` | | The bundle. |
 | `GET /api/speak?text=<reply>` | | MP3 of the reply read aloud, streamed as it is made. 404 when the service has no voice. Takes the token as `?token=` so an audio element can play it directly. |

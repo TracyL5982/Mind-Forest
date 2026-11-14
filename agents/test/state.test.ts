@@ -154,3 +154,37 @@ test('when an earlier part was changed since, undo still takes back the latest p
   assert.equal(k.mind.itemOf(nodeIds[1]!).title, 'A edited by the user');
   assert.ok(edit.id);
 });
+
+test('a library item waits in no inbox, outlives its last node, and is found unless only placed items are asked for', () => {
+  const k = kit();
+  const { nodeIds } = k.seedTree('Film', ['Dolly zoom']);
+  const vertigo = k.item({ title: 'Vertigo', kind: 'video', source: { from: 'library', capturedAt: '' }, data: { library: { kind: 'film', key: 25 } } });
+  k.mind.apply({ origin: USER, label: 'library', commands: [{ type: 'addItem', item: vertigo }] });
+  assert.deepEqual(k.mind.inbox(), []);
+  assert.equal(k.mind.search('vertigo')[0]?.item.id, vertigo.id);
+  assert.deepEqual(k.mind.search('vertigo', { placed: true }), []);
+
+  const node = makeNode(k.ctx, vertigo, { treeId: k.mind.node(nodeIds[0]!).treeId, parent: nodeIds[0]!, status: 'pick', why: 'the same shot', origin: USER });
+  k.mind.apply({ origin: USER, label: 'hang', commands: [{ type: 'addNode', node }] });
+  assert.equal(k.mind.search('vertigo', { placed: true })[0]?.item.id, vertigo.id);
+
+  k.mind.apply({ origin: USER, label: 'drop', commands: [{ type: 'deleteNode', id: node.id }] });
+  assert.equal(k.mind.item(vertigo.id).archived, false);
+  assert.deepEqual(k.mind.inbox(), []);
+  assert.equal(k.mind.search('vertigo')[0]?.item.id, vertigo.id);
+});
+
+test('a change set that changes nothing takes no seq and is never what undo takes back', () => {
+  const k = kit();
+  const { treeId } = k.seedTree('Film', ['Dolly zoom']);
+  const renamed = k.mind.apply({ origin: USER, label: 'rename', commands: [{ type: 'renameTree', id: treeId, title: 'Cinema' }] });
+
+  const nothing = k.mind.apply({ origin: USER, label: 'rename again', commands: [{ type: 'renameTree', id: treeId, title: 'Cinema' }] });
+  const next = k.mind.apply({ origin: USER, label: 'rename back', commands: [{ type: 'renameTree', id: treeId, title: 'Film' }] });
+
+  assert.deepEqual(nothing.patches, []);
+  assert.equal(next.seq, renamed.seq + 1);
+  assert.ok(!k.mind.changes().some((c) => c.id === nothing.id), 'it is not in the history');
+  k.mind.undo();
+  assert.equal(k.mind.undoTarget()?.id, renamed.id, 'the undo after next takes back the last real change');
+});

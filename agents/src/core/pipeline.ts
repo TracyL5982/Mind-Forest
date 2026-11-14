@@ -9,6 +9,7 @@ import {
   type Roles,
   type Scene,
   type Scope,
+  type Playback,
   type Settings,
   type Turn,
 } from './roles/types.ts';
@@ -47,6 +48,8 @@ export interface PipelineDeps {
   emit: (message: Outbound) => void;
   /** How long a partial transcript must hold still before the agent acts on it. */
   settleMs?: number;
+  /** What the connected clients can play. Without it every client is taken to be a browser. */
+  playback?: () => Playback;
 }
 
 const USER: Origin = { by: 'user' };
@@ -77,6 +80,7 @@ export class Pipeline {
       tools: deps.tools,
       assets: deps.assets,
       settings: deps.settings,
+      playback: deps.playback ?? (() => ({ embeds: true, files: [] })),
       newId: deps.newId,
       now: deps.now,
       note: (role, message) => deps.emit({ t: 'note', role, message }),

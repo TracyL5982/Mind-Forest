@@ -199,3 +199,20 @@ test('no items, no work', async () => {
   assert.deepEqual(await filer(k.ctx, []), []);
   assert.equal(k.model.calls.length, 0);
 });
+
+test('a dump is filed among the trees even when items of the library match it better', async () => {
+  const k = kit();
+  const film = k.seedTree('Film', ['Camera moves', 'Dolly zoom shots']);
+  for (let n = 0; n < 6; n++) {
+    const film = k.item({ title: 'Dolly zoom', text: 'dolly zoom', kind: 'video', source: { from: 'library', capturedAt: '' }, data: { library: { kind: 'film', key: n } } });
+    k.mind.apply({ origin: USER, label: 'library', commands: [{ type: 'addItem', item: film }] });
+  }
+  const dropped = k.item({ title: 'Dolly zoom' });
+  k.model.on('filer', () => {
+    throw new Error('model is down');
+  });
+
+  file(k, [dropped], await filer(k.ctx, [dropped]));
+
+  assert.equal(nodeOf(k, dropped).parent, film.nodeIds[1]);
+});

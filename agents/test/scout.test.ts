@@ -50,6 +50,7 @@ function setup(settings: Partial<Settings> = {}, directions: unknown[] = MIX) {
     { title: 'Jaws beach scene', url: 'https://www.youtube.com/watch?v=abcdefghijk', snippet: '' },
   ];
   k.world.videos.set('https://www.youtube.com/watch?v=abcdefghijk', { title: 'Jaws beach scene', url: 'https://www.youtube.com/watch?v=abcdefghijk', embed: 'https://www.youtube.com/embed/abcdefghijk', poster: 'https://img.example/jaws.jpg' });
+  k.world.pictures.add('https://img.example/jaws.jpg');
   k.model.on('scout.ideate', () => ({ reading: 'A film technique the user is studying.', directions })).on('scout.curate', () => ({ chosen: [{ number: 1, note: 'The rail leads the eye to the floor.', excerpt: '' }] }));
   return { k, film, anchor: film.nodeIds[0]! };
 }
@@ -67,6 +68,14 @@ function hang(k: Kit, anchor: Id, title: string, status: Node['status'], fields:
 
 function picked(k: Kit, anchor: Id): Item[] {
   return k.mind.picks(anchor).map((n) => k.mind.itemOf(n.id));
+}
+
+/** The asset behind a service address, so a test can say what the service holds or streams there. */
+function served(k: Kit, address: unknown): string {
+  assert.equal(typeof address, 'string');
+  const id = /^\/assets\/(.+)$/.exec(address as string)?.[1];
+  assert.ok(id && (k.assets.files.has(id) || k.assets.links.has(id)), `${String(address)} is an asset of the service`);
+  return id;
 }
 
 test('each direction becomes content of its own kind, shown in place', async () => {
@@ -97,7 +106,7 @@ test('each direction becomes content of its own kind, shown in place', async () 
   const video = byTitle.get(VIDEO.title)!;
   assert.equal(video.kind, 'video');
   assert.equal(video.data.embed, 'https://www.youtube.com/embed/abcdefghijk');
-  assert.equal(video.data.thumbnailUrl, 'https://img.example/jaws.jpg');
+  assert.ok(k.assets.files.has(served(k, video.data.thumbnailUrl)), 'its still was brought in, not pointed at');
 });
 
 test('no pick is ever a bare link out of the app', async () => {
@@ -250,6 +259,7 @@ test('a record is shown in its own words, and only words that are really in it',
 test('a chart, steps and a recording a source returns reach the card', async () => {
   const find = direction('find', 'The numbers', { source: 'papers', lookups: ['numbers'] });
   const { k, anchor } = setup({}, [find]);
+  k.world.pictures.add('https://img.example/cover.jpg');
   k.world.found.set('papers:numbers', [
     { ...PAPER, url: 'https://x.example/chart', chart: { labels: ['2000', '2010'], values: [1, 2], unit: 'billions' } },
     { ...PAPER, url: 'https://x.example/steps', steps: ['Chop', 'Stir'] },
@@ -264,8 +274,8 @@ test('a chart, steps and a recording a source returns reach the card', async () 
   assert.deepEqual(chart!.data.chart, { labels: ['2000', '2010'], values: [1, 2], unit: 'billions' });
   assert.deepEqual(steps!.data.steps, ['Chop', 'Stir']);
   assert.equal(episode!.kind, 'video');
-  assert.equal(episode!.data.mediaUrl, 'https://cdn.example/episode.mp3');
-  assert.equal(episode!.data.thumbnailUrl, 'https://img.example/cover.jpg');
+  assert.equal(k.assets.links.get(served(k, episode!.data.mediaUrl)), 'https://cdn.example/episode.mp3', 'the recording streams through the service');
+  assert.ok(k.assets.files.has(served(k, episode!.data.thumbnailUrl)), 'its cover was brought in');
 });
 
 test('a search that finds little is tried in other words, and the records are pooled without repeats', async () => {
@@ -454,4 +464,133 @@ test('never more links than the setting allows, and only to items that were offe
     [lenses.nodeIds[3], lenses.nodeIds[4]].sort(),
     'the two strongest are the ones drawn',
   );
+});
+
+test('every picture and recording a pick shows is fetched from the service, never from where it was found', async () => {
+  const podcast = direction('find', 'Hear it explained', { source: 'podcasts', lookups: ['dolly zoom'] });
+  const { k, anchor } = setup({}, [...MIX, podcast]);
+  k.world.sources.push({ id: 'podcasts', name: 'Podcasts', goodFor: 'Episodes.', query: 'Topic words.', show: 1 });
+  k.world.found.set('podcasts:dolly zoom', [{ ...PAPER, url: 'https://podcasts.example/ep', media: 'https://cdn.example/ep.mp3', image: 'https://img.example/ep.jpg' }]);
+  k.world.pictures.add('https://img.example/ep.jpg');
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const items = picked(k, anchor);
+  assert.equal(items.length, 6);
+  for (const item of items) {
+    for (const address of [item.data.thumbnailUrl, item.data.mediaUrl].filter((a) => a !== undefined)) served(k, address);
+    if (item.source.asset) served(k, `/assets/${item.source.asset}`);
+    for (const node of k.mind.nodesOfItem(item.id)) {
+      for (const key of ['poster', 'image'] as const) if (node.view.props[key] !== undefined) served(k, node.view.props[key]);
+    }
+  }
+  assert.ok(items.some((i) => i.data.mediaUrl), 'the episode plays');
+});
+
+const ARCHIVE = { id: 'archive', name: 'Internet Archive', goodFor: 'Old films that play as a file.', query: 'Title words.', show: 1 };
+const REEL = { title: 'Jaws, the beach', by: 'A film school', date: '1975', text: 'The dolly zoom on the beach, frame by frame.', from: 'Internet Archive', url: 'https://archive.example/details/jaws', media: 'https://archive.example/download/jaws/jaws.mp4', image: 'https://archive.example/img/jaws' };
+
+function headsetSetup(files: string[] = ['mp4', 'mp3']) {
+  const { k, anchor } = setup({}, [VIDEO]);
+  k.world.sources.push(ARCHIVE);
+  k.world.pictures.add(REEL.image);
+  k.playback.embeds = false;
+  k.playback.files = files;
+  return { k, anchor };
+}
+
+test('while a client that cannot show an embedded player is connected, a video comes as a film that plays from the service', async () => {
+  const { k, anchor } = headsetSetup();
+  k.world.found.set('archive:Jaws beach dolly zoom', [REEL]);
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const [film] = picked(k, anchor);
+  assert.equal(film!.kind, 'video');
+  assert.equal(film!.data.embed, undefined);
+  assert.equal(k.assets.links.get(served(k, film!.data.mediaUrl)), REEL.media);
+  assert.ok(k.assets.files.has(served(k, film!.data.thumbnailUrl)));
+});
+
+test('a browser alone gets the embedded player, and the archive is not searched for it', async () => {
+  const { k, anchor } = setup({}, [VIDEO]);
+  k.world.sources.push(ARCHIVE);
+  k.world.found.set('archive:Jaws beach dolly zoom', [REEL]);
+  const searched: string[] = [];
+  const search = k.ctx.tools.sources.search;
+  k.ctx.tools.sources.search = (id, query) => (searched.push(id), search(id, query));
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.equal(picked(k, anchor)[0]!.data.embed, 'https://www.youtube.com/embed/abcdefghijk');
+  assert.deepEqual(searched, []);
+});
+
+test('when no film plays as a file, the embedded video still comes, shown to the headset by its still', async () => {
+  const { k, anchor } = headsetSetup();
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const [video] = picked(k, anchor);
+  assert.equal(video!.data.embed, 'https://www.youtube.com/embed/abcdefghijk');
+  assert.ok(k.assets.files.has(served(k, video!.data.thumbnailUrl)));
+});
+
+test('a recording that a connected client cannot play is left out', async () => {
+  const { k, anchor } = headsetSetup(['mp4']);
+  k.world.found.set('archive:Jaws beach dolly zoom', [{ ...REEL, media: 'https://archive.example/download/jaws/jaws.ogv' }, { ...REEL, url: 'https://archive.example/details/jaws2', media: 'https://archive.example/download/jaws2/jaws2.mp4' }]);
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const [film] = picked(k, anchor);
+  assert.equal(k.assets.links.get(served(k, film!.data.mediaUrl)), 'https://archive.example/download/jaws2/jaws2.mp4');
+});
+
+function libraryFilm(k: Kit, title: string, text: string, tags: string[]): Item {
+  const film = k.item({ title, text, kind: 'video', tags, source: { from: 'library', capturedAt: '' }, data: { library: { kind: 'film', key: 25 }, mediaUrl: '/assets/vertigo.mp4' } });
+  k.mind.apply({ origin: USER, label: 'library', commands: [{ type: 'addItem', item: film }] });
+  return film;
+}
+
+test('a library film that no tree holds is hung under the card only for a strong tie, and the new picks still come', async () => {
+  for (const [strength, shown] of [
+    [0.9, true],
+    [0.6, false],
+  ] as const) {
+    const { k, anchor } = setup();
+    const vertigo = libraryFilm(k, 'Vertigo', 'Scottie climbs the bell tower stairs: the dolly zoom.', ['dolly zoom']);
+    k.model.on('scout.links', () => ({ ratings: [{ itemId: vertigo.id, strength, why: 'where the dolly zoom began' }] }));
+
+    const commands = await scout(k.ctx, { anchor, mode: 'refresh' });
+    apply(k, commands);
+
+    const hung = k.mind.picks(anchor).filter((n) => n.itemId === vertigo.id);
+    assert.equal(hung.length, shown ? 1 : 0, `rated ${strength}`);
+    assert.equal(k.mind.picks(anchor).length - hung.length, 5, 'the new picks all came');
+    assert.ok(!commands.some((c) => c.type === 'addItem' && c.item.id === vertigo.id), 'the film is shown, not copied');
+    if (shown) assert.deepEqual([hung[0]!.why, hung[0]!.origin.tool], ['where the dolly zoom began', 'library']);
+  }
+});
+
+test('a library film that shares nothing with the card is never offered to the model', async () => {
+  const { k, anchor } = setup();
+  libraryFilm(k, 'The Gold Rush', 'Chaplin eats his boot.', ['comedy']);
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.ok(!k.model.calls.some((c) => c.role === 'scout.links'), 'the model was not asked to rate it');
+});
+
+test('a refresh takes a library pick away and the film stays in the library', async () => {
+  const { k, anchor } = setup();
+  const vertigo = libraryFilm(k, 'Vertigo', 'Scottie climbs the bell tower stairs: the dolly zoom.', ['dolly zoom']);
+  k.model.on('scout.links', () => ({ ratings: [{ itemId: vertigo.id, strength: 0.9, why: 'where it began' }] }));
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+  k.model.on('scout.links', () => ({ ratings: [] }));
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.equal(k.mind.picks(anchor).filter((n) => n.itemId === vertigo.id).length, 0);
+  assert.equal(k.mind.item(vertigo.id).archived, false);
+  assert.deepEqual(k.mind.inbox(), []);
 });

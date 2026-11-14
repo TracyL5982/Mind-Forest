@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
+import { DiskAssets } from '../src/node/assets.ts';
 import { startServer, type Running, type ServerOptions } from '../src/node/server.ts';
 
 interface Msg {
@@ -204,4 +206,110 @@ test('recorded speech is transcribed with the card titles as hints, and the clie
   assert.equal((await p.until((m) => m.t === 'hello')).hearing, 'browser');
   p.ws.close();
   await plain.close();
+});
+
+test('a linked file and a linked remote file are streamed through the service, by byte range, with the token', async () => {
+  const bytes = new Uint8Array(Array.from({ length: 64 }, (_v, i) => i));
+  const remote = createServer((req, res) => {
+    const [, from, to] = /^bytes=(\d+)-(\d+)$/.exec(req.headers.range ?? '') ?? [];
+    if (!from) {
+      res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Content-Length': bytes.length });
+      return void res.end(bytes);
+    }
+    res.writeHead(206, { 'Content-Type': 'audio/mpeg', 'Content-Range': `bytes ${from}-${to}/${bytes.length}`, 'Accept-Ranges': 'bytes' });
+    res.end(bytes.subarray(Number(from), Number(to) + 1));
+  });
+  await new Promise<void>((ready) => remote.listen(0, '127.0.0.1', ready));
+  const port = (remote.address() as { port: number }).port;
+  const dataDir = mkdtempSync(join(tmpdir(), 'mp-'));
+  const films = join(dataDir, 'films');
+  mkdirSync(films);
+  const file = join(films, 'clip.mp4');
+  writeFileSync(file, bytes);
+  const assets = new DiskAssets(join(dataDir, 'assets'), '', films);
+  const film = await assets.link(file, 'video/mp4');
+  const episode = await assets.link(`http://127.0.0.1:${port}/episode.mp3`, 'audio/mpeg');
+  const { run } = await boot(dataDir, { films });
+
+  assert.equal((await fetch(`${run.url}${assets.url(film.id)}`)).status, 401);
+  const whole = await fetch(`${run.url}${assets.url(film.id)}?token=secret`);
+  assert.equal(whole.headers.get('content-type'), 'video/mp4');
+  assert.deepEqual(new Uint8Array(await whole.arrayBuffer()), bytes);
+  const part = await fetch(`${run.url}${assets.url(film.id)}?token=secret`, { headers: { Range: 'bytes=10-13' } });
+  assert.equal(part.status, 206);
+  assert.equal(part.headers.get('content-range'), 'bytes 10-13/64');
+  assert.deepEqual([...new Uint8Array(await part.arrayBuffer())], [10, 11, 12, 13]);
+
+  const relayed = await fetch(`${run.url}${assets.url(episode.id)}?token=secret`, { headers: { Range: 'bytes=60-63' } });
+  assert.equal(relayed.status, 206);
+  assert.equal(relayed.headers.get('content-range'), 'bytes 60-63/64');
+  assert.deepEqual([...new Uint8Array(await relayed.arrayBuffer())], [60, 61, 62, 63]);
+  assert.equal(await assets.get(episode.id), null, 'a remote file is never copied into the service');
+  const asked = await fetch(`${run.url}/assets/${encodeURIComponent(`http://127.0.0.1:${port}/episode.mp3`)}?token=secret&url=${encodeURIComponent(`http://127.0.0.1:${port}/episode.mp3`)}`);
+  assert.equal(asked.status, 404, 'an address in the request is never fetched');
+
+  await run.close();
+  remote.close();
+});
+
+test('the service knows while a client that cannot show an embedded player is connected', async () => {
+  const { run } = await boot();
+  const browser = await connect(run);
+  browser.ws.send(JSON.stringify({ t: 'client', media: { embeds: true, files: ['mp4', 'webm', 'mp3'] } }));
+  const headset = await connect(run);
+  headset.ws.send(JSON.stringify({ t: 'client', media: { embeds: false, files: ['mp4', 'mp3'] } }));
+  const said = await settled(() => run.pipeline.ctx.playback().embeds === false);
+  headset.ws.close();
+  const left = await settled(() => run.pipeline.ctx.playback().embeds === true);
+  browser.ws.close();
+  await run.close();
+
+  assert.deepEqual(said, { embeds: false, files: ['mp4', 'mp3'] });
+  assert.deepEqual(left, { embeds: true, files: ['mp4', 'webm', 'mp3'] });
+
+  async function settled(done: () => boolean) {
+    for (let waited = 0; !done() && waited < 2000; waited += 10) await new Promise((r) => setTimeout(r, 10));
+    return run.pipeline.ctx.playback();
+  }
+});
+
+test('a linked file is served only from the films folder, however its record names it', async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), 'mp-'));
+  const films = join(dataDir, 'films');
+  mkdirSync(films);
+  writeFileSync(join(films, 'clip.mp4'), 'film');
+  writeFileSync(join(dataDir, 'secret.txt'), 'not for clients');
+  const assets = new DiskAssets(join(dataDir, 'assets'), '', films);
+  await assert.rejects(assets.link(join(dataDir, 'secret.txt'), 'video/mp4'), /films/);
+  await assert.rejects(assets.link(join(films, '../secret.txt'), 'video/mp4'), /films/);
+  const film = await assets.link(join(films, 'clip.mp4'), 'video/mp4');
+  const record = join(dataDir, 'assets', readdirSync(join(dataDir, 'assets')).find((f) => f.endsWith('.json'))!);
+  writeFileSync(record, readFileSync(record, 'utf8').replace(join(films, 'clip.mp4'), join(films, '../secret.txt')));
+  const { run } = await boot(dataDir, { films });
+
+  const res = await fetch(`${run.url}${assets.url(film.id)}?token=secret`);
+
+  assert.equal(res.status, 404);
+  await run.close();
+});
+
+test('the seq a client receives rises by exactly one from hello, also across changes that changed nothing', async () => {
+  const { run } = await boot();
+  const c = await connect(run);
+  const hello = await c.until((m) => m.t === 'hello');
+  await run.pipeline.dump([{ kind: 'text', text: 'Rack focus pulls the eye across the frame' }]);
+  await run.pipeline.idle();
+  const tree = [...run.mind.trees.values()][0]!;
+  const rename = (title: string) => c.ws.send(JSON.stringify({ t: 'commands', label: 'Rename', commands: [{ type: 'renameTree', id: tree.id, title }] }));
+  rename('Focus');
+  rename('Focus');
+  rename('Rack focus');
+  await c.until((m) => m.t === 'change' && (m.set as { patches: { after: { title?: string } }[] }).patches.some((p) => p.after?.title === 'Rack focus'));
+  await run.pipeline.idle();
+  c.ws.close();
+  await run.close();
+
+  const seqs = c.seen.filter((m) => m.t === 'change').map((m) => (m.set as { seq: number }).seq);
+  const from = (hello.snapshot as { seq: number }).seq;
+  assert.deepEqual(seqs, seqs.map((_s, i) => from + 1 + i));
 });

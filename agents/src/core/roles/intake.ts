@@ -237,7 +237,7 @@ async function mediaItem(run: Run, job: Extract<Job, { type: 'media' }>): Promis
     kind: job.kind,
     ...(reply ? labels(reply, plain) : plain),
     text: reply ? reply.description.trim() : '',
-    data: reply ? structure(reply) : {},
+    data: { ...(reply ? structure(reply) : {}), ...(job.kind === 'video' ? { mediaUrl: run.ctx.assets.url(job.asset) } : {}) },
     origin: USER,
     source: { from: 'drop', asset: job.asset },
   });

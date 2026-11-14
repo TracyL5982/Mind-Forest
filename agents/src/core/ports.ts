@@ -118,6 +118,12 @@ export interface Tools {
 
 export interface Assets {
   put(bytes: Uint8Array, mime: string, name?: string): Promise<{ id: string }>;
+  /**
+   * An asset whose bytes stay where they are, a remote address or a file on the host, streamed through the service when asked for.
+   * For playable media too large to copy. Never called with an address a client supplied.
+   */
+  link(from: string, mime: string, name?: string): Promise<{ id: string }>;
+  /** The bytes, when the host holds them. Null for an asset linked to a remote address. */
   get(id: string): Promise<{ bytes: Uint8Array; mime: string; name?: string } | null>;
   /** The address a client loads the asset from. */
   url(id: string): string;

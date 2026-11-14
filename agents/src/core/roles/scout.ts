@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Command, Id, Item, Node } from '../domain.ts';
+import { inLibrary, type Command, type Id, type Item, type Node } from '../domain.ts';
 import type { Found, Source } from '../ports.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
@@ -131,7 +131,12 @@ export const scout: Roles['scout'] = async (ctx, input) => {
       flush();
     }),
   );
-  commands.push(...(await linking));
+  for (const tie of await linking) {
+    const there = shownAt(ctx, tie.item.id, anchor);
+    if (there) commands.push({ type: 'link', link: { id: ctx.newId(), a: anchor.id, b: there.id, why: tie.why, strength: tie.strength } });
+    // A library film or work that no tree holds is shown in place under the card, the way a new pick is.
+    else commands.push({ type: 'addNode', node: makeNode(ctx, tie.item, { treeId: anchor.treeId, parent: anchor.id, status: pickStatus(ctx), why: tie.why, importance: tie.strength, origin: AGENT(ROLE, 'library'), offset: placed++ }) });
+  }
   return commands;
 };
 
@@ -319,9 +324,18 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
       return choose(ctx, d, web!, await (early ?? onWeb()), taken);
     }
     case 'video': {
-      for (const video of await ctx.tools.web.videos(oneLine(d.lookups[0] || d.title, 160))) {
+      const wanted = oneLine(d.lookups[0] || d.title, 160);
+      // A client that cannot show a player from another site would get only a still, so while one is connected a film that plays as a file is looked for first.
+      const files = ctx.playback().embeds ? undefined : ctx.tools.sources.list().find((src) => src.id === 'archive');
+      if (files) {
+        const played = await choose(ctx, d, files, await gather(ctx, files, [wanted], taken), taken);
+        if (played.length > 0) return played;
+      }
+      for (const video of await ctx.tools.web.videos(wanted)) {
         if (taken.has(urlKey(video.url))) continue;
         taken.add(urlKey(video.url));
+        // A client that cannot embed a player shows the still, so it is brought in like any other picture.
+        const still = video.poster ? await ctx.tools.web.picture(video.poster) : null;
         return [
           {
             tool: 'web',
@@ -331,7 +345,7 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
               kind: 'video',
               text: [d.body.trim(), video.title].filter(Boolean).join('\n\n'),
               summary: oneLine(d.body || video.title, 400),
-              data: { site: siteOf(video.url), embed: video.embed, ...(video.poster ? { thumbnailUrl: video.poster } : {}) },
+              data: { site: siteOf(video.url), embed: video.embed, ...(still ? { thumbnailUrl: ctx.assets.url(still.asset) } : {}) },
               source: { from: 'web', url: video.url },
             }),
           },
@@ -362,6 +376,7 @@ async function gather(ctx: RoleContext, source: Source, wanted: string[], taken:
     if (fresh.length >= ENOUGH_FOUND) break;
     try {
       for (const record of await ctx.tools.sources.search(source.id, each)) {
+        if (record.media && !playable(ctx, record.media)) continue;
         if (!taken.has(urlKey(record.url)) && !fresh.some((f) => urlKey(f.url) === urlKey(record.url))) fresh.push(record);
       }
     } catch (err) {
@@ -393,7 +408,9 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
       const record = found[index]!;
       if (taken.has(urlKey(record.url))) return null;
       taken.add(urlKey(record.url));
-      const picture = record.stored ?? (record.image && !record.media ? await ctx.tools.web.picture(record.image) : null);
+      const picture = record.stored ?? (record.image ? await ctx.tools.web.picture(record.image) : null);
+      // A recording plays from the service, which streams it from its source, so a client only ever fetches from the service.
+      const media = record.media ? await ctx.assets.link(record.media, mediaType(record.media)) : null;
       const label = [...new Set([record.by, record.date, record.from ?? source.name].filter(Boolean))].join(', ');
       const passage = excerpt || clipText(record.text, EXCERPT);
       return {
@@ -401,7 +418,7 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
         item: makeItem(ctx, {
           ...common(d, source.id),
           title: oneLine(record.title, 120),
-          kind: record.media ? 'video' : picture ? 'image' : 'text',
+          kind: media ? 'video' : picture ? 'image' : 'text',
           text: [passage, label].filter(Boolean).join('\n\n'),
           summary: oneLine(note || passage || label, 400),
           data: {
@@ -411,9 +428,9 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
             from: record.from ?? source.name,
             ...(record.chart ? { chart: record.chart } : {}),
             ...(record.steps && !picture ? { steps: record.steps } : {}),
-            ...(record.media ? { mediaUrl: record.media, ...(record.image ? { thumbnailUrl: record.image } : {}) } : {}),
+            ...(media ? { mediaUrl: ctx.assets.url(media.id), ...(picture ? { thumbnailUrl: ctx.assets.url(picture.asset) } : {}) } : {}),
           },
-          source: { from: 'web', url: record.url, ...(picture ? { asset: picture.asset } : {}) },
+          source: { from: 'web', url: record.url, ...(picture && !media ? { asset: picture.asset } : {}) },
         }),
       };
     }),
@@ -483,6 +500,19 @@ function clipText(text: string, max: number): string {
   return t.length <= max ? t : `${t.slice(0, max - 1).trimEnd()}…`;
 }
 
+/** Whether every client that named the files it plays can play this one. A file whose type its address does not show is given the benefit of the doubt. */
+function playable(ctx: RoleContext, url: string): boolean {
+  const { files } = ctx.playback();
+  const ext = /\.([a-z0-9]{2,4})$/i.exec(url.split(/[?#]/)[0]!)?.[1]?.toLowerCase();
+  return files.length === 0 || !ext || files.includes(ext);
+}
+
+/** The type a recording is served as until its source says otherwise. */
+function mediaType(url: string): string {
+  const ext = /\.([a-z0-9]{2,4})$/i.exec(url.split(/[?#]/)[0]!)?.[1]?.toLowerCase();
+  return { mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', m4a: 'audio/mp4', ogg: 'audio/ogg' }[ext ?? ''] ?? 'audio/mpeg';
+}
+
 function knownUrls(ctx: RoleContext): Set<string> {
   const urls = new Set<string>();
   for (const item of ctx.mind.items.values()) {
@@ -491,8 +521,20 @@ function knownUrls(ctx: RoleContext): Set<string> {
   return urls;
 }
 
-/** Links to what the user already has, drawn only when plain search and then the model both call the tie strong. */
-async function links(ctx: RoleContext, run: Run): Promise<Command[]> {
+/** Where an item the user already has is shown, to link to: a node in another tree first. None for library items no tree holds. */
+function shownAt(ctx: RoleContext, itemId: Id, anchor: Node): Node | undefined {
+  const nodes = ctx.mind.nodesOfItem(itemId);
+  return nodes.find((n) => n.treeId !== anchor.treeId) ?? nodes[0];
+}
+
+interface Tie {
+  item: Item;
+  strength: number;
+  why: string;
+}
+
+/** Ties to what the user already has, kept only when plain search and then the model both call them strong. */
+async function links(ctx: RoleContext, run: Run): Promise<Tie[]> {
   const { anchor, item } = run;
   if (ctx.settings.maxLinksPerRun <= 0) return [];
   const exclude = new Set<Id>([
@@ -500,15 +542,11 @@ async function links(ctx: RoleContext, run: Run): Promise<Command[]> {
     ...ctx.mind.subtree(anchor.id).map((n) => n.itemId),
     ...ctx.mind.linksOf(anchor.id).map((l) => ctx.mind.node(l.a === anchor.id ? l.b : l.a).itemId),
   ]);
-  const target = (itemId: Id): Node | undefined => {
-    const nodes = ctx.mind.nodesOfItem(itemId);
-    return nodes.find((n) => n.treeId !== anchor.treeId) ?? nodes[0];
-  };
 
   const coverage = new Map<Id, number>();
   for (const query of [`${item.title} ${item.tags.join(' ')}`, run.need]) {
     for (const hit of ctx.mind.search(query, { limit: 20, exclude })) {
-      if (hit.coverage >= LINK_COVERAGE && target(hit.id)) coverage.set(hit.id, Math.max(coverage.get(hit.id) ?? 0, hit.coverage));
+      if (hit.coverage >= LINK_COVERAGE && (shownAt(ctx, hit.id, anchor) || inLibrary(hit.item))) coverage.set(hit.id, Math.max(coverage.get(hit.id) ?? 0, hit.coverage));
     }
   }
   const candidates = [...coverage].sort((a, b) => b[1] - a[1]).slice(0, MAX_LINK_CANDIDATES).map(([id]) => ctx.mind.item(id));
@@ -521,7 +559,7 @@ async function links(ctx: RoleContext, run: Run): Promise<Command[]> {
       user: [
         run.brief,
         '',
-        "These items are already elsewhere in the user's notes and share some words with it:",
+        "These items are already in the user's notes or in their library of films and works, and share some words with it:",
         ...candidates.map((c) => `- item ${c.id} "${oneLine(nameOf(c), 100)}": ${oneLine(c.summary || c.text, 240)}`),
         '',
         'Rate how strongly each is connected to what the user is looking at, from 0 to 1, using the item ids exactly as written.',
@@ -541,10 +579,7 @@ async function links(ctx: RoleContext, run: Run): Promise<Command[]> {
       .filter(([, r]) => r.strength >= ctx.settings.linkThreshold)
       .sort((a, b) => b[1].strength - a[1].strength)
       .slice(0, ctx.settings.maxLinksPerRun)
-      .map(([itemId, r]) => ({
-        type: 'link' as const,
-        link: { id: ctx.newId(), a: anchor.id, b: target(itemId)!.id, why: r.why || 'closely related', strength: r.strength },
-      }));
+      .map(([itemId, r]) => ({ item: ctx.mind.item(itemId), strength: r.strength, why: r.why || 'closely related' }));
   } catch (err) {
     ctx.note(ROLE, `could not rate links to existing notes (${message(err)}), drawing none`);
     return [];
