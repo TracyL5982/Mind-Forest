@@ -1,14 +1,14 @@
 {
  "items": [
   {
-   "key": "A-R01 article, one table deep inside",
+   "key": "A-R01",
    "activity": "research",
    "language": "en",
-   "what": "link to a long article; one two-row table in the middle",
+   "what": "article, one table deep inside: link to a long article; one two-row table in the middle",
    "expect": "link",
    "accept": [],
    "item": {
-    "id": "formats-A-R01 article, one table deep inside",
+    "id": "formats-A-R01",
     "tags": [
      "week",
      "people"
@@ -52,14 +52,14 @@
    }
   },
   {
-   "key": "A-R02 article, one quotable line",
+   "key": "A-R02",
    "activity": "research",
    "language": "en",
-   "what": "link to a long essay that quotes one person once",
+   "what": "article, one quotable line: link to a long essay that quotes one person once",
    "expect": "link",
    "accept": [],
    "item": {
-    "id": "formats-A-R02 article, one quotable line",
+    "id": "formats-A-R02",
     "tags": [
      "week",
      "people"
@@ -88,14 +88,14 @@
    }
   },
   {
-   "key": "A-R03 文章，模型只摘了一段",
+   "key": "A-R03",
    "activity": "research",
    "language": "zh",
-   "what": "link to a Chinese article; the model fills only the passage \"worth quoting\"",
+   "what": "文章，模型只摘了一段: link to a Chinese article; the model fills only the passage \"worth quoting\"",
    "expect": "link",
    "accept": [],
    "item": {
-    "id": "formats-A-R03 文章，模型只摘了一段",
+    "id": "formats-A-R03",
     "tags": [
      "默认",
      "选项"
@@ -123,14 +123,14 @@
    }
   },
   {
-   "key": "A-R04 tool home page",
+   "key": "A-R04",
    "activity": "research",
    "language": "en",
-   "what": "link to a product page, no structure",
+   "what": "tool home page: link to a product page, no structure",
    "expect": "link",
    "accept": [],
    "item": {
-    "id": "formats-A-R04 tool home page",
+    "id": "formats-A-R04",
     "tags": [
      "text",
      "exampletool"
@@ -155,14 +155,14 @@
    }
   },
   {
-   "key": "A-R05 paper pick",
+   "key": "A-R05",
    "activity": "research",
    "language": "en",
-   "what": "Scout pick from the papers source",
+   "what": "paper pick: Scout pick from the papers source",
    "expect": "reference",
    "accept": [],
    "item": {
-    "id": "formats-A-R05 paper pick",
+    "id": "formats-A-R05",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -196,14 +196,14 @@
    }
   },
   {
-   "key": "A-R06 paper pick that also carries a chart",
+   "key": "A-R06",
    "activity": "research",
    "language": "en",
-   "what": "Scout paper pick whose record also has data.chart",
+   "what": "paper pick that also carries a chart: Scout paper pick whose record also has data.chart",
    "expect": "reference",
    "accept": [],
    "item": {
-    "id": "formats-A-R06 paper pick that also carries a chart",
+    "id": "formats-A-R06",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -250,14 +250,14 @@
    }
   },
   {
-   "key": "A-R07 statistic pick",
+   "key": "A-R07",
    "activity": "research",
    "language": "en",
-   "what": "Scout pick from the data source: a series by year",
+   "what": "statistic pick: Scout pick from the data source: a series by year",
    "expect": "chart",
    "accept": [],
    "item": {
-    "id": "formats-A-R07 statistic pick",
+    "id": "formats-A-R07",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -298,14 +298,14 @@
    }
   },
   {
-   "key": "A-R08 图书",
+   "key": "A-R08",
    "activity": "research",
    "language": "zh",
-   "what": "Scout book pick with a cover picture",
+   "what": "图书: Scout book pick with a cover picture",
    "expect": "reference",
    "accept": [],
    "item": {
-    "id": "formats-A-R08 图书",
+    "id": "formats-A-R08",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -336,14 +336,14 @@
    }
   },
   {
-   "key": "A-R09 pasted CSV",
+   "key": "A-R09",
    "activity": "research",
    "language": "en",
-   "what": "CSV pasted from a spreadsheet",
+   "what": "pasted CSV: CSV pasted from a spreadsheet",
    "expect": "table",
    "accept": [],
    "item": {
-    "id": "formats-A-R09 pasted CSV",
+    "id": "formats-A-R09",
     "tags": [
      "country",
      "gdp_per_capita"
@@ -395,14 +395,16 @@
    }
   },
   {
-   "key": "A-R10 long essay, one statistic",
+   "key": "A-R10",
    "activity": "research",
    "language": "en",
-   "what": "a 1,800 character essay that states one figure",
+   "what": "long essay, one statistic: a 1,800 character essay that states one figure",
    "expect": "note",
-   "accept": [],
+   "accept": [
+    "sheet"
+   ],
    "item": {
-    "id": "formats-A-R10 long essay, one statistic",
+    "id": "formats-A-R10",
     "tags": [
      "week",
      "people"
@@ -431,14 +433,14 @@
    }
   },
   {
-   "key": "A-R11 段落里的定义",
+   "key": "A-R11",
    "activity": "research",
    "language": "zh",
-   "what": "a long Chinese paragraph that defines one term in passing",
+   "what": "段落里的定义: a long Chinese paragraph that defines one term in passing",
    "expect": "note",
    "accept": [],
    "item": {
-    "id": "formats-A-R11 段落里的定义",
+    "id": "formats-A-R11",
     "tags": [
      "其实",
      "以前"
@@ -463,14 +465,14 @@
    }
   },
   {
-   "key": "A-R12 definition",
+   "key": "A-R12",
    "activity": "research",
    "language": "en",
-   "what": "a one-line definition",
+   "what": "definition: a one-line definition",
    "expect": "definition",
    "accept": [],
    "item": {
-    "id": "formats-A-R12 definition",
+    "id": "formats-A-R12",
     "tags": [
      "parallax",
      "apparent"
@@ -495,14 +497,14 @@
    }
   },
   {
-   "key": "A-R13 comparison with pros and cons inside",
+   "key": "A-R13",
    "activity": "research",
    "language": "en",
-   "what": "a 1,400 character comparison of two databases; one short pros/cons passage",
+   "what": "comparison with pros and cons inside: a 1,400 character comparison of two databases; one short pros/cons passage",
    "expect": "note",
    "accept": [],
    "item": {
-    "id": "formats-A-R13 comparison with pros and cons inside",
+    "id": "formats-A-R13",
     "tags": [
      "ones",
      "decision"
@@ -532,14 +534,14 @@
    }
   },
   {
-   "key": "A-R14 问答",
+   "key": "A-R14",
    "activity": "research",
    "language": "zh",
-   "what": "a short question with its answer",
+   "what": "问答: a short question with its answer",
    "expect": "qa",
    "accept": [],
    "item": {
-    "id": "formats-A-R14 问答",
+    "id": "formats-A-R14",
     "tags": [
      "为什么",
      "天空"
@@ -564,14 +566,14 @@
    }
   },
   {
-   "key": "A-R15 调查占比",
+   "key": "A-R15",
    "activity": "research",
    "language": "zh",
-   "what": "survey shares that sum to 100",
+   "what": "调查占比: survey shares that sum to 100",
    "expect": "breakdown",
    "accept": [],
    "item": {
-    "id": "formats-A-R15 调查占比",
+    "id": "formats-A-R15",
     "tags": [
      "受访者",
      "常用"
@@ -609,14 +611,14 @@
    }
   },
   {
-   "key": "A-R16 一组数据",
+   "key": "A-R16",
    "activity": "research",
    "language": "zh",
-   "what": "several labelled figures",
+   "what": "一组数据: several labelled figures",
    "expect": "facts",
    "accept": [],
    "item": {
-    "id": "formats-A-R16 一组数据",
+    "id": "formats-A-R16",
     "tags": [
      "铁路",
      "全长"
@@ -657,14 +659,14 @@
    }
   },
   {
-   "key": "A-R17 code with a table in a comment",
+   "key": "A-R17",
    "activity": "research",
    "language": "en",
-   "what": "a pasted Python function whose docstring holds a small table",
+   "what": "code with a table in a comment: a pasted Python function whose docstring holds a small table",
    "expect": "code",
    "accept": [],
    "item": {
-    "id": "formats-A-R17 code with a table in a comment",
+    "id": "formats-A-R17",
     "tags": [
      "rate",
      "tier"
@@ -703,14 +705,14 @@
    }
   },
   {
-   "key": "A-R18 quotation",
+   "key": "A-R18",
    "activity": "research",
    "language": "en",
-   "what": "a quotation with its speaker",
+   "what": "quotation: a quotation with its speaker",
    "expect": "quote",
    "accept": [],
    "item": {
-    "id": "formats-A-R18 quotation",
+    "id": "formats-A-R18",
     "tags": [
      "fool",
      "first"
@@ -740,16 +742,16 @@
    }
   },
   {
-   "key": "A-R19 注意事项",
+   "key": "A-R19",
    "activity": "research",
    "language": "zh",
-   "what": "a caution",
+   "what": "注意事项: a caution",
    "expect": "callout",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-A-R19 注意事项",
+    "id": "formats-A-R19",
     "tags": [
      "阿司匹林",
      "注意"
@@ -771,16 +773,16 @@
    }
   },
   {
-   "key": "A-R20 how-to page",
+   "key": "A-R20",
    "activity": "research",
    "language": "en",
-   "what": "link to a page that is a procedure",
+   "what": "how-to page: link to a page that is a procedure",
    "expect": "steps",
    "accept": [
     "link"
    ],
    "item": {
-    "id": "formats-A-R20 how-to page",
+    "id": "formats-A-R20",
     "tags": [
      "back",
      "database"
@@ -811,16 +813,16 @@
    }
   },
   {
-   "key": "A-B01 short to-do",
+   "key": "A-B01",
    "activity": "brainstorming",
    "language": "en",
-   "what": "\"Buy milk\"",
+   "what": "short to-do: \"Buy milk\"",
    "expect": "note",
    "accept": [
     "idea"
    ],
    "item": {
-    "id": "formats-A-B01 short to-do",
+    "id": "formats-A-B01",
     "tags": [
      "buy",
      "milk"
@@ -842,14 +844,14 @@
    }
   },
   {
-   "key": "A-B02 短想法",
+   "key": "A-B02",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "a short thought",
+   "what": "短想法: a short thought",
    "expect": "idea",
    "accept": [],
    "item": {
-    "id": "formats-A-B02 短想法",
+    "id": "formats-A-B02",
     "tags": [
      "书房",
      "搬到"
@@ -871,16 +873,16 @@
    }
   },
   {
-   "key": "A-B03 short question, no answer",
+   "key": "A-B03",
    "activity": "brainstorming",
    "language": "en",
-   "what": "a question with no answer",
+   "what": "short question, no answer: a question with no answer",
    "expect": "idea",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-A-B03 short question, no answer",
+    "id": "formats-A-B03",
     "tags": [
      "app",
      "worked"
@@ -902,16 +904,16 @@
    }
   },
   {
-   "key": "A-B04 two-item list",
+   "key": "A-B04",
    "activity": "brainstorming",
    "language": "en",
-   "what": "a list of two",
+   "what": "two-item list: a list of two",
    "expect": "list",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-A-B04 two-item list",
+    "id": "formats-A-B04",
     "tags": [
      "languages",
      "consider"
@@ -938,14 +940,14 @@
    }
   },
   {
-   "key": "A-B05 利弊",
+   "key": "A-B05",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "short pros and cons",
+   "what": "利弊: short pros and cons",
    "expect": "proscons",
    "accept": [],
    "item": {
-    "id": "formats-A-B05 利弊",
+    "id": "formats-A-B05",
     "tags": [
      "搬到",
      "上海"
@@ -976,14 +978,14 @@
    }
   },
   {
-   "key": "A-B06 palette",
+   "key": "A-B06",
    "activity": "brainstorming",
    "language": "en",
-   "what": "a palette with hex values",
+   "what": "palette: a palette with hex values",
    "expect": "swatch",
    "accept": [],
    "item": {
-    "id": "formats-A-B06 palette",
+    "id": "formats-A-B06",
     "tags": [
      "brand",
      "palette"
@@ -1020,14 +1022,16 @@
    }
   },
   {
-   "key": "A-B07 plan that mentions two colours",
+   "key": "A-B07",
    "activity": "brainstorming",
    "language": "en",
-   "what": "a renovation plan; says the door goes red and the walls stay white",
+   "what": "plan that mentions two colours: a renovation plan; says the door goes red and the walls stay white",
    "expect": "note",
-   "accept": [],
+   "accept": [
+    "list"
+   ],
    "item": {
-    "id": "formats-A-B07 plan that mentions two colours",
+    "id": "formats-A-B07",
     "tags": [
      "door",
      "paint"
@@ -1063,14 +1067,14 @@
    }
   },
   {
-   "key": "A-B08 会议记录",
+   "key": "A-B08",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "meeting note with a checklist and a date",
+   "what": "会议记录: meeting note with a checklist and a date",
    "expect": "list",
    "accept": [],
    "item": {
-    "id": "formats-A-B08 会议记录",
+    "id": "formats-A-B08",
     "tags": [
      "产品",
      "确定"
@@ -1107,14 +1111,14 @@
    }
   },
   {
-   "key": "A-B09 名字备选",
+   "key": "A-B09",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "five name candidates",
+   "what": "名字备选: five name candidates",
    "expect": "list",
    "accept": [],
    "item": {
-    "id": "formats-A-B09 名字备选",
+    "id": "formats-A-B09",
     "tags": [
      "产品",
      "回声"
@@ -1144,14 +1148,14 @@
    }
   },
   {
-   "key": "A-B10 markdown table",
+   "key": "A-B10",
    "activity": "brainstorming",
    "language": "en",
-   "what": "a feature comparison pasted as a markdown table",
+   "what": "markdown table: a feature comparison pasted as a markdown table",
    "expect": "table",
    "accept": [],
    "item": {
-    "id": "formats-A-B10 markdown table",
+    "id": "formats-A-B10",
     "tags": [
      "plan",
      "price"
@@ -1198,14 +1202,14 @@
    }
   },
   {
-   "key": "A-B11 budget split",
+   "key": "A-B11",
    "activity": "brainstorming",
    "language": "en",
-   "what": "a budget in percent",
+   "what": "budget split: a budget in percent",
    "expect": "breakdown",
    "accept": [],
    "item": {
-    "id": "formats-A-B11 budget split",
+    "id": "formats-A-B11",
     "tags": [
      "launch",
      "budget"
@@ -1243,14 +1247,14 @@
    }
   },
   {
-   "key": "A-B12 目标数字",
+   "key": "A-B12",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "one target figure",
+   "what": "目标数字: one target figure",
    "expect": "fact",
    "accept": [],
    "item": {
-    "id": "formats-A-B12 目标数字",
+    "id": "formats-A-B12",
     "tags": [
      "目标",
      "注册"
@@ -1279,14 +1283,14 @@
    }
   },
   {
-   "key": "A-B13 长段想法",
+   "key": "A-B13",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "a long unstructured brain-dump",
+   "what": "长段想法: a long unstructured brain-dump",
    "expect": "note",
    "accept": [],
    "item": {
-    "id": "formats-A-B13 长段想法",
+    "id": "formats-A-B13",
     "tags": [
      "我们",
      "其实"
@@ -1308,14 +1312,14 @@
    }
   },
   {
-   "key": "A-B14 计划步骤",
+   "key": "A-B14",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "a numbered plan",
+   "what": "计划步骤: a numbered plan",
    "expect": "steps",
    "accept": [],
    "item": {
-    "id": "formats-A-B14 计划步骤",
+    "id": "formats-A-B14",
     "tags": [
      "上线",
      "计划"
@@ -1344,14 +1348,14 @@
    }
   },
   {
-   "key": "A-B15 plan that names one person",
+   "key": "A-B15",
    "activity": "brainstorming",
    "language": "en",
-   "what": "a 400 character plan that involves one named person",
+   "what": "plan that names one person: a 400 character plan that involves one named person",
    "expect": "note",
    "accept": [],
    "item": {
-    "id": "formats-A-B15 plan that names one person",
+    "id": "formats-A-B15",
     "tags": [
      "ask",
      "maria"
@@ -1381,14 +1385,14 @@
    }
   },
   {
-   "key": "A-B16 pasted code",
+   "key": "A-B16",
    "activity": "brainstorming",
    "language": "en",
-   "what": "a pasted JavaScript function",
+   "what": "pasted code: a pasted JavaScript function",
    "expect": "code",
    "accept": [],
    "item": {
-    "id": "formats-A-B16 pasted code",
+    "id": "formats-A-B16",
     "tags": [
      "args",
      "function"
@@ -1410,14 +1414,14 @@
    }
   },
   {
-   "key": "A-B17 chat import",
+   "key": "A-B17",
    "activity": "brainstorming",
    "language": "en",
-   "what": "an imported assistant conversation",
+   "what": "chat import: an imported assistant conversation",
    "expect": "chat",
    "accept": [],
    "item": {
-    "id": "formats-A-B17 chat import",
+    "id": "formats-A-B17",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -1455,14 +1459,16 @@
    }
   },
   {
-   "key": "A-B18 chat takeaway",
+   "key": "A-B18",
    "activity": "brainstorming",
    "language": "en",
-   "what": "a takeaway Intake cut from that conversation",
+   "what": "chat takeaway: a takeaway Intake cut from that conversation",
    "expect": "note",
-   "accept": [],
+   "accept": [
+    "list"
+   ],
    "item": {
-    "id": "formats-A-B18 chat takeaway",
+    "id": "formats-A-B18",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -1484,16 +1490,16 @@
    }
   },
   {
-   "key": "A-B19 web pick",
+   "key": "A-B19",
    "activity": "brainstorming",
    "language": "en",
-   "what": "Scout pick of a web article (no picture)",
+   "what": "web pick: Scout pick of a web article (no picture)",
    "expect": "note",
    "accept": [
     "link"
    ],
    "item": {
-    "id": "formats-A-B19 web pick",
+    "id": "formats-A-B19",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -1519,14 +1525,14 @@
    }
   },
   {
-   "key": "A-B20 video pick",
+   "key": "A-B20",
    "activity": "brainstorming",
    "language": "en",
-   "what": "Scout video pick",
+   "what": "video pick: Scout video pick",
    "expect": "video",
    "accept": [],
    "item": {
-    "id": "formats-A-B20 video pick",
+    "id": "formats-A-B20",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -1551,14 +1557,14 @@
    }
   },
   {
-   "key": "A-M01 photo with a date and a place",
+   "key": "A-M01",
    "activity": "memories",
    "language": "en",
-   "what": "a beach photo; the model titles it with the place",
+   "what": "photo with a date and a place: a beach photo; the model titles it with the place",
    "expect": "image",
    "accept": [],
    "item": {
-    "id": "formats-A-M01 photo with a date and a place",
+    "id": "formats-A-M01",
     "tags": [
      "image"
     ],
@@ -1583,14 +1589,14 @@
    }
   },
   {
-   "key": "A-M02 photo, no place",
+   "key": "A-M02",
    "activity": "memories",
    "language": "en",
-   "what": "a birthday cake",
+   "what": "photo, no place: a birthday cake",
    "expect": "image",
    "accept": [],
    "item": {
-    "id": "formats-A-M02 photo, no place",
+    "id": "formats-A-M02",
     "tags": [
      "image"
     ],
@@ -1612,14 +1618,14 @@
    }
   },
   {
-   "key": "A-M03 外婆家的院子",
+   "key": "A-M03",
    "activity": "memories",
    "language": "zh",
-   "what": "a photo of a courtyard",
+   "what": "外婆家的院子: a photo of a courtyard",
    "expect": "image",
    "accept": [],
    "item": {
-    "id": "formats-A-M03 外婆家的院子",
+    "id": "formats-A-M03",
     "tags": [
      "image"
     ],
@@ -1641,14 +1647,14 @@
    }
   },
   {
-   "key": "A-M04 note that mentions a place in passing",
+   "key": "A-M04",
    "activity": "memories",
    "language": "en",
-   "what": "a note about a grandfather; Chicago is mentioned once",
+   "what": "note that mentions a place in passing: a note about a grandfather; Chicago is mentioned once",
    "expect": "note",
    "accept": [],
    "item": {
-    "id": "formats-A-M04 note that mentions a place in passing",
+    "id": "formats-A-M04",
     "tags": [
      "grandpa",
      "never"
@@ -1672,14 +1678,14 @@
    }
   },
   {
-   "key": "A-M05 diary entry titled with a city",
+   "key": "A-M05",
    "activity": "memories",
    "language": "en",
-   "what": "a 400 character diary entry about a dinner; the title has the city",
+   "what": "diary entry titled with a city: a 400 character diary entry about a dinner; the title has the city",
    "expect": "note",
    "accept": [],
    "item": {
-    "id": "formats-A-M05 diary entry titled with a city",
+    "id": "formats-A-M05",
     "tags": [
      "finally",
      "found"
@@ -1706,16 +1712,16 @@
    }
   },
   {
-   "key": "A-M06 外婆的饺子",
+   "key": "A-M06",
    "activity": "memories",
    "language": "zh",
-   "what": "a recipe: ingredients and steps",
+   "what": "外婆的饺子: a recipe: ingredients and steps",
    "expect": "steps",
    "accept": [
     "list"
    ],
    "item": {
-    "id": "formats-A-M06 外婆的饺子",
+    "id": "formats-A-M06",
     "tags": [
      "白菜",
      "外婆"
@@ -1750,14 +1756,14 @@
    }
   },
   {
-   "key": "A-M07 museum pick",
+   "key": "A-M07",
    "activity": "memories",
    "language": "en",
-   "what": "Scout pick from a museum collection",
+   "what": "museum pick: Scout pick from a museum collection",
    "expect": "artwork",
    "accept": [],
    "item": {
-    "id": "formats-A-M07 museum pick",
+    "id": "formats-A-M07",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -1787,14 +1793,14 @@
    }
   },
   {
-   "key": "A-M08 a cafe to remember",
+   "key": "A-M08",
    "activity": "memories",
    "language": "en",
-   "what": "a note that is about one place",
+   "what": "a cafe to remember: a note that is about one place",
    "expect": "place",
    "accept": [],
    "item": {
-    "id": "formats-A-M08 a cafe to remember",
+    "id": "formats-A-M08",
     "tags": [
      "café",
      "brasileira"
@@ -1818,14 +1824,14 @@
    }
   },
   {
-   "key": "A-M09 西湖",
+   "key": "A-M09",
    "activity": "memories",
    "language": "zh",
-   "what": "a note about a place",
+   "what": "西湖: a note about a place",
    "expect": "place",
    "accept": [],
    "item": {
-    "id": "formats-A-M09 西湖",
+    "id": "formats-A-M09",
     "tags": [
      "清晨",
      "西湖"
@@ -1849,14 +1855,14 @@
    }
   },
   {
-   "key": "A-M10 外婆的话",
+   "key": "A-M10",
    "activity": "memories",
    "language": "zh",
-   "what": "something grandmother used to say",
+   "what": "外婆的话: something grandmother used to say",
    "expect": "quote",
    "accept": [],
    "item": {
-    "id": "formats-A-M10 外婆的话",
+    "id": "formats-A-M10",
     "tags": [
      "一口",
      "一步"
@@ -1883,14 +1889,14 @@
    }
   },
   {
-   "key": "A-M11 行程表",
+   "key": "A-M11",
    "activity": "memories",
    "language": "zh",
-   "what": "a trip itinerary as a table",
+   "what": "行程表: a trip itinerary as a table",
    "expect": "table",
    "accept": [],
    "item": {
-    "id": "formats-A-M11 行程表",
+    "id": "formats-A-M11",
     "tags": [
      "日期",
      "城市"
@@ -1937,14 +1943,14 @@
    }
   },
   {
-   "key": "A-M12 日记",
+   "key": "A-M12",
    "activity": "memories",
    "language": "zh",
-   "what": "a long diary entry with a date",
+   "what": "日记: a long diary entry with a date",
    "expect": "note",
    "accept": [],
    "item": {
-    "id": "formats-A-M12 日记",
+    "id": "formats-A-M12",
     "tags": [
      "我们",
      "其实"
@@ -1968,14 +1974,14 @@
    }
   },
   {
-   "key": "A-M13 露营清单",
+   "key": "A-M13",
    "activity": "memories",
    "language": "zh",
-   "what": "a packing checklist",
+   "what": "露营清单: a packing checklist",
    "expect": "list",
    "accept": [],
    "item": {
-    "id": "formats-A-M13 露营清单",
+    "id": "formats-A-M13",
     "tags": [
      "周末",
      "露营"
@@ -2010,14 +2016,14 @@
    }
   },
   {
-   "key": "A-M14 video titled with a place",
+   "key": "A-M14",
    "activity": "memories",
    "language": "en",
-   "what": "a dropped video of a child's first steps; the model titles it with the beach",
+   "what": "video titled with a place: a dropped video of a child's first steps; the model titles it with the beach",
    "expect": "video",
    "accept": [],
    "item": {
-    "id": "formats-A-M14 video titled with a place",
+    "id": "formats-A-M14",
     "tags": [
      "video"
     ],
@@ -2041,14 +2047,14 @@
    }
   },
   {
-   "key": "A-M15 wedding in figures",
+   "key": "A-M15",
    "activity": "memories",
    "language": "en",
-   "what": "several labelled facts",
+   "what": "wedding in figures: several labelled facts",
    "expect": "facts",
    "accept": [],
    "item": {
-    "id": "formats-A-M15 wedding in figures",
+    "id": "formats-A-M15",
     "tags": [
      "wedding",
      "date"
@@ -2091,14 +2097,14 @@
    }
   },
   {
-   "key": "A-M16 a long letter",
+   "key": "A-M16",
    "activity": "memories",
    "language": "en",
-   "what": "a 1,000 character letter the user typed in; the model fills the passage \"worth quoting\"",
+   "what": "a long letter: a 1,000 character letter the user typed in; the model fills the passage \"worth quoting\"",
    "expect": "note",
    "accept": [],
    "item": {
-    "id": "formats-A-M16 a long letter",
+    "id": "formats-A-M16",
     "tags": [
      "ones",
      "decision"
@@ -2127,16 +2133,16 @@
    }
   },
   {
-   "key": "A-M17 Aunt Mei",
+   "key": "A-M17",
    "activity": "memories",
    "language": "en",
-   "what": "a note about one person",
+   "what": "Aunt Mei: a note about one person",
    "expect": "person",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-A-M17 Aunt Mei",
+    "id": "formats-A-M17",
     "tags": [
      "aunt",
      "mei"
@@ -2164,14 +2170,14 @@
    }
   },
   {
-   "key": "A-M18 游记链接",
+   "key": "A-M18",
    "activity": "memories",
    "language": "zh",
-   "what": "link to a long travel blog post; its title names the place",
+   "what": "游记链接: link to a long travel blog post; its title names the place",
    "expect": "link",
    "accept": [],
    "item": {
-    "id": "formats-A-M18 游记链接",
+    "id": "formats-A-M18",
     "tags": [
      "默认",
      "选项"
@@ -2197,16 +2203,16 @@
    }
   },
   {
-   "key": "A-M19 a time",
+   "key": "A-M19",
    "activity": "memories",
    "language": "en",
-   "what": "\"Flight home at 10:45\"",
+   "what": "a time: \"Flight home at 10:45\"",
    "expect": "idea",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-A-M19 a time",
+    "id": "formats-A-M19",
     "tags": [
      "flight",
      "home"
@@ -2230,14 +2236,14 @@
    }
   },
   {
-   "key": "A-M20 photo of a handwritten recipe card",
+   "key": "A-M20",
    "activity": "memories",
    "language": "en",
-   "what": "a photo of grandmother's recipe card; the model reads the steps off it",
+   "what": "photo of a handwritten recipe card: a photo of grandmother's recipe card; the model reads the steps off it",
    "expect": "image",
    "accept": [],
    "item": {
-    "id": "formats-A-M20 photo of a handwritten recipe card",
+    "id": "formats-A-M20",
     "tags": [
      "image"
     ],
@@ -2266,14 +2272,14 @@
    }
   },
   {
-   "key": "B-R01 court ruling write-up",
+   "key": "B-R01",
    "activity": "research",
    "language": "en",
-   "what": "saved link: a 3,400-character legal news page on an appeal ruling, one judge quoted once, case facts named",
+   "what": "court ruling write-up: saved link: a 3,400-character legal news page on an appeal ruling, one judge quoted once, case facts named",
    "expect": "link",
    "accept": [],
    "item": {
-    "id": "formats-B-R01 court ruling write-up",
+    "id": "formats-B-R01",
     "tags": [
      "law",
      "tenancy",
@@ -2321,16 +2327,16 @@
    }
   },
   {
-   "key": "B-R02 drug interaction table page",
+   "key": "B-R02",
    "activity": "research",
    "language": "en",
-   "what": "saved link: a clinical reference page that is a short introduction and one eight-row table",
+   "what": "drug interaction table page: saved link: a clinical reference page that is a short introduction and one eight-row table",
    "expect": "table",
    "accept": [
     "link"
    ],
    "item": {
-    "id": "formats-B-R02 drug interaction table page",
+    "id": "formats-B-R02",
     "tags": [
      "warfarin",
      "interactions"
@@ -2404,16 +2410,17 @@
    }
   },
   {
-   "key": "B-R03 pasted trial abstract",
+   "key": "B-R03",
    "activity": "research",
    "language": "en",
-   "what": "pasted text: a 1,000-character trial abstract with four headline figures",
+   "what": "pasted trial abstract: pasted text: a 1,000-character trial abstract with four headline figures",
    "expect": "note",
    "accept": [
-    "facts"
+    "facts",
+    "sheet"
    ],
    "item": {
-    "id": "formats-B-R03 pasted trial abstract",
+    "id": "formats-B-R03",
     "tags": [
      "pneumonia",
      "antibiotics",
@@ -2455,14 +2462,14 @@
    }
   },
   {
-   "key": "B-R04 journal article pick",
+   "key": "B-R04",
    "activity": "research",
    "language": "en",
-   "what": "Scout pick from a papers source, medicine",
+   "what": "journal article pick: Scout pick from a papers source, medicine",
    "expect": "reference",
    "accept": [],
    "item": {
-    "id": "formats-B-R04 journal article pick",
+    "id": "formats-B-R04",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -2497,14 +2504,14 @@
    }
   },
   {
-   "key": "B-R05 dataset pick, series by year",
+   "key": "B-R05",
    "activity": "research",
    "language": "en",
-   "what": "Scout pick from a statistics source: consumer price inflation by year",
+   "what": "dataset pick, series by year: Scout pick from a statistics source: consumer price inflation by year",
    "expect": "chart",
    "accept": [],
    "item": {
-    "id": "formats-B-R05 dataset pick, series by year",
+    "id": "formats-B-R05",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -2550,16 +2557,16 @@
    }
   },
   {
-   "key": "B-R06 dataset pick, shares of a whole",
+   "key": "B-R06",
    "activity": "research",
    "language": "en",
-   "what": "Scout pick from a statistics source: where a household budget goes, five shares that sum to 100",
+   "what": "dataset pick, shares of a whole: Scout pick from a statistics source: where a household budget goes, five shares that sum to 100",
    "expect": "breakdown",
    "accept": [
     "chart"
    ],
    "item": {
-    "id": "formats-B-R06 dataset pick, shares of a whole",
+    "id": "formats-B-R06",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -2603,14 +2610,14 @@
    }
   },
   {
-   "key": "B-R07 pasted legal definition",
+   "key": "B-R07",
    "activity": "research",
    "language": "en",
-   "what": "pasted text: one term and its meaning, 230 characters",
+   "what": "pasted legal definition: pasted text: one term and its meaning, 230 characters",
    "expect": "definition",
    "accept": [],
    "item": {
-    "id": "formats-B-R07 pasted legal definition",
+    "id": "formats-B-R07",
     "tags": [
      "law",
      "contract"
@@ -2635,14 +2642,14 @@
    }
   },
   {
-   "key": "B-R08 API documentation page",
+   "key": "B-R08",
    "activity": "research",
    "language": "en",
-   "what": "saved link: a 2,300-character documentation page for one function, with a three-row parameter table and a code sample in the middle",
+   "what": "API documentation page: saved link: a 2,300-character documentation page for one function, with a three-row parameter table and a code sample in the middle",
    "expect": "link",
    "accept": [],
    "item": {
-    "id": "formats-B-R08 API documentation page",
+    "id": "formats-B-R08",
     "tags": [
      "javascript",
      "debounce"
@@ -2691,14 +2698,14 @@
    }
   },
   {
-   "key": "B-R09 pasted mortgage comparison",
+   "key": "B-R09",
    "activity": "research",
    "language": "en",
-   "what": "pasted text: a Markdown table of three mortgage products with one line above it",
+   "what": "pasted mortgage comparison: pasted text: a Markdown table of three mortgage products with one line above it",
    "expect": "table",
    "accept": [],
    "item": {
-    "id": "formats-B-R09 pasted mortgage comparison",
+    "id": "formats-B-R09",
     "tags": [
      "mortgage",
      "quotes"
@@ -2754,14 +2761,14 @@
    }
   },
   {
-   "key": "B-R10 pasted Python function",
+   "key": "B-R10",
    "activity": "research",
    "language": "en",
-   "what": "pasted text: a 14-line Python function with a docstring",
+   "what": "pasted Python function: pasted text: a 14-line Python function with a docstring",
    "expect": "code",
    "accept": [],
    "item": {
-    "id": "formats-B-R10 pasted Python function",
+    "id": "formats-B-R10",
     "tags": [
      "python",
      "mortgage"
@@ -2787,14 +2794,14 @@
    }
   },
   {
-   "key": "B-R11 book pick",
+   "key": "B-R11",
    "activity": "research",
    "language": "en",
-   "what": "Scout pick from a books source, history, with a cover",
+   "what": "book pick: Scout pick from a books source, history, with a cover",
    "expect": "reference",
    "accept": [],
    "item": {
-    "id": "formats-B-R11 book pick",
+    "id": "formats-B-R11",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -2826,14 +2833,14 @@
    }
   },
   {
-   "key": "B-R12 museum object pick",
+   "key": "B-R12",
    "activity": "research",
    "language": "en",
-   "what": "Scout pick from a museum collection: a botanical plate, picture stored",
+   "what": "museum object pick: Scout pick from a museum collection: a botanical plate, picture stored",
    "expect": "artwork",
    "accept": [],
    "item": {
-    "id": "formats-B-R12 museum object pick",
+    "id": "formats-B-R12",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -2864,16 +2871,16 @@
    }
   },
   {
-   "key": "B-R13 web page pick",
+   "key": "B-R13",
    "activity": "research",
    "language": "en",
-   "what": "Scout pick from the web source: a passage of a gardening advice page, with its maker and date",
+   "what": "web page pick: Scout pick from the web source: a passage of a gardening advice page, with its maker and date",
    "expect": "excerpt",
    "accept": [
     "link"
    ],
    "item": {
-    "id": "formats-B-R13 web page pick",
+    "id": "formats-B-R13",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -2900,14 +2907,14 @@
    }
   },
   {
-   "key": "B-R15 民法典居住权解读",
+   "key": "B-R15",
    "activity": "research",
    "language": "zh",
-   "what": "saved link: a 1,500-character Chinese explainer on a civil code provision, quoting one article",
+   "what": "民法典居住权解读: saved link: a 1,500-character Chinese explainer on a civil code provision, quoting one article",
    "expect": "link",
    "accept": [],
    "item": {
-    "id": "formats-B-R15 民法典居住权解读",
+    "id": "formats-B-R15",
     "tags": [
      "民法典",
      "居住权"
@@ -2938,17 +2945,17 @@
    }
   },
   {
-   "key": "B-R16 药品说明书摘录",
+   "key": "B-R16",
    "activity": "research",
    "language": "zh",
-   "what": "pasted text: the dosage section of a medicine leaflet as label and value lines",
+   "what": "药品说明书摘录: pasted text: the dosage section of a medicine leaflet as label and value lines",
    "expect": "facts",
    "accept": [
     "table",
     "list"
    ],
    "item": {
-    "id": "formats-B-R16 药品说明书摘录",
+    "id": "formats-B-R16",
     "tags": [
      "布洛芬",
      "儿童用药"
@@ -2997,14 +3004,14 @@
    }
   },
   {
-   "key": "B-R17 个税税率表",
+   "key": "B-R17",
    "activity": "research",
    "language": "zh",
-   "what": "pasted text: a seven-row tax table copied from a spreadsheet, tab separated",
+   "what": "个税税率表: pasted text: a seven-row tax table copied from a spreadsheet, tab separated",
    "expect": "table",
    "accept": [],
    "item": {
-    "id": "formats-B-R17 个税税率表",
+    "id": "formats-B-R17",
     "tags": [
      "个税",
      "税率"
@@ -3079,14 +3086,14 @@
    }
   },
   {
-   "key": "B-R18 中文论文",
+   "key": "B-R18",
    "activity": "research",
    "language": "zh",
-   "what": "Scout pick from a papers source, Chinese, language study",
+   "what": "中文论文: Scout pick from a papers source, Chinese, language study",
    "expect": "reference",
    "accept": [],
    "item": {
-    "id": "formats-B-R18 中文论文",
+    "id": "formats-B-R18",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -3119,14 +3126,14 @@
    }
   },
   {
-   "key": "B-R19 名词解释",
+   "key": "B-R19",
    "activity": "research",
    "language": "zh",
-   "what": "pasted text: one finance term and its meaning",
+   "what": "名词解释: pasted text: one finance term and its meaning",
    "expect": "definition",
    "accept": [],
    "item": {
-    "id": "formats-B-R19 名词解释",
+    "id": "formats-B-R19",
     "tags": [
      "复利",
      "理财"
@@ -3151,16 +3158,16 @@
    }
   },
   {
-   "key": "B-R20 张居正百科",
+   "key": "B-R20",
    "activity": "research",
    "language": "zh",
-   "what": "saved link: a 1,100-character Chinese encyclopedia page about one historical person",
+   "what": "张居正百科: saved link: a 1,100-character Chinese encyclopedia page about one historical person",
    "expect": "link",
    "accept": [
     "person"
    ],
    "item": {
-    "id": "formats-B-R20 张居正百科",
+    "id": "formats-B-R20",
     "tags": [
      "张居正",
      "明代"
@@ -3209,14 +3216,14 @@
    }
   },
   {
-   "key": "B-R21 高考报名人数",
+   "key": "B-R21",
    "activity": "research",
    "language": "zh",
-   "what": "Scout pick from a statistics source, Chinese: exam entrants by year in 万",
+   "what": "高考报名人数: Scout pick from a statistics source, Chinese: exam entrants by year in 万",
    "expect": "chart",
    "accept": [],
    "item": {
-    "id": "formats-B-R21 高考报名人数",
+    "id": "formats-B-R21",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -3258,16 +3265,16 @@
    }
   },
   {
-   "key": "B-B01 one-line thought",
+   "key": "B-B01",
    "activity": "brainstorming",
    "language": "en",
-   "what": "typed text: a single line of nine words",
+   "what": "one-line thought: typed text: a single line of nine words",
    "expect": "idea",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-B-B01 one-line thought",
+    "id": "formats-B-B01",
     "tags": [
      "car",
      "budget"
@@ -3289,14 +3296,14 @@
    }
   },
   {
-   "key": "B-B02 refinancing, for and against",
+   "key": "B-B02",
    "activity": "brainstorming",
    "language": "en",
-   "what": "typed text: a question with a list for and a list against, 420 characters",
+   "what": "refinancing, for and against: typed text: a question with a list for and a list against, 420 characters",
    "expect": "proscons",
    "accept": [],
    "item": {
-    "id": "formats-B-B02 refinancing, for and against",
+    "id": "formats-B-B02",
     "tags": [
      "mortgage",
      "decision"
@@ -3330,14 +3337,14 @@
    }
   },
   {
-   "key": "B-B03 renovation checklist",
+   "key": "B-B03",
    "activity": "brainstorming",
    "language": "en",
-   "what": "typed text: a tick-box list of seven jobs, three done",
+   "what": "renovation checklist: typed text: a tick-box list of seven jobs, three done",
    "expect": "list",
    "accept": [],
    "item": {
-    "id": "formats-B-B03 renovation checklist",
+    "id": "formats-B-B03",
     "tags": [
      "bathroom",
      "diy"
@@ -3378,16 +3385,16 @@
    }
   },
   {
-   "key": "B-B05 recipe draft",
+   "key": "B-B05",
    "activity": "brainstorming",
    "language": "en",
-   "what": "typed text: a recipe being worked out, with an ingredient list, five numbered steps and a timing, 560 characters",
+   "what": "recipe draft: typed text: a recipe being worked out, with an ingredient list, five numbered steps and a timing, 560 characters",
    "expect": "steps",
    "accept": [
     "list"
    ],
    "item": {
-    "id": "formats-B-B05 recipe draft",
+    "id": "formats-B-B05",
     "tags": [
      "dal",
      "recipe"
@@ -3430,16 +3437,16 @@
    }
   },
   {
-   "key": "B-B06 question and own answer",
+   "key": "B-B06",
    "activity": "brainstorming",
    "language": "en",
-   "what": "typed text: one question and the answer the user settled on",
+   "what": "question and own answer: typed text: one question and the answer the user settled on",
    "expect": "qa",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-B-B06 question and own answer",
+    "id": "formats-B-B06",
     "tags": [
      "sqlite",
      "database"
@@ -3464,14 +3471,14 @@
    }
   },
   {
-   "key": "B-B07 nursery palette",
+   "key": "B-B07",
    "activity": "brainstorming",
    "language": "en",
-   "what": "typed text: four paint colours with hex values",
+   "what": "nursery palette: typed text: four paint colours with hex values",
    "expect": "swatch",
    "accept": [],
    "item": {
-    "id": "formats-B-B07 nursery palette",
+    "id": "formats-B-B07",
     "tags": [
      "nursery",
      "paint"
@@ -3512,14 +3519,14 @@
    }
   },
   {
-   "key": "B-B08 pasted assistant conversation",
+   "key": "B-B08",
    "activity": "brainstorming",
    "language": "en",
-   "what": "pasted text: a four-turn conversation with an assistant about a 10 km training plan",
+   "what": "pasted assistant conversation: pasted text: a four-turn conversation with an assistant about a 10 km training plan",
    "expect": "chat",
    "accept": [],
    "item": {
-    "id": "formats-B-B08 pasted assistant conversation",
+    "id": "formats-B-B08",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -3557,14 +3564,14 @@
    }
   },
   {
-   "key": "B-B10 Scout direction with steps",
+   "key": "B-B10",
    "activity": "brainstorming",
    "language": "en",
-   "what": "Scout-written direction: a paragraph and five steps",
+   "what": "Scout direction with steps: Scout-written direction: a paragraph and five steps",
    "expect": "steps",
    "accept": [],
    "item": {
-    "id": "formats-B-B10 Scout direction with steps",
+    "id": "formats-B-B10",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -3593,16 +3600,16 @@
    }
   },
   {
-   "key": "B-B12 split dump, pricing part",
+   "key": "B-B12",
    "activity": "brainstorming",
    "language": "en",
-   "what": "one of three parts the model split a 1,550-character brain dump into: prices and a target",
+   "what": "split dump, pricing part: one of three parts the model split a 1,550-character brain dump into: prices and a target",
    "expect": "facts",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-B-B12 split dump, pricing part",
+    "id": "formats-B-B12",
     "tags": [
      "tutoring",
      "pricing"
@@ -3639,16 +3646,16 @@
    }
   },
   {
-   "key": "B-B13 split dump, channels part",
+   "key": "B-B13",
    "activity": "brainstorming",
    "language": "en",
-   "what": "one of three parts: four ways to find students written as one sentence, then two more sentences",
+   "what": "split dump, channels part: one of three parts: four ways to find students written as one sentence, then two more sentences",
    "expect": "list",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-B-B13 split dump, channels part",
+    "id": "formats-B-B13",
     "tags": [
      "tutoring",
      "marketing"
@@ -3677,16 +3684,16 @@
    }
   },
   {
-   "key": "B-B14 split dump, open questions part",
+   "key": "B-B14",
    "activity": "brainstorming",
    "language": "en",
-   "what": "one of three parts: open questions with no answers",
+   "what": "split dump, open questions part: one of three parts: open questions with no answers",
    "expect": "note",
    "accept": [
     "list"
    ],
    "item": {
-    "id": "formats-B-B14 split dump, open questions part",
+    "id": "formats-B-B14",
     "tags": [
      "tutoring",
      "legal"
@@ -3708,14 +3715,14 @@
    }
   },
   {
-   "key": "B-B17 library README",
+   "key": "B-B17",
    "activity": "brainstorming",
    "language": "en",
-   "what": "saved link: a 1,900-character repository page with a three-step install in the middle",
+   "what": "library README: saved link: a 1,900-character repository page with a three-step install in the middle",
    "expect": "link",
    "accept": [],
    "item": {
-    "id": "formats-B-B17 library README",
+    "id": "formats-B-B17",
     "tags": [
      "javascript",
      "library"
@@ -3745,16 +3752,16 @@
    }
   },
   {
-   "key": "B-B18 一句话的想法",
+   "key": "B-B18",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "typed text: one line of fourteen characters",
+   "what": "一句话的想法: typed text: one line of fourteen characters",
    "expect": "idea",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-B-B18 一句话的想法",
+    "id": "formats-B-B18",
     "tags": [
      "亲子",
      "菜市场"
@@ -3776,14 +3783,14 @@
    }
   },
   {
-   "key": "B-B19 换工作的利弊",
+   "key": "B-B19",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "typed text: a heading, three points for and three against",
+   "what": "换工作的利弊: typed text: a heading, three points for and three against",
    "expect": "proscons",
    "accept": [],
    "item": {
-    "id": "formats-B-B19 换工作的利弊",
+    "id": "formats-B-B19",
     "tags": [
      "换工作",
      "深圳"
@@ -3817,17 +3824,17 @@
    }
   },
   {
-   "key": "B-B20 装修预算分配",
+   "key": "B-B20",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "typed text: five budget shares in percent that sum to 100",
+   "what": "装修预算分配: typed text: five budget shares in percent that sum to 100",
    "expect": "breakdown",
    "accept": [
     "chart",
     "facts"
    ],
    "item": {
-    "id": "formats-B-B20 装修预算分配",
+    "id": "formats-B-B20",
     "tags": [
      "装修",
      "预算"
@@ -3889,14 +3896,14 @@
    }
   },
   {
-   "key": "B-B21 学琴计划清单",
+   "key": "B-B21",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "typed text: a heading and six things to arrange, no tick marks",
+   "what": "学琴计划清单: typed text: a heading and six things to arrange, no tick marks",
    "expect": "list",
    "accept": [],
    "item": {
-    "id": "formats-B-B21 学琴计划清单",
+    "id": "formats-B-B21",
     "tags": [
      "钢琴",
      "兴趣班"
@@ -3927,14 +3934,14 @@
    }
   },
   {
-   "key": "B-B22 红烧肉做法",
+   "key": "B-B22",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "typed text: a dish, its ingredients on one line and five steps",
+   "what": "红烧肉做法: typed text: a dish, its ingredients on one line and five steps",
    "expect": "steps",
    "accept": [],
    "item": {
-    "id": "formats-B-B22 红烧肉做法",
+    "id": "formats-B-B22",
     "tags": [
      "红烧肉",
      "菜谱"
@@ -3972,14 +3979,14 @@
    }
   },
   {
-   "key": "B-B23 Scout 写的方向",
+   "key": "B-B23",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "Scout-written direction in Chinese: a title and one paragraph, no steps",
+   "what": "Scout 写的方向: Scout-written direction in Chinese: a title and one paragraph, no steps",
    "expect": "note",
    "accept": [],
    "item": {
-    "id": "formats-B-B23 Scout 写的方向",
+    "id": "formats-B-B23",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -4000,14 +4007,14 @@
    }
   },
   {
-   "key": "B-B24 和助手的对话",
+   "key": "B-B24",
    "activity": "brainstorming",
    "language": "zh",
-   "what": "pasted text: a four-turn Chinese conversation with an assistant about choosing an after-school class [parseTranscript returned null: filed as text]",
+   "what": "和助手的对话: pasted text: a four-turn Chinese conversation with an assistant about choosing an after-school class [parseTranscript returned null: filed as text]",
    "expect": "chat",
    "accept": [],
    "item": {
-    "id": "formats-B-B24 和助手的对话",
+    "id": "formats-B-B24",
     "tags": [
      "孩子",
      "游泳"
@@ -4029,14 +4036,14 @@
    }
   },
   {
-   "key": "B-B25 video pick",
+   "key": "B-B25",
    "activity": "brainstorming",
    "language": "en",
-   "what": "Scout video pick: a sourdough shaping demonstration",
+   "what": "video pick: Scout video pick: a sourdough shaping demonstration",
    "expect": "video",
    "accept": [],
    "item": {
-    "id": "formats-B-B25 video pick",
+    "id": "formats-B-B25",
     "tags": [],
     "archived": false,
     "revision": 0,
@@ -4062,14 +4069,14 @@
    }
   },
   {
-   "key": "B-M01 recital photo",
+   "key": "B-M01",
    "activity": "memories",
    "language": "en",
-   "what": "dropped photo: a child at a piano on a school stage",
+   "what": "recital photo: dropped photo: a child at a piano on a school stage",
    "expect": "image",
    "accept": [],
    "item": {
-    "id": "formats-B-M01 recital photo",
+    "id": "formats-B-M01",
     "tags": [
      "piano",
      "concert",
@@ -4095,14 +4102,14 @@
    }
   },
   {
-   "key": "B-M02 match clip",
+   "key": "B-M02",
    "activity": "memories",
    "language": "en",
-   "what": "dropped video: a goal in a children's football match",
+   "what": "match clip: dropped video: a goal in a children's football match",
    "expect": "video",
    "accept": [],
    "item": {
-    "id": "formats-B-M02 match clip",
+    "id": "formats-B-M02",
     "tags": [
      "football",
      "goal"
@@ -4139,14 +4146,16 @@
    }
   },
   {
-   "key": "B-M03 birthday dinner journal entry",
+   "key": "B-M03",
    "activity": "memories",
    "language": "en",
-   "what": "typed text: a 1,000-character journal entry about a family dinner, with one thing the father said",
+   "what": "birthday dinner journal entry: typed text: a 1,000-character journal entry about a family dinner, with one thing the father said",
    "expect": "note",
-   "accept": [],
+   "accept": [
+    "sheet"
+   ],
    "item": {
-    "id": "formats-B-M03 birthday dinner journal entry",
+    "id": "formats-B-M03",
     "tags": [
      "family",
      "birthday"
@@ -4179,16 +4188,16 @@
    }
   },
   {
-   "key": "B-M04 a place and a line about it",
+   "key": "B-M04",
    "activity": "memories",
    "language": "en",
-   "what": "typed text: a place name on the first line and two sentences about a day there; the model writes a descriptive title",
+   "what": "a place and a line about it: typed text: a place name on the first line and two sentences about a day there; the model writes a descriptive title",
    "expect": "place",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-B-M04 a place and a line about it",
+    "id": "formats-B-M04",
     "tags": [
      "whitby",
      "dad"
@@ -4215,16 +4224,16 @@
    }
   },
   {
-   "key": "B-M05 grandmother's recipe from memory",
+   "key": "B-M05",
    "activity": "memories",
    "language": "en",
-   "what": "typed text: a family recipe with an ingredient line, six steps written as sentences, and a memory at the end",
+   "what": "grandmother's recipe from memory: typed text: a family recipe with an ingredient line, six steps written as sentences, and a memory at the end",
    "expect": "steps",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-B-M05 grandmother's recipe from memory",
+    "id": "formats-B-M05",
     "tags": [
      "recipe",
      "nana",
@@ -4265,14 +4274,14 @@
    }
   },
   {
-   "key": "B-M06 something a child said",
+   "key": "B-M06",
    "activity": "memories",
    "language": "en",
-   "what": "typed text: a child's sentence in quotation marks, who said it and where",
+   "what": "something a child said: typed text: a child's sentence in quotation marks, who said it and where",
    "expect": "quote",
    "accept": [],
    "item": {
-    "id": "formats-B-M06 something a child said",
+    "id": "formats-B-M06",
     "tags": [
      "mila",
      "sayings"
@@ -4305,17 +4314,17 @@
    }
   },
   {
-   "key": "B-M07 baby milestones",
+   "key": "B-M07",
    "activity": "memories",
    "language": "en",
-   "what": "typed text: five milestones as label and value lines",
+   "what": "baby milestones: typed text: five milestones as label and value lines",
    "expect": "facts",
    "accept": [
     "list",
     "table"
    ],
    "item": {
-    "id": "formats-B-M07 baby milestones",
+    "id": "formats-B-M07",
     "tags": [
      "leo",
      "milestones"
@@ -4363,16 +4372,16 @@
    }
   },
   {
-   "key": "B-M08 race result",
+   "key": "B-M08",
    "activity": "memories",
    "language": "en",
-   "what": "typed text: one sentence with a finishing time",
+   "what": "race result: typed text: one sentence with a finishing time",
    "expect": "fact",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-B-M08 race result",
+    "id": "formats-B-M08",
     "tags": [
      "running",
      "half marathon"
@@ -4402,14 +4411,14 @@
    }
   },
   {
-   "key": "B-M09 local news page about our concert",
+   "key": "B-M09",
    "activity": "memories",
    "language": "en",
-   "what": "saved link: a 900-character local news report of a choir concert, naming the conductor and the sum raised",
+   "what": "local news page about our concert: saved link: a 900-character local news report of a choir concert, naming the conductor and the sum raised",
    "expect": "link",
    "accept": [],
    "item": {
-    "id": "formats-B-M09 local news page about our concert",
+    "id": "formats-B-M09",
     "tags": [
      "choir",
      "concert",
@@ -4455,14 +4464,14 @@
    }
   },
   {
-   "key": "B-M10 vaccination record",
+   "key": "B-M10",
    "activity": "memories",
    "language": "en",
-   "what": "typed text: a child's vaccinations as a small table with three columns",
+   "what": "vaccination record: typed text: a child's vaccinations as a small table with three columns",
    "expect": "table",
    "accept": [],
    "item": {
-    "id": "formats-B-M10 vaccination record",
+    "id": "formats-B-M10",
     "tags": [
      "ella",
      "vaccinations"
@@ -4522,14 +4531,14 @@
    }
   },
   {
-   "key": "B-M11 pasted family group chat",
+   "key": "B-M11",
    "activity": "memories",
    "language": "en",
-   "what": "pasted text: eight lines of a family message thread, names before each line",
+   "what": "pasted family group chat: pasted text: eight lines of a family message thread, names before each line",
    "expect": "note",
    "accept": [],
    "item": {
-    "id": "formats-B-M11 pasted family group chat",
+    "id": "formats-B-M11",
     "tags": [
      "family",
      "photo"
@@ -4560,14 +4569,14 @@
    }
   },
   {
-   "key": "B-M13 one remembered figure",
+   "key": "B-M13",
    "activity": "memories",
    "language": "en",
-   "what": "typed text: a label, a colon and a measurement",
+   "what": "one remembered figure: typed text: a label, a colon and a measurement",
    "expect": "fact",
    "accept": [],
    "item": {
-    "id": "formats-B-M13 one remembered figure",
+    "id": "formats-B-M13",
     "tags": [
      "leo",
      "birth"
@@ -4599,14 +4608,14 @@
    }
   },
   {
-   "key": "B-M15 photo of a handwritten recipe card",
+   "key": "B-M15",
    "activity": "memories",
    "language": "en",
-   "what": "dropped photo: a handwritten card, whose words the model reads out",
+   "what": "photo of a handwritten recipe card: dropped photo: a handwritten card, whose words the model reads out",
    "expect": "image",
    "accept": [],
    "item": {
-    "id": "formats-B-M15 photo of a handwritten recipe card",
+    "id": "formats-B-M15",
     "tags": [
      "recipe",
      "chutney",
@@ -4641,17 +4650,17 @@
    }
   },
   {
-   "key": "B-M23 places we lived",
+   "key": "B-M23",
    "activity": "memories",
    "language": "en",
-   "what": "typed text: a heading and five lines, each a span of years and a town",
+   "what": "places we lived: typed text: a heading and five lines, each a span of years and a town",
    "expect": "list",
    "accept": [
     "table",
     "facts"
    ],
    "item": {
-    "id": "formats-B-M23 places we lived",
+    "id": "formats-B-M23",
     "tags": [
      "homes",
      "family"
@@ -4681,14 +4690,14 @@
    }
   },
   {
-   "key": "B-M16 过年日记",
+   "key": "B-M16",
    "activity": "memories",
    "language": "zh",
-   "what": "typed text: a 420-character journal entry about New Year at grandmother's house",
+   "what": "过年日记: typed text: a 420-character journal entry about New Year at grandmother's house",
    "expect": "note",
    "accept": [],
    "item": {
-    "id": "formats-B-M16 过年日记",
+    "id": "formats-B-M16",
     "tags": [
      "过年",
      "外婆"
@@ -4722,16 +4731,16 @@
    }
   },
   {
-   "key": "B-M17 一个地名和一句话",
+   "key": "B-M17",
    "activity": "memories",
    "language": "zh",
-   "what": "typed text: a city name on the first line and one sentence about living there; the model keeps the name as the title",
+   "what": "一个地名和一句话: typed text: a city name on the first line and one sentence about living there; the model keeps the name as the title",
    "expect": "place",
    "accept": [
     "note"
    ],
    "item": {
-    "id": "formats-B-M17 一个地名和一句话",
+    "id": "formats-B-M17",
     "tags": [
      "绍兴",
      "童年"
@@ -4755,14 +4764,14 @@
    }
   },
   {
-   "key": "B-M18 孩子说的话",
+   "key": "B-M18",
    "activity": "memories",
    "language": "zh",
-   "what": "typed text: a child's sentence in quotation marks, with who and when",
+   "what": "孩子说的话: typed text: a child's sentence in quotation marks, with who and when",
    "expect": "quote",
    "accept": [],
    "item": {
-    "id": "formats-B-M18 孩子说的话",
+    "id": "formats-B-M18",
     "tags": [
      "豆豆",
      "童言"
@@ -4792,14 +4801,14 @@
    }
   },
   {
-   "key": "B-M19 全家福",
+   "key": "B-M19",
    "activity": "memories",
    "language": "zh",
-   "what": "dropped photo: a family portrait, described in Chinese",
+   "what": "全家福: dropped photo: a family portrait, described in Chinese",
    "expect": "image",
    "accept": [],
    "item": {
-    "id": "formats-B-M19 全家福",
+    "id": "formats-B-M19",
     "tags": [
      "全家福",
      "春节"
@@ -4829,14 +4838,14 @@
    }
   },
   {
-   "key": "B-M20 奶奶的腌萝卜",
+   "key": "B-M20",
    "activity": "memories",
    "language": "zh",
-   "what": "typed text: a family pickle method in four steps, with a remark at the end",
+   "what": "奶奶的腌萝卜: typed text: a family pickle method in four steps, with a remark at the end",
    "expect": "steps",
    "accept": [],
    "item": {
-    "id": "formats-B-M20 奶奶的腌萝卜",
+    "id": "formats-B-M20",
     "tags": [
      "腌萝卜",
      "奶奶"
@@ -4868,16 +4877,16 @@
    }
   },
   {
-   "key": "B-M21 爸爸的体检指标",
+   "key": "B-M21",
    "activity": "memories",
    "language": "zh",
-   "what": "typed text: eight check-up readings as label and value lines",
+   "what": "爸爸的体检指标: typed text: eight check-up readings as label and value lines",
    "expect": "facts",
    "accept": [
     "table"
    ],
    "item": {
-    "id": "formats-B-M21 爸爸的体检指标",
+    "id": "formats-B-M21",
     "tags": [
      "体检",
      "爸爸"
