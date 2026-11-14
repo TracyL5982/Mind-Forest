@@ -68,7 +68,8 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
   // ---- museums
 
   type Museum = (query: string, max: number) => Promise<Found[]>;
-  const work = (title: string, by: string, date: string, medium: string, from: string, url: string, image: string): Found => ({ title, by, date, text: medium, from, url, image });
+  const work = (title: string, by: string, date: string, medium: string, holder: string, url: string, image: string): Found =>
+    ({ title, by, date, text: medium, from: holder, url, image, kind: 'artwork', holder, ...(medium ? { medium } : {}) });
 
   const chicago: Museum = async (query, max) => {
     const json = await ask(`https://api.artic.edu/api/v1/artworks/search?q=${q(query)}&limit=${max}&fields=id,title,artist_title,date_display,medium_display,image_id`);
@@ -122,13 +123,17 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     query: 'Three to six words a paper on this would have in its title or abstract.',
     show: 2,
     async search(query) {
-      const json = await ask(`https://api.openalex.org/works?search=${q(query)}&filter=cited_by_count:>10&per-page=8&select=id,doi,title,publication_year,authorships,abstract_inverted_index,cited_by_count`);
+      const json = await ask(`https://api.openalex.org/works?search=${q(query)}&filter=cited_by_count:>10&per-page=8&select=id,doi,title,publication_year,authorships,primary_location,abstract_inverted_index,cited_by_count`);
       return list(json.results).map((w): Found => {
         const words: string[] = [];
         for (const [word, places] of Object.entries((w.abstract_inverted_index ?? {}) as Record<string, number[]>)) for (const at of places) words[at] = word;
         const authors = list(w.authorships).map((a) => str(a.author?.display_name)).filter(Boolean);
         const cited = Number(w.cited_by_count) || 0;
+        const venue = str(w.primary_location?.source?.display_name);
         return {
+          kind: 'paper',
+          ...(authors.length > 0 ? { authors } : {}),
+          ...(venue ? { venue } : {}),
           title: plain(str(w.title)),
           by: authors.length > 2 ? `${authors[0]} et al.` : authors.join(' and '),
           date: str(w.publication_year),
@@ -151,6 +156,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
       // One request per search. Asking for each book's own page as well got this client refused.
       const json = await ask(`https://openlibrary.org/search.json?q=${q(query)}&limit=${PER_SEARCH}&fields=key,title,subtitle,author_name,first_publish_year,cover_i,first_sentence,subject`);
       return list(json.docs).map((b): Found => ({
+        kind: 'book', ...(list(b.author_name).length > 0 ? { authors: list(b.author_name).map(str).filter(Boolean) } : {}),
         title: [str(b.title), str(b.subtitle)].filter(Boolean).join(': '), by: list(b.author_name).slice(0, 2).join(' and '), date: str(b.first_publish_year),
         text: [list(b.first_sentence).map(str)[0] ?? '', list(b.subject).length > 0 ? `Subjects: ${list(b.subject).slice(0, 8).join(', ')}.` : ''].filter(Boolean).join('\n'),
         url: `https://openlibrary.org${str(b.key)}`,

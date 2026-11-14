@@ -67,6 +67,16 @@ export interface Found {
   media?: string;
   steps?: string[];
   chart?: { labels: string[]; values: number[]; unit?: string };
+  /** What kind of thing the record is, when its source knows. */
+  kind?: 'artwork' | 'paper' | 'book';
+  /** What a work is made of, as its holder catalogues it. */
+  medium?: string;
+  /** The museum or collection that holds a work. */
+  holder?: string;
+  /** Every author in order. `by` may shorten them. */
+  authors?: string[];
+  /** The journal, conference or repository a paper appeared in. */
+  venue?: string;
 }
 
 /** A video that can be played inside a client. */

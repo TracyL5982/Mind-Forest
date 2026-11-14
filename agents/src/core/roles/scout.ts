@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Command, Id, Item, Node } from '../domain.ts';
+import type { Command, Id, Item, ItemData, Node } from '../domain.ts';
 import type { Found, Source } from '../ports.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
@@ -354,6 +354,7 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
                 by: record.by,
                 date: record.date,
                 from: record.from ?? source.name,
+                ...catalogued(record),
                 ...(record.chart ? { chart: record.chart } : {}),
                 ...(record.steps && !picture ? { steps: record.steps } : {}),
                 ...(record.media ? { mediaUrl: record.media, ...(record.image ? { thumbnailUrl: record.image } : {}) } : {}),
@@ -393,6 +394,17 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
     default:
       return [];
   }
+}
+
+/** What a source's catalogue says about a record, as `item.data` keys a card can draw. */
+export function catalogued(record: Found): ItemData {
+  return {
+    ...(record.kind ? { kind: record.kind } : {}),
+    ...(record.medium ? { medium: record.medium } : {}),
+    ...(record.holder ? { holder: record.holder } : {}),
+    ...(record.authors?.length ? { authors: record.authors } : {}),
+    ...(record.venue ? { venue: record.venue } : {}),
+  };
 }
 
 const Chosen = z.object({ chosen: z.array(z.object({ number: z.number(), note: z.string(), excerpt: z.string() })) });
