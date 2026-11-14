@@ -49,6 +49,35 @@ python3 scripts/clips/build.py
 
 Each loop is the first 4 seconds of its full clip, frame for frame, and its last half second blends back into its start so it cycles seamlessly. Opening a dot starts the full clip at the loop's current moment and crossfades once that frame is on screen.
 
+## Works
+
+The visionOS ocean also holds about 750 museum works, gathered around the ideas the films carry ("Watching unseen", "The double") and some of their own ("Before cinema", "Masks"), so a film and a painting can stand under one tag. They come from the open collections of the Met, the V&A, the Art Institute of Chicago and the Cleveland Museum of Art (through their APIs, no key) and from MoMA's published dataset. Like the clips, this is for an academic, non-public demo: MoMA's pictures in particular are mostly in copyright. Each step keeps what it fetched, so a second run asks for nothing twice:
+
+```bash
+python3 scripts/works/moma.py
+```
+
+```bash
+python3 scripts/works/gather.py
+```
+
+```bash
+python3 scripts/works/pick.py
+```
+
+```bash
+python3 scripts/works/fetch.py
+```
+
+```bash
+python3 scripts/works/build.py
+```
+
+- `themes.py`: the themes, with the searches put to each museum. `gather.py` writes every answer to `media-src/works/candidates.json`. It paces itself per museum; the Met refuses a client that asks faster than a few times a second, and the script then leaves it and says what is still to ask (`--src met` asks one museum only).
+- `pick.py` chooses the works (`selection.json`): themes take turns and each takes from the museum that has had the least, a candidate must really match its theme, and no maker or series fills one. The same print kept by two museums counts once, and a work whose picture is already on disk is preferred, so a new run changes little. Ids listed in `exclude.txt` are left out (by `build.py` too, so removing a few needs no new pick). `sheet.py` makes a contact sheet per theme (`media-src/works/sheets/`) to look the choice over.
+- `fetch.py` asks for each picture near the size it is kept, turns it into a HEIC of at most 1600 px (about 140 KB, good enough to look into closely; 750 come to about 105 MB) and deletes the download at once. Pictures that turn out too small or too long and thin are marked, and the next `pick.py` chooses others.
+- `build.py` writes `public/works/`: `works.json` (every work with what its museum knows of it, and the tags: themes, makers, kinds, places, and the museums' own subjects where several works share one), `atlas.jpg` (every work small, for the ocean) beside `full/<id>.heic`. `norm.py` puts the five museums' wording into one vocabulary.
+
 ## Code map
 
 | File | What it does |
