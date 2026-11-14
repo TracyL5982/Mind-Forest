@@ -255,11 +255,11 @@ A figure is set in one of three sizes, each with its line height in px, its lett
 
 ### Fixed words
 
-A card draws a few words that are not the item's own. Each has an English and a Chinese form. A card uses the Chinese forms when `item.title` and `item.text`, joined by a line feed, hold at least one Han character (Unicode script Han) and no more of the letters `A` to `Z` and `a` to `z` than Han characters, and the English forms otherwise. A missing title or text counts as empty. A footprint is worked out with the same words the card draws, so `title` below and a reference's line of authors are counted in the card's own language.
+A card draws a few words that are not the item's own. Each has an English and a Chinese form. A card uses the Chinese forms when `item.title` and `item.text`, joined by a line feed, hold at least one Han character (Unicode script Han) and no more of the letters `A` to `Z` and `a` to `z` than Han characters, and the English forms otherwise. Web addresses and hex colours are taken out before the count, because they are written in Latin letters in any language: each match of `\b(?:https?:\/\/|www\.)\S*|#[0-9A-Fa-f]{3,8}\b` is replaced by a space. Digits are never counted. A missing title or text counts as empty. A footprint is worked out with the same words the card draws, so `title` below and a reference's line of authors are counted in the card's own language.
 
 | Where | English | Chinese |
 |---|---|---|
-| The title of an item that has none | `Untitled` | `未命名` |
+| The title of an item that has none, on the card and the opened card | `Untitled` | `未命名` |
 | Under the rows a card shows, when it holds N more | `and N more` | `还有 N 项` |
 | Under a table that leaves out R rows | `and R more rows`, `and 1 more row` | `还有 R 行` |
 | Under a table that leaves out C columns | `and C more columns`, `and 1 more column` | `还有 C 列` |

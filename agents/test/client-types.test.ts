@@ -222,6 +222,9 @@ test('a card draws its fixed words in Chinese when its item is written in Chines
   assert.equal(wordsOf({ title: 'Packing', text: '' }).moreOf(1, 2), 'and 1 more row, 2 more columns');
   assert.equal(wordsOf({ title: 'Quest 3 的定位', text: '' }).untitled, 'Untitled', 'more Latin letters than Han characters is English');
   assert.equal(wordsOf({ title: 'AI 记忆宫殿', text: '' }).untitled, '未命名');
+  const palette = '雾蓝 #A9BCCF\n米白 #FAF7EF\n胡桃 #8B5A2B\n墨绿 #2F4F3E\n砖红 #B5523B\n燕麦 #DCCFB8\n石灰 #C9C5BA\n深棕 #4E3B2A';
+  assert.equal(wordsOf({ title: '客厅配色', text: palette }).more(2), '还有 2 项', 'the letters of a hex colour are not English');
+  assert.equal(wordsOf({ title: '', text: '读书笔记 https://example.com/books/the-poetics-of-space-by-gaston-bachelard' }).untitled, '未命名', 'nor are a web address');
   assert.equal(wordsOf({ title: '', text: '' }).untitled, 'Untitled');
   assert.equal(wordsOf({}).untitled, 'Untitled');
   const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Kind> };

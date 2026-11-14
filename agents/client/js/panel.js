@@ -1,6 +1,7 @@
 import { h, put, safeUrl } from './dom.js';
 import { chipSources } from './chips.js';
 import { drawDetail } from './components/index.js';
+import { titleOf } from './components/shared.js';
 import { leftover } from './said.js';
 
 const HOW = { paste: 'You pasted this', drop: 'You dropped this in', voice: 'You said this', link: 'A link you added', web: 'Found on the web', instagram: 'Found on Instagram', 'image-gen': 'Made for you as a picture', idea: 'An idea from the librarian' };
@@ -102,7 +103,7 @@ export class Panel {
     const detail = this.editing ? [] : [drawDetail(node, item, { asset: this.asset })].flat(Infinity).filter((part) => part !== null && part !== undefined && part !== false && part !== '');
     const { summary, text } = leftover(item, [item.title, ...detail.flatMap(written), ...sources.map((source) => source.text)]);
     const parts = this.editing ? [this.editForm(item)] : [
-      h('h2', { class: 'panel-title', dir: 'auto', text: item.title || 'Untitled' }),
+      h('h2', { class: 'panel-title', dir: 'auto', text: titleOf(item) }),
       node.why && h('p', { class: `panel-why ${pick ? 'is-pick' : ''}` }, h('span', { text: 'Why it is here' }), node.why),
       detail,
       summary && h('p', { class: 'panel-summary', dir: 'auto', text: summary }),

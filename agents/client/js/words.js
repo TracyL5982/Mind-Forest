@@ -62,17 +62,20 @@ const WORDS = {
 
 const HAN = /\p{Script=Han}/gu;
 const LATIN = /[A-Za-z]/g;
+/** Web addresses and hex colours are written in Latin letters whatever the language around them, so they are not counted. */
+const NOT_WORDS = /\b(?:https?:\/\/|www\.)\S*|#[0-9A-Fa-f]{3,8}\b/g;
 const sets = new WeakMap();
 
 /**
- * The words for an item's card: Chinese when its title and text together hold a Han character and
- * no more Latin letters than Han characters, and English otherwise.
+ * The words for an item's card: Chinese when its title and text together, without web addresses
+ * and hex colours, hold a Han character and no more Latin letters than Han characters, and English
+ * otherwise.
  */
 export function wordsOf(item) {
   if (!item || typeof item !== 'object') return WORDS.en;
   let words = sets.get(item);
   if (!words) {
-    const written = `${typeof item.title === 'string' ? item.title : ''}\n${typeof item.text === 'string' ? item.text : ''}`;
+    const written = `${typeof item.title === 'string' ? item.title : ''}\n${typeof item.text === 'string' ? item.text : ''}`.replace(NOT_WORDS, ' ');
     const han = written.match(HAN)?.length ?? 0;
     words = han > 0 && (written.match(LATIN)?.length ?? 0) <= han ? WORDS.zh : WORDS.en;
     sets.set(item, words);
