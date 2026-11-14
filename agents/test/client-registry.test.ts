@@ -53,6 +53,7 @@ test('a width is counted in whole tenths of a letter, and a joined emoji counts 
   assert.equal(span('中あ한'), 18 + 18 + 18, 'at the text size');
   assert.equal(span('中あ한', TITLE_LETTER), 17 + 18 + 17, 'at the title size');
   assert.equal(span('中あ한', QUOTE_LETTER), 21 + 21 + 21, 'in a quote');
+  assert.equal(span('中あ한', 210), 16 + 16 + 16, 'in a fact value');
   assert.equal(span('Quote', QUOTE_LETTER), span('Quote'), 'only the widest characters differ by face');
   assert.equal(span('🎉'), 22);
   assert.equal(span('👨‍👩‍👧‍👦'), 22);
@@ -64,6 +65,18 @@ test('a width is counted in whole tenths of a letter, and a joined emoji counts 
     const made = Array.from({ length: 1 + (i % 40) }, (_, k) => [...alphabet][(i * 7 + k * 13) % 25]).join('');
     assert.ok(Number.isInteger(span(made)), made);
   }
+});
+
+test('a fact value takes the largest size its digits fit at, and is never given less room than it draws in', async () => {
+  const { COMPONENTS } = await load('components/index.js');
+  const size = (value: string) => COMPONENTS.fact.size({ title: '' }, { value, label: '' }) as [number, number];
+  const height = (lead: number, lines = 1) => 40 + lead * lines;
+  assert.deepEqual(size('1234567890123'), [313, height(36)], 'thirteen digits at 21.48 px each fit the largest size');
+  assert.deepEqual(size('12345678901234'), [244, height(28)], 'fourteen step down once');
+  assert.deepEqual(size('1234567890123456789'), [320, height(28)], 'nineteen at 15.06 px each still fit the middle size');
+  assert.deepEqual(size('12345678901234567890'), [234, height(21)], 'twenty step down again');
+  assert.deepEqual(size('1234567890123456789012345678'), [314, height(21)]);
+  assert.deepEqual(size('12345678901234567890123456789'), [320, height(21, 2)], 'past one line at the smallest size it wraps');
 });
 
 test('a string cut to a width keeps whole characters and fits the width', async () => {

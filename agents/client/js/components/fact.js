@@ -7,18 +7,24 @@ const COLUMN = WIDE - SIDES;
 const RULE = 10;
 /**
  * The sizes a value can be set in, largest first: the class that sets it, its line height in px,
- * and one letter in tenths of a px. A letter here is the widest any one character runs, because a
- * figure cut short would mislead.
+ * one letter in tenths of a px, and one digit in hundredths of a px. A letter here is the widest
+ * any one character runs, because a figure cut short would mislead. Digits are all one width, so
+ * each is counted at exactly that.
  */
-const STEPS = [['', 36, 210], ['is-mid', 28, 149], ['is-small', 21, 99]];
+const STEPS = [['', 36, 210, 2148], ['is-mid', 28, 149, 1506], ['is-small', 21, 105, 1001]];
+const DIGIT = 11;
+
+/** A value's width on one line in hundredths of a px. */
+const need = (value, letter, digit) => span(value, letter) * letter - (value.match(/[0-9]/g)?.length ?? 0) * (DIGIT * letter - digit);
 
 /** A value takes the largest size that holds it on one line. Past the smallest, it wraps to two. */
 function plan(item, props) {
   const value = text(props.value) || '–';
   const label = text(props.label);
-  const [cls, lead, letter] = STEPS.find((step) => span(value) * step[2] <= COLUMN * 100) ?? STEPS.at(-1);
-  const lines = fold(value, COLUMN, letter, 2);
-  const valueWidth = lines > 1 ? COLUMN : up(span(value) * letter, 100);
+  const fits = STEPS.find((step) => need(value, step[2], step[3]) <= COLUMN * 100);
+  const [cls, lead, letter, digit] = fits ?? STEPS.at(-1);
+  const lines = fits ? 1 : fold(value, COLUMN, letter, 2);
+  const valueWidth = lines > 1 ? COLUMN : up(need(value, letter, digit), 100);
   const width = clamp(SIDES + Math.max(valueWidth, textWidth(label)), NARROW, WIDE);
   return {
     value, label, width, cls, lines,
