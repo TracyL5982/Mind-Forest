@@ -27,17 +27,18 @@ A group is `{ id, treeId, anchor, composite, title, members, props }`. `anchor` 
 - Amber is also the three dots on a card the agents are working on. Teal is the links between cards, and the ring on the card that a dragged card would land under.
 - A small label in capitals names what the look alone cannot: a group frame's kind, a code card's language when it is known, and where a chat came from. A clip is named by its play mark and a chat by its bubbles, so neither carries a label for its type.
 - A group frame is a faint wash and a hairline.
-- The field draws a pick at 0.86 of its footprint and the first card of a tree at 1.12.
+- The field draws a pick at 0.86 of its footprint and the first card of a tree at 1.12. Every other card is drawn at 1. A selected card keeps its scale. Selecting adds a ring outside the card and changes no size.
+- A card's drawn size is its footprint times its scale, kept as a fraction: a 240 by 51 pick is 206.4 by 43.86. Layout works on drawn sizes and card centres in IEEE doubles and rounds nothing on the way, so equal footprints give equal positions. The web client rounds once, when it writes a card's top-left corner to the page, to one decimal place of a px. The one exception is inside a gallery, a cluster and an opened stack, where the cell sizes are rounded up as that section says.
 
 ## How a card's footprint is worked out
 
 A second client must give every card the same footprint as the web client, because the field is laid out from footprints alone. This section is the whole rule. `test/footprints.json` holds sample cards with the footprint each must get. `npm test` checks the web client against it, and a second client should run the same file through its own code.
 
-All arithmetic is in whole numbers. `up(a, b)` is `a / b` rounded up. `clamp(v, lo, hi)` holds `v` between `lo` and `hi`. A prop that is not a string counts as an empty string. A card whose component is unknown is sized as a note with no props.
+All arithmetic is in whole numbers. `up(a, b)` is `a / b` rounded up. `clamp(v, lo, hi)` holds `v` between `lo` and `hi`. A prop that is not a string counts as an empty string. A prop "is set" when it is a string that is not empty, so a string of spaces is set. A card whose component is unknown is sized as a note with no props.
 
 ### The width of a string
 
-`span(str)` is the string's width in tenths of an average lowercase letter. Walk the string by code point and add each code point's tenths from the table. The first row that holds the code point wins. A code point in no row counts 10. A code point that comes directly after U+200D counts 0, so a joined emoji counts once.
+`span(str, face)` is the string's width in tenths of an average lowercase letter, in one of four faces: the title, the text, the quote's serif, and a fact's value. Walk the string by code point and add each code point's tenths from the table. The last two rows count differently in each face, because those characters are as wide as the type is tall while the letter differs. Every other row counts the same in all four. The first row that holds the code point wins. A code point in no row counts 10. A code point that comes directly after U+200D counts 0, so a joined emoji counts once.
 
 | Code points | Tenths | What they are |
 |---|---|---|
@@ -52,14 +53,15 @@ All arithmetic is in whole numbers. `up(a, b)` is `a / b` rounded up. `clamp(v, 
 | U+2190 to 2BFF | 22 | Arrows and symbols |
 | U+1F1E6 to 1F1FF | 11 | Regional indicators. Two draw one flag. |
 | U+1F000 to 1FAFF | 22 | Emoji |
-| U+2E80 to 10FFFF | 20 | Han, kana, hangul, full-width forms, and everything above them |
+| U+3040 to 30FF | title 18, text 18, quote 21, fact value 16 | Kana |
+| U+2E80 to 10FFFF | title 17, text 18, quote 21, fact value 16 | Han, hangul, full-width forms, and everything above them |
 
-One letter is `TITLE_LETTER = 93` tenths of a px at the title size, `TEXT_LETTER = 72` at the text size, and 80 in a quote's serif. `span(str) * letter` is a width in hundredths of a px.
+One letter is `TITLE_LETTER = 93` tenths of a px in the title face, `TEXT_LETTER = 72` in the text face, and `QUOTE_LETTER = 78` in the quote face. A fact's value has a letter for each of its three sizes, given under fact, and all three use the fact value face. `span(str, face) * letter` is a width in hundredths of a px. Below, a `fold` with a letter of 93 counts in the title face, 72 in the text face and 78 in the quote face.
 
 `fold(str, width, letter, max)` is how many lines a string is given in a column `width` px wide:
 
 ```
-need = span(str) * letter
+need = span(str, face) * letter
 room = width * 100
 fold = 1                                          when need <= room
 fold = clamp(up(need, room - 20 * letter), 1, max)  otherwise
@@ -82,9 +84,9 @@ The `20 * letter` allows two letters a line for breaking between words. A string
 `title` below is `item.title`, or `Untitled` when that is empty.
 
 - **note.** Width 240. `titleLines = fold(title, 207, 93, 2)`. The body is `item.summary`, else `item.text`, and is left out when it is empty or equal to `item.title`. `bodyLines = fold(body, 207, 72, 2)` when `props.emphasis` is set and `fold(body, 207, 72, 3)` when it is not. Height is `30 + 21 * titleLines`, plus 23 when `props.emphasis` is set, plus `6 + 17 * bodyLines` when there is a body.
-- **quote.** Width 288. The words are `props.text`, else `item.text`, else `item.title`. `lines = fold(words, 247, 80, 5)`. Height is `52 + 21 * lines`, plus 25 when `props.by` is set.
-- **fact.** The value is `props.value`, or `–` (U+2013) when that is empty. It is set in the first of three sizes whose letter fits it on one line of 287 px, which is `span(value) * letter <= 28700`. The sizes are a line height of 36 with a letter of 210, 28 with 149, and 21 with 99. When none fits, it takes the last size and `valueLines = fold(value, 287, 99, 2)`. Otherwise `valueLines = 1`. `valueWidth` is 287 when `valueLines` is 2 and `up(span(value) * letter, 100)` otherwise. `labelWidth = up(span(props.label) * 72, 100)`. Width is `clamp(33 + max(valueWidth, labelWidth), 200, 320)`. `labelLines = fold(props.label, width - 33, 72, 2)`, or 0 with no label. The foot is `item.title` when it is not empty and differs from the value and from the label. Height is `40 + valueLines * lineHeight + 17 * labelLines`, plus 25 when there is a foot. A value's letter is the widest any one character runs, so a value is never cut before two lines at the smallest size.
-- **image.** Width 240. The picture is `clamp(round(240 / aspect), 130, 260)` px tall, where `aspect` is `Number(props.aspect)`, or 1.35 when that is zero or not a number, the division is in IEEE doubles, and `round` is `floor(x + 0.5)`. The caption is `props.caption`, else `item.title`. `captionLines = fold(caption, 207, 72, 2)`, or 0 with no caption. Height is the picture plus 2, plus `19 + 17 * captionLines` when there is a caption.
+- **quote.** Width 288. The words are `props.text`, else `item.text`, else `item.title`. `lines = fold(words, 247, 78, 5)`. Height is `52 + 21 * lines`, plus 25 when `props.by` is set. When the words draw in fewer lines than they were given, the spare room sits between the words and the speaker.
+- **fact.** The value is `props.value`, or `–` (U+2013) when that is empty. It is set in the first of three sizes that fits it on one line of 287 px. The sizes are a line height of 36 with a letter of 210 and a digit of 2148, 28 with 149 and 1506, and 21 with 105 and 1001. A digit is the drawn width of each of `0` to `9` in hundredths of a px, and replaces the 11 tenths the table gives it: `need = span(value, fact value) * letter - digits * (11 * letter - digit)`, where `digits` is how many of `0` to `9` the value holds. A size fits when `need <= 28700`. When none fits, it takes the last size and `valueLines = fold(value, 287, 105, 2)`, which counts in the fact value face and counts a digit as the table does. Otherwise `valueLines = 1`. `valueWidth` is 287 when `valueLines` is 2 and `up(need, 100)` at the size taken otherwise. `labelWidth = up(span(props.label, text) * 72, 100)`. Width is `clamp(33 + max(valueWidth, labelWidth), 200, 320)`. `labelLines = fold(props.label, width - 33, 72, 2)`, or 0 with no label. The foot is `item.title` when it is not empty and differs from the value and from the label. Height is `40 + valueLines * lineHeight + 17 * labelLines`, plus 25 when there is a foot. A value's letter is the widest any one character other than a digit runs, and digits are all one width, so a value is never cut before two lines at the smallest size.
+- **image.** Width 240. The picture is `clamp(round(240 / aspect), 130, 260)` px tall, where `aspect` is `Number(props.aspect)`, or 1.35 when that is zero or not a number, the division is in IEEE doubles, and `round` is `floor(x + 0.5)`. The caption is `props.caption`, else `item.title` as written, so an empty title gives no caption and never `Untitled`. `captionLines = fold(caption, 207, 72, 2)`, or 0 with no caption. Height is the picture plus 2, plus `19 + 17 * captionLines` when there is a caption.
 - **video.** Width 272. The poster is 153 px tall. The caption is as for image, with `captionLines = fold(caption, 239, 72, 2)`. Height is 155, plus `19 + 17 * captionLines` when there is a caption.
 - **link.** Width is 316 when `props.image` is set and 272 when it is not. The text column is 187 px with a picture and 239 without. `titleLines = fold(title, column, 93, 2)`. The description is `props.description`, else `item.summary`. `aboutLines = fold(description, column, 72, 2)`, or 0 with none. `main = 21 * titleLines`, plus `4 + 17 * aboutLines` when there is a description. Height is `56 + main`, and at least 120 with a picture.
 - **chart.** 300 by 195, or 300 by 212 when `props.unit` is set.
@@ -156,7 +158,7 @@ A web page preview.
 
 - **Chosen when** `item.data.chart` holds at least two labels and as many values, or the model finds several comparable numbers in a text item.
 - **Props.** `chart`: `bar` or `line`. `labels`. `values`. `unit?`. `mark?`: index of a bar or point to call out, not set today.
-- **Drawn as** bars or a line over gridlines, with a scale down the left side. Numbers on the scale and on the plot are written short, to three figures, such as `1.61M` and `0.004`. The marked bar or point is brighter and always carries its value. On a card every value is written when there are six or fewer and each fits above its own bar or point. When the labels do not fit side by side, every nth label is written, the marked, first and last ones before the rest, and a label longer than 44 px may be cut. The opened card writes every value that fits on the plot, and when the plot had to thin, cut or round anything it adds a table of every label with its full value. With no values the card says `No data`.
+- **Drawn as** bars or a line over gridlines, with a scale down the left side. Numbers on the scale and on the plot are written short, to three figures, such as `1.61M` and `0.004`. The marked bar or point is brighter and always carries its value. On a card every value is written when there are six or fewer and each fits above its own bar or point. With six bars or points or fewer, every label is written, cut to the width of one bar's step less 6 px. With more, when the labels do not fit side by side, every nth label is written, the marked, first and last ones before the rest, and a label longer than 44 px may be cut. The opened card writes every value that fits on the plot, and when the plot had to thin, cut or round anything it adds a table of every label with its full value. With no values the card says `No data`.
 - **Item holds.** `data.chart = { labels, values, unit? }`, or the numbers inside `text`.
 
 The chart is a `line` when every label is a year or a full date and they ascend. Otherwise it is a `bar`.
@@ -173,7 +175,7 @@ A short excerpt of a conversation.
 
 - **Chosen when** the item's kind is `chat` and `data.messages` holds at least one message with text.
 - **Props.** `messages`: at most 4 of `{ role, text }`, each cut to 280 characters, in conversation order. `source?`: where the chat came from, such as `claude`.
-- **Drawn as** the title on its own line, the first 3 messages as bubbles of at most two lines, and the source below them.
+- **Drawn as** the title on its own line, the first 3 messages as bubbles of at most two lines, and the source below them. The opened card shows up to 40 messages in full and the source below them.
 - **Item holds.** `data.messages = [{ role, text }]`.
 
 The excerpt is the first user message, the longest assistant reply, and the user message just before that reply. System messages are left out.
@@ -216,7 +218,7 @@ Pictures and clips side by side.
 
 - **Chosen when** 3 or more siblings are drawn as `image` or `video`. Plain code.
 - **Props.** `columns?`: not set today. The client lays out.
-- **Drawn as** rows of equal columns. Each card sits at the top of its cell, and each cell starts on a whole px. A cluster and an opened stack are laid out the same way.
+- **Drawn as** rows of equal columns. A column is as wide as the widest member's drawn width, rounded up to a whole px. A row is as tall as its tallest member's drawn height, rounded up. Each card sits at the top left of its cell, so cards of different widths share a left edge with the frame's label, and each cell starts on a whole px. A cluster and an opened stack are laid out the same way.
 - **Members.** In sibling order.
 
 ### timeline
@@ -234,7 +236,7 @@ A label the model gives must appear in that member's title, text, summary or `da
 Members as columns, criteria as rows.
 
 - **Chosen when** the model finds 2 to 4 alternatives worth weighing. Scout picks that answer one question are the common case.
-- **Drawn as** the members side by side with one row per criterion below them. A row is as tall as its longest cell needs, one line or two.
+- **Drawn as** the members side by side with one row per criterion below them. A row is as tall as its longest cell needs, one line or two. The frame ends 18 px under the last row, as it does under the cards of any other frame.
 - **Props.** `criteria`: 2 to 4 row labels. `cells`: a map from member node id to one short string per criterion, in the order of `criteria`. An empty string means the member's content does not say.
 - **Members.** The alternatives, at most 4.
 
