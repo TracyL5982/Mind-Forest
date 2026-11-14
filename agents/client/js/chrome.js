@@ -134,6 +134,11 @@ export function bindSettings(send) {
   };
   $('picks-less').addEventListener('click', () => step(-1));
   $('picks-more').addEventListener('click', () => step(1));
+  $('name-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const agentName = $('agent-name').value.trim();
+    if (agentName) send({ t: 'settings', patch: { agentName } });
+  });
 }
 
 export function showSettings(settings) {
@@ -141,6 +146,7 @@ export function showSettings(settings) {
     button.setAttribute('aria-checked', String(button.dataset.mode === settings.picksMode));
   }
   $('picks-count').value = settings.picksPerRun;
+  if (settings.agentName && document.activeElement !== $('agent-name')) $('agent-name').value = settings.agentName;
 }
 
 /** The handoff sheet: choose what to package, then the download and a preview of what was written. */

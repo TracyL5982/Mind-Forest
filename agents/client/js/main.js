@@ -3,7 +3,8 @@ import { Store } from './store.js';
 import { Field } from './field.js';
 import { Panel } from './panel.js';
 import { bindField, bindDump, textDump } from './input.js';
-import { Voice, speak, hush } from './voice.js';
+import { Voice, speak, hush, watchReplies } from './voice.js';
+import { HandsFree, wakeProblem } from './wake.js';
 import { HandoffSheet, WorkLog, bindGate, bindSettings, caption, showGate, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
 
 const $ = (id) => document.getElementById(id);
@@ -97,6 +98,8 @@ function receive(message) {
       const first = field.cards.size === 0;
       store.replace(message.snapshot, message.undo ?? null);
       store.settings = message.settings;
+      handsFree.rename(agentName());
+      showMic();
       voiced = message.voice === true;
       voice.serviceHears = message.hearing === 'service';
       showSettings(store.settings);
@@ -147,6 +150,8 @@ function receive(message) {
       return;
     case 'settings':
       store.settings = message.settings;
+      handsFree.rename(agentName());
+      showMic();
       showSettings(store.settings);
       return;
     case 'note':
@@ -270,16 +275,70 @@ $('talk').addEventListener('submit', (e) => {
   if (text && utter(text, true)) $('talk-text').value = '';
 });
 
+// ---- the microphone: hands-free when the page can listen for the agent's name, a tap per recording when it cannot
+
+const agentName = () => (store.settings?.agentName ?? 'momo').trim().replace(/(^|\s)(\p{L})/gu, (_, gap, letter) => gap + letter.toUpperCase());
+/** null when the page can listen for the name, otherwise why not. Undefined until the microphone is first pressed. */
+let cannotListen;
+let toldWhy = false;
+let micState = 'off';
+
+const MIC = {
+  off: () => [`Listen for "Hey ${agentName()}"`, 'Ask or tell the librarian'],
+  starting: () => ['Starting to listen', 'Starting to listen…'],
+  waiting: () => [`Listening for "Hey ${agentName()}". Tap to stop.`, `Say "Hey ${agentName()}", or type`],
+  hearing: () => ['Hearing you. Tap to stop.', 'Hearing you…'],
+  working: () => ['Working on what you said', 'Working on what you said…'],
+  speaking: () => [`${agentName()} is speaking`, `${agentName()} is speaking…`],
+  idle: () => [cannotListen ? `Tap to talk. Hands-free listening is off because ${cannotListen}.` : 'Talk', 'Ask or tell the librarian'],
+  listening: () => ['Listening. Tap to stop.', 'Listening…'],
+};
+
+function showMic(state = micState) {
+  micState = state;
+  const [label, prompt] = MIC[state]();
+  $('mic').dataset.state = state;
+  $('mic').setAttribute('aria-pressed', String(!['off', 'idle'].includes(state)));
+  $('mic').setAttribute('aria-label', label);
+  $('mic').title = label;
+  $('talk-text').placeholder = prompt;
+}
+
 const voice = new Voice({
   onWords: utter,
   onProblem: toast,
-  onState: (state) => {
-    $('mic').dataset.state = state;
-    $('mic').setAttribute('aria-pressed', String(state === 'listening'));
-  },
+  onState: showMic,
   transcribe: (blob) => conn.transcribe(blob, currentTree()),
 });
-$('mic').addEventListener('click', () => voice.toggle());
+
+const handsFree = new HandsFree({
+  onState: showMic,
+  onProblem: toast,
+  onRecorded: async (blob) => {
+    try {
+      const text = (await conn.transcribe(blob, currentTree())).trim();
+      if (text) utter(text, true);
+      else toast('Nothing was heard after the name.');
+    } catch {
+      toast('That recording could not be turned into text.');
+    }
+    handsFree.done();
+  },
+});
+watchReplies((playing) => handsFree.replyPlaying(playing));
+/** For scripts/wake-check.ts, which measures how hard the listener works. */
+window.handsFreeBusy = () => handsFree.busy();
+
+$('mic').addEventListener('click', async () => {
+  if (cannotListen === undefined) {
+    cannotListen = await wakeProblem();
+    if (cannotListen) showMic('idle');
+  }
+  if (cannotListen === null) return handsFree.on ? handsFree.stop() : handsFree.start(agentName());
+  if (!toldWhy) toast(`This page cannot listen for "Hey ${agentName()}": ${cannotListen}. Tap the microphone each time you talk.`);
+  toldWhy = true;
+  voice.toggle();
+});
 
 function showMute() {
   $('mute').setAttribute('aria-pressed', String(!muted));

@@ -290,6 +290,8 @@ input[type='text']:focus, textarea:focus { outline: none; border-color: rgba(255
 .stepper { display: flex; align-items: center; gap: 8px; }
 .stepper span { flex: 1; }
 .stepper output { min-width: 28px; text-align: center; font-size: 17px; font-variant-numeric: tabular-nums; }
+.name-row { display: flex; gap: 8px; }
+.name-row input { flex: 1; min-width: 0; }
 
 .panel { position: fixed; z-index: 25; top: 66px; right: 12px; bottom: 12px; width: 384px; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; }
 .panel-head { display: flex; align-items: center; gap: 10px; padding: 10px 10px 6px 18px; }
@@ -338,7 +340,9 @@ input[type='text']:focus, textarea:focus { outline: none; border-color: rgba(255
 .dump-target b { font-weight: 600; font-size: 13.5px; }
 .dump-target small { font-size: 11px; color: var(--ink-2); }
 .mic { border-radius: 50%; padding: 0; }
-.mic[data-state='listening'] { background: var(--ink); color: #111317; border-color: var(--ink); animation: listening 1.3s ease-in-out infinite; }
+.mic[data-state='waiting'] { border-color: var(--tie); color: var(--tie); }
+.mic[data-state='starting'], .mic[data-state='speaking'] { border-color: var(--tie); color: var(--tie); opacity: 0.6; }
+.mic[data-state='listening'], .mic[data-state='hearing'] { background: var(--ink); color: #111317; border-color: var(--ink); animation: listening 1.3s ease-in-out infinite; }
 .mic[data-state='working'] { opacity: 0.6; }
 @keyframes listening { 50% { box-shadow: 0 0 0 8px rgba(236, 235, 230, 0.14); } }
 .caption { display: flex; flex-direction: column; gap: 2px; padding: 0 6px; }
@@ -398,5 +402,5 @@ input[type='text']:focus, textarea:focus { outline: none; border-color: rgba(255
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card-face.is-arriving, .pane, .think i, .mic[data-state='listening'] { animation: none; }
+  .card-face.is-arriving, .pane, .think i, .mic[data-state='listening'], .mic[data-state='hearing'] { animation: none; }
 }

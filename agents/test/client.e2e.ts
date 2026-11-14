@@ -4,7 +4,8 @@
  * Screenshots land in docs/screenshots. Set MIND_PALACE_CHROMIUM to use another browser.
  */
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
@@ -319,12 +320,16 @@ async function main(): Promise<void> {
       await run.pipeline.idle();
     });
 
-    await check('the settings switch reaches the service and comes back', async () => {
+    await check("the settings switch and the agent's name reach the service and come back", async () => {
       await page.getByRole('button', { name: 'Settings' }).click();
       await page.getByRole('radio', { name: 'Keep everything at once' }).click();
       await page.locator('[data-mode="immediate"][aria-checked="true"]').waitFor();
       await page.getByRole('button', { name: 'Fewer picks' }).click();
       await until('four picks each time', async () => (await page.locator('#picks-count').textContent()) === '4');
+      assert.equal(await page.getByLabel('What you call the librarian').inputValue(), 'momo');
+      await page.getByLabel('What you call the librarian').fill('Juno');
+      await page.getByRole('button', { name: 'Rename' }).click();
+      await until('the microphone offering the new name', async () => (await page.getAttribute('#mic', 'title')) === 'Listen for "Hey Juno"');
       await shot(page, 'desktop-5-settings');
       await page.getByRole('radio', { name: 'Dashed until kept' }).click();
       await page.locator('[data-mode="provisional"][aria-checked="true"]').waitFor();
@@ -456,11 +461,192 @@ async function main(): Promise<void> {
   }
 }
 
+/** A spoken clip for the fake microphone, made with a macOS voice: a second of quiet, the words, then quiet for the page to notice the pause. */
+function spoken(text: string, dir: string): string {
+  const aiff = join(dir, 'clip.aiff');
+  const wav = join(dir, `${text.replace(/\W+/g, '-').slice(0, 30)}.wav`);
+  execFileSync('say', ['-v', 'Samantha', '-o', aiff, text]);
+  execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1', aiff, join(dir, 'speech.wav')]);
+  const speech = readFileSync(join(dir, 'speech.wav'));
+  const pcm = speech.subarray(speech.indexOf('data') + 8);
+  const quiet = (seconds: number) => Buffer.alloc(16000 * 2 * seconds);
+  const body = Buffer.concat([quiet(1), pcm, quiet(4)]);
+  const head = Buffer.alloc(44);
+  head.write('RIFF', 0);
+  head.writeUInt32LE(36 + body.length, 4);
+  head.write('WAVEfmt ', 8);
+  head.writeUInt32LE(16, 16);
+  head.writeUInt16LE(1, 20);
+  head.writeUInt16LE(1, 22);
+  head.writeUInt32LE(16000, 24);
+  head.writeUInt32LE(32000, 28);
+  head.writeUInt16LE(2, 32);
+  head.writeUInt16LE(16, 34);
+  head.write('data', 36);
+  head.writeUInt32LE(body.length, 40);
+  writeFileSync(wav, Buffer.concat([head, body]));
+  rmSync(aiff);
+  return wav;
+}
+
+/** The real model's scores for the pieces "hey", "hi", "high" and "Momo" are made of, and the letters they could fall back on. */
+const STAND_IN_PIECES: [string, number][] = [
+  ['▁HE', -5.315], ['Y', -4.518], ['▁HI', -7.776], ['▁HIGH', -7.966], ['▁MO', -6.187], ['MO', -7.022], ['OM', -6.61],
+  ['▁', -4.624], ['H', -6.175], ['E', -4.197], ['I', -5.195], ['G', -5.024], ['M', -4.591], ['O', -4.663],
+];
+
+/**
+ * A stand-in for sherpa-onnx's spotter, in a copy of the client, for when the listener files are not here.
+ * It cannot tell words apart: it "hears the phrase" at the first sound that lasts 0.6 seconds, and places the phrase where that sound began.
+ * It keeps the keywords the page gave it, so the check can read them.
+ */
+function standInClient(dir: string): string {
+  const client = join(dir, 'client');
+  cpSync(join(here, '../client'), client, { recursive: true, filter: (from) => !from.includes('/vendor') });
+  const vendor = join(client, 'vendor/sherpa-onnx');
+  mkdirSync(vendor, { recursive: true });
+  const varint = (n: number) => {
+    const out: number[] = [];
+    for (; n > 127; n >>>= 7) out.push((n & 127) | 128);
+    return Buffer.from([...out, n]);
+  };
+  const field = (key: number, body: Buffer) => Buffer.concat([Buffer.from([key]), varint(body.length), body]);
+  writeFileSync(join(vendor, 'bpe.model'), Buffer.concat(STAND_IN_PIECES.map(([text, score]) => {
+    const value = Buffer.alloc(4);
+    value.writeFloatLE(score);
+    return field(0x0a, Buffer.concat([field(0x0a, Buffer.from(text)), Buffer.from([0x15]), value]));
+  })));
+  writeFileSync(join(vendor, 'versions.json'), JSON.stringify({ standIn: true }));
+  writeFileSync(join(vendor, 'sherpa-onnx-wasm-kws-main.js'), 'self.Module.onRuntimeInitialized();\n');
+  writeFileSync(join(vendor, 'sherpa-onnx-kws.js'), `function createKws(Module, config) {
+  self.standInKeywords = config.keywords;
+  return {
+    createStream: () => ({
+      seconds: 0, loudSince: null, heard: null, ready: false,
+      acceptWaveform(rate, piece) {
+        const level = Math.sqrt(piece.reduce((sum, s) => sum + s * s, 0) / piece.length);
+        if (level < 0.02) this.loudSince = null;
+        else if (this.loudSince === null) this.loudSince = this.seconds;
+        this.seconds += piece.length / rate;
+        if (this.loudSince !== null && this.seconds - this.loudSince >= 0.6 && !this.fired) this.heard = this.loudSince;
+        this.ready = true;
+      },
+      free() {},
+    }),
+    isReady: (s) => s.ready,
+    decode: (s) => { s.ready = false; },
+    getResult: (s) => (s.heard === null || s.fired ? { keyword: '' } : (s.fired = true, { keyword: 'HEY_MOMO', start_time: 0, timestamps: [s.heard] })),
+    reset() {},
+    free() {},
+  };
+}
+`);
+  return client;
+}
+
+/**
+ * The page listening for its name, with a clip played into a fake microphone. Needs macOS's `say`.
+ * With the listener files (npm run fetch-wake), the real spotter hears the clips. Without them a stand-in does, which tests the page's half only,
+ * and the check that needs the real spotter to tell words apart is skipped and says so.
+ */
+async function wakeChecks(): Promise<void> {
+  const real = existsSync(join(here, '../client/vendor/sherpa-onnx/versions.json'));
+  const dir = mkdtempSync(join(tmpdir(), 'mp-wake-'));
+  const acted: string[] = [];
+  const posted: { mime: string; seconds: number; firstTenthLevel: number; loudest: number }[] = [];
+  const server = await startServer({
+    port: 0, host: '127.0.0.1', dataDir: join(dir, 'data'), clientDir: real ? join(here, '../client') : standInClient(dir), model: new FakeModel(), token: 'secret',
+    roles: { ...fakeRoles, conductor: async (ctx, input) => (acted.push(input.utterance), fakeRoles.conductor(ctx, input)) },
+    transcribe: async (audio, mime) => {
+      const samples = new Int16Array(audio.slice(44).buffer);
+      const level = (from: number, to: number) => Math.sqrt(samples.slice(from, to).reduce((sum, s) => sum + (s / 32768) ** 2, 0) / Math.max(1, to - from));
+      let loudest = 0;
+      for (let at = 0; at < samples.length; at += 1600) loudest = Math.max(loudest, level(at, at + 1600));
+      posted.push({ mime, seconds: samples.length / 16000, firstTenthLevel: level(0, 1600), loudest });
+      return 'Hey Momo, show me more like this.';
+    },
+  });
+  await server.pipeline.dump([{ kind: 'text', text: 'Sourdough rises slowly in winter' }]);
+  await server.pipeline.idle();
+  const open = async (clip: string) => {
+    const browser = await chromium.launch({
+      executablePath: browserPath(), headless: true,
+      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${clip}%noloop`, '--autoplay-policy=no-user-gesture-required'],
+    });
+    const page = await browser.newPage();
+    const problems: string[] = [];
+    page.on('console', (m) => { if (m.type() === 'error') problems.push(m.text()); });
+    page.on('pageerror', (err) => problems.push(String(err)));
+    await page.goto(`${server.url}/#token=secret`);
+    await page.locator('#status[data-state="live"]').waitFor();
+    await page.evaluate(() => {
+      const seen: string[] = [];
+      (window as unknown as { micStates: string[] }).micStates = seen;
+      new MutationObserver(() => seen.push(document.querySelector('#mic')!.getAttribute('data-state')!)).observe(document.querySelector('#mic')!, { attributes: true, attributeFilter: ['data-state'] });
+    });
+    /** The mic's states since it was pressed, each run of one state counted once. */
+    const states = async () => {
+      const seen = await page.evaluate(() => (window as unknown as { micStates: string[] }).micStates);
+      return seen.slice(seen.indexOf('starting')).filter((state, i, all) => state !== all[i - 1]);
+    };
+    return { browser, page, problems, states };
+  };
+  try {
+    const woke = real
+      ? 'the page wakes on "hey Momo", records what follows, and the service acts on it without the name'
+      : 'with a stand-in spotter, the page records from just before the phrase to the pause, the service acts without the name, and the page does not listen while the reply plays';
+    await check(woke, async () => {
+      const { browser, page, problems, states } = await open(spoken('Hey Momo, show me more like this.', dir));
+      try {
+        await page.locator('.card').first().click();
+        await page.locator('#mic').click();
+        await until('the page waiting for its name', async () => (await page.getAttribute('#mic', 'data-state')) === 'waiting', 15000);
+        assert.equal(await page.getAttribute('#talk-text', 'placeholder'), 'Say "Hey Momo", or type');
+        if (!real) assert.equal(await page.workers()[0]!.evaluate(() => (self as unknown as { standInKeywords: string }).standInKeywords), '▁HE Y ▁MO MO @HEY_MOMO\n▁HI ▁MO MO @HI_MOMO\n▁HIGH ▁MO MO @HI_MOMO');
+        await until('the page hearing the speaker', async () => (await states()).includes('hearing'), 15000);
+        await until('the recording posted', async () => posted.length === 1, 15000);
+        await page.locator('#caption').getByText('Show me more like this.').waitFor();
+        await until('the reply heard and the page waiting again', async () => (await states()).join() === 'starting,waiting,hearing,working,waiting,speaking,waiting', 10000);
+        assert.deepEqual(acted, ['Show me more like this.']);
+        assert.equal(posted[0]!.mime, 'audio/wav');
+        assert.ok(posted[0]!.seconds > 2.4 && posted[0]!.seconds < 5, `the recording holds the phrase, the command and the pause: ${posted[0]!.seconds} s`);
+        assert.ok(posted[0]!.firstTenthLevel < 0.01 && posted[0]!.loudest > 0.05, `the recording starts in the quiet before the phrase: ${JSON.stringify(posted[0])}`);
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+
+    if (!real) console.log('skip without "hey Momo" nothing is recorded or sent: it needs the real spotter (npm run fetch-wake)');
+    else await check('without "hey Momo" nothing is recorded or sent', async () => {
+      const before = posted.length;
+      const { browser, page, problems, states } = await open(spoken('Show me more like this, and keep the first two.', dir));
+      try {
+        await page.locator('#mic').click();
+        await until('the page waiting for its name', async () => (await page.getAttribute('#mic', 'data-state')) === 'waiting', 15000);
+        await page.waitForTimeout(8000);
+        assert.equal(posted.length, before);
+        assert.equal(acted.length, 1);
+        assert.deepEqual(await states(), ['starting', 'waiting']);
+        await page.locator('#mic').click();
+        assert.equal(await page.getAttribute('#mic', 'data-state'), 'off');
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+  } finally {
+    await server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 const dataDir = mkdtempSync(join(tmpdir(), 'mp-e2e-'));
 const boot = (port: number) => startServer({ port, host: '127.0.0.1', dataDir, clientDir: join(here, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret' });
 let run: Running = await boot(0);
 try {
   await main();
+  await wakeChecks();
   console.log(`\n${passed} checks passed. Screenshots are in docs/screenshots.`);
 } finally {
   await run.close();

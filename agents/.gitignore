@@ -3,3 +3,4 @@ data/
 data-fake/
 data-scenario/
 *.log
+client/vendor/

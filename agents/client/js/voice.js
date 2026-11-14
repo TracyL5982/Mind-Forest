@@ -135,36 +135,60 @@ function watchForPause(stream, done) {
 }
 
 let playing = null;
+let onPlaying = () => {};
+
+/** Tells `listener` when a reply starts and stops being heard, so a microphone can stop listening meanwhile. */
+export function watchReplies(listener) {
+  onPlaying = listener;
+}
 
 /** Plays the service's voice for a reply. Without one, or if it fails, the browser's own voice reads it. */
 export function speak(text, url) {
   hush();
+  onPlaying(true);
   if (!url) return browserSpeak(text);
   const audio = new Audio(url);
   playing = audio;
   const fallback = () => {
     if (playing !== audio) return;
-    playing = null;
     browserSpeak(text);
   };
   audio.onerror = fallback;
-  audio.onended = () => { if (playing === audio) playing = null; };
+  audio.onended = () => {
+    if (playing !== audio) return;
+    playing = null;
+    onPlaying(false);
+  };
   audio.play().catch(fallback);
 }
 
 function browserSpeak(text) {
-  if (!('speechSynthesis' in window)) return;
+  if (!('speechSynthesis' in window)) {
+    playing = null;
+    return onPlaying(false);
+  }
   window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+  const line = new SpeechSynthesisUtterance(text);
+  playing = line;
+  const ended = () => {
+    if (playing !== line) return;
+    playing = null;
+    onPlaying(false);
+  };
+  line.onend = line.onerror = ended;
+  // Some browsers never report that a line ended, and a microphone waiting for it would wait for good.
+  setTimeout(ended, 2000 + text.length * 90);
+  window.speechSynthesis.speak(line);
 }
 
 export function hush() {
-  if (playing) {
-    const audio = playing;
-    playing = null;
-    audio.pause();
-    audio.removeAttribute('src');
-    audio.load();
+  const was = playing;
+  playing = null;
+  if (was instanceof HTMLAudioElement) {
+    was.pause();
+    was.removeAttribute('src');
+    was.load();
   }
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  if (was) onPlaying(false);
 }
