@@ -265,7 +265,7 @@ function stepsOf(item: Item) {
 function codeOf(item: Item) {
   const code = read(CodeData, item.data.code);
   const source = code?.source || (item.kind === 'code' ? item.text : '');
-  return source || item.kind === 'code' ? { language: code?.language || 'text', source } : undefined;
+  return source ? { language: code?.language || 'text', source } : undefined;
 }
 
 /** The facts that have both a label and a value. */
@@ -385,8 +385,8 @@ function extracted<T>(component: ComponentId, of: (item: Item) => T | undefined,
 }
 
 /**
- * First match wins. What a source catalogued comes first, because it is a record and no guess. A picture or a recording stays one,
- * whatever was read off it. Then the structure Intake extracted, the most particular shape first, and then the item's kind and its own words.
+ * First match wins. What a source catalogued comes first, because it is a record and no guess. A picture, a recording or a piece of code
+ * stays one, whatever was read off it. Then the structure Intake extracted, the most particular shape first, and then the item's kind and its own words.
  */
 const RULES: Rule[] = [
   {
@@ -425,6 +425,7 @@ const RULES: Rule[] = [
     when: (item, asked) => mediaOf(item, 'video', asked) !== undefined,
     props: (item, asked) => compact({ src: mediaOf(item, 'video', asked), poster: str(item.data.thumbnailUrl), caption: captionOf(item) }),
   },
+  { component: 'code', reads: 'kind', when: (item) => codeOf(item) !== undefined, props: (item) => codeOf(item)! },
   extracted('breakdown', breakdownOf, ({ labels, values, unit }) => ({ labels, values, unit })),
   extracted('chart', chartOf, ({ labels, values, unit }) => chartProps(labels, values, unit)),
   extracted('table', tableOf, (table) => table),
@@ -436,7 +437,6 @@ const RULES: Rule[] = [
   extracted('quote', (item) => read(QuoteData, item.data.quote), ({ text, by }) => compact({ text, by })),
   extracted('person', (item) => read(PersonData, item.data.person), ({ name, role, image }, item) => compact({ name, role, image: image ?? str(item.data.image) })),
   extracted('swatch', coloursOf, (colours) => ({ colours })),
-  extracted('code', codeOf, (code) => code, (code) => code.source),
   extracted(
     'facts',
     factsOf,

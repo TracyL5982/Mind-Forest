@@ -525,7 +525,6 @@ const PIECES: [string, Record<string, unknown>][] = [
   ['quote', { quote: { text: 'Invent the future.', by: 'Alan Kay' } }],
   ['person', { person: { name: 'Agnès Varda', role: 'Director' } }],
   ['swatch', { colours: [{ name: 'Ember', value: '#E4572E' }, { name: 'navy', value: 'navy' }] }],
-  ['code', { code: { language: 'ts', source: 'const a = 1;' } }],
   ['facts', { facts: [{ label: 'Height', value: '330 m' }, { label: 'Built', value: '1889' }] }],
   ['fact', { facts: [{ label: 'Height', value: '330 m' }] }],
   ['excerpt', { excerpt: { text: 'The house shelters day-dreaming.', at: 'Chapter 1' } }],
@@ -581,8 +580,11 @@ test('when an item satisfies two rules, the earlier one draws it', () => {
     ['steps', 'list', { data: { steps: ['Boil', 'Stir'], items: ['Boil', 'Stir'] } }],
     ['steps', 'link', { ...LINKED, data: { steps: ['Boil the water', 'Stir it in'] } }],
     ['quote', 'excerpt', { data: { quote: { text: 'Invent the future.' }, excerpt: { text: 'Invent the future.' } } }],
-    ['table', 'code', { data: { table, code: { source: 'Plan | Price' } } }],
+    ['image', 'code', { ...PHOTO, data: { code: { source: 'const a = 1;' } } }],
+    ['code', 'table', { data: { table, code: { source: 'Plan | Price' } } }],
+    ['code', 'chart', { data: { chart: percent, code: { source: 'const a = 1;' } } }],
     ['code', 'facts', { data: { code: { source: 'const a = 1;' }, facts } }],
+    ['code', 'place', { kind: 'code', title: 'Lisbon', text: 'print(1)', data: { where: 'Lisbon' } }],
     ['fact', 'idea', { title: 'Budget: $1.2M', text: 'Budget: $1.2M' }],
     ['link', 'excerpt', { ...LINKED, data: { excerpt: { text: 'Some words about it.' } } }],
     ['link', 'place', { ...LINKED, title: 'Lisbon', data: { where: 'Lisbon' } }],
@@ -593,8 +595,25 @@ test('when an item satisfies two rules, the earlier one draws it', () => {
   for (const [first, second, fields] of pairs) assert.equal(chosen({ title: 'Both', ...fields }), first, `${first} before ${second}`);
 
   assert.equal(chosen({ ...LINKED, title: 'Article', text: ESSAY, data: { table } }), 'link', 'a table gives way to the link below the floor');
-  const source = 'def rate(tier):\n    # tier | rate\n    return RATES[tier]\n\nprint(rate("pro"))\nprint(rate("free"))';
-  assert.equal(chosen({ title: 'rate', text: source, data: { table: { heads: ['tier', 'rate'], rows: [['pro', '']] }, code: { source } } }), 'code', 'and to the code it sits in');
+});
+
+test('an item that is code draws as code, whatever was read off it and however little of it that was', () => {
+  const constants = Array.from({ length: 6 }, (_v, n) => `export const LIMIT_${n} = ${n * 10};`).join('\n');
+  const facts = Array.from({ length: 6 }, (_v, n) => ({ label: `LIMIT_${n}`, value: `${n * 10}` }));
+  assert.equal(chosen({ title: 'limits.ts', text: constants, data: { facts } }), 'facts', 'the same text, when it is not code, is its facts');
+  assert.deepEqual(ruled({ title: 'limits.ts', text: constants, data: { facts, code: { source: constants } } }), { component: 'code', props: { language: 'text', source: constants } });
+  assert.equal(chosen({ title: 'limits.ts', kind: 'code', text: constants, data: { facts } }), 'code');
+
+  const source = 'def rate(tier):\n    \"\"\"\n    tier | rate\n    free | 10\n    pro  | 100\n    \"\"\"\n    return RATES[tier]';
+  const table = { heads: ['tier', 'rate'], rows: [['free', '10'], ['pro', '100']] };
+  assert.equal(chosen({ title: 'rate', text: source, data: { table } }), 'table');
+  assert.equal(chosen({ title: 'rate', text: source, data: { table, code: { language: 'python', source } } }), 'code', 'a table in a docstring does not draw the function');
+
+  assert.equal(chosen({ title: 'Snippet', text: ESSAY, data: { code: { source: 'const a = 1;' } } }), 'code', 'code has no floor');
+  assert.equal(chosen({ ...LINKED, title: 'Gist', data: { code: { source: 'const a = 1;' } } }), 'code');
+  assert.equal(chosen({ title: 'Empty', kind: 'code', text: '' }), 'note', 'code with no source is a note');
+  assert.equal(chosen({ title: 'Empty', kind: 'code', text: '', data: { code: { source: '' } } }), 'note');
+  assert.equal(chosen({ title: 'Empty', kind: 'code', text: '', data: { facts: [{ label: 'Height', value: '330 m' }] } }), 'fact', 'and what it carries still draws it');
 });
 
 test('three sibling pictures become a gallery whether a rule draws them as images, videos or artworks', async () => {
