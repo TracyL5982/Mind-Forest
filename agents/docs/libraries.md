@@ -485,7 +485,7 @@ The parts of one whole.
 
 - **Chosen when** `item.data.chart` is shares of one whole: at most eight values, none below 0, a unit of `%`, `％`, `percent`, `pct` or `百分比`, and a sum from 99 to 101. For what the user made it must also pass the coverage floor. Any other chart data is a `chart`.
 - **Props.** `labels`: two to eight. `values`: one for each label, none below 0. `unit?`.
-- **Drawn as** the title, then one line for each part: its label, a level bar, and its share written whole at the end. The longest bar is the largest part. Never a pie. A percent sign is written on each share. Any other unit is written once, under the title. The opened card lists every label whole with its value, and with its share of the total when the values are not percentages.
+- **Drawn as** the title, then one line for each part: its label, a level bar, and its share written whole at the end. The longest bar is the largest part. Never a pie. A percent sign is written on each share. Any other unit is written once, under the title. The opened card draws the same bars with every label whole, and writes each share of the total beside a value that is no percentage.
 - **Item holds.** `data.chart = { labels, values, unit }`.
 
 ### qa
@@ -521,7 +521,7 @@ One term and what it means.
 
 - **Chosen when** `item.data.term` and `item.data.definition` are both set, and they pass the coverage floor.
 - **Props.** `term`. `definition`.
-- **Drawn as** a dictionary entry: the term as a headword, large while it fits one line, over a short rule, then the meaning in an upright serif on up to six lines. The opened card has both whole.
+- **Drawn as** a dictionary entry: the term as a headword, large while it fits one line, over a short rule, then the meaning in an upright serif on up to six lines. The opened card has the meaning whole, under the term when its own title is not already the term.
 - **Item holds.** `data.term` and `data.definition`.
 
 ### idea
@@ -575,7 +575,7 @@ A place by name.
 
 - **Chosen when** the item is a short note whose title names the place in `data.where`, as A place above says.
 - **Props.** `name`: `data.where`. `src?`: the item's picture, from `data.image`.
-- **Drawn as** the name set large beside a round pin, with the item's summary or text on up to three lines under it. With `src`, the picture fills a frame 120 px tall across the top of the card. The opened card has the picture whole. No chip repeats the place.
+- **Drawn as** the name set large beside a round pin, with the item's summary or text on up to three lines under it. With `src`, the picture fills a frame 120 px tall across the top of the card. The opened card has the picture whole, and the name when its own title is not already the name. No chip repeats the place.
 - **Item holds.** `data.where`, and `data.image` for a picture.
 
 ## Composites

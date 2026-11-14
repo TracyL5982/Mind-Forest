@@ -32,6 +32,12 @@ export function size(item, props) {
   return [WIDTH, FRAME + wrap(item.title || 'Untitled', COLUMN, TITLE_LETTER, 2) * TITLE + (unit ? TEXT : 0) + (rows.length ? 10 + rows.length * TEXT + (rows.length - 1) * GAP : 0)];
 }
 
+const bars = (rows, largest, columns, clamped) => h('div', { class: 'breakdown', style: { gridTemplateColumns: columns } }, rows.map((row) => [
+  say('div', `breakdown-label ${clamped}`, row.label),
+  h('div', { class: 'breakdown-track' }, row.value > 0 && h('div', { class: 'breakdown-bar', style: { width: `${(row.value / largest) * 100}%` } })),
+  h('div', { class: 'breakdown-share', text: row.written }),
+]));
+
 /** Every share is written whole, so the labels give way first and then the bars. */
 export function draw(item, props) {
   const { rows, unit, largest } = parts(props);
@@ -41,22 +47,18 @@ export function draw(item, props) {
     h('div', { class: 'chart-head' },
       say('div', `card-title clamp-${wrap(item.title || 'Untitled', COLUMN, TITLE_LETTER, 2)}`, item.title || 'Untitled'),
       unit && say('div', 'card-tag clamp-1', unit)),
-    rows.length > 0 && h('div', { class: 'breakdown', style: { gridTemplateColumns: `${labels}px minmax(0, 1fr) ${shares}px` } }, rows.map((row) => [
-      say('div', 'breakdown-label clamp-1', row.label),
-      h('div', { class: 'breakdown-track' }, row.value > 0 && h('div', { class: 'breakdown-bar', style: { width: `${(row.value / largest) * 100}%` } })),
-      h('div', { class: 'breakdown-share', text: row.written }),
-    ])),
+    rows.length > 0 && bars(rows, largest, `${labels}px minmax(0, 1fr) ${shares}px`, 'clamp-1'),
   ];
 }
 
-/** Every label whole beside its value, and beside its share of the whole when the values are not percentages. */
+/** The same bars with every label whole, and each share of the whole beside a value that is no percentage. */
 export function detail(item, props) {
-  const { rows, unit, total } = parts(props);
-  const share = (value) => (unit || !rows.some((row) => row.written.endsWith('%')) ? ` · ${exact(Number(((value / (total || 1)) * 100).toFixed(1)))}%` : '');
+  const { rows, unit, largest, total } = parts(props);
+  const percent = rows.some((row) => row.written.endsWith('%'));
+  const shared = rows.map((row) => ({ ...row, written: percent ? row.written : `${row.written} · ${exact(Number(((row.value / (total || 1)) * 100).toFixed(1)))}%` }));
   return [
-    h('div', { class: 'detail-chart' },
+    h('div', { class: 'detail-chart detail-breakdown' },
       unit && say('div', 'card-tag', unit),
-      h('table', { class: 'chart-table' }, h('tbody', null, rows.map((row) =>
-        h('tr', null, say('th', '', row.label), h('td', { text: `${row.written}${share(row.value)}` })))))),
+      bars(shared, largest, 'fit-content(45%) minmax(48px, 1fr) auto', '')),
   ];
 }

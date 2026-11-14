@@ -316,6 +316,9 @@ button, input, textarea { font: inherit; color: inherit; }
 .breakdown-track { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); }
 .breakdown-bar { min-width: 2px; height: 100%; border-radius: 4px; background: color-mix(in srgb, var(--accent) 62%, var(--face)); }
 .breakdown-share { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.detail-breakdown .breakdown { margin-top: 0; align-items: start; }
+.detail-breakdown .breakdown-label { overflow-wrap: anywhere; }
+.detail-breakdown .breakdown-track { margin-top: 4.5px; }
 
 /* qa: two voices, each named by a letter. The question is set as a title and the answer as text under a rule. */
 .c-qa { gap: 0; }

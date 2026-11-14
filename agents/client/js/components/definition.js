@@ -29,7 +29,9 @@ export function draw(item, props) {
   return [headword(term, large, termLines), h('div', { class: 'fact-rule' }), say('div', `definition-text clamp-${lines}`, meaning)];
 }
 
+/** The meaning whole, under the term when the opened card's own title is not already the term. */
 export function detail(item, props) {
   const { term, meaning, large } = plan(props);
-  return [h('div', { class: 'detail-definition' }, headword(term, large, 0), h('div', { class: 'fact-rule' }), say('div', 'definition-text', meaning))];
+  const named = term === item.title;
+  return [h('div', { class: 'detail-definition' }, !named && headword(term, large, 0), !named && h('div', { class: 'fact-rule' }), say('div', 'definition-text', meaning))];
 }
