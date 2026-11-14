@@ -2,7 +2,9 @@
 
 This folder draws the agent service's cards in the web client's look. The web side is `agents/client/js/components/*.js`, `agents/client/style.css` and `agents/docs/libraries.md` on `genui/integration`. A card is a node's `view` (`{component, props}`) and its `item`, as the service sends them.
 
-Each card has the footprint the web gives it, worked out from the letter widths in `libraries.md` and never measured. Its words are set in the host's fonts inside that footprint. A component this library does not draw yet is drawn as a note with no props, so its footprint differs from the web's until its type is ported.
+Each card has the footprint the web gives it, worked out from the letter widths in `libraries.md` and never measured. Its words are set in the host's fonts inside that footprint.
+
+The library draws 26 of the web's 28 components. `sheet` and `explorable` are not drawn yet. Like any unknown component, they are drawn as a note with no props, so their footprints differ from the web's until they are ported. Composites (a group's arrangement) are not drawn.
 
 ## What the bridge calls
 
@@ -33,7 +35,7 @@ An address that starts with `sample:` is a sample picture from the web library p
 
 ## The gallery
 
-`-cards` stands the web library page's samples as a tree, with no service and no network. The root card is the library. A card for each type the Quest draws comes up round it. Pinch a type to bring its other samples round it, such as the pick, the card with chips and other content. Each sample's label from the web page is on its thread.
+`-cards` stands the web library page's samples as a tree, with no service and no network. The root card is the library, with four groups round it: Words, Pictures and sound, Numbers, and Lists and the rest. Pinch a group to bring its types round it. Pinch a type to bring its other samples round it, such as the pick, the card with chips and other content. Each sample's label from the web page is on its thread.
 
 ```bash
 quest/desktop/preview -cards
@@ -43,7 +45,7 @@ quest/desktop/preview -cards
 quest/tools/run.sh -- -cards
 ```
 
-To open one card at a given second, add `-pickRef note:cards-quote-0 -pickAt 3`. Sample notes are named `cards-<type>-<index>`.
+To open one card at a given second, add `-pickRef note:cards-quote-0 -pickAt 3`. Sample notes are named `cards-<type>-<index>`, and the groups `cards-group-<index>`.
 
 The samples are compiled in from `samples.cpp`. Regenerate the file when the web samples change:
 
@@ -74,7 +76,8 @@ node quest/tools/cards_compare.mjs --faces /tmp/faces --out /tmp/compare --playw
 | --- | --- |
 | `cards.h`, `cards.cpp` | The calls above: the cards notes show, and their faces, small and opened. |
 | `kind.h`, `kinds.cpp` | One card type, as one `components/<type>.js` is, and the registry of types. |
-| `note.cpp`, `quote.cpp`, `image.cpp` | The types drawn so far. Each file has the footprint, the small face and the type's part of the opened card, and puts its type in the registry. A new type is one new file. |
+| `<type>.cpp` | One file for each type drawn, named as its component: `note`, `quote`, `fact`, `image`, `video`, `audio`, `link`, `chart`, `person`, `chat`, `code`, `steps`, `facts`, `table`, `list`, `breakdown`, `qa`, `callout`, `excerpt`, `definition`, `idea`, `proscons`, `swatch`, `artwork`, `reference` and `place`. Each file has the footprint, the small face and the type's part of the opened card, and puts its type in the registry. A new type is one new file. |
+| `figures.*`, `media.*`, `rows.*`, `text.*` | Helpers that several types share: figures and number formats, pictures and play marks, the foot of a list, and the fixed words and stroked glyphs. |
 | `measure.h`, `measure.cpp` | The footprint arithmetic of `libraries.md` and `components/shared.js`: `span`, `fold`, `wrap`, `advance`. |
 | `item.h`, `item.cpp` | The item as a card reads it, the fixed words in English or Chinese (`words.js`), and the chips (`chips.js`). |
 | `said.h`, `said.cpp` | What the opened card still prints of the item's text (`said.js`). |

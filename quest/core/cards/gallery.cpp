@@ -1,6 +1,8 @@
 #include "gallery.h"
 
+#include <algorithm>
 #include <cstdlib>
+#include <map>
 
 #include "../base.h"
 #include "../ocean/catalog.h"
@@ -22,6 +24,21 @@ Color colour(const std::string& hex) {
 struct Link {
     std::string id, why;
 };
+
+/// The types under each card round the library, so no ring holds more than it can. A type in none goes under "Other cards".
+struct Group {
+    const char* title;
+    std::vector<std::string> types;
+};
+const std::vector<Group>& groups() {
+    static const std::vector<Group> all{
+        {"Words", {"note", "quote", "callout", "excerpt", "definition", "idea", "qa"}},
+        {"Pictures and sound", {"image", "video", "audio", "artwork", "link", "person", "swatch"}},
+        {"Numbers", {"fact", "facts", "chart", "breakdown", "table"}},
+        {"Lists and the rest", {"steps", "list", "proscons", "reference", "chat", "code", "place"}},
+    };
+    return all;
+}
 
 /// A note for one card, with the card put for it.
 void add(Catalog& catalog, const std::string& id, const Json& view, const Json& item, const Node& node) {
@@ -72,8 +89,8 @@ int gallery(Catalog& catalog) {
     std::optional<Json> samples = readSamples();
     if (!samples) return -1;
     const std::string root = "cards-root";
-    addLabel(catalog, root, "Card library", "Every card type the Quest draws so far, from the web client's library page. Pinch a type to see its other samples round it.", true);
-    std::vector<Link> types;
+    addLabel(catalog, root, "Card library", "Every card type the Quest draws so far, from the web client's library page. Pinch a group, then a type to see its other samples round it.", true);
+    std::map<std::string, Link> types;
     int count = 0;
     for (const Json& type : (*samples)["types"].array()) {
         std::string name = type["type"].string("");
@@ -92,9 +109,30 @@ int gallery(Catalog& catalog) {
         if (samplesOfType.empty()) continue;
         const std::string head = samplesOfType.front().id;
         hang(catalog, head, std::vector<Link>(samplesOfType.begin() + 1, samplesOfType.end()), "More " + name);
-        types.push_back({head, name});
+        types[name] = {head, name};
     }
-    hang(catalog, root, types, "More types");
+    std::vector<Group> shown = groups();
+    shown.push_back({"Other cards", {}});
+    for (const auto& [name, link] : types) {
+        bool placed = std::any_of(shown.begin(), shown.end() - 1, [&](const Group& g) { return std::count(g.types.begin(), g.types.end(), name); });
+        if (!placed) shown.back().types.push_back(name);
+    }
+    std::vector<Link> ring;
+    for (size_t g = 0; g < shown.size(); g++) {
+        std::vector<Link> members;
+        std::string names;
+        for (const std::string& name : shown[g].types) {
+            if (!types.count(name)) continue;
+            members.push_back(types[name]);
+            names += (names.empty() ? "" : ", ") + name;
+        }
+        if (members.empty()) continue;
+        std::string id = "cards-group-" + std::to_string(g);
+        addLabel(catalog, id, shown[g].title, names + ".", false);
+        hang(catalog, id, members, "More types");
+        ring.push_back({id, shown[g].title});
+    }
+    hang(catalog, root, ring, "More groups");
     catalog.briefs.push_back(Brief{"cards", "Every card the agents draw, as the web client draws them", "Card library", "note:" + root});
     logLine(fmt("[cards] the gallery: %d types, %d cards", int(types.size()), count));
     return int(catalog.briefs.size()) - 1;
