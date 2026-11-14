@@ -441,6 +441,13 @@ button, input, textarea { font: inherit; color: inherit; }
 .cmp-label { position: absolute; left: 0; top: 5px; font-size: var(--type-text); line-height: var(--lead-text); color: var(--ink-2); }
 .cmp-cell { position: absolute; top: 5px; padding: 0 8px; font-size: var(--type-text); line-height: var(--lead-text); text-align: center; }
 .seq-arrow { position: absolute; text-align: center; font-size: var(--type-title); line-height: 1; transform: translateY(-50%); color: var(--tint); }
+.lay-label { position: absolute; font-size: var(--type-text); line-height: var(--lead-text); color: var(--tint); white-space: nowrap; }
+.pane.is-pick .lay-label { color: var(--pick); }
+.lay-frame { position: absolute; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--tint) 13%, transparent); }
+.lay-join { position: absolute; display: flex; align-items: center; justify-content: center; font-size: var(--type-title); line-height: 1; color: var(--tint); }
+.pane.is-pick .lay-join { color: var(--pick); }
+.lay-join.is-line::before { content: ''; width: 1px; height: calc(100% - 8px); background: currentColor; opacity: 0.55; }
+.lay-join.is-line.is-across::before { width: calc(100% - 12px); height: 1px; }
 
 /* ---- controls */
 
