@@ -69,6 +69,8 @@ private:
     std::optional<std::string> focusSent;
     /// `-agentWalk <n>`: for runs with no hands, the first new pick round the open card is pinched, n times.
     int walk = 0;
+    /// `-keyboardTest`: brings up the system keyboard once, 3 s in, and logs what is typed.
+    bool keyboardTest = false;
     double now = 0;
 
     void synced(const Delta& delta);
@@ -87,6 +89,18 @@ private:
     bool paint(const Item& item, const Node& node);
     /// Draws a card already in the standing tree again, from where it is, after its content changed.
     void redraw(int localId);
+    /// A conversation about a card: it leads a layer of its own (kept, if it was a suggestion), and the question goes
+    /// to the service, which brings related suggestions round it.
+    void converse(int nodeID, const std::string& question);
+    /// What was typed on the system keyboard, waiting for the frame thread: the text, and whether it was sent.
+    struct Typed {
+        std::mutex lock;
+        std::vector<std::pair<std::string, bool>> done;
+    };
+    std::shared_ptr<Typed> typed = std::make_shared<Typed>();
+    std::optional<int> typingFor;                   // the card the keyboard is open for
+    /// Brings up the keyboard for a question about a card.
+    void type(int nodeID);
     /// Fetches the pictures a card shows from the service, off the frame thread.
     void fetchPictures(const std::string& noteID);
     /// Pictures fetched and unpacked on a host thread, waiting for the frame thread.

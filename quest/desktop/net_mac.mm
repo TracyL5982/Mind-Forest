@@ -175,3 +175,12 @@ void fetch(Request request, std::function<void(Response)> done) {
 }
 
 }  // namespace platform
+
+namespace platform {
+
+// The preview has no keyboard of its own to bring up; `-agentType <words>` stands in for typing there.
+bool showKeyboard(const std::string&, KeyboardEvents) { return false; }
+void hideKeyboard() {}
+
+}  // namespace platform
+

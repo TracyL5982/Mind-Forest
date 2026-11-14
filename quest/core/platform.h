@@ -174,3 +174,20 @@ void fetch(Request request, std::function<void(Response)> done);
 
 }  // namespace platform
 
+// MARK: - Typing
+// The system keyboard, for typing to the agent where speaking won't do.
+
+namespace platform {
+
+/// What the user types, on a thread of the host's: the whole text after each change, then once the end.
+struct KeyboardEvents {
+    std::function<void(const std::string& text)> typed;
+    /// `sent`: ended with the keyboard's send key, rather than closed.
+    std::function<void(const std::string& text, bool sent)> done;
+};
+/// Brings up the system keyboard holding `text`. False where there is none to bring up.
+bool showKeyboard(const std::string& text, KeyboardEvents events);
+void hideKeyboard();
+
+}  // namespace platform
+

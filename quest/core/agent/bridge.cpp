@@ -89,7 +89,8 @@ std::shared_ptr<Bridge> Bridge::fromFlags(OceanModel& model) {
 }
 
 Bridge::Bridge(OceanModel& model, Address address, std::shared_ptr<Transport> transport, std::optional<std::string> dump)
-    : model(model), client(std::move(address), std::move(transport)), dump(std::move(dump)), walk(Flags::integer("agentWalk")) {}
+    : model(model), client(std::move(address), std::move(transport)), dump(std::move(dump)), walk(Flags::integer("agentWalk")),
+      keyboardTest(Flags::has("keyboardTest")) {}
 
 void Bridge::frame(double t) {
     now = t;
@@ -126,6 +127,28 @@ void Bridge::frame(double t) {
             std::string nodeId = noteID.substr(std::string("agent-").size());
             if (standingTree && standingTree->local.count(nodeId)) redraw(standingTree->local[nodeId]);
         }
+    }
+    std::vector<std::pair<std::string, bool>> finished;
+    {
+        std::lock_guard<std::mutex> g(typed->lock);
+        finished.swap(typed->done);
+    }
+    for (auto& [text, sent] : finished) {
+        std::optional<int> card = typingFor;
+        typingFor.reset();
+        if (!sent || text.find_first_not_of(" \t\n") == std::string::npos) {
+            logLine("[agent] typing put away");
+            continue;
+        }
+        if (card && model.tree && model.tree->nodes.count(*card)) converse(*card, text);
+    }
+    if (keyboardTest && now > 3) {
+        keyboardTest = false;
+        bool shown = platform::showKeyboard("", {
+            [](const std::string& text) { logLine("[agent] keyboard test typed: " + text); },
+            [](const std::string& text, bool sent) { logLine(std::string("[agent] keyboard test ") + (sent ? "sent: " : "closed: ") + text); },
+        });
+        logLine(std::string("[agent] keyboard test: ") + (shown ? "asked the system for its keyboard" : "no keyboard here"));
     }
     reportFocus();
     for (auto& [id, t] : thinking) {
@@ -268,6 +291,10 @@ void Bridge::changed(const Delta& delta, bool animate) {
             });
             model.after(3.0, [this, pick] {
                 if (!model.tree || model.tree->focus() != pick) return;
+                if (std::optional<std::string> words = Flags::string("agentType")) {
+                    converse(pick, percentDecoded(*words));
+                    return;
+                }
                 const auto& c = model.card(pick);
                 for (int k = 0; c && k < int(c->asks.size()); k++) {
                     if (c->asks[k].key == "deeper") model.askGardener(pick, k);
@@ -486,6 +513,46 @@ void Bridge::rows(const TreeNode& node, std::vector<Ask>& asks) {
     if (!node.kept) asks.push_back(Ask{"keep", "Keep this"});
     asks.push_back(Ask{"more", "What else is like this?"});
     asks.push_back(Ask{"deeper", "Tell me more about this"});
+    asks.push_back(Ask{"type", "Type your own question…"});
+}
+
+void Bridge::type(int nodeID) {
+    std::weak_ptr<Typed> inbox = typed;
+    bool shown = platform::showKeyboard("", {
+        nullptr,
+        [inbox](const std::string& text, bool sent) {
+            if (auto box = inbox.lock()) {
+                std::lock_guard<std::mutex> g(box->lock);
+                box->done.emplace_back(text, sent);
+            }
+        },
+    });
+    if (!shown) {
+        logLine("[agent] there is no keyboard to bring up here");
+        return;
+    }
+    typingFor = nodeID;
+    logLine("[agent] typing a question");
+}
+
+void Bridge::converse(int nodeID, const std::string& question) {
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    if (!p || !p->service.count(nodeID)) return;
+    NodeId id{p->service[nodeID]};
+    TreeNode& n = p->tree->nodes[nodeID];
+    if (!n.kept) {
+        client.send(Outbound::keep({id}));
+        n.kept = true;
+        logLine("[agent] kept " + model.catalog->title(n.ref));
+    }
+    // A conversation about the card: it now leads a layer of its own, where what the service brings for it stands.
+    if (!n.head) {
+        Tree::Change moved = p->tree->focus(nodeID);
+        model.arrive(moved.added);
+        model.restyle();
+    }
+    client.send(Outbound::ask(id, question));
+    logLine("[agent] asked: " + question);
 }
 
 void Bridge::reportFocus() {
@@ -511,26 +578,22 @@ bool Bridge::ask(int nodeID, int k) {
     const auto& c = model.card(nodeID);
     if (s == p->service.end() || !c || k < 0 || k >= int(c->asks.size())) return true;
     const Ask row = c->asks[k];
-    NodeId id{s->second};
-    TreeNode& n = p->tree->nodes[nodeID];
-    if (!n.kept) {
-        client.send(Outbound::keep({id}));
-        n.kept = true;
-        logLine("[agent] kept " + model.catalog->title(n.ref));
+    if (row.key == "type") {
+        type(nodeID);
+        return true;
     }
     if (row.key == "keep") {
+        TreeNode& n = p->tree->nodes[nodeID];
+        if (!n.kept) {
+            client.send(Outbound::keep({NodeId{s->second}}));
+            n.kept = true;
+            logLine("[agent] kept " + model.catalog->title(n.ref));
+        }
         redraw(nodeID);
         model.restyle();
         return true;
     }
-    // A conversation about the card: it now leads a layer of its own, where what the service brings for it stands.
-    if (!n.head) {
-        Tree::Change moved = p->tree->focus(nodeID);
-        model.arrive(moved.added);
-        model.restyle();
-    }
-    client.send(Outbound::ask(id, row.question));
-    logLine("[agent] asked: " + row.question);
+    converse(nodeID, row.question);
     return true;
 }
 

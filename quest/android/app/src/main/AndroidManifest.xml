@@ -13,6 +13,8 @@
 
     <!-- The agent service, on this headset's 127.0.0.1 through adb, or at an address given at launch. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The system keyboard over the app, for typing to the agent (Keyboard.kt). -->
+    <uses-feature android:name="oculus.software.overlay_keyboard" android:required="false" />
 
     <uses-permission android:name="org.khronos.openxr.permission.OPENXR" />
     <uses-permission android:name="org.khronos.openxr.permission.OPENXR_SYSTEM" />
