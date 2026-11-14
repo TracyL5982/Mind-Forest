@@ -100,6 +100,18 @@
     {"type":"quote","item":{"title":"Four lines","summary":"","text":""},"props":{"text":"It is not the strongest of the species that survives, nor the most intelligent — it is the one most adaptable to change.","by":"Often credited to Darwin"},"size":[288,161]},
     {"type":"quote","item":{"title":"Capitals","summary":"","text":""},"props":{"text":"WE HOLD THESE TRUTHS TO BE SELF-EVIDENT","by":"1776"},"size":[288,119]},
     {"type":"quote","item":{"title":"Mixed","summary":"","text":""},"props":{"text":"Quest 上的记忆宫殿 lets you walk through 200 张卡片 at once."},"size":[288,94]},
-    {"type":"quote","item":{"title":"学而","summary":"","text":""},"props":{"text":"学而时习之，不亦说乎？有朋自远方来，不亦乐乎？","by":"孔子"},"size":[288,119]}
+    {"type":"quote","item":{"title":"学而","summary":"","text":""},"props":{"text":"学而时习之，不亦说乎？有朋自远方来，不亦乐乎？","by":"孔子"},"size":[288,119]},
+    {"type":"fact","item":{"title":"Absolute zero","summary":"","text":""},"props":{"value":"零下273.15℃","label":"绝对零度"},"size":[275,118]},
+    {"type":"fact","item":{"title":"Rent","summary":"","text":""},"props":{"value":"₩1,200,000","label":"a month for the studio"},"size":[243,118]},
+    {"type":"fact","item":{"title":"Ticket","summary":"","text":""},"props":{"value":"€49.90","label":"for a day pass"},"size":[200,118]},
+    {"type":"fact","item":{"title":"Salinity","summary":"","text":""},"props":{"value":"35‰","label":"the salt in sea water"},"size":[200,118]},
+    {"type":"fact","item":{"title":"Running time","summary":"","text":""},"props":{"value":"2½ hours","label":"from the first reel to the last"},"size":[206,118]},
+    {"type":"fact","item":{"title":"Headset","summary":"","text":""},"props":{"value":"Quest™ 3","label":"the device the palace is built for"},"size":[228,118]},
+    {"type":"quote","item":{"title":"Second thoughts","summary":"","text":""},"props":{"text":"Wait — no… that can’t be right — can it? I checked the figures twice — three times, even — and still…","by":"the editor"},"size":[288,161]},
+    {"type":"quote","item":{"title":"Launch day","summary":"","text":""},"props":{"text":"We shipped it 🎉🚀 — finally… and nobody noticed ❤️","by":"Mina"},"size":[288,119]},
+    {"type":"quote","item":{"title":"Dashes","summary":"","text":""},"props":{"text":"Memory — the kind you can walk through — is built slowly… one card, then another… until the room is full — and then you start again."},"size":[288,136]},
+    {"type":"quote","item":{"title":"千字文","summary":"","text":""},"props":{"text":"天地玄黄宇宙洪荒日月盈昃辰宿列张寒来暑往秋收冬藏闰余成岁律吕","by":"周兴嗣"},"size":[288,119]},
+    {"type":"quote","item":{"title":"一行","summary":"","text":""},"props":{"text":"天地玄黄宇宙洪荒日月盈昃辰宿列"},"size":[288,73]},
+    {"type":"quote","item":{"title":"五行","summary":"","text":""},"props":{"text":"天地玄黄宇宙洪荒日月盈昃辰宿列张寒来暑往秋收冬藏闰余成岁律吕调阳云腾致雨露结为霜金生丽水玉出昆冈剑号巨阙珠称夜光果珍李柰菜重芥姜海咸河淡鳞潜羽翔龙师火帝","by":"千字文"},"size":[288,182]}
   ]
 }
