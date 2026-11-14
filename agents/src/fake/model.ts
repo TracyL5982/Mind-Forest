@@ -94,7 +94,7 @@ const isBullet = (line: string) => /^(?:[-*•]\s|\[[ xX]\]\s)/.test(line);
 /**
  * What a model would say about a text, read by pattern instead. Each kind of structure has one plain way to write it:
  *   Where: Lisbon                     People: Ana Lima, Ben Okri
- *   Pros: fast, small                 Cons: (or either label followed by bulleted lines)
+ *   Pros:                             Cons: each followed by bulleted lines, one point each
  *   Plan | Price                      a table, its first row the heads
  *   Q: ...   A: ...                   Parallax means the apparent shift…, a term and its meaning
  *   - one / - two                     a list, and a checklist when every line starts [ ] or [x]
@@ -116,8 +116,10 @@ export function describe(text: string): Description {
     return lines.slice(at + 1, end < 0 ? undefined : end).map((line) => BULLET.exec(line)![2]!);
   };
 
-  const pros = list('pros');
-  const cons = list('cons');
+  // A point is a whole line: one written inline among others is a piece of a sentence.
+  const points = (label: string) => (labelled(label) ? [] : list(label));
+  const pros = points('pros');
+  const cons = points('cons');
   const bullets = pros.length + cons.length > 0 ? [] : lines.filter(isBullet).map((line) => BULLET.exec(line)!);
   const rows = lines.filter((line) => line.includes('|'));
   const first = lines.find(Boolean) ?? '';
@@ -150,10 +152,10 @@ export function describe(text: string): Description {
   };
 }
 
-/** The first line that says what a term means, as "Parallax means the apparent shift of an object" does. */
+/** The first line that says what a term means, as "Parallax means the apparent shift of an object" does, the line whole. */
 function meaning(lines: string[]): { term: string; definition: string } | Record<string, never> {
   const said = lines.map((line) => /^(\p{L}[\p{L} ]{0,39}?) means (\S.*)$/u.exec(line)).find(Boolean);
-  return said ? { term: said[1]!, definition: said[2]! } : {};
+  return said ? { term: said[1]!, definition: said[0] } : {};
 }
 
 const NOTE: Omit<Entry, 'id'> = { component: 'note', subject: '', passage: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [] };
@@ -164,9 +166,9 @@ const FIGURE = /^[$€£¥]?\d/;
 
 /**
  * What a model would choose for a text the rules drew as a note or an idea, read by pattern instead:
- *   Caution: hot oil spits            a callout, and so is "Warning:". "Note:" makes a remark of it
+ *   Caution: hot oil spits            a callout of the whole line, and so is "Warning:". "Note:" makes a remark of it
  *   Cost: €240                        a figure of a sheet, when the value starts with a number
- *   Best: the bridge; the bookshop    a list of a sheet, its entries set apart by ";"
+ *   Best:  - the bridge  - the shop   a list of a sheet, a line that ends in a colon with bulleted lines under it
  * A sheet is a text with a figure or a list written so, and a sentence beside them. Its first line is the heading.
  * A text holding "fake:invent" is given a figure it never states, to show the content check keeping the note.
  * A text in none of these forms keeps the card it has `now`.
@@ -175,15 +177,16 @@ export function choose(text: string, now: 'note' | 'idea' = 'note'): Omit<Entry,
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (/fake:invent/.test(text)) return { ...NOTE, component: 'fact', subject: 'Share', passage: '99%' };
   const marked = lines.map((line) => MARKED.exec(line)).find(Boolean);
-  if (marked) return { ...NOTE, component: 'callout', passage: marked[2]!.trim(), tone: marked[1]!.toLowerCase() === 'note' ? 'note' : 'caution' };
+  if (marked) return { ...NOTE, component: 'callout', passage: marked[0], tone: marked[1]!.toLowerCase() === 'note' ? 'note' : 'caution' };
 
   const labelled = lines.flatMap((line) => {
     const found = LABELLED.exec(line);
     return found ? [{ label: found[1]!, value: found[2]! }] : [];
   });
   const figures = labelled.filter(({ value }) => FIGURE.test(value)).map(({ label, value }) => `${label} | ${value}`);
-  const listed = labelled.find(({ value }) => value.includes(';'))?.value.split(/;\s*/).filter(Boolean) ?? [];
-  const prose = lines.slice(1).find((line) => !LABELLED.test(line));
+  const label = lines.findIndex((line) => /:$/.test(line));
+  const listed = label < 0 ? [] : lines.slice(label + 1).filter(isBullet).map((line) => BULLET.exec(line)![2]!);
+  const prose = lines.slice(1).find((line) => !LABELLED.test(line) && !isBullet(line) && !/:$/.test(line));
   if (figures.length + listed.length === 0 || !prose) return { ...NOTE, component: now };
   const part = (kind: Entry['sections'][number]['kind'], text: string, lines: string[] = []) => ({ kind, text, by: '', lines });
   return {

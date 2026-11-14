@@ -17,7 +17,7 @@ async function pasted(text: string) {
 }
 
 test('the fake clerk reads each kind of structure from its plain written form, and the real Intake keeps it', async () => {
-  assert.deepEqual(await pasted('Moving to Rust\nWhere: Lisbon\nPeople: Ana Lima, Ben Okri\nPros:\n- no data races\n- one binary\nCons: slow builds, a steep start.'), {
+  assert.deepEqual(await pasted('Moving to Rust\nWhere: Lisbon\nPeople: Ana Lima, Ben Okri\nPros:\n- no data races\n- one binary\nCons:\n- slow builds\n- a steep start'), {
     where: 'Lisbon',
     people: ['Ana Lima', 'Ben Okri'],
     pros: ['no data races', 'one binary'],
@@ -30,8 +30,9 @@ test('the fake clerk reads each kind of structure from its plain written form, a
     question: 'Why is the sky blue?',
     answer: 'Air scatters short wavelengths the most.',
     term: 'Parallax',
-    definition: 'the apparent shift of an object when the viewer moves',
+    definition: 'Parallax means the apparent shift of an object when the viewer moves',
   });
+  assert.deepEqual(await pasted('Moving to Rust\nPros: no data races, one binary'), {}, 'a point written inline among others is a piece of a sentence');
   assert.deepEqual(await pasted('Packing\n[x] passport\n[ ] charger'), { items: ['passport', 'charger'], checklist: [true, false] });
   assert.deepEqual(await pasted('Bring\n- tent\n- stove'), { items: ['tent', 'stove'] });
   assert.deepEqual(await pasted('Palette: Ember #E4572E, #17BEBB and #fff.'), {
@@ -95,7 +96,7 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
     excerpt: await paste('The house remembers.\n> Every stair keeps the weight of who climbed it.\nAt: Chapter 3'),
     definition: await paste('Parallax means the apparent shift of an object when the viewer moves'),
     idea: await paste('Build a treehouse'),
-    proscons: await paste('Moving to Rust\nPros: no data races, one binary\nCons: slow builds'),
+    proscons: await paste('Moving to Rust\nPros:\n- no data races\n- one binary\nCons:\n- slow builds'),
     swatch: await paste('Palette: Ember #E4572E, Lagoon #17BEBB'),
     artwork: await ask('find a museum painting of stairs'),
     reference: await ask('find a paper on the dolly zoom'),
@@ -109,7 +110,7 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
 const PORTO =
   'Weekend in Porto\n\n' +
   'We took the early train on Friday and walked the river both days, and when it rained on Saturday we sat in the bookshop until it closed and nobody minded. Next time we go in May, before the crowds, and stay an extra night.\n' +
-  'Cost: €240\nNights: 2\nBest: the bridge at dusk; the tiled station; grilled sardines';
+  'Cost: €240\nNights: 2\nBest:\n- the bridge at dusk\n- the tiled station\n- grilled sardines';
 const PORTO_SHEET = {
   sections: [
     { kind: 'heading', text: 'Weekend in Porto' },
@@ -131,8 +132,8 @@ test('the fake chooses a callout, a sheet or a note for a text the rules left as
   };
 
   assert.deepEqual(await paste(PORTO), { component: 'sheet', props: PORTO_SHEET, by: 'renderer' });
-  assert.deepEqual(await paste('Sourdough\nNote: the starter doubles in about six hours.'), { component: 'callout', props: { text: 'the starter doubles in about six hours.', tone: 'note' }, by: 'renderer' });
-  assert.equal((await paste('The tower, 2019\nBest: the view at night; the lift; the gardens below it')).component, 'note', 'a list with no sentence beside it is no sheet');
+  assert.deepEqual(await paste('Sourdough\nNote: the starter doubles in about six hours.'), { component: 'callout', props: { text: 'Note: the starter doubles in about six hours.', tone: 'note' }, by: 'renderer' });
+  assert.equal((await paste('The tower, 2019\nBest:\n- the view at night\n- the lift\n- the gardens below it')).component, 'list', 'a list with no sentence beside it is no sheet, and the rules draw the list');
   assert.deepEqual(k.notes, []);
 
   assert.equal((await paste('Survey of 40 viewers\nWhat they noticed in the scene, in their own words. fake:invent')).component, 'note');

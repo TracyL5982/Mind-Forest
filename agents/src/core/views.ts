@@ -149,23 +149,23 @@ export type PropsOf<C extends ComponentId> = z.infer<(typeof COMPONENTS)[C]>;
  * How one value in a view's props must stand in its item before a card may show it.
  * The content is the item's title and text and the values of its `data`, without the addresses `data` holds.
  * - `says`: the content states these words. `cell` is the same, may be empty, and holds no "|" or tab, which would make it two cells.
- * - `entry`: the same, and not out of a sentence that opens with a condition, as "the build" is out of "If she agrees we need the build".
- * - `quotes`: the content holds this passage as one stretch.
- * - `whole`: the same, and the passage begins where a sentence, a list item or a cell begins, or after a marker such as "Caution:",
- *   and ends where one ends: nothing is cut off it.
- * - `said`: a whole passage, or quoted words that are a sentence of their own.
- * - `lead`: a whole passage, or the opening of one cut short with an ellipsis.
- * - `meaning`: the passage the content gives as the meaning of the `term` beside it in the props, in a sentence that opens with the term.
+ * - `whole`: one or more whole units of the content, one after another, as `Grounding.passage` reads them: whole sentences, list lines,
+ *   table cells or lines that stand by themselves, nothing cut off any of them, and no reversing word in the unit before them, the unit
+ *   after them, or the heading or label they sit under. "take ibuprofen with warfarin" is no whole unit of "Do not take ibuprofen with warfarin."
+ * - `units`: whole units, whatever stands beside them: a point for or against, or the words a note sets large above the whole item.
+ * - `said`: someone's words: `whole`, or the whole of a quotation inside one sentence that says who said it.
+ * - `lead`: `whole`, or the opening of whole units cut short with an ellipsis.
+ * - `meaning`: `whole`, the first unit opening with the `term` beside it in the props: "Parallax is the shift…", "Parallax: the shift…".
  * - `writes`: the content writes this number. When the `unit` beside it in the props scales it, as 万 and k do, the content writes it with that unit: "2189万" for 2189 in 万.
  * - `unit`: the content states these words, or writes them against one of the `values` beside them in the props, as "45%" writes "%".
  * - `paints`: the content writes this colour, a hex value as a whole or a colour name as words.
  * - `own`: one of the item's own values, whole or cut short with an ellipsis: an address, its site, its source, its summary, its text, a value in its `data`.
- * - `label`: words of the content that name the `value` beside them in the props, as `Grounding.names` reads them: on the line, in the sentence or
- *   in the table row that holds the value.
+ * - `label`: words of the content that name the `value` beside them in the props, as `Grounding.names` reads them: in the unit that holds
+ *   the value, or in its table row and the head of its column.
  * - `point`: the same for the number at the same place in the `values` beside them, as a chart's labels are.
  * - `choice`: how to draw, not what to show.
  */
-export type Stated = 'says' | 'cell' | 'entry' | 'quotes' | 'whole' | 'said' | 'lead' | 'meaning' | 'writes' | 'unit' | 'paints' | 'own' | 'label' | 'point' | 'choice';
+export type Stated = 'says' | 'cell' | 'whole' | 'units' | 'said' | 'lead' | 'meaning' | 'writes' | 'unit' | 'paints' | 'own' | 'label' | 'point' | 'choice';
 
 type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never;
 type Fields<T> = { readonly [K in keyof T]-?: Check<NonNullable<T[K]>> };
@@ -196,7 +196,7 @@ type ContentChecks = {
 
 /** The content check of every component. The type refuses a component, or a prop of one, that has no entry here. */
 export const CHECKS: ContentChecks = {
-  note: { props: { emphasis: 'says' } },
+  note: { props: { emphasis: 'units' } },
   quote: { props: { text: 'said', by: 'says' } },
   fact: { props: { value: 'says', label: 'label' }, also: (p) => p.value.length <= 32 },
   image: { props: { src: 'own', caption: 'own', aspect: 'choice' } },
@@ -209,14 +209,14 @@ export const CHECKS: ContentChecks = {
   person: { props: { name: 'says', role: 'says', image: 'own' } },
   chat: { props: { messages: { role: 'own', text: 'own' }, source: 'own' } },
   code: { props: { language: 'choice', source: 'own' } },
-  steps: { props: { steps: 'entry' }, also: (p, _item, text) => p.steps.length >= 2 && !text.converses() },
+  steps: { props: { steps: 'whole' }, also: (p, _item, text) => p.steps.length >= 2 && !text.converses() },
   facts: {
     props: { facts: { label: 'label', value: 'says' }, more: 'choice' },
     also: (p, item) => p.more === undefined || (Array.isArray(item.data.facts) && p.more === item.data.facts.length - p.facts.length),
   },
   table: { props: { heads: 'cell', rows: 'cell' } },
   list: {
-    props: { items: 'entry', checked: 'choice' },
+    props: { items: 'whole', checked: 'choice' },
     // A mark stands when the text carries it on the item's own line, or the data holds it for that item.
     also: (p, item, text) => {
       if (text.converses()) return false;
@@ -227,12 +227,12 @@ export const CHECKS: ContentChecks = {
   },
   // Shares of one whole add up to it. A percent that the text rounded may leave the sum one off.
   breakdown: { props: { labels: 'point', values: 'writes', unit: 'unit' }, also: (p) => Math.abs(p.values.reduce((sum, value) => sum + value, 0) - 100) <= 1 },
-  qa: { props: { question: 'says', answer: 'says' }, also: (_p, _item, text) => !text.converses() },
+  qa: { props: { question: 'says', answer: 'whole' }, also: (_p, _item, text) => !text.converses() },
   callout: { props: { text: 'whole', tone: 'choice' } },
   excerpt: { props: { text: 'whole', at: 'says', source: 'own' } },
   definition: { props: { term: 'says', definition: 'meaning' } },
   idea: { props: {} },
-  proscons: { props: { pros: 'says', cons: 'says' }, also: (_p, _item, text) => !text.converses() },
+  proscons: { props: { pros: 'units', cons: 'units' }, also: (_p, _item, text) => !text.converses() },
   swatch: { props: { colours: { name: 'says', value: 'paints' } } },
   artwork: { props: { src: 'own', maker: 'says', date: 'says', medium: 'says', holder: 'says' } },
   reference: {
@@ -247,7 +247,7 @@ export const CHECKS: ContentChecks = {
           heading: { text: 'says' },
           text: { text: 'lead' },
           figures: { facts: { label: 'label', value: 'says' } },
-          list: { items: 'entry' },
+          list: { items: 'whole' },
           table: { heads: 'cell', rows: 'cell' },
           picture: { src: 'own' },
           excerpt: { text: 'said', by: 'says' },

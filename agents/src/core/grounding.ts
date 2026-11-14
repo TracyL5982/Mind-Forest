@@ -1,27 +1,22 @@
 /**
- * A source text, asked whether it states a claim. Built once per text; each question reads the same token list.
+ * A source text, asked whether it states a claim. Built once per text; each question reads the same token list, and the same units.
  *
  * The text and every claim are first brought to one written form (Unicode NFKC, invisible characters removed), so a
  * full-width digit or a decomposed accent is the character it looks like.
  *
- * A claim is stated when its tokens are a run of whole tokens of the text. Case, spacing, quote marks and other
- * punctuation between tokens do not count. A token is a word, a number, or one character of a script written
- * without spaces, which makes a claim in such a script match as a substring. A number is one token that knows every
- * value its written form may be read as, and a claim number is stated by a token that holds its value.
+ * A short claim, such as a value, a name or a label, is stated when its tokens are a run of whole tokens of the text. Case, spacing,
+ * quote marks and other punctuation between tokens do not count. A token is a word, a number, or one character of a script written
+ * without spaces, which makes a claim in such a script match as a substring. A number is one token with its sign and its magnitude:
+ * "-3%", "负3%", "(£1.3m)" and "800 thousand" are each one number, and "3%", "£1.3m" and "800" are other numbers.
  *
- * Between two tokens the text may break off: at a sentence end, an empty line, a table cell, a list item. Each kind
- * of claim names the breaks it may not run across. A claim that itself carries the break at that place may.
- *
- * A line break ends a sentence only where the line ends one or is a list item, or the next line is a list item, a table row or
- * empty: pasted text is often wrapped in the middle of a sentence, as in "Do not⏎take ibuprofen".
+ * A passage, an entry of a list or a step is stated only as whole units of the text, verbatim once white space is folded. A unit is one
+ * whole sentence, one whole list line, one whole table cell, or a line that stands by itself: a heading, or a label ending in a colon.
+ * No part of a unit is a passage, because no check on strings can tell when a part keeps what the whole says: "take ibuprofen with
+ * warfarin" is part of "Do not take ibuprofen with warfarin."
  */
 export interface Grounding {
   /** The text holds these words or this number, inside one table cell, one list item and one CJK sentence. A claim with no letter or digit must stand in the text as written. */
   says(claim: string): boolean;
-  /** As `says`, and no sentence that holds them opens with a condition ("If", "When", "Unless", "如果", "要是") the words leave behind. */
-  asserts(claim: string): boolean;
-  /** As `says`, and the words are one stretch of the text: a sentence end or an empty line breaks the passage too. A line break inside a sentence does not. */
-  quotes(passage: string): boolean;
   /** The text writes this number, in any grouping. Counted in a unit that scales it, as 万, 亿, 千, k, M and bn do, it is written with that unit against it: 2189 in 万 is "2189万". */
   writes(value: number, unit?: string): boolean;
   /** The text writes this number with this unit set against it, before or after: "45%", "$120", "12 films", and "2189万" for 2189 in 万. */
@@ -33,79 +28,58 @@ export interface Grounding {
   /** The check mark on the line whose own text is these words: done, not done, or none. */
   ticks(words: string): boolean | undefined;
   /**
-   * The words name the value where the text writes it: each word of the label stands, in any order, on the line that holds the value,
-   * in its sentence there, or in the head of the value's column. A word stands in its other forms too: "slept" for "sleep", "Jan" for
-   * "January", "one" for "1". A label need not hold the words that only tie it together ("of", "per", "的"), and may add a word that
-   * says what kind of value it is ("time", "price", "weight") where the value is of that kind. It may not open or end with a word that
-   * ties, which makes it a piece cut out of a phrase: "of the five-day group". A number is read as `writes` reads it, with its unit.
-   * "fell by 15%" names no "absences".
+   * The words name the value where the text writes it: each word of the label stands, in any order, in the unit that holds the value,
+   * and for a table cell in its row or the head of its column. A word stands in its other forms too: "slept" for "sleep", "Jan" for
+   * "January", "one" for "1". A label need not hold the words that only tie it together ("of", "per", "的"), and may not open or end
+   * with one, which makes it a piece cut out of a phrase: "of the five-day group". "Height" names no "330 m long".
    */
   names(label: string, value: string | number, unit?: string): boolean;
-  /**
-   * As `quotes`, and the passage is whole: it begins where a sentence, a table cell or a list item begins, or after a marker such as
-   * "Caution:" or "注意：", and ends where one ends. "take the pills" is no whole passage of "Do not take the pills.", and
-   * "store it in the freezer." none of "Wrong: store it in the freezer."
-   */
-  whole(passage: string): boolean;
-  /** Someone's words: a whole passage, or quoted words that are a sentence of their own, as in 'He said, "Same time next year."' */
-  said(passage: string): boolean;
-  /** As `quotes`, and the passage begins where a whole one may. It may break off anywhere. */
-  leads(passage: string): boolean;
+  /** How the passage stands: as one or more whole units one after another, and then whether a reversing word stands beside them. */
+  passage(passage: string): Passage;
+  /** As `passage`, for a passage cut short: it opens where a unit opens and may end anywhere inside the units after it. */
+  leads(passage: string): Passage;
+  /** Someone's words: whole units, or the whole of a quotation inside one sentence that says who said it, as in 'He said, "Same time next year."' */
+  said(passage: string): Passage;
+  /** The meaning is whole units, the first of which opens with the term: "Parallax is the shift…", "Parallax: the shift…". */
+  defines(term: string, meaning: string): Passage | 'apart';
   /** The text opens with these words. */
   begins(passage: string): boolean;
-  /**
-   * The text gives the term this meaning, in one sentence that opens with the term: the meaning is the whole sentence, or the
-   * rest of it after nothing but punctuation or a linking word, as in "Parallax: the shift…" and "Parallax is the shift…".
-   * "Some say that X is Y", "The opposite of X is Y" and "Y. X is something else" give X no meaning Y.
-   */
-  defines(term: string, meaning: string): boolean;
   /** The text is a conversation: three lines or more open with a name and a colon, of two people at least, one of whom speaks twice. */
   converses(): boolean;
 }
 
+/**
+ * How a passage stands in a text.
+ * - `whole`: it is one or more whole units, one after another.
+ * - `turned`: it is, and a unit beside it, or the heading or label it sits under, holds a word of `REVERSING`.
+ * - `cut`: the text holds its words, but not as whole units.
+ * - `unstated`: the text does not hold its words.
+ */
+export type Passage = 'whole' | 'turned' | 'cut' | 'unstated';
+
+/**
+ * Words that may turn around what stands beside them: "That claim is false.", "Myth:", "Do not", "谣言", "别". A unit beside one,
+ * or under one, is never shown without it. The table over-refuses on purpose, since a refused card falls back to the rules' card.
+ */
+export const REVERSING = {
+  en: ['not true', 'untrue', 'false', 'myth', 'wrong', 'incorrect', 'mistaken', 'out of date', 'outdated', 'debunked', 'overturned', 'disproved', 'rumour', 'rumor', "don't", 'do not', 'never', 'avoid', 'not recommended', 'no longer'],
+  zh: ['谣言', '不对', '错误', '误解', '被推翻', '推翻', '过时', '不要', '别', '禁止', '千万别', '并非', '不是真的', '已被证伪', '勿'],
+} as const;
+
 const enum Break {
-  /** ".", "!" or "?" before white space, unless the period closes an abbreviation. */
-  Sentence = 1,
   /** "。", or "!" or "?" set straight against a character of a script written without spaces. */
   FullStop = 2,
-  /** An empty line. */
-  Blank = 4,
   /** A "|" between two cells of a table row. */
   Cell = 8,
   /** The start of a line that opens with a bullet, a number and a dot, a check box or "|". */
   Item = 16,
   /** The line break before or after a line that holds table cells. */
   Row = 32,
-  /** A tab inside a line: a cell break to a short claim. Prose holds tabs too, so a passage reads one as white space. */
+  /** A tab inside a line: a cell break to a short claim. */
   Tab = 64,
-  /** A line break of any kind. */
-  Line = 128,
-  /** A quotation mark that opens words the text itself sets apart. */
-  Quote = 256,
-  /** A quotation mark that closes them. */
-  Unquote = 1024,
-  /** A colon after a marker that opens a line or a sentence: "Caution:", "Note:", "注意：". What follows it stands as it is said. */
-  Lead = 512,
-  /** Any colon. */
-  Colon = 2048,
-  /** A comma or a semicolon. */
-  Pause = 4096,
-  /** A mark that may end a sentence, whatever follows it: ".", "!", "?" or "。". */
-  Stop = 8192,
-  /** The line break after a list item, which ends the item as a full stop would. */
-  Close = 16384,
 }
 
 const SHORT = Break.FullStop | Break.Cell | Break.Item | Break.Row | Break.Tab;
-const PASSAGE = Break.FullStop | Break.Cell | Break.Item | Break.Row | Break.Sentence | Break.Blank;
-/** Where one sentence ends and the next begins, to a claim that must stand inside one. A line break inside a sentence does not end it. */
-const SENTENCE = Break.Sentence | Break.FullStop | Break.Blank | Break.Item | Break.Row;
-const APART = SENTENCE | Break.Cell | Break.Tab | Break.Close;
-/**
- * Where a whole passage may begin, where one may begin when a marker may stand before it, and before which one may end.
- * Quoted words are no passage of their own, since the sentence around them may deny them: 'He said "the plan works" was a lie.'
- */
-const EDGES = { start: APART, led: APART | Break.Lead, end: APART };
 
 /** A number as a text writes it. */
 interface Num {
@@ -130,6 +104,7 @@ interface Tokens {
 
 const SPACELESS = String.raw`(?=[\p{L}\p{M}\p{N}])[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Thai}]`;
 const SPACELESS_CHAR = new RegExp(`^${SPACELESS}$`, 'u');
+const HAS_SPACELESS = new RegExp(SPACELESS, 'u');
 const WORD_CHAR = /^[\p{L}\p{M}\p{N}]$/u;
 const SPACED_BEFORE = new RegExp(`(?:(?!${SPACELESS})[\\p{L}\\p{N}])$`, 'u');
 const SPACED_AFTER = new RegExp(`^(?:(?!${SPACELESS})[\\p{L}\\p{N}])`, 'u');
@@ -141,13 +116,6 @@ const ONLY_MARK = new RegExp(`^(?:${MARK})$`, 'u');
 const MARK_FIRST = new RegExp(`^(?:\\s*\\d+[.)])?[^\\p{L}\\p{N}]*?(${MARK})(.*)$`, 'u');
 const MARK_LAST = new RegExp(`^(.*?)(${MARK})\\s*$`, 'u');
 const OPENS_ITEM = new RegExp(`[-*•|]|\\d+[.)]\\s|${MARK}`, 'uy');
-
-const OPENING_MARKS = new Set([...'“„‘«「『']);
-const CLOSING_MARKS = new Set([...'”»」』']);
-/** A mark that opens words when it follows white space or an opening bracket, and closes them otherwise. */
-const EITHER_MARKS = new Set([...'"\'’']);
-const BEFORE_OPENING = /^[\s([{]?$/u;
-const PAUSES = new Set([...',;、']);
 
 const ASCII_ONLY = /^[\x00-\x7f]*$/;
 const UNSEEN = /[­​-‍⁠️﻿]/g;
@@ -203,10 +171,12 @@ function kindAt(text: string, at: number): Char {
   return code < 128 ? ASCII[code]! : beyondAscii(String.fromCodePoint(text.codePointAt(at)!));
 }
 
-/** Words whose period is part of the word and ends no sentence. A single letter and a run of initials are read the same way. */
-const ABBREVIATIONS = new Set('dr mr mrs ms mx prof sr jr st mt ft vs approx est fig vol inc ltd corp dept ca cf pp acc incl excl esp'.split(' '));
-
 const MAGNITUDES = new Map([['千', 1e3], ['万', 1e4], ['萬', 1e4], ['亿', 1e8], ['億', 1e8]]);
+/** A magnitude written as a word after the number, which is part of it: "800 thousand" is 800000. */
+const MAGNITUDE_WORD = /\s?(thousand|million|billion|trillion)(?![\p{L}\p{N}])/iuy;
+const MAGNITUDE_WORDS: Record<string, number> = { thousand: 1e3, million: 1e6, billion: 1e9, trillion: 1e12 };
+/** A word or words before a number that are its minus sign: "负3%", "零下5度", "minus 3". */
+const SIGN_WORDS: Token[][] = [['负'], ['零', '下'], ['minus']];
 
 const DIGIT_GROUPS = /\d+(?:(?:\/\d+)+|(?:[.,]\d+)*)/y;
 const DIGITS_AND_DOTS = /\d+(?:\.\d+)*/y;
@@ -257,9 +227,8 @@ const times = (value: number, magnitude: number) => Number((value * magnitude).t
 class Reader implements Tokens {
   readonly list: Token[] = [];
   readonly breaks: number[] = [];
-  /** How many cell breaks stand before each token on its line: the column it is in, when the line is a table row. */
-  readonly columns: number[] = [];
-  private column = 0;
+  /** Where each token starts in the text. */
+  readonly starts: number[] = [];
   private readonly size: number;
   private at = 0;
   /** The breaks met since the last token. */
@@ -272,12 +241,8 @@ class Reader implements Tokens {
   /** The index this line's first token has, or will have. */
   private lineHead = 0;
   private cells = false;
-  /** This line opens with a bullet, a number or a check box: a list item, which its line break ends as a full stop would. */
-  private listed = false;
   /** Numbers that start before here are entries of a comma list, so a comma groups nothing. */
   private listEnd = 0;
-  /** The index of the first token of this sentence or line. */
-  private opened = 0;
   /** How many tokens stand before the character at `mark`. */
   readonly marked: number;
 
@@ -294,19 +259,13 @@ class Reader implements Tokens {
     const kind = kindAt(text, at);
     // A tab that indents a line separates no cells.
     if (kind === Char.Space || (kind === Char.Cell && this.lineFrom < 0 && text[at] === '\t')) {
-      if (this.stopped) this.pending |= Break.Sentence;
       this.stopped = false;
       this.at++;
       return;
     }
     if (kind === Char.Newline) {
-      if (this.stopped) this.pending |= Break.Sentence;
-      if (this.listed) this.pending |= Break.Close;
-      if (this.lineFrom < 0) this.pending |= Break.Blank;
-      this.pending |= Break.Line;
       this.closeRow();
-      this.stopped = this.cells = this.listed = false;
-      this.column = 0;
+      this.stopped = this.cells = false;
       this.lineFrom = -1;
       this.lineHead = this.list.length;
       this.at++;
@@ -316,63 +275,44 @@ class Reader implements Tokens {
       this.lineFrom = at;
       if (kind !== Char.Letter && kind !== Char.Lone) {
         OPENS_ITEM.lastIndex = at;
-        if (OPENS_ITEM.test(text)) {
-          this.pending |= Break.Item;
-          this.listed = true;
-        }
+        if (OPENS_ITEM.test(text)) this.pending |= Break.Item;
       }
     }
     if (kind === Char.Letter) this.word();
     else if (kind === Char.Lone) {
       if (this.stopped) this.pending |= Break.FullStop;
       const to = at + width(text, at);
-      this.push(text.slice(at, to), to);
+      this.push(text.slice(at, to), at, to);
     } else if (kind === Char.Digit) this.number();
     else {
-      if (kind === Char.FullStop) this.pending |= Break.FullStop | Break.Stop;
-      else if (kind === Char.Stop) this.pending |= Break.Stop;
+      if (kind === Char.FullStop) this.pending |= Break.FullStop;
       else if (kind === Char.Cell) {
         this.pending |= text[at] === '\t' ? Break.Tab : Break.Cell;
         this.cells = true;
-        this.column++;
-      } else if (OPENING_MARKS.has(text[at]!) || (EITHER_MARKS.has(text[at]!) && BEFORE_OPENING.test(text[at - 1] ?? ''))) this.pending |= Break.Quote;
-      else if (CLOSING_MARKS.has(text[at]!) || EITHER_MARKS.has(text[at]!)) this.pending |= Break.Unquote;
-      else if (text[at] === ':' || text[at] === '：') {
-        if ((this.pending & ~Break.Unquote) === 0 && this.marker()) this.pending |= Break.Lead;
-        this.pending |= Break.Colon;
-      } else if (PAUSES.has(text[at]!)) this.pending |= Break.Pause;
+      }
       this.stopped = kind === Char.Stop || (kind === Char.Closer && this.stopped);
       this.at += width(text, at);
     }
   }
 
-  /** The words since the start of this sentence or line are a marker, which a colon then closes. */
-  private marker(): boolean {
-    const size = this.list.length - this.opened;
-    return MARKERS.some((marker) => marker.length === size && marker.every((token, n) => this.list[this.opened + n] === token));
-  }
-
-  /**
-   * A period after a number and its unit or ordinal ends a sentence where a capital, a digit, a CJK character or the end of the
-   * text follows it, as in "due on the 1st. The deposit" and "330 m. Weight", although "st" and "m" may be abbreviations.
-   */
-  private endsAfterNumber(word: number, period: number): boolean {
-    const { text, size } = this;
-    if (!(typeof this.list[this.list.length - 1] === 'object' && (this.end === word || this.spaces(this.end, word)))) return false;
-    let at = period + 1;
-    if (at < size && !/\s/.test(text[at]!)) return false;
-    while (at < size && /\s/.test(text[at]!)) at++;
-    return at >= size || /[\p{Lu}\p{N}]/u.test(text[at]!) || kindAt(text, at) === Char.Lone;
-  }
-
-  private push(token: Token, to: number): void {
-    if ((this.pending & (SENTENCE | Break.Line)) !== 0) this.opened = this.list.length;
+  private push(token: Token, from: number, to: number): void {
     this.list.push(token);
     this.breaks.push(this.pending);
-    this.columns.push(this.column);
+    this.starts.push(from);
     this.pending = 0;
     this.stopped = false;
     this.at = this.end = to;
+  }
+
+  /** Takes back the last `count` tokens, which a number reads as its sign, and gives where the first of them started. */
+  private unpush(count: number): number {
+    let from = this.at;
+    for (let n = 0; n < count; n++) {
+      this.list.pop();
+      this.pending |= this.breaks.pop()!;
+      from = this.starts.pop()!;
+    }
+    return from;
   }
 
   private closeRow(): void {
@@ -414,12 +354,11 @@ class Reader implements Tokens {
     while (code >= 97 && code <= 122) code = text.charCodeAt(++to);
     const lower = !(code < 128 ? ASCII[code] === Char.Letter : to < size && kindAt(text, to) === Char.Letter);
     if (!lower) to = this.lettersEnd(to);
-    const single = to - at === 1;
     let initials = false;
     let apostrophe = false;
     let next = text.charCodeAt(to);
-    // "U.S." is the word "us": single letters joined by periods, with the period that closes them.
-    if (single) {
+    // "U.S." is the word "us": single letters joined by periods.
+    if (to - at === 1) {
       while (next === 46 && to + 1 < size && kindAt(text, to + 1) === Char.Letter && !this.inWord(to + 2)) {
         to += 2;
         initials = true;
@@ -443,20 +382,26 @@ class Reader implements Tokens {
       if (!this.inWord(after) && text[after] !== '+' && text[after] !== '#') {
         written += text.slice(to, after);
         to = after;
-        next = text.charCodeAt(to);
       }
     }
-    if (next === 46 && (initials || single || ABBREVIATIONS.has(written)) && !this.endsAfterNumber(at, to)) to++;
-    this.push(written, to);
+    this.push(written, at, to);
   }
 
-  /** How a dash set against the number after it reads: 0 for no sign, 1 for a minus, 2 for a minus or no sign. */
-  private sign(index: number): 0 | 1 | 2 {
+  /** A dash set against the number after it is its minus sign, unless it follows a token straight: "GPT-4", "10-12". */
+  private sign(index: number): boolean {
     const char = this.text[index];
-    // Straight after a token it is a hyphen or a range: "GPT-4", "10-12".
-    if ((char !== '-' && char !== '−' && char !== '–') || index === this.end) return 0;
-    // At the start of a line it may be a bullet, and after a number and a space it may be a range.
-    return index === this.lineFrom || this.afterNumber(index) ? 2 : 1;
+    return (char === '-' || char === '−' || char === '–') && index !== this.end;
+  }
+
+  /** How many tokens before here are words that make the number after them negative: "负", "零下", "minus". */
+  private signWords(first: number): number {
+    const { list } = this;
+    for (const words of SIGN_WORDS) {
+      const at = list.length - words.length;
+      if (at < 0 || !words.every((word, n) => list[at + n] === word)) continue;
+      if (this.end === first || (words[0] === 'minus' && this.spaces(this.end, first))) return words.length;
+    }
+    return 0;
   }
 
   /** Only spaces stand between the last token, a number, and here. */
@@ -483,8 +428,13 @@ class Reader implements Tokens {
       glued = text[before--]!;
       if (!minus && (minus = this.sign(before))) before--;
     }
-    const first = before + 1;
+    let first = before + 1;
     glued += this.comparator(before);
+    const signWords = minus ? 0 : this.signWords(first);
+    if (signWords > 0) {
+      minus = true;
+      first = this.unpush(signWords);
+    }
 
     // After a letter the digits are part of a name, as in "Q1,120", and group nothing.
     const free = start >= this.listEnd && !(start === this.end && kindAt(text, start - 1) === Char.Letter);
@@ -507,14 +457,21 @@ class Reader implements Tokens {
       }
     }
 
+    let magnitude: number | undefined;
     if (!Number.isNaN(value)) {
-      // "5k" and "3万" state five thousand and thirty thousand, not five and three. "5km" is still five.
+      // "5k", "3万" and "800 thousand" state five thousand, thirty thousand and eight hundred thousand, not five, three and eight hundred.
+      // "5km" is still five, and so is "5m" unless money is counted: "£1.3m" is 1.3 million.
       const char = text[to];
       const han = char === ' ' ? to + 1 : to;
-      let magnitude = MAGNITUDES.get(text[han]!);
+      MAGNITUDE_WORD.lastIndex = to;
+      const word = MAGNITUDE_WORD.exec(text);
+      magnitude = MAGNITUDES.get(text[han]!);
       if (magnitude) to = han + 1;
-      else if ((char === 'k' || char === 'K' || char === 'M') && !this.inWord(to + 1)) {
-        magnitude = char === 'M' ? 1e6 : 1e3;
+      else if (word) {
+        magnitude = MAGNITUDE_WORDS[word[1]!.toLowerCase()];
+        to += word[0].length;
+      } else if ((char === 'k' || char === 'K' || char === 'M' || (char === 'm' && isCurrency(glued[0]))) && !this.inWord(to + 1)) {
+        magnitude = char === 'k' || char === 'K' ? 1e3 : 1e6;
         to += 1;
       } else if ((char === 'b' || char === 'B') && (text[to + 1] === 'n' || text[to + 1] === 'N') && !this.inWord(to + 2)) {
         magnitude = 1e9;
@@ -525,11 +482,6 @@ class Reader implements Tokens {
         value = times(value, by);
         readings = readings.map((reading) => times(reading, by));
       }
-      if (minus) {
-        const below = readings.map((reading) => -reading);
-        value = -value;
-        readings = minus === 2 ? [...below, ...readings] : below;
-      }
     }
 
     const after = text[to] === ' ' ? to + 1 : to;
@@ -537,7 +489,13 @@ class Reader implements Tokens {
       glued += text[after];
       to = after + 1;
     }
-    this.push({ value, readings, literal, glued }, to);
+    // An amount of money in brackets is a loss, as accounts write one: "(£1.3m)".
+    if (!minus && (isCurrency(glued[0]) || magnitude) && /\(\s*$/.test(text.slice(Math.max(0, first - 3), first)) && /^[a-z]{0,3}\s*\)/i.test(text.slice(to, to + 6))) minus = true;
+    if (minus && !Number.isNaN(value)) {
+      value = -value;
+      readings = readings.map((reading) => -reading);
+    }
+    this.push({ value, readings, literal, glued }, first, to);
   }
 }
 
@@ -545,28 +503,23 @@ const tokenize = (text: string): Tokens => new Reader(text);
 
 const phrases = (...written: string[]): Token[][] => written.map((phrase) => tokenize(phrase).list);
 
-/**
- * The words before a colon after which a passage may begin: each says only that what follows matters. Any other lead may turn
- * what follows it around: "Wrong:", "Myth:", "Don't:", "禁止：", "错误：".
- */
-const MARKER_WORDS = [
-  ...['caution', 'note', 'please note', 'nb', 'warning', 'important', 'reminder', 'tip', '注意', '提醒', '小心', '警告', '提示', '温馨提示', '重要'],
-  // The parts of a paper's abstract, which name a part and say nothing of what it holds.
-  ...['background', 'methods', 'results', 'conclusion', 'conclusions', 'findings', 'summary', 'abstract', '背景', '方法', '结果', '结论', '摘要'],
-];
-const MARKERS = phrases(...MARKER_WORDS);
+/** The words before a colon that open a remark and name no speaker: "Note:", "注意：". */
+const MARKERS = ['caution', 'note', 'please note', 'nb', 'warning', 'important', 'reminder', 'tip', '注意', '提醒', '小心', '警告', '提示', '温馨提示', '重要'];
 /** A line that opens with a short name and a colon, as a turn of a conversation does: "Mum: …", "妈妈：…". */
 const SPEAKER = /^\s*([^\s:：]{1,12})\s*[:：]/u;
 
-/** The words that may stand between a term and its meaning in one sentence. */
-const LINKS = phrases(
-  ...['is', 'are', 'was', 'were', 'means', 'mean', 'refers to', 'stands for', 'is when', 'is where', 'is defined as', 'are defined as', 'describes'],
-  ...['是', '是指', '指', '指的是', '就是', '即', '也就是', '意思是', '的意思是', '叫', '叫做'],
-);
+const TURNS = phrases(...REVERSING.en, ...REVERSING.zh);
+/** The words of a sentence that say someone said what it quotes. */
+const SPEECH = phrases(...['say', 'ask', 'tell', 'write', 'reply', 'add', 'explain', 'answer', 'recall', 'according to', 'put it'], ...['说', '问', '写道', '说道', '问道', '答道', '表示', '称', '回答', '讲']);
 /** The words that may open a sentence before the term it defines. */
-const OPENERS = phrases('a', 'an', 'the', 'the word', 'the term', 'the phrase', 'the concept of', 'the idea of', '所谓');
-/** The words that open a sentence whose entries hold only under a condition. */
+const OPENERS = phrases('', 'a', 'an', 'the', 'the word', 'the term', 'the phrase', 'the concept of', 'the idea of', '所谓');
+/** The words that open a line that is no heading but the start of a sentence the next line goes on with. */
 const CONDITIONS = phrases('if', 'when', 'unless', 'only if', '如果', '要是', '假如', '除非', '万一');
+/** The words that open a line that goes on with the line before it. */
+const GOES_ON = phrases(
+  ...['and', 'or', 'but', 'nor', 'only', 'unless', 'until', 'because', 'than'],
+  ...['但', '而', '并', '或', '以及', '和', '与', '及', '才', '就', '再', '否则', '除非', '只有', '只要', '以免', '以便', '不过', '可是', '然后', '所以', '因此', '也', '还', '的', '地', '得'],
+);
 const MONEY: Record<string, Token[][]> = {
   $: phrases('dollars', 'dollar', 'usd', '美元'),
   '€': phrases('euros', 'euro', 'eur', '欧元'),
@@ -588,55 +541,9 @@ const WORDS_AFTER: Record<string, Token[][]> = { ...MONEY, '%': phrases('percent
 
 /** Words a label needs no text to write, since they only tie its other words together. A label that opens or ends with one is cut out of a phrase. */
 const TIES = new Set('a an the of per for to in at on by and or is are was were be with from as its 的 了 是 在 却 要 说 和 与 及 也 都'.split(' '));
-/** Of those, the ones a label may begin with: an article opens a name ("A year on Mars"), and 在 and 要 open many words, as 在线 and 要求. */
-const OPENS_WORDS = new Set(['a', 'an', 'the', '在', '要']);
+/** Of those, the characters that also open words in a script written without spaces, as 在线 and 要求, which a label may begin with. */
+const OPENS_WORDS = new Set(['在', '要']);
 const TIE_PHRASES = phrases('已经');
-
-/** What kind of value a value is, read off its unit or its form. */
-type Kind = 'time' | 'age' | 'year' | 'date' | 'money' | 'share' | 'per' | 'length' | 'mass' | 'area' | 'rank';
-/** A numeral, in digits or in Chinese, before the unit that counts it. */
-const N = '[\\d一二三四五六七八九十两百千万亿]\\s*';
-const KINDS: Record<Kind, RegExp> = {
-  money: new RegExp(`[$€£¥₹₩]|\\b(?:dollars?|euros?|pounds?|pence|cents?|yen|yuan|usd|eur|gbp|rmb|cny)\\b|${N}(?:元|块)|美元|欧元|英镑|日元`, 'iu'),
-  time: new RegExp(`\\d:\\d\\d|\\d\\s*(?:s|secs?|mins?|h|hrs?|yrs?)\\b|\\b(?:seconds?|minutes?|hours?|days?|nights?|weeks?|months?|years?)\\b|${N}(?:秒|分钟?|小时|钟头|天|周|星期|个?月|年)`, 'iu'),
-  age: new RegExp(`\\b(?:years?|yrs?|months?|weeks?)(?: old)?\\b|${N}周?岁`, 'iu'),
-  year: /^\D*(?:1[0-9]|20)\d\d\D*$/u,
-  date: new RegExp(`\\b(?:jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\\b|\\d{1,4}[/.-]\\d{1,2}|\\d(?:st|nd|rd|th)\\b|${N}(?:月|日|号)`, 'iu'),
-  share: /%|\bper ?cent\b|\bpct\b|百分之/iu,
-  per: /\bper\b|\/|\b(?:an?|each) (?:hour|head|day|night|week|month|year|person)\b|每/iu,
-  length: new RegExp(`\\d\\s*(?:mm|cm|m|km|ft|feet|foot|in|inch(?:es)?|miles?|mi|yards?|metres?|meters?|kilometres?|kilometers?|centimetres?|centimeters?)\\b|${N}(?:米|厘米|毫米|公里|千米)`, 'iu'),
-  mass: new RegExp(`\\d\\s*(?:mg|g|kg|kgs|lbs?|oz)\\b|\\b(?:kilos?|kilograms?|grams?|ounces?|stones?|tonnes?|tons?)\\b|${N}(?:克|公斤|千克|斤|吨)`, 'iu'),
-  area: new RegExp(`\\b(?:sq|square|m2|acres?|hectares?)\\b|m²|${N}(?:平米|平方米?|亩)`, 'iu'),
-  rank: /\d(?:st|nd|rd|th)\b|第/iu,
-};
-/** The kinds of a value. A sum of money is that and nothing else, so "$2.1m" is no length. */
-function kindsOf(written: string): Set<Kind> {
-  const kinds = new Set((Object.keys(KINDS) as Kind[]).filter((kind) => KINDS[kind].test(written)));
-  if (kinds.has('money')) kinds.delete('length');
-  return kinds;
-}
-
-/**
- * Words a label may add that say what kind of value it names, with the kinds of value each may name. A word for which no kind is
- * given names any value, and may be added only beside a word the text writes: "Total climb".
- */
-const MEASURES: [Token[], Kind[]][] = (
-  [
-    [['time', 'duration', '时间', '时长', '用时'], ['time']],
-    [['age', '年龄'], ['age', 'time']],
-    [['year', '年份'], ['year']],
-    [['date', '日期'], ['date']],
-    [['price', 'cost', 'amount', 'fee', '价格', '价钱', '售价', '费用', '成本', '金额'], ['money']],
-    [['rate'], ['share', 'per', 'money']],
-    [['share', 'proportion', '比例', '比率', '占比'], ['share']],
-    [['length', '长度'], ['length', 'time']],
-    [['height', 'distance', '高度', '距离'], ['length']],
-    [['weight', '重量'], ['mass']],
-    [['size', 'area', '面积'], ['area', 'length']],
-    [['place', 'rank', 'position', '名次', '排名'], ['rank']],
-    [['count', 'number', 'total', '数', '数量', '总数', '次数', '数目', '总计', '合计'], []],
-  ] as const
-).flatMap(([words, kinds]) => words.map((word): [Token[], Kind[]] => [tokenize(word).list, [...kinds]]));
 
 const NUMBER_WORDS = new Map('one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty'.split(' ').map((word, n) => [word, n + 1]));
 /** Each month and weekday by its name, under the short forms a label may give it. */
@@ -690,35 +597,25 @@ function remembered<T>(read: (key: string) => T, bound: number): (key: string) =
 /** The one form a label word and a text word are compared in. */
 const formOf = remembered((word) => CALENDAR.get(word) ?? stem(word), 20_000);
 
-/** A label read into the words that must stand beside its value and the words it may add. Undefined for a label cut out of a phrase. */
-interface Label {
-  words: Token[];
-  measures: { tokens: Token[]; kinds: Kind[] }[];
-  /** It opens with an article, as "A year on Mars" and "a week" do. */
-  article: boolean;
+/** The reversing phrases by the form of their first word, so a run of tokens is read once against the whole table. */
+const TURNS_BY_FIRST = new Map<string, Token[][]>();
+for (const phrase of TURNS) {
+  const first = formOf(phrase[0] as string);
+  TURNS_BY_FIRST.set(first, [...(TURNS_BY_FIRST.get(first) ?? []), phrase]);
 }
 
+/** The words of a label that must stand beside its value. Undefined for a label cut out of a phrase. */
 const labelOf = remembered(readLabel, 2_000);
 
-function readLabel(label: string): Label | undefined {
+function readLabel(label: string): Token[] | undefined {
   const { list } = tokenize(uniform(label));
-  if (list.length === 0) return undefined;
   const tie = (token: Token | undefined, opening: boolean) => typeof token === 'string' && TIES.has(token) && !(opening && OPENS_WORDS.has(token));
   const tied = (phrase: Token[], at: number) => phrase.every((token, n) => list[at + n] === token);
-  if (tie(list[0], true) || tie(list.at(-1), false) || TIE_PHRASES.some((phrase) => tied(phrase, 0) || tied(phrase, list.length - phrase.length))) return undefined;
+  if (list.length === 0 || tie(list[0], true) || tie(list.at(-1), false) || TIE_PHRASES.some((phrase) => tied(phrase, 0) || tied(phrase, list.length - phrase.length))) return undefined;
   const taken = new Set<number>();
-  const measures: Label['measures'] = [];
-  for (const [tokens, kinds] of MEASURES) {
-    for (let at = 0; at + tokens.length <= list.length; at++) {
-      const here = tokens.every((token, n) => !taken.has(at + n) && typeof list[at + n] === 'string' && formOf(list[at + n] as string) === formOf(token as string));
-      if (!here) continue;
-      for (let n = 0; n < tokens.length; n++) taken.add(at + n);
-      measures.push({ tokens: list.slice(at, at + tokens.length), kinds });
-    }
-  }
   for (const phrase of TIE_PHRASES) for (let at = 0; at + phrase.length <= list.length; at++) if (tied(phrase, at)) for (let n = 0; n < phrase.length; n++) taken.add(at + n);
   const words = list.filter((token, at) => !taken.has(at) && !(typeof token === 'string' && TIES.has(token)));
-  return words.length + measures.length > 0 ? { words, measures, article: list[0] === 'a' || list[0] === 'an' || list[0] === 'the' } : undefined;
+  return words.length > 0 ? words : undefined;
 }
 
 /** The token at `at` is a number that states what the asked number states, with every sign the asked one carries. */
@@ -774,6 +671,192 @@ function marked(text: string): { item: Tokens; done: boolean }[] {
   return lines;
 }
 
+// ---- units
+
+/** One whole unit of a text: a sentence, a list line, a table cell, or a line that stands by itself, as a heading or a label does. */
+interface Unit {
+  from: number;
+  to: number;
+  /** Units an empty line apart are not beside each other. */
+  paragraph: number;
+  /** The heading, or the label line ending in a colon, that the unit sits under, by index, or -1. */
+  under: number;
+  /** A cell's row, the row of its table's heads and its column, or -1. */
+  row: number;
+  head: number;
+  column: number;
+}
+
+/** Words whose period is part of the word. After most of them a full stop ends a sentence only before a capital that opens no other one. */
+const ABBREVIATIONS = new Set('dr mr mrs ms mx prof sr jr st mt ft vs approx est fig vol inc ltd corp dept ca cf pp acc incl excl esp etc eg ie'.split(' '));
+/** Those that always stand before what they name, so that their period never ends a sentence: "Dr. Smith", "e.g. Paris". */
+const BEFORE_A_NAME = new Set('dr mr mrs ms mx prof st mt vs approx fig vol ca cf pp eg ie'.split(' '));
+const CLOSERS = /["'”’»」』)\]]/u;
+/**
+ * What opens a line of a list and is no part of its unit: a bullet, a number, a check box, a step's number in words ("第一步，",
+ * "Step 2:"), the "Q:" and "A:" of a question and its answer, or the ">" of a quoted line. A ">" before a number is "more than".
+ */
+const ITEM_LINE = new RegExp(
+  `^\\s*(?:(?:[-*•]\\s+|\\d+[.)]\\s+)(?:(?:${MARK})\\s*)?|(?:${MARK})\\s*|第[一二三四五六七八九十\\d]+步[，,:、.]?\\s*|[Ss]tep\\s*\\d+[:.)]\\s*|(?:[QqAa]|问|答)\\s*:\\s*|>\\s+(?=\\D))`,
+  'u',
+);
+const HEADING_LINE = /^\s*#{1,6}\s+/;
+const ROW_DIVIDER = /^[\s|:\-–—+]*$/;
+/** A line that ends in one of these goes on, or ends a sentence: no heading. */
+const LINE_END = /[.!?。;,:、\-–—]["'”’»」』)\]]*\s*$/u;
+
+/** Where a period at `at` ends a sentence: before white space or the end, and after an abbreviation only before a capital that opens no other one. */
+function endsAtPeriod(text: string, at: number, to: number): boolean {
+  if (at + 1 < to && !/\s/.test(text[at + 1]!) && !CLOSERS.test(text[at + 1]!)) return false;
+  const before = /([\p{L}.]+)$/u.exec(text.slice(Math.max(0, at - 12), at))?.[1] ?? '';
+  const word = before.replaceAll('.', '').toLowerCase();
+  // After a number and its unit or ordinal, a sentence ends before a capital, a digit or a CJK character: "330 m. Weight", "the 1st. The
+  // deposit", and not "6 ft. tall".
+  if (/\d\s?\p{L}{1,3}$/u.test(text.slice(Math.max(0, at - 6), at))) return at + 1 >= to || new RegExp(`^\\s+(?:[\\p{Lu}\\d]|${SPACELESS})`, 'u').test(text.slice(at + 1, to));
+  const abbreviation = word !== '' && (ABBREVIATIONS.has(word) || /^\p{L}$/u.test(word) || /^(?:\p{L}\.)+\p{L}$/u.test(before));
+  if (!abbreviation) return true;
+  if (BEFORE_A_NAME.has(word)) return false;
+  const next = /^\s+(\p{Lu}\p{L}*)(\.?)/u.exec(text.slice(at + 1, to));
+  return next !== null && !(next[2] === '.' && (ABBREVIATIONS.has(next[1]!.toLowerCase()) || next[1]!.length === 1));
+}
+
+/** The sentences of a stretch of prose, as offsets into the text. */
+function sentences(text: string, from: number, to: number): [number, number][] {
+  const out: [number, number][] = [];
+  let start = from;
+  const marks = /[.!?。]/g;
+  for (let at = from; at < to; at++) {
+    marks.lastIndex = at;
+    const found = marks.exec(text);
+    if (!found || found.index >= to) break;
+    at = found.index;
+    const char = text[at]!;
+    const next = text[at + 1];
+    const ends =
+      char === '。' ||
+      ((char === '!' || char === '?') && (at + 1 >= to || /\s/.test(next!) || CLOSERS.test(next!) || SPACELESS_CHAR.test(next!))) ||
+      (char === '.' && endsAtPeriod(text, at, to));
+    if (!ends) continue;
+    let end = at + 1;
+    while (end < to && CLOSERS.test(text[end]!)) end++;
+    out.push([start, end]);
+    start = at = end;
+    at--;
+  }
+  out.push([start, to]);
+  return out;
+}
+
+/** The first words of a line and its last, read off its two ends alone: a line may be a long stretch of prose. */
+const firstWords = (line: string) => tokenize(line.slice(0, 24)).list;
+const lastWord = (line: string) => tokenize(line.slice(-16)).list.at(-1);
+const opensWith = (list: Token[], phrase: Token[]) => phrase.length > 0 && phrase.every((token, n) => list[n] === token);
+
+/** Ties that may also end a sentence in a script written without spaces, as 的 and 了 do: "是我想做的", "我们到了". */
+const ENDS_SENTENCE = new Set(['的', '了']);
+
+/**
+ * A line with no end punctuation ends its unit at the line break, as "Store below 25°C" does, unless what it holds goes on into the
+ * next line: it opens with a condition or ends with a word that ties, or the next line opens as no sentence does, in lower case or
+ * with a word that joins it to what came before. Splitting a sentence in two would make each half a whole unit; joining two lines
+ * only makes a bigger one.
+ */
+function endsAtLine(run: string, next: string): boolean {
+  if (LINE_END.test(run.slice(-8)) || /^\p{Ll}/u.test(next)) return false;
+  const [opening, following, last] = [firstWords(run), firstWords(next), lastWord(run)];
+  if (GOES_ON.some((words) => opensWith(following, words)) || CONDITIONS.some((condition) => opensWith(opening, condition))) return false;
+  return !(typeof last === 'string' && TIES.has(last) && !ENDS_SENTENCE.has(last));
+}
+
+/** A line that is a unit by itself is a heading when it is short: at most six words, or twelve characters in a script written without spaces. */
+function short(line: string): boolean {
+  if (line.length > 80) return false;
+  const size = HAS_SPACELESS.test(line) ? [...line].filter((char) => WORD_CHAR.test(char)).length : tokenize(line).list.length;
+  return size > 0 && size <= (HAS_SPACELESS.test(line) ? 12 : 6);
+}
+
+/** The whole units of a text, in order. */
+function unitsOf(text: string): Unit[] {
+  const units: Unit[] = [];
+  let paragraph = 0;
+  let under = -1;
+  let row = 0;
+  let head = -1;
+  let prose: [number, number] | undefined;
+  const add = (from: number, to: number, cell?: { column: number }) => {
+    while (from < to && /\s/.test(text[from]!)) from++;
+    while (to > from && /\s/.test(text[to - 1]!)) to--;
+    if (to <= from) return -1;
+    units.push({ from, to, paragraph, under, row: cell ? row : -1, head: cell ? head : -1, column: cell?.column ?? -1 });
+    return units.length - 1;
+  };
+  const flush = () => {
+    if (prose) for (const [from, to] of sentences(text, ...prose)) add(from, to);
+    prose = undefined;
+  };
+  const lines = text.split('\n');
+  let from = 0;
+  for (const [n, line] of lines.entries()) {
+    const to = from + line.length;
+    const trimmed = line.trim();
+    // A tab parts cells where the line beside it holds one too, as a pasted table's rows do. In a line of prose it is white space.
+    const tabbed = (other: string | undefined) => other !== undefined && other.trim().includes('\t');
+    const rowLine = trimmed.includes('|') || (trimmed.includes('\t') && (tabbed(lines[n - 1]) || tabbed(lines[n + 1])));
+    if (!rowLine) head = -1;
+    if (trimmed === '') {
+      flush();
+      paragraph++;
+    } else if (rowLine) {
+      flush();
+      if (!ROW_DIVIDER.test(trimmed)) {
+        if (head < 0) head = row;
+        const inner = line.replace(/^\s*\|/, (fence) => ' '.repeat(fence.length)).replace(/\|\s*$/, (fence) => ' '.repeat(fence.length));
+        let start = from;
+        let column = 0;
+        for (let at = 0; at <= inner.length; at++) {
+          if (at < inner.length && inner[at] !== '|' && inner[at] !== '\t') continue;
+          add(start, from + at, { column: column++ });
+          start = from + at + 1;
+        }
+        row++;
+      }
+    } else if (ITEM_LINE.test(line)) {
+      flush();
+      add(from + ITEM_LINE.exec(line)![0].length, to);
+    } else if (HEADING_LINE.test(line)) {
+      flush();
+      const at = add(from + HEADING_LINE.exec(line)![0].length, to);
+      if (at >= 0) under = at;
+    } else if (/:$/.test(trimmed)) {
+      // A line that ends in a colon labels the lines after it, and its last sentence is the label.
+      prose = prose ? [prose[0], to] : [from, to];
+      flush();
+      under = units.length - 1;
+    } else {
+      const alone = !prose;
+      prose = prose ? [prose[0], to] : [from, to];
+      const next = lines[n + 1]?.trim();
+      if (next !== undefined && (next === '' ? !LINE_END.test(trimmed) : endsAtLine(text.slice(...prose), next))) {
+        flush();
+        if (alone && short(trimmed) && endsAtLine(trimmed, '')) under = units.length - 1;
+      }
+    }
+    from = to + 1;
+  }
+  flush();
+  return units;
+}
+
+/** One written form for comparing passages: straight quotes, one space for any run of white space, one case. */
+const fold = (text: string): string => uniform(text).replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim().toLowerCase();
+const OPEN_QUOTES = /^["'«「『]+/u;
+const CLOSE_QUOTES = /["'»」』]+$/u;
+/** A passage without the marks around it that change nothing it says: quotation marks, and a closing full stop, comma or semicolon. */
+const bare = (folded: string): string =>
+  folded.replace(OPEN_QUOTES, '').replace(CLOSE_QUOTES, '').trim().replace(/[.。,;、]$/u, '').replace(CLOSE_QUOTES, '').trim();
+/** Each quotation inside a sentence: the words between an opening mark and its closing one, and where they start and end. */
+const QUOTATION = /"([^"]+)"|「([^」]+)」|『([^』]+)』|«([^»]+)»/gu;
+
 class Source implements Grounding {
   private readonly text: string;
   /** Where the words end and the held values begin. */
@@ -782,7 +865,7 @@ class Source implements Grounding {
   private numbers: Set<number> | undefined;
   private hexes: Set<string> | undefined;
   private lines: ReturnType<typeof marked> | undefined;
-  private spans: { sentence: Int32Array; line: Int32Array } | undefined;
+  private split: { units: Unit[]; folded: string[]; bared: string[]; unitOf: Int32Array; first: Int32Array; last: Int32Array; turns: Int8Array } | undefined;
   /** Each claim read so far. A card asks about the same value more than once: as a value, and as what its label names. */
   private readonly claims = new Map<string, Tokens>();
 
@@ -794,6 +877,27 @@ class Source implements Grounding {
 
   private get tokens(): Reader {
     return (this.read ??= new Reader(this.text, this.mark));
+  }
+
+  /**
+   * The units of the words, each folded, and bare too; the unit each token stands in, or -1; the first token of each unit and the one
+   * past its last; and which units hold a reversing word, or -1 before that is read.
+   */
+  private get units() {
+    if (this.split) return this.split;
+    const units = unitsOf(this.text.slice(0, this.mark));
+    const { starts, marked } = this.tokens;
+    const unitOf = new Int32Array(marked).fill(-1);
+    const [first, last] = [new Int32Array(units.length), new Int32Array(units.length)];
+    for (let at = 0, unit = 0; at < marked; at++) {
+      while (unit < units.length && units[unit]!.to <= starts[at]!) unit++;
+      if (unit >= units.length || units[unit]!.from > starts[at]!) continue;
+      if (last[unit] === 0) first[unit] = at;
+      last[unit] = at + 1;
+      unitOf[at] = unit;
+    }
+    const folded = units.map(({ from, to }) => fold(this.text.slice(from, to)));
+    return (this.split = { units, folded, bared: folded.map(bare), unitOf, first, last, turns: new Int8Array(units.length).fill(-1) });
   }
 
   /**
@@ -815,11 +919,10 @@ class Source implements Grounding {
   }
 
   says(claim: string): boolean {
-    return this.stated(claim, SHORT);
-  }
-
-  quotes(passage: string): boolean {
-    return this.stated(passage, PASSAGE);
+    const asked = this.claim(claim);
+    if (asked.list.length > 0) return this.holds(asked, SHORT);
+    const symbols = uniform(claim).trim();
+    return symbols.length > 0 && this.standsAlone(symbols);
   }
 
   writes(value: number, unit?: string): boolean {
@@ -857,83 +960,79 @@ class Source implements Grounding {
     return this.lines.find(({ item }) => item.list.length === asked.list.length && asked.list.every((token, n) => same(item, n, token)))?.done;
   }
 
-  asserts(claim: string): boolean {
-    const asked = this.claim(claim);
-    if (asked.list.length === 0) return this.says(claim);
-    return this.holds(asked, SHORT, (start) => start >= this.tokens.marked || !this.conditional(start), this.tokens.list.length);
-  }
-
   names(label: string, value: string | number, unit?: string): boolean {
-    const shape = labelOf(label);
-    if (!shape) return false;
-    const { words, measures } = shape;
-    const asked = typeof value === 'string' ? value : `${value}${unit ?? ''}`;
+    const words = labelOf(label);
+    if (!words) return false;
     const written = this.tokens;
-    const { line } = this.spanned();
-    const named = (start: number, size: number) => {
-      let [from, to] = [start, start + size];
-      while (from > 0 && line[from - 1] === line[start]) from--;
-      while (to < written.marked && line[to] === line[start]) to++;
-      const head = this.head(start);
-      const stands = (word: Token) => {
+    const named = (start: number) => {
+      const scope = this.scope(start);
+      return words.every((word) => scope.some(([from, to]) => {
         for (let at = from; at < to; at++) if (like(written, at, word)) return true;
-        return head.some((at) => like(written, at, word));
-      };
-      if (!words.every(stands)) return false;
-      // A word that says what kind of value it is may be added where the value is of that kind, read off the value and the words
-      // the text sets after it ("3.4 kg"), and a word that says nothing of its kind beside a word that does or a word the text writes.
-      const unstated = measures.filter(({ tokens }) => !tokens.every(stands));
-      if (unstated.length === 0) return true;
-      const after = written.list.slice(start + size, Math.min(to, start + size + 2)).filter((token) => typeof token === 'string');
-      const kinds = kindsOf(`${asked} ${after.join(' ')}`);
-      const generic = unstated.filter(({ kinds: of }) => of.length === 0).length;
-      if (!unstated.every(({ kinds: of }) => of.length === 0 || of.some((kind) => kinds.has(kind)))) return false;
-      return generic === 0 || words.length > 0 || measures.length > generic;
+        return false;
+      }));
     };
     if (typeof value === 'string') {
       const asked = this.claim(value);
-      // An article opens a name, and not a piece of the value it labels: "a week" of "10 hours a week".
-      if (shape.article && words.every((word) => asked.list.some((_token, at) => like(asked, at, word)))) return false;
-      return asked.list.length > 0 && this.holds(asked, SHORT, (start) => named(start, asked.list.length));
+      return asked.list.length > 0 && this.holds(asked, SHORT, named);
     }
     if (!Number.isFinite(value)) return false;
     const scaled = this.scaled(value, unit);
-    if (scaled.length > 0) return scaled.some((asked) => this.holds(asked, SHORT, (start) => named(start, asked.list.length)));
+    if (scaled.length > 0) return scaled.some((asked) => this.holds(asked, SHORT, named));
     for (let at = 0; at < written.marked; at++) {
       const token = written.list[at]!;
-      if (typeof token === 'object' && token.readings.includes(value) && named(at, 1)) return true;
+      if (typeof token === 'object' && token.readings.includes(value) && named(at)) return true;
     }
     return false;
   }
 
-  whole(passage: string): boolean {
-    return this.passage(passage, true, true);
+  passage(passage: string): Passage {
+    const run = this.run(passage);
+    if (run) return this.turned(...run) ? 'turned' : 'whole';
+    return this.held(passage);
   }
 
-  said(passage: string): boolean {
-    if (this.whole(passage)) return true;
-    const asked = this.claim(passage);
-    if (asked.list.length === 0) return false;
-    const { breaks, marked } = this.tokens;
-    const { sentence } = this.spanned();
-    return this.holds(asked, PASSAGE, (from) => {
-      const after = from + asked.list.length;
-      const closed = after >= marked ? 0 : breaks[after]!;
-      // The quoted words whole, from the mark that opens them to the mark that closes them.
-      if ((breaks[from]! & Break.Quote) === 0 || (after < marked && (closed & Break.Unquote) === 0)) return false;
-      for (let at = from + 1; at < after; at++) if ((breaks[at]! & (Break.Quote | Break.Unquote)) !== 0) return false;
-      // A sentence of their own: opened where a sentence opens or after a colon or a comma, and closed by a full stop or where a
-      // sentence ends, or before a comma. "He said "the plan works" was a lie." quotes words that are part of a sentence of the text's own.
-      if (!(this.edge(from, 'start') || (breaks[from]! & (Break.Colon | Break.Pause)) !== 0)) return false;
-      if (!(after >= marked || (closed & (EDGES.end | Break.Pause | Break.Stop)) !== 0)) return false;
-      // Not the rest of a quotation the sentence broke off, as "take the pills" is of '"Never," she said, "take the pills."'
-      for (let at = from; at > 0 && sentence[at - 1] === sentence[from]; at--) if ((breaks[at]! & Break.Unquote) !== 0) return false;
-      return true;
-    });
+  leads(passage: string): Passage {
+    const asked = fold(passage).replace(OPEN_QUOTES, '');
+    if (asked === '') return 'unstated';
+    const { units } = this.units;
+    for (let first = 0; first < units.length; first++) {
+      const opening = fold(this.text.slice(units[first]!.from, Math.min(this.mark, units[first]!.from + passage.length * 2 + 8))).replace(OPEN_QUOTES, '');
+      if (!opening.startsWith(asked)) continue;
+      let last = first;
+      while (last + 1 < units.length && fold(this.text.slice(units[first]!.from, units[last]!.to)).length < asked.length) last++;
+      return this.turned(first, last) ? 'turned' : 'whole';
+    }
+    return this.held(passage);
   }
 
-  leads(passage: string): boolean {
-    return this.passage(passage, true, false);
+  said(passage: string): Passage {
+    const run = this.run(passage);
+    if (run) return this.turned(...run) ? 'turned' : 'whole';
+    const asked = bare(fold(passage));
+    for (const [at, sentence] of this.units.folded.entries()) {
+      for (const quotation of sentence.matchAll(QUOTATION)) {
+        if (bare(quotation.slice(1).find(Boolean) ?? '') !== asked) continue;
+        // The rest of the sentence only says who said it: before the quotation with nothing after it, or after it in four words at
+        // most, as "she said" and "said my grandmother" do. 'He said "the plan works" was a lie.' says more. The rest may turn the
+        // quotation around too: "He said, though it is a myth, …".
+        const [before, after] = [tokenize(sentence.slice(0, quotation.index)), tokenize(sentence.slice(quotation.index! + quotation[0].length))];
+        const speaks = (words: Tokens) => SPEECH.some((speech) => this.within(words, 0, words.list.length, speech));
+        if (!((after.list.length === 0 && speaks(before)) || (before.list.length === 0 && after.list.length <= 4 && speaks(after)))) continue;
+        return this.turned(at, at) || this.turnsIn(before) || this.turnsIn(after) ? 'turned' : 'whole';
+      }
+    }
+    return this.held(passage);
+  }
+
+  defines(term: string, meaning: string): Passage | 'apart' {
+    const run = this.run(meaning);
+    if (!run) return this.held(meaning);
+    const named = this.claim(term);
+    const { units } = this.units;
+    const opening = tokenize(this.text.slice(units[run[0]]!.from, units[run[0]]!.to));
+    const opens = named.list.length > 0 && OPENERS.some((opener) => opener.every((token, n) => opening.list[n] === token) && named.list.every((token, n) => same(opening, opener.length + n, token)));
+    if (!opens) return 'apart';
+    return this.turned(...run) ? 'turned' : 'whole';
   }
 
   begins(passage: string): boolean {
@@ -941,78 +1040,79 @@ class Source implements Grounding {
     return asked.list.length > 0 && same(this.tokens, 0, asked.list[0]!) && runs(this.tokens, 0, asked, 0);
   }
 
-  defines(term: string, meaning: string): boolean {
-    const [named, meant] = [this.claim(term), this.claim(meaning)];
-    if (named.list.length === 0 || meant.list.length === 0) return false;
-    const written = this.tokens;
-    const { sentence } = this.spanned();
-    const size = named.list.length;
-    return this.holds(meant, PASSAGE, (from) => {
-      const last = from + meant.list.length - 1;
-      if (!this.edge(last + 1, 'end') || sentence[last] !== sentence[from]) return false;
-      // The whole sentence, which opens with the term: "Parallax is the apparent shift…".
-      if (this.opensWith(from, named) && this.edge(from, 'led')) return true;
-      // The rest of the term's sentence after the term, which opens it: "Parallax: the apparent shift…".
-      return this.holds(named, SHORT, (at) => {
-        if (at + size > from || sentence[at] !== sentence[from] || !this.opensSentence(at)) return false;
-        const between = written.list.slice(at + size, from);
-        return between.length === 0 || LINKS.some((link) => link.length === between.length && link.every((token, n) => token === between[n]));
-      });
-    });
-  }
-
   converses(): boolean {
     const speakers = new Map<string, number>();
     for (const line of this.text.slice(0, this.mark).split('\n')) {
       const speaker = SPEAKER.exec(line)?.[1]?.toLowerCase();
-      if (speaker && !MARKER_WORDS.includes(speaker)) speakers.set(speaker, (speakers.get(speaker) ?? 0) + 1);
+      if (speaker && !MARKERS.includes(speaker)) speakers.set(speaker, (speakers.get(speaker) ?? 0) + 1);
     }
     const lines = [...speakers.values()];
     return lines.length >= 2 && lines.reduce((sum, n) => sum + n, 0) >= 3 && lines.some((n) => n >= 2);
   }
 
-  /** The asked tokens stand at `at`, one after another. */
-  private opensWith(at: number, asked: Tokens): boolean {
-    return asked.list.every((token, n) => same(this.tokens, at + n, token));
-  }
-
-  /** The token opens its sentence, or follows nothing in it but an article or a word that names a term: "The word", "所谓". */
-  private opensSentence(at: number): boolean {
-    if (this.edge(at, 'led')) return true;
-    const { list } = this.tokens;
-    return OPENERS.some((opener) => at >= opener.length && this.edge(at - opener.length, 'led') && opener.every((token, n) => list[at - opener.length + n] === token));
-  }
-
-  /** The sentence that holds the token opens with a condition the token comes after: "If she agrees we need the build ready". */
-  private conditional(at: number): boolean {
-    const { breaks, list } = this.tokens;
-    const { sentence } = this.spanned();
-    let first = at;
-    while (first > 0 && sentence[first - 1] === sentence[at]) first--;
-    // A marker before it, as in "Note: if it rains", is passed over.
-    for (let lead = first + 1; lead <= first + 3 && lead < at; lead++) if ((breaks[lead]! & Break.Lead) !== 0) first = lead;
-    return first < at && CONDITIONS.some((condition) => condition.every((token, n) => list[first + n] === token));
-  }
-
-  /** The words of the head of the value's column, when it stands in a row of a table under the table's first row. */
-  private head(at: number): number[] {
-    const { breaks, columns } = this.tokens;
-    const { line } = this.spanned();
-    const opens = (token: number) => token === 0 || line[token - 1] !== line[token];
-    let row = at;
-    while (!opens(row)) row--;
-    if ((breaks[row]! & Break.Row) === 0) return [];
-    // Up to the first row of the table: the rows above, as far as they follow one another with no empty line between.
-    let head = row;
-    while (head > 0 && (breaks[head]! & Break.Blank) === 0) {
-      let above = head - 1;
-      while (!opens(above)) above--;
-      if ((breaks[above]! & Break.Row) === 0) break;
-      head = above;
+  /** The first and last of the whole units, one after another, whose text is the passage, once folded and bare. */
+  private run(passage: string): [number, number] | undefined {
+    const asked = bare(fold(passage));
+    if (asked === '') return undefined;
+    const { units, bared } = this.units;
+    for (let first = 0; first < units.length; first++) {
+      const opening = bared[first]!;
+      if (opening === '' || !asked.startsWith(opening.slice(0, 12))) continue;
+      for (let last = first; last < units.length; last++) {
+        const span = last === first ? opening : bare(fold(this.text.slice(units[first]!.from, units[last]!.to)));
+        if (span === asked) return [first, last];
+        if (span.length > asked.length) break;
+      }
     }
-    const cell: number[] = [];
-    for (let token = head; token < row && line[token] === line[head]; token++) if (columns[token] === columns[at]) cell.push(token);
-    return cell;
+    return undefined;
+  }
+
+  /** The unit before the run or after it in the same paragraph, or the heading or label it sits under, holds a reversing word. */
+  private turned(first: number, last: number): boolean {
+    const { units } = this.units;
+    const beside = [first - 1, last + 1].filter((at) => at >= 0 && at < units.length && units[at]!.paragraph === units[first]!.paragraph);
+    return [...beside, units[first]!.under].some((at) => at >= 0 && this.reverses(at));
+  }
+
+  /** The unit holds a word of `REVERSING`. */
+  private reverses(unit: number): boolean {
+    const { turns, first, last } = this.units;
+    if (turns[unit]! < 0) turns[unit] = this.turnsIn(this.tokens, first[unit]!, last[unit]!) ? 1 : 0;
+    return turns[unit] === 1;
+  }
+
+  /** A word of `REVERSING` stands among the tokens from `from` up to `to`. */
+  private turnsIn(text: Tokens, from = 0, to = text.list.length): boolean {
+    for (let at = from; at < to; at++) {
+      const token = text.list[at];
+      if (typeof token !== 'string') continue;
+      for (const words of TURNS_BY_FIRST.get(formOf(token)) ?? []) if (this.within(text, at, Math.min(to, at + words.length), words)) return true;
+    }
+    return false;
+  }
+
+
+  /** These words stand, one after another, among the tokens from `from` up to `to`. A Latin word stands in its other forms too. */
+  private within(text: Tokens, from: number, to: number, words: Token[]): boolean {
+    for (let at = from; at + words.length <= to; at++) {
+      if (words.every((word, n) => typeof word === 'string' && typeof text.list[at + n] === 'string' && (text.list[at + n] === word || formOf(text.list[at + n] as string) === formOf(word)))) return true;
+    }
+    return false;
+  }
+
+  /** What a passage that is no run of whole units is: words the text holds, or not. */
+  private held(passage: string): Passage {
+    const asked = this.claim(passage);
+    return asked.list.length > 0 && this.holds(asked, 0, () => true) ? 'cut' : 'unstated';
+  }
+
+  /** The tokens a label may be read from, as runs: those of the value's unit, and for a table cell those of its row and of the head of its column. */
+  private scope(at: number): [number, number][] {
+    const { units, unitOf, first, last } = this.units;
+    const unit = units[unitOf[at]!];
+    if (!unit) return [[at, at + 1]];
+    if (unit.row < 0) return [[first[unitOf[at]!]!, last[unitOf[at]!]!]];
+    return units.flatMap((other, n) => (other.row === unit.row || (other.row === unit.head && other.column === unit.column) ? [[first[n]!, last[n]!] as [number, number]] : []));
   }
 
   /** The values a text may write for this number in a unit that scales it, each as a claim. None when the unit does not scale it. */
@@ -1021,55 +1121,14 @@ class Source implements Grounding {
   }
 
   /**
-   * The sentence each token stands in, and its line. A list item and a table row are each a sentence of their own, whatever ends
-   * them, and a sentence runs on over a line break that ends none. Only an item or a row is a line of its own: a line of prose
-   * holds several sentences, and there each sentence counts as a line, so a line is never longer than a sentence.
-   */
-  private spanned(): { sentence: Int32Array; line: Int32Array } {
-    if (this.spans) return this.spans;
-    const { breaks } = this.tokens;
-    const [sentence, line] = [new Int32Array(breaks.length), new Int32Array(breaks.length)];
-    let apart = false;
-    for (let from = 0, to = 1; from < breaks.length; from = to++) {
-      let listed = (breaks[from]! & (Break.Item | Break.Row)) !== 0;
-      for (; to < breaks.length && (breaks[to]! & Break.Line) === 0; to++) listed ||= (breaks[to]! & (Break.Cell | Break.Tab)) !== 0;
-      for (let at = Math.max(from, 1); at < to; at++) {
-        const ended = (breaks[at]! & SENTENCE) !== 0;
-        sentence[at] = sentence[at - 1]! + (ended || (at === from && (apart || listed)) ? 1 : 0);
-        line[at] = line[at - 1]! + (at === from || (ended && !listed) ? 1 : 0);
-      }
-      apart = listed;
-    }
-    return (this.spans = { sentence, line });
-  }
-
-  /** A whole passage may begin at this token, or end before it: it is the first word, stands past the last, or follows such an edge. */
-  private edge(at: number, as: keyof typeof EDGES): boolean {
-    const { breaks, marked } = this.tokens;
-    return at === 0 || at >= marked || (breaks[at]! & EDGES[as]) !== 0;
-  }
-
-  private passage(passage: string, fromEdge: boolean, toEdge: boolean): boolean {
-    const asked = this.claim(passage);
-    return asked.list.length > 0 && this.holds(asked, PASSAGE, (start) => (!fromEdge || this.edge(start, 'led')) && (!toEdge || this.edge(start + asked.list.length, 'end')));
-  }
-
-  private stated(claim: string, barred: number): boolean {
-    const asked = this.claim(claim);
-    if (asked.list.length > 0) return this.holds(asked, barred);
-    const symbols = uniform(claim).trim();
-    return symbols.length > 0 && this.standsAlone(symbols);
-  }
-
-  /**
    * The asked tokens are a run of the text's tokens that crosses none of the barred breaks. With `where`, the run is one that
-   * stands among the words, before any held value, at a start that `where` accepts. `within` may let it stand anywhere.
+   * stands among the words, before any held value, at a start that `where` accepts.
    */
-  private holds(asked: Tokens, barred: number, where?: (start: number) => boolean, within = where ? this.tokens.marked : this.tokens.list.length): boolean {
+  private holds(asked: Tokens, barred: number, where?: (start: number) => boolean): boolean {
     const written = this.tokens;
     const { list } = written;
     const first = asked.list[0]!;
-    const until = within - asked.list.length + 1;
+    const until = (where ? written.marked : list.length) - asked.list.length + 1;
     const found = (start: number) => runs(written, start, asked, barred) && (where === undefined || where(start));
     if (typeof first === 'string') {
       for (let start = list.indexOf(first); start >= 0 && start < until; start = list.indexOf(first, start + 1)) if (found(start)) return true;
@@ -1092,6 +1151,6 @@ class Source implements Grounding {
 
 /**
  * `held` are values the source holds beside its words, each read as a list item of its own. A claim about how words stand
- * together, which `names`, `whole`, `leads` and `defines` are, is read against the words alone.
+ * together, which `names`, `passage`, `said`, `leads` and `defines` are, is read against the words alone.
  */
 export const grounding = (source: string, held: readonly string[] = []): Grounding => new Source(source, held);
