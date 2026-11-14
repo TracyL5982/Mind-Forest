@@ -2,21 +2,72 @@ import { z } from 'zod';
 import type { ItemData } from '../../domain.ts';
 import { clip, squash, tidyTags, TITLE_MAX, type Described } from './plain.ts';
 
-// Flat, every key required, empty meaning absent: the model API rejects recursive schemas and optional keys.
+type Shape = Record<string, z.ZodType>;
+type Reply<S extends Shape> = { [K in keyof S]: z.infer<S[K]> };
+
+/** The text the model read, asked whether it states a value. With no text to check against, every value stands. */
+interface Read {
+  says(words: string): boolean;
+  writes(value: number): boolean;
+}
+
+interface Field<S extends Shape> {
+  /** The reply keys the model fills. Flat, every key required, empty meaning absent: the model API rejects recursive schemas and optional keys. */
+  reply: S;
+  /** The `item.data` keys this field writes, or nothing when the reply leaves it empty or the text does not state it. */
+  keep(reply: Reply<S>, text: Read): ItemData | undefined;
+}
+
+const field = <S extends Shape>(f: Field<S>): Field<S> => f;
+
+/** Every piece of structure Intake extracts. The reply schema and `structure()` are both built from this table. */
+const EXTRACTED = [
+  field({
+    reply: { steps: z.array(z.string()) },
+    keep(r) {
+      const steps = r.steps.map(squash).filter(Boolean).slice(0, 12);
+      return steps.length >= 2 ? { steps } : undefined;
+    },
+  }),
+  field({
+    reply: { facts: z.array(z.object({ label: z.string(), value: z.string() })) },
+    keep(r) {
+      const facts = r.facts.map((f) => ({ label: squash(f.label), value: squash(f.value) })).filter((f) => f.label && f.value);
+      return facts.length > 0 ? { facts: facts.slice(0, 12) } : undefined;
+    },
+  }),
+  field({
+    reply: { quoteText: z.string(), quoteBy: z.string() },
+    keep(r, text) {
+      const quote = r.quoteText.trim();
+      return quote && text.says(quote) ? { quote: { text: quote, ...(r.quoteBy.trim() ? { by: r.quoteBy.trim() } : {}) } } : undefined;
+    },
+  }),
+  field({
+    reply: { chartLabels: z.array(z.string()), chartValues: z.array(z.number()), chartUnit: z.string() },
+    keep(r, text) {
+      const stated = r.chartValues.every((v) => Number.isFinite(v) && text.writes(v));
+      if (r.chartLabels.length < 2 || r.chartLabels.length !== r.chartValues.length || !stated) return undefined;
+      return { chart: { labels: r.chartLabels.map(squash), values: r.chartValues, ...(r.chartUnit.trim() ? { unit: r.chartUnit.trim() } : {}) } };
+    },
+  }),
+  field({
+    reply: { personName: z.string(), personRole: z.string() },
+    keep: (r) => (r.personName.trim() ? { person: { name: r.personName.trim(), ...(r.personRole.trim() ? { role: r.personRole.trim() } : {}) } } : undefined),
+  }),
+  field({
+    reply: { when: z.string() },
+    keep: (r) => (r.when.trim() ? { when: r.when.trim() } : undefined),
+  }),
+];
+
+type Merged<U> = (U extends unknown ? (u: U) => void : never) extends (u: infer I) => void ? { [K in keyof I]: I[K] } : never;
+
 const description = {
   title: z.string(),
   summary: z.string(),
   tags: z.array(z.string()),
-  steps: z.array(z.string()),
-  facts: z.array(z.object({ label: z.string(), value: z.string() })),
-  quoteText: z.string(),
-  quoteBy: z.string(),
-  chartLabels: z.array(z.string()),
-  chartValues: z.array(z.number()),
-  chartUnit: z.string(),
-  personName: z.string(),
-  personRole: z.string(),
-  when: z.string(),
+  ...(Object.assign({}, ...EXTRACTED.map((f) => f.reply)) as Merged<(typeof EXTRACTED)[number]['reply']>),
 };
 
 export const LinkReply = z.object(description);
@@ -82,33 +133,24 @@ Write in the language of the conversation.`;
 
 const loose = (text: string): string => squash(text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ''));
 
+function reader(grounding?: string): Read {
+  if (grounding === undefined) return { says: () => true, writes: () => true };
+  let words: string | undefined;
+  let digits: string | undefined;
+  return {
+    says: (claim) => (words ??= loose(grounding)).includes(loose(claim)),
+    writes: (value) => (digits ??= grounding.replace(/,/g, '')).includes(String(value)),
+  };
+}
+
 /**
  * The parts of the model's description worth keeping as drawable data.
- * With `grounding` (the text the model read), a quote or a chart value that is not in it is dropped.
+ * With `grounding` (the text the model read), a value that is not in it is dropped.
  */
 export function structure(d: Description, grounding?: string): ItemData {
+  const text = reader(grounding);
   const data: ItemData = {};
-  const steps = d.steps.map(squash).filter(Boolean).slice(0, 12);
-  if (steps.length >= 2) data.steps = steps;
-
-  const facts = d.facts.map((f) => ({ label: squash(f.label), value: squash(f.value) })).filter((f) => f.label && f.value);
-  if (facts.length > 0) data.facts = facts.slice(0, 12);
-
-  const quote = d.quoteText.trim();
-  if (quote && (grounding === undefined || loose(grounding).includes(loose(quote)))) {
-    data.quote = { text: quote, ...(d.quoteBy.trim() ? { by: d.quoteBy.trim() } : {}) };
-  }
-
-  const digits = grounding?.replace(/,/g, '');
-  const stated = d.chartValues.every((v) => Number.isFinite(v) && (digits === undefined || digits.includes(String(v))));
-  if (d.chartLabels.length >= 2 && d.chartLabels.length === d.chartValues.length && stated) {
-    data.chart = { labels: d.chartLabels.map(squash), values: d.chartValues, ...(d.chartUnit.trim() ? { unit: d.chartUnit.trim() } : {}) };
-  }
-
-  if (d.personName.trim()) {
-    data.person = { name: d.personName.trim(), ...(d.personRole.trim() ? { role: d.personRole.trim() } : {}) };
-  }
-  if (d.when.trim()) data.when = d.when.trim();
+  for (const extracted of EXTRACTED) Object.assign(data, (extracted as Field<Shape>).keep(d, text));
   return data;
 }
 
