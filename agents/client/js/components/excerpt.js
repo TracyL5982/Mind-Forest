@@ -47,7 +47,9 @@ export function draw(item, props) {
   return [say('blockquote', `excerpt-text clamp-${lines}`, words), from(title, where, 'clamp-1')];
 }
 
+/** The passage whole. The maker the Scout's closing line named has a line of its own, because nothing else on the opened card says it. */
 export function detail(item, props) {
   const { where } = plan(item, props);
-  return [h('div', { class: 'detail-excerpt' }, say('blockquote', 'excerpt-text', passage(item, props)), from('', where, ''))];
+  const by = text(item.data?.by).trim();
+  return [h('div', { class: 'detail-excerpt' }, say('blockquote', 'excerpt-text', passage(item, props)), from(where.includes(by) ? '' : by, where, ''))];
 }

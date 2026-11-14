@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { chipSources } from '../chips.js';
 import { SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, picture, say, text, wrap } from './shared.js';
 
 const WIDTH = 264;
@@ -39,8 +40,10 @@ export function draw(item, props, ctx) {
   ];
 }
 
+/** The picture whole and the label's lines whole, without the holder when the opened card's list of sources names it. */
 export function detail(item, props, ctx) {
-  const { by, medium, holder } = plan(item, props);
+  const { by, medium, holder: held } = plan(item, props);
+  const holder = chipSources(item).some((source) => source.text === held) ? '' : held;
   return [
     h('div', { class: 'detail-media' }, picture(text(props.src), item.title, ctx)),
     (by || medium || holder) && h('div', { class: 'detail-artwork' },

@@ -1,4 +1,5 @@
 import { h } from '../dom.js';
+import { chipSources } from '../chips.js';
 import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, kind, list, say, text, wrap } from './shared.js';
 
 const WIDTH = 288;
@@ -40,8 +41,15 @@ export function draw(item, props) {
   ];
 }
 
+/**
+ * The kind and the year, and under them the authors and the venue whole. A line the opened card's
+ * list of sources says in the same words is left to that list. A list of authors that was cut
+ * stays, because only this line says so.
+ */
 export function detail(item, props) {
-  const { authors, venue, label, year } = plan(item, props);
+  const { authors: names, venue: where, label, year } = plan(item, props);
+  const listed = chipSources(item).map((source) => source.text);
+  const [authors, venue] = [names, where].map((line) => (listed.includes(line) ? '' : line));
   return [
     h('div', { class: 'detail-reference' },
       head(label, year),

@@ -1,6 +1,7 @@
 import { h, put, safeUrl } from './dom.js';
 import { chipSources } from './chips.js';
 import { drawDetail } from './components/index.js';
+import { isSaid, rest } from './said.js';
 
 const HOW = { paste: 'You pasted this', drop: 'You dropped this in', voice: 'You said this', link: 'A link you added', web: 'Found on the web', instagram: 'Found on Instagram', 'image-gen': 'Made for you as a picture', idea: 'An idea from the librarian' };
 
@@ -14,6 +15,25 @@ function cameFrom(item) {
 function when(iso) {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+/** Every string a drawn part writes, each text node on its own. */
+function written(part) {
+  if (typeof part === 'string') return [part];
+  if (part.nodeType === 3) return [part.textContent];
+  return [...part.childNodes].flatMap(written);
+}
+
+/**
+ * What the opened card prints of the item under its type's own opened form, so nothing is said
+ * twice: the lines of the text that the title, the form and the sources leave unsaid, and the
+ * summary when none of those nor the text says it.
+ */
+function leftover(item, detail, sources) {
+  const said = [item.title, ...detail.flatMap(written), ...sources.map((source) => source.text)];
+  const text = item.text === item.summary ? '' : rest(item.text, said);
+  const summary = isSaid(item.summary, [...said, text]) || rest(item.summary, said, 0) === '' ? '' : item.summary;
+  return { summary, text };
 }
 
 /** The opened card: everything it holds, and what you can do with it. */
@@ -86,12 +106,14 @@ export class Panel {
 
     const url = safeUrl(item.source.url ?? '');
     const sources = chipSources(item);
+    const detail = this.editing ? [] : [drawDetail(node, item, { asset: this.asset })].flat(Infinity).filter((part) => part !== null && part !== undefined && part !== false && part !== '');
+    const { summary, text } = leftover(item, detail, sources);
     const parts = this.editing ? [this.editForm(item)] : [
       h('h2', { class: 'panel-title', dir: 'auto', text: item.title || 'Untitled' }),
       node.why && h('p', { class: `panel-why ${pick ? 'is-pick' : ''}` }, h('span', { text: 'Why it is here' }), node.why),
-      drawDetail(node, item, { asset: this.asset }),
-      item.summary && item.summary !== item.title && h('p', { class: 'panel-summary', dir: 'auto', text: item.summary }),
-      item.text && item.text !== item.summary && item.text !== item.title && h('p', { class: 'panel-text', dir: 'auto', text: item.text }),
+      detail,
+      summary && h('p', { class: 'panel-summary', dir: 'auto', text: summary }),
+      text && h('p', { class: 'panel-text', dir: 'auto', text }),
       item.tags.length > 0 && h('div', { class: 'tags' }, item.tags.map((tag) => h('span', { class: 'tag', text: tag }))),
       h('dl', { class: 'facts' },
         sources.map(({ kind, label, text }) => [h('dt', { text: label }), h('dd', { data: { chip: kind }, text })]),

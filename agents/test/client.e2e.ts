@@ -422,6 +422,12 @@ async function main(): Promise<void> {
         const made = page.locator(`.card.is-kept[data-component="${type}"]`, { hasText: shown }).last();
         await made.waitFor();
         assert.equal(await made.locator(part).count(), parts, `${type} draws ${parts} of ${part}`);
+        if (type !== 'table' && type !== 'callout') continue;
+        await made.click();
+        const opened = await page.locator('#panel .panel-scroll').innerText();
+        assert.equal(opened.split(shown).length, 2, `an opened ${type} says "${shown}" once`);
+        if (type === 'table') assert.equal(await page.locator('#panel .panel-text').count(), 0, 'an opened table does not print the pasted rows again under its cells');
+        await page.keyboard.press('Escape');
       }
       await run.pipeline.idle();
       const asked: [string, string, string, string][] = [

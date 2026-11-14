@@ -19,7 +19,7 @@ A group is `{ id, treeId, anchor, composite, title, members, props }`. `anchor` 
 
 `client/library.html` draws every component and composite from sample data with the live client's code. Open it to see the current look. Under each sample it states the type name and the footprint.
 
-- Each component is one module, `client/js/components/<type>.js`, that exports `size`, `draw`, `detail` and `shows`. `detail` draws the opened card, and for the types that count rows it draws every row the card left out. Each composite is one module in `client/js/composites/`. The `index.js` in each folder is the registry.
+- Each component is one module, `client/js/components/<type>.js`, that exports `size`, `draw`, `detail` and `shows`. `detail` draws the type's part of the opened card, and for the types that count rows it draws every row the card left out. The opened card says what else it prints. Each composite is one module in `client/js/composites/`. The `index.js` in each folder is the registry.
 - `size(item, props)` is the card's footprint in px. It is worked out from the content and never measured, so the field can be laid out before anything is drawn. The next section gives the rule. The registry adds 28 px to the height of a card that has chips.
 - `shows` lists the chip sources the type already draws, as `item.data` keys. See Chips.
 - Text on the field is set in three sizes, named `--type-display`, `--type-title` and `--type-text` in `client/style.css`. A figure that is too long for its card steps down to a middle size, then to the title size. A fact's value, a row of facts, an idea, a term and a place name are figures.
@@ -264,6 +264,28 @@ So a link the Scout brought whose origin is its site gets no origin chip, and no
 **The opened card** lists every source left after step 2 in full, with no limit of three and without leaving out what the type shows: `When`, `Origin` for an item the agents brought, `Where`, and `People` with every name. `chipSources(item)` returns these as `{ kind, label, text }`. A card with an `Origin` leaves out the `From` line that says how the item arrived, because `Found on the web` beside a museum's name says the same thing less well. Its `Source` link stays.
 
 **A known limit.** A card in a timeline shows its year on the axis and again on its `when` chip. The chip stays, because a card's footprint is worked out from its item and props alone. If the chip depended on the group, a card would change size when it joined or left a timeline, and the field could not be laid out from footprints.
+
+## The opened card
+
+An opened card says each thing once. From top to bottom it has the item's title, why a pick is here, the type's own opened form, the summary, what is left of the text, the tags, and the list of sources.
+
+`client/js/said.js` is the whole rule for the summary and the text, and has no drawing code. `said` is every string the card has drawn by then: the title, each string the type's opened form writes, and the text of each source in the list.
+
+**The text.** It is not printed when it equals the summary. Otherwise split it at each line feed and take each line with its runs of white space turned into one space and its ends trimmed. Matching ignores case.
+
+1. A line with no letter or digit is kept as an empty line.
+2. A line that is inside one string of `said` is left out.
+3. Mark every place in the line where a string of `said` stands as whole words, the longest strings first. A string stands as whole words when the character before it and the character after it are not letters or digits, or are characters of a script written without spaces (U+3040 to 30FF, U+3400 to 9FFF, U+AC00 to D7AF), or the string itself starts or ends with one.
+4. `left` is the weight of what is not marked, where a letter or digit weighs 1 and a character of a script written without spaces weighs 2. The line is left out when `left` is at most 12 and less than the weight of what is marked. So `Solo | $8 | 1`, `[x] passport` and `Definition: …` are left out once the form has drawn their words.
+5. Any other line is printed. A marked run of 20 characters or more is first cut out of it when the run is a sentence of its own: it starts the line or follows a `.` `!` `?` `:` `;` or their full-width forms, and it ends the line, ends with one of those, or is followed by a closing quote mark, bracket, stop or comma. The quote marks and brackets around the run and the stops after it go with it.
+
+Three or more line feeds in a row become two, and the result is trimmed. Nothing is printed when nothing is left.
+
+**The summary.** It is printed whole, unless a string of `said` or the text as printed holds it, or the rule for the text, given the summary and `said` and with 0 in place of the 12 of step 4, leaves nothing of it: every letter and digit of the summary is already drawn. An ellipsis at its end (`…` or `...`) is taken off before it is looked for in a string, and case and runs of white space are ignored.
+
+So an opened table shows its grid and not the pasted rows again, a page the Scout picked shows its passage once, and a paragraph beside a small table is still printed.
+
+A type's opened form leaves to the list of sources what the list says in the same words: an artwork its holder, a reference its venue, and its authors when the list is not cut short.
 
 ## Rules the Renderer follows
 
@@ -512,7 +534,7 @@ A passage of a longer source.
 
 - **Chosen when** `item.data.excerpt` exists and passes the coverage floor, or the item is a page the Scout picked: an item the agents brought whose kind is `text`, that has an address, and whose text holds more than the closing line that says who made it and when.
 - **Props.** `text`: the passage. For a page the Scout picked it is the item's whole text, which ends with a blank line and that closing line. `at?`: where the passage sits in its source, such as `Chapter 1`. `source?`: `data.site`, else `data.from`.
-- **Drawn as** the passage in an upright serif beside a rule, on up to six lines, without the Scout's closing line. Under it are the item's title and one line of `at` and `source`. A quote is a person's words, and is set in italics on a washed face under a quotation mark. The opened card has the whole passage with its line breaks.
+- **Drawn as** the passage in an upright serif beside a rule, on up to six lines, without the Scout's closing line. Under it are the item's title and one line of `at` and `source`. A quote is a person's words, and is set in italics on a washed face under a quotation mark. The opened card has the whole passage with its line breaks, and under it `item.data.by`, the maker the Scout's closing line named, on a line of its own when the line of `at` and `source` does not hold it.
 - **Item holds.** `data.excerpt = { text, at? }`, or the passage as `text`.
 
 ### definition
@@ -557,7 +579,7 @@ A work to look at, with what its collection records.
 
 - **Chosen when** `item.data.kind` is `artwork` and the item has a picture: itself when its kind is `image`, a recording's `data.thumbnailUrl`, or a page's `data.image`. This is the first row of the table, so a museum's work is never a plain image.
 - **Props.** `src`: the picture. `maker?`: from `data.by`. `date?`. `medium?`. `holder?`.
-- **Drawn as** the work whole on a dark mat, never cropped, over a plate that reads like a museum label: the title, the maker and the date, the medium, and the holder. A plain image fills its frame and has one caption. The opened card has the picture and each line of the label whole. No chip repeats the holder or the date.
+- **Drawn as** the work whole on a dark mat, never cropped, over a plate that reads like a museum label: the title, the maker and the date, the medium, and the holder. A plain image fills its frame and has one caption. The opened card has the picture and the lines of the label whole, without the holder when its list of sources names it. No chip repeats the holder or the date.
 - **Item holds.** `data.kind = 'artwork'`, with `data.by`, `data.date`, `data.medium` and `data.holder` as the Scout copied them.
 
 ### reference
@@ -566,7 +588,7 @@ A paper or a book.
 
 - **Chosen when** `item.data.kind` is `paper` or `book`.
 - **Props.** `kind`. `authors`: `data.authors`, else the one name in `data.by`, and it may be empty. `more?`: true when `data.authorsCut` is true, so the list names only some. `year?`: the four-digit year in `data.date`. `venue?`. `url?`: the item's address.
-- **Drawn as** a library card: `Paper` or `Book` and the year over a rule, then the title on up to three lines, the authors on up to two with `and others` when the list is cut, and the venue on up to two. The opened card has the authors and the venue whole. No chip repeats the venue, the date or the authors.
+- **Drawn as** a library card: `Paper` or `Book` and the year over a rule, then the title on up to three lines, the authors on up to two with `and others` when the list is cut, and the venue on up to two. The opened card has the kind and the year, and the authors and the venue whole when its list of sources does not say them in the same words. A list of authors that was cut is always written, because only that line says `and others`. No chip repeats the venue, the date or the authors.
 - **Item holds.** `data.kind`, with `data.authors`, `data.authorsCut`, `data.venue` and `data.date`.
 
 ### place
