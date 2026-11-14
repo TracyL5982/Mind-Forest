@@ -26,7 +26,7 @@
     <application
         android:allowBackup="false"
         android:hasCode="true"
-        android:label="Mind Palace Ocean">
+        android:label="${appLabel}">
 
         <!-- Lets simpleperf and Perfetto profile the release build from the shell. -->
         <profileable android:shell="true" />

@@ -24,7 +24,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 if [ $build = 1 ]; then
-  (cd "$QUEST_ROOT/android" && ./gradlew assemble$variant -PoceanScene=$scene --console=plain -q)
+  (cd "$QUEST_ROOT/android" && ./gradlew assemble$variant -PoceanScene=$scene -PappSuffix="${QUEST_APP_SUFFIX:-}" --console=plain -q)
   lower=$(echo $variant | tr A-Z a-z)
   adb install -r "$QUEST_ROOT/android/app/build/outputs/apk/$lower/app-$lower.apk" | tail -1
   # Compile the Kotlin side ahead of time: freshly installed, its text drawing is otherwise interpreted and about twice as slow.
