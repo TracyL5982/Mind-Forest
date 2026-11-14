@@ -24,7 +24,7 @@ test('the sample set is whole: built items, a known card expected of each, and a
  * How many samples of each activity the rules alone draw as a person would. A change to a rule that lowers one of these
  * made format choice worse: fix the rule, or change a sample's key only where a person would agree and say so in docs/formats.md.
  */
-const RULES_AGREE = { research: 42, brainstorming: 41, memories: 45 };
+const RULES_AGREE = { research: 42, brainstorming: 42, memories: 45 };
 
 test('the rules alone agree with a person on at least as many samples of each activity as they did', () => {
   for (const activity of ACTIVITIES) {
@@ -44,8 +44,10 @@ test('what the rules draw for every sample is a card the library accepts and the
 
 test('the samples the model is asked about are text the rules left as a note or an idea, and there are enough of them to measure it', () => {
   const open = SAMPLES.filter((sample) => unsure(sample.item, byRule(sample.item, assetUrl)));
-  assert.ok(open.length >= 50, `${open.length} samples go to the model`);
+  assert.ok(open.length >= 65, `${open.length} samples go to the model`);
   for (const sample of open) assert.ok(sample.item.kind === 'text' && ['note', 'idea'].includes(byRule(sample.item, assetUrl).component), sample.key);
+  const short = open.filter((sample) => sample.language === 'zh' && [...sample.item.text].length < 40);
+  assert.ok(short.length >= 10, `${short.length} of them are Chinese texts of under 40 characters, which say as much as an English text of 40 or more`);
   assert.deepEqual([...new Set(SAMPLES.map((sample) => sample.item.kind))].sort(), ['chat', 'image', 'link', 'text', 'video']);
 });
 
