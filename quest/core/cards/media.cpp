@@ -1,5 +1,6 @@
 #include "media.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace cards {
@@ -15,6 +16,11 @@ std::string capital(const std::string& s) {
         n++;
     }
     return uppercased(utf8(t.substr(0, n)));
+}
+
+CGRect contained(CGRect box, float aspect) {
+    float w = std::min(box.width(), box.height() * aspect), h = w / aspect;
+    return {box.midX() - w / 2, box.midY() - h / 2, w, h};
 }
 
 void disc(const Pen& pen, const Look& look, CGRect box) {

@@ -9,6 +9,9 @@ namespace cards {
 /// The first character a reader sees in `s`, in capitals (`graphemes(s)[0].toUpperCase()`).
 std::string capital(const std::string& s);
 
+/// A rectangle of `aspect` shown whole in `box` (pixels), centred.
+CGRect contained(CGRect box, float aspect);
+
 /// A round mark in the card's colour (`.audio-play`, `.person-face`): the accent at 18 % over the face,
 /// ringed outside by a hairline of the accent at half strength. `box` is in pixels.
 void disc(const Pen& pen, const Look& look, CGRect box);

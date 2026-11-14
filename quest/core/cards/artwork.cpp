@@ -41,12 +41,6 @@ Footprint size(const Item& item, const Json& props) {
                        (p.holder.empty() ? 0 : TEXT)};
 }
 
-/// A rectangle of `aspect` shown whole in `box`, centred.
-CGRect contained(CGRect box, float aspect) {
-    float w = std::min(box.width(), box.height() * aspect), h = w / aspect;
-    return {box.midX() - w / 2, box.midY() - h / 2, w, h};
-}
-
 /// The work's two shadows: a soft dark one cast 6 px down, and a faint light edge.
 void lift(const Pen& pen, CGRect r) {
     const int layers = 8;
