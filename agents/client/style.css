@@ -443,8 +443,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .explore-state-text { font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
 .explore-control { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .explore-name { color: var(--ink-2); font-size: 12.5px; line-height: 17px; overflow-wrap: anywhere; }
-.explore-segmented { display: flex; gap: 6px; }
-.explore-option { flex: 1 1 0; min-width: 0; min-height: var(--hit); padding: 6px 8px; border-radius: 12px; border: 1px solid var(--line-2); background: transparent; color: var(--ink-2); font-size: 14px; line-height: 18px; overflow-wrap: anywhere; cursor: pointer; }
+.explore-segmented { display: flex; flex-wrap: wrap; gap: 6px; }
+.explore-option { flex: 1 1 auto; min-width: 0; min-height: var(--hit); padding: 6px 12px; border-radius: 12px; border: 1px solid var(--line-2); background: transparent; color: var(--ink-2); font-size: 14px; line-height: 18px; overflow-wrap: break-word; cursor: pointer; }
 .explore-option[aria-checked='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--ink); }
 .explore-switch { min-height: var(--hit); align-self: flex-start; max-width: 100%; display: inline-flex; align-items: center; gap: 10px; padding: 0 4px 0 0; border: 0; background: none; text-align: start; font-size: 14px; line-height: 18px; overflow-wrap: anywhere; cursor: pointer; }
 .explore-switch-track { flex: none; position: relative; width: 40px; height: 24px; border-radius: 12px; background: var(--line-2); transition: background 0.15s; }
