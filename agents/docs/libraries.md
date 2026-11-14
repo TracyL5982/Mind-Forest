@@ -178,7 +178,7 @@ So a link the Scout brought whose only origin is its site gets no origin chip. O
 - The glyph takes the card's accent. That is the tree's colour, or amber while the card is a pick. Teal is not used.
 - The origin chip follows the item. A museum pick shows `The Metropolitan…` as a pick and after it is kept, at the same size. An item the user added shows no origin chip, whatever its data holds.
 
-**The opened card** lists every source in full, with no limit of three and without leaving out what the type shows: `When`, `Where`, `People` with every name, and `Origin` for an item the agents brought. `chipSources(item)` returns these as `{ kind, label, text }`.
+**The opened card** lists every source in full, with no limit of three and without leaving out what the type shows: `When`, `Where`, `People` with every name, and `Origin` for an item the agents brought. `chipSources(item)` returns these as `{ kind, label, text }`. A card with an `Origin` leaves out the `From` line that says how the item arrived, because `Found on the web` beside a museum's name says the same thing less well. Its `Source` link stays.
 
 **A known limit.** A card in a timeline shows its year on the axis and again on its `when` chip. The chip stays, because a card's footprint is worked out from its item and props alone. If the chip depended on the group, a card would change size when it joined or left a timeline, and the field could not be laid out from footprints.
 

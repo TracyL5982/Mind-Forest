@@ -85,6 +85,7 @@ export class Panel {
     if (this.editing && this.scroll.querySelector('form')) return;
 
     const url = safeUrl(item.source.url ?? '');
+    const sources = chipSources(item);
     const parts = this.editing ? [this.editForm(item)] : [
       h('h2', { class: 'panel-title', dir: 'auto', text: item.title || 'Untitled' }),
       node.why && h('p', { class: `panel-why ${pick ? 'is-pick' : ''}` }, h('span', { text: 'Why it is here' }), node.why),
@@ -93,8 +94,8 @@ export class Panel {
       item.text && item.text !== item.summary && item.text !== item.title && h('p', { class: 'panel-text', dir: 'auto', text: item.text }),
       item.tags.length > 0 && h('div', { class: 'tags' }, item.tags.map((tag) => h('span', { class: 'tag', text: tag }))),
       h('dl', { class: 'facts' },
-        chipSources(item).map(({ kind, label, text }) => [h('dt', { text: label }), h('dd', { data: { chip: kind }, text })]),
-        h('dt', { text: 'From' }), h('dd', { text: cameFrom(item) }),
+        sources.map(({ kind, label, text }) => [h('dt', { text: label }), h('dd', { data: { chip: kind }, text })]),
+        !sources.some(({ kind }) => kind === 'origin') && [h('dt', { text: 'From' }), h('dd', { text: cameFrom(item) })],
         url && [h('dt', { text: 'Source' }), h('dd', null, h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', text: url.replace(/^https?:\/\//, '') }))],
         when(item.source.capturedAt) && [h('dt', { text: 'Added' }), h('dd', { text: when(item.source.capturedAt) })],
       ),

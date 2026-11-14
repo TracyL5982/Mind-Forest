@@ -98,14 +98,15 @@ export const LONG_PLACE = 'The upper reading room of the old municipal library, 
  */
 export function chipped(image: string): Command[] {
   const { commands, add, group } = planting('chips', 'With chips');
+  const found = (url: string) => ({ from: 'web', url, capturedAt: new Date().toISOString() });
   const root = add(null, 'note', {}, 'Cards that say when, where and who', { summary: 'One line of chips under a card, only when its item holds them.', data: { when: 'Spring 1958', where: 'Sonoma coast' } });
   add(root, 'image', { src: image, caption: 'Fog over the harbour' }, 'Harbour in fog', { kind: 'image', data: { when: '12 May 1958', where: 'Bodega Bay' } });
   add(root, 'image', { src: image, caption: 'Fog over the harbour' }, 'Harbour in fog, undated', { kind: 'image' });
   add(root, 'note', {}, 'The crew at the wrap party', { summary: 'Everyone who stayed to the end.', data: { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra', 'Barbara Liskov', 'Alan Kay'] } });
   add(root, 'note', {}, 'Where the notes were found', { summary: 'A box of index cards under the stairs.', data: { where: LONG_PLACE } });
-  add(root, 'image', { src: image, caption: 'Sudden shower over a bridge' }, 'Sudden Shower over Shin-Ohashi Bridge', { kind: 'image', data: { when: '1857', from: 'The Metropolitan Museum of Art', site: 'metmuseum.org' }, origin: { by: 'agent', role: 'scout', tool: 'met' } }, 'pick');
-  add(root, 'link', { url: 'https://example.com/fog', site: 'example.com', description: 'Why coastal fog comes in at dusk.' }, 'Reading the fog', { kind: 'link', data: { when: '2019', site: 'example.com' }, origin: { by: 'agent', role: 'scout', tool: 'web' } }, 'pick');
-  add(root, 'quote', { text: 'We looked at the water until the water looked back.', by: 'A diary' }, 'From the diary', { data: { when: 'Summer 1958', where: 'Bodega Bay', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'], holder: 'Bancroft Library' }, origin: { by: 'agent', role: 'scout', tool: 'web' } }, 'pick');
+  add(root, 'image', { src: image, caption: 'Sudden shower over a bridge' }, 'Sudden Shower over Shin-Ohashi Bridge', { kind: 'image', data: { when: '1857', from: 'The Metropolitan Museum of Art', site: 'metmuseum.org' }, origin: { by: 'agent', role: 'scout', tool: 'met' }, source: found('https://www.metmuseum.org/art/collection/search/36461') }, 'pick');
+  add(root, 'link', { url: 'https://example.com/fog', site: 'example.com', description: 'Why coastal fog comes in at dusk.' }, 'Reading the fog', { kind: 'link', data: { when: '2019', site: 'example.com' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/fog') }, 'pick');
+  add(root, 'quote', { text: 'We looked at the water until the water looked back.', by: 'A diary' }, 'From the diary', { data: { when: 'Summer 1958', where: 'Bodega Bay', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'], holder: 'Bancroft Library' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/diary') }, 'pick');
   const plain = add(root, 'note', {}, 'A plain note', { summary: 'No date, no place, nobody named.' });
   const years = ['1958', '1963', '1975'];
   const timeline = years.map((year, i) => add(plain, 'note', {}, `The shoot in ${year}`, { summary: 'One visit to the bay.', data: { when: year, where: ['Bodega Bay', 'Point Reyes', 'Tomales'][i], ...(i === 1 ? { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'] } : {}) } }));

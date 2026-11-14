@@ -336,8 +336,10 @@ async function main(): Promise<void> {
       const facts = page.locator('#panel .facts');
       assert.deepEqual(await facts.locator('dd[data-chip]').allTextContents(), ['Summer 1958', 'Bodega Bay', 'Ada Lovelace, Grace Hopper, Edsger Dijkstra', 'Bancroft Library'], 'the opened card lists every source in full');
       assert.deepEqual((await facts.locator('dt').allTextContents()).slice(0, 4), ['When', 'Where', 'People', 'Origin']);
+      assert.ok(!(await facts.locator('dt').allTextContents()).includes('From'), 'what the agents brought names its origin, and no second place it came from');
       await card(CHIPPED.plainNote).click();
       assert.equal(await facts.locator('dd[data-chip]').count(), 0);
+      assert.deepEqual((await facts.locator('dt').allTextContents()).slice(0, 1), ['From'], 'what the user added says how it arrived');
 
       const size = await tall(CHIPPED.museum);
       await card(CHIPPED.museum).click();
