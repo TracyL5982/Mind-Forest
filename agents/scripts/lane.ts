@@ -17,7 +17,13 @@
  *   think=<text>       type a thought into the dock and wait for its picks
  *   shapes             load the Every shape tree: each card type, each arrangement, one unknown type
  *   crowd=<n>          load a tree of n note cards. Default 200.
- *   card=<type>:<json> add one kept card of that type with those props, in a tree named Lane
+ *   card=<type>:<json> add one kept card of that type in a tree named Lane. The JSON is the card's
+ *                      props, or { item, props, pick } to also set the item's title, summary,
+ *                      text or data, or to add the card as a pick: card=fact:{"item":{"title":"Budget"},"props":{"value":"$1.2M","label":"spent"},"pick":true}
+ *   group=<kind>:<json> arrange the cards added since the last group as a gallery, timeline,
+ *                      comparison, sequence, cluster or stack. The JSON is the group's props, and
+ *                      may hold a title. A key $0, $1, ... stands for the first, second, ... card:
+ *                      group=timeline:{"title":"Years","labels":{"$0":"1958","$1":"1975","$2":"1990"}}
  *   tree=<text>        go to the tree whose name holds this text. The field zooms out to fit it,
  *                      and never zooms in past 100 percent.
  *   zoom=<percent>     zoom the field about the middle of the page
@@ -73,21 +79,41 @@ async function connect(page: Page, run: Running): Promise<void> {
   await page.locator('#status[data-state="live"]').waitFor();
 }
 
-function loneCard(type: string, props: Record<string, unknown>, run: Running): { id: string; commands: Command[] } {
+type Given = { item?: Partial<Item>; props?: Record<string, unknown>; pick?: boolean };
+
+/** Read `card=`'s JSON: the props alone, or the item, the props and whether the card is a pick. */
+function given(json: string): Given {
+  const parsed = json ? (JSON.parse(json) as Record<string, unknown>) : {};
+  const whole = ['item', 'props', 'pick'].some((key) => key in parsed) && Object.keys(parsed).every((key) => ['item', 'props', 'pick'].includes(key));
+  return whole ? (parsed as Given) : { props: parsed };
+}
+
+/** The lane cards no group has taken yet, in the order they were added. */
+const loose: string[] = [];
+let groups = 0;
+
+function loneCard(type: string, { item: fields = {}, props = {}, pick = false }: Given, run: Running): { id: string; commands: Command[] } {
   const at = new Date().toISOString();
   const n = run.mind.trees.has('lane') ? run.mind.treeNodes('lane').length : 0;
-  const make = (id: string, component: string, title: string, parent: string | null, given: Record<string, unknown>): [Item, Node] => [
-    { id: `item-${id}`, kind: 'text', title, text: '', summary: '', tags: [], data: {}, source: { from: 'paste', capturedAt: at }, origin: { by: 'user' }, archived: false, revision: 0 },
-    { id, treeId: 'lane', itemId: `item-${id}`, parent, status: 'kept', why: '', importance: 0.5, origin: { by: 'user' }, view: { component, props: given, by: 'renderer' }, order: n },
+  const make = (id: string, component: string, title: string, parent: string | null, view: Record<string, unknown>, more: Partial<Item>, status: Node['status']): [Item, Node] => [
+    { id: `item-${id}`, kind: 'text', title, text: '', summary: '', tags: [], data: {}, source: { from: 'paste', capturedAt: at }, origin: { by: 'user' }, archived: false, revision: 0, ...more },
+    { id, treeId: 'lane', itemId: `item-${id}`, parent, status, why: status === 'pick' ? 'Worth a look' : '', importance: 0.5, origin: { by: 'user' }, view: { component, props: view, by: 'renderer' }, order: n },
   ];
   const commands: Command[] = [];
   if (n === 0) {
-    const [item, root] = make('lane-root', 'note', 'Lane', null, {});
+    const [item, root] = make('lane-root', 'note', 'Lane', null, {}, {}, 'kept');
     commands.push({ type: 'addItem', item }, { type: 'createTree', tree: { id: 'lane', title: 'Lane', rootId: root.id, digest: '', createdAt: at }, root });
   }
-  const [item, node] = make(`lane-${n}`, type, `A ${type} card`, 'lane-root', props);
+  const [item, node] = make(`lane-${n}`, type, `A ${type} card`, 'lane-root', props, { ...fields, id: `item-lane-${n}` }, pick ? 'pick' : 'kept');
   commands.push({ type: 'addItem', item }, { type: 'addNode', node });
   return { id: node.id, commands };
+}
+
+/** Swaps a key `$n` for the id of the nth loose card, at any depth. */
+function named(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(named);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, inner]) => [/^\$\d+$/.test(key) ? (loose[Number(key.slice(1))] ?? key) : key, named(inner)]));
 }
 
 async function overlapping(page: Page): Promise<string[]> {
@@ -141,11 +167,23 @@ const STEPS: Record<string, Step> = {
   async card(value, page, run) {
     const cut = value.indexOf(':');
     const type = cut < 0 ? value : value.slice(0, cut);
-    const props = cut < 0 ? {} : (JSON.parse(value.slice(cut + 1)) as Record<string, unknown>);
-    const { id, commands } = loneCard(type, props, run);
+    const { id, commands } = loneCard(type, given(cut < 0 ? '' : value.slice(cut + 1)), run);
     if (!run.pipeline.userCommands(`Add a ${type} card`, commands)) throw new Error(`the service refused a ${type} card`);
+    loose.push(id);
     await page.locator(`.card[data-id="${id}"]`).waitFor();
     return `drawn as ${await page.locator(`.card[data-id="${id}"]`).getAttribute('data-component')}`;
+  },
+  async group(value, page, run) {
+    const cut = value.indexOf(':');
+    const composite = cut < 0 ? value : value.slice(0, cut);
+    const { title = '', ...props } = named(cut < 0 ? {} : JSON.parse(value.slice(cut + 1))) as { title?: string } & Record<string, unknown>;
+    const id = `lane-group-${groups++}`;
+    const members = loose.splice(0);
+    if (!run.pipeline.userCommands(`Group as a ${composite}`, [{ type: 'setGroup', group: { id, treeId: 'lane', anchor: 'lane-root', composite, title, members, props } } as Command])) {
+      throw new Error(`the service refused a ${composite} of ${members.length} cards`);
+    }
+    await page.locator(`.pane[data-group="${id}"]`).waitFor();
+    return `${members.length} cards drawn as ${await page.locator(`.pane[data-group="${id}"]`).getAttribute('data-composite')}`;
   },
   async tree(value, page) {
     await page.locator('.tree-chip', { hasText: value }).first().click();
