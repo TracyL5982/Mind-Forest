@@ -186,10 +186,11 @@ export function series(props) {
 
 /**
  * A bar or line chart with gridlines and a scale. Labels and values are written level, in short
- * form, and only where they fit. When a slot is narrower than the labels, or than 44 px for long
- * labels, every nth label is written, the marked, first and last ones before the rest, and a
- * label longer than its slots is cut. On a card, values are
- * written for six points or fewer. `whole` says every label and value is on the plot in full.
+ * form, and only where they fit. Six points or fewer each keep their label, cut to the slot. With
+ * more, when a slot is narrower than the labels, or than 44 px for long labels, every nth label is
+ * written, the marked, first and last ones before the rest, and a label longer than its slots is
+ * cut. On a card, values are written for six points or fewer. `whole` says every label and value
+ * is on the plot in full.
  */
 export function plot(props, width, height, { opened = false } = {}) {
   const { values, labels, mark } = series(props);
@@ -255,7 +256,7 @@ export function plot(props, width, height, { opened = false } = {}) {
   }
 
   const widest = Math.max(...labels.map(textWidth));
-  const stride = Math.max(1, Math.ceil((Math.min(widest, 44) + 6) / step));
+  const stride = n <= 6 ? 1 : Math.max(1, Math.ceil((Math.min(widest, 44) + 6) / step));
   const room = Math.floor(stride * step - 6);
   const labelRow = [];
   const written = new Set(markedFirst
