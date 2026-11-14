@@ -2,6 +2,7 @@ import type { Command, Item } from '../core/domain.ts';
 import type { Found } from '../core/ports.ts';
 import { codeIn } from '../core/roles/intake/code.ts';
 import { structure } from '../core/roles/intake/describe.ts';
+import { located } from '../core/roles/intake/located.ts';
 import { byRule, drawn, unsure } from '../core/roles/renderer.ts';
 import { catalogued } from '../core/roles/scout.ts';
 import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles } from '../core/roles/types.ts';
@@ -50,7 +51,7 @@ export const fakeRoles: Roles = {
   },
 
   async intake(ctx, dumps) {
-    return dumps.map((d): Item => {
+    return located(ctx, dumps.map((d): Item => {
       if (d.kind === 'link') {
         return makeItem(ctx, { kind: 'link', title: d.url.replace(/^https?:\/\//, '').slice(0, 60), summary: 'A page you dropped in.', tags: ['link'], origin: { by: 'user' }, source: { from: 'link', url: d.url } });
       }
@@ -62,7 +63,7 @@ export const fakeRoles: Roles = {
       }
       const first = d.text.split('\n')[0]!.slice(0, 60);
       return makeItem(ctx, { kind: 'text', title: first, text: d.text, summary: d.text.slice(0, 160), data: { ...structure(describe(d.text), d.text), ...(codeIn(d.text) ? { code: codeIn(d.text) } : {}) }, tags: first.toLowerCase().split(/\W+/).filter((w) => w.length > 4).slice(0, 3), origin: { by: 'user' }, source: { from: 'paste' } });
-    });
+    }));
   },
 
   async filer(ctx, items) {

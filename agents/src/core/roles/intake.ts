@@ -14,6 +14,7 @@ import {
   TEXT_SYSTEM,
   TextReply,
 } from './intake/describe.ts';
+import { located } from './intake/located.ts';
 import { asUrl, clip, decodeText, firstLine, middleOut, nameStem, plainly, squash, TITLE_MAX, toBase64, type Described } from './intake/plain.ts';
 import { AGENT, makeItem, type RawDump, type RoleContext, type Roles } from './types.ts';
 
@@ -84,7 +85,7 @@ export const intake: Roles['intake'] = async (ctx, dumps) => {
   if (run.failures > 0) {
     ctx.note(ROLE, `The model failed on ${run.failures} of ${run.calls} descriptions. Those items have plain titles and tags.`);
   }
-  return slots.flat();
+  return located(ctx, slots.flat());
 };
 
 async function recognise(ctx: RoleContext, dump: RawDump): Promise<Job[]> {
