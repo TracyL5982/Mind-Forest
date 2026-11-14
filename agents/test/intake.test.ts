@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import { Item } from '../src/core/domain.ts';
 import type { JsonRequest } from '../src/core/ports.ts';
 import { intake } from '../src/core/roles/intake.ts';
+import { byRule } from '../src/core/roles/renderer.ts';
+import { DEMO_MEMO, tones } from '../src/fake/model.ts';
 import { kit, type Kit } from './kit.ts';
 
 const NOTHING = {
@@ -140,6 +142,57 @@ test('a small video is watched and a large one is filed by name with a note', as
   assert.equal(items[1]!.source.asset, large.id);
   assert.ok(k.notes.some((n) => n.includes('beach-walk_take2.mp4') && n.includes('15 MB')));
   assertWellFormed(items);
+});
+
+const MEASURED = { seconds: 20, peaks: [0.2, 1, 0.6, 0.35] };
+
+test('a dropped recording is transcribed and its transcript described as a text is, so it is found by a word spoken in it', async () => {
+  const k = kit();
+  const memo = await k.assets.put(tones(3), 'audio/wav', 'garden-memo.wav');
+  k.model.describing();
+
+  const items = await intake(k.ctx, [{ kind: 'asset', asset: memo.id, mime: 'audio/wav', name: 'garden-memo.wav', sound: MEASURED }]);
+
+  assert.equal(items.length, 1, 'a long transcript is one recording, never split into ideas');
+  const [recording] = items;
+  assert.equal(recording!.kind, 'audio');
+  assert.equal(recording!.text, DEMO_MEMO);
+  assert.equal(recording!.title, 'Garden notes for Thursday.');
+  assert.deepEqual(recording!.data.sound, MEASURED);
+  assert.deepEqual([recording!.source.from, recording!.source.asset], ['drop', memo.id]);
+  assert.deepEqual(k.model.calls.map((c) => c.kind), ['transcribe', 'json']);
+  assert.match(k.model.calls[1]!.detail, /the transcript of a recording, file name: garden-memo\.wav/);
+  assert.deepEqual(byRule(recording!, (id) => `/assets/${id}`), { component: 'audio', props: { src: `/assets/${memo.id}`, ...MEASURED } });
+  k.mind.apply({ origin: { by: 'user' }, label: 'Drop a memo', commands: [{ type: 'addItem', item: recording! }] });
+  assert.deepEqual(k.mind.search('compost').map((hit) => hit.id), [recording!.id]);
+  assertWellFormed(items);
+});
+
+test('a recording whose transcription fails is kept with no transcript and one line in the run log', async () => {
+  const k = kit();
+  const memo = await k.assets.put(tones(1), 'audio/mpeg', 'voice-note_0412.mp3');
+  k.model.onTranscribe(new Error('the transcriber is down')).describing();
+
+  const items = await intake(k.ctx, [{ kind: 'asset', asset: memo.id, mime: 'audio/mpeg', name: 'voice-note_0412.mp3', sound: MEASURED }]);
+
+  assert.deepEqual(items.map((i) => [i.kind, i.title, i.text]), [['audio', 'voice note 0412', '']]);
+  assert.equal(items[0]!.summary, 'A recording dropped in as voice-note_0412.mp3.');
+  assert.deepEqual(items[0]!.data, { sound: MEASURED });
+  assert.deepEqual(k.notes, ['intake: Could not transcribe "voice-note_0412.mp3", so it has no transcript.']);
+  assert.equal(k.model.calls.filter((c) => c.kind === 'json').length, 0, 'nothing is described when nothing was heard');
+  assertWellFormed(items);
+});
+
+test('a recording the client could not decode is filed by name, and nothing is sent to be transcribed', async () => {
+  const k = kit();
+  const junk = await k.assets.put(bytes('not sound at all'), 'audio/mpeg', 'interview.mp3');
+
+  const items = await intake(k.ctx, [{ kind: 'asset', asset: junk.id, mime: 'audio/mpeg', name: 'interview.mp3' }]);
+
+  assert.deepEqual(items.map((i) => [i.kind, i.title]), [['file', 'interview.mp3']]);
+  assert.deepEqual(byRule(items[0]!, (id) => `/assets/${id}`).component, 'note');
+  assert.deepEqual(k.notes, ['intake: "interview.mp3" could not be played as sound, so it is filed by name only.']);
+  assert.equal(k.model.calls.length, 0);
 });
 
 test('a dropped text file is read as text and a binary file is filed by name', async () => {
@@ -837,7 +890,7 @@ test('no more than four model calls run at once', async () => {
   k.ctx.model = {
     search: (req) => k.model.search(req),
     image: (req) => k.model.image(req),
-    transcribe: () => k.model.transcribe(),
+    transcribe: (req) => k.model.transcribe(req),
     json: async (req) => {
       peak = Math.max(peak, ++running);
       await new Promise((resolve) => setTimeout(resolve, 5));

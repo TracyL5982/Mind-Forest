@@ -80,8 +80,9 @@ export const STRUCTURED = Object.fromEntries(STRUCTURED_IDS.map((id, i) => [id, 
 /**
  * One tree that holds every component and every composite, and a link to a card in another tree when one is given. Every item holds
  * what the Renderer's rules draw its card from, so the tree looks the same after the stand-in Renderer has been over it. `structured: false` leaves out the fourteen types drawn from structure.
+ * `sound` is the address of a recording the service holds, which adds a recording at the end, after the types drawn from structure.
  */
-export function showcase(image: string, other?: string, { structured = true } = {}): Command[] {
+export function showcase(image: string, other?: string, { structured = true, sound = '' } = {}): Command[] {
   const { commands, add, group } = planting('show', 'Every shape');
 
   const root = add(null, 'note', 'Every way a card can be drawn', { summary: 'Twenty-five components and six ways to arrange them.', text: 'Twenty-five components and six ways to arrange them.' });
@@ -134,6 +135,13 @@ export function showcase(image: string, other?: string, { structured = true } = 
     }
     if (add(carried, id, title, seed) !== STRUCTURED[id]) throw new Error(`the ${id} card is not ${STRUCTURED[id]}`);
   }
+  if (sound) {
+    add(root, 'audio', 'Garden notes for Thursday', {
+      kind: 'audio', text: 'Stake the tomatoes by the south wall before the wind, and order two more bags of compost.',
+      data: { mediaUrl: sound, sound: { seconds: 4, peaks: [0.2, 0.5, 0.9, 1, 0.6, 0.3, 0.45, 0.8, 0.7, 0.25, 0.1, 0.4] } },
+      source: { from: 'drop', capturedAt: new Date().toISOString() },
+    });
+  }
   return commands;
 }
 
@@ -158,6 +166,12 @@ export function assembled(): Command[] {
   const steps = Array.from({ length: 5 }, (_, i) => add(facets[5]!, 'note', `Step ${i + 1} of the walk`, { summary: 'One stop on the river path, with what to look for there.', text: 'One stop on the river path, with what to look for there.' }));
   group(facets[5]!, 'layout', 'The walk', steps, { tree: { kind: 'column', children: steps.map((id) => ({ kind: 'card', id, role: 'normal' })) } });
   return commands;
+}
+
+/** Stores a file in the service as a client does, and returns the address it is served from. */
+export async function stored(page: Page, run: Running, bytes: Uint8Array, mime: string, name: string): Promise<string> {
+  const up = await page.request.post(`${run.url}/api/assets?name=${encodeURIComponent(name)}`, { headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': mime }, data: Buffer.from(bytes) });
+  return ((await up.json()) as { url: string }).url;
 }
 
 /** The ids of the cards in `chipped`, by what each one is there to show. */

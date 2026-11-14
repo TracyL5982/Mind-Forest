@@ -12,7 +12,8 @@ import { join, resolve } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
 import type { Running } from '../src/node/server.ts';
 import { COMPONENT_IDS, STRUCTURED_IDS } from '../src/core/samples.ts';
-import { ASSEMBLED, CHIPPED, LONG_PLACE, PLACED, PNG, STRUCTURED, assembled, bootFake, browserPath, chipped, crowd, showcase, spills, unknownShape } from './stage.ts';
+import { DEMO_MEMO, tones } from '../src/fake/model.ts';
+import { ASSEMBLED, CHIPPED, LONG_PLACE, PLACED, PNG, STRUCTURED, assembled, bootFake, browserPath, chipped, crowd, showcase, spills, stored, unknownShape } from './stage.ts';
 
 const shots = process.env.MIND_PALACE_SHOTS ? resolve(process.env.MIND_PALACE_SHOTS) : mkdtempSync(join(tmpdir(), 'mp-shots-'));
 mkdirSync(shots, { recursive: true });
@@ -241,6 +242,41 @@ async function main(): Promise<void> {
       await run.pipeline.idle();
     });
 
+    await check('a dropped recording is a card with its waveform, its length and its first words, plays when opened, and is found by a word spoken in it', async () => {
+      await page.locator('#file-pick').setInputFiles({ name: 'garden-memo.wav', mimeType: 'audio/wav', buffer: Buffer.from(tones(20)) });
+      const memo = page.locator('.card.is-kept[data-component="audio"]', { hasText: 'Garden notes for Thursday.' });
+      await memo.waitFor();
+      assert.equal(await memo.locator('.audio-length').textContent(), '0:20', 'the length the browser measured');
+      assert.equal(await memo.locator('.audio-wave rect').count(), 48, 'one bar for each slice the browser measured');
+      assert.match((await memo.locator('.card-text').textContent())!, /^The tomatoes by the south wall/, 'the first words after the title');
+      const item = [...run.mind.items.values()].find((one) => one.kind === 'audio')!;
+      assert.equal(item.text, DEMO_MEMO);
+      assert.ok(run.mind.search('compost').some((hit) => hit.id === item.id), 'found by a word spoken in it');
+      await run.pipeline.idle();
+      assert.deepEqual(await spills(page), []);
+      await shot(page, 'desktop-4-recording');
+
+      await memo.click();
+      const panel = page.locator('#panel');
+      const player = panel.locator('audio');
+      await player.waitFor();
+      assert.ok(await panel.getByText('Ask Mara about the seed swap, and order two more bags of compost.').isVisible(), 'the whole transcript');
+      await player.evaluate((el: HTMLAudioElement) => el.play());
+      await until('the recording to play', () => player.evaluate((el: HTMLAudioElement) => el.currentTime > 0));
+      await player.evaluate((el: HTMLAudioElement) => el.pause());
+      await shot(page, 'desktop-4-recording-open');
+
+      await page.getByRole('textbox', { name: 'Ask about this card' }).fill('a podcast episode about this');
+      await page.getByRole('textbox', { name: 'Ask about this card' }).press('Enter');
+      const episode = page.locator('.card.is-pick[data-component="audio"]', { hasText: 'Why the room seems to stretch' });
+      await episode.waitFor();
+      assert.equal(await episode.locator('.audio-length').textContent(), '0:12', 'the length the source gave');
+      assert.equal(await episode.locator('.audio-wave .audio-flat').count(), 1, 'no waveform, since nobody measured it');
+      await run.pipeline.idle();
+      await shot(page, 'desktop-4-podcast-pick');
+      await panel.getByRole('button', { name: 'Close' }).click();
+    });
+
     await check('the settings switch reaches the service and comes back', async () => {
       await page.getByRole('button', { name: 'Settings' }).click();
       await page.getByRole('radio', { name: 'Keep everything at once' }).click();
@@ -281,7 +317,7 @@ async function main(): Promise<void> {
     await check('every component and composite is drawn, unknown shapes fall back to a note, and a link is dashed', async () => {
       const up = await desktop.request.post(`${run.url}/api/assets?name=still.png`, { headers: { Authorization: 'Bearer secret', 'Content-Type': 'image/png' }, data: Buffer.from(PNG) });
       const image = ((await up.json()) as { url: string }).url;
-      assert.ok(run.pipeline.userCommands('Add every shape', showcase(image, rootId)));
+      assert.ok(run.pipeline.userCommands('Add every shape', showcase(image, rootId, { sound: await stored(page, run, tones(4), 'audio/wav', 'memo.wav') })));
       await page.locator('.tree-chip', { hasText: 'Every shape' }).waitFor();
       for (const component of COMPONENT_IDS) {
         assert.ok((await count(page, `.card[data-id^="show-"][data-component="${component}"]`)) > 0, `${component} is drawn`);

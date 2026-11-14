@@ -47,7 +47,7 @@ Drawing rules:
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `dump` | `dumps` | Things dropped into the mindstorm. Each is `{kind:'text', text, name?}`, `{kind:'link', url}`, or `{kind:'asset', asset, mime, name?}`. Upload files first (below). |
+| `dump` | `dumps` | Things dropped into the mindstorm. Each is `{kind:'text', text, name?}`, `{kind:'link', url}`, or `{kind:'asset', asset, mime, name?, sound?}`. Upload files first (below). A recording (a `mime` that starts `audio/`) carries `sound: {seconds, peaks}`, which the client measured when it decoded the file, because the service never decodes sound: see the audio card in `docs/libraries.md`. A recording sent with no `sound` is filed by name. |
 | `utter` | `text`, `final`, `scene` | Speech as text. Send partials with `final: false` as they arrive and the last one with `final: true`. |
 | `focus` | `nodeId` | The user opened or looked at a node. The agent brings picks for it if it has none. |
 | `ask` | `nodeId`, `need` | A typed question about a node. |

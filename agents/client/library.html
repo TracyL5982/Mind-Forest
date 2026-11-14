@@ -43,7 +43,7 @@
   <p>Every way the Renderer can draw one card (components) and every way it can arrange several sibling cards (composites). This page draws them with the same code and styles as the live client, from sample data.</p>
   <p>Solid cards are yours. Dashed amber cards are picks the librarian brought and you have not kept.</p>
   <p>Under each sample is its type name and its footprint in pixels, which is worked out from the content and never measured.</p>
-  <p>The first eleven types are drawn from an item's kind and its words. The fourteen after them are drawn from structure the item carries, such as its facts, its rows, its entries or a catalogue's record, or from a passage of its words. The last, a sheet, is assembled from parts of those kinds when no one card covers the item. Each is shown from the sample the service gives it, then with other content, in Chinese, and at its extremes, some of them opened.</p>
+  <p>The first twelve types are drawn from an item's kind and its words. The fourteen after them are drawn from structure the item carries, such as its facts, its rows, its entries or a catalogue's record, or from a passage of its words. The last, a sheet, is assembled from parts of those kinds when no one card covers the item. Each is shown from the sample the service gives it, then with other content, in Chinese, and at its extremes, some of them opened.</p>
   <p>Any card can carry one line of chips under its content: a date, a place, people and, for what the agents brought, where it came from. A date is always whole, and a longer place, name or source is clipped inside its chip. Each type is shown once without chips and once with them. The line adds 28 pixels and nothing else changes.</p>
 </header>
 
@@ -57,6 +57,7 @@ import { h } from './js/dom.js';
 import { drawCard, sizeOf } from './js/components/index.js';
 import { arrange } from './js/composites/index.js';
 import { Panel } from './js/panel.js';
+import { measure } from './js/input.js';
 import { SAMPLES, SHEETS } from './library-samples.js';
 
 const TINT = '#9fc3ff';
@@ -68,6 +69,25 @@ function sample(label, a, b, w = 640, hgt = 440) {
 const PIC = { fields: sample('', '#e2b21f', '#3f7d3a'), night: sample('', '#1b2550', '#0c0f1e'), river: sample('', '#2f7fa8', '#16324a'), quilt: sample('', '#b0413e', '#27408b'), face: sample('', '#c98b6b', '#6b4a8a', 200, 200), tall: sample('', '#d8cfc0', '#3a3532', 300, 420), scroll: sample('', '#3f7d6a', '#1c3350', 900, 300) };
 /** The pictures the samples from the service name, which this page has no service to load from. */
 const STAND_IN = { [SAMPLES.artwork.props.src]: PIC.tall, [SAMPLES.place.props.src]: PIC.river };
+
+/** A WAV file of tones that swell and fade, louder and quieter in turn as a voice is, measured by the live client's own code. */
+function memo(seconds, rate = 8000) {
+  const count = seconds * rate;
+  const wav = new DataView(new ArrayBuffer(44 + count * 2));
+  [[0, 'RIFF'], [8, 'WAVE'], [12, 'fmt '], [36, 'data']].forEach(([at, word]) => [...word].forEach((ch, i) => wav.setUint8(at + i, ch.charCodeAt(0))));
+  [[4, 36 + count * 2, 4], [16, 16, 4], [20, 1, 2], [22, 1, 2], [24, rate, 4], [28, rate * 2, 4], [32, 2, 2], [34, 16, 2], [40, count * 2, 4]]
+    .forEach(([at, value, size]) => (size === 4 ? wav.setUint32(at, value, true) : wav.setUint16(at, value, true)));
+  for (let n = 0; n < count; n++) {
+    const t = n / rate;
+    const beat = Math.floor(t * 2.5);
+    const loud = 0.15 + 0.75 * Math.abs(Math.sin(beat * 2.3)) * (beat % 7 === 6 ? 0.1 : 1);
+    wav.setInt16(44 + n * 2, Math.round(loud * Math.sin(Math.PI * ((t * 2.5) % 1)) * Math.sin(2 * Math.PI * (180 + 40 * (beat % 4)) * t) * 32767), true);
+  }
+  return new File([wav.buffer], 'memo.wav', { type: 'audio/wav' });
+}
+const MEMO_FILE = memo(8);
+const MEMO = { src: URL.createObjectURL(MEMO_FILE), ...(await measure(MEMO_FILE)) };
+const PEAKS = MEMO.peaks ?? [];
 const ctx = { asset: (src) => STAND_IN[src] ?? src };
 
 let n = 0;
@@ -124,6 +144,8 @@ const COMPONENT_SAMPLES = [
     make('image', { src: PIC.fields, caption: 'Car on a winding road through yellow fields' }, { title: 'Aerial illustration', summary: 'A flat illustration of a white car on a road between yellow fields, seen from above.' })],
   ['video', 'rules', 'Any clip. A YouTube pick plays inside the opened card.',
     make('video', { src: '', poster: PIC.night, caption: 'Night drive, headlights only' }, { title: 'Night drive' })],
+  ['audio', 'rules', 'A recording you dropped in, or a podcast episode the Scout brought. The words under it are the first of its transcript. The length and the waveform are measured once, when the file is dropped, and the opened card plays it over the whole transcript.',
+    make('audio', MEMO, { source: { from: 'drop' }, title: 'Garden notes for Thursday', text: 'The tomatoes by the south wall need staking before the wind picks up, and the beans can go in once the soil is dry.\nAsk Mara about the seed swap, and order two more bags of compost.' })],
   ['link', 'rules', 'A web page you pasted yourself. The Scout no longer brings these.',
     make('link', { url: 'https://example.com/aerial', site: 'example.com', description: 'How aerial photographers read farmland as pattern.', image: PIC.river }, { title: 'Reading land from above' })],
   ['chart', 'model', 'When the card\'s text holds a small series of numbers. Every value must appear in the text.',
@@ -291,6 +313,12 @@ const VARIANTS = {
     ['Wide', make('image', { src: PIC.river, aspect: 1.85 }, { title: 'River delta' })],
     ['Picture that fails to load', make('image', { src: 'data:image/png;base64,AAAA', caption: 'A print the museum has taken down' }, { title: 'Missing print' })],
   ],
+  audio: [
+    ['A podcast the Scout brought: a length and no waveform', make('audio', { src: 'https://podcasts.example/film-hour/41.mp3', seconds: 2520 }, { title: 'Why the room seems to stretch', text: 'Two cinematographers talk through the dolly zoom: how Hitchcock\'s crew found it, why the background seems to rush away while the subject holds still, and when it turns from dread into comedy.\n\nThe Example Film Hour, 2024-03-08, Podcasts', origin: { by: 'agent' }, source: { from: 'web' } }), 'pick'],
+    ['Nothing was heard', make('audio', { src: MEMO.src, seconds: 4, peaks: PEAKS.slice(0, 20) }, { title: 'voice note 0412', summary: 'A recording dropped in as voice-note_0412.mp3.' })],
+    ['Chinese', make('audio', MEMO, { source: { from: 'drop' }, title: '周六的菜市场', text: '早上七点去菜市场，买两斤排骨、一把青菜和一块豆腐。记得带上布袋子，顺便问问摊主下周还有没有新鲜的笋。' }), 'kept', true],
+    ['An hour, and a long title', make('audio', { ...MEMO, seconds: 3725 }, { title: 'Interview with the keeper of the old municipal library about the box of index cards', text: 'So the cards were in the basement the whole time, under the stairs, in a tea chest with the parish maps.' })],
+  ],
   link: [
     ['No picture', make('link', { url: 'https://example.org/lenses', site: 'example.org' }, { title: 'A field guide to long lenses and what they flatten', summary: 'Why distant hills stack up behind the subject.' })],
   ],
@@ -323,6 +351,7 @@ const CHIPS = {
   fact: { data: { when: '1833' } },
   image: { brought: ['pick', 'kept'], data: { site: 'metmuseum.org', date: '1857', holder: 'The Metropolitan Museum of Art' } },
   video: { data: { when: '3 Aug 2024', where: 'Route 1, Big Sur' } },
+  audio: { data: { when: '14 Nov 2026', where: 'The allotment, plot 12' } },
   link: { brought: ['pick'], data: { site: 'example.com', date: '2019', from: 'The web' } },
   chart: { brought: ['pick'], data: { site: 'doi.org', date: '2019', venue: 'Journal of Japanese Studies', authors: ['T. Screech', 'M. Forrer', 'H. Smith'] } },
   person: { data: { when: '1832', where: 'Edo' } },

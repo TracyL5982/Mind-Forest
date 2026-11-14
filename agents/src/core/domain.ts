@@ -3,8 +3,21 @@ import { z } from 'zod';
 export const Id = z.string().min(1);
 export type Id = string;
 
-export const ItemKind = z.enum(['text', 'image', 'video', 'link', 'chat', 'file', 'code']);
+export const ItemKind = z.enum(['text', 'image', 'video', 'audio', 'link', 'chat', 'file', 'code']);
 export type ItemKind = z.infer<typeof ItemKind>;
+
+/** The most slices a recording's loudness is measured in. */
+export const PEAKS = 64;
+
+/**
+ * What is known of a recording without decoding it again: how long it plays, and, when a client measured the file, how loud each
+ * of its equal slices is, 0 to 1, the loudest slice 1. A client measures a file it drops; a source may give the length alone.
+ */
+export const Sound = z.object({
+  seconds: z.number().positive().finite(),
+  peaks: z.array(z.number().min(0).max(1)).min(1).max(PEAKS).optional(),
+});
+export type Sound = z.infer<typeof Sound>;
 
 export const Origin = z.object({
   by: z.enum(['user', 'agent']),
@@ -31,6 +44,7 @@ export type Source = z.infer<typeof Source>;
  * term and definition, items string[] with checklist boolean[], colours {name, value}[], excerpt {text, at?}.
  * A Scout pick also carries what its source catalogued: kind (artwork, paper or book), medium, holder, authors string[],
  * authorsCut true (when the source lists only the first of them), venue.
+ * A recording carries sound (a `Sound`), and its text is its transcript.
  */
 export const ItemData = z.record(z.string(), z.unknown());
 export type ItemData = z.infer<typeof ItemData>;

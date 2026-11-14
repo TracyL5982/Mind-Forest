@@ -14,7 +14,7 @@ export class FakeModel implements ModelClient {
   readonly calls: { kind: 'json' | 'search' | 'image' | 'transcribe'; role: string; detail: string }[] = [];
   private readonly json_ = new Map<string, JsonHandler>();
   private search_: (query: string, max: number) => WebResult[] = () => [];
-  private transcript = '';
+  private heard: string | Error | undefined;
 
   on(role: string, handler: JsonHandler): this {
     this.json_.set(role, handler);
@@ -24,8 +24,9 @@ export class FakeModel implements ModelClient {
     this.search_ = handler;
     return this;
   }
-  onTranscribe(text: string): this {
-    this.transcript = text;
+  /** What every recording is heard to say from now on, or the error transcribing it fails with. */
+  onTranscribe(heard: string | Error): this {
+    this.heard = heard;
     return this;
   }
 
@@ -68,10 +69,54 @@ export class FakeModel implements ModelClient {
     this.calls.push({ kind: 'image', role: req.role, detail: req.prompt });
     return { bytes: PIXEL, mime: 'image/png' };
   }
-  async transcribe(): Promise<string> {
-    this.calls.push({ kind: 'transcribe', role: 'voice', detail: '' });
-    return this.transcript;
+  /** Until it is told otherwise, the fake hears the demo memo in a WAV file, such as one `tones` made, and nothing in any other. */
+  async transcribe(req: { audio: Uint8Array; mime: string }): Promise<string> {
+    this.calls.push({ kind: 'transcribe', role: 'voice', detail: req.mime });
+    if (this.heard instanceof Error) throw this.heard;
+    return this.heard ?? (isWave(req.audio) ? DEMO_MEMO : '');
   }
+}
+
+/**
+ * What the fake hears in a WAV file: a memo with a few things to do, so a dropped recording has words with no model behind it.
+ * A transcriber writes each stretch of speech on a line of its own.
+ */
+export const DEMO_MEMO = [
+  'Garden notes for Thursday.',
+  'The tomatoes by the south wall need staking before the wind picks up, and the beans can go in once the soil is dry.',
+  'Ask Mara about the seed swap, and order two more bags of compost.',
+].join('\n');
+
+const ascii = (bytes: Uint8Array, at: number) => String.fromCharCode(...bytes.subarray(at, at + 4));
+const isWave = (bytes: Uint8Array): boolean => bytes.length >= 12 && ascii(bytes, 0) === 'RIFF' && ascii(bytes, 8) === 'WAVE';
+
+/** A WAV file of `seconds` of soft tones that swell and fade twice a second, louder and quieter in turn as a voice is: mono, 16 bit, at `rate`. */
+export function tones(seconds: number, rate = 8000): Uint8Array {
+  const count = Math.round(seconds * rate);
+  const bytes = new Uint8Array(44 + count * 2);
+  const wav = new DataView(bytes.buffer);
+  const word = (at: number, text: string) => [...text].forEach((ch, i) => wav.setUint8(at + i, ch.charCodeAt(0)));
+  word(0, 'RIFF');
+  wav.setUint32(4, 36 + count * 2, true);
+  word(8, 'WAVE');
+  word(12, 'fmt ');
+  wav.setUint32(16, 16, true);
+  wav.setUint16(20, 1, true);
+  wav.setUint16(22, 1, true);
+  wav.setUint32(24, rate, true);
+  wav.setUint32(28, rate * 2, true);
+  wav.setUint16(32, 2, true);
+  wav.setUint16(34, 16, true);
+  word(36, 'data');
+  wav.setUint32(40, count * 2, true);
+  for (let n = 0; n < count; n++) {
+    const t = n / rate;
+    const beat = Math.floor(t * 2);
+    const loud = 0.2 + 0.7 * Math.abs(Math.sin(beat * 1.7));
+    const swell = Math.sin(Math.PI * ((t * 2) % 1));
+    wav.setInt16(44 + n * 2, Math.round(loud * swell * Math.sin(2 * Math.PI * (220 + 55 * (beat % 5)) * t) * 32767), true);
+  }
+  return bytes;
 }
 
 /** A 1×1 transparent PNG. */

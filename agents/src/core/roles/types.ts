@@ -1,4 +1,4 @@
-import type { Command, Id, Item, Node, Origin } from '../domain.ts';
+import type { Command, Id, Item, Node, Origin, Sound } from '../domain.ts';
 import type { Assets, ModelClient, Tools } from '../ports.ts';
 import type { Mindstorm } from '../state.ts';
 import { defaultView } from '../views.ts';
@@ -41,7 +41,8 @@ export interface RoleContext {
 export type RawDump =
   | { kind: 'text'; text: string; name?: string }
   | { kind: 'link'; url: string }
-  | { kind: 'asset'; asset: string; mime: string; name?: string };
+  /** `sound` is what the client measured of a recording it could decode. A recording without it is filed by name only. */
+  | { kind: 'asset'; asset: string; mime: string; name?: string; sound?: Sound };
 
 export interface Scene {
   /** The node the user is looking at or has open. */

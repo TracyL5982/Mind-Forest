@@ -63,8 +63,10 @@ export interface Found {
   /** The collection or channel it came from, when that is narrower than the source. */
   from?: string;
   image?: string;
-  /** Audio or video that plays in place. */
+  /** Sound that plays in place, such as a podcast episode. */
   media?: string;
+  /** How long `media` plays, in seconds, when the source says. */
+  seconds?: number;
   steps?: string[];
   chart?: { labels: string[]; values: number[]; unit?: string };
   /** What kind of thing the record is, when its source knows. */

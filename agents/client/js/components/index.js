@@ -3,6 +3,7 @@ import * as quote from './quote.js';
 import * as fact from './fact.js';
 import * as image from './image.js';
 import * as video from './video.js';
+import * as audio from './audio.js';
 import * as link from './link.js';
 import * as chart from './chart.js';
 import * as person from './person.js';
@@ -38,7 +39,7 @@ import { CHIP_LINE, say, textWidth } from './shared.js';
  * out from the item and the props.
  */
 export const COMPONENTS = {
-  note, quote, fact, image, video, link, chart, person, chat, code, steps,
+  note, quote, fact, image, video, audio, link, chart, person, chat, code, steps,
   facts, table, list, breakdown, qa, callout, excerpt, definition, idea, proscons, swatch, artwork, reference, place, sheet,
 };
 

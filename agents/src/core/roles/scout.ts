@@ -346,7 +346,7 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
             item: makeItem(ctx, {
               ...common(d, source.id),
               title: oneLine(record.title, 120),
-              kind: record.media ? 'video' : picture ? 'image' : 'text',
+              kind: record.media ? 'audio' : picture ? 'image' : 'text',
               text: [passage, label].filter(Boolean).join('\n\n'),
               summary: oneLine(note || passage || label, 400),
               data: {
@@ -358,6 +358,7 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
                 ...(record.chart ? { chart: record.chart } : {}),
                 ...(record.steps && !picture ? { steps: record.steps } : {}),
                 ...(record.media ? { mediaUrl: record.media, ...(record.image ? { thumbnailUrl: record.image } : {}) } : {}),
+                ...(record.media && record.seconds && record.seconds > 0 ? { sound: { seconds: record.seconds } } : {}),
               },
               source: { from: 'web', url: record.url, ...(picture ? { asset: picture.asset } : {}) },
             }),

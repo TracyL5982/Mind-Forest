@@ -23,12 +23,12 @@ A group is `{ id, treeId, anchor, composite, title, members, props }`. `anchor` 
 - `size(item, props)` is the card's footprint in px. It is worked out from the content and never measured, so the field can be laid out before anything is drawn. The next section gives the rule. The registry adds 28 px to the height of a card that has chips.
 - `shows` lists the chip sources the type already draws, as `item.data` keys. A sheet's `shows` is a function of the item and the props, because what it draws is in its sections. See Chips.
 - Text on the field is set in three sizes, named `--type-display`, `--type-title` and `--type-text` in `client/style.css`. A figure that is too long for its card steps down to a middle size, then to the title size. A fact's value, a row of facts, an idea, a term and a place name are figures.
-- Each type has its own face, so types can be told apart when zoomed out. A note is plain. A quote is a serif on a face washed with the tree's colour. A fact is one large figure on a darker face. A picture or clip has tight corners and its caption on a plate below. A link sits under an address bar. A chart has gridlines and a scale. A person has a round face beside the name. A chat is speech bubbles. Code is fixed-width with a numbered gutter. Steps are numbers down a rail. Facts are figures two to a row on a fact's darker face. A table is ruled rows with numbers set to the right. A list has a dot or a tick box before each entry. A breakdown is level bars with a share at the end of each. A question and its answer carry a `Q` and an `A`. A callout has a band down its left edge. An excerpt is an upright serif beside a rule. A definition is a large headword over a short rule. An idea is large words under a spark. Pros and cons are two columns of plus and minus marks. A swatch has a band of its colours across the top. An artwork sits whole on a mat a shade lighter than its card, over a label. A reference has its kind and year over a rule. A place has a round pin beside a large name. A sheet is one card under one title, whose parts are each drawn as the card of their kind draws them and set apart by a hairline, with its picture, when it has one, in a band across the top.
+- Each type has its own face, so types can be told apart when zoomed out. A note is plain. A quote is a serif on a face washed with the tree's colour. A fact is one large figure on a darker face. A picture or clip has tight corners and its caption on a plate below. A recording has a round play mark beside its waveform and its length, over the first words of its transcript. A link sits under an address bar. A chart has gridlines and a scale. A person has a round face beside the name. A chat is speech bubbles. Code is fixed-width with a numbered gutter. Steps are numbers down a rail. Facts are figures two to a row on a fact's darker face. A table is ruled rows with numbers set to the right. A list has a dot or a tick box before each entry. A breakdown is level bars with a share at the end of each. A question and its answer carry a `Q` and an `A`. A callout has a band down its left edge. An excerpt is an upright serif beside a rule. A definition is a large headword over a short rule. An idea is large words under a spark. Pros and cons are two columns of plus and minus marks. A swatch has a band of its colours across the top. An artwork sits whole on a mat a shade lighter than its card, over a label. A reference has its kind and year over a rule. A place has a round pin beside a large name. A sheet is one card under one title, whose parts are each drawn as the card of their kind draws them and set apart by a hairline, with its picture, when it has one, in a band across the top.
 - A card's marks take its tree's colour. While the card is a pick they are amber, its border is dashed and its face is darker. A pick's face is never see-through.
 - Amber is also the three dots on a card the agents are working on. Teal is the links between cards, and the ring on the card that a dragged card would land under. No card type uses either for anything else. A caution callout is coral, and a remark is grey.
 - Every card has corners of 12 px, and 4 px when it leads with a picture: an image, a video, an artwork.
 - No colour is the only sign of anything. A tick box is filled and ticked, a point for or against has a plus or a minus, and a callout names its tone in words.
-- A small label in capitals names what the look alone cannot: a group frame's kind, a code card's language when it is known, and where a chat came from. A clip is named by its play mark and a chat by its bubbles, so neither carries a label for its type.
+- A small label in capitals names what the look alone cannot: a group frame's kind, a code card's language when it is known, and where a chat came from. A clip and a recording are named by their play marks and a chat by its bubbles, so none of them carries a label for its type.
 - A group frame is a faint wash and a hairline.
 - The field draws a pick at 0.86 of its footprint and the first card of a tree at 1.12. Every other card is drawn at 1. A selected card keeps its scale. Selecting adds a ring outside the card and changes no size.
 - A card's drawn size is its footprint times its scale, kept as a fraction: a 240 by 51 pick is 206.4 by 43.86. Layout works on drawn sizes and card centres in IEEE doubles and rounds nothing on the way, so equal footprints give equal positions. The web client rounds once, when it writes a card's top-left corner to the page, to one decimal place of a px. The one exception is inside a gallery, a cluster and an opened stack, where the cell sizes are rounded up as that section says.
@@ -272,6 +272,7 @@ A card draws a few words that are not the item's own. Each has an English and a 
 | A link with no site | `link` | `链接` |
 | A picture that cannot be loaded | `Picture unavailable` | `图片无法显示` |
 | An opened clip with nothing to play | `This clip has no file to play.` | `这段视频没有可播放的文件。` |
+| An opened recording with nothing to play | `This recording has no file to play.` | `这段录音没有可播放的文件。` |
 | A chart with no values | `No data` | `暂无数据` |
 | The label a chip shows on hover | `When`, `Where`, `People`, `Origin` | `时间`, `地点`, `人物`, `来源` |
 | What a tick box says to a screen reader | `Done`, `Not done` | `已完成`, `未完成` |
@@ -288,6 +289,7 @@ A card draws a few words that are not the item's own. Each has an English and a 
 - **fact.** The value is `props.value`, or `–` (U+2013) when that is empty. It is set in the first of three sizes that fits it on one line of 287 px. The sizes are a line height of 36 with a letter of 210 and a digit of 2148, 28 with 149 and 1506, and 21 with 105 and 1001. A digit is the drawn width of each of `0` to `9` in hundredths of a px, and replaces the 11 tenths the table gives it: `need = span(value, fact value) * letter - digits * (11 * letter - digit)`, where `digits` is how many of `0` to `9` the value holds. A size fits when `need <= 28700`. When none fits, it takes the last size and `valueLines = fold(value, 287, 105, 8)`, which counts in the fact value face and counts a digit as the table does. The card grows a line of 21 px for each line the value needs at that size, up to eight lines. Otherwise `valueLines = 1`. `valueWidth` is 287 when `valueLines` is more than 1 and `up(need, 100)` at the size taken otherwise. `labelWidth = up(span(props.label, text) * 72, 100)`. Width is `clamp(33 + max(valueWidth, labelWidth), 200, 320)`. `labelLines = fold(props.label, width - 33, 72, 2)`, or 0 with no label. The foot is `item.title` when it is not empty and differs from the value and from the label. Height is `40 + valueLines * lineHeight + 17 * labelLines`, plus 25 when there is a foot. A value's letter is the widest any one character of English other than a digit runs, digits are all one width, and every other character counts the widest it draws, so a value fits the lines it is given. A client must never cut a fact's value or end it with an ellipsis, because a figure cut short misleads. A client draws the value with no line clamp. If the value still draws wider than it was counted, it wraps onto a further line, breaking inside a word where it must, and stays whole. The card keeps the size given here. Eight lines is the ceiling, so that a paragraph filed as a value cannot make a tower. A value that needs more than eight lines at the smallest size is the one value a card may hide the end of: it runs past the bottom of the card and the card's edge clips it, still with no ellipsis. The opened view draws every value whole at any length, and scrolls when it is taller than the view.
 - **image.** Width 240. The picture is `clamp(round(240 / aspect), 130, 260)` px tall, where `aspect` is `Number(props.aspect)`, or 1.35 when that is zero or not a number, the division is in IEEE doubles, and `round` is `floor(x + 0.5)`. The caption is `props.caption`, else `item.title` as written, so an empty title gives no caption and never `Untitled`. `captionLines = fold(caption, 207, 72, 2)`, or 0 with no caption. Height is the picture plus 2, plus `19 + 17 * captionLines` when there is a caption.
 - **video.** Width 272. The poster is 153 px tall. The caption is as for image, with `captionLines = fold(caption, 239, 72, 2)`. Height is 155, plus `19 + 17 * captionLines` when there is a caption.
+- **audio.** Width 272. `titleLines = wrap(title, 239, 93, 2)`. The words are `item.text` with each run of white space turned into one space and the ends trimmed. When `item.title`, treated the same way, is not empty and the words equal it, there are no words. When the words start with it followed by a space, that much is taken off the front, so a transcript that opens with its title does not say it twice. `bodyLines = wrap(words, 239, 72, 3)`, or 0 with no words. Both are counted word by word, so the card sets them without kerning, as it sets the structured types. Height is `30 + 21 * titleLines + 6 + 40`, plus `6 + 17 * bodyLines` when there are words. The 40 is the strip that holds the play mark, the waveform and the length, which is the same for any props.
 - **link.** Width is 316 when `props.image` is set and 272 when it is not. The text column is 187 px with a picture and 239 without. `titleLines = fold(title, column, 93, 2)`. The description is `props.description`, else `item.summary`. `aboutLines = fold(description, column, 72, 2)`, or 0 with none. `main = 21 * titleLines`, plus `4 + 17 * aboutLines` when there is a description. Height is `56 + main`, and at least 120 with a picture.
 - **chart.** 300 by 195, or 300 by 212 when `props.unit` is set.
 - **person.** 252 by 88.
@@ -448,31 +450,32 @@ The first row that holds draws the item. Each row reads one of four things: what
 | 2 | `reference` | catalogue | `data.kind` is `paper` or `book` |
 | 3 | `image` | kind | the item's kind is `image` and it has a source |
 | 4 | `video` | kind | the item's kind is `video` and it has a source |
-| 5 | `code` | kind | `data.code` holds a source, or the item's kind is `code` and its text is not empty |
-| 6 | `breakdown` | catalogue, then structure | `data.chart` is shares of one whole |
-| 7 | `chart` | catalogue, then structure | `data.chart` holds at least two labels and as many values |
-| 8 | `table` | structure | `data.table` has at least two heads and one row |
-| 9 | `proscons` | structure | `data.pros` and `data.cons` each hold a point |
-| 10 | `qa` | structure | `data.question` and `data.answer` are both set |
-| 11 | `definition` | structure | `data.term` and `data.definition` are both set |
-| 12 | `steps` | structure | `data.steps` holds two or more steps |
-| 13 | `list` | structure | `data.items` holds two or more entries, none of them empty |
-| 14 | `quote` | structure | `data.quote` exists |
-| 15 | `person` | structure | `data.person` exists |
-| 16 | `swatch` | structure | `data.colours` holds two or more colours |
-| 17 | `facts` | structure | `data.facts` holds two or more facts with a label and a value, and no value is over 60 characters |
-| 18 | `fact` | structure | `data.facts` holds exactly one, or the text is one short line that reads as a value with a label, and the value is not over 60 characters |
-| 19 | `link` | kind | the item's kind is `link` and it has an address |
-| 20 | `excerpt` | structure | `data.excerpt` exists |
-| 21 | `excerpt` | catalogue | the item is a page the Scout picked: a text pick with an address whose text holds more than its closing line |
-| 22 | `place` | text | a short note whose title is the name of the place in `data.where` |
-| 23 | `chat` | kind | the item's kind is `chat` and it holds a message |
-| 24 | `idea` | text | a short thought the user wrote out |
-| 25 | `note` | text | always |
+| 5 | `audio` | kind | the item's kind is `audio` and it has a file or an address to play |
+| 6 | `code` | kind | `data.code` holds a source, or the item's kind is `code` and its text is not empty |
+| 7 | `breakdown` | catalogue, then structure | `data.chart` is shares of one whole |
+| 8 | `chart` | catalogue, then structure | `data.chart` holds at least two labels and as many values |
+| 9 | `table` | structure | `data.table` has at least two heads and one row |
+| 10 | `proscons` | structure | `data.pros` and `data.cons` each hold a point |
+| 11 | `qa` | structure | `data.question` and `data.answer` are both set |
+| 12 | `definition` | structure | `data.term` and `data.definition` are both set |
+| 13 | `steps` | structure | `data.steps` holds two or more steps |
+| 14 | `list` | structure | `data.items` holds two or more entries, none of them empty |
+| 15 | `quote` | structure | `data.quote` exists |
+| 16 | `person` | structure | `data.person` exists |
+| 17 | `swatch` | structure | `data.colours` holds two or more colours |
+| 18 | `facts` | structure | `data.facts` holds two or more facts with a label and a value, and no value is over 60 characters |
+| 19 | `fact` | structure | `data.facts` holds exactly one, or the text is one short line that reads as a value with a label, and the value is not over 60 characters |
+| 20 | `link` | kind | the item's kind is `link` and it has an address |
+| 21 | `excerpt` | structure | `data.excerpt` exists |
+| 22 | `excerpt` | catalogue | the item is a page the Scout picked: a text pick with an address whose text holds more than its closing line |
+| 23 | `place` | text | a short note whose title is the name of the place in `data.where` |
+| 24 | `chat` | kind | the item's kind is `chat` and it holds a message |
+| 25 | `idea` | text | a short thought the user wrote out |
+| 26 | `note` | text | always |
 
-What a source catalogued comes first, because it is a record and no guess. A picture, a recording or a piece of code stays one, whatever was read off it. Then comes the structure Intake extracted, the most particular shape first. Rows 6 and 7 are each two rows: the first holds only for an item the agents brought, and has no floor. A conversation's data is its messages, so an item whose kind is `chat` is tried against rows 23 and 25 alone. A row whose props its schema refuses is passed over.
+What a source catalogued comes first, because it is a record and no guess. A picture, a recording or a piece of code stays one, whatever was read off it. Then comes the structure Intake extracted, the most particular shape first. Rows 7 and 8 are each two rows: the first holds only for an item the agents brought, and has no floor. A conversation's data is its messages, so an item whose kind is `chat` is tried against rows 24 and 26 alone. A recording is its sound, and what Intake reads off its transcript is for its chips and for search, so an item whose kind is `audio` is tried against rows 5 and 26 alone: with nothing to play it is a note. A row whose props its schema refuses is passed over.
 
-A fact's value is a figure or a few words. One of more than 60 characters, counted after Unicode NFKC with each run of white space as one space, is a sentence, so rows 17 and 18 do not hold for an item with such a value and it is left to the rows after them.
+A fact's value is a figure or a few words. One of more than 60 characters, counted after Unicode NFKC with each run of white space as one space, is a sentence, so rows 18 and 19 do not hold for an item with such a value and it is left to the rows after them.
 
 ### The coverage floor
 
@@ -484,11 +487,11 @@ A row whose card names a value or shows a passage or a meaning is also held to t
 
 ### A place
 
-Row 22 holds when the item's kind is `text`, `data.where` is set, the title is not empty, the text is under 280 characters, and the title names the place. The two are compared in one case and one written form, each without the region after its last comma. They match when they are equal. In a script written without spaces (Han, kana, hangul, Thai) with at least two characters each, they also match when the title is the place with a region of two to six characters in front of it, as 杭州西湖 is of 西湖, or when one is the other with one character at its end that names a kind of district: 市 区 县 省 都 镇 乡 村 州 府 道 町 시 도 구.
+Row 23 holds when the item's kind is `text`, `data.where` is set, the title is not empty, the text is under 280 characters, and the title names the place. The two are compared in one case and one written form, each without the region after its last comma. They match when they are equal. In a script written without spaces (Han, kana, hangul, Thai) with at least two characters each, they also match when the title is the place with a region of two to six characters in front of it, as 杭州西湖 is of 西湖, or when one is the other with one character at its end that names a kind of district: 市 区 县 省 都 镇 乡 村 州 府 道 町 시 도 구.
 
 ### An idea
 
-Row 24 holds when the user made the item, its kind is `text`, and it is one phrase: the text, or the title when there is no text. When both are set they must be the same phrase, whatever the case, the white space and the punctuation at the end. The phrase is under 60 characters, or under 24 in a script written without spaces, holds no digit, and is no web address. In a script written without spaces it holds at least 6 letters. In any other it holds at least 3 words with a letter in them, so a chore, a name or a room number stays a note.
+Row 25 holds when the user made the item, its kind is `text`, and it is one phrase: the text, or the title when there is no text. When both are set they must be the same phrase, whatever the case, the white space and the punctuation at the end. The phrase is under 60 characters, or under 24 in a script written without spaces, holds no digit, and is no web address. In a script written without spaces it holds at least 6 letters. In any other it holds at least 3 words with a letter in them, so a chore, a name or a room number stays a note.
 
 ### The model
 
@@ -622,6 +625,14 @@ A leading number counts only when it carries a currency sign, a percent sign, or
 - **Chosen when** the item's kind is `video` and a source exists.
 - **Props.** `src`. `poster?`: from `data.thumbnailUrl`. `caption?`: as for image.
 - **Item holds.** The same sources as image.
+
+### audio
+
+- **Chosen when** the item's kind is `audio` and it has a file or an address to play. Without one it is a note.
+- **Props.** `src`: the stored file, else `data.mediaUrl`, the address a source gave. `seconds?`: how long it plays. `peaks?`: up to 64 numbers from 0 to 1, how loud each equal slice of it is, the loudest 1. Both come from `data.sound`, and the content check holds each to that: they are values the item holds.
+- **Drawn as** the title, then a strip 40 px tall: a round play mark 32 px across in the accent, the waveform, and the length. The waveform takes the room the mark and the length leave, 10 px from each, and is 24 px tall: one bar for each peak, as tall as its peak and at least 1.5 px, set about the middle line, every bar as wide as the others with a gap of half a bar after it, stretched to fill the room. With no peaks it is a flat line 1.5 px thick. The length is `seconds` rounded to a whole second and written as a clock writes it, `m:ss` under an hour and `h:mm:ss` from an hour, such as `0:20`, `42:00` and `1:02:05`, in the text size with figures of one width, and it is left out with no `seconds`. Under the strip go the words of the footprint rule, clamped to their lines with an ellipsis. The play mark is a mark and no control: a press on the card opens it, as on any card. The opened card has the player, and when there are peaks the waveform 56 px tall over it, which fills with the accent as the recording plays, and a press on it plays from that point. Under the player go `item.text` whole, trimmed, with its line breaks, so every word that was heard is there once. With no `src` the opened card says so in the fixed words.
+- **Item holds.** `source.asset`, the file a person dropped, or `data.mediaUrl`, the address a source gave, such as a podcast episode. `data.sound = { seconds, peaks? }`: for a dropped file the client measured both, and a source may give the length alone. `text`: the transcript, which may be empty when transcription failed, or what a source wrote of the recording. Intake describes a transcript as it describes a text, so `data` may also hold a date, a place or people for the chips.
+- **Measured when dropped.** The service never decodes sound. A client that drops a recording decodes it once and sends `sound` with the dump: `seconds` is the decoded length to the millisecond, and `peaks` is 48 numbers, the loudest sample of each of 48 equal slices over every channel, each divided by the loudest of the 48 and rounded to two places, or all 0 for silence. The web client decodes at 8000 samples a second, which keeps the loudness of a voice and is quick for an hour of sound. A file the client cannot decode is sent with no `sound`, and Intake files it by name as a `file`, because it would not play in that client either.
 
 ### link
 
