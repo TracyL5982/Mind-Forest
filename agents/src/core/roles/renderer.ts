@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
 import { grounding, type Grounding } from '../grounding.ts';
-import { CHECKS, isValidGroup, isValidView, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type Section, type Stated } from '../views.ts';
+import { CHECKS, isValidGroup, isValidView, recording, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type Section, type Stated } from '../views.ts';
 import type { RoleContext, Roles } from './types.ts';
 
 const ROLE = 'renderer';
@@ -518,6 +518,7 @@ const RULES: Rule[] = [
     when: (item, asked) => mediaOf(item, 'video', asked) !== undefined,
     props: (item, asked) => compact({ src: mediaOf(item, 'video', asked), poster: str(item.data.thumbnailUrl), caption: captionOf(item) }),
   },
+  { component: 'audio', reads: 'kind', when: (item, { assetUrl }) => recording(item, assetUrl) !== undefined, props: (item, { assetUrl }) => recording(item, assetUrl)! },
   { component: 'code', reads: 'kind', when: (item) => codeOf(item) !== undefined, props: (item) => codeOf(item)! },
   ...[
     extracted('breakdown', breakdownOf, ({ labels, values, unit }) => ({ labels, values, unit })),
@@ -571,8 +572,14 @@ const RULES: Rule[] = [
   { component: 'note', reads: 'text', when: () => true, props: () => ({}) },
 ];
 
-/** A conversation's data is its messages, so no rule that reads structure may take one. */
-const CHAT_RULES = RULES.filter((rule) => rule.component === 'chat' || rule.component === 'note');
+/**
+ * A conversation's data is its messages, so no rule that reads structure may take one. A recording is its sound, and the structure
+ * read off its transcript is for its chips and for search, so one with nothing to play is a note.
+ */
+const RULES_OF: Partial<Record<Item['kind'], Rule[]>> = {
+  chat: RULES.filter((rule) => rule.component === 'chat' || rule.component === 'note'),
+  audio: RULES.filter((rule) => rule.component === 'audio' || rule.component === 'note'),
+};
 
 /**
  * How much an item says, which a structure is measured against. The model wrote the title of a text the user made,
@@ -590,7 +597,7 @@ export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
   const asked = { assetUrl };
   let whole: number | undefined;
   let content: Content | undefined;
-  for (const rule of item.kind === 'chat' ? CHAT_RULES : RULES) {
+  for (const rule of RULES_OF[item.kind] ?? RULES) {
     if (!rule.when(item, asked)) continue;
     let draw: Draw = { component: rule.component, props: rule.props(item, asked) };
     if (rule.reads === 'structure') {
@@ -623,7 +630,7 @@ const STANDS: Record<Stated, (value: unknown, content: Content, beside: Props, a
   writes: (value, { text }, { unit }) => typeof value === 'number' && text.writes(value, typeof unit === 'string' ? unit : undefined),
   unit: (value, { text }, { values }) => typeof value === 'string' && unitStands(value, values, text),
   paints: (value, { text }) => typeof value === 'string' && (value.trim().startsWith('#') ? text.paints(value) : text.says(value)),
-  own: (value, content) => typeof value === 'string' && content.own(value),
+  own: (value, content) => (typeof value === 'string' || typeof value === 'number') && content.own(String(value)),
   // A value the content does not state fails its own check, and its label has then nothing to stand beside.
   label: (value, { text }, { value: named }) => typeof value === 'string' && value.trim() !== '' && typeof named === 'string' && (text.names(value, named) || !text.says(named)),
   // A label with no number at its place is a chart of unequal lists, which the chart's own check refuses.

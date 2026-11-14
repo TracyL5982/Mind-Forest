@@ -738,6 +738,24 @@ test('three sibling pictures become a gallery whether a rule draws them as image
   assert.deepEqual(groups(k).map((g) => [g.composite, g.members]), [['gallery', ids]]);
 });
 
+test('a recording is drawn as one with what is known of its sound, whatever its transcript holds, and one with nothing to play is a note', () => {
+  const sound = { seconds: 20, peaks: [0.1, 1, 0.4] };
+  const transcript = { kind: 'audio' as const, text: 'Pros: quick. Cons: loud.', data: { sound, pros: ['quick'], cons: ['loud'], when: 'Thursday' } };
+  const dropped = ruled({ title: 'Memo', ...transcript, source: { from: 'drop', asset: 'm1', capturedAt: '' } });
+  assert.deepEqual(dropped, { component: 'audio', props: { src: '/assets/m1', ...sound } });
+  const missing = ruled({ title: 'Memo', ...transcript });
+  assert.deepEqual(missing, { component: 'note', props: {} }, 'a recording with no file is a note, and no rule reads its transcript');
+  const episode = kit().item({
+    title: 'Why the room seems to stretch', kind: 'audio', origin: SCOUT, text: 'Two cinematographers on the dolly zoom.',
+    data: { mediaUrl: 'https://cdn.example/41.mp3', thumbnailUrl: 'https://cdn.example/41.jpg', sound: { seconds: 2520 }, site: 'podcasts.example' },
+    source: { from: 'web', url: 'https://podcasts.example/41', capturedAt: '' },
+  });
+  assert.deepEqual(byRule(episode, url), { component: 'audio', props: { src: 'https://cdn.example/41.mp3', seconds: 2520 } }, 'a pick plays from the address its source gave');
+  assert.ok(grounded(byRule(episode, url), episode, url) && grounded(dropped, kit().item({ title: 'Memo', ...transcript, source: { from: 'drop', asset: 'm1', capturedAt: '' } }), url));
+  assert.equal(grounded({ component: 'audio', props: { src: 'https://cdn.example/41.mp3', seconds: 60 } }, episode, url), false, 'a length the item does not hold');
+  assert.equal(chosen({ title: 'Memo', kind: 'audio', data: { mediaUrl: '   ' } }), 'note');
+});
+
 test('a conversation stays a chat whatever else its data holds', () => {
   const messages = [{ role: 'user', text: 'How?' }, { role: 'assistant', text: 'Like so.' }];
   const data = { messages, steps: ['Boil', 'Stir'], table: { heads: ['a', 'b'], rows: [['1', '2']] }, where: 'Talk' };
@@ -747,7 +765,7 @@ test('a conversation stays a chat whatever else its data holds', () => {
 
 test('every sample is drawn as its type, with props the library accepts and the item states', () => {
   assert.deepEqual(Object.keys(CHECKS), COMPONENT_IDS, 'every component has a content check');
-  assert.equal(COMPONENT_IDS.length, 26);
+  assert.equal(COMPONENT_IDS.length, 27);
   for (const id of STRUCTURED_IDS) {
     const { item, props } = SAMPLES[id];
     const made = byRule(item, sampleAssetUrl);

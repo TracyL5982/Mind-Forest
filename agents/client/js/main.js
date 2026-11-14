@@ -2,7 +2,7 @@ import { Connection, readToken, saveToken } from './connection.js';
 import { Store } from './store.js';
 import { Field } from './field.js';
 import { Panel } from './panel.js';
-import { bindField, bindDump, textDump } from './input.js';
+import { bindField, bindDump, isSound, measure, textDump } from './input.js';
 import { Voice, speak, hush } from './voice.js';
 import { HandoffSheet, WorkLog, bindGate, bindSettings, caption, showGate, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
 
@@ -202,8 +202,8 @@ async function dump(what) {
     toast(what.files.length === 1 ? `Adding ${what.files[0].name}…` : `Adding ${what.files.length} files…`);
     for (const file of what.files.slice(0, 50)) {
       try {
-        const made = await conn.upload(file);
-        dumps.push({ kind: 'asset', asset: made.id, mime: made.mime, name: file.name });
+        const [made, sound] = await Promise.all([conn.upload(file), isSound(file) ? measure(file) : null]);
+        dumps.push({ kind: 'asset', asset: made.id, mime: made.mime, name: file.name, ...(sound && { sound }) });
       } catch {
         toast(`${file.name} could not be added.`);
       }

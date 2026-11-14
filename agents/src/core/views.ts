@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Item, View } from './domain.ts';
+import { Sound, type Item, type View } from './domain.ts';
 import type { Grounding } from './grounding.ts';
 
 /** A string a card shows as words: at least one character that is not white space. */
@@ -63,6 +63,8 @@ export const COMPONENTS = {
   fact: z.object({ value: z.string(), label: z.string() }),
   image: z.object({ src: z.string(), caption: z.string().optional(), aspect: z.number().optional() }),
   video: z.object({ src: z.string(), poster: z.string().optional(), caption: z.string().optional() }),
+  /** A recording: where it plays from, and its length and loudness when they are known. The item's text is its transcript. */
+  audio: z.strictObject({ src: z.string().min(1), seconds: Sound.shape.seconds.optional(), peaks: Sound.shape.peaks }),
   /** A web page: site, title, description, optional picture. */
   link: z.object({ url: z.string(), site: z.string(), description: z.string().optional(), image: z.string().optional() }),
   chart: z.object({
@@ -156,7 +158,8 @@ export type PropsOf<C extends ComponentId> = z.infer<(typeof COMPONENTS)[C]>;
  * - `writes`: the content writes this number. When the `unit` beside it in the props scales it, as 万 and k do, the content writes it with that unit: "2189万" for 2189 in 万.
  * - `unit`: the content states these words, or writes them against one of the `values` beside them in the props, as "45%" writes "%".
  * - `paints`: the content writes this colour, a hex value as a whole or a colour name as words.
- * - `own`: one of the item's own values, whole or cut short with an ellipsis: an address, its site, its source, its summary, its text, a value in its `data`.
+ * - `own`: one of the item's own values, whole or cut short with an ellipsis: an address, its site, its source, its summary, its text, a value in its `data`,
+ *   which may be a number, as a recording's length is.
  * - `label`: words of the content that name the `value` beside them in the props: every one stands in the sentence, line or table row that holds the value.
  * - `point`: the same for the number at the same place in the `values` beside them, as a chart's labels are.
  * - `choice`: how to draw, not what to show.
@@ -197,6 +200,7 @@ export const CHECKS: ContentChecks = {
   fact: { props: { value: 'says', label: 'label' }, also: (p) => p.value.length <= 32 },
   image: { props: { src: 'own', caption: 'own', aspect: 'choice' } },
   video: { props: { src: 'own', poster: 'own', caption: 'own' } },
+  audio: { props: { src: 'own', seconds: 'own', peaks: 'own' } },
   link: { props: { url: 'own', site: 'own', description: 'own', image: 'own' } },
   chart: {
     props: { chart: 'choice', labels: 'point', values: 'writes', unit: 'unit', mark: 'choice' },
@@ -292,6 +296,10 @@ export function defaultView(item: Item, assetUrl: (id: string) => string): View 
       return src ? view('image', { src }) : view('note', {});
     case 'video':
       return src ? view('video', { src }) : view('note', {});
+    case 'audio': {
+      const props = recording(item, assetUrl);
+      return props ? view('audio', props) : view('note', {});
+    }
     case 'link':
       return item.source.url
         ? view('link', { url: item.source.url, site: siteOf(item.source.url), description: item.summary || undefined })
@@ -310,6 +318,17 @@ export function defaultView(item: Item, assetUrl: (id: string) => string): View 
     case 'file':
       return view('note', {});
   }
+}
+
+/**
+ * The card of a recording: its stored file, else the address a source gave it to play from, with what is known of its sound.
+ * Nothing when it has neither, so a recording with nothing to play is a note.
+ */
+export function recording(item: Item, assetUrl: (id: string) => string): PropsOf<'audio'> | undefined {
+  const src = item.source.asset ? assetUrl(item.source.asset) : typeof item.data.mediaUrl === 'string' ? item.data.mediaUrl.trim() : '';
+  if (item.kind !== 'audio' || !src) return undefined;
+  const sound = Sound.safeParse(item.data.sound);
+  return { src, ...(sound.success && { seconds: sound.data.seconds, ...(sound.data.peaks && { peaks: sound.data.peaks }) }) };
 }
 
 export function siteOf(url: string): string {

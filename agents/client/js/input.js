@@ -113,6 +113,38 @@ export function bindField(field, store, { onCard, onBackground, onMove, onUserVi
   }, { passive: false });
 }
 
+/** How many slices a dropped recording's loudness is measured in, and the rate it is decoded at to measure it. */
+const PEAKS = 48;
+const MEASURE_RATE = 8000;
+
+export const isSound = (file) => typeof file?.type === 'string' && file.type.startsWith('audio/');
+
+/**
+ * What the service is sent of a recording, measured once here because the service never decodes
+ * sound: how long it plays, and the loudest sample of each of PEAKS equal slices, the loudest
+ * slice 1, to two places. Null when this browser cannot decode the file, which then would not play
+ * in it either.
+ */
+export async function measure(file) {
+  let decoded;
+  try {
+    decoded = await new OfflineAudioContext(1, 1, MEASURE_RATE).decodeAudioData(await file.arrayBuffer());
+  } catch {
+    return null;
+  }
+  if (!(decoded.duration > 0) || decoded.length === 0) return null;
+  const channels = Array.from({ length: decoded.numberOfChannels }, (_, n) => decoded.getChannelData(n));
+  const slices = Math.min(PEAKS, decoded.length);
+  const loudest = Array.from({ length: slices }, (_, i) => {
+    let peak = 0;
+    const [from, to] = [Math.floor((i * decoded.length) / slices), Math.floor(((i + 1) * decoded.length) / slices)];
+    for (const samples of channels) for (let n = from; n < to; n++) peak = Math.max(peak, Math.abs(samples[n]));
+    return peak;
+  });
+  const top = Math.max(...loudest);
+  return { seconds: Math.round(decoded.duration * 1000) / 1000, peaks: loudest.map((peak) => (top > 0 ? Math.round((peak / top) * 100) / 100 : 0)) };
+}
+
 const LINK = /^https?:\/\/\S+$/i;
 
 /** A typed or pasted thought: one bare address is a link, anything else is text. */
