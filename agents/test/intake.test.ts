@@ -454,6 +454,42 @@ test('prose is never taken for code', async () => {
   assert.equal(items.length, PROSE.length);
 });
 
+const COMMENTED: [what: string, source: string][] = [
+  ['a table in a docstring', 'def rate(tier):\n    """\n    tier | rate\n    free | 10\n    pro  | 100\n    """\n    return {"free": 10, "pro": 100}[tier]\n\nprint(rate("pro"))'],
+  ['prose in a block comment', '/*\n * Debounce waits until the calls stop.\n * It is the usual fix for a search box\n * that fires on every key\n */\nfunction debounce(fn, ms) {\n  let t;\n  return wrap(fn, ms, t);\n}'],
+  ['prose in line comments', '// Reads the limit for a tier\n// The tiers are free and pro\n// Anything else is an error\nconst limit = RATES[tier];\nif (limit === undefined) throw new Error(tier);\nreturn limit;'],
+  ['hash comments', '# The radius is in metres\n# The result is in square metres\n# Nothing is rounded\nimport math\ndef area(r):\n    return math.pi * r ** 2\nprint(area(2))'],
+  ['a docstring in single quotes', "def area(r):\n    '''\n    Area of a circle\n    r is the radius in metres\n    Nothing is rounded here\n    '''\n    return 3.14159 * r ** 2\nprint(area(2))"],
+  ['dash comments', '-- Everyone who signed up this year\n-- and has not paid yet\n-- newest first\nSELECT name FROM users WHERE (paid = 0);\nSELECT count(*) FROM users WHERE (paid != 0);\nDELETE FROM sessions WHERE (age > 30);'],
+  ['a glob that looks like an open comment', 'import { glob } from "glob";\nconst files = glob("src/*.ts");\nfor (const file of files) {\n  check(file);\n}'],
+];
+
+const DOCUMENTS = [
+  '# Trip to Lisbon\n\n## Getting there\nThe train from Porto takes three hours.\nBook the morning one.\n\n## Staying\nAlfama is steep but close to everything.',
+  '# Reading list\n- The Poetics of Space\n- Ways of Seeing\n## Later\n- Species of Spaces',
+  '# 周末计划\n\n## 周六\n上午去西湖边走走。\n下午在家整理书架。\n\n## 周日\n和朋友吃饭。',
+  '# Notes\n// not sure about this yet\nAsk Ana about the budget.\nCall the venue.\n-- me',
+  'Two comments and a thought:\n# first\n# second\nThat is all.',
+  '"""\nA poem kept in quotes\nfor no reason at all\n"""\nand a line after it',
+  '/* an aside\nthat runs over lines */\nThen the letter proper.\nIt has three lines\nand none is code.',
+];
+
+test('code is still code when its comments or docstring hold prose or a table', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Snippet') })) }));
+  const items = await intake(k.ctx, COMMENTED.map(([, source]) => ({ kind: 'text' as const, text: source })));
+  items.forEach((item, n) => assert.deepEqual(item.data.code, { source: COMMENTED[n]![1] }, COMMENTED[n]![0]));
+  const [two] = await intake(k.ctx, [{ kind: 'text', text: '# Only two lines are code\n# under these comments\nimport math\nprint(math.pi)' }]);
+  assert.equal(two!.data.code, undefined, 'three lines of code must remain outside the comments');
+});
+
+test('a document with headings, or with a comment in it, is not code', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Words') })) }));
+  const items = await intake(k.ctx, DOCUMENTS.map((text) => ({ kind: 'text' as const, text })));
+  items.forEach((item, n) => assert.equal(item.data.code, undefined, DOCUMENTS[n]));
+});
+
 test('a long paste of code stays one item, and code is kept when the model fails', async () => {
   const k = kit();
   const long = Array.from({ length: 80 }, (_v, n) => `const value${n} = compute(${n});`).join('\n');
