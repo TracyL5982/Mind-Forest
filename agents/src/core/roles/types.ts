@@ -183,6 +183,14 @@ export function makeNode(
   };
 }
 
+/**
+ * An id as a model wrote it back. Shown "item library:film:53", a model often returns the whole of that, so the word before the id
+ * and any quotes or brackets around it are dropped.
+ */
+export function idFrom(raw: string): string {
+  return raw.trim().replace(/^(?:item|node|tree)\s+/i, '').replace(/^["'“\[(]+|["'”\])]+$/g, '');
+}
+
 /** The status an agent's pick starts with under the current setting. */
 export function pickStatus(ctx: RoleContext): Node['status'] {
   return ctx.settings.picksMode === 'provisional' ? 'pick' : 'kept';

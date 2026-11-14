@@ -630,6 +630,16 @@ test('a library film that no tree holds is hung under the card only for a strong
   }
 });
 
+test('a library film is brought when the model writes its id back as it was shown, "item library:film:25"', async () => {
+  const { k, anchor } = setup();
+  const vertigo = libraryFilm(k, 'Vertigo', 'Scottie climbs the bell tower stairs: the dolly zoom.', ['dolly zoom']);
+  k.model.on('scout.known', () => ({ ratings: [{ itemId: `item ${vertigo.id}`, strength: 0.9, why: 'where it began' }] }));
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.equal(k.mind.picks(anchor).filter((n) => n.itemId === vertigo.id).length, 1);
+});
+
 test('a library film that shares nothing with the card is never offered to the model', async () => {
   const { k, anchor } = setup();
   libraryFilm(k, 'The Gold Rush', 'Chaplin eats his boot.', ['comedy']);

@@ -4,7 +4,7 @@ import type { Found, Source } from '../ports.ts';
 import { givesWay, KNOWN_MOST, LIBRARY_TOOL, MINDSTORM, newSlots, sameness, treeKeys, urlKey } from '../round.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
-import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles, type Turn } from './types.ts';
+import { AGENT, idFrom, makeItem, makeNode, pickStatus, type RoleContext, type Roles, type Turn } from './types.ts';
 
 const ROLE = 'scout';
 const MAX_GENERATED_IMAGES = 4;
@@ -587,8 +587,9 @@ async function known(ctx: RoleContext, run: Run, seen: ReadonlySet<string>): Pro
   const offered = new Set(candidates.map((c) => c.id));
   const best = new Map<Id, { strength: number; why: string }>();
   for (const r of answer.ratings) {
-    if (!offered.has(r.itemId) || best.has(r.itemId)) continue;
-    best.set(r.itemId, { strength: clamp(r.strength), why: oneLine(r.why, 80) });
+    const itemId = idFrom(r.itemId);
+    if (!offered.has(itemId) || best.has(itemId)) continue;
+    best.set(itemId, { strength: clamp(r.strength), why: oneLine(r.why, 80) });
   }
   // Two things the user has can be the same content, such as one film held twice. The stronger is brought.
   const chosen = new Set<string>();

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Command, Id, Item, Node, Tree } from '../domain.ts';
 import { MINDSTORM } from '../round.ts';
 import { tokenize } from '../search.ts';
-import { AGENT, makeNode, pickStatus, type RoleContext, type Roles, type TreeRequest } from './types.ts';
+import { AGENT, idFrom, makeNode, pickStatus, type RoleContext, type Roles, type TreeRequest } from './types.ts';
 
 const ROLE = 'filer';
 const MAX_TREES = 8;
@@ -163,10 +163,11 @@ function shortlist(ctx: RoleContext, items: Item[]): Shortlisted[] {
 function validate(ctx: RoleContext, answer: Answer, batch: ReadonlyMap<Id, Item>): Map<Id, Placement> {
   const out = new Map<Id, Placement>();
   for (const p of answer.placements) {
-    const item = batch.get(p.itemId);
+    const item = batch.get(idFrom(p.itemId));
     if (!item || out.has(item.id) || !(p.strength >= ctx.settings.strongTie)) continue;
     // The model sometimes names the tree where a node was asked for. Its root is what it meant.
-    const parent = ctx.mind.nodes.get(p.parentNodeId) ?? ctx.mind.nodes.get(ctx.mind.trees.get(p.parentNodeId)?.rootId ?? '');
+    const named = idFrom(p.parentNodeId);
+    const parent = ctx.mind.nodes.get(named) ?? ctx.mind.nodes.get(ctx.mind.trees.get(named)?.rootId ?? '');
     if (parent?.status === 'kept') out.set(item.id, { at: 'card', parent: parent.id, why: oneLine(p.why, 80) || 'belongs here' });
   }
   return out;

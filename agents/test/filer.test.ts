@@ -30,7 +30,7 @@ test('an item with a strong fit hangs under the card the model named, as a dashe
   const k = kit();
   const film = k.seedTree('Film', ['Camera moves', 'Dolly zoom', 'Whip pan']);
   const item = k.item({ title: 'Vertigo effect in Jaws', summary: 'The beach shot that pulls the background in.' });
-  script(k, [{ itemId: item.id, parentNodeId: film.nodeIds[1], why: 'a famous dolly zoom' }]);
+  script(k, [{ itemId: `item ${item.id}`, parentNodeId: `node ${film.nodeIds[1]}`, why: 'a famous dolly zoom' }]);
 
   const commands = await filer(k.ctx, [item]);
   file(k, [item], commands);

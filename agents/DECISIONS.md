@@ -202,3 +202,51 @@ After the first hands-on session the picks were judged dull: every pick was a we
 **Why.** The C++ client's review found clients receiving 10 and then 12. The service numbered every set but sent only those with patches. An empty set could also become the undo target, so a press of undo did nothing.
 
 **Tested.** Both rules have a test, and both tests fail on the code before the change.
+
+## 29. Mindstorm: a dump joins the knowledge base, and starts a tree only when asked
+
+**Decision.** Everything dropped becomes items, and every item is part of the user's knowledge base. A plain dump starts no tree. The Filer asks the model whether an item plainly belongs under one card of a tree, with a strength from 0 to 1. At 0.8 or above (the setting `strongTie`, shared with the Scout) the item is hung there once, as a dashed pick with a `why`, origin `{by: 'agent', role: 'filer', tool: 'mindstorm'}`. Otherwise it is placed nowhere. A tree is started only when the dump or the user asks for one, and its root then gets its first round. The web client lists what no tree holds under "Knowledge base" in its tree row, and says where a drop went.
+
+**Why.** The user asked for the mindstorm to be a knowledge base that trees draw on, not a pile that turns every drop into a tree.
+
+**Also changed.** The Filer no longer falls back to search when the model fails. A wrong placement is noise and a drop left in the knowledge base costs nothing, so the safe answer is no placement. Taking away a pick that holds what the user dropped, as a refresh does, leaves the item in the knowledge base. Deleting a kept card still archives its item. `Mindstorm.inbox()` is `unplaced()` now: those items are not waiting to be filed. Only the root of a tree the user asked for is scouted on arrival, so `EAGER_SCOUTS` is gone.
+
+**Measured.** On a copy of the user's data (4 trees, 1,014 library items), a dropped line about the Reservoir Dogs standoff became a pick under "The standoff" in "Standoffs", and no tree was made. On an earlier run of the same drop it went under "The cut is the event" in the same tree.
+
+**Alternative.** Let the Filer's model decide that a dump asks for a tree. It would understand more phrasings and languages, but it cannot take the asking words off the content, and the offline stand-in would need its own rule anyway.
+
+## 30. Mindstorm: a request for a tree is heard by plain rules, and by the Conductor for other words
+
+**Decision.** `src/core/tree-request.ts` hears a request at the start or the end of a text: "make a tree about Kubrick", "start a tree on this: …", "… make a tree from this", "make this a tree: …". The words are taken off what was dropped. The pipeline applies it to text dumps, and the Conductor to utterances before any model call. Other words ("build me something around Hitchcock's films") reach the Conductor's model, which now has a `tree` kind. "This" means what was just dropped, until the user opens a card, and otherwise the open card. "Make a tree about X" where X is the title of something the user already has makes that item the root, so a tree about Vertigo is rooted in the library's Vertigo rather than a new card that would repeat it.
+
+**Why.** Free, deterministic and testable, and it works in the offline stand-in. "Build a treehouse", "a family tree" and "plant a tree for every newborn" ask for nothing (tested).
+
+**Cost.** English phrasings only. A dump that starts "make a tree from cardboard: …" is read as a request.
+
+## 31. Mindstorm: every round draws on everything the user has, and the Scout stops drawing links
+
+**Decision.** Each Scout run searches the whole mindstorm (dumps, cards of other trees, the library) with the card's title, its title and tags, and the request, keeps up to 20 candidates that share half the words, and asks the model to rate them. Those rated 0.8 or above come into the round as nodes holding the existing item, strongest first, at most 8, in the run's first delivery. New content fills the rest: what the user set as picks per run, never fewer than 2, never past 10. Unkept agent picks elsewhere are suggestions, not knowledge, and are not offered. A library item keeps origin tool `library`; anything else the user had gets tool `mindstorm`. One tool name, one meaning.
+
+**Why.** The user asked that what they already have and is strongly tied always be among a new tree's content, with room left for new material.
+
+**Replaced.** Before, a strong tie to a card of another tree was drawn as a link across trees, and only library items were hung in place, at most 2 per run. Both now come in place, the same way. `maxLinksPerRun` is gone and `linkThreshold` is `strongTie`.
+
+**Also changed.** A run brings at most the new picks asked for. Before, a run asked for one direction more than the count and kept every find, so 5 asked could bring 7. Under a cap of 10, the extra would push older picks out on every "more".
+
+**Measured.** On the copy of the user's data, "make a tree about Stanley Kubrick" rooted the tree in the library's Kubrick card and brought The Shining, Dr. Strangelove and 2001 from the library, then 5 new picks: 8 in the round, nothing repeated. 95 s, 12 Meta calls (25,363 tokens in, 13,450 out), 1 OpenAI web search (8,846 in, 389 out), 1 generated picture.
+
+## 32. Mindstorm: the round rules are held where changes are applied
+
+**Decision.** `admit` in `src/core/round.ts` runs on every Scout delivery and every Filer change, against the mindstorm as it is at that moment. Around each card it keeps at most 10 unkept picks, at most 8 of them things the user already had, by deleting the oldest unkept picks in the same change. Nothing inside a tree repeats: not the same item, not the same `source.url`, `data.mediaUrl` or `source.asset`, not the same title once case, punctuation and a leading article are set aside. Something the user already had takes the place of an unkept pick that brought the same thing new. An agent's item that is left out goes with its node; a dropped item stays in the knowledge base.
+
+**Why "a layer" is one card's round.** In the headset a layer holds several cards' rounds. A limit per layer would starve each card as the tree grows.
+
+**Why at application.** Two Scout runs on two cards of one tree, or a drop filed while a run is out, could each bring the same thing. Checked when applied, in one synchronous step, neither can. The Scout also checks as it composes, so a repeat does not take a slot it could have filled.
+
+**Tested.** Three deliberate breakages (no `admit`, 10 known places, no title key) each fail the new tests.
+
+## 33. Mindstorm: an id the model writes back with the word before it is still read
+
+**Finding.** In the first live run the Kubrick round brought nothing the user had, although search offered The Shining, Dr. Strangelove and 2001 and the model rated them 0.9 and 0.95. Shown `- item library:film:53 "The Shining"`, the model answered `"itemId": "item library:film:53"`, and every rating was dropped as naming nothing offered. The library's ids contain colons, unlike the service's own ids. The tie rating before this change had the same prompt line, so a library film was most likely never hung live.
+
+**Decision.** `idFrom` drops a leading "item", "node" or "tree" and surrounding quotes or brackets from an id a model wrote. The Scout and the Filer read ids through it. With it, the same run brought all three films.
