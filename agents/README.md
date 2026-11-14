@@ -14,6 +14,8 @@ npm start
 
 It prints an address such as `http://localhost:8787/#token=…`. Open it. Type a thought into the box and press Add.
 
+To talk without pressing anything, run `npm run fetch-wake` once. It builds the listener for the web client (git, cmake and make, about 2 GB free while it builds, several minutes). Then press the microphone once and say "hey Momo" or "hi Momo", then what you want. The page listens for the name on your device and sends only what follows it. Rename the agent in Settings. Without the listener the microphone records once per tap.
+
 Keys are read from `~/.muse-garden.env`. `MODEL_API_KEY` is required. Optional keys switch sources on: `YOUTUBE_API_KEY` (direct video search), `TMDB_API_KEY` (film and television), `EUROPEANA_API_KEY` (European museums and archives), `GUARDIAN_API_KEY` (news), `OPENAI_API_KEY` (a faster web search, model set by `MIND_PALACE_SEARCH_MODEL`, default `gpt-5.4-mini`, a spoken voice for replies, set by `MIND_PALACE_VOICE`, default `marin`, and speech recognition told your card titles, model set by `MIND_PALACE_HEARING_MODEL`, default `gpt-4o-transcribe`), and `META_IG_TOKEN` with `META_IG_USER_ID` (Instagram). Nothing is copied into the repo. Your mindstorm is saved in `agents/data/`.
 
 To try the client with no model and no cost: `npm run dev:fake`.
@@ -30,9 +32,9 @@ To try the client with no model and no cost: `npm run dev:fake`.
 ## Check it
 
 ```bash
-npm test                 # 135 tests on scripted models, no network
+npm test                 # 140 tests on scripted models, no network
 npx tsc --noEmit
-node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 23 checks
+node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 25 checks
 npm run scenario         # everything against the live model, 25 checks, about 160,000 tokens
 ```
 
@@ -72,6 +74,7 @@ Over plain `http://` on a local network address, browsers refuse the microphone.
 ## Not verified
 
 - Nothing has run on a Quest or a Vision Pro.
-- The microphone, live speech recognition and spoken replies in the web client have not been exercised. Speech-to-text through the service was checked once with a synthesized recording.
+- The microphone, live speech recognition and spoken replies in the web client have not been exercised.
+- The wake phrase was measured on synthetic voices and a fake microphone only (DECISIONS.md 23). Speech-to-text through the service was checked once with a synthesized recording.
 - The Ocean adapter was typechecked against an older visionOS SDK and exercised on macOS. It has not been built for visionOS 26.
 - Reading your Instagram posts and reading a web page were each checked live once. Image generation was seen live in a pick. Video understanding and code sketches are written and unit-tested but were not triggered in a live run.

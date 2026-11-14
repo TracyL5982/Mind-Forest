@@ -142,3 +142,35 @@ After the first hands-on session the picks were judged dull: every pick was a we
 **Not measured.** Real voices in a real room. Synthetic speech is easier than a person, so these error rates are a floor.
 
 **Alternative.** OpenAI's live transcription models stream words as they are spoken. Not tried.
+
+## 23. Wake word: "hey Momo" is heard on the device by sherpa-onnx's keyword spotter
+
+**Decision.** The agent is called Momo unless renamed (`settings.agentName`, also in the web client's Settings). A client listens for "hey Momo" or "hi Momo" on the device with sherpa-onnx's keyword spotter (v1.13.8) and its English model `sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01`. No sound leaves the device before the phrase. After it, the client records until the speaker pauses for 1.2 seconds and posts that recording to `/api/transcribe`. The service drops a leading "hey Momo" from what it acts on, tells the Conductor its name, and tells the transcriber to expect it.
+
+**Why.** The user wants to talk without pressing anything, and without the page sending everything they say. A keyword spotter is a small streaming recognizer that reports only the phrases it is given. A new name needs no training, and the same C library runs on Android for the Quest.
+
+**Tuned.** Keywords `▁HE Y ▁MO MO`, `▁HI ▁MO MO` and `▁HIGH ▁MO MO`, because the model often hears "hi" as "high". Boost 2.0, threshold 0.05, 1 trailing blank, 4 active paths. The boost is what matters: thresholds from 0.02 to 0.1 caught the same clips. A boost of 2.5 caught 2 more native phrases out of 120 but woke on 22 near misses instead of 2. Adding "hey Mo Mo" as two words woke on "Hey Mo, more!" 24 times.
+
+**Measured.** 842 synthetic clips (`scripts/wake-clips.ts`), each heard clean and with pink noise 20 dB and 10 dB below the speech, in 100 ms pieces like a microphone (`scripts/wake-measure.py`). The phrase was said alone, before a command, and after other talk.
+
+| | Clean | Noise 20 dB | Noise 10 dB |
+|---|---|---|---|
+| The phrase caught, 10 native English macOS voices (of 120) | 108 | 84 | 44 |
+| The phrase caught, 6 OpenAI voices, 4 with a Mandarin, Indian, Spanish or French accent (of 48) | 48 | 47 | 44 |
+| The phrase caught, 7 non-English macOS voices reading English (of 84) | 21 | 20 | 14 |
+| False wakes in 1.56 hours of talk, commands and the agent's replies | 0 | 0 | 0 |
+| Near misses that woke it (of 444, such as "hey mama", "hi mom", "Hey Moe", "Mo Mo's bakery", "memo", "momentum") | 2 | 2 | 1 |
+
+The phrase is caught a median 0.41 seconds after it ends (at most 0.56). No false wake in 1.56 hours puts the rate under about 2 an hour at 95% confidence. More hours of talk are needed to say how far under. In a real browser with a fake microphone (`scripts/wake-check.ts`), the WebAssembly build woke on all 3 clips tried, and OpenAI's transcription of a Mandarin-accented "Hey Momo, show me more like this." reached the Conductor as "Show me more like this." After other talk ("I was reading about winter bread all morning. Hey Momo, bring more on sourdough."), the recording held only the phrase and what followed, and the Conductor got "Bring more on sourdough." in both voices tried. While waiting for its name, the whole browser used 0.089, 0.094 and 0.095 of one core in three 30-second runs against 0.005 with the microphone off. The spotter itself took 39 ms per second of sound.
+
+**What limits it.** The model has 3.3 million parameters, and its ear decides. Asked to transcribe the clips, it hears "Momo" as "moment", "monot" or "mamo" in some voices, and as "more more" in the non-English ones. The British voice Daniel and the South African voice Tessa catch 8 phrases of 12 and the Indian voice Rishi 9, while six other voices catch all 12. Noise at 10 dB halves what it catches. The near misses that wake it are "Hi Mo", "Hi Moe" and "Hey Moe" in one Irish voice, which sound almost the same as the phrase. A reply that names the agent ("Hi, I'm Momo") woke it once in noise, which is why a client does not listen while a reply plays.
+
+**Also found.** The model's `-mobile` variant fails on every decode in sherpa-onnx 1.13.8, with an onnxruntime Reshape error in the encoder, so the regular model is used. sherpa-onnx publishes no browser build of the keyword spotter. `npm run fetch-wake` builds one from the v1.13.8 source with Emscripten 4.0.23, both pinned to their commits, into the git-ignored `client/vendor/sherpa-onnx/`. Without those files the page keeps tap-to-talk and says why.
+
+**In the web client.** An AudioWorklet brings the microphone to 16 kHz, and a Worker runs the spotter and keeps the last 3 seconds of sound. On the phrase the page chimes and starts the recording 0.3 seconds before the phrase, placed by the spotter's timestamps, so the words right after it are kept whole. The service strips the phrase from the transcript. If nothing is said within 8 seconds, nothing is sent.
+
+**Cost.** About 4 minutes of OpenAI speech for the clips, a few cents.
+
+**Not measured.** Real voices, a real room, a microphone across the room, and the Quest. Synthetic speech is clean and evenly paced, so real use is likely worse. Names other than Momo.
+
+**Alternative.** Picovoice Porcupine needs an account and a key on every device. openWakeWord needs a model trained for each name. Both fix the name in advance.
