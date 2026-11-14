@@ -710,7 +710,7 @@ Colours with their names.
 
 - **Chosen when** `item.data.colours` holds two or more colours, and they pass the coverage floor.
 - **Props.** `colours`: each `{ name, value }`. `value` is a hex colour of 3, 4, 6 or 8 digits after its `#`, or a CSS colour name of 1 to 30 letters from `a` to `z` in either case, and nothing else, so it is safe to paint. `name` equals `value` when the content gave the colour no name.
-- **Drawn as** a band of the colours across the top of the card, then the title, then one line for each of the first six: a small chip of the colour, its name, and its value whole at the right, or the value alone when the colour has no other name. No word is set on a colour, so every word reads on any of them. A value the client cannot paint leaves hatching in its place. The card writes `and N more`, and the opened card lists every colour.
+- **Drawn as** a band of the colours across the top of the card, then the title, then one line for each of the first six: a small round dot of the colour, its name, and its value whole at the right, or the value alone when the colour has no other name. No word is set on a colour, so every word reads on any of them. Each dot, and each chip of the opened card, is edged by a black hairline inside and a light grey one (`#b0b0aa`) outside, so its edge holds 3 to 1 whatever its colour: a colour of luminance 0.1 and up against the black, any darker one against the grey, and the grey against every face of a card. A value the client cannot paint leaves hatching in its place. The card writes `and N more`, and the opened card lists every colour.
 - **Item holds.** `data.colours = [{ name, value }]`.
 
 ### artwork
