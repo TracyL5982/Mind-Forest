@@ -2,10 +2,10 @@ import type { Command, Item } from '../core/domain.ts';
 import type { Found } from '../core/ports.ts';
 import { codeIn } from '../core/roles/intake/code.ts';
 import { structure } from '../core/roles/intake/describe.ts';
-import { byRule, grounded } from '../core/roles/renderer.ts';
+import { byRule, drawn, unsure } from '../core/roles/renderer.ts';
 import { catalogued } from '../core/roles/scout.ts';
 import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles } from '../core/roles/types.ts';
-import { describe } from './model.ts';
+import { choose, describe } from './model.ts';
 
 const WORK: Found = {
   kind: 'artwork', title: 'Stairwell, seen from above', by: 'Ilse Brandt', date: '1928', text: 'Gelatin silver print',
@@ -114,10 +114,9 @@ export const fakeRoles: Roles = {
       const node = ctx.mind.nodes.get(id);
       const item = node && ctx.mind.items.get(node.itemId);
       if (!node || !item) return [];
-      // No rule draws a callout, so the fake draws one from a line that opens "Caution:", "Warning:" or "Note:".
-      const marked = /^(caution|warning|note):\s*(\S.*)$/im.exec(item.text);
-      const callout = { component: 'callout', props: { text: marked?.[2]?.trim(), tone: marked?.[1]!.toLowerCase() === 'note' ? 'note' : 'caution' } };
-      const draw = marked && grounded(callout, item, assetUrl) ? callout : byRule(item, assetUrl);
+      const ruled = byRule(item, assetUrl);
+      // Where the real Renderer would ask the model, the fake's own choice goes through the same checks.
+      const draw = (unsure(item, ruled) && drawn(ctx, { id, ...choose(item.text, ruled.component === 'idea' ? 'idea' : 'note') }, item)) || ruled;
       const same = draw.component === node.view.component && JSON.stringify(draw.props) === JSON.stringify(node.view.props);
       return same ? [] : [{ type: 'setView', id, view: { ...draw, by: 'renderer' } }];
     });

@@ -5,6 +5,51 @@ import type { Grounding } from './grounding.ts';
 /** A string a card shows as words: at least one character that is not white space. */
 const words = z.string().regex(/\S/);
 
+const SPACELESS = /[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Thai}]/u;
+
+/**
+ * Every bound on how much a card built from a model's reply may show. A length is in characters. A pair is one bound for a script
+ * written with spaces and one for a script written without, which says as much in half the room.
+ */
+export const ROOM = {
+  /** A sheet's heading. Whoever builds the sheet cuts a longer one to this, with an ellipsis. */
+  heading: 80,
+  /** A sheet's passage of text, cut the same way. */
+  text: 280,
+  /** The label of a figure. A longer one does not read at a glance beside its value. */
+  label: 40,
+  /** A quote, an excerpt or a callout. A longer passage is the item itself, which a note shows better. */
+  passage: { spaced: 400, spaceless: 200 },
+  /** The least opening text with which a sheet may show under a fifth of its item. */
+  opening: { spaced: 120, spaceless: 60 },
+  /** The most figures, list entries, table rows and table columns in one section of a sheet, and the most sections, a heading counted. */
+  figures: 4,
+  list: 8,
+  rows: 5,
+  columns: 4,
+  sections: 4,
+} as const;
+
+/** The bound of a pair that holds for this text. */
+export const roomOf = (bound: { spaced: number; spaceless: number }, text: string): number => (SPACELESS.test(text) ? bound.spaceless : bound.spaced);
+
+/** One section of a `sheet`. A list or a table past its size is cut by whoever builds the sheet; the opened card shows the item whole. */
+export const SECTION = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('heading'), text: words.max(ROOM.heading) }),
+  /** A passage of the item, whole, or its opening words cut short with an ellipsis. */
+  z.strictObject({ kind: z.literal('text'), text: words.max(ROOM.text) }),
+  z.strictObject({ kind: z.literal('figures'), facts: z.array(z.strictObject({ label: words.max(ROOM.label), value: words })).min(1).max(ROOM.figures) }),
+  z.strictObject({ kind: z.literal('list'), items: z.array(words).min(2).max(ROOM.list) }),
+  z
+    .strictObject({ kind: z.literal('table'), heads: z.array(z.string()).min(2).max(ROOM.columns), rows: z.array(z.array(z.string())).min(1).max(ROOM.rows) })
+    .refine((table) => table.rows.every((row) => row.length === table.heads.length)),
+  /** The item's own picture. */
+  z.strictObject({ kind: z.literal('picture'), src: z.string().min(1) }),
+  /** Words quoted in the item, and who said them or where they stand. */
+  z.strictObject({ kind: z.literal('excerpt'), text: words.refine((text) => text.length <= roomOf(ROOM.passage, text)), by: z.string().optional() }),
+]);
+export type Section = z.infer<typeof SECTION>;
+
 /**
  * The component library: every way one item can be drawn.
  * Props carry only what the item itself does not already hold. A client draws from the item plus these props.
@@ -87,6 +132,14 @@ export const COMPONENTS = {
   }),
   /** A place by name. `src` is the item's picture, when it has one. */
   place: z.strictObject({ name: z.string().min(1), src: z.string().optional() }),
+  /**
+   * A card assembled from sections, for content no single type covers: four at most, a heading counted. A heading, when there is one,
+   * comes first. Two sections at least are no heading, and a sheet of nothing but passages of text is a note, so one of them is of another kind.
+   */
+  sheet: z.strictObject({ sections: z.array(SECTION).min(1).max(ROOM.sections) }).refine(({ sections }) => {
+    const parts = sections.filter((section) => section.kind !== 'heading');
+    return sections.length - parts.length <= 1 && sections.slice(1).every((section) => section.kind !== 'heading') && parts.length >= 2 && parts.some((section) => section.kind !== 'text');
+  }),
 } as const;
 export type ComponentId = keyof typeof COMPONENTS;
 export const COMPONENT_IDS = Object.keys(COMPONENTS) as ComponentId[];
@@ -97,22 +150,36 @@ export type PropsOf<C extends ComponentId> = z.infer<(typeof COMPONENTS)[C]>;
  * The content is the item's title and text and the values of its `data`, without the addresses `data` holds.
  * - `says`: the content states these words. `cell` is the same, may be empty, and holds no "|" or tab, which would make it two cells.
  * - `quotes`: the content holds this passage as one stretch.
+ * - `whole`: the same, and the passage begins where a sentence, a line or quoted words begin and ends where one ends: nothing is cut off it.
+ * - `lead`: a whole passage, or the opening of one cut short with an ellipsis.
+ * - `meaning`: the passage the content gives as the meaning of the `term` beside it in the props, in the term's sentence or the next one over.
  * - `writes`: the content writes this number. When the `unit` beside it in the props scales it, as 万 and k do, the content writes it with that unit: "2189万" for 2189 in 万.
  * - `unit`: the content states these words, or writes them against one of the `values` beside them in the props, as "45%" writes "%".
  * - `paints`: the content writes this colour, a hex value as a whole or a colour name as words.
  * - `own`: one of the item's own values, whole or cut short with an ellipsis: an address, its site, its source, its summary, its text, a value in its `data`.
- * - `label`: words that name a value beside them. Not checked against the content, and never empty.
+ * - `label`: words of the content that name the `value` beside them in the props: every one stands in the sentence, line or table row that holds the value.
+ * - `point`: the same for the number at the same place in the `values` beside them, as a chart's labels are.
  * - `choice`: how to draw, not what to show.
  */
-export type Stated = 'says' | 'cell' | 'quotes' | 'writes' | 'unit' | 'paints' | 'own' | 'label' | 'choice';
+export type Stated = 'says' | 'cell' | 'quotes' | 'whole' | 'lead' | 'meaning' | 'writes' | 'unit' | 'paints' | 'own' | 'label' | 'point' | 'choice';
 
-/** One way of standing for a plain value, the same shape as the props for an object, and the element's shape for a list. */
+type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never;
+type Fields<T> = { readonly [K in keyof T]-?: Check<NonNullable<T[K]>> };
+
+/**
+ * One way of standing for a plain value, the same shape as the props for an object, and the element's shape for a list.
+ * An object that is one of several shapes told apart by `kind` has a check for each kind under `byKind`, over its other keys.
+ */
 export type Check<T = unknown> = unknown extends T
   ? Stated | { readonly [key: string]: Check }
-  : T extends readonly (infer E)[]
+  : [T] extends [readonly (infer E)[]]
     ? Check<E>
-    : T extends object
-      ? { readonly [K in keyof T]-?: Check<NonNullable<T[K]>> }
+    : [T] extends [object]
+      ? IsUnion<T> extends true
+        ? [T] extends [{ kind: string }]
+          ? { readonly byKind: { readonly [K in T['kind']]: Fields<Omit<Extract<T, { kind: K }>, 'kind'>> } }
+          : never
+        : Fields<T>
       : Stated;
 
 type ContentChecks = {
@@ -126,13 +193,13 @@ type ContentChecks = {
 /** The content check of every component. The type refuses a component, or a prop of one, that has no entry here. */
 export const CHECKS: ContentChecks = {
   note: { props: { emphasis: 'says' } },
-  quote: { props: { text: 'quotes', by: 'says' } },
+  quote: { props: { text: 'whole', by: 'says' } },
   fact: { props: { value: 'says', label: 'label' }, also: (p) => p.value.length <= 32 },
   image: { props: { src: 'own', caption: 'own', aspect: 'choice' } },
   video: { props: { src: 'own', poster: 'own', caption: 'own' } },
   link: { props: { url: 'own', site: 'own', description: 'own', image: 'own' } },
   chart: {
-    props: { chart: 'choice', labels: 'says', values: 'writes', unit: 'unit', mark: 'choice' },
+    props: { chart: 'choice', labels: 'point', values: 'writes', unit: 'unit', mark: 'choice' },
     also: (p) => p.labels.length >= 2 && p.labels.length === p.values.length,
   },
   person: { props: { name: 'says', role: 'says', image: 'own' } },
@@ -153,11 +220,12 @@ export const CHECKS: ContentChecks = {
       return p.checked === undefined || p.checked.every((mark, n) => text.ticks(p.items[n]!) === mark || kept(p.items[n]!) === mark);
     },
   },
-  breakdown: { props: { labels: 'says', values: 'writes', unit: 'unit' } },
+  // Shares of one whole add up to it. A percent that the text rounded may leave the sum one off.
+  breakdown: { props: { labels: 'point', values: 'writes', unit: 'unit' }, also: (p) => Math.abs(p.values.reduce((sum, value) => sum + value, 0) - 100) <= 1 },
   qa: { props: { question: 'says', answer: 'says' } },
-  callout: { props: { text: 'quotes', tone: 'choice' } },
-  excerpt: { props: { text: 'quotes', at: 'says', source: 'own' } },
-  definition: { props: { term: 'says', definition: 'says' } },
+  callout: { props: { text: 'whole', tone: 'choice' } },
+  excerpt: { props: { text: 'whole', at: 'says', source: 'own' } },
+  definition: { props: { term: 'says', definition: 'meaning' } },
   idea: { props: {} },
   proscons: { props: { pros: 'says', cons: 'says' } },
   swatch: { props: { colours: { name: 'says', value: 'paints' } } },
@@ -167,6 +235,21 @@ export const CHECKS: ContentChecks = {
     also: (p, item) => p.more === undefined || item.data.authorsCut === true,
   },
   place: { props: { name: 'says', src: 'own' } },
+  sheet: {
+    props: {
+      sections: {
+        byKind: {
+          heading: { text: 'says' },
+          text: { text: 'lead' },
+          figures: { facts: { label: 'label', value: 'says' } },
+          list: { items: 'says' },
+          table: { heads: 'cell', rows: 'cell' },
+          picture: { src: 'own' },
+          excerpt: { text: 'whole', by: 'says' },
+        },
+      },
+    },
+  },
 };
 
 /**

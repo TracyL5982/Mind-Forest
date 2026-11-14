@@ -1,0 +1,6643 @@
+{
+ "items": [
+  {
+   "key": "A-R01",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "article, one table deep inside: link to a long article; one two-row table in the middle",
+   "expect": "link",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R01",
+    "tags": [
+     "week",
+     "people"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "Remote work after five years",
+    "summary": "A long essay on how remote work changed management.",
+    "text": "Remote work changed how teams plan their week, and the change has outlasted the reasons that first caused it. Managers who once measured presence now have to measure outcomes, and many of them say they were never taught how. The companies that adapted fastest were not the ones with the best tools but the ones that already wrote things down. Writing forces a decision to be stated, and a stated decision can be questioned by someone who was not in the room. There is a cost: people new to a team learn less by overhearing, and the people who used to teach by accident no longer do. Some firms answer with fixed office days, others with a week together every quarter, and neither has clear evidence behind it yet. What the surveys agree on is narrower than the headlines: most people want a choice, and few want the same choice every week. The longer view is that the office was a habit before it was a policy, and habits change more slowly than rules.\n\nHow the three policies compare\n\nPolicy | Office days | Share of firms\nFully remote | 0 | 18%\nHybrid | 2 to 3 | 61%\n\nRemote work changed how teams plan their week, and the change has outlasted the reasons that first caused it. Managers who once measured presence now have to measure outcomes, and many of them say they were never taught how. The companies that adapted fastest were not the ones with the best tools but the ones that already wrote things down. Writing forces a decision to be stated, and a stated decision can be questioned by someone who was not in the room. There is a cost: people new to a team learn less by overhearing, and the people who used to teach by accident no longer do. Some firms answer with fixed office days, others with a week together every quarter, and neither has clear evidence behind it yet. What the surveys agree on is narrower than the headlines: most people want a choice, and few want the same choice every week. The longer view is that the office was a habit before it was a policy, and habits change more slowly than rules.",
+    "data": {
+     "table": {
+      "heads": [
+       "Policy",
+       "Office days",
+       "Share of firms"
+      ],
+      "rows": [
+       [
+        "Fully remote",
+        "0",
+        "18%"
+       ],
+       [
+        "Hybrid",
+        "2 to 3",
+        "61%"
+       ]
+      ]
+     },
+     "site": "example-review.com"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://www.example-review.com/2026/remote-work-after-five-years",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R02",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "article, one quotable line: link to a long essay that quotes one person once",
+   "expect": "link",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R02",
+    "tags": [
+     "week",
+     "people"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "The office was a habit",
+    "summary": "An essay arguing that the office is a habit more than a policy.",
+    "text": "Remote work changed how teams plan their week, and the change has outlasted the reasons that first caused it. Managers who once measured presence now have to measure outcomes, and many of them say they were never taught how. The companies that adapted fastest were not the ones with the best tools but the ones that already wrote things down. Writing forces a decision to be stated, and a stated decision can be questioned by someone who was not in the room. There is a cost: people new to a team learn less by overhearing, and the people who used to teach by accident no longer do. Some firms answer with fixed office days, others with a week together every quarter, and neither has clear evidence behind it yet. As the historian Nikil Saval put it, \"The office was never a place so much as an agreement.\" Remote work changed how teams plan their week, and the change has outlasted the reasons that first caused it. Managers who once measured presence now have to measure outcomes, and many of them say they were never taught how. The companies that adapted fastest were not the ones with the best tools but the ones that already wrote things down. Writing forces a decision to be stated, and a stated decision can be questioned by someone who was not in the room. There is a cost: people new to a team learn less by overhearing, and the people who used to teach by accident no longer do. Some firms answer with fixed office days, others with a week together every quarter, and neither has clear evidence behind it yet. What the surveys agree on is narrower than the headlines: most people want a choice, and few want the same choice every week.",
+    "data": {
+     "quote": {
+      "text": "The office was never a place so much as an agreement.",
+      "by": "Nikil Saval"
+     },
+     "site": "longform.example.org"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://longform.example.org/essays/the-office-habit",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R03",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "文章，模型只摘了一段: link to a Chinese article; the model fills only the passage \"worth quoting\"",
+   "expect": "link",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R03",
+    "tags": [
+     "默认",
+     "选项"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "远程办公五年之后",
+    "summary": "一篇关于远程办公如何改变团队协作的长文。",
+    "text": "这几年我们团队的工作方式变了很多，一开始只是因为不得不这样，后来大家发现有些做法其实更好。以前开会是默认选项，现在写文档是默认选项，会议只在文档解决不了的时候才开。写下来的好处是，不在场的人也能看到当时是怎么决定的，也能提出不同意见。当然也有代价，新同事很难像以前那样在旁边听着就学会了，带人的成本其实变高了。所以我们现在每个季度会聚在一起一周，专门做那些需要面对面才能做好的事情。回头看，办公室首先是一种习惯，然后才是一项制度，而习惯比制度变得慢。这几年我们团队的工作方式变了很多，一开始只是因为不得不这样，后来大家发现有些做法其实更好。以前开会是默认选项，现在写文档是默认选项，会议只在文档解决不了的时候才开。写下来的好处是，不在场的人也能看到当时是怎么决定的，也能提出不同意见。当然也有代价，新同事很难像以前那样在旁边听着就学会了，带人的成本其实变高了。所以我们现在每个季度会聚在一起一周，专门做那些需要面对面才能做好的事情。回头看，办公室首先是一种习惯，然后才是一项制度，而习惯比制度变得慢。这几年我们团队的工作方式变了很多，一开始只是因为不得不这样，后来大家发现有些做法其实更好。以前开会是默认选项，现在写文档是默认选项，会议只在文档解决不了的时候才开。",
+    "data": {
+     "excerpt": {
+      "text": "办公室首先是一种习惯，然后才是一项制度，而习惯比制度变得慢。"
+     },
+     "site": "zhuanlan.example.cn"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://zhuanlan.example.cn/p/88213",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R04",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "tool home page: link to a product page, no structure",
+   "expect": "link",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R04",
+    "tags": [
+     "text",
+     "exampletool"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "Exampletool: diagrams from plain text",
+    "summary": "A tool that draws diagrams from text.",
+    "text": "Write a few lines of text and get a diagram. Free for personal use. Works in the browser.",
+    "data": {
+     "site": "exampletool.dev"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://www.exampletool.dev/",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R05",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "paper pick: Scout pick from the papers source",
+   "expect": "reference",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R05",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Perceived depth under opposed zoom and camera motion",
+    "text": "Viewers judged the room to stretch by half when the lens zoomed in as the camera pulled back.\n\nM. Okafor et al., 2011-05-03, Research papers",
+    "summary": "A study of how the dolly zoom changes perceived depth.",
+    "data": {
+     "site": "doi.example",
+     "by": "M. Okafor et al.",
+     "date": "2011-05-03",
+     "from": "Research papers",
+     "kind": "paper",
+     "authors": [
+      "M. Okafor",
+      "L. Haas",
+      "R. Ito"
+     ],
+     "authorsCut": true,
+     "venue": "Journal of Example Vision"
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://doi.example/10.1000/zoom.2011",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R06",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "paper pick that also carries a chart: Scout paper pick whose record also has data.chart",
+   "expect": "reference",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R06",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Sleep duration and recall in adolescents",
+    "text": "Recall rose with sleep up to nine hours and fell after.\n\nA. Lindqvist et al., 2019, Research papers",
+    "summary": "Recall rises with sleep up to nine hours.",
+    "data": {
+     "site": "doi.example",
+     "by": "A. Lindqvist et al.",
+     "date": "2019",
+     "from": "Research papers",
+     "kind": "paper",
+     "authors": [
+      "A. Lindqvist",
+      "P. Roy"
+     ],
+     "venue": "Example Sleep Review",
+     "chart": {
+      "labels": [
+       "6 h",
+       "7 h",
+       "8 h",
+       "9 h"
+      ],
+      "values": [
+       52,
+       61,
+       68,
+       71
+      ],
+      "unit": "% recalled"
+     }
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://doi.example/10.1000/sleep.2019",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R07",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "statistic pick: Scout pick from the data source: a series by year",
+   "expect": "chart",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R07",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Share of the population using the internet, world",
+    "text": "Share of the population using the internet, world, 2000 to 2023.\n\nWorld Bank, 2023, World statistics",
+    "summary": "Internet use grew tenfold in two decades.",
+    "data": {
+     "site": "data.example.org",
+     "by": "World Bank",
+     "date": "2023",
+     "from": "World statistics",
+     "chart": {
+      "labels": [
+       "2000",
+       "2010",
+       "2020",
+       "2023"
+      ],
+      "values": [
+       6.7,
+       28.8,
+       59.3,
+       67.4
+      ],
+      "unit": "%"
+     }
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://data.example.org/indicator/IT.NET.USER.ZS",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R08",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "图书: Scout book pick with a cover picture",
+   "expect": "reference",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R08",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "image",
+    "title": "乡土中国",
+    "text": "从基层上看去，中国社会是乡土性的。\n\n费孝通, 1948, Books",
+    "summary": "理解中国基层社会结构的经典。",
+    "data": {
+     "site": "openlibrary.org",
+     "by": "费孝通",
+     "date": "1948",
+     "from": "Books",
+     "kind": "book",
+     "authors": [
+      "费孝通"
+     ]
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://openlibrary.org/works/OL123W",
+     "asset": "asset-7",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R09",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted CSV: CSV pasted from a spreadsheet",
+   "expect": "table",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R09",
+    "tags": [
+     "country",
+     "gdp_per_capita"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "GDP per head and life expectancy, four countries",
+    "summary": "Four countries compared.",
+    "text": "country,gdp_per_capita,life_expectancy\nNorway,87900,83.2\nPortugal,27300,82.4\nVietnam,4300,74.6\nKenya,2100,62.7",
+    "data": {
+     "table": {
+      "heads": [
+       "country",
+       "gdp_per_capita",
+       "life_expectancy"
+      ],
+      "rows": [
+       [
+        "Norway",
+        "87900",
+        "83.2"
+       ],
+       [
+        "Portugal",
+        "27300",
+        "82.4"
+       ],
+       [
+        "Vietnam",
+        "4300",
+        "74.6"
+       ],
+       [
+        "Kenya",
+        "2100",
+        "62.7"
+       ]
+      ]
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R10",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "long essay, one statistic: a 1,800 character essay that states one figure",
+   "expect": "note",
+   "accept": [
+    "sheet"
+   ],
+   "item": {
+    "id": "formats-A-R10",
+    "tags": [
+     "week",
+     "people"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Why hybrid work stuck",
+    "summary": "Notes on why hybrid policies outlasted the pandemic.",
+    "text": "Remote work changed how teams plan their week, and the change has outlasted the reasons that first caused it. Managers who once measured presence now have to measure outcomes, and many of them say they were never taught how. The companies that adapted fastest were not the ones with the best tools but the ones that already wrote things down. Writing forces a decision to be stated, and a stated decision can be questioned by someone who was not in the room. There is a cost: people new to a team learn less by overhearing, and the people who used to teach by accident no longer do. Some firms answer with fixed office days, others with a week together every quarter, and neither has clear evidence behind it yet. What the surveys agree on is narrower than the headlines: most people want a choice, and few want the same choice every week. In the largest of those surveys, 61% of firms said they had settled on a hybrid policy. Remote work changed how teams plan their week, and the change has outlasted the reasons that first caused it. Managers who once measured presence now have to measure outcomes, and many of them say they were never taught how. The companies that adapted fastest were not the ones with the best tools but the ones that already wrote things down. Writing forces a decision to be stated, and a stated decision can be questioned by someone who was not in the room. There is a cost: people new to a team learn less by overhearing, and the people who used to teach by accident no longer do. Some firms answer with fixed office days, others with a week together every quarter, and neither has clear evidence behind it yet. What the surveys agree on is narrower than the headlines: most people want a choice, and few want the same choice every week. The longer view is that the office was a habit before it was a policy, and habits change more slowly than rules.",
+    "data": {
+     "facts": [
+      {
+       "label": "Firms with a hybrid policy",
+       "value": "61%"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R11",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "段落里的定义: a long Chinese paragraph that defines one term in passing",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R11",
+    "tags": [
+     "其实",
+     "以前"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "团队规模与协作方式",
+    "summary": "关于团队规模的笔记。",
+    "text": "这几年我们团队的工作方式变了很多，一开始只是因为不得不这样，后来大家发现有些做法其实更好。以前开会是默认选项，现在写文档是默认选项，会议只在文档解决不了的时候才开。写下来的好处是，不在场的人也能看到当时是怎么决定的，也能提出不同意见。当然也有代价，新同事很难像以前那样在旁边听着就学会了，带人的成本其实变高了。这里要先说一个概念：邓巴数是指一个人能够维持稳定社交关系的人数上限，大约是150人。这几年我们团队的工作方式变了很多，一开始只是因为不得不这样，后来大家发现有些做法其实更好。以前开会是默认选项，现在写文档是默认选项，会议只在文档解决不了的时候才开。写下来的好处是，不在场的人也能看到当时是怎么决定的，也能提出不同意见。当然也有代价，新同事很难像以前那样在旁边听着就学会了，带人的成本其实变高了。所以我们现在每个季度会聚在一起一周，专门做那些需要面对面才能做好的事情。回头看，办公室首先是一种习惯，然后才是一项制度，而习惯比制度变得慢。",
+    "data": {
+     "term": "邓巴数",
+     "definition": "一个人能够维持稳定社交关系的人数上限"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R12",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "definition: a one-line definition",
+   "expect": "definition",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R12",
+    "tags": [
+     "parallax",
+     "apparent"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Parallax",
+    "summary": "A definition.",
+    "text": "Parallax: the apparent shift of an object against its background when the viewer moves.",
+    "data": {
+     "term": "Parallax",
+     "definition": "the apparent shift of an object against its background when the viewer moves"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R13",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "comparison with pros and cons inside: a 1,400 character comparison of two databases; one short pros/cons passage",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R13",
+    "tags": [
+     "ones",
+     "decision"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Postgres or SQLite for the sync service",
+    "summary": "A comparison of two databases.",
+    "text": "Postgres or SQLite for the sync service. Remote work changed how teams plan their week, and the change has outlasted the reasons that first caused it. Managers who once measured presence now have to measure outcomes, and many of them say they were never taught how. The companies that adapted fastest were not the ones with the best tools but the ones that already wrote things down. Writing forces a decision to be stated, and a stated decision can be questioned by someone who was not in the room. There is a cost: people new to a team learn less by overhearing, and the people who used to teach by accident no longer do. For SQLite the pros are zero setup and one file to back up; the cons are one writer at a time. Remote work changed how teams plan their week, and the change has outlasted the reasons that first caused it. Managers who once measured presence now have to measure outcomes, and many of them say they were never taught how. The companies that adapted fastest were not the ones with the best tools but the ones that already wrote things down. Writing forces a decision to be stated, and a stated decision can be questioned by someone who was not in the room. There is a cost: people new to a team learn less by overhearing, and the people who used to teach by accident no longer do. Some firms answer with fixed office days, others with a week together every quarter, and neither has clear evidence behind it yet.",
+    "data": {
+     "pros": [
+      "zero setup",
+      "one file to back up"
+     ],
+     "cons": [
+      "one writer at a time"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R14",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "问答: a short question with its answer",
+   "expect": "qa",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R14",
+    "tags": [
+     "为什么",
+     "天空"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "为什么天空是蓝色的",
+    "summary": "瑞利散射。",
+    "text": "为什么天空是蓝色的？因为空气分子对短波长的蓝光散射得最强。",
+    "data": {
+     "question": "为什么天空是蓝色的？",
+     "answer": "因为空气分子对短波长的蓝光散射得最强。"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R15",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "调查占比: survey shares that sum to 100",
+   "expect": "breakdown",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R15",
+    "tags": [
+     "受访者",
+     "常用"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "受访者常用的沟通工具",
+    "summary": "四种工具的占比。",
+    "text": "受访者常用的沟通工具：微信 45%，钉钉 30%，飞书 15%，邮件 10%。",
+    "data": {
+     "chart": {
+      "labels": [
+       "微信",
+       "钉钉",
+       "飞书",
+       "邮件"
+      ],
+      "values": [
+       45,
+       30,
+       15,
+       10
+      ],
+      "unit": "%"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R16",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "一组数据: several labelled figures",
+   "expect": "facts",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R16",
+    "tags": [
+     "铁路",
+     "全长"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "青藏铁路",
+    "summary": "青藏铁路的基本数据。",
+    "text": "青藏铁路\n全长：1956公里\n最高点：5072米\n通车：2006年\n车站：85个",
+    "data": {
+     "facts": [
+      {
+       "label": "全长",
+       "value": "1956公里"
+      },
+      {
+       "label": "最高点",
+       "value": "5072米"
+      },
+      {
+       "label": "通车",
+       "value": "2006年"
+      },
+      {
+       "label": "车站",
+       "value": "85个"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R17",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "code with a table in a comment: a pasted Python function whose docstring holds a small table",
+   "expect": "code",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R17",
+    "tags": [
+     "rate",
+     "tier"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "rate(): request limit by tier",
+    "summary": "A function that returns the request limit for a tier.",
+    "text": "def rate(tier):\n    \"\"\"\n    tier | rate\n    free | 10\n    pro  | 100\n    \"\"\"\n    return {\"free\": 10, \"pro\": 100}[tier]\n\nprint(rate(\"pro\"))",
+    "data": {
+     "table": {
+      "heads": [
+       "tier",
+       "rate"
+      ],
+      "rows": [
+       [
+        "free",
+        "10"
+       ],
+       [
+        "pro",
+        "100"
+       ]
+      ]
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R18",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "quotation: a quotation with its speaker",
+   "expect": "quote",
+   "accept": [],
+   "item": {
+    "id": "formats-A-R18",
+    "tags": [
+     "fool",
+     "first"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Feynman on fooling yourself",
+    "summary": "A quotation.",
+    "text": "\"The first principle is that you must not fool yourself, and you are the easiest person to fool.\" Richard Feynman",
+    "data": {
+     "quote": {
+      "text": "The first principle is that you must not fool yourself, and you are the easiest person to fool.",
+      "by": "Richard Feynman"
+     },
+     "person": {
+      "name": "Richard Feynman"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R19",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "注意事项: a caution",
+   "expect": "callout",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-A-R19",
+    "tags": [
+     "阿司匹林",
+     "注意"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "布洛芬与阿司匹林不能同服",
+    "summary": "用药注意事项。",
+    "text": "注意：布洛芬不能和阿司匹林同时服用，间隔至少要八小时，否则会削弱阿司匹林的作用。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-R20",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "how-to page: link to a page that is a procedure",
+   "expect": "steps",
+   "accept": [
+    "link"
+   ],
+   "item": {
+    "id": "formats-A-R20",
+    "tags": [
+     "back",
+     "database"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "Back up the database",
+    "summary": "Four steps to back up.",
+    "text": "Back up the database\n1. Stop the writer.\n2. Copy the data file.\n3. Start the writer.\n4. Verify the copy opens.",
+    "data": {
+     "steps": [
+      "Stop the writer.",
+      "Copy the data file.",
+      "Start the writer.",
+      "Verify the copy opens."
+     ],
+     "site": "docs.example.dev"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://docs.example.dev/guides/backup",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B01",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "short to-do: \"Buy milk\"",
+   "expect": "note",
+   "accept": [
+    "idea"
+   ],
+   "item": {
+    "id": "formats-A-B01",
+    "tags": [
+     "buy",
+     "milk"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Buy milk",
+    "summary": "A to-do.",
+    "text": "Buy milk",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B02",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "短想法: a short thought",
+   "expect": "idea",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B02",
+    "tags": [
+     "书房",
+     "搬到"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "把书房搬到阁楼",
+    "summary": "一个想法。",
+    "text": "把书房搬到阁楼",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B03",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "short question, no answer: a question with no answer",
+   "expect": "idea",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-A-B03",
+    "tags": [
+     "app",
+     "worked"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "What if the app worked offline?",
+    "summary": "An open question.",
+    "text": "What if the app worked offline?",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B04",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "two-item list: a list of two",
+   "expect": "list",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-A-B04",
+    "tags": [
+     "languages",
+     "consider"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Languages to consider",
+    "summary": "Two options.",
+    "text": "Languages to consider:\n- Rust\n- Go",
+    "data": {
+     "items": [
+      "Rust",
+      "Go"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B05",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "利弊: short pros and cons",
+   "expect": "proscons",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B05",
+    "tags": [
+     "搬到",
+     "上海"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "搬到上海",
+    "summary": "搬家的利弊。",
+    "text": "搬到上海\n优点：机会多，朋友都在\n缺点：房租贵，离家远",
+    "data": {
+     "pros": [
+      "机会多",
+      "朋友都在"
+     ],
+     "cons": [
+      "房租贵",
+      "离家远"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B06",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "palette: a palette with hex values",
+   "expect": "swatch",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B06",
+    "tags": [
+     "brand",
+     "palette"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Brand palette",
+    "summary": "Three brand colours.",
+    "text": "Brand palette\nEmber #E4572E\nLagoon #17BEBB\nInk #1B1B1E",
+    "data": {
+     "colours": [
+      {
+       "name": "Ember",
+       "value": "#E4572E"
+      },
+      {
+       "name": "Lagoon",
+       "value": "#17BEBB"
+      },
+      {
+       "name": "Ink",
+       "value": "#1B1B1E"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B07",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "plan that mentions two colours: a renovation plan; says the door goes red and the walls stay white",
+   "expect": "note",
+   "accept": [
+    "list"
+   ],
+   "item": {
+    "id": "formats-A-B07",
+    "tags": [
+     "door",
+     "paint"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Hallway plan for the autumn",
+    "summary": "What to change in the hallway.",
+    "text": "Hallway plan for the autumn. Take the old shelf out and move the coat hooks next to the door. Paint the door red and keep the walls white. Ask Tomas whether the floor can be sanded before the paint goes on, and get a second quote for the lights.",
+    "data": {
+     "people": [
+      "Tomas"
+     ],
+     "colours": [
+      {
+       "name": "door",
+       "value": "red"
+      },
+      {
+       "name": "walls",
+       "value": "white"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B08",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "会议记录: meeting note with a checklist and a date",
+   "expect": "list",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B08",
+    "tags": [
+     "产品",
+     "确定"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "11月20日 产品周会",
+    "summary": "周会待办。",
+    "text": "11月20日 产品周会\n[x] 确定发布日期\n[ ] 更新定价页\n[ ] 给王磊发合同",
+    "data": {
+     "when": "11月20日",
+     "people": [
+      "王磊"
+     ],
+     "items": [
+      "确定发布日期",
+      "更新定价页",
+      "给王磊发合同"
+     ],
+     "checklist": [
+      true,
+      false,
+      false
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B09",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "名字备选: five name candidates",
+   "expect": "list",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B09",
+    "tags": [
+     "产品",
+     "回声"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "产品名备选",
+    "summary": "五个备选名字。",
+    "text": "产品名备选\n- 青柠\n- 回声\n- 拾光\n- 小径\n- 观澜",
+    "data": {
+     "items": [
+      "青柠",
+      "回声",
+      "拾光",
+      "小径",
+      "观澜"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B10",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "markdown table: a feature comparison pasted as a markdown table",
+   "expect": "table",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B10",
+    "tags": [
+     "plan",
+     "price"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Plans compared",
+    "summary": "Three plans.",
+    "text": "| Plan | Price | Seats |\n|---|---|---|\n| Solo | $8 | 1 |\n| Team | $20 | 5 |\n| Org | $1,200 | 100 |",
+    "data": {
+     "table": {
+      "heads": [
+       "Plan",
+       "Price",
+       "Seats"
+      ],
+      "rows": [
+       [
+        "Solo",
+        "$8",
+        "1"
+       ],
+       [
+        "Team",
+        "$20",
+        "5"
+       ],
+       [
+        "Org",
+        "$1,200",
+        "100"
+       ]
+      ]
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B11",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "budget split: a budget in percent",
+   "expect": "breakdown",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B11",
+    "tags": [
+     "launch",
+     "budget"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Launch budget",
+    "summary": "How the budget splits.",
+    "text": "Launch budget: ads 40%, events 25%, content 20%, tools 15%.",
+    "data": {
+     "chart": {
+      "labels": [
+       "ads",
+       "events",
+       "content",
+       "tools"
+      ],
+      "values": [
+       40,
+       25,
+       20,
+       15
+      ],
+      "unit": "%"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B12",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "目标数字: one target figure",
+   "expect": "fact",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B12",
+    "tags": [
+     "目标",
+     "注册"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "注册目标",
+    "summary": "目标。",
+    "text": "目标：500个注册用户",
+    "data": {
+     "facts": [
+      {
+       "label": "目标",
+       "value": "500个注册用户"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B13",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "长段想法: a long unstructured brain-dump",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B13",
+    "tags": [
+     "我们",
+     "其实"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "团队工作方式的变化",
+    "summary": "一些想法。",
+    "text": "这几年我们团队的工作方式变了很多，一开始只是因为不得不这样，后来大家发现有些做法其实更好。以前开会是默认选项，现在写文档是默认选项，会议只在文档解决不了的时候才开。写下来的好处是，不在场的人也能看到当时是怎么决定的，也能提出不同意见。当然也有代价，新同事很难像以前那样在旁边听着就学会了，带人的成本其实变高了。所以我们现在每个季度会聚在一起一周，专门做那些需要面对面才能做好的事情。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B14",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "计划步骤: a numbered plan",
+   "expect": "steps",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B14",
+    "tags": [
+     "上线",
+     "计划"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "上线计划",
+    "summary": "四步上线。",
+    "text": "上线计划\n1. 冻结代码\n2. 跑完回归测试\n3. 灰度百分之十\n4. 全量发布",
+    "data": {
+     "steps": [
+      "冻结代码",
+      "跑完回归测试",
+      "灰度百分之十",
+      "全量发布"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B15",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "plan that names one person: a 400 character plan that involves one named person",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B15",
+    "tags": [
+     "ask",
+     "maria"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Get Orbit to test the onboarding flow",
+    "summary": "A plan to find testers.",
+    "text": "Ask Maria Chen, head of design at Orbit, whether her team would test the onboarding flow. If she agrees we need the build ready by the first week of December, a short script for the sessions, and someone to take notes. If she does not, fall back to the five customers who offered in the spring.",
+    "data": {
+     "person": {
+      "name": "Maria Chen",
+      "role": "head of design at Orbit"
+     },
+     "people": [
+      "Maria Chen"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B16",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "pasted code: a pasted JavaScript function",
+   "expect": "code",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B16",
+    "tags": [
+     "args",
+     "function"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "debounce helper",
+    "summary": "A debounce function.",
+    "text": "function debounce(fn, ms) {\n  let t;\n  return (...args) => {\n    clearTimeout(t);\n    t = setTimeout(() => fn(...args), ms);\n  };\n}",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B17",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "chat import: an imported assistant conversation",
+   "expect": "chat",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B17",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "chat",
+    "title": "Pricing a tool for small teams",
+    "text": "user: How should I price a tool for small teams?\n\nassistant: Start from what a team saves each month. Three tiers is the usual shape: a free one to try, one for a team, one for a company. Charge per seat only if use grows with seats.\n\nuser: And a yearly discount?\n\nassistant: Two months free is the common offer.",
+    "summary": "Worked out a three-tier price.",
+    "data": {
+     "messages": [
+      {
+       "role": "user",
+       "text": "How should I price a tool for small teams?"
+      },
+      {
+       "role": "assistant",
+       "text": "Start from what a team saves each month. Three tiers is the usual shape: a free one to try, one for a team, one for a company. Charge per seat only if use grows with seats."
+      },
+      {
+       "role": "user",
+       "text": "And a yearly discount?"
+      },
+      {
+       "role": "assistant",
+       "text": "Two months free is the common offer."
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "chat-export:claude",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B18",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "chat takeaway: a takeaway Intake cut from that conversation",
+   "expect": "note",
+   "accept": [
+    "list"
+   ],
+   "item": {
+    "id": "formats-A-B18",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Three tiers",
+    "text": "Three tiers is the usual shape: a free one to try, one for a team, one for a company.",
+    "summary": "Three tiers is the usual shape.",
+    "data": {
+     "fromChat": "i0"
+    },
+    "origin": {
+     "by": "agent",
+     "role": "intake"
+    },
+    "source": {
+     "from": "chat-export:claude",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B19",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "web pick: Scout pick of a web article (no picture)",
+   "expect": "note",
+   "accept": [
+    "link"
+   ],
+   "item": {
+    "id": "formats-A-B19",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "How Basecamp runs six-week cycles",
+    "text": "Six weeks is long enough to build something meaningful and short enough to see the end from the start.\n\nR. Singer, 2019, basecamp.example",
+    "summary": "A fixed cycle makes scope the variable.",
+    "data": {
+     "site": "basecamp.example",
+     "by": "R. Singer",
+     "date": "2019",
+     "from": "basecamp.example"
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://basecamp.example/shapeup/cycles",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-B20",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "video pick: Scout video pick",
+   "expect": "video",
+   "accept": [],
+   "item": {
+    "id": "formats-A-B20",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "video",
+    "title": "The dolly zoom explained",
+    "text": "How the effect is made.\n\nThe dolly zoom explained",
+    "summary": "How the effect is made.",
+    "data": {
+     "site": "youtube.com",
+     "embed": "https://www.youtube.com/embed/abc",
+     "thumbnailUrl": "https://i.ytimg.com/vi/abc/hq.jpg"
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://www.youtube.com/watch?v=abc",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M01",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "photo with a date and a place: a beach photo; the model titles it with the place",
+   "expect": "image",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M01",
+    "tags": [
+     "image"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "image",
+    "title": "Sunset at Praia da Luz",
+    "summary": "Two children on the beach at sunset.",
+    "text": "A wide beach at sunset with two children running toward the water. A sign reads Praia da Luz. The date stamp in the corner reads 12 August 2025.",
+    "data": {
+     "when": "12 August 2025",
+     "where": "Praia da Luz"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "drop",
+     "asset": "asset-40",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M02",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "photo, no place: a birthday cake",
+   "expect": "image",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M02",
+    "tags": [
+     "image"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "image",
+    "title": "Birthday cake with seven candles",
+    "summary": "A birthday cake.",
+    "text": "A chocolate birthday cake with seven lit candles on a kitchen table.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "drop",
+     "asset": "asset-41",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M03",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "外婆家的院子: a photo of a courtyard",
+   "expect": "image",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M03",
+    "tags": [
+     "image"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "image",
+    "title": "外婆家的院子",
+    "summary": "院子里的柿子树。",
+    "text": "一个老院子，墙边种着一棵柿子树，树下放着两把竹椅。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "drop",
+     "asset": "asset-42",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M04",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "note that mentions a place in passing: a note about a grandfather; Chicago is mentioned once",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M04",
+    "tags": [
+     "grandpa",
+     "never"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Grandpa's stories",
+    "summary": "What he used to tell us.",
+    "text": "Grandpa never talked much about the war, but he would tell the story of the winter he spent in Chicago before shipping out, and of the diner where he learned to drink coffee. He kept the cup they gave him for forty years.",
+    "data": {
+     "where": "Chicago"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M05",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "diary entry titled with a city: a 400 character diary entry about a dinner; the title has the city",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M05",
+    "tags": [
+     "finally",
+     "found"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Dinner in Lisbon with Ana",
+    "summary": "A long dinner.",
+    "text": "We finally found the place Ana had been talking about, up the hill past the tram stop. Grilled sardines, bread, a bottle of vinho verde, and her father telling us how the street looked in 1974. We walked back down through Lisbon at midnight and nobody wanted to go to bed.",
+    "data": {
+     "where": "Lisbon",
+     "people": [
+      "Ana"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M06",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "外婆的饺子: a recipe: ingredients and steps",
+   "expect": "steps",
+   "accept": [
+    "list"
+   ],
+   "item": {
+    "id": "formats-A-M06",
+    "tags": [
+     "白菜",
+     "外婆"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "外婆的饺子",
+    "summary": "外婆的做法。",
+    "text": "外婆的饺子\n材料：\n- 面粉500克\n- 猪肉馅300克\n- 白菜半棵\n- 姜一小块\n做法：\n1. 和面醒半小时\n2. 白菜剁碎挤干水\n3. 拌馅\n4. 包好下锅煮三开",
+    "data": {
+     "steps": [
+      "和面醒半小时",
+      "白菜剁碎挤干水",
+      "拌馅",
+      "包好下锅煮三开"
+     ],
+     "items": [
+      "面粉500克",
+      "猪肉馅300克",
+      "白菜半棵",
+      "姜一小块"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M07",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "museum pick: Scout pick from a museum collection",
+   "expect": "artwork",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M07",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "image",
+    "title": "Stairwell, seen from above",
+    "text": "Gelatin silver print\n\nIlse Brandt, 1928, The Example Museum of Art",
+    "summary": "A spiral stair photographed straight down.",
+    "data": {
+     "site": "museum.example",
+     "by": "Ilse Brandt",
+     "date": "1928",
+     "from": "The Example Museum of Art",
+     "kind": "artwork",
+     "medium": "Gelatin silver print",
+     "holder": "The Example Museum of Art"
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://museum.example/works/1928-14",
+     "asset": "asset-46",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M08",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "a cafe to remember: a note that is about one place",
+   "expect": "place",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M08",
+    "tags": [
+     "café",
+     "brasileira"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Café A Brasileira",
+    "summary": "A cafe in Lisbon.",
+    "text": "Café A Brasileira\nRua Garrett 120, Lisbon. The one with the statue of Pessoa outside. Go before nine.",
+    "data": {
+     "where": "Café A Brasileira"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M09",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "西湖: a note about a place",
+   "expect": "place",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M09",
+    "tags": [
+     "清晨",
+     "西湖"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "杭州西湖",
+    "summary": "清晨的西湖。",
+    "text": "清晨的西湖，断桥上还没有游人，湖面起了一层薄雾。",
+    "data": {
+     "where": "西湖"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M10",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "外婆的话: something grandmother used to say",
+   "expect": "quote",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M10",
+    "tags": [
+     "一口",
+     "一步"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "外婆常说的话",
+    "summary": "外婆的话。",
+    "text": "外婆常说：“饭要一口一口吃，路要一步一步走。”",
+    "data": {
+     "quote": {
+      "text": "饭要一口一口吃，路要一步一步走。",
+      "by": "外婆"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M11",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "行程表: a trip itinerary as a table",
+   "expect": "table",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M11",
+    "tags": [
+     "日期",
+     "城市"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "川西行程",
+    "summary": "三站行程。",
+    "text": "日期\t城市\t住宿\n5月1日\t成都\t宽窄巷子客栈\n5月3日\t康定\t情歌大酒店\n5月5日\t稻城\t亚丁驿站",
+    "data": {
+     "table": {
+      "heads": [
+       "日期",
+       "城市",
+       "住宿"
+      ],
+      "rows": [
+       [
+        "5月1日",
+        "成都",
+        "宽窄巷子客栈"
+       ],
+       [
+        "5月3日",
+        "康定",
+        "情歌大酒店"
+       ],
+       [
+        "5月5日",
+        "稻城",
+        "亚丁驿站"
+       ]
+      ]
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M12",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "日记: a long diary entry with a date",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M12",
+    "tags": [
+     "我们",
+     "其实"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "三月的一天",
+    "summary": "日记。",
+    "text": "2024年3月15日。这几年我们团队的工作方式变了很多，一开始只是因为不得不这样，后来大家发现有些做法其实更好。以前开会是默认选项，现在写文档是默认选项，会议只在文档解决不了的时候才开。写下来的好处是，不在场的人也能看到当时是怎么决定的，也能提出不同意见。当然也有代价，新同事很难像以前那样在旁边听着就学会了，带人的成本其实变高了。所以我们现在每个季度会聚在一起一周，专门做那些需要面对面才能做好的事情。",
+    "data": {
+     "when": "2024年3月15日"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M13",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "露营清单: a packing checklist",
+   "expect": "list",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M13",
+    "tags": [
+     "周末",
+     "露营"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "周末露营清单",
+    "summary": "要带的东西。",
+    "text": "周末露营清单\n[x] 帐篷\n[x] 睡袋\n[ ] 头灯\n[ ] 驱蚊水",
+    "data": {
+     "items": [
+      "帐篷",
+      "睡袋",
+      "头灯",
+      "驱蚊水"
+     ],
+     "checklist": [
+      true,
+      true,
+      false,
+      false
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M14",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "video titled with a place: a dropped video of a child's first steps; the model titles it with the beach",
+   "expect": "video",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M14",
+    "tags": [
+     "video"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "video",
+    "title": "First steps on Brighton beach",
+    "summary": "Her first steps.",
+    "text": "A toddler takes four unsteady steps across the pebbles toward the camera and sits down laughing. The pier of Brighton beach is behind her.",
+    "data": {
+     "where": "Brighton beach"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "drop",
+     "asset": "asset-53",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M15",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "wedding in figures: several labelled facts",
+   "expect": "facts",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M15",
+    "tags": [
+     "wedding",
+     "date"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Our wedding",
+    "summary": "The day in figures.",
+    "text": "Our wedding\nDate: 14 June 2014\nGuests: 82\nVenue: Quinta da Serra\nFirst dance: La Vie en rose",
+    "data": {
+     "facts": [
+      {
+       "label": "Date",
+       "value": "14 June 2014"
+      },
+      {
+       "label": "Guests",
+       "value": "82"
+      },
+      {
+       "label": "Venue",
+       "value": "Quinta da Serra"
+      },
+      {
+       "label": "First dance",
+       "value": "La Vie en rose"
+      }
+     ],
+     "when": "14 June 2014",
+     "where": "Quinta da Serra"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M16",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "a long letter: a 1,000 character letter the user typed in; the model fills the passage \"worth quoting\"",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M16",
+    "tags": [
+     "ones",
+     "decision"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Letter from Dad",
+    "summary": "A letter.",
+    "text": "Dear Sam, Remote work changed how teams plan their week, and the change has outlasted the reasons that first caused it. Managers who once measured presence now have to measure outcomes, and many of them say they were never taught how. The companies that adapted fastest were not the ones with the best tools but the ones that already wrote things down. Writing forces a decision to be stated, and a stated decision can be questioned by someone who was not in the room. I think about that summer more than I say. Remote work changed how teams plan their week, and the change has outlasted the reasons that first caused it. Managers who once measured presence now have to measure outcomes, and many of them say they were never taught how. The companies that adapted fastest were not the ones with the best tools but the ones that already wrote things down. Writing forces a decision to be stated, and a stated decision can be questioned by someone who was not in the room. Write when you can. Love, Dad",
+    "data": {
+     "people": [
+      "Sam"
+     ],
+     "excerpt": {
+      "text": "I think about that summer more than I say."
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M17",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "Aunt Mei: a note about one person",
+   "expect": "person",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-A-M17",
+    "tags": [
+     "aunt",
+     "mei"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Aunt Mei",
+    "summary": "About Aunt Mei.",
+    "text": "Aunt Mei, my mother's older sister. Taught primary school in Suzhou for thirty years and made the best red bean soup.",
+    "data": {
+     "person": {
+      "name": "Aunt Mei",
+      "role": "my mother's older sister"
+     },
+     "where": "Suzhou"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M18",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "游记链接: link to a long travel blog post; its title names the place",
+   "expect": "link",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M18",
+    "tags": [
+     "默认",
+     "选项"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "稻城亚丁三日",
+    "summary": "一篇游记。",
+    "text": "稻城亚丁三日。这几年我们团队的工作方式变了很多，一开始只是因为不得不这样，后来大家发现有些做法其实更好。以前开会是默认选项，现在写文档是默认选项，会议只在文档解决不了的时候才开。写下来的好处是，不在场的人也能看到当时是怎么决定的，也能提出不同意见。当然也有代价，新同事很难像以前那样在旁边听着就学会了，带人的成本其实变高了。所以我们现在每个季度会聚在一起一周，专门做那些需要面对面才能做好的事情。回头看，办公室首先是一种习惯，然后才是一项制度，而习惯比制度变得慢。这几年我们团队的工作方式变了很多，一开始只是因为不得不这样，后来大家发现有些做法其实更好。以前开会是默认选项，现在写文档是默认选项，会议只在文档解决不了的时候才开。",
+    "data": {
+     "where": "稻城亚丁",
+     "site": "blog.example.cn"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://blog.example.cn/2025/daocheng",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M19",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "a time: \"Flight home at 10:45\"",
+   "expect": "idea",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-A-M19",
+    "tags": [
+     "flight",
+     "home"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Flight home at 10:45",
+    "summary": "A flight time.",
+    "text": "Flight home at 10:45",
+    "data": {
+     "when": "10:45"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "A-M20",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "photo of a handwritten recipe card: a photo of grandmother's recipe card; the model reads the steps off it",
+   "expect": "image",
+   "accept": [],
+   "item": {
+    "id": "formats-A-M20",
+    "tags": [
+     "image"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "image",
+    "title": "Grandma's apple cake card",
+    "summary": "Her handwritten card.",
+    "text": "A yellowed index card in blue handwriting. It reads: Apple cake. 1. Cream the butter and sugar. 2. Fold in the flour. 3. Lay the apples on top. 4. Bake one hour.",
+    "data": {
+     "steps": [
+      "Cream the butter and sugar.",
+      "Fold in the flour.",
+      "Lay the apples on top.",
+      "Bake one hour."
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "drop",
+     "asset": "asset-59",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R01",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "court ruling write-up: saved link: a 3,400-character legal news page on an appeal ruling, one judge quoted once, case facts named",
+   "expect": "link",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R01",
+    "tags": [
+     "law",
+     "tenancy",
+     "deposit"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "Appeal court: late deposit protection is not a lesser breach",
+    "summary": "An appeal ruling that late protection of a tenancy deposit is penalised like no protection.",
+    "text": "The tenant paid a deposit of six weeks rent when the tenancy began and the landlord did not place it in an approved scheme within the thirty days the statute allows. The landlord argued that the lateness was a technical slip that caused the tenant no loss, since the money was protected before the tenancy ended. The court below accepted that argument and awarded the lowest penalty the statute permits. On appeal the question was whether a court may treat late protection as a lesser kind of breach than no protection at all. The panel held that the statute draws no such line, and that the penalty turns on the culpability of the landlord and not on the loss to the tenant. It noted that a professional landlord with several properties is expected to know the rules, while a first-time landlord letting a single flat may deserve more leniency. The decision does not disturb the earlier rule that a notice seeking possession is invalid while the deposit is unprotected. Commentators expect the ruling to raise the awards made in the county courts, where the lowest multiple had become the habit.\n\nGiving the lead judgment, Lady Justice Okonkwo said: \"Parliament chose a penalty and not compensation. A landlord who protects late has still broken the duty.\" The other two members of the panel agreed.\n\nOn appeal the question was whether a court may treat late protection as a lesser kind of breach than no protection at all. The panel held that the statute draws no such line, and that the penalty turns on the culpability of the landlord and not on the loss to the tenant. It noted that a professional landlord with several properties is expected to know the rules, while a first-time landlord letting a single flat may deserve more leniency. The decision does not disturb the earlier rule that a notice seeking possession is invalid while the deposit is unprotected. Commentators expect the ruling to raise the awards made in the county courts, where the lowest multiple had become the habit. Landlords who use an agent remain liable themselves, because the duty in the statute falls on the person who receives the deposit or on whose behalf it is received. The tenant was also awarded the costs of the appeal. The tenant paid a deposit of six weeks rent when the tenancy began and the landlord did not place it in an approved scheme within the thirty days the statute allows. The landlord argued that the lateness was a technical slip that caused the tenant no loss, since the money was protected before the tenancy ended. The court below accepted that argument and awarded the lowest penalty the statute permits.\n\nThe case is Harwell v Dunmore Lettings, decided on 21 October 2026 in the Court of Appeal.",
+    "data": {
+     "facts": [
+      {
+       "label": "Case",
+       "value": "Harwell v Dunmore Lettings"
+      },
+      {
+       "label": "Decided",
+       "value": "21 October 2026"
+      },
+      {
+       "label": "Court",
+       "value": "Court of Appeal"
+      }
+     ],
+     "quote": {
+      "text": "Parliament chose a penalty and not compensation. A landlord who protects late has still broken the duty.",
+      "by": "Lady Justice Okonkwo"
+     },
+     "when": "21 October 2026",
+     "people": [
+      "Lady Justice Okonkwo"
+     ],
+     "site": "housinglawweek.example"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://www.housinglawweek.example/2026/10/deposit-penalty-appeal",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R02",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "drug interaction table page: saved link: a clinical reference page that is a short introduction and one eight-row table",
+   "expect": "table",
+   "accept": [
+    "link"
+   ],
+   "item": {
+    "id": "formats-B-R02",
+    "tags": [
+     "warfarin",
+     "interactions"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "Common warfarin interactions",
+    "summary": "A table of medicines that change the INR of a patient on warfarin and what to do about each.",
+    "text": "Warfarin has a narrow therapeutic range, so a change in another medicine can move a stable patient out of range within days. Most interactions work through the liver enzymes that clear the drug, and a few through vitamin K or through platelets.\n\nMedicine | Effect on INR | What to do\nAmiodarone | Raises | Reduce dose by a third, check weekly\nClarithromycin | Raises | Check INR after 3 days\nFluconazole | Raises | Check INR after 3 days\nRifampicin | Lowers | Expect a higher dose, check weekly\nCarbamazepine | Lowers | Check INR after 1 week\nIbuprofen | No change | Avoid, bleeding risk\nSt John's wort | Lowers | Advise the patient to stop\nParacetamol, regular | Raises slightly | Check if taken daily for over a week",
+    "data": {
+     "table": {
+      "heads": [
+       "Medicine",
+       "Effect on INR",
+       "What to do"
+      ],
+      "rows": [
+       [
+        "Amiodarone",
+        "Raises",
+        "Reduce dose by a third, check weekly"
+       ],
+       [
+        "Clarithromycin",
+        "Raises",
+        "Check INR after 3 days"
+       ],
+       [
+        "Fluconazole",
+        "Raises",
+        "Check INR after 3 days"
+       ],
+       [
+        "Rifampicin",
+        "Lowers",
+        "Expect a higher dose, check weekly"
+       ],
+       [
+        "Carbamazepine",
+        "Lowers",
+        "Check INR after 1 week"
+       ],
+       [
+        "Ibuprofen",
+        "No change",
+        "Avoid, bleeding risk"
+       ],
+       [
+        "St John's wort",
+        "Lowers",
+        "Advise the patient to stop"
+       ],
+       [
+        "Paracetamol, regular",
+        "Raises slightly",
+        "Check if taken daily for over a week"
+       ]
+      ]
+     },
+     "site": "anticoagclinic.example"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://www.anticoagclinic.example/warfarin/interactions",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R03",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted trial abstract: pasted text: a 1,000-character trial abstract with four headline figures",
+   "expect": "note",
+   "accept": [
+    "facts",
+    "sheet"
+   ],
+   "item": {
+    "id": "formats-B-R03",
+    "tags": [
+     "pneumonia",
+     "antibiotics",
+     "trial"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Five versus ten days of amoxicillin for childhood pneumonia",
+    "summary": "A trial abstract finding five days of amoxicillin no worse than ten for children with pneumonia treated at home.",
+    "text": "Background: Whether a shorter course of antibiotics is enough for children with uncomplicated pneumonia treated at home has been uncertain.\nMethods: We randomly assigned 824 children aged 6 months to 5 years to five days or ten days of amoxicillin. The primary outcome was treatment failure by day 28, defined as a further antibiotic prescription for a respiratory infection.\nResults: Treatment failure occurred in 12.6% of the five-day group and 12.4% of the ten-day group, a difference of 0.2 percentage points that met the margin for non-inferiority. Cough lasted a median of 12 days in both groups. Rash was reported less often with the shorter course.\nConclusions: Among children with pneumonia who can be treated at home, five days of amoxicillin was not inferior to ten days. A shorter course exposes children to less antibiotic and may be easier for families to complete.",
+    "data": {
+     "facts": [
+      {
+       "label": "Children randomised",
+       "value": "824"
+      },
+      {
+       "label": "Failure, five days",
+       "value": "12.6%"
+      },
+      {
+       "label": "Failure, ten days",
+       "value": "12.4%"
+      },
+      {
+       "label": "Median cough",
+       "value": "12 days"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R04",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "journal article pick: Scout pick from a papers source, medicine",
+   "expect": "reference",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R04",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Bedtime routines and sleep onset in children aged two to five",
+    "text": "Children with a consistent routine of three steps fell asleep sooner and woke less often, and the effect grew with the number of nights a week the routine was kept.\n\nJ. Mindell et al., 2017-03-11, Research papers",
+    "summary": "Evidence that the routine itself, more than its content, shortens the time to fall asleep.",
+    "data": {
+     "site": "doi.example",
+     "by": "J. Mindell et al.",
+     "date": "2017-03-11",
+     "from": "Research papers",
+     "kind": "paper",
+     "authors": [
+      "J. Mindell",
+      "E. Leichman",
+      "C. Lee"
+     ],
+     "authorsCut": true,
+     "venue": "Example Journal of Paediatric Sleep"
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout",
+     "tool": "source"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://doi.example/10.1000/sleep.2017.044",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R05",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "dataset pick, series by year: Scout pick from a statistics source: consumer price inflation by year",
+   "expect": "chart",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R05",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Inflation, consumer prices (annual %), Turkey",
+    "text": "Inflation, consumer prices (annual %), Turkey, 2019 to 2024.\n\nWorld Bank, 2024, World statistics",
+    "summary": "Prices rose fastest in 2022 and have stayed above fifty percent a year since.",
+    "data": {
+     "site": "data.example.org",
+     "by": "World Bank",
+     "date": "2024",
+     "from": "World statistics",
+     "chart": {
+      "labels": [
+       "2019",
+       "2020",
+       "2021",
+       "2022",
+       "2023",
+       "2024"
+      ],
+      "values": [
+       15.2,
+       12.3,
+       19.6,
+       72.3,
+       53.9,
+       58.5
+      ],
+      "unit": "%"
+     }
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout",
+     "tool": "source"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://data.example.org/indicator/FP.CPI.TOTL.ZG?locations=TR",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R06",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "dataset pick, shares of a whole: Scout pick from a statistics source: where a household budget goes, five shares that sum to 100",
+   "expect": "breakdown",
+   "accept": [
+    "chart"
+   ],
+   "item": {
+    "id": "formats-B-R06",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Household spending by category, 2025",
+    "text": "Share of average weekly household spending by category, 2025: housing and fuel, transport, food, recreation, everything else.\n\nOffice for National Statistics, 2025, World statistics",
+    "summary": "Housing is the largest single share, at about a quarter.",
+    "data": {
+     "site": "stats.example.gov",
+     "by": "Office for National Statistics",
+     "date": "2025",
+     "from": "World statistics",
+     "chart": {
+      "labels": [
+       "Housing and fuel",
+       "Transport",
+       "Food",
+       "Recreation",
+       "Everything else"
+      ],
+      "values": [
+       24,
+       15,
+       13,
+       11,
+       37
+      ],
+      "unit": "%"
+     }
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout",
+     "tool": "source"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://stats.example.gov/household-spending-2025",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R07",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted legal definition: pasted text: one term and its meaning, 230 characters",
+   "expect": "definition",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R07",
+    "tags": [
+     "law",
+     "contract"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Promissory estoppel",
+    "summary": "The rule that a relied-on promise can bind without consideration.",
+    "text": "Promissory estoppel: a rule that stops a person from going back on a clear promise when the other side has relied on it to their cost, even though the promise was not backed by consideration and so would not be a contract.",
+    "data": {
+     "term": "Promissory estoppel",
+     "definition": "a rule that stops a person from going back on a clear promise when the other side has relied on it to their cost, even though the promise was not backed by consideration and so would not be a contract"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R08",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "API documentation page: saved link: a 2,300-character documentation page for one function, with a three-row parameter table and a code sample in the middle",
+   "expect": "link",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R08",
+    "tags": [
+     "javascript",
+     "debounce"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "debounce(fn, wait, options) | utilkit",
+    "summary": "Reference for a function that holds a callback back until calls stop arriving.",
+    "text": "The function schedules the callback once the wait has passed without another call, which is what a search box or a resize handler usually wants. Each call cancels the timer set by the one before it, so only the last call in a burst runs. When the leading option is set, the first call of a burst runs at once and later calls are held back. The returned function keeps the arguments of the most recent call and the value of this from it. It is not the same as throttling, which lets one call through in every interval however many arrive. Remember to cancel a pending call when the component that owns it is removed, or the callback will run against a view that is gone.\n\nParameters\n\nName | Type | Meaning\nfn | Function | The callback to hold back\nwait | number | Milliseconds to wait, 0 by default\noptions.leading | boolean | Run on the first call of a burst\n\nExample\n\nconst save = debounce(writeDraft, 400);\ninput.addEventListener('input', save);\n\nWhen the leading option is set, the first call of a burst runs at once and later calls are held back. The returned function keeps the arguments of the most recent call and the value of this from it. It is not the same as throttling, which lets one call through in every interval however many arrive. Remember to cancel a pending call when the component that owns it is removed, or the callback will run against a view that is gone. The function schedules the callback once the wait has passed without another call, which is what a search box or a resize handler usually wants. Each call cancels the timer set by the one before it, so only the last call in a burst runs. The function schedules the callback once the wait has passed without another call, which is what a search box or a resize handler usually wants. Each call cancels the timer set by the one before it, so only the last call in a burst runs. When the leading option is set, the first call of a burst runs at once and later calls are held back. The returned function keeps the arguments of the most recent call and the value of this from it.",
+    "data": {
+     "table": {
+      "heads": [
+       "Name",
+       "Type",
+       "Meaning"
+      ],
+      "rows": [
+       [
+        "fn",
+        "Function",
+        "The callback to hold back"
+       ],
+       [
+        "wait",
+        "number",
+        "Milliseconds to wait, 0 by default"
+       ],
+       [
+        "options.leading",
+        "boolean",
+        "Run on the first call of a burst"
+       ]
+      ]
+     },
+     "site": "docs.utilkit.example"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://docs.utilkit.example/api/debounce",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R09",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted mortgage comparison: pasted text: a Markdown table of three mortgage products with one line above it",
+   "expect": "table",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R09",
+    "tags": [
+     "mortgage",
+     "quotes"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Mortgage quotes from the broker",
+    "summary": "Three mortgage products compared by rate, fee, monthly payment and exit charge.",
+    "text": "Quotes from the broker, 12 Nov\n\n| Product | Rate | Fee | Monthly | Early exit |\n|---|---|---|---|---|\n| 2-year fixed | 4.19% | £999 | £1,412 | 2% |\n| 5-year fixed | 4.45% | £0 | £1,451 | 5% falling to 1% |\n| Tracker | Base + 0.6% | £499 | £1,398 | None |",
+    "data": {
+     "when": "12 Nov",
+     "table": {
+      "heads": [
+       "Product",
+       "Rate",
+       "Fee",
+       "Monthly",
+       "Early exit"
+      ],
+      "rows": [
+       [
+        "2-year fixed",
+        "4.19%",
+        "£999",
+        "£1,412",
+        "2%"
+       ],
+       [
+        "5-year fixed",
+        "4.45%",
+        "£0",
+        "£1,451",
+        "5% falling to 1%"
+       ],
+       [
+        "Tracker",
+        "Base + 0.6%",
+        "£499",
+        "£1,398",
+        "None"
+       ]
+      ]
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R10",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted Python function: pasted text: a 14-line Python function with a docstring",
+   "expect": "code",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R10",
+    "tags": [
+     "python",
+     "mortgage"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Python function for a loan repayment schedule",
+    "summary": "A function that works out the monthly payment and total interest of a repayment loan.",
+    "text": "def amortise(principal, annual_rate, years):\n    \"\"\"Monthly payment and total interest for a repayment loan.\"\"\"\n    r = annual_rate / 12\n    n = years * 12\n    if r == 0:\n        return principal / n, 0.0\n    payment = principal * r / (1 - (1 + r) ** -n)\n    total = payment * n\n    return payment, total - principal\n\n\nfor rate in (0.0419, 0.0445):\n    monthly, interest = amortise(250_000, rate, 25)\n    print(f\"{rate:.2%}: {monthly:,.0f} a month, {interest:,.0f} interest\")",
+    "data": {
+     "code": {
+      "source": "def amortise(principal, annual_rate, years):\n    \"\"\"Monthly payment and total interest for a repayment loan.\"\"\"\n    r = annual_rate / 12\n    n = years * 12\n    if r == 0:\n        return principal / n, 0.0\n    payment = principal * r / (1 - (1 + r) ** -n)\n    total = payment * n\n    return payment, total - principal\n\n\nfor rate in (0.0419, 0.0445):\n    monthly, interest = amortise(250_000, rate, 25)\n    print(f\"{rate:.2%}: {monthly:,.0f} a month, {interest:,.0f} interest\")"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R11",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "book pick: Scout pick from a books source, history, with a cover",
+   "expect": "reference",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R11",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "image",
+    "title": "The Silk Roads: A New History of the World",
+    "text": "A history told from the trading cities between the Mediterranean and China.\n\nPeter Frankopan, 2015, Books",
+    "summary": "A wide frame for the trade routes question: it treats the middle of the map as the centre.",
+    "data": {
+     "site": "openlibrary.example",
+     "by": "Peter Frankopan",
+     "date": "2015",
+     "from": "Books",
+     "kind": "book",
+     "authors": [
+      "Peter Frankopan"
+     ]
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout",
+     "tool": "source"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://openlibrary.example/works/OL17352669W",
+     "asset": "asset-10",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R12",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "museum object pick: Scout pick from a museum collection: a botanical plate, picture stored",
+   "expect": "artwork",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R12",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "image",
+    "title": "Rosa centifolia",
+    "text": "Stipple engraving, printed in colour and finished by hand, from Les Roses.\n\nPierre-Joseph Redouté, 1817-1824, Rijksmuseum",
+    "summary": "The cabbage rose as it looked before modern breeding.",
+    "data": {
+     "site": "collection.example.nl",
+     "by": "Pierre-Joseph Redouté",
+     "date": "1817-1824",
+     "from": "Rijksmuseum",
+     "kind": "artwork",
+     "medium": "Stipple engraving, colour printed, hand finished",
+     "holder": "Rijksmuseum, Amsterdam"
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout",
+     "tool": "source"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://collection.example.nl/object/RP-P-1958-512",
+     "asset": "asset-11",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R13",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "en",
+   "what": "web page pick: Scout pick from the web source: a passage of a gardening advice page, with its maker and date",
+   "expect": "excerpt",
+   "accept": [
+    "link"
+   ],
+   "item": {
+    "id": "formats-B-R13",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Soil pH: why it matters and how to change it",
+    "text": "Lime raises the pH slowly, over a season, and works faster when it is dug in than when it is left on the surface. Test again a year later before adding more, because too much lime locks up iron and manganese and is hard to undo.\n\nRoyal Horticultural Society, 2024, Web",
+    "summary": "Explains why liming is a once-a-year job and not something to top up.",
+    "data": {
+     "site": "rhs.example",
+     "by": "Royal Horticultural Society",
+     "date": "2024",
+     "from": "Web"
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout",
+     "tool": "source"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://www.rhs.example/soil-composts-mulches/soil-ph",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R15",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "民法典居住权解读: saved link: a 1,500-character Chinese explainer on a civil code provision, quoting one article",
+   "expect": "link",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R15",
+    "tags": [
+     "民法典",
+     "居住权"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "居住权怎么设立？一文读懂民法典第三百六十六条",
+    "summary": "解读民法典中居住权的设立方式、限制和常见情形。",
+    "text": "居住权是民法典物权编新增的一种用益物权，目的是让没有房屋所有权的人也能稳定地住下去。设立居住权应当采用书面形式订立合同，并向登记机构申请登记，居住权自登记时设立。居住权一般无偿设立，不得转让，也不得继承，设立居住权的住宅原则上不得出租，当事人另有约定的除外。实践中最常见的情形是老人把房子过户给子女，同时给自己保留居住权，或者离婚时给没有住房的一方设立居住权。\n\n民法典第三百六十六条规定：居住权人有权按照合同约定，对他人的住宅享有占有、使用的用益物权，以满足生活居住的需要。\n\n居住权一般无偿设立，不得转让，也不得继承，设立居住权的住宅原则上不得出租，当事人另有约定的除外。实践中最常见的情形是老人把房子过户给子女，同时给自己保留居住权，或者离婚时给没有住房的一方设立居住权。居住权期限届满或者居住权人死亡的，居住权消灭，应当及时办理注销登记。买二手房的人需要注意，房屋上已经登记的居住权不因买卖而消灭，查册时要看清楚。以遗嘱方式设立居住权的，参照适用合同设立的有关规定。居住权是民法典物权编新增的一种用益物权，目的是让没有房屋所有权的人也能稳定地住下去。设立居住权应当采用书面形式订立合同，并向登记机构申请登记，居住权自登记时设立。居住权是民法典物权编新增的一种用益物权，目的是让没有房屋所有权的人也能稳定地住下去。设立居住权应当采用书面形式订立合同，并向登记机构申请登记，居住权自登记时设立。居住权一般无偿设立，不得转让，也不得继承，设立居住权的住宅原则上不得出租，当事人另有约定的除外。实践中最常见的情形是老人把房子过户给子女，同时给自己保留居住权，或者离婚时给没有住房的一方设立居住权。居住权期限届满或者居住权人死亡的，居住权消灭，应当及时办理注销登记。",
+    "data": {
+     "term": "居住权",
+     "definition": "民法典物权编新增的一种用益物权",
+     "excerpt": {
+      "text": "居住权人有权按照合同约定，对他人的住宅享有占有、使用的用益物权，以满足生活居住的需要。",
+      "at": "民法典第三百六十六条"
+     },
+     "site": "minfajiedu.example.cn"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://www.minfajiedu.example.cn/wuquan/juzhuquan",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R16",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "药品说明书摘录: pasted text: the dosage section of a medicine leaflet as label and value lines",
+   "expect": "facts",
+   "accept": [
+    "table",
+    "list"
+   ],
+   "item": {
+    "id": "formats-B-R16",
+    "tags": [
+     "布洛芬",
+     "儿童用药"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "布洛芬混悬液（儿童用）用法用量",
+    "summary": "儿童用布洛芬混悬液的规格、剂量和使用间隔。",
+    "text": "布洛芬混悬液（儿童用）\n规格：100毫升:2克\n适用年龄：1至12岁\n单次剂量：每公斤体重5至10毫克\n给药间隔：6至8小时\n每日上限：4次\n连续使用：不超过3天",
+    "data": {
+     "facts": [
+      {
+       "label": "规格",
+       "value": "100毫升:2克"
+      },
+      {
+       "label": "适用年龄",
+       "value": "1至12岁"
+      },
+      {
+       "label": "单次剂量",
+       "value": "每公斤体重5至10毫克"
+      },
+      {
+       "label": "给药间隔",
+       "value": "6至8小时"
+      },
+      {
+       "label": "每日上限",
+       "value": "4次"
+      },
+      {
+       "label": "连续使用",
+       "value": "不超过3天"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R17",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "个税税率表: pasted text: a seven-row tax table copied from a spreadsheet, tab separated",
+   "expect": "table",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R17",
+    "tags": [
+     "个税",
+     "税率"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "个人所得税综合所得税率表",
+    "summary": "综合所得适用的七级超额累进税率和速算扣除数。",
+    "text": "级数\t全年应纳税所得额\t税率\t速算扣除数\n1\t不超过36000元\t3%\t0\n2\t超过36000元至144000元\t10%\t2520\n3\t超过144000元至300000元\t20%\t16920\n4\t超过300000元至420000元\t25%\t31920\n5\t超过420000元至660000元\t30%\t52920\n6\t超过660000元至960000元\t35%\t85920\n7\t超过960000元\t45%\t181920",
+    "data": {
+     "table": {
+      "heads": [
+       "级数",
+       "全年应纳税所得额",
+       "税率",
+       "速算扣除数"
+      ],
+      "rows": [
+       [
+        "1",
+        "不超过36000元",
+        "3%",
+        "0"
+       ],
+       [
+        "2",
+        "超过36000元至144000元",
+        "10%",
+        "2520"
+       ],
+       [
+        "3",
+        "超过144000元至300000元",
+        "20%",
+        "16920"
+       ],
+       [
+        "4",
+        "超过300000元至420000元",
+        "25%",
+        "31920"
+       ],
+       [
+        "5",
+        "超过420000元至660000元",
+        "30%",
+        "52920"
+       ],
+       [
+        "6",
+        "超过660000元至960000元",
+        "35%",
+        "85920"
+       ],
+       [
+        "7",
+        "超过960000元",
+        "45%",
+        "181920"
+       ]
+      ]
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R18",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "中文论文: Scout pick from a papers source, Chinese, language study",
+   "expect": "reference",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R18",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "汉语作为第二语言的声调习得研究",
+    "text": "母语为非声调语言的学习者最难掌握的是阳平和上声的区分，感知训练的效果好于单纯的发音训练。\n\n王韫佳等, 2012, Research papers",
+    "summary": "说明先练听辨、后练发音的顺序有依据。",
+    "data": {
+     "site": "doi.example",
+     "by": "王韫佳等",
+     "date": "2012",
+     "from": "Research papers",
+     "kind": "paper",
+     "authors": [
+      "王韫佳",
+      "李美京"
+     ],
+     "venue": "世界汉语教学"
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout",
+     "tool": "source"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://doi.example/10.1000/sjhy.2012.03",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R19",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "名词解释: pasted text: one finance term and its meaning",
+   "expect": "definition",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R19",
+    "tags": [
+     "复利",
+     "理财"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "复利",
+    "summary": "利息并入本金再生息的计息方式。",
+    "text": "复利：把每一期产生的利息并入本金，下一期连同利息一起再计算利息的计息方式，时间越长，与单利的差距越大。",
+    "data": {
+     "term": "复利",
+     "definition": "把每一期产生的利息并入本金，下一期连同利息一起再计算利息的计息方式，时间越长，与单利的差距越大"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R20",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "张居正百科: saved link: a 1,100-character Chinese encyclopedia page about one historical person",
+   "expect": "link",
+   "accept": [
+    "person"
+   ],
+   "item": {
+    "id": "formats-B-R20",
+    "tags": [
+     "张居正",
+     "明代"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "张居正（明代政治家、改革家）",
+    "summary": "明代内阁首辅张居正的生平与改革。",
+    "text": "张居正（1525年－1582年），字叔大，号太岳，湖广江陵人，明代政治家、改革家，万历初年任内阁首辅。\n\n张居正少年时即有神童之名，嘉靖二十六年中进士，入翰林院，此后在内阁中一步步上升。万历初年皇帝年幼，他以内阁首辅的身份实际主持朝政，前后约十年。他推行考成法，要求各级官员按期上报办事的结果，逾期不办的要追究，行政效率一时为之一振。在财政上他下令清丈全国田亩，查出大量隐匿的土地，随后把田赋和徭役合并折银征收，这就是一条鞭法。边防方面他重用戚继光、李成梁等将领，北方边境在这一时期相对安定。他为人严厉，树敌很多，父亲去世时没有按惯例回乡守制，引起朝中激烈的非议，史称夺情。他去世后不久即遭清算，家产被抄，长子自尽，直到天启年间才得到平反。后世对他的评价分歧很大，有人称他为救时宰相，也有人批评他专权。\n\n他推行考成法，要求各级官员按期上报办事的结果，逾期不办的要追究，行政效率一时为之一振。在财政上他下令清丈全国田亩，查出大量隐匿的土地，随后把田赋和徭役合并折银征收，这就是一条鞭法。边防方面他重用戚继光、李成梁等将领，北方边境在这一时期相对安定。他为人严厉，树敌很多，父亲去世时没有按惯例回乡守制，引起朝中激烈的非议，史称夺情。他去世后不久即遭清算，家产被抄，长子自尽，直到天启年间才得到平反。后世对他的评价分歧很大，有人称他为救时宰相，也有人批评他专权。",
+    "data": {
+     "facts": [
+      {
+       "label": "生卒",
+       "value": "1525年－1582年"
+      },
+      {
+       "label": "字",
+       "value": "叔大"
+      },
+      {
+       "label": "籍贯",
+       "value": "湖广江陵"
+      }
+     ],
+     "person": {
+      "name": "张居正",
+      "role": "明代政治家、改革家"
+     },
+     "where": "湖广江陵",
+     "people": [
+      "张居正",
+      "戚继光",
+      "李成梁"
+     ],
+     "site": "baike.example.cn"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://baike.example.cn/item/张居正",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-R21",
+   "origin": "reviewers",
+   "activity": "research",
+   "language": "zh",
+   "what": "高考报名人数: Scout pick from a statistics source, Chinese: exam entrants by year in 万",
+   "expect": "chart",
+   "accept": [],
+   "item": {
+    "id": "formats-B-R21",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "全国高考报名人数",
+    "text": "全国高考报名人数，2019年1031万，2021年1078万，2023年1291万，2025年1335万。\n\n教育部, 2025, World statistics",
+    "summary": "六年里报名人数增加了三百万。",
+    "data": {
+     "site": "data.example.cn",
+     "by": "教育部",
+     "date": "2025",
+     "from": "World statistics",
+     "chart": {
+      "labels": [
+       "2019",
+       "2021",
+       "2023",
+       "2025"
+      ],
+      "values": [
+       1031,
+       1078,
+       1291,
+       1335
+      ],
+      "unit": "万"
+     }
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout",
+     "tool": "source"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://data.example.cn/gaokao/baoming",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B01",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "one-line thought: typed text: a single line of nine words",
+   "expect": "idea",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-B-B01",
+    "tags": [
+     "car",
+     "budget"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Sell the second car and join the car club",
+    "summary": "An idea to replace the second car with a car club membership.",
+    "text": "Sell the second car and join the car club",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B02",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "refinancing, for and against: typed text: a question with a list for and a list against, 420 characters",
+   "expect": "proscons",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B02",
+    "tags": [
+     "mortgage",
+     "decision"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Remortgage now or wait until June",
+    "summary": "Weighing an early remortgage against waiting for the fix to end.",
+    "text": "Remortgage now or wait until the fix ends in June?\n\nFor going now:\n- Locks in 4.19% before any rise\n- Monthly payment drops by about £90\n- One less thing to do in spring\n\nAgainst:\n- Early repayment charge of £2,100\n- New valuation fee\n- Rates might fall by June",
+    "data": {
+     "when": "June",
+     "pros": [
+      "Locks in 4.19% before any rise",
+      "Monthly payment drops by about £90",
+      "One less thing to do in spring"
+     ],
+     "cons": [
+      "Early repayment charge of £2,100",
+      "New valuation fee",
+      "Rates might fall by June"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B03",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "renovation checklist: typed text: a tick-box list of seven jobs, three done",
+   "expect": "list",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B03",
+    "tags": [
+     "bathroom",
+     "diy"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Bathroom refit",
+    "summary": "The jobs for the bathroom refit, with three already done.",
+    "text": "Bathroom refit\n[x] Turn off water at the stopcock\n[x] Strip old sealant\n[x] Order tiles\n[ ] Replace the isolating valve\n[ ] Tank the shower wall\n[ ] Tile and grout\n[ ] Reseal the bath",
+    "data": {
+     "items": [
+      "Turn off water at the stopcock",
+      "Strip old sealant",
+      "Order tiles",
+      "Replace the isolating valve",
+      "Tank the shower wall",
+      "Tile and grout",
+      "Reseal the bath"
+     ],
+     "checklist": [
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B05",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "recipe draft: typed text: a recipe being worked out, with an ingredient list, five numbered steps and a timing, 560 characters",
+   "expect": "steps",
+   "accept": [
+    "list"
+   ],
+   "item": {
+    "id": "formats-B-B05",
+    "tags": [
+     "dal",
+     "recipe"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Weeknight dal, version 3",
+    "summary": "A red lentil dal with coconut milk, ready in about half an hour.",
+    "text": "Weeknight dal, version 3\n\n200 g red lentils\n1 onion\n3 cloves garlic\n1 tin coconut milk\n2 tsp curry powder\n\n1. Rinse the lentils until the water runs clear.\n2. Soften the onion and garlic in oil for five minutes.\n3. Stir in the curry powder, then the lentils and 600 ml water.\n4. Simmer for 20 minutes, stirring now and then.\n5. Add the coconut milk and salt, and cook five minutes more.\n\nServes 4. Next time try a squeeze of lime at the end.",
+    "data": {
+     "steps": [
+      "Rinse the lentils until the water runs clear.",
+      "Soften the onion and garlic in oil for five minutes.",
+      "Stir in the curry powder, then the lentils and 600 ml water.",
+      "Simmer for 20 minutes, stirring now and then.",
+      "Add the coconut milk and salt, and cook five minutes more."
+     ],
+     "facts": [
+      {
+       "label": "Serves",
+       "value": "4"
+      }
+     ],
+     "items": [
+      "200 g red lentils",
+      "1 onion",
+      "3 cloves garlic",
+      "1 tin coconut milk",
+      "2 tsp curry powder"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B06",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "question and own answer: typed text: one question and the answer the user settled on",
+   "expect": "qa",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-B-B06",
+    "tags": [
+     "sqlite",
+     "database"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Postgres or SQLite for the membership app",
+    "summary": "SQLite is enough for a single-writer app with a few hundred members.",
+    "text": "Do we need Postgres for the club membership app, or is SQLite enough?\n\nSQLite is enough. There is one writer, a few hundred members, and backups are a file copy.",
+    "data": {
+     "question": "Do we need Postgres for the club membership app, or is SQLite enough?",
+     "answer": "SQLite is enough. There is one writer, a few hundred members, and backups are a file copy."
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B07",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "nursery palette: typed text: four paint colours with hex values",
+   "expect": "swatch",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B07",
+    "tags": [
+     "nursery",
+     "paint"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Colours for the baby's room",
+    "summary": "A four-colour palette for the nursery.",
+    "text": "Colours for the baby's room\nSage wall #B7C4A1\nOat trim #EDE6D6\nClay accent #C98B6B\nNight sky ceiling #2F3E5C",
+    "data": {
+     "colours": [
+      {
+       "name": "Sage wall",
+       "value": "#B7C4A1"
+      },
+      {
+       "name": "Oat trim",
+       "value": "#EDE6D6"
+      },
+      {
+       "name": "Clay accent",
+       "value": "#C98B6B"
+      },
+      {
+       "name": "Night sky ceiling",
+       "value": "#2F3E5C"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B08",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "pasted assistant conversation: pasted text: a four-turn conversation with an assistant about a 10 km training plan",
+   "expect": "chat",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B08",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "chat",
+    "title": "10 km training plan in ten weeks",
+    "summary": "A three-day-a-week plan with a growing long run and light speed work from week six.",
+    "text": "User: I can run 5 km without stopping. I want to run a 10 km race in ten weeks. How should I train?\n\nAssistant: Run three days a week. Keep two runs short and easy, and make the third a long run that grows by about a kilometre every week until it reaches 11 km two weeks before the race. In the last two weeks cut the distance by a third so you arrive rested. If a week goes badly, repeat it instead of pushing on.\n\nUser: Should I do any speed work?\n\nAssistant: Not for the first five weeks. After that, turn one of the short runs into six one-minute efforts with two minutes of easy running between them. That is enough to make race pace feel familiar.",
+    "data": {
+     "messages": [
+      {
+       "role": "user",
+       "text": "I can run 5 km without stopping. I want to run a 10 km race in ten weeks. How should I train?"
+      },
+      {
+       "role": "assistant",
+       "text": "Run three days a week. Keep two runs short and easy, and make the third a long run that grows by about a kilometre every week until it reaches 11 km two weeks before the race. In the last two weeks cut the distance by a third so you arrive rested. If a week goes badly, repeat it instead of pushing on."
+      },
+      {
+       "role": "user",
+       "text": "Should I do any speed work?"
+      },
+      {
+       "role": "assistant",
+       "text": "Not for the first five weeks. After that, turn one of the short runs into six one-minute efforts with two minutes of easy running between them. That is enough to make race pace feel familiar."
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "chat-export:transcript",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B10",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "Scout direction with steps: Scout-written direction: a paragraph and five steps",
+   "expect": "steps",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B10",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Build one raised bed this weekend",
+    "text": "A single bed of two metres by one is enough to learn what grows in your light before you commit the whole lawn.\n1. Mark out the bed where it gets six hours of sun.\n2. Screw four scaffold boards into a frame.\n3. Lay cardboard over the grass inside the frame.\n4. Fill with a mix of topsoil and compost.\n5. Water well and leave it a week before planting.",
+    "summary": "A single bed of two metres by one is enough to learn what grows in your light before you commit the whole lawn.",
+    "data": {
+     "steps": [
+      "Mark out the bed where it gets six hours of sun.",
+      "Screw four scaffold boards into a frame.",
+      "Lay cardboard over the grass inside the frame.",
+      "Fill with a mix of topsoil and compost.",
+      "Water well and leave it a week before planting."
+     ]
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout",
+     "tool": "idea"
+    },
+    "source": {
+     "from": "idea",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B12",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "split dump, pricing part: one of three parts the model split a 1,550-character brain dump into: prices and a target",
+   "expect": "facts",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-B-B12",
+    "tags": [
+     "tutoring",
+     "pricing"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Tutoring prices and weekly target",
+    "summary": "Charge by the hour, less per head for groups, and aim for ten hours a week.",
+    "text": "Pricing: charge £40 an hour for one-to-one and £25 a head for groups of three, and aim for 10 hours a week. That would cover the car payment with some left over.",
+    "data": {
+     "facts": [
+      {
+       "label": "One-to-one, per hour",
+       "value": "£40"
+      },
+      {
+       "label": "Group of three, per head",
+       "value": "£25"
+      },
+      {
+       "label": "Hours a week",
+       "value": "10"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B13",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "split dump, channels part: one of three parts: four ways to find students written as one sentence, then two more sentences",
+   "expect": "list",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-B-B13",
+    "tags": [
+     "tutoring",
+     "marketing"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Ways to find tutoring students",
+    "summary": "Four local channels, with word of mouth likely the strongest.",
+    "text": "Ways to find students: the school newsletter, the library noticeboard, word of mouth from the swim club, a flyer at the music shop. Parents ask each other more than they read adverts so the swim club might be the best one. Ask two parents whether they would pay that much before printing anything.",
+    "data": {
+     "items": [
+      "the school newsletter",
+      "the library noticeboard",
+      "word of mouth from the swim club",
+      "a flyer at the music shop"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B14",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "split dump, open questions part: one of three parts: open questions with no answers",
+   "expect": "note",
+   "accept": [
+    "list"
+   ],
+   "item": {
+    "id": "formats-B-B14",
+    "tags": [
+     "tutoring",
+     "legal"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Open questions before tutoring at home",
+    "summary": "Insurance, background checks and tax are still to be checked.",
+    "text": "Do I need insurance or a background check to tutor under-16s at home? Ask the council. Also ask whether income under a thousand pounds needs declaring.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B17",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "library README: saved link: a 1,900-character repository page with a three-step install in the middle",
+   "expect": "link",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B17",
+    "tags": [
+     "javascript",
+     "library"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "example-org/utilkit: small utilities for the browser",
+    "summary": "A small library of timing and event helpers for the browser.",
+    "text": "utilkit is a set of small functions for timing, events and formatting that work in any modern browser without a build step. The function schedules the callback once the wait has passed without another call, which is what a search box or a resize handler usually wants. Each call cancels the timer set by the one before it, so only the last call in a burst runs. When the leading option is set, the first call of a burst runs at once and later calls are held back. The returned function keeps the arguments of the most recent call and the value of this from it. It is not the same as throttling, which lets one call through in every interval however many arrive.\n\nGetting started\n\n1. Install the package with npm install utilkit.\n2. Import the function you need from utilkit.\n3. Call it with your callback and a wait in milliseconds.\n\nEach call cancels the timer set by the one before it, so only the last call in a burst runs. When the leading option is set, the first call of a burst runs at once and later calls are held back. The returned function keeps the arguments of the most recent call and the value of this from it. It is not the same as throttling, which lets one call through in every interval however many arrive. Remember to cancel a pending call when the component that owns it is removed, or the callback will run against a view that is gone. The function schedules the callback once the wait has passed without another call, which is what a search box or a resize handler usually wants. The project is released under the MIT licence and welcomes issues and pull requests. The returned function keeps the arguments of the most recent call and the value of this from it. It is not the same as throttling, which lets one call through in every interval however many arrive. Remember to cancel a pending call when the component that owns it is removed, or the callback will run against a view that is gone.",
+    "data": {
+     "steps": [
+      "Install the package with npm install utilkit.",
+      "Import the function you need from utilkit.",
+      "Call it with your callback and a wait in milliseconds."
+     ],
+     "site": "github.com"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://github.com/example-org/utilkit",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B18",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "一句话的想法: typed text: one line of fourteen characters",
+   "expect": "idea",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-B-B18",
+    "tags": [
+     "亲子",
+     "菜市场"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "周末带孩子去菜市场认蔬菜",
+    "summary": "周末带孩子去菜市场认识蔬菜的想法。",
+    "text": "周末带孩子去菜市场认蔬菜",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B19",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "换工作的利弊: typed text: a heading, three points for and three against",
+   "expect": "proscons",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B19",
+    "tags": [
+     "换工作",
+     "深圳"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "要不要接受深圳那家公司的offer",
+    "summary": "权衡换工作到深圳的好处和坏处。",
+    "text": "要不要接受深圳那家公司的offer\n\n好处：\n薪水涨三成\n团队做的方向是我想做的\n离父母近一些\n\n坏处：\n房租贵一倍\n孩子要转学\n现在的项目明年春天才上线，走了可惜",
+    "data": {
+     "where": "深圳",
+     "pros": [
+      "薪水涨三成",
+      "团队做的方向是我想做的",
+      "离父母近一些"
+     ],
+     "cons": [
+      "房租贵一倍",
+      "孩子要转学",
+      "现在的项目明年春天才上线，走了可惜"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B20",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "装修预算分配: typed text: five budget shares in percent that sum to 100",
+   "expect": "breakdown",
+   "accept": [
+    "chart",
+    "facts"
+   ],
+   "item": {
+    "id": "formats-B-B20",
+    "tags": [
+     "装修",
+     "预算"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "装修预算怎么分",
+    "summary": "装修预算按硬装、家具、家电、软装和备用金分配的比例。",
+    "text": "装修预算怎么分\n硬装40%\n家具25%\n家电20%\n软装10%\n备用金5%",
+    "data": {
+     "facts": [
+      {
+       "label": "硬装",
+       "value": "40%"
+      },
+      {
+       "label": "家具",
+       "value": "25%"
+      },
+      {
+       "label": "家电",
+       "value": "20%"
+      },
+      {
+       "label": "软装",
+       "value": "10%"
+      },
+      {
+       "label": "备用金",
+       "value": "5%"
+      }
+     ],
+     "chart": {
+      "labels": [
+       "硬装",
+       "家具",
+       "家电",
+       "软装",
+       "备用金"
+      ],
+      "values": [
+       40,
+       25,
+       20,
+       10,
+       5
+      ],
+      "unit": "%"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B21",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "学琴计划清单: typed text: a heading and six things to arrange, no tick marks",
+   "expect": "list",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B21",
+    "tags": [
+     "钢琴",
+     "兴趣班"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "给孩子学钢琴要准备的事",
+    "summary": "孩子开始学钢琴前要安排的六件事。",
+    "text": "给孩子学钢琴要准备的事\n- 试听两位老师的课\n- 租琴还是买琴\n- 每天固定的练琴时间\n- 买节拍器和琴凳\n- 问问邻居隔音的事\n- 定下考不考级",
+    "data": {
+     "items": [
+      "试听两位老师的课",
+      "租琴还是买琴",
+      "每天固定的练琴时间",
+      "买节拍器和琴凳",
+      "问问邻居隔音的事",
+      "定下考不考级"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B22",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "红烧肉做法: typed text: a dish, its ingredients on one line and five steps",
+   "expect": "steps",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B22",
+    "tags": [
+     "红烧肉",
+     "菜谱"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "红烧肉（少糖版）",
+    "summary": "少糖的红烧肉做法，先煸后炖。",
+    "text": "红烧肉（少糖版）\n材料：五花肉500克，冰糖15克，生抽两勺，老抽半勺，姜三片，八角一颗\n第一步，五花肉切块，冷水下锅焯水后捞出。\n第二步，锅里不放油，把肉煸到两面微黄出油。\n第三步，放冰糖炒到融化上色。\n第四步，加生抽、老抽、姜和八角，倒热水没过肉。\n第五步，小火炖四十分钟，最后大火收汁。",
+    "data": {
+     "steps": [
+      "五花肉切块，冷水下锅焯水后捞出。",
+      "锅里不放油，把肉煸到两面微黄出油。",
+      "放冰糖炒到融化上色。",
+      "加生抽、老抽、姜和八角，倒热水没过肉。",
+      "小火炖四十分钟，最后大火收汁。"
+     ],
+     "items": [
+      "五花肉500克",
+      "冰糖15克",
+      "生抽两勺",
+      "老抽半勺",
+      "姜三片",
+      "八角一颗"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B23",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "Scout 写的方向: Scout-written direction in Chinese: a title and one paragraph, no steps",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B23",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "把家庭账本改成只记三类",
+    "text": "大多数人记账坚持不下去，是因为分类太细。只记固定支出、日常开销和想买的东西三类，每周日晚上花五分钟对一次，比每笔都记更容易坚持，也足够看出钱去了哪里。",
+    "summary": "大多数人记账坚持不下去，是因为分类太细。只记固定支出、日常开销和想买的东西三类，每周日晚上花五分钟对一次，比每笔都记更容易坚持，也足够看出钱去了哪里。",
+    "data": {},
+    "origin": {
+     "by": "agent",
+     "role": "scout",
+     "tool": "idea"
+    },
+    "source": {
+     "from": "idea",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B24",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "和助手的对话: pasted text: a four-turn Chinese conversation with an assistant about choosing an after-school class [parseTranscript returned null: filed as text]",
+   "expect": "chat",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B24",
+    "tags": [
+     "孩子",
+     "游泳"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "游泳还是围棋：给七岁孩子选兴趣班",
+    "summary": "好动的孩子先学游泳，围棋在家玩起来再说。",
+    "text": "用户：孩子七岁，想给她报一个兴趣班，游泳和围棋选哪个好？\n\n助手：两个并不冲突，但如果只能选一个，先看孩子自己的意愿，再看你们接送的时间。游泳是一项安全技能，七岁学正合适，一般三个月能学会蛙泳。围棋需要坐得住，适合喜欢安静思考的孩子。可以各上一次试听课，看她下课后愿不愿意再去。\n\n用户：她比较好动。\n\n助手：那建议先学游泳，把精力用出去。围棋可以在家用小棋盘玩，等她有兴趣了再报班。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-B25",
+   "origin": "reviewers",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "video pick: Scout video pick: a sourdough shaping demonstration",
+   "expect": "video",
+   "accept": [],
+   "item": {
+    "id": "formats-B-B25",
+    "tags": [],
+    "archived": false,
+    "revision": 0,
+    "kind": "video",
+    "title": "Watch the shaping, not the recipe",
+    "text": "Most failed loaves go wrong at shaping. This demonstration shows the fold and the tension pull slowly enough to copy.\n\nHow to Shape a Sourdough Boule",
+    "summary": "Most failed loaves go wrong at shaping. This demonstration shows the fold and the tension pull slowly enough to copy.",
+    "data": {
+     "site": "youtube.com",
+     "embed": "https://www.youtube.com/embed/shp456QRS11",
+     "thumbnailUrl": "https://i.ytimg.com/vi/shp456QRS11/hqdefault.jpg"
+    },
+    "origin": {
+     "by": "agent",
+     "role": "scout",
+     "tool": "web"
+    },
+    "source": {
+     "from": "web",
+     "url": "https://www.youtube.com/watch?v=shp456QRS11",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M01",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "recital photo: dropped photo: a child at a piano on a school stage",
+   "expect": "image",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M01",
+    "tags": [
+     "piano",
+     "concert",
+     "school"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "image",
+    "title": "Piano at the Spring Concert 2026",
+    "summary": "A girl playing the piano on a school stage at a spring concert.",
+    "text": "A girl of about eight in a dark green dress sits at an upright piano on a small school stage. A banner behind her reads \"Spring Concert 2026\". A teacher stands at the side of the stage holding a folder, and the first rows of the audience are visible from behind.",
+    "data": {
+     "when": "2026"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "drop",
+     "asset": "asset-40",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M02",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "match clip: dropped video: a goal in a children's football match",
+   "expect": "video",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M02",
+    "tags": [
+     "football",
+     "goal"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "video",
+    "title": "Goal in the Saturday match",
+    "summary": "A player in yellow, number 7, scores in a children's football match.",
+    "text": "A short clip from the touchline of a children's football match on a muddy pitch. A player in a yellow shirt with the number 7 runs onto a pass and scores past the goalkeeper, then turns and runs back with both arms up. Adults behind the camera cheer and someone shouts \"Go on Sam!\". The scoreboard at the end shows 2 - 1.",
+    "data": {
+     "facts": [
+      {
+       "label": "Shirt number",
+       "value": "7"
+      },
+      {
+       "label": "Score",
+       "value": "2 - 1"
+      }
+     ],
+     "quote": {
+      "text": "Go on Sam!"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "drop",
+     "asset": "asset-41",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M03",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "birthday dinner journal entry: typed text: a 1,000-character journal entry about a family dinner, with one thing the father said",
+   "expect": "note",
+   "accept": [
+    "sheet"
+   ],
+   "item": {
+    "id": "formats-B-M03",
+    "tags": [
+     "family",
+     "birthday"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Dad's seventieth birthday dinner",
+    "summary": "The family dinner for Dad's seventieth, the photo book, and his plan to label the old slides.",
+    "text": "Dad's seventieth, Saturday 3 October. We took the back room at Bellini's, fourteen of us, the first time all four cousins have been in one place since the wedding. Mum had made a book of photographs and nobody had told him. He went quiet for a long time turning the pages and then said, \"I don't remember being this happy, but the evidence is against me.\" Everyone laughed and Aunt Ruth cried. Jonah gave a toast that was mostly about the time Dad drove to Dover with the roof box open. The food was slow and nobody minded. The children fell asleep on the bench seat under the coats. Afterwards Dad walked me to the car and said he wanted to go through the slides in the loft before Christmas and put names on them while he still knew who everyone was. I said I would come up for a weekend in November and bring the scanner.",
+    "data": {
+     "quote": {
+      "text": "I don't remember being this happy, but the evidence is against me.",
+      "by": "Dad"
+     },
+     "when": "Saturday 3 October",
+     "where": "Bellini's",
+     "people": [
+      "Aunt Ruth",
+      "Jonah"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M04",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "a place and a line about it: typed text: a place name on the first line and two sentences about a day there; the model writes a descriptive title",
+   "expect": "place",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-B-M04",
+    "tags": [
+     "whitby",
+     "dad"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Skimming stones at Whitby with Dad",
+    "summary": "Learning to skim stones on the beach at Whitby.",
+    "text": "Whitby\nDad taught me to skim stones on the beach below the abbey. I got one to bounce six times and he said that was the family record.",
+    "data": {
+     "where": "Whitby",
+     "people": [
+      "Dad"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M05",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "grandmother's recipe from memory: typed text: a family recipe with an ingredient line, six steps written as sentences, and a memory at the end",
+   "expect": "steps",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-B-M05",
+    "tags": [
+     "recipe",
+     "nana",
+     "bread"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Nana's soda bread",
+    "summary": "Nana's soda bread recipe written down from memory.",
+    "text": "Nana's soda bread, as near as I can remember it.\n\nYou need 450 g plain flour, a teaspoon of bicarbonate of soda, a teaspoon of salt and about 400 ml buttermilk.\n\n1. Heat the oven to 200 degrees.\n2. Mix the flour, soda and salt in the big bowl.\n3. Pour in most of the buttermilk and bring it together with one hand, like a claw.\n4. Turn it out, pat it into a round and do not knead it.\n5. Cut a deep cross in the top.\n6. Bake for 40 minutes until it sounds hollow underneath.\n\nShe never measured the buttermilk. She said you stop when the dough stops asking for it.",
+    "data": {
+     "steps": [
+      "Heat the oven to 200 degrees.",
+      "Mix the flour, soda and salt in the big bowl.",
+      "Pour in most of the buttermilk and bring it together with one hand, like a claw.",
+      "Turn it out, pat it into a round and do not knead it.",
+      "Cut a deep cross in the top.",
+      "Bake for 40 minutes until it sounds hollow underneath."
+     ],
+     "person": {
+      "name": "Nana"
+     },
+     "items": [
+      "450 g plain flour",
+      "a teaspoon of bicarbonate of soda",
+      "a teaspoon of salt",
+      "about 400 ml buttermilk"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M06",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "something a child said: typed text: a child's sentence in quotation marks, who said it and where",
+   "expect": "quote",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M06",
+    "tags": [
+     "mila",
+     "sayings"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Mila on the moon following us",
+    "summary": "Something Mila said in the car at age four.",
+    "text": "\"Daddy, the moon is following us home.\" Mila, age 4, in the back of the car after swimming.",
+    "data": {
+     "quote": {
+      "text": "Daddy, the moon is following us home.",
+      "by": "Mila"
+     },
+     "person": {
+      "name": "Mila"
+     },
+     "people": [
+      "Mila"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M07",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "baby milestones: typed text: five milestones as label and value lines",
+   "expect": "facts",
+   "accept": [
+    "list",
+    "table"
+   ],
+   "item": {
+    "id": "formats-B-M07",
+    "tags": [
+     "leo",
+     "milestones"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Leo's firsts",
+    "summary": "The ages at which Leo reached his first milestones.",
+    "text": "Leo's firsts\nFirst smile: 6 weeks\nRolled over: 4 months\nFirst tooth: 7 months\nFirst steps: 13 months\nFirst word: ball",
+    "data": {
+     "facts": [
+      {
+       "label": "First smile",
+       "value": "6 weeks"
+      },
+      {
+       "label": "Rolled over",
+       "value": "4 months"
+      },
+      {
+       "label": "First tooth",
+       "value": "7 months"
+      },
+      {
+       "label": "First steps",
+       "value": "13 months"
+      },
+      {
+       "label": "First word",
+       "value": "ball"
+      }
+     ],
+     "person": {
+      "name": "Leo"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M08",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "race result: typed text: one sentence with a finishing time",
+   "expect": "fact",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-B-M08",
+    "tags": [
+     "running",
+     "half marathon"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Manchester half marathon finish",
+    "summary": "A half marathon finished eight minutes faster than the year before.",
+    "text": "Finished the Manchester half marathon in 1:52:40, eight minutes faster than last year.",
+    "data": {
+     "facts": [
+      {
+       "label": "Finish time",
+       "value": "1:52:40"
+      }
+     ],
+     "where": "Manchester"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M09",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "local news page about our concert: saved link: a 900-character local news report of a choir concert, naming the conductor and the sum raised",
+   "expect": "link",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M09",
+    "tags": [
+     "choir",
+     "concert",
+     "hospice"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "link",
+    "title": "Community choir raises the roof, and £3,200, for the hospice",
+    "summary": "A local report of the choir concert that raised £3,200 for the hospice.",
+    "text": "More than two hundred people filled St Anne's church on Friday night for the Valley Community Choir's autumn concert in aid of the hospice. The choir of sixty, which rehearses on Tuesday evenings in the scout hut, sang a programme that ran from Tallis to a medley of film songs arranged by its conductor, Helen Marsh. The loudest applause was for the youngest member, eleven-year-old Priya Shah, who sang the first verse of the closing piece alone. Collections on the door and an interval raffle raised £3,200. \"We started in a living room with nine people,\" Mrs Marsh told the audience. \"I would like to thank everyone who has put up with us since.\" The hospice said the money would pay for a week of overnight nursing at home. The choir is looking for tenors and basses, and anyone interested can come along on a Tuesday without an audition. Its next concert is on 12 December.",
+    "data": {
+     "facts": [
+      {
+       "label": "Raised",
+       "value": "£3,200"
+      },
+      {
+       "label": "Choir size",
+       "value": "sixty"
+      }
+     ],
+     "quote": {
+      "text": "We started in a living room with nine people,",
+      "by": "Helen Marsh"
+     },
+     "when": "Friday night",
+     "where": "St Anne's church",
+     "people": [
+      "Helen Marsh",
+      "Priya Shah"
+     ],
+     "site": "valleygazette.example"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "link",
+     "url": "https://www.valleygazette.example/news/choir-raises-roof-for-hospice",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M10",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "vaccination record: typed text: a child's vaccinations as a small table with three columns",
+   "expect": "table",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M10",
+    "tags": [
+     "ella",
+     "vaccinations"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Ella's vaccinations",
+    "summary": "A record of Ella's vaccinations with dates and places.",
+    "text": "Ella's vaccinations\nVaccine | Date | Where\n6-in-1, first dose | 14 Jan 2024 | Elm Road surgery\nMenB, first dose | 14 Jan 2024 | Elm Road surgery\nRotavirus | 11 Feb 2024 | Elm Road surgery\nMMR, first dose | 20 Nov 2024 | Health centre\nFlu spray | 3 Oct 2026 | School",
+    "data": {
+     "person": {
+      "name": "Ella"
+     },
+     "table": {
+      "heads": [
+       "Vaccine",
+       "Date",
+       "Where"
+      ],
+      "rows": [
+       [
+        "6-in-1, first dose",
+        "14 Jan 2024",
+        "Elm Road surgery"
+       ],
+       [
+        "MenB, first dose",
+        "14 Jan 2024",
+        "Elm Road surgery"
+       ],
+       [
+        "Rotavirus",
+        "11 Feb 2024",
+        "Elm Road surgery"
+       ],
+       [
+        "MMR, first dose",
+        "20 Nov 2024",
+        "Health centre"
+       ],
+       [
+        "Flu spray",
+        "3 Oct 2026",
+        "School"
+       ]
+      ]
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M11",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "pasted family group chat: pasted text: eight lines of a family message thread, names before each line",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M11",
+    "tags": [
+     "family",
+     "photo"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Finding the photo of Grandad on the tractor",
+    "summary": "A family thread in which the missing photo of Grandad turns out to be with Caz.",
+    "text": "Mum: Has anyone seen the photo of Grandad on the tractor?\nBen: I think it's in the blue album\nMum: I looked. It's not there\nCaz: I have it! I borrowed it for the school project in about 2009 and never gave it back\nMum: Caroline.\nCaz: I know. I'll bring it Sunday\nBen: Scan it first this time\nMum: Bring the frame as well please, it was your grandmother's",
+    "data": {
+     "when": "Sunday",
+     "people": [
+      "Mum",
+      "Ben",
+      "Caz",
+      "Caroline",
+      "Grandad"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M13",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "one remembered figure: typed text: a label, a colon and a measurement",
+   "expect": "fact",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M13",
+    "tags": [
+     "leo",
+     "birth"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Leo's birth weight",
+    "summary": "Leo weighed 3.4 kg at birth.",
+    "text": "Leo's birth weight: 3.4 kg",
+    "data": {
+     "facts": [
+      {
+       "label": "Leo's birth weight",
+       "value": "3.4 kg"
+      }
+     ],
+     "person": {
+      "name": "Leo"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M15",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "photo of a handwritten recipe card: dropped photo: a handwritten card, whose words the model reads out",
+   "expect": "image",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M15",
+    "tags": [
+     "recipe",
+     "chutney",
+     "handwriting"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "image",
+    "title": "Handwritten plum chutney recipe card",
+    "summary": "A handwritten index card with a recipe for plum chutney.",
+    "text": "A cream index card with handwriting in blue ink, stained at one corner. The heading reads \"Plum chutney\". Below it is a list: 2 lb plums, 1 lb onions, 1 lb sugar, 1 pint malt vinegar, 2 tsp ginger. At the bottom is written \"Boil 1 hour, stir often\" and the initials E.M.",
+    "data": {
+     "quote": {
+      "text": "Boil 1 hour, stir often"
+     },
+     "items": [
+      "2 lb plums",
+      "1 lb onions",
+      "1 lb sugar",
+      "1 pint malt vinegar",
+      "2 tsp ginger"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "drop",
+     "asset": "asset-52",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M23",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "en",
+   "what": "places we lived: typed text: a heading and five lines, each a span of years and a town",
+   "expect": "list",
+   "accept": [
+    "table",
+    "facts"
+   ],
+   "item": {
+    "id": "formats-B-M23",
+    "tags": [
+     "homes",
+     "family"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Where we have lived",
+    "summary": "The towns the family has lived in since 1998.",
+    "text": "Where we have lived\n1998 to 2003: Leeds, the flat over the bakery\n2003 to 2010: Bristol, Ashley Road\n2010 to 2012: Lyon\n2012 to 2019: Bristol again, Cotham\n2019 to now: Stroud",
+    "data": {
+     "items": [
+      "1998 to 2003: Leeds, the flat over the bakery",
+      "2003 to 2010: Bristol, Ashley Road",
+      "2010 to 2012: Lyon",
+      "2012 to 2019: Bristol again, Cotham",
+      "2019 to now: Stroud"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M16",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "过年日记: typed text: a 420-character journal entry about New Year at grandmother's house",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M16",
+    "tags": [
+     "过年",
+     "外婆"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "在外婆家过年",
+    "summary": "回外婆家过年的几天：炸丸子、守岁、红包和临走时的腊肉。",
+    "text": "腊月二十八回到外婆家。院子里的柿子树比去年又高了，树上还挂着几个没摘的柿子，外婆说是留给鸟吃的。舅舅在灶屋里炸丸子，表弟偷吃被烫了嘴，全家人笑了半天。晚上围着火盆守岁，外婆讲她小时候过年只有一碗白米饭就很高兴，妈妈在旁边剥橘子，橘子皮扔进火里，满屋子都是香味。外公的照片摆在堂屋的桌上，外婆给他也盛了一碗饺子。初一早上我起得最晚，枕头底下压着一个红包，上面是外婆歪歪扭扭的字：平安。走的那天她一直送到村口，往后备箱里塞了两袋腊肉和一罐她自己做的辣酱。我回头看的时候她还站在那里。今年想在清明前再回去一次，带上相机，把老房子每个角落都拍下来。",
+    "data": {
+     "quote": {
+      "text": "平安"
+     },
+     "when": "腊月二十八",
+     "people": [
+      "外婆",
+      "舅舅",
+      "表弟",
+      "妈妈",
+      "外公"
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M17",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "一个地名和一句话: typed text: a city name on the first line and one sentence about living there; the model keeps the name as the title",
+   "expect": "place",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-B-M17",
+    "tags": [
+     "绍兴",
+     "童年"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "绍兴市",
+    "summary": "小时候住在绍兴仓桥直街的记忆。",
+    "text": "绍兴市\n小时候住在仓桥直街，巷口有一家卖臭豆腐的，放学总要买一串。",
+    "data": {
+     "where": "绍兴"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M18",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "孩子说的话: typed text: a child's sentence in quotation marks, with who and when",
+   "expect": "quote",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M18",
+    "tags": [
+     "豆豆",
+     "童言"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "豆豆问云是不是天空的被子",
+    "summary": "豆豆三岁半时说的一句话。",
+    "text": "“妈妈，云是不是天空盖的被子？”——豆豆，三岁半，早上去幼儿园的路上",
+    "data": {
+     "quote": {
+      "text": "妈妈，云是不是天空盖的被子？",
+      "by": "豆豆"
+     },
+     "person": {
+      "name": "豆豆"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M19",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "全家福: dropped photo: a family portrait, described in Chinese",
+   "expect": "image",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M19",
+    "tags": [
+     "全家福",
+     "春节"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "image",
+    "title": "春节全家福",
+    "summary": "春节时全家九口人在客厅拍的合影。",
+    "text": "一张全家福，九个人在客厅的沙发前站成两排，墙上贴着红色的福字和春联。前排坐着两位老人，老太太怀里抱着一个穿红色棉袄的婴儿。后排左边的男人举着手机在自拍。茶几上摆着瓜子、橘子和一盘糖。",
+    "data": {
+     "facts": [
+      {
+       "label": "人数",
+       "value": "九个人"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "drop",
+     "asset": "asset-57",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M20",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "奶奶的腌萝卜: typed text: a family pickle method in four steps, with a remark at the end",
+   "expect": "steps",
+   "accept": [],
+   "item": {
+    "id": "formats-B-M20",
+    "tags": [
+     "腌萝卜",
+     "奶奶"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "奶奶的腌萝卜",
+    "summary": "奶奶腌萝卜的四个步骤。",
+    "text": "奶奶的腌萝卜\n1. 白萝卜洗净不去皮，切成手指粗的条，晒一天。\n2. 撒盐揉出水，压上石头腌一夜。\n3. 把水倒掉，拌上辣椒面、花椒和一点白酒。\n4. 装坛压紧，封口放阴凉处，半个月后能吃。\n奶奶说萝卜一定要霜降以后的才甜。",
+    "data": {
+     "steps": [
+      "白萝卜洗净不去皮，切成手指粗的条，晒一天。",
+      "撒盐揉出水，压上石头腌一夜。",
+      "把水倒掉，拌上辣椒面、花椒和一点白酒。",
+      "装坛压紧，封口放阴凉处，半个月后能吃。"
+     ],
+     "person": {
+      "name": "奶奶"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "B-M21",
+   "origin": "reviewers",
+   "activity": "memories",
+   "language": "zh",
+   "what": "爸爸的体检指标: typed text: eight check-up readings as label and value lines",
+   "expect": "facts",
+   "accept": [
+    "table"
+   ],
+   "item": {
+    "id": "formats-B-M21",
+    "tags": [
+     "体检",
+     "爸爸"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "爸爸2026年体检",
+    "summary": "爸爸2026年体检的主要指标。",
+    "text": "爸爸2026年体检\n身高：172厘米\n体重：78公斤\n血压：138/86\n空腹血糖：6.3\n总胆固醇：5.8\n尿酸：452\n心率：72\n视力：左0.8 右0.6",
+    "data": {
+     "facts": [
+      {
+       "label": "身高",
+       "value": "172厘米"
+      },
+      {
+       "label": "体重",
+       "value": "78公斤"
+      },
+      {
+       "label": "血压",
+       "value": "138/86"
+      },
+      {
+       "label": "空腹血糖",
+       "value": "6.3"
+      },
+      {
+       "label": "总胆固醇",
+       "value": "5.8"
+      },
+      {
+       "label": "尿酸",
+       "value": "452"
+      },
+      {
+       "label": "心率",
+       "value": "72"
+      },
+      {
+       "label": "视力",
+       "value": "左0.8 右0.6"
+      }
+     ],
+     "when": "2026年"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C01",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted text: a 1,000-character summary of a sleep study, with three headline figures Intake extracted",
+   "expect": "sheet",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-C01",
+    "tags": [
+     "sleep",
+     "schools"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Later school start: what the study found",
+    "summary": "A district moved its first bell to 8:30 and students slept longer.",
+    "text": "Notes on the school start time study. The district moved the first bell at its four high schools from 7:40 to 8:30 and followed the same students for two years. The researchers were careful about what they could and could not claim, because there was no control district and the change came in the same year as a new timetable. Even so, the direction of every measure was the same. Students slept 34 minutes longer on school nights, and they did not simply go to bed later, which is what sceptics had predicted. First-period absences fell by 15%, and the share of students who said they fell asleep in class at least once a week dropped from 31% to 19%. Grades moved very little, which the authors treat as honest evidence that sleep is not a quick route to better marks. Teachers reported calmer first lessons. Bus costs rose, since the routes could no longer be shared with the primary schools, and after-school sport finished in the dark for part of the winter. The board voted to keep the later start and to look again at the bus contract.",
+    "data": {
+     "facts": [
+      {
+       "label": "Extra sleep on school nights",
+       "value": "34 minutes"
+      },
+      {
+       "label": "First-period absences",
+       "value": "15%"
+      },
+      {
+       "label": "Asleep in class weekly",
+       "value": "31% to 19%"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C02",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted text: an 850-character write-up of an interview with a ferry captain, one line quoted",
+   "expect": "sheet",
+   "accept": [
+    "quote",
+    "note"
+   ],
+   "item": {
+    "id": "formats-C02",
+    "tags": [
+     "ferry",
+     "interview"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Interview with the ferry captain",
+    "summary": "The captain on the winter timetable and the lost Friday boat.",
+    "text": "Talked to the captain of the island ferry for the piece on the winter timetable. He has worked the route for twenty-six years and his father worked it before him. He was relaxed about most of the changes: fewer sailings in January make sense to him, because the boat often crosses with four or five cars. What he minds is the loss of the late Friday boat, which is the one students and nurses use to get home for the weekend. He said, \"A ferry is not a bus. When you cut a sailing you cut a road, and people on an island know exactly which road you cut.\" The operator says the late boat loses money on every crossing. The council subsidy has not gone up since the fuel price did. He thinks the answer is a smaller boat for the winter, which the company owned until it sold it, and he would rather say so on the record than be polite about it.",
+    "data": {
+     "quote": {
+      "text": "A ferry is not a bus. When you cut a sailing you cut a road, and people on an island know exactly which road you cut.",
+      "by": "the captain"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C03",
+   "origin": "authors",
+   "activity": "research",
+   "language": "zh",
+   "what": "粘贴的文字：一份约500字的社区食堂调研小结，里面有三个关键数字",
+   "expect": "sheet",
+   "accept": [],
+   "item": {
+    "id": "formats-C03",
+    "tags": [
+     "养老",
+     "调研"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "社区老年食堂调研小结",
+    "summary": "六家社区老年食堂的经营情况和老人的反馈。",
+    "text": "社区老年食堂调研小结。上个月我们走访了城东的六家社区老年食堂，和四十多位老人、十几位工作人员聊了聊。总体的感受是，老人对食堂的需要是真实的，尤其是独居和行动不便的那部分人，一顿热饭解决的不只是吃的问题，还有每天出门见人的理由。但食堂的日子并不好过。六家里有四家在亏损，一份午餐平均卖12元，成本却要16元左右，差额靠街道补贴和企业捐赠填上。每家每天的就餐人数大多在80人上下，周末会少一半。几位负责人都提到，人手是最大的难题，厨师留不住，志愿者也不稳定。老人这边抱怨最多的是菜太咸、太硬，以及送餐不准时。也有做得好的，比如和附近的小学合用厨房，把成本摊薄；还有一家请老人自己参与择菜和分餐，既省了人手，老人也愿意来。我们的建议是，补贴不要只按人头发，要和服务质量挂钩，同时鼓励食堂对周边居民开放，用市场价的午餐补贴老人餐。",
+    "data": {
+     "facts": [
+      {
+       "label": "亏损的食堂",
+       "value": "四家"
+      },
+      {
+       "label": "午餐售价",
+       "value": "12元"
+      },
+      {
+       "label": "午餐成本",
+       "value": "16元"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C04",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "typed notes: 800 characters from a planning meeting, prose with a budget figure and three open questions",
+   "expect": "sheet",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-C04",
+    "tags": [
+     "library",
+     "part",
+     "hall",
+     "lending"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Notes from the planning call about the neighbourhood tool library. E…",
+    "summary": "Notes from the planning call about the neighbourhood tool library. Everyone agrees the idea is good and that the hard part is the boring part. The church hall will give us the old cloakroom for nothi…",
+    "text": "Notes from the planning call about the neighbourhood tool library. Everyone agrees the idea is good and that the hard part is the boring part. The church hall will give us the old cloakroom for nothing as long as we are out of the way on Sundays. Shelving and a decent lock come to about £600, which the residents association can cover. Insurance is the thing nobody had thought about. Lending someone a ladder is not the same as lending them a book, and the hall will want to see a policy before we open. Priya knows someone who runs a library of things in Leeds and will ask how they handle it. We talked for a while about deposits and decided against them, because they keep away exactly the people who need to borrow a drill. Opening would be Saturday mornings to start with, two volunteers at a time. Still open: who holds the keys, what we do about power tools, and whether we charge a membership.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C05",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "打字记下的复盘：约400字，叙述里夹着两个数字和三条下一步",
+   "expect": "sheet",
+   "accept": [],
+   "item": {
+    "id": "formats-C05",
+    "tags": [
+     "资料",
+     "注册",
+     "用户",
+     "上线"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "小程序上线一个月的复盘。先说结论：方向没错，但我们高估了大家愿意填资料的耐心。上线第一周靠朋友圈转发带来了不少人，注册用户到月底是320…",
+    "summary": "小程序上线一个月的复盘。先说结论：方向没错，但我们高估了大家愿意填资料的耐心。上线第一周靠朋友圈转发带来了不少人，注册用户到月底是3200人，可是真正发过一次帖的只有410人，大部分人看一眼就走了。访谈下来，最常听到的一句话是“我不知道该发什么”。首页太空，新用户进来看不到和自己有关的内容，注册流程又要填五项资料，很多人填到一半就退出了。好的一面是，留下来的人很活跃，同城的几个小组已经自己约了线…",
+    "text": "小程序上线一个月的复盘。先说结论：方向没错，但我们高估了大家愿意填资料的耐心。上线第一周靠朋友圈转发带来了不少人，注册用户到月底是3200人，可是真正发过一次帖的只有410人，大部分人看一眼就走了。访谈下来，最常听到的一句话是“我不知道该发什么”。首页太空，新用户进来看不到和自己有关的内容，注册流程又要填五项资料，很多人填到一半就退出了。好的一面是，留下来的人很活跃，同城的几个小组已经自己约了线下活动，这是我们没有预料到的。技术上没有出大问题，只是图片上传在弱网下很慢，被吐槽了几次。下一步要做三件事：把注册资料减到两项，首页默认展示同城的内容，给新用户准备几个可以直接参与的话题。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C06",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "en",
+   "what": "journal entry: 800 characters about a hut-to-hut walk, with distances Intake extracted and one remembered line",
+   "expect": "sheet",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-C06",
+    "tags": [
+     "walking",
+     "mountains"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Three days on the ridge with Tom",
+    "summary": "A hut-to-hut walk, the long second day and the last morning.",
+    "text": "Three days on the ridge with Tom, written up on the train home so I do not forget. We started late on the first day because the bus from the valley only runs twice, and reached the first hut as the light went, soaked from the knees down. The warden had kept soup for us. The second day was the long one: 19 km along the crest with the cloud lifting and closing all morning, and then a descent that my knees are still complaining about. We saw two ibex above the tarn and nobody else until four in the afternoon. Tom carried the stove the whole way and never once mentioned it. On the last morning we were up at five to watch the sun come over the far wall of the valley, and it was so quiet that we could hear the stream a long way below. Total climb over the three days was 2,400 m according to his watch. At the top of the last pass he said, \"Same time next year, and you carry the stove.\" I said yes before I had thought about it.",
+    "data": {
+     "facts": [
+      {
+       "label": "Second day",
+       "value": "19 km"
+      },
+      {
+       "label": "Total climb",
+       "value": "2,400 m"
+      }
+     ],
+     "quote": {
+      "text": "Same time next year, and you carry the stove.",
+      "by": "Tom"
+     }
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C07",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "zh",
+   "what": "日记：约350字，记孩子两岁体检，有身高体重和一句孩子说的话",
+   "expect": "sheet",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-C07",
+    "tags": [
+     "孩子",
+     "体检"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "小满两岁体检",
+    "summary": "带小满做两岁体检的一天。",
+    "text": "今天带小满去做两岁的体检。早上出门的时候她还不肯穿外套，在门口哭了好一会儿，最后是抱着她的小兔子才肯走。到了医院人很多，排了快一个小时。量身高的时候她站得笔直，好像知道这是件要紧的事。身高88厘米，体重12.5公斤，医生说都在正常范围里，比半年前长了不少。查牙齿的时候她怎么都不肯张嘴，医生拿了一个小镜子给她玩，才看了一眼，说已经出了十六颗。医生问平时吃饭怎么样，我说挑食，不爱吃青菜。医生说不用太着急，换着花样多试几次就好。回家的路上她在车里睡着了，醒来第一句话是：“妈妈，医生的镜子可以带回家吗？”我和她爸爸都笑了。晚上给爷爷奶奶打电话，她抢着说自己长高了。",
+    "data": {
+     "facts": [
+      {
+       "label": "身高",
+       "value": "88厘米"
+      },
+      {
+       "label": "体重",
+       "value": "12.5公斤"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C08",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "reading notes: 750 characters on a book chapter, with one copied sentence and three takeaways at the end",
+   "expect": "sheet",
+   "accept": [],
+   "item": {
+    "id": "formats-C08",
+    "tags": [
+     "buildings",
+     "old",
+     "new",
+     "district"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Reading notes, chapter four of the book on how cities age. The argum…",
+    "summary": "Reading notes, chapter four of the book on how cities age. The argument of the chapter is that the buildings a city cannot afford to replace are the ones that keep it alive, because cheap old space i…",
+    "text": "Reading notes, chapter four of the book on how cities age. The argument of the chapter is that the buildings a city cannot afford to replace are the ones that keep it alive, because cheap old space is where new things start. A bookshop, a rehearsal room or a repair business cannot pay the rent on a new block, and a district made only of new blocks has room for banks and chain restaurants and little else. The line I copied out: \"New ideas must use old buildings.\" She is not sentimental about it. Old buildings matter for their low overheads and not for their charm, and a district of nothing but old buildings is usually a district in trouble. What a street needs is a mixture of ages, so that high-yield and low-yield uses can sit side by side. To take into the essay: the point about overheads and not charm; the mixture of ages as the real requirement; and the warning that clearing a block at once removes the cheap space for a generation.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C09",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "en",
+   "what": "journal entry: a 700-character account of a first marathon, with the finish time and place",
+   "expect": "sheet",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-C09",
+    "tags": [
+     "running",
+     "marathon"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "My first marathon",
+    "summary": "The day of the race, from the cold start to the finish.",
+    "text": "Ran it. I am writing this on the sofa with my feet in a washing-up bowl. The start was colder than forecast and I wore the bin bag until the gun, like everyone else. The first half felt easy, which the coach had warned me about, and I held back as promised. The crowds on the bridge were three deep and somebody had a sign that said the end is near, which was not true. At thirty kilometres my left calf started to tighten and I walked through two water stations, eating the orange quarters a child was handing out. Mum and Ana were at the last corner with the dog. I do not remember the final straight at all. Finish time 4:12:37, and I was 6,804th, which I am told is the middle of the pack. I said at the line that I would never do it again and by the evening I was looking at the dates for next spring.",
+    "data": {
+     "facts": [
+      {
+       "label": "Finish time",
+       "value": "4:12:37"
+      },
+      {
+       "label": "Place",
+       "value": "6,804th"
+      }
+     ]
+    },
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C10",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted text: a one-paragraph medicine warning",
+   "expect": "callout",
+   "accept": [],
+   "item": {
+    "id": "formats-C10",
+    "tags": [
+     "take",
+     "ibuprofen",
+     "while",
+     "warfarin"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Do not take ibuprofen while you are on warfarin unless your doctor h…",
+    "summary": "Do not take ibuprofen while you are on warfarin unless your doctor has told you to. Together they raise the risk of bleeding in the stomach.",
+    "text": "Do not take ibuprofen while you are on warfarin unless your doctor has told you to. Together they raise the risk of bleeding in the stomach.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C11",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "typed reminder to the team about an expiring key",
+   "expect": "callout",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-C11",
+    "tags": [
+     "reminder",
+     "whoever",
+     "call",
+     "staging"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Reminder for whoever is on call: the staging API key expires on 3 De…",
+    "summary": "Reminder for whoever is on call: the staging API key expires on 3 December. Rotate it before the demo or the whole walkthrough will fail at login.",
+    "text": "Reminder for whoever is on call: the staging API key expires on 3 December. Rotate it before the demo or the whole walkthrough will fail at login.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C12",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "zh",
+   "what": "打字记下的提醒：家人过敏",
+   "expect": "callout",
+   "accept": [],
+   "item": {
+    "id": "formats-C12",
+    "tags": [
+     "注意",
+     "奶奶",
+     "花生",
+     "过敏"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "注意：奶奶对花生过敏，家里聚餐千万不要用花生油，买的点心也要先看配料表。",
+    "summary": "注意：奶奶对花生过敏，家里聚餐千万不要用花生油，买的点心也要先看配料表。",
+    "text": "注意：奶奶对花生过敏，家里聚餐千万不要用花生油，买的点心也要先看配料表。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C13",
+   "origin": "authors",
+   "activity": "research",
+   "language": "zh",
+   "what": "粘贴的文字：药品说明里的一条警示",
+   "expect": "callout",
+   "accept": [],
+   "item": {
+    "id": "formats-C13",
+    "tags": [
+     "警告",
+     "服用",
+     "抗生素",
+     "期间"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "警告：服用头孢类抗生素期间以及停药后七天内不得饮酒，否则可能出现面部潮红、心悸甚至休克等严重反应。",
+    "summary": "警告：服用头孢类抗生素期间以及停药后七天内不得饮酒，否则可能出现面部潮红、心悸甚至休克等严重反应。",
+    "text": "警告：服用头孢类抗生素期间以及停药后七天内不得饮酒，否则可能出现面部潮红、心悸甚至休克等严重反应。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C14",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "打字记下的提醒：上线前的注意事项",
+   "expect": "callout",
+   "accept": [],
+   "item": {
+    "id": "formats-C14",
+    "tags": [
+     "切记",
+     "上线",
+     "一定",
+     "备份"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "切记：上线前一定要先备份数据库。上次就是因为跳过了这一步，回滚的时候丢了两个小时的订单。",
+    "summary": "切记：上线前一定要先备份数据库。上次就是因为跳过了这一步，回滚的时候丢了两个小时的订单。",
+    "text": "切记：上线前一定要先备份数据库。上次就是因为跳过了这一步，回滚的时候丢了两个小时的订单。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C15",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "en",
+   "what": "typed note about the family cabin",
+   "expect": "callout",
+   "accept": [],
+   "item": {
+    "id": "formats-C15",
+    "tags": [
+     "never",
+     "leave",
+     "gas",
+     "heater"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Never leave the gas heater on overnight at the cabin. The detector i…",
+    "summary": "Never leave the gas heater on overnight at the cabin. The detector in the back bedroom has not worked since last winter and nobody has replaced it yet.",
+    "text": "Never leave the gas heater on overnight at the cabin. The detector in the back bedroom has not worked since last winter and nobody has replaced it yet.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C16",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted text: one sentence that defines a term",
+   "expect": "definition",
+   "accept": [],
+   "item": {
+    "id": "formats-C16",
+    "tags": [
+     "survivorship",
+     "bias",
+     "error",
+     "looking"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Survivorship bias is the error of looking only at the people or thin…",
+    "summary": "Survivorship bias is the error of looking only at the people or things that made it through some selection, and overlooking those that did not because they are no longer visible.",
+    "text": "Survivorship bias is the error of looking only at the people or things that made it through some selection, and overlooking those that did not because they are no longer visible.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C17",
+   "origin": "authors",
+   "activity": "research",
+   "language": "zh",
+   "what": "粘贴的文字：一句话解释一个术语",
+   "expect": "definition",
+   "accept": [],
+   "item": {
+    "id": "formats-C17",
+    "tags": [
+     "成本",
+     "沉没",
+     "的是",
+     "已经"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "沉没成本，指的是已经付出而且无论如何都收不回来的成本，比如买了不能退的电影票，理性的决策不应该把它算进去。",
+    "summary": "沉没成本，指的是已经付出而且无论如何都收不回来的成本，比如买了不能退的电影票，理性的决策不应该把它算进去。",
+    "text": "沉没成本，指的是已经付出而且无论如何都收不回来的成本，比如买了不能退的电影票，理性的决策不应该把它算进去。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C18",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted text: a question and its answer in two sentences",
+   "expect": "qa",
+   "accept": [],
+   "item": {
+    "id": "formats-C18",
+    "tags": [
+     "enough",
+     "airliners",
+     "cruise",
+     "around"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Why do airliners cruise at around 35,000 feet? The air up there is t…",
+    "summary": "Why do airliners cruise at around 35,000 feet? The air up there is thin enough to cut drag and save fuel, but still dense enough for the engines to breathe and the wings to lift.",
+    "text": "Why do airliners cruise at around 35,000 feet? The air up there is thin enough to cut drag and save fuel, but still dense enough for the engines to breathe and the wings to lift.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C19",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "zh",
+   "what": "打字记下的：奶奶回答的一个问题",
+   "expect": "qa",
+   "accept": [],
+   "item": {
+    "id": "formats-C19",
+    "tags": [
+     "凉水",
+     "为什么",
+     "饺子",
+     "要点"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "为什么煮饺子要点三次凉水？奶奶说，水一直滚着皮会先煮破，点一次凉水让水静一静，馅才能熟透，皮也更筋道。",
+    "summary": "为什么煮饺子要点三次凉水？奶奶说，水一直滚着皮会先煮破，点一次凉水让水静一静，馅才能熟透，皮也更筋道。",
+    "text": "为什么煮饺子要点三次凉水？奶奶说，水一直滚着皮会先煮破，点一次凉水让水静一静，馅才能熟透，皮也更筋道。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C20",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "typed paragraph weighing a decision, points for and against in prose",
+   "expect": "proscons",
+   "accept": [],
+   "item": {
+    "id": "formats-C20",
+    "tags": [
+     "thinking",
+     "buying",
+     "van",
+     "instead"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Thinking about buying the van instead of renting one each time. For:…",
+    "summary": "Thinking about buying the van instead of renting one each time. For: it would be there whenever a job comes up, we could fit it out with racks, and over three years it works out cheaper than hiring.…",
+    "text": "Thinking about buying the van instead of renting one each time. For: it would be there whenever a job comes up, we could fit it out with racks, and over three years it works out cheaper than hiring. Against: the insurance is steep, there is nowhere to park it on our street, and it ties up money we wanted for the workshop.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C21",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "打字记下的：一个决定的好处和坏处",
+   "expect": "proscons",
+   "accept": [],
+   "item": {
+    "id": "formats-C21",
+    "tags": [
+     "不要",
+     "成都",
+     "好处",
+     "房租"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "要不要搬去成都。好处：房租便宜一半，离父母近，朋友也多。坏处：现在的工作不能远程，孩子要重新适应学校，冬天总是阴天。",
+    "summary": "要不要搬去成都。好处：房租便宜一半，离父母近，朋友也多。坏处：现在的工作不能远程，孩子要重新适应学校，冬天总是阴天。",
+    "text": "要不要搬去成都。好处：房租便宜一半，离父母近，朋友也多。坏处：现在的工作不能远程，孩子要重新适应学校，冬天总是阴天。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C22",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "en",
+   "what": "typed from memory: how grandad lit the stove, a procedure told as a paragraph",
+   "expect": "steps",
+   "accept": [
+    "note",
+    "list"
+   ],
+   "item": {
+    "id": "formats-C22",
+    "tags": [
+     "open",
+     "side",
+     "gap",
+     "kindling"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "How Grandad lit the stove, as near as I can remember it. First open…",
+    "summary": "How Grandad lit the stove, as near as I can remember it. First open the damper all the way. Then lay two split logs side by side with a gap between them. Put a handful of kindling across the gap and…",
+    "text": "How Grandad lit the stove, as near as I can remember it. First open the damper all the way. Then lay two split logs side by side with a gap between them. Put a handful of kindling across the gap and a twist of newspaper under it. Light the paper and leave the door open a finger width. When the kindling has caught, add one small log and close the door.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C23",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "typed line: candidate names for a café",
+   "expect": "list",
+   "accept": [],
+   "item": {
+    "id": "formats-C23",
+    "tags": [
+     "names",
+     "café",
+     "far",
+     "ember"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Names we like for the café so far: Ember, Third Place, Slow Tide, Pa…",
+    "summary": "Names we like for the café so far: Ember, Third Place, Slow Tide, Paper Lantern and The Long Table.",
+    "text": "Names we like for the café so far: Ember, Third Place, Slow Tide, Paper Lantern and The Long Table.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C24",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted text: three figures about Mars in one sentence",
+   "expect": "facts",
+   "accept": [
+    "list"
+   ],
+   "item": {
+    "id": "formats-C24",
+    "tags": [
+     "year",
+     "mars",
+     "lasts",
+     "days"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "A year on Mars lasts 687 days, a day there is 24 hours 37 minutes lo…",
+    "summary": "A year on Mars lasts 687 days, a day there is 24 hours 37 minutes long, and gravity at the surface is 38% of what it is on Earth.",
+    "text": "A year on Mars lasts 687 days, a day there is 24 hours 37 minutes long, and gravity at the surface is 38% of what it is on Earth.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C25",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted text: a rent figure for each of five years",
+   "expect": "chart",
+   "accept": [
+    "facts",
+    "table"
+   ],
+   "item": {
+    "id": "formats-C25",
+    "tags": [
+     "median",
+     "monthly",
+     "rent",
+     "city"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Median monthly rent in the city, in euros: 2019 980, 2020 1010, 2021…",
+    "summary": "Median monthly rent in the city, in euros: 2019 980, 2020 1010, 2021 1090, 2022 1240, 2023 1395.",
+    "text": "Median monthly rent in the city, in euros: 2019 980, 2020 1010, 2021 1090, 2022 1240, 2023 1395.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C26",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "en",
+   "what": "typed line: what Dad said at the airport",
+   "expect": "quote",
+   "accept": [],
+   "item": {
+    "id": "formats-C26",
+    "tags": [
+     "call",
+     "dad",
+     "airport",
+     "holding"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Dad at the airport, holding my bag until the very last moment: \"Call…",
+    "summary": "Dad at the airport, holding my bag until the very last moment: \"Call when you land, and call again when you have eaten something.\"",
+    "text": "Dad at the airport, holding my bag until the very last moment: \"Call when you land, and call again when you have eaten something.\"",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C27",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "打字记下的：这个月开销的占比",
+   "expect": "breakdown",
+   "accept": [
+    "chart",
+    "facts"
+   ],
+   "item": {
+    "id": "formats-C27",
+    "tags": [
+     "这个",
+     "哪儿",
+     "房租",
+     "吃饭"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "这个月的钱都花在哪儿了：房租45%，吃饭25%，交通10%，孩子的兴趣班15%，其他5%。",
+    "summary": "这个月的钱都花在哪儿了：房租45%，吃饭25%，交通10%，孩子的兴趣班15%，其他5%。",
+    "text": "这个月的钱都花在哪儿了：房租45%，吃饭25%，交通10%，孩子的兴趣班15%，其他5%。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C28",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted text: a small table copied out of a spreadsheet, tab separated",
+   "expect": "table",
+   "accept": [],
+   "item": {
+    "id": "formats-C28",
+    "tags": [
+     "model",
+     "range",
+     "price",
+     "city"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Model Range Price",
+    "summary": "Model Range Price City 310 km €24,900 Tourer 455 km €33,400 Estate 420 km €36,200",
+    "text": "Model\tRange\tPrice\nCity\t310 km\t€24,900\nTourer\t455 km\t€33,400\nEstate\t420 km\t€36,200",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C29",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "en",
+   "what": "journal entry: 420 characters about an ordinary evening, with a passing number",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-C29",
+    "tags": [
+     "nothing",
+     "much",
+     "happened",
+     "today"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Nothing much happened today and I want to remember it anyway. We ate…",
+    "summary": "Nothing much happened today and I want to remember it anyway. We ate late because the rice took forever, and afterwards the three of us sat on the back step while the light went. The neighbours were…",
+    "text": "Nothing much happened today and I want to remember it anyway. We ate late because the rice took forever, and afterwards the three of us sat on the back step while the light went. The neighbours were playing something slow on the radio. Jo fell asleep against my arm before nine. I thought about how these are the evenings I will not be able to tell apart later, and how that is probably what makes them good.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C30",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "zh",
+   "what": "日记：约200字，回老家的一个下午",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-C30",
+    "tags": [
+     "妈妈",
+     "柿子",
+     "我们",
+     "下午"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "下午陪妈妈去了一趟老房子。院子里的柿子树还在，比我记忆里矮了许多，大概是我长高了。妈妈在厨房门口站了很久，说以前外婆就是在这里喊我们吃饭…",
+    "summary": "下午陪妈妈去了一趟老房子。院子里的柿子树还在，比我记忆里矮了许多，大概是我长高了。妈妈在厨房门口站了很久，说以前外婆就是在这里喊我们吃饭的。屋里的东西差不多搬空了，只剩墙上一张褪色的年画。我们没有待太久，走的时候她把门锁了两遍。回去的车上谁都没有说话，快到家时她忽然说，明年柿子熟了再来一次吧。",
+    "text": "下午陪妈妈去了一趟老房子。院子里的柿子树还在，比我记忆里矮了许多，大概是我长高了。妈妈在厨房门口站了很久，说以前外婆就是在这里喊我们吃饭的。屋里的东西差不多搬空了，只剩墙上一张褪色的年画。我们没有待太久，走的时候她把门锁了两遍。回去的车上谁都没有说话，快到家时她忽然说，明年柿子熟了再来一次吧。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C31",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted text: a 480-character argument from an essay, no figures",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-C31",
+    "tags": [
+     "scores",
+     "measure",
+     "trouble",
+     "measuring"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "The trouble with measuring a teacher by test scores is not that the…",
+    "summary": "The trouble with measuring a teacher by test scores is not that the scores mean nothing. It is that once the measure decides who is paid and who is dismissed, people begin to work on the measure and…",
+    "text": "The trouble with measuring a teacher by test scores is not that the scores mean nothing. It is that once the measure decides who is paid and who is dismissed, people begin to work on the measure and stop working on the thing it was meant to show. Lessons narrow to what will be examined, the children at the borderline get the attention, and the scores rise while the understanding they were supposed to stand for does not. A number that was a fair witness becomes a poor judge.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C32",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "typed musing: a product thought that asks itself a question and does not answer it",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-C32",
+    "tags": [
+     "people",
+     "worth",
+     "keep",
+     "coming"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Keep coming back to the idea that the app should do less. What if th…",
+    "summary": "Keep coming back to the idea that the app should do less. What if the home screen were just today, and everything else lived one step away? I do not know whether people would feel calmer or just lost…",
+    "text": "Keep coming back to the idea that the app should do less. What if the home screen were just today, and everything else lived one step away? I do not know whether people would feel calmer or just lost. Worth a prototype before anyone argues about it, and worth watching three people use it in silence.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C33",
+   "origin": "authors",
+   "activity": "research",
+   "language": "zh",
+   "what": "粘贴的文字：一段约200字的论述，没有数字",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-C33",
+    "tags": [
+     "一边",
+     "城市",
+     "更新",
+     "容易"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "城市更新最容易犯的错误，是把“旧”和“破”当成一回事。老街区的价值往往不在建筑本身，而在几十年里慢慢长出来的邻里关系和小生意。把居民整体…",
+    "summary": "城市更新最容易犯的错误，是把“旧”和“破”当成一回事。老街区的价值往往不在建筑本身，而在几十年里慢慢长出来的邻里关系和小生意。把居民整体迁走，再盖一片整齐的新楼，看上去焕然一新，原来的生活却接不回来了。真正难的是一边修一边住，让人留下来，让变化慢一点。",
+    "text": "城市更新最容易犯的错误，是把“旧”和“破”当成一回事。老街区的价值往往不在建筑本身，而在几十年里慢慢长出来的邻里关系和小生意。把居民整体迁走，再盖一片整齐的新楼，看上去焕然一新，原来的生活却接不回来了。真正难的是一边修一边住，让人留下来，让变化慢一点。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C34",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "随手记下的想法：约150字，里面有带引号的词",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-C34",
+    "tags": [
+     "他们",
+     "为什么",
+     "最近",
+     "觉得"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "最近总觉得我们说的“用户增长”有点自欺欺人。数字是涨了，可是每次开会大家讲的都是怎么把人拉进来，很少有人问他们为什么留下，或者为什么走。…",
+    "summary": "最近总觉得我们说的“用户增长”有点自欺欺人。数字是涨了，可是每次开会大家讲的都是怎么把人拉进来，很少有人问他们为什么留下，或者为什么走。也许应该停一个月不做拉新，只打电话给那些悄悄离开的人，听听他们怎么说。",
+    "text": "最近总觉得我们说的“用户增长”有点自欺欺人。数字是涨了，可是每次开会大家讲的都是怎么把人拉进来，很少有人问他们为什么留下，或者为什么走。也许应该停一个月不做拉新，只打电话给那些悄悄离开的人，听听他们怎么说。",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C35",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "en",
+   "what": "typed memory: a description of a place, with a year mentioned",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-C35",
+    "tags": [
+     "bakery",
+     "corner",
+     "old",
+     "street"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "The bakery on the corner of our old street had a blue door that stuc…",
+    "summary": "The bakery on the corner of our old street had a blue door that stuck in wet weather, so you had to lean on it with your shoulder. Inside it was always too warm and smelled of caraway. We went every…",
+    "text": "The bakery on the corner of our old street had a blue door that stuck in wet weather, so you had to lean on it with your shoulder. Inside it was always too warm and smelled of caraway. We went every Saturday until we moved away in 2011, and the woman behind the counter never once asked what we wanted, she just started filling the bag.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C36",
+   "origin": "authors",
+   "activity": "research",
+   "language": "en",
+   "what": "pasted text: a 500-character passage of an essay that explains a term in passing",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-C36",
+    "tags": [
+     "free",
+     "lunch",
+     "never",
+     "economists"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "Economists like to say that there is no such thing as a free lunch,…",
+    "summary": "Economists like to say that there is no such thing as a free lunch, and most of the time they are right, but the phrase hides how unevenly the bill is shared. When a factory saves money by venting it…",
+    "text": "Economists like to say that there is no such thing as a free lunch, and most of the time they are right, but the phrase hides how unevenly the bill is shared. When a factory saves money by venting its waste into a river, the cost does not vanish. It lands on the people downstream, who pay in dirty water and never see an invoice. Costs of this kind are called externalities, and a great deal of politics is an argument about who should be made to carry them. The lunch was never free. It was only served at one table and charged to another.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "C37",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "typed story of how a project went, told in order but no procedure",
+   "expect": "note",
+   "accept": [],
+   "item": {
+    "id": "formats-C37",
+    "tags": [
+     "newsletter",
+     "got",
+     "started",
+     "record"
+    ],
+    "archived": false,
+    "revision": 0,
+    "kind": "text",
+    "title": "How the newsletter got started, for the record. At first it was only…",
+    "summary": "How the newsletter got started, for the record. At first it was only a list of links I sent to four friends on Fridays. Then one of them forwarded it to her team, and by the summer strangers were rep…",
+    "text": "How the newsletter got started, for the record. At first it was only a list of links I sent to four friends on Fridays. Then one of them forwarded it to her team, and by the summer strangers were replying with corrections, which I took as a sign that someone was reading. I never planned any of it, and every attempt to make it more professional has made it a little worse.",
+    "data": {},
+    "origin": {
+     "by": "user"
+    },
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    }
+   }
+  },
+  {
+   "key": "D01",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "zh",
+   "what": "打字记下的提醒：外婆家的井盖",
+   "expect": "callout",
+   "accept": [],
+   "item": {
+    "id": "formats-D01",
+    "kind": "text",
+    "title": "小心：外婆家后院的井盖是松的，带孩子去玩一定要绕开走。",
+    "text": "小心：外婆家后院的井盖是松的，带孩子去玩一定要绕开走。",
+    "summary": "小心：外婆家后院的井盖是松的，带孩子去玩一定要绕开走。",
+    "tags": [
+     "小心",
+     "外婆家"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "D02",
+   "origin": "authors",
+   "activity": "research",
+   "language": "zh",
+   "what": "打字记下的提醒：一份问卷的局限",
+   "expect": "callout",
+   "accept": [],
+   "item": {
+    "id": "formats-D02",
+    "kind": "text",
+    "title": "注意：这份问卷的样本只来自一线城市，结论不能直接推到全国。",
+    "text": "注意：这份问卷的样本只来自一线城市，结论不能直接推到全国。",
+    "summary": "注意：这份问卷的样本只来自一线城市，结论不能直接推到全国。",
+    "tags": [
+     "注意",
+     "样本"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "D03",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "打字记下的提醒：发版的时间",
+   "expect": "callout",
+   "accept": [],
+   "item": {
+    "id": "formats-D03",
+    "kind": "text",
+    "title": "千万别在周五下午发版，出了问题没人能及时回滚。",
+    "text": "千万别在周五下午发版，出了问题没人能及时回滚。",
+    "summary": "千万别在周五下午发版，出了问题没人能及时回滚。",
+    "tags": [
+     "千万",
+     "别在"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "D04",
+   "origin": "authors",
+   "activity": "research",
+   "language": "zh",
+   "what": "粘贴的文字：一句话解释一个术语",
+   "expect": "definition",
+   "accept": [],
+   "item": {
+    "id": "formats-D04",
+    "kind": "text",
+    "title": "幸存者偏差：只看到经过筛选留下来的人或事，而忽略了被淘汰的那些。",
+    "text": "幸存者偏差：只看到经过筛选留下来的人或事，而忽略了被淘汰的那些。",
+    "summary": "幸存者偏差：只看到经过筛选留下来的人或事，而忽略了被淘汰的那些。",
+    "tags": [
+     "幸存者",
+     "偏差"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "D05",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "打字记下的：一个术语是什么意思",
+   "expect": "definition",
+   "accept": [],
+   "item": {
+    "id": "formats-D05",
+    "kind": "text",
+    "title": "最小可行产品，就是只做核心功能、能拿去给真实用户试的第一个版本。",
+    "text": "最小可行产品，就是只做核心功能、能拿去给真实用户试的第一个版本。",
+    "summary": "最小可行产品，就是只做核心功能、能拿去给真实用户试的第一个版本。",
+    "tags": [
+     "最小",
+     "可行"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "D06",
+   "origin": "authors",
+   "activity": "research",
+   "language": "zh",
+   "what": "粘贴的文字：一个问题和它的答案",
+   "expect": "qa",
+   "accept": [],
+   "item": {
+    "id": "formats-D06",
+    "kind": "text",
+    "title": "为什么飞机舷窗是圆的？因为方形的角会让应力集中，容易产生裂纹。",
+    "text": "为什么飞机舷窗是圆的？因为方形的角会让应力集中，容易产生裂纹。",
+    "summary": "为什么飞机舷窗是圆的？因为方形的角会让应力集中，容易产生裂纹。",
+    "tags": [
+     "为什么",
+     "飞机"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "D07",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "zh",
+   "what": "打字记下的：问爸爸的一个问题和他的回答",
+   "expect": "qa",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-D07",
+    "kind": "text",
+    "title": "爸爸为什么总在车里坐一会儿才上楼？他说那几分钟是只属于他自己的。",
+    "text": "爸爸为什么总在车里坐一会儿才上楼？他说那几分钟是只属于他自己的。",
+    "summary": "爸爸为什么总在车里坐一会儿才上楼？他说那几分钟是只属于他自己的。",
+    "tags": [
+     "爸爸",
+     "为什么"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "D08",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "打字记下的一个想法，二十来个字",
+   "expect": "idea",
+   "accept": [],
+   "item": {
+    "id": "formats-D08",
+    "kind": "text",
+    "title": "要不要办一个只开在周日早上的社区旧书交换摊",
+    "text": "要不要办一个只开在周日早上的社区旧书交换摊",
+    "summary": "要不要办一个只开在周日早上的社区旧书交换摊",
+    "tags": [
+     "不要",
+     "一个"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "D09",
+   "origin": "authors",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "打字记下的一个想法，三十多个字",
+   "expect": "idea",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-D09",
+    "kind": "text",
+    "title": "如果把说明书做成一张可以折进包装盒的漫画海报，会不会更多人愿意看完",
+    "text": "如果把说明书做成一张可以折进包装盒的漫画海报，会不会更多人愿意看完",
+    "summary": "如果把说明书做成一张可以折进包装盒的漫画海报，会不会更多人愿意看完",
+    "tags": [
+     "如果",
+     "说明"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  },
+  {
+   "key": "D10",
+   "origin": "authors",
+   "activity": "memories",
+   "language": "zh",
+   "what": "打字记下的一个想法：以后想和妈妈做的事",
+   "expect": "idea",
+   "accept": [
+    "note"
+   ],
+   "item": {
+    "id": "formats-D10",
+    "kind": "text",
+    "title": "等妈妈退休了，带她把年轻时下乡的那几个村子重新走一遍，拍成一本相册",
+    "text": "等妈妈退休了，带她把年轻时下乡的那几个村子重新走一遍，拍成一本相册",
+    "summary": "等妈妈退休了，带她把年轻时下乡的那几个村子重新走一遍，拍成一本相册",
+    "tags": [
+     "妈妈",
+     "退休"
+    ],
+    "data": {},
+    "source": {
+     "from": "paste",
+     "capturedAt": "2026-11-14T00:00:00.000Z"
+    },
+    "origin": {
+     "by": "user"
+    },
+    "archived": false,
+    "revision": 0
+   }
+  }
+ ]
+}

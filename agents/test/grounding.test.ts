@@ -508,3 +508,84 @@ test('a number counted in a unit that scales it is written only with that unit a
   assert.deepEqual([revenue.writes(120, 'k'), revenue.writes(1.5, 'M'), revenue.writes(90, 'k'), revenue.writes(90, '$'), revenue.writes(120)], [true, true, false, true, false]);
   assert.deepEqual([revenue.writes(120, '$k'), revenue.writes(90, '$k'), revenue.writes(120, '€k')], [true, false, false], 'a currency sign may lead the unit');
 });
+
+test('a label names a value when its words stand in the sentence, the list item or the table row that holds the value', () => {
+  const study = grounding('First-period absences fell by 15%. The share of students who fell asleep in class at least once a week dropped from 31% to 19%.');
+  assert.equal(study.names('first-period absences', '15%'), true);
+  assert.equal(study.names('absences, first period', '15%'), true, 'the words in any order');
+  assert.equal(study.names('students asleep in class', '15%'), false, 'words of the next sentence');
+  assert.equal(study.names('fell asleep in class', '31%'), true);
+  assert.equal(study.names('absent students', '15%'), false, 'a word the sentence does not hold, however close');
+  assert.equal(study.names('absences', '51%'), false, 'a value the text does not state');
+  assert.equal(study.names('', '15%'), false);
+  assert.equal(study.names('%', '15%'), false, 'a label of no word');
+
+  const rows = grounding('Budget\n\n| 房租 | 45% |\n| 吃饭 | 5% |\n\n- Rent: 980 euros. Paid on the first.\n- Food: 240 euros.');
+  assert.deepEqual([rows.names('房租', 45, '%'), rows.names('房租', 5, '%'), rows.names('吃饭', 5, '%')], [true, false, true], 'a share belongs to its row');
+  assert.deepEqual([rows.names('Rent', '980 euros'), rows.names('Food', '980 euros'), rows.names('Rent, paid on the first', '980 euros')], [true, false, true], 'a list item is one line, whatever sentences it holds');
+  assert.equal(rows.names('Budget', '45%'), false, 'the title is a paragraph of its own');
+
+  const plans = grounding('Our plans.\n\nPlan | Price | Seats\nSolo | $8 | 1\nOrg | $1,200 | 100\n\n| | Jan | Feb |\n| Rain | 81 | 60 |');
+  assert.deepEqual([plans.names('Price', '$1,200'), plans.names('Seats', 100), plans.names('Seats', '$1,200'), plans.names('Solo', '$1,200')], [true, true, false, false], 'the head of a column names the values under it');
+  assert.deepEqual([plans.names('Jan', 81), plans.names('Feb', 81), plans.names('Rain', 60), plans.names('Price', 81)], [true, false, true, false], 'in its own table');
+
+  const lines = grounding('The tower in short.\nHeight: 330 m\nBuilt: 1889\n2019: 980 euros\n2020: 1,010 euros');
+  assert.deepEqual([lines.names('Height', '330 m'), lines.names('Built', '330 m'), lines.names('tower', '330 m')], [true, false, false], 'a line that opens with a label and a colon stands alone');
+  assert.deepEqual([lines.names('2019', 980), lines.names('2019', 1010), lines.names('2020', 1010, 'euros')], [true, false, true]);
+  const wrapped = grounding('Churn fell to 4.2% in March,\nthe lowest since launch.');
+  assert.equal(wrapped.names('lowest churn', '4.2%'), true, 'a sentence runs on over a line break');
+
+  const cities = grounding('北京的常住人口是2189万。上海是2487万。');
+  assert.deepEqual([cities.names('北京人口', 2189, '万'), cities.names('上海', 2189, '万'), cities.names('北京', 2189)], [true, false, false], 'a number is read with its unit, as `writes` reads it');
+  const held = grounding('The tower is tall.', ['Height', '330 m']);
+  assert.deepEqual([held.says('330 m'), held.names('Height', '330 m'), held.names('tower', '330 m')], [true, false, false], 'a value held beside the words stands beside no word');
+});
+
+test('a whole passage begins and ends where a sentence, a line, a cell or quoted words do, and a lead may break off', () => {
+  const text = grounding(
+    'Do not take ibuprofen while you are on warfarin. Together they raise the risk.\nCaution: the stairs are steep.\nNonna said, "salt it like the sea", and tasted it.\n- Rotate the key\n注意：楼梯很陡。他说那几分钟是他自己的。',
+    ['held words'],
+  );
+  for (const passage of [
+    'Do not take ibuprofen while you are on warfarin.',
+    'Do not take ibuprofen while you are on warfarin. Together they raise the risk.',
+    'Together they raise the risk',
+    'Caution: the stairs are steep.',
+    'the stairs are steep',
+    'salt it like the sea',
+    'Rotate the key',
+    '楼梯很陡。',
+  ]) {
+    assert.equal(text.whole(passage), true, passage);
+  }
+  for (const passage of ['take ibuprofen while you are on warfarin.', 'Do not take ibuprofen', 'they raise the risk', 'are steep', 'salt it', 'Nonna said', '那几分钟是他自己的。', 'held words', 'Do not take paracetamol.']) {
+    assert.equal(text.whole(passage), false, passage);
+  }
+  assert.deepEqual([text.leads('Do not take ibuprofen while'), text.leads('take ibuprofen while'), text.leads('Together they'), text.leads('held')], [true, false, true, false]);
+  assert.deepEqual([text.begins('Do not take ibuprofen'), text.begins('do not, take'), text.begins('take ibuprofen'), text.begins('')], [true, true, false, false]);
+  const report = grounding('Reminder for whoever is on call: the key expires on 3 December.');
+  assert.equal(report.whole('the key expires on 3 December.'), false, 'a colon after more than three words opens no passage');
+});
+
+test('a text defines a term by a meaning that follows it, or by a whole passage in its sentence or the next one over', () => {
+  const text = grounding(
+    'Parallax is the apparent shift of an object when the viewer moves. Survivorship bias: looking only at what made it through.\n' +
+      'When a factory vents waste into a river, the cost does not vanish. It lands on the people downstream. Costs of this kind are called externalities. A tomato is not a vegetable.\n' +
+      '沉没成本，指的是已经付出而且收不回来的成本。',
+  );
+  assert.equal(text.defines('Parallax', 'the apparent shift of an object when the viewer moves'), true);
+  assert.equal(text.defines('Parallax', 'the apparent shift of an object'), false, 'a meaning cut short');
+  assert.equal(text.defines('Parallax', 'shift of an object when the viewer moves.'), false, 'more than a link stands between them');
+  assert.equal(text.defines('Survivorship bias', 'looking only at what made it through.'), true);
+  assert.equal(text.defines('Parallax', 'looking only at what made it through.'), false, 'the meaning of another term');
+  assert.equal(text.defines('externalities', 'Costs of this kind are called externalities.'), true);
+  assert.equal(text.defines('externalities', 'It lands on the people downstream.'), true, 'the sentence before');
+  assert.equal(text.defines('externalities', 'When a factory vents waste into a river, the cost does not vanish.'), false, 'two sentences before');
+  assert.equal(text.defines('externalities', 'When a factory vents waste into a river, the cost does not vanish. It lands on the people downstream.'), true, 'a passage that reaches the sentence before');
+  assert.equal(text.defines('A tomato', 'a vegetable.'), false);
+  assert.equal(text.defines('沉没成本', '已经付出而且收不回来的成本。'), true);
+  assert.equal(text.defines('成本', '已经付出而且收不回来的成本。'), true, 'the term may be the last words of a longer one');
+  assert.equal(text.defines('Parallax', ''), false);
+  const lines = grounding('Term: Parallax\nDefinition: the apparent shift of an object\nBias: an error of selection');
+  assert.deepEqual([lines.defines('Parallax', 'the apparent shift of an object'), lines.defines('Bias', 'an error of selection'), lines.defines('Parallax', 'an error of selection')], [true, true, false], 'two lines that each open with a lead pair what follows');
+});

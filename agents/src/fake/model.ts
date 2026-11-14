@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { JsonRequest, ModelClient, WebResult } from '../core/ports.ts';
 import { LinkReply, type Description } from '../core/roles/intake/describe.ts';
+import type { ComponentsReply, Entry } from '../core/roles/renderer.ts';
 
 type JsonHandler = (req: JsonRequest<unknown>) => unknown;
 
@@ -42,11 +43,21 @@ export class FakeModel implements ModelClient {
       .on('intake.video', named);
   }
 
+  /** Answers the Renderer's question about cards as `choose` does, so the real Renderer runs with no model behind it. */
+  choosing(): this {
+    return this.on('renderer.components', (req): ComponentsReply => ({
+      items: [...req.user.matchAll(/^id: (.+)\ntitle: (.*)\n(now: idea\n)?(?:(?:length|picture): .*\n)*text: ([\s\S]*?)(?=\n\nid: |(?![\s\S]))/gm)].map((asked) => ({
+        id: asked[1]!,
+        ...choose(asked[4]!, asked[3] ? 'idea' : 'note'),
+      })),
+    }));
+  }
+
   async json<T>(req: JsonRequest<T>): Promise<T> {
     this.calls.push({ kind: 'json', role: req.role, detail: req.user });
     const handler = this.json_.get(req.role);
     if (!handler) throw new Error(`FakeModel has no script for role "${req.role}"`);
-    return req.schema.parse(handler(req as JsonRequest<unknown>));
+    return req.schema.parse(await handler(req as JsonRequest<unknown>));
   }
   async search(req: { role: string; query: string; max?: number }): Promise<WebResult[]> {
     this.calls.push({ kind: 'search', role: req.role, detail: req.query });
@@ -234,5 +245,42 @@ export function describe(text: string): Description {
         : {}),
     excerptText: passage,
     excerptAt: labelled('at'),
+  };
+}
+
+const NOTE: Omit<Entry, 'id'> = { component: 'note', subject: '', passage: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [] };
+
+const MARKED = /^(caution|warning|note):\s*(\S.*)$/i;
+const LABELLED = /^(\p{L}[\p{L} ]{1,29}):\s+(\S.*)$/u;
+const FIGURE = /^[$€£¥]?\d/;
+
+/**
+ * What a model would choose for a text the rules drew as a note or an idea, read by pattern instead:
+ *   Caution: hot oil spits            a callout, and so is "Warning:". "Note:" makes a remark of it
+ *   Cost: €240                        a figure of a sheet, when the value starts with a number
+ *   Best: the bridge; the bookshop    a list of a sheet, its entries set apart by ";"
+ * A sheet is a text with a figure or a list written so, and a sentence beside them. Its first line is the heading.
+ * A text holding "fake:invent" is given a figure it never states, to show the content check keeping the note.
+ * A text in none of these forms keeps the card it has `now`.
+ */
+export function choose(text: string, now: 'note' | 'idea' = 'note'): Omit<Entry, 'id'> {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (/fake:invent/.test(text)) return { ...NOTE, component: 'fact', subject: 'Share', passage: '99%' };
+  const marked = lines.map((line) => MARKED.exec(line)).find(Boolean);
+  if (marked) return { ...NOTE, component: 'callout', passage: marked[2]!.trim(), tone: marked[1]!.toLowerCase() === 'note' ? 'note' : 'caution' };
+
+  const labelled = lines.flatMap((line) => {
+    const found = LABELLED.exec(line);
+    return found ? [{ label: found[1]!, value: found[2]! }] : [];
+  });
+  const figures = labelled.filter(({ value }) => FIGURE.test(value)).map(({ label, value }) => `${label} | ${value}`);
+  const listed = labelled.find(({ value }) => value.includes(';'))?.value.split(/;\s*/).filter(Boolean) ?? [];
+  const prose = lines.slice(1).find((line) => !LABELLED.test(line));
+  if (figures.length + listed.length === 0 || !prose) return { ...NOTE, component: now };
+  const part = (kind: Entry['sections'][number]['kind'], text: string, lines: string[] = []) => ({ kind, text, by: '', lines });
+  return {
+    ...NOTE,
+    component: 'sheet',
+    sections: [part('heading', lines[0]!), part('text', prose), ...(figures.length > 0 ? [part('figures', '', figures)] : []), ...(listed.length > 1 ? [part('list', '', listed)] : [])],
   };
 }

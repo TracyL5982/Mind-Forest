@@ -27,6 +27,28 @@ export interface Grounding {
   paints(hex: string): boolean;
   /** The check mark on the line whose own text is these words: done, not done, or none. */
   ticks(words: string): boolean | undefined;
+  /**
+   * The words name the value where the text writes it: every word of the label stands, in any order, in one sentence, one line or
+   * one table row that also holds the value, or in the head of the value's column. A number is read as `writes` reads it, with its unit.
+   * "fell by 15%" names no "absences".
+   */
+  names(label: string, value: string | number, unit?: string): boolean;
+  /**
+   * As `quotes`, and the passage is whole: it begins where a sentence, a line, a table cell or quoted words begin, and ends where
+   * one ends. "take the pills" is no whole passage of "Do not take the pills."
+   */
+  whole(passage: string): boolean;
+  /** As `quotes`, and the passage begins where a sentence, a line, a table cell or quoted words begin. It may break off anywhere. */
+  leads(passage: string): boolean;
+  /** The text opens with these words. */
+  begins(passage: string): boolean;
+  /**
+   * The text gives the term this meaning. The meaning is a passage that ends where a sentence or a line ends. It is whole and the
+   * term stands in one of its sentences or in the sentence before or after, or it follows the term in the term's own sentence with
+   * nothing between them but punctuation or a linking word, as in "Parallax: the shift…" and "Parallax is the shift…".
+   * A meaning that follows another lead, as in "Bias: an error…", is not whole, and is the meaning of that lead alone.
+   */
+  defines(term: string, meaning: string): boolean;
 }
 
 const enum Break {
@@ -44,10 +66,25 @@ const enum Break {
   Row = 32,
   /** A tab inside a line: a cell break to a short claim. Prose holds tabs too, so a passage reads one as white space. */
   Tab = 64,
+  /** A line break of any kind. */
+  Line = 128,
+  /** A quotation mark that opens words the text itself sets apart. */
+  Quote = 256,
+  /** A quotation mark that closes them. */
+  Unquote = 1024,
+  /** A colon after the first few words of a line or a sentence, which are then a marker or a speaker: "Caution:", "Dad:". */
+  Lead = 512,
 }
 
 const SHORT = Break.FullStop | Break.Cell | Break.Item | Break.Row | Break.Tab;
 const PASSAGE = Break.FullStop | Break.Cell | Break.Item | Break.Row | Break.Sentence | Break.Blank;
+/** Where one sentence ends and the next begins, to a claim that must stand inside one. A line break inside a sentence does not end it. */
+const SENTENCE = Break.Sentence | Break.FullStop | Break.Blank | Break.Item | Break.Row;
+const APART = SENTENCE | Break.Line | Break.Cell | Break.Tab;
+/** Where a whole passage may begin, where one may begin when a lead may stand before it, and before which one may end. */
+const EDGES = { start: APART | Break.Quote, led: APART | Break.Quote | Break.Lead, end: APART | Break.Unquote };
+/** The most words a lead has. */
+const LEAD_WORDS = 3;
 
 /** A number as a text writes it. */
 interface Num {
@@ -83,6 +120,12 @@ const ONLY_MARK = new RegExp(`^(?:${MARK})$`, 'u');
 const MARK_FIRST = new RegExp(`^(?:\\s*\\d+[.)])?[^\\p{L}\\p{N}]*?(${MARK})(.*)$`, 'u');
 const MARK_LAST = new RegExp(`^(.*?)(${MARK})\\s*$`, 'u');
 const OPENS_ITEM = new RegExp(`[-*•|]|\\d+[.)]\\s|${MARK}`, 'uy');
+
+const OPENING_MARKS = new Set([...'“„‘«「『']);
+const CLOSING_MARKS = new Set([...'”»」』']);
+/** A mark that opens words when it follows white space or an opening bracket, and closes them otherwise. */
+const EITHER_MARKS = new Set([...'"\'’']);
+const BEFORE_OPENING = /^[\s([{]?$/u;
 
 const ASCII_ONLY = /^[\x00-\x7f]*$/;
 const UNSEEN = /[­​-‍⁠️﻿]/g;
@@ -192,6 +235,9 @@ const times = (value: number, magnitude: number) => Number((value * magnitude).t
 class Reader implements Tokens {
   readonly list: Token[] = [];
   readonly breaks: number[] = [];
+  /** How many cell breaks stand before each token on its line: the column it is in, when the line is a table row. */
+  readonly columns: number[] = [];
+  private column = 0;
   private readonly size: number;
   private at = 0;
   /** The breaks met since the last token. */
@@ -206,9 +252,15 @@ class Reader implements Tokens {
   private cells = false;
   /** Numbers that start before here are entries of a comma list, so a comma groups nothing. */
   private listEnd = 0;
+  /** The index of the first token of this sentence or line. */
+  private opened = 0;
+  /** How many tokens stand before the character at `mark`. */
+  readonly marked: number;
 
-  constructor(private readonly text: string) {
+  constructor(private readonly text: string, mark = text.length) {
     this.size = text.length;
+    while (this.at < mark) this.step();
+    this.marked = this.list.length;
     while (this.at < this.size) this.step();
     this.closeRow();
   }
@@ -226,8 +278,10 @@ class Reader implements Tokens {
     if (kind === Char.Newline) {
       if (this.stopped) this.pending |= Break.Sentence;
       if (this.lineFrom < 0) this.pending |= Break.Blank;
+      this.pending |= Break.Line;
       this.closeRow();
       this.stopped = this.cells = false;
+      this.column = 0;
       this.lineFrom = -1;
       this.lineHead = this.list.length;
       this.at++;
@@ -251,15 +305,20 @@ class Reader implements Tokens {
       else if (kind === Char.Cell) {
         this.pending |= text[at] === '\t' ? Break.Tab : Break.Cell;
         this.cells = true;
-      }
+        this.column++;
+      } else if (OPENING_MARKS.has(text[at]!) || (EITHER_MARKS.has(text[at]!) && BEFORE_OPENING.test(text[at - 1] ?? ''))) this.pending |= Break.Quote;
+      else if (CLOSING_MARKS.has(text[at]!) || EITHER_MARKS.has(text[at]!)) this.pending |= Break.Unquote;
+      else if ((text[at] === ':' || text[at] === '：') && (this.pending & ~Break.Unquote) === 0 && this.list.length > this.opened && this.list.length - this.opened <= LEAD_WORDS) this.pending |= Break.Lead;
       this.stopped = kind === Char.Stop || (kind === Char.Closer && this.stopped);
       this.at += width(text, at);
     }
   }
 
   private push(token: Token, to: number): void {
+    if ((this.pending & (SENTENCE | Break.Line)) !== 0) this.opened = this.list.length;
     this.list.push(token);
     this.breaks.push(this.pending);
+    this.columns.push(this.column);
     this.pending = 0;
     this.stopped = false;
     this.at = this.end = to;
@@ -433,6 +492,11 @@ class Reader implements Tokens {
 
 const tokenize = (text: string): Tokens => new Reader(text);
 
+/** The words that may stand between a term and its meaning in one sentence. */
+const LINKS = ['is', 'are', 'was', 'were', 'means', 'mean', 'refers to', 'stands for', 'is when', 'is where', '是', '是指', '指', '指的是', '就是', '即', '意思是', '的意思是', '叫', '叫做'].map(
+  (phrase) => tokenize(phrase).list,
+);
+
 const phrases = (...written: string[]): Token[][] => written.map((phrase) => tokenize(phrase).list);
 const MONEY: Record<string, Token[][]> = {
   $: phrases('dollars', 'dollar', 'usd', '美元'),
@@ -495,31 +559,44 @@ function marked(text: string): { item: Tokens; done: boolean }[] {
   return lines;
 }
 
-/**
- * The ways a text may set a unit against a number, each as a claim: the unit after the number, before it,
- * and around it when a currency sign leads the unit, as "$120k" writes 120 in "$k".
- */
-function against(value: number, unit: string): Tokens[] {
-  const sign = uniform(unit).trim();
-  if (sign === '') return [];
-  const written = [`${value}${sign}`, `${sign}${value}`];
-  if (sign.length > 1 && isCurrency(sign[0])) written.push(`${sign[0]}${value}${sign.slice(1)}`);
-  return written.map(tokenize).filter((asked) => asked.list.length > 0);
-}
-
 class Source implements Grounding {
   private readonly text: string;
-  private read: Tokens | undefined;
+  /** Where the words end and the held values begin. */
+  private readonly mark: number;
+  private read: Reader | undefined;
   private numbers: Set<number> | undefined;
   private hexes: Set<string> | undefined;
   private lines: ReturnType<typeof marked> | undefined;
+  private spans: { sentence: Int32Array; line: Int32Array } | undefined;
+  /** Each claim read so far. A card asks about the same value more than once: as a value, and as what its label names. */
+  private readonly claims = new Map<string, Tokens>();
 
-  constructor(source: string) {
-    this.text = uniform(source);
+  constructor(source: string, held: readonly string[]) {
+    const words = uniform(source);
+    this.mark = words.length;
+    this.text = held.length === 0 ? words : `${words}\n${held.map((value) => `• ${uniform(value)}`).join('\n')}`;
   }
 
-  private get tokens(): Tokens {
-    return (this.read ??= tokenize(this.text));
+  private get tokens(): Reader {
+    return (this.read ??= new Reader(this.text, this.mark));
+  }
+
+  /**
+   * The ways a text may set a unit against a number, each as a claim: the unit after the number, before it,
+   * and around it when a currency sign leads the unit, as "$120k" writes 120 in "$k".
+   */
+  private against(value: number, unit: string): Tokens[] {
+    const sign = uniform(unit).trim();
+    if (sign === '') return [];
+    const written = [`${value}${sign}`, `${sign}${value}`];
+    if (sign.length > 1 && isCurrency(sign[0])) written.push(`${sign[0]}${value}${sign.slice(1)}`);
+    return written.map((form) => this.claim(form)).filter((asked) => asked.list.length > 0);
+  }
+
+  private claim(words: string): Tokens {
+    let asked = this.claims.get(words);
+    if (!asked) this.claims.set(words, (asked = tokenize(uniform(words))));
+    return asked;
   }
 
   says(claim: string): boolean {
@@ -532,7 +609,7 @@ class Source implements Grounding {
 
   writes(value: number, unit?: string): boolean {
     if (!Number.isFinite(value)) return false;
-    const scaled = unit === undefined ? [] : against(value, unit).filter(({ list: [first] }) => typeof first === 'object' && !Number.isNaN(first.value) && first.value !== value);
+    const scaled = this.scaled(value, unit);
     if (scaled.length > 0) return scaled.some((asked) => this.holds(asked, SHORT));
     this.numbers ??= new Set(this.tokens.list.flatMap((token) => (typeof token === 'object' ? token.readings : [])));
     return this.numbers.has(value);
@@ -540,7 +617,7 @@ class Source implements Grounding {
 
   measures(value: number, unit: string): boolean {
     if (!Number.isFinite(value)) return false;
-    return against(value, unit).some((asked) => {
+    return this.against(value, unit).some((asked) => {
       const [only] = asked.list;
       // A sign the reading drops, as "%" before a number, leaves the bare number, which is measured in nothing.
       const bare = asked.list.length === 1 && typeof only === 'object' && only.glued === '' && only.value === value;
@@ -550,7 +627,7 @@ class Source implements Grounding {
 
   tallies(words: string): boolean {
     // A form with no one value, such as a date, tallies when each of its groups is written.
-    return tokenize(uniform(words)).list.every((token) => typeof token !== 'object' || (Number.isNaN(token.value) ? token.readings : [token.value]).every((value) => this.writes(value)));
+    return this.claim(words).list.every((token) => typeof token !== 'object' || (Number.isNaN(token.value) ? token.readings : [token.value]).every((value) => this.writes(value)));
   }
 
   paints(hex: string): boolean {
@@ -559,30 +636,169 @@ class Source implements Grounding {
   }
 
   ticks(words: string): boolean | undefined {
-    const asked = tokenize(uniform(words));
+    const asked = this.claim(words);
     if (asked.list.length === 0) return undefined;
     this.lines ??= marked(this.text);
     return this.lines.find(({ item }) => item.list.length === asked.list.length && asked.list.every((token, n) => same(item, n, token)))?.done;
   }
 
+  names(label: string, value: string | number, unit?: string): boolean {
+    const words = this.claim(label).list;
+    if (words.length === 0) return false;
+    const written = this.tokens;
+    const within = (from: number, to: number) =>
+      words.every((word) => {
+        for (let at = from; at < to; at++) if (same(written, at, word)) return true;
+        return false;
+      });
+    const named = (start: number, size: number) => {
+      const { sentence, line } = this.spanned();
+      for (const span of [sentence, line]) {
+        let [from, to] = [start, start + size];
+        while (from > 0 && span[from - 1] === span[start]) from--;
+        while (to < written.marked && span[to] === span[start]) to++;
+        if (within(from, to)) return true;
+      }
+      return this.headed(start, words);
+    };
+    if (typeof value === 'string') {
+      const asked = this.claim(value);
+      return asked.list.length > 0 && this.holds(asked, SHORT, (start) => named(start, asked.list.length));
+    }
+    if (!Number.isFinite(value)) return false;
+    const scaled = this.scaled(value, unit);
+    if (scaled.length > 0) return scaled.some((asked) => this.holds(asked, SHORT, (start) => named(start, asked.list.length)));
+    for (let at = 0; at < written.marked; at++) {
+      const token = written.list[at]!;
+      if (typeof token === 'object' && token.readings.includes(value) && named(at, 1)) return true;
+    }
+    return false;
+  }
+
+  whole(passage: string): boolean {
+    return this.passage(passage, true, true);
+  }
+
+  leads(passage: string): boolean {
+    return this.passage(passage, true, false);
+  }
+
+  begins(passage: string): boolean {
+    const asked = this.claim(passage);
+    return asked.list.length > 0 && same(this.tokens, 0, asked.list[0]!) && runs(this.tokens, 0, asked, 0);
+  }
+
+  defines(term: string, meaning: string): boolean {
+    const [named, meant] = [this.claim(term), this.claim(meaning)];
+    if (named.list.length === 0 || meant.list.length === 0) return false;
+    const written = this.tokens;
+    const { sentence } = this.spanned();
+    return this.holds(meant, PASSAGE, (from) => {
+      const last = from + meant.list.length - 1;
+      if (!this.edge(last + 1, 'end')) return false;
+      const whole = this.edge(from, 'start');
+      const led = (written.breaks[from]! & Break.Lead) !== 0;
+      return this.holds(named, SHORT, (at) => {
+        const end = at + named.list.length;
+        // Two lines that each open with a lead pair what follows the leads, as "Term: Parallax" and "Definition: the shift…" do.
+        const paired = led && (written.breaks[at]! & Break.Lead) !== 0;
+        if ((whole || paired) && sentence[at]! >= sentence[from]! - 1 && sentence[at]! <= sentence[last]! + 1) return true;
+        if (end > from || sentence[at] !== sentence[from]) return false;
+        const between = written.list.slice(end, from);
+        return between.length === 0 || LINKS.some((link) => link.length === between.length && link.every((token, n) => token === between[n]));
+      });
+    });
+  }
+
+  /** The token stands in a row of a table whose first row holds every one of the words in the cell of the same column. */
+  private headed(at: number, words: Token[]): boolean {
+    const written = this.tokens;
+    const { breaks, columns } = written;
+    const { line } = this.spanned();
+    const opens = (token: number) => token === 0 || line[token - 1] !== line[token];
+    let row = at;
+    while (!opens(row)) row--;
+    if ((breaks[row]! & Break.Row) === 0) return false;
+    // Up to the first row of the table: the rows above, as far as they follow one another with no empty line between.
+    let head = row;
+    while (head > 0 && (breaks[head]! & Break.Blank) === 0) {
+      let above = head - 1;
+      while (!opens(above)) above--;
+      if ((breaks[above]! & Break.Row) === 0) break;
+      head = above;
+    }
+    if (head === row) return false;
+    return words.every((word) => {
+      for (let token = head; token < row && line[token] === line[head]; token++) if (columns[token] === columns[at] && same(written, token, word)) return true;
+      return false;
+    });
+  }
+
+  /** The values a text may write for this number in a unit that scales it, each as a claim. None when the unit does not scale it. */
+  private scaled(value: number, unit: string | undefined): Tokens[] {
+    return unit === undefined ? [] : this.against(value, unit).filter(({ list: [first] }) => typeof first === 'object' && !Number.isNaN(first.value) && first.value !== value);
+  }
+
+  /**
+   * The sentence each token stands in, and its line. A list item, a table row and a line that opens with a lead, as "Height: 330 m"
+   * does, are each a sentence of their own, whatever ends them. Only an item or a row is a line of its own: a line of prose holds
+   * several sentences, and there each sentence counts as a line.
+   */
+  private spanned(): { sentence: Int32Array; line: Int32Array } {
+    if (this.spans) return this.spans;
+    const { breaks } = this.tokens;
+    const [sentence, line] = [new Int32Array(breaks.length), new Int32Array(breaks.length)];
+    let apart = false;
+    for (let from = 0, to = 1; from < breaks.length; from = to++) {
+      let listed = (breaks[from]! & (Break.Item | Break.Row)) !== 0;
+      let led = false;
+      for (; to < breaks.length && (breaks[to]! & Break.Line) === 0; to++) {
+        listed ||= (breaks[to]! & (Break.Cell | Break.Tab)) !== 0;
+        led ||= to - from <= LEAD_WORDS && (breaks[to]! & Break.Lead) !== 0;
+      }
+      for (let at = Math.max(from, 1); at < to; at++) {
+        const ended = (breaks[at]! & SENTENCE) !== 0;
+        sentence[at] = sentence[at - 1]! + (ended || (at === from && (apart || listed || led)) ? 1 : 0);
+        line[at] = line[at - 1]! + (at === from || (ended && !listed) ? 1 : 0);
+      }
+      apart = listed || led;
+    }
+    return (this.spans = { sentence, line });
+  }
+
+  /** A whole passage may begin at this token, or end before it: it is the first word, stands past the last, or follows such an edge. */
+  private edge(at: number, as: keyof typeof EDGES): boolean {
+    const { breaks, marked } = this.tokens;
+    return at === 0 || at >= marked || (breaks[at]! & EDGES[as]) !== 0;
+  }
+
+  private passage(passage: string, fromEdge: boolean, toEdge: boolean): boolean {
+    const asked = this.claim(passage);
+    return asked.list.length > 0 && this.holds(asked, PASSAGE, (start) => (!fromEdge || this.edge(start, 'led')) && (!toEdge || this.edge(start + asked.list.length, 'end')));
+  }
+
   private stated(claim: string, barred: number): boolean {
-    const written = uniform(claim);
-    const asked = tokenize(written);
+    const asked = this.claim(claim);
     if (asked.list.length > 0) return this.holds(asked, barred);
-    const symbols = written.trim();
+    const symbols = uniform(claim).trim();
     return symbols.length > 0 && this.standsAlone(symbols);
   }
 
-  /** The asked tokens are a run of the text's tokens that crosses none of the barred breaks. */
-  private holds(asked: Tokens, barred: number): boolean {
+  /**
+   * The asked tokens are a run of the text's tokens that crosses none of the barred breaks. With `where`, the run is one that
+   * stands among the words, before any held value, at a start that `where` accepts.
+   */
+  private holds(asked: Tokens, barred: number, where?: (start: number) => boolean): boolean {
     const written = this.tokens;
     const { list } = written;
     const first = asked.list[0]!;
+    const until = where ? written.marked - asked.list.length + 1 : list.length;
+    const found = (start: number) => runs(written, start, asked, barred) && (where === undefined || where(start));
     if (typeof first === 'string') {
-      for (let start = list.indexOf(first); start >= 0; start = list.indexOf(first, start + 1)) if (runs(written, start, asked, barred)) return true;
+      for (let start = list.indexOf(first); start >= 0 && start < until; start = list.indexOf(first, start + 1)) if (found(start)) return true;
       return false;
     }
-    for (let start = 0; start < list.length; start++) if (states(written, start, first) && runs(written, start, asked, barred)) return true;
+    for (let start = 0; start < until; start++) if (states(written, start, first) && found(start)) return true;
     return false;
   }
 
@@ -597,4 +813,8 @@ class Source implements Grounding {
   }
 }
 
-export const grounding = (source: string): Grounding => new Source(source);
+/**
+ * `held` are values the source holds beside its words, each read as a list item of its own. A claim about how words stand
+ * together, which `names`, `whole`, `leads` and `defines` are, is read against the words alone.
+ */
+export const grounding = (source: string, held: readonly string[] = []): Grounding => new Source(source, held);
