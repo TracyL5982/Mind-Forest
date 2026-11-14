@@ -120,27 +120,42 @@ A string that needs more lines than `max` is drawn cut with an ellipsis. A fact'
 
 A card's footprint is its type's footprint, and 28 px taller when the card has at least one chip. The width never changes, and neither does the height with the number of chips. Whether the node is a pick or kept changes nothing. The Chips section says which chips an item has, and that rule gives at most three, in order. Call them the candidates. A card has chips when it has at least one candidate.
 
-The line draws some of the candidates and cuts their text. This changes what is drawn and never the footprint.
+The line draws some of the candidates, each in a box of a width worked out here. This changes what is drawn and never the footprint. No text is cut by this rule. A chip is given its whole text and the width of its box, and the client's own text engine clips the text inside the box.
 
-`room` is the card's width less 40 for a quote or a person, less 26 for an image or a video, and less 32 for every other type. That is the border and the margin each side of the line. `need(chip) = 28 + textWidth(chip.text)`, where 28 is the chip's glyph and padding. Chips are 6 px apart.
+`room` is the card's width less 40 for a quote, less 26 for an image or a video, and less 32 for every other type. That is the card's 1 px border and the margin each side of the line: 19, 12 and 15 px. Chips are 6 px apart.
 
-1. **The date first.** When the first candidate's kind is `when`, it is drawn and its width is `min(need, room)`. It is cut only when its text alone is wider than the line. Then `rest = room - that width - 6`, and steps 2 and 3 run on the other candidates with `rest`. With no `when` candidate, `rest = room` and steps 2 and 3 run on every candidate.
-2. **How many of the others are drawn.** Walk the others in order with `left = rest + 6`. For each, `left = left - 6 - min(84, need)`. One is drawn only when `left >= 0` after its own step. One that is left out still takes its step, so no later one is drawn. On a card with no `when` candidate the first is always drawn, whatever `left` is, so a card with chips never has an empty line. The opened card lists what the line leaves out.
-3. **How wide each of the others is.** Start with `free = rest - 6 * (drawn others - 1)` and each of them without a width. Repeat: `each = floor(free / chips without a width)`. Every chip without a width whose `need <= each` gets its `need` as its width, and `free` drops by that. When no chip does, every chip without a width gets `each`, and the rule ends. It also ends when every chip has a width.
-4. **How a chip is cut.** A chip whose `need` is no more than its width is drawn whole. Any other chip is cut by the rule in Text cut to a width, with `letter = 72` and `room = width - 28`.
-5. **The people chip's count.** A people chip for three or more people ends in ` +N`. That end, with its space, is `keep`. When the chip is cut, only the text before `keep` is cut, with `room = width - 28 - textWidth(keep)`, and `keep` is put back after the ellipsis: `Ada Lovelace, Grace Ho… +3`. The web client draws the count without its space, 4 px after the names.
+`text(chip) = textWidth(chip.text)`. `pad(chip)` is 28, the chip's glyph and padding, and for a people chip with a `count` it is `28 + textWidth(' +N')`, where ` +N` is a space, a plus sign and the count in decimal digits. `need(chip) = pad(chip) + text(chip)`.
 
-On a note, where `room` is 208: `Spring 1958` and `Sonoma county` draw as `Spring 1958` and `Sonoma c…`. `Early September 1958` leaves 37 px, so `Bodega Bay` is left out. A date of 60 letters is cut to the whole line and nothing is drawn beside it.
+1. **The date first.** When the first candidate's kind is `when`, it is drawn and its width is `min(need, room)`. Then `rest = room - that width - 6`, and steps 2 and 3 run on the other candidates with `rest`. With no `when` candidate, `rest = room` and steps 2 and 3 run on every candidate.
+2. **How many of the others are drawn.** Walk the others in order with `left = rest + 6`. For each, `left = left - 6 - pad - min(44, text)`. One is drawn only when `left >= 0` after its own step. One that is left out still takes its step, so no later one is drawn. On a card with no `when` candidate the first is always drawn, whatever `left` is, so a card with chips never has an empty line. The 44 is a floor of 72 px for a chip, less the 28 of its glyph and padding. The opened card lists what the line leaves out.
+3. **How wide each of the others is.** Start with `free = rest - 6 * (drawn others - 1) - the sum of their pads`, and each of them without a share. Repeat: `each = floor(free / chips without a share)`. Every chip without a share whose `text <= each` gets its `text` as its share, and `free` drops by that. When no chip does, every chip without a share gets `each`, and the rule ends. It also ends when every chip has a share. A chip's width is its `pad` plus its share.
 
-A sample in `test/footprints.json` whose item has `data` lists in `chips` the text of each chip its card draws, after cutting. `origin` in a sample's item is `item.origin`.
+So the widths on a line and the gaps between them never add up to more than `room`, a chip beside a date has at least 72 px or its whole text, and a people chip always has room for its count.
+
+**Drawing a chip in its box.** A client draws the chip's glyph, then `chip.text` on one line, then for a people chip with a `count` the count as `+N`, 4 px after the names. It clips `chip.text` to what the box leaves, with an ellipsis, by its own text engine. The count is never clipped: three authors whose second name does not fit read `T. Screech, M. For… +1`. The exact characters that survive the clip are the client's own and are not part of this rule.
+
+The widths are counted from the table, and a string nearly always draws narrower than it counts, so a date is whole unless it alone is wider than the line. A client may close a box up to its text when the text draws narrower than counted, and may let a clipped chip take the px that frees, as the web client does. It must never give a chip less than its width here when its text is clipped, and the chips and gaps must stay inside `room`.
+
+On a note, where `room` is 208: `12 May 1958` has a box of 108 and `Bodega Bay` the 94 left. `Early September 1958` takes 165 and leaves 37, so `Bodega Bay` is left out. A date of 60 letters has the whole line and nothing is drawn beside it.
+
+A sample in `test/footprints.json` whose item has `data` lists in `chips` each chip its card draws, in order: `kind`, the whole `text`, the `width` of its box and, on a people chip that leaves some unnamed, `count`. `origin` in a sample's item is `item.origin`.
 
 ### Text cut to a width
 
-Where the web client shortens a string itself, as it does for a chart's labels and for chips, it keeps whole characters (grapheme clusters) while `span(kept + '…') * letter <= room * 100` and adds the ellipsis. It never cuts inside an emoji or between a letter and its accent. The first letter on a link's address bar and a person's initials are whole characters too.
+Where the web client shortens a string itself, as it does for a chart's labels, `cut(str, room)` gives the string, or as much of its start as fits `room` px with an ellipsis. It is only used at the text size, so every `span` below is in the text face and the letter is 72. Chips are not cut this way.
+
+```
+cut = str                        when span(str) * 72 <= room * 100
+budget = room * 100 - span('…') * 72
+```
+
+Otherwise split the string into the characters a reader sees, which are the extended grapheme clusters of Unicode Annex 29, and walk them in order with `used = 0` and nothing kept. For each cluster, add `span(cluster) * 72` to `used`, where the cluster is counted alone as a string of its own. When `used` is now more than `budget` and at least one cluster is already kept, stop without keeping this one. Otherwise keep it. So the first cluster is always kept, even when it alone is over the budget. The result is the kept clusters joined, with the white space at its end removed, then `…` (U+2026). White space here is what JavaScript's `trimEnd` removes: U+0009 to 000D, U+0020, U+00A0, U+1680, U+2000 to 200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF. When only white space was kept, the result is `…` alone.
+
+A cluster is counted alone, so the rule about U+200D applies inside a cluster and not across two. An emoji joined from several is one cluster and counts once. A letter that follows a U+200D which ended the cluster before it starts a new cluster, and counts its own width. A cut never lands inside an emoji or between a letter and its accent. The first letter on a link's address bar and a person's initials are whole clusters too.
 
 ## Chips
 
-Any card may show one line of chips under its content. A chip is a short fact about the item: when, where, who, or where the agents found it. A photo with a date and a place reads as a memory without a card type of its own.
+Any card may show one line of chips under its content. A chip is a short fact about the item: when, where it came from, where, or who. A photo with a date and a place reads as a memory without a card type of its own.
 
 Chips are read from the item alone. They never come from `view.props`, so the Renderer and the model have no part in them, and they do not depend on the node, so a card keeps its chips and its size when a pick is kept. `client/js/chips.js` is the whole rule for which chips an item has and has no drawing code. `client/js/components/index.js` fits them to a card.
 
@@ -148,18 +163,23 @@ Chips are read from the item alone. They never come from `view.props`, so the Re
 
 | Kind | Read from | Text on the chip |
 | --- | --- | --- |
-| `when` | `item.data.when`, a string | The string. |
-| `where` | `item.data.where`, a string | The string. |
-| `people` | `item.data.people`, an array of strings | The first two names joined by a comma and a space, then ` +N` for the N left unnamed: `Ada, Grace +3`. |
-| `origin` | The first of `item.data.from`, `item.data.holder` and `item.data.site` that is a string | The string. Only when the agents brought the item, which is `item.origin.by === 'agent'`. |
+| `when` | The first of `item.data.when` and `item.data.date` that is a source | The string. |
+| `origin` | The first of `item.data.holder`, `item.data.venue`, `item.data.site` and `item.data.from` that is a source. Only when the agents brought the item, which is `item.origin.by === 'agent'`. | The string. |
+| `where` | `item.data.where` | The string. |
+| `people` | The first of `item.data.people` and `item.data.authors` that holds a name, each an array of strings. With neither, `item.data.by`, a string, as one name. | The first two names joined by a comma and a space. With more than two names the chip also has `count`, how many it leaves unnamed. |
 
-A value is trimmed. An empty string, a value of another type, or an empty array is no source. A name that is not a string or is empty is skipped.
+A value is trimmed of the white space at both ends. A string is a source only when something is left after that, so an empty string, a string of spaces and a value of another type are passed over, and the next key is tried. A name that is not a string, or is empty once trimmed, is skipped, and an array with no name left is no source.
+
+The Scout writes `date`, `by`, `site` and `from` on what it brings, and `holder`, `venue` and `authors` when its source gives them. `when`, `where` and `people` are for what the user makes. The origin keys run from the most exact to the least: the museum that holds a work, the journal a paper is in, the site a page is on, and last the name of the source the Scout searched, such as `The web`.
+
+What the user made has no origin, so its order is when, where, people. What the agents brought says where it came from straight after its date, before a place or people, so a paper keeps its journal when the line has no room for its authors.
 
 **Which chips a card has.**
 
 1. Take the sources the item holds, in the order above.
-2. Drop each one whose `item.data` key the card's type already shows. The table below lists these.
-3. Keep the first three. `chips(item, shown)` returns these as `{ kind, text }`. A people chip that counts the unnamed also has `keep`, the end of `text` that holds the count.
+2. Drop each one whose text is exactly the text of a source before it. A page whose `by` is its `site` names the site once.
+3. Drop each one whose `item.data` key the card's type already shows, and each one whose text is exactly the trimmed value of such a key. The table below lists these.
+4. Keep the first three. `chips(item, shown)` returns these as `{ kind, text }`, and a people chip that leaves some unnamed also has `count`.
 
 **What each type already shows.**
 
@@ -168,17 +188,18 @@ A value is trimmed. An empty string, a value of another type, or an empty array 
 | `link` | `site`, in its address bar |
 | every other type | nothing |
 
-So a link the Scout brought whose only origin is its site gets no origin chip. One with `data.from` gets that as its origin chip.
+So a link the Scout brought whose origin is its site gets no origin chip, and nothing vaguer stands in for it. One with a `holder` or a `venue` that differs from its site gets that as its origin chip.
 
 **The line.**
 
 - A card with at least one chip is 28 px taller than the same card without. A card with none has the footprint its type gives it, no line, and the same markup as before chips existed.
-- The line never wraps. A date is drawn whole, because a date cut short says little. The chips after it share what is left: a card draws fewer than three chips when three would crowd, and cuts a chip that is longer than its share of the line. The chip line in the footprint section gives the numbers. `chipsOf(node, item)` returns the chips as drawn, `{ kind, text, full }`, where `text` is cut and `full` is not. A hover on a chip shows `full`.
+- The line never wraps. A date is drawn whole, because a date cut short says little. The chips after it share what is left: a card draws fewer than three chips when three would crowd, and clips the text of a chip that is longer than its box. The chip line in the footprint section gives the numbers. `chipsOf(node, item)` returns the chips as drawn, `{ kind, text, width }` and `count` on a people chip that leaves some unnamed, where `text` is whole and `width` is the chip's box in px.
+- A hover on a chip shows its label and its text: `Origin: The Metropolitan Museum of Art`. The labels are `When`, `Origin`, `Where` and `People`, the same as on the opened card.
 - A chip is 20 px tall and set in the text size. It starts with a glyph for its kind, so the kinds are told apart without colour: a clock for `when`, a pin for `where`, a figure for `people`, a turned arrow for `origin`.
 - The glyph takes the card's accent. That is the tree's colour, or amber while the card is a pick. Teal is not used.
 - The origin chip follows the item. A museum pick shows `The Metropolitan…` as a pick and after it is kept, at the same size. An item the user added shows no origin chip, whatever its data holds.
 
-**The opened card** lists every source in full, with no limit of three and without leaving out what the type shows: `When`, `Where`, `People` with every name, and `Origin` for an item the agents brought. `chipSources(item)` returns these as `{ kind, label, text }`. A card with an `Origin` leaves out the `From` line that says how the item arrived, because `Found on the web` beside a museum's name says the same thing less well. Its `Source` link stays.
+**The opened card** lists every source left after step 2 in full, with no limit of three and without leaving out what the type shows: `When`, `Origin` for an item the agents brought, `Where`, and `People` with every name. `chipSources(item)` returns these as `{ kind, label, text }`. A card with an `Origin` leaves out the `From` line that says how the item arrived, because `Found on the web` beside a museum's name says the same thing less well. Its `Source` link stays.
 
 **A known limit.** A card in a timeline shows its year on the axis and again on its `when` chip. The chip stays, because a card's footprint is worked out from its item and props alone. If the chip depended on the group, a card would change size when it joined or left a timeline, and the field could not be laid out from footprints.
 
@@ -348,6 +369,7 @@ Many similar members, piled so only the top shows until opened.
 - **Chosen when** more than 9 ungrouped siblings share one component. Plain code. The 6 most important stay out. The rest go in the stack.
 - **Props.** None. `title` reads like `5 more`.
 - **Members.** Most important first.
+- **Drawn closed as** the first member with the edges of up to two more behind it, each 7 px further down and to the right. The block is sized from the first member's drawn size alone. Each member behind it is drawn at the first member's drawn size with its content hidden, so a taller or wider card behind a smaller one shows only that edge. A fourth member and any after it are not drawn.
 
 ## Adding to a library
 
