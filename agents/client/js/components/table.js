@@ -11,6 +11,8 @@ const MOST_ROWS = 6;
 const ROW = 24;
 /** What a column of words is left with at least, when the columns are counted. */
 const WORDS_FLOOR = 44;
+/** What the first column is given at least, or all it needs when that is less, because it names each row. */
+const FIRST_FLOOR = 120;
 /** A number is never cut, so it is no wider than this. Anything wider is read as words. */
 const NUMBER_MOST = 160;
 const NUMERAL = /^[-+−–~≈<>≤≥±]?\s?\p{Sc}?\s?\d[\d.,:/\s]*\s?[\p{L}\p{Sc}%°‰µ²³]{0,5}$/u;
@@ -33,16 +35,18 @@ const grid = (props) => ({
 /**
  * The first rows and columns, as many as fit. No number is cut, in a column of numbers or beside
  * words: a column is at least as wide as the widest number it shows, and the words share what is
- * left. Columns are dropped from the end until each one that holds words can have `WORDS_FLOOR` px
- * or all it needs, and the card counts the columns it drops as it does the rows.
+ * left. The first column, which names each row, is at least `FIRST_FLOOR` px wide or as wide as it
+ * needs. Columns are dropped from the end until each one that holds words can have `WORDS_FLOOR`
+ * px or all it needs, and the card counts the columns it drops as it does the rows.
  */
 export function plan(item, props) {
   const { heads, rows } = grid(props);
   const shown = rows.slice(0, MOST_ROWS);
   const columns = heads.map((head, i) => {
     const cells = shown.map((row) => row[i] ?? '');
-    const floor = Math.max(0, ...cells.filter(isNumber).map(textWidth));
     const want = Math.max(textWidth(head), ...cells.map(textWidth));
+    const numbers = Math.max(0, ...cells.filter(isNumber).map(textWidth));
+    const floor = i === 0 ? Math.max(numbers, Math.min(want, FIRST_FLOOR)) : numbers;
     const number = numeric(shown, i);
     return { number, floor, want, least: number ? floor : Math.max(floor, Math.min(want, WORDS_FLOOR)) };
   });
