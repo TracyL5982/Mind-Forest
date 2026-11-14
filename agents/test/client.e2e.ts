@@ -55,20 +55,35 @@ function places(page: Page, ids: string[]): Promise<Record<string, string>> {
   return page.evaluate((wanted) => Object.fromEntries(wanted.map((id) => [id, (document.querySelector(`.card[data-id="${id}"]`) as HTMLElement).style.transform])), ids);
 }
 
+type Box = { title: string | null; left: number; top: number; right: number; bottom: number };
+
+/** Every card's box once the cards are still: two readings 300 ms apart that match, or the last reading after 5 s. */
+async function resting(page: Page): Promise<Box[]> {
+  const read = () => page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.card[data-id]:not(.is-under)')].map((el) => {
+    const { left, top, right, bottom } = el.getBoundingClientRect();
+    return { title: el.getAttribute('aria-label'), left, top, right, bottom };
+  }));
+  let last = await read();
+  for (const end = Date.now() + 5000; Date.now() < end; ) {
+    await page.waitForTimeout(300);
+    const next = await read();
+    if (JSON.stringify(next) === JSON.stringify(last)) break;
+    last = next;
+  }
+  return last;
+}
+
 async function overlaps(page: Page): Promise<string[]> {
-  await settle(page);
-  return page.evaluate(() => {
-    const cards = [...document.querySelectorAll<HTMLElement>('.card[data-id]:not(.is-under)')].map((el) => ({ title: el.getAttribute('aria-label'), r: el.getBoundingClientRect() }));
-    const hits: string[] = [];
-    for (let i = 0; i < cards.length; i++) {
-      for (let j = i + 1; j < cards.length; j++) {
-        const a = cards[i]!.r;
-        const b = cards[j]!.r;
-        if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) hits.push(`${cards[i]!.title} / ${cards[j]!.title}`);
-      }
+  const cards = await resting(page);
+  const hits: string[] = [];
+  for (let i = 0; i < cards.length; i++) {
+    for (let j = i + 1; j < cards.length; j++) {
+      const a = cards[i]!;
+      const b = cards[j]!;
+      if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) hits.push(`${a.title} / ${b.title}`);
     }
-    return hits;
-  });
+  }
+  return hits;
 }
 
 async function main(): Promise<void> {
