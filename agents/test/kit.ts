@@ -63,7 +63,7 @@ export function kit(settings: Partial<Settings> = {}): Kit {
       },
       read: async (url) => world.pages.get(url) ?? null,
       picture: async (url) => (world.pictures.has(url) ? { asset: (await assets.put(new Uint8Array([1]), 'image/jpeg', 'found')).id } : null),
-      video: async (url) => world.videos.get(url) ?? null,
+      videos: async () => world.web.flatMap((hit) => world.videos.get(hit.url) ?? []),
     },
     sources: { list: () => world.sources, search: async (id, query) => world.found.get(`${id}:${query}`) ?? [] },
     instagram: { recent: async (limit = 10) => world.posts.slice(0, limit) },

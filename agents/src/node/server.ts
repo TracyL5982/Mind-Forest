@@ -23,6 +23,7 @@ export interface ServerOptions {
   /** Every request must carry it. Generated and saved under dataDir when absent. */
   token?: string;
   instagram?: { token: string; userId: string };
+  keys?: Record<string, string | undefined>;
   settings?: Partial<Settings>;
   log?: (line: string) => void;
 }
@@ -81,7 +82,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     mind,
     roles: opts.roles,
     model: opts.model,
-    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram }),
+    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys }),
     assets,
     store,
     settings,

@@ -98,3 +98,11 @@ After the first hands-on session the picks were judged dull: every pick was a we
 
 **Alternative.** A fast search service with its own key (Brave Search has a free tier) would take about 12 seconds off every web pick. No keyless search engine answered: DuckDuckGo and Marginalia both refused.
 
+## 19. Sources that need a key
+
+**Decision.** `YOUTUBE_API_KEY`, `TMDB_API_KEY` and `EUROPEANA_API_KEY` are read from the env file. With a YouTube key, videos come from YouTube's own search and only embeddable ones are returned. TMDB and Europeana are sources in the registry and are offered to the model only when their key is present. The film source searches by title and by subject keyword, because TMDB's plain search matches titles only.
+
+**Why.** The user added the keys to cover video, film and historical material. Without a key the video path found a playable video in none of the live runs.
+
+**Safety.** Each key travels in the request address to its own provider. Failures report the status code only, so a key cannot end up in a note or a log.
+

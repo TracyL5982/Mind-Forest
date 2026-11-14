@@ -19,6 +19,7 @@ const run = await startServer({
   model: new MetaModel({ apiKey: env.MODEL_API_KEY ?? '' }),
   roles,
   token: 'live',
+  keys: env,
   instagram: env.META_IG_TOKEN && env.META_IG_USER_ID ? { token: env.META_IG_TOKEN, userId: env.META_IG_USER_ID } : undefined,
   log: (line) => console.log(line),
 });

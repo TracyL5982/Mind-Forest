@@ -95,8 +95,8 @@ export interface Tools {
     read(url: string): Promise<Page | null>;
     /** Downloads a picture and stores it, so a client shows it in place. Null when the address holds no usable picture. */
     picture(url: string): Promise<{ asset: string } | null>;
-    /** Confirms a video address is real and returns how to play it in place. */
-    video(url: string): Promise<Playable | null>;
+    /** Videos for a search that can be played in place, best first. */
+    videos(query: string): Promise<Playable[]>;
   };
   sources: {
     list(): Source[];

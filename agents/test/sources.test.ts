@@ -79,3 +79,10 @@ test('a source that answers with an error is a failure, not an empty result', as
 test('markup from a source is reduced to words', () => {
   assert.equal(plain('<p>Tom &amp; Jerry&#39;s <i>big</i> day&hellip;</p><p>Next</p>'), "Tom & Jerry's big day…\nNext");
 });
+
+test('a source that needs a key is only offered when its key is there', () => {
+  const ids = (keys?: Record<string, string>) => makeSources({ send: fetch, model: {} as ModelClient, read: async () => null, keys }).list().map((s) => s.id);
+  assert.ok(!ids().includes('films') && !ids().includes('heritage'));
+  assert.ok(ids({ TMDB_API_KEY: 'k' }).includes('films'));
+  assert.ok(ids({ EUROPEANA_API_KEY: 'k' }).includes('heritage'));
+});

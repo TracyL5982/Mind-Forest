@@ -7,6 +7,8 @@ export interface SourceOptions {
   send: Send;
   model: ModelClient;
   read: (url: string) => Promise<Page | null>;
+  /** Keys by their name in the env file. A source whose key is missing is not offered. */
+  keys?: Record<string, string | undefined>;
 }
 
 interface Adapter extends Source {
@@ -335,7 +337,57 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     },
   };
 
-  const adapters: Adapter[] = [web, papers, books, data, discussions, code, answers, museums, boards, podcasts, recipes];
+  // ---- sources that need a key. The key travels in the address, so a failure reports its status and nothing else.
+
+  const tmdbKey = opts.keys?.TMDB_API_KEY;
+  const films: Adapter = {
+    id: 'films',
+    name: 'Film and television',
+    goodFor: 'A film or series that tells this kind of story, shows this world or treats this subject, with a still and its synopsis.',
+    query: 'The exact title when you know one. Otherwise one subject word that such films share ("heist", "hotel", "lighthouse"). Never add the word film.',
+    show: 2,
+    async search(query) {
+      const tmdb = (path: string) => ask(`https://api.themoviedb.org/3/${path}${path.includes('?') ? '&' : '?'}api_key=${q(tmdbKey ?? '')}&include_adult=false`);
+      // A title search only matches titles, so the subject is also looked up as a keyword and the best-known films carrying it are added.
+      const [titled, keywords] = await Promise.all([tmdb(`search/multi?query=${q(query)}`), tmdb(`search/keyword?query=${q(query)}`).catch(() => ({}) as Json)]);
+      const ids = list(keywords.results).slice(0, 2).map((k) => k.id).join('|');
+      const tagged = ids ? await tmdb(`discover/movie?with_keywords=${q(ids)}&sort_by=vote_count.desc`).catch(() => ({}) as Json) : {};
+      const all = [...list(titled.results).slice(0, 3), ...list((tagged as Json).results).map((m) => ({ ...m, media_type: 'movie' })), ...list(titled.results).slice(3)];
+      const seen = new Set<string>();
+      return all.filter((m) => {
+        const id = `${m.media_type}/${m.id}`;
+        if (seen.has(id) || !(m.media_type === 'movie' || m.media_type === 'tv') || str(m.overview).length <= 60 || !(str(m.backdrop_path) || str(m.poster_path))) return false;
+        seen.add(id);
+        return true;
+      }).slice(0, 8).map((m): Found => ({
+        title: str(m.title) || str(m.name), by: m.media_type === 'tv' ? 'Television series' : 'Film', date: (str(m.release_date) || str(m.first_air_date)).slice(0, 4),
+        text: str(m.overview), from: 'The Movie Database',
+        url: `https://www.themoviedb.org/${m.media_type}/${m.id}`,
+        image: `https://image.tmdb.org/t/p/w780${str(m.backdrop_path) || str(m.poster_path)}`,
+      }));
+    },
+  };
+
+  const europeanaKey = opts.keys?.EUROPEANA_API_KEY;
+  const heritage: Adapter = {
+    id: 'heritage',
+    name: 'Europeana',
+    goodFor: 'Historical photographs, maps, posters, drawings, manuscripts and everyday objects from European museums, libraries and archives. Good for how something looked or was done in the past.',
+    query: 'Two or three plain words: a thing, a place, a trade, a period ("tram Lisbon", "herbarium", "shop interior 1920").',
+    show: 3,
+    visual: true,
+    async search(query) {
+      const json = await ask(`https://api.europeana.eu/record/v2/search.json?wskey=${q(europeanaKey ?? '')}&query=${q(query)}&rows=10&media=true&thumbnail=true&qf=TYPE:IMAGE&reusability=open&profile=standard`);
+      const one = (value: unknown) => str(list(value)[0]);
+      return list(json.items).filter((r) => one(r.edmIsShownBy) || one(r.edmPreview)).map((r): Found => ({
+        title: plain(one(r.title)), by: /^https?:/.test(one(r.dcCreator)) ? '' : one(r.dcCreator), date: one(r.year),
+        text: plain(one(r.dcDescription)).slice(0, 600), from: one(r.dataProvider) || 'Europeana',
+        url: str(r.guid).split('?')[0]!, image: one(r.edmIsShownBy) || one(r.edmPreview),
+      }));
+    },
+  };
+
+  const adapters: Adapter[] = [web, papers, books, data, discussions, code, answers, museums, boards, podcasts, recipes, ...(tmdbKey ? [films] : []), ...(europeanaKey ? [heritage] : [])];
   const byId = new Map(adapters.map((a) => [a.id, a]));
 
   return {

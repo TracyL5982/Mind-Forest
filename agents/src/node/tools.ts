@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import type { Assets, ModelClient, Page, Playable, SocialPost, Tools } from '../core/ports.ts';
 import { siteOf } from '../core/views.ts';
-import { makeSources } from './sources.ts';
+import { makeSources, plain } from './sources.ts';
 
 export interface ToolOptions {
   model: ModelClient;
   assets: Assets;
   instagram?: { token: string; userId: string };
+  /** Keys for sources that need one, by the name they have in the env file. A source without its key is left out. */
+  keys?: Record<string, string | undefined>;
   fetch?: typeof fetch;
 }
 
@@ -19,9 +21,14 @@ export function makeTools(opts: ToolOptions): Tools {
       search: (query, max) => opts.model.search({ role: 'tool.web', query, max }),
       read: (url) => readPage(send, url),
       picture: (url) => storePicture(send, opts.assets, url),
-      video: (url) => playable(send, url),
+      async videos(query) {
+        if (opts.keys?.YOUTUBE_API_KEY) return youtube(send, opts.keys.YOUTUBE_API_KEY, query);
+        // Without a YouTube key the model's web search finds addresses, and each is confirmed with YouTube before it is used.
+        const hits = await opts.model.search({ role: 'tool.web', query: `${query} youtube`, max: 6 });
+        return (await Promise.all(hits.map((hit) => playable(send, hit.url)))).flatMap((v) => v ?? []);
+      },
     },
-    sources: makeSources({ send, model: opts.model, read: (url) => readPage(send, url) }),
+    sources: makeSources({ send, model: opts.model, read: (url) => readPage(send, url), keys: opts.keys }),
     instagram: {
       async recent(limit = 12): Promise<SocialPost[]> {
         if (!opts.instagram) return [];
@@ -81,6 +88,20 @@ async function storePicture(send: typeof fetch, assets: Assets, url: string): Pr
   } catch {
     return null;
   }
+}
+
+async function youtube(send: typeof fetch, apiKey: string, query: string): Promise<Playable[]> {
+  const params = new URLSearchParams({ part: 'snippet', type: 'video', videoEmbeddable: 'true', safeSearch: 'moderate', maxResults: '6', q: query, key: apiKey });
+  const res = await send(`https://www.googleapis.com/youtube/v3/search?${params}`, { signal: AbortSignal.timeout(8_000) });
+  // The address holds the key, so only the status is reported.
+  if (!res.ok) throw new Error(`YouTube search answered ${res.status}`);
+  const json = (await res.json()) as { items?: { id?: { videoId?: string }; snippet?: { title?: string; channelTitle?: string; thumbnails?: { high?: { url?: string }; medium?: { url?: string } } } }[] };
+  return (json.items ?? []).flatMap((v) => {
+    const id = v.id?.videoId;
+    if (!id || !/^[\w-]{11}$/.test(id)) return [];
+    const poster = v.snippet?.thumbnails?.high?.url ?? v.snippet?.thumbnails?.medium?.url;
+    return [{ title: plain(v.snippet?.title ?? ''), url: `https://www.youtube.com/watch?v=${id}`, embed: `https://www.youtube.com/embed/${id}`, ...(poster ? { poster } : {}) }];
+  });
 }
 
 async function playable(send: typeof fetch, url: string): Promise<Playable | null> {

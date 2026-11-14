@@ -41,7 +41,7 @@ mind.load(new SqliteStore(join(dataDir, 'mindstorm.sqlite')).all());
 
 const ctx: RoleContext = {
   mind, model, assets, newId, now,
-  tools: makeTools({ model, assets }),
+  tools: makeTools({ model, assets, keys: env }),
   settings: { ...DEFAULT_SETTINGS },
   note: (role, message) => console.log(`  note ${role}: ${message}`),
 };

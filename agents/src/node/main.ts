@@ -41,6 +41,7 @@ const running = await startServer({
   model,
   roles,
   token: env.MIND_PALACE_TOKEN || undefined,
+  keys: { YOUTUBE_API_KEY: env.YOUTUBE_API_KEY, TMDB_API_KEY: env.TMDB_API_KEY, EUROPEANA_API_KEY: env.EUROPEANA_API_KEY },
   instagram: env.META_IG_TOKEN && env.META_IG_USER_ID ? { token: env.META_IG_TOKEN, userId: env.META_IG_USER_ID } : undefined,
   log: (line) => console.log(line),
 });

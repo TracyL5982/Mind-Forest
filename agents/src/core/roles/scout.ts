@@ -227,7 +227,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number): Promise<Direct
       '- "image": images has one entry. Its prompt is a complete prompt for an image generator: subject, composition, style, palette, light. When it extends a picture the user dropped, carry over that picture\'s style and palette so it reads as the same world. body is one sentence saying what it shows.',
       `- "gallery": images has exactly ${GALLERY_SIZE} entries, variations on one theme, each with its own short title and full prompt. title names the set.`,
       '- "find": real material from one source. source is one id from the list of sources, chosen for what this direction needs. lookups is two or three searches for the same thing in different words, the shortest and broadest first. Every source except the web is a keyword catalogue where each extra word removes results, so keep each search to two or three plain words and never put a whole question in one. title names what you hope to find. body is one or two sentences on what the user should get from it.',
-      '- "video": only when seeing motion matters. lookups has one search phrase for one specific well-known video. body is one sentence on what to watch for.',
+      '- "video": when watching teaches more than reading: a technique shown by hand, a performance, a process, a place in motion, a talk worth hearing. lookups has one search phrase, the way you would type it into a video site. body is one sentence on what to watch for.',
       '',
       'Sources for "find":',
       ...ctx.tools.sources.list().map((src) => `- ${src.id}: ${src.name}. ${src.goodFor} Search: ${src.query}`),
@@ -319,11 +319,8 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
       return choose(ctx, d, web!, await (early ?? onWeb()), taken);
     }
     case 'video': {
-      const hits = await ctx.tools.web.search(`${oneLine(d.lookups[0] || d.title, 160)} youtube`, 6);
-      for (const hit of hits) {
-        if (taken.has(urlKey(hit.url))) continue;
-        const video = await ctx.tools.web.video(hit.url);
-        if (!video || taken.has(urlKey(video.url))) continue;
+      for (const video of await ctx.tools.web.videos(oneLine(d.lookups[0] || d.title, 160))) {
+        if (taken.has(urlKey(video.url))) continue;
         taken.add(urlKey(video.url));
         return [
           {
