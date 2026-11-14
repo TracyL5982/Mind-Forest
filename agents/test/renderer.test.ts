@@ -511,7 +511,7 @@ test('the model may set states of one thing in order with each change between th
   ]);
 });
 
-test('the model may lead with one member, and may set four members on two axes that their content names', async () => {
+test('the model may lead with one member, and may set four members on two axes that their content names, each with a line of its own that stands whole', async () => {
   const k = kit();
   const idea = (title: string, summary: string): Fields => ({ title, summary, text: PLAIN });
   const { root, ids } = grow(k, [
@@ -525,13 +525,13 @@ test('the model may lead with one member, and may set four members on two axes t
   ]);
   k.model.on('renderer.composites', () => ({
     groups: [
-      proposal({ parent: root, composite: 'matrix', title: 'What to build', members: ids.slice(0, 4), axes: ['effort', 'impact'] }),
+      proposal({ parent: root, composite: 'matrix', title: 'What to build', members: ids.slice(0, 4), axes: ['effort', 'impact'], reasons: ['Little effort.', 'large impact', 'Little effort and little impact.', ''] }),
       proposal({ parent: root, composite: 'lead', title: 'Sign-ups', members: [ids[4]!, ids[5]!, ids[6]!] }),
     ],
   }));
   await render(k, ids);
   assert.deepEqual(groups(k).map((g) => [g.composite, g.members, g.props]), [
-    ['matrix', ids.slice(0, 4), { x: 'effort', y: 'impact' }],
+    ['matrix', ids.slice(0, 4), { x: 'effort', y: 'impact', reasons: { [ids[0]!]: 'Little effort.', [ids[1]!]: '', [ids[2]!]: 'Little effort and little impact.', [ids[3]!]: '' } }],
     ['lead', [ids[4], ids[5], ids[6]], {}],
   ]);
 

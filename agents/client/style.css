@@ -446,7 +446,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .rank-n.is-first { color: var(--bg); background: var(--tint); }
 .pane.is-pick .rank-n { color: var(--pick); background: color-mix(in srgb, var(--pick) 16%, transparent); }
 .pane.is-pick .rank-n.is-first { color: var(--bg); background: var(--pick); }
-.rank-why { color: var(--ink-2); }
+.rank-why, .mx-why { color: var(--ink-2); }
 .ba-step { position: absolute; padding: 0 12px; display: flex; flex-direction: column; align-items: center; }
 .ba-arrow { height: 24px; font-size: var(--type-title); line-height: 24px; color: var(--tint); }
 .ba-change { position: static; width: 100%; text-align: center; color: var(--ink); }

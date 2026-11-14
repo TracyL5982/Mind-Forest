@@ -1315,7 +1315,7 @@ Arrangements:
 - ranked: suggested siblings that each answer the same question, from the best answer to the least. Give members best first, and in reasons one entry per member, in the same order: a sentence or line copied whole from that member's content that says why it stands there, or an empty string.
 - beforeafter: 2 to 4 members that are one thing at different times or in different states. Give members in order, and in changes one entry for each step from one member to the next, so one fewer than the members: a sentence or line copied whole from the content of either member that names what changed, or an empty string.
 - lead: one member that the others support, explain or give evidence for. Give that member first.
-- matrix: exactly 4 members that differ along two measures, one member in each corner. Give axes as two names of 1 to 3 words, the horizontal measure first, each in words the members' content uses. Give members in the order top left, top right, bottom left, bottom right, where the horizontal measure grows to the right and the vertical one grows upwards.
+- matrix: exactly 4 members that differ along two measures, one member in each corner. Give axes as two names of 1 to 3 words, the horizontal measure first, each in words the members' content uses. Give members in the order top left, top right, bottom left, bottom right, where the horizontal measure grows to the right and the vertical one grows upwards, and in reasons one entry per member, in the same order: a sentence or line copied whole from that member's content that says why it sits in its corner, or an empty string.
 
 Rules:
 - A comparison or a beforeafter needs 2 to 4 members, a matrix exactly 4, and every other arrangement at least 3.
@@ -1361,7 +1361,8 @@ function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], membe
       // An axis is named in words that at least two of the members use. A name no member uses was made up.
       const [x, y] = g.axes.map((axis) => axis.trim());
       const named = (axis: string | undefined) => axis !== undefined && axis !== '' && axis.length <= ROOM.axis && ids.filter((id) => content(id).says(axis)).length >= 2;
-      return whole && ids.length === 4 && named(x) && named(y) ? { composite: 'matrix', title, members: ids, props: { x, y } } : null;
+      if (!whole || ids.length !== 4 || !named(x) || !named(y)) return null;
+      return { composite: 'matrix', title, members: ids, props: { x, y, reasons: Object.fromEntries(ids.map((id) => [id, line(g.reasons[g.members.indexOf(id)], id)])) } };
     }
     case 'timeline': {
       const label = new Map(g.members.map((id, i) => [id, (g.labels[i] ?? '').trim()]));

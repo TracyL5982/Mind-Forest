@@ -43,7 +43,7 @@ function propsFor(composite: CompositeId, ids: string[], next: () => number): Re
   const line = () => (next() < 0.2 ? '' : words(next, ROOM.reason.spaced));
   if (composite === 'ranked') return { reasons: Object.fromEntries(ids.map((id) => [id, line()])) };
   if (composite === 'beforeafter') return { changes: Object.fromEntries(ids.slice(1).map((id) => [id, line()])) };
-  if (composite === 'matrix') return { x: words(next, ROOM.axis), y: words(next, ROOM.axis) };
+  if (composite === 'matrix') return { x: words(next, ROOM.axis), y: words(next, ROOM.axis), reasons: Object.fromEntries(ids.map((id) => [id, line()])) };
   return {};
 }
 

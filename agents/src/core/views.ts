@@ -283,8 +283,11 @@ export const COMPOSITES = {
   overview: z.object({}),
   /** Pictures, swatches and ideas packed in columns, each at its own footprint. */
   moodboard: z.object({}),
-  /** Four members on a 2 by 2, in the order top left, top right, bottom left, bottom right. `x` grows to the right and `y` grows upwards. */
-  matrix: z.object({ x: words.max(ROOM.axis), y: words.max(ROOM.axis) }),
+  /**
+   * Four members on a 2 by 2, in the order top left, top right, bottom left, bottom right. `x` grows to the right and `y` grows upwards.
+   * `reasons[memberId]` is one line of why it sits in its corner, a whole sentence or line of its content, or empty.
+   */
+  matrix: z.object({ x: words.max(ROOM.axis), y: words.max(ROOM.axis), reasons: z.record(z.string(), z.string().refine((text) => text.length <= roomOf(ROOM.reason, text))) }),
 } as const;
 export type CompositeId = keyof typeof COMPOSITES;
 export const COMPOSITE_IDS = Object.keys(COMPOSITES) as CompositeId[];
