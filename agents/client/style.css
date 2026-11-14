@@ -285,7 +285,7 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* excerpt: a passage in an upright serif beside a rule, over the name of what it is from. A quote is a person's words, in italics on a washed face. */
 .c-excerpt { gap: 0; }
-.excerpt-text { padding-left: 12px; border-left: 2px solid var(--accent); font: var(--type-title)/var(--lead-title) 'Iowan Old Style', 'Palatino Linotype', Georgia, serif; }
+.excerpt-text { padding-left: 12px; border-left: 2px solid var(--accent); font: var(--type-title)/var(--lead-title) 'Iowan Old Style', 'Palatino Linotype', Georgia, serif; font-kerning: inherit; }
 .excerpt-from { margin-top: auto; padding-top: 10px; font-size: var(--type-text); line-height: var(--lead-text); }
 .excerpt-where { color: var(--ink-3); }
 .detail-excerpt .excerpt-text { font-size: 17px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -356,7 +356,7 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* definition: a headword over a short rule, and its meaning in an upright serif, as a dictionary sets them. */
 .c-definition { gap: 0; }
-.definition-text { font: var(--type-title)/var(--lead-title) 'Iowan Old Style', 'Palatino Linotype', Georgia, serif; }
+.definition-text { font: var(--type-title)/var(--lead-title) 'Iowan Old Style', 'Palatino Linotype', Georgia, serif; font-kerning: inherit; }
 .detail-definition .definition-text { font-size: 17px; line-height: 1.45; overflow-wrap: anywhere; }
 .detail-definition .fact-value, .detail-definition .card-title { overflow-wrap: anywhere; }
 
