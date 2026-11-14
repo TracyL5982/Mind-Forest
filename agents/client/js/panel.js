@@ -1,5 +1,8 @@
 import { h, put, safeUrl } from './dom.js';
-import { drawDetail } from './components.js';
+import { chipSources } from './chips.js';
+import { drawDetail } from './components/index.js';
+import { titleOf } from './components/shared.js';
+import { leftover } from './said.js';
 
 const HOW = { paste: 'You pasted this', drop: 'You dropped this in', voice: 'You said this', link: 'A link you added', web: 'Found on the web', instagram: 'Found on Instagram', 'image-gen': 'Made for you as a picture', idea: 'An idea from the librarian' };
 
@@ -15,12 +18,20 @@ function when(iso) {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+/** Every string a drawn part writes, each text node on its own. */
+function written(part) {
+  if (typeof part === 'string') return [part];
+  if (part.nodeType === 3) return [part.textContent];
+  return [...part.childNodes].flatMap(written);
+}
+
 /** The opened card: everything it holds, and what you can do with it. */
 export class Panel {
   constructor({ el, store, send, asset, onClose }) {
     Object.assign(this, { el, store, send, asset, onClose });
     this.nodeId = null;
     this.editing = false;
+    this.drawn = null;
     this.selection = new Set();
 
     this.badge = h('span', { class: 'badge' });
@@ -56,6 +67,7 @@ export class Panel {
     if (this.nodeId === null) return;
     this.nodeId = null;
     this.editing = false;
+    this.drawn = null;
     this.el.hidden = true;
     this.onClose();
   }
@@ -69,6 +81,8 @@ export class Panel {
 
     this.badge.textContent = pick ? 'Pick from the librarian' : node.parent === null ? 'Start of a tree' : 'Kept';
     this.badge.classList.toggle('is-pick', pick);
+    this.el.classList.toggle('is-pick', pick);
+    this.el.style.setProperty('--tint', this.store.view.colour.get(node.id) ?? '');
     this.count.textContent = this.selection.size > 1 ? `${this.selection.size} cards selected` : '';
 
     const picks = [...this.selection].filter((id) => this.store.node.get(id)?.status === 'pick');
@@ -80,17 +94,24 @@ export class Panel {
       this.deleteButton(node),
     );
     if (this.editing && this.scroll.querySelector('form')) return;
+    // The store hands out a new node or item only when one changed, so the same two mean the same view, and its scroll place is kept.
+    if (!this.editing && this.drawn?.node === node && this.drawn.item === item) return;
+    this.drawn = this.editing ? null : { node, item };
 
     const url = safeUrl(item.source.url ?? '');
+    const sources = chipSources(item);
+    const detail = this.editing ? [] : [drawDetail(node, item, { asset: this.asset })].flat(Infinity).filter((part) => part !== null && part !== undefined && part !== false && part !== '');
+    const { summary, text } = leftover(item, [item.title, ...detail.flatMap(written), ...sources.map((source) => source.text)]);
     const parts = this.editing ? [this.editForm(item)] : [
-      h('h2', { class: 'panel-title', text: item.title || 'Untitled' }),
+      h('h2', { class: 'panel-title', dir: 'auto', text: titleOf(item) }),
       node.why && h('p', { class: `panel-why ${pick ? 'is-pick' : ''}` }, h('span', { text: 'Why it is here' }), node.why),
-      drawDetail(node, item, { asset: this.asset }),
-      item.summary && item.summary !== item.title && h('p', { class: 'panel-summary', text: item.summary }),
-      item.text && item.text !== item.summary && item.text !== item.title && h('p', { class: 'panel-text', text: item.text }),
+      detail,
+      summary && h('p', { class: 'panel-summary', dir: 'auto', text: summary }),
+      text && h('p', { class: 'panel-text', dir: 'auto', text }),
       item.tags.length > 0 && h('div', { class: 'tags' }, item.tags.map((tag) => h('span', { class: 'tag', text: tag }))),
       h('dl', { class: 'facts' },
-        h('dt', { text: 'From' }), h('dd', { text: cameFrom(item) }),
+        sources.map(({ kind, label, text }) => [h('dt', { text: label }), h('dd', { data: { chip: kind }, text })]),
+        !sources.some(({ kind }) => kind === 'origin') && [h('dt', { text: 'From' }), h('dd', { text: cameFrom(item) })],
         url && [h('dt', { text: 'Source' }), h('dd', null, h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', text: url.replace(/^https?:\/\//, '') }))],
         when(item.source.capturedAt) && [h('dt', { text: 'Added' }), h('dd', { text: when(item.source.capturedAt) })],
       ),

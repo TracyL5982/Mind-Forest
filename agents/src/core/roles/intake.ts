@@ -1,6 +1,7 @@
 import type { Item, ItemData } from '../domain.ts';
 import type { JsonRequest } from '../ports.ts';
 import { mostRecent, parseChatJson, parseTranscript, type Conversation } from './intake/chat.ts';
+import { codeIn } from './intake/code.ts';
 import {
   CHAT_SYSTEM,
   ChatReply,
@@ -167,11 +168,14 @@ async function textItems(run: Run, jobs: TextJob[]): Promise<Item[][]> {
   return jobs.map((job, i) => {
     const plain = plainly(job.text, 'note', job.arrival.name);
     const stored = job.arrival.asset ? clip(job.text, STORED_FILE_TEXT) : job.text;
-    const entries = (reply?.entries ?? []).filter((e) => e.dump === i).slice(0, job.text.length > SHORT_TEXT ? MAX_PARTS : 1);
+    const code = codeIn(job.text);
+    // Pasted code is one thing however long it is, so it is never split into ideas.
+    const entries = (reply?.entries ?? []).filter((e) => e.dump === i).slice(0, job.text.length > SHORT_TEXT && !code ? MAX_PARTS : 1);
     const item = (described: Described, text: string, data: ItemData) =>
       makeItem(run.ctx, { kind: 'text', ...described, text, data, origin: USER, source: sourceOf(job.arrival) });
-    if (entries.length === 0) return [item(plain, stored, {})];
-    if (entries.length === 1) return [item(labels(entries[0]!, plain), stored, structure(entries[0]!, job.text))];
+    const whole = code ? { code } : {};
+    if (entries.length === 0) return [item(plain, stored, whole)];
+    if (entries.length === 1) return [item(labels(entries[0]!, plain), stored, { ...structure(entries[0]!, job.text), ...whole })];
     return entries.map((entry) => {
       const text = entry.text.trim() || entry.summary.trim();
       return item(labels(entry, plainly(text, 'note')), text, structure(entry, job.text));
@@ -237,7 +241,8 @@ async function mediaItem(run: Run, job: Extract<Job, { type: 'media' }>): Promis
     kind: job.kind,
     ...(reply ? labels(reply, plain) : plain),
     text: reply ? reply.description.trim() : '',
-    data: { ...(reply ? structure(reply) : {}), ...(job.kind === 'video' ? { mediaUrl: run.ctx.assets.url(job.asset) } : {}) },
+    // A picture has no text of its own, so its structure is held to what the model's description and the file name say.
+    data: { ...(reply ? structure(reply, `${reply.description}\n${job.name}`) : {}), ...(job.kind === 'video' ? { mediaUrl: run.ctx.assets.url(job.asset) } : {}) },
     origin: USER,
     source: { from: 'drop', asset: job.asset },
   });

@@ -39,7 +39,7 @@ export class Layout {
   /**
    * view: the store's derived view. parentOf(id) is a card's parent id, or null for a root.
    * footprint(id) is the room one card takes, [w, h].
-   * arrangeGroup(group) gives a composite's arrangement from ./composites.js.
+   * arrangeGroup(group) gives a composite's arrangement from ./composites/index.js.
    */
   update(view, parentOf, footprint, arrangeGroup) {
     const pos = new Map();
