@@ -441,6 +441,26 @@ button, input, textarea { font: inherit; color: inherit; }
 .cmp-label { position: absolute; left: 0; top: 5px; font-size: var(--type-text); line-height: var(--lead-text); color: var(--ink-2); }
 .cmp-cell { position: absolute; top: 5px; padding: 0 8px; font-size: var(--type-text); line-height: var(--lead-text); text-align: center; }
 .seq-arrow { position: absolute; text-align: center; font-size: var(--type-title); line-height: 1; transform: translateY(-50%); color: var(--tint); }
+.arr-words { position: absolute; font-size: var(--type-text); line-height: var(--lead-text); font-kerning: none; overflow-wrap: anywhere; }
+.rank-n { position: absolute; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: var(--type-text); line-height: 1; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--tint); background: color-mix(in srgb, var(--tint) 16%, transparent); }
+.rank-n.is-first { color: var(--bg); background: var(--tint); }
+.pane.is-pick .rank-n { color: var(--pick); background: color-mix(in srgb, var(--pick) 16%, transparent); }
+.pane.is-pick .rank-n.is-first { color: var(--bg); background: var(--pick); }
+.rank-why { color: var(--ink-2); }
+.ba-step { position: absolute; padding: 0 12px; display: flex; flex-direction: column; align-items: center; }
+.ba-arrow { height: 24px; font-size: var(--type-title); line-height: 24px; color: var(--tint); }
+.ba-change { position: static; width: 100%; text-align: center; color: var(--ink); }
+.lead-rule { position: absolute; height: 1px; background: var(--line); }
+.mx-split { position: absolute; background: var(--line); }
+.mx-split.is-across { height: 1px; }
+.mx-split.is-down { width: 1px; }
+.mx-axis { position: absolute; background: color-mix(in srgb, var(--tint) 55%, transparent); }
+.mx-axis.is-up { width: 1px; }
+.mx-axis.is-right { height: 1px; }
+.mx-axis::after { content: ''; position: absolute; border: 4px solid transparent; }
+.mx-axis.is-up::after { left: -4px; top: -6px; border-top: 0; border-bottom: 7px solid color-mix(in srgb, var(--tint) 55%, transparent); }
+.mx-axis.is-right::after { right: -6px; top: -4px; border-right: 0; border-left: 7px solid color-mix(in srgb, var(--tint) 55%, transparent); }
+.mx-name { white-space: nowrap; color: var(--ink); }
 
 /* ---- controls */
 

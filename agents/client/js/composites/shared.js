@@ -1,3 +1,5 @@
+import { TEXT_LETTER, wrap } from '../components/shared.js';
+
 export const PAD = 18;
 export const HEAD = 40;
 
@@ -36,3 +38,6 @@ export function grid(ids, sizes, { columns, gap }) {
 }
 
 export const squarish = (n) => (n <= 3 ? n : n === 4 ? 2 : 3);
+
+/** The lines a line of words set beside a card takes in a column `width` px wide, counted as the structured cards count theirs. None for no words. */
+export const linesOf = (str, width) => (str ? wrap(str, Math.floor(width), TEXT_LETTER, Infinity) : 0);
