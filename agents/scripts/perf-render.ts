@@ -70,6 +70,26 @@ const DRAWN: ((n: number) => Partial<Item>)[] = [
   () => ({ kind: 'chat', data: { messages: [{ role: 'user', text: 'Why does the room stretch?' }, { role: 'assistant', text: 'The lens zooms in while the camera pulls back.' }] } }),
   () => ({ data: { pros: ['fast builds'], cons: ['a steep start'], table: { heads: ['Plan', 'Price'], rows: [['Solo', '$8']] } } }),
   (n) => ({ text: pasted(n) }),
+  () => ({ data: { chart: { labels: ['Rent', 'Food', 'Other'], values: [50, 30, 20], unit: '%' } } }),
+  () => ({ data: { table: { heads: ['Plan', 'Price', 'Seats'], rows: [['Solo', '$8', '1'], ['Team', '$20', '5'], ['Org', '$1,200', '100']] } } }),
+  () => ({ data: { items: ['the tent', 'the stove', 'the map'], checklist: [true, false, true] } }),
+  () => ({ data: { question: 'Why is the sky blue?', answer: 'Air scatters short wavelengths the most.' } }),
+  () => ({ data: { term: 'Parallax', definition: 'the apparent shift of an object when the viewer moves' } }),
+  () => ({ data: { excerpt: { text: 'Every stair keeps the weight of who climbed it.', at: 'Chapter 3' }, site: 'example.com' } }),
+  () => ({ data: { pros: ['fast builds', 'one small binary'], cons: ['a steep start'] } }),
+  () => ({ data: { colours: [{ name: 'Ember', value: '#E4572E' }, { name: 'Lagoon', value: '#17BEBB' }, { name: 'navy', value: 'navy' }] } }),
+  () => ({ data: { facts: [{ label: 'Seats', value: '100' }, { label: 'Price', value: '$1,200' }, { label: 'Plan', value: 'Org' }] } }),
+  (n) => ({
+    kind: 'image', origin: { by: 'agent', role: 'scout' }, data: { kind: 'artwork', by: 'Ilse Brandt', date: '1928', medium: 'Gelatin silver print', holder: 'The Example Museum of Art' },
+    source: { from: 'web', url: `https://museum.example/works/${n}`, asset: `asset-${n}`, capturedAt: '2026-11-14T00:00:00.000Z' },
+  }),
+  (n) => ({
+    origin: { by: 'agent', role: 'scout' }, data: { kind: 'paper', by: 'M. Okafor et al.', date: '2011', authors: ['M. Okafor', 'L. Haas'], authorsCut: true, venue: 'Journal of Example Vision' },
+    source: { from: 'web', url: `https://doi.example/${n}`, capturedAt: '2026-11-14T00:00:00.000Z' },
+  }),
+  (n) => ({ title: `Lisbon ${n}`, data: { where: 'Lisbon' } }),
+  (n) => ({ title: `A thought ${n}`, text: '' }),
+  (n) => ({ kind: 'image', title: `beach-${n}.jpg`, data: { where: '杭州西湖' }, source: { from: 'drop', asset: `asset-${n}`, capturedAt: '2026-11-14T00:00:00.000Z' } }),
 ];
 
 function item(n: number): Item {
@@ -119,3 +139,4 @@ line(
   byRule ? time(() => items.reduce((drawn, i) => drawn + (byRule(i, (id) => `/assets/${id}`).component === 'note' ? 0 : 1), 0)) : null,
   'items drawn as more than a note',
 );
+if (byRule) console.log(`types drawn: ${[...new Set(items.map((i) => byRule(i, (id) => `/assets/${id}`).component))].sort().join(' ')}`);
