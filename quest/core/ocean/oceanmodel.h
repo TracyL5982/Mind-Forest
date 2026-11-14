@@ -148,6 +148,20 @@ private:
     // NOTE(port): added for Quest (see `update` and `showFull`): how many frames a work's small card
     // has waited for its picture to be unpacked, and the open works whose full picture is on its way.
     std::map<int, int> buildWaited;
+    // NOTE(port): added for Quest. A card that is waiting its turn to be built (or for its picture to be
+    // unpacked) shows where it will be, as a faint film of light the size it will have, once it has
+    // waited long enough to be noticed (the renderer's placeholder, render.h). Each card's, by its id.
+    std::map<int, EntityRef> ghosts;
+    // NOTE(port): added for Quest (see `stand`): the cards of a tree just stood up that are still to be
+    // made, each with the moment it is due to appear, and which tree they are for.
+    struct StandWaiting {
+        int id;
+        double due;
+    };
+    std::vector<StandWaiting> standQueue;
+    size_t standNext = 0;
+    const Tree* standTree = nullptr;
+    void standMore();
     std::vector<int> fullWaiting;
     void finishFull(int id);
     Tween<Vec2> pan{Vec2::zero()};                      // the open card's place on its layer: it is kept in the middle
@@ -847,6 +861,11 @@ private:
         static std::optional<ShelfFile> from(const Json& j);
         Json json() const;
     };
+    // NOTE(port): added for Quest. Saved trees read from the shelf file are hung one a frame, the most
+    // lately saved first, instead of all at once before the first frame: there will be many more of them.
+    // Those still to hang, in the file's order (oldest first). Nothing is written back until all are up.
+    std::vector<ShelfFile::Item> shelfWaiting;
+    void shelveWaiting();
 
     /// (`shelfURL`: the file's path; "" if there is nowhere to keep it.)
     static std::string shelfURL();

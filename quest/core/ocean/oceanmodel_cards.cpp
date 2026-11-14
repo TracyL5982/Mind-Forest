@@ -84,6 +84,20 @@ void OceanModel::makeCard(const TreeNode& n, double delay) {
         buildOpen(*c, n);
     } else if (look.alpha > 0) {
         buildQueue.push_back(n.id);
+        // NOTE(port): added for Quest (see `ghosts`). A picture that never arrives: the renderer draws its
+        // placeholder for it, after a moment, until `buildSmall` puts the card's own picture in its place.
+        if (catalog) {
+            static const ImageRef never = [] {
+                auto image = std::make_shared<Image>();
+                image->width = image->height = 1;
+                image->ready.store(false);
+                return image;
+            }();
+            Vec2 size = catalog->smallSize(n.ref);
+            EntityRef ghost = Entity::make(Mesh::generatePlane(size.x, size.y), {Material::unlit(Color::white(), Texture::make(never))});
+            c->smallHolder->addChild(ghost);
+            ghosts[n.id] = ghost;
+        }
     }
     touch(c->settles() + 0.4);          // and the moment after it lands, when its thread runs out to it
 }
@@ -136,6 +150,10 @@ Vec3 OceanModel::treePoint(const TreeNode* n) const {
 void OceanModel::buildSmall(CardView& c) {
     if (!(art && catalog && tree && find(*tree, c.id) && !c.built)) return;
     c.built = true;
+    if (auto ghost = ghosts.find(c.id); ghost != ghosts.end()) {
+        ghost->second->removeFromParent();
+        ghosts.erase(ghost);
+    }
     std::optional<Piece> piece;
     switch (c.ref.kind) {
     case Ref::Kind::film:

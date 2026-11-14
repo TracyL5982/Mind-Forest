@@ -1,6 +1,7 @@
 #include "base.h"
 
 #include <chrono>
+#include <mutex>
 #include <cstdlib>
 
 #ifdef __ANDROID__
@@ -78,8 +79,15 @@ const std::vector<std::string>& arguments() { return args; }
 
 namespace Cost {
 static Entry entries[kinds];
+static std::mutex guard;
 Entry& of(Kind kind) { return entries[kind]; }
 void reset() {
+    std::lock_guard<std::mutex> lock(guard);
     for (Entry& e : entries) e = {};
+}
+void add(Kind kind, double ms) {
+    std::lock_guard<std::mutex> lock(guard);
+    entries[kind].calls++;
+    entries[kind].ms += ms;
 }
 }

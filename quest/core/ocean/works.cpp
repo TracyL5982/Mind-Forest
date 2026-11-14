@@ -42,8 +42,24 @@ void Art::thumb(const Work& work, CGRect rect) const {
 /// A work's picture read from its own file, no larger than `pixels` on its long side.
 ImageRef Art::picture(const Work& work, int pixels) const {
     if (!workLibrary) return nullptr;
-    const std::shared_ptr<WorkLibrary>& library = workLibrary;
-    return read(library->fullURL(work), pixels);
+    // NOTE(port): changed for Quest: from a small copy where one will do (see `pictureSource`).
+    Source source = pictureSource(work, pixels);
+    if (source.url.empty()) return nullptr;
+    return read(source.url, source.maxPixel > 0 ? std::optional<int>(source.maxPixel) : std::nullopt);
+}
+
+Art::Source Art::pictureSource(const Work& work, int pixels) const {
+    if (!workLibrary) return {};
+    if (pixels <= 520) {
+        // "full/<id>.heic" has a small copy at "works-small/<id>.jpg".
+        size_t slash = work.file.find_last_of('/'), dot = work.file.find_last_of('.');
+        std::string name = work.file.substr(slash == std::string::npos ? 0 : slash + 1,
+                                            dot == std::string::npos || (slash != std::string::npos && dot < slash) ? std::string::npos
+                                                                                                                        : dot - (slash == std::string::npos ? 0 : slash + 1));
+        std::string small = platform::resourcePath("works-small/" + name + ".jpg");
+        if (!small.empty()) return {small, pixels >= 512 ? 0 : pixels};
+    }
+    return {workLibrary->fullURL(work), pixels};
 }
 
 ImageRef Art::read(const std::string& url, std::optional<int> pixels) {
@@ -84,12 +100,11 @@ bool Art::fullReady(const Work& work) const {
 
 bool Art::smallReady(const Work& work) const {
     if (!workLibrary) return true;
-    std::string url = workLibrary->fullURL(work);
-    // The size `workSmall` asks `drawPicture` for.
+    // The size `workSmall` asks `drawPicture` for, from where `picture` will read it.
     Vec2 s = workPicture(work, false);
-    int pixels = int(std::ceil(std::max(px(s.x), px(s.y))));
-    if (url.empty() || platform::imageReady(url, pixels)) return true;
-    platform::prefetchImage(url, pixels);
+    Source source = pictureSource(work, int(std::ceil(std::max(px(s.x), px(s.y)))));
+    if (source.url.empty() || platform::imageReady(source.url, source.maxPixel)) return true;
+    platform::prefetchImage(source.url, source.maxPixel);
     return false;
 }
 

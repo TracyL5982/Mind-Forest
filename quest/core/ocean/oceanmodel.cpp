@@ -154,19 +154,21 @@ void OceanModel::update(float dt) {
     lookAtOcean(dt);
     followPan(dt);
     drawHandGlow(now, dt);
+    shelveWaiting();
 
+    standMore();
     // Build a couple of waiting cards a frame, so a step never stalls.
     int budget = 2;
     // NOTE(port): changed for Quest. A work's small card draws its picture from the work's own file,
     // and unpacking that takes several frames' time on the headset's chip. It is unpacked on a
-    // background thread, and the card waits in the queue until it is there (half a second at most)
+    // background thread, and the card waits in the queue until it is there (showing its placeholder)
     // while the cards behind it are built. The Swift builds the first two, whatever they are.
     size_t next = 0;
     while (budget > 0 && next < buildQueue.size()) {
         int id = buildQueue[next];
         CardRef c = card(id);
         if (c && !c->built && c->ref.kind == Ref::Kind::work && art && catalog &&
-            !art->smallReady(catalog->works[c->ref.index]) && buildWaited[id]++ < 45) {
+            !art->smallReady(catalog->works[c->ref.index]) && buildWaited[id]++ < 900) {
             next++;
             continue;
         }
@@ -206,7 +208,7 @@ void OceanModel::update(float dt) {
             m->entity->removeFromParent();
             return true;
         }), movers.end());
-    } else if (shelfDirty) {
+    } else if (shelfDirty && shelfWaiting.empty()) {
         saveShelf();
     }
     report(dt, mediaTime() - began);

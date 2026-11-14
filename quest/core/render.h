@@ -53,12 +53,16 @@ public:
     /// spent, what still waits is sent on the next frames, and is not drawn until it has been: a step
     /// that makes a dozen cards costs a dozen frames a little each instead of one frame a lot.
     double uploadBudgetMs = 3;
+    /// A picture that has been on its way longer than `placeholderAfter` seconds shows as a faint shimmer
+    /// where it will be; one that took longer than `gentleAfter` fades in over `fadeIn` when it arrives.
+    /// Anything quicker simply appears, so most cards never show either.
+    double placeholderAfter = 0.15, gentleAfter = 0.12, fadeIn = 0.25;
 
 private:
     struct Program {
         unsigned id = 0;
         int model = -1, viewProj = -1, tint = -1, useTexture = -1, tex = -1, opacity = -1, threshold = -1;
-        int hover = -1, opaque = -1, time = -1, shift = -1, center = -1, uvMatrix = -1;
+        int hover = -1, opaque = -1, time = -1, shift = -1, center = -1, uvMatrix = -1, loading = -1;
     };
     struct Item {
         const Entity* entity;
@@ -70,6 +74,8 @@ private:
         const Hover* hover;
         float distance;
         int order;
+        float waiting = 0;      // its picture is not there yet: how strongly the placeholder shows, 0…1
+        float appear = 1;       // its picture has just arrived: how far it has faded in, 0…1
     };
     /// Small opaque pictures that share a texture and a tint, gathered into one mesh in world space
     /// each frame and drawn with one call: the ocean's hundreds of pieces are two of these.
@@ -87,6 +93,7 @@ private:
     Program unlit, line, dust, glow, video;
     std::vector<Item> opaque, transparent;
     double uploadSpentMs = 0;
+    double frameTime = 0;
     /// Whether a picture still waiting may be sent this frame; false means leave what uses it undrawn for now.
     bool mayUpload() const { return stats.textureUploads == 0 || uploadSpentMs < uploadBudgetMs; }
     unsigned timerQuery = 0;

@@ -1,6 +1,10 @@
 #include "scene.h"
 
 #include <algorithm>
+#include <condition_variable>
+#include <mutex>
+
+#include "base.h"
 
 namespace gpu {
 std::vector<unsigned>& deadTextures() {
@@ -17,6 +21,27 @@ std::vector<unsigned>& deadVertexArrays() {
 }
 }
 
+// MARK: - Pictures still on their way
+
+namespace {
+std::mutex arrivals;
+std::condition_variable arrivedSignal;
+}
+
+void Image::wait() const {
+    if (ready.load()) return;
+    std::unique_lock<std::mutex> lock(arrivals);
+    arrivedSignal.wait(lock, [&] { return ready.load(); });
+}
+
+void Image::arrived() {
+    {
+        std::lock_guard<std::mutex> lock(arrivals);
+        ready.store(true);
+    }
+    arrivedSignal.notify_all();
+}
+
 // MARK: - Textures
 
 TextureRef Texture::make(const ImageRef& image, bool mipmaps) {
@@ -26,6 +51,7 @@ TextureRef Texture::make(const ImageRef& image, bool mipmaps) {
     t->height = image->height;
     t->mipmaps = mipmaps;
     t->pending = image;
+    t->madeAt = mediaTime();
     return t;
 }
 

@@ -17,6 +17,9 @@
 //   -quitAfter <s>       end the run after this long
 //   -shotAt <s>          save the left eye to out/shot-<n>.bmp at this time (also -shotEvery <s>)
 //   -testScene           a plain test scene instead of the ocean
+//   -rasterTest          before any session: draw 200 pictures on the background thread beside 2000 text measures, and log how it went
+//   -syncRaster          draw every picture on the frame thread, as before pictures could arrive later (to compare)
+//   -slowRaster <ms>     hold each picture back this long, to see how waiting looks
 #include <EGL/egl.h>
 #include <GLES3/gl32.h>
 #include <GLES2/gl2ext.h>
@@ -37,6 +40,7 @@
 #include "app.h"
 #include "async.h"
 #include "base.h"
+#include "canvas.h"
 #include "host.h"
 #include "input.h"
 #include "jni_bridge.h"
@@ -506,6 +510,37 @@ void run() {
     XrTime lastDisplayTime = 0;
     double runBegan = 0, lastFrameWall = 0;
 
+    // `-rasterTest`: before any session, draw two hundred pictures on the background thread while this
+    // thread measures text, as a busy step does, and say how it went. It checks the one thing a headset
+    // lying on a desk (its session held back by the boundary dialog) cannot otherwise show.
+    if (Flags::has("rasterTest")) {
+        double began = mediaTime();
+        std::vector<ImageRef> made;
+        TextAttributes words;
+        words.font = Font::systemFont(28, Font::Weight::semibold);
+        words.foregroundColor = Color::white();
+        long measured = 0;
+        for (int i = 0; i < 200; i++) {
+            UIGraphicsImageRendererFormat format;
+            format.scale = 1;
+            std::string text = fmt("Picture %d of the test", i);
+            made.push_back(UIGraphicsImageRenderer(CGSize(320, 96), format).image([&](Canvas&) {
+                setFill(Color::hex(0x101820));
+                UIRectFill(CGRect(0, 0, 320, 96));
+                drawString(text, CGPoint(12, 30), words);
+            }));
+            for (int k = 0; k < 10; k++) measured += long(stringSize(fmt("measured %d %d", i, k), words).width);
+        }
+        double asked = mediaTime();
+        long lit = 0;
+        for (const ImageRef& image : made) {
+            image->wait();
+            for (size_t p = 0; p < image->rgba.size(); p += 97) lit += image->rgba[p];
+        }
+        logLine(fmt("[test] raster: 200 pictures asked for in %.0f ms beside 2000 measures (%ld), all there after %.0f ms, sum %ld, last %d x %d",
+                    (asked - began) * 1000, measured, (mediaTime() - began) * 1000, lit, made.back()->width, made.back()->height));
+    }
+
     // MARK: Frames
 
     while (!quitting) {
@@ -621,7 +656,23 @@ void run() {
         lastDisplayTime = frame.predictedDisplayTime;
 
         // The scene starts once the head is known: it stands where you are and faces where you face.
-        if (!started && host::head) {
+        // The two big pictures the ocean is built from are unpacked on the background thread first (0.1 s
+        // of work); frames keep coming meanwhile, with nothing in them yet.
+        static bool atlasesAsked = false;
+        static std::string atlases[2];
+        if (!started && !atlasesAsked) {
+            atlasesAsked = true;
+            if (!Flags::has("testScene")) {
+                atlases[0] = platform::resourcePath("clips/atlas.jpg");
+                atlases[1] = platform::resourcePath("works/atlas.jpg");
+                for (const std::string& a : atlases) platform::prefetchImage(a, 0);
+            }
+        }
+        bool atlasesReady = true;
+        for (const std::string& a : atlases) {
+            if (!a.empty() && !platform::imageReady(a, 0)) atlasesReady = false;
+        }
+        if (!started && host::head && atlasesReady) {
             double began = mediaTime();
             scene->start();
             started = true;
@@ -768,8 +819,8 @@ void run() {
             f.uploadBytes = renderer.stats.meshUploadBytes;
             perf.add(f, logFps);
             lastFrameWall = wall;
-            // A frame that took more than two frames' time: say what it spent it on.
-            if (f.cpuMs > 22 && logFps) {
+            // A frame that ran over its time (13 ms is past the budget at 90 Hz, and at 72): say what it spent it on.
+            if (f.cpuMs > 13 && logFps) {
                 auto part = [](const char* name, Cost::Kind k) { return fmt("%s %d calls %.1f ms", name, Cost::of(k).calls, Cost::of(k).ms); };
                 logLine(fmt("[hitch] %.1f s: %.0f ms (update %.0f, draw %.0f) · %s · %s · %s · %s", elapsed, f.cpuMs, updateMs, f.buildMs + f.submitMs,
                             part("text layout", Cost::layout).c_str(), part("rasterise", Cost::raster).c_str(),

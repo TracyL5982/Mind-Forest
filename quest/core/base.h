@@ -59,15 +59,13 @@ struct Entry {
 };
 Entry& of(Kind kind);
 void reset();
+/// One more call of a kind, from any thread.
+void add(Kind kind, double ms);
 /// Adds the time from its making to its end to one kind.
 struct Scope {
     Kind kind;
     double began;
     explicit Scope(Kind kind) : kind(kind), began(mediaTime()) {}
-    ~Scope() {
-        Entry& e = of(kind);
-        e.calls++;
-        e.ms += (mediaTime() - began) * 1000;
-    }
+    ~Scope() { add(kind, (mediaTime() - began) * 1000); }
 };
 }

@@ -2,6 +2,12 @@
 // Canvas writes, the measures remembered, strings, cropping and the blur.
 #include "canvas.h"
 
+#include <chrono>
+#include <thread>
+
+#include "async.h"
+#include "base.h"
+
 #include <algorithm>
 #include <cstring>
 #include <map>
@@ -326,6 +332,41 @@ void Canvas::drawText(const std::string& string, CGPoint at, const TextAttribute
 }
 
 ImageRef Canvas::image() {
+    // Quest: the calls are recorded here, on the frame thread (sizes come from measuring, which is done by
+    // now), and turned into pixels on the background thread. What comes back at once is a picture whose
+    // size is known and whose pixels are on their way: a step that makes a dozen cards no longer holds
+    // the frame while each is painted. `-syncRaster` paints them here, as before.
+    static const bool later = !Flags::has("syncRaster");
+    if (later) {
+        auto out = std::make_shared<Image>();
+        out->width = std::max(1, int(std::ceil(size.width * scale)));
+        out->height = std::max(1, int(std::ceil(size.height * scale)));
+        out->scale = scale;
+        out->ready.store(false);
+        auto job = std::make_shared<Canvas>(*this);
+        Async::run([job, out] {
+            // Pictures this one is drawn from were asked for before it: they are there by now.
+            for (const ImageRef& used : job->images) {
+                if (used) used->wait();
+            }
+            // `-slowRaster <ms>` holds each picture back, to see how waiting looks.
+            static const double slow = Flags::number("slowRaster");
+            if (slow > 0) std::this_thread::sleep_for(std::chrono::microseconds(int64_t(slow * 1000)));
+            ImageRef done = platform::rasterize(*job);
+            if (done) {
+                if (job->opaque) {
+                    for (size_t i = 3; i < done->rgba.size(); i += 4) done->rgba[i] = 255;
+                }
+                out->width = done->width;
+                out->height = done->height;
+                out->rgba = std::move(done->rgba);
+            } else {
+                out->rgba.assign(size_t(out->width) * size_t(out->height) * 4, 0);
+            }
+            out->arrived();
+        });
+        return out;
+    }
     ImageRef out = platform::rasterize(*this);
     if (!out) return nullptr;
     out->scale = scale;
@@ -456,6 +497,7 @@ void TextLayout::enumerateEnclosingRects(CharacterRange range, const std::functi
 
 ImageRef cropping(const ImageRef& image, CGRect to) {
     if (!image) return nullptr;
+    image->wait();      // its pixels are read here
     int x0 = std::max(0, int(std::floor(to.minX()))), y0 = std::max(0, int(std::floor(to.minY())));
     int x1 = std::min(image->width, int(std::ceil(to.maxX()))), y1 = std::min(image->height, int(std::ceil(to.maxY())));
     if (x1 <= x0 || y1 <= y0) return nullptr;
@@ -473,6 +515,7 @@ ImageRef cropping(const ImageRef& image, CGRect to) {
 
 ImageRef gaussianBlur(const ImageRef& image, float sigma) {
     if (!image || image->width <= 0 || image->height <= 0 || !(sigma > 0)) return image;
+    image->wait();      // its pixels are read here
     const int w = image->width, h = image->height;
     // sRGB to linear light and back, by table.
     static float toLinear[256];

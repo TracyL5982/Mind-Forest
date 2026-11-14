@@ -63,7 +63,8 @@ object CanvasRenderer {
 
     // MARK: Fonts
 
-    private val typefaces = HashMap<Int, Typeface>()
+    // (Text is measured on the frame thread while pictures are drawn on another: this is shared between them.)
+    private val typefaces = java.util.concurrent.ConcurrentHashMap<Int, Typeface>()
 
     /** The system font at one of Font::Weight's four: 0 regular, 1 medium, 2 semibold, 3 bold. */
     private fun typeface(weight: Int): Typeface = typefaces.getOrPut(weight) {
@@ -131,6 +132,27 @@ object CanvasRenderer {
             return Frame(0f, advance, lines)
         }
         val unlimited = !(width < 1e6f)
+        if (unlimited && text.indexOf('\n') < 0) {
+            // One line with nothing to wrap it: no line breaker is needed, only its width. Most of what is
+            // measured is this (a title, a label, a tag), and a step that opens a tree measures dozens.
+            var shownEnd = text.length
+            while (shownEnd > 0 && text[shownEnd - 1] == ' ') shownEnd--
+            val w = paint.measureText(text, 0, shownEnd)
+            var edges: FloatArray? = null
+            if (carets) {
+                edges = FloatArray(text.length + 1)
+                val advances = FloatArray(max(shownEnd, 1))
+                if (shownEnd > 0) paint.getTextWidths(text, 0, shownEnd, advances)
+                var x = 0f
+                for (k in 0..text.length) {
+                    val at = min(k, shownEnd)
+                    if (k in 1..shownEnd) x += advances[k - 1]
+                    edges[k] = min(max(0f, x - (if (at > 0) kernShift else 0f)), w)
+                }
+            }
+            lines.add(Line(text.substring(0, shownEnd), 0f, w, advance, advance - m.descent, 0, text.length, false, edges))
+            return Frame(w, advance, lines)
+        }
         val wrap = if (unlimited) 1 shl 24 else max(1, floor(width + 0.01f).toInt())
         val builder = StaticLayout.Builder.obtain(text, 0, text.length, paint, wrap)
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)

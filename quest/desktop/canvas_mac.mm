@@ -25,6 +25,8 @@
 #include "base.h"
 #include "canvas.h"
 
+#include <mutex>
+
 namespace {
 
 // MARK: - Fonts
@@ -32,6 +34,9 @@ namespace {
 /// The system font at a size and weight. Kept for good: there are a few dozen at most.
 CTFontRef systemFont(const Font& font) {
     static std::map<std::pair<float, int>, CTFontRef> known;
+    // (Text is measured on the frame thread while pictures are drawn on another: this is shared between them.)
+    static std::mutex guard;
+    std::lock_guard<std::mutex> lock(guard);
     auto key = std::make_pair(font.pointSize, int(font.weight));
     auto it = known.find(key);
     if (it != known.end()) return it->second;

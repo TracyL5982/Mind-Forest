@@ -458,12 +458,14 @@ void OceanModel::loadShelf(const std::shared_ptr<Catalog>& catalog) {
             }
             if (holdsWorks && !sameWorks) {
                 dropped += 1;
-            } else if (TreeRef t = Tree::make(item.tree, catalog)) {
-                shelve(t, std::nullopt, nullptr, item.spot);
+            } else {
+                // NOTE(port): the Swift makes each tree and hangs its cover here, before the first frame.
+                // Here they wait, and `shelveWaiting` hangs one a frame, the newest first.
+                shelfWaiting.push_back(item);
             }
         }
         if (dropped > 0) logLine(fmt("[ocean] shelf: %d covers held works the library has since changed, and were let go", dropped));
-        logLine(fmt("[ocean] shelf: %d covers kept from last time", int(shelf.size())));
+        logLine(fmt("[ocean] shelf: %d covers kept from last time", int(shelfWaiting.size())));
         return;
     }
     for (const SavedSpec& spec : catalog->saved) {
@@ -471,12 +473,27 @@ void OceanModel::loadShelf(const std::shared_ptr<Catalog>& catalog) {
     }
 }
 
+/// Hangs one more of the saved trees read at launch: the most lately saved of those still waiting.
+void OceanModel::shelveWaiting() {
+    if (shelfWaiting.empty() || !catalog || !built) return;
+    ShelfFile::Item item = std::move(shelfWaiting.back());
+    shelfWaiting.pop_back();
+    size_t before = shelf.size();
+    bool loaded = shelfLoaded;
+    shelfLoaded = false;        // hanging what was read is not a change to write back
+    if (TreeRef t = Tree::make(item.tree, catalog)) shelve(t, std::nullopt, nullptr, item.spot);
+    shelfLoaded = loaded;
+    // It is older than every one hung before it this way: it goes in front of them, so the shelf keeps the file's order.
+    if (shelf.size() > before) std::rotate(shelf.begin(), shelf.end() - 1, shelf.end());
+    touch(time + 0.2);
+}
+
 /// Writes the shelf down. A tree taken off the shelf and still standing is kept at the place it left.
 void OceanModel::saveShelf() {
     shelfDirty = false;
     std::string url = shelfURL();
     if (url.empty() || !catalog) return;
-    std::vector<ShelfFile::Item> items;
+    std::vector<ShelfFile::Item> items = shelfWaiting;     // (none, by the time anything is written: see `update`)
     for (const Shelved& cover : shelf) items.push_back(ShelfFile::Item{cover.tree->saved(), cover.spot});
     if (tree && standingSpot) items.push_back(ShelfFile::Item{tree->saved(), *standingSpot});
     std::string data = ShelfFile(int(catalog->clips.size()), catalog->worksKey, items).json().dump();

@@ -19,6 +19,7 @@
 //   components.set(Art.gaze / Art.hover)           -> entity->hover = Hover::shader() / Hover::highlight(...)
 //   components.remove(HoverEffectComponent.self)   -> entity->hover = Hover::none()
 #pragma once
+#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
@@ -61,6 +62,12 @@ struct Image {
     float scale = 1;
     std::vector<uint8_t> rgba;
     Vec2 size() const { return {float(width) / scale, float(height) / scale}; }
+    /// False while its pixels are still being drawn on the background thread (canvas.cpp): its size is
+    /// known, `rgba` is not to be read yet. The renderer waits for it without stopping; anything else
+    /// that reads the pixels calls `wait()` first.
+    std::atomic<bool> ready{true};
+    void wait() const;
+    void arrived();
 };
 using ImageRef = std::shared_ptr<Image>;
 
@@ -75,6 +82,9 @@ public:
     bool mipmaps = false;
     /// Kept until uploaded, then dropped.
     ImageRef pending;
+    /// When it was made, and (if it took long enough to notice) when it reached the screen: the renderer
+    /// shows a card that is still waiting for its picture as a faint shimmer, and lets the picture in gently.
+    double madeAt = 0, fadeFrom = 0;
     /// Renderer's: the GL name, and for a video, that it is an external texture.
     unsigned gl = 0;
     bool external = false;

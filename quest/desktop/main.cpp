@@ -102,7 +102,9 @@ int main(int argc, char** argv) {
         }
         double wall = glfwGetTime();
         // For a picture, app time runs as fast as frames can be made.
-        float dt = shot ? 1.f / 90 : float(std::min(0.1, std::max(1.0 / 240, wall - last)));
+        // (`-realtime` keeps the wall clock even for a picture: for looking at what waiting looks like.)
+        static const bool realtime = Flags::has("realtime");
+        float dt = shot && !realtime ? 1.f / 90 : float(std::min(0.1, std::max(1.0 / 240, wall - last)));
         last = wall;
         elapsed += dt;
 
@@ -163,12 +165,13 @@ int main(int argc, char** argv) {
             magnify = 1;
             scene->magnifyEnded();
         }
-        Async::drain(shot.has_value());      // for a picture, wait for what is being read, so it comes out the same each time
+        Async::drain(shot.has_value() && !realtime);      // for a picture, wait for what is being read, so it comes out the same each time
         Cost::reset();
         double updateBegan = mediaTime();
         scene->update(dt);
         double updateMs = (mediaTime() - updateBegan) * 1000;
-        if (Flags::has("hitches") && updateMs > 4) {
+        // `-hitches` lists updates over 4 ms; `-hitches <ms>` sets the line (the headset's chip is about six times slower).
+        if (Flags::has("hitches") && updateMs > (Flags::number("hitches") > 0 ? Flags::number("hitches") : 4)) {
             auto part = [](const char* name, Cost::Kind k) { return fmt("%s %d calls %.1f ms", name, Cost::of(k).calls, Cost::of(k).ms); };
             fprintf(stderr, "[hitch] %.1f s: update %.1f ms · %s · %s · %s\n", elapsed, updateMs, part("text layout", Cost::layout).c_str(),
                     part("rasterise", Cost::raster).c_str(), part("decode", Cost::decode).c_str());

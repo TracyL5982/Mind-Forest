@@ -399,6 +399,15 @@ public:
     // NOTE(port): added for Quest. Unpacking a work's own file takes several frames' time on the
     // headset's chip, so both sizes can be asked for ahead (on a background thread) and waited for:
     // the full picture an open work shows, and the small one a small card draws.
+    /// Where a work's picture is read from when it is wanted no larger than `pixels`, and the size to ask
+    /// the file for (0: as it is). Up to 520 px that is a small copy made for the headset
+    /// ("works-small/<id>.jpg", 512 px, by tools/push_media.sh) where there is one: unpacking the 1600 px
+    /// original for a card a few centimetres wide costs the headset about 55 ms a picture.
+    struct Source {
+        std::string url;
+        int maxPixel = 0;
+    };
+    Source pictureSource(const Work& work, int pixels) const;
     /// Whether the work's full picture is unpacked and waiting; asks for it if it has not been.
     bool fullReady(const Work& work) const;
     /// The same for the picture `workSmall` draws.

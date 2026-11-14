@@ -114,7 +114,7 @@ quest/tools/perf.py --sweep "-hz 72" "-hz 90" "-ffr 0" "-scale 1.2"
 time at the 95th percentile, late frames, draw calls, stale frames), so it can gate a change.
 `--profile` samples the CPU with simpleperf and lists the hottest functions. With `-perf` (which
 the script passes) or `-fps`, the app also writes a `[hitch]` line to the log for every frame that took
-more than two frames' time, saying how much of it went to text layout, rasterising, picture decoding
+more than 13 ms, saying how much of it went to text layout, rasterising, picture decoding
 and texture upload; the whole log of the last run is kept in `quest/perf/last-log.txt`.
 
 The headset can interrupt a run by itself: its boundary dialog appears when it loses its bearings on a
@@ -122,12 +122,40 @@ desk, and a nudge can wake its wear sensor. The script notices (the session stop
 again up to `--retries` times. If it keeps happening, put the headset on once and confirm the boundary.
 
 `quest/perf/baseline.json` is the scripted demo (60 s, release build, 90 Hz, default settings) on
-2026-11-13: 0.18 % late frames, CPU 2.1 ms at the median and 3.5 ms at the 95th percentile, 1.7 ms of
-GPU as the compositor measures it, at most 112 draw calls.
+2026-11-14: 0.02 % late frames (1 of 5,131), CPU 2.1 ms at the median and 3.6 ms at the 95th percentile,
+the worst frame 8 ms, 1.8 ms of GPU as the compositor measures it, at most 118 draw calls. The
+compositor's own stale-frame count swings between about 15 and 55 from run to run of the same build.
 
 For numbers that can be compared: put the headset on a stand facing the same way each time (what is in
 view is what is drawn), let it cool between runs, and use the release build (`run.sh --build --release`,
 which also compiles the app's Kotlin ahead of time on the headset).
+
+## Loading without stutter
+
+Nothing slow runs on the frame thread if it can run elsewhere (`core/async.*`, one background thread),
+and what must run there is spread over frames:
+
+- **Card pictures.** The drawing calls for a card are recorded on the frame thread (its size comes from
+  measuring text, which stays there) and turned into pixels in the background. The card's picture is a
+  texture whose size is known and whose pixels are on their way; the renderer simply does not draw it
+  until they are there, then sends at most 3 ms of new pictures to the GPU per frame.
+- **Work pictures.** A card a few centimetres wide is drawn from a small copy of the work's picture
+  (`works-small/<id>.jpg`, 512 px, made by `tools/push_media.sh` into `media-src/quest`): unpacking the
+  1600 px original costs the headset about 55 ms, the small copy about 4. It is unpacked in the
+  background, and the card waits its turn in the build queue until it is ready. The full picture an open
+  work shows, and the two atlases at launch, are unpacked in the background too.
+- **A tree's cards** are made over the few frames after it is stood up, about 3 ms' worth a frame and
+  each before it is due to appear, not all in the one frame (`-standBudget <ms>`).
+- **Saved trees' covers** are hung one a frame after launch, the most lately saved first, so the shelf
+  can grow without the launch growing with it.
+- **Film players** are made and let go on their own thread.
+- **What you see while waiting.** Anything that arrives within about 0.15 s just appears. A card that
+  waits longer shows as a faint film of light, the size it will be, with a slow sweep across it, and
+  its picture fades in over 0.25 s when it arrives.
+
+`-syncRaster` puts picture drawing back on the frame thread to compare; `-slowRaster <ms>` delays each
+picture so the waiting look can be seen; `-rasterTest` checks the background path on the headset before
+any session starts.
 
 ## Looking at it on the Mac
 

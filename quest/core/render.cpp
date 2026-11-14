@@ -64,9 +64,18 @@ uniform float uOpacity;
 uniform float uThreshold;
 uniform vec3 uHover;
 uniform int uOpaque;
+uniform float uLoading;
+uniform float uTime;
 in highp vec2 vUV;
 out vec4 frag;
 void main() {
+    if (uLoading > 0.0) {
+        // A picture still on its way: a film of light where it will be, with a slow sweep across it.
+        float sweep = 0.5 + 0.5 * sin(uTime * 2.6 - (vUV.x + vUV.y) * 3.2);
+        float a = (0.05 + 0.09 * sweep * sweep) * uLoading * uOpacity;
+        frag = vec4(vec3(0.72, 0.85, 1.0) * a, a);
+        return;
+    }
     vec4 c = uTint;
     if (uUseTexture != 0) c *= texel(texture(uTex, vUV));
     if (c.a < uThreshold) discard;
@@ -238,6 +247,7 @@ Renderer::Program Renderer::build(const char* name, const char* vertex, const ch
     p.shift = glGetUniformLocation(p.id, "uShift");
     p.center = glGetUniformLocation(p.id, "uCenter");
     p.uvMatrix = glGetUniformLocation(p.id, "uUVMatrix");
+    p.loading = glGetUniformLocation(p.id, "uLoading");
     return p;
 }
 
@@ -435,7 +445,26 @@ void Renderer::collect(const Entity* e, const Mat4& parent, float opacity, const
         }
         if (drawn) {
             Item item{e, mesh, &material, world, opacity, hovered, hover, distance, int(opaque.size() + transparent.size())};
-            (isTransparent(material, opacity) ? transparent : opaque).push_back(item);
+            bool see = isTransparent(material, opacity);
+            if (Texture* texture = material.kind == Material::Kind::unlit ? material.texture.get() : nullptr) {
+                if (!texture->gl) {
+                    // Not on the GPU yet. If its pixels are still being drawn, nothing shows at first, then a placeholder.
+                    if (texture->pending && !texture->pending->ready.load()) {
+                        double waited = frameTime - texture->madeAt;
+                        if (waited < placeholderAfter) drawn = false;
+                        item.waiting = float(std::min(1.0, (waited - placeholderAfter) / 0.25));
+                        see = true;
+                    }
+                } else if (texture->fadeFrom > 0) {
+                    double since = frameTime - texture->fadeFrom;
+                    if (since >= fadeIn) texture->fadeFrom = 0;
+                    else {
+                        item.appear = float(std::max(0.0, since / fadeIn));
+                        see = true;
+                    }
+                }
+            }
+            if (drawn) (see ? transparent : opaque).push_back(item);
         }
     }
     for (const auto& c : e->children) collect(c.get(), world, opacity, hover, hovered, views);
@@ -447,6 +476,7 @@ bool Renderer::gather(const Item& item) {
     if (item.hover && item.hover->kind == Hover::Kind::highlight && item.hovered > 0.004f) return false;
     if (m.opacityThreshold > 0) return false;
     Texture* texture = m.texture.get();
+    if (texture && ((texture->pending && !texture->pending->ready.load()) || texture->fadeFrom > 0)) return false;
     Batch* batch = nullptr;
     for (Batch& b : batches) {
         if (b.count == 0 && !batch) batch = &b;     // a free one, if none matches
@@ -483,7 +513,7 @@ void Renderer::drawBatches(const Mat4* viewProj) {
     for (Batch& b : batches) {
         if (b.count == 0) continue;
         if (b.texture && b.texture->pending) {
-            if (!mayUpload()) continue;
+            if (!b.texture->pending->ready.load() || !mayUpload()) continue;
             upload(b.texture);
         }
         if (!b.vao) {
@@ -512,6 +542,7 @@ void Renderer::drawBatches(const Mat4* viewProj) {
         Vec3 c = b.tint.linear();
         glUniform4f(p.tint, c.x, c.y, c.z, b.tint.a);
         glUniform1f(p.threshold, 0);
+        glUniform1f(p.loading, 0);
         glUniform3f(p.hover, 0, 0, 0);
         bool textured = b.texture && b.texture->gl;
         glUniform1i(p.useTexture, textured ? 1 : 0);
@@ -557,6 +588,7 @@ void Renderer::draw(const EntityRef& root, const Views& views, double time) {
 
     opaque.clear();
     transparent.clear();
+    frameTime = mediaTime();
     if (root) collect(root.get(), Mat4::identity(), 1, nullptr, 0, views);
     if (batching) {
         size_t kept = 0;
@@ -601,7 +633,7 @@ void Renderer::draw(const EntityRef& root, const Views& views, double time) {
 
 void Renderer::submit(const Item& item, const Views& views, double time, const Mat4* viewProj) {
     const Material& m = *item.material;
-    bool see = isTransparent(m, item.opacity);
+    bool see = isTransparent(m, item.opacity) || item.appear < 1;
     Texture* texture = nullptr;
     const Program* p = &unlit;
     switch (m.kind) {
@@ -618,17 +650,34 @@ void Renderer::submit(const Item& item, const Views& views, double time, const M
         break;
     }
     }
+    bool placeholder = false;
     if (texture && texture->pending) {
-        if (!mayUpload()) return;       // next frame
-        upload(texture);
+        if (!texture->pending->ready.load() || !mayUpload()) {
+            // Still on its way (or its turn to be sent has not come): a placeholder if it has been long, else nothing.
+            if (item.waiting <= 0) return;
+            placeholder = true;
+            texture = nullptr;
+        } else {
+            double waited = frameTime - texture->madeAt;
+            upload(texture);
+            // It was long enough in coming to have been noticed: let it in gently, from the next frame.
+            if (waited > gentleAfter) {
+                texture->fadeFrom = frameTime;
+                if (item.waiting <= 0) return;
+                placeholder = true;
+                texture = nullptr;
+            }
+        }
     }
     upload(item.mesh);
 
     glUseProgram(p->id);
     glUniformMatrix4fv(p->viewProj, 2, GL_FALSE, viewProj[0].data());
     glUniformMatrix4fv(p->model, 1, GL_FALSE, item.world.data());
-    if (p->opacity >= 0) glUniform1f(p->opacity, (m.transparent ? m.opacity : 1) * item.opacity);
-    if (p->opaque >= 0) glUniform1i(p->opaque, see ? 0 : 1);
+    if (p->opacity >= 0) glUniform1f(p->opacity, (m.transparent ? m.opacity : 1) * item.opacity * item.appear);
+    if (p->opaque >= 0) glUniform1i(p->opaque, see && !placeholder ? 0 : 1);
+    if (p->loading >= 0) glUniform1f(p->loading, placeholder ? std::max(0.02f, item.waiting) : 0);
+    if (placeholder && p->opaque >= 0) glUniform1i(p->opaque, 0);
     if (p->tint >= 0) {
         Vec3 c = m.color.linear();
         glUniform4f(p->tint, c.x, c.y, c.z, m.color.a);
@@ -672,7 +721,7 @@ void Renderer::submit(const Item& item, const Views& views, double time, const M
     } else {
         glDisable(GL_CULL_FACE);
     }
-    glDepthMask(m.writesDepth ? GL_TRUE : GL_FALSE);
+    glDepthMask(m.writesDepth && !placeholder ? GL_TRUE : GL_FALSE);
 
     int count = item.mesh->isLowLevel() ? static_cast<LowLevelMesh*>(item.mesh)->indexCount : int(item.mesh->indices.size());
     glBindVertexArray(item.mesh->vao);

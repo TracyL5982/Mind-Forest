@@ -27,8 +27,42 @@ void OceanModel::stand(TreeRef t) {
         if (ao != bo) return ao < bo;
         return a->id < b->id;
     });
-    for (size_t i = 0; i < order.size(); i++) makeCard(*order[i], 0.02 + double(std::min(int(i), 40)) * Pace::stagger * 0.8);
-    restyle();
+    // NOTE(port): changed for Quest. The Swift makes every card here, in the one frame, each to appear a
+    // little after the last. Making them is what takes the time (each measures its text), and a tree of
+    // forty cards held the headset's frame for two. Here each is given the moment it is due, and they are
+    // made over the next few frames, a few milliseconds' worth at a time and always before they are due
+    // (`standMore`): what is seen is the same, card after card.
+    standQueue.clear();
+    standNext = 0;
+    standTree = t.get();
+    for (size_t i = 0; i < order.size(); i++) {
+        standQueue.push_back(StandWaiting{order[i]->id, time + 0.02 + double(std::min(int(i), 40)) * Pace::stagger * 0.8});
+    }
+    standMore();
+}
+
+/// Makes the next cards of a tree that has just been stood up, for as long as this frame can spare.
+void OceanModel::standMore() {
+    if (standNext >= standQueue.size()) return;
+    if (!tree || tree.get() != standTree) {
+        standQueue.clear();
+        standNext = 0;
+        return;
+    }
+    static const double budget = Flags::number("standBudget") > 0 ? Flags::number("standBudget") : 3;      // ms a frame
+    double began = mediaTime();
+    while (standNext < standQueue.size()) {
+        StandWaiting next = standQueue[standNext++];
+        const TreeNode* n = find(*tree, next.id);
+        if (n && !card(next.id)) makeCard(*n, std::max(0.02, next.due - time));
+        if ((mediaTime() - began) * 1000 > budget) break;
+    }
+    touch(time + 0.3);
+    if (standNext >= standQueue.size()) {
+        standQueue.clear();
+        standNext = 0;
+        restyle();
+    }
 }
 
 void OceanModel::startBrief(int i) {
@@ -133,6 +167,9 @@ void OceanModel::dismiss(const std::vector<TreeNode>& gone, bool cut) {
         touch(c->goneAt);
     }
     buildQueue.erase(std::remove_if(buildQueue.begin(), buildQueue.end(), [&](int id) { return cards.count(id) == 0; }), buildQueue.end());
+    for (auto ghost = ghosts.begin(); ghost != ghosts.end();) {
+        if (cards.count(ghost->first) == 0) ghost = ghosts.erase(ghost); else ++ghost;
+    }
 }
 
 /// On a pinch at nothing: out of a zoom, then out of the focus (the card closes, and its group draws in).
