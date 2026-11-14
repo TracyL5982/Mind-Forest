@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mind Palace view library</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  html, body { height: auto; }
+  body { overflow: auto; padding: 32px 28px 80px; }
+  .lib-top { max-width: 980px; margin-bottom: 28px; }
+  .lib-top h1 { font-size: 26px; font-weight: 650; margin-bottom: 8px; }
+  .lib-top p { color: var(--ink-2); max-width: 70ch; margin-bottom: 6px; }
+  .lib-h2 { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin: 40px 0 6px; }
+  .lib-entry { padding: 22px 0 26px; border-top: 1px solid var(--line); }
+  .lib-name { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .lib-name h3 { margin: 0; font-size: 18px; font-weight: 620; }
+  .lib-who { font-size: 11.5px; padding: 2px 9px; border-radius: 10px; border: 1px solid var(--line-2); color: var(--ink-2); }
+  .lib-who.is-model { color: var(--pick); border-color: color-mix(in srgb, var(--pick) 45%, transparent); }
+  .lib-when { color: var(--ink-2); font-size: 13.5px; max-width: 80ch; margin-bottom: 16px; }
+  .lib-row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .lib-cell { display: flex; flex-direction: column; gap: 8px; }
+  .lib-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  .lib-stage { position: relative; }
+  .lib-stage .card, .lib-stage .pane { animation: none; }
+  .lib-detail { width: 340px; padding: 16px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+  .lib-props { margin-top: 14px; }
+  .lib-props summary { cursor: pointer; color: var(--ink-3); font-size: 12px; }
+  .lib-props pre { margin-top: 8px; padding: 12px; border-radius: 10px; background: #111317; color: var(--ink-2); font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; max-width: 760px; overflow: auto; }
+  .lib-scroll { overflow-x: auto; padding-bottom: 6px; }
+</style>
+</head>
+<body>
+<header class="lib-top">
+  <h1>View library</h1>
+  <p>Every way the Renderer can draw one card (components) and every way it can arrange several sibling cards (composites). This page draws them with the same code and styles as the live client, from sample data.</p>
+  <p>Solid cards are yours. Dashed amber cards are picks the librarian brought and you have not kept.</p>
+</header>
+
+<div class="lib-h2">Components</div>
+<main id="components"></main>
+<div class="lib-h2">Composites</div>
+<section id="composites"></section>
+
+<script type="module">
+import { h } from './js/dom.js';
+import { COMPONENTS, drawCard, drawDetail, sizeOf } from './js/components.js';
+import { arrange } from './js/composites.js';
+
+const TINT = '#9fc3ff';
+const ctx = { asset: (src) => src };
+
+function sample(label, a, b, w = 640, hgt = 440) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${hgt}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="${w}" height="${hgt}" fill="url(#g)"/><circle cx="${w * 0.72}" cy="${hgt * 0.34}" r="${hgt * 0.16}" fill="rgba(255,255,255,0.28)"/><path d="M0 ${hgt * 0.78} Q ${w * 0.3} ${hgt * 0.5} ${w * 0.55} ${hgt * 0.74} T ${w} ${hgt * 0.62} V ${hgt} H0Z" fill="rgba(0,0,0,0.3)"/></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+const PIC = { fields: sample('', '#e2b21f', '#3f7d3a'), night: sample('', '#1b2550', '#0c0f1e'), river: sample('', '#2f7fa8', '#16324a'), quilt: sample('', '#b0413e', '#27408b'), face: sample('', '#c98b6b', '#6b4a8a', 200, 200) };
+
+let n = 0;
+const make = (component, props, item) => ({
+  node: { id: `n${++n}`, status: 'kept', view: { component, props } },
+  item: { title: 'Untitled', text: '', summary: '', tags: [], data: {}, source: { from: 'paste' }, ...item },
+});
+
+function card({ node, item }, status = 'kept', at = null) {
+  const [w, hgt] = sizeOf(node, item);
+  const el = h('div', { class: `card is-${status}`, data: { component: node.view.component }, style: { width: `${w}px`, height: `${hgt}px`, '--tint': TINT } },
+    h('div', { class: 'card-face' }, h('div', { class: `card-body c-${node.view.component}` }, drawCard(node, item, ctx))));
+  el.style.setProperty('--tint', TINT);
+  if (at) el.style.transform = `translate(${at.x - w / 2}px, ${at.y - hgt / 2}px)`;
+  return { el, w, hgt };
+}
+
+function staged(made, status) {
+  const { el, w, hgt } = card(made, status);
+  return h('div', { class: 'lib-stage', style: { width: `${w}px`, height: `${hgt}px` } }, el);
+}
+
+const cell = (label, ...kids) => h('div', { class: 'lib-cell' }, h('div', { class: 'lib-label', text: label }), kids);
+const who = (by) => h('span', { class: `lib-who ${by === 'model' ? 'is-model' : ''}`, text: by === 'model' ? 'chosen by the model' : 'chosen by rules' });
+const props = (label, value) => h('details', { class: 'lib-props' }, h('summary', { text: label }), h('pre', { text: JSON.stringify(value, null, 2) }));
+
+const COMPONENT_SAMPLES = [
+  ['note', 'rules', 'The fallback for any card. The model may add one emphasis line taken from the text.',
+    make('note', { emphasis: 'The river is the highway' }, { title: 'If the river is the highway', summary: 'Barges carry the grain out and the news in. The road is for locals. Every hamlet faces the water, and the red house is the only one that turned its back.' })],
+  ['quote', 'model', 'When the card is someone\'s words. The quote must appear in the card\'s own text.',
+    make('quote', { text: 'A map is not the territory it represents, but it has a similar structure.', by: 'Alfred Korzybski' }, { title: 'Korzybski on maps' })],
+  ['fact', 'model', 'When one number or short value carries the card. The number must appear in the card\'s own text.',
+    make('fact', { value: '53', label: 'stations on the Tokaido road' }, { title: 'Hiroshige\'s road series' })],
+  ['image', 'rules', 'Any picture: dropped, generated, or brought from a museum.',
+    make('image', { src: PIC.fields, caption: 'Car on a winding road through yellow fields' }, { title: 'Aerial illustration', summary: 'A flat illustration of a white car on a road between yellow fields, seen from above.' })],
+  ['video', 'rules', 'Any clip. A YouTube pick plays inside the opened card.',
+    make('video', { src: '', poster: PIC.night, caption: 'Night drive, headlights only' }, { title: 'Night drive' })],
+  ['link', 'rules', 'A web page you pasted yourself. The Scout no longer brings these.',
+    make('link', { url: 'https://example.com/aerial', site: 'example.com', description: 'How aerial photographers read farmland as pattern.', image: PIC.river }, { title: 'Reading land from above' })],
+  ['chart', 'model', 'When the card\'s text holds a small series of numbers. Every value must appear in the text.',
+    make('chart', { chart: 'bar', labels: ['Mar', 'Apr', 'May', 'Jun'], values: [4, 9, 14, 6], unit: 'weeks in bloom', mark: 2 }, { title: 'Rapeseed bloom by month' })],
+  ['person', 'rules', 'When the card\'s data names a person.',
+    make('person', { name: 'Utagawa Hiroshige', role: 'Printmaker, 1797 to 1858', image: PIC.face }, { title: 'Utagawa Hiroshige' })],
+  ['chat', 'rules', 'An excerpt of an imported conversation.',
+    make('chat', { source: 'ChatGPT', messages: [{ role: 'user', text: 'What would this valley look like in winter?' }, { role: 'assistant', text: 'The yellow goes. You get brown stubble, dark hedges and a pale road, so the red house becomes the only colour.' }] }, { title: 'Winter version', data: {} })],
+  ['code', 'rules', 'A code sketch.',
+    make('code', { language: 'javascript', source: 'const fields = grid(8, 6)\n  .map(cell => ({ ...cell, crop: pick(CROPS) }))\n  .filter(cell => !road.crosses(cell));\n\ndraw(fields, { palette: YELLOWS });' }, { title: 'Generate a field map' })],
+  ['steps', 'rules', 'A short ordered how-to. The Scout\'s "steps" picks arrive like this. The model can also choose it for a note that reads as steps.',
+    make('steps', { steps: ['Trace the road as one wavy spine', 'Fill fields with flat yellow', 'Add hedges as double green strokes', 'Place the car, the house, the tree', 'Export at three scales', 'Test it as a poster'] }, { title: 'Redraw this map in vector' })],
+];
+
+const componentsEl = document.getElementById('components');
+for (const [name, by, when, made] of COMPONENT_SAMPLES) {
+  const detail = drawDetail(made.node, made.item, ctx).flat(Infinity).filter(Boolean);
+  componentsEl.append(h('section', { class: 'lib-entry' },
+    h('div', { class: 'lib-name' }, h('h3', { text: name }), who(by)),
+    h('p', { class: 'lib-when', text: when }),
+    h('div', { class: 'lib-row' },
+      cell('Kept', staged(made, 'kept')),
+      cell('Pick', staged(made, 'pick')),
+      detail.length > 0 && cell('Opened', h('div', { class: 'lib-detail' }, detail))),
+    props('Props', made.node.view.props)));
+}
+
+const note = (title, summary) => make('note', {}, { title, summary });
+const pic = (title, src) => make('image', { src }, { title });
+
+const COMPOSITE_SAMPLES = [
+  ['gallery', 'rules', 'Three or more sibling pictures or clips. This is how a set of generated pictures or museum works appears.',
+    [pic('Bocage, Normandy', PIC.fields), pic('The same valley at midnight', PIC.night), pic('River delta', PIC.river), pic('Amish quilt', PIC.quilt)], () => ({ columns: 2 }), 'pick'],
+  ['timeline', 'rules', 'Three or more siblings whose data carries a date. The model can also propose one when the dates are only in the text.',
+    [note('Tokaido prints', 'Hiroshige draws the road as a string of weather.'), note('First aerial photo', 'Nadar photographs Paris from a balloon.'), note('Earth from Above', 'Arthus-Bertrand shoots farmland as pattern.')],
+    (ids) => ({ labels: { [ids[0]]: '1833', [ids[1]]: '1858', [ids[2]]: '1999' } })],
+  ['comparison', 'model', 'Two to four alternatives judged on the same criteria.',
+    [note('Vector redraw', 'Rebuild the map as clean shapes.'), note('Sewn quilt', 'Piece the fields from fabric.'), note('Game map', 'Make each field a tile.')],
+    (ids) => ({ criteria: ['Time to make', 'What you learn'], cells: { [ids[0]]: ['An evening', 'The shape language'], [ids[1]]: ['A month', 'Colour as material'], [ids[2]]: ['A weekend', 'What the map lets you do'] } })],
+  ['sequence', 'model', 'Siblings that only make sense in one order.',
+    [note('Pick the hamlet', 'Start from the red house.'), note('Decide who owns the yellow', 'One family or forty.'), note('Draw the parish map', 'One page, river on the right.')], () => ({})],
+  ['cluster', 'model', 'Siblings that share one theme, held close under its name.',
+    [note('Who owns all that yellow', ''), note('The junction tree', ''), note('What the river carries', ''), note('The house that turned away', '')], () => ({ theme: 'The world beyond the frame' })],
+  ['stack', 'rules', 'More than nine similar siblings. Only the top shows until you open the pile.',
+    Array.from({ length: 7 }, (_, i) => note(`Loose thought ${i + 1}`, 'One of many similar notes.')), () => ({})],
+];
+
+function composite(name, members, makeProps, status, open) {
+  const ids = members.map((m) => m.node.id);
+  const sizes = new Map(members.map((m) => [m.node.id, sizeOf(m.node, m.item)]));
+  const group = { id: `g-${name}`, composite: name, title: '', members: ids, props: makeProps(ids) };
+  const arr = arrange(group, ids, sizes, open);
+  const pane = h('div', { class: `pane ${status === 'pick' ? 'is-pick' : ''}`, data: { composite: name }, style: { left: '0', top: '0', width: `${arr.w}px`, height: `${arr.h}px` } },
+    h('div', { class: 'pane-head' },
+      h('span', { class: 'pane-kind', text: arr.label }),
+      arr.title !== arr.label && h('span', { class: 'pane-title clamp-1', text: arr.title }),
+      arr.canOpen && h('span', { class: 'pane-open', style: { display: 'inline-flex', alignItems: 'center' }, text: open ? 'Close' : `Open ${ids.length}` })),
+    arr.marks);
+  pane.style.setProperty('--tint', TINT);
+  const cards = members.map((m) => {
+    const { el } = card(m, status, arr.at.get(m.node.id));
+    el.classList.toggle('is-under', arr.under.has(m.node.id));
+    el.classList.toggle('is-buried', arr.buried.has(m.node.id));
+    return el;
+  });
+  return { el: h('div', { class: 'lib-stage', style: { width: `${arr.w}px`, height: `${arr.h}px` } }, pane, cards), group };
+}
+
+const compositesEl = document.getElementById('composites');
+for (const [name, by, when, members, makeProps, status = 'kept'] of COMPOSITE_SAMPLES) {
+  const closed = composite(name, members, makeProps, status, false);
+  compositesEl.append(h('section', { class: 'lib-entry' },
+    h('div', { class: 'lib-name' }, h('h3', { text: name }), who(by)),
+    h('p', { class: 'lib-when', text: when }),
+    h('div', { class: 'lib-row lib-scroll' },
+      cell(name === 'stack' ? 'Closed' : status === 'pick' ? 'As picks' : 'Kept', closed.el),
+      name === 'stack' && cell('Opened', composite(name, members, makeProps, status, true).el)),
+    props('Props', closed.group.props)));
+}
+</script>
+</body>
+</html>
