@@ -136,8 +136,8 @@ test('the service refuses a group that mixes picks with kept cards, is of no kno
   assert.throws(group('g', 'heap', ids.slice(0, 3)), /no composite is called heap/);
   assert.throws(group('g', 'cluster', ids.slice(0, 2)), /a cluster holds at least 3 members, not 2/);
   assert.throws(group('g', 'beforeafter', ids.slice(0, 5), { changes: {} }), /a beforeafter holds 2 to 4 members, not 5/);
-  assert.throws(group('g', 'matrix', ids.slice(0, 3), { x: 'Cost', y: 'Reach' }), /a matrix holds 4 members, not 3/);
-  assert.throws(group('g', 'matrix', ids.slice(0, 4), { x: '', y: 'Reach' }), /props of a matrix/);
+  assert.throws(group('g', 'matrix', ids.slice(0, 3), { x: 'Cost', y: 'Reach', reasons: {} }), /a matrix holds 4 members, not 3/);
+  assert.throws(group('g', 'matrix', ids.slice(0, 4), { x: '', y: 'Reach', reasons: {} }), /props of a matrix/);
   group('g1', 'sequence', ids.slice(0, 3))();
   assert.throws(group('g2', 'cluster', ids.slice(2, 5)), new RegExp(`node ${ids[2]} is already in group g1`));
   group('g1', 'sequence', ids.slice(1, 4))();

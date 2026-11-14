@@ -296,8 +296,11 @@ export const COMPOSITES = {
   overview: z.object({}),
   /** Pictures, swatches and ideas packed in columns, each at its own footprint. */
   moodboard: z.object({}),
-  /** Four members on a 2 by 2, in the order top left, top right, bottom left, bottom right. `x` grows to the right and `y` grows upwards. */
-  matrix: z.object({ x: words.max(ROOM.axis), y: words.max(ROOM.axis) }),
+  /**
+   * Four members on a 2 by 2, in the order top left, top right, bottom left, bottom right. `x` grows to the right and `y` grows upwards.
+   * `reasons[memberId]` is one line of why it sits in its corner, a whole sentence or line of its content, or empty.
+   */
+  matrix: z.object({ x: words.max(ROOM.axis), y: words.max(ROOM.axis), reasons: z.record(z.string(), z.string().refine((text) => text.length <= roomOf(ROOM.reason, text))) }),
   /** Members set out by a structure the model describes when no arrangement above fits: rows, columns and grids, nested up to four deep. */
   layout: z.strictObject({ tree: LAYOUT_PART }).refine(({ tree }) => tree.kind !== 'card' && withinLimits(tree as Box)),
 } as const;

@@ -447,9 +447,9 @@ const COMPOSITE_SAMPLES = [
       make('chart', { chart: 'line', labels: ['1900', '1950', '2000', '2020'], values: [1, 2, 6, 7], unit: 'M visitors' }, { title: 'Visitors a year' })], () => ({})],
   ['moodboard', 'rules', 'Four or more pictures, swatches and ideas among siblings, at least two of them pictures and at least one not. Each card goes under the shortest column, at its own size. Pictures alone are a gallery.',
     [pic('Bocage, Normandy', PIC.fields), drawn('swatch'), make('image', { src: PIC.tall }, { title: 'Stairwell' }), make('idea', {}, { title: 'Paint the door ochre' }), pic('River delta', PIC.river), make('idea', {}, { title: '把客厅改成工作室' })], () => ({})],
-  ['matrix', 'model', 'Four siblings on a 2 by 2 with two named axes, one in each corner. Each axis name must be words at least two of the four use.',
+  ['matrix', 'model', 'Four siblings on a 2 by 2 with two named axes, one in each corner, each with a line of why it sits there. Each axis name must be words at least two of the four use, and each line a whole sentence or line of its own card\'s words, or it is left out.',
     [note('Fix the onboarding email', 'Little effort. A large impact on sign-ups.'), note('Rebuild the editor', 'Months of effort, and a large impact.'), note('Rename the settings tab', 'Little effort and little impact.'), note('Port to the watch', 'Much effort for little impact.')],
-    () => ({ x: 'Effort', y: 'Impact' })],
+    (ids) => ({ x: 'Effort', y: 'Impact', reasons: { [ids[0]]: 'Little effort.', [ids[1]]: 'Months of effort, and a large impact.', [ids[2]]: 'Little effort and little impact.', [ids[3]]: '' } })],
 ];
 
 function composite(name, members, makeProps, status, open) {
