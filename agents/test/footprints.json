@@ -19,7 +19,7 @@
     {"type":"note","item":{"title":"https://example.com/research/2026/a-very-long-path-segment-without-any-break-at-all","summary":"https://example.com/research/2026/a-very-long-path-segment-without-any-break-at-all","text":""},"props":{},"size":[240,72]},
     {"type":"note","item":{"title":"Twenty-three letters wide","summary":"iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii","text":""},"props":{},"size":[240,74]},
     {"type":"note","item":{"title":"WWWWWWWWWWWWW","summary":"mmmmmmmmmmmmmmmmmmmmmmmmmmm","text":""},"props":{},"size":[240,91]},
-    {"type":"quote","item":{"title":"Korzybski on maps","summary":"","text":""},"props":{"text":"A map is not the territory it represents, but it has a similar structure.","by":"Alfred Korzybski"},"size":[288,140]},
+    {"type":"quote","item":{"title":"Korzybski on maps","summary":"","text":""},"props":{"text":"A map is not the territory it represents, but it has a similar structure.","by":"Alfred Korzybski"},"size":[288,119]},
     {"type":"quote","item":{"title":"On buildings","summary":"","text":""},"props":{"text":"We shape our buildings, and afterwards our buildings shape us, and then the streets between them, and at last the map of the whole town, until nobody remembers which came first."},"size":[288,157]},
     {"type":"quote","item":{"title":"Short","summary":"","text":""},"props":{"text":"Less is more.","by":"Mies"},"size":[288,98]},
     {"type":"quote","item":{"title":"From the item","summary":"","text":"Words kept in the item when the props hold none."},"props":{},"size":[288,94]},

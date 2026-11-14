@@ -48,9 +48,12 @@ test('every sample in footprints.json gets the footprint written there', async (
 });
 
 test('a width is counted in whole tenths of a letter, and a joined emoji counts once', async () => {
-  const { span } = await load('components/shared.js');
+  const { span, TITLE_LETTER, QUOTE_LETTER } = await load('components/shared.js');
   assert.equal(span('il. frt 09 AZ mw% W'), 5 * 8 + 7 * 3 + 11 * 2 + 12 * 2 + 15 * 3 + 17);
-  assert.equal(span('中あ한'), 60);
+  assert.equal(span('中あ한'), 18 + 18 + 18, 'at the text size');
+  assert.equal(span('中あ한', TITLE_LETTER), 17 + 18 + 17, 'at the title size');
+  assert.equal(span('中あ한', QUOTE_LETTER), 21 + 21 + 21, 'in a quote');
+  assert.equal(span('Quote', QUOTE_LETTER), span('Quote'), 'only the widest characters differ by face');
   assert.equal(span('🎉'), 22);
   assert.equal(span('👨‍👩‍👧‍👦'), 22);
   assert.equal(span('🏳️‍🌈'), 22);

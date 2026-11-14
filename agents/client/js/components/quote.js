@@ -1,15 +1,13 @@
 import { h } from '../dom.js';
-import { FRAME, TEXT, TITLE, fold, say, text } from './shared.js';
+import { FRAME, QUOTE_LETTER, TEXT, TITLE, fold, say, text } from './shared.js';
 
 const WIDTH = 288;
 /** The quote's wider side padding and the border, and 1 px to spare. */
 const COLUMN = WIDTH - 41;
 const MARK = 22;
-/** One letter of the serif italic, in tenths of a px. It runs narrower than a title. */
-const LETTER = 80;
 
 const words = (item, props) => text(props.text) || item.text || item.title || '';
-const lines = (item, props) => fold(words(item, props), COLUMN, LETTER, 5);
+const lines = (item, props) => fold(words(item, props), COLUMN, QUOTE_LETTER, 5);
 const mark = () => h('div', { class: 'quote-mark', text: '“', 'aria-hidden': 'true' });
 const by = (props, clamped) => text(props.by) && h('div', { class: 'quote-by' }, say('span', clamped, props.by));
 

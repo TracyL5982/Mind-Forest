@@ -18,7 +18,9 @@ export const list = (value) => (Array.isArray(value) ? value : []);
 /**
  * How wide each character is, in tenths of an average lowercase letter. Rows are
  * `[first code point, last code point, tenths]` and the first row that holds a code point wins.
- * A code point in no row counts 10. docs/libraries.md repeats this table for other clients, and
+ * A code point in no row counts 10. The last two rows hold four counts, for the title face, the
+ * text face, the quote's serif and a fact's value, because those characters are as wide as the
+ * type is tall whatever the face. docs/libraries.md repeats this table for other clients, and
  * test/footprints.json holds the footprints it must give.
  */
 const WIDTHS = [
@@ -38,8 +40,10 @@ const WIDTHS = [
   [0x26, 0x26, 12], [0x41, 0x5a, 12],
   // Arrows, symbols and emoji. Two regional indicators draw one flag.
   [0x2190, 0x2bff, 22], [0x1f1e6, 0x1f1ff, 11], [0x1f000, 0x1faff, 22],
-  // Han, kana, hangul, full-width forms, and everything above them.
-  [0x2e80, 0x10ffff, 20],
+  // Kana runs a hair wider than Han at the title size.
+  [0x3040, 0x30ff, [18, 18, 21, 16]],
+  // Han, hangul, full-width forms, and everything above them.
+  [0x2e80, 0x10ffff, [17, 18, 21, 16]],
 ];
 const JOINER = 0x200d;
 const LOW = 0x250;
@@ -47,30 +51,41 @@ const low = new Uint8Array(LOW).fill(10);
 for (const [first, last, tenths] of [...WIDTHS].reverse()) {
   for (let cp = first; cp <= Math.min(last, LOW - 1); cp++) low[cp] = tenths;
 }
-const tenthsOf = (cp) => (cp < LOW ? low[cp] : (WIDTHS.find(([first, last]) => cp >= first && cp <= last)?.[2] ?? 10));
+function tenthsOf(cp, face) {
+  if (cp < LOW) return low[cp];
+  const tenths = WIDTHS.find(([first, last]) => cp >= first && cp <= last)?.[2] ?? 10;
+  return typeof tenths === 'number' ? tenths : tenths[face];
+}
 
 /**
- * A string's width in tenths of an average lowercase letter, always a whole number. A code point
- * that follows a zero-width joiner counts nothing, so a joined emoji counts once.
+ * How wide one average lowercase letter is at the title size, at the text size and in a quote's
+ * serif, in tenths of a px. Each is the widest ratio of drawn width to `span` over a set of sample
+ * strings, so most strings run short. `span` times one of these is a width in hundredths of a px.
  */
-export function span(str) {
+export const TITLE_LETTER = 93;
+export const TEXT_LETTER = 72;
+export const QUOTE_LETTER = 78;
+
+/** A letter width names its face. Any letter but these three is one of a fact's value sizes. */
+const FACES = [TITLE_LETTER, TEXT_LETTER, QUOTE_LETTER];
+const faceOf = (letter) => (FACES.includes(letter) ? FACES.indexOf(letter) : FACES.length);
+
+/**
+ * A string's width in tenths of an average lowercase letter, always a whole number, in the face
+ * whose letter is `letter`. A code point that follows a zero-width joiner counts nothing, so a
+ * joined emoji counts once.
+ */
+export function span(str, letter = TEXT_LETTER) {
+  const face = faceOf(letter);
   let tenths = 0;
   let joined = false;
   for (const ch of str) {
     const cp = ch.codePointAt(0);
-    if (!joined) tenths += tenthsOf(cp);
+    if (!joined) tenths += tenthsOf(cp, face);
     joined = cp === JOINER;
   }
   return tenths;
 }
-
-/**
- * How wide one average lowercase letter is at the title size and at the text size, in tenths of a
- * px. Each is the widest ratio of drawn width to `span` over a set of sample strings, so most
- * strings run short. `span` times one of these is a width in hundredths of a px.
- */
-export const TITLE_LETTER = 93;
-export const TEXT_LETTER = 72;
 
 /** a / b rounded up, for whole numbers. */
 export const up = (a, b) => Math.floor((a + b - 1) / b);
@@ -85,7 +100,7 @@ export const textWidth = (str) => up(span(str) * TEXT_LETTER, 100);
  * words. Every step is in whole hundredths of a px.
  */
 export function fold(str, width, letter, max) {
-  const need = span(str) * letter;
+  const need = span(str, letter) * letter;
   const room = width * 100;
   return need <= room ? 1 : clamp(up(need, room - 20 * letter), 1, max);
 }
@@ -99,7 +114,7 @@ export function graphemes(str) {
   let joined = false;
   for (const ch of str) {
     const cp = ch.codePointAt(0);
-    if (parts.length > 0 && (joined || tenthsOf(cp) === 0)) parts[parts.length - 1] += ch;
+    if (parts.length > 0 && (joined || tenthsOf(cp, 1) === 0)) parts[parts.length - 1] += ch;
     else parts.push(ch);
     joined = cp === JOINER;
   }
@@ -108,12 +123,12 @@ export function graphemes(str) {
 
 /** The string, or as much of its start as fits `room` px with an ellipsis, counted like `fold`. */
 export function cut(str, room, letter) {
-  if (span(str) * letter <= room * 100) return str;
+  if (span(str, letter) * letter <= room * 100) return str;
   const budget = room * 100 - span('…') * letter;
   let used = 0;
   let kept = '';
   for (const part of graphemes(str)) {
-    used += span(part) * letter;
+    used += span(part, letter) * letter;
     if (used > budget && kept) break;
     kept += part;
   }
