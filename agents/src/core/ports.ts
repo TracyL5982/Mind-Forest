@@ -37,12 +37,16 @@ export interface Page {
   image?: string;
 }
 
-/** A real, named thing looked up in an encyclopedia. */
-export interface Reference {
+/** A work held by a museum, from its open online collection. */
+export interface Artwork {
   title: string;
+  maker: string;
+  date: string;
+  medium: string;
+  museum: string;
+  /** The museum's own page for the work. */
   url: string;
-  extract: string;
-  image?: string;
+  image: string;
 }
 
 /** A video that can be played inside a client. */
@@ -68,12 +72,14 @@ export interface Tools {
     search(query: string, max?: number): Promise<WebResult[]>;
     /** The readable text of a page, or null when it cannot be fetched. */
     read(url: string): Promise<Page | null>;
-    /** The encyclopedia entry for a named work, person, place or technique, or null when there is none. */
-    lookup(name: string): Promise<Reference | null>;
     /** Downloads a picture and stores it, so a client shows it in place. Null when the address holds no usable picture. */
     picture(url: string): Promise<{ asset: string } | null>;
     /** Confirms a video address is real and returns how to play it in place. */
     video(url: string): Promise<Playable | null>;
+  };
+  art: {
+    /** Works with a picture from museum collections that match a short catalogue search. */
+    search(query: string, max?: number): Promise<Artwork[]>;
   };
   instagram: {
     /** The connected account's own recent posts. */

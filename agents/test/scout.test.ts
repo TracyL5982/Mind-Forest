@@ -7,7 +7,7 @@ import { AGENT, kit, type Kit } from './kit.ts';
 
 const USER = { by: 'user' as const };
 
-type Format = 'note' | 'steps' | 'image' | 'gallery' | 'reference' | 'video';
+type Format = 'note' | 'steps' | 'image' | 'gallery' | 'artwork' | 'video';
 
 function direction(format: Format, title: string, more: Record<string, unknown> = {}) {
   return {
@@ -27,22 +27,24 @@ function direction(format: Format, title: string, more: Record<string, unknown> 
 const NOTE = direction('note', 'The house at the bend');
 const STEPS = direction('steps', 'Shoot it yourself', { steps: ['Pick a subject', 'Pull back while zooming in', 'Hold the subject size'] });
 const IMAGE = direction('image', 'The same shot at night', { images: [{ title: 'Night', prompt: 'the same staircase at night, flat illustration' }] });
-const REFERENCE = direction('reference', 'Vertigo, the film that named it', { lookup: 'Vertigo (film)' });
+const ARTWORK = direction('artwork', 'Staircases that pull the eye down', { lookup: 'spiral staircase' });
+const work = (n: number, title: string) => ({ title, maker: `Maker ${n}`, date: '1920', medium: 'Gelatin silver print', museum: 'A Museum', url: `https://museum.example/works/${n}`, image: `https://img.example/work-${n}.jpg` });
+const WORKS = [work(1, 'Stairwell, Berlin'), work(2, 'Teapot with spiral handle'), work(3, 'The Long Descent')];
 const VIDEO = direction('video', 'Watch the Jaws beach shot', { lookup: 'Jaws beach dolly zoom' });
-const MIX = [NOTE, STEPS, IMAGE, REFERENCE, VIDEO];
+const MIX = [NOTE, STEPS, IMAGE, ARTWORK, VIDEO];
 
-/** A film tree, an encyclopedia that knows Vertigo, a web that knows one video, and a model that proposes the five-way mix. */
+/** A film tree, a museum that holds three works, a web that knows one video, and a model that proposes the five-way mix. */
 function setup(settings: Partial<Settings> = {}, directions: unknown[] = MIX) {
   const k = kit(settings);
   const film = k.seedTree('Film', ['Dolly zoom', 'Vertigo staircase']);
-  k.world.references.set('Vertigo (film)', { title: 'Vertigo (film)', url: 'https://en.wikipedia.org/wiki/Vertigo_(film)', extract: 'A 1958 film by Alfred Hitchcock.', image: 'https://img.example/vertigo.jpg' });
-  k.world.pictures.add('https://img.example/vertigo.jpg');
+  k.world.artworks.set('spiral staircase', WORKS);
+  for (const w of WORKS) k.world.pictures.add(w.image);
   k.world.web = [
     { title: 'An article', url: 'https://example.com/article', snippet: '' },
     { title: 'Jaws beach scene', url: 'https://www.youtube.com/watch?v=abcdefghijk', snippet: '' },
   ];
   k.world.videos.set('https://www.youtube.com/watch?v=abcdefghijk', { title: 'Jaws beach scene', url: 'https://www.youtube.com/watch?v=abcdefghijk', embed: 'https://www.youtube.com/embed/abcdefghijk', poster: 'https://img.example/jaws.jpg' });
-  k.model.on('scout.ideate', () => ({ directions })).on('scout.check', () => ({ fits: true }));
+  k.model.on('scout.ideate', () => ({ directions })).on('scout.curate', () => ({ chosen: [{ number: 1, note: 'The rail leads the eye to the floor.' }] }));
   return { k, film, anchor: film.nodeIds[0]! };
 }
 
@@ -79,11 +81,12 @@ test('each direction becomes content of its own kind, shown in place', async () 
   assert.equal(image.kind, 'image');
   assert.ok(k.assets.files.has(image.source.asset!), 'the generated picture is stored');
 
-  const reference = byTitle.get(REFERENCE.title)!;
-  assert.equal(reference.kind, 'image', 'a reference with a picture is shown as that picture');
-  assert.ok(k.assets.files.has(reference.source.asset!), 'the picture was brought in, not pointed at');
-  assert.equal(reference.source.url, 'https://en.wikipedia.org/wiki/Vertigo_(film)');
-  assert.match(reference.text, /1958 film by Alfred Hitchcock/);
+  const artwork = byTitle.get('Stairwell, Berlin')!;
+  assert.equal(artwork.kind, 'image');
+  assert.ok(k.assets.files.has(artwork.source.asset!), 'the picture was brought in, not pointed at');
+  assert.equal(artwork.source.url, 'https://museum.example/works/1');
+  assert.match(artwork.text, /The rail leads the eye/);
+  assert.match(artwork.text, /Maker 1, 1920, Gelatin silver print, A Museum/);
 
   const video = byTitle.get(VIDEO.title)!;
   assert.equal(video.kind, 'video');
@@ -168,35 +171,46 @@ test('written ideas are delivered first and the made ones follow', async () => {
   assert.equal(k.mind.picks(anchor).length, 5);
 });
 
-test('a reference nothing confirms is left out, and so is one the mindstorm already holds', async () => {
-  const invented = direction('reference', 'A film that does not exist', { lookup: 'The Spiral Hour (film)' });
-  const { k, anchor } = setup({}, [NOTE, REFERENCE, invented]);
-  hang(k, anchor, 'Vertigo, saved earlier', 'kept', { source: { from: 'web', url: 'https://en.wikipedia.org/wiki/Vertigo_(film)', capturedAt: '' } });
+test('a museum search with no match is left out, and so is a work the mindstorm already holds', async () => {
+  const unmatched = direction('artwork', 'Works nobody holds', { lookup: 'nothing at all' });
+  const { k, anchor } = setup({}, [NOTE, ARTWORK, unmatched]);
+  hang(k, anchor, 'Stairwell, saved earlier', 'kept', { source: { from: 'web', url: 'https://museum.example/works/1', capturedAt: '' } });
+  k.model.on('scout.curate', () => ({ chosen: [{ number: 1, note: '' }] }));
 
   apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
 
-  assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title]);
-  assert.ok(k.notes.some((n) => n.includes('The Spiral Hour')));
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), [NOTE.title, 'Teapot with spiral handle'].sort(), 'the held work was never offered to the model');
+  assert.ok(k.notes.some((n) => n.includes('nothing at all')));
 });
 
-test('a reference without a usable picture is still brought, as text', async () => {
-  const { k, anchor } = setup({}, [REFERENCE]);
+test('only the works the model chooses are shown, up to three, each once', async () => {
+  const { k, anchor } = setup({}, [ARTWORK]);
+  k.model.on('scout.curate', () => ({ chosen: [{ number: 3, note: 'a' }, { number: 1, note: 'b' }, { number: 3, note: 'again' }, { number: 9, note: 'not in the list' }] }));
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), ['Stairwell, Berlin', 'The Long Descent']);
+  assert.match(k.model.calls.find((c) => c.role === 'scout.curate')!.detail, /Teapot with spiral handle.*Maker 2/);
+});
+
+test('no work is shown when the model finds none that fit, or cannot be asked', async () => {
+  const { k, anchor } = setup({}, [NOTE, ARTWORK]);
+  k.model.on('scout.curate', () => ({ chosen: [] }));
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title]);
+
+  k.model.on('scout.curate', () => { throw new Error('down'); });
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title]);
+});
+
+test('a work whose picture cannot be brought in is left out', async () => {
+  const { k, anchor } = setup({}, [ARTWORK]);
   k.world.pictures.clear();
 
   apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
 
-  const [reference] = picked(k, anchor);
-  assert.equal(reference!.kind, 'text');
-  assert.match(reference!.text, /1958 film/);
-});
-
-test('a picture that shows a different thing of the same name is not used', async () => {
-  const { k, anchor } = setup({}, [REFERENCE]);
-  k.model.on('scout.check', () => ({ fits: false }));
-
-  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
-
-  assert.equal(picked(k, anchor)[0]!.kind, 'text');
+  assert.deepEqual(picked(k, anchor), []);
 });
 
 test('a video that cannot be played in place is left out', async () => {

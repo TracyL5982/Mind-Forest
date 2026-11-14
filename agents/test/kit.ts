@@ -1,5 +1,5 @@
 import type { Id, Item } from '../src/core/domain.ts';
-import type { Assets, Page, Playable, Reference, SocialPost, Tools, WebResult } from '../src/core/ports.ts';
+import type { Assets, Page, Artwork, Playable, SocialPost, Tools, WebResult } from '../src/core/ports.ts';
 import { AGENT, DEFAULT_SETTINGS, makeItem, makeNode, type RoleContext, type Settings } from '../src/core/roles/types.ts';
 import { Mindstorm } from '../src/core/state.ts';
 import { FakeModel } from '../src/fake/model.ts';
@@ -24,7 +24,7 @@ export interface FakeWorld {
   posts: SocialPost[];
   web: WebResult[];
   /** Encyclopedia entries by the name asked for. */
-  references: Map<string, Reference>;
+  artworks: Map<string, Artwork[]>;
   /** Picture addresses that can be downloaded. */
   pictures: Set<string>;
   videos: Map<string, Playable>;
@@ -51,7 +51,7 @@ export function kit(settings: Partial<Settings> = {}): Kit {
   const mind = new Mindstorm({ now, newId });
   const model = new FakeModel();
   const assets = new MemoryAssets();
-  const world: FakeWorld = { pages: new Map(), posts: [], web: [], references: new Map(), pictures: new Set(), videos: new Map() };
+  const world: FakeWorld = { pages: new Map(), posts: [], web: [], artworks: new Map(), pictures: new Set(), videos: new Map() };
   const notes: string[] = [];
   const tools: Tools = {
     web: {
@@ -60,10 +60,10 @@ export function kit(settings: Partial<Settings> = {}): Kit {
         return scripted.length > 0 ? scripted : world.web.slice(0, max);
       },
       read: async (url) => world.pages.get(url) ?? null,
-      lookup: async (name) => world.references.get(name) ?? null,
       picture: async (url) => (world.pictures.has(url) ? { asset: (await assets.put(new Uint8Array([1]), 'image/jpeg', 'found')).id } : null),
       video: async (url) => world.videos.get(url) ?? null,
     },
+    art: { search: async (query, max = 10) => (world.artworks.get(query) ?? []).slice(0, max) },
     instagram: { recent: async (limit = 10) => world.posts.slice(0, limit) },
     images: {
       generate: async (prompt) => {

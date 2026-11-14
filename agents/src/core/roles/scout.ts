@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { Command, Id, Item, Node } from '../domain.ts';
+import type { Artwork } from '../ports.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
 import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles, type Turn } from './types.ts';
@@ -7,6 +8,8 @@ import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles, ty
 const ROLE = 'scout';
 const MAX_GENERATED_IMAGES = 4;
 const GALLERY_SIZE = 3;
+const ARTWORK_CANDIDATES = 12;
+const ARTWORKS_PER_DIRECTION = 3;
 const MAX_LINK_CANDIDATES = 5;
 const LINK_COVERAGE = 0.5;
 const HISTORY_TURNS = 6;
@@ -15,7 +18,7 @@ const Ideas = z.object({
   directions: z.array(
     z.object({
       angle: z.string(),
-      format: z.enum(['note', 'steps', 'image', 'gallery', 'reference', 'video']),
+      format: z.enum(['note', 'steps', 'image', 'gallery', 'artwork', 'video']),
       title: z.string(),
       body: z.string(),
       why: z.string(),
@@ -44,7 +47,7 @@ interface Run {
 
 /**
  * Extends the anchor in several different directions and brings each back as content the user can take in on the spot:
- * a written idea, a generated picture, a set of pictures, a real work with its picture, a video that plays in place.
+ * a written idea, a generated picture, a set of pictures, real works from museum collections, a video that plays in place.
  * Nothing it brings is a bare link out of the app.
  */
 export const scout: Roles['scout'] = async (ctx, input) => {
@@ -192,7 +195,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number): Promise<Direct
       '- No two directions share an angle. Angles to draw from: the world or story it implies, a real work or artist or place or tradition it echoes, the technique behind it, its opposite or a counterpoint, a what-if that changes one thing, a detail worth zooming into, the same idea in another medium or sense, where it comes from historically, a concrete next step to make something.',
       '- A direction that would fit any picture or any idea is a failure. Name specifics.',
       count >= 3
-        ? '- Mix the formats: at least one to look at ("image" or "gallery"), at least one "reference", at least one "note". At most one "gallery" and one "video".'
+        ? '- Mix the formats: at least one to look at ("image" or "gallery"), at least one "artwork", at least one "note". At most one "gallery" and one "video".'
         : '- Prefer different formats.',
       '',
       'For each direction:',
@@ -208,7 +211,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number): Promise<Direct
       '- "steps": steps is three to six short steps for making or trying something. body is one sentence saying what the steps achieve.',
       '- "image": images has one entry. Its prompt is a complete prompt for an image generator: subject, composition, style, palette, light. When it extends a picture the user dropped, carry over that picture\'s style and palette so it reads as the same world. body is one sentence saying what it shows.',
       `- "gallery": images has exactly ${GALLERY_SIZE} entries, variations on one theme (three places, three moods, three characters), each with its own short title and full prompt. title names the set.`,
-      '- "reference": a real, specific, named work, person, place, movement or technique that you are certain exists. lookup is its exact name as an encyclopedia would title it. body is two or three sentences on what it is and exactly how it connects to what the user has. Never invent one.',
+      '- "artwork": real works from museum collections (Art Institute of Chicago, The Met, Cleveland Museum of Art, V&A): paintings, prints, photographs, textiles, design objects. The app searches the collections and shows the works it finds. lookup is the catalogue search, two to four plain words: an artist\'s name, or a subject, or a kind of object with a place or period ("Hiroshige rain", "crazy quilt", "Hokusai wave", "art deco poster"). title names the thread. body is one or two sentences on what ties such works to what the user has and what to look for in them.',
       '- "video": only when seeing motion matters. lookup is a search phrase for one specific well-known video. body is one sentence on what to watch for.',
     ].join('\n'),
     schema: Ideas,
@@ -279,34 +282,37 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
       );
       return made.flatMap((m) => m ?? []);
     }
-    case 'reference': {
-      const name = oneLine(d.lookup || d.title, 120);
-      const found = await ctx.tools.web.lookup(name);
-      if (!found) {
-        // Nothing confirms the thing exists, so it is not shown as fact.
-        ctx.note(ROLE, `no entry found for "${name}", left out`);
+    case 'artwork': {
+      const query = oneLine(d.lookup || d.title, 80);
+      const found = (await ctx.tools.art.search(query, ARTWORK_CANDIDATES)).filter((w) => !taken.has(urlKey(w.url)));
+      if (found.length === 0) {
+        ctx.note(ROLE, `no museum holds a match for "${query}", left out`);
         return [];
       }
-      if (taken.has(urlKey(found.url))) return [];
-      taken.add(urlKey(found.url));
-      const body = d.body.trim();
-      const stored = found.image ? await ctx.tools.web.picture(found.image) : null;
-      // An entry's lead picture can show another sense of the word, so it is only used once the model has looked at it.
-      const picture = stored && (await shows(ctx, stored.asset, `${found.title}. ${found.extract.split('. ')[0] ?? ''}`)) ? stored : null;
-      return [
-        {
-          tool: 'web',
-          item: makeItem(ctx, {
-            ...common(d, 'web'),
-            title: oneLine(d.title || found.title, 120),
-            kind: picture ? 'image' : 'text',
-            text: [body, found.extract].filter(Boolean).join('\n\n'),
-            summary: oneLine(body || found.extract, 400),
-            data: { site: siteOf(found.url), reference: found.title },
-            source: { from: 'web', url: found.url, ...(picture ? { asset: picture.asset } : {}) },
-          }),
-        },
-      ];
+      // A catalogue search matches words, so the model picks the works that carry the direction before any is shown.
+      const chosen = await curate(ctx, d, found);
+      const made = await Promise.all(
+        chosen.map(async ({ work, note }): Promise<Made | null> => {
+          if (taken.has(urlKey(work.url))) return null;
+          taken.add(urlKey(work.url));
+          const stored = await ctx.tools.web.picture(work.image);
+          if (!stored) return null;
+          const label = [work.maker, work.date, work.medium, work.museum].filter(Boolean).join(', ');
+          return {
+            tool: 'museum',
+            item: makeItem(ctx, {
+              ...common(d, 'museum'),
+              title: oneLine(work.title, 120),
+              kind: 'image',
+              text: [note, label].filter(Boolean).join('\n\n'),
+              summary: oneLine(note || `${work.title}, ${label}`, 400),
+              data: { site: siteOf(work.url), maker: work.maker, date: work.date, medium: work.medium, museum: work.museum },
+              source: { from: 'web', url: work.url, asset: stored.asset },
+            }),
+          };
+        }),
+      );
+      return made.flatMap((m) => m ?? []);
     }
     case 'video': {
       const hits = await ctx.tools.web.search(`${oneLine(d.lookup || d.title, 160)} youtube`, 6);
@@ -338,23 +344,35 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
   }
 }
 
-const Fits = z.object({ fits: z.boolean() });
+const Chosen = z.object({ chosen: z.array(z.object({ number: z.number(), note: z.string() })) });
 
-async function shows(ctx: RoleContext, asset: string, subject: string): Promise<boolean> {
+async function curate(ctx: RoleContext, d: Direction, found: Artwork[]): Promise<{ work: Artwork; note: string }[]> {
   try {
-    const file = await ctx.assets.get(asset);
-    if (!file) return false;
     const answer = await ctx.model.json({
-      role: `${ROLE}.check`,
-      system: 'You check whether a picture illustrates a subject.',
-      user: `Subject: ${oneLine(subject, 500)}\nCould the attached picture be a picture of this subject? Answer fits: false only when it clearly shows a different kind of thing that merely shares the name.`,
-      schema: Fits,
-      images: [`data:${file.mime};base64,${toBase64(file.bytes)}`],
+      role: `${ROLE}.curate`,
+      system: SYSTEM,
+      user: [
+        `You are extending what the user has in this direction: ${oneLine(d.angle, 80)}. ${oneLine(d.title, 120)}. ${oneLine(d.body, 400)}`,
+        '',
+        'A museum catalogue search returned these works:',
+        ...found.map((w, i) => `${i + 1}. "${oneLine(w.title, 100)}" by ${w.maker || 'an unknown maker'}, ${w.date || 'undated'}, ${oneLine(w.medium, 80) || 'medium not given'} (${w.museum})`),
+        '',
+        `Choose up to ${ARTWORKS_PER_DIRECTION} that truly carry this direction, best first, and prefer different makers. A work that only shares a word with the search does not belong. Choose none when none fit.`,
+        'For each: number, and note, one or two sentences on what to notice in this work and how it speaks to what the user has. Say only what you know about the work or can tell from its record.',
+      ].join('\n'),
+      schema: Chosen,
       effort: 'low',
     });
-    return answer.fits;
-  } catch {
-    return false;
+    const seen = new Set<number>();
+    return answer.chosen.flatMap(({ number, note }) => {
+      const work = found[Math.round(number) - 1];
+      if (!work || seen.has(number)) return [];
+      seen.add(number);
+      return [{ work, note: note.trim() }];
+    }).slice(0, ARTWORKS_PER_DIRECTION);
+  } catch (err) {
+    ctx.note(ROLE, `could not choose among the museum works (${message(err)}), left out`);
+    return [];
   }
 }
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Assets, ModelClient, Page, Playable, Reference, SocialPost, Tools } from '../core/ports.ts';
+import type { Assets, ModelClient, Page, Artwork, Playable, SocialPost, Tools } from '../core/ports.ts';
 import { siteOf } from '../core/views.ts';
 
 export interface ToolOptions {
@@ -17,10 +17,10 @@ export function makeTools(opts: ToolOptions): Tools {
     web: {
       search: (query, max) => opts.model.search({ role: 'tool.web', query, max }),
       read: (url) => readPage(send, url),
-      lookup: (name) => lookup(send, name),
       picture: (url) => storePicture(send, opts.assets, url),
       video: (url) => playable(send, url),
     },
+    art: { search: (query, max = 10) => museums(send, query, max) },
     instagram: {
       async recent(limit = 12): Promise<SocialPost[]> {
         if (!opts.instagram) return [];
@@ -66,27 +66,68 @@ export function makeTools(opts: ToolOptions): Tools {
 
 const AGENT_NAME = 'MindPalace/0.1 (local prototype)';
 
-async function lookup(send: typeof fetch, name: string): Promise<Reference | null> {
-  try {
-    const query = new URLSearchParams({
-      action: 'query', format: 'json', generator: 'search', gsrsearch: name, gsrlimit: '1',
-      prop: 'pageimages|extracts|info', piprop: 'thumbnail', pithumbsize: '960',
-      exintro: '1', explaintext: '1', exsentences: '4', inprop: 'url', redirects: '1',
-    });
-    const res = await send(`https://en.wikipedia.org/w/api.php?${query}`, { headers: { 'User-Agent': AGENT_NAME }, signal: AbortSignal.timeout(8_000) });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { query?: { pages?: Record<string, { title?: string; extract?: string; fullurl?: string; thumbnail?: { source?: string } }> } };
-    const page = Object.values(json.query?.pages ?? {})[0];
-    if (!page?.title || !page.fullurl) return null;
-    // The search always returns its nearest page, so a result that shares no real word with the name is a different thing.
-    const words = (text: string) => new Set(text.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []);
-    const asked = words(name);
-    const shared = [...words(page.title)].filter((w) => asked.has(w)).length;
-    if (asked.size > 0 && shared === 0) return null;
-    return { title: page.title, url: page.fullurl, extract: (page.extract ?? '').trim(), ...(page.thumbnail?.source ? { image: page.thumbnail.source } : {}) };
-  } catch {
-    return null;
+type Museum = (send: typeof fetch, query: string, max: number) => Promise<Artwork[]>;
+
+async function ask<T>(send: typeof fetch, url: string): Promise<T> {
+  const res = await send(url, { headers: { 'User-Agent': AGENT_NAME, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`${res.status}`);
+  return (await res.json()) as T;
+}
+
+const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const chicago: Museum = async (send, query, max) => {
+  const fields = 'id,title,artist_title,date_display,medium_display,image_id';
+  const json = await ask<{ data?: Record<string, unknown>[] }>(send, `https://api.artic.edu/api/v1/artworks/search?q=${encodeURIComponent(query)}&limit=${max}&fields=${fields}`);
+  return (json.data ?? []).filter((w) => text(w.image_id)).map((w) => ({
+    title: text(w.title), maker: text(w.artist_title), date: text(w.date_display), medium: text(w.medium_display),
+    museum: 'Art Institute of Chicago', url: `https://www.artic.edu/artworks/${w.id}`,
+    image: `https://www.artic.edu/iiif/2/${text(w.image_id)}/full/843,/0/default.jpg`,
+  }));
+};
+
+const met: Museum = async (send, query, max) => {
+  const base = 'https://collectionapi.metmuseum.org/public/collection';
+  const found = await ask<{ objectIDs?: number[] | null }>(send, `${base}/v1.1/search?hasImages=true&q=${encodeURIComponent(query)}&limit=${max * 2}`);
+  // The search answers with ids only, and works still in copyright come back without a picture.
+  const works = await Promise.all((found.objectIDs ?? []).slice(0, max * 2).map((id) => ask<Record<string, unknown>>(send, `${base}/v1/objects/${id}`).catch(() => null)));
+  return works.flatMap((w) => (w && text(w.primaryImageSmall) ? [{
+    title: text(w.title), maker: text(w.artistDisplayName), date: text(w.objectDate), medium: text(w.medium),
+    museum: 'The Metropolitan Museum of Art', url: text(w.objectURL), image: text(w.primaryImageSmall),
+  }] : [])).slice(0, max);
+};
+
+const cleveland: Museum = async (send, query, max) => {
+  const json = await ask<{ data?: Record<string, any>[] }>(send, `https://openaccess-api.clevelandart.org/api/artworks/?q=${encodeURIComponent(query)}&has_image=1&limit=${max}`);
+  return (json.data ?? []).filter((w) => text(w.images?.web?.url)).map((w) => ({
+    title: text(w.title), maker: text(w.creators?.[0]?.description), date: text(w.creation_date), medium: text(w.technique) || text(w.type),
+    museum: 'Cleveland Museum of Art', url: text(w.url), image: text(w.images.web.url),
+  }));
+};
+
+const victoriaAndAlbert: Museum = async (send, query, max) => {
+  const json = await ask<{ records?: Record<string, any>[] }>(send, `https://api.vam.ac.uk/v2/objects/search?q=${encodeURIComponent(query)}&images_exist=1&page_size=${max}`);
+  return (json.records ?? []).filter((w) => text(w._images?._iiif_image_base_url)).map((w) => ({
+    title: text(w._primaryTitle) || text(w.objectType), maker: text(w._primaryMaker?.name), date: text(w._primaryDate), medium: text(w.objectType),
+    museum: 'Victoria and Albert Museum', url: `https://collections.vam.ac.uk/item/${w.systemNumber}`,
+    image: `${text(w._images._iiif_image_base_url)}full/!960,960/0/default.jpg`,
+  }));
+};
+
+const MUSEUMS: Museum[] = [chicago, met, cleveland, victoriaAndAlbert];
+const PER_MUSEUM = 4;
+
+/** Asks every museum at once and deals the answers out in turn, so no single collection fills the list. */
+async function museums(send: typeof fetch, query: string, max: number): Promise<Artwork[]> {
+  const answers = await Promise.all(MUSEUMS.map((museum) => museum(send, query, PER_MUSEUM).catch(() => [] as Artwork[])));
+  const dealt: Artwork[] = [];
+  for (let round = 0; round < PER_MUSEUM; round++) {
+    for (const works of answers) {
+      const work = works[round];
+      if (work && work.title && work.url && work.image) dealt.push(work);
+    }
   }
+  return dealt.slice(0, max);
 }
 
 const MIN_PICTURE_BYTES = 4_000;
