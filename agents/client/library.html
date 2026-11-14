@@ -57,6 +57,7 @@ import { h } from './js/dom.js';
 import { drawCard, sizeOf } from './js/components/index.js';
 import { arrange } from './js/composites/index.js';
 import { Panel } from './js/panel.js';
+import { useMaps } from './js/map.js';
 import { SAMPLES, SHEETS } from './library-samples.js';
 
 const TINT = '#9fc3ff';
@@ -69,6 +70,9 @@ const PIC = { fields: sample('', '#e2b21f', '#3f7d3a'), night: sample('', '#1b25
 /** The pictures the samples from the service name, which this page has no service to load from. */
 const STAND_IN = { [SAMPLES.artwork.props.src]: PIC.tall, [SAMPLES.place.props.src]: PIC.river };
 const ctx = { asset: (src) => STAND_IN[src] ?? src };
+/** Maps draw the plain squares in samples/tiles, which scripts/sample-tiles.ts writes for these points, so the page asks no tile server for anything. */
+useMaps({ tiles: 'samples/tiles/{z}/{x}/{y}.svg', credit: '© OpenStreetMap contributors' });
+const AT = { lisbon: { lat: 38.7223, lon: -9.1393 }, vilnius: { lat: 54.6872, lon: 25.2797 }, moganshan: { lat: 30.6086, lon: 119.8664 } };
 
 let n = 0;
 const make = (component, props, item) => ({
@@ -156,7 +160,7 @@ const STRUCTURED_SAMPLES = [
   ['definition', 'rules', 'A term and what it means, set like a dictionary entry.', drawn('definition')],
   ['proscons', 'rules', 'The points for and the points against, side by side.', drawn('proscons')],
   ['swatch', 'rules', 'Colours with their names and values.', drawn('swatch')],
-  ['place', 'rules', 'A short note whose title is the name of a place, with its picture when it has one.', drawn('place')],
+  ['place', 'rules', 'A short note whose title is the name of a place, with its picture when it has one, and a map when the item knows where the place is.', drawn('place')],
   ['sheet', 'model', 'A card assembled from two to four parts, for an item with more than one kind of thing worth seeing that no card of its own covers: its opening beside a few figures, a list, a small table or words someone said. Each part is drawn as the card of its kind draws it, under one title, each after the first under a hairline.', drawn('sheet')],
 ];
 
@@ -271,6 +275,9 @@ const VARIANTS = {
     ] }, { title: 'The framed print' })],
   ],
   place: [
+    ['On a map, from sample tiles', make('place', { name: 'Lisbon' }, { title: 'Lisbon', summary: 'Three days in March. The tram up to Graça, and the light on the river at six.', data: { where: 'Lisbon', at: AT.lisbon } }), 'kept', true],
+    ['A long name on a map, as a pick', make('place', { name: 'The upper reading room of the old municipal library, Vilnius' }, { title: 'The upper reading room of the old municipal library, Vilnius', text: 'Where the box of index cards was found.', data: { at: AT.vilnius } }), 'pick'],
+    ['On a map, in Chinese', make('place', { name: '莫干山' }, { title: '莫干山', summary: '竹林里的小路，一直走到山顶的老别墅。', data: { where: '莫干山', at: AT.moganshan } })],
     ['No picture', make('place', { name: 'Lisbon' }, { title: 'Lisbon', summary: 'Three days in March. The tram up to Graça, and the light on the river at six.' })],
     ['A long name', make('place', { name: 'The upper reading room of the old municipal library, Vilnius' }, { title: 'The upper reading room of the old municipal library, Vilnius', text: 'Where the box of index cards was found.' })],
     ['A name and nothing else', make('place', { name: '莫干山' }, { title: '莫干山' })],
