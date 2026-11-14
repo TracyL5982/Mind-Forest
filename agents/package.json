@@ -11,7 +11,9 @@
     "test": "node --no-warnings --import tsx --test 'test/**/*.test.ts' 'src/**/*.test.ts'",
     "typecheck": "tsc --noEmit",
     "scenario": "node --no-warnings --import tsx scripts/scenario.ts",
-    "dev:fake": "node --no-warnings --import tsx src/node/main.ts --fake"
+    "dev:fake": "node --no-warnings --import tsx src/node/main.ts --fake",
+    "import-library": "node --no-warnings --import tsx scripts/import-library.ts",
+    "saved-trees": "node --no-warnings --import tsx scripts/saved-trees.ts"
   },
   "dependencies": {
     "ws": "^8.23.0",

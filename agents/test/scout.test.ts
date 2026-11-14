@@ -545,3 +545,52 @@ test('a recording that a connected client cannot play is left out', async () => 
   const [film] = picked(k, anchor);
   assert.equal(k.assets.links.get(served(k, film!.data.mediaUrl)), 'https://archive.example/download/jaws2/jaws2.mp4');
 });
+
+function libraryFilm(k: Kit, title: string, text: string, tags: string[]): Item {
+  const film = k.item({ title, text, kind: 'video', tags, source: { from: 'library', capturedAt: '' }, data: { library: { kind: 'film', key: 25 }, mediaUrl: '/assets/vertigo.mp4' } });
+  k.mind.apply({ origin: USER, label: 'library', commands: [{ type: 'addItem', item: film }] });
+  return film;
+}
+
+test('a library film that no tree holds is hung under the card only for a strong tie, and the new picks still come', async () => {
+  for (const [strength, shown] of [
+    [0.9, true],
+    [0.6, false],
+  ] as const) {
+    const { k, anchor } = setup();
+    const vertigo = libraryFilm(k, 'Vertigo', 'Scottie climbs the bell tower stairs: the dolly zoom.', ['dolly zoom']);
+    k.model.on('scout.links', () => ({ ratings: [{ itemId: vertigo.id, strength, why: 'where the dolly zoom began' }] }));
+
+    const commands = await scout(k.ctx, { anchor, mode: 'refresh' });
+    apply(k, commands);
+
+    const hung = k.mind.picks(anchor).filter((n) => n.itemId === vertigo.id);
+    assert.equal(hung.length, shown ? 1 : 0, `rated ${strength}`);
+    assert.equal(k.mind.picks(anchor).length - hung.length, 5, 'the new picks all came');
+    assert.ok(!commands.some((c) => c.type === 'addItem' && c.item.id === vertigo.id), 'the film is shown, not copied');
+    if (shown) assert.deepEqual([hung[0]!.why, hung[0]!.origin.tool], ['where the dolly zoom began', 'library']);
+  }
+});
+
+test('a library film that shares nothing with the card is never offered to the model', async () => {
+  const { k, anchor } = setup();
+  libraryFilm(k, 'The Gold Rush', 'Chaplin eats his boot.', ['comedy']);
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.ok(!k.model.calls.some((c) => c.role === 'scout.links'), 'the model was not asked to rate it');
+});
+
+test('a refresh takes a library pick away and the film stays in the library', async () => {
+  const { k, anchor } = setup();
+  const vertigo = libraryFilm(k, 'Vertigo', 'Scottie climbs the bell tower stairs: the dolly zoom.', ['dolly zoom']);
+  k.model.on('scout.links', () => ({ ratings: [{ itemId: vertigo.id, strength: 0.9, why: 'where it began' }] }));
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+  k.model.on('scout.links', () => ({ ratings: [] }));
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.equal(k.mind.picks(anchor).filter((n) => n.itemId === vertigo.id).length, 0);
+  assert.equal(k.mind.item(vertigo.id).archived, false);
+  assert.deepEqual(k.mind.inbox(), []);
+});

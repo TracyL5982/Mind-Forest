@@ -1,0 +1,64 @@
+[
+  {
+    "steps": [
+      {
+        "parent": null,
+        "ref": "tag:standoff",
+        "why": ""
+      },
+      {
+        "parent": 0,
+        "ref": "film:37",
+        "why": "Brought in by you"
+      },
+      {
+        "parent": 1,
+        "ref": "tag:editing",
+        "why": "Craft"
+      },
+      {
+        "parent": 2,
+        "ref": "film:45",
+        "why": "Training Montage"
+      }
+    ],
+    "title": "Standoffs",
+    "walked": [
+      "tag:standoff",
+      "film:37",
+      "tag:editing",
+      "film:45"
+    ]
+  },
+  {
+    "steps": [
+      {
+        "parent": null,
+        "ref": "note:machines-note",
+        "why": ""
+      },
+      {
+        "parent": 0,
+        "ref": "film:38",
+        "why": "A bone becomes a satellite"
+      },
+      {
+        "parent": 1,
+        "ref": "film:53",
+        "why": "Stanley Kubrick"
+      },
+      {
+        "parent": 1,
+        "ref": "tag:kubrick",
+        "why": "People"
+      }
+    ],
+    "title": "Machines that look back",
+    "walked": [
+      "note:machines-note",
+      "film:38",
+      "tag:kubrick",
+      "film:53"
+    ]
+  }
+]

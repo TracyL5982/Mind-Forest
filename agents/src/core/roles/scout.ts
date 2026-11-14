@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Command, Id, Item, Node } from '../domain.ts';
+import { inLibrary, type Command, type Id, type Item, type Node } from '../domain.ts';
 import type { Found, Source } from '../ports.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
@@ -131,7 +131,12 @@ export const scout: Roles['scout'] = async (ctx, input) => {
       flush();
     }),
   );
-  commands.push(...(await linking));
+  for (const tie of await linking) {
+    const there = shownAt(ctx, tie.item.id, anchor);
+    if (there) commands.push({ type: 'link', link: { id: ctx.newId(), a: anchor.id, b: there.id, why: tie.why, strength: tie.strength } });
+    // A library film or work that no tree holds is shown in place under the card, the way a new pick is.
+    else commands.push({ type: 'addNode', node: makeNode(ctx, tie.item, { treeId: anchor.treeId, parent: anchor.id, status: pickStatus(ctx), why: tie.why, importance: tie.strength, origin: AGENT(ROLE, 'library'), offset: placed++ }) });
+  }
   return commands;
 };
 
@@ -516,8 +521,20 @@ function knownUrls(ctx: RoleContext): Set<string> {
   return urls;
 }
 
-/** Links to what the user already has, drawn only when plain search and then the model both call the tie strong. */
-async function links(ctx: RoleContext, run: Run): Promise<Command[]> {
+/** Where an item the user already has is shown, to link to: a node in another tree first. None for library items no tree holds. */
+function shownAt(ctx: RoleContext, itemId: Id, anchor: Node): Node | undefined {
+  const nodes = ctx.mind.nodesOfItem(itemId);
+  return nodes.find((n) => n.treeId !== anchor.treeId) ?? nodes[0];
+}
+
+interface Tie {
+  item: Item;
+  strength: number;
+  why: string;
+}
+
+/** Ties to what the user already has, kept only when plain search and then the model both call them strong. */
+async function links(ctx: RoleContext, run: Run): Promise<Tie[]> {
   const { anchor, item } = run;
   if (ctx.settings.maxLinksPerRun <= 0) return [];
   const exclude = new Set<Id>([
@@ -525,15 +542,11 @@ async function links(ctx: RoleContext, run: Run): Promise<Command[]> {
     ...ctx.mind.subtree(anchor.id).map((n) => n.itemId),
     ...ctx.mind.linksOf(anchor.id).map((l) => ctx.mind.node(l.a === anchor.id ? l.b : l.a).itemId),
   ]);
-  const target = (itemId: Id): Node | undefined => {
-    const nodes = ctx.mind.nodesOfItem(itemId);
-    return nodes.find((n) => n.treeId !== anchor.treeId) ?? nodes[0];
-  };
 
   const coverage = new Map<Id, number>();
   for (const query of [`${item.title} ${item.tags.join(' ')}`, run.need]) {
     for (const hit of ctx.mind.search(query, { limit: 20, exclude })) {
-      if (hit.coverage >= LINK_COVERAGE && target(hit.id)) coverage.set(hit.id, Math.max(coverage.get(hit.id) ?? 0, hit.coverage));
+      if (hit.coverage >= LINK_COVERAGE && (shownAt(ctx, hit.id, anchor) || inLibrary(hit.item))) coverage.set(hit.id, Math.max(coverage.get(hit.id) ?? 0, hit.coverage));
     }
   }
   const candidates = [...coverage].sort((a, b) => b[1] - a[1]).slice(0, MAX_LINK_CANDIDATES).map(([id]) => ctx.mind.item(id));
@@ -546,7 +559,7 @@ async function links(ctx: RoleContext, run: Run): Promise<Command[]> {
       user: [
         run.brief,
         '',
-        "These items are already elsewhere in the user's notes and share some words with it:",
+        "These items are already in the user's notes or in their library of films and works, and share some words with it:",
         ...candidates.map((c) => `- item ${c.id} "${oneLine(nameOf(c), 100)}": ${oneLine(c.summary || c.text, 240)}`),
         '',
         'Rate how strongly each is connected to what the user is looking at, from 0 to 1, using the item ids exactly as written.',
@@ -566,10 +579,7 @@ async function links(ctx: RoleContext, run: Run): Promise<Command[]> {
       .filter(([, r]) => r.strength >= ctx.settings.linkThreshold)
       .sort((a, b) => b[1].strength - a[1].strength)
       .slice(0, ctx.settings.maxLinksPerRun)
-      .map(([itemId, r]) => ({
-        type: 'link' as const,
-        link: { id: ctx.newId(), a: anchor.id, b: target(itemId)!.id, why: r.why || 'closely related', strength: r.strength },
-      }));
+      .map(([itemId, r]) => ({ item: ctx.mind.item(itemId), strength: r.strength, why: r.why || 'closely related' }));
   } catch (err) {
     ctx.note(ROLE, `could not rate links to existing notes (${message(err)}), drawing none`);
     return [];
