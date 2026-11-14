@@ -76,7 +76,7 @@ function entry(fields: Partial<ComponentsReply['items'][number]> & { id: Id }): 
 }
 
 function proposal(fields: Partial<CompositesReply['groups'][number]> & { parent: Id; members: Id[] }): CompositesReply['groups'][number] {
-  return { composite: 'cluster', title: '', labels: [], criteria: [], cells: [], theme: '', ...fields };
+  return { composite: 'cluster', title: '', labels: [], criteria: [], cells: [], theme: '', parts: [], ...fields };
 }
 
 test('structured data picks the component without asking the model', async () => {
@@ -349,6 +349,40 @@ test('the model timeline keeps only members whose date is in their content', asy
   await render(k, ids);
   assert.deepEqual(groups(k)[0]!.members, ids.slice(0, 3));
   assert.deepEqual(Object.values(groups(k)[0]!.props.labels as Record<string, string>), ['1958', '1975', '1990']);
+});
+
+test('a layout the model describes is set as a tree labelled in the words of its members, and one nested five deep is set aside with a note', async () => {
+  const k = kit();
+  const { root, ids } = grow(k, [
+    { title: 'Eat: grilled sardines in Alfama', summary: 'Smoke on every corner in June.' },
+    { title: 'Eat: pastéis de nata at Belém', summary: 'Warm from the oven.' },
+    { title: 'See: Tram 28 at dawn', summary: 'Before the crowds.' },
+    { title: 'See: the tiled station at São Bento', summary: 'Twenty thousand tiles.' },
+  ]);
+  const [a, b, c, d] = ids as [Id, Id, Id, Id];
+  const part = (id: string, parent: string, kind: CompositesReply['groups'][number]['parts'][number]['kind'], label = '') => ({ id, parent, kind, role: 'normal' as const, label, join: 'none' as const });
+  k.model.on('renderer.composites', () => ({
+    groups: [proposal({
+      parent: root,
+      composite: 'layout',
+      title: 'Lisbon',
+      members: [],
+      parts: [part('all', '', 'row', 'Three days'), part('eat', 'all', 'column', 'Eat'), part('see', 'all', 'column', 'See'), part('wrap', 'see', 'row'), part(a, 'eat', 'card'), part(b, 'eat', 'card'), part(c, 'wrap', 'card'), part(d, 'wrap', 'card')],
+    })],
+  }));
+  await render(k, ids);
+  const card = (id: Id) => ({ kind: 'card', id, role: 'normal' });
+  assert.deepEqual(groups(k).map((g) => [g.composite, g.title, g.members, g.props]), [
+    ['layout', 'Lisbon', [a, b, c, d], { tree: { kind: 'row', children: [{ kind: 'column', label: 'Eat', children: [card(a), card(b)] }, { kind: 'column', label: 'See', children: [{ kind: 'row', children: [card(c), card(d)] }] }] } }],
+  ], 'a label no member states is dropped');
+
+  const deep = kit();
+  const tree = grow(deep, [{ title: 'one' }, { title: 'two' }, { title: 'three' }, { title: 'four' }]);
+  const nest = ['b1', 'b2', 'b3', 'b4', 'b5'].map((id, n) => part(id, n === 0 ? '' : `b${n}`, 'row'));
+  deep.model.on('renderer.composites', () => ({ groups: [proposal({ parent: tree.root, composite: 'layout', members: [], parts: [...nest, ...tree.ids.map((id) => part(id, 'b5', 'card'))] })] }));
+  await render(deep, tree.ids);
+  assert.deepEqual(groups(deep), []);
+  assert.ok(deep.notes.some((note) => /layout .* 5 containers deep/.test(note)), deep.notes.join('\n'));
 });
 
 test('beyond nine alike siblings, the least important go into a stack', async () => {

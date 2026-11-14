@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Item, View } from './domain.ts';
 import type { Grounding } from './grounding.ts';
+import { JOINS, KINDS, LIMITS, ROLES, withinLimits, type Box, type Part } from './layout.ts';
 
 /** A string a card shows as words: at least one character that is not white space. */
 const words = z.string().regex(/\S/);
@@ -252,6 +253,14 @@ export const CHECKS: ContentChecks = {
   },
 };
 
+/** A part of an assembled arrangement: a member, or a row, column or grid of parts. */
+const LAYOUT_PART: z.ZodType<Part> = z.lazy(() =>
+  z.union([
+    z.strictObject({ kind: z.literal('card'), id: z.string().min(1), role: z.enum(ROLES) }),
+    z.strictObject({ kind: z.enum(KINDS), label: words.max(LIMITS.label).optional(), join: z.enum(JOINS).optional(), children: z.array(LAYOUT_PART).min(1) }),
+  ]),
+);
+
 /**
  * The composite library: every way several sibling nodes can be drawn as one arrangement.
  * Member ids in props are node ids.
@@ -269,6 +278,8 @@ export const COMPOSITES = {
   cluster: z.object({ theme: z.string().optional() }),
   /** Many similar members, piled so only the top shows until opened. */
   stack: z.object({}),
+  /** Members set out by a structure the model describes when no arrangement above fits: rows, columns and grids, nested up to four deep. */
+  layout: z.strictObject({ tree: LAYOUT_PART }).refine(({ tree }) => tree.kind !== 'card' && withinLimits(tree as Box)),
 } as const;
 export type CompositeId = keyof typeof COMPOSITES;
 export const COMPOSITE_IDS = Object.keys(COMPOSITES) as CompositeId[];

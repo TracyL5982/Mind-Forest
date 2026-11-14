@@ -2,10 +2,10 @@ import type { Command, Item } from '../core/domain.ts';
 import type { Found } from '../core/ports.ts';
 import { codeIn } from '../core/roles/intake/code.ts';
 import { structure } from '../core/roles/intake/describe.ts';
-import { byRule, drawn, unsure } from '../core/roles/renderer.ts';
+import { byRule, drawn, layoutDraft, unsure } from '../core/roles/renderer.ts';
 import { catalogued } from '../core/roles/scout.ts';
 import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles } from '../core/roles/types.ts';
-import { choose, describe } from './model.ts';
+import { assemble, choose, describe } from './model.ts';
 
 const WORK: Found = {
   kind: 'artwork', title: 'Stairwell, seen from above', by: 'Ilse Brandt', date: '1928', text: 'Gelatin silver print',
@@ -26,6 +26,24 @@ async function found(ctx: RoleContext, record: Found, source: { id: string; name
     kind: picture ? 'image' : 'text', title: record.title, text: `${record.text}\n\n${record.by}, ${record.date}, ${from}`, summary: record.text, tags: [record.kind ?? 'find'],
     data: { site: new URL(record.url).hostname, by: record.by, date: record.date, from, ...catalogued(record) },
     origin: AGENT('scout', source.id), source: { from: 'web', url: record.url, ...(picture ? { asset: picture.id } : {}) },
+  });
+}
+
+/**
+ * Where the model would lay out the kept siblings of a changed card, the stand-in's own structure, read from their titles, goes
+ * through the same checks. Each parent has at most one such group, under one id, and siblings in another group stay out of it.
+ */
+function assembled(ctx: RoleContext, nodeIds: readonly string[]): Command[] {
+  const parents = new Set(nodeIds.flatMap((id) => ctx.mind.nodes.get(id)?.parent ?? []));
+  return [...parents].flatMap((anchor): Command[] => {
+    const id = `${anchor}-layout`;
+    const elsewhere = new Set([...ctx.mind.groups.values()].filter((group) => group.id !== id).flatMap((group) => group.members));
+    const kept = ctx.mind.children(anchor).filter((node) => node.status === 'kept' && !elsewhere.has(node.id));
+    const parts = assemble(kept.map((node) => ({ id: node.id, title: ctx.mind.itemOf(node.id).title })));
+    const draft = parts && layoutDraft(ctx, { parent: anchor, title: '', parts }, kept.map((node) => node.id));
+    const standing = ctx.mind.groups.get(id);
+    if (!draft || JSON.stringify(standing && [standing.members, standing.props]) === JSON.stringify([draft.members, draft.props])) return [];
+    return [{ type: 'setGroup', group: { id, treeId: ctx.mind.node(anchor).treeId, anchor, ...draft } }];
   });
 }
 
@@ -110,7 +128,7 @@ export const fakeRoles: Roles = {
 
   async renderer(ctx, { nodeIds }) {
     const assetUrl = (id: string) => ctx.assets.url(id);
-    return nodeIds.flatMap((id): Command[] => {
+    const views = nodeIds.flatMap((id): Command[] => {
       const node = ctx.mind.nodes.get(id);
       const item = node && ctx.mind.items.get(node.itemId);
       if (!node || !item) return [];
@@ -120,6 +138,7 @@ export const fakeRoles: Roles = {
       const same = draw.component === node.view.component && JSON.stringify(draw.props) === JSON.stringify(node.view.props);
       return same ? [] : [{ type: 'setView', id, view: { ...draw, by: 'renderer' } }];
     });
+    return [...views, ...assembled(ctx, nodeIds)];
   },
 
   async packager(ctx, { scope, note }) {

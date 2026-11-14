@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
 import { grounding, type Grounding } from '../grounding.ts';
+import { cardsOf, collapse, JOINS, KINDS, LIMITS, parseFlat, ROLES, type Box, type Part as LayoutPart } from '../layout.ts';
 import { CHECKS, isValidGroup, isValidView, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type Section, type Stated } from '../views.ts';
 import type { RoleContext, Roles } from './types.ts';
 
@@ -96,13 +97,14 @@ export const CompositesReply = z.object({
   groups: z.array(
     z.object({
       parent: z.string(),
-      composite: z.enum(['timeline', 'comparison', 'sequence', 'cluster']),
+      composite: z.enum(['timeline', 'comparison', 'sequence', 'cluster', 'layout']),
       title: z.string(),
       members: z.array(z.string()),
       labels: z.array(z.string()),
       criteria: z.array(z.string()),
       cells: z.array(z.object({ member: z.string(), values: z.array(z.string()) })),
       theme: z.string(),
+      parts: z.array(z.object({ id: z.string(), parent: z.string(), kind: z.enum(['card', ...KINDS]), role: z.enum(ROLES), label: z.string(), join: z.enum(['none', ...JOINS]) })),
     }),
   ),
 });
@@ -1247,6 +1249,7 @@ Arrangements:
 - comparison: 2 to 4 alternatives the user would weigh against each other. Give 2 to 4 criteria, and in cells one entry per member with one short value per criterion, in the order of criteria. Draw each value from that member's summary. Leave a value empty when the summary does not say.
 - sequence: members whose order means something, such as steps or an argument. Give members in that order.
 - cluster: members that share one theme the others do not. Give theme, a label of 1 to 3 words.
+${LAYOUT_OPTION}
 
 Rules:
 - A timeline, sequence or cluster needs at least 3 members. A comparison needs 2 to 4.
@@ -1255,6 +1258,7 @@ Rules:
 - Use the parent and member ids exactly as given.
 - title is a few words: the theme, or what is being compared.
 - Fill only the fields of the chosen arrangement. Leave the others as an empty string or an empty list.
+- Choose layout only when no other arrangement fits.
 
 ${blocks.join('\n\n')}`;
 }
@@ -1301,7 +1305,37 @@ function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], ids: 
       const theme = (g.theme.trim() || g.title.trim()).split(/\s+/).slice(0, 3).join(' ');
       return ids.length >= 3 && theme ? { composite: 'cluster', title: title || theme, members: ids, props: { theme } } : null;
     }
+    case 'layout':
+      return layoutDraft(ctx, g, ids);
   }
+}
+
+const LAYOUT_OPTION = `- layout: only when none of the arrangements above fits, members that fall into a structure of their own, such as two or three labelled sets side by side, or one member the others serve. Describe it in parts, one for each container and one for each member, each naming the id of the container it sits in. A container is a row, a column or a grid, with an id you make up; the outermost one has parent "". A member's part has kind card and its node id as id. Give each member a role: lead for the one member the others serve, minor for an aside, otherwise normal. A container may carry a label of 1 to 4 words taken from its members' content. Set join to arrow when a row's or a column's members follow one another, line when they only belong together, otherwise none. At most ${LIMITS.cards} members, ${LIMITS.boxes} containers, and containers ${LIMITS.depth} deep. Leave members empty; the parts name them.`;
+
+/**
+ * The structure the model gave for a layout, as a tree whose labels stand in its members' content, or null with a note that says why
+ * it was set aside. A label stands when one member under it states it, or when every member under it states each of its words.
+ */
+export function layoutDraft(ctx: RoleContext, g: Pick<CompositesReply['groups'][number], 'parent' | 'title' | 'parts'>, ids: Id[]): GroupDraft | null {
+  const parsed = parseFlat(g.parts, new Set(ids));
+  if ('why' in parsed) {
+    ctx.note(ROLE, `Set aside the layout the model gave under ${g.parent}: ${parsed.why}.`);
+    return null;
+  }
+  const said = new Map(ids.map((id) => {
+    const item = ctx.mind.itemOf(id);
+    return [id, grounding(`${item.title}\n${item.text}\n${item.summary}\n${str(item.data.when) ?? ''}`)];
+  }));
+  const stands = (label: string, under: string[]) =>
+    label.length <= LIMITS.label && (under.some((id) => said.get(id)!.says(label)) || label.split(/\s+/).every((word) => under.every((id) => said.get(id)!.says(word))));
+  const grounded = (part: LayoutPart): LayoutPart => {
+    if (part.kind === 'card') return part;
+    const { label, ...rest } = part;
+    const children = part.children.map(grounded);
+    return label && stands(label, cardsOf(part)) ? { ...rest, label, children } : { ...rest, children };
+  };
+  const tree = collapse(grounded(parsed.tree) as Box);
+  return { composite: 'layout', title: clip(g.title, 40), members: cardsOf(tree), props: { tree } };
 }
 
 async function askComposites(ctx: RoleContext, pools: Pool[], changed: ReadonlySet<Id>, out: Command[]): Promise<void> {
@@ -1329,7 +1363,7 @@ async function askComposites(ctx: RoleContext, pools: Pool[], changed: ReadonlyS
     return;
   }
   for (const g of reply.groups) {
-    const members = [...new Set(g.members)];
+    const members = [...new Set(g.composite === 'layout' ? g.parts.filter((part) => part.kind === 'card').map((part) => part.id) : g.members)];
     const pool = asked.find((p) => p.parent.id === g.parent && members.length > 0 && members.every((id) => p.asked.includes(id)));
     if (!pool) continue;
     const draft = draftFrom(
