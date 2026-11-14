@@ -100,6 +100,14 @@ const GROWING: Record<string, Given[]> = {
     { props: { colours: [{ name: 'Night', value: 'black' }, { name: 'Day', value: 'white' }, { name: 'Dusk', value: '#334' }] } },
     { item: { title: words(10) }, props: { colours: Array.from({ length: 9 }, (_, i) => ({ name: `Colour ${i}`, value: `#${i}${i}${i}` })) } },
   ],
+  sheet: [
+    { props: { sections: [{ kind: 'text', text: 'Pack the night before.' }, { kind: 'list', items: ['Tent', 'Stove'] }] } },
+    { props: { sections: [{ kind: 'heading', text: 'Camp' }, { kind: 'text', text: 'Pack the night before.' }, { kind: 'list', items: ['Tent', 'Stove'] }] } },
+    { props: { sections: [{ kind: 'heading', text: 'Camp' }, { kind: 'text', text: words(30) }, { kind: 'list', items: ['Tent', 'Stove', 'Lamp'] }] } },
+    { props: { sections: [{ kind: 'heading', text: 'Camp' }, { kind: 'text', text: words(30) }, { kind: 'figures', facts: [{ label: 'Nights', value: '2' }] }, { kind: 'list', items: ['Tent', 'Stove', 'Lamp'] }] } },
+    { props: { sections: [{ kind: 'picture', src: 'a.png' }, { kind: 'text', text: words(30) }, { kind: 'figures', facts: [{ label: 'Nights', value: '2' }, { label: 'Cost', value: '€240' }, { label: 'Walked', value: '31 km' }] }, { kind: 'list', items: ['Tent', 'Stove', 'Lamp', words(12), 'Map', 'Rope', 'Axe', 'Tea'] }] } },
+    { item: { title: words(12) }, props: { sections: [{ kind: 'picture', src: 'a.png' }, { kind: 'text', text: words(30) }, { kind: 'figures', facts: [{ label: 'Nights', value: '2' }, { label: 'Cost', value: '€240' }, { label: 'Walked', value: '31 km' }] }, { kind: 'list', items: ['Tent', 'Stove', 'Lamp', words(12), 'Map', 'Rope', 'Axe', 'Tea'] }] } },
+  ],
   place: [
     { item: { title: 'Lisbon' }, props: { name: 'Lisbon' } },
     { item: { title: 'Lisbon', summary: 'Three days.' }, props: { name: 'Lisbon' } },
@@ -139,7 +147,7 @@ test('every component the service can choose has a client module, a content chec
   assert.deepEqual(Object.keys(COMPONENTS), COMPONENT_IDS, 'the client registry holds the service\'s components, in its order');
   for (const id of COMPONENT_IDS) {
     for (const part of ['size', 'draw', 'detail']) assert.equal(typeof COMPONENTS[id]![part], 'function', `${id}.${part}`);
-    assert.ok(Array.isArray(COMPONENTS[id]!.shows), `${id}.shows`);
+    assert.ok(Array.isArray(COMPONENTS[id]!.shows) || typeof COMPONENTS[id]!.shows === 'function', `${id}.shows`);
     assert.ok(Object.hasOwn(CHECKS, id) && typeof CHECKS[id].props === 'object', `${id} has a content check`);
     assert.ok(page.includes(`\n### ${id}\n`), `docs/libraries.md has a section for ${id}`);
     assert.ok(page.includes(`\n- **${id}.** `), `docs/libraries.md gives the footprint of ${id}`);
@@ -244,4 +252,29 @@ test('a facts card sets every figure in one size, trims what it is given, and ma
   assert.deepEqual(COMPONENTS.facts!.size(blank, { facts: [{ label: ' Height ', value: '  330 m  ' }, { label: 'Built', value: '\t1889\n' }] }), facts('330 m', '1889'), 'padding around a label or a value counts nothing');
   const passage = 'a room that is too large for its purpose makes those in it speak as if to a crowd '.repeat(6);
   assert.deepEqual(facts(passage, '1889'), [320, 30 + 21 + 12 + (8 * 21 + 17) + 12 + (21 + 17)], 'a passage is given eight lines and no more');
+});
+
+test('a sheet is one card: its heading is its title, a picture leads it, each part is as tall as on its own card, and no chip says what it draws', async () => {
+  const { COMPONENTS, sizeOf, chipsOf } = (await load('components/index.js')) as {
+    COMPONENTS: Record<string, Kind>;
+    sizeOf: (node: unknown, item: unknown) => number[];
+    chipsOf: (node: unknown, item: unknown) => { kind: string; text: string }[];
+  };
+  const sheet = (sections: unknown[], item: Record<string, unknown> = {}) => COMPONENTS.sheet!.size({ ...blank, ...item }, { sections });
+  const text = { kind: 'text', text: 'Pack the night before.' };
+  const list = { kind: 'list', items: ['Tent', 'Stove'] };
+  assert.deepEqual(sheet([text, list]), [320, 30 + 21 + 6 + 17 + 21 + (17 + 5 + 17)], 'the opening sits under the title as a note\'s text does, and the list under a hairline');
+  assert.deepEqual(sheet([list, text]), [320, 30 + 21 + 10 + (17 + 5 + 17) + 21 + 17], 'a list that comes first sits under the title as on a list card');
+  assert.deepEqual(sheet([{ kind: 'heading', text: 'Camp' }, text, list], { title: 'A title that is long enough to take two lines of a card this wide' }), sheet([text, list]), 'the heading stands in for the item\'s title');
+  assert.deepEqual(sheet([{ kind: 'picture', src: 'a.png' }, text, list]), [320, sheet([text, list])[1]! + 140], 'a picture leads the card in a band across it');
+  const { size: facts } = COMPONENTS.facts!;
+  const figures = [{ label: 'Nights', value: '2' }, { label: 'Cost', value: '€240' }, { label: 'Walked', value: 'thirty-one kilometres in the rain' }];
+  assert.equal(sheet([{ kind: 'figures', facts: figures }, text])[1]! - (21 + 17), facts(blank, { facts: figures })[1], 'figures are laid out as on a facts card');
+
+  const item = { ...blank, title: 'Weekend in Porto', data: { when: 'Last May', where: 'Porto', people: ['Ines'] } };
+  const node = { view: { component: 'sheet', props: { sections: [text, { kind: 'excerpt', text: 'I would come back just for the sardines.', by: 'Ines' }] } } };
+  assert.deepEqual(chipsOf(node, item).map((chip) => chip.kind), ['when', 'where'], 'the people chip would say Ines again');
+  const named = { view: { component: 'sheet', props: { sections: [{ kind: 'heading', text: 'Porto' }, text, list] } } };
+  assert.deepEqual(chipsOf(named, item).map((chip) => chip.kind), ['when', 'people'], 'the place chip would say the heading again');
+  assert.equal(sizeOf(node, item)[1], COMPONENTS.sheet!.size(item, node.view.props)[1]! + 28);
 });

@@ -37,9 +37,10 @@ const grid = (props) => ({
  * words: a column is at least as wide as the widest number it shows, and the words share what is
  * left. The first column, which names each row, is at least `FIRST_FLOOR` px wide or as wide as it
  * needs. Columns are dropped from the end until each one that holds words can have `WORDS_FLOOR`
- * px or all it needs, and the card counts the columns it drops as it does the rows.
+ * px or all it needs, and the card counts the columns it drops as it does the rows. `room` is the
+ * column the cells share: a table card's, or a sheet's.
  */
-export function plan(item, props) {
+export function plan(item, props, room = ROOM) {
   const { heads, rows } = grid(props);
   const shown = rows.slice(0, MOST_ROWS);
   const columns = heads.map((head, i) => {
@@ -52,10 +53,10 @@ export function plan(item, props) {
   });
   const least = (count) => columns.slice(0, count).reduce((sum, column) => sum + column.least, BETWEEN * (count - 1));
   let count = Math.min(columns.length, MOST_COLUMNS);
-  while (count > 1 && least(count) > ROOM) count -= 1;
+  while (count > 1 && least(count) > room) count -= 1;
   const kept = columns.slice(0, count);
   const floors = kept.reduce((sum, column) => sum + column.floor, 0);
-  const extra = spread(kept.map((column) => column.want - column.floor), ROOM - BETWEEN * (count - 1) - floors);
+  const extra = spread(kept.map((column) => column.want - column.floor), room - BETWEEN * (count - 1) - floors);
   const widths = kept.map((column, i) => column.floor + extra[i]);
   const width = clamp(SIDES + widths.reduce((sum, wide) => sum + wide, BETWEEN * (count - 1)), NARROW, WIDE);
   const [moreRows, moreColumns] = [rows.length - shown.length, heads.length - count];
@@ -69,24 +70,30 @@ export function plan(item, props) {
   };
 }
 
+/** How tall the rows `plan` shows stand under their heads, with the line that counts what is left out. */
+export const ruledHeight = ({ rows, foot }) => ROW * (1 + rows.length) + (foot ? 8 + TEXT : 0);
+
 export const shows = [];
 
 export function size(item, props) {
-  const { rows, width, titleLines, foot } = plan(item, props);
-  return [width, FRAME + titleLines * TITLE + 8 + ROW * (1 + rows.length) + (foot ? 8 + TEXT : 0)];
+  const planned = plan(item, props);
+  return [planned.width, FRAME + planned.titleLines * TITLE + 8 + ruledHeight(planned)];
 }
 
 /** A cell. A number is drawn whole wherever it stands, and to the right in a column of numbers. */
 const cell = (words, right, head) => h('div', { class: `table-cell${right ? ' is-right' : ''}${head ? ' is-head' : isNumber(words) ? ' is-number' : ''}`, dir: !head && isNumber(words) ? false : 'auto', text: words });
 
+/** The heads and the rows `plan` shows, in the columns it gives them. */
+export const ruled = ({ heads, rows, numbers, widths }) => h('div', { class: 'table', role: 'table', style: { gridTemplateColumns: widths.map((wide) => `${wide}px`).join(' ') } },
+  heads.map((head, i) => cell(head, numbers[i], true)),
+  rows.map((row) => row.map((words, i) => cell(words, numbers[i], false))));
+
 export function draw(item, props) {
-  const { heads, rows, numbers, widths, titleLines, foot } = plan(item, props);
+  const planned = plan(item, props);
   return [
-    say('div', `card-title clamp-${titleLines}`, titleOf(item)),
-    h('div', { class: 'table', role: 'table', style: { gridTemplateColumns: widths.map((wide) => `${wide}px`).join(' ') } },
-      heads.map((head, i) => cell(head, numbers[i], true)),
-      rows.map((row) => row.map((words, i) => cell(words, numbers[i], false)))),
-    foot && h('div', { class: 'card-foot', text: foot }),
+    say('div', `card-title clamp-${planned.titleLines}`, titleOf(item)),
+    ruled(planned),
+    planned.foot && h('div', { class: 'card-foot', text: planned.foot }),
   ];
 }
 

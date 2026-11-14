@@ -12,7 +12,7 @@ const SMALL_LETTER = SMALL[2];
 /** The most lines a value is given, as on a fact card. */
 const MOST_LINES = 8;
 
-const pairs = (props) => list(props.facts).map((fact) => ({ label: text(fact?.label).trim(), value: text(fact?.value).trim() }));
+export const pairs = (props) => list(props.facts).map((fact) => ({ label: text(fact?.label).trim(), value: text(fact?.value).trim() }));
 
 /** Whether a value is on one line in `room` px at the middle size. */
 const fitsMiddle = (fact, room) => figureNeed(fact.value, MIDDLE) <= room * 100;
@@ -23,10 +23,10 @@ const fitsMiddle = (fact, room) => figureNeed(fact.value, MIDDLE) <= room * 100;
  * another match: the middle size while each value fits its room there, and the smallest when one
  * does not fit even a whole row. At the smallest size a value that needs more wraps and its row
  * grows with it, up to `MOST_LINES`. A value that needs more lines still is a passage, not a
- * figure: it is cut there with an ellipsis, and the opened card has it whole.
+ * figure: it is cut there with an ellipsis, and the opened card has it whole. A sheet sets its
+ * figures the same way, in a column as wide as this card's.
  */
-function plan(item, props) {
-  const facts = pairs(props);
+export function grid(facts) {
   const rows = [];
   for (let i = 0; i < facts.length; i += rows.at(-1).cells.length) {
     const paired = i + 1 < facts.length && fitsMiddle(facts[i], HALF) && fitsMiddle(facts[i + 1], HALF);
@@ -44,26 +44,35 @@ function plan(item, props) {
     });
     return { cells, height: Math.max(...cells.map((cell) => cell.height)) };
   });
-  const more = Number.isInteger(props.more) && props.more > 0 ? props.more : 0;
-  return { cls, rows: drawn, more, titleLines: wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) };
+  return { cls, rows: drawn, height: drawn.reduce((sum, row) => sum + row.height, 0) + Math.max(0, drawn.length - 1) * ROW_GAP };
 }
+
+function plan(item, props) {
+  const more = Number.isInteger(props.more) && props.more > 0 ? props.more : 0;
+  return { ...grid(pairs(props)), more, titleLines: wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) };
+}
+
+/** The rows of figures, each over its label. */
+export const figures = ({ cls, rows }) => h('div', { class: 'figures' }, rows.map((row) => row.cells.map((cell) =>
+  h('div', { class: row.cells.length === 1 ? 'figure is-alone' : 'figure', dir: 'auto' },
+    h('div', { class: `fact-value ${cls}${cell.cut ? ` clamp-${MOST_LINES}` : ''}`, text: cell.value }),
+    h('div', { class: `fact-label clamp-${cell.labelLines}`, text: cell.label })))));
+
+/** Every figure with its label, whole, as the opened card lists them. */
+export const listed = (facts) => h('dl', { class: 'detail-figures' }, facts.map((fact) => [say('dt', '', fact.label.trim()), say('dd', '', fact.value.trim())]));
 
 export const shows = [];
 
 export function size(item, props) {
-  const { rows, more, titleLines } = plan(item, props);
-  const grid = rows.reduce((sum, row) => sum + row.height, 0) + Math.max(0, rows.length - 1) * ROW_GAP;
-  return [WIDTH, FRAME + titleLines * TITLE + (rows.length ? 12 + grid : 0) + (more ? 8 + TEXT : 0)];
+  const { rows, height, more, titleLines } = plan(item, props);
+  return [WIDTH, FRAME + titleLines * TITLE + (rows.length ? 12 + height : 0) + (more ? 8 + TEXT : 0)];
 }
 
 export function draw(item, props) {
   const { cls, rows, more, titleLines } = plan(item, props);
   return [
     say('div', `card-title clamp-${titleLines}`, titleOf(item)),
-    rows.length > 0 && h('div', { class: 'figures' }, rows.map((row) => row.cells.map((cell) =>
-      h('div', { class: row.cells.length === 1 ? 'figure is-alone' : 'figure', dir: 'auto' },
-        h('div', { class: `fact-value ${cls}${cell.cut ? ` clamp-${MOST_LINES}` : ''}`, text: cell.value }),
-        h('div', { class: `fact-label clamp-${cell.labelLines}`, text: cell.label }))))),
+    rows.length > 0 && figures({ cls, rows }),
     more > 0 && andMore(more, item),
   ];
 }
@@ -75,6 +84,4 @@ function every(item, props) {
   return held.length > shown.length ? held : shown;
 }
 
-export const detail = (item, props) => [
-  h('dl', { class: 'detail-figures' }, every(item, props).map((fact) => [say('dt', '', fact.label.trim()), say('dd', '', fact.value.trim())])),
-];
+export const detail = (item, props) => [listed(every(item, props))];

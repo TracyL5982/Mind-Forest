@@ -23,6 +23,7 @@ import * as swatch from './swatch.js';
 import * as artwork from './artwork.js';
 import * as reference from './reference.js';
 import * as place from './place.js';
+import * as sheet from './sheet.js';
 import { h, s } from '../dom.js';
 import { chips } from '../chips.js';
 import { wordsOf } from '../words.js';
@@ -33,11 +34,12 @@ import { CHIP_LINE, say, textWidth } from './shared.js';
  * from the item and the props, so the field can be laid out without measuring the page. `draw`
  * returns the card's contents. `detail` returns the longer form shown when the card is opened,
  * and may return nothing. `shows` lists the chip sources the type already draws, as `item.data`
- * keys, so no chip repeats them.
+ * keys, so no chip repeats them. A sheet draws what its sections hold, so its `shows` is worked
+ * out from the item and the props.
  */
 export const COMPONENTS = {
   note, quote, fact, image, video, link, chart, person, chat, code, steps,
-  facts, table, list, breakdown, qa, callout, excerpt, definition, idea, proscons, swatch, artwork, reference, place,
+  facts, table, list, breakdown, qa, callout, excerpt, definition, idea, proscons, swatch, artwork, reference, place, sheet,
 };
 
 export const componentOf = (node) => (Object.hasOwn(COMPONENTS, node.view?.component) ? node.view.component : 'note');
@@ -47,6 +49,9 @@ function resolve(node) {
   const name = componentOf(node);
   return { kind: COMPONENTS[name], props: name === node.view?.component ? (node.view.props ?? {}) : {} };
 }
+
+/** The chips a card of this kind may draw, without what it draws already. */
+const chipsFor = (kind, item, props) => chips(item, typeof kind.shows === 'function' ? kind.shows(item, props) : kind.shows);
 
 /** A chip that is not the date is drawn only while each such chip can have this many px, or its whole text. */
 const CHIP_FLOOR = 72;
@@ -112,7 +117,7 @@ const insetOf = (node) => CHIP_INSET[componentOf(node)] ?? CHIP_INSET_ELSE;
 export function chipsOf(node, item) {
   const { kind, props } = resolve(node);
   const room = kind.size(item, props)[0] - 2 - 2 * insetOf(node);
-  const all = chips(item, kind.shows);
+  const all = chipsFor(kind, item, props);
   const dated = all[0]?.kind === 'when' ? [all[0]] : [];
   const taken = dated.map((chip) => Math.min(needOf(chip), room));
   const rest = room - taken.reduce((sum, wide) => sum + wide + CHIP_GAP, 0);
@@ -124,7 +129,7 @@ export function chipsOf(node, item) {
 export function sizeOf(node, item) {
   const { kind, props } = resolve(node);
   const [wide, tall] = kind.size(item, props);
-  return [wide, tall + (chips(item, kind.shows).length > 0 ? CHIP_LINE : 0)];
+  return [wide, tall + (chipsFor(kind, item, props).length > 0 ? CHIP_LINE : 0)];
 }
 
 const GLYPH = {

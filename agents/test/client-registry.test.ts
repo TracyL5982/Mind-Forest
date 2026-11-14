@@ -6,7 +6,7 @@ const load = (path: string) => import(new URL(`../client/js/${path}`, import.met
 
 test('every card type in the client registry can be sized, drawn and opened', async () => {
   const { COMPONENTS } = await load('components/index.js');
-  assert.deepEqual(Object.keys(COMPONENTS), ['note', 'quote', 'fact', 'image', 'video', 'link', 'chart', 'person', 'chat', 'code', 'steps', 'facts', 'table', 'list', 'breakdown', 'qa', 'callout', 'excerpt', 'definition', 'idea', 'proscons', 'swatch', 'artwork', 'reference', 'place']);
+  assert.deepEqual(Object.keys(COMPONENTS), ['note', 'quote', 'fact', 'image', 'video', 'link', 'chart', 'person', 'chat', 'code', 'steps', 'facts', 'table', 'list', 'breakdown', 'qa', 'callout', 'excerpt', 'definition', 'idea', 'proscons', 'swatch', 'artwork', 'reference', 'place', 'sheet']);
   for (const [name, kind] of Object.entries<Record<string, unknown>>(COMPONENTS)) {
     for (const part of ['size', 'draw', 'detail']) assert.equal(typeof kind[part], 'function', `${name}.${part}`);
   }
@@ -26,11 +26,14 @@ test('a card footprint is two whole numbers that depend only on the item and pro
   }
 });
 
-test('every card type says which chip sources it already shows', async () => {
+test('every card type says which chip sources it already shows, and a sheet works them out from what its sections draw', async () => {
   const { COMPONENTS } = await load('components/index.js');
-  const shows = Object.fromEntries(Object.entries<{ shows: string[] }>(COMPONENTS).flatMap(([name, kind]) => (kind.shows.length > 0 ? [[name, kind.shows]] : [])));
+  const shows = Object.fromEntries(Object.entries<{ shows: unknown }>(COMPONENTS).flatMap(([name, kind]) => (Array.isArray(kind.shows) && kind.shows.length > 0 ? [[name, kind.shows]] : [])));
   assert.deepEqual(shows, { link: ['site'], excerpt: ['site', 'from'], reference: ['venue', 'date', 'authors'], artwork: ['holder', 'date'], place: ['where'] });
-  for (const [name, kind] of Object.entries<{ shows: unknown }>(COMPONENTS)) assert.ok(Array.isArray(kind.shows), `${name}.shows`);
+  for (const [name, kind] of Object.entries<{ shows: unknown }>(COMPONENTS)) assert.ok(name === 'sheet' ? typeof kind.shows === 'function' : Array.isArray(kind.shows), `${name}.shows`);
+  const data = { when: '12 May', where: 'Porto', people: ['Ines', 'Tom'], authors: ['Ines'], site: '  Porto  ', count: 3 };
+  const props = { sections: [{ kind: 'figures', facts: [{ label: 'Arrived', value: '12 May' }] }, { kind: 'excerpt', text: 'Back for the sardines.', by: 'Ines' }] };
+  assert.deepEqual(COMPONENTS.sheet.shows({ title: 'Porto', text: '', data }, props), ['when', 'where', 'authors', 'site'], 'a value it draws, and a list of names when it draws each one');
 });
 
 test('a card with chips is taller by one fixed line, whatever its type, its status and however many chips', async () => {
@@ -133,7 +136,8 @@ test('the boxes on a line never outgrow the card, and a people chip always has r
         const item = { title: 'A title', text: '', summary: '', data, origin: { by } };
         const drawn: Drawn[] = chipsOf(node, item);
         const told = `${component} ${by} ${JSON.stringify(data).slice(0, 60)}`;
-        const only = Object.keys(data).every((key) => COMPONENTS[component].shows.includes(key));
+        const { shows } = COMPONENTS[component];
+        const only = Object.keys(data).every((key) => (typeof shows === 'function' ? shows(item, node.view.props) : shows).includes(key));
         assert.ok(drawn.length >= (only ? 0 : 1) && drawn.length <= 3, told);
         const line = drawn.reduce((sum, chip) => sum + chip.width, 6 * (drawn.length - 1));
         assert.ok(line <= sizeOf(node, item)[0] - (sides[component] ?? 32), `${told}: the line is ${line} px`);

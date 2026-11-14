@@ -241,8 +241,8 @@ button, input, textarea { font: inherit; color: inherit; }
    Kerning is off in them, so a word is exactly as wide as its characters add up to and a line ends where it was counted to end.
    A figure set at 24 px and up is kerned, because Ta and Wa gape there unkerned. Kerning only draws a line narrower than its
    characters add up to, so the count still holds. */
-.c-facts, .c-table, .c-list, .c-breakdown, .c-qa, .c-callout, .c-excerpt, .c-definition, .c-idea, .c-proscons, .c-swatch, .c-artwork, .c-reference, .c-place { font-kerning: none; }
-:is(.c-facts, .c-idea, .c-definition, .c-place) .fact-value:not(.is-small) { font-kerning: normal; }
+.c-facts, .c-table, .c-list, .c-breakdown, .c-qa, .c-callout, .c-excerpt, .c-definition, .c-idea, .c-proscons, .c-swatch, .c-artwork, .c-reference, .c-place, .c-sheet { font-kerning: none; }
+:is(.c-facts, .c-idea, .c-definition, .c-place, .c-sheet) .fact-value:not(.is-small) { font-kerning: normal; }
 
 /* list: a dot before each entry, or a tick box when the list is a checklist. A tick box shows a mark and takes no click. */
 .list-head { display: flex; align-items: baseline; gap: 10px; }
@@ -265,7 +265,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .figures { margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 17px; }
 .figure { min-width: 0; }
 .figure.is-alone { grid-column: 1 / -1; }
-.detail-figures { padding: 13px 15px; border-radius: 12px; background: var(--sunk); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 8px 16px; font-size: 14px; line-height: 20px; }
+/* A long label wraps in its column rather than squeeze the value beside it to a letter a line. */
+.detail-figures { padding: 13px 15px; border-radius: 12px; background: var(--sunk); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); display: grid; grid-template-columns: minmax(0, max-content) minmax(40%, 1fr); gap: 8px 16px; font-size: 14px; line-height: 20px; }
 .detail-figures dt { color: var(--ink-2); overflow-wrap: anywhere; }
 .detail-figures dd { font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
@@ -401,6 +402,20 @@ button, input, textarea { font: inherit; color: inherit; }
 .place-pin svg { fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
 .place-head .fact-value, .place-head .card-title { min-width: 0; }
 .detail-place .place-head .fact-value, .detail-place .place-head .card-title { overflow-wrap: anywhere; }
+
+/* sheet: one card assembled from parts under one title, each part drawn as the card of its own kind draws it, and each after
+   the first under a hairline. components/sheet.js sets the room around each part, so the footprint and the page agree. */
+.c-sheet { padding: 0; gap: 0; }
+.sheet-under { padding: 13px 15px; display: flex; flex-direction: column; min-height: 0; }
+.sheet-part { flex: none; }
+.sheet-part.is-ruled { border-top: 1px solid var(--line); }
+.c-sheet .figures, .c-sheet .list, .c-sheet .table { margin-top: 0; }
+.sheet-part .card-foot { margin-top: 8px; }
+.sheet-by { margin-top: 4px; display: flex; align-items: flex-start; gap: 8px; color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); }
+.sheet-by::before { content: ''; flex: none; width: 14px; height: 1px; margin-top: 8.5px; background: currentColor; }
+.sheet-by span { min-width: 0; overflow-wrap: anywhere; }
+.detail-sheet-heading { overflow-wrap: anywhere; }
+.detail-sheet-text { color: var(--ink); overflow-wrap: anywhere; }
 
 /* ---- groups */
 
