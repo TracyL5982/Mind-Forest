@@ -486,3 +486,62 @@ test('every picture and recording a pick shows is fetched from the service, neve
   }
   assert.ok(items.some((i) => i.data.mediaUrl), 'the episode plays');
 });
+
+const ARCHIVE = { id: 'archive', name: 'Internet Archive', goodFor: 'Old films that play as a file.', query: 'Title words.', show: 1 };
+const REEL = { title: 'Jaws, the beach', by: 'A film school', date: '1975', text: 'The dolly zoom on the beach, frame by frame.', from: 'Internet Archive', url: 'https://archive.example/details/jaws', media: 'https://archive.example/download/jaws/jaws.mp4', image: 'https://archive.example/img/jaws' };
+
+function headsetSetup(files: string[] = ['mp4', 'mp3']) {
+  const { k, anchor } = setup({}, [VIDEO]);
+  k.world.sources.push(ARCHIVE);
+  k.world.pictures.add(REEL.image);
+  k.playback.embeds = false;
+  k.playback.files = files;
+  return { k, anchor };
+}
+
+test('while a client that cannot show an embedded player is connected, a video comes as a film that plays from the service', async () => {
+  const { k, anchor } = headsetSetup();
+  k.world.found.set('archive:Jaws beach dolly zoom', [REEL]);
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const [film] = picked(k, anchor);
+  assert.equal(film!.kind, 'video');
+  assert.equal(film!.data.embed, undefined);
+  assert.equal(k.assets.links.get(served(k, film!.data.mediaUrl)), REEL.media);
+  assert.ok(k.assets.files.has(served(k, film!.data.thumbnailUrl)));
+});
+
+test('a browser alone gets the embedded player, and the archive is not searched for it', async () => {
+  const { k, anchor } = setup({}, [VIDEO]);
+  k.world.sources.push(ARCHIVE);
+  k.world.found.set('archive:Jaws beach dolly zoom', [REEL]);
+  const searched: string[] = [];
+  const search = k.ctx.tools.sources.search;
+  k.ctx.tools.sources.search = (id, query) => (searched.push(id), search(id, query));
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.equal(picked(k, anchor)[0]!.data.embed, 'https://www.youtube.com/embed/abcdefghijk');
+  assert.deepEqual(searched, []);
+});
+
+test('when no film plays as a file, the embedded video still comes, shown to the headset by its still', async () => {
+  const { k, anchor } = headsetSetup();
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const [video] = picked(k, anchor);
+  assert.equal(video!.data.embed, 'https://www.youtube.com/embed/abcdefghijk');
+  assert.ok(k.assets.files.has(served(k, video!.data.thumbnailUrl)));
+});
+
+test('a recording that a connected client cannot play is left out', async () => {
+  const { k, anchor } = headsetSetup(['mp4']);
+  k.world.found.set('archive:Jaws beach dolly zoom', [{ ...REEL, media: 'https://archive.example/download/jaws/jaws.ogv' }, { ...REEL, url: 'https://archive.example/details/jaws2', media: 'https://archive.example/download/jaws2/jaws2.mp4' }]);
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const [film] = picked(k, anchor);
+  assert.equal(k.assets.links.get(served(k, film!.data.mediaUrl)), 'https://archive.example/download/jaws2/jaws2.mp4');
+});

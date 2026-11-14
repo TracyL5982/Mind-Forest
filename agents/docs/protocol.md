@@ -26,6 +26,16 @@ Drawing rules:
 - `view.component` and `view.props` say how to draw a node. `group.composite` says how to arrange its members. Both libraries are documented in `docs/libraries.md`. A client that does not know a component draws it as `note`.
 - An asset address such as `/assets/<id>` is relative to the service.
 
+## Pictures and media
+
+A client fetches only from the service. Every address in an item or a view that a client loads is a service address such as `/assets/<id>`. A client that cannot send the `Authorization` header adds `?token=<token>`.
+
+- `source.asset`: the item's own file, as an asset id: a picture, or a video or recording that plays.
+- `data.thumbnailUrl`: a video's still, as a service address.
+- `data.mediaUrl`: a file that plays (MP4, MP3 and the like), as a service address. Every item that plays has it. The service holds the file, or streams it from where it was found, with byte ranges either way.
+- `data.embed`: a player page on another site, such as `https://www.youtube.com/embed/<id>`. Only a browser can show it. A client that cannot shows `data.thumbnailUrl` and the title instead.
+- `source.url`: where the item was found. A record of its origin, not something a client loads.
+
 ## Service to client
 
 | `t` | Fields | Meaning |
@@ -58,6 +68,7 @@ Drawing rules:
 | `organize` | `request`, `scope`, `focus?` | A typed organizing request. `scope` is `{treeIds, nodeIds}`. |
 | `handoff` | `scope`, `note?` | Package a handoff. An empty scope means everything. |
 | `settings` | `patch` | `picksMode` (`provisional` or `immediate`), `picksPerRun`, `scoutOnDump`. |
+| `client` | `media` | What this connection can play, sent right after connecting: `{embeds, files}`. `embeds` is false for a client that cannot show a player from another site, such as the headset. `files` lists the file extensions it plays, such as `["mp4", "mp3"]`. A connection that never sends it is taken to be a browser that shows embeds. While any connected client cannot show embeds, the Scout looks for each video as a file that plays from the service first, and leaves out recordings whose type a connected client did not list. |
 
 `scene` is `{focus?, selection, treeId?}`: the node the user has open, the nodes they have selected, and the tree they are in. The agent uses it to resolve "this" and "that".
 
@@ -66,7 +77,7 @@ Drawing rules:
 | Request | Body | Reply |
 |---|---|---|
 | `POST /api/assets?name=<file name>` | The file's bytes, with its `Content-Type` | `{id, url, mime}` |
-| `GET /assets/<id>` | | The bytes. Supports byte ranges for video. |
+| `GET /assets/<id>` | | The bytes. Supports byte ranges for video. A file the service streams from its source answers with the source's status and range. |
 | `POST /api/transcribe?tree=<id>` | Audio bytes, with `Content-Type` (`audio/wav`, `audio/webm`, `audio/mp4`, `audio/mpeg`, `audio/ogg`) | `{text}`. The titles of the cards in `tree`, then of every tree and the newest cards, are given to the recognizer as words the user is likely to say. |
 | `GET /handoffs/<name>.zip` | | The bundle. |
 | `GET /api/speak?text=<reply>` | | MP3 of the reply read aloud, streamed as it is made. 404 when the service has no voice. Takes the token as `?token=` so an audio element can play it directly. |

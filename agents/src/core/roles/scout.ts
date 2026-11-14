@@ -319,7 +319,14 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
       return choose(ctx, d, web!, await (early ?? onWeb()), taken);
     }
     case 'video': {
-      for (const video of await ctx.tools.web.videos(oneLine(d.lookups[0] || d.title, 160))) {
+      const wanted = oneLine(d.lookups[0] || d.title, 160);
+      // A client that cannot show a player from another site would get only a still, so while one is connected a film that plays as a file is looked for first.
+      const files = ctx.playback().embeds ? undefined : ctx.tools.sources.list().find((src) => src.id === 'archive');
+      if (files) {
+        const played = await choose(ctx, d, files, await gather(ctx, files, [wanted], taken), taken);
+        if (played.length > 0) return played;
+      }
+      for (const video of await ctx.tools.web.videos(wanted)) {
         if (taken.has(urlKey(video.url))) continue;
         taken.add(urlKey(video.url));
         // A client that cannot embed a player shows the still, so it is brought in like any other picture.
@@ -364,6 +371,7 @@ async function gather(ctx: RoleContext, source: Source, wanted: string[], taken:
     if (fresh.length >= ENOUGH_FOUND) break;
     try {
       for (const record of await ctx.tools.sources.search(source.id, each)) {
+        if (record.media && !playable(ctx, record.media)) continue;
         if (!taken.has(urlKey(record.url)) && !fresh.some((f) => urlKey(f.url) === urlKey(record.url))) fresh.push(record);
       }
     } catch (err) {
@@ -485,6 +493,13 @@ const squash = (text: string): string => text.replace(/\s+/g, ' ').trim().toLowe
 function clipText(text: string, max: number): string {
   const t = text.trim();
   return t.length <= max ? t : `${t.slice(0, max - 1).trimEnd()}…`;
+}
+
+/** Whether every client that named the files it plays can play this one. A file whose type its address does not show is given the benefit of the doubt. */
+function playable(ctx: RoleContext, url: string): boolean {
+  const { files } = ctx.playback();
+  const ext = /\.([a-z0-9]{2,4})$/i.exec(url.split(/[?#]/)[0]!)?.[1]?.toLowerCase();
+  return files.length === 0 || !ext || files.includes(ext);
 }
 
 /** The type a recording is served as until its source says otherwise. */

@@ -108,3 +108,36 @@ test('with an OpenAI key the web is searched there, and only pages the search re
   assert.deepEqual(posted, ['https://api.openai.com/v1/responses true']);
   assert.deepEqual(found.map((f) => f.url), ['https://good.example/essay', 'https://other.example/report']);
 });
+
+test('the archive brings films that play as an MP4 file, trying fewer words when all of them find nothing', async () => {
+  const asked: string[] = [];
+  const send = (async (url: string) => {
+    const at = new URL(String(url));
+    asked.push(at.pathname === '/advancedsearch.php' ? `search ${/title:\(([^)]*)\)/.exec(at.searchParams.get('q') ?? '')?.[1]}` : `item ${at.pathname}`);
+    const reply = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+    if (at.pathname === '/advancedsearch.php') {
+      const docs = /title:\(steam locomotive\)/.test(at.searchParams.get('q') ?? '') ? [{ identifier: 'steam_1950' }, { identifier: 'audio_only' }] : [];
+      return reply({ response: { docs } });
+    }
+    if (at.pathname === '/metadata/steam_1950') {
+      return reply({
+        metadata: { title: 'The Steam Locomotive', creator: 'New York Central', date: '1950-01-01', description: '<p>How a <b>locomotive</b> is built.</p>' },
+        files: [
+          { name: 'steam.mp4', format: 'MPEG4' },
+          { name: 'steam_512kb.mp4', format: '512Kb MPEG4' },
+          { name: 'steam.ogv', format: 'Ogg Video' },
+        ],
+      });
+    }
+    return reply({ metadata: { title: 'Only sound' }, files: [{ name: 'talk.mp3', format: 'VBR MP3' }] });
+  }) as typeof fetch;
+
+  const found = await makeSources({ send, model: {} as ModelClient, read: async () => null }).search('archive', 'steam locomotive factory');
+
+  assert.deepEqual(asked.slice(0, 2), ['search steam locomotive factory', 'search steam locomotive']);
+  assert.equal(found.length, 1);
+  assert.deepEqual([found[0]!.title, found[0]!.by, found[0]!.date, found[0]!.text], ['The Steam Locomotive', 'New York Central', '1950', 'How a locomotive is built.']);
+  assert.equal(found[0]!.media, 'https://archive.org/download/steam_1950/steam_512kb.mp4', 'the copy every player can play, not the original');
+  assert.equal(found[0]!.url, 'https://archive.org/details/steam_1950');
+  assert.ok(found[0]!.image);
+});
