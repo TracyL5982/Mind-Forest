@@ -1,5 +1,6 @@
 import type { Command, Item } from '../core/domain.ts';
 import type { Found } from '../core/ports.ts';
+import { codeIn } from '../core/roles/intake/code.ts';
 import { structure } from '../core/roles/intake/describe.ts';
 import { byRule, grounded } from '../core/roles/renderer.ts';
 import { catalogued } from '../core/roles/scout.ts';
@@ -60,7 +61,7 @@ export const fakeRoles: Roles = {
         return makeItem(ctx, { kind, title, summary: `${title}, a ${kind} you dropped in.`, tags: [kind], origin: { by: 'user' }, source: { from: 'drop', asset: d.asset } });
       }
       const first = d.text.split('\n')[0]!.slice(0, 60);
-      return makeItem(ctx, { kind: 'text', title: first, text: d.text, summary: d.text.slice(0, 160), data: structure(describe(d.text), d.text), tags: first.toLowerCase().split(/\W+/).filter((w) => w.length > 4).slice(0, 3), origin: { by: 'user' }, source: { from: 'paste' } });
+      return makeItem(ctx, { kind: 'text', title: first, text: d.text, summary: d.text.slice(0, 160), data: { ...structure(describe(d.text), d.text), ...(codeIn(d.text) ? { code: codeIn(d.text) } : {}) }, tags: first.toLowerCase().split(/\W+/).filter((w) => w.length > 4).slice(0, 3), origin: { by: 'user' }, source: { from: 'paste' } });
     });
   },
 

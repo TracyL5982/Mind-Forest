@@ -100,4 +100,5 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
     place: await paste('Lisbon\nWhere: Lisbon'),
   };
   assert.deepEqual(made, Object.fromEntries(Object.keys(made).map((id) => [id, id])));
+  assert.equal(await paste('function add(a, b) {\n  return a + b;\n}'), 'code', 'pasted code is drawn as code');
 });

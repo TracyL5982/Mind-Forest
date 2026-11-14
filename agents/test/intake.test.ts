@@ -402,6 +402,73 @@ test('a chart value written in a magnitude is kept with the unit that carries it
   });
 });
 
+const CODE: [language: string, source: string][] = [
+  ['javascript', 'function debounce(fn, ms) {\n  let t;\n  return (...args) => {\n    clearTimeout(t);\n    t = setTimeout(() => fn(...args), ms);\n  };\n}'],
+  ['python', 'import math\n\ndef area(r):\n    return math.pi * r ** 2\n\nprint(area(2))'],
+  ['c', '#include <stdio.h>\n\nint main(void) {\n    printf("hello\\n");\n    return 0;\n}'],
+  ['java', 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("hello");\n    }\n}'],
+  ['rust', 'use std::collections::HashMap;\n\nfn main() {\n    let mut seen = HashMap::new();\n    seen.insert("a", 1);\n    println!("{:?}", seen);\n}'],
+];
+
+const PROSE = [
+  'Dumplings\n2 cups flour\n1 cup water\nMix the flour and water, rest for 30 minutes.\nRoll thin, fill, and boil until they float.',
+  'Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could',
+  'Packing:\n- tent\n- stove\n- map (the big one)\n- matches',
+  '把客厅改成工作室这件事想了很久。\n书桌放在窗边，光线最好。\n沙发留一张小的，朋友来了还能坐。\n最麻烦的是那面书墙，要重新打。',
+  'Meeting notes\nAna will draft the plan by Friday.\nBen checks the budget; Carl books the room.\nWe meet again on the 12th.',
+  'Why the launch slipped:\n1. The vendor was late.\n2. QA found a crash (fixed).\n3. Legal wanted another week.',
+  'Dear Mei,\nThank you for the tea set; we use it every Sunday.\nThe children ask when you will visit.\nWith love,\nNan',
+  'Pros: fast builds, one small binary.\nCons: a steep start.\nVerdict: try it on the next service.',
+  'Plan | Price | Seats\nSolo | $8 | 1\nTeam | $20 | 5\nOrg | $1,200 | 100',
+  'Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.\nThat is also why sunsets are red.',
+  'if the weather holds we go on Saturday\nfor now nobody has a tent\nlet me know who can drive',
+];
+
+test('pasted code is kept as code, fenced or bare, in five languages', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Snippet', { facts: [{ label: 'args', value: 'fn' }] }) })) }));
+  const bare = await intake(k.ctx, CODE.map(([, source]) => ({ kind: 'text' as const, text: `\n${source}\n` })));
+  assert.deepEqual(bare.map((item) => item.data.code), CODE.map(([, source]) => ({ source })));
+  assert.deepEqual(bare.map((item) => item.kind), CODE.map(() => 'text'));
+  assert.equal(bare[0]!.text, `\n${CODE[0]![1]}\n`, 'the paste itself is the text');
+  assert.deepEqual(bare[0]!.data.facts, [{ label: 'args', value: 'fn' }], 'what the model read off it is kept beside the code');
+
+  const fenced = await intake(k.ctx, CODE.map(([language, source]) => ({ kind: 'text' as const, text: `\`\`\`${language}\n${source}\n\`\`\`` })));
+  assert.deepEqual(fenced.map((item) => item.data.code), CODE.map(([language, source]) => ({ language, source })));
+  const [untagged, prose, two] = await intake(k.ctx, [
+    { kind: 'text', text: '```\nSELECT name FROM users\n```' },
+    { kind: 'text', text: 'Try this:\n```\nSELECT name FROM users\n```\nIt lists them.' },
+    { kind: 'text', text: '```\na\n```\nand\n```\nb\n```' },
+  ]);
+  assert.deepEqual(untagged!.data.code, { source: 'SELECT name FROM users' });
+  assert.equal(prose!.data.code, undefined, 'a fence inside prose is not the whole paste');
+  assert.equal(two!.data.code, undefined);
+  assertWellFormed([...bare, ...fenced]);
+});
+
+test('prose is never taken for code', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Words') })) }));
+  const items = await intake(k.ctx, PROSE.map((text) => ({ kind: 'text' as const, text })));
+  items.forEach((item, n) => assert.equal(item.data.code, undefined, PROSE[n]));
+  assert.equal(items.length, PROSE.length);
+});
+
+test('a long paste of code stays one item, and code is kept when the model fails', async () => {
+  const k = kit();
+  const long = Array.from({ length: 80 }, (_v, n) => `const value${n} = compute(${n});`).join('\n');
+  k.model.on('intake.text', () => ({ entries: Array.from({ length: 4 }, (_v, n) => ({ dump: 0, text: `Part ${n}.`, ...described(`Part ${n}`) })) }));
+  const whole = await intake(k.ctx, [{ kind: 'text', text: long }]);
+  assert.equal(whole.length, 1);
+  assert.deepEqual([whole[0]!.text, whole[0]!.data.code], [long, { source: long }]);
+
+  k.model.on('intake.text', () => {
+    throw new Error('down');
+  });
+  const [plain] = await intake(k.ctx, [{ kind: 'text', text: CODE[1]![1] }]);
+  assert.deepEqual(plain!.data, { code: { source: CODE[1]![1] } });
+});
+
 test('a quotation or an excerpt cannot be stitched across two sentences or two lines', async () => {
   const text = 'Air scatters short blue wavelengths more than long red ones.\nRayleigh scattering: scattering of light by small particles. It is why the sky is blue.';
   assert.deepEqual(await extracted(text, { excerptText: 'red ones Rayleigh scattering', quoteText: 'small particles it is why' }), {});
