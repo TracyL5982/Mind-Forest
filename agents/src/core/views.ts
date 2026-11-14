@@ -28,6 +28,10 @@ export const ROOM = {
   rows: 5,
   columns: 4,
   sections: 4,
+  /** A line an arrangement sets beside a member: a ranked member's reason, or the change that led to a state. */
+  reason: { spaced: 140, spaceless: 70 },
+  /** The name of a matrix's axis. */
+  axis: 32,
 } as const;
 
 /** The bound of a pair that holds for this text. */
@@ -269,9 +273,37 @@ export const COMPOSITES = {
   cluster: z.object({ theme: z.string().optional() }),
   /** Many similar members, piled so only the top shows until opened. */
   stack: z.object({}),
+  /** Members best first. `reasons[memberId]` is one line of why it stands there, a whole sentence or line of its content, or empty. */
+  ranked: z.object({ reasons: z.record(z.string(), z.string().refine((text) => text.length <= roomOf(ROOM.reason, text))) }),
+  /** One thing in two to four states, in order. `changes[memberId]` names the change that led to that member, for each member after the first. */
+  beforeafter: z.object({ changes: z.record(z.string(), z.string().refine((text) => text.length <= roomOf(ROOM.reason, text))) }),
+  /** The first member leads, alone on a row of its own. The others support it in a row beneath. */
+  lead: z.object({}),
+  /** Figures in a row above one chart. The last member is the chart or breakdown, and the others are facts. */
+  overview: z.object({}),
+  /** Pictures, swatches and ideas packed in columns, each at its own footprint. */
+  moodboard: z.object({}),
+  /** Four members on a 2 by 2, in the order top left, top right, bottom left, bottom right. `x` grows to the right and `y` grows upwards. */
+  matrix: z.object({ x: words.max(ROOM.axis), y: words.max(ROOM.axis) }),
 } as const;
 export type CompositeId = keyof typeof COMPOSITES;
 export const COMPOSITE_IDS = Object.keys(COMPOSITES) as CompositeId[];
+
+/** The fewest and the most members of each composite. */
+export const MEMBERS: { readonly [C in CompositeId]: readonly [number, number] } = {
+  gallery: [3, Infinity],
+  timeline: [3, Infinity],
+  comparison: [2, 4],
+  sequence: [3, Infinity],
+  cluster: [3, Infinity],
+  stack: [3, Infinity],
+  ranked: [3, Infinity],
+  beforeafter: [2, 4],
+  lead: [3, Infinity],
+  overview: [3, Infinity],
+  moodboard: [3, Infinity],
+  matrix: [4, 4],
+};
 
 export function isValidView(view: { component: string; props: unknown }): boolean {
   const schema = COMPONENTS[view.component as ComponentId];

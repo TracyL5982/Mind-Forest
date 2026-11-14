@@ -92,17 +92,23 @@ export const ComponentsReply = z.object({
 });
 export type ComponentsReply = z.infer<typeof ComponentsReply>;
 
+/** The arrangements the model may propose. */
+const ASKED = ['timeline', 'comparison', 'sequence', 'cluster', 'ranked', 'beforeafter', 'lead', 'matrix'] as const satisfies readonly CompositeId[];
+
 export const CompositesReply = z.object({
   groups: z.array(
     z.object({
       parent: z.string(),
-      composite: z.enum(['timeline', 'comparison', 'sequence', 'cluster']),
+      composite: z.enum(ASKED),
       title: z.string(),
       members: z.array(z.string()),
       labels: z.array(z.string()),
       criteria: z.array(z.string()),
       cells: z.array(z.object({ member: z.string(), values: z.array(z.string()) })),
       theme: z.string(),
+      reasons: z.array(z.string()),
+      changes: z.array(z.string()),
+      axes: z.array(z.string()),
     }),
   ),
 });
@@ -1139,40 +1145,128 @@ function add(ctx: RoleContext, pool: Pool, draft: GroupDraft, out: Command[]): v
   for (const id of draft.members) pool.taken.add(id);
 }
 
-/**
- * Brings one rule-made composite up to date. The pool's own group of that kind is left alone when
- * nothing changed, and replaced when its membership would. Groups of other kinds keep their members.
- */
-function settle(
-  ctx: RoleContext,
-  pool: Pool,
-  out: Command[],
-  composite: CompositeId,
-  fits: (node: Node) => boolean,
-  build: (candidates: Node[]) => GroupDraft | null,
-): void {
-  const byId = new Map(pool.nodes.map((n) => [n.id, n]));
-  const own = pool.standing.find((g) => g.composite === composite && g.members.every((id) => fits(byId.get(id)!)));
-  const draft = build(pool.nodes.filter((n) => fits(n) && (!pool.taken.has(n.id) || own?.members.includes(n.id))));
-  if (!draft || (own && sameGroup(own, draft))) return;
-  if (own) {
-    out.push({ type: 'removeGroup', id: own.id });
-    pool.standing = pool.standing.filter((g) => g !== own);
-    for (const id of own.members) pool.taken.delete(id);
-  }
-  add(ctx, pool, draft, out);
+function drop(pool: Pool, group: Group, out: Command[]): void {
+  out.push({ type: 'removeGroup', id: group.id });
+  pool.standing = pool.standing.filter((g) => g !== group);
+  for (const id of group.members) pool.taken.delete(id);
 }
 
-/** Splits each parent's children into pools, clears groups that no longer hold, and applies the gallery and timeline rules. */
-function survey(ctx: RoleContext, parents: Node[], componentOf: (node: Node) => string, out: Command[]): Pool[] {
+/** What the plain-code arrangements read of a sibling: the card it is drawn as, and the date its data gives. */
+interface Look {
+  component: (node: Node) => string;
+  when: (node: Node) => string | undefined;
+}
+
+/**
+ * One arrangement that plain code makes. `sort` names the group of this kind a sibling may join, or is null when it may join none:
+ * most make one group of a pool, and the stack makes one of each card type. `build` makes the group of the siblings of one name, or none.
+ */
+interface Arranging {
+  composite: CompositeId;
+  sort: (node: Node, look: Look) => string | null;
+  build: (nodes: Node[], look: Look) => GroupDraft | null;
+  /** Runs after the model's groups are made, so it takes only what no group took. */
+  late?: true;
+}
+
+const FIGURES = new Set(['fact', 'facts']);
+const PLOTS = new Set(['chart', 'breakdown']);
+const MOOD = new Set([...PICTURE_LED, 'swatch', 'idea']);
+
+const plain = (composite: CompositeId, members: Node[], props: Props = {}): GroupDraft => ({ composite, title: '', members: members.map((n) => n.id), props });
+const among = (kinds: ReadonlySet<string>) => (node: Node, look: Look) => (kinds.has(look.component(node)) ? '' : null);
+
+/**
+ * The arrangements plain code makes, in the order they take siblings. An earlier one may take a sibling from the group a later one
+ * made, and that group is made again from what is left. The model's groups keep their members.
+ */
+const ARRANGED: readonly Arranging[] = [
+  {
+    composite: 'overview',
+    sort: among(new Set([...FIGURES, ...PLOTS])),
+    build: (nodes, look) => {
+      const plots = nodes.filter((n) => PLOTS.has(look.component(n)));
+      const figures = nodes.filter((n) => FIGURES.has(look.component(n)));
+      return plots.length === 1 && figures.length >= 2 && figures.length <= 5 ? plain('overview', [...figures, plots[0]!]) : null;
+    },
+  },
+  {
+    composite: 'moodboard',
+    sort: among(MOOD),
+    build: (nodes, look) => {
+      const pictures = nodes.filter((n) => PICTURE_LED.has(look.component(n))).length;
+      return nodes.length >= 4 && pictures >= 2 && pictures < nodes.length ? plain('moodboard', nodes) : null;
+    },
+  },
+  { composite: 'gallery', sort: among(PICTURE_LED), build: (nodes) => (nodes.length >= 3 ? plain('gallery', nodes) : null) },
+  {
+    composite: 'timeline',
+    sort: (n, look) => (look.when(n) !== undefined ? '' : null),
+    build: (nodes, look) => {
+      if (nodes.length < 3) return null;
+      const times = new Map(nodes.map((n) => [n.id, timeOf(look.when(n)!)]));
+      const ordered = [...times.values()].every((t) => t !== null) ? [...nodes].sort((a, b) => times.get(a.id)! - times.get(b.id)!) : nodes;
+      return plain('timeline', ordered, { labels: Object.fromEntries(ordered.map((n) => [n.id, clip(look.when(n)!, 40)])) });
+    },
+  },
+  {
+    composite: 'stack',
+    sort: (n, look) => look.component(n),
+    build: (nodes) => (nodes.length > STACK_ABOVE ? { ...plain('stack', [...nodes].sort((a, b) => b.importance - a.importance || a.order - b.order).slice(STACK_KEEPS)), title: `${nodes.length - STACK_KEEPS} more` } : null),
+    late: true,
+  },
+];
+
+/** The arrangement that made this group: one of its kind whose members all join one group of that kind. */
+function madeBy(group: Group, byId: ReadonlyMap<Id, Node>, look: Look): number | undefined {
+  const row = ARRANGED.findIndex((rule) => rule.composite === group.composite);
+  if (row < 0) return undefined;
+  const names = new Set(group.members.map((id) => (byId.has(id) ? ARRANGED[row]!.sort(byId.get(id)!, look) : null)));
+  return names.size === 1 && !names.has(null) ? row : undefined;
+}
+
+/**
+ * Brings the groups of one plain-code arrangement up to date in one pool. Its group of each name is left alone when nothing changed,
+ * made again when its membership would change, and removed when the rule no longer holds.
+ */
+function settle(ctx: RoleContext, pool: Pool, out: Command[], row: number, look: Look): void {
+  const rule = ARRANGED[row]!;
+  const byId = new Map(pool.nodes.map((n) => [n.id, n]));
+  const names = new Set(pool.nodes.map((n) => rule.sort(n, look)));
+  names.delete(null);
+  for (const name of names) {
+    const own = pool.standing.find((g) => g.composite === rule.composite && g.members.every((id) => rule.sort(byId.get(id)!, look) === name));
+    const later = pool.standing.filter((g) => g !== own && (madeBy(g, byId, look) ?? -1) > row);
+    const open = (n: Node) => !pool.taken.has(n.id) || own?.members.includes(n.id) || later.some((g) => g.members.includes(n.id));
+    const draft = rule.build(pool.nodes.filter((n) => rule.sort(n, look) === name && open(n)), look);
+    if (own && draft && sameGroup(own, draft)) continue;
+    if (own) drop(pool, own, out);
+    for (const g of later) if (draft?.members.some((id) => g.members.includes(id))) drop(pool, g, out);
+    if (draft) add(ctx, pool, draft, out);
+  }
+}
+
+/** The composites only plain code makes. A group of one of these that its rule would not make now is left over from an earlier state. */
+const RULED_ONLY: ReadonlySet<string> = new Set(ARRANGED.map((rule) => rule.composite).filter((composite) => !(ASKED as readonly string[]).includes(composite)));
+
+/** Splits each parent's children into pools, clears groups that no longer hold, and applies the plain-code arrangements that run first. */
+function survey(ctx: RoleContext, parents: Node[], look: Look, out: Command[]): Pool[] {
   const pools: Pool[] = [];
-  const when = (node: Node) => str(ctx.mind.items.get(node.itemId)?.data.when);
   for (const parent of parents) {
     const children = ctx.mind.children(parent.id);
     const statusOf = new Map(children.map((n) => [n.id, n.status]));
-    const anchored = [...ctx.mind.groups.values()].filter((g) => g.anchor === parent.id);
+    const byId = new Map(children.map((n) => [n.id, n]));
+    const groups = [...ctx.mind.groups.values()];
+    const anchored = groups.filter((g) => g.anchor === parent.id);
+    // A group that now mixes kept nodes with picks, or names a node that moved away, no longer holds.
+    const broken = new Set(anchored.filter((g) => {
+      const status = statusOf.get(g.members[0]!);
+      return !status || g.members.some((id) => statusOf.get(id) !== status);
+    }));
+    for (const g of groups) if (g.anchor !== parent.id && g.members.some((id) => statusOf.has(id))) broken.add(g);
+    for (const g of broken) out.push({ type: 'removeGroup', id: g.id });
     for (const status of ['kept', 'pick'] as const) {
-      const standing = anchored.filter((g) => g.members.every((id) => statusOf.get(id) === status));
+      const standing = anchored.filter((g) => !broken.has(g) && g.members.every((id) => statusOf.get(id) === status));
       const pool: Pool = {
         parent,
         nodes: children.filter((n) => n.status === status),
@@ -1180,38 +1274,9 @@ function survey(ctx: RoleContext, parents: Node[], componentOf: (node: Node) => 
         taken: new Set(standing.flatMap((g) => g.members)),
         asked: [],
       };
-      settle(
-        ctx,
-        pool,
-        out,
-        'gallery',
-        (n) => PICTURE_LED.has(componentOf(n)),
-        (nodes) => (nodes.length >= 3 ? { composite: 'gallery', title: '', members: nodes.map((n) => n.id), props: {} } : null),
-      );
-      settle(
-        ctx,
-        pool,
-        out,
-        'timeline',
-        (n) => when(n) !== undefined,
-        (nodes) => {
-          if (nodes.length < 3) return null;
-          const times = new Map(nodes.map((n) => [n.id, timeOf(when(n)!)]));
-          const ordered = [...times.values()].every((t) => t !== null) ? [...nodes].sort((a, b) => times.get(a.id)! - times.get(b.id)!) : nodes;
-          return {
-            composite: 'timeline',
-            title: '',
-            members: ordered.map((n) => n.id),
-            props: { labels: Object.fromEntries(ordered.map((n) => [n.id, clip(when(n)!, 40)])) },
-          };
-        },
-      );
+      for (const g of standing) if (RULED_ONLY.has(g.composite) && madeBy(g, byId, look) === undefined) drop(pool, g, out);
+      ARRANGED.forEach((rule, row) => rule.late || settle(ctx, pool, out, row, look));
       pools.push(pool);
-    }
-    // A group that now mixes kept nodes with picks, or names a node that moved away, no longer holds.
-    for (const g of anchored) {
-      const status = statusOf.get(g.members[0]!);
-      if (!status || g.members.some((id) => statusOf.get(id) !== status)) out.push({ type: 'removeGroup', id: g.id });
     }
   }
   return pools;
@@ -1247,9 +1312,14 @@ Arrangements:
 - comparison: 2 to 4 alternatives the user would weigh against each other. Give 2 to 4 criteria, and in cells one entry per member with one short value per criterion, in the order of criteria. Draw each value from that member's summary. Leave a value empty when the summary does not say.
 - sequence: members whose order means something, such as steps or an argument. Give members in that order.
 - cluster: members that share one theme the others do not. Give theme, a label of 1 to 3 words.
+- ranked: suggested siblings that each answer the same question, from the best answer to the least. Give members best first, and in reasons one entry per member, in the same order: a sentence or line copied whole from that member's content that says why it stands there, or an empty string.
+- beforeafter: 2 to 4 members that are one thing at different times or in different states. Give members in order, and in changes one entry for each step from one member to the next, so one fewer than the members: a sentence or line copied whole from the content of either member that names what changed, or an empty string.
+- lead: one member that the others support, explain or give evidence for. Give that member first.
+- matrix: exactly 4 members that differ along two measures, one member in each corner. Give axes as two names of 1 to 3 words, the horizontal measure first, each in words the members' content uses. Give members in the order top left, top right, bottom left, bottom right, where the horizontal measure grows to the right and the vertical one grows upwards.
 
 Rules:
-- A timeline, sequence or cluster needs at least 3 members. A comparison needs 2 to 4.
+- A comparison or a beforeafter needs 2 to 4 members, a matrix exactly 4, and every other arrangement at least 3.
+- ranked is only for suggested siblings.
 - A node belongs to at most one group.
 - Never put a kept sibling and a suggested sibling in the same group.
 - Use the parent and member ids exactly as given.
@@ -1259,7 +1329,11 @@ Rules:
 ${blocks.join('\n\n')}`;
 }
 
-function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], ids: Id[]): GroupDraft | null {
+/**
+ * The group the model proposed, as far as the members' content holds it up. `members` are the proposed ones, without repeats, and
+ * `ids` those of them no other group took.
+ */
+function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], members: Id[], ids: Id[], status: Node['status']): GroupDraft | null {
   const read = new Map<Id, Grounding>();
   const content = (id: Id) => {
     const item = ctx.mind.itemOf(id);
@@ -1267,7 +1341,28 @@ function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], ids: 
     return read.get(id)!;
   };
   const title = clip(g.title, 40);
+  /** A line set beside a member stands when it is a whole sentence or line of one of these members' content, and short enough. */
+  const line = (said: string | undefined, ...of: Id[]) => {
+    const text = (said ?? '').trim();
+    return text !== '' && text.length <= roomOf(ROOM.reason, text) && of.some((id) => content(id).whole(text)) ? text : '';
+  };
+  const whole = ids.length === members.length;
   switch (g.composite) {
+    case 'ranked': {
+      if (status !== 'pick' || ids.length < 3) return null;
+      return { composite: 'ranked', title, members: ids, props: { reasons: Object.fromEntries(ids.map((id) => [id, line(g.reasons[g.members.indexOf(id)], id)])) } };
+    }
+    case 'beforeafter':
+      if (!whole || g.members.length !== ids.length || ids.length < 2 || ids.length > 4) return null;
+      return { composite: 'beforeafter', title, members: ids, props: { changes: Object.fromEntries(ids.slice(1).map((id, i) => [id, line(g.changes[i], ids[i]!, id)])) } };
+    case 'lead':
+      return ids.length >= 3 ? { composite: 'lead', title, members: ids, props: {} } : null;
+    case 'matrix': {
+      // An axis is named in words that at least two of the members use. A name no member uses was made up.
+      const [x, y] = g.axes.map((axis) => axis.trim());
+      const named = (axis: string | undefined) => axis !== undefined && axis !== '' && axis.length <= ROOM.axis && ids.filter((id) => content(id).says(axis)).length >= 2;
+      return whole && ids.length === 4 && named(x) && named(y) ? { composite: 'matrix', title, members: ids, props: { x, y } } : null;
+    }
     case 'timeline': {
       const label = new Map(g.members.map((id, i) => [id, (g.labels[i] ?? '').trim()]));
       const dated = ids.filter((id) => {
@@ -1332,29 +1427,8 @@ async function askComposites(ctx: RoleContext, pools: Pool[], changed: ReadonlyS
     const members = [...new Set(g.members)];
     const pool = asked.find((p) => p.parent.id === g.parent && members.length > 0 && members.every((id) => p.asked.includes(id)));
     if (!pool) continue;
-    const draft = draftFrom(
-      ctx,
-      g,
-      members.filter((id) => !pool.taken.has(id)),
-    );
+    const draft = draftFrom(ctx, g, members, members.filter((id) => !pool.taken.has(id)), pool.nodes[0]!.status);
     if (draft) add(ctx, pool, draft, out);
-  }
-}
-
-function stack(ctx: RoleContext, pool: Pool, componentOf: (node: Node) => string, out: Command[]): void {
-  for (const component of new Set(pool.nodes.map(componentOf))) {
-    settle(
-      ctx,
-      pool,
-      out,
-      'stack',
-      (n) => componentOf(n) === component,
-      (nodes) => {
-        if (nodes.length <= STACK_ABOVE) return null;
-        const under = [...nodes].sort((a, b) => b.importance - a.importance || a.order - b.order).slice(STACK_KEEPS);
-        return { composite: 'stack', title: `${under.length} more`, members: under.map((n) => n.id), props: {} };
-      },
-    );
   }
 }
 
@@ -1395,11 +1469,12 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
   const parentIds = new Set(nodes.flatMap((n) => n.parent ?? []));
   const parents = [...parentIds].flatMap((id) => ctx.mind.nodes.get(id) ?? []);
   const groups: Command[] = [];
-  const pools = survey(ctx, parents, componentOf, groups);
+  const look: Look = { component: componentOf, when: (node) => str(ctx.mind.items.get(node.itemId)?.data.when) };
+  const pools = survey(ctx, parents, look, groups);
 
   const [answers] = await Promise.all([askComponents(ctx, open), again ? undefined : askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);
   for (const [id, draw] of answers) if (draw) draws.set(id, draw);
-  for (const pool of pools) stack(ctx, pool, componentOf, groups);
+  for (const pool of pools) ARRANGED.forEach((rule, row) => rule.late && settle(ctx, pool, groups, row, look));
 
   const asked = new Set(open.map(({ node }) => node.id));
   const views: Command[] = [];
@@ -1414,6 +1489,7 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
   }
   const owed = open.flatMap(({ node }) => (answers.has(node.id) ? [] : [node.id]));
   if (owed.length > 0) later?.(owed);
-  const removals = groups.filter((c) => c.type === 'removeGroup');
+  // Two parents of one pass may each find that a group no longer holds.
+  const removals = [...new Map(groups.flatMap((c) => (c.type === 'removeGroup' ? [[c.id, c] as const] : []))).values()];
   return [...views, ...removals, ...groups.filter((c) => c.type !== 'removeGroup')];
 };

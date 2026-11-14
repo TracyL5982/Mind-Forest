@@ -76,7 +76,7 @@ function entry(fields: Partial<ComponentsReply['items'][number]> & { id: Id }): 
 }
 
 function proposal(fields: Partial<CompositesReply['groups'][number]> & { parent: Id; members: Id[] }): CompositesReply['groups'][number] {
-  return { composite: 'cluster', title: '', labels: [], criteria: [], cells: [], theme: '', ...fields };
+  return { composite: 'cluster', title: '', labels: [], criteria: [], cells: [], theme: '', reasons: [], changes: [], axes: [], ...fields };
 }
 
 test('structured data picks the component without asking the model', async () => {
@@ -393,6 +393,159 @@ test('when the model fails, the rule-based views and groups still come back', as
     'renderer: A call to choose components for 1 item failed (). Kept the rule-based views of it.',
     'renderer: The model could not look for composites (). Kept the rule-based groups.',
   ]);
+});
+
+// ---- the six arrangements of the second pass
+
+const picture = (title: string): Fields => ({ title, kind: 'image', source: { from: 'drop', asset: title, capturedAt: '' } });
+const figure = (label: string, value: string): Fields => ({ title: label, data: { facts: [{ label, value }] } });
+const chart = (title: string): Fields => ({ title, data: { chart: { labels: ['2022', '2023', '2024'], values: [1.2, 2.5, 4.1], unit: 'M' } } });
+const SWATCH: Fields = { title: 'Palette', text: 'Ember #E4572E and Lagoon #17BEBB', data: { colours: [{ name: 'Ember', value: '#E4572E' }, { name: 'Lagoon', value: '#17BEBB' }] } };
+const IDEA: Fields = { title: 'Paint the door ochre', text: 'Paint the door ochre' };
+const arranged = (k: Kit) => groups(k).map((g) => [g.composite, g.members]);
+
+test('three facts and a chart under one parent are an overview with the figures first, and two charts or six facts are not', async () => {
+  const k = kit();
+  const { ids } = grow(k, [figure('Height', '330 m'), chart('Visitors'), figure('Built', '1889'), figure('Floors', '3'), { title: 'A note', text: PLAIN }]);
+  await render(k, ids);
+  assert.deepEqual(ids.map((id) => view(k, id).component), ['fact', 'chart', 'fact', 'fact', 'note']);
+  assert.deepEqual(arranged(k), [['overview', [ids[0], ids[2], ids[3], ids[1]]]]);
+  assert.deepEqual(await render(k, ids), [], 'an overview that still holds is left alone');
+
+  for (const pool of [[figure('Height', '330 m'), figure('Built', '1889'), chart('Visitors'), chart('Tickets')], [...['a', 'b', 'c', 'd', 'e', 'f'].map((n) => figure(`Floor ${n}`, '3')), chart('Visitors')], [figure('Height', '330 m'), chart('Visitors')]]) {
+    const none = kit();
+    none.model.on('renderer.composites', () => ({ groups: [] }));
+    await render(none, grow(none, pool).ids);
+    assert.deepEqual(arranged(none), [], `${pool.length} siblings`);
+  }
+});
+
+test('two pictures, a swatch and an idea are a moodboard, three pictures alone stay a gallery, and an idea that joins them makes the gallery a moodboard', async () => {
+  const k = kit();
+  const { ids } = grow(k, [picture('a'), SWATCH, picture('b'), IDEA]);
+  await render(k, ids);
+  assert.deepEqual(ids.map((id) => view(k, id).component), ['image', 'swatch', 'image', 'idea']);
+  assert.deepEqual(arranged(k), [['moodboard', ids]]);
+
+  const pictures = kit();
+  const { treeId, root, ids: three } = grow(pictures, [picture('a'), picture('b'), picture('c')]);
+  await render(pictures, three);
+  assert.deepEqual(arranged(pictures), [['gallery', three]]);
+  const idea = hang(pictures, treeId, root, IDEA);
+  assert.deepEqual((await render(pictures, [idea])).map((c) => c.type), ['setView', 'removeGroup', 'setGroup']);
+  assert.deepEqual(arranged(pictures), [['moodboard', [...three, idea]]]);
+
+  for (const pool of [[picture('a'), SWATCH, IDEA, IDEA], [picture('a'), picture('b'), SWATCH]]) {
+    const none = kit();
+    none.model.on('renderer.composites', () => ({ groups: [] }));
+    await render(none, grow(none, pool).ids);
+    assert.deepEqual(arranged(none), [], 'one picture, or three siblings');
+  }
+});
+
+test('an overview or a moodboard whose rule no longer holds is removed', async () => {
+  const k = kit();
+  k.model.on('renderer.composites', () => ({ groups: [] }));
+  const { treeId, root, ids } = grow(k, [figure('Height', '330 m'), figure('Built', '1889'), chart('Visitors')]);
+  await render(k, ids);
+  assert.equal(groups(k)[0]?.composite, 'overview');
+  const second = hang(k, treeId, root, chart('Tickets'));
+  assert.deepEqual((await render(k, [second])).map((c) => c.type), ['setView', 'removeGroup']);
+  assert.deepEqual(arranged(k), []);
+});
+
+/** Five picks that each answer which lens to take, and a model that ranks them. */
+function lenses(status: Node['status'] = 'pick') {
+  const k = kit();
+  const pick = (title: string, summary: string): Fields => ({ title, summary, text: PLAIN, status, why: 'One answer to which lens to take' });
+  const { root, ids } = grow(k, [
+    pick('Summicron 35', 'Small and sharp. It costs the most.'),
+    pick('Nokton 40', 'Fast and cheap. The focus throw is long.'),
+    pick('Planar 50', 'Sharp at every stop.'),
+    pick('Elmar 24', 'Wide enough for rooms.'),
+    pick('Jupiter 8', 'A Soviet copy of the Sonnar.'),
+  ]);
+  const order = [ids[2]!, ids[0]!, ids[1]!, ids[4]!, ids[3]!] as const;
+  k.model.on('renderer.composites', () => ({
+    groups: [proposal({ parent: root, composite: 'ranked', title: 'Which lens', members: [...order], reasons: ['Sharp at every stop.', 'Small and sharp.', 'cheap', 'Made in 1950.', ''] })],
+  }));
+  return { k, ids, order };
+}
+
+test('the model may rank picks best first, a reason stands only as a whole sentence of its own pick, and keeping one pick removes the ranking', async () => {
+  const { k, ids, order } = lenses();
+  await render(k, ids);
+  const [ranked] = groups(k);
+  assert.equal(ranked!.composite, 'ranked');
+  assert.equal(ranked!.title, 'Which lens');
+  assert.deepEqual(ranked!.members, [...order]);
+  assert.deepEqual(ranked!.props.reasons, { [order[0]]: 'Sharp at every stop.', [order[1]]: 'Small and sharp.', [order[2]]: '', [order[3]]: '', [order[4]]: '' }, 'a fragment and a sentence the pick does not hold are blank');
+
+  k.mind.apply({ origin: USER, label: 'keep', commands: [{ type: 'keepPick', id: ids[0]! }] });
+  assert.deepEqual(await render(k, [ids[0]!]), [{ type: 'removeGroup', id: ranked!.id }]);
+
+  const kept = lenses('kept');
+  await render(kept.k, kept.ids);
+  assert.deepEqual(arranged(kept.k), [], 'cards the user kept are not ranked');
+});
+
+test('the model may set states of one thing in order with each change between them, and a change neither state holds is blank', async () => {
+  const k = kit();
+  const { root, ids } = grow(k, [
+    { title: 'The harbour wall in 2019', summary: 'A wall of timber and patched concrete.', text: PLAIN },
+    { title: 'The harbour wall in 2024', summary: 'The council rebuilt the wall in stone. It stands two metres higher.', text: PLAIN },
+    { title: 'The ferry', summary: 'Runs all winter.', text: PLAIN },
+    { title: 'The fish market', summary: 'Empty since spring.', text: PLAIN },
+  ]);
+  const [before, after, ferry, market] = ids as [Id, Id, Id, Id];
+  k.model.on('renderer.composites', () => ({
+    groups: [
+      proposal({ parent: root, composite: 'beforeafter', title: 'The wall', members: [before, after], changes: ['The council rebuilt the wall in stone.'] }),
+      proposal({ parent: root, composite: 'beforeafter', members: [ferry, market], changes: ['It closed.'] }),
+    ],
+  }));
+  await render(k, ids);
+  assert.deepEqual(groups(k).map((g) => [g.composite, g.members, g.props]), [
+    ['beforeafter', [before, after], { changes: { [after]: 'The council rebuilt the wall in stone.' } }],
+    ['beforeafter', [ferry, market], { changes: { [market]: '' } }],
+  ]);
+});
+
+test('the model may lead with one member, and may set four members on two axes that their content names', async () => {
+  const k = kit();
+  const idea = (title: string, summary: string): Fields => ({ title, summary, text: PLAIN });
+  const { root, ids } = grow(k, [
+    idea('Fix the onboarding email', 'Little effort. A large impact on sign-ups.'),
+    idea('Rebuild the editor', 'Months of effort, and a large impact.'),
+    idea('Rename the settings tab', 'Little effort and little impact.'),
+    idea('Port to the watch', 'Much effort for little impact.'),
+    idea('Why sign-ups fell', 'The email went to spam for a month.'),
+    idea('The spam report', 'Two in three emails were flagged.'),
+    idea('What users said', 'Nobody saw the email.'),
+  ]);
+  k.model.on('renderer.composites', () => ({
+    groups: [
+      proposal({ parent: root, composite: 'matrix', title: 'What to build', members: ids.slice(0, 4), axes: ['effort', 'impact'] }),
+      proposal({ parent: root, composite: 'lead', title: 'Sign-ups', members: [ids[4]!, ids[5]!, ids[6]!] }),
+    ],
+  }));
+  await render(k, ids);
+  assert.deepEqual(groups(k).map((g) => [g.composite, g.members, g.props]), [
+    ['matrix', ids.slice(0, 4), { x: 'effort', y: 'impact' }],
+    ['lead', [ids[4], ids[5], ids[6]], {}],
+  ]);
+
+  for (const wrong of [
+    proposal({ parent: root, composite: 'matrix', members: ids.slice(0, 4), axes: ['cost', 'impact'] }),
+    proposal({ parent: root, composite: 'matrix', members: ids.slice(0, 3), axes: ['effort', 'impact'] }),
+    proposal({ parent: root, composite: 'lead', members: ids.slice(4, 6) }),
+  ]) {
+    const again = kit();
+    const tree = grow(again, ids.map((id) => ({ title: k.mind.itemOf(id).title, summary: k.mind.itemOf(id).summary, text: PLAIN })));
+    again.model.on('renderer.composites', () => ({ groups: [{ ...wrong, parent: tree.root, members: wrong.members.map((id) => tree.ids[ids.indexOf(id)]!) }] }));
+    await render(again, tree.ids);
+    assert.deepEqual(arranged(again), [], `${wrong.composite} of ${wrong.members.length} on ${wrong.axes.join(' and ')}`);
+  }
 });
 
 // ---- the card types chosen from an item's structure
