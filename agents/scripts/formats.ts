@@ -61,7 +61,7 @@ const refused = answered.filter((outcome) => outcome.verdict && 'refused' in out
 console.log(`\nThe model was asked about ${asked.length} samples and answered for ${answered.length}.`);
 console.log(`It changed ${changed.length} cards: ${changed.filter((o) => !byRules(o) && inTheEnd(o)).length} right, ${changed.filter((o) => byRules(o) && !inTheEnd(o)).length} wrong, ${changed.filter((o) => byRules(o) === inTheEnd(o)).length} neither by the key.`);
 for (const { sample, ruled, drawn } of changed) console.log(`  ${sample.key.padEnd(6)} ${ruled} to ${drawn}, expected ${[sample.expect, ...sample.accept].join(' or ')}`);
-console.log(`${refused.length} of its answers were refused and the note kept${refused.length > 0 ? ':' : '.'}`);
+console.log(`${refused.length} of its answers were refused and the rule's card kept${refused.length > 0 ? ':' : '.'}`);
 for (const [why, list] of groups((outcome) => (outcome.verdict as { refused: string }).refused, refused)) {
   console.log(`  ${why}: ${list.length}`);
   for (const { sample, reply, verdict } of list) console.log(`    ${sample.key} ${reply!.component}${'prop' in verdict! && verdict.prop ? ` (${verdict.prop})` : ''}, expected ${sample.expect}`);
@@ -90,6 +90,6 @@ if (notes.length > 0) {
 }
 if (!fake) {
   const failed = calls.filter((call) => !call.ok).length;
-  console.log(`\n${calls.length} model calls${failed ? `, ${failed} failed` : ''}, ${calls.reduce((sum, call) => sum + call.tokens, 0)} tokens in all.`);
+  console.log(`\n${calls.length} model calls${failed ? `, ${failed} failed` : ''}, ${calls.reduce((sum, call) => sum + call.tokens, 0)} tokens in all, the slowest call ${(Math.max(...calls.map((call) => call.ms)) / 1000).toFixed(1)} s.`);
   for (const call of calls) console.log(`  ${call.ok ? `${call.tokens} tokens` : 'failed'}, ${(call.ms / 1000).toFixed(1)} s`);
 }
