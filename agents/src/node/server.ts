@@ -241,6 +241,9 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       case 'focus':
         pipeline.focus(m.nodeId);
         return;
+      case 'questions':
+        ws.send(JSON.stringify({ t: 'questions', nodeId: m.nodeId, questions: await pipeline.questions(m.nodeId) }));
+        return;
       case 'ask':
         await pipeline.ask(m.nodeId, m.need);
         return;

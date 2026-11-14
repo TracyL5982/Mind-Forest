@@ -1,4 +1,4 @@
-import type { Command, Id, Item, Node, Origin } from '../domain.ts';
+import type { Command, Id, Item, ItemKind, Node, Origin } from '../domain.ts';
 import type { Assets, ModelClient, Tools } from '../ports.ts';
 import type { Mindstorm } from '../state.ts';
 import { defaultView } from '../views.ts';
@@ -92,6 +92,23 @@ export interface Conducted {
   say: string;
 }
 
+/** What a card's suggested questions are written from: the card, where it stands, and the cards round it. Every text is already clipped. */
+export interface CardBrief {
+  title: string;
+  kind: ItemKind;
+  /** Who put it here, and from where. */
+  from: string;
+  why: string;
+  summary: string;
+  text: string;
+  /** Titles from the tree's root down to the card's parent. */
+  path: string[];
+  /** Titles of the cards under it. */
+  under: string[];
+  /** Titles of the cards beside it. */
+  beside: string[];
+}
+
 export interface Handoff {
   /** File name without extension. */
   name: string;
@@ -129,6 +146,8 @@ export interface Roles {
   /** Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup. */
   renderer(ctx: RoleContext, input: { nodeIds: Id[] }): Promise<Command[]>;
   packager(ctx: RoleContext, input: { scope: Scope; note?: string }): Promise<Handoff>;
+  /** Up to four short questions the user is likely to ask next about an open card. Throws when the model fails. */
+  questions(ctx: RoleContext, input: { card: CardBrief; history: Turn[] }): Promise<string[]>;
 }
 
 export const AGENT = (role: string, tool?: string): Origin => ({ by: 'agent', role, ...(tool ? { tool } : {}) });

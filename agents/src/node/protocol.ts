@@ -16,6 +16,7 @@ export const ClientMessage = z.discriminatedUnion('t', [
   z.object({ t: z.literal('dump'), dumps: z.array(RawDump).min(1).max(50) }),
   z.object({ t: z.literal('utter'), text: z.string(), final: z.boolean(), scene: Scene }),
   z.object({ t: z.literal('focus'), nodeId: Id }),
+  z.object({ t: z.literal('questions'), nodeId: Id }),
   z.object({ t: z.literal('ask'), nodeId: Id, need: z.string().min(1) }),
   z.object({ t: z.literal('more'), nodeId: Id, need: z.string().optional() }),
   z.object({ t: z.literal('keep'), nodeIds: z.array(Id).min(1) }),
