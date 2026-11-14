@@ -175,7 +175,7 @@ export class Field {
       pane.el.dataset.composite = group.composite;
       put(pane.el,
         h('div', { class: 'pane-head' },
-          h('span', { class: 'pane-kind', text: arr.label }),
+          h('span', { class: 'kind', text: arr.label }),
           arr.title !== arr.label && h('span', { class: 'pane-title clamp-1', text: arr.title }),
           arr.canOpen && h('button', {
             class: 'pane-open', type: 'button', text: arr.open ? 'Close' : `Open ${group.members.length}`,

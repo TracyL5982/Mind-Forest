@@ -44,8 +44,11 @@ export function fold(str, width, letterPx, max) {
 
 export const title = (item, lines = 2) => h('div', { class: `card-title clamp-${lines}`, text: item.title || 'Untitled' });
 
-/** A one-line title with a short tag at its right: a unit, a language, where a chat came from. */
-export const head = (item, tag) => h('div', { class: 'card-head' }, title(item, 1), tag && h('span', { class: 'card-tag', text: tag }));
+/** A short label that names what a card is: a clip, a language, where a chat came from. */
+export const kind = (label) => h('span', { class: 'kind', text: label });
+
+/** A one-line title with the card's kind at its right. */
+export const head = (item, label) => h('div', { class: 'card-head' }, title(item, 1), kind(label));
 
 export function picture(src, alt, ctx) {
   const img = h('img', { src: ctx.asset(src), alt, loading: 'lazy', draggable: 'false' });
@@ -54,9 +57,9 @@ export function picture(src, alt, ctx) {
 }
 
 /** A picture or poster at a fixed height, with its caption on a plate below it. */
-export const framed = (height, caption, lines, ...media) => [
+export const framed = (height, caption, lines, media, label) => [
   h('div', { class: 'media-frame', style: { height: `${height}px` } }, media),
-  h('div', { class: 'media-plate' }, h('div', { class: `media-caption clamp-${lines}`, text: caption })),
+  h('div', { class: 'media-plate' }, h('div', { class: `media-caption clamp-${lines}`, text: caption }), label && kind(label)),
 ];
 
 /** The height `framed` takes: the picture, the plate's padding, the caption, the border. */

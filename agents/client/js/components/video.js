@@ -3,17 +3,20 @@ import { TEXT_LETTER, fold, framed, framedHeight, picture, text } from './shared
 
 const WIDTH = 272;
 const POSTER = 153;
+/** The room the Video label takes on the caption plate. */
+const KIND = 54;
 
 const caption = (item, props) => text(props.caption) || item.title || '';
-const captionLines = (item, props) => fold(caption(item, props), WIDTH - 27, TEXT_LETTER, 2);
+const captionLines = (item, props) => fold(caption(item, props), WIDTH - 27 - KIND, TEXT_LETTER, 2);
 
 export const size = (item, props) => [WIDTH, framedHeight(POSTER, captionLines(item, props))];
 
-export const draw = (item, props, ctx) => framed(POSTER, caption(item, props), captionLines(item, props),
+export const draw = (item, props, ctx) => framed(POSTER, caption(item, props), captionLines(item, props), [
   text(props.poster)
     ? picture(props.poster, item.title, ctx)
     : h('video', { src: ctx.asset(text(props.src)), preload: 'metadata', muted: true, playsinline: true, tabindex: '-1' }),
-  h('div', { class: 'media-play', 'aria-hidden': 'true' }));
+  h('div', { class: 'media-play', 'aria-hidden': 'true' }),
+], 'Video');
 
 export function detail(item, props, ctx) {
   const embed = /^https:\/\/www\.youtube\.com\/embed\/[\w-]{11}$/.test(text(item.data?.embed)) ? item.data.embed : '';

@@ -145,7 +145,7 @@ function composite(name, members, makeProps, status, open) {
   const arr = arrange(group, ids, sizes, open);
   const pane = h('div', { class: `pane ${status === 'pick' ? 'is-pick' : ''}`, data: { composite: name }, style: { left: '0', top: '0', width: `${arr.w}px`, height: `${arr.h}px` } },
     h('div', { class: 'pane-head' },
-      h('span', { class: 'pane-kind', text: arr.label }),
+      h('span', { class: 'kind', text: arr.label }),
       arr.title !== arr.label && h('span', { class: 'pane-title clamp-1', text: arr.title }),
       arr.canOpen && h('span', { class: 'pane-open', style: { display: 'inline-flex', alignItems: 'center' }, text: open ? 'Close' : `Open ${ids.length}` })),
     arr.marks);

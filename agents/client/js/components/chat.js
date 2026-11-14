@@ -17,7 +17,7 @@ export function size(item, props) {
 }
 
 export const draw = (item, props) => [
-  head(item, text(props.source)),
+  head(item, text(props.source) || 'Chat'),
   shown(props).map((message) => bubble(message, linesOf(message))),
 ];
 

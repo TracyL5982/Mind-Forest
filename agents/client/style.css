@@ -96,8 +96,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .card-title { font-weight: 620; font-size: var(--type-title); line-height: var(--lead-title); letter-spacing: -0.006em; }
 .card-text { color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); }
 .card-foot { margin-top: auto; color: var(--ink-3); font-size: var(--type-text); line-height: var(--lead-text); }
-.card-head { display: flex; align-items: baseline; gap: 10px; }
+.card-head { display: flex; align-items: center; gap: 10px; }
 .card-head .card-title { flex: 1; }
+/* Names what a card or a frame is, where its look alone would leave that unclear. */
+.kind { flex: none; padding: 0 6px; border-radius: 5px; border: 1px solid var(--line); color: var(--ink-2); font-size: var(--type-text); line-height: 15px; font-variant-caps: all-small-caps; letter-spacing: 0.07em; white-space: nowrap; }
 .card-tag { flex: none; color: var(--ink-3); font-size: var(--type-text); line-height: var(--lead-text); }
 
 .card.is-root .card-face { border-color: rgba(255, 255, 255, 0.5); }
@@ -144,7 +146,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .c-image, .c-video { padding: 0; gap: 0; }
 .media-frame { position: relative; flex: none; overflow: hidden; background: #0c0e11; }
 .media-frame img, .media-frame video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
-.media-plate { padding: 9px 12px; }
+.media-plate { padding: 9px 12px; display: flex; align-items: flex-start; gap: 10px; }
+.media-plate .media-caption { flex: 1; min-width: 0; }
 .media-caption { color: var(--ink); font-size: var(--type-text); line-height: var(--lead-text); }
 .media-missing { width: 100%; height: 100%; display: grid; place-items: center; color: var(--ink-3); font-size: var(--type-text); line-height: var(--lead-text); background: repeating-linear-gradient(135deg, #131519 0 10px, #17191e 10px 20px); }
 .media-play { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px; border-radius: 50%; background: rgba(11, 13, 17, 0.7); border: 1px solid var(--line-2); }
@@ -211,18 +214,18 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* ---- groups */
 
+/* A frame is a faint wash and a hairline, so the cards inside it carry the weight. */
 .pane {
   position: absolute;
-  border-radius: 26px;
-  background: color-mix(in srgb, var(--tint) 7%, transparent);
-  border: 1px solid color-mix(in srgb, var(--tint) 24%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--tint) 3.5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tint) 13%, transparent);
   animation: arrive 0.4s both;
 }
-.pane.is-pick { border-style: dashed; border-color: color-mix(in srgb, var(--pick) 40%, transparent); background: color-mix(in srgb, var(--pick) 4%, transparent); }
+.pane.is-pick { border-style: dashed; border-color: color-mix(in srgb, var(--pick) 30%, transparent); background: color-mix(in srgb, var(--pick) 2.5%, transparent); }
 .pane-head { position: absolute; left: 18px; right: 12px; top: 6px; height: 30px; display: flex; align-items: center; gap: 9px; }
-.pane-kind { flex: none; font-size: var(--type-text); letter-spacing: 0.09em; text-transform: uppercase; color: var(--tint); }
-.pane.is-pick .pane-kind { color: var(--pick); }
-.pane-title { flex: 1; font-size: var(--type-text); color: var(--ink); }
+.pane.is-pick .kind { color: var(--pick); border-color: color-mix(in srgb, var(--pick) 30%, transparent); }
+.pane-title { flex: 1; font-size: var(--type-text); color: var(--ink-2); }
 .pane-open { margin-left: auto; height: 28px; padding: 0 12px; border-radius: 14px; border: 1px solid var(--line-2); background: rgba(11, 13, 17, 0.6); font-size: var(--type-text); cursor: pointer; }
 .tl-axis { position: absolute; height: 1px; background: color-mix(in srgb, var(--tint) 55%, transparent); }
 .tl-tick { position: absolute; width: 0; height: 0; }
