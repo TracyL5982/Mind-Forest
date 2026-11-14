@@ -126,6 +126,8 @@ void Bridge::frame(double t) {
 
 void Bridge::synced(const Delta& delta) {
     logLine(fmt("[agent] connected: %d trees, %d cards", int(client.mirror().trees().size()), int(client.mirror().nodes().size())));
+    // The headset shows no player from another site, and its player takes these files (Android's MediaPlayer).
+    client.send(Outbound::client(Media{false, {"mp4", "m4a", "mp3"}}));
     changed(delta, false);
     if (dump) {
         client.send(Outbound::dump({Dump::text(*dump)}));
@@ -243,8 +245,7 @@ Bridge::Planted* Bridge::plant(const TreeInfo& info) {
     const Node* root = mirror.node(info.rootId);
     const Item* item = root ? mirror.item(root->itemId) : nullptr;
     if (!root || !item || !model.catalog) return nullptr;
-    auto tree = std::make_shared<Tree>(refFor(*item), info.title, Maker::both, model.catalog);
-    tree->grows = false;
+    auto tree = std::make_shared<Tree>(refFor(*item), info.title, Maker::both, model.catalog, false);
     Planted& p = trees[info.id.value];
     p = Planted{tree, {{root->id.value, tree->root}}, {{tree->root, root->id.value}}};
     int count = 1;
@@ -295,6 +296,8 @@ Ref Bridge::refFor(const Item& item) {
                 if (w.id == library["key"].string()) return Ref::work(w.index);
             }
         }
+        if (kind == "tag" && library["key"].isString() && catalog.tags.count(library["key"].string())) return Ref::tag(library["key"].string());
+        if (kind == "note" && library["key"].isString() && catalog.notes.count(library["key"].string())) return Ref::note(library["key"].string());
     }
     OceanNote note;
     note.id = "agent-" + item.id.value;

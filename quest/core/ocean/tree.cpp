@@ -100,8 +100,8 @@ Json Tree::Link::json() const {
     return j;
 }
 
-Tree::Tree(const Ref& ref, const std::string& title, Maker maker, const std::shared_ptr<Catalog>& catalog)
-    : title(title), maker(maker), catalog(catalog) {
+Tree::Tree(const Ref& ref, const std::string& title, Maker maker, const std::shared_ptr<Catalog>& catalog, bool grows)
+    : title(title), maker(maker), catalog(catalog), grows(grows) {
     root = 0;
     current = 0;
     stand = 0;
@@ -119,7 +119,7 @@ Tree::Tree(const Ref& ref, const std::string& title, Maker maker, const std::sha
     n.xy = Vec2::zero();
     nodes[0] = n;
     nextID = 1;
-    grow(0);
+    if (grows) grow(0);     // AGENT
     relayout();
 }
 

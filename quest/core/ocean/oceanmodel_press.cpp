@@ -444,6 +444,9 @@ void OceanModel::loadShelf(const std::shared_ptr<Catalog>& catalog) {
         bool& flag;
         ~Done() { flag = true; }
     } done{shelfLoaded};
+    // AGENT: joined to the agent service, the shelf holds the service's trees only (the bridge hangs them),
+    // so the trees this app keeps itself, and the two it starts with, stay in their file untouched.
+    if (agentBridge) return;
     std::string url = shelfURL();
     if (Flags::has("freshShelf") && !url.empty()) std::remove(url.c_str());
     std::optional<std::string> data = url.empty() ? std::nullopt : platform::readFile(url);

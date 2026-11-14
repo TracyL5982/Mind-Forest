@@ -199,7 +199,8 @@ public:
     static constexpr std::array<float, 9> ringAngles{20, 60, 100, 140, 180, 220, 260, 300, 340};
 
     /// `init(root:title:maker:catalog:)`
-    Tree(const Ref& ref, const std::string& title, Maker maker, const std::shared_ptr<Catalog>& catalog);
+    // AGENT: `grows` false makes a tree the agent service grows: its root starts with nothing round it (see `grows` below).
+    Tree(const Ref& ref, const std::string& title, Maker maker, const std::shared_ptr<Catalog>& catalog, bool grows = true);
 
     std::set<Ref> held() const;
 
