@@ -214,11 +214,11 @@ function parts(chars, i) {
 
 /**
  * How wide each character from U+0020 to U+007E draws, in hundredths of a px, in the faces `wrap`
- * counts in: the title, the text, the upright serif of a passage, and a figure's three sizes. `WIDTHS` weighs these characters for a whole sentence. Here each has its own width, so a
- * line counted word by word ends where the page ends it. Each is the width the character draws
- * with kerning off, rounded up, and 0.02 px more. style.css sets the fourteen structured types
- * without kerning, so a word is exactly as wide as its characters. docs/libraries.md repeats the
- * table.
+ * counts in: the title, the text, the upright serif of a passage, and a figure's three sizes.
+ * `WIDTHS` weighs these characters for a whole sentence. Here each has its own width, so a line
+ * counted word by word ends where the page ends it. Each is the width the character draws with
+ * kerning off, rounded up, and 0.02 px more. style.css sets the fourteen structured types without
+ * kerning, so a word is exactly as wide as its characters. docs/libraries.md repeats the table.
  */
 export const ADVANCES = new Map([
   [TITLE_LETTER, [384, 512, 833, 1018, 1018, 1572, 1139, 496, 627, 627, 731, 1018, 496, 731, 496, 484, 1034, 760, 973, 1014, 1042, 1004, 1035, 914, 1048, 1035, 496, 496, 1018, 1018, 1018, 834, 1441, 1109, 1055, 1137, 1148, 945, 907, 1173, 1198, 449, 897, 1075, 901, 1398, 1180, 1213, 1023, 1213, 1055, 1026, 1007, 1168, 1095, 1559, 1107, 1072, 1037, 627, 484, 627, 1018, 947, 762, 889, 988, 890, 988, 910, 594, 979, 955, 404, 404, 899, 416, 1426, 947, 941, 981, 981, 634, 850, 601, 947, 876, 1286, 866, 894, 856, 627, 423, 627, 1018]],
@@ -234,8 +234,8 @@ const SQUARE = /[\u3000-\u30ff\u3400-\u9fff\uff01-\uff60\uffe0-\uffe6]/;
 
 /**
  * A string's width on one line in hundredths of a px, counted for `wrap`: each character from
- * U+0020 to U+007E by `ADVANCES`, each character set with Han by `EM`,
- * and the rest of the string, with those taken out, by `span`.
+ * U+0020 to U+007E by `ADVANCES`, each character set with Han by `EM`, and the rest of the string,
+ * with those taken out, by `span`.
  */
 export function advance(str, letter) {
   const widths = ADVANCES.get(letter);
@@ -255,8 +255,8 @@ export function advance(str, letter) {
  * How many lines a string is given in a column too narrow for `fold`, where one long word can
  * leave half a line empty. The words are laid out one by one, each as wide as `advance` counts it.
  * A line may end at white space and where `parts` says a word parts, and nowhere else, which is at
- * most where a page breaks. A word wider than a line
- * starts a line of its own and is broken wherever a line ends.
+ * most where a page breaks. A word wider than a line starts a line of its own and is broken
+ * wherever a line ends.
  */
 export function wrap(str, width, letter, max) {
   const room = width * 100;
