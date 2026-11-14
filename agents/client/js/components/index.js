@@ -9,6 +9,7 @@ import * as person from './person.js';
 import * as chat from './chat.js';
 import * as code from './code.js';
 import * as steps from './steps.js';
+import * as list from './list.js';
 import { h, s } from '../dom.js';
 import { LABEL, chips } from '../chips.js';
 import { CHIP_LINE, say, textWidth } from './shared.js';
@@ -20,7 +21,10 @@ import { CHIP_LINE, say, textWidth } from './shared.js';
  * and may return nothing. `shows` lists the chip sources the type already draws, as `item.data`
  * keys, so no chip repeats them.
  */
-export const COMPONENTS = { note, quote, fact, image, video, link, chart, person, chat, code, steps };
+export const COMPONENTS = {
+  note, quote, fact, image, video, link, chart, person, chat, code, steps,
+  list,
+};
 
 export const componentOf = (node) => (Object.hasOwn(COMPONENTS, node.view?.component) ? node.view.component : 'note');
 

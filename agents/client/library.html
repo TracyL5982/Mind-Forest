@@ -52,15 +52,18 @@
 import { h } from './js/dom.js';
 import { COMPONENTS, drawCard, drawDetail, sizeOf } from './js/components/index.js';
 import { arrange } from './js/composites/index.js';
+import { SAMPLES } from './library-samples.js';
 
 const TINT = '#9fc3ff';
-const ctx = { asset: (src) => src };
 
 function sample(label, a, b, w = 640, hgt = 440) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${hgt}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="${w}" height="${hgt}" fill="url(#g)"/><circle cx="${w * 0.72}" cy="${hgt * 0.34}" r="${hgt * 0.16}" fill="rgba(255,255,255,0.28)"/><path d="M0 ${hgt * 0.78} Q ${w * 0.3} ${hgt * 0.5} ${w * 0.55} ${hgt * 0.74} T ${w} ${hgt * 0.62} V ${hgt} H0Z" fill="rgba(0,0,0,0.3)"/></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
-const PIC = { fields: sample('', '#e2b21f', '#3f7d3a'), night: sample('', '#1b2550', '#0c0f1e'), river: sample('', '#2f7fa8', '#16324a'), quilt: sample('', '#b0413e', '#27408b'), face: sample('', '#c98b6b', '#6b4a8a', 200, 200) };
+const PIC = { fields: sample('', '#e2b21f', '#3f7d3a'), night: sample('', '#1b2550', '#0c0f1e'), river: sample('', '#2f7fa8', '#16324a'), quilt: sample('', '#b0413e', '#27408b'), face: sample('', '#c98b6b', '#6b4a8a', 200, 200), tall: sample('', '#d8cfc0', '#3a3532', 300, 420), scroll: sample('', '#3f7d6a', '#1c3350', 900, 300) };
+/** The pictures the samples from the service name, which this page has no service to load from. */
+const STAND_IN = { [SAMPLES.artwork.props.src]: PIC.tall, [SAMPLES.place.props.src]: PIC.river };
+const ctx = { asset: (src) => STAND_IN[src] ?? src };
 
 let n = 0;
 const make = (component, props, item) => ({
@@ -121,8 +124,101 @@ const COMPONENT_SAMPLES = [
     make('steps', { steps: ['Trace the road as one wavy spine', 'Fill fields with flat yellow', 'Add hedges as double green strokes', 'Place the car, the house, the tree', 'Export at three scales', 'Test it as a poster'] }, { title: 'Redraw this map in vector' })],
 ];
 
+const drawn = (name) => make(name, SAMPLES[name].props, SAMPLES[name].item);
+const films = Array.from({ length: 40 }, (_, i) => [String(1958 + i), ['Vertigo', 'Jaws', 'Goodfellas', 'La Haine', 'Raging Bull', 'The Lord of the Rings: The Fellowship of the Ring'][i % 6], ['Hitchcock', 'Spielberg', 'Scorsese', 'Kassovitz'][i % 4], `$${(3.2 + i * 7.9).toFixed(1)}M`]);
+
+/** The types a rule draws from the structure an item carries, each from the sample the service's own rules give its props. */
+const STRUCTURED_SAMPLES = [
+  ['list', 'rules', 'Entries in no particular order. With a mark for each entry it is a checklist, and the tick boxes show the marks and take no click.', drawn('list')],
+  ['facts', 'rules', 'Two to six figures about one thing, each with its label. A count stands for the facts the card leaves to the opened view.', drawn('facts')],
+  ['table', 'rules', 'Rows and columns. The card shows up to five columns and six rows and counts the rest, and the opened view has every cell.', drawn('table')],
+  ['excerpt', 'rules', 'A passage of a longer source, such as a page the Scout picked, with where it is from beneath it.', drawn('excerpt')],
+  ['idea', 'rules', 'A short thought you wrote out, set large with nothing beside it.', drawn('idea')],
+  ['reference', 'rules', 'A paper or a book from a catalogue, set like a library card.', drawn('reference')],
+  ['artwork', 'rules', 'A work a museum holds, shown whole on a mat over what the collection records.', drawn('artwork')],
+  ['breakdown', 'rules', 'The parts of one whole as bars, with each share written beside its bar.', drawn('breakdown')],
+  ['qa', 'rules', 'One question and its answer.', drawn('qa')],
+  ['callout', 'model', 'A caveat or a remark set apart from the rest of a note. The words must be a passage of the card\'s own text.', drawn('callout')],
+  ['definition', 'rules', 'A term and what it means, set like a dictionary entry.', drawn('definition')],
+  ['proscons', 'rules', 'The points for and the points against, side by side.', drawn('proscons')],
+  ['swatch', 'rules', 'Colours with their names and values.', drawn('swatch')],
+  ['place', 'rules', 'A short note whose title is the name of a place, with its picture when it has one.', drawn('place')],
+].filter(([name]) => name in COMPONENTS);
+
 /** The same types with other content, to show how each footprint follows what the card holds. */
 const VARIANTS = {
+  list: [
+    ['Bullets', make('list', { items: ['Tent', 'Stove and two gas canisters', 'Two head torches and spare batteries for the walk back after dark', 'Water filter'] }, { title: 'Bring to the lake' })],
+    ['Twelve entries', make('list', { items: ['Passport', 'Visa printout', 'Travel insurance', 'Chargers', 'Adapter', 'Camera', 'Film', 'Notebook', 'Rain jacket', 'Walking boots', 'First aid kit', 'House keys to the neighbour'], checked: [true, true, true, true, false, true, false, false, false, false, false, false] }, { title: 'Before the flight to Lisbon' })],
+    ['Two short entries', make('list', { items: ['牛奶', '鸡蛋'] }, { title: '要买' })],
+  ],
+  facts: [
+    ['Two facts', make('facts', { facts: [{ label: 'Height', value: '330 m' }, { label: 'Built', value: '1889' }] }, { title: 'Eiffel Tower' })],
+    ['Three, the last alone on its row', make('facts', { facts: [{ label: 'Orbit', value: '687 days' }, { label: 'Moons', value: '2' }, { label: 'Tallest mountain', value: 'Olympus Mons, 21.9 km' }] }, { title: 'Mars' })],
+    ['Six long values', make('facts', { facts: [{ label: 'Engineers', value: 'Maurice Koechlin and Émile Nouguier' }, { label: 'Built in', value: '2 years, 2 months and 5 days' }, { label: 'Iron', value: '7,300 tonnes of puddled iron' }, { label: 'Rivets', value: '2,500,000' }, { label: 'Cost', value: '7,799,401.31 gold francs' }, { label: 'Repainted', value: 'every seven years, by hand' }], more: 3 }, { title: 'How the tower was built' })],
+    ['Chinese', make('facts', { facts: [{ label: '建成', value: '1420年' }, { label: '占地', value: '72万平方米' }, { label: '房间', value: '9,371间' }, { label: '年参观人数', value: '1,700万人次' }] }, { title: '故宫' })],
+  ],
+  table: [
+    ['Forty rows', make('table', { heads: ['Year', 'Film', 'Director', 'Gross'], rows: films }, { title: 'Forty years of the shot' })],
+    ['Seven columns', make('table', { heads: ['Lens', 'Mount', 'Focal', 'Stop', 'Weight', 'Filter', 'Price'], rows: [['Summicron', 'M', '35 mm', 'f/2', '255 g', '39 mm', '$3,895'], ['Nokton', 'M', '40 mm', 'f/1.2', '315 g', '52 mm', '$999'], ['Planar', 'ZM', '50 mm', 'f/2', '230 g', '43 mm', '$930']] }, { title: 'Lenses for the trip' })],
+    ['Chinese', make('table', { heads: ['城市', '人口', '面积', '地铁里程'], rows: [['上海', '2,487万', '6,341 km²', '831 km'], ['北京', '2,185万', '16,410 km²', '836 km'], ['成都', '2,140万', '14,335 km²', '601 km'], ['杭州', '1,252万', '16,850 km²', '516 km']] }, { title: '四座城市' })],
+    ['Long cells', make('table', { heads: ['Shot', 'What it does to the room', 'First seen'], rows: [['Dolly zoom', 'The subject holds still while the background rushes away or closes in', '1958'], ['Whip pan', 'The room smears into streaks between two framings', '1927'], ['Split diopter', 'Near and far are both sharp, with a soft seam between them', '1941']] }, { title: 'Three shots that bend a room' })],
+  ],
+  excerpt: [
+    ['A page the Scout picked, as a pick', make('excerpt', { text: 'Fog forms when warm, moist air moves over the cold water of the bay and cools to its dew point. By late afternoon the land has warmed, the pressure inland drops, and the fog is drawn through the gap.\n\nexample.com, 2019, The web', source: 'example.com' }, { title: 'Why coastal fog comes in at dusk', data: { site: 'example.com', by: 'example.com', date: '2019', from: 'The web' }, origin: { by: 'agent' } }), 'pick'],
+    ['Chinese', make('excerpt', { text: '家宅庇护着梦想，家宅保护着梦想者，家宅让我们能够在安详中做梦。', at: '第一章', source: '上海译文出版社' }, { title: '空间的诗学' })],
+    ['Long, no source', make('excerpt', { text: 'We shape our buildings, and afterwards our buildings shape us, and then the streets between them, and at last the map of the whole town, until nobody remembers which came first, the wall or the habit of walking around it, the square or the market that needed somewhere to stand, the bridge or the two villages that had always meant to meet.' }, { title: 'On buildings' })],
+  ],
+  idea: [
+    ['A few words', make('idea', {}, { title: 'Build a treehouse' })],
+    ['Longer', make('idea', {}, { title: 'Film the whole street in one take at dawn' })],
+    ['Fifty-nine characters', make('idea', {}, { title: 'Turn the attic into a reading room with a window for stars' })],
+    ['Chinese, longer', make('idea', {}, { title: '给每一位来访的朋友拍一张站在门口的照片，年底做成一本册子' })],
+  ],
+  reference: [
+    ['A book', make('reference', { kind: 'book', authors: ['Gaston Bachelard'], year: '1958', venue: 'Presses Universitaires de France' }, { title: 'The Poetics of Space' })],
+    ['Chinese', make('reference', { kind: 'paper', authors: ['张伟', '李娜', '王芳'], more: true, year: '2021', venue: '计算机学报' }, { title: '基于注意力机制的长文本摘要方法综述' })],
+    ['Many authors, long venue', make('reference', { kind: 'paper', authors: ['A. Vaswani', 'N. Shazeer', 'N. Parmar', 'J. Uszkoreit', 'L. Jones', 'A. N. Gomez', 'Ł. Kaiser', 'I. Polosukhin'], year: '2017', venue: 'Advances in Neural Information Processing Systems 30: Annual Conference on Neural Information Processing Systems' }, { title: 'Attention is all you need' })],
+    ['A title and nothing else', make('reference', { kind: 'book', authors: [] }, { title: 'A field guide to getting lost' })],
+  ],
+  artwork: [
+    ['A maker and nothing else', make('artwork', { src: PIC.fields, maker: 'Unknown photographer' }, { title: 'Road through rapeseed' })],
+    ['Chinese, a wide work', make('artwork', { src: PIC.scroll, maker: '王希孟', date: '1113年', medium: '绢本设色', holder: '故宫博物院' }, { title: '千里江山图' })],
+    ['Picture that fails to load', make('artwork', { src: 'data:image/png;base64,AAAA', maker: 'Utagawa Hiroshige', date: '1857', medium: 'Woodblock print; ink and color on paper', holder: 'The Metropolitan Museum of Art' }, { title: 'Sudden Shower over Shin-Ohashi Bridge and Atake' })],
+  ],
+  breakdown: [
+    ['Eight parts', make('breakdown', { labels: ['Sleep', 'Work', 'Commute', 'Cooking and eating', 'Children', 'Reading', 'Exercise', 'Everything else'], values: [33, 31.5, 6, 8, 9.5, 4, 3, 5], unit: '%' }, { title: 'A weekday, by the hour' })],
+    ['Chinese', make('breakdown', { labels: ['房租', '吃饭', '交通', '储蓄'], values: [45, 25, 10, 20], unit: '%' }, { title: '每月的钱花在哪' })],
+    ['Counts with their own unit', make('breakdown', { labels: ['Kept', 'Picks not yet kept', 'Deleted'], values: [1280, 342, 96], unit: 'cards' }, { title: 'What became of the cards' })],
+  ],
+  qa: [
+    ['English', make('qa', { question: 'Why does the room seem to stretch?', answer: 'The lens zooms in while the camera pulls back, so the subject holds its size and the background rushes away.' }, { title: 'Asking about the stretch' })],
+    ['Long', make('qa', { question: 'If the camera pulls back at the same rate as the lens zooms in, why does anything in the frame change at all?', answer: 'Because zooming magnifies everything by the same amount, while moving the camera changes the size of near things far more than far ones. The two cancel only at the distance of the subject. Everything behind it grows, everything in front of it shrinks, and the eye reads that as the room itself changing shape, which no real room does, and that is where the dread comes from.' }, { title: 'The geometry of it' })],
+  ],
+  callout: [
+    ['A remark', make('callout', { text: 'The second unit shot this on a miniature of the stairwell laid on its side.', tone: 'note' }, { title: 'How the tower shot was made' })],
+    ['Chinese', make('callout', { text: '水温超过40℃会杀死酵母。', tone: 'caution' }, { title: '喂养酵种' })],
+    ['Long, no title', make('callout', { text: 'Never leave the gimbal powered on inside the case. The motors fight the foam, the battery runs flat in an hour, and on a warm day the pack can swell enough to crack the latch plate.', tone: 'caution' }, { title: '' })],
+  ],
+  definition: [
+    ['Chinese', make('definition', { term: '视差', definition: '观察者的位置改变时，物体相对于背景的视位置所发生的变化。' }, { title: '视差' })],
+    ['A long term', make('definition', { term: 'Photosynthetically active radiation', definition: 'the part of sunlight, from 400 to 700 nanometres, that plants can use.' }, { title: 'PAR' })],
+    ['A long meaning', make('definition', { term: 'Bokeh', definition: 'the way a lens draws the parts of a picture that are out of focus, most of all small points of light, which it turns into soft discs whose shape and edge depend on the blades of the aperture and on how well the lens is corrected, so that two lenses of the same focal length and stop can give one scene two quite different moods.' }, { title: 'Bokeh' })],
+  ],
+  proscons: [
+    ['Chinese', make('proscons', { pros: ['房价低', '美食多', '生活节奏慢'], cons: ['夏天潮湿', '离家人远'] }, { title: '要不要搬去成都' })],
+    ['Many long points', make('proscons', { pros: ['One binary to ship, with no runtime to install on the render nodes', 'No data races', 'The compiler finds what review misses', 'Fast at run time', 'Good tooling', 'Friendly community'], cons: ['Slow builds on the old laptops', 'A steep start for the two juniors who joined in spring', 'Fewer libraries for colour science', 'Hiring is harder', 'The rewrite stalls features'] }, { title: 'Moving the render queue to Rust before the autumn release' })],
+  ],
+  swatch: [
+    ['Eight colours', make('swatch', { colours: [{ name: 'Ink', value: '#0B0D11' }, { name: 'Slate', value: '#1B1D23' }, { name: 'Fog', value: '#A3A39C' }, { name: 'Paper', value: '#ECEBE6' }, { name: 'Amber', value: '#F2C27A' }, { name: 'Teal', value: '#62D6C3' }, { name: 'Coral', value: '#FF9A92' }, { name: 'Light goldenrod', value: 'lightgoldenrodyellow' }] }, { title: 'Mind Palace, as drawn' })],
+    ['Chinese', make('swatch', { colours: [{ name: '宫墙红', value: '#C8102E' }, { name: '琉璃黄', value: '#F2B824' }, { name: '汉白玉', value: '#F4F1E8' }, { name: '青金', value: '#1F3A6E' }] }, { title: '故宫配色' })],
+    ['Two, one a name the browser does not know', make('swatch', { colours: [{ name: 'Night', value: 'black' }, { name: 'Dusk at the bay', value: 'duskblue' }] }, { title: 'Bay' })],
+  ],
+  place: [
+    ['No picture', make('place', { name: 'Lisbon' }, { title: 'Lisbon', summary: 'Three days in March. The tram up to Graça, and the light on the river at six.' })],
+    ['A long name', make('place', { name: 'The upper reading room of the old municipal library, Vilnius' }, { title: 'The upper reading room of the old municipal library, Vilnius', text: 'Where the box of index cards was found.' })],
+    ['A name and nothing else', make('place', { name: '莫干山' }, { title: '莫干山' })],
+  ],
   note: [
     ['Title only', make('note', {}, { title: 'Pick the hamlet' })],
     ['Long text', make('note', {}, { title: 'What the river carries past the red house every morning', summary: 'Grain barges, the post, a doctor on Thursdays and, twice a year, the surveyors who redraw the parish map and argue about where the yellow ends.' })],
@@ -177,6 +273,20 @@ const CHIPS = {
   chat: { data: { when: '2 Mar 2025' } },
   code: { data: { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra', 'Barbara Liskov', 'Alan Kay'] } },
   steps: { brought: ['pick'], data: { where: 'The upper reading room of the old municipal library, Vilnius', from: 'Are.na' } },
+  list: { data: { when: '本周六', where: '莫干山' } },
+  facts: { data: { when: '1889', where: 'Champ de Mars, Paris' } },
+  table: { data: { when: 'November 2026' } },
+  excerpt: { data: { when: '1958', where: 'Paris' } },
+  idea: { data: { when: '昨晚', where: '阁楼' } },
+  reference: { brought: ['pick'], data: { where: 'Cited in the lighting notes' } },
+  artwork: { brought: ['pick', 'kept'], data: { where: 'Gallery 852' } },
+  breakdown: { data: { when: 'October 2026' } },
+  qa: { data: { when: '2026年3月', where: '物理课' } },
+  callout: { data: { when: '12 May 2026', people: ['Ana Lima', 'Ben Okri', 'Chen Wei'] } },
+  definition: { data: { where: 'Astronomy, week 3' } },
+  proscons: { data: { when: 'Q1 2027', people: ['Ana Lima', 'Ben Okri', 'Chen Wei'] } },
+  swatch: { data: { where: 'The kitchen' } },
+  place: { data: { when: '清晨', people: ['小林', '阿青'] } },
 };
 const CHIP_LABEL = { pick: 'Pick with chips', kept: 'The same pick, kept' };
 
@@ -187,7 +297,7 @@ function withChips(name, made) {
 }
 
 const componentsEl = document.getElementById('components');
-for (const [name, by, when, made] of COMPONENT_SAMPLES) {
+for (const [name, by, when, made] of [...COMPONENT_SAMPLES, ...STRUCTURED_SAMPLES]) {
   const detail = drawDetail(made.node, made.item, ctx).flat(Infinity).filter(Boolean);
   componentsEl.append(h('section', { class: 'lib-entry' },
     h('div', { class: 'lib-name' }, h('h3', { text: name }), who(by)),
@@ -197,7 +307,7 @@ for (const [name, by, when, made] of COMPONENT_SAMPLES) {
       cell('Pick', staged(made, 'pick')),
       withChips(name, made),
       detail.length > 0 && cell('Opened', opened(detail))),
-    (VARIANTS[name] ?? []).length > 0 && h('div', { class: 'lib-row lib-more' }, VARIANTS[name].map(([label, variant]) => cell(label, staged(variant, 'kept')))),
+    (VARIANTS[name] ?? []).length > 0 && h('div', { class: 'lib-row lib-more' }, VARIANTS[name].map(([label, variant, status = 'kept']) => cell(label, staged(variant, status)))),
     props('Props', made.node.view.props)));
 }
 

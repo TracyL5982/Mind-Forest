@@ -45,12 +45,15 @@ h1, h2, p, ol, dl, dd, blockquote, pre, fieldset { margin: 0; padding: 0; border
 button, input, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
-.clamp-1, .clamp-2, .clamp-3, .clamp-4, .clamp-5 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.clamp-1, .clamp-2, .clamp-3, .clamp-4, .clamp-5, .clamp-6, .clamp-7, .clamp-8 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .clamp-1 { -webkit-line-clamp: 1; }
 .clamp-2 { -webkit-line-clamp: 2; }
 .clamp-3 { -webkit-line-clamp: 3; }
 .clamp-4 { -webkit-line-clamp: 4; }
 .clamp-5 { -webkit-line-clamp: 5; }
+.clamp-6 { -webkit-line-clamp: 6; }
+.clamp-7 { -webkit-line-clamp: 7; }
+.clamp-8 { -webkit-line-clamp: 8; }
 
 /* ---- the field */
 
@@ -231,6 +234,22 @@ button, input, textarea { font: inherit; color: inherit; }
 .steps li + li::before { content: ''; position: absolute; left: 9.5px; top: -8px; width: 1px; height: 8px; background: color-mix(in srgb, var(--accent) 45%, transparent); }
 .step-n { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: var(--type-text); line-height: 1; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .steps.is-full li { align-items: flex-start; font-size: 14px; line-height: 20px; }
+
+/* list: a dot before each entry, or a tick box when the list is a checklist. A tick box shows a mark and takes no click. */
+.list-head { display: flex; align-items: baseline; gap: 10px; }
+.list-head .card-title { flex: 1; }
+.list-tally { font-variant-numeric: tabular-nums; }
+.list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.list li { display: flex; align-items: flex-start; gap: 8px; font-size: var(--type-text); line-height: var(--lead-text); }
+.list li.is-done { color: var(--ink-2); }
+.list-dot, .list-box { flex: none; width: 12px; height: 12px; margin-top: 2.5px; }
+.list-dot::before { content: ''; display: block; width: 4px; height: 4px; margin: 4px; border-radius: 50%; background: var(--accent); }
+.list-box rect { fill: none; stroke: var(--ink-3); stroke-width: 1.2; }
+.list-box.is-done rect { fill: var(--accent); stroke: var(--accent); }
+.list-box path { fill: none; stroke: var(--face); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.list.is-full { margin-top: 0; gap: 8px; }
+.list.is-full li { font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.list.is-full .list-dot, .list.is-full .list-box { margin-top: 4px; }
 
 /* ---- groups */
 

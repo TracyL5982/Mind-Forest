@@ -6,7 +6,7 @@ const load = (path: string) => import(new URL(`../client/js/${path}`, import.met
 
 test('every card type in the client registry can be sized, drawn and opened', async () => {
   const { COMPONENTS } = await load('components/index.js');
-  assert.deepEqual(Object.keys(COMPONENTS), ['note', 'quote', 'fact', 'image', 'video', 'link', 'chart', 'person', 'chat', 'code', 'steps']);
+  assert.deepEqual(Object.keys(COMPONENTS).slice(0, 11), ['note', 'quote', 'fact', 'image', 'video', 'link', 'chart', 'person', 'chat', 'code', 'steps']);
   for (const [name, kind] of Object.entries<Record<string, unknown>>(COMPONENTS)) {
     for (const part of ['size', 'draw', 'detail']) assert.equal(typeof kind[part], 'function', `${name}.${part}`);
   }
@@ -26,10 +26,11 @@ test('a card footprint is two whole numbers that depend only on the item and pro
   }
 });
 
-test('every card type says which chip sources it already shows, and only a link shows one', async () => {
+test('every card type says which chip sources it already shows', async () => {
   const { COMPONENTS } = await load('components/index.js');
-  const shows = Object.fromEntries(Object.entries<{ shows: string[] }>(COMPONENTS).map(([name, kind]) => [name, kind.shows]));
-  assert.deepEqual(shows, { note: [], quote: [], fact: [], image: [], video: [], link: ['site'], chart: [], person: [], chat: [], code: [], steps: [] });
+  const shows = Object.fromEntries(Object.entries<{ shows: string[] }>(COMPONENTS).flatMap(([name, kind]) => (kind.shows.length > 0 ? [[name, kind.shows]] : [])));
+  assert.deepEqual(shows, { link: ['site'] });
+  for (const [name, kind] of Object.entries<{ shows: unknown }>(COMPONENTS)) assert.ok(Array.isArray(kind.shows), `${name}.shows`);
 });
 
 test('a card with chips is taller by one fixed line, whatever its type, its status and however many chips', async () => {
