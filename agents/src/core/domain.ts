@@ -29,7 +29,8 @@ export type Source = z.infer<typeof Source>;
  * person {name, role?}, quote {text, by?}, code {language, source}, when string (a date), site string,
  * where string, people string[], pros string[], cons string[], table {heads, rows string[][]}, question and answer,
  * term and definition, items string[] with checklist boolean[], colours {name, value}[], excerpt {text, at?}.
- * A Scout pick also carries what its source catalogued: kind (artwork, paper or book), medium, holder, authors string[], venue.
+ * A Scout pick also carries what its source catalogued: kind (artwork, paper or book), medium, holder, authors string[],
+ * authorsCut true (when the source lists only the first of them), venue.
  */
 export const ItemData = z.record(z.string(), z.unknown());
 export type ItemData = z.infer<typeof ItemData>;

@@ -403,6 +403,7 @@ export function catalogued(record: Found): ItemData {
     ...(record.medium ? { medium: record.medium } : {}),
     ...(record.holder ? { holder: record.holder } : {}),
     ...(record.authors?.length ? { authors: record.authors } : {}),
+    ...(record.authors?.length && record.authorsCut ? { authorsCut: true } : {}),
     ...(record.venue ? { venue: record.venue } : {}),
   };
 }

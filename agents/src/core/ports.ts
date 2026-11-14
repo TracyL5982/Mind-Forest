@@ -73,8 +73,10 @@ export interface Found {
   medium?: string;
   /** The museum or collection that holds a work. */
   holder?: string;
-  /** Every author in order. `by` may shorten them. */
+  /** The authors in order, as many as the source lists. `by` may shorten them. */
   authors?: string[];
+  /** True when the source cut `authors` short, so there are more than are listed. */
+  authorsCut?: boolean;
   /** The journal, conference or repository a paper appeared in. */
   venue?: string;
 }
