@@ -12,6 +12,11 @@ const LABEL = { least: 48, most: 128 };
 const PERCENT = new Set(['%', '％']);
 
 const exact = (value) => value.toLocaleString('en', { maximumFractionDigits: 6 });
+/** A unit written once under the title: any but a percent sign, which each share carries. */
+const named = (props) => {
+  const unit = text(props.unit).trim();
+  return PERCENT.has(unit) ? '' : unit;
+};
 
 /**
  * The parts as they are written. A percent sign is written on each share, and any other unit once,
@@ -20,22 +25,21 @@ const exact = (value) => value.toLocaleString('en', { maximumFractionDigits: 6 }
  * whole is 0.
  */
 export function parts(props) {
-  const unit = text(props.unit).trim();
-  const percent = PERCENT.has(unit);
+  const percent = PERCENT.has(text(props.unit).trim());
   const values = list(props.values);
   const rows = list(props.labels).slice(0, MOST).map((label, i) => {
     const value = Number.isFinite(values[i]) && values[i] > 0 ? values[i] : 0;
     return { label: text(label).trim(), value, written: `${exact(value)}${percent ? '%' : ''}` };
   });
   const total = rows.reduce((sum, row) => sum + row.value, 0);
-  return { rows: rows.map((row) => ({ ...row, bar: exact(row.value) === '0' ? 0 : row.value / total })), unit: percent ? '' : unit, total };
+  return { rows: rows.map((row) => ({ ...row, bar: exact(row.value) === '0' ? 0 : row.value / total })), unit: named(props), total };
 }
 
 export const shows = [];
 
 export function size(item, props) {
-  const { rows, unit } = parts(props);
-  return [WIDTH, FRAME + wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) * TITLE + (unit ? TEXT : 0) + (rows.length ? 10 + rows.length * TEXT + (rows.length - 1) * GAP : 0)];
+  const rows = Math.min(list(props.labels).length, MOST);
+  return [WIDTH, FRAME + wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) * TITLE + (named(props) ? TEXT : 0) + (rows ? 10 + rows * TEXT + (rows - 1) * GAP : 0)];
 }
 
 const bars = (rows, columns, clamped) => h('div', { class: 'breakdown', style: { gridTemplateColumns: columns } }, rows.map((row) => [
