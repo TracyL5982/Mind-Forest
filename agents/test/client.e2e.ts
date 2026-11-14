@@ -423,6 +423,11 @@ async function main(): Promise<void> {
         for (const type of ['note', 'quote', 'fact', 'image', 'video', 'link', 'chart', 'person', 'chat', 'code', 'steps']) {
           assert.ok(stated.some((line) => new RegExp(`^${type} \\d+ by \\d+$`).test(line)), `${type} states its footprint`);
         }
+        for (const type of ['note', 'quote', 'fact', 'image', 'video', 'link', 'chart', 'person', 'chat', 'code', 'steps']) {
+          const cards = view.locator(`#components .card[data-component="${type}"]`);
+          assert.ok((await cards.filter({ has: view.locator('.chip-line') }).count()) > 0, `${type} is shown with chips`);
+          assert.ok((await cards.filter({ hasNot: view.locator('.chip-line') }).count()) > 0, `${type} is shown without chips`);
+        }
         assert.deepEqual(await spills(view), []);
         const size = await view.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
         assert.equal(size[0], size[1], 'the page does not scroll sideways');
