@@ -18,43 +18,88 @@ export const list = (value) => (Array.isArray(value) ? value : []);
 /**
  * How wide each character is, in tenths of an average lowercase letter. Rows are
  * `[first code point, last code point, tenths]` and the first row that holds a code point wins.
- * A code point in no row counts 10. The last two rows hold four counts, for the title face, the
- * text face, the quote's serif and a fact's value, because those characters are as wide as the
- * type is tall whatever the face. docs/libraries.md repeats this table for other clients, and
- * test/footprints.json holds the footprints it must give.
+ * Tenths given as four counts are for the title face, the text face, the quote's serif and a fact's
+ * value. Past the letters, digits and signs of English, a row's count is the widest any of its
+ * characters was measured drawing in that face, so text is never given less room than it takes.
+ * docs/libraries.md repeats this table for other clients, and test/footprints.json holds the
+ * footprints it must give.
  */
+const THIN = [6, 6, 7, 6];
+const SMALL = [12, 11, 13, 10];
+const SIGN = [13, 12, 19, 11];
+const CAPITAL = [16, 15, 17, 14];
+const WIDE = [19, 20, 21, 18];
+const ARROW = [20, 21, 24, 19];
+const EMOJI = [22, 23, 26, 21];
+const WIDEST = [28, 28, 34, 27];
+const KANA = [18, 18, 21, 16];
+const HAN = [17, 18, 21, 16];
+const HANGUL = [15, 15, 21, 14];
+const CJK = [18, 18, 21, 17];
+const LIGATURE = [62, 56, 134, 58];
+/** A code point in no row: as wide as the widest character outside the rows was measured drawing. */
+const OTHER = [46, 47, 55, 43];
+const rows = (tenths, ...ranges) => ranges.map((range) => (typeof range === 'number' ? [range, range, tenths] : [...range, tenths]));
 const WIDTHS = [
   // Marks that join or change the character before them take no room.
-  [0x0300, 0x036f, 0], [0x200b, 0x200f, 0], [0x2060, 0x2064, 0], [0xfe00, 0xfe0f, 0], [0x1f3fb, 0x1f3ff, 0], [0xe0000, 0xe007f, 0],
+  ...rows(0, [0x0300, 0x036f], [0x0483, 0x0489], [0x0591, 0x05bd], [0x064b, 0x065f], 0x0670, [0x0900, 0x0902], [0x0941, 0x0948], 0x094d, 0x0e31, [0x0e34, 0x0e3a], [0x0e47, 0x0e4d]),
+  ...rows(0, [0x200b, 0x200f], [0x202a, 0x202e], [0x2060, 0x206f], [0xfe00, 0xfe0f], [0x1f3fb, 0x1f3ff], [0xe0000, 0xe007f]),
   // Spaces, thin punctuation, and i j l.
-  [0x09, 0x0d, 5], [0x20, 0x21, 5], [0x27, 0x27, 5], [0x2c, 0x2c, 5], [0x2e, 0x2f, 5], [0x3a, 0x3b, 5], [0x5c, 0x5c, 5], [0x69, 0x6a, 5], [0x6c, 0x6c, 5], [0x7c, 0x7c, 5],
-  [0xa0, 0xa0, 5], [0x2000, 0x200a, 5], [0x2018, 0x2019, 5], [0x2028, 0x2029, 5], [0x202f, 0x202f, 5], [0x205f, 0x205f, 5],
+  ...rows(5, [0x09, 0x0d], [0x20, 0x21], 0x27, 0x2c, [0x2e, 0x2f], [0x3a, 0x3b], 0x5c, [0x69, 0x6a], 0x6c, 0x7c, 0xa0, [0x2028, 0x2029], 0x202f, 0x205f),
   // Brackets, the hyphen, and f r t.
-  [0x28, 0x29, 7], [0x2d, 0x2d, 7], [0x5b, 0x5b, 7], [0x5d, 0x5d, 7], [0x7b, 0x7b, 7], [0x7d, 0x7d, 7], [0x66, 0x66, 7], [0x72, 0x72, 7], [0x74, 0x74, 7],
+  ...rows(7, [0x28, 0x29], 0x2d, 0x5b, 0x5d, 0x7b, 0x7d, 0x66, 0x72, 0x74),
   // Digits and the signs set as wide as a digit.
-  [0x30, 0x39, 11], [0x23, 0x24, 11], [0x2b, 0x2b, 11], [0x3c, 0x3e, 11], [0x5e, 0x5e, 11], [0x7e, 0x7e, 11], [0xa3, 0xa3, 11], [0xd7, 0xd7, 11], [0x20ac, 0x20ac, 11],
-  // The widest letters and signs.
-  [0x25, 0x25, 15], [0x40, 0x40, 15], [0x4d, 0x4d, 15], [0x6d, 0x6d, 15], [0x77, 0x77, 15], [0x2014, 0x2014, 15], [0x2026, 0x2026, 15],
-  [0x57, 0x57, 17],
+  ...rows(11, [0x30, 0x39], [0x23, 0x24], 0x2b, [0x3c, 0x3e], 0x5e, 0x7e),
+  // The widest letters and signs of English.
+  ...rows(15, 0x25, 0x40, 0x4d, 0x6d, 0x77),
+  ...rows(17, 0x57),
   // Capitals and the ampersand.
-  [0x26, 0x26, 12], [0x41, 0x5a, 12],
-  // Arrows, symbols and emoji. Two regional indicators draw one flag.
-  [0x2190, 0x2bff, 22], [0x1f1e6, 0x1f1ff, 11], [0x1f000, 0x1faff, 22],
-  // Kana runs a hair wider than Han at the title size.
-  [0x3040, 0x30ff, [18, 18, 21, 16]],
-  // Han, hangul, full-width forms, and everything above them.
-  [0x2e80, 0x10ffff, [17, 18, 21, 16]],
+  ...rows(12, 0x26, [0x41, 0x5a]),
+  // The other small letters and signs of English.
+  ...rows(10, [0x20, 0x7e]),
+  // Thin spaces, single quotes, the middle dot and primes.
+  ...rows(THIN, 0xb7, [0x2004, 0x2006], [0x2008, 0x200a], [0x2018, 0x201b], 0x2024, 0x2027, 0x2032, 0x2035, 0x2044),
+  // Accented small letters, raised and lowered figures, double quotes, daggers, bullets, half-width kana and hangul.
+  ...rows(SMALL, 0xa1, 0xa8, 0xaa, 0xad, [0xaf, 0xb0], [0xb2, 0xb4], [0xb8, 0xba], 0xbf, [0xdf, 0xe5], [0xe7, 0xf6], [0xf8, 0xff]),
+  ...rows(SMALL, 0x2000, 0x2002, [0x2010, 0x2011], 0x2016, [0x201c, 0x201f], [0x2020, 0x2023], 0x2033, [0x2039, 0x203a], [0x2070, 0x209f], [0xff61, 0xffdc]),
+  // Currency signs and the signs of arithmetic.
+  ...rows(SIGN, [0xa2, 0xa7], [0xab, 0xac], 0xae, 0xb1, [0xb5, 0xb6], 0xbb, 0xd7, 0xf7, 0x2007, [0x2012, 0x2013]),
+  ...rows(SIGN, [0x20a0, 0x20a7], [0x20ab, 0x20ae], [0x20b1, 0x20b6], [0x20b8, 0x20ba], [0x20bc, 0x20bd], 0x20bf, 0x2212, 0x221a, 0x2248, 0x2260, [0x2264, 0x2265]),
+  // Accented capitals and the rest of European Latin, the tone letters of pinyin, small Greek and small Cyrillic.
+  ...rows(CAPITAL, [0xc0, 0xc5], [0xc7, 0xd6], [0xd8, 0xde], [0x0100, 0x0151], [0x0154, 0x0173], [0x0175, 0x017f], [0x01cd, 0x01dc], [0x03ac, 0x03ce], [0x0430, 0x045f]),
+  // Dashes, the ellipsis, fractions, joined letters, Greek and Cyrillic capitals, Armenian, Hebrew, Devanagari and Vietnamese.
+  ...rows(WIDE, 0xa9, [0xbc, 0xbe], 0xc6, 0xe6, [0x0152, 0x0153], 0x0174, [0x0370, 0x03ab], [0x0410, 0x042f], [0x0530, 0x058f], [0x05be, 0x05ff], [0x0900, 0x097f], [0x1e00, 0x1eff]),
+  ...rows(WIDE, 0x2001, 0x2003, [0x2014, 0x2015], [0x2025, 0x2026], [0x20a9, 0x20aa], 0x2122, 0x2126),
+  // Arrows and the signs of mathematics.
+  ...rows(ARROW, [0x03cf, 0x03ff], [0x2190, 0x22ff]),
+  // Arabic, Thai, symbols, emoji and the second forms of Han.
+  ...rows(EMOJI, [0x0600, 0x06ff], [0x0e00, 0x0e5a], [0x2300, 0x27bf], [0xf900, 0xfaff], [0x1f000, 0x1f6ff], [0x1f900, 0x1faff]),
+  // Letters that stand for a word or a unit, such as the per mille and degree signs, Roman numerals, and other alphabets.
+  ...rows(WIDEST, [0x0180, 0x02ff], [0x0400, 0x052f], [0x0700, 0x077f], [0x0e5b, 0x0e7f], [0x10a0, 0x10ff], [0x1f00, 0x1fff], [0x2030, 0x205e], [0x20a0, 0x218f], [0x27c0, 0x2bff]),
+  ...rows(WIDEST, [0x302e, 0x302f], [0xfb00, 0xfb4f], [0xfe70, 0xfeff]),
+  ...rows(KANA, [0x3040, 0x30ff]),
+  ...rows(HAN, [0x3400, 0x9fff]),
+  ...rows(HANGUL, [0xac00, 0xd7af]),
+  // The punctuation and symbols set with Han, and full-width forms.
+  ...rows(CJK, [0x2e80, 0x33ff], [0xfe10, 0xfe6f], [0xff00, 0xff60], [0xffe0, 0xffef]),
+  // Arabic words and phrases drawn as one character.
+  ...rows(LIGATURE, [0xfb50, 0xfdff]),
 ];
 const JOINER = 0x200d;
-const LOW = 0x250;
-const low = new Uint8Array(LOW).fill(10);
+const EMOJI_FORM = 0xfe0f;
+const FACE_COUNT = 4;
+/** Below `LOW` each face has its count for every code point laid out, so a lookup there is one read. */
+const LOW = 0x3400;
+const low = Array.from({ length: FACE_COUNT }, (_, face) => new Uint8Array(LOW).fill(OTHER[face]));
+const high = WIDTHS.filter(([, last]) => last >= LOW);
+const count = (tenths, face) => (typeof tenths === 'number' ? tenths : tenths[face]);
 for (const [first, last, tenths] of [...WIDTHS].reverse()) {
-  for (let cp = first; cp <= Math.min(last, LOW - 1); cp++) low[cp] = tenths;
+  for (let face = 0; face < FACE_COUNT; face++) low[face].fill(count(tenths, face), first, Math.min(last, LOW - 1) + 1);
 }
 function tenthsOf(cp, face) {
-  if (cp < LOW) return low[cp];
-  const tenths = WIDTHS.find(([first, last]) => cp >= first && cp <= last)?.[2] ?? 10;
-  return typeof tenths === 'number' ? tenths : tenths[face];
+  if (cp < LOW) return low[face][cp];
+  const row = high.find(([first, last]) => cp >= first && cp <= last);
+  return row ? count(row[2], face) : OTHER[face];
 }
 
 /**
@@ -73,15 +118,19 @@ const faceOf = (letter) => (FACES.includes(letter) ? FACES.indexOf(letter) : FAC
 /**
  * A string's width in tenths of an average lowercase letter, always a whole number, in the face
  * whose letter is `letter`. A code point that follows a zero-width joiner counts nothing, so a
- * joined emoji counts once.
+ * joined emoji counts once. U+FE0F draws the character before it as an emoji, so it counts
+ * whatever brings the last code point that took room up to an emoji's count.
  */
 export function span(str, letter = TEXT_LETTER) {
   const face = faceOf(letter);
   let tenths = 0;
   let joined = false;
+  let last = 0;
   for (const ch of str) {
     const cp = ch.codePointAt(0);
-    if (!joined) tenths += tenthsOf(cp, face);
+    const add = joined ? 0 : cp === EMOJI_FORM ? Math.max(0, EMOJI[face] - last) : tenthsOf(cp, face);
+    tenths += add;
+    if (add > 0) last = add;
     joined = cp === JOINER;
   }
   return tenths;

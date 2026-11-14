@@ -50,16 +50,21 @@ test('every sample in footprints.json gets the footprint written there', async (
 test('a width is counted in whole tenths of a letter, and a joined emoji counts once', async () => {
   const { span, TITLE_LETTER, QUOTE_LETTER } = await load('components/shared.js');
   assert.equal(span('il. frt 09 AZ mw% W'), 5 * 8 + 7 * 3 + 11 * 2 + 12 * 2 + 15 * 3 + 17);
-  assert.equal(span('中あ한'), 18 + 18 + 18, 'at the text size');
-  assert.equal(span('中あ한', TITLE_LETTER), 17 + 18 + 17, 'at the title size');
+  assert.equal(span('中あ한'), 18 + 18 + 15, 'at the text size');
+  assert.equal(span('中あ한', TITLE_LETTER), 17 + 18 + 15, 'at the title size');
   assert.equal(span('中あ한', QUOTE_LETTER), 21 + 21 + 21, 'in a quote');
-  assert.equal(span('中あ한', 210), 16 + 16 + 16, 'in a fact value');
-  assert.equal(span('Quote', QUOTE_LETTER), span('Quote'), 'only the widest characters differ by face');
-  assert.equal(span('🎉'), 22);
-  assert.equal(span('👨‍👩‍👧‍👦'), 22);
-  assert.equal(span('🏳️‍🌈'), 22);
-  assert.equal(span('🇯🇵'), 22);
-  assert.equal(span('é'), 10);
+  assert.equal(span('中あ한', 210), 16 + 16 + 14, 'in a fact value');
+  assert.equal(span('Quote', QUOTE_LETTER), span('Quote'), 'the letters of English count the same in every face');
+  assert.equal(span('🎉'), 23);
+  assert.equal(span('🎉', QUOTE_LETTER), 26);
+  assert.equal(span('👨‍👩‍👧‍👦'), span('🎉'));
+  assert.equal(span('🏳️‍🌈'), span('🎉'));
+  assert.equal(span('©️'), span('🎉'), 'U+FE0F draws the sign before it as an emoji');
+  assert.equal(span('❤️'), span('❤'), 'and adds nothing to a character already that wide');
+  assert.equal(span('🧑‍⚕️'), span('🎉'), 'or to a joined emoji that ends with it');
+  assert.equal(span('é'), 11);
+  assert.equal(span('e\u0301'), span('e'), 'an accent that joins a letter takes no room');
+  assert.equal(span('\ua984'), 47, 'a character the table does not name counts as the widest');
   const alphabet = 'ABCDEabcdmw.,ilt0123 $%中🎉';
   for (let i = 0; i < 2000; i++) {
     const made = Array.from({ length: 1 + (i % 40) }, (_, k) => [...alphabet][(i * 7 + k * 13) % 25]).join('');
@@ -77,6 +82,15 @@ test('a fact value takes the largest size its digits fit at, and is never given 
   assert.deepEqual(size('12345678901234567890'), [234, height(21)], 'twenty step down again');
   assert.deepEqual(size('1234567890123456789012345678'), [314, height(21)]);
   assert.deepEqual(size('12345678901234567890123456789'), [320, height(21, 2)], 'past one line at the smallest size it wraps');
+});
+
+test('a sign or a unit is counted at least as wide as it draws', async () => {
+  const { span, QUOTE_LETTER } = await load('components/shared.js');
+  /** Widths in px measured in the page: a fact value at its largest size, and a quote. */
+  const value = { '℃': 38.78, '₩': 30.73, '‰': 42.16, '™': 26.86, '½': 25.84, '€': 21.48, '¥': 21.48, '°': 15.07, '²': 10.98, '≈': 21.48, '→': 31.58, '—': 28.83, 'é': 18.34, 'Ω': 25.61, '№': 36.94, '🎉': 33.33 };
+  const quote = { '—': 16, '…': 16, '“': 7.47, '’': 4.45, '🎉': 20, '℃': 15.72, 'é': 6.08 };
+  for (const [ch, px] of Object.entries(value)) assert.ok(span(ch, 210) * 210 >= px * 100, `${ch} in a fact value`);
+  for (const [ch, px] of Object.entries(quote)) assert.ok(span(ch, QUOTE_LETTER) * QUOTE_LETTER >= px * 100, `${ch} in a quote`);
 });
 
 test('a string cut to a width keeps whole characters and fits the width', async () => {
