@@ -1,4 +1,6 @@
 import type { Item } from './domain.ts';
+import { fit, type Fitted } from './map.ts';
+import type { LatLon } from './ports.ts';
 import { byModel, byRule, type Entry } from './roles/renderer.ts';
 import { COMPONENT_IDS, type ComponentId, type PropsOf } from './views.ts';
 
@@ -226,3 +228,36 @@ const CHOSEN: Partial<Record<StructuredId, Record<string, unknown>>> = {
 export const SAMPLES = Object.fromEntries(
   STRUCTURED_IDS.map((id) => [id, { item: ITEMS[id], props: CHOSEN[id] ?? byRule(ITEMS[id], sampleAssetUrl).props }]),
 ) as Record<StructuredId, { item: Item; props: Record<string, unknown> }>;
+
+/** One map the library page draws: its members in pin order, each a picture or a note at the point its data holds, and the props the map rule gives them. */
+export interface MapSample {
+  label: string;
+  status: 'kept' | 'pick';
+  members: { id: string; picture?: 'river' | 'fields' | 'night' | 'quilt'; item: Item }[];
+  props: Fitted<string>;
+}
+
+function mapSample(label: string, status: MapSample['status'], members: MapSample['members']): MapSample {
+  const props = fit(members.map(({ id, item }) => [id, item.data.at as LatLon] as const));
+  const order = props.pins.flatMap((pin) => pin.members);
+  return { label, status, members: [...members].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id)), props };
+}
+
+const at = (id: string, title: string, data: Item['data'], fields: Partial<Item> = {}) => ({ id: `sample-map-${id}`, item: item(`map-${id}`, { title, data, ...fields }) });
+
+/** A trip of four photos from three places, and five places in Chinese as picks, two of them under one pin. */
+export const MAPS: MapSample[] = [
+  mapSample('Four photos from three places', 'kept', [
+    { ...at('alfama', 'Washing lines in Alfama', { where: 'Lisbon', at: { lat: 38.7139, lon: -9.1334 } }, { kind: 'image' }), picture: 'river' },
+    { ...at('porto', 'The bridge at dusk', { where: 'Porto', at: { lat: 41.1406, lon: -8.611 } }, { kind: 'image' }), picture: 'night' },
+    { ...at('evora', 'Cork oaks outside Évora', { at: { lat: 38.5714, lon: -7.9135 } }, { kind: 'image' }), picture: 'fields' },
+    { ...at('alfama-2', 'The tram up to Graça', { where: 'Lisbon', at: { lat: 38.7141, lon: -9.1337 } }, { kind: 'image' }), picture: 'quilt' },
+  ]),
+  mapSample('Five places in Chinese, as picks', 'pick', [
+    { ...at('xihu', '西湖骑车', { where: '杭州', at: { lat: 30.2431, lon: 120.15 } }, { summary: '从断桥骑到苏堤，大约一个小时。' }) },
+    { ...at('suzhou', '苏州园林', { where: '苏州', at: { lat: 31.299, lon: 120.5853 } }, { summary: '拙政园早上八点开门，人少。' }) },
+    { ...at('bund', '外滩夜景', { where: '上海', at: { lat: 31.2304, lon: 121.4737 } }, { summary: '晚上七点以后灯才全亮。' }) },
+    { ...at('lingyin', '灵隐寺', { where: '杭州', at: { lat: 30.2408, lon: 120.1017 } }, { summary: '早点去，人少。' }) },
+    { ...at('moganshan', '莫干山民宿', { where: '莫干山', at: { lat: 30.6086, lon: 119.8664 } }, { summary: '竹林里的小路，一直走到山顶的老别墅。' }) },
+  ]),
+];

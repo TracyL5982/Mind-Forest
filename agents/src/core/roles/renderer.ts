@@ -3,8 +3,9 @@ import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
 import { parse } from '../formula.ts';
 import { grounding, type Grounding, type Passage } from '../grounding.ts';
 import { cardsOf, collapse, JOINS, KINDS, LIMITS, parseFlat, ROLES, type Box, type Part as LayoutPart } from '../layout.ts';
-import { Unreadable } from '../ports.ts';
-import { CHECKS, isValidGroup, isValidView, misses, recording, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type PropsOf, type Section, type Stated } from '../views.ts';
+import { fit } from '../map.ts';
+import { Unreadable, type LatLon } from '../ports.ts';
+import { CHECKS, isValidGroup, isValidView, misses, POINT, recording, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type PropsOf, type Section, type Stated } from '../views.ts';
 import type { RoleContext, Roles } from './types.ts';
 
 const ROLE = 'renderer';
@@ -147,6 +148,7 @@ const TableData = z.object({ heads: z.array(z.string()), rows: z.array(z.array(z
 const ColoursData = z.array(z.object({ name: z.string(), value: z.string().min(1) }));
 const ExcerptData = z.object({ text: z.string().min(1), at: z.string().optional() });
 const MarksData = z.array(z.boolean());
+const AtData = z.object(POINT.shape);
 
 function read<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
   if (value === undefined) return undefined;
@@ -1252,10 +1254,11 @@ function drop(pool: Pool, group: Group, out: Command[]): void {
   for (const id of group.members) pool.taken.delete(id);
 }
 
-/** What the plain-code arrangements read of a sibling: the card it is drawn as, and the date its data gives. */
+/** What the plain-code arrangements read of a sibling: the card it is drawn as, and the date and the point on the earth its data gives. */
 interface Look {
   component: (node: Node) => string;
   when: (node: Node) => string | undefined;
+  at: (node: Node) => LatLon | undefined;
 }
 
 /**
@@ -1277,11 +1280,26 @@ const MOOD = new Set([...PICTURE_LED, 'swatch', 'idea']);
 const plain = (composite: CompositeId, members: Node[], props: Props = {}): GroupDraft => ({ composite, title: '', members: members.map((n) => n.id), props });
 const among = (kinds: ReadonlySet<string>) => (node: Node, look: Look) => (kinds.has(look.component(node)) ? '' : null);
 
+/** The siblings in time order when the date of every one of them can be read, and as they come otherwise. */
+function byDate(nodes: Node[], look: Look): Node[] {
+  const times = new Map(nodes.map((n) => [n.id, timeOf(look.when(n) ?? '')]));
+  return [...times.values()].every((t) => t !== null) ? [...nodes].sort((a, b) => times.get(a.id)! - times.get(b.id)!) : nodes;
+}
+
 /**
  * The arrangements plain code makes, in the order they take siblings. An earlier one may take a sibling from the group a later one
  * made, and that group is made again from what is left. The model's groups keep their members.
  */
 const ARRANGED: readonly Arranging[] = [
+  {
+    composite: 'map',
+    sort: (n, look) => (look.at(n) ? '' : null),
+    build: (nodes, look) => {
+      if (nodes.length < 3) return null;
+      const { centre, zoom, pins } = fit(byDate(nodes, look).map((n) => [n.id, look.at(n)!] as const));
+      return pins.length >= 2 ? { composite: 'map', title: '', members: pins.flatMap((pin) => pin.members), props: { centre, zoom, pins } } : null;
+    },
+  },
   {
     composite: 'overview',
     sort: among(new Set([...FIGURES, ...PLOTS])),
@@ -1305,8 +1323,7 @@ const ARRANGED: readonly Arranging[] = [
     sort: (n, look) => (look.when(n) !== undefined ? '' : null),
     build: (nodes, look) => {
       if (nodes.length < 3) return null;
-      const times = new Map(nodes.map((n) => [n.id, timeOf(look.when(n)!)]));
-      const ordered = [...times.values()].every((t) => t !== null) ? [...nodes].sort((a, b) => times.get(a.id)! - times.get(b.id)!) : nodes;
+      const ordered = byDate(nodes, look);
       return plain('timeline', ordered, { labels: Object.fromEntries(ordered.map((n) => [n.id, clip(look.when(n)!, 40)])) });
     },
   },
@@ -1608,7 +1625,11 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
   const parentIds = new Set(nodes.flatMap((n) => n.parent ?? []));
   const parents = [...parentIds].flatMap((id) => ctx.mind.nodes.get(id) ?? []);
   const groups: Command[] = [];
-  const look: Look = { component: componentOf, when: (node) => str(ctx.mind.items.get(node.itemId)?.data.when) };
+  const look: Look = {
+    component: componentOf,
+    when: (node) => str(ctx.mind.items.get(node.itemId)?.data.when),
+    at: (node) => read(AtData, ctx.mind.items.get(node.itemId)?.data.at),
+  };
   const pools = survey(ctx, parents, look, groups);
 
   const [{ answers, replied }] = await Promise.all([askComponents(ctx, open), again ? undefined : askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);

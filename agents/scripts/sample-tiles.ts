@@ -2,12 +2,15 @@
  * Writes the sample map tiles that client/library.html and the tests draw, so neither asks a tile
  * server for anything. Each is a plain square, one of two shades by where it sits, so a seam or a
  * tile out of place shows. It writes the tiles that cover each point below at the sizes a place
- * card and its opened view draw, as client/js/map.js lays them out.
+ * card and its opened view draw, and the tiles of each sample map arrangement in src/core/samples.ts,
+ * as client/js/map.js lays them out.
  *
  * Run: node --no-warnings --import tsx scripts/sample-tiles.ts
  */
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { MAP } from '../src/core/map.ts';
+import { MAPS } from '../src/core/samples.ts';
 
 type Tile = { z: number; x: number; y: number };
 const { layout } = (await import(new URL('../client/js/map.js', import.meta.url).href)) as {
@@ -27,15 +30,17 @@ const SHADES = ['#5f7d6d', '#6e8a79'];
 const dir = join(import.meta.dirname, '../client/samples/tiles');
 rmSync(dir, { recursive: true, force: true });
 const written = new Set<string>();
-for (const centre of Object.values(POINTS)) {
-  for (const size of SIZES) {
-    for (const { z, x, y } of layout({ centre, ...size }).tiles) {
-      const path = join(dir, String(z), String(x), `${y}.svg`);
-      if (written.has(path)) continue;
-      mkdirSync(join(dir, String(z), String(x)), { recursive: true });
-      writeFileSync(path, `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="${SHADES[(x + y) % 2]}"/></svg>\n`);
-      written.add(path);
-    }
+const maps = [
+  ...Object.values(POINTS).flatMap((centre) => SIZES.map((size) => ({ centre, ...size }))),
+  ...MAPS.map(({ props }) => ({ centre: props.centre, zoom: props.zoom, width: MAP.width, height: MAP.height })),
+];
+for (const map of maps) {
+  for (const { z, x, y } of layout(map).tiles) {
+    const path = join(dir, String(z), String(x), `${y}.svg`);
+    if (written.has(path)) continue;
+    mkdirSync(join(dir, String(z), String(x)), { recursive: true });
+    writeFileSync(path, `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="${SHADES[(x + y) % 2]}"/></svg>\n`);
+    written.add(path);
   }
 }
 console.log(`${written.size} tiles in ${dir}`);

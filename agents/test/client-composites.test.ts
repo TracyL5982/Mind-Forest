@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { fit, MAP } from '../src/core/map.ts';
 import { MEMBERS, ROOM, type CompositeId } from '../src/core/views.ts';
 
 /** Just enough of a page for an arrangement to build its marks: each element keeps its class, its style and what it holds. */
@@ -15,7 +16,7 @@ const page = {
     });
   },
 };
-Object.assign(globalThis, { document: page });
+Object.assign(globalThis, { document: { ...page, createElementNS: (_space: string) => page.createElement() } });
 
 const load = (path: string) => import(new URL(`../client/js/${path}`, import.meta.url).href);
 
@@ -44,20 +45,25 @@ function propsFor(composite: CompositeId, ids: string[], next: () => number): Re
   if (composite === 'ranked') return { reasons: Object.fromEntries(ids.map((id) => [id, line()])) };
   if (composite === 'beforeafter') return { changes: Object.fromEntries(ids.slice(1).map((id) => [id, line()])) };
   if (composite === 'matrix') return { x: words(next, ROOM.axis), y: words(next, ROOM.axis), reasons: Object.fromEntries(ids.map((id) => [id, line()])) };
+  if (composite === 'map') {
+    const spread = 10 ** (next() * 5 - 3);
+    const [lat, lon] = [next() * 140 - 70, next() * 300 - 150];
+    return { ...fit(ids.map((id) => [id, { lat: lat + (next() - 0.5) * spread, lon: lon + (next() - 0.5) * spread }] as const)) };
+  }
   return {};
 }
 
 /** Where a mark is drawn, from its style, or from the size style.css gives its class. */
 function box(mark: Element): { left: number; top: number; width: number; height: number } | null {
   const px = (value: string | undefined) => (value === undefined ? undefined : Number.parseFloat(value));
-  const fixed = mark.class.includes('rank-n') ? 22 : /lead-rule|is-across|is-right/.test(mark.class) ? 1 : undefined;
+  const fixed = /rank-n|map-n/.test(mark.class) ? 22 : /lead-rule|is-across|is-right/.test(mark.class) ? 1 : undefined;
   const [left, top] = [px(mark.style.left), px(mark.style.top)];
-  const width = px(mark.style.width) ?? (mark.class.includes('rank-n') ? 22 : /is-up|is-down/.test(mark.class) ? 1 : undefined);
+  const width = px(mark.style.width) ?? (/rank-n|map-n/.test(mark.class) ? 22 : /is-up|is-down/.test(mark.class) ? 1 : undefined);
   const height = px(mark.style.height) ?? (mark.class.includes('mx-name') ? 17 : fixed);
   return left === undefined || top === undefined || width === undefined || height === undefined ? null : { left, top, width, height };
 }
 
-const NEW: CompositeId[] = ['ranked', 'beforeafter', 'lead', 'overview', 'moodboard', 'matrix'];
+const NEW: CompositeId[] = ['ranked', 'beforeafter', 'lead', 'overview', 'moodboard', 'matrix', 'map'];
 const EPS = 1e-6;
 
 test('500 member sets of each new arrangement place no card over another or outside the frame, and no mark over a card', async () => {
@@ -99,4 +105,30 @@ test('500 member sets of each new arrangement place no card over another or outs
 test('every arrangement in views.ts has a client module, in the same order', async () => {
   const { COMPOSITES } = await load('composites/index.js');
   assert.deepEqual(Object.keys(COMPOSITES), Object.keys(MEMBERS));
+});
+
+test('the map the service fits to its points draws every point inside its margins, each pin apart from the others, at the largest zoom that holds them', async () => {
+  const { MAP: DRAWN } = await load('composites/map.js');
+  const { layout } = await load('map.js');
+  assert.deepEqual(DRAWN, { width: MAP.width, height: MAP.height }, 'the client draws the map at the size the service fits it to');
+  const next = random(1931);
+  for (let run = 0; run < 2000; run++) {
+    const spread = 10 ** (next() * 5 - 3.5);
+    const [lat, lon] = [next() * 150 - 75, next() * 320 - 160];
+    const points = Array.from({ length: 3 + Math.floor(next() * 10) }, (_, n) => [`m${n}`, { lat: lat + (next() - 0.5) * spread, lon: lon + (next() - 0.5) * spread }] as const);
+    const { centre, zoom, pins } = fit(points);
+    const told = `run ${run}: ${JSON.stringify(points)}`;
+    const drawn = (z: number, at: { lat: number; lon: number }[]) => layout({ centre, zoom: z, width: MAP.width, height: MAP.height, pins: at }).pins as { left: number; top: number }[];
+    const inside = (p: { left: number; top: number }) => p.left >= MAP.side - 1 && p.left <= MAP.width - MAP.side + 1 && p.top >= MAP.edge - 1 && p.top <= MAP.height - MAP.edge + 1;
+    assert.ok(drawn(zoom, points.map(([, at]) => at)).every(inside), `${told}: every point is inside the margins at zoom ${zoom}`);
+    const placed = drawn(zoom, pins);
+    for (let i = 0; i < placed.length; i++) for (let j = i + 1; j < placed.length; j++) assert.ok(Math.hypot(placed[i]!.left - placed[j]!.left, placed[i]!.top - placed[j]!.top) >= MAP.apart - 1, `${told}: pins ${i + 1} and ${j + 1} are apart`);
+    assert.deepEqual(pins.flatMap((pin) => pin.members).sort(), points.map(([id]) => id).sort(), `${told}: every point is under one pin`);
+    if (zoom < MAP.most) {
+      const closer = layout({ centre, zoom: zoom + 1, width: MAP.width, height: MAP.height, pins: points.map(([, at]) => at) }).pins as { left: number; top: number }[];
+      const xs = closer.map((p) => p.left);
+      const ys = closer.map((p) => p.top);
+      assert.ok(Math.max(...xs) - Math.min(...xs) > MAP.width - 2 * MAP.side || Math.max(...ys) - Math.min(...ys) > MAP.height - 2 * MAP.edge, `${told}: zoom ${zoom + 1} would not hold them`);
+    }
+  }
 });

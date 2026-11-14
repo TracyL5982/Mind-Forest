@@ -74,6 +74,7 @@ const PIN = 'M11 27C5.2 19.9 2 15.1 2 10.6a9 9 0 0 1 18 0c0 4.5-3.2 9.3-9 16.4Z'
  * each cover the px they share only in part, and the ground would show through as a hairline, so
  * each tile is drawn a second time under the others, 1 px to the right and 1 px down. `link` makes
  * the credit a link, which a card on the field cannot have, because a click there opens the card.
+ * A pin with a `label` carries it in its head in place of the dot, as the pins of a map arrangement carry their numbers.
  */
 export function drawMap({ centre, zoom, width, height, pins = [], link = false }, className) {
   const { tiles, pins: placed } = layout({ centre, zoom, width, height, pins });
@@ -83,8 +84,9 @@ export function drawMap({ centre, zoom, width, height, pins = [], link = false }
       backgroundImage: drawn.map((tile) => `url(${JSON.stringify(tileUrl(provider.tiles, tile))})`).join(', '),
       backgroundPosition: drawn.map((tile) => `${tile.left}px ${tile.top}px`).join(', '),
     } }),
-    placed.map(({ left, top }) => s('svg', { class: 'map-pin', viewBox: '0 0 22 28', width: 22, height: 28, 'aria-hidden': 'true', style: { left: `${left - 11}px`, top: `${top - 27}px` } },
-      s('path', { d: PIN }), s('circle', { cx: 11, cy: 10.5, r: 3.4 }))));
+    placed.map(({ left, top }, n) => s('svg', { class: 'map-pin', viewBox: '0 0 22 28', width: 22, height: 28, 'aria-hidden': 'true', style: { left: `${left - 11}px`, top: `${top - 27}px` } },
+      s('path', { d: PIN }),
+      pins[n].label ? s('text', { x: 11, y: 14.4, 'text-anchor': 'middle', text: pins[n].label }) : s('circle', { cx: 11, cy: 10.5, r: 3.4 }))));
   const credit = provider && (link && provider.link
     ? h('a', { class: 'map-credit', href: provider.link, target: '_blank', rel: 'noopener', text: provider.credit })
     : h('span', { class: 'map-credit', text: provider.credit }));

@@ -9,6 +9,7 @@ import { byRule } from '../src/core/roles/renderer.ts';
 import type { Roles } from '../src/core/roles/types.ts';
 import { COMPONENT_IDS, SAMPLES, STRUCTURED_IDS } from '../src/core/samples.ts';
 import { COMPOSITE_IDS } from '../src/core/views.ts';
+import { fit } from '../src/core/map.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running } from '../src/node/server.ts';
 
@@ -90,7 +91,7 @@ export function showcase(image: string, other?: string, { structured = true, sou
   const counted = `${COMPONENT_IDS.length} components and ${COMPOSITE_IDS.length} ways to arrange them.`;
   const root = add(null, 'note', 'Every way a card can be drawn', { summary: counted, text: counted });
   const quote = add(root, 'quote', 'Lange on seeing', { text: '"The camera is a tool for learning how to see without a camera." Dorothea Lange', data: { quote: { text: 'The camera is a tool for learning how to see without a camera.', by: 'Dorothea Lange' } } });
-  add(root, 'fact', 'Drop-off in minute one', { data: { facts: [{ label: 'of viewers leave in the first minute', value: '42%' }] } });
+  const factCard = add(root, 'fact', 'Drop-off in minute one', { data: { facts: [{ label: 'of viewers leave in the first minute', value: '42%' }] } });
   const imageCard = add(root, 'image', 'Beach still', { ...picture(image), summary: 'A still from the beach scene' });
   const videoCard = add(root, 'video', 'Dolly zoom clip', { kind: 'video', data: { mediaUrl: image, thumbnailUrl: image }, summary: 'The dolly zoom, slowed down' });
   const linkCard = add(root, 'link', 'The Vertigo effect, explained', { kind: 'link', summary: 'How one shot changed the grammar of suspense.', source: { from: 'link', url: 'https://example.com/vertigo', capturedAt: new Date().toISOString() } });
@@ -202,6 +203,14 @@ export function showcase(image: string, other?: string, { structured = true, sou
   ].map(([title, text]) => note(chartCard, title!, text!));
   const column = (label: string, ids: string[]) => ({ kind: 'column', label, children: ids.map((id) => ({ kind: 'card', id, role: 'normal' })) });
   group(chartCard, 'layout', 'Two rigs', rigs, { tree: { kind: 'row', children: [column('On a tripod', rigs.slice(0, 2)), column('On a dolly', rigs.slice(2))] } });
+  // The map rule fits the same props from the same points, so the stand-in Renderer finds the group as it would make it.
+  const located = ([
+    ['Shot on the Lisbon tram', 'The pull, on the 28 tram.', { lat: 38.7223, lon: -9.1393 }],
+    ['Shot at Porto station', 'The pull, under the tiles.', { lat: 41.1456, lon: -8.6106 }],
+    ['Shot on the Lisbon steps', 'The pull, down the steps.', { lat: 38.7139, lon: -9.1334 }],
+  ] as const).map(([title, text, at]) => [add(factCard, 'note', title, { text, summary: text, data: { at } }), at] as const);
+  const { centre, zoom, pins } = fit(located);
+  group(factCard, 'map', 'Where it was shot', pins.flatMap((pin) => pin.members), { centre, zoom, pins });
   return commands;
 }
 
