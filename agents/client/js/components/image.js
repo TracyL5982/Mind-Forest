@@ -7,6 +7,8 @@ const pictureHeight = (props) => clamp(Math.round(WIDTH / (Number(props.aspect) 
 const caption = (item, props) => text(props.caption) || item.title || '';
 const captionLines = (item, props) => (caption(item, props) ? fold(caption(item, props), WIDTH - SIDES, TEXT_LETTER, 2) : 0);
 
+export const shows = [];
+
 export const size = (item, props) => [WIDTH, framedHeight(pictureHeight(props), captionLines(item, props))];
 
 export const draw = (item, props, ctx) => framed(pictureHeight(props), caption(item, props), captionLines(item, props),

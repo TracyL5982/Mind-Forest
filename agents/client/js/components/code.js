@@ -7,6 +7,8 @@ const lines = (props) => text(props.source).split('\n');
 /** The Renderer sends `text` when it does not know the language, and that names nothing. */
 const language = (props) => (text(props.language) && props.language !== 'text' ? props.language : '');
 
+export const shows = [];
+
 export const size = (item, props) => [304, FRAME + TITLE + 8 + clamp(lines(props).length, 1, SHOWN) * TEXT];
 
 export function draw(item, props) {

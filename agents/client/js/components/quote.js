@@ -11,6 +11,8 @@ const lines = (item, props) => fold(words(item, props), COLUMN, QUOTE_LETTER, 5)
 const mark = () => h('div', { class: 'quote-mark', text: '“', 'aria-hidden': 'true' });
 const by = (props, clamped) => text(props.by) && h('div', { class: 'quote-by' }, say('span', clamped, props.by));
 
+export const shows = [];
+
 export const size = (item, props) => [WIDTH, FRAME + MARK + lines(item, props) * TITLE + (text(props.by) ? 8 + TEXT : 0)];
 
 export const draw = (item, props) => [

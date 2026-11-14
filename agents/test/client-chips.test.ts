@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-type Chip = { kind: string; text: string };
+type Chip = { kind: string; text: string; keep?: string };
 type Source = Chip & { label: string };
 type Chips = {
   chips: (item: unknown, node: unknown, shown?: string[]) => Chip[];
@@ -35,12 +35,12 @@ test('five sources give three chips', () => {
   assert.deepEqual(chips(item(FIVE), pick), [
     { kind: 'when', text: '12 May 1958' },
     { kind: 'where', text: 'Bodega Bay' },
-    { kind: 'people', text: 'Ada, Grace +1' },
+    { kind: 'people', text: 'Ada, Grace +1', keep: ' +1' },
   ]);
 });
 
 test('five people give two names and a count', () => {
-  assert.deepEqual(chips(item({ people: ['Ada', 'Grace', 'Edsger', 'Barbara', 'Alan'] }), kept), [{ kind: 'people', text: 'Ada, Grace +3' }]);
+  assert.deepEqual(chips(item({ people: ['Ada', 'Grace', 'Edsger', 'Barbara', 'Alan'] }), kept), [{ kind: 'people', text: 'Ada, Grace +3', keep: ' +3' }]);
   assert.deepEqual(chips(item({ people: ['Ada', 'Grace'] }), kept), [{ kind: 'people', text: 'Ada, Grace' }]);
   assert.deepEqual(chips(item({ people: ['Ada', '', 3, ' Grace '] }), kept), [{ kind: 'people', text: 'Ada, Grace' }]);
 });
@@ -56,7 +56,7 @@ test('a source the card type already shows is left out', () => {
   assert.deepEqual(chips(item({ site: 'example.com' }), pick, ['site']), []);
   assert.deepEqual(chips(item({ when: '1958', site: 'example.com' }), pick, ['site']), [{ kind: 'when', text: '1958' }]);
   assert.deepEqual(chips(item(FIVE), pick, ['when', 'where']), [
-    { kind: 'people', text: 'Ada, Grace +1' },
+    { kind: 'people', text: 'Ada, Grace +1', keep: ' +1' },
     { kind: 'origin', text: 'The Met' },
   ]);
 });

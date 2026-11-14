@@ -24,6 +24,8 @@ function plan(item, props) {
   };
 }
 
+export const shows = ['site'];
+
 export function size(item, props) {
   const { thumb, width, titleLines, aboutLines } = plan(item, props);
   const main = titleLines * TITLE + (aboutLines ? 4 + aboutLines * TEXT : 0);

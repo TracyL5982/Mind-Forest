@@ -7,6 +7,8 @@ const nameOf = (item, props) => text(props.name) || item.title || '';
 const face = (name, props, ctx) => h('div', { class: 'person-face' },
   text(props.image) ? picture(props.image, name, ctx, () => initials(name)) : initials(name));
 
+export const shows = [];
+
 export const size = () => [252, 88];
 
 export function draw(item, props, ctx) {

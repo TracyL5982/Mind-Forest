@@ -1,5 +1,5 @@
 import { h, put, s, clamp, ease } from './dom.js';
-import { componentOf, drawCard, sizeOf } from './components/index.js';
+import { chipsOf, componentOf, drawCard, sizeOf } from './components/index.js';
 import { arrange } from './composites/index.js';
 import { Layout } from './layout.js';
 
@@ -114,13 +114,13 @@ export class Field {
       }
 
       const component = componentOf(node);
-      const sig = `${sh.item.revision}|${JSON.stringify(node.view)}|${sh.w}x${sh.h}`;
+      const sig = `${sh.item.revision}|${JSON.stringify(node.view)}|${sh.w}x${sh.h}|${JSON.stringify(chipsOf(node, sh.item))}`;
       if (sig !== card.sig) {
         card.sig = sig;
         card.el.style.width = `${sh.w}px`;
         card.el.style.height = `${sh.h}px`;
         card.el.dataset.component = component;
-        put(card.face, h('div', { class: `card-body c-${component}` }, drawCard(node, sh.item, { asset: this.asset })));
+        put(card.face, drawCard(node, sh.item, { asset: this.asset }));
       }
       card.el.setAttribute('aria-label', `${node.status === 'pick' ? 'Pick' : 'Card'}: ${sh.item.title}`);
       card.el.style.setProperty('--tint', view.colour.get(node.id));

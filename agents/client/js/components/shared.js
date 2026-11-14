@@ -11,6 +11,8 @@ export const TEXT = 17;
 export const FRAME = 30;
 /** Left and right padding plus the border of a padded card, and 1 px to spare. */
 export const SIDES = 33;
+/** What a card with chips adds to its height: the line of chips and the gap above it. */
+export const CHIP_LINE = 28;
 
 export const text = (value) => (typeof value === 'string' ? value : '');
 export const list = (value) => (Array.isArray(value) ? value : []);

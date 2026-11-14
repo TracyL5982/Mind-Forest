@@ -4,6 +4,8 @@ import { FRAME, SIDES, TEXT, TITLE, plot, say, series, text, title } from './sha
 const WIDTH = 300;
 const PLOT = 136;
 
+export const shows = [];
+
 export const size = (item, props) => [WIDTH, FRAME + TITLE + (text(props.unit) ? TEXT : 0) + 8 + PLOT];
 
 export const draw = (item, props) => [

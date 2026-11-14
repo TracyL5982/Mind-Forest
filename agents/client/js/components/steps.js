@@ -7,6 +7,8 @@ const GAP = 8;
 
 const step = (label, i, lines) => h('li', null, h('span', { class: 'step-n', text: String(i + 1) }), say('span', lines, String(label)));
 
+export const shows = [];
+
 export function size(item, props) {
   const n = list(props.steps).length;
   const rows = Math.min(n, SHOWN);

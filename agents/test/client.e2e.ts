@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
 import type { Running } from '../src/node/server.ts';
-import { PNG, bootFake, browserPath, crowd, showcase, spills } from './stage.ts';
+import { CHIPPED, LONG_PLACE, PNG, bootFake, browserPath, chipped, crowd, showcase, spills } from './stage.ts';
 
 const shots = process.env.MIND_PALACE_SHOTS ? resolve(process.env.MIND_PALACE_SHOTS) : mkdtempSync(join(tmpdir(), 'mp-shots-'));
 mkdirSync(shots, { recursive: true });
@@ -301,6 +301,38 @@ async function main(): Promise<void> {
       await until('the pile to open', async () => (await count(page, '.card.is-under')) === 0);
       await page.getByRole('button', { name: 'Close', exact: true }).click();
       await until('the pile to close', async () => (await count(page, '.card.is-under')) === 4);
+    });
+
+    await check('a card whose item holds a date, a place, people or an origin shows them as one line of chips', async () => {
+      const up = await desktop.request.post(`${run.url}/api/assets?name=still.png`, { headers: { Authorization: 'Bearer secret', 'Content-Type': 'image/png' }, data: Buffer.from(PNG) });
+      assert.ok(run.pipeline.userCommands('Add cards with chips', chipped(((await up.json()) as { url: string }).url)));
+      await page.locator('.tree-chip', { hasText: 'With chips' }).click();
+      await settle(page);
+      const card = (id: string) => page.locator(`.card[data-id="${id}"]`);
+      const chips = (id: string) => card(id).locator('.chip').allTextContents();
+      const tall = (id: string) => card(id).evaluate((el: HTMLElement) => [parseFloat(el.style.width), parseFloat(el.style.height)]);
+
+      assert.deepEqual(await chips(CHIPPED.photo), ['12 May 1958', 'Bodega Bay']);
+      const [photo, plain] = [await tall(CHIPPED.photo), await tall(CHIPPED.plainPhoto)];
+      assert.deepEqual(photo, [plain[0], plain[1]! + 28], 'the photo with chips is taller by the chip line and no wider');
+      assert.equal(await card(CHIPPED.plainNote).locator('.chip-line').count(), 0, 'a card with nothing to say has no chip line');
+      assert.deepEqual(await chips(CHIPPED.people), ['Ada Lovelace, Grace Hopper+3']);
+      assert.deepEqual(await chips(CHIPPED.link), ['2019'], 'a link does not repeat its site');
+      assert.equal((await chips(CHIPPED.museum)).at(-1), 'The Metropolitan Museum of Art');
+      assert.deepEqual(await chips(CHIPPED.four), ['Summer 1958', 'Bodega Bay'], 'a card too narrow for a third chip leaves it to the opened card');
+
+      const long = card(CHIPPED.longPlace).locator('.chip-text');
+      assert.equal(await long.textContent(), LONG_PLACE);
+      assert.ok(await long.evaluate((el: HTMLElement) => el.scrollWidth > el.clientWidth && getComputedStyle(el).textOverflow === 'ellipsis'), 'a long place is cut with an ellipsis');
+      const lines = await page.locator('.card[data-id^="chips-"] .chip-line').evaluateAll((els) => els.map((el) => (el as HTMLElement).offsetHeight));
+      assert.ok(lines.length >= 9 && lines.every((height) => height === 20), `every chip line is one line tall, got ${lines}`);
+      assert.deepEqual(await overlaps(page), []);
+      assert.deepEqual(await spills(page), []);
+
+      await card(CHIPPED.museum).click();
+      await page.locator('#panel').getByRole('button', { name: 'Keep', exact: true }).click();
+      await until('the kept card to drop its origin chip', async () => (await chips(CHIPPED.museum)).join() === '1857');
+      await page.keyboard.press('Escape');
     });
 
     await check('every card type in the registry can be sized, drawn and opened', async () => {

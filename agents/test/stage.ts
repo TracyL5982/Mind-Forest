@@ -34,22 +34,28 @@ export function bootFake({ port = 0, dataDir = mkdtempSync(join(tmpdir(), 'mp-st
 
 export const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAHUlEQVQI12NkYPjPgA0wYRWlqgTj////cRhFJzsAGGgEB+4vOSMAAAAASUVORK5CYII='), (c) => c.charCodeAt(0));
 
-/** One tree that holds every component and every composite, and a link to a card in another tree when one is given. */
-export function showcase(image: string, other?: string): Command[] {
+/** The commands that build one tree, a card at a time. Ids are `<treeId>-<n>` in the order cards are added. */
+function planting(treeId: string, treeTitle: string) {
   const at = new Date().toISOString();
   const commands: Command[] = [];
   let n = 0;
   const add = (parent: string | null, component: string, props: Record<string, unknown>, title: string, extra: Partial<Item> = {}, status: Node['status'] = 'kept'): string => {
-    const id = `show-${n++}`;
+    const id = `${treeId}-${n++}`;
     const item: Item = { id: `item-${id}`, kind: 'text', title, text: '', summary: '', tags: [], data: {}, source: { from: 'paste', capturedAt: at }, origin: { by: 'user' }, archived: false, revision: 0, ...extra };
-    const node: Node = { id, treeId: 'show', itemId: item.id, parent, status, why: status === 'pick' ? 'Worth a look' : '', importance: 0.5, origin: { by: 'user' }, view: { component, props, by: 'renderer' }, order: n };
+    const node: Node = { id, treeId, itemId: item.id, parent, status, why: status === 'pick' ? 'Worth a look' : '', importance: 0.5, origin: { by: 'user' }, view: { component, props, by: 'renderer' }, order: n };
     commands.push({ type: 'addItem', item });
-    if (parent === null) commands.push({ type: 'createTree', tree: { id: 'show', title: 'Every shape', rootId: id, digest: '', createdAt: at }, root: node });
+    if (parent === null) commands.push({ type: 'createTree', tree: { id: treeId, title: treeTitle, rootId: id, digest: '', createdAt: at }, root: node });
     else commands.push({ type: 'addNode', node });
     return id;
   };
   const group = (anchor: string, composite: string, title: string, members: string[], props: Record<string, unknown>) =>
-    commands.push({ type: 'setGroup', group: { id: `group-${composite}`, treeId: 'show', anchor, composite, title, members, props } });
+    commands.push({ type: 'setGroup', group: { id: `${treeId}-group-${composite}`, treeId, anchor, composite, title, members, props } });
+  return { commands, add, group };
+}
+
+/** One tree that holds every component and every composite, and a link to a card in another tree when one is given. */
+export function showcase(image: string, other?: string): Command[] {
+  const { commands, add, group } = planting('show', 'Every shape');
 
   const root = add(null, 'note', { emphasis: 'one of each' }, 'Every way a card can be drawn', { summary: 'Eleven components and six ways to arrange them.' });
   const quote = add(root, 'quote', { text: 'The camera is a tool for learning how to see without a camera.', by: 'Dorothea Lange' }, 'Lange on seeing');
@@ -80,11 +86,40 @@ export function showcase(image: string, other?: string): Command[] {
   return commands;
 }
 
-export function crowd(total: number): Command[] {
+/** The ids of the cards in `chipped`, by what each one is there to show. */
+export const CHIPPED = { photo: 'chips-1', plainPhoto: 'chips-2', people: 'chips-3', longPlace: 'chips-4', museum: 'chips-5', link: 'chips-6', four: 'chips-7', plainNote: 'chips-8' } as const;
+
+export const LONG_PLACE = 'The upper reading room of the old municipal library, Vilnius';
+
+/**
+ * One tree of cards whose items carry a date, a place, people or an origin, beside twins that carry
+ * none, and a timeline whose members have chips. These `item.data` keys are what intake and the
+ * Scout write, so the stand-in agents do not have to.
+ */
+export function chipped(image: string): Command[] {
+  const { commands, add, group } = planting('chips', 'With chips');
+  const root = add(null, 'note', {}, 'Cards that say when, where and who', { summary: 'One line of chips under a card, only when its item holds them.' });
+  add(root, 'image', { src: image, caption: 'Fog over the harbour' }, 'Harbour in fog', { kind: 'image', data: { when: '12 May 1958', where: 'Bodega Bay' } });
+  add(root, 'image', { src: image, caption: 'Fog over the harbour' }, 'Harbour in fog, undated', { kind: 'image' });
+  add(root, 'note', {}, 'The crew at the wrap party', { summary: 'Everyone who stayed to the end.', data: { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra', 'Barbara Liskov', 'Alan Kay'] } });
+  add(root, 'note', {}, 'Where the notes were found', { summary: 'A box of index cards under the stairs.', data: { where: LONG_PLACE } });
+  add(root, 'image', { src: image, caption: 'Sudden shower over a bridge' }, 'Sudden Shower over Shin-Ohashi Bridge', { kind: 'image', data: { when: '1857', from: 'The Metropolitan Museum of Art', site: 'metmuseum.org' }, origin: { by: 'agent', role: 'scout', tool: 'met' } }, 'pick');
+  add(root, 'link', { url: 'https://example.com/fog', site: 'example.com', description: 'Why coastal fog comes in at dusk.' }, 'Reading the fog', { kind: 'link', data: { when: '2019', site: 'example.com' }, origin: { by: 'agent', role: 'scout', tool: 'web' } }, 'pick');
+  add(root, 'quote', { text: 'We looked at the water until the water looked back.', by: 'A diary' }, 'From the diary', { data: { when: 'Summer 1958', where: 'Bodega Bay', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'], holder: 'Bancroft Library' }, origin: { by: 'agent', role: 'scout', tool: 'web' } }, 'pick');
+  const plain = add(root, 'note', {}, 'A plain note', { summary: 'No date, no place, nobody named.' });
+  const years = ['1958', '1963', '1975'];
+  const timeline = years.map((year, i) => add(plain, 'note', {}, `The shoot in ${year}`, { summary: 'One visit to the bay.', data: { when: year, where: ['Bodega Bay', 'Point Reyes', 'Tomales'][i], ...(i === 1 ? { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'] } : {}) } }));
+  group(plain, 'timeline', 'Visits', timeline, { labels: Object.fromEntries(timeline.map((id, i) => [id, years[i]])) });
+  return commands;
+}
+
+/** A tree of `total` note cards. With `chips`, every other card carries a date and a place. */
+export function crowd(total: number, { chips = false } = {}): Command[] {
   const at = new Date().toISOString();
   const commands: Command[] = [];
   for (let i = 0; i < total; i++) {
-    const item: Item = { id: `crowd-item-${i}`, kind: 'text', title: `Thought ${i + 1}`, text: '', summary: 'One of many, to see how the field holds up.', tags: [], data: {}, source: { from: 'paste', capturedAt: at }, origin: { by: 'user' }, archived: false, revision: 0 };
+    const data = chips && i % 2 === 0 ? { when: `May ${1900 + i}`, where: 'Bodega Bay' } : {};
+    const item: Item = { id: `crowd-item-${i}`, kind: 'text', title: `Thought ${i + 1}`, text: '', summary: 'One of many, to see how the field holds up.', tags: [], data, source: { from: 'paste', capturedAt: at }, origin: { by: 'user' }, archived: false, revision: 0 };
     const node: Node = { id: `crowd-${i}`, treeId: 'crowd', itemId: item.id, parent: i === 0 ? null : `crowd-${Math.floor((i - 1) / 4)}`, status: i % 3 === 2 ? 'pick' : 'kept', why: i % 3 === 2 ? 'Related' : '', importance: 0.5, origin: { by: 'user' }, view: { component: 'note', props: {}, by: 'default' }, order: i };
     commands.push({ type: 'addItem', item });
     if (i === 0) commands.push({ type: 'createTree', tree: { id: 'crowd', title: 'A crowd', rootId: node.id, digest: '', createdAt: at }, root: node });
@@ -101,7 +136,7 @@ export function spills(page: Page): Promise<string[]> {
     for (const card of document.querySelectorAll<HTMLElement>('.card:not(.is-under):not(.is-buried)')) {
       const face = card.querySelector('.card-face')!.getBoundingClientRect();
       const name = `${card.dataset.component} "${card.getAttribute('aria-label') ?? card.textContent!.slice(0, 30)}"`;
-      for (const el of card.querySelectorAll<HTMLElement>('.card-body *')) {
+      for (const el of card.querySelectorAll<HTMLElement>('.card-body *, .chip-line, .chip-line *')) {
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) continue;
         const label = el.getAttribute('class') ?? el.tagName.toLowerCase();

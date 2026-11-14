@@ -40,6 +40,8 @@ function plan(item, props) {
   };
 }
 
+export const shows = [];
+
 export function size(item, props) {
   const { width, valueHeight, labelLines, foot } = plan(item, props);
   return [width, FRAME + valueHeight + RULE + labelLines * TEXT + (foot ? 8 + TEXT : 0)];

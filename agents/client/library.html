@@ -67,10 +67,12 @@ const make = (component, props, item) => ({
   item: { title: 'Untitled', text: '', summary: '', tags: [], data: {}, source: { from: 'paste' }, ...item },
 });
 
-function card({ node, item }, status = 'kept', at = null) {
+function card(made, status = 'kept', at = null) {
+  const { item } = made;
+  const node = { ...made.node, status };
   const [w, hgt] = sizeOf(node, item);
   const el = h('div', { class: `card is-${status}`, data: { component: node.view.component }, style: { width: `${w}px`, height: `${hgt}px`, '--tint': TINT } },
-    h('div', { class: 'card-face' }, h('div', { class: `card-body c-${node.view.component}` }, drawCard(node, item, ctx))));
+    h('div', { class: 'card-face' }, drawCard(node, item, ctx)));
   el.style.setProperty('--tint', TINT);
   if (at) el.style.transform = `translate(${at.x - w / 2}px, ${at.y - hgt / 2}px)`;
   return { el, w, hgt };

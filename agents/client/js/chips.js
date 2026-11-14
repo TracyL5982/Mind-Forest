@@ -13,8 +13,8 @@ const LABEL = { when: 'When', where: 'Where', people: 'People', origin: 'Origin'
 const str = (value) => (typeof value === 'string' ? value.trim() : '');
 const names = (value) => (Array.isArray(value) ? value.map(str).filter(Boolean) : []);
 
-/** Two names, then how many more: `Ada, Grace +3`. */
-const few = (people) => people.slice(0, 2).join(', ') + (people.length > 2 ? ` +${people.length - 2}` : '');
+/** How many people a chip leaves unnamed, as it is written: ` +3`, or nothing. */
+const rest = (people) => (people.length > 2 ? ` +${people.length - 2}` : '');
 
 /** Every source the item holds, in chip order. `key` is the `item.data` key the value was read from. */
 function sources(item, node) {
@@ -24,20 +24,22 @@ function sources(item, node) {
   return [
     str(data.when) && { kind: 'when', key: 'when', text: str(data.when), full: str(data.when) },
     str(data.where) && { kind: 'where', key: 'where', text: str(data.where), full: str(data.where) },
-    people.length > 0 && { kind: 'people', key: 'people', text: few(people), full: people.join(', ') },
+    people.length > 0 && { kind: 'people', key: 'people', text: people.slice(0, 2).join(', ') + rest(people), keep: rest(people), full: people.join(', ') },
     origin && { kind: 'origin', key: origin, text: str(data[origin]), full: str(data[origin]) },
   ].filter(Boolean);
 }
 
 /**
  * The chips a card draws: at most three `{ kind, text }`, in the order when, where, people, origin.
- * `shown` lists the `item.data` keys the card's type already draws, and those are left out.
+ * `shown` lists the `item.data` keys the card's type already draws, and those are left out. A
+ * people chip that counts the unnamed also has `keep`, the end of its text that says how many, so
+ * a card that cuts the chip short can cut the names and keep the count.
  */
 export function chips(item, node, shown = []) {
   return sources(item, node)
     .filter((source) => !shown.includes(source.key))
     .slice(0, CHIP_LIMIT)
-    .map(({ kind, text }) => ({ kind, text }));
+    .map(({ kind, text, keep }) => (keep ? { kind, text, keep } : { kind, text }));
 }
 
 /** Every source in full, for the opened card: `{ kind, label, text }`, with each person named. */

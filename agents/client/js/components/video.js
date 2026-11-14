@@ -7,6 +7,8 @@ const POSTER = 153;
 const caption = (item, props) => text(props.caption) || item.title || '';
 const captionLines = (item, props) => (caption(item, props) ? fold(caption(item, props), WIDTH - SIDES, TEXT_LETTER, 2) : 0);
 
+export const shows = [];
+
 export const size = (item, props) => [WIDTH, framedHeight(POSTER, captionLines(item, props))];
 
 export const draw = (item, props, ctx) => framed(POSTER, caption(item, props), captionLines(item, props), [

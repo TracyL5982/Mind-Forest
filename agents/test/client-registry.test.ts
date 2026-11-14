@@ -26,6 +26,53 @@ test('a card footprint is two whole numbers that depend only on the item and pro
   }
 });
 
+test('every card type says which chip sources it already shows, and only a link shows one', async () => {
+  const { COMPONENTS } = await load('components/index.js');
+  const shows = Object.fromEntries(Object.entries<{ shows: string[] }>(COMPONENTS).map(([name, kind]) => [name, kind.shows]));
+  assert.deepEqual(shows, { note: [], quote: [], fact: [], image: [], video: [], link: ['site'], chart: [], person: [], chat: [], code: [], steps: [] });
+});
+
+test('a card with chips is taller by one fixed line, whatever its type and however many chips', async () => {
+  const { COMPONENTS, sizeOf } = await load('components/index.js');
+  const { CHIP_LINE } = await load('components/shared.js');
+  const bare = { title: 'A title', text: 'Some text', summary: 'A summary', data: {} };
+  const one = { ...bare, data: { when: '1958' } };
+  const many = { ...bare, data: { when: '1958', where: 'Bodega Bay', people: ['Ada', 'Grace', 'Edsger'], from: 'The Met', site: 'example.com' } };
+  for (const component of [...Object.keys(COMPONENTS), 'hologram']) {
+    for (const status of ['kept', 'pick']) {
+      const node = { status, view: { component, props: {} } };
+      const [wide, tall] = sizeOf(node, bare);
+      assert.deepEqual(sizeOf(node, { ...bare, data: undefined }), [wide, tall], `${component} without data`);
+      assert.deepEqual(sizeOf(node, one), [wide, tall + CHIP_LINE], `${component} with one chip`);
+      assert.deepEqual(sizeOf(node, many), [wide, tall + CHIP_LINE], `${component} with every source`);
+    }
+  }
+});
+
+test('a link does not grow for its site, and a pick grows for its origin only until it is kept', async () => {
+  const { sizeOf, chipsOf } = await load('components/index.js');
+  const { CHIP_LINE } = await load('components/shared.js');
+  const item = { title: 'A page', text: '', summary: '', data: { site: 'example.com' } };
+  const as = (component: string, status: string) => ({ status, view: { component, props: { site: 'example.com' } } });
+  assert.deepEqual(chipsOf(as('link', 'pick'), item), []);
+  assert.deepEqual(sizeOf(as('link', 'pick'), item), sizeOf(as('link', 'pick'), { ...item, data: {} }));
+  assert.deepEqual(chipsOf(as('note', 'pick'), item), [{ kind: 'origin', text: 'example.com' }]);
+  assert.equal(sizeOf(as('note', 'pick'), item)[1] - sizeOf(as('note', 'kept'), item)[1], CHIP_LINE);
+});
+
+test('a card draws its first chip, then each next one only while none has to be cut short', async () => {
+  const { chipsOf } = await load('components/index.js');
+  const texts = (component: string, data: Record<string, unknown>) =>
+    chipsOf({ status: 'kept', view: { component, props: {} } }, { title: 'A title', text: '', summary: '', data }).map((chip: { text: string }) => chip.text);
+  const short = { when: '1958', where: 'Rome', people: ['Ada'] };
+  const long = { when: 'Summer 1958', where: 'Bodega Bay', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'] };
+  assert.deepEqual(texts('note', short), ['1958', 'Rome', 'Ada']);
+  assert.deepEqual(texts('note', long), ['Summer 1958', 'Bodega Bay']);
+  assert.deepEqual(texts('fact', long), ['Summer 1958']);
+  assert.deepEqual(texts('chart', { ...long, when: '1958' }), ['1958', 'Bodega Bay', 'Ada Lovelace, Grace Hopper +1']);
+  assert.deepEqual(texts('fact', { where: 'The upper reading room of the old municipal library, Vilnius' }), ['The upper reading room of the old municipal library, Vilnius']);
+});
+
 test('every arrangement in the client registry has a name and can arrange', async () => {
   const { COMPOSITES } = await load('composites/index.js');
   assert.deepEqual(Object.keys(COMPOSITES), ['gallery', 'timeline', 'comparison', 'sequence', 'cluster', 'stack']);

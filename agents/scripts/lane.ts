@@ -16,7 +16,10 @@
  *   app                open the app and connect to the service
  *   think=<text>       type a thought into the dock and wait for its picks
  *   shapes             load the Every shape tree: each card type, each arrangement, one unknown type
- *   crowd=<n>          load a tree of n note cards. Default 200.
+ *   chips              load the With chips tree: cards whose items carry a date, a place, people
+ *                      or an origin, twins that carry none, and a timeline of cards with chips
+ *   crowd=<n>          load a tree of n note cards. Default 200. `crowd=<n>:chips` gives every
+ *                      other card a date and a place.
  *   card=<type>:<json> add one kept card of that type in a tree named Lane. The JSON is the card's
  *                      props, or { item, props, pick } to also set the item's title, summary,
  *                      text or data, or to add the card as a pick: card=fact:{"item":{"title":"Budget"},"props":{"value":"$1.2M","label":"spent"},"pick":true}
@@ -49,7 +52,7 @@ import { parseArgs } from 'node:util';
 import { chromium, type Page } from 'playwright-core';
 import type { Command, Item, Node } from '../src/core/domain.ts';
 import type { Running } from '../src/node/server.ts';
-import { PNG, TOKEN, bootFake, browserPath, crowd, showcase, spills } from '../test/stage.ts';
+import { PNG, TOKEN, bootFake, browserPath, chipped, crowd, showcase, spills } from '../test/stage.ts';
 
 const { values: flags, positionals: steps } = parseArgs({
   allowPositionals: true,
@@ -91,6 +94,11 @@ function given(json: string): Given {
 /** The lane cards no group has taken yet, in the order they were added. */
 const loose: string[] = [];
 let groups = 0;
+
+async function still(page: Page, run: Running): Promise<string> {
+  const up = await page.request.post(`${run.url}/api/assets?name=still.png`, { headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'image/png' }, data: Buffer.from(PNG) });
+  return ((await up.json()) as { url: string }).url;
+}
 
 function loneCard(type: string, { item: fields = {}, props = {}, pick = false }: Given, run: Running): { id: string; commands: Command[] } {
   const at = new Date().toISOString();
@@ -151,18 +159,22 @@ const STEPS: Record<string, Step> = {
     return `${(await cards(page).count()) - before} cards arrived`;
   },
   async shapes(_, page, run) {
-    const up = await page.request.post(`${run.url}/api/assets?name=still.png`, { headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'image/png' }, data: Buffer.from(PNG) });
-    const image = ((await up.json()) as { url: string }).url;
     const other = [...run.mind.trees.values()][0]?.rootId;
-    if (!run.pipeline.userCommands('Add every shape', showcase(image, other))) throw new Error('the service refused the Every shape tree');
+    if (!run.pipeline.userCommands('Add every shape', showcase(await still(page, run), other))) throw new Error('the service refused the Every shape tree');
     await page.locator('.tree-chip', { hasText: 'Every shape' }).waitFor();
     await run.pipeline.idle();
   },
+  async chips(_, page, run) {
+    if (!run.pipeline.userCommands('Add cards with chips', chipped(await still(page, run)))) throw new Error('the service refused the With chips tree');
+    await page.locator('.tree-chip', { hasText: 'With chips' }).waitFor();
+    await run.pipeline.idle();
+  },
   async crowd(value, page, run) {
-    const total = Number(value) || 200;
-    if (!run.pipeline.userCommands('Add a crowd', crowd(total))) throw new Error('the service refused the crowd');
+    const [count, mode] = value.split(':');
+    const total = Number(count) || 200;
+    if (!run.pipeline.userCommands('Add a crowd', crowd(total, { chips: mode === 'chips' }))) throw new Error('the service refused the crowd');
     await page.waitForFunction((n) => document.querySelectorAll('.card[data-id^="crowd-"]').length === n, total);
-    return `${total} cards drawn`;
+    return `${total} cards drawn, ${await page.locator('.card[data-id^="crowd-"] .chip-line').count()} with chips`;
   },
   async card(value, page, run) {
     const cut = value.indexOf(':');
@@ -171,7 +183,9 @@ const STEPS: Record<string, Step> = {
     if (!run.pipeline.userCommands(`Add a ${type} card`, commands)) throw new Error(`the service refused a ${type} card`);
     loose.push(id);
     await page.locator(`.card[data-id="${id}"]`).waitFor();
-    return `drawn as ${await page.locator(`.card[data-id="${id}"]`).getAttribute('data-component')}`;
+    const card = page.locator(`.card[data-id="${id}"]`);
+    const chips = await card.locator('.chip').evaluateAll((els) => els.map((el) => [...el.children].map((part) => part.textContent).filter(Boolean).join(' ')));
+    return `drawn as ${await card.getAttribute('data-component')}, ${await card.evaluate((el: HTMLElement) => `${el.style.width} by ${el.style.height}`)}${chips.length ? `, chips: ${chips.join(' | ')}` : ', no chips'}`;
   },
   async group(value, page, run) {
     const cut = value.indexOf(':');

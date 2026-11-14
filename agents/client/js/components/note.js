@@ -15,6 +15,8 @@ function plan(item, props) {
   };
 }
 
+export const shows = [];
+
 export function size(item, props) {
   const { emphasis, titleLines, bodyLines } = plan(item, props);
   return [WIDTH, FRAME + titleLines * TITLE + (emphasis ? 6 + TEXT : 0) + (bodyLines ? 6 + bodyLines * TEXT : 0)];
