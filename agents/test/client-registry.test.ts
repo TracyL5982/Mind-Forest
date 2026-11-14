@@ -133,7 +133,8 @@ test('the boxes on a line never outgrow the card, and a people chip always has r
         const item = { title: 'A title', text: '', summary: '', data, origin: { by } };
         const drawn: Drawn[] = chipsOf(node, item);
         const told = `${component} ${by} ${JSON.stringify(data).slice(0, 60)}`;
-        assert.ok(drawn.length >= 1 && drawn.length <= 3, told);
+        const only = Object.keys(data).every((key) => COMPONENTS[component].shows.includes(key));
+        assert.ok(drawn.length >= (only ? 0 : 1) && drawn.length <= 3, told);
         const line = drawn.reduce((sum, chip) => sum + chip.width, 6 * (drawn.length - 1));
         assert.ok(line <= sizeOf(node, item)[0] - (sides[component] ?? 32), `${told}: the line is ${line} px`);
         for (const chip of drawn) {
