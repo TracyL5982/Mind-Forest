@@ -17,6 +17,14 @@ test('an opened card does not print again the lines of its text that its own for
   assert.equal(rest('const a = 1;\n\nrun(a);', ['const a = 1;\n\nrun(a);']), '', 'a line inside a longer drawn string');
 });
 
+test('a line whose drawn strings leave only labels, joining words and signs is said', () => {
+  assert.equal(rest('Pros: no data races, one small binary. Cons: slow builds, a steep start.', ['no data races', 'one small binary', 'slow builds', 'a steep start']), '');
+  assert.equal(rest('Ingredients: flour, butter, sugar and two eggs', ['flour', 'butter', 'sugar', 'two eggs']), '');
+  assert.equal(rest('Palette: ember (#E4572E) and lagoon (#17BEBB)', ['ember', '#E4572E', 'lagoon', '#17BEBB']), '');
+  assert.equal(rest('优点：房价低、美食多；缺点：夏天潮湿', ['房价低', '美食多', '夏天潮湿']), '');
+  assert.equal(rest('1. 五花肉切块\n2) 冰糖炒色', ['五花肉切块', '冰糖炒色']), '', 'a pasted number is a bullet');
+});
+
 test('an opened card still prints what its text says beyond its form', () => {
   const table = ['City', 'Rent', 'Lisbon', '900'];
   assert.equal(rest('City | Rent\nLisbon | 900\n\nI would rather live by the river.', table), 'I would rather live by the river.');
@@ -27,6 +35,9 @@ test('an opened card still prints what its text says beyond its form', () => {
   assert.equal(rest('Catalogue', ['cat']), 'Catalogue', 'a drawn string is matched as whole words');
   assert.equal(rest('Table 2. Mean recall by hours of sleep (n = 212)', ['Mean recall by hours of sleep']), 'Table 2. (n = 212)', 'words after what is drawn are not a mark');
   assert.equal(rest('Eiffel Tower notes for the trip\nHeight: 330 m', ['Eiffel Tower notes', 'Height', '330 m']), 'Eiffel Tower notes for the trip');
+  assert.equal(rest('Pros: no data races (huge for us)', ['no data races']), 'Pros: no data races (huge for us)', 'an aside after the last drawn string');
+  assert.equal(rest('The three things I always forget to pack: passport, charger', ['passport', 'charger']), 'The three things I always forget to pack: passport, charger', 'a clause before a colon is no label');
+  assert.equal(rest('Flour, butter but no eggs', ['flour', 'butter', 'eggs']), 'Flour, butter but no eggs', 'a word that is not a joining word');
 });
 
 test('a sentence the form has drawn is cut out of a line that says more', () => {

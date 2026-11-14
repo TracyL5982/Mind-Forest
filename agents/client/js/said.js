@@ -12,8 +12,13 @@ const isLetter = (ch) => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
 const weight = (str) => [...str].reduce((sum, ch) => sum + (UNSPACED.test(ch) ? 2 : isLetter(ch) ? 1 : 0), 0);
 /** A word may end beside this character. */
 const edge = (ch) => !isLetter(ch) || UNSPACED.test(ch);
-/** A line that says no more than this beyond what is drawn only marks it, as `Definition:` and `[x]` do. */
-const MARK = 12;
+/** A pasted line's bullet, number or tick box, which the card's own form draws in its own way. */
+const BULLET = /^\s*(?:(?:[-*•·+]|\d+[.)、]|\[[ xX✓]\])\s*)+/;
+/** Words before a colon that only name what follows, as `Pros:` and `优点：` do, when they weigh at most `MARK`. */
+const LABEL = /\p{L}[\p{L}\p{N} ]*(?=\s*[:：])/gu;
+const MARK = 16;
+/** Words that only join the drawn strings around them. */
+const JOINERS = new Set(['and', 'or', '和', '与', '以及']);
 /** A sentence this long that is already drawn is cut out of a line that says more. */
 const STRETCH = 20;
 const OPENS = /["'“‘«「『（(]/;
@@ -36,22 +41,29 @@ export function isSaid(words, said) {
  */
 export function leftover(item, said) {
   const text = rest(item.text, said);
-  const summary = isSaid(item.summary, [item.text, ...said]) || rest(item.summary, said, 0) === '' ? '' : item.summary;
+  const summary = isSaid(item.summary, [item.text, ...said]) || rest(item.summary, said, false) === '' ? '' : item.summary;
   return { summary, text };
+}
+
+/** The words of `remains`, a line with each drawn string taken out, that are not marks. */
+function unmarked(remains) {
+  const words = remains.replace(BULLET, '').replace(LABEL, (label) => (weight(label) <= MARK ? '' : label)).match(/[\p{L}\p{N}]+/gu) ?? [];
+  return words.filter((word) => !JOINERS.has(lower(word)));
 }
 
 /**
  * The lines of `text` that `said` does not already say, where `said` is every string the opened
  * card draws. A string is matched as whole words, whatever its case and however its white space
- * runs. A line is left out when one of those strings holds it, or when all it adds to them is
- * signs between them and a mark before them of at most twelve letters and fewer than they give
- * it, as the cells of a pasted table row add `|` and a ticked entry adds `[x]`. A letter after the
- * first drawn string is never a mark, so `(n = 212)` after a drawn title keeps its line. Any other
- * line is printed, without each sentence of twenty characters or more that is already drawn. A
- * character of a script written without spaces counts as two letters. `mark` is the most letters
- * a line may add and still be left out.
+ * runs. A line is left out when one of those strings holds it, or when what is left once they are
+ * taken out is only marks: a bullet, number or tick box at its start, labels before a colon,
+ * joining words such as `and`, punctuation and brackets. So `Pros: no data races. Cons: slow
+ * builds` and a pasted table row are left out once the card draws their words, and `(n = 212)`
+ * after a drawn title keeps its line. Any other line is printed, without each sentence of twenty
+ * characters or more that is already drawn. A character of a script written without spaces counts
+ * as two letters. With `marks` false nothing is a mark, so a line is left out only when every
+ * letter and digit of it is drawn.
  */
-export function rest(text, said, mark = MARK) {
+export function rest(text, said, marks = true) {
   const shown = [...new Set(said.map((part) => lower(fold(part))).filter(Boolean))].sort((a, b) => b.length - a.length);
   const kept = [];
   for (const raw of text.split('\n')) {
@@ -69,10 +81,9 @@ export function rest(text, said, mark = MARK) {
         if ((edge(part[0]) || edge(low[at - 1])) && (edge(part.at(-1)) || edge(low[end]))) drawn.fill(true, at, end);
       }
     }
-    const first = drawn.indexOf(true);
-    const lead = weight(line.slice(0, Math.max(0, first)));
-    const left = weight(line.split('').filter((_, i) => !drawn[i]).join(''));
-    if (first >= 0 && left === lead && lead <= mark && lead < weight(line) - lead) continue;
+    const remains = line.split('').map((ch, i) => (!drawn[i] ? ch : drawn[i - 1] ? '' : '\n')).join('');
+    const left = marks ? unmarked(remains) : (remains.match(/[\p{L}\p{N}]+/gu) ?? []);
+    if (drawn.includes(true) && left.length === 0) continue;
     kept.push(withoutSentences(line, drawn) ?? raw.trim());
   }
   return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
