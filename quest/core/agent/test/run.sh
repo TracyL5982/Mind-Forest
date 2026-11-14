@@ -7,8 +7,8 @@ set -e
 TEST="$(cd "$(dirname "$0")" && pwd)"
 CORE="$(cd "$TEST/../.." && pwd)"
 AGENTS="$(cd "$CORE/../../agents" && pwd)"
-OUT="${TMPDIR:-/tmp}/mind-palace-agent-tests"
-mkdir -p "$OUT"
+OUT="$(mktemp -d "${TMPDIR:-/tmp}/mind-palace-agent-tests.XXXX")"
+trap 'rm -rf "$OUT"' EXIT
 SOURCES=("$CORE/base.cpp" "$CORE/json.cpp" "$CORE/agent/protocol.cpp" "$CORE/agent/mirror.cpp" "$CORE/agent/client.cpp" "$TEST"/*_test.cpp "$TEST/main.cpp")
 FLAGS=(-std=c++20 -g -O1 -Wall -Wextra -Werror -I"$CORE")
 

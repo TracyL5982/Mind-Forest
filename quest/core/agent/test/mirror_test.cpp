@@ -63,17 +63,33 @@ bool sameState(const Mirror& mirror, const Snapshot& snapshot) {
 }  // namespace
 
 TEST(replayingTheSessionComesToWhatAFreshHelloHolds) {
-    std::vector<Change> changes = sessionChanges();
-    bool skipped = false;
-    for (size_t i = 1; i < changes.size(); i++) skipped = skipped || changes[i].set.seq > changes[i - 1].set.seq + 1;
-    CHECK(skipped, "the recorded session skips a seq, as the service does after a set that changed nothing");
-
     Mirror mirror;
     mirror.apply(firstHello().snapshot);
-    for (Change& change : changes) applied(mirror, change.set);
+    for (Change& change : sessionChanges()) applied(mirror, change.set);
     Hello final = finalHello();
     CHECK(sameState(mirror, final.snapshot), "the mirror holds what a second connection's hello does");
     CHECK_EQ(mirror.seq(), final.snapshot.seq);
+}
+
+// The service counts sets it never sends, so the client must not require seq to be last + 1.
+// agents/src/core/state.ts, Mindstorm.commit (line 237): every applied set gets `seq: ++this.seq`.
+// agents/src/core/pipeline.ts, Pipeline.commit (line 381): `if (set.patches.length === 0 && !set.undoes) return;`
+// drops a set that changed nothing before it is stored or sent. In this session the renderer's pass
+// after the undo chose the views the nodes already had, so its set took 11, and 10 is followed by 12.
+TEST(aSeqThatSkipsAheadStillApplies) {
+    std::vector<Change> changes = sessionChanges();
+    size_t skip = 0;
+    for (size_t i = 1; i < changes.size() && !skip; i++) {
+        if (changes[i].set.seq > changes[i - 1].set.seq + 1) skip = i;
+    }
+    CHECK(skip, "the recorded session skips a seq");
+    if (!skip) return;
+    Mirror mirror;
+    mirror.apply(firstHello().snapshot);
+    for (size_t i = 0; i < skip; i++) applied(mirror, changes[i].set);
+    CHECK_EQ(mirror.seq(), changes[skip - 1].set.seq);
+    applied(mirror, changes[skip].set);
+    CHECK_EQ(mirror.seq(), changes[skip].set.seq);
 }
 
 TEST(aChangeThatAdds) {
