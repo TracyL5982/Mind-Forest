@@ -1,18 +1,19 @@
 /**
  * Drives the web client in a real browser against the service with stand-in agents.
  * Run: node --no-warnings --import tsx test/client.e2e.ts
- * Screenshots land in docs/screenshots. Set MIND_PALACE_CHROMIUM to use another browser.
+ * Screenshots land in a new folder under the system's temporary folder, and the last line printed
+ * names it. Set MIND_PALACE_SHOTS=docs/screenshots to replace the tracked ones on purpose.
+ * Set MIND_PALACE_CHROMIUM to use another browser.
  */
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
 import type { Running } from '../src/node/server.ts';
 import { PNG, bootFake, browserPath, crowd, showcase, spills } from './stage.ts';
 
-const here = import.meta.dirname;
-const shots = join(here, '../docs/screenshots');
+const shots = process.env.MIND_PALACE_SHOTS ? resolve(process.env.MIND_PALACE_SHOTS) : mkdtempSync(join(tmpdir(), 'mp-shots-'));
 mkdirSync(shots, { recursive: true });
 
 let passed = 0;
@@ -402,7 +403,7 @@ const boot = (port: number) => bootFake({ port, dataDir });
 let run: Running = await boot(0);
 try {
   await main();
-  console.log(`\n${passed} checks passed. Screenshots are in docs/screenshots.`);
+  console.log(`\n${passed} checks passed. Screenshots are in ${shots}.`);
 } finally {
   await run.close();
 }
