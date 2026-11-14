@@ -26,6 +26,10 @@ CGRect contained(CGRect box, float aspect) {
 void disc(const Pen& pen, const Look& look, CGRect box) {
     pen.ctx.setFillColor(mix(look.accent, 0.18f, look.fill));
     pen.ctx.fillEllipse(box);
+    ring(pen, look, box);
+}
+
+void ring(const Pen& pen, const Look& look, CGRect box) {
     float line = pen.k;
     pen.ctx.setStrokeColor(look.accent.withAlphaComponent(0.5f));
     pen.ctx.setLineWidth(line);
