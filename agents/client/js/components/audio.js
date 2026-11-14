@@ -1,5 +1,5 @@
 import { h, s, clamp } from '../dom.js';
-import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, fold, list, say, text, title, titleOf } from './shared.js';
+import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, list, say, text, title, titleOf, wrap } from './shared.js';
 import { wordsOf } from '../words.js';
 
 const WIDTH = 272;
@@ -43,8 +43,8 @@ function plan(item, props) {
   return {
     body,
     length: lengthOf(props),
-    titleLines: fold(titleOf(item), COLUMN, TITLE_LETTER, 2),
-    bodyLines: body ? fold(body, COLUMN, TEXT_LETTER, 3) : 0,
+    titleLines: wrap(titleOf(item), COLUMN, TITLE_LETTER, 2),
+    bodyLines: body ? wrap(body, COLUMN, TEXT_LETTER, 3) : 0,
   };
 }
 
