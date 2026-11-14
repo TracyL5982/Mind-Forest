@@ -368,7 +368,7 @@ function placeOf(item: Item): string | undefined {
   return namesPlace(placeName(item.title), placeName(where)) ? where : undefined;
 }
 
-const IDEA_BELOW = 40;
+const IDEA_BELOW = 60;
 const IDEA_WORDS = 3;
 /** In a script written without spaces a word cannot be counted, so the thought is measured in characters. */
 const IDEA_CHARACTERS = 6;

@@ -515,7 +515,9 @@ test('an idea is a phrase the user wrote, and a label is a note', () => {
   }
   assert.equal(typed('Why do users churn?', 'Why users churn'), 'note', 'a title in other words');
   assert.equal(typed('With a rope ladder.', 'Build a treehouse'), 'note', 'a title with more text under it');
-  assert.equal(typed('Build a treehouse in the old oak by the river'), 'note', 'forty characters or more');
+  assert.equal(typed('Build a treehouse in the old oak by the river'), 'idea', 'a thought of nine words');
+  assert.equal(typed('x'.repeat(4) + ' word'.repeat(11)), 'idea', 'fifty-nine characters');
+  assert.equal(typed('x'.repeat(5) + ' word'.repeat(11)), 'note', 'sixty characters or more');
   assert.equal(chosen({ title: 'Build a treehouse', text: 'Build a treehouse', origin: SCOUT }), 'note', 'a thought an agent brought');
   assert.equal(chosen({ title: 'treehouse plans.pdf', text: '', kind: 'file' }), 'note', 'a file');
 });
