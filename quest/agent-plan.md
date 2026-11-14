@@ -13,6 +13,14 @@ Branch: `tracy/quest-agents`, made from `quest-port` with `tracy/agents` merged 
 - **Card drawing belongs to the looks worktree.** The bridge maps agent items onto the five note kinds the scene draws today (text, image, video, chart, link) and keeps each item's full component and props beside it for that work to use. No file under `core/ocean/art*`, `notes.cpp`, `works.cpp` or `cardview*` is edited here.
 - **Connection order.** Option 1 (USB, `adb reverse`) first, option 2 (wireless adb, `adb reverse`) the same day. Options for anywhere (Tailscale Funnel, Cloudflare named tunnel, hosted) after, by measurement. The client speaks `ws://` and `wss://` from the start, so each later option is an address.
 
+## Where it stands (2026-11-14)
+
+- **WS1 done.** Build tools on this Mac; the APK builds in about 2 minutes; `tools/agent.sh` (usb, wifi, resume, status). The build installs beside the headset's app as "Mind Palace Ocean (agents)" with its own media. Baseline with the network idle matches the saved one (`perf/agents-baseline.json`).
+- **WS2 done.** `core/agent/` protocol, mirror and client: 32 tests under ASan+UBSan and TSan, replayed from a recorded session.
+- **WS4 done.** `platform::openSocket` and `platform::fetch`: Mac (10 checks against the scripted service, `desktop/test/net_check.sh`) and Quest (OkHttp; plain traffic only to the headset itself).
+- **WS5, M1 reached against the scripted service.** On the headset over USB: a dropped thought's tree stands, its card opens, four picks arrive dashed, a pinch keeps one, it rises a layer and four new picks arrive round it. With three rounds of that in 45 s: 90 fps, no late frame, CPU 2.43 ms at the 95th percentile (`perf/agents-live-scripted.json`). Written but not yet seen working: the questions under an open card, asking about a mark, the knife, the clap, the "Thinking…" word, trees removed at the service, a card whose item changes after it is drawn.
+- **WS3 and WS7 running** on their own branches.
+
 ## Data shapes
 
 Named before code. Field names follow `agents/src/core/domain.ts` exactly.

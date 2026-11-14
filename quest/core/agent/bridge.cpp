@@ -1,6 +1,7 @@
 #include "bridge.h"
 
 #include <algorithm>
+#include <cctype>
 #include <initializer_list>
 
 #include "base.h"
@@ -52,6 +53,21 @@ std::string kindWord(const std::string& kind) {
     return w != words.end() ? w->second : kind;
 }
 
+/// `%20` and the like as the characters they stand for: Android's launcher splits launch flags at spaces,
+/// so `-agentDump` carries several words as `The%20dolly%20zoom`.
+std::string percentDecoded(const std::string& s) {
+    std::string out;
+    for (size_t i = 0; i < s.size(); i++) {
+        if (s[i] == '%' && i + 2 < s.size() && std::isxdigit((unsigned char)s[i + 1]) && std::isxdigit((unsigned char)s[i + 2])) {
+            out += char(std::stoi(s.substr(i + 1, 2), nullptr, 16));
+            i += 2;
+        } else {
+            out += s[i];
+        }
+    }
+    return out;
+}
+
 /// Seconds between showings of "Thinking…" while the service still works on a card (each showing lasts a little longer).
 constexpr double thinkAgain = 2.2;
 
@@ -66,7 +82,9 @@ std::shared_ptr<Bridge> Bridge::fromFlags(OceanModel& model) {
         return nullptr;
     }
     logLine("[agent] joining " + address->http);
-    return std::make_shared<Bridge>(model, *address, std::make_shared<PlatformTransport>(), Flags::string("agentDump"));
+    std::optional<std::string> dump = Flags::string("agentDump");
+    if (dump) dump = percentDecoded(*dump);
+    return std::make_shared<Bridge>(model, *address, std::make_shared<PlatformTransport>(), dump);
 }
 
 Bridge::Bridge(OceanModel& model, Address address, std::shared_ptr<Transport> transport, std::optional<std::string> dump)
