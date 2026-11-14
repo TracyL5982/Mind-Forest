@@ -24,7 +24,8 @@ export interface ModelClient {
   /** One reply, constrained to the schema and parsed. */
   json<T>(req: JsonRequest<T>): Promise<T>;
   /** Live web search. Returns the raw hits, best first. */
-  search(req: { role: string; query: string; max?: number }): Promise<WebResult[]>;
+  /** `prefer` says which kinds of pages to favour and which to leave out. */
+  search(req: { role: string; query: string; max?: number; prefer?: string }): Promise<WebResult[]>;
   image(req: { role: string; prompt: string }): Promise<{ bytes: Uint8Array; mime: string }>;
   transcribe(req: { audio: Uint8Array; mime: string }): Promise<string>;
 }

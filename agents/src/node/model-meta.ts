@@ -61,7 +61,7 @@ export class MetaModel implements ModelClient {
     return req.schema.parse(dropNulls(JSON.parse(text)));
   }
 
-  async search(req: { role: string; query: string; max?: number }): Promise<WebResult[]> {
+  async search(req: { role: string; query: string; max?: number; prefer?: string }): Promise<WebResult[]> {
     const max = req.max ?? 5;
     const output = await this.responses('search', req.role, {
       model: this.model,
@@ -69,6 +69,7 @@ export class MetaModel implements ModelClient {
         `Search the web for: ${req.query}\n` +
         `Return the ${max} most useful and varied results. For each give the page's exact URL, its title, ` +
         `and a snippet of one or two sentences.\n` +
+        (req.prefer ? `${req.prefer}\n` : '') +
         // Left free, the model opens every page it finds: measured at 50 s and about 350,000 tokens a search.
         `Run exactly one search. Do not open any page. Write each snippet only from what the search result itself shows.`,
       tools: [{ type: 'web_search' }],

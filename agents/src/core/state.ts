@@ -20,6 +20,8 @@ export interface Draft {
   origin: Origin;
   label: string;
   commands: Command[];
+  /** See `ChangeSet.part`. */
+  part?: Id;
 }
 
 export interface MindstormOptions {
@@ -82,8 +84,21 @@ export class Mindstorm {
     const target = id ? this.history.find((c) => c.id === id) : this.undoTarget(housekeeping);
     if (!target) throw new CommandError('missing', id ? `no change set ${id}` : 'nothing to undo');
     if (this.undone.has(target.id)) throw new CommandError('conflict', `${target.id} is already undone`);
-    const followers = this.history.filter((c) => c.seq > target.seq && !c.undoes && !this.undone.has(c.id) && housekeeping(c));
-    const reverting = [...followers.reverse(), target];
+    const standing = (c: ChangeSet) => !c.undoes && !this.undone.has(c.id);
+    const whole = target.part ? this.history.filter((c) => c.part === target.part && standing(c)) : [target];
+    try {
+      return this.revert(target, whole, origin, housekeeping);
+    } catch (err) {
+      // An earlier part of the same work may have been changed since, for example a pick that was kept. The latest part still comes back.
+      if (whole.length === 1 || !(err instanceof CommandError) || err.code !== 'conflict') throw err;
+      return this.revert(target, [target], origin, housekeeping);
+    }
+  }
+
+  private revert(target: ChangeSet, whole: ChangeSet[], origin: Origin, housekeeping: (set: ChangeSet) => boolean): ChangeSet {
+    const first = Math.min(...whole.map((c) => c.seq));
+    const followers = this.history.filter((c) => c.seq > first && !c.undoes && !this.undone.has(c.id) && !whole.includes(c) && housekeeping(c));
+    const reverting = [...followers, ...whole].sort((x, y) => y.seq - x.seq);
     const set = this.commit({ origin, label: `Undo: ${target.label}`, commands: [] }, () => {
       for (const one of reverting) {
         for (const p of [...one.patches].reverse()) {
@@ -96,7 +111,7 @@ export class Mindstorm {
       }
     });
     set.undoes = target.id;
-    set.alsoUndoes = followers.map((c) => c.id);
+    set.alsoUndoes = reverting.filter((c) => c !== target).map((c) => c.id);
     for (const one of reverting) this.undone.add(one.id);
     return set;
   }
@@ -224,6 +239,7 @@ export class Mindstorm {
       origin: draft.origin,
       label: draft.label,
       commands: draft.commands,
+      ...(draft.part ? { part: draft.part } : {}),
       patches: squash(this.working),
     };
     this.working = null;

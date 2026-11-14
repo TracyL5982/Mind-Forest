@@ -105,7 +105,7 @@ async function readPage(send: typeof fetch, url: string): Promise<Page | null> {
     const res = await send(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MindPalace/0.1)', Accept: 'text/html,application/xhtml+xml,text/plain' },
       redirect: 'follow',
-      signal: AbortSignal.timeout(12_000),
+      signal: AbortSignal.timeout(7_000),
     });
     const type = res.headers.get('content-type') ?? '';
     if (!res.ok || !/text\/|xml|json/.test(type)) return null;

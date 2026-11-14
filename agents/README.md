@@ -30,7 +30,7 @@ To try the client with no model and no cost: `npm run dev:fake`.
 ## Check it
 
 ```bash
-npm test                 # 125 tests on scripted models, no network
+npm test                 # 131 tests on scripted models, no network
 npx tsc --noEmit
 node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 23 checks
 npm run scenario         # everything against the live model, 25 checks, about 160,000 tokens
@@ -45,7 +45,7 @@ You talk to one voice. Content roles decide what exists. The Renderer decides ho
 | Conductor | Hears each utterance with what you are looking at, and routes it: ask, more, navigate, organize, handoff, capture, keep, undo. | `src/core/roles/conductor.ts` |
 | Intake | Turns a dump into items: text, links, pictures, video, files, and chat exports from ChatGPT, Claude, Muse or a pasted transcript. | `src/core/roles/intake.ts` |
 | Filer | Places each new item in an existing tree or starts a new one. | `src/core/roles/filer.ts` |
-| Scout | Works out what a card is and what you are doing with it, then extends it in several different directions. Each comes back as content shown in place: a written idea, steps, a generated picture or set, a video that plays in the card, or real material found in a source that suits the subject. Sources: the web (the page is read and the passage shown), research papers, books, world data as charts, Hacker News threads, GitHub projects, Stack Overflow, museum collections, Are.na, podcasts, recipes. It looks at a dropped picture itself. Never a bare link. Links to existing content only when the tie is strong. | `src/core/roles/scout.ts`, `src/node/sources.ts` |
+| Scout | Works out what a card is and what you are doing with it, then extends it in several different directions. Each comes back as content shown in place: a written idea, steps, a generated picture or set, a video that plays in the card, or real material found in a source that suits the subject. Sources: the web (the page is read and the passage shown), research papers, books (Apple Books), world data as charts, Hacker News threads, GitHub projects, Stack Overflow, museum collections, Are.na, podcasts, recipes. It looks at a dropped picture itself. Never a bare link. Links to existing content only when the tie is strong. | `src/core/roles/scout.ts`, `src/node/sources.ts` |
 | Organizer | Moves, groups, renames, merges, splits and deletes on request, as one undoable step. | `src/core/roles/organizer.ts` |
 | Renderer | Picks a component for each card and a composite for groups of cards. Never invents data. | `src/core/roles/renderer.ts` |
 | Archivist | Plain code. Keeps the change log, the search index and each tree's digest current. | `src/core/pipeline.ts`, `src/core/state.ts` |

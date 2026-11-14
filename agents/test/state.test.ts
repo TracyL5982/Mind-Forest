@@ -119,3 +119,38 @@ test('replaying stored change sets rebuilds the same state', () => {
   assert.equal(copy.search('root').length, 1);
   assert.throws(() => copy.undo(k.mind.changes()[3]!.id), /already undone/);
 });
+
+test('change sets that are parts of one piece of work are undone together, with what happened between them left alone', () => {
+  const k = kit();
+  const { nodeIds } = k.seedTree('Film', ['Root', 'A', 'B', 'C']);
+  const rename = (n: number, title: string, part?: string) =>
+    k.mind.apply({ origin: USER, label: `rename ${title}`, commands: [{ type: 'editItem', id: k.mind.node(nodeIds[n]!).itemId, patch: { title } }], ...(part ? { part } : {}) });
+  const title = (n: number) => k.mind.itemOf(nodeIds[n]!).title;
+
+  rename(1, 'A first delivery', 'run-1');
+  rename(3, 'C by the user');
+  rename(2, 'B second delivery', 'run-1');
+
+  const undo = k.mind.undo();
+  assert.deepEqual([title(1), title(2), title(3)], ['A', 'B', 'C by the user']);
+  assert.equal(undo.alsoUndoes?.length, 1);
+
+  k.mind.undo();
+  assert.equal(title(3), 'C', 'the next undo reaches the change before the run, not a part of the run again');
+});
+
+test('when an earlier part was changed since, undo still takes back the latest part', () => {
+  const k = kit();
+  const { nodeIds } = k.seedTree('Film', ['Root', 'A', 'B']);
+  const rename = (n: number, title: string, part?: string) =>
+    k.mind.apply({ origin: USER, label: `rename ${title}`, commands: [{ type: 'editItem', id: k.mind.node(nodeIds[n]!).itemId, patch: { title } }], ...(part ? { part } : {}) });
+
+  rename(1, 'A first delivery', 'run-1');
+  const edit = rename(1, 'A edited by the user');
+  const last = rename(2, 'B second delivery', 'run-1');
+
+  k.mind.undo(last.id);
+  assert.equal(k.mind.itemOf(nodeIds[2]!).title, 'B');
+  assert.equal(k.mind.itemOf(nodeIds[1]!).title, 'A edited by the user');
+  assert.ok(edit.id);
+});

@@ -166,9 +166,11 @@ export interface ChangeSet {
   label: string;
   commands: Command[];
   patches: Patch[];
+  /** Change sets that are parts of one piece of work, such as the deliveries of one Scout run, share this. They are undone together. */
+  part?: Id;
   /** Set when this change set is the undo of another. */
   undoes?: Id;
-  /** Housekeeping sets that followed it and were undone in the same step. */
+  /** The other sets undone in the same step: the rest of its piece of work, and the housekeeping that followed. */
   alsoUndoes?: Id[];
 }
 

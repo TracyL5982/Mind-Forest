@@ -15,6 +15,9 @@ interface Adapter extends Source {
 
 const AGENT_NAME = 'MindPalace/0.1 (local prototype)';
 const PER_SEARCH = 6;
+const WEB_PREFERENCE =
+  'Prefer pages with substance: original reporting, studies, official and first-hand sources, case studies, and long pieces by people who know the subject. ' +
+  'Leave out listicles, "best of" roundups, affiliate reviews, pages written to rank in search, shops, and encyclopedia entries.';
 
 const str = (value: unknown): string => (typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '');
 const list = (value: unknown): any[] => (Array.isArray(value) ? value : []);
@@ -61,11 +64,11 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     query: 'A web search of four to eight words that would find one strong page.',
     show: 1,
     async search(query) {
-      const hits = await opts.model.search({ role: 'tool.web', query, max: PER_SEARCH });
+      const hits = await opts.model.search({ role: 'tool.web', query, max: 8, prefer: WEB_PREFERENCE });
       // Encyclopedia entries are left out: the user asked for sources with a point of view or first-hand detail.
       const usable = hits.filter((hit) => !/(^|\.)(wikipedia|wikimedia|fandom)\.org$|(^|\.)fandom\.com$/.test(hostOf(hit.url)));
       const pages = await Promise.all(
-        usable.slice(0, 4).map(async (hit): Promise<Found | null> => {
+        usable.slice(0, 5).map(async (hit): Promise<Found | null> => {
           const page = await opts.read(hit.url).catch(() => null);
           const title = [page?.title, hit.title].map((t) => str(t)).find((t) => t && !/^https?:\/\//i.test(t));
           if (!page || !title || page.text.length < 400) return null;
@@ -155,18 +158,17 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
   const books: Adapter = {
     id: 'books',
     name: 'Books',
-    goodFor: 'A well-known book that treats the subject at length, with its cover. Search by title or author when you know one.',
+    goodFor: 'A book that treats the subject at length, with its cover and the publisher\'s description. Search by title or author when you know one.',
     query: 'A title, an author, or two to four subject words.',
     show: 2,
     async search(query) {
-      // One request per search. Asking for each book's own page as well got this client refused.
-      const json = await ask(`https://openlibrary.org/search.json?q=${q(query)}&limit=${PER_SEARCH}&fields=key,title,subtitle,author_name,first_publish_year,cover_i,first_sentence,subject`);
-      return list(json.docs).map((b): Found => ({
-        title: [str(b.title), str(b.subtitle)].filter(Boolean).join(': '), by: list(b.author_name).slice(0, 2).join(' and '), date: str(b.first_publish_year),
-        text: [list(b.first_sentence).map(str)[0] ?? '', list(b.subject).length > 0 ? `Subjects: ${list(b.subject).slice(0, 8).join(', ')}.` : ''].filter(Boolean).join('\n'),
-        url: `https://openlibrary.org${str(b.key)}`,
-        ...(b.cover_i ? { image: `https://covers.openlibrary.org/b/id/${b.cover_i}-L.jpg` } : {}),
-      }));
+      const json = await ask(`https://itunes.apple.com/search?term=${q(query)}&media=ebook&limit=${PER_SEARCH}`);
+      return list(json.results).map((b): Found => ({
+        title: str(b.trackName), by: str(b.artistName), date: str(b.releaseDate).slice(0, 4),
+        text: [plain(str(b.description)).slice(0, 1500), list(b.genres).length > 0 ? `Shelved under: ${list(b.genres).filter((g) => g !== 'Books').slice(0, 5).join(', ')}.` : ''].filter(Boolean).join('\n'),
+        url: str(b.trackViewUrl),
+        ...(str(b.artworkUrl100) ? { image: str(b.artworkUrl100).replace('100x100bb', '600x600bb') } : {}),
+      })).filter((f) => f.text.length > 120);
     },
   };
 

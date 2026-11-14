@@ -12,6 +12,7 @@ const FOUND_SHOWN_TO_MODEL = 10;
 const VISUAL_SHOWN_TO_MODEL = 8;
 const SEARCHES_PER_FIND = 3;
 const ENOUGH_FOUND = 6;
+const THIN_POOL = 3;
 const EXCERPT = 900;
 const MAX_LINK_CANDIDATES = 5;
 const LINK_COVERAGE = 0.5;
@@ -306,11 +307,16 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
       const source = sources.find((src) => src.id === d.source.trim()) ?? web;
       if (!source) return [];
       const wanted = d.lookups.map((l) => oneLine(l, 120)).filter(Boolean);
-      const first = await find(ctx, d, source, wanted.length > 0 ? wanted : [oneLine(d.title, 120)], taken);
-      if (first.length > 0 || !web || source.id === 'web') return first;
+      const onWeb = () => gather(ctx, web!, [oneLine(d.title, 120)], taken);
+      const pool = await gather(ctx, source, wanted.length > 0 ? wanted : [oneLine(d.title, 120)], taken);
+      const rescue = web && source.id !== 'web';
+      // A thin pool usually ends with nothing, so the slow web search starts now instead of after the model has said no.
+      const early = rescue && pool.fresh.length < THIN_POOL ? onWeb() : null;
+      const first = await choose(ctx, d, source, pool, taken);
+      if (first.length > 0 || !rescue) return first;
       // A catalogue only holds what it holds. The open web is asked once before the direction is given up.
       ctx.note(ROLE, `trying the web for "${oneLine(d.title, 60)}"`);
-      return find(ctx, d, web, [oneLine(d.title, 120)], taken);
+      return choose(ctx, d, web!, await (early ?? onWeb()), taken);
     }
     case 'video': {
       const hits = await ctx.tools.web.search(`${oneLine(d.lookups[0] || d.title, 160)} youtube`, 6);
@@ -342,11 +348,16 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
   }
 }
 
-/** Searches one source for a direction and returns what the model chose from it, as items. Empty when nothing fit. */
-async function find(ctx: RoleContext, d: Direction, source: Source, wanted: string[], taken: Set<string>): Promise<Made[]> {
+interface Pool {
+  fresh: Found[];
+  query: string;
+  failed: string;
+}
+
+/** Searches one source, in up to three wordings, for records the mindstorm does not hold yet. */
+async function gather(ctx: RoleContext, source: Source, wanted: string[], taken: Set<string>): Promise<Pool> {
   // The web search is slow and costly, so it runs once. Catalogues answer in under a second, so every wording is tried.
   const queries = wanted.slice(0, source.id === 'web' ? 1 : SEARCHES_PER_FIND);
-  const query = queries.join('" or "');
   // The broadest wording goes first. The next is only tried while the pool is thin, which keeps the load on each source light.
   const fresh: Found[] = [];
   let failed = '';
@@ -360,6 +371,11 @@ async function find(ctx: RoleContext, d: Direction, source: Source, wanted: stri
       failed = message(err);
     }
   }
+  return { fresh, query: queries.join('" or "'), failed };
+}
+
+/** Lets the model choose from what a search gathered and returns its choices as items. Empty when nothing fit. */
+async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, query, failed }: Pool, taken: Set<string>): Promise<Made[]> {
   if (fresh.length === 0 && failed) {
     ctx.note(ROLE, `${source.name} could not be reached (${failed}), "${oneLine(d.title, 60)}" left out`);
     return [];
