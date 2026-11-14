@@ -1333,17 +1333,24 @@ Rules:
 ${blocks.join('\n\n')}`;
 }
 
+/** What a member of a proposed group states, read once for each member: its title, text, summary and date. Every line or label the model sets beside members stands in this. */
+function membersContent(ctx: RoleContext): (id: Id) => Grounding {
+  const read = new Map<Id, Grounding>();
+  return (id) => {
+    if (!read.has(id)) {
+      const item = ctx.mind.itemOf(id);
+      read.set(id, grounding(`${item.title}\n${item.text}\n${item.summary}\n${str(item.data.when) ?? ''}`));
+    }
+    return read.get(id)!;
+  };
+}
+
 /**
  * The group the model proposed, as far as the members' content holds it up. `members` are the proposed ones, without repeats, and
  * `ids` those of them no other group took.
  */
 function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], members: Id[], ids: Id[], status: Node['status']): GroupDraft | null {
-  const read = new Map<Id, Grounding>();
-  const content = (id: Id) => {
-    const item = ctx.mind.itemOf(id);
-    if (!read.has(id)) read.set(id, grounding(`${item.title}\n${item.text}\n${item.summary}\n${str(item.data.when) ?? ''}`));
-    return read.get(id)!;
-  };
+  const content = membersContent(ctx);
   const title = clip(g.title, 40);
   /** A line set beside a member stands when it is a whole sentence or line of one of these members' content, and short enough. */
   const line = (said: string | undefined, ...of: Id[]) => {
@@ -1417,12 +1424,9 @@ export function layoutDraft(ctx: RoleContext, g: Pick<CompositesReply['groups'][
     ctx.note(ROLE, `Set aside the layout the model gave under ${g.parent}: ${parsed.why}.`);
     return null;
   }
-  const said = new Map(cardsOf(parsed.tree).map((id) => {
-    const item = ctx.mind.itemOf(id);
-    return [id, grounding(`${item.title}\n${item.text}\n${item.summary}\n${str(item.data.when) ?? ''}`)];
-  }));
+  const content = membersContent(ctx);
   const stands = (label: string, under: string[]) =>
-    label.length <= LIMITS.label && (under.some((id) => said.get(id)!.says(label)) || label.split(/\s+/).every((word) => under.every((id) => said.get(id)!.says(word))));
+    label.length <= LIMITS.label && (under.some((id) => content(id).says(label)) || label.split(/\s+/).every((word) => under.every((id) => content(id).says(word))));
   const grounded = (part: LayoutPart): LayoutPart => {
     if (part.kind === 'card') return part;
     const { label, ...rest } = part;
