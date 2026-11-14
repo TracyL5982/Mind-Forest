@@ -38,6 +38,8 @@ const MAX_ASKED_SIBLINGS = 12;
 const STACK_ABOVE = 9;
 const STACK_KEEPS = 6;
 const FACTS_SHOWN = 6;
+/** The longest value a fact card sets as a figure. A longer one is a sentence, and is left to the item's other rows. */
+const FACT_VALUE_MOST = 60;
 /** The least share of an item's title and text that a card drawn from its extracted structure must show. */
 const COVERAGE_FLOOR = 0.2;
 /** The cards that lead with a picture, which a gallery sets side by side. */
@@ -271,14 +273,17 @@ function codeOf(item: Item) {
 /** The facts that have both a label and a value. */
 const factsIn = (item: Item) => read(FactsData, item.data.facts)?.filter((fact) => fact.label.trim() && fact.value.trim()) ?? [];
 
+const isFigure = (fact: { value: string }): boolean => sizeOf(fact.value) <= FACT_VALUE_MOST;
+
 function factOf(item: Item) {
   const facts = factsIn(item);
-  return facts.length === 1 ? { value: facts[0]!.value, label: facts[0]!.label } : factInText(item);
+  const fact = facts.length === 1 ? { value: facts[0]!.value, label: facts[0]!.label } : factInText(item);
+  return fact && isFigure(fact) ? fact : undefined;
 }
 
 function factsOf(item: Item) {
   const facts = factsIn(item);
-  return facts.length > 1 ? facts : undefined;
+  return facts.length > 1 && facts.every(isFigure) ? facts : undefined;
 }
 
 /** Where a picture or a recording plays from. A stored asset outlives a social network's media address, which expires. */

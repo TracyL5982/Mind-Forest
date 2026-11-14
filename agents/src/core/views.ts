@@ -66,8 +66,8 @@ export const COMPONENTS = {
   idea: z.strictObject({}),
   /** The points for and the points against, side by side. */
   proscons: z.strictObject({ pros: z.array(words).min(1), cons: z.array(words).min(1) }),
-  /** Colours with their names. `value` is a hex colour or a CSS colour name. */
-  swatch: z.strictObject({ colours: z.array(z.strictObject({ name: words, value: z.string().min(1) })).min(2) }),
+  /** Colours with their names. `value` is a hex colour of 3, 4, 6 or 8 digits or a CSS colour name, so nothing else can reach a style. */
+  swatch: z.strictObject({ colours: z.array(z.strictObject({ name: words, value: z.string().regex(/^(?:#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|[a-z]{1,30})$/i) })).min(2) }),
   /** A work to look at, with what its collection records. `src` is its picture. */
   artwork: z.strictObject({
     src: z.string().min(1),

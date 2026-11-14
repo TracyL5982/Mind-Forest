@@ -404,6 +404,12 @@ test('each structured type is chosen from the data that holds it, and a near mis
   const eight = Array.from({ length: 8 }, (_v, n) => ({ label: `Row ${n}`, value: `${n}` }));
   const many = ruled({ title: 'Many', data: { facts: eight } }).props as { facts: unknown[]; more: number };
   assert.deepEqual([many.facts.length, many.more], [6, 2], 'six facts are shown and the rest are counted');
+  const sentence = 'a tower of wrought iron that was meant to stand for twenty years';
+  assert.equal(sentence.length, 64);
+  assert.equal(chosen({ title: 'Tower', data: { facts: [facts[0], { label: 'What', value: sentence.slice(0, 60) }] } }), 'facts', 'a value of sixty characters is still a figure');
+  assert.notEqual(chosen({ title: 'Tower', data: { facts: [facts[0], { label: 'What', value: sentence }] } }), 'facts', 'a longer value is a sentence, and the item is left to its other rows');
+  assert.notEqual(chosen({ title: 'Tower', data: { facts: [{ label: 'What', value: sentence }] } }), 'fact');
+  assert.equal(chosen({ title: 'Tower', data: { facts: [{ label: 'What', value: '高'.repeat(60) }] } }), 'fact', 'characters are counted, not bytes');
 
   const table = { heads: ['Plan', 'Price'], rows: [['Solo', '$8'], ['Team', '']] };
   assert.deepEqual(ruled({ title: 'Plans', data: { table } }), { component: 'table', props: table });
@@ -885,6 +891,12 @@ test('a card shows no blank label, value, list entry, point or colour name', () 
     ['swatch', { colours: [{ name: '', value: '#fff' }, { name: 'navy', value: 'navy' }] }],
   ];
   for (const [component, props] of blank) assert.equal(isValidView({ component, props }), false, `${component} ${JSON.stringify(props)}`);
+});
+
+test('a swatch paints only a hex colour or a colour name, so no other value of a style can come in as a colour', () => {
+  const swatch = (value: string) => isValidView({ component: 'swatch', props: { colours: [{ name: 'One', value }, { name: 'Two', value: '#fff' }] } });
+  for (const value of ['#abc', '#abcd', '#A1b2C3', '#a1b2c3d4', 'navy', 'RebeccaPurple', 'lightgoldenrodyellow']) assert.ok(swatch(value), value);
+  for (const value of ['var(--accent)', 'url(https://example.com/x.png)', 'rgb(1, 2, 3)', '#ab', '#abcde', '#abcdefg', 'red; background: blue', 'dark red', '', ' navy', `${'a'.repeat(31)}`, 'expression(alert(1))', 'calc(1px)']) assert.equal(swatch(value), false, value);
 });
 
 test('an address in the data states nothing, a table cell holds no cell break, and a quotation may run over a tab', () => {
