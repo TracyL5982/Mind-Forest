@@ -101,4 +101,24 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
   };
   assert.deepEqual(made, Object.fromEntries(Object.keys(made).map((id) => [id, id])));
   assert.equal(await paste('function add(a, b) {\n  return a + b;\n}'), 'code', 'pasted code is drawn as code');
+
+  const plain: [string, string][] = [
+    ['Eiffel Tower\nHeight: 330 m\nBuilt: 1889\nFloors: 3', 'facts'],
+    ['Question: Why is the sky blue?\nAnswer: Air scatters short wavelengths the most.', 'qa'],
+    ['问：为什么天空是蓝色的？\n答：因为空气分子对蓝光散射得最强。', 'qa'],
+    ['Bokeh: the quality of the blur in the parts of a picture that are out of focus', 'definition'],
+    ['Rent 45%, food 25%, transport 10% and savings 20%.', 'breakdown'],
+    ['City,Rent,Commute\nLisbon,900,25 min\nPorto,700,20 min', 'table'],
+    ['City\tRent\nLisbon\t900\nPorto\t700', 'table'],
+  ];
+  for (const [text, type] of plain) assert.equal(await paste(text), type, `the plain form ${JSON.stringify(text)}`);
+  const ordinary = [
+    'Use a | b to pipe output\nthen c | d again',
+    'x = y + 2\nSolve for y when x = 10',
+    '> 5 means the test passed',
+    'Rent went up 45%, which hurt, and food by 25%.',
+    'We met on Tuesday, talked for an hour, and left.\nThen it rained, we ran, and the bus came.\nNobody minded, really, at all.',
+    'Remember: the keys are under the blue pot by the door',
+  ];
+  for (const text of ordinary) assert.ok(['note', 'idea'].includes((await paste(text))!), `ordinary text stays a note: ${JSON.stringify(text)} is drawn as ${await paste(text)}`);
 });

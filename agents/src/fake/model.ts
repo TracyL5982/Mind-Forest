@@ -76,22 +76,70 @@ export function blank(): Description {
 const BULLET = /^(?:[-*•]\s+)?(?:\[([ xX])\]\s+)?(.+)$/;
 const isBullet = (line: string) => /^(?:[-*•]\s|\[[ xX]\]\s)/.test(line);
 
+const SENTENCE_MARK = /[.!?;:。！？；：]/;
+/** Words that open a line of some other structure or of a plain remark, so `Where: 3 km north` is no fact and `Remember: ...` no definition. */
+const RESERVED = new Set([
+  'where', 'people', 'pros', 'cons', 'q', 'a', 'question', 'answer', 'term', 'definition', 'at', 'chart', 'palette', 'caution', 'warning', 'note', 'when', '问', '答',
+  'remember', 'reminder', 'todo', 'to do', 'tip', 'idea', 'update', 'ps', 'fyi', 're', 'subject', 'title', 'summary',
+]);
+const FIGURE = /^[\d$€£¥]/;
+const fewWords = (label: string, most: number): boolean => label.length <= 30 && label.split(/\s+/).length <= most;
+
 /**
- * What a model would say about a text, read by pattern instead. Each kind of structure has one plain way to write it:
+ * The rows of a table a person typed: a head line and at least two rows, every line with the same number of cells, and a head
+ * that is no sentence. Cells are parted by `|`, by tabs, or by commas when every line has at least two.
+ */
+function tableIn(lines: string[]): { heads: string[]; rows: string[] } | undefined {
+  const cells = (line: string, by: string | RegExp): string[] => line.replace(/^\||\|$/g, '').split(by).map((cell) => cell.trim());
+  const from = (rows: string[], by: string | RegExp, least: number) => {
+    const grid = rows.map((row) => cells(row, by));
+    const [head] = grid;
+    if (rows.length < 3 || !head || head.length < least || grid.some((row) => row.length !== head.length) || head.some((cell) => !cell || SENTENCE_MARK.test(cell))) return undefined;
+    return { heads: head, rows: grid.slice(1).map((row) => row.join(' | ')) };
+  };
+  const piped = lines.filter((line) => line.includes('|'));
+  if (piped.length > 0) return from(piped, '|', 2);
+  const said = lines.filter(Boolean);
+  if (said.every((line) => line.includes('\t'))) return from(said, '\t', 2);
+  return said.every((line) => line.split(',').length >= 3 && line.length <= 80 && !/[.!?]$/.test(line)) ? from(said, ',', 3) : undefined;
+}
+
+/** Shares of a whole written in one sentence, "Rent 45%, food 25% and savings 30%", when every part of it is a name and a share and they sum to 100. */
+function sharesIn(text: string): { labels: string[]; values: number[] } | undefined {
+  for (const sentence of text.split(/[.。\n]+(?!\d)/)) {
+    const parts = sentence.split(/[,，、;；]|\band\b|和/).map((part) => /^\s*(\p{L}[\p{L} ]{0,30}?)\s*(\d+(?:\.\d+)?)\s?[%％]\s*$/u.exec(part));
+    if (parts.length < 2 || !parts.every(Boolean)) continue;
+    const values = parts.map((part) => Number(part![2]));
+    const sum = values.reduce((total, value) => total + value, 0);
+    if (sum >= 99 && sum <= 101) return { labels: parts.map((part) => part![1]!.trim()), values };
+  }
+  return undefined;
+}
+
+/**
+ * What a model would say about a text, read by pattern instead. Each kind of structure is read from the plain ways a person writes it:
  *   Where: Lisbon                     People: Ana Lima, Ben Okri
  *   Pros: fast, small                 Cons: (or either label followed by bulleted lines)
- *   Plan | Price                      a table, its first row the heads
- *   Q: ...   A: ...                   Term: ...   Definition: ...
+ *   Plan | Price                      a table: a head line and two rows or more, parted by |, tabs or commas
+ *   Q: ...   A: ...                   also Question: and Answer:, 问： and 答：
+ *   Term: ...   Definition: ...       or one line, "Bokeh: the quality of the blur in a picture"
  *   - one / - two                     a list, and a checklist when every line starts [ ] or [x]
  *   Ember #E4572E                     a colour, named by the capitalised word before it
- *   > a passage                       an excerpt, with an optional line "At: Chapter 3"
- *   Height = 330 m                    a fact, one for each such line
+ *   > a passage of six words or more  an excerpt, with an optional line "At: Chapter 3"
+ *   Height = 330 m   Height: 330 m    a fact for each such line, whose value opens with a digit or a currency sign
  *   Chart: Rent 50%, Food 30%         a series, in percent when every entry is
+ *   Rent 45%, food 25%, other 30%     shares of a whole, when they sum to 100
  * A text holding "fake:invent" is also given a place it never names, to show the grounding check dropping it.
  */
 export function describe(text: string): Description {
   const lines = text.split(/\r?\n/).map((line) => line.trim());
-  const labelled = (label: string): string => lines.find((line) => line.toLowerCase().startsWith(`${label}:`))?.slice(label.length + 1).trim() ?? '';
+  const labelled = (...labels: string[]): string => {
+    for (const label of labels) {
+      const line = lines.find((each) => new RegExp(`^${label}[:：]`, 'i').test(each));
+      if (line) return line.slice(label.length + 1).trim();
+    }
+    return '';
+  };
   const list = (label: string): string[] => {
     const at = lines.findIndex((line) => line.toLowerCase().startsWith(`${label}:`));
     if (at < 0) return [];
@@ -104,9 +152,14 @@ export function describe(text: string): Description {
   const pros = list('pros');
   const cons = list('cons');
   const bullets = pros.length + cons.length > 0 ? [] : lines.filter(isBullet).map((line) => BULLET.exec(line)!);
-  const rows = lines.filter((line) => line.includes('|'));
+  const table = tableIn(lines);
   const first = lines.find(Boolean) ?? '';
   const series = list('chart').map((entry) => /^(.+?)\s+(-?\d+(?:\.\d+)?)(%?)$/.exec(entry));
+  const shares = series.length === 0 ? sharesIn(text) : undefined;
+  const said = lines.filter(Boolean);
+  const entry = said.length === 1 ? /^(\p{L}[\p{L}\p{N} -]*):\s+(\p{L}.{14,})$/u.exec(said[0]!) : null;
+  const defined = entry && fewWords(entry[1]!, 3) && !RESERVED.has(entry[1]!.toLowerCase()) ? entry : null;
+  const passage = lines.map((line) => /^> (\p{L}.*)$/u.exec(line)?.[1]?.trim() ?? '').find((words) => words.split(/\s+/).length >= 6 || (words.match(/\p{Script=Han}/gu)?.length ?? 0) >= 12) ?? '';
 
   return {
     ...blank(),
@@ -117,21 +170,23 @@ export function describe(text: string): Description {
     people: list('people'),
     pros,
     cons,
-    ...(rows.length >= 2 ? { tableHeads: rows[0]!.replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim()), tableRows: rows.slice(1) } : {}),
-    question: labelled('q'),
-    answer: labelled('a'),
-    term: labelled('term'),
-    definition: labelled('definition'),
+    ...(table ? { tableHeads: table.heads, tableRows: table.rows } : {}),
+    question: labelled('q', 'question', '问'),
+    answer: labelled('a', 'answer', '答'),
+    term: labelled('term') || (defined?.[1] ?? ''),
+    definition: labelled('definition') || (defined?.[2] ?? ''),
     ...(bullets.length >= 2 ? { items: bullets.map((b) => b[2]!), checklist: bullets.every((b) => b[1]) ? bullets.map((b) => b[1] !== ' ') : [] } : {}),
     colours: [...text.matchAll(/(?:([A-Z][\w-]*) )?(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3}))\b/g)].map((m) => ({ name: m[1] ?? '', value: m[2]! })),
     facts: lines.flatMap((line) => {
-      const fact = /^([^=|]+?)\s*=\s*(\S.*)$/.exec(line);
-      return fact ? [{ label: fact[1]!, value: fact[2]! }] : [];
+      const fact = /^([^=|:：]+?)\s*(?:=|[:：]\s)\s*(\S.*)$/.exec(line);
+      return fact && FIGURE.test(fact[2]!) && fewWords(fact[1]!, 4) && !RESERVED.has(fact[1]!.toLowerCase()) ? [{ label: fact[1]!, value: fact[2]! }] : [];
     }),
     ...(series.length >= 2 && series.every(Boolean)
       ? { chartLabels: series.map((entry) => entry![1]!), chartValues: series.map((entry) => Number(entry![2])), chartUnit: series.every((entry) => entry![3]) ? '%' : '' }
-      : {}),
-    excerptText: lines.find((line) => line.startsWith('> '))?.slice(2).trim() ?? '',
+      : shares
+        ? { chartLabels: shares.labels, chartValues: shares.values, chartUnit: '%' }
+        : {}),
+    excerptText: passage,
     excerptAt: labelled('at'),
   };
 }
