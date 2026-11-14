@@ -5,7 +5,7 @@ const step = (label, i, lines) => h('li', null, h('span', { class: 'step-n', tex
 
 export function size(item, props) {
   const n = list(props.steps).length;
-  return [244, 52 + 27 * clamp(n, 1, 5) + (n > 5 ? 20 : 0)];
+  return [244, 56 + 27 * clamp(n, 1, 5) + (n > 5 ? 24 : 0)];
 }
 
 export function draw(item, props) {

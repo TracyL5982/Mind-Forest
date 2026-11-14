@@ -1,7 +1,7 @@
 import { h } from '../dom.js';
 import { text, title } from './shared.js';
 
-export const size = () => [232, 126];
+export const size = () => [232, 138];
 
 export const draw = (item, props) => [
   title(item),

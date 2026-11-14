@@ -1,7 +1,7 @@
 import { h, safeUrl } from '../dom.js';
 import { picture, text, title } from './shared.js';
 
-export const size = (item, props) => [text(props.image) ? 304 : 264, 126];
+export const size = (item, props) => [text(props.image) ? 304 : 264, 134];
 
 export function draw(item, props, ctx) {
   const site = text(props.site) || 'link';

@@ -25,6 +25,7 @@
  *   close              close the opened card
  *   wait=<ms>          wait
  *   apart              fail when two cards overlap
+ *   fits               fail when part of a card reaches past its face or its text is squeezed
  *   shot=<name>        save <out>/<name>.png. `shot=<name>:full` saves the whole scrolling page.
  *
  * Example
@@ -40,7 +41,7 @@ import { parseArgs } from 'node:util';
 import { chromium, type Page } from 'playwright-core';
 import type { Command, Item, Node } from '../src/core/domain.ts';
 import type { Running } from '../src/node/server.ts';
-import { PNG, TOKEN, bootFake, browserPath, crowd, showcase } from '../test/stage.ts';
+import { PNG, TOKEN, bootFake, browserPath, crowd, showcase, spills } from '../test/stage.ts';
 
 const { values: flags, positionals: steps } = parseArgs({
   allowPositionals: true,
@@ -192,6 +193,12 @@ const STEPS: Record<string, Step> = {
     const hits = await overlapping(page);
     if (hits.length > 0) throw new Error(`${hits.length} pairs of cards overlap, the first is ${hits[0]}`);
     return `${await cards(page).count()} cards, none overlap`;
+  },
+  async fits(_, page) {
+    await settle(page);
+    const found = await spills(page);
+    if (found.length > 0) throw new Error(`${found.length} parts do not fit, the first is ${found[0]}`);
+    return `${await page.locator('.card').count()} cards, every part fits`;
   },
   async shot(value, page) {
     const [name, mode] = value.split(':');

@@ -2,6 +2,7 @@
 import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { Page } from 'playwright-core';
 import type { Command, Item, Node } from '../src/core/domain.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
@@ -92,3 +93,24 @@ export function crowd(total: number): Command[] {
   return commands;
 }
 
+
+/** Every part of a card that reaches past its face, text squeezed to fewer lines than it is allowed, or text wider than its box. */
+export function spills(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const found: string[] = [];
+    for (const card of document.querySelectorAll<HTMLElement>('.card:not(.is-under):not(.is-buried)')) {
+      const face = card.querySelector('.card-face')!.getBoundingClientRect();
+      const name = `${card.dataset.component} "${card.getAttribute('aria-label') ?? card.textContent!.slice(0, 30)}"`;
+      for (const el of card.querySelectorAll<HTMLElement>('.card-body *')) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        const label = el.getAttribute('class') ?? el.tagName.toLowerCase();
+        if (r.left < face.left - 1 || r.right > face.right + 1 || r.top < face.top - 1 || r.bottom > face.bottom + 1) found.push(`${name}: ${label} leaves the card`);
+        const lines = Number(/clamp-(\d)/.exec(label)?.[1] ?? 0);
+        if (lines > 0 && el.clientHeight < Math.min(el.scrollHeight, lines * parseFloat(getComputedStyle(el).lineHeight)) - 1) found.push(`${name}: ${label} is squeezed below its ${lines} lines`);
+        else if (el instanceof HTMLElement && el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX === 'visible') found.push(`${name}: ${label} is wider than its box`);
+      }
+    }
+    return found;
+  });
+}

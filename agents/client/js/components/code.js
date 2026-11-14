@@ -1,7 +1,7 @@
 import { h } from '../dom.js';
 import { head, text } from './shared.js';
 
-export const size = () => [296, 166];
+export const size = () => [296, 178];
 
 export const draw = (item, props) => [
   head(item, text(props.language) || 'text'),

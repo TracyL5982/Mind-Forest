@@ -3,7 +3,7 @@ import { head, list, text } from './shared.js';
 
 const bubble = (message, lines) => h('div', { class: `bubble ${lines} ${message.role === 'user' ? 'is-user' : ''}`, text: text(message.text) });
 
-export const size = (item, props) => [276, 56 + 46 * clamp(list(props.messages).length, 1, 3)];
+export const size = (item, props) => [276, 49 + 53 * clamp(list(props.messages).length, 1, 3)];
 
 export const draw = (item, props) => [
   head(item, text(props.source)),

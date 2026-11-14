@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
 import type { Running } from '../src/node/server.ts';
-import { PNG, bootFake, browserPath, crowd, showcase } from './stage.ts';
+import { PNG, bootFake, browserPath, crowd, showcase, spills } from './stage.ts';
 
 const here = import.meta.dirname;
 const shots = join(here, '../docs/screenshots');
@@ -294,6 +294,7 @@ async function main(): Promise<void> {
       assert.equal(await page.locator('.card[data-component="image"] img').first().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), true, 'the uploaded picture loads');
       await page.locator('.tree-chip', { hasText: 'Every shape' }).click();
       assert.deepEqual(await overlaps(page), []);
+      assert.deepEqual(await spills(page), [], 'no card holds more than its footprint');
       await shot(page, 'desktop-8-every-shape');
       await page.getByRole('button', { name: 'Open 5' }).click();
       await until('the pile to open', async () => (await count(page, '.card.is-under')) === 0);
