@@ -9,6 +9,8 @@ const COLUMN = Math.floor(((WIDTH - SIDES) * 86) / 100) - 20;
 const bubble = (message, lines) => h('div', { class: `bubble ${message.role === 'user' ? 'is-user' : ''}` },
   say('div', lines ? `clamp-${lines}` : '', text(message.text)));
 
+const source = (props) => text(props.source) && h('div', { class: 'chat-source' }, kind(props.source));
+
 const shown = (props) => list(props.messages).slice(0, SHOWN);
 const linesOf = (message) => fold(text(message.text), COLUMN, TEXT_LETTER, 2);
 
@@ -20,9 +22,10 @@ export function size(item, props) {
 export const draw = (item, props) => [
   title(item, 1),
   shown(props).map((message) => bubble(message, linesOf(message))),
-  text(props.source) && h('div', { class: 'chat-source' }, kind(props.source)),
+  source(props),
 ];
 
 export const detail = (item, props) => [
-  h('div', { class: 'detail-chat' }, list(item.data?.messages ?? props.messages).slice(0, 40).map((message) => bubble(message, 0))),
+  h('div', { class: 'detail-chat' }, list(item.data?.messages ?? props.messages).slice(0, 40).map((message) => bubble(message, 0)),
+    source(props)),
 ];
