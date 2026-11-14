@@ -34,6 +34,56 @@ export const COMPONENTS = {
   code: z.object({ language: z.string(), source: z.string() }),
   /** An ordered list of short steps. */
   steps: z.object({ steps: z.array(z.string()) }),
+  /** Two to six figures with their labels. `more` counts the further facts the item holds. */
+  facts: z.strictObject({
+    facts: z.array(z.strictObject({ label: z.string(), value: z.string() })).min(2).max(6),
+    more: z.number().int().positive().optional(),
+  }),
+  /** A table: every row has one cell for each head, and a cell may be empty. All rows are here; a client shows what fits. */
+  table: z
+    .strictObject({ heads: z.array(z.string()).min(2), rows: z.array(z.array(z.string())).min(1) })
+    .refine((p) => p.rows.every((row) => row.length === p.heads.length)),
+  /** A list in no particular order. With `checked`, a checklist: one mark for each item. */
+  list: z
+    .strictObject({ items: z.array(z.string()).min(2), checked: z.array(z.boolean()).optional() })
+    .refine((p) => p.checked === undefined || p.checked.length === p.items.length),
+  /** Parts of a whole: two to eight shares, one value for each label. */
+  breakdown: z
+    .strictObject({ labels: z.array(z.string()).min(2).max(8), values: z.array(z.number().nonnegative()), unit: z.string().optional() })
+    .refine((p) => p.labels.length === p.values.length),
+  /** One question and its answer. */
+  qa: z.strictObject({ question: z.string().min(1), answer: z.string().min(1) }),
+  /** A caveat or a remark set apart from the rest. */
+  callout: z.strictObject({ text: z.string().min(1), tone: z.enum(['caution', 'note']) }),
+  /** A passage of a longer source, where it sits there, and the source's name. */
+  excerpt: z.strictObject({ text: z.string().min(1), at: z.string().optional(), source: z.string().optional() }),
+  /** One term and what it means. */
+  definition: z.strictObject({ term: z.string().min(1), definition: z.string().min(1) }),
+  /** A short thought. The client draws the item's title large. */
+  idea: z.strictObject({}),
+  /** The points for and the points against, side by side. */
+  proscons: z.strictObject({ pros: z.array(z.string()).min(1), cons: z.array(z.string()).min(1) }),
+  /** Colours with their names. `value` is a hex colour or a CSS colour name. */
+  swatch: z.strictObject({ colours: z.array(z.strictObject({ name: z.string(), value: z.string().min(1) })).min(2) }),
+  /** A work to look at, with what its collection records. `src` is its picture. */
+  artwork: z.strictObject({
+    src: z.string().min(1),
+    maker: z.string().optional(),
+    date: z.string().optional(),
+    medium: z.string().optional(),
+    holder: z.string().optional(),
+  }),
+  /** A paper or a book. `more` is true when it has further authors than the list names. */
+  reference: z.strictObject({
+    kind: z.enum(['paper', 'book']),
+    authors: z.array(z.string()),
+    more: z.literal(true).optional(),
+    year: z.string().optional(),
+    venue: z.string().optional(),
+    url: z.string().optional(),
+  }),
+  /** A place by name. `src` is the item's picture, when it has one. */
+  place: z.strictObject({ name: z.string().min(1), src: z.string().optional() }),
 } as const;
 export type ComponentId = keyof typeof COMPONENTS;
 export const COMPONENT_IDS = Object.keys(COMPONENTS) as ComponentId[];
@@ -85,6 +135,34 @@ export const CHECKS: ContentChecks = {
   chat: { props: { messages: { role: 'own', text: 'own' }, source: 'own' } },
   code: { props: { language: 'choice', source: 'own' } },
   steps: { props: { steps: 'says' }, also: (p) => p.steps.length >= 2 },
+  facts: {
+    props: { facts: { label: 'label', value: 'says' }, more: 'choice' },
+    also: (p, item) => p.more === undefined || (Array.isArray(item.data.facts) && p.more === item.data.facts.length - p.facts.length),
+  },
+  table: { props: { heads: 'cell', rows: 'cell' } },
+  list: {
+    props: { items: 'says', checked: 'choice' },
+    // A mark stands when the text carries it on the item's own line, or the data holds it for that item.
+    also: (p, item, text) => {
+      const [items, marks] = [item.data.items, item.data.checklist];
+      const kept = (entry: string) => (Array.isArray(items) && Array.isArray(marks) && items.includes(entry) ? marks[items.indexOf(entry)] : undefined);
+      return p.checked === undefined || p.checked.every((mark, n) => text.ticks(p.items[n]!) === mark || kept(p.items[n]!) === mark);
+    },
+  },
+  breakdown: { props: { labels: 'says', values: 'writes', unit: 'says' } },
+  qa: { props: { question: 'says', answer: 'says' } },
+  callout: { props: { text: 'quotes', tone: 'choice' } },
+  excerpt: { props: { text: 'quotes', at: 'says', source: 'own' } },
+  definition: { props: { term: 'says', definition: 'says' } },
+  idea: { props: {} },
+  proscons: { props: { pros: 'says', cons: 'says' } },
+  swatch: { props: { colours: { name: 'says', value: 'paints' } } },
+  artwork: { props: { src: 'own', maker: 'says', date: 'says', medium: 'says', holder: 'says' } },
+  reference: {
+    props: { kind: 'own', authors: 'says', more: 'choice', year: 'says', venue: 'says', url: 'own' },
+    also: (p, item) => p.more === undefined || item.data.authorsCut === true,
+  },
+  place: { props: { name: 'says', src: 'own' } },
 };
 
 /**

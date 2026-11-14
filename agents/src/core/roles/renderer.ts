@@ -37,6 +37,7 @@ const MAX_ASKED_POOLS = 8;
 const MAX_ASKED_SIBLINGS = 12;
 const STACK_ABOVE = 9;
 const STACK_KEEPS = 6;
+const FACTS_SHOWN = 6;
 
 // ---- reply schemas. Structured output wants every key present, so an empty string or list means "none".
 
@@ -85,6 +86,10 @@ const PersonData = z.object({ name: z.string().min(1), role: z.string().optional
 const CodeData = z.object({ language: z.string().optional(), source: z.string().optional() });
 const FactsData = z.array(z.object({ label: z.string().min(1), value: Label }));
 const MessagesData = z.array(z.object({ role: z.string(), text: z.string() }));
+const TableData = z.object({ heads: z.array(z.string()), rows: z.array(z.array(z.string())) });
+const ColoursData = z.array(z.object({ name: z.string(), value: z.string().min(1) }));
+const ExcerptData = z.object({ text: z.string().min(1), at: z.string().optional() });
+const MarksData = z.array(z.boolean());
 
 function read<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
   if (value === undefined) return undefined;
@@ -243,12 +248,78 @@ function mediaOf(item: Item, kind: 'image' | 'video', { assetUrl }: Asked): stri
   return (item.source.asset ? assetUrl(item.source.asset) : (str(item.data.mediaUrl) ?? item.source.url)) || undefined;
 }
 
+const PERCENT = new Set(['%', '％', 'percent', 'pct', '百分比']);
+
+/** A chart whose values are shares of one whole: a percent unit, and a sum of about a hundred. */
+function breakdownOf(item: Item) {
+  const chart = chartOf(item);
+  if (!chart || chart.values.length > 8 || !PERCENT.has(chart.unit?.trim().toLowerCase() ?? '') || chart.values.some((v) => v < 0)) return undefined;
+  const sum = chart.values.reduce((a, b) => a + b, 0);
+  return sum >= 99 && sum <= 101 ? chart : undefined;
+}
+
+function tableOf(item: Item) {
+  const table = read(TableData, item.data.table);
+  return table && table.rows.length > 0 ? table : undefined;
+}
+
+/** The entries of a list of strings that say something. */
+const entriesOf = (value: unknown) => read(StepsData, value)?.filter((entry) => entry.trim()) ?? [];
+
+function listOf(item: Item) {
+  const items = read(StepsData, item.data.items);
+  if (!items || items.length < 2 || items.some((entry) => !entry.trim())) return undefined;
+  const checked = read(MarksData, item.data.checklist);
+  return { items, checked: checked?.length === items.length ? checked : undefined };
+}
+
+function coloursOf(item: Item) {
+  const colours = read(ColoursData, item.data.colours);
+  return colours && colours.length >= 2 ? colours : undefined;
+}
+
+function factsOf(item: Item) {
+  const facts = read(FactsData, item.data.facts);
+  return facts && facts.length > 1 ? facts : undefined;
+}
+
+/** The still picture an item has: itself when it is one, a recording's poster, a page's own picture. */
+function pictureOf(item: Item, asked: Asked): string | undefined {
+  if (item.kind === 'image') return mediaOf(item, 'image', asked);
+  return str(item.kind === 'video' ? item.data.thumbnailUrl : item.data.image);
+}
+
+const referenceKind = (item: Item) => (item.data.kind === 'paper' || item.data.kind === 'book' ? item.data.kind : undefined);
+
+/** The place an item is about, when its title names that place and does not merely have one. */
+function placeOf(item: Item): string | undefined {
+  const where = str(item.data.where)?.trim();
+  if (!where || !item.title.trim()) return undefined;
+  return grounding(item.title).says(where) || grounding(where).says(item.title) ? where : undefined;
+}
+
+const IDEA_BELOW = 40;
+
+/** A short thought the user typed: a title and nothing more. */
+function isIdea(item: Item): boolean {
+  const [title, text] = [item.title.trim(), item.text.trim()];
+  return item.kind === 'text' && item.origin.by === 'user' && title !== '' && [...title].length < IDEA_BELOW && (text === '' || text === title);
+}
+
 const captionOf = (item: Item) => (item.summary.trim() && item.summary.trim().length <= CAPTION ? item.summary.trim() : undefined);
 
 const spokenOf = (item: Item) => (item.kind === 'chat' ? excerpt(read(MessagesData, item.data.messages) ?? []) : []);
 
 /** First match wins. Structured data a content role filled in outranks the item's kind. */
 const RULES: Rule[] = [
+  {
+    component: 'breakdown',
+    when: (item) => breakdownOf(item) !== undefined,
+    props: (item) => {
+      const { labels, values, unit } = breakdownOf(item)!;
+      return { labels, values, unit };
+    },
+  },
   {
     component: 'chart',
     when: (item) => chartOf(item) !== undefined,
@@ -257,13 +328,38 @@ const RULES: Rule[] = [
       return chartProps(labels, values, unit);
     },
   },
+  { component: 'table', when: (item) => tableOf(item) !== undefined, props: (item) => tableOf(item)! },
+  {
+    component: 'proscons',
+    when: (item) => entriesOf(item.data.pros).length > 0 && entriesOf(item.data.cons).length > 0,
+    props: (item) => ({ pros: entriesOf(item.data.pros), cons: entriesOf(item.data.cons) }),
+  },
+  {
+    component: 'qa',
+    when: (item) => str(item.data.question) !== undefined && str(item.data.answer) !== undefined,
+    props: (item) => ({ question: str(item.data.question), answer: str(item.data.answer) }),
+  },
+  {
+    component: 'definition',
+    when: (item) => str(item.data.term) !== undefined && str(item.data.definition) !== undefined,
+    props: (item) => ({ term: str(item.data.term), definition: str(item.data.definition) }),
+  },
   { component: 'steps', when: (item) => stepsOf(item) !== undefined, props: (item) => ({ steps: stepsOf(item)! }) },
+  { component: 'list', when: (item) => listOf(item) !== undefined, props: (item) => compact(listOf(item)!) },
   {
     component: 'quote',
     when: (item) => read(QuoteData, item.data.quote) !== undefined,
     props: (item) => {
       const { text, by } = read(QuoteData, item.data.quote)!;
       return compact({ text, by });
+    },
+  },
+  {
+    component: 'excerpt',
+    when: (item) => read(ExcerptData, item.data.excerpt) !== undefined,
+    props: (item) => {
+      const { text, at } = read(ExcerptData, item.data.excerpt)!;
+      return compact({ text, at, source: str(item.data.site) ?? str(item.data.from) });
     },
   },
   {
@@ -274,8 +370,44 @@ const RULES: Rule[] = [
       return compact({ name, role, image: image ?? str(item.data.image) });
     },
   },
+  { component: 'swatch', when: (item) => coloursOf(item) !== undefined, props: (item) => ({ colours: coloursOf(item)! }) },
   { component: 'code', when: (item) => codeOf(item) !== undefined, props: (item) => codeOf(item)! },
+  {
+    component: 'facts',
+    when: (item) => factsOf(item) !== undefined,
+    props: (item) => {
+      const facts = factsOf(item)!;
+      return compact({ facts: facts.slice(0, FACTS_SHOWN), more: facts.length - FACTS_SHOWN > 0 ? facts.length - FACTS_SHOWN : undefined });
+    },
+  },
   { component: 'fact', when: (item) => factOf(item) !== undefined, props: (item) => factOf(item)! },
+  {
+    component: 'artwork',
+    when: (item, asked) => item.data.kind === 'artwork' && pictureOf(item, asked) !== undefined,
+    props: (item, asked) =>
+      compact({ src: pictureOf(item, asked), maker: str(item.data.by), date: str(item.data.date), medium: str(item.data.medium), holder: str(item.data.holder) }),
+  },
+  {
+    component: 'reference',
+    when: (item) => referenceKind(item) !== undefined,
+    props: (item) => {
+      const listed = entriesOf(item.data.authors);
+      const by = str(item.data.by);
+      return compact({
+        kind: referenceKind(item),
+        authors: listed.length > 0 ? listed : by ? [by] : [],
+        more: listed.length > 0 && item.data.authorsCut === true ? true : undefined,
+        year: /(?<!\d)\d{4}(?!\d)/.exec(str(item.data.date) ?? '')?.[0],
+        venue: str(item.data.venue),
+        url: item.source.url,
+      });
+    },
+  },
+  {
+    component: 'place',
+    when: (item) => placeOf(item) !== undefined,
+    props: (item, asked) => compact({ name: placeOf(item), src: pictureOf(item, asked) }),
+  },
   {
     component: 'image',
     when: (item, asked) => mediaOf(item, 'image', asked) !== undefined,
@@ -299,12 +431,16 @@ const RULES: Rule[] = [
     when: (item) => spokenOf(item).length > 0,
     props: (item) => compact({ messages: spokenOf(item), source: item.source.from.replace(/^chat-export:/, '') }),
   },
+  { component: 'idea', when: isIdea, props: () => ({}) },
   { component: 'note', when: () => true, props: () => ({}) },
 ];
 
+/** A conversation's data is its messages, so no rule that reads structure may take one. */
+const CHAT_RULES = RULES.filter((rule) => rule.component === 'chat' || rule.component === 'note');
+
 export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
   const asked = { assetUrl };
-  for (const rule of RULES) {
+  for (const rule of item.kind === 'chat' ? CHAT_RULES : RULES) {
     if (!rule.when(item, asked)) continue;
     const draw = { component: rule.component, props: rule.props(item, asked) };
     if (isValidView(draw)) return draw;
