@@ -64,6 +64,12 @@ const GROWING: Record<string, Given[]> = {
     { props: { src: 'a.png', maker: 'Ilse Brandt', date: '1928', medium: 'Gelatin silver print', holder: 'The Example Museum of Art' } },
     { item: { title: words(10) }, props: { src: 'a.png', maker: words(10), date: '1928', medium: words(10), holder: 'The Example Museum of Art' } },
   ],
+  breakdown: [
+    { props: { labels: ['Yes', 'No'], values: [3, 1] } },
+    { props: { labels: ['Yes', 'No'], values: [3, 1], unit: 'votes' } },
+    { props: { labels: ['Yes', 'No', 'Maybe'], values: [3, 1, 2], unit: 'votes' } },
+    { item: { title: words(10) }, props: { labels: ['Yes', 'No', 'Maybe', 'Later', 'Never'], values: [3, 1, 2, 1, 1], unit: 'votes' } },
+  ],
 };
 
 /** A type that sets longer words in a smaller size, so a card that holds a little more can be a little shorter. */

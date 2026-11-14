@@ -202,6 +202,11 @@
     {"type":"artwork","item":{"title":"Stairwell, seen from above","summary":"","text":"","data":{"kind":"artwork","date":"1928","holder":"The Example Museum of Art","where":"Gallery 852"},"origin":{"by":"agent","role":"scout"}},"props":{"src":"/assets/sample-stairwell","maker":"Ilse Brandt","date":"1928","medium":"Gelatin silver print","holder":"The Example Museum of Art"},"size":[264,324],"chips":[{"kind":"where","text":"Gallery 852","width":98}]},
     {"type":"artwork","item":{"title":"千里江山图","summary":"","text":""},"props":{"src":"a.png","maker":"王希孟","date":"1113年","medium":"绢本设色","holder":"故宫博物院"},"size":[264,296]},
     {"type":"artwork","item":{"title":"Sudden Shower over Shin-Ohashi Bridge and Atake","summary":"","text":""},"props":{"src":"a.png","maker":"Utagawa Hiroshige","date":"1857","medium":"Woodblock print; ink and color on paper","holder":"The Metropolitan Museum of Art"},"size":[264,334]},
-    {"type":"artwork","item":{"title":"","summary":"","text":""},"props":{"src":"a.png"},"size":[264,243]}
+    {"type":"artwork","item":{"title":"","summary":"","text":""},"props":{"src":"a.png"},"size":[264,243]},
+    {"type":"breakdown","item":{"title":"Where the month goes","summary":"","text":""},"props":{"labels":["Rent","Food","Transport","Savings"],"values":[45,25,10,20],"unit":"%"},"size":[300,150]},
+    {"type":"breakdown","item":{"title":"A weekday, by the hour","summary":"","text":""},"props":{"labels":["Sleep","Work","Commute","Cooking and eating","Children","Reading","Exercise","Everything else"],"values":[33,31.5,6,8,9.5,4,3,5],"unit":"%"},"size":[300,246]},
+    {"type":"breakdown","item":{"title":"每月的钱花在哪","summary":"","text":"","data":{"when":"2026年10月"}},"props":{"labels":["房租","吃饭","交通","储蓄"],"values":[45,25,10,20],"unit":"％"},"size":[300,178],"chips":[{"kind":"when","text":"2026年10月","width":102}]},
+    {"type":"breakdown","item":{"title":"What became of the cards","summary":"","text":""},"props":{"labels":["Kept","Picks not yet kept","Deleted"],"values":[1280,342,96],"unit":"cards"},"size":[300,143]},
+    {"type":"breakdown","item":{"title":"Two parts and no unit, under a title long enough to take two lines","summary":"","text":""},"props":{"labels":["Yes","No"],"values":[3,1]},"size":[300,123]}
   ]
 }

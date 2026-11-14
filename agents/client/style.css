@@ -310,6 +310,13 @@ button, input, textarea { font: inherit; color: inherit; }
 .artwork-holder { color: var(--ink-3); }
 .detail-artwork { font-size: 13.5px; line-height: 19px; overflow-wrap: anywhere; }
 
+/* breakdown: the parts of one whole as level bars, each share written whole at the end of its bar. Never a pie. */
+.breakdown { margin-top: 4px; display: grid; gap: 7px 8px; align-items: center; font-size: var(--type-text); line-height: var(--lead-text); }
+.breakdown-label { color: var(--ink-2); }
+.breakdown-track { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.06); }
+.breakdown-bar { min-width: 2px; height: 100%; border-radius: 4px; background: color-mix(in srgb, var(--accent) 62%, var(--face)); }
+.breakdown-share { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
 /* ---- groups */
 
 /* A frame is a faint wash and a hairline, so the cards inside it carry the weight. */
