@@ -232,6 +232,42 @@ test('a record is shown in its own words, and only words that are really in it',
   assert.match(second!.text, /^We measured viewer discomfort/);
 });
 
+test('what a museum catalogues about a work reaches the pick: maker, date, medium and holder', async () => {
+  const { k, anchor } = setup({}, [ARTWORK]);
+  k.world.found.set('museums:spiral staircase', [{ ...work(1, 'Stairwell, Berlin'), kind: 'artwork', medium: 'Gelatin silver print', holder: 'A Museum' }, work(2, 'Teapot with spiral handle')]);
+  k.model.on('scout.curate', () => ({ chosen: [1, 2].map((number) => ({ number, note: '', excerpt: '' })) }));
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const [catalogued, bare] = picked(k, anchor);
+  assert.deepEqual(catalogued!.data, { site: 'museum.example', by: 'Maker 1', date: '1920', from: 'A Museum', kind: 'artwork', medium: 'Gelatin silver print', holder: 'A Museum' });
+  assert.deepEqual(bare!.data, { site: 'museum.example', by: 'Maker 2', date: '1920', from: 'A Museum' }, 'a record whose source catalogued nothing more gains no keys');
+});
+
+test('a paper reaches the pick with every author and its venue', async () => {
+  const find = direction('find', 'What the studies measured', { source: 'papers', lookups: ['dolly zoom discomfort'] });
+  const { k, anchor } = setup({}, [find]);
+  const authors = ['A. Researcher', 'B. Scholar', 'C. Fellow'];
+  k.world.found.set('papers:dolly zoom discomfort', [{ ...PAPER, by: 'A. Researcher et al.', kind: 'paper', authors, venue: 'Journal of Vision' }]);
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const [paper] = picked(k, anchor);
+  assert.deepEqual(paper!.data, { site: 'doi.example', by: 'A. Researcher et al.', date: '2011', from: 'Research papers', kind: 'paper', authors, venue: 'Journal of Vision' });
+  assert.match(paper!.text, /A\. Researcher et al\., 2011, Research papers$/, 'the words under the passage are as they were');
+});
+
+test('a paper whose source cut its author list short reaches the pick marked as cut', async () => {
+  const find = direction('find', 'What the studies measured', { source: 'papers', lookups: ['dolly zoom discomfort'] });
+  const { k, anchor } = setup({}, [find]);
+  k.world.found.set('papers:dolly zoom discomfort', [{ ...PAPER, kind: 'paper', authors: ['A. Researcher', 'B. Scholar'], authorsCut: true }]);
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  const [paper] = picked(k, anchor);
+  assert.deepEqual([paper!.data.authors, paper!.data.authorsCut], [['A. Researcher', 'B. Scholar'], true]);
+});
+
 test('a chart, steps and a recording a source returns reach the card', async () => {
   const find = direction('find', 'The numbers', { source: 'papers', lookups: ['numbers'] });
   const { k, anchor } = setup({}, [find]);
