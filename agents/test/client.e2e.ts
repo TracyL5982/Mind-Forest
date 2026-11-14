@@ -318,8 +318,9 @@ async function main(): Promise<void> {
       assert.equal(await card(CHIPPED.plainNote).locator('.chip-line').count(), 0, 'a card with nothing to say has no chip line');
       assert.deepEqual(await chips(CHIPPED.link), ['2019'], 'a link does not repeat its site, as its origin or as its author');
       const museum = await chips(CHIPPED.museum);
-      assert.deepEqual(museum.slice(0, 2), ['1857', 'metmuseum.org'], 'a pick the Scout brought says when it is from, then where it came from');
-      assert.equal(await card(CHIPPED.museum).locator('.chip[data-kind="origin"]').getAttribute('title'), 'Origin: metmuseum.org');
+      assert.deepEqual(museum, ['1857', 'The Metropolitan Museum of Art'], 'a pick the Scout brought says when it is from, then who holds it');
+      assert.deepEqual(await chips(CHIPPED.paper), ['2019', 'Journal of Japanese Studies'], 'a paper says its year and its journal, and a note has no room for its authors after them');
+      assert.equal(await card(CHIPPED.museum).locator('.chip[data-kind="origin"]').getAttribute('title'), 'Origin: The Metropolitan Museum of Art');
       assert.deepEqual(await chips(CHIPPED.four), ['Summer 1958', 'Bancroft Library'], 'the origin comes straight after the date, and what has no room is left to the opened card');
 
       const clipped = (el: HTMLElement) => el.scrollWidth > el.clientWidth && getComputedStyle(el).textOverflow === 'ellipsis';
@@ -373,7 +374,7 @@ async function main(): Promise<void> {
       await settle(page);
       assert.deepEqual(await chips(CHIPPED.museum), museum, 'a kept pick still says where it came from');
       assert.deepEqual(await tall(CHIPPED.museum), size, 'and is the size it was as a pick');
-      assert.deepEqual(await facts.locator('dd[data-chip="origin"]').allTextContents(), ['metmuseum.org']);
+      assert.deepEqual(await facts.locator('dd[data-chip="origin"]').allTextContents(), ['The Metropolitan Museum of Art']);
       await page.keyboard.press('Escape');
     });
 
