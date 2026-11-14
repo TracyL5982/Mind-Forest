@@ -18,20 +18,20 @@ export const LABEL = { when: 'When', where: 'Where', people: 'People', origin: '
 const str = (value) => (typeof value === 'string' ? value.trim() : '');
 const names = (value) => (Array.isArray(value) ? value.map(str).filter(Boolean) : []);
 
-/** The people an item names, and the `item.data` key they were read from. The Scout writes `authors` and `by`. */
+/**
+ * The people an item names, and the `item.data` key they were read from. The Scout writes
+ * `authors`. Its `by` is not read, because it is as often a site or a score as a person.
+ */
 function crew(data) {
-  for (const key of ['people', 'authors']) {
-    const found = names(data[key]);
-    if (found.length > 0) return { key, found };
-  }
-  return { key: 'by', found: names([data.by]) };
+  const key = ['people', 'authors'].find((name) => names(data[name]).length > 0);
+  return { key, found: names(data[key]) };
 }
 
 /**
  * Every source the item holds, in chip order: `{ kind, key, text }`, where `key` is the
  * `item.data` key the value was read from, and a people source also holds every name in `names`.
  * What the agents brought says where it came from straight after its date. A source that says
- * what an earlier one said is left out, as when a page's author is its site.
+ * what an earlier one said is left out, as when the one author named is the holder.
  */
 function sources(item) {
   const data = item?.data ?? {};

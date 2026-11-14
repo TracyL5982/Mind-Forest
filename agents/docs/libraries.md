@@ -166,18 +166,18 @@ Chips are read from the item alone. They never come from `view.props`, so the Re
 | `when` | The first of `item.data.when` and `item.data.date` that is a source | The string. |
 | `origin` | The first of `item.data.holder`, `item.data.venue`, `item.data.site` and `item.data.from` that is a source. Only when the agents brought the item, which is `item.origin.by === 'agent'`. | The string. |
 | `where` | `item.data.where` | The string. |
-| `people` | The first of `item.data.people` and `item.data.authors` that holds a name, each an array of strings. With neither, `item.data.by`, a string, as one name. | The first two names joined by a comma and a space. With more than two names the chip also has `count`, how many it leaves unnamed. |
+| `people` | The first of `item.data.people` and `item.data.authors` that holds a name, each an array of strings. | The first two names joined by a comma and a space. With more than two names the chip also has `count`, how many it leaves unnamed. |
 
 A value is trimmed of the white space at both ends. A string is a source only when something is left after that, so an empty string, a string of spaces and a value of another type are passed over, and the next key is tried. A name that is not a string, or is empty once trimmed, is skipped, and an array with no name left is no source.
 
-The Scout writes `date`, `by`, `site` and `from` on what it brings, and `holder`, `venue` and `authors` when its source gives them. `when`, `where` and `people` are for what the user makes. The origin keys run from the most exact to the least: the museum that holds a work, the journal a paper is in, the site a page is on, and last the name of the source the Scout searched, such as `The web`.
+The Scout writes `date`, `site` and `from` on what it brings, and `holder`, `venue` and `authors` when its source gives them. It also writes `by`, which no chip reads: it is a maker for a museum work, and for other sources a site's name, a score or a cuisine, and a wrong person on a card is worse than none. `when`, `where` and `people` are for what the user makes. The origin keys run from the most exact to the least: the museum that holds a work, the journal a paper is in, the site a page is on, and last the name of the source the Scout searched, such as `The web`.
 
 What the user made has no origin, so its order is when, where, people. What the agents brought says where it came from straight after its date, before a place or people, so a paper keeps its journal when the line has no room for its authors.
 
 **Which chips a card has.**
 
 1. Take the sources the item holds, in the order above.
-2. Drop each one whose text is exactly the text of a source before it. A page whose `by` is its `site` names the site once.
+2. Drop each one whose text is exactly the text of a source before it. A work whose one author is its holder names it once.
 3. Drop each one whose `item.data` key the card's type already shows, and each one whose text is exactly the trimmed value of such a key. The table below lists these.
 4. Keep the first three. `chips(item, shown)` returns these as `{ kind, text }`, and a people chip that leaves some unnamed also has `count`.
 

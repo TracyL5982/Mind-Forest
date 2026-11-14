@@ -55,12 +55,14 @@ test('the date is data.when, else data.date, which is the key the Scout writes',
   assert.deepEqual(chips(item({ when: ' ', date: '1857' })), [{ kind: 'when', text: '1857' }]);
 });
 
-test('the people are data.people, else data.authors, else the one data.by names', () => {
+test('the people are data.people, else data.authors, and never data.by', () => {
   const all = { people: ['Ada', 'Grace'], authors: ['T. Screech', 'M. Forrer', 'H. Smith'], by: 'Screech et al.' };
   assert.deepEqual(chips(item(all)), [{ kind: 'people', text: 'Ada, Grace' }]);
   assert.deepEqual(chips(item({ ...all, people: [] })), [{ kind: 'people', text: 'T. Screech, M. Forrer', count: 1 }]);
-  assert.deepEqual(chips(item({ by: 'Utagawa Hiroshige' })), [{ kind: 'people', text: 'Utagawa Hiroshige' }]);
-  assert.deepEqual(chips(item({ authors: 'T. Screech', by: ' ' })), []);
+  assert.deepEqual(chips(item({ by: 'Utagawa Hiroshige' })), [], 'by alone gives no people chip: it is as often a site or a score as a person');
+  assert.deepEqual(chips(brought({ by: '312 points, 45 comments' })), []);
+  assert.deepEqual(chipSources(brought({ by: 'The Guardian' })), []);
+  assert.deepEqual(chips(item({ authors: 'T. Screech' })), []);
 });
 
 test('the origin is the first of holder, venue, site and from that holds more than spaces', () => {
@@ -92,8 +94,8 @@ test('a source the card type already shows is left out, and so is one that says 
 });
 
 test('a source that repeats an earlier one is left out', () => {
-  assert.deepEqual(chips(brought({ site: 'example.com', by: 'example.com', from: 'The web' })), [{ kind: 'origin', text: 'example.com' }]);
-  assert.deepEqual(chipSources(brought({ site: 'example.com', by: 'example.com' })), [{ kind: 'origin', label: 'Origin', text: 'example.com' }]);
+  assert.deepEqual(chips(brought({ holder: 'Rijksmuseum', authors: ['Rijksmuseum'], from: 'The web' })), [{ kind: 'origin', text: 'Rijksmuseum' }]);
+  assert.deepEqual(chipSources(brought({ holder: 'Rijksmuseum', people: ['Rijksmuseum'] })), [{ kind: 'origin', label: 'Origin', text: 'Rijksmuseum' }]);
   assert.deepEqual(chips(item({ when: 'Edo', where: 'Edo' })), [{ kind: 'when', text: 'Edo' }]);
 });
 
