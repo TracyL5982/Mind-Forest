@@ -193,6 +193,45 @@ export function fold(str, width, letter, max) {
   return clamp(BREAKS_ANYWHERE.test(str) ? packed(str, room, letter) : up(need, room - 20 * letter), 1, max);
 }
 
+const ANYWHERE = /[\u3041-\u3096\u30a1-\u30fa\u30fc\u3400-\u9fff\uac00-\ud7af]/;
+
+/**
+ * How many lines a string is given in a column too narrow for `fold`, where one long word can
+ * leave half a line empty. The words are laid out one by one. A line may end at white space and
+ * between two characters that can each end a line, and nowhere else, which is at most where a page
+ * breaks. A word wider than a line starts a line of its own and is broken wherever a line ends. One
+ * letter of each line is kept spare, because a short word can draw a little wider than it counts.
+ */
+export function wrap(str, width, letter, max) {
+  const room = width * 100 - 10 * letter;
+  const space = span(' ', letter) * letter;
+  let lines = 1;
+  let used = 0;
+  const place = (wide, gap) => {
+    if (used > 0 && used + gap + wide > room) {
+      lines += 1;
+      used = 0;
+    }
+    used += (used > 0 ? gap : 0) + wide;
+  };
+  for (const word of str.split(/\s+/).filter(Boolean)) {
+    let gap = space;
+    let unit = '';
+    const chars = [...word];
+    chars.forEach((ch, i) => {
+      unit += ch;
+      const next = chars[i + 1];
+      if (next !== undefined && !(ANYWHERE.test(ch) && ANYWHERE.test(next))) return;
+      const wide = span(unit, letter) * letter;
+      if (wide <= room) place(wide, gap);
+      else [...unit].forEach((part, k) => place(span(part, letter) * letter, k === 0 ? room : 0));
+      gap = 0;
+      unit = '';
+    });
+  }
+  return clamp(lines, 1, max);
+}
+
 const segmenter = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
 
 /** A string as the characters a reader sees, so a cut never lands inside an emoji or an accent. */
