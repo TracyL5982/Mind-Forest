@@ -87,13 +87,15 @@ export const fakeRoles: Roles = {
     const node = ctx.mind.node(anchor);
     const topic = need ?? ctx.mind.itemOf(anchor).title;
     const n = ctx.mind.children(anchor).length;
+    // Nothing repeats inside a tree, so a later run under a card that already holds picks brings them under other titles.
+    const again = (title: string) => (n > 0 ? `${title}, take ${n + 1}` : title);
     // Asked for a museum work or a paper, the fake brings one as its first pick, so a card that draws a source's own record can be seen offline.
     const asked = /\b(museum|artwork|painting)/i.test(need ?? '') ? await found(ctx, WORK, { id: 'museums', name: 'Museum collections' }) : /\b(paper|study|research)/i.test(need ?? '') ? await found(ctx, PAPER, { id: 'papers', name: 'Research papers' }) : null;
     const drafts: Item[] = [
-      asked ?? makeItem(ctx, { kind: 'link', title: `An essay on ${topic}`, summary: 'A long read that argues the idea from first principles.', tags: ['essay'], origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/essay-${n}` } }),
-      makeItem(ctx, { kind: 'text', title: '7 in 10 notice it without naming it', text: 'In a small survey, 7 in 10 viewers noticed the effect without being able to name it.', summary: 'A survey figure.', tags: ['data'], data: { facts: [{ label: 'viewers who notice it', value: '70%' }] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/survey-${n}` } }),
-      makeItem(ctx, { kind: 'text', title: 'How to try it', summary: 'Three steps.', tags: ['how-to'], data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/howto-${n}` } }),
-      makeItem(ctx, { kind: 'text', title: 'Where it turns up', summary: 'How often each genre uses it.', tags: ['history'], data: { chart: { labels: ['Horror', 'Thriller', 'Drama', 'Comedy'], values: [14, 11, 9, 3], unit: 'films' } }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/chart-${n}` } }),
+      asked ?? makeItem(ctx, { kind: 'link', title: again(`An essay on ${topic}`), summary: 'A long read that argues the idea from first principles.', tags: ['essay'], origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/essay-${n}` } }),
+      makeItem(ctx, { kind: 'text', title: again('7 in 10 notice it without naming it'), text: 'In a small survey, 7 in 10 viewers noticed the effect without being able to name it.', summary: 'A survey figure.', tags: ['data'], data: { facts: [{ label: 'viewers who notice it', value: '70%' }] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/survey-${n}` } }),
+      makeItem(ctx, { kind: 'text', title: again('How to try it'), summary: 'Three steps.', tags: ['how-to'], data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/howto-${n}` } }),
+      makeItem(ctx, { kind: 'text', title: again('Where it turns up'), summary: 'How often each genre uses it.', tags: ['history'], data: { chart: { labels: ['Horror', 'Thriller', 'Drama', 'Comedy'], values: [14, 11, 9, 3], unit: 'films' } }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/chart-${n}` } }),
     ];
     const commands: Command[] = mode === 'refresh' ? ctx.mind.picks(anchor).map((p) => ({ type: 'deleteNode', id: p.id })) : [];
     drafts.slice(0, ctx.settings.picksPerRun).forEach((item, i) => {

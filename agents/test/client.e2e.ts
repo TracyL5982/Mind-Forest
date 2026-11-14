@@ -91,9 +91,23 @@ async function main(): Promise<void> {
       await shot(page, 'desktop-1-empty');
     });
 
+    await check('a plain thought goes into the knowledge base, is listed there, and starts no tree', async () => {
+      await page.getByLabel('A thought for the mindstorm').fill('Remember the lens cap');
+      await page.getByRole('button', { name: 'Add', exact: true }).click();
+      await page.locator('.kb-chip', { hasText: 'Knowledge base 1' }).waitFor();
+      await page.locator('#toast', { hasText: 'is in your knowledge base' }).waitFor();
+      assert.equal(await count(page, '.card'), 0);
+      assert.equal(await count(page, '.tree-chip'), 0);
+      assert.equal(await page.locator('#empty').isVisible(), false);
+      await page.locator('.kb-chip').click();
+      await page.locator('#kb-list li', { hasText: 'Remember the lens cap' }).waitFor();
+      await page.mouse.click(700, 450);
+      await until('the list to close', async () => !(await page.locator('#kb').isVisible()));
+    });
+
     let rootId = '';
-    await check('a typed thought becomes a tree with one solid card and four dashed picks', async () => {
-      await page.getByLabel('A thought for the mindstorm').fill('The dolly zoom makes dread out of geometry');
+    await check('a thought that asks for a tree becomes one, with one solid card and four dashed picks', async () => {
+      await page.getByLabel('A thought for the mindstorm').fill('Start a tree on this: The dolly zoom makes dread out of geometry');
       await page.getByRole('button', { name: 'Add', exact: true }).click();
       await page.locator('.card.is-kept').first().waitFor();
       await page.locator('.card.is-thinking .think').first().waitFor();
@@ -160,7 +174,7 @@ async function main(): Promise<void> {
       const before = await places(page, firstTree);
       await page.evaluate(() => {
         const data = new DataTransfer();
-        data.setData('text/plain', 'Sourdough starters need feeding on a schedule');
+        data.setData('text/plain', 'Sourdough starters need feeding on a schedule. Start a tree on this.');
         document.body.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
       });
       await until('two trees', async () => (await count(page, '.tree-chip')) === 2);
@@ -230,14 +244,19 @@ async function main(): Promise<void> {
       assert.equal(await panel.isVisible(), false);
     });
 
-    await check('a chosen file and a typed address land as a picture card and a link card', async () => {
+    await check('a chosen file goes into the knowledge base, "start a tree on this" makes it a picture card, and a typed address is kept as a link', async () => {
       await page.locator('#file-pick').setInputFiles({ name: 'still.png', mimeType: 'image/png', buffer: Buffer.from(PNG) });
-      const picture = page.locator('.card[data-component="image"]', { hasText: 'still.png' });
+      await page.locator('#toast', { hasText: '“still.png” is in your knowledge base' }).waitFor();
+      await page.getByLabel('Talk to the librarian').fill('start a tree on this');
+      await page.getByRole('button', { name: 'Send' }).click();
+      const picture = page.locator('.card.is-root[data-component="image"]', { hasText: 'still.png' });
       await picture.waitFor();
       await until('the picture to load', () => picture.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0));
       await page.getByLabel('A thought for the mindstorm').fill('https://example.org/lenses');
       await page.getByLabel('A thought for the mindstorm').press('Enter');
-      await page.locator('.card[data-component="link"]', { hasText: 'example.org' }).first().waitFor();
+      await page.locator('.kb-chip').click();
+      await page.locator('#kb-list li', { hasText: 'example.org' }).waitFor();
+      await page.locator('.kb-chip').click();
       await run.pipeline.idle();
     });
 
@@ -418,11 +437,11 @@ async function main(): Promise<void> {
       ];
       await page.keyboard.press('Escape');
       for (const [type, text, shown, part, parts] of pasted) {
-        await paste(text);
+        await paste(`Start a tree on this:\n${text}`);
         const made = page.locator(`.card.is-kept[data-component="${type}"]`, { hasText: shown }).last();
         await made.waitFor();
         assert.equal(await made.locator(part).count(), parts, `${type} draws ${parts} of ${part}`);
-        // A paste the filer puts under an earlier card makes no tree to glide to, so each tree is visited until the card is on screen.
+        // Each paste starts a tree the view follows, but one can sit off the screen while the field settles, so each tree is visited until the card is on screen.
         for (const chip of [null, ...(await page.locator('.tree-chip').all())]) {
           if (chip) await chip.click();
           await settle(page);
@@ -438,10 +457,11 @@ async function main(): Promise<void> {
         if (type === 'table') assert.equal(await page.locator('#panel .panel-text').count(), 0, 'an opened table does not print the pasted rows again under its cells');
         if (type === 'table') {
           const drawn = await page.locator('#panel .detail-table').elementHandle();
+          const known = Number((await page.locator('.kb-chip').textContent())!.replace(/\D+/g, ''));
           await paste('Remember to water the fig tree on Sunday morning');
-          await page.locator('.card.is-kept', { hasText: 'water the fig tree' }).last().waitFor();
+          await page.locator('.kb-chip', { hasText: `Knowledge base ${known + 1}` }).waitFor();
           await run.pipeline.idle();
-          assert.ok(await drawn!.evaluate((el) => el.isConnected), 'an opened table is not drawn again when another card arrives, so it keeps its scroll place');
+          assert.ok(await drawn!.evaluate((el) => el.isConnected), 'an opened table is not drawn again when something else arrives, so it keeps its scroll place');
         }
         await page.keyboard.press('Escape');
       }

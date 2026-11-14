@@ -15,7 +15,7 @@
 
 <section id="empty" class="empty" hidden>
   <h1>Nothing here yet</h1>
-  <p>Drop a file, paste a link, or type a thought below. The librarian files it into a tree and brings picks: new things worth a look, drawn dashed until you keep them.</p>
+  <p>Drop a file, paste a link, or type a thought below. It goes into your knowledge base, and under a card of a tree only when it plainly belongs there. To grow a tree, type or say “make a tree about …”, or add “start a tree on this” to what you drop. The librarian then brings picks: what you already have that fits, and new things worth a look, drawn dashed until you keep them.</p>
 </section>
 
 <header class="bar">
@@ -62,6 +62,12 @@
     <output id="picks-count">5</output>
     <button id="picks-more" class="btn" type="button" aria-label="More picks">+</button>
   </div>
+</section>
+
+<section id="kb" class="pop kb" hidden aria-label="Knowledge base">
+  <h2>Knowledge base</h2>
+  <p class="kb-about">What you dropped that no tree holds yet. Type or say “make a tree about …” to grow a tree from what is here.</p>
+  <ol id="kb-list" class="kb-list"></ol>
 </section>
 
 <aside id="panel" class="panel" hidden aria-label="Opened card"></aside>
