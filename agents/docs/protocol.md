@@ -30,7 +30,7 @@ Drawing rules:
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `hello` | `protocol`, `snapshot`, `settings`, `undo` | Sent once on connect. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
+| `hello` | `protocol`, `snapshot`, `settings`, `undo`, `voice` | Sent once on connect. `voice` is true when the service can read replies aloud through `GET /api/speak`. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
 | `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
 | `activity` | `activity` | Work state: `id`, `role`, `state` (`start`, `done`, `error`), `message`, optional `nodeId`. Show a thinking mark on `nodeId` between `start` and `done`. |
 | `say` | `text` | One short line for the agent to speak. |
@@ -69,9 +69,10 @@ Drawing rules:
 | `GET /assets/<id>` | | The bytes. Supports byte ranges for video. |
 | `POST /api/transcribe` | Audio bytes, with `Content-Type` (`audio/wav`, `audio/webm`, `audio/mp4`, `audio/mpeg`, `audio/ogg`) | `{text}` |
 | `GET /handoffs/<name>.zip` | | The bundle. |
+| `GET /api/speak?text=<reply>` | | MP3 of the reply read aloud, streamed as it is made. 404 when the service has no voice. Takes the token as `?token=` so an audio element can play it directly. |
 | `GET /api/state` | | `{snapshot, settings}` |
 | `GET /api/health` | | `{ok, protocol}`. No token needed. |
 
 ## Voice
 
-A client can turn speech into text itself and send `utter` messages. Or it can record audio, post it to `/api/transcribe`, and send the returned text as a final `utter`. The service speaks through `say` messages. The client turns them into sound.
+A client can turn speech into text itself and send `utter` messages. Or it can record audio, post it to `/api/transcribe`, and send the returned text as a final `utter`. The service speaks through `say` messages. The client turns them into sound, with `GET /api/speak` when `hello.voice` is true and its own voice otherwise.

@@ -6,15 +6,15 @@ import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { startServer, type Running } from '../src/node/server.ts';
+import { startServer, type Running, type ServerOptions } from '../src/node/server.ts';
 
 interface Msg {
   t: string;
   [k: string]: unknown;
 }
 
-async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-'))): Promise<{ run: Running; dataDir: string }> {
-  const run = await startServer({ port: 0, host: '127.0.0.1', dataDir, clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret' });
+async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-')), extra: Partial<ServerOptions> = {}): Promise<{ run: Running; dataDir: string }> {
+  const run = await startServer({ port: 0, host: '127.0.0.1', dataDir, clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret', ...extra });
   return { run, dataDir };
 }
 
@@ -146,4 +146,31 @@ test('one undo takes back one real change, along with the format choices that fo
   await run.pipeline.idle();
   c.ws.close();
   await run.close();
+});
+
+test('a reply is read aloud by the service voice when it has one, and the client is told when it has none', async () => {
+  const heard: string[] = [];
+  const { run } = await boot(undefined, {
+    speak: async (text) => {
+      heard.push(text);
+      return new Blob([new Uint8Array([1, 2]), new Uint8Array([3])]).stream();
+    },
+  });
+  assert.equal((await fetch(`${run.url}/api/speak?text=hello`)).status, 401);
+  const res = await fetch(`${run.url}/api/speak?token=secret&text=${encodeURIComponent('Filed under Japan.')}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'audio/mpeg');
+  assert.deepEqual([...new Uint8Array(await res.arrayBuffer())], [1, 2, 3]);
+  assert.deepEqual(heard, ['Filed under Japan.']);
+  const voiced = await connect(run);
+  assert.equal((await voiced.until((m) => m.t === 'hello')).voice, true);
+  voiced.ws.close();
+  await run.close();
+
+  const { run: silent } = await boot();
+  const quiet = await connect(silent);
+  assert.equal((await quiet.until((m) => m.t === 'hello')).voice, false);
+  quiet.ws.close();
+  assert.equal((await fetch(`${silent.url}/api/speak?token=secret&text=hello`)).status, 404);
+  await silent.close();
 });

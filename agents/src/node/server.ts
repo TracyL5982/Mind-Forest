@@ -9,6 +9,7 @@ import { DEFAULT_SETTINGS, type Handoff, type Roles, type Settings } from '../co
 import { Mindstorm } from '../core/state.ts';
 import { DiskAssets } from './assets.ts';
 import { ClientMessage, PROTOCOL_VERSION } from './protocol.ts';
+import type { Speak } from './speech-openai.ts';
 import { SqliteStore } from './store.ts';
 import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
@@ -24,6 +25,8 @@ export interface ServerOptions {
   token?: string;
   instagram?: { token: string; userId: string };
   keys?: Record<string, string | undefined>;
+  /** Reads a reply aloud. Without it the client uses the browser's own voice. */
+  speak?: Speak;
   settings?: Partial<Settings>;
   log?: (line: string) => void;
 }
@@ -37,6 +40,7 @@ export interface Running {
 }
 
 const MAX_UPLOAD = 300 * 1024 * 1024;
+const MAX_SPOKEN = 1200;
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -139,6 +143,22 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       const text = await opts.model.transcribe({ audio, mime: req.headers['content-type'] ?? 'audio/wav' });
       return json(res, 200, { text });
     }
+    if (req.method === 'GET' && path === '/api/speak') {
+      const text = (url.searchParams.get('text') ?? '').slice(0, MAX_SPOKEN).trim();
+      if (!opts.speak || !text) return json(res, 404, { error: 'no voice' });
+      const stop = new AbortController();
+      res.on('close', () => stop.abort());
+      const audio = await opts.speak(text, stop.signal);
+      res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' });
+      const reader = audio.getReader();
+      try {
+        for (let part = await reader.read(); !part.done; part = await reader.read()) res.write(part.value);
+      } catch (err) {
+        if (!stop.signal.aborted) throw err;
+      }
+      res.end();
+      return;
+    }
     if (req.method === 'GET' && path === '/api/state') return json(res, 200, { snapshot: mind.snapshot(), settings });
     if (req.method === 'GET' && path.startsWith('/assets/')) {
       const id = path.slice('/assets/'.length);
@@ -173,7 +193,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
 
   wss.on('connection', (ws: WebSocket) => {
     sockets.add(ws);
-    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, undo: pipeline.undoLabel() }));
+    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, undo: pipeline.undoLabel(), voice: Boolean(opts.speak) }));
     ws.on('close', () => sockets.delete(ws));
     ws.on('message', (raw) => {
       let message: ClientMessage;

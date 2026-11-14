@@ -87,12 +87,37 @@ export class Voice {
   }
 }
 
-export function speak(text) {
+let playing = null;
+
+/** Plays the service's voice for a reply. Without one, or if it fails, the browser's own voice reads it. */
+export function speak(text, url) {
+  hush();
+  if (!url) return browserSpeak(text);
+  const audio = new Audio(url);
+  playing = audio;
+  const fallback = () => {
+    if (playing !== audio) return;
+    playing = null;
+    browserSpeak(text);
+  };
+  audio.onerror = fallback;
+  audio.onended = () => { if (playing === audio) playing = null; };
+  audio.play().catch(fallback);
+}
+
+function browserSpeak(text) {
   if (!('speechSynthesis' in window)) return;
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
 }
 
 export function hush() {
+  if (playing) {
+    const audio = playing;
+    playing = null;
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+  }
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
 }

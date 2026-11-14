@@ -98,6 +98,10 @@ export class Connection {
     return reply.json();
   }
 
+  speechUrl(text) {
+    return `/api/speak?token=${encodeURIComponent(this.token)}&text=${encodeURIComponent(text)}`;
+  }
+
   async transcribe(blob) {
     const reply = await fetch('/api/transcribe', {
       method: 'POST',

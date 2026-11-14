@@ -23,6 +23,7 @@ let following = null;
 let drawQueued = false;
 let refit = false;
 let muted = false;
+let voiced = false;
 try { muted = localStorage.getItem(MUTED) === '1'; } catch { /* keeps the default */ }
 
 function send(message) {
@@ -96,6 +97,7 @@ function receive(message) {
       const first = field.cards.size === 0;
       store.replace(message.snapshot, message.undo ?? null);
       store.settings = message.settings;
+      voiced = message.voice === true;
       showSettings(store.settings);
       log.reset();
       for (const id of field.thinking.keys()) field.thinking.set(id, 0);
@@ -130,7 +132,7 @@ function receive(message) {
     }
     case 'say':
       caption('librarian', message.text);
-      if (!muted) speak(message.text);
+      if (!muted) speak(message.text, voiced ? conn.speechUrl(message.text) : null);
       return;
     case 'heard':
       caption('you', message.text, { faint: !message.final });
