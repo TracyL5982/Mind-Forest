@@ -132,6 +132,11 @@ export function showcase(image: string, other?: string, { structured = true } = 
       seed.text = [title, opening, ...figures.map(({ label, value }) => `${label}: ${value}`)].join('\n');
       seed.view = { component: 'sheet', props: { sections: [{ kind: 'heading', text: title }, { kind: 'text', text: opening }, { kind: 'figures', facts: figures }] } };
     }
+    // The stand-in reads a slider from a formula in backticks that names its quantity, and sentences that each write a value and its result.
+    if (id === 'explorable') {
+      seed.text = 'On a full-frame camera the field of view is `2 * atan(18 / f) * 57.2958` degrees, for a focal length f in mm.\nAt 24 mm the field of view is 73.7°. At 50 mm it is 39.6°. At 200 mm it is 10.3°.';
+      seed.view = { component: 'explorable', props: SAMPLES.explorable.props };
+    }
     if (add(carried, id, title, seed) !== STRUCTURED[id]) throw new Error(`the ${id} card is not ${STRUCTURED[id]}`);
   }
   return commands;

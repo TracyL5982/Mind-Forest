@@ -69,8 +69,9 @@ test('every Renderer reply is flat: each key required, none nullable, no recursi
   assert.deepEqual(entry.component.enum, [...CHOSEN]);
   assert.deepEqual(
     Object.keys(entry),
-    ['id', 'component', 'subject', 'passage', 'by', 'tone', 'lines', 'labels', 'numbers', 'left', 'right', 'unit', 'emphasis', 'sections'],
-    'a card the model may choose is built from these slots, and adding one adds no key',
+    ['id', 'component', 'subject', 'passage', 'by', 'tone', 'lines', 'labels', 'numbers', 'left', 'right', 'unit', 'emphasis', 'sections', 'controls', 'formula'],
+    'a card the model may choose is built from these slots, and adding one adds no key but what no slot can hold: an explorable\'s controls and its formula',
   );
   assert.deepEqual(Object.keys(entry.sections.items.properties), ['kind', 'text', 'by', 'lines']);
+  assert.deepEqual(Object.keys(entry.controls.items.properties), ['kind', 'label', 'states', 'texts', 'name', 'unit', 'min', 'max', 'values']);
 });

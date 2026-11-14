@@ -172,6 +172,34 @@ test('the fake chooses a callout, a sheet or a note for a text the rules left as
   assert.deepEqual(k.notes, ['renderer: Kept "Survey of 40 viewers" as the rules drew it: the model\'s fact shows value, which the content does not state.']);
 });
 
+test('the fake makes an explorable of a text that contrasts states or gives a formula, and the real checks refuse a formula that cannot be read or misses', async () => {
+  const k = kit();
+  const { treeId, nodeIds } = k.seedTree('Tree', ['Root']);
+  const paste = async (text: string) => {
+    const [item] = await fakeRoles.intake(k.ctx, [{ kind: 'text', text }]);
+    const node = makeNode(k.ctx, item!, { treeId, parent: nodeIds[0]!, status: 'kept', why: '', origin: item!.origin });
+    k.mind.apply({ origin: item!.origin, label: 'paste', commands: [{ type: 'addItem', item: item! }, { type: 'addNode', node }] });
+    k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands: await fakeRoles.renderer(k.ctx, { nodeIds: [node.id] }) });
+    return k.mind.node(node.id).view as { component: string; props: { controls?: { kind: string }[]; output?: { kind: string } } };
+  };
+  const field = (formula: string) => `Field of view\nOn a full-frame camera the field of view is \`${formula}\` degrees, for a focal length f in mm.\nAt 24 mm the field of view is 73.7°. At 50 mm it is 39.6°. At 200 mm it is 10.3°.`;
+
+  const slider = await paste(field('2 * atan(18 / f) * 57.2958'));
+  assert.deepEqual([slider.component, slider.props.controls?.[0]?.kind, slider.props.output?.kind], ['explorable', 'slider', 'chart']);
+  const dolly = await paste('Three ways to shoot a dolly zoom\nZoom only: the lens zooms in while the camera stays put.\nDolly only: the camera moves in on a fixed lens.\nBoth: the camera pulls back as the lens zooms in.');
+  assert.deepEqual([dolly.component, dolly.props.controls?.[0]?.kind], ['explorable', 'segmented']);
+  const aperture = await paste('光圈与景深\n大光圈：背景虚化得很厉害，只有对焦的那一层是清楚的。\n小光圈：从前景到远山都清楚，但快门要放慢。');
+  assert.deepEqual([aperture.component, aperture.props.controls?.[0]?.kind], ['explorable', 'toggle']);
+  assert.deepEqual(k.notes, []);
+
+  assert.equal((await paste(field('2 * atan2(18, f) * 57.2958'))).component, 'note');
+  assert.equal((await paste(field('2 * atan(18 / f) * 60'))).component, 'note');
+  assert.deepEqual(k.notes, [
+    'renderer: Kept "Field of view" as the rules drew it: the model\'s explorable has a formula that cannot be read: it calls the unknown function "atan2".',
+    'renderer: Kept "Field of view" as the rules drew it: the model\'s explorable has a formula that gives 77.22 at focal length 24, where the item states 73.7.',
+  ]);
+});
+
 test('the fake model answers the real Renderer about cards, one valid entry for each item it is asked about', async () => {
   const k = kit();
   k.model.choosing();

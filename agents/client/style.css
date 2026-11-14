@@ -241,8 +241,8 @@ button, input, textarea { font: inherit; color: inherit; }
    Kerning is off in them, so a word is exactly as wide as its characters add up to and a line ends where it was counted to end.
    A figure set at 24 px and up is kerned, because Ta and Wa gape there unkerned. Kerning only draws a line narrower than its
    characters add up to, so the count still holds. */
-.c-facts, .c-table, .c-list, .c-breakdown, .c-qa, .c-callout, .c-excerpt, .c-definition, .c-idea, .c-proscons, .c-swatch, .c-artwork, .c-reference, .c-place, .c-sheet { font-kerning: none; }
-:is(.c-facts, .c-idea, .c-definition, .c-place, .c-sheet) .fact-value:not(.is-small) { font-kerning: normal; }
+.c-facts, .c-table, .c-list, .c-breakdown, .c-qa, .c-callout, .c-excerpt, .c-definition, .c-idea, .c-proscons, .c-swatch, .c-artwork, .c-reference, .c-place, .c-sheet, .c-explorable { font-kerning: none; }
+:is(.c-facts, .c-idea, .c-definition, .c-place, .c-sheet, .c-explorable) .fact-value:not(.is-small) { font-kerning: normal; }
 
 /* list: a dot before each entry, or a tick box when the list is a checklist. A tick box shows a mark and takes no click. */
 .list-head { display: flex; align-items: baseline; gap: 10px; }
@@ -416,6 +416,44 @@ button, input, textarea { font: inherit; color: inherit; }
 .sheet-by span { min-width: 0; overflow-wrap: anywhere; }
 .detail-sheet-heading { overflow-wrap: anywhere; }
 .detail-sheet-text { color: var(--ink); overflow-wrap: anywhere; }
+
+/* explorable: under a mark that says it can be explored, the title, what the controls change, and a row for each control as it
+   stands by default. Nothing on the card responds, because a drag on the field moves the card; the opened card has the controls.
+   components/explorable.js sets the room between the parts, so the footprint and the page agree. */
+.c-explorable { gap: 0; }
+.explore-mark { flex: none; height: var(--lead-text); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.explore-glyph { flex: none; fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; }
+.explore-out { flex: none; margin-top: 10px; display: flex; flex-direction: column; }
+.explore-text { color: var(--ink); font-size: var(--type-text); line-height: var(--lead-text); }
+.explore-text + .explore-text { margin-top: 6px; }
+.explore-figure .fact-label { margin-top: 2px; }
+.explore-plot { display: block; flex: none; margin-top: 8px; }
+.explore-row { flex: none; height: 28px; margin-top: 8px; display: flex; align-items: center; gap: 4px; }
+.explore-pill { flex: 1 1 0; min-width: 0; height: 28px; padding: 0 5px; border-radius: 14px; border: 1px solid var(--line-2); color: var(--ink-2); font-size: var(--type-text); line-height: 26px; text-align: center; white-space: nowrap; overflow: hidden; }
+.explore-pill.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--ink); }
+.explore-row .explore-reading { flex: 1; min-width: 0; color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); white-space: nowrap; overflow: hidden; }
+.explore-track { flex: none; position: relative; height: 4px; margin-left: 4px; border-radius: 2px; background: var(--line-2); }
+.explore-knob { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--accent); }
+.detail-explorable { padding: 13px 15px; border-radius: 12px; background: var(--face); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); display: flex; flex-direction: column; gap: 14px; }
+.detail-explorable .explore-out { margin-top: 0; gap: 8px; }
+.explore-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+.explore-value .fact-value { overflow-wrap: anywhere; }
+.explore-computed { color: var(--ink-3); font-size: var(--type-text); font-variant-caps: all-small-caps; letter-spacing: 0.07em; }
+.detail-explorable .explore-plot { width: 100%; height: auto; margin-top: 0; }
+.explore-state-text { font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.explore-control { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.explore-name { color: var(--ink-2); font-size: 12.5px; line-height: 17px; overflow-wrap: anywhere; }
+.explore-segmented { display: flex; gap: 6px; }
+.explore-option { flex: 1 1 0; min-width: 0; min-height: var(--hit); padding: 6px 8px; border-radius: 12px; border: 1px solid var(--line-2); background: transparent; color: var(--ink-2); font-size: 14px; line-height: 18px; overflow-wrap: anywhere; cursor: pointer; }
+.explore-option[aria-checked='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--ink); }
+.explore-switch { min-height: var(--hit); align-self: flex-start; max-width: 100%; display: inline-flex; align-items: center; gap: 10px; padding: 0 4px 0 0; border: 0; background: none; text-align: start; font-size: 14px; line-height: 18px; overflow-wrap: anywhere; cursor: pointer; }
+.explore-switch-track { flex: none; position: relative; width: 40px; height: 24px; border-radius: 12px; background: var(--line-2); transition: background 0.15s; }
+.explore-switch-thumb { position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink); transition: transform 0.15s; }
+.explore-switch[aria-checked='true'] .explore-switch-track { background: var(--accent); }
+.explore-switch[aria-checked='true'] .explore-switch-thumb { transform: translateX(16px); background: var(--bg); }
+.explore-slider { display: flex; align-items: center; gap: 12px; }
+.explore-range { flex: 1; min-width: 0; height: var(--hit); margin: 0; accent-color: var(--accent); cursor: pointer; }
+.explore-slider .explore-reading { flex: none; min-width: 64px; text-align: end; font-size: 14px; font-variant-numeric: tabular-nums; }
 
 /* ---- groups */
 

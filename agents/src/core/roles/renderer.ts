@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
+import { parse } from '../formula.ts';
 import { grounding, type Grounding } from '../grounding.ts';
-import { CHECKS, isValidGroup, isValidView, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type Section, type Stated } from '../views.ts';
+import { CHECKS, isValidGroup, isValidView, misses, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type PropsOf, type Section, type Stated } from '../views.ts';
 import type { RoleContext, Roles } from './types.ts';
 
 const ROLE = 'renderer';
@@ -58,7 +59,7 @@ const PICTURE_LED = new Set(['image', 'video', 'artwork']);
 
 /** The cards that can be built from an item's own words, which the model chooses among. */
 export const CHOSEN = [
-  'note', 'idea', 'quote', 'fact', 'facts', 'steps', 'list', 'chart', 'breakdown', 'table', 'qa', 'definition', 'proscons', 'callout', 'excerpt', 'sheet',
+  'note', 'idea', 'quote', 'fact', 'facts', 'steps', 'list', 'chart', 'breakdown', 'table', 'qa', 'definition', 'proscons', 'callout', 'excerpt', 'sheet', 'explorable',
 ] as const satisfies readonly ComponentId[];
 export type Chosen = (typeof CHOSEN)[number];
 
@@ -69,6 +70,7 @@ const SECTION_KINDS = ['heading', 'text', 'figures', 'list', 'table', 'picture',
  * `subject` is a term, a question or what a value measures. `passage` is words of the item: a quotation, an answer, a meaning, a value.
  * Neither is named after a part of an item, because the model copied every item's title and whole text into slots called `title` and `body`.
  * `lines` are steps, list entries, "label | value" pairs, or table rows with "|" between their cells and the heads row first.
+ * `controls` and `formula` are an explorable's: its controls, each slider with the values the item states for it, and the formula they drive.
  */
 export const ComponentsReply = z.object({
   items: z.array(
@@ -87,6 +89,20 @@ export const ComponentsReply = z.object({
       unit: z.string(),
       emphasis: z.string(),
       sections: z.array(z.object({ kind: z.enum(SECTION_KINDS), text: z.string(), by: z.string(), lines: z.array(z.string()) })),
+      controls: z.array(
+        z.object({
+          kind: z.enum(['toggle', 'segmented', 'slider']),
+          label: z.string(),
+          states: z.array(z.string()),
+          texts: z.array(z.string()),
+          name: z.string(),
+          unit: z.string(),
+          min: z.number(),
+          max: z.number(),
+          values: z.array(z.number()),
+        }),
+      ),
+      formula: z.string(),
     }),
   ),
 });
@@ -633,6 +649,7 @@ const STANDS: Record<Stated, (value: unknown, content: Content, beside: Props, a
     return typeof value === 'string' && value.trim() !== '' && (typeof named !== 'number' || text.names(value, named, unit) || !text.writes(named, unit));
   },
   choice: () => true,
+  computes: () => true,
 };
 
 interface Leaf {
@@ -772,7 +789,7 @@ function distinct<T>(entries: T[], key: (entry: T) => string = (entry) => folded
  */
 function sizeShown(view: Draw): number {
   const shown = new Set<string>();
-  for (const { value, how } of leaves(view.props, checksOf(view.component).props)) if (how && how !== 'choice' && how !== 'own') shown.add(folded(String(value)));
+  for (const { value, how } of leaves(view.props, checksOf(view.component).props)) if (how && how !== 'choice' && how !== 'own' && how !== 'computes') shown.add(folded(String(value)));
   let size = 0;
   for (const value of shown) size += sizeOf(value);
   return size;
@@ -891,7 +908,40 @@ const BUILT: Record<Chosen, (reply: Entry, reading: Reading) => Props> = {
   callout: ({ passage, tone }) => ({ text: passage.trim(), tone: tone.trim().toLowerCase() === 'note' ? 'note' : 'caution' }),
   excerpt: ({ passage, by }, { kept, item }) => compact({ text: unquoted(passage), at: kept(by), source: str(item.data.site) ?? str(item.data.from) }),
   sheet: ({ sections }, reading) => ({ sections: sections.map((part) => ({ kind: part.kind, ...SECTIONS[part.kind](part, reading) })) }),
+  explorable: (reply, { text }) => {
+    const stated = (unit: string, values: number[]) => (unit.trim() && unitStands(unit.trim(), values, text) ? unit.trim() : undefined);
+    const controls = reply.controls.map((control, n) => {
+      if (control.kind !== 'slider') return { kind: control.kind, label: control.label.trim(), states: control.states.map((name, at) => ({ name: name.trim(), text: unquoted(control.texts[at] ?? '') })) };
+      const { values } = control;
+      const [min, max] = [Math.min(control.min, ...values), Math.max(control.max, ...values)];
+      return compact({ kind: 'slider', name: control.name.trim(), label: control.label.trim(), unit: stated(control.unit, values), min, max, step: stepFor(min, max, values), values });
+    });
+    const sliders = reply.controls.filter((control) => control.kind === 'slider');
+    if (sliders.length === 0) return { controls, output: { kind: 'text' } };
+    const read = parse(reply.formula, sliders.map((slider) => slider.name.trim()));
+    const values = reply.numbers;
+    // A result the item states at three or more values is drawn as the curve through them.
+    const output = compact({ kind: values.length >= 3 ? 'chart' : 'figure', label: reply.subject.trim(), unit: stated(reply.unit, values), formula: 'program' in read ? read.program : [], values });
+    return { controls, output, ...('error' in read && { unread: read.error }) };
+  },
 };
+
+/**
+ * The coarsest step of 1, 2 or 5 times a power of ten that gives a slider at least 40 steps and lands on its ends and on every value
+ * it states, or NaN when only one finer than `ROOM.stops` steps would.
+ */
+function stepFor(min: number, max: number, values: number[]): number {
+  for (let power = 6; power >= -6; power--) {
+    for (const times of [5, 2, 1]) {
+      const step = Number((times * 10 ** power).toPrecision(1));
+      const steps = (max - min) / step;
+      if (steps < 40) continue;
+      if (steps > ROOM.stops) return Number.NaN;
+      if ([min, max, ...values].every((value) => Math.abs(value / step - Math.round(value / step)) < 1e-6)) return step;
+    }
+  }
+  return Number.NaN;
+}
 
 /**
  * What became of one reply: the card it draws, or why it draws none and the rule's card stays.
@@ -900,10 +950,15 @@ const BUILT: Record<Chosen, (reply: Entry, reading: Reading) => Props> = {
  * - `small`: the card would show less than `COVERAGE_FLOOR` of the item.
  * `left` are the figures, list entries, table rows and sections the card was drawn without, or lost before it was refused, and why.
  */
-export type Verdict = { draw: Draw; left?: Fault[] } | { refused: 'invalid' | 'small' | Why; component: Chosen; prop?: string; left?: Fault[] };
+export type Verdict =
+  | { draw: Draw; left?: Fault[] }
+  | { refused: 'invalid' | 'small' | Why; component: Chosen; prop?: string; left?: Fault[] }
+  | { refused: 'formula'; component: 'explorable'; prop: 'formula'; because: string; left?: Fault[] };
 
 /** The cards that draw the item itself, so they have no share of it to fall short of, and nothing that an edit could leave standing. */
 const WHOLE = new Set<string>(['note', 'idea']);
+/** An explorable whose formula gives a value at every step of its sliders, which shows more than any share of its item's words. */
+const computed = (draw: Draw): boolean => draw.component === 'explorable' && (draw.props.output as { kind?: string } | undefined)?.kind !== 'text';
 
 function judged(draw: Draw, component: Chosen, item: Item, content: Content): Verdict {
   if (!isValidView(draw) || (draw.component === 'idea' && !isIdea(item, true))) return { refused: 'invalid', component };
@@ -914,7 +969,7 @@ function judged(draw: Draw, component: Chosen, item: Item, content: Content): Ve
   const left = dropped.length > 0 ? { left: dropped } : {};
   if (dropped.length > 0 && !isValidView(card)) return { refused: dropped[0]!.why, component, prop: dropped[0]!.prop, ...left };
   if (!(checksOf(card.component).also?.(card.props as never, item, content.text) ?? true)) return { refused: 'invalid', component, ...left };
-  if (!WHOLE.has(card.component) && sizeShown(card) < COVERAGE_FLOOR * wholeOf(item)) return { refused: 'small', component, ...left };
+  if (!WHOLE.has(card.component) && !computed(card) && sizeShown(card) < COVERAGE_FLOOR * wholeOf(item)) return { refused: 'small', component, ...left };
   return { draw: card, ...left };
 }
 
@@ -975,7 +1030,15 @@ export function byModel(reply: Entry, item: Item, assetUrl: (id: string) => stri
   const content = contentOf(item, assetUrl);
   const reading: Reading = { item, asked: { assetUrl }, text: content.text, kept: (value) => (value.trim() && content.text.says(value) ? value.trim() : undefined) };
   const props = BUILT[reply.component](reply, reading);
-  return reply.component === 'sheet' ? assembled(props.sections as Section[], item, content) : judged({ component: reply.component, props }, reply.component, item, content);
+  if (reply.component === 'sheet') return assembled(props.sections as Section[], item, content);
+  if (reply.component === 'explorable') {
+    const { unread, ...explorable } = props;
+    if (typeof unread === 'string') return { refused: 'formula', component: 'explorable', prop: 'formula', because: `cannot be read: ${unread}` };
+    const draw = { component: 'explorable' as const, props: explorable };
+    const miss = isValidView(draw) ? misses(explorable as PropsOf<'explorable'>) : undefined;
+    if (miss) return { refused: 'formula', component: 'explorable', prop: 'formula', because: miss };
+  }
+  return judged({ component: reply.component, props }, reply.component, item, content);
 }
 
 /** An item the rules are unsure of, with the card they drew it as `now`. */
@@ -1013,6 +1076,7 @@ Cards, and the fields each one uses:
 - proscons: the item weighs one choice. left has the points for and right the points against.
 - callout: the item is mainly a warning, a caveat or a reminder the reader must not miss. passage is that sentence, whole, and tone is "caution" for a warning or "note" for a remark.
 - excerpt: the item is mainly a passage copied out of a longer source. passage is the passage, whole and no longer than a quote, and by where it sits in the source when the text says.
+- explorable: the item explains how something works by relating quantities or by contrasting states, so a reader learns more by changing it. To contrast two to four states of one thing, controls has one control of kind "segmented", or "toggle" for two, with label naming what changes, states the name of each state, and texts the sentence or sentences that say each state, copied whole and in the same order. To relate quantities, controls has one control of kind "slider", with label and unit, name (a short name for the quantity, used in formula), min and max (the range worth exploring), and values (each value of it the item states); formula gives the result from name, written with numbers, + - * / ^, brackets and min, max, round, sqrt, exp, ln and atan (in radians), and nothing else; subject is the result's label, unit its unit, and numbers the result the item states at each of those values, in the same order.
 - sheet: an assembled card, for an item with two or more kinds of part worth showing that no card above covers. sections has two to four parts in reading order, a heading counted. Each has a kind:
   - heading: text is a few words from the item that name it. At most one, and first.
   - text: text is the item's opening, copied from its first word: one or two whole sentences, and at least ${ROOM.opening.spaced} characters of a long item (${ROOM.opening.spaceless} in Chinese or Japanese).
@@ -1037,8 +1101,9 @@ Items:
 ${items}`;
 }
 
-const REFUSED: Record<Extract<Verdict, { refused: string }>['refused'], (prop?: string) => string> = {
+const REFUSED: Record<Extract<Verdict, { refused: string }>['refused'], (prop?: string, because?: string) => string> = {
   invalid: () => 'is not one the library accepts',
+  formula: (_prop, because) => `has a formula that ${because}`,
   unstated: (prop) => `shows ${prop}, which the content does not state`,
   label: (prop) => `names a value at ${prop} in words the content does not set beside it`,
   cut: (prop) => `shows ${prop}, which is not a whole passage of the content`,
@@ -1062,7 +1127,7 @@ export function drawn(ctx: RoleContext, reply: Entry, item: Item): Draw | undefi
   // What a refusal names needs no second line.
   for (const { prop, why } of verdict.left ?? []) if (!('refused' in verdict) || prop !== verdict.prop) ctx.note(ROLE, `Left ${prop} out of the ${card} for ${name}: ${LEFT[why]}.`);
   if ('refused' in verdict) {
-    ctx.note(ROLE, `Kept ${name} as the rules drew it: the model's ${verdict.component} ${REFUSED[verdict.refused](verdict.prop)}.`);
+    ctx.note(ROLE, `Kept ${name} as the rules drew it: the model's ${verdict.component} ${REFUSED[verdict.refused](verdict.prop, 'because' in verdict ? verdict.because : undefined)}.`);
     return undefined;
   }
   return verdict.draw;

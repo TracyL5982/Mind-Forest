@@ -11,6 +11,8 @@ type Given = { item?: Record<string, unknown>; props: Record<string, unknown> };
 const load = (path: string) => import(new URL(`../client/js/${path}`, import.meta.url).href);
 const blank = { title: 'A title', text: '', summary: '', data: {} };
 const words = (count: number) => Array.from({ length: count }, (_, i) => `word${i}`).join(' ');
+const switching = (count: number, said: string) => ({ kind: 'segmented', label: 'Light', states: Array.from({ length: count }, (_, i) => ({ name: `State ${i}`, text: said })) });
+const contrasted = (...controls: unknown[]) => ({ controls, output: { kind: 'text' } });
 
 /**
  * For each type, cards that each hold more than the one before: more rows, or longer text. The
@@ -107,6 +109,13 @@ const GROWING: Record<string, Given[]> = {
     { props: { sections: [{ kind: 'heading', text: 'Camp' }, { kind: 'text', text: words(30) }, { kind: 'figures', facts: [{ label: 'Nights', value: '2' }] }, { kind: 'list', items: ['Tent', 'Stove', 'Lamp'] }] } },
     { props: { sections: [{ kind: 'picture', src: 'a.png' }, { kind: 'text', text: words(30) }, { kind: 'figures', facts: [{ label: 'Nights', value: '2' }, { label: 'Cost', value: '€240' }, { label: 'Walked', value: '31 km' }] }, { kind: 'list', items: ['Tent', 'Stove', 'Lamp', words(12), 'Map', 'Rope', 'Axe', 'Tea'] }] } },
     { item: { title: words(12) }, props: { sections: [{ kind: 'picture', src: 'a.png' }, { kind: 'text', text: words(30) }, { kind: 'figures', facts: [{ label: 'Nights', value: '2' }, { label: 'Cost', value: '€240' }, { label: 'Walked', value: '31 km' }] }, { kind: 'list', items: ['Tent', 'Stove', 'Lamp', words(12), 'Map', 'Rope', 'Axe', 'Tea'] }] } },
+  ],
+  explorable: [
+    { props: contrasted(switching(2, 'Short.')) },
+    { props: contrasted(switching(2, words(12))) },
+    { props: contrasted(switching(3, words(30))) },
+    { props: contrasted(switching(3, words(30)), switching(2, words(12))) },
+    { item: { title: words(12) }, props: contrasted(switching(3, words(30)), switching(2, words(12))) },
   ],
   place: [
     { item: { title: 'Lisbon' }, props: { name: 'Lisbon' } },
@@ -277,4 +286,31 @@ test('a sheet is one card: its heading is its title, a picture leads it, each pa
   const named = { view: { component: 'sheet', props: { sections: [{ kind: 'heading', text: 'Porto' }, text, list] } } };
   assert.deepEqual(chipsOf(named, item).map((chip) => chip.kind), ['when', 'people'], 'the place chip would say the heading again');
   assert.equal(sizeOf(node, item)[1], COMPONENTS.sheet!.size(item, node.view.props)[1]! + 28);
+});
+
+test('an explorable shows the value its item states where the sliders stand on one, the formula\'s value marked computed anywhere else, and steps through a formula as the service does', async () => {
+  type Result = { value: number | undefined; shown: string; computed: boolean };
+  const client = (await load('components/explorable.js')) as {
+    evaluate: (program: unknown[], values: Record<string, number>) => number | undefined;
+    resultAt: (sliders: unknown[], output: unknown, at: Record<string, number>) => Result;
+    written: (value: number, decimals: number, unit: string) => string;
+  };
+  const { evaluate, parse } = await import('../src/core/formula.ts');
+  const slider = { kind: 'slider', name: 'f', label: 'focal length', unit: 'mm', min: 12, max: 300, step: 2, values: [24, 50, 200] };
+  const output = { kind: 'chart', label: 'field of view', unit: '°', formula: [2, 18, 'f', '/', 'atan', '*', 57.2958, '*'], values: [73.7, 39.6, 10.3] };
+  assert.deepEqual(client.resultAt([slider], output, { f: 50 }), { value: 39.6, shown: '39.6°', computed: false });
+  assert.deepEqual(client.resultAt([slider], output, { f: 300 }), { value: client.evaluate(output.formula, { f: 300 }), shown: '6.9°', computed: true });
+  assert.equal(client.resultAt([slider], { ...output, formula: [1, 'f', '/'] }, { f: 0 }).shown, '–', 'no value where the formula has none');
+  assert.equal(client.written(12500.5, 1, 'mm'), '12,500.5 mm');
+  assert.equal(client.written(45, 0, '%'), '45%');
+  assert.equal(client.written(50, 0, '毫米'), '50毫米');
+
+  const sources = ['2 * atan(18 / f) * 57.2958', '-f ^ 2 + min(f, 3, 1) - max(f, 2)', 'round(f / 3) + sqrt(f) - ln(f) * exp(1 / f)', '1 / (f - 4)', 'sqrt(4 - f)', '2 ^ 3 ^ f'];
+  for (const source of sources) {
+    const read = parse(source, ['f']);
+    assert.ok('program' in read, source);
+    for (const f of [-2, 0, 0.5, 1, 4, 7.25, 50]) assert.equal(client.evaluate(read.program, { f }), evaluate(read.program, { f }), `${source} at f = ${f}`);
+  }
+  assert.equal(client.evaluate([1, '+'], {}), undefined, 'a step short of its arguments has no value');
+  assert.equal(client.evaluate([1, 'toString'], {}), undefined, 'a name that is no quantity has no value');
 });

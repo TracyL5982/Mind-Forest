@@ -472,6 +472,68 @@ async function main(): Promise<void> {
       assert.deepEqual(await spills(page), []);
     });
 
+    await check('a pasted explainer is drawn as an explorable whose card shows its first state and whose opened controls change what it shows', async () => {
+      const paste = (text: string) => page.evaluate((pasted) => {
+        const data = new DataTransfer();
+        data.setData('text/plain', pasted);
+        document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+      }, text);
+      const open = async (shown: string) => {
+        const made = page.locator('.card.is-kept[data-component="explorable"]', { hasText: shown }).last();
+        await made.waitFor();
+        assert.equal(await made.locator('button, input, [role], [tabindex]').count(), 0, 'nothing on the card takes a click');
+        for (const chip of [null, ...(await page.locator('.tree-chip').all())]) {
+          if (chip) await chip.click();
+          await settle(page);
+          const box = await made.boundingBox();
+          const view = page.viewportSize()!;
+          if (box && box.x >= 0 && box.y >= 0 && box.x + box.width <= view.width && box.y + box.height <= view.height) break;
+        }
+        await made.click();
+        return made;
+      };
+      const panel = page.locator('#panel');
+      await page.keyboard.press('Escape');
+
+      await paste('Field of view against focal length\nOn a full-frame camera the field of view is `2 * atan(18 / f) * 57.2958` degrees, for a focal length f in mm.\nAt 24 mm the field of view is 73.7°. At 50 mm it is 39.6°. At 200 mm it is 10.3°.');
+      const field = await open('focal length 24 mm');
+      assert.equal(await field.locator('.fact-value').innerText(), '73.7°', 'the card stands on the first value the item states');
+      const figure = panel.locator('.explore-value .fact-value');
+      const computed = panel.locator('.explore-computed');
+      const range = panel.getByRole('slider', { name: 'focal length' });
+      assert.equal(await figure.innerText(), '73.7°');
+      assert.equal(await computed.isVisible(), false);
+      assert.ok((await range.boundingBox())!.height >= 44);
+      await range.fill('50');
+      assert.deepEqual([await figure.innerText(), await computed.isVisible()], ['39.6°', false], 'a value the item states shows as the item states it');
+      await range.focus();
+      await page.keyboard.press('End');
+      assert.deepEqual([await panel.locator('.explore-reading').innerText(), await figure.innerText(), await computed.innerText()], ['300 mm', '6.9°', 'computed'], 'the end of the range is computed');
+      await page.keyboard.press('ArrowLeft');
+      assert.equal(await panel.locator('.explore-reading').innerText(), '298 mm', 'an arrow key moves one step');
+      await page.keyboard.press('Escape');
+
+      await paste('Three ways to shoot a dolly zoom\nZoom only: the lens zooms in while the camera stays put, so the background grows with the subject.\nDolly only: the camera moves in on a fixed lens, so the subject grows and the background barely changes.\nBoth: the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it.');
+      const dolly = await open('Dolly only');
+      assert.deepEqual(await dolly.locator('.explore-pill').allInnerTexts(), ['Zoom only', 'Dolly only', 'Both']);
+      const states = panel.getByRole('radio');
+      assert.equal(await states.count(), 3);
+      const shown = () => panel.locator('.explore-state-text:visible').allInnerTexts();
+      for (const [n, words] of [[1, 'the camera moves in'], [2, 'the camera pulls back'], [0, 'the lens zooms in while']] as const) {
+        await states.nth(n).click();
+        const visible = await shown();
+        assert.ok(visible.length === 1 && visible[0]!.startsWith(words), `state ${n} shows its own text, not ${visible}`);
+        assert.ok((await states.nth(n).boundingBox())!.height >= 44);
+      }
+      await states.nth(0).focus();
+      await page.keyboard.press('ArrowRight');
+      assert.equal(await states.nth(1).getAttribute('aria-checked'), 'true', 'an arrow key chooses the next state');
+      assert.equal(await panel.locator('.panel-text').count(), 0, 'the opened card prints no state\'s text again');
+      await page.keyboard.press('Escape');
+      await settle(page);
+      assert.deepEqual(await spills(page), []);
+    });
+
     await check('every card type in the registry can be sized, drawn and opened', async () => {
       const missing = await page.evaluate<string[]>(`import('/js/components/index.js').then(({ COMPONENTS }) =>
         Object.entries(COMPONENTS).flatMap(([name, kind]) => ['size', 'draw', 'detail'].filter((part) => typeof kind[part] !== 'function').map((part) => name + '.' + part)))`);
