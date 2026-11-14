@@ -1,0 +1,44 @@
+import { h } from '../dom.js';
+import { TEXT, text, textWidth } from '../components/shared.js';
+import { HEAD, PAD } from './shared.js';
+
+export const name = 'Matrix';
+
+/** The room between two cells, the gutter that holds the upright axis, and the band under the cells that holds the level one. */
+const GAP = 20;
+const AXIS = 24;
+const UNDER = 18;
+
+/**
+ * Four members on a 2 by 2, in the order top left, top right, bottom left, bottom right. A column is as wide as its widest card
+ * and a row as tall as its tallest, and each card sits in the middle of its cell. The upright axis runs up the left side with
+ * its name above it, and the level one runs along the bottom with its name under its right end.
+ */
+export function arrange(group, ids, sizes) {
+  const [x, y] = [text(group.props.x).trim(), text(group.props.y).trim()];
+  const size = (i) => (ids[i] === undefined ? [0, 0] : sizes.get(ids[i]));
+  const cols = [0, 1].map((c) => Math.ceil(Math.max(size(c)[0], size(c + 2)[0])));
+  const rows = [0, 1].map((r) => Math.ceil(Math.max(size(2 * r)[1], size(2 * r + 1)[1])));
+  const left = PAD + AXIS;
+  const top = HEAD + (y ? TEXT + 6 : 0);
+  const gridW = cols[0] + GAP + cols[1];
+  const gridH = rows[0] + GAP + rows[1];
+  const at = new Map();
+  ids.slice(0, 4).forEach((id, i) => {
+    const [c, r] = [i % 2, Math.floor(i / 2)];
+    at.set(id, { x: left + (c ? cols[0] + GAP : 0) + cols[c] / 2, y: top + (r ? rows[0] + GAP : 0) + rows[r] / 2 });
+  });
+  const bottom = top + gridH;
+  const inner = Math.max(AXIS + gridW, textWidth(y), textWidth(x));
+  return {
+    at, w: PAD * 2 + inner, h: bottom + UNDER + (x ? TEXT : 0) + PAD,
+    marks: [
+      h('div', { class: 'mx-split is-across', style: { left: `${left}px`, top: `${top + rows[0] + GAP / 2}px`, width: `${gridW}px` } }),
+      h('div', { class: 'mx-split is-down', style: { left: `${left + cols[0] + GAP / 2}px`, top: `${top}px`, height: `${gridH}px` } }),
+      h('div', { class: 'mx-axis is-up', style: { left: `${PAD + AXIS / 2}px`, top: `${top}px`, height: `${gridH + UNDER / 2}px` } }),
+      h('div', { class: 'mx-axis is-right', style: { left: `${PAD + AXIS / 2}px`, top: `${bottom + UNDER / 2}px`, width: `${AXIS / 2 + gridW}px` } }),
+      y && h('div', { class: 'arr-words mx-name', dir: 'auto', style: { left: `${PAD}px`, top: `${HEAD}px`, width: `${textWidth(y)}px` }, text: y }),
+      x && h('div', { class: 'arr-words mx-name', dir: 'auto', style: { left: `${PAD + Math.max(AXIS + gridW, textWidth(x)) - textWidth(x)}px`, top: `${bottom + UNDER}px`, width: `${textWidth(x)}px` }, text: x }),
+    ],
+  };
+}

@@ -400,6 +400,27 @@ const COMPOSITE_SAMPLES = [
     [note('Who owns all that yellow', ''), note('The junction tree', ''), note('What the river carries', ''), note('The house that turned away', '')], () => ({ theme: 'The world beyond the frame' })],
   ['stack', 'rules', 'More than nine similar siblings. Only the top shows until you open the pile.',
     Array.from({ length: 7 }, (_, i) => note(`Loose thought ${i + 1}`, 'One of many similar notes.')), () => ({})],
+  ['ranked', 'model', 'Picks that each answer one question, numbered best first, each with one line of why. The line must be a whole sentence or line of that pick\'s own words, or it is left out.',
+    [note('Planar 50', 'Sharp at every stop.'), note('Summicron 35', 'Small and sharp. It costs the most.'), note('Nokton 40', 'Fast and cheap.'), note('Jupiter 8', 'A Soviet copy of the Sonnar.'), note('Elmar 24', 'Wide enough for rooms.')],
+    (ids) => ({ reasons: { [ids[0]]: 'Sharp at every stop.', [ids[1]]: 'Small and sharp.', [ids[2]]: 'Fast and cheap.', [ids[3]]: '', [ids[4]]: 'Wide enough for rooms.' } }), 'pick',
+    [['Chinese, a long reason and none', [note('上海', '地铁最长，房租也最高。'), note('成都', '生活节奏慢，美食多，离家人远一些，但房价只有上海的一半左右。'), note('杭州', '离上海一个小时。')],
+      (ids) => ({ reasons: { [ids[0]]: '地铁最长，房租也最高。', [ids[1]]: '生活节奏慢，美食多，离家人远一些，但房价只有上海的一半左右。', [ids[2]]: '' } }), 'pick']]],
+  ['beforeafter', 'model', 'One thing in two to four states, in order, with the change that led to each named between them. The change must be a whole sentence or line of either state\'s words, or the arrow stands alone.',
+    [note('The harbour wall in 2019', 'Timber and patched concrete.'), note('The harbour wall in 2024', 'The council rebuilt the wall in stone. It stands two metres higher.')],
+    (ids) => ({ changes: { [ids[1]]: 'The council rebuilt the wall in stone.' } }), 'kept',
+    [['Three states, one change not stated', [note('Draft', 'Twelve pages.'), note('Cut', 'We cut it to six pages for the panel.'), note('Final', 'Six pages and a cover.')],
+      (ids) => ({ changes: { [ids[1]]: 'We cut it to six pages for the panel.', [ids[2]]: '' } })]]],
+  ['lead', 'model', 'One card that the others support, explain or give evidence for, alone on the first row with its support beneath. No card is drawn larger than its own size.',
+    [make('fact', { value: '-38%', label: 'sign-ups in March' }, { title: 'Sign-ups fell' }), note('The spam report', 'Two in three emails were flagged.'), note('What users said', 'Nobody saw the email.'), note('The fix', 'A new sending domain.')], () => ({}),
+    'kept', [['Six cards in support', [note('Why sign-ups fell', 'The email went to spam for a month.'), ...['The spam report', 'What users said', 'The fix', 'The domain', 'The test send', 'The numbers since'].map((title) => note(title, 'One piece of the story.'))], () => ({})]]],
+  ['overview', 'rules', 'Two to five figures and one chart or breakdown among siblings no other group took: the figures in a row above the chart.',
+    [make('fact', { value: '330 m', label: 'Height' }, { title: 'Height' }), make('fact', { value: '1889', label: 'Built' }, { title: 'Built' }), make('fact', { value: '7,300 t', label: 'Iron' }, { title: 'Iron' }),
+      make('chart', { chart: 'line', labels: ['1900', '1950', '2000', '2020'], values: [1, 2, 6, 7], unit: 'M visitors' }, { title: 'Visitors a year' })], () => ({})],
+  ['moodboard', 'rules', 'Four or more pictures, swatches and ideas among siblings, at least two of them pictures and at least one not. Each card goes under the shortest column, at its own size. Pictures alone are a gallery.',
+    [pic('Bocage, Normandy', PIC.fields), drawn('swatch'), make('image', { src: PIC.tall }, { title: 'Stairwell' }), make('idea', {}, { title: 'Paint the door ochre' }), pic('River delta', PIC.river), make('idea', {}, { title: '把客厅改成工作室' })], () => ({})],
+  ['matrix', 'model', 'Four siblings on a 2 by 2 with two named axes, one in each corner. Each axis name must be words at least two of the four use.',
+    [note('Fix the onboarding email', 'Little effort. A large impact on sign-ups.'), note('Rebuild the editor', 'Months of effort, and a large impact.'), note('Rename the settings tab', 'Little effort and little impact.'), note('Port to the watch', 'Much effort for little impact.')],
+    () => ({ x: 'Effort', y: 'Impact' })],
 ];
 
 function composite(name, members, makeProps, status, open) {
@@ -424,7 +445,7 @@ function composite(name, members, makeProps, status, open) {
 }
 
 const compositesEl = document.getElementById('composites');
-for (const [name, by, when, members, makeProps, status = 'kept'] of COMPOSITE_SAMPLES) {
+for (const [name, by, when, members, makeProps, status = 'kept', more = []] of COMPOSITE_SAMPLES) {
   const closed = composite(name, members, makeProps, status, false);
   compositesEl.append(h('section', { class: 'lib-entry' },
     h('div', { class: 'lib-name' }, h('h3', { text: name }), who(by)),
@@ -432,6 +453,7 @@ for (const [name, by, when, members, makeProps, status = 'kept'] of COMPOSITE_SA
     h('div', { class: 'lib-row lib-scroll' },
       cell(name === 'stack' ? 'Closed' : status === 'pick' ? 'As picks' : 'Kept', closed.el),
       name === 'stack' && cell('Opened', composite(name, members, makeProps, status, true).el)),
+    more.map(([label, others, othersProps, othersStatus = 'kept']) => h('div', { class: 'lib-row lib-scroll lib-more' }, cell(label, composite(name, others, othersProps, othersStatus, false).el))),
     props('Props', closed.group.props)));
 }
 </script>

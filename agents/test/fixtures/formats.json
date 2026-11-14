@@ -6639,5 +6639,1003 @@
     "revision": 0
    }
   }
+ ],
+ "pools": [
+  {
+   "key": "P-01",
+   "activity": "research",
+   "language": "en",
+   "what": "three figures and a chart about one building under its note",
+   "expect": "overview",
+   "siblings": [
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-1-1",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Height",
+      "text": "Height: 330 m",
+      "summary": "",
+      "data": {
+       "facts": [
+        {
+         "label": "Height",
+         "value": "330 m"
+        }
+       ]
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-1-2",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Built",
+      "text": "Built: 1889",
+      "summary": "",
+      "data": {
+       "facts": [
+        {
+         "label": "Built",
+         "value": "1889"
+        }
+       ]
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-1-3",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Iron",
+      "text": "Iron: 7,300 tonnes",
+      "summary": "",
+      "data": {
+       "facts": [
+        {
+         "label": "Iron",
+         "value": "7,300 tonnes"
+        }
+       ]
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-1-4",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Visitors a year",
+      "text": "1990: 5.7 M\n2000: 6.3 M\n2010: 6.7 M\n2020: 2.2 M",
+      "summary": "",
+      "data": {
+       "chart": {
+        "labels": [
+         "1990",
+         "2000",
+         "2010",
+         "2020"
+        ],
+        "values": [
+         5.7,
+         6.3,
+         6.7,
+         2.2
+        ],
+        "unit": "M"
+       }
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "key": "P-02",
+   "activity": "memories",
+   "language": "zh",
+   "what": "两个数字和一份开销占比，记在同一次旅行下",
+   "expect": "overview",
+   "siblings": [
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-2-5",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "天数",
+      "text": "天数: 9天",
+      "summary": "",
+      "data": {
+       "facts": [
+        {
+         "label": "天数",
+         "value": "9天"
+        }
+       ]
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-2-6",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "走过的城市",
+      "text": "走过的城市: 4座",
+      "summary": "",
+      "data": {
+       "facts": [
+        {
+         "label": "走过的城市",
+         "value": "4座"
+        }
+       ]
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-2-7",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "钱花在哪",
+      "text": "住宿: 45%\n吃饭: 30%\n交通: 25%",
+      "summary": "",
+      "data": {
+       "chart": {
+        "labels": [
+         "住宿",
+         "吃饭",
+         "交通"
+        ],
+        "values": [
+         45,
+         30,
+         25
+        ],
+        "unit": "%"
+       }
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "key": "P-03",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "two photos, a palette and a short thought for a kitchen redo",
+   "expect": "moodboard",
+   "siblings": [
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-3-8",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "image",
+      "title": "Tiles in Lisbon",
+      "text": "",
+      "summary": "Tiles in Lisbon, a photo you dropped in.",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "drop",
+       "asset": "pool-asset-1",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-3-9",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Kitchen palette",
+      "text": "Ember #E4572E\nLagoon #17BEBB",
+      "summary": "",
+      "data": {
+       "colours": [
+        {
+         "name": "Ember",
+         "value": "#E4572E"
+        },
+        {
+         "name": "Lagoon",
+         "value": "#17BEBB"
+        }
+       ]
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-3-10",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "image",
+      "title": "Open shelves",
+      "text": "",
+      "summary": "Open shelves, a photo you dropped in.",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "drop",
+       "asset": "pool-asset-2",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-3-11",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Paint the door ochre",
+      "text": "Paint the door ochre",
+      "summary": "",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "key": "P-04",
+   "activity": "memories",
+   "language": "en",
+   "what": "three photos from one day and nothing else",
+   "expect": "gallery",
+   "siblings": [
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-4-12",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "image",
+      "title": "The pier",
+      "text": "",
+      "summary": "The pier, a photo you dropped in.",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "drop",
+       "asset": "pool-asset-3",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-4-13",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "image",
+      "title": "Lunch",
+      "text": "",
+      "summary": "Lunch, a photo you dropped in.",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "drop",
+       "asset": "pool-asset-4",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-4-14",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "image",
+      "title": "The ferry home",
+      "text": "",
+      "summary": "The ferry home, a photo you dropped in.",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "drop",
+       "asset": "pool-asset-5",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "key": "P-05",
+   "activity": "research",
+   "language": "en",
+   "what": "four picks that each answer which lens to take, which a person would rank",
+   "expect": "ranked",
+   "siblings": [
+    {
+     "status": "pick",
+     "item": {
+      "id": "pool-5-15",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Planar 50",
+      "text": "Sharp at every stop.\n\nlenses.example.com",
+      "summary": "Sharp at every stop.",
+      "data": {
+       "site": "lenses.example.com"
+      },
+      "origin": {
+       "by": "agent",
+       "role": "scout"
+      },
+      "source": {
+       "from": "web",
+       "url": "https://lenses.example.com/planar-50",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "pick",
+     "item": {
+      "id": "pool-5-16",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Summicron 35",
+      "text": "Small and sharp. It costs the most.\n\nlenses.example.com",
+      "summary": "Small and sharp. It costs the most.",
+      "data": {
+       "site": "lenses.example.com"
+      },
+      "origin": {
+       "by": "agent",
+       "role": "scout"
+      },
+      "source": {
+       "from": "web",
+       "url": "https://lenses.example.com/summicron-35",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "pick",
+     "item": {
+      "id": "pool-5-17",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Nokton 40",
+      "text": "Fast and cheap.\n\nlenses.example.com",
+      "summary": "Fast and cheap.",
+      "data": {
+       "site": "lenses.example.com"
+      },
+      "origin": {
+       "by": "agent",
+       "role": "scout"
+      },
+      "source": {
+       "from": "web",
+       "url": "https://lenses.example.com/nokton-40",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "pick",
+     "item": {
+      "id": "pool-5-18",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Jupiter 8",
+      "text": "A Soviet copy of the Sonnar.\n\nlenses.example.com",
+      "summary": "A Soviet copy of the Sonnar.",
+      "data": {
+       "site": "lenses.example.com"
+      },
+      "origin": {
+       "by": "agent",
+       "role": "scout"
+      },
+      "source": {
+       "from": "web",
+       "url": "https://lenses.example.com/jupiter-8",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "key": "P-06",
+   "activity": "brainstorming",
+   "language": "zh",
+   "what": "四个想法，每个都说了要花多少力气、有多大用处",
+   "expect": "matrix",
+   "siblings": [
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-6-19",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "改欢迎邮件",
+      "text": "花的力气小，用处很大。",
+      "summary": "",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-6-20",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "重写编辑器",
+      "text": "花的力气大，用处也很大。",
+      "summary": "",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-6-21",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "改设置页的名字",
+      "text": "花的力气小，用处也小。",
+      "summary": "",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-6-22",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "做手表版",
+      "text": "花的力气大，用处却小。",
+      "summary": "",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "key": "P-07",
+   "activity": "research",
+   "language": "en",
+   "what": "two figures and two charts: no one chart for the figures to sit over",
+   "expect": "none",
+   "siblings": [
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-7-23",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Height",
+      "text": "Height: 330 m",
+      "summary": "",
+      "data": {
+       "facts": [
+        {
+         "label": "Height",
+         "value": "330 m"
+        }
+       ]
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-7-24",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Built",
+      "text": "Built: 1889",
+      "summary": "",
+      "data": {
+       "facts": [
+        {
+         "label": "Built",
+         "value": "1889"
+        }
+       ]
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-7-25",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Visitors a year",
+      "text": "2000: 6.3 M\n2020: 2.2 M",
+      "summary": "",
+      "data": {
+       "chart": {
+        "labels": [
+         "2000",
+         "2020"
+        ],
+        "values": [
+         6.3,
+         2.2
+        ],
+        "unit": "M"
+       }
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-7-26",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Repaints",
+      "text": "1900: 1\n1950: 4\n2000: 8",
+      "summary": "",
+      "data": {
+       "chart": {
+        "labels": [
+         "1900",
+         "1950",
+         "2000"
+        ],
+        "values": [
+         1,
+         4,
+         8
+        ]
+       }
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "key": "P-08",
+   "activity": "brainstorming",
+   "language": "en",
+   "what": "one photo, a palette and two thoughts: too few pictures for a moodboard",
+   "expect": "none",
+   "siblings": [
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-8-27",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "image",
+      "title": "The hallway",
+      "text": "",
+      "summary": "The hallway, a photo you dropped in.",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "drop",
+       "asset": "pool-asset-6",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-8-28",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Hall palette",
+      "text": "Moss #4A5D23\nChalk #F2F0E6",
+      "summary": "",
+      "data": {
+       "colours": [
+        {
+         "name": "Moss",
+         "value": "#4A5D23"
+        },
+        {
+         "name": "Chalk",
+         "value": "#F2F0E6"
+        }
+       ]
+      },
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-8-29",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Hooks for every coat",
+      "text": "Hooks for every coat",
+      "summary": "",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-8-30",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "A bench by the door",
+      "text": "A bench by the door",
+      "summary": "",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "key": "P-09",
+   "activity": "memories",
+   "language": "zh",
+   "what": "三条互不相干的随手记",
+   "expect": "none",
+   "siblings": [
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-9-31",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "周五见",
+      "text": "周五晚上和阿青吃饭，地方她定。",
+      "summary": "",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-9-32",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "还书",
+      "text": "图书馆的书下周二到期，记得还。",
+      "summary": "",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-9-33",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "阳台的花",
+      "text": "茉莉开了第一朵，比去年早半个月。",
+      "summary": "",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "key": "P-10",
+   "activity": "research",
+   "language": "en",
+   "what": "two photos and a note: too few pictures for a gallery",
+   "expect": "none",
+   "siblings": [
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-10-34",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "image",
+      "title": "Site visit, north wall",
+      "text": "",
+      "summary": "Site visit, north wall, a photo you dropped in.",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "drop",
+       "asset": "pool-asset-7",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-10-35",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "image",
+      "title": "Site visit, roof",
+      "text": "",
+      "summary": "Site visit, roof, a photo you dropped in.",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "drop",
+       "asset": "pool-asset-8",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    },
+    {
+     "status": "kept",
+     "item": {
+      "id": "pool-10-36",
+      "tags": [],
+      "archived": false,
+      "revision": 0,
+      "kind": "text",
+      "title": "Damp in the north wall",
+      "text": "The surveyor found damp along the north wall, worst under the window.",
+      "summary": "",
+      "data": {},
+      "origin": {
+       "by": "user"
+      },
+      "source": {
+       "from": "paste",
+       "capturedAt": "2026-11-14T00:00:00.000Z"
+      }
+     }
+    }
+   ]
+  }
  ]
 }

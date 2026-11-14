@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
-import type { Item } from '../src/core/domain.ts';
+import type { Item, Node } from '../src/core/domain.ts';
 import type { ModelClient } from '../src/core/ports.ts';
 import { byModel, byRule, renderer, unsure, type ComponentsReply, type Entry, type Verdict } from '../src/core/roles/renderer.ts';
 import { makeNode } from '../src/core/roles/types.ts';
-import type { ComponentId } from '../src/core/views.ts';
+import type { ComponentId, CompositeId } from '../src/core/views.ts';
 import { kit } from './kit.ts';
 
 export const ACTIVITIES = ['research', 'brainstorming', 'memories'] as const;
@@ -28,7 +28,21 @@ export interface Sample {
   item: Item;
 }
 
-export const samples = (): Sample[] => (JSON.parse(readFileSync(new URL('./fixtures/formats.json', import.meta.url), 'utf8')) as { items: Sample[] }).items;
+const fixture = () => JSON.parse(readFileSync(new URL('./fixtures/formats.json', import.meta.url), 'utf8')) as { items: Sample[]; pools: Pool[] };
+
+export const samples = (): Sample[] => fixture().items;
+
+/** Siblings under one parent, with the arrangement a person would draw them as, or `none` where no group is right. */
+export interface Pool {
+  key: string;
+  activity: (typeof ACTIVITIES)[number];
+  language: 'en' | 'zh';
+  what: string;
+  expect: CompositeId | 'none';
+  siblings: { status: Node['status']; item: Item }[];
+}
+
+export const pools = (): Pool[] => fixture().pools;
 
 export const assetUrl = (id: string): string => `/assets/${id}`;
 
