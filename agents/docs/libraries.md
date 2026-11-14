@@ -882,6 +882,50 @@ Many similar members, piled so only the top shows until opened.
 - **Members.** Most important first.
 - **Drawn closed as** the first member with the edges of up to two more behind it, each 7 px further down and to the right. The block is sized from the first member's drawn size alone. Each member behind it is drawn at the first member's drawn size with its content hidden, so a taller or wider card behind a smaller one shows only that edge. A fourth member and any after it are not drawn.
 
+### layout
+
+Members set out by a structure the model describes, when no arrangement above fits: rows, columns and grids, nested up to 4 deep. The model describes structure only. Every position comes from the members' footprints by the rule below, which `src/core/layout.ts` holds and the web client runs as the built copy `client/js/core/layout.js` (`scripts/layout-js.ts` builds it, and `npm test` fails while the copy is stale).
+
+- **Chosen when** the model proposes it, last of the arrangements it is offered and only when none of the others fits. The stand-in Renderer of `npm run dev:fake` proposes one for kept siblings whose titles open with a facet, as `Eat: grilled sardines` and `See: Tram 28 at dawn` do: a row with one labelled column for each facet that two siblings or more open with. Siblings with no shared facet stay out.
+- **Props.** `tree`: the outermost container. A part is a member, `{ kind: 'card', id, role }`, where `id` is the member's node id and `role` is `lead`, `normal` or `minor`, or a container, `{ kind, label?, join?, children }`, where `kind` is `row`, `column` or `grid`, `label` is 1 to 40 characters, `join` is `arrow` or `line`, and `children` holds at least one part. A tree holds 3 to 12 members, each once, and at most 8 containers, and no member sits under more than 4 containers. `isValidGroup` refuses any other tree.
+- **Members.** In the order the tree is read: in each container, its lead first, then its other parts in order, then its minors.
+
+**What the model gives.** The model's reply schema cannot nest, so it gives `parts`, a flat list in which every part names the container it sits in. A part has `id`, `parent`, `kind` (`card`, `row`, `column` or `grid`), `role`, `label` and `join` (`none`, `arrow` or `line`). A card's `id` is a member's node id. A container's `id` is any name the model makes up. The outermost container has `parent` `""`. The children of a container are the parts that name it, in the order they come in the list. The Renderer turns the list into a tree, and sets the group aside with a note in the work log when:
+
+- two parts share an id,
+- a card is not one of the siblings the model was asked about, or is in another group,
+- there are more than 12 members, fewer than 3, or more than 8 containers,
+- a part names a parent that is not there, or a card,
+- there is not exactly one outermost part, or it is a card,
+- containers name each other in a loop, so some part cannot be reached from the outermost one,
+- or containers nest more than 4 deep.
+
+A container with no parts is dropped. A `join` on a grid is dropped, because a grid's neighbours have no order. A label then stands only when one member under its container states the label, or when every member under its container states each of its words, by the matcher in `grounding.ts` reading the member's title, text, summary and `data.when`. A label longer than 40 characters, or one that does not stand, is dropped. Last, the tree is collapsed: a container that holds one part and has no label is replaced by that part, from the innermost up, so a card wrapped in three bare containers sits directly in the nearest labelled one.
+
+**Placing.** Positions are worked out bottom up, each part in a room of the width it may take, in px from the top left of the block's content. The block's frame is then the content with 18 px on each side, 40 px above for the head and 18 px below, as for every arrangement. The spacing is:
+
+```
+GAP    = 12    between parts, and between lines
+JOINED = 44    between the parts of a row or a column that has a join
+LABEL  = 24    the line a label takes above its container's parts
+INSET  = 10    the inset of a labelled container's frame, on each side
+ROOM   = 1100  the width the outermost container may take
+```
+
+- A **card** takes its footprint with each side rounded up to a whole px. The card is drawn at its own footprint at the top left of that room, and never scaled.
+- A **container** gives its parts `room - 2 * inset`, where `inset` is `INSET` for a labelled container that is not the outermost and 0 otherwise. `step` is `JOINED` when it has a join and `GAP` otherwise. Its parts are taken in reading order: its first lead, then the rest with each minor moved to the end. A second lead is drawn as a normal part.
+- A **row** lays its lead, when it has one, alone on the first line. It lays the rest left to right, `step` apart, top aligned, starting a new line before a part that would take the line past the room. Lines stack `GAP` apart, each as tall as its tallest part. The row is as wide as its widest line.
+- A **column** stacks its parts top to bottom, `step` apart, left aligned. With a lead, the lead stands alone at the top left, and the rest stack in a second column `GAP` to its right, in the room left beside it. The column is as tall as the taller of the two.
+- A **grid** lays its lead, when it has one, alone on the first line, then the rest in rows of `columns` cells, the lines `GAP` apart. A cell is as wide as the widest of the rest and a line as tall as its tallest part, and each part sits at the top left of its cell. `columns` starts at 1, 2 or 3 for 1, 2 or 3 parts, 2 for 4, and 3 for more, and drops by one while `columns * cell + (columns - 1) * GAP` is wider than the room. The grid is as wide as the wider of its lead and its cells.
+- A **labelled** container makes itself at least as wide as `textWidth(label)`, moves its parts down by `LABEL` and both ways by `inset`, and adds `2 * inset` to its width and `LABEL + 2 * inset` to its height. Its label sits at `(inset, inset)`, as wide as its content and `LABEL` tall, in the text face, on one line. A labelled container other than the outermost draws a frame over its whole size.
+- A **join** sits in each gap between neighbours on one line of a row, and between neighbours in a column, never from one line to the next and never beside a lead. In a row it fills the gap's width and is as tall as the shorter neighbour, from the line's top. In a column it fills the gap's height and is as wide as the narrower neighbour, from the column's left. An `arrow` draws → or ↓ in its middle, and a `line` a hairline across it.
+
+No part's room overlaps another's, and every mark sits in the gaps or above the parts, so nothing overlaps by construction. `test/layout.test.ts` places 5,000 generated structures and checks it.
+
+**The shape check.** After placing, the block is drawn as a `cluster` of the same members, labelled `Cluster`, unless its content is at most 1100 px wide and 1000 px tall, at most 4 times as wide as tall, at most 1.5 times as tall as wide, and the cards fill at least half of it. The fill is the cards' footprints added up, over the content's area less each label's line and each frame's inset ring, `w * h - (w - 20) * (h - 20)` for a frame of `w` by `h`. Labels and frames take that room by design, so a hole counts against the fill and a frame does not. A tree that names a card that is not a member, or leaves a member out, is drawn as a cluster too.
+
+The limits were set from 30 structures written the way the model writes them, over real footprints: facets side by side, a lead and its support, steps joined by arrows, labelled sets in sets three and four deep, a single column, a long row, and three sheets side by side. Each was drawn and judged by eye. The three judged plainly ragged, with a large hole beside a tall card or a part left alone on a wrapped line, have a fill of 0.38, 0.46 and 0.48. Every other one has 0.52 or more, so the threshold is 0.5. Two of those, nested three and four deep, leave a hole under a shorter column and still pass at 0.52: the threshold does not catch every hole in a nested block. Counting the frames' room as empty instead put all four structures three and four deep below 0.5, though two of them looked right. A single column of five notes passed every other limit at 1.95 times as tall as wide, and a column of four at 2.29, so a block may be at most 1.5 times as tall as wide. With these limits 23 of the 30 are drawn as laid out.
+
 ## Adding to a library
 
 Add the schema to `COMPONENTS` or `COMPOSITES` in `src/core/views.ts` and a check to `CHECKS`, add a rule or a model option in `renderer.ts`, add a test in `test/renderer.test.ts`, and add a section here and a line under Each type. For the web client, add a module to `client/js/components/` or `client/js/composites/`, list it in that folder's `index.js` in the order of `views.ts`, and add a sample to `client/library.html`. A component module also exports `shows`, and gets an entry in `CHIPS` in `library.html` so it is drawn once with chips. Add at least four samples to `test/footprints.json`, one of them in Chinese and one at an extreme, and run `scripts/footprints.ts` to fill in their sizes. For a structured type, add a sample to `src/core/samples.ts` and run `scripts/samples.ts`, which writes the file the library page draws from, and add a growing run to `test/client-types.test.ts`. `npm test` fails when a component in `views.ts` lacks its client module, its content check or either part of this page. `isValidView` and `isValidGroup` reject anything a schema does not describe, so the client can trust the props it receives.
