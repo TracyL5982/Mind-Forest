@@ -82,8 +82,27 @@ const RESERVED = new Set([
   'where', 'people', 'pros', 'cons', 'q', 'a', 'question', 'answer', 'term', 'definition', 'at', 'chart', 'palette', 'caution', 'warning', 'note', 'when', '问', '答',
   'remember', 'reminder', 'todo', 'to do', 'tip', 'idea', 'update', 'ps', 'fyi', 're', 'subject', 'title', 'summary',
 ]);
-const FIGURE = /^[\d$€£¥]/;
+/** Words that open a remark and name nothing, so `Note to self: call the plumber` and `Mum said: bring chairs` are no term. */
+const LEAD_IN = new Set([
+  'note to self', 'notes', 'ingredients', 'budget', 'packing', 'shopping', 'plan', 'plans', 'status', 'meeting', 'agenda', 'tips',
+  'today', 'tonight', 'tomorrow', 'yesterday',
+]);
+const leadsIn = (term: string): boolean => LEAD_IN.has(term.toLowerCase()) || /\b(?:said|says)$/i.test(term);
+/**
+ * A figure: a number, with a sign or a currency before it, and after it a unit or at most two words, as `330 m`, `€29.40`,
+ * `2.1 million` and `7/10`. A clock time and a date are no figure, and neither is a clause, as in `6 is better`.
+ */
+const FIGURE = /^[~≈<>±+−-]?\s?[$€£¥]?\s?\d[\d.,/:]*(?:\s?[-–]\s?\d[\d.,]*)?\s?[%‰°℃]?((?:\s?[\p{L}²³°/]+){0,2})$/u;
+const TIME_OR_DATE = /^\d{1,2}(?::\d{2})?\s?(?:[ap]\.?m\.?|(?:st|nd|rd|th)?\s?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)$|^\d{1,2}:\d{2}$|^\d{1,4}\/\d{1,2}\/\d{1,4}$/i;
+const CLAUSE = new Set(['is', 'are', 'was', 'were', 'be', 'am', 'will', 'would', 'can', 'could', 'should', 'must', 'do', 'does', 'did', 'has', 'have', 'had', 'and', 'or', 'but', 'the', 'a', 'an', 'to', 'of', 'in', 'on', 'at', 'for', 'with', 'by', 'from', 'it', 'me', 'you', 'we', 'then']);
+function isFigure(value: string): boolean {
+  const words = FIGURE.exec(value)?.[1];
+  return words !== undefined && !TIME_OR_DATE.test(value) && !words.trim().split(/\s+/).some((word) => CLAUSE.has(word));
+}
 const fewWords = (label: string, most: number): boolean => label.length <= 30 && label.split(/\s+/).length <= most;
+/** Words a sentence has and a row of heads does not. */
+const SENTENCE_WORD = /^(?:then|what|when|so|the|a|an|and|but|is|are|was|were|i|we|you|it|truly|really)$/i;
+const NUMBER_CELL = /^[~≈<>±+−-]?\s?[$€£¥]?\s?\d[\d.,/:]*\s?\S{0,6}$/;
 
 /**
  * The rows of a table a person typed: a head line and at least two rows, every line with the same number of cells, and a head
@@ -101,13 +120,21 @@ function tableIn(lines: string[]): { heads: string[]; rows: string[] } | undefin
   if (piped.length > 0) return from(piped, '|', 2);
   const said = lines.filter(Boolean);
   if (said.every((line) => line.includes('\t'))) return from(said, '\t', 2);
-  return said.every((line) => line.split(',').length >= 3 && line.length <= 80 && !/[.!?]$/.test(line)) ? from(said, ',', 3) : undefined;
+  if (!said.every((line) => line.split(',').length >= 3 && line.length <= 80 && !/[.!?]$/.test(line))) return undefined;
+  const table = from(said, ',', 3);
+  if (!table || table.heads.some((head) => head.split(/\s+/).some((word) => SENTENCE_WORD.test(word)))) return undefined;
+  const grid = table.rows.map((row) => row.split(' | '));
+  return table.heads.some((_, i) => grid.filter((row) => NUMBER_CELL.test(row[i]!)).length * 2 > grid.length) ? table : undefined;
 }
 
-/** Shares of a whole written in one sentence, "Rent 45%, food 25% and savings 30%", when every part of it is a name and a share and they sum to 100. */
+/**
+ * Shares of a whole written in one sentence, "Rent 45%, food 25% and savings 30%", when every part of it is a name and a share
+ * and they sum to 100. A label before them, as in "Our budget this year: rent is 45%, …", is not part of the first name.
+ */
 function sharesIn(text: string): { labels: string[]; values: number[] } | undefined {
   for (const sentence of text.split(/[.。\n]+(?!\d)/)) {
-    const parts = sentence.split(/[,，、;；]|\band\b|和/).map((part) => /^\s*(\p{L}[\p{L} ]{0,30}?)\s*(\d+(?:\.\d+)?)\s?[%％]\s*$/u.exec(part));
+    const shares = sentence.replace(/^[^:：]{1,40}[:：]\s*/, '');
+    const parts = shares.split(/[,，、;；]|\band\b|和/).map((part) => /^\s*(\p{L}[\p{L} ]{0,30}?)(?:\s+(?:is|are|was|were))?\s*(\d+(?:\.\d+)?)\s?[%％]\s*$/u.exec(part));
     if (parts.length < 2 || !parts.every(Boolean)) continue;
     const values = parts.map((part) => Number(part![2]));
     const sum = values.reduce((total, value) => total + value, 0);
@@ -117,18 +144,35 @@ function sharesIn(text: string): { labels: string[]; values: number[] } | undefi
 }
 
 /**
+ * The passages quoted with `>`, each run of such lines joined into one. A passage opens with a letter that is no small letter,
+ * so `> 5 means the test passed` and a reply's `> not sure about this` are no quote.
+ */
+function quotedIn(lines: string[]): string[] {
+  const passages: string[] = [];
+  lines.forEach((line, i) => {
+    const words = /^>\s?(.*)$/.exec(line)?.[1]?.trim();
+    if (words === undefined) return;
+    if (i > 0 && lines[i - 1]!.startsWith('>')) passages[passages.length - 1] += ` ${words}`;
+    else passages.push(words);
+  });
+  return passages.filter((words) => /^(?!\p{Ll})\p{L}/u.test(words));
+}
+
+/**
  * What a model would say about a text, read by pattern instead. Each kind of structure is read from the plain ways a person writes it:
  *   Where: Lisbon                     People: Ana Lima, Ben Okri
  *   Pros: fast, small                 Cons: (or either label followed by bulleted lines)
- *   Plan | Price                      a table: a head line and two rows or more, parted by |, tabs or commas
+ *   Plan | Price                      a table: a head line and two rows or more, parted by |, tabs or commas, and by
+ *                                     commas only when the head has no word of a sentence and a column is mostly numbers
  *   Q: ...   A: ...                   also Question: and Answer:, 问： and 答：
- *   Term: ...   Definition: ...       or one line, "Bokeh: the quality of the blur in a picture"
+ *   Term: ...   Definition: ...       or one line, "Bokeh: the quality of the blur in a picture", when the term is no
+ *                                     lead-in such as "Note to self" or "Mum said" and the meaning one sentence with no list"
  *   - one / - two                     a list, and a checklist when every line starts [ ] or [x]
  *   Ember #E4572E                     a colour, named by the capitalised word before it
- *   > a passage of six words or more  an excerpt, with an optional line "At: Chapter 3"
- *   Height = 330 m   Height: 330 m    a fact for each such line, whose value opens with a digit or a currency sign
+ *   > a passage of six words or more  an excerpt over one or more such lines, with an optional line "At: Chapter 3"
+ *   Height = 330 m   Height: 330 m    a fact for each such line whose value is a figure, a number with a unit or two words
  *   Chart: Rent 50%, Food 30%         a series, in percent when every entry is
- *   Rent 45%, food 25%, other 30%     shares of a whole, when they sum to 100
+ *   Rent 45%, food 25%, other 30%     shares of a whole, when they sum to 100, also after a label: "Budget: rent 45%, …"
  * A text holding "fake:invent" is also given a place it never names, to show the grounding check dropping it.
  */
 export function describe(text: string): Description {
@@ -158,8 +202,10 @@ export function describe(text: string): Description {
   const shares = series.length === 0 ? sharesIn(text) : undefined;
   const said = lines.filter(Boolean);
   const entry = said.length === 1 ? /^(\p{L}[\p{L}\p{N} -]*):\s+(\p{L}.{14,})$/u.exec(said[0]!) : null;
-  const defined = entry && fewWords(entry[1]!, 3) && !RESERVED.has(entry[1]!.toLowerCase()) ? entry : null;
-  const passage = lines.map((line) => /^> (\p{L}.*)$/u.exec(line)?.[1]?.trim() ?? '').find((words) => words.split(/\s+/).length >= 6 || (words.match(/\p{Script=Han}/gu)?.length ?? 0) >= 12) ?? '';
+  const meaning = entry?.[2] ?? '';
+  const oneSentence = !/[.!?。！？]\s+\S/.test(meaning) && (meaning.match(/[,，、;；]/g)?.length ?? 0) < 2 && !/\d\s?[%％]/.test(meaning);
+  const defined = entry && fewWords(entry[1]!, 4) && !RESERVED.has(entry[1]!.toLowerCase()) && !leadsIn(entry[1]!) && oneSentence ? entry : null;
+  const passage = quotedIn(lines).find((words) => words.split(/\s+/).length >= 6 || (words.match(/\p{Script=Han}/gu)?.length ?? 0) >= 12) ?? '';
 
   return {
     ...blank(),
@@ -179,7 +225,7 @@ export function describe(text: string): Description {
     colours: [...text.matchAll(/(?:([A-Z][\w-]*) )?(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3}))\b/g)].map((m) => ({ name: m[1] ?? '', value: m[2]! })),
     facts: lines.flatMap((line) => {
       const fact = /^([^=|:：]+?)\s*(?:=|[:：]\s)\s*(\S.*)$/.exec(line);
-      return fact && FIGURE.test(fact[2]!) && fewWords(fact[1]!, 4) && !RESERVED.has(fact[1]!.toLowerCase()) ? [{ label: fact[1]!, value: fact[2]! }] : [];
+      return fact && isFigure(fact[2]!) && fewWords(fact[1]!, 4) && !RESERVED.has(fact[1]!.toLowerCase()) ? [{ label: fact[1]!, value: fact[2]! }] : [];
     }),
     ...(series.length >= 2 && series.every(Boolean)
       ? { chartLabels: series.map((entry) => entry![1]!), chartValues: series.map((entry) => Number(entry![2])), chartUnit: series.every((entry) => entry![3]) ? '%' : '' }

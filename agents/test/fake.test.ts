@@ -110,6 +110,8 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
     ['Rent 45%, food 25%, transport 10% and savings 20%.', 'breakdown'],
     ['City,Rent,Commute\nLisbon,900,25 min\nPorto,700,20 min', 'table'],
     ['City\tRent\nLisbon\t900\nPorto\t700', 'table'],
+    ['> Every stair keeps the weight\n> of who climbed it.\nAt: p. 41', 'excerpt'],
+    ['Our budget this year: rent 45%, food 25%, transport 10%, savings 20%', 'breakdown'],
   ];
   for (const [text, type] of plain) assert.equal(await paste(text), type, `the plain form ${JSON.stringify(text)}`);
   const ordinary = [
@@ -119,6 +121,18 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
     'Rent went up 45%, which hurt, and food by 25%.',
     'We met on Tuesday, talked for an hour, and left.\nThen it rained, we ran, and the bus came.\nNobody minded, really, at all.',
     'Remember: the keys are under the blue pot by the door',
+    'Tom: 5 pm works for me\nAna: 6 is better',
+    'Chapter 3: 40 pages of nothing happening, then everything at once.',
+    'Weather: 18 degrees and raining again',
+    'Score: 3 - 1 to us, finally.\nNext match: 12 May',
+    'Tel: 555-0100 #204',
+    'Note to self: call the plumber on Monday',
+    'Mum said: bring 2 chairs and the big table',
+    'Ingredients: flour, butter, sugar, two eggs and a pinch of salt',
+    'Budget: rent is 50%, food 30%',
+    'Today: finished the report and sent it to the whole team',
+    'Dinner, drinks, dancing\nthen home, bed, sleep\nwhat a night, truly, wow',
+    'If x > 5 then the loop exits early.\n> not sure this is right though',
   ];
   for (const text of ordinary) assert.ok(['note', 'idea'].includes((await paste(text))!), `ordinary text stays a note: ${JSON.stringify(text)} is drawn as ${await paste(text)}`);
 });
