@@ -137,7 +137,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
         const cited = Number(w.cited_by_count) || 0;
         const venue = str(w.primary_location?.source?.display_name);
         const kind = WORK_KINDS[str(w.type)];
-        // The search lists at most 100 authors and does not always send its own flag for a cut list.
+        // The search lists at most 100 authors. Eight live records with a cut list all came without `is_authors_truncated`, so the count decides.
         const authorsCut = w.is_authors_truncated === true || list(w.authorships).length >= OPENALEX_AUTHORS;
         return {
           ...(kind ? { kind } : {}),
