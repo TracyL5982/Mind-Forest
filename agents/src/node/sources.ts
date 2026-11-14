@@ -148,18 +148,14 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     query: 'A title, an author, or two to four subject words.',
     show: 2,
     async search(query) {
-      const json = await ask(`https://openlibrary.org/search.json?q=${q(query)}&limit=${PER_SEARCH}&fields=key,title,author_name,first_publish_year,cover_i,subject`);
-      return (await Promise.all(list(json.docs).map(async (b): Promise<Found | null> => {
-        const full = await ask(`https://openlibrary.org${str(b.key)}.json`).catch(() => null);
-        const description = plain(str(full?.description?.value ?? full?.description)).split(/\n-{3,}|\(\[source\]/)[0]!.trim();
-        if (description.length < 80) return null;
-        return {
-          title: str(b.title), by: list(b.author_name).slice(0, 2).join(' and '), date: str(b.first_publish_year),
-          text: [description, list(b.subject).length > 0 ? `Subjects: ${list(b.subject).slice(0, 6).join(', ')}.` : ''].filter(Boolean).join('\n'),
-          url: `https://openlibrary.org${str(b.key)}`,
-          ...(b.cover_i ? { image: `https://covers.openlibrary.org/b/id/${b.cover_i}-L.jpg` } : {}),
-        };
-      }))).flatMap((f) => f ?? []);
+      // One request per search. Asking for each book's own page as well got this client refused.
+      const json = await ask(`https://openlibrary.org/search.json?q=${q(query)}&limit=${PER_SEARCH}&fields=key,title,subtitle,author_name,first_publish_year,cover_i,first_sentence,subject`);
+      return list(json.docs).map((b): Found => ({
+        title: [str(b.title), str(b.subtitle)].filter(Boolean).join(': '), by: list(b.author_name).slice(0, 2).join(' and '), date: str(b.first_publish_year),
+        text: [list(b.first_sentence).map(str)[0] ?? '', list(b.subject).length > 0 ? `Subjects: ${list(b.subject).slice(0, 8).join(', ')}.` : ''].filter(Boolean).join('\n'),
+        url: `https://openlibrary.org${str(b.key)}`,
+        ...(b.cover_i ? { image: `https://covers.openlibrary.org/b/id/${b.cover_i}-L.jpg` } : {}),
+      }));
     },
   };
 

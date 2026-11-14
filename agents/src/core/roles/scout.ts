@@ -8,8 +8,10 @@ import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles, ty
 const ROLE = 'scout';
 const MAX_GENERATED_IMAGES = 4;
 const GALLERY_SIZE = 3;
-const FOUND_SHOWN_TO_MODEL = 8;
-const VISUAL_SHOWN_TO_MODEL = 6;
+const FOUND_SHOWN_TO_MODEL = 10;
+const VISUAL_SHOWN_TO_MODEL = 8;
+const SEARCHES_PER_FIND = 3;
+const ENOUGH_FOUND = 6;
 const EXCERPT = 900;
 const MAX_LINK_CANDIDATES = 5;
 const LINK_COVERAGE = 0.5;
@@ -28,7 +30,7 @@ const Ideas = z.object({
       steps: z.array(z.string()),
       images: z.array(z.object({ title: z.string(), prompt: z.string() })),
       source: z.string(),
-      lookup: z.string(),
+      lookups: z.array(z.string()),
     }),
   ),
 });
@@ -67,7 +69,8 @@ export const scout: Roles['scout'] = async (ctx, input) => {
 
   let directions: Direction[];
   try {
-    directions = await ideate(ctx, run, count);
+    // Some searches find nothing that fits, so one direction more than the count is asked for.
+    directions = await ideate(ctx, run, count >= 3 ? count + 1 : count);
   } catch (err) {
     ctx.note(ROLE, `could not think of directions (${message(err)}), the picks stay as they are`);
     return [];
@@ -200,7 +203,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number): Promise<Direct
       '- No two directions share an angle. Angles to draw from: the evidence or data behind it, how others have built or solved it, the strongest objection or a counterexample, a neighbouring field that met the same problem, a what-if that changes one thing, a detail worth zooming into, where it comes from historically, the people working on it, what it would look or sound like, the same idea in another medium, a concrete next step.',
       '- A direction that would fit any subject is a failure. Name specifics.',
       count >= 4
-        ? '- Mix the formats: at least two "find" directions that use different sources, and at least one "note". At most one "gallery" and one "video".'
+        ? '- Mix the formats: at least three "find" directions that use different sources, and at least one "note". At most one "gallery" and one "video".'
         : count === 3
           ? '- Mix the formats: at least one "find" and at least one "note".'
           : '- Prefer different formats.',
@@ -212,15 +215,15 @@ async function ideate(ctx: RoleContext, run: Run, count: number): Promise<Direct
       '- title: under 60 characters, specific, no trailing period.',
       '- why: under eight words, shown on the thread that joins this card to the original. It names where this direction goes ("what the studies found").',
       '- tags: 2 to 4 short lowercase words.',
-      '- body, steps, images, source, lookup: as the format says. Leave the ones a format does not use empty.',
+      '- body, steps, images, source, lookups: as the format says. Leave the ones a format does not use empty.',
       '',
       'Formats:',
       '- "note": body is two to four sentences of real substance: a concrete idea, a what-if, an objection, a piece of knowledge. Not a description of what the user already has, and not advice to explore something.',
       '- "steps": steps is three to six short steps for making or trying something. body is one sentence saying what the steps achieve.',
       '- "image": images has one entry. Its prompt is a complete prompt for an image generator: subject, composition, style, palette, light. When it extends a picture the user dropped, carry over that picture\'s style and palette so it reads as the same world. body is one sentence saying what it shows.',
       `- "gallery": images has exactly ${GALLERY_SIZE} entries, variations on one theme, each with its own short title and full prompt. title names the set.`,
-      '- "find": real material from one source. source is one id from the list of sources, chosen for what this direction needs. lookup is the search, written the way that source asks. title names what you hope to find. body is one or two sentences on what the user should get from it.',
-      '- "video": only when seeing motion matters. lookup is a search phrase for one specific well-known video. body is one sentence on what to watch for.',
+      '- "find": real material from one source. source is one id from the list of sources, chosen for what this direction needs. lookups is two or three searches for the same thing in different words, the shortest and broadest first. Every source except the web is a keyword catalogue where each extra word removes results, so keep each search to two or three plain words and never put a whole question in one. title names what you hope to find. body is one or two sentences on what the user should get from it.',
+      '- "video": only when seeing motion matters. lookups has one search phrase for one specific well-known video. body is one sentence on what to watch for.',
       '',
       'Sources for "find":',
       ...ctx.tools.sources.list().map((src) => `- ${src.id}: ${src.name}. ${src.goodFor} Search: ${src.query}`),
@@ -297,9 +300,28 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
     case 'find': {
       const sources = ctx.tools.sources.list();
       const source = sources.find((src) => src.id === d.source.trim()) ?? sources.find((src) => src.id === 'web');
-      const query = oneLine(d.lookup || d.title, 120);
       if (!source) return [];
-      const fresh = (await ctx.tools.sources.search(source.id, query)).filter((f) => !taken.has(urlKey(f.url)));
+      const wanted = d.lookups.map((l) => oneLine(l, 120)).filter(Boolean);
+      // The web search is slow and costly, so it runs once. Catalogues answer in under a second, so every wording is tried.
+      const queries = (wanted.length > 0 ? wanted : [oneLine(d.title, 120)]).slice(0, source.id === 'web' ? 1 : SEARCHES_PER_FIND);
+      const query = queries.join('" or "');
+      // The broadest wording goes first. The next is only tried while the pool is thin, which keeps the load on each source light.
+      const fresh: Found[] = [];
+      let failed = '';
+      for (const each of queries) {
+        if (fresh.length >= ENOUGH_FOUND) break;
+        try {
+          for (const record of await ctx.tools.sources.search(source.id, each)) {
+            if (!taken.has(urlKey(record.url)) && !fresh.some((f) => urlKey(f.url) === urlKey(record.url))) fresh.push(record);
+          }
+        } catch (err) {
+          failed = message(err);
+        }
+      }
+      if (fresh.length === 0 && failed) {
+        ctx.note(ROLE, `${source.name} could not be reached (${failed}), "${oneLine(d.title, 60)}" left out`);
+        return [];
+      }
       // Things to look at are brought in first, so the model chooses among them by sight and a missing picture is never shown.
       const found = source.visual
         ? (await Promise.all(fresh.slice(0, VISUAL_SHOWN_TO_MODEL).map(async (f) => ({ ...f, stored: f.image ? await ctx.tools.web.picture(f.image) : null })))).filter((f) => f.stored)
@@ -344,7 +366,7 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
       return made.flatMap((m) => m ?? []);
     }
     case 'video': {
-      const hits = await ctx.tools.web.search(`${oneLine(d.lookup || d.title, 160)} youtube`, 6);
+      const hits = await ctx.tools.web.search(`${oneLine(d.lookups[0] || d.title, 160)} youtube`, 6);
       for (const hit of hits) {
         if (taken.has(urlKey(hit.url))) continue;
         const video = await ctx.tools.web.video(hit.url);
@@ -365,7 +387,7 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
           },
         ];
       }
-      ctx.note(ROLE, `no playable video found for "${oneLine(d.lookup || d.title, 60)}", left out`);
+      ctx.note(ROLE, `no playable video found for "${oneLine(d.lookups[0] || d.title, 60)}", left out`);
       return [];
     }
     default:

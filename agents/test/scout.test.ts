@@ -20,7 +20,7 @@ function direction(format: Format, title: string, more: Record<string, unknown> 
     steps: [],
     images: [],
     source: '',
-    lookup: '',
+    lookups: [],
     ...more,
   };
 }
@@ -28,14 +28,14 @@ function direction(format: Format, title: string, more: Record<string, unknown> 
 const NOTE = direction('note', 'The house at the bend');
 const STEPS = direction('steps', 'Shoot it yourself', { steps: ['Pick a subject', 'Pull back while zooming in', 'Hold the subject size'] });
 const IMAGE = direction('image', 'The same shot at night', { images: [{ title: 'Night', prompt: 'the same staircase at night, flat illustration' }] });
-const ARTWORK = direction('find', 'Staircases that pull the eye down', { source: 'museums', lookup: 'spiral staircase' });
+const ARTWORK = direction('find', 'Staircases that pull the eye down', { source: 'museums', lookups: ['spiral staircase'] });
 const work = (n: number, title: string) => ({ title, by: `Maker ${n}`, date: '1920', text: 'Gelatin silver print', from: 'A Museum', url: `https://museum.example/works/${n}`, image: `https://img.example/work-${n}.jpg` });
 const MUSEUMS = { id: 'museums', name: 'Museum collections', goodFor: 'Works to look at.', query: 'Catalogue words.', show: 3, visual: true };
 const PAPERS = { id: 'papers', name: 'Research papers', goodFor: 'What studies found.', query: 'Title words.', show: 2 };
 const WEB = { id: 'web', name: 'The web', goodFor: 'Anything current.', query: 'A web search.', show: 1 };
 const PAPER = { title: 'Vertigo and the dolly zoom', by: 'A. Researcher', date: '2011', text: 'We measured viewer discomfort. Discomfort peaked when the background grew by half. The effect faded after two seconds.', url: 'https://doi.example/10.1/zoom' };
 const WORKS = [work(1, 'Stairwell, Berlin'), work(2, 'Teapot with spiral handle'), work(3, 'The Long Descent')];
-const VIDEO = direction('video', 'Watch the Jaws beach shot', { lookup: 'Jaws beach dolly zoom' });
+const VIDEO = direction('video', 'Watch the Jaws beach shot', { lookups: ['Jaws beach dolly zoom'] });
 const MIX = [NOTE, STEPS, IMAGE, ARTWORK, VIDEO];
 
 /** A film tree, a museum that holds three works, a web that knows one video, and a model that proposes the five-way mix. */
@@ -178,7 +178,7 @@ test('written ideas are delivered first and the made ones follow', async () => {
 });
 
 test('a museum search with no match is left out, and so is a work the mindstorm already holds', async () => {
-  const unmatched = direction('find', 'Works nobody holds', { source: 'museums', lookup: 'nothing at all' });
+  const unmatched = direction('find', 'Works nobody holds', { source: 'museums', lookups: ['nothing at all'] });
   const { k, anchor } = setup({}, [NOTE, ARTWORK, unmatched]);
   hang(k, anchor, 'Stairwell, saved earlier', 'kept', { source: { from: 'web', url: 'https://museum.example/works/1', capturedAt: '' } });
   k.model.on('scout.curate', () => ({ chosen: [{ number: 1, note: '', excerpt: '' }] }));
@@ -211,7 +211,7 @@ test('no work is shown when the model finds none that fit, or cannot be asked', 
 });
 
 test('a record is shown in its own words, and only words that are really in it', async () => {
-  const find = direction('find', 'What the studies measured', { source: 'papers', lookup: 'dolly zoom discomfort' });
+  const find = direction('find', 'What the studies measured', { source: 'papers', lookups: ['dolly zoom discomfort'] });
   const { k, anchor } = setup({}, [find]);
   k.world.found.set('papers:dolly zoom discomfort', [PAPER, { ...PAPER, title: 'A second study', url: 'https://doi.example/10.1/second' }]);
   k.model.on('scout.curate', () => ({
@@ -233,7 +233,7 @@ test('a record is shown in its own words, and only words that are really in it',
 });
 
 test('a chart, steps and a recording a source returns reach the card', async () => {
-  const find = direction('find', 'The numbers', { source: 'papers', lookup: 'numbers' });
+  const find = direction('find', 'The numbers', { source: 'papers', lookups: ['numbers'] });
   const { k, anchor } = setup({}, [find]);
   k.world.found.set('papers:numbers', [
     { ...PAPER, url: 'https://x.example/chart', chart: { labels: ['2000', '2010'], values: [1, 2], unit: 'billions' } },
@@ -253,8 +253,33 @@ test('a chart, steps and a recording a source returns reach the card', async () 
   assert.equal(episode!.data.thumbnailUrl, 'https://img.example/cover.jpg');
 });
 
+test('a search that finds little is tried in other words, and the records are pooled without repeats', async () => {
+  const find = direction('find', 'What the studies measured', { source: 'papers', lookups: ['dolly zoom', 'vertigo effect', 'zoom discomfort', 'a fourth wording'] });
+  const { k, anchor } = setup({}, [find]);
+  const second = { ...PAPER, title: 'A second study', url: 'https://doi.example/10.1/second' };
+  k.world.found.set('papers:vertigo effect', [PAPER, second]);
+  k.world.found.set('papers:zoom discomfort', [second]);
+  k.world.found.set('papers:a fourth wording', [{ ...PAPER, title: 'Never searched', url: 'https://doi.example/10.1/never' }]);
+  k.model.on('scout.curate', () => ({ chosen: [{ number: 1, note: '', excerpt: '' }, { number: 2, note: '', excerpt: '' }, { number: 3, note: '', excerpt: '' }] }));
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), ['A second study', PAPER.title].sort());
+});
+
+test('a source that cannot be reached is reported as that, not as having nothing', async () => {
+  const find = direction('find', 'What the studies measured', { source: 'papers', lookups: ['dolly zoom'] });
+  const { k, anchor } = setup({}, [NOTE, find]);
+  k.ctx.tools.sources.search = async () => { throw new Error('refused'); };
+
+  apply(k, await scout(k.ctx, { anchor, mode: 'refresh' }));
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title]);
+  assert.ok(k.notes.some((n) => /Research papers could not be reached \(refused\)/.test(n)));
+});
+
 test('a direction that names no known source is searched on the web', async () => {
-  const find = direction('find', 'A case study', { source: 'encyclopedia', lookup: 'dolly zoom case study' });
+  const find = direction('find', 'A case study', { source: 'encyclopedia', lookups: ['dolly zoom case study'] });
   const { k, anchor } = setup({}, [find]);
   k.world.found.set('web:dolly zoom case study', [PAPER]);
 
