@@ -1,4 +1,5 @@
 import type { Found, ModelClient, Page, Source } from '../core/ports.ts';
+import { openaiSearch } from './search-openai.ts';
 
 type Send = typeof fetch;
 type Json = Record<string, any>;
@@ -66,18 +67,22 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     query: 'A web search of four to eight words that would find one strong page.',
     show: 1,
     async search(query) {
-      const hits = await opts.model.search({ role: 'tool.web', query, max: 8, prefer: WEB_PREFERENCE });
+      const openaiKey = opts.keys?.OPENAI_API_KEY;
+      const hits = openaiKey
+        ? await openaiSearch(send, { apiKey: openaiKey, model: opts.keys?.MIND_PALACE_SEARCH_MODEL }, { query, max: 8, prefer: WEB_PREFERENCE })
+        : await opts.model.search({ role: 'tool.web', query, max: 8, prefer: WEB_PREFERENCE });
       // Encyclopedia entries are left out: the user asked for sources with a point of view or first-hand detail.
       const usable = hits.filter((hit) => !/(^|\.)(wikipedia|wikimedia|fandom)\.org$|(^|\.)fandom\.com$/.test(hostOf(hit.url)));
       const pages = await Promise.all(
-        usable.slice(0, 5).map(async (hit): Promise<Found | null> => {
+        // Many sites refuse to be read by a program, so every hit is tried and the first few that answer are kept.
+        usable.filter((hit) => !/\.pdf($|\?)/i.test(hit.url)).slice(0, 8).map(async (hit): Promise<Found | null> => {
           const page = await opts.read(hit.url).catch(() => null);
           const title = [page?.title, hit.title].map((t) => str(t)).find((t) => t && !/^https?:\/\//i.test(t));
           if (!page || !title || page.text.length < 400) return null;
           return { title, by: page.site, date: '', text: page.text.slice(0, 5000), url: hit.url };
         }),
       );
-      return pages.flatMap((p) => p ?? []);
+      return pages.flatMap((p) => p ?? []).slice(0, 5);
     },
   };
 

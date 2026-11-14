@@ -87,3 +87,24 @@ test('a source that needs a key is only offered when its key is there', () => {
   assert.ok(ids({ EUROPEANA_API_KEY: 'k' }).includes('heritage'));
   assert.ok(!ids().includes('news') && ids({ GUARDIAN_API_KEY: 'k' }).includes('news'));
 });
+
+test('with an OpenAI key the web is searched there, and only pages the search really returned are used', async () => {
+  const reply = {
+    output: [
+      { type: 'web_search_call', action: { sources: [{ url: 'https://good.example/essay?utm_source=openai' }, { url: 'https://other.example/report/' }] } },
+      { type: 'message', content: [{ text: '1. An essay | https://good.example/essay\n2. **A report** | (https://other.example/report)\n3. Made up | https://invented.example/page' }] },
+    ],
+  };
+  const posted: string[] = [];
+  const send = (async (url: string, init?: RequestInit) => {
+    posted.push(`${url} ${String(init?.body).includes('Leave out listicles')}`);
+    return new Response(JSON.stringify(reply), { status: 200 });
+  }) as typeof fetch;
+  const read = async (url: string): Promise<Page | null> => ({ url, title: `Page at ${url}`, text: LONG, site: 'site.example' });
+  const model = { search: async () => { throw new Error('the model search must not be used'); } } as unknown as ModelClient;
+
+  const found = await makeSources({ send, model, read, keys: { OPENAI_API_KEY: 'k' } }).search('web', 'parking maximums');
+
+  assert.deepEqual(posted, ['https://api.openai.com/v1/responses true']);
+  assert.deepEqual(found.map((f) => f.url), ['https://good.example/essay', 'https://other.example/report']);
+});

@@ -14,7 +14,7 @@ npm start
 
 It prints an address such as `http://localhost:8787/#token=…`. Open it. Type a thought into the box and press Add.
 
-Keys are read from `~/.muse-garden.env`. `MODEL_API_KEY` is required. Optional keys switch sources on: `YOUTUBE_API_KEY` (direct video search), `TMDB_API_KEY` (film and television), `EUROPEANA_API_KEY` (European museums and archives), `GUARDIAN_API_KEY` (news), and `META_IG_TOKEN` with `META_IG_USER_ID` (Instagram). Nothing is copied into the repo. Your mindstorm is saved in `agents/data/`.
+Keys are read from `~/.muse-garden.env`. `MODEL_API_KEY` is required. Optional keys switch sources on: `YOUTUBE_API_KEY` (direct video search), `TMDB_API_KEY` (film and television), `EUROPEANA_API_KEY` (European museums and archives), `GUARDIAN_API_KEY` (news), `OPENAI_API_KEY` (a faster web search, model set by `MIND_PALACE_SEARCH_MODEL`, default `gpt-5.4-mini`), and `META_IG_TOKEN` with `META_IG_USER_ID` (Instagram). Nothing is copied into the repo. Your mindstorm is saved in `agents/data/`.
 
 To try the client with no model and no cost: `npm run dev:fake`.
 
@@ -30,7 +30,7 @@ To try the client with no model and no cost: `npm run dev:fake`.
 ## Check it
 
 ```bash
-npm test                 # 132 tests on scripted models, no network
+npm test                 # 133 tests on scripted models, no network
 npx tsc --noEmit
 node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 23 checks
 npm run scenario         # everything against the live model, 25 checks, about 160,000 tokens
