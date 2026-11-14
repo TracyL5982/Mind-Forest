@@ -1,0 +1,24 @@
+#!/bin/bash
+# Builds the agent core's tests with the Mac's clang and runs them twice, under the address and
+# undefined-behaviour sanitizers and under the thread sanitizer. Then checks every outbound message
+# against the service's own schema.
+#   quest/core/agent/test/run.sh
+set -e
+TEST="$(cd "$(dirname "$0")" && pwd)"
+CORE="$(cd "$TEST/../.." && pwd)"
+AGENTS="$(cd "$CORE/../../agents" && pwd)"
+OUT="${TMPDIR:-/tmp}/mind-palace-agent-tests"
+mkdir -p "$OUT"
+SOURCES=("$CORE/base.cpp" "$CORE/json.cpp" "$CORE/agent/protocol.cpp" "$CORE/agent/mirror.cpp" "$CORE/agent/client.cpp" "$TEST"/*_test.cpp "$TEST/main.cpp")
+FLAGS=(-std=c++20 -g -O1 -Wall -Wextra -Werror -I"$CORE")
+
+xcrun clang++ "${FLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all "${SOURCES[@]}" -o "$OUT/tests" &
+xcrun clang++ "${FLAGS[@]}" -fsanitize=thread "${SOURCES[@]}" -o "$OUT/tests-tsan" &
+wait %1 && wait %2
+
+echo "address and undefined-behaviour sanitizers:"
+"$OUT/tests" 2>"$OUT/log.txt" || { cat "$OUT/log.txt"; exit 1; }
+echo "thread sanitizer:"
+TSAN_OPTIONS=halt_on_error=1 "$OUT/tests-tsan" 2>"$OUT/log-tsan.txt" || { cat "$OUT/log-tsan.txt"; exit 1; }
+echo "against the service's schema:"
+"$OUT/tests" --outbound | (cd "$AGENTS" && node --no-warnings --import tsx "$TEST/outbound.ts")
