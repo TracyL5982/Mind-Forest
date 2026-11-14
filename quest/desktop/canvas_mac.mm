@@ -37,10 +37,23 @@ CTFontRef systemFont(const Font& font) {
     // (Text is measured on the frame thread while pictures are drawn on another: this is shared between them.)
     static std::mutex guard;
     std::lock_guard<std::mutex> lock(guard);
-    auto key = std::make_pair(font.pointSize, int(font.weight));
+    auto key = std::make_pair(font.pointSize, faceCode(font));
     auto it = known.find(key);
     if (it != known.end()) return it->second;
-    CTFontRef made = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, font.pointSize, nullptr);
+    CTFontRef made = nullptr;
+    if (font.design == Font::Design::serif) {
+        // The web client's serif: Iowan Old Style, else Georgia.
+        for (CFStringRef name : {CFSTR("Iowan Old Style"), CFSTR("Georgia")}) {
+            if ((made = CTFontCreateWithName(name, font.pointSize, nullptr))) break;
+        }
+    }
+    if (!made) made = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, font.pointSize, nullptr);
+    if (made && font.italic) {
+        if (CTFontRef slanted = CTFontCreateCopyWithSymbolicTraits(made, font.pointSize, nullptr, kCTFontItalicTrait, kCTFontItalicTrait)) {
+            CFRelease(made);
+            made = slanted;
+        }
+    }
     if (made && font.weight != Font::Weight::regular) {
         // The same font, asked for again by its weight (UIFont.Weight's own numbers).
         CGFloat weight = rawValue(font.weight);
@@ -369,7 +382,7 @@ ImageRef platform::rasterize(const Canvas& canvas) {
             CGFloat parts[4] = {r, g, b, a};
             CGColorRef color = CGColorCreate(sRGB(), parts);
             std::vector<CTLineRef> lines;
-            TextFrame frame = lay(canvas.strings[index], Font{size, Font::Weight(weight)}, kerned ? std::optional<float>(kern) : std::nullopt,
+            TextFrame frame = lay(canvas.strings[index], fontOfFace(size, weight), kerned ? std::optional<float>(kern) : std::nullopt,
                                   lineHeight, width, maxLines, false, color, &lines);
             // Glyphs are drawn y-up; the text matrix turns them over to match the canvas.
             CGContextSetTextMatrix(ctx, CGAffineTransformMakeScale(1, -1));

@@ -129,19 +129,38 @@ struct FontMetrics {
     float ascent = 0, descent = 0, leading = 0;
 };
 
-/// UIFont: only the system font, by size and weight.
+/// UIFont: the system font, by size and weight.
 struct Font {
     /// UIFont.Weight
     enum class Weight { regular, medium, semibold, bold };
+    /// Added for Quest: the agent's cards are set as the web client sets them, a few lines in a serif
+    /// ('Iowan Old Style', Georgia) and some in italics. The ported sources only ever ask for `system`.
+    enum class Design { system, serif };
     float pointSize = 12;
     Weight weight = Weight::regular;
+    Design design = Design::system;
+    bool italic = false;
 
     static Font systemFont(float ofSize, Weight weight = Weight::regular) { return {ofSize, weight}; }
+    static Font serifFont(float ofSize, Weight weight = Weight::regular, bool italic = false) {
+        return {ofSize, weight, Design::serif, italic};
+    }
     /// ascender - descender + leading: what one line of it takes when nothing says otherwise.
     float lineHeight() const;
     FontMetrics metrics() const;
 };
-inline bool operator==(const Font& a, const Font& b) { return a.pointSize == b.pointSize && a.weight == b.weight; }
+inline bool operator==(const Font& a, const Font& b) {
+    return a.pointSize == b.pointSize && a.weight == b.weight && a.design == b.design && a.italic == b.italic;
+}
+
+/// How a font's face is told to the host, beside its size: the weight (0…3), plus 4 for the serif and
+/// 8 for italics. The system font's four weights are their own numbers, as they were before there was more.
+inline int faceCode(const Font& font) {
+    return int(font.weight) | (font.design == Font::Design::serif ? 4 : 0) | (font.italic ? 8 : 0);
+}
+inline Font fontOfFace(float size, int code) {
+    return {size, Font::Weight(code & 3), (code & 4) ? Font::Design::serif : Font::Design::system, (code & 8) != 0};
+}
 
 /// `weight.rawValue`
 inline float rawValue(Font::Weight w) {
@@ -305,7 +324,7 @@ public:
         strokeEllipse = 19, // rect
         image = 20,         // index into `images`, rect
         text = 21,          // index into `strings`, x, y, width (>= 1e6: no wrapping), maxLines, font size,
-                            // weight (Font::Weight), kerned (0 or 1), kern, line height (0: the font's own), color
+                            // face (faceCode), kerned (0 or 1), kern, line height (0: the font's own), color
     };
     std::vector<float> commands;
     std::vector<std::string> strings;

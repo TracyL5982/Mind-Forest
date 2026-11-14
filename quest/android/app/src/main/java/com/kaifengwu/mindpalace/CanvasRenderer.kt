@@ -66,15 +66,18 @@ object CanvasRenderer {
     // (Text is measured on the frame thread while pictures are drawn on another: this is shared between them.)
     private val typefaces = java.util.concurrent.ConcurrentHashMap<Int, Typeface>()
 
-    /** The system font at one of Font::Weight's four: 0 regular, 1 medium, 2 semibold, 3 bold. */
-    private fun typeface(weight: Int): Typeface = typefaces.getOrPut(weight) {
-        val w = when (weight) {
+    /**
+     * A font by its face code (faceCode in canvas.h): one of Font::Weight's four in the low two bits
+     * (0 regular, 1 medium, 2 semibold, 3 bold), 4 for the serif, 8 for italics.
+     */
+    private fun typeface(face: Int): Typeface = typefaces.getOrPut(face) {
+        val w = when (face and 3) {
             1 -> 500
             2 -> 600
             3 -> 700
             else -> 400
         }
-        Typeface.create(Typeface.DEFAULT, w, false)
+        Typeface.create(if (face and 4 != 0) Typeface.SERIF else Typeface.DEFAULT, w, face and 8 != 0)
     }
 
     /**
