@@ -10,7 +10,7 @@ OUT=build
 mkdir -p $OUT
 FLAGS="-std=c++20 -O2 -g -Wall -Wno-unused-variable -Wno-unused-function -Wno-missing-braces -Wno-deprecated-declarations \
   -I$CORE -I$CORE/ocean -I. -I/opt/homebrew/include -DREPO_ROOT=\"$REPO\""
-sources=(main.cpp platform_mac.mm $CORE/base.cpp $CORE/json.cpp $CORE/scene.cpp $CORE/render.cpp $CORE/input.cpp $CORE/perf.cpp $CORE/async.cpp $CORE/app.cpp)
+sources=(main.cpp platform_mac.mm net_mac.mm $CORE/base.cpp $CORE/json.cpp $CORE/scene.cpp $CORE/render.cpp $CORE/input.cpp $CORE/perf.cpp $CORE/async.cpp $CORE/app.cpp)
 if [ "$1" = "--host-only" ]; then
   FLAGS="$FLAGS -DOCEAN_NO_SCENE"
 else
