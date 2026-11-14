@@ -525,6 +525,10 @@ test('a label names a value when its words stand in the sentence, the list item 
   assert.deepEqual([rows.names('Rent', '980 euros'), rows.names('Food', '980 euros'), rows.names('Rent, paid on the first', '980 euros')], [true, false, true], 'a list item is one line, whatever sentences it holds');
   assert.equal(rows.names('Budget', '45%'), false, 'the title is a paragraph of its own');
 
+  const plans = grounding('Our plans.\n\nPlan | Price | Seats\nSolo | $8 | 1\nOrg | $1,200 | 100\n\n| | Jan | Feb |\n| Rain | 81 | 60 |');
+  assert.deepEqual([plans.names('Price', '$1,200'), plans.names('Seats', 100), plans.names('Seats', '$1,200'), plans.names('Solo', '$1,200')], [true, true, false, false], 'the head of a column names the values under it');
+  assert.deepEqual([plans.names('Jan', 81), plans.names('Feb', 81), plans.names('Rain', 60), plans.names('Price', 81)], [true, false, true, false], 'in its own table');
+
   const lines = grounding('The tower in short.\nHeight: 330 m\nBuilt: 1889\n2019: 980 euros\n2020: 1,010 euros');
   assert.deepEqual([lines.names('Height', '330 m'), lines.names('Built', '330 m'), lines.names('tower', '330 m')], [true, false, false], 'a line that opens with a label and a colon stands alone');
   assert.deepEqual([lines.names('2019', 980), lines.names('2019', 1010), lines.names('2020', 1010, 'euros')], [true, false, true]);

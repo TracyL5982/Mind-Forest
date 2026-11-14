@@ -378,11 +378,20 @@ test('both halves of a pair must be in the text', async () => {
 
 test('a fact, a date and a named person are kept only when the text writes them', async () => {
   const text = 'Ada Lovelace wrote the first program in 1843. The notes ran to 65 pages.';
-  const stated = { facts: [{ label: 'Length', value: '65 pages' }], when: '1843', personName: 'Ada Lovelace', personRole: 'Mathematician' };
-  assert.deepEqual(await extracted(text, stated), { facts: [{ label: 'Length', value: '65 pages' }], when: '1843', person: { name: 'Ada Lovelace', role: 'Mathematician' } });
-  assert.deepEqual(await extracted(text, { facts: [{ label: 'Length', value: '5 pages' }, { label: 'Year', value: '1843' }], when: '4 July 1843', personName: 'Charles Babbage', personRole: 'Engineer' }), {
-    facts: [{ label: 'Year', value: '1843' }],
+  const stated = { facts: [{ label: 'The notes', value: '65 pages' }], when: '1843', personName: 'Ada Lovelace', personRole: 'Mathematician' };
+  assert.deepEqual(await extracted(text, stated), { facts: [{ label: 'The notes', value: '65 pages' }], when: '1843', person: { name: 'Ada Lovelace', role: 'Mathematician' } });
+  assert.deepEqual(await extracted(text, { facts: [{ label: 'The notes', value: '5 pages' }, { label: 'First program', value: '1843' }], when: '4 July 1843', personName: 'Charles Babbage', personRole: 'Engineer' }), {
+    facts: [{ label: 'First program', value: '1843' }],
   });
+});
+
+test('a fact or a point of a series is kept only under a label whose words stand in the sentence, the line or the row of its value', async () => {
+  const text = 'Ada Lovelace wrote the first program in 1843. The notes ran to 65 pages.\nRent: 980 euros\nFood: 240 euros';
+  const facts = [{ label: 'Length', value: '65 pages' }, { label: 'First program', value: '65 pages' }, { label: 'Notes', value: '65 pages' }, { label: 'Year', value: '1843' }, { label: 'Food', value: '980 euros' }];
+  assert.deepEqual(await extracted(text, { facts }), { facts: [{ label: 'Notes', value: '65 pages' }] }, 'a word of its own, a word of another sentence and a word of another line are each no label');
+  assert.deepEqual(await extracted(text, { chartLabels: ['Rent', 'Food'], chartValues: [980, 240], chartUnit: 'euros' }), { chart: { labels: ['Rent', 'Food'], values: [980, 240], unit: 'euros' } });
+  assert.deepEqual(await extracted(text, { chartLabels: ['Rent', 'Food'], chartValues: [240, 980], chartUnit: 'euros' }), {}, 'a series with its values under the wrong labels');
+  assert.deepEqual(await extracted(text, { chartLabels: ['Housing', 'Food'], chartValues: [980, 240], chartUnit: 'euros' }), {});
 });
 
 test('a chart value is a whole number of the text, not digits inside another', async () => {

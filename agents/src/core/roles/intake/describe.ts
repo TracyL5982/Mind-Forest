@@ -58,7 +58,8 @@ const EXTRACTED = [
   field({
     reply: { facts: z.array(z.object({ label: z.string(), value: z.string() })) },
     keep(r, text) {
-      const facts = r.facts.map((f) => ({ label: squash(f.label), value: squash(f.value) })).filter((f) => f.label && f.value && text.says(f.value));
+      // A label is kept when its words stand in the sentence, the line or the row of its value: a card shows no word the text did not set there.
+      const facts = r.facts.map((f) => ({ label: squash(f.label), value: squash(f.value) })).filter((f) => f.label && f.value && text.says(f.value) && text.names(f.label, f.value));
       return facts.length > 0 ? { facts: facts.slice(0, 12) } : undefined;
     },
   }),
@@ -74,7 +75,7 @@ const EXTRACTED = [
     keep(r, text) {
       const unit = r.chartUnit.trim();
       // "2189万" writes 2189 in 万, and not the bare number 2189.
-      const stated = r.chartValues.every((v) => text.writes(v, unit));
+      const stated = r.chartValues.every((v, n) => text.writes(v, unit) && text.names(squash(r.chartLabels[n] ?? ''), v, unit));
       if (r.chartLabels.length < 2 || r.chartLabels.length !== r.chartValues.length || !stated) return undefined;
       return { chart: { labels: r.chartLabels.map(squash), values: r.chartValues, ...(unit ? { unit } : {}) } };
     },
@@ -191,9 +192,9 @@ The remaining fields hold structure a card can draw. Fill one only when the cont
 - steps: the ordered steps, when the content is a procedure or a sequence.
 
 The fields below are checked against the content. Copy its own words and numbers into them: a value that is not written in the content is thrown away.
-- facts: label and value pairs, when the content lists figures or attributes. Each value as the content writes it.
+- facts: label and value pairs, when the content lists figures or attributes. Each value as the content writes it, and each label in words of the sentence, line or row that holds the value: add none of your own.
 - quoteText and quoteBy: a quotation the content contains, word for word with its punctuation, and who said it.
-- chartLabels, chartValues, chartUnit: a numeric series the content states, one value per label. Each value is a number the content writes.
+- chartLabels, chartValues, chartUnit: a numeric series the content states, one value per label. Each value is a number the content writes, and each label the words the content writes beside it.
 - personName and personRole: when the content is about one named person, the name as written.
 - when: a date or time the content is about, as written.
 - where: the place the content is about, as written.

@@ -29,7 +29,8 @@ export interface Grounding {
   ticks(words: string): boolean | undefined;
   /**
    * The words name the value where the text writes it: every word of the label stands, in any order, in one sentence, one line or
-   * one table row that also holds the value. A number is read as `writes` reads it, with its unit. "fell by 15%" names no "absences".
+   * one table row that also holds the value, or in the head of the value's column. A number is read as `writes` reads it, with its unit.
+   * "fell by 15%" names no "absences".
    */
   names(label: string, value: string | number, unit?: string): boolean;
   /**
@@ -234,6 +235,9 @@ const times = (value: number, magnitude: number) => Number((value * magnitude).t
 class Reader implements Tokens {
   readonly list: Token[] = [];
   readonly breaks: number[] = [];
+  /** How many cell breaks stand before each token on its line: the column it is in, when the line is a table row. */
+  readonly columns: number[] = [];
+  private column = 0;
   private readonly size: number;
   private at = 0;
   /** The breaks met since the last token. */
@@ -277,6 +281,7 @@ class Reader implements Tokens {
       this.pending |= Break.Line;
       this.closeRow();
       this.stopped = this.cells = false;
+      this.column = 0;
       this.lineFrom = -1;
       this.lineHead = this.list.length;
       this.at++;
@@ -300,6 +305,7 @@ class Reader implements Tokens {
       else if (kind === Char.Cell) {
         this.pending |= text[at] === '\t' ? Break.Tab : Break.Cell;
         this.cells = true;
+        this.column++;
       } else if (OPENING_MARKS.has(text[at]!) || (EITHER_MARKS.has(text[at]!) && BEFORE_OPENING.test(text[at - 1] ?? ''))) this.pending |= Break.Quote;
       else if (CLOSING_MARKS.has(text[at]!) || EITHER_MARKS.has(text[at]!)) this.pending |= Break.Unquote;
       else if ((text[at] === ':' || text[at] === '：') && (this.pending & ~Break.Unquote) === 0 && this.list.length > this.opened && this.list.length - this.opened <= LEAD_WORDS) this.pending |= Break.Lead;
@@ -312,6 +318,7 @@ class Reader implements Tokens {
     if ((this.pending & (SENTENCE | Break.Line)) !== 0) this.opened = this.list.length;
     this.list.push(token);
     this.breaks.push(this.pending);
+    this.columns.push(this.column);
     this.pending = 0;
     this.stopped = false;
     this.at = this.end = to;
@@ -652,7 +659,7 @@ class Source implements Grounding {
         while (to < written.marked && span[to] === span[start]) to++;
         if (within(from, to)) return true;
       }
-      return false;
+      return this.headed(start, words);
     };
     if (typeof value === 'string') {
       const asked = this.claim(value);
@@ -700,6 +707,30 @@ class Source implements Grounding {
         const between = written.list.slice(end, from);
         return between.length === 0 || LINKS.some((link) => link.length === between.length && link.every((token, n) => token === between[n]));
       });
+    });
+  }
+
+  /** The token stands in a row of a table whose first row holds every one of the words in the cell of the same column. */
+  private headed(at: number, words: Token[]): boolean {
+    const written = this.tokens;
+    const { breaks, columns } = written;
+    const { line } = this.spanned();
+    const opens = (token: number) => token === 0 || line[token - 1] !== line[token];
+    let row = at;
+    while (!opens(row)) row--;
+    if ((breaks[row]! & Break.Row) === 0) return false;
+    // Up to the first row of the table: the rows above, as far as they follow one another with no empty line between.
+    let head = row;
+    while (head > 0 && (breaks[head]! & Break.Blank) === 0) {
+      let above = head - 1;
+      while (!opens(above)) above--;
+      if ((breaks[above]! & Break.Row) === 0) break;
+      head = above;
+    }
+    if (head === row) return false;
+    return words.every((word) => {
+      for (let token = head; token < row && line[token] === line[head]; token++) if (columns[token] === columns[at] && same(written, token, word)) return true;
+      return false;
     });
   }
 
