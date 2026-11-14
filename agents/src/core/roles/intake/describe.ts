@@ -1,32 +1,33 @@
 import { z } from 'zod';
 import type { ItemData } from '../../domain.ts';
+import { grounding, type Grounding } from '../../grounding.ts';
 import { asColour } from './colours.ts';
 import { clip, squash, tidyTags, TITLE_MAX, type Described } from './plain.ts';
 
 type Shape = Record<string, z.ZodType>;
 type Reply<S extends Shape> = { [K in keyof S]: z.infer<S[K]> };
 
-/** The text the model read, asked whether it states a value. With no text to check against, every value stands. */
-interface Read {
-  says(words: string): boolean;
-  writes(value: number): boolean;
-}
-
 interface Field<S extends Shape> {
   /** The reply keys the model fills. Flat, every key required, empty meaning absent: the model API rejects recursive schemas and optional keys. */
   reply: S;
   /** The `item.data` keys this field writes, or nothing when the reply leaves it empty or the text does not state it. */
-  keep(reply: Reply<S>, text: Read): ItemData | undefined;
+  keep(reply: Reply<S>, text: Grounding): ItemData | undefined;
 }
 
 const field = <S extends Shape>(f: Field<S>): Field<S> => f;
+
+/** Each entry once, whatever its case, in the order given. */
+function distinct(entries: string[]): string[] {
+  const seen = new Set<string>();
+  return entries.map(squash).filter((entry) => entry && !seen.has(entry.toLowerCase()) && seen.add(entry.toLowerCase()));
+}
 
 /** A list the content states entry by entry. An entry the text does not hold is dropped. */
 const listed = <K extends string>(key: K, max: number) =>
   field({
     reply: { [key]: z.array(z.string()) } as Record<K, z.ZodArray<z.ZodString>>,
     keep(r, text) {
-      const entries = [...new Set((r[key] as string[]).map(squash))].filter((entry) => entry && text.says(entry)).slice(0, max);
+      const entries = distinct(r[key] as string[]).filter((entry) => text.says(entry)).slice(0, max);
       return entries.length > 0 ? { [key]: entries } : undefined;
     },
   });
@@ -56,8 +57,8 @@ const EXTRACTED = [
   }),
   field({
     reply: { facts: z.array(z.object({ label: z.string(), value: z.string() })) },
-    keep(r) {
-      const facts = r.facts.map((f) => ({ label: squash(f.label), value: squash(f.value) })).filter((f) => f.label && f.value);
+    keep(r, text) {
+      const facts = r.facts.map((f) => ({ label: squash(f.label), value: squash(f.value) })).filter((f) => f.label && f.value && text.says(f.value));
       return facts.length > 0 ? { facts: facts.slice(0, 12) } : undefined;
     },
   }),
@@ -65,24 +66,30 @@ const EXTRACTED = [
     reply: { quoteText: z.string(), quoteBy: z.string() },
     keep(r, text) {
       const quote = r.quoteText.trim();
-      return quote && text.says(quote) ? { quote: { text: quote, ...(r.quoteBy.trim() ? { by: r.quoteBy.trim() } : {}) } } : undefined;
+      return quote && text.quotes(quote) ? { quote: { text: quote, ...(r.quoteBy.trim() ? { by: r.quoteBy.trim() } : {}) } } : undefined;
     },
   }),
   field({
     reply: { chartLabels: z.array(z.string()), chartValues: z.array(z.number()), chartUnit: z.string() },
     keep(r, text) {
-      const stated = r.chartValues.every((v) => Number.isFinite(v) && text.writes(v));
+      const stated = r.chartValues.every((v) => text.writes(v));
       if (r.chartLabels.length < 2 || r.chartLabels.length !== r.chartValues.length || !stated) return undefined;
       return { chart: { labels: r.chartLabels.map(squash), values: r.chartValues, ...(r.chartUnit.trim() ? { unit: r.chartUnit.trim() } : {}) } };
     },
   }),
   field({
     reply: { personName: z.string(), personRole: z.string() },
-    keep: (r) => (r.personName.trim() ? { person: { name: r.personName.trim(), ...(r.personRole.trim() ? { role: r.personRole.trim() } : {}) } } : undefined),
+    keep(r, text) {
+      const name = r.personName.trim();
+      return name && text.says(name) ? { person: { name, ...(r.personRole.trim() ? { role: r.personRole.trim() } : {}) } } : undefined;
+    },
   }),
   field({
     reply: { when: z.string() },
-    keep: (r) => (r.when.trim() ? { when: r.when.trim() } : undefined),
+    keep(r, text) {
+      const when = r.when.trim();
+      return when && text.says(when) ? { when } : undefined;
+    },
   }),
   field({
     reply: { where: z.string() },
@@ -99,14 +106,15 @@ const EXTRACTED = [
     reply: { tableHeads: z.array(z.string()), tableRows: z.array(z.string()) },
     keep(r, text) {
       const heads = r.tableHeads.map(squash);
-      if (heads.length < 2 || heads.length > MAX_COLUMNS || heads.some((head) => !head || !text.says(head))) return undefined;
+      if (heads.length < 2 || heads.length > MAX_COLUMNS || heads.some((head) => !text.quotes(head))) return undefined;
+      const same = (cells: string[]) => cells.every((cell, n) => cell.toLowerCase() === heads[n]!.toLowerCase());
       const rows = r.tableRows
         .map((row) => {
-          const cells = row.split('|').map(squash);
-          const fenced = cells.length === heads.length + 2 && !cells[0] && !cells.at(-1);
-          return fenced ? cells.slice(1, -1) : cells;
+          // A leading "|" with no trailing one, or the reverse, may be an empty cell, so the two are only taken off together.
+          const fenced = /^\s*\|.*\|\s*$/s.test(row) ? row.trim().slice(1, -1) : row;
+          return fenced.split('|').map(squash);
         })
-        .filter((cells) => cells.length === heads.length && cells.some(Boolean) && cells.every((cell) => !cell || text.says(cell)))
+        .filter((cells) => cells.length === heads.length && !cells.every((cell) => /^[-:\s]*$/.test(cell)) && !same(cells) && cells.every((cell) => !cell || text.quotes(cell)))
         .slice(0, MAX_ROWS);
       return rows.length > 0 ? { table: { heads, rows } } : undefined;
     },
@@ -116,13 +124,11 @@ const EXTRACTED = [
   field({
     reply: { items: z.array(z.string()), checklist: z.array(z.boolean()) },
     keep(r, text) {
-      const ticked = r.checklist.length === r.items.length;
-      const kept = r.items
-        .map((item, n) => ({ item: squash(item), done: r.checklist[n] }))
-        .filter((entry) => entry.item && text.says(entry.item))
-        .slice(0, MAX_ITEMS);
-      if (kept.length < 2) return undefined;
-      return { items: kept.map((entry) => entry.item), ...(ticked ? { checklist: kept.map((entry) => entry.done) } : {}) };
+      const items = distinct(r.items).filter((item) => text.says(item)).slice(0, MAX_ITEMS);
+      if (items.length < 2) return undefined;
+      // The model only says the list is a checklist. Each mark is read off the text, so a mark the text does not carry is never shown.
+      const marks = r.checklist.length > 0 ? items.map((item) => text.ticks(item)) : [];
+      return { items, ...(marks.length > 0 && marks.every((mark) => mark !== undefined) ? { checklist: marks } : {}) };
     },
   }),
   field({
@@ -131,7 +137,7 @@ const EXTRACTED = [
       const colours = new Map<string, { name: string; value: string }>();
       for (const colour of r.colours) {
         const value = asColour(colour.value);
-        if (!value || !text.says(colour.value) || colours.has(value.toLowerCase())) continue;
+        if (!value || !(value.startsWith('#') ? text.paints(value) : text.says(colour.value)) || colours.has(value.toLowerCase())) continue;
         const name = squash(colour.name);
         colours.set(value.toLowerCase(), { name: name && text.says(name) ? name : value, value });
       }
@@ -143,7 +149,7 @@ const EXTRACTED = [
     keep(r, text) {
       const passage = r.excerptText.trim();
       const at = squash(r.excerptAt);
-      return passage && text.says(passage) ? { excerpt: { text: passage, ...(at && text.says(at) ? { at } : {}) } } : undefined;
+      return passage && text.quotes(passage) ? { excerpt: { text: passage, ...(at && text.says(at) ? { at } : {}) } } : undefined;
     },
   }),
 ];
@@ -179,22 +185,22 @@ Write in the language of the content.
 
 The remaining fields hold structure a card can draw. Fill one only when the content itself states it, and leave it empty (an empty string or an empty list) otherwise. Never invent structure.
 - steps: the ordered steps, when the content is a procedure or a sequence.
-- facts: label and value pairs, when the content lists figures or attributes.
-- quoteText and quoteBy: a quotation the content contains, word for word, and who said it.
-- chartLabels, chartValues, chartUnit: a numeric series the content states, one value per label.
-- personName and personRole: when the content is about one named person.
-- when: a date or time the content is about, as written.
 
-The fields below are checked against the content. Copy its own words into them: a value that is not written in the content is thrown away.
+The fields below are checked against the content. Copy its own words and numbers into them: a value that is not written in the content is thrown away.
+- facts: label and value pairs, when the content lists figures or attributes. Each value as the content writes it.
+- quoteText and quoteBy: a quotation the content contains, word for word with its punctuation, and who said it.
+- chartLabels, chartValues, chartUnit: a numeric series the content states, one value per label. Each value is a number the content writes.
+- personName and personRole: when the content is about one named person, the name as written.
+- when: a date or time the content is about, as written.
 - where: the place the content is about, as written.
 - people: every person the content names.
 - pros and cons: the points for and the points against, when the content weighs a choice.
-- tableHeads and tableRows: a table the content holds. tableHeads has the column heads. Each entry of tableRows is one row, with its cells in column order separated by " | ".
+- tableHeads and tableRows: a table the content holds. tableHeads has the column heads. Each entry of tableRows is one row, with its cells in column order separated by " | ". Leave out the heads row and any divider line of dashes.
 - question and answer: when the content asks one question and answers it.
 - term and definition: when the content defines one term.
-- items and checklist: a list in no particular order. Leave checklist empty unless the content marks items as done or not done. Then give true or false for each item, in the same order.
-- colours: each colour the content gives as a hex value or a plain colour name, with the name the content calls it, or an empty name.
-- excerptText and excerptAt: one passage of a longer source that is worth quoting, word for word, and where it sits as the source itself says (a heading, a chapter, a page).`;
+- items and checklist: a list in no particular order. Leave checklist empty unless the content puts a check mark or a tick box beside each item. Then give true or false for each item, in the same order.
+- colours: each colour the content presents as a colour (a palette entry, a swatch, the colour of something), as a hex value or a plain colour name, with the name the content calls it, or an empty name. A colour word used for something else, such as the fruit in "an orange", is not a colour.
+- excerptText and excerptAt: one passage of a longer source that is worth quoting, word for word with its punctuation, and where it sits as the source itself says (a heading, a chapter, a page).`;
 
 export const TEXT_SYSTEM = `You are the intake clerk of a brainstorming app. You label what the user drops in so it can be filed and found later.
 
@@ -216,6 +222,8 @@ You are given one image or one video the user dropped in, and its file name. Des
 
 Also return "description": a few sentences on what is visible, including any text you can read in it, so the item can be found by searching.
 
+For an image or a video, the content the fields are checked against is your own description and the file name. A place, a name, a number or any other value you put in a field must be written in your description in the same words, or it is thrown away.
+
 ${FIELDS}`;
 
 export const CHAT_SYSTEM = `You are the intake clerk of a brainstorming app. The user has brought in a conversation they had with an AI assistant, and you record what came out of it.
@@ -229,24 +237,9 @@ Return:
 - takeaways: up to 5 ideas, conclusions or decisions from the conversation that are worth keeping on their own. Each has a title under 70 characters and a text of one to three sentences that makes sense without the conversation. Return fewer, or none, when the conversation holds fewer.
 Write in the language of the conversation.`;
 
-const loose = (text: string): string => squash(text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ''));
-
-function reader(grounding?: string): Read {
-  if (grounding === undefined) return { says: () => true, writes: () => true };
-  let words: string | undefined;
-  let digits: string | undefined;
-  return {
-    says: (claim) => (words ??= loose(grounding)).includes(loose(claim)),
-    writes: (value) => (digits ??= grounding.replace(/,/g, '')).includes(String(value)),
-  };
-}
-
-/**
- * The parts of the model's description worth keeping as drawable data.
- * With `grounding` (the text the model read), a value that is not in it is dropped.
- */
-export function structure(d: Description, grounding?: string): ItemData {
-  const text = reader(grounding);
+/** The parts of the model's description worth keeping as drawable data: those that `source`, the text the model described, states. */
+export function structure(d: Description, source: string): ItemData {
+  const text = grounding(source);
   const data: ItemData = {};
   for (const extracted of EXTRACTED) Object.assign(data, (extracted as Field<Shape>).keep(d, text));
   return data;

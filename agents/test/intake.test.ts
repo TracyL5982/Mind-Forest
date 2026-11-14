@@ -335,20 +335,136 @@ test('where an excerpt sits is dropped alone when the text does not say it', asy
   assert.deepEqual(data, { excerpt: { text: 'Every stair keeps the weight.' } });
 });
 
-test('a list is a checklist only when every item has a mark', async () => {
-  const data = await extracted('Bring: tent, stove, map.', { items: ['tent', 'stove', 'map'], checklist: [true] });
-  assert.deepEqual(data, { items: ['tent', 'stove', 'map'] });
+test('a list is a checklist only when the text itself marks each item, and the marks are the text\'s', async () => {
+  assert.deepEqual(await extracted('Bring: tent, stove, map.', { items: ['tent', 'stove', 'map'], checklist: [true, true, false] }), { items: ['tent', 'stove', 'map'] });
+  assert.deepEqual(await extracted('☑ tent\n☐ stove\nmap', { items: ['tent', 'stove', 'map'], checklist: [true, false, false] }), { items: ['tent', 'stove', 'map'] });
+  assert.deepEqual(await extracted('[x] tent\n[ ] stove', { items: ['tent', 'stove'], checklist: [false, true] }), { items: ['tent', 'stove'], checklist: [true, false] });
+  assert.deepEqual(await extracted('[x] tent\n[ ] stove', { items: ['tent', 'stove'], checklist: [] }), { items: ['tent', 'stove'] });
 });
 
-test('a photo has no text to check against, so what the model reads in it is kept', async () => {
+test('a list needs two different entries, whatever their case', async () => {
+  const text = 'Bring: passport, charger.';
+  assert.deepEqual(await extracted(text, { items: ['passport'] }), {});
+  assert.deepEqual(await extracted(text, { items: ['passport', 'Passport', 'PASSPORT'] }), {});
+  assert.deepEqual(await extracted(text, { items: ['passport', 'umbrella'] }), {});
+  assert.deepEqual(await extracted(text, { items: ['passport', 'Charger', 'charger'] }), { items: ['passport', 'Charger'] });
+  assert.deepEqual(await extracted(text, { people: ['Charger', 'charger'], pros: ['passport', 'PASSPORT'] }), { people: ['Charger'], pros: ['passport'] });
+});
+
+test('a word, a number or a symbol the text only holds inside something else is not stated', async () => {
+  const text = 'A comparison of options for the manager, founded in 1950 with 1,200 euros. It was an important hundred-page report.';
+  const reply = {
+    where: 'Paris',
+    people: ['Ana', '?'],
+    pros: ['...', 'port'],
+    cons: ['5', '200'],
+    colours: [{ name: '', value: 'red' }, { name: '', value: 'tan' }, { name: '', value: '#195' }],
+    question: 'Why?',
+    answer: 'A comparison of options',
+    term: 'manager',
+    definition: '—',
+  };
+  assert.deepEqual(await extracted(text, reply), {});
+  assert.deepEqual(await extracted(text, { where: 'the Manager', cons: ['1200', '1950'], pros: ['hundred page report'] }), { where: 'the Manager', cons: ['1200', '1950'], pros: ['hundred page report'] });
+  assert.deepEqual(await extracted('北京是中国的首都，人口2189万。', { where: '北京', people: ['上海'], cons: ['189'] }), { where: '北京' });
+});
+
+test('both halves of a pair must be in the text', async () => {
+  const text = 'Why is the sky blue? Air scatters short wavelengths the most.\nParallax: the apparent shift of an object when the viewer moves.';
+  assert.deepEqual(await extracted(text, { question: 'Why is grass green?', answer: 'Air scatters short wavelengths the most.' }), {});
+  assert.deepEqual(await extracted(text, { term: 'Refraction', definition: 'the apparent shift of an object when the viewer moves' }), {});
+});
+
+test('a fact, a date and a named person are kept only when the text writes them', async () => {
+  const text = 'Ada Lovelace wrote the first program in 1843. The notes ran to 65 pages.';
+  const stated = { facts: [{ label: 'Length', value: '65 pages' }], when: '1843', personName: 'Ada Lovelace', personRole: 'Mathematician' };
+  assert.deepEqual(await extracted(text, stated), { facts: [{ label: 'Length', value: '65 pages' }], when: '1843', person: { name: 'Ada Lovelace', role: 'Mathematician' } });
+  assert.deepEqual(await extracted(text, { facts: [{ label: 'Length', value: '5 pages' }, { label: 'Year', value: '1843' }], when: '4 July 1843', personName: 'Charles Babbage', personRole: 'Engineer' }), {
+    facts: [{ label: 'Year', value: '1843' }],
+  });
+});
+
+test('a chart value is a whole number of the text, not digits inside another', async () => {
+  const text = 'Sales were 1,200 in May and 3.5 in June of 1950.';
+  assert.deepEqual(await extracted(text, { chartLabels: ['May', 'June'], chartValues: [1200, 3.5] }), { chart: { labels: ['May', 'June'], values: [1200, 3.5] } });
+  for (const chartValues of [[200, 3.5], [1200, 35], [1200, 5], [1200, -3.5]]) assert.deepEqual(await extracted(text, { chartLabels: ['May', 'June'], chartValues }), {}, String(chartValues));
+});
+
+test('a quotation or an excerpt cannot be stitched across two sentences or two lines', async () => {
+  const text = 'Air scatters short blue wavelengths more than long red ones.\nRayleigh scattering: scattering of light by small particles. It is why the sky is blue.';
+  assert.deepEqual(await extracted(text, { excerptText: 'red ones Rayleigh scattering', quoteText: 'small particles it is why' }), {});
+  assert.deepEqual(await extracted(text, { excerptText: 'scattering of light by small particles. It is why the sky is blue.' }), {
+    excerpt: { text: 'scattering of light by small particles. It is why the sky is blue.' },
+  });
+});
+
+test('a table is read from fenced rows without shifting a column, and its divider and repeated heads are left out', async () => {
+  const text = '| Plan | Price | Seats |\n|---|:-:|--:|\n| Basic | 5 | 1 |\n| Team | 20 | 10 |';
+  const heads = ['Plan', 'Price', 'Seats'];
+  const whole = { table: { heads, rows: [['Basic', '5', '1'], ['Team', '20', '10']] } };
+  assert.deepEqual(await extracted(text, { tableHeads: heads, tableRows: ['| Plan | Price | Seats |', '|---|:-:|--:|', '| Basic | 5 | 1 |', '| Team | 20 | 10 |'] }), whole);
+  assert.deepEqual(await extracted(text, { tableHeads: heads, tableRows: ['--- | --- | ---', 'plan | price | seats', 'Basic | 5 | 1', 'Team | 20 | 10'] }), whole);
+  assert.deepEqual(await extracted(text, { tableHeads: heads, tableRows: ['| Basic | 5 |', '| 5 |', '| Team | 20 | 10 |'] }), { table: { heads, rows: [['Team', '20', '10']] } }, 'a fenced row that is short is dropped, not shifted');
+  assert.deepEqual(await extracted(text, { tableHeads: heads, tableRows: ['Basic | 5 | ', 'Team |  | 10'] }), { table: { heads, rows: [['Basic', '5', ''], ['Team', '', '10']] } });
+  assert.deepEqual(await extracted(text, { tableHeads: heads, tableRows: ['|---|---|---|'] }), {});
+});
+
+test('a table needs every head and every cell in the text', async () => {
+  const text = 'Plan | Price | Seats\nBasic | 5 | 1\nOrg | $1,200 | 100';
+  const rows = ['Basic | 5 | 1'];
+  assert.deepEqual(await extracted(text, { tableHeads: ['Plan', 'Cost', 'Seats'], tableRows: rows }), {});
+  assert.deepEqual(await extracted(text, { tableHeads: ['Plan', 'Pri', 'Seat'], tableRows: rows }), {});
+  assert.deepEqual(await extracted(text, { tableHeads: ['#', 'Plan', 'Price'], tableRows: ['1 | Basic | 5'] }), {});
+  assert.deepEqual(await extracted(text, { tableHeads: ['Plan', 'Price', 'Seats'], tableRows: ['Org | $20 | 100', 'Basic | ✓ | 1', 'Seats Basic | 5 | 1', 'Basic | -5 | 1', 'Org | $1200 | 100'] }), {
+    table: { heads: ['Plan', 'Price', 'Seats'], rows: [['Org', '$1200', '100']] },
+  });
+});
+
+const INVENTED = { where: 'Atlantis', people: ['Carl Jung'], pros: ['cheap'], tableHeads: ['a', 'b'], tableRows: ['1 | 2'], excerptText: 'never written', colours: [{ name: 'Ghost', value: '#123456' }], when: '2077', personName: 'Carl Jung' };
+
+test('a link is held to its page: a value the page does not write is dropped', async () => {
   const k = kit();
-  const { id } = await k.assets.put(new Uint8Array([1, 2, 3]), 'image/jpeg', 'beach.jpg');
-  k.model.on('intake.image', () => ({ ...described('Two friends on a beach', { where: 'Nazaré', people: ['Ana Lima', 'Ben Okri'] }), description: 'Two people on sand.' }));
+  const url = 'https://example.com/trip';
+  k.world.pages.set(url, { url, title: 'Trip notes', text: 'Three days away in Porto with Ana Lima.', site: 'example.com' });
+  k.model.on('intake.link', () => described('Trip', { ...INVENTED, where: 'Porto', people: ['Carl Jung', 'Ana Lima'] }));
 
-  const [photo] = await intake(k.ctx, [{ kind: 'asset', asset: id, mime: 'image/jpeg', name: 'beach.jpg' }]);
+  const [link] = await intake(k.ctx, [{ kind: 'link', url }]);
 
-  assert.deepEqual(photo!.data, { where: 'Nazaré', people: ['Ana Lima', 'Ben Okri'] });
+  assert.deepEqual(link!.data, { where: 'Porto', people: ['Ana Lima'], site: 'example.com' });
 });
+
+test('each part of a split text is held to the text: a value it does not write is dropped', async () => {
+  const k = kit();
+  const long = `${'First idea about Lisbon. '.repeat(40)}\n\n${'Second idea about Porto. '.repeat(40)}`;
+  k.model.on('intake.text', () => ({
+    entries: [
+      { dump: 0, text: 'First idea about Lisbon.', ...described('First', { ...INVENTED, where: 'Lisbon' }) },
+      { dump: 0, text: 'Second idea about Porto.', ...described('Second', INVENTED) },
+    ],
+  }));
+
+  const parts = await intake(k.ctx, [{ kind: 'text', text: long }]);
+
+  assert.deepEqual(parts.map((part) => part.data), [{ where: 'Lisbon' }, {}]);
+});
+
+for (const [kind, mime, name] of [['image', 'image/jpeg', 'beach.jpg'], ['video', 'video/mp4', 'nazare-clip.mp4']] as const) {
+  test(`${kind === 'image' ? 'a photo' : 'a video'} is held to the model's own description and the file name`, async () => {
+    const media = async (description: string, more: object) => {
+      const k = kit();
+      const { id } = await k.assets.put(new Uint8Array([1, 2, 3]), mime, name);
+      k.model.on(`intake.${kind}`, () => ({ ...described('Two friends on a beach', more), description }));
+      const [item] = await intake(k.ctx, [{ kind: 'asset', asset: id, mime, name }]);
+      return item!.data;
+    };
+    const named = { where: 'Nazaré', people: ['Ana Lima', 'Ben Okri'] };
+
+    assert.deepEqual(await media('Ana Lima and Ben Okri stand on the sand at Nazaré.', named), named);
+    assert.deepEqual(await media('Two people on sand.', { ...INVENTED, ...named }), {});
+    assert.deepEqual(await media('', { ...INVENTED, ...named }), {});
+    assert.deepEqual(await media('Waves.', { where: kind === 'image' ? 'beach' : 'nazare' }), { where: kind === 'image' ? 'beach' : 'nazare' }, 'the file name counts as content');
+  });
+}
 
 const CHATGPT_EXPORT = [
   {
