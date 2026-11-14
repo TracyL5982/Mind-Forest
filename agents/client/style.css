@@ -136,10 +136,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .quote-by { margin-top: auto; padding-top: 8px; display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); }
 .quote-by::before { content: ''; flex: none; width: 14px; height: 1px; background: currentColor; }
 
-/* fact: one large figure on a sunk face, underlined once. */
+/* fact: one large figure on a sunk face, underlined once. The figure is never clamped: a cut number misleads, so it wraps instead. */
 [data-component='fact'] .card-face { background: var(--sunk); }
 .c-fact { gap: 0; }
-.fact-value { flex: none; font-size: var(--type-display); line-height: var(--lead-display); font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.fact-value { flex: none; overflow-wrap: anywhere; font-size: var(--type-display); line-height: var(--lead-display); font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .fact-value.is-mid { font-size: var(--type-display-2); line-height: var(--lead-display-2); }
 .fact-value.is-small { font-size: var(--type-title); line-height: var(--lead-title); }
 .fact-rule { flex: none; width: 28px; height: 2px; margin: 4px 0; background: var(--accent); }
@@ -381,7 +381,6 @@ input[type='text']:focus, textarea:focus { outline: none; border-color: rgba(255
 .detail-quote .quote-by { align-items: baseline; }
 .detail-quote .quote-by::before { transform: translateY(-4px); }
 .detail-fact { padding: 13px 15px; border-radius: 12px; background: var(--sunk); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); display: flex; flex-direction: column; }
-.detail-fact .fact-value { overflow-wrap: anywhere; }
 .detail-chart { --face: #111317; padding: 12px; border-radius: 12px; background: var(--face); display: flex; flex-direction: column; gap: 6px; }
 .chart-table { width: 100%; margin-top: 6px; border-collapse: collapse; font-size: var(--type-text); line-height: var(--lead-text); font-variant-numeric: tabular-nums; }
 .chart-table th, .chart-table td { padding: 4px 0; border-top: 1px solid var(--line); }

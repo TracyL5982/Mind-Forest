@@ -17,7 +17,11 @@ const DIGIT = 11;
 /** A value's width on one line in hundredths of a px. */
 const need = (value, letter, digit) => span(value, letter) * letter - (value.match(/[0-9]/g)?.length ?? 0) * (DIGIT * letter - digit);
 
-/** A value takes the largest size that holds it on one line. Past the smallest, it wraps to two. */
+/**
+ * A value takes the largest size that holds it on one line. Past the smallest, it wraps to two.
+ * It is drawn whole whatever the estimate: a value wider than it was counted wraps, and is never
+ * clamped or ended with an ellipsis.
+ */
 function plan(item, props) {
   const value = text(props.value) || '–';
   const label = text(props.label);
@@ -40,9 +44,9 @@ export function size(item, props) {
 }
 
 export function draw(item, props) {
-  const { value, label, cls, lines, labelLines, foot } = plan(item, props);
+  const { value, label, cls, labelLines, foot } = plan(item, props);
   return [
-    say('div', `fact-value ${cls} clamp-${lines}`, value),
+    say('div', cls ? `fact-value ${cls}` : 'fact-value', value),
     h('div', { class: 'fact-rule' }),
     label && say('div', `fact-label clamp-${labelLines}`, label),
     foot && say('div', 'card-foot clamp-1', foot),
