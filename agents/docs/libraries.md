@@ -38,23 +38,38 @@ All arithmetic is in whole numbers. `up(a, b)` is `a / b` rounded up. `clamp(v, 
 
 ### The width of a string
 
-`span(str, face)` is the string's width in tenths of an average lowercase letter, in one of four faces: the title, the text, the quote's serif, and a fact's value. Walk the string by code point and add each code point's tenths from the table. The last two rows count differently in each face, because those characters are as wide as the type is tall while the letter differs. Every other row counts the same in all four. The first row that holds the code point wins. A code point in no row counts 10. A code point that comes directly after U+200D counts 0, so a joined emoji counts once.
+`span(str, face)` is the string's width in tenths of an average lowercase letter, in one of four faces: the title, the text, the quote's serif, and a fact's value. Walk the string by code point and add each code point's tenths from the table, in the column of the face. The first row that holds the code point wins. A code point in no row counts 46 in the title face, 47 in the text face, 55 in the quote face and 43 in a fact value: an unknown character is given the room of the widest one measured, so it is never cut.
 
-| Code points | Tenths | What they are |
-|---|---|---|
-| U+0300 to 036F, U+200B to 200F, U+2060 to 2064, U+FE00 to FE0F, U+1F3FB to 1F3FF, U+E0000 to E007F | 0 | Marks that join or change the character before them |
-| U+0009 to 000D, U+0020, U+00A0, U+2000 to 200A, U+2028, U+2029, U+202F, U+205F | 5 | Spaces and line ends |
-| `!` `'` `,` `.` `/` `:` `;` `\` `\|` `i` `j` `l`, U+2018, U+2019 | 5 | Thin punctuation and letters |
-| `(` `)` `-` `[` `]` `{` `}` `f` `r` `t` | 7 | |
-| `0` to `9`, `#` `$` `+` `<` `=` `>` `^` `~`, U+00A3, U+00D7, U+20AC | 11 | Digits and signs as wide as a digit |
-| `%` `@` `M` `m` `w`, U+2014, U+2026 | 15 | |
-| `W` | 17 | |
-| `&`, `A` to `Z` other than `M` and `W` | 12 | Capitals |
-| U+2190 to 2BFF | 22 | Arrows and symbols |
-| U+1F1E6 to 1F1FF | 11 | Regional indicators. Two draw one flag. |
-| U+1F000 to 1FAFF | 22 | Emoji |
-| U+3040 to 30FF | title 18, text 18, quote 21, fact value 16 | Kana |
-| U+2E80 to 10FFFF | title 17, text 18, quote 21, fact value 16 | Han, hangul, full-width forms, and everything above them |
+Two code points count by what comes before them:
+
+- A code point that comes directly after U+200D counts 0, so a joined emoji counts once.
+- U+FE0F draws the character before it as an emoji. It counts the emoji row's count for the face, less the count of the last code point before it that counted more than 0. When that leaves less than 0 it counts 0, and when no code point before it counted more than 0 it counts the whole emoji row's count. So `©` followed by U+FE0F counts as one emoji, a heart followed by U+FE0F counts no more than the heart, and a person joined to a sign that ends in U+FE0F still counts once.
+
+| Code points | Title | Text | Quote | Fact value | What they are |
+|---|---|---|---|---|---|
+| U+0300 to 036F, U+0483 to 0489, U+0591 to 05BD, U+064B to 065F, U+0670, U+0900 to 0902, U+0941 to 0948, U+094D, U+0E31, U+0E34 to 0E3A, U+0E47 to 0E4D, U+200B to 200F, U+202A to 202E, U+2060 to 206F, U+FE00 to FE0F, U+1F3FB to 1F3FF, U+E0000 to E007F | 0 | 0 | 0 | 0 | Marks that join or change the character before them |
+| U+0009 to 000D, U+0020, `!` `'` `,` `.` `/` `:` `;` `\` `\|` `i` `j` `l`, U+00A0, U+2028, U+2029, U+202F, U+205F | 5 | 5 | 5 | 5 | Spaces, line ends, thin punctuation and letters |
+| `(` `)` `-` `[` `]` `{` `}` `f` `r` `t` | 7 | 7 | 7 | 7 | |
+| `0` to `9`, `#` `$` `+` `<` `=` `>` `^` `~` | 11 | 11 | 11 | 11 | Digits and signs as wide as a digit |
+| `%` `@` `M` `m` `w` | 15 | 15 | 15 | 15 | |
+| `W` | 17 | 17 | 17 | 17 | |
+| `&`, `A` to `Z` | 12 | 12 | 12 | 12 | Capitals |
+| U+0020 to 007E | 10 | 10 | 10 | 10 | The other small letters and signs of English |
+| U+00B7, U+2004 to 2006, U+2008 to 200A, U+2018 to 201B, U+2024, U+2027, U+2032, U+2035, U+2044 | 6 | 6 | 7 | 6 | Thin spaces, single quotes, the middle dot and primes |
+| U+00A1, U+00A8, U+00AA, U+00AD, U+00AF to 00B0, U+00B2 to 00B4, U+00B8 to 00BA, U+00BF, U+00DF to 00E5, U+00E7 to 00F6, U+00F8 to 00FF, U+2000, U+2002, U+2010 to 2011, U+2016, U+201C to 201F, U+2020 to 2023, U+2033, U+2039 to 203A, U+2070 to 209F, U+FF61 to FFDC | 12 | 11 | 13 | 10 | Accented small letters, the degree sign, raised and lowered figures, double quotes, daggers, bullets, half-width kana and hangul |
+| U+00A2 to 00A7, U+00AB to 00AC, U+00AE, U+00B1, U+00B5 to 00B6, U+00BB, U+00D7, U+00F7, U+2007, U+2012 to 2013, U+20A0 to 20A7, U+20AB to 20AE, U+20B1 to 20B6, U+20B8 to 20BA, U+20BC to 20BD, U+20BF, U+2212, U+221A, U+2248, U+2260, U+2264 to 2265 | 13 | 12 | 19 | 11 | Currency signs such as `£` `¥` `€`, the en dash, and the signs of arithmetic |
+| U+00C0 to 00C5, U+00C7 to 00D6, U+00D8 to 00DE, U+0100 to 0151, U+0154 to 0173, U+0175 to 017F, U+01CD to 01DC, U+03AC to 03CE, U+0430 to 045F | 16 | 15 | 17 | 14 | Accented capitals, the rest of European Latin, the tone letters of pinyin, small Greek and small Cyrillic |
+| U+00A9, U+00BC to 00BE, U+00C6, U+00E6, U+0152 to 0153, U+0174, U+0370 to 03AB, U+0410 to 042F, U+0530 to 058F, U+05BE to 05FF, U+0900 to 097F, U+1E00 to 1EFF, U+2001, U+2003, U+2014 to 2015, U+2025 to 2026, U+20A9 to 20AA, U+2122, U+2126 | 19 | 20 | 21 | 18 | The em dash, the ellipsis, fractions, `™`, `₩`, joined letters, Greek and Cyrillic capitals, Armenian, Hebrew, Devanagari and Vietnamese |
+| U+03CF to 03FF, U+2190 to 22FF | 20 | 21 | 24 | 19 | Arrows and the signs of mathematics |
+| U+0600 to 06FF, U+0E00 to 0E5A, U+2300 to 27BF, U+F900 to FAFF, U+1F000 to 1F6FF, U+1F900 to 1FAFF | 22 | 23 | 26 | 21 | Emoji, symbols, Arabic, Thai and the second forms of Han. This is the emoji row. |
+| U+0180 to 02FF, U+0400 to 052F, U+0700 to 077F, U+0E5B to 0E7F, U+10A0 to 10FF, U+1F00 to 1FFF, U+2030 to 205E, U+20A0 to 218F, U+27C0 to 2BFF, U+302E to 302F, U+FB00 to FB4F, U+FE70 to FEFF | 28 | 28 | 34 | 27 | Signs that stand for a word or a unit, such as `‰` `℃` `№`, Roman numerals, and other alphabets |
+| U+3040 to 30FF | 18 | 18 | 21 | 16 | Kana |
+| U+3400 to 9FFF | 17 | 18 | 21 | 16 | Han |
+| U+AC00 to D7AF | 15 | 15 | 21 | 14 | Hangul |
+| U+2E80 to 33FF, U+FE10 to FE6F, U+FF00 to FF60, U+FFE0 to FFEF | 18 | 18 | 21 | 17 | The punctuation and symbols set with Han, and full-width forms |
+| U+FB50 to FDFF | 62 | 56 | 134 | 58 | Arabic words and phrases drawn as one character |
+
+The rows for English, from `!` to the row of U+0020 to 007E, are weights: a letter may draw a little wider than its count, and the letter widths below are set so that words and sentences still fit. Every count in the other rows is the widest any character of the row draws in that face in the web client, rounded up to a whole tenth, so a string is never given less room than it takes. A client that draws with other fonts keeps these counts for its footprints, and must make sure its own text fits them.
 
 One letter is `TITLE_LETTER = 93` tenths of a px in the title face, `TEXT_LETTER = 72` in the text face, and `QUOTE_LETTER = 78` in the quote face. A fact's value has a letter for each of its three sizes, given under fact, and all three use the fact value face. `span(str, face) * letter` is a width in hundredths of a px. Below, a `fold` with a letter of 93 counts in the title face, 72 in the text face and 78 in the quote face.
 
@@ -63,11 +78,16 @@ One letter is `TITLE_LETTER = 93` tenths of a px in the title face, `TEXT_LETTER
 ```
 need = span(str, face) * letter
 room = width * 100
-fold = 1                                          when need <= room
+fold = 1                                            when need <= room
+fold = clamp(packed(str), 1, max)                   when str can break anywhere
 fold = clamp(up(need, room - 20 * letter), 1, max)  otherwise
 ```
 
-The `20 * letter` allows two letters a line for breaking between words. A string that needs more lines than `max` is drawn cut with an ellipsis.
+A string can break anywhere when every one of its code points is a kana letter, a Han character or a hangul syllable: U+3041 to 3096, U+30A1 to 30FA, U+30FC, U+3400 to 9FFF, or U+AC00 to D7AF. A line may end after any of these, so each line holds every character that fits. `packed(str)` counts those lines. Start with one line that holds nothing. For each code point in order, take its width, `span` of that code point alone times `letter`. When the line already holds something and its width plus this one is more than `room`, start a new line that holds nothing. Then add the width to the line. `packed` is the number of lines at the end. Thirty Han characters in a quote are 1638 each in a room of 24700, so fifteen fit a line and the quote is given two lines.
+
+For any other string, the `20 * letter` allows two letters a line for breaking between words. Punctuation, spaces, digits and Latin letters all make a string one of these, because a line may not start with a comma or split a word.
+
+A string that needs more lines than `max` is drawn cut with an ellipsis. A fact's value is the one exception, given under fact.
 
 ### Constants
 
@@ -85,7 +105,7 @@ The `20 * letter` allows two letters a line for breaking between words. A string
 
 - **note.** Width 240. `titleLines = fold(title, 207, 93, 2)`. The body is `item.summary`, else `item.text`, and is left out when it is empty or equal to `item.title`. `bodyLines = fold(body, 207, 72, 2)` when `props.emphasis` is set and `fold(body, 207, 72, 3)` when it is not. Height is `30 + 21 * titleLines`, plus 23 when `props.emphasis` is set, plus `6 + 17 * bodyLines` when there is a body.
 - **quote.** Width 288. The words are `props.text`, else `item.text`, else `item.title`. `lines = fold(words, 247, 78, 5)`. Height is `52 + 21 * lines`, plus 25 when `props.by` is set. When the words draw in fewer lines than they were given, the spare room sits between the words and the speaker.
-- **fact.** The value is `props.value`, or `–` (U+2013) when that is empty. It is set in the first of three sizes that fits it on one line of 287 px. The sizes are a line height of 36 with a letter of 210 and a digit of 2148, 28 with 149 and 1506, and 21 with 105 and 1001. A digit is the drawn width of each of `0` to `9` in hundredths of a px, and replaces the 11 tenths the table gives it: `need = span(value, fact value) * letter - digits * (11 * letter - digit)`, where `digits` is how many of `0` to `9` the value holds. A size fits when `need <= 28700`. When none fits, it takes the last size and `valueLines = fold(value, 287, 105, 2)`, which counts in the fact value face and counts a digit as the table does. Otherwise `valueLines = 1`. `valueWidth` is 287 when `valueLines` is 2 and `up(need, 100)` at the size taken otherwise. `labelWidth = up(span(props.label, text) * 72, 100)`. Width is `clamp(33 + max(valueWidth, labelWidth), 200, 320)`. `labelLines = fold(props.label, width - 33, 72, 2)`, or 0 with no label. The foot is `item.title` when it is not empty and differs from the value and from the label. Height is `40 + valueLines * lineHeight + 17 * labelLines`, plus 25 when there is a foot. A value's letter is the widest any one character other than a digit runs, and digits are all one width, so a value is never cut before two lines at the smallest size.
+- **fact.** The value is `props.value`, or `–` (U+2013) when that is empty. It is set in the first of three sizes that fits it on one line of 287 px. The sizes are a line height of 36 with a letter of 210 and a digit of 2148, 28 with 149 and 1506, and 21 with 105 and 1001. A digit is the drawn width of each of `0` to `9` in hundredths of a px, and replaces the 11 tenths the table gives it: `need = span(value, fact value) * letter - digits * (11 * letter - digit)`, where `digits` is how many of `0` to `9` the value holds. A size fits when `need <= 28700`. When none fits, it takes the last size and `valueLines = fold(value, 287, 105, 2)`, which counts in the fact value face and counts a digit as the table does. Otherwise `valueLines = 1`. `valueWidth` is 287 when `valueLines` is 2 and `up(need, 100)` at the size taken otherwise. `labelWidth = up(span(props.label, text) * 72, 100)`. Width is `clamp(33 + max(valueWidth, labelWidth), 200, 320)`. `labelLines = fold(props.label, width - 33, 72, 2)`, or 0 with no label. The foot is `item.title` when it is not empty and differs from the value and from the label. Height is `40 + valueLines * lineHeight + 17 * labelLines`, plus 25 when there is a foot. A value's letter is the widest any one character of English other than a digit runs, digits are all one width, and every other character counts the widest it draws, so a value fits the lines it is given. A client must never cut a fact's value or end it with an ellipsis, because a figure cut short misleads. A client draws the value with no line clamp. If the value still draws wider than it was counted, it wraps onto a further line, breaking inside a word where it must, and stays whole. The card keeps the size given here.
 - **image.** Width 240. The picture is `clamp(round(240 / aspect), 130, 260)` px tall, where `aspect` is `Number(props.aspect)`, or 1.35 when that is zero or not a number, the division is in IEEE doubles, and `round` is `floor(x + 0.5)`. The caption is `props.caption`, else `item.title` as written, so an empty title gives no caption and never `Untitled`. `captionLines = fold(caption, 207, 72, 2)`, or 0 with no caption. Height is the picture plus 2, plus `19 + 17 * captionLines` when there is a caption.
 - **video.** Width 272. The poster is 153 px tall. The caption is as for image, with `captionLines = fold(caption, 239, 72, 2)`. Height is 155, plus `19 + 17 * captionLines` when there is a caption.
 - **link.** Width is 316 when `props.image` is set and 272 when it is not. The text column is 187 px with a picture and 239 without. `titleLines = fold(title, column, 93, 2)`. The description is `props.description`, else `item.summary`. `aboutLines = fold(description, column, 72, 2)`, or 0 with none. `main = 21 * titleLines`, plus `4 + 17 * aboutLines` when there is a description. Height is `56 + main`, and at least 120 with a picture.
