@@ -406,7 +406,7 @@ button, input, textarea { font: inherit; color: inherit; }
 /* A map: its tiles in a layer at the middle of a plain ground, a pin at each point, and the provider's credit in a corner. */
 .map { position: relative; flex: none; overflow: hidden; background: #20262c; }
 .map-layer { position: absolute; left: 50%; top: 50%; }
-.map-tile { position: absolute; max-width: none; display: block; object-fit: none; pointer-events: none; user-select: none; filter: saturate(0.7) brightness(0.86); }
+.map-tiles { position: absolute; inset: 0; background-repeat: no-repeat; background-size: 256px 256px; filter: saturate(0.7) brightness(0.86); }
 .map-pin { position: absolute; overflow: visible; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); }
 .map-pin path { fill: var(--accent); stroke: rgba(0, 0, 0, 0.6); stroke-width: 1.2; }
 .map-pin circle { fill: var(--face); }

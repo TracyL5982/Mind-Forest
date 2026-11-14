@@ -68,24 +68,21 @@ const PIN = 'M11 27C5.2 19.9 2 15.1 2 10.6a9 9 0 0 1 18 0c0 4.5-3.2 9.3-9 16.4Z'
 
 /**
  * The map, drawn as `layout` places it in a layer `width` by `height` px at the middle of its box,
- * so a box a little wider or narrower than the map still has its centre in the middle. Each tile is
- * drawn only as far as it lies inside the map, so no part of a map reaches past it. A tile that
- * fails to load is taken away and leaves the plain ground. `link` makes the credit a link, which a
- * card on the field cannot have, because a click there opens the card.
+ * so a box a little wider or narrower than the map still has its centre in the middle. The tiles are
+ * the backgrounds of one element the size of the map, so no part of them reaches past it, and a tile
+ * that fails to load leaves the plain ground. Two pictures that meet at a fraction of a device px
+ * each cover the px they share only in part, and the ground would show through as a hairline, so
+ * each tile is drawn a second time under the others, 1 px to the right and 1 px down. `link` makes
+ * the credit a link, which a card on the field cannot have, because a click there opens the card.
  */
 export function drawMap({ centre, zoom, width, height, pins = [], link = false }, className) {
   const { tiles, pins: placed } = layout({ centre, zoom, width, height, pins });
+  const drawn = provider ? [...tiles, ...tiles.map((tile) => ({ ...tile, left: tile.left + 1, top: tile.top + 1 }))] : [];
   const layer = h('div', { class: 'map-layer', style: { width: `${width}px`, height: `${height}px`, marginLeft: `${-width / 2}px`, marginTop: `${-height / 2}px` } },
-    provider && tiles.map((tile) => {
-      const [left, top] = [Math.max(0, tile.left), Math.max(0, tile.top)];
-      const img = h('img', { class: 'map-tile', src: tileUrl(provider.tiles, tile), alt: '', draggable: 'false', style: {
-        left: `${left}px`, top: `${top}px`,
-        width: `${Math.min(width, tile.left + TILE) - left}px`, height: `${Math.min(height, tile.top + TILE) - top}px`,
-        objectPosition: `${tile.left - left}px ${tile.top - top}px`,
-      } });
-      img.addEventListener('error', () => img.remove());
-      return img;
-    }),
+    drawn.length > 0 && h('div', { class: 'map-tiles', style: {
+      backgroundImage: drawn.map((tile) => `url(${JSON.stringify(tileUrl(provider.tiles, tile))})`).join(', '),
+      backgroundPosition: drawn.map((tile) => `${tile.left}px ${tile.top}px`).join(', '),
+    } }),
     placed.map(({ left, top }) => s('svg', { class: 'map-pin', viewBox: '0 0 22 28', width: 22, height: 28, 'aria-hidden': 'true', style: { left: `${left - 11}px`, top: `${top - 27}px` } },
       s('path', { d: PIN }), s('circle', { cx: 11, cy: 10.5, r: 3.4 }))));
   const credit = provider && (link && provider.link
