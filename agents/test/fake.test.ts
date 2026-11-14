@@ -26,7 +26,7 @@ test('the fake clerk reads each kind of structure from its plain written form, a
   assert.deepEqual(await pasted('| Plan | Price |\n| --- | --- |\n| Solo | $8 |\n| Team | $20 |'), {
     table: { heads: ['Plan', 'Price'], rows: [['Solo', '$8'], ['Team', '$20']] },
   });
-  assert.deepEqual(await pasted('Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.\nTerm: Parallax\nDefinition: the apparent shift of an object when the viewer moves'), {
+  assert.deepEqual(await pasted('Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.\nParallax means the apparent shift of an object when the viewer moves'), {
     question: 'Why is the sky blue?',
     answer: 'Air scatters short wavelengths the most.',
     term: 'Parallax',
@@ -93,7 +93,7 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
     qa: await paste('Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.'),
     callout: await paste('Sourdough\nCaution: water above 40 °C kills the yeast.'),
     excerpt: await paste('The house remembers.\n> Every stair keeps the weight of who climbed it.\nAt: Chapter 3'),
-    definition: await paste('Term: Parallax\nDefinition: the apparent shift of an object when the viewer moves'),
+    definition: await paste('Parallax means the apparent shift of an object when the viewer moves'),
     idea: await paste('Build a treehouse'),
     proscons: await paste('Moving to Rust\nPros: no data races, one binary\nCons: slow builds'),
     swatch: await paste('Palette: Ember #E4572E, Lagoon #17BEBB'),
@@ -105,8 +105,9 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
   assert.equal(await paste('function add(a, b) {\n  return a + b;\n}'), 'code', 'pasted code is drawn as code');
 });
 
+// A heading line ends no sentence, so an empty line sets it apart from the passage that follows it.
 const PORTO =
-  'Weekend in Porto\n' +
+  'Weekend in Porto\n\n' +
   'We took the early train on Friday and walked the river both days, and when it rained on Saturday we sat in the bookshop until it closed and nobody minded. Next time we go in May, before the crowds, and stay an extra night.\n' +
   'Cost: €240\nNights: 2\nBest: the bridge at dusk; the tiled station; grilled sardines';
 const PORTO_SHEET = {

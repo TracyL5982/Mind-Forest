@@ -388,7 +388,17 @@ test('a fact, a date and a named person are kept only when the text writes them'
 test('a fact or a point of a series is kept only under a label whose words stand in the sentence, the line or the row of its value', async () => {
   const text = 'Ada Lovelace wrote the first program in 1843. The notes ran to 65 pages.\nRent: 980 euros\nFood: 240 euros';
   const facts = [{ label: 'Length', value: '65 pages' }, { label: 'First program', value: '65 pages' }, { label: 'Notes', value: '65 pages' }, { label: 'Year', value: '1843' }, { label: 'Food', value: '980 euros' }];
-  assert.deepEqual(await extracted(text, { facts }), { facts: [{ label: 'Notes', value: '65 pages' }] }, 'a word of its own, a word of another sentence and a word of another line are each no label');
+  assert.deepEqual(
+    await extracted(text, { facts }),
+    { facts: [{ label: 'Notes', value: '65 pages' }, { label: 'Year', value: '1843' }] },
+    'a word of another sentence and a word of another line are each no label, and a word for a kind of value labels only a value of that kind',
+  );
+  const honest = [{ label: 'One-to-one, per hour', value: '£40' }, { label: 'Finish time', value: '1:52:40' }, { label: 'Sleeps', value: 'six people' }, { label: 'of the group', value: '£25' }];
+  assert.deepEqual(
+    await extracted('Charge £40 an hour for one-to-one and £25 a head for groups of three. Finished the half marathon in 1:52:40. The cottage slept six people.', { facts: honest }),
+    { facts: honest.slice(0, 3) },
+    'a label in other forms of the text\'s words is kept, and a piece cut out of a phrase is not',
+  );
   assert.deepEqual(await extracted(text, { chartLabels: ['Rent', 'Food'], chartValues: [980, 240], chartUnit: 'euros' }), { chart: { labels: ['Rent', 'Food'], values: [980, 240], unit: 'euros' } });
   assert.deepEqual(await extracted(text, { chartLabels: ['Rent', 'Food'], chartValues: [240, 980], chartUnit: 'euros' }), {}, 'a series with its values under the wrong labels');
   assert.deepEqual(await extracted(text, { chartLabels: ['Housing', 'Food'], chartValues: [980, 240], chartUnit: 'euros' }), {});

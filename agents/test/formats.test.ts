@@ -32,6 +32,12 @@ test('every sample says who wrote it: the 120 two independent reviewers wrote, a
  * in docs/formats.md.
  */
 const RULES_AGREE = { reviewers: { research: 39, brainstorming: 37, memories: 40 }, authors: { research: 5, brainstorming: 7, memories: 9 } };
+/**
+ * How many of each group the rules draw as the very card a person picked. 112 of the reviewers' since the label check reads a label's
+ * words in their other forms and lets it leave out words that only tie: B-B12 ("One-to-one, per hour") and B-M08 ("Finish time") are
+ * facts and a fact again, as at 5012005, where round two had made them notes.
+ */
+const RULES_EXACT = { reviewers: 112, authors: 10 };
 
 test('the rules alone agree with a person on at least as many samples of each group and activity as they did', () => {
   for (const origin of ORIGINS) {
@@ -41,6 +47,14 @@ test('the rules alone agree with a person on at least as many samples of each gr
       const was = RULES_AGREE[origin][activity];
       assert.ok(of.length - missed.length >= was, `${origin}, ${activity}: ${of.length - missed.length} of ${of.length}, was ${was}. Missed: ${missed.join('; ')}`);
     }
+  }
+});
+
+test('the rules alone draw the very card a person picked for at least as many samples of each group as they did', () => {
+  for (const origin of ORIGINS) {
+    const of = SAMPLES.filter((sample) => sample.origin === origin);
+    const exact = of.filter((sample) => byRule(sample.item, assetUrl).component === sample.expect).length;
+    assert.ok(exact >= RULES_EXACT[origin], `${origin}: ${exact} of ${of.length}, was ${RULES_EXACT[origin]}`);
   }
 });
 

@@ -260,7 +260,8 @@ function factInText(item: Item): { value: string; label: string } | undefined {
   const text = (item.text.trim() || item.title).trim();
   if (text.length > 80 || text.includes('\n')) return undefined;
   const valueFirst = VALUE_FIRST.exec(text);
-  if (valueFirst) return { value: valueFirst[1]!, label: valueFirst[2]!.replace(/[.\s]+$/, '') };
+  // "42% of users leave" labels its value "users leave": a label that opens with "of" is a piece of a phrase.
+  if (valueFirst) return { value: valueFirst[1]!, label: valueFirst[2]!.replace(/[.\s]+$/, '').replace(/^(?:of|in|at|on|for|per|from|to|by|with)\s+/i, '') };
   const labelFirst = LABEL_FIRST.exec(text);
   if (!labelFirst) return undefined;
   const [label, value] = [labelFirst[1]!.trim(), labelFirst[2]!.trim()];
@@ -611,8 +612,10 @@ export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
 const STANDS: Record<Stated, (value: unknown, content: Content, beside: Props, at: number) => boolean> = {
   says: (value, { text }) => typeof value === 'string' && text.says(value),
   cell: (value, { text }) => typeof value === 'string' && (value.trim() === '' || (!/[|\t]/.test(value) && text.says(value))),
+  entry: (value, { text }) => typeof value === 'string' && text.asserts(value),
   quotes: (value, { text }) => typeof value === 'string' && text.quotes(value),
   whole: (value, { text }) => typeof value === 'string' && text.whole(value),
+  said: (value, { text }) => typeof value === 'string' && text.said(value),
   lead: (value, { text }) => typeof value === 'string' && (text.whole(value) || (value.trimEnd().endsWith('…') && text.leads(value.trimEnd().slice(0, -1)))),
   meaning: (value, { text }, { term }) => typeof value === 'string' && typeof term === 'string' && text.defines(term, value),
   writes: (value, { text }, { unit }) => typeof value === 'number' && text.writes(value, typeof unit === 'string' ? unit : undefined),
@@ -667,23 +670,29 @@ const checksOf = (component: string) => CHECKS[component as ComponentId] as { pr
  * - `label`: it names a value in words the content does not set beside that value.
  * - `cut`: it is a passage cut out of a sentence of the content.
  * - `apart`: it is a meaning the content does not give the term.
+ * - `if`: it is an entry out of a sentence that opens with a condition, which the card would leave behind.
  * - `long`: it is longer than a card has room for. Only a card built from a model's reply is held to this.
  */
-export type Why = 'unstated' | 'label' | 'cut' | 'apart' | 'long';
+export type Why = 'unstated' | 'label' | 'cut' | 'apart' | 'if' | 'long';
 /** One value a card may not show, by its path in the props. */
 export interface Fault {
   prop: string;
   why: Why;
 }
 
-/** The kinds of check that read how words stand together in the item, with what a value that fails one is. */
-const TOGETHER: Partial<Record<Stated, Why>> = { label: 'label', point: 'label', whole: 'cut', lead: 'cut', meaning: 'apart' };
+/** The kinds of check that read how words stand together in the item, with what a value that fails one while the content holds it is. */
+const TOGETHER: Partial<Record<Stated, Why>> = { label: 'label', point: 'label', whole: 'cut', said: 'cut', lead: 'cut', meaning: 'apart', entry: 'if' };
+/**
+ * Those a card a rule drew is held to as well. Not `entry`: it asks first that the item's words state the entry, and Intake
+ * writes steps in its own words, which a rule may draw.
+ */
+const BY_RULE = new Set<Stated>(['label', 'point', 'whole', 'said', 'lead', 'meaning']);
 
 const kindsIn = (check: Check): Stated[] => (typeof check === 'string' ? [check] : Object.values(check).flatMap(kindsIn));
 /** The cards with a value that such a check reads. */
-const READS_WORDS = new Set<string>(Object.entries(CHECKS).flatMap(([component, { props }]) => (kindsIn(props).some((kind) => kind in TOGETHER) ? [component] : [])));
+const READS_WORDS = new Set<string>(Object.entries(CHECKS).flatMap(([component, { props }]) => (kindsIn(props).some((kind) => BY_RULE.has(kind)) ? [component] : [])));
 
-const tooLong = (how: Stated, value: string): boolean => (how === 'label' ? value.trim().length > ROOM.label : how === 'whole' && value.trim().length > roomOf(ROOM.passage, value));
+const tooLong = (how: Stated, value: string): boolean => (how === 'label' ? value.trim().length > ROOM.label : (how === 'whole' || how === 'said') && value.trim().length > roomOf(ROOM.passage, value));
 
 /**
  * Every value of a view that may not be shown. For a view built from a model's reply, each value is read, and held to its length.
@@ -692,7 +701,7 @@ const tooLong = (how: Stated, value: string): boolean => (how === 'label' ? valu
 function* faults(view: Draw, content: Content, by: 'model' | 'rule'): Generator<Fault> {
   const chosen = by === 'model';
   for (const { value, how, beside, at, path } of leaves(view.props, checksOf(view.component).props)) {
-    if (!chosen && !(how && how in TOGETHER)) continue;
+    if (!chosen && !(how && BY_RULE.has(how))) continue;
     if (!how) yield { prop: path, why: 'unstated' };
     else if (chosen && typeof value === 'string' && tooLong(how, value)) yield { prop: path, why: 'long' };
     else if (!STANDS[how](value, content, beside, at)) {
@@ -812,7 +821,8 @@ const entriesIn = (lines: string[]): string[] => distinct(each(lines));
 /** How each kind of section is built from its part of a reply, whole. `fitted` cuts it to the room a sheet has. */
 const SECTIONS: Record<Section['kind'], (part: Part, reading: Reading) => Props> = {
   heading: ({ text }) => ({ text: text.trim() }),
-  text: ({ text }) => ({ text: text.trim() }),
+  // A text the reply cut short is no passage of the item: only `fitted` cuts, after the checks, to the room a sheet has.
+  text: ({ text }) => ({ text: text.trim().replace(/\s*…$/, '') }),
   figures: ({ lines }) => ({ facts: pairsOf(lines) }),
   list: ({ lines }) => ({ items: entriesIn(lines) }),
   table: ({ lines }) => tableIn(lines),
@@ -933,7 +943,8 @@ const opensItem = (section: Section, content: Content): boolean =>
 function assembled(sections: Section[], item: Item, content: Content): Verdict {
   const given = distinct(sections, (section) => folded(stable(section)));
   const headings = given.filter((section) => section.kind === 'heading').length;
-  if (given.length > ROOM.sections || headings > 1 || (headings === 1 && given[0]!.kind !== 'heading')) return { refused: 'invalid', component: 'sheet' };
+  const allowed = checksOf('sheet').also?.({ sections: given } as never, item, content.text) ?? true;
+  if (!allowed || given.length > ROOM.sections || headings > 1 || (headings === 1 && given[0]!.kind !== 'heading')) return { refused: 'invalid', component: 'sheet' };
 
   const alone = given
     .flatMap((section) => dedicated(section) ?? [])
@@ -1004,7 +1015,7 @@ Cards, and the fields each one uses:
 - breakdown: the item is mainly the shares of one whole, in percent, adding up to a hundred. labels, numbers and unit, as for chart.
 - table: the item is mainly rows and columns. lines has the row of column heads first and then one row each, with " | " between cells.
 - qa: the item asks one question and answers it. subject is the question and passage the answer.
-- definition: the item says what one term means. subject is the term and passage the meaning, from the sentence that holds the term or the one next to it, up to the end of a sentence.
+- definition: the item says what one term means, in a sentence that opens with the term. subject is the term and passage the meaning: the rest of that sentence after the term, up to its end.
 - proscons: the item weighs one choice. left has the points for and right the points against.
 - callout: the item is mainly a warning, a caveat or a reminder the reader must not miss. passage is that sentence, whole, and tone is "caution" for a warning or "note" for a remark.
 - excerpt: the item is mainly a passage copied out of a longer source. passage is the passage, whole and no longer than a quote, and by where it sits in the source when the text says.
@@ -1038,6 +1049,7 @@ const REFUSED: Record<Extract<Verdict, { refused: string }>['refused'], (prop?: 
   label: (prop) => `names a value at ${prop} in words the content does not set beside it`,
   cut: (prop) => `shows ${prop}, which is not a whole passage of the content`,
   apart: (prop) => `gives its term a meaning at ${prop} that the content does not give it`,
+  if: (prop) => `shows ${prop}, which the content says only under a condition the card leaves out`,
   long: (prop) => `shows ${prop}, which is longer than a card has room for`,
   small: () => 'would show under a fifth of it',
 };
@@ -1046,6 +1058,7 @@ const LEFT: Record<Why, string> = {
   label: 'the content does not set its label beside its value',
   cut: 'it is not a whole passage of the content',
   apart: 'the content does not give the term this meaning',
+  if: 'the content says it only under a condition the card leaves out',
   long: 'it is longer than a card has room for',
 };
 

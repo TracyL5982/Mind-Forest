@@ -92,7 +92,7 @@ const isBullet = (line: string) => /^(?:[-*•]\s|\[[ xX]\]\s)/.test(line);
  *   Where: Lisbon                     People: Ana Lima, Ben Okri
  *   Pros: fast, small                 Cons: (or either label followed by bulleted lines)
  *   Plan | Price                      a table, its first row the heads
- *   Q: ...   A: ...                   Term: ...   Definition: ...
+ *   Q: ...   A: ...                   Parallax means the apparent shift…, a term and its meaning
  *   - one / - two                     a list, and a checklist when every line starts [ ] or [x]
  *   Ember #E4572E                     a colour, named by the capitalised word before it
  *   > a passage                       an excerpt, with an optional line "At: Chapter 3"
@@ -131,8 +131,7 @@ export function describe(text: string): Description {
     ...(rows.length >= 2 ? { tableHeads: rows[0]!.replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim()), tableRows: rows.slice(1) } : {}),
     question: labelled('q'),
     answer: labelled('a'),
-    term: labelled('term'),
-    definition: labelled('definition'),
+    ...meaning(lines),
     ...(bullets.length >= 2 ? { items: bullets.map((b) => b[2]!), checklist: bullets.every((b) => b[1]) ? bullets.map((b) => b[1] !== ' ') : [] } : {}),
     colours: [...text.matchAll(/(?:([A-Z][\w-]*) )?(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3}))\b/g)].map((m) => ({ name: m[1] ?? '', value: m[2]! })),
     facts: lines.flatMap((line) => {
@@ -145,6 +144,12 @@ export function describe(text: string): Description {
     excerptText: lines.find((line) => line.startsWith('> '))?.slice(2).trim() ?? '',
     excerptAt: labelled('at'),
   };
+}
+
+/** The first line that says what a term means, as "Parallax means the apparent shift of an object" does. */
+function meaning(lines: string[]): { term: string; definition: string } | Record<string, never> {
+  const said = lines.map((line) => /^(\p{L}[\p{L} ]{0,39}?) means (\S.*)$/u.exec(line)).find(Boolean);
+  return said ? { term: said[1]!, definition: said[2]! } : {};
 }
 
 const NOTE: Omit<Entry, 'id'> = { component: 'note', subject: '', passage: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [] };

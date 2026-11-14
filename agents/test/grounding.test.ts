@@ -509,7 +509,7 @@ test('a number counted in a unit that scales it is written only with that unit a
   assert.deepEqual([revenue.writes(120, '$k'), revenue.writes(90, '$k'), revenue.writes(120, '€k')], [true, false, false], 'a currency sign may lead the unit');
 });
 
-test('a label names a value when its words stand in the sentence, the list item or the table row that holds the value', () => {
+test('a label names a value when its words stand on the line, in the sentence or in the table row that holds the value', () => {
   const study = grounding('First-period absences fell by 15%. The share of students who fell asleep in class at least once a week dropped from 31% to 19%.');
   assert.equal(study.names('first-period absences', '15%'), true);
   assert.equal(study.names('absences, first period', '15%'), true, 'the words in any order');
@@ -528,20 +528,72 @@ test('a label names a value when its words stand in the sentence, the list item 
   const plans = grounding('Our plans.\n\nPlan | Price | Seats\nSolo | $8 | 1\nOrg | $1,200 | 100\n\n| | Jan | Feb |\n| Rain | 81 | 60 |');
   assert.deepEqual([plans.names('Price', '$1,200'), plans.names('Seats', 100), plans.names('Seats', '$1,200'), plans.names('Solo', '$1,200')], [true, true, false, false], 'the head of a column names the values under it');
   assert.deepEqual([plans.names('Jan', 81), plans.names('Feb', 81), plans.names('Rain', 60), plans.names('Price', 81)], [true, false, true, false], 'in its own table');
+  assert.deepEqual([plans.names('Org price', '$1,200'), plans.names('Solo price', '$1,200')], [true, false], 'a label may take words from the row and from the head of the column');
 
   const lines = grounding('The tower in short.\nHeight: 330 m\nBuilt: 1889\n2019: 980 euros\n2020: 1,010 euros');
-  assert.deepEqual([lines.names('Height', '330 m'), lines.names('Built', '330 m'), lines.names('tower', '330 m')], [true, false, false], 'a line that opens with a label and a colon stands alone');
+  assert.deepEqual([lines.names('Height', '330 m'), lines.names('Built', '330 m'), lines.names('tower', '330 m')], [true, false, false], 'each line stands alone');
   assert.deepEqual([lines.names('2019', 980), lines.names('2019', 1010), lines.names('2020', 1010, 'euros')], [true, false, true]);
-  const wrapped = grounding('Churn fell to 4.2% in March,\nthe lowest since launch.');
-  assert.equal(wrapped.names('lowest churn', '4.2%'), true, 'a sentence runs on over a line break');
-
   const cities = grounding('北京的常住人口是2189万。上海是2487万。');
   assert.deepEqual([cities.names('北京人口', 2189, '万'), cities.names('上海', 2189, '万'), cities.names('北京', 2189)], [true, false, false], 'a number is read with its unit, as `writes` reads it');
   const held = grounding('The tower is tall.', ['Height', '330 m']);
   assert.deepEqual([held.says('330 m'), held.names('Height', '330 m'), held.names('tower', '330 m')], [true, false, false], 'a value held beside the words stands beside no word');
 });
 
-test('a whole passage begins and ends where a sentence, a line, a cell or quoted words do, and a lead may break off', () => {
+test('a label and its value stand on one line: a line break that ends no sentence still parts them, and a full stop after a number ends one', () => {
+  const unpunctuated = grounding('身高88厘米\n体重12.5公斤\n头围47厘米');
+  assert.deepEqual([unpunctuated.names('身高', '12.5公斤'), unpunctuated.names('体重', '12.5公斤')], [false, true]);
+  assert.deepEqual([grounding('Rent due on the 1st\nDeposit £900').names('Rent', '£900'), grounding('Rent due on the 1st\nDeposit £900').names('Deposit', '£900')], [false, true]);
+  assert.equal(grounding('Churn fell to 4.2% in March,\nthe lowest since launch.').names('lowest churn', '4.2%'), false, 'a wrapped sentence too');
+  assert.equal(grounding('Rent is due on the 1st. The deposit is £900.').names('Rent', '£900'), false, 'an ordinal ends a sentence before a capital');
+  assert.equal(grounding('Height 330 m. Weight 10,100 tonnes.').names('Height', '10,100 tonnes'), false, 'and so does a unit that may be an abbreviation');
+  assert.equal(grounding('The shop opens at 9 a.m. Parking costs £4.').names('shop', '£4'), false);
+  assert.equal(grounding('The wall is 6 ft. The gate costs $300.').names('wall', '$300'), false);
+  assert.equal(grounding('身高88厘米。体重12.5公斤。').names('身高', '12.5公斤'), false);
+  assert.equal(grounding('The fence is 6 ft. tall and costs $300.').names('fence', '$300'), true, 'before a lower-case word the period is an abbreviation');
+  assert.equal(grounding('We met at 3 p.m. in the hall and paid £5.').names('hall', '£5'), true);
+  assert.equal(grounding('The rent is due on the 1st.').quotes('The rent is due on the 1st.'), true, 'a full stop at the end of the text');
+});
+
+test('a label word stands in its other forms: an ending, a past tense, a short month or weekday, a number in words', () => {
+  assert.equal(grounding('Finished the Manchester half marathon in 1:52:40.').names('Finish time', '1:52:40'), true);
+  assert.equal(grounding('Students slept 34 minutes longer on school nights.').names('Sleep on school nights', '34 minutes longer'), true);
+  assert.equal(grounding('Absences fell by 15% after the change.').names('Fall in absences', '15%'), true);
+  assert.equal(grounding('Mum lands at 14:35 at Terminal 2.').names('Landing', '14:35'), true);
+  assert.equal(grounding('Charge £40 an hour for one-to-one and £25 a head for groups of three.').names('One-to-one, per hour', '£40'), true, 'a word that only ties need not stand');
+  assert.equal(grounding('Charge £40 an hour for one-to-one and £25 a head for groups of three.').names('Group of three, per head', '£25'), true);
+  assert.equal(grounding('Visitors: 1,200 in January, 1,450 in February.').names('Jan', 1200), true);
+  assert.equal(grounding('The temperature reached 31°C on Monday.').names('Mon', 31, '°C'), true);
+  assert.equal(grounding('Running went from 18 km in week one to 25 km in week two.').names('Week 1', 18, 'km'), true);
+  assert.equal(grounding('Running went from 18 km in week one. It was 25 km in week two.').names('Week 2', 18, 'km'), false);
+  assert.equal(grounding('Treatment failure occurred in 12.6% of the five-day group.').names('Treatment failure, five days', '12.6%'), true, 'a hyphen is a space');
+  assert.equal(grounding('Absent pupils fell by 15%.').names('absence', '15%'), false, 'a word of the same root is no form of it');
+});
+
+test('a label may add a word for the kind of value it names, where the value is of that kind', () => {
+  const bridge = grounding('The bridge is 1,280 m long and it weighs 9,000 tonnes. The towers rise 227 m.');
+  assert.deepEqual([bridge.names('Length', '1,280 m'), bridge.names('Weight', '9,000 tonnes'), bridge.names('Tower height', '227 m')], [true, true, true]);
+  assert.deepEqual([bridge.names('Weight', '1,280 m'), bridge.names('Height', '9,000 tonnes'), bridge.names('Price', '227 m')], [false, false, false], 'a value of another kind');
+  const baby = grounding('The baby weighed 3.4 kg at birth and was 51 cm long.');
+  assert.deepEqual([baby.names('Birth weight (kg)', '3.4'), baby.names('Length (cm)', '51'), baby.names('Weight', '51')], [true, true, false], 'the kind is read off the words that follow the value');
+  assert.equal(grounding('The recipe takes 35 minutes.').names('Total time', '35 minutes'), true);
+  assert.deepEqual([grounding('The deposit is £900.').names('Total', '£900'), grounding('The deposit is £900.').names('Deposit total', '£900')], [false, true], 'a word that names any value stands only beside another');
+  assert.deepEqual([grounding('这次搬家一共花了4800元。').names('搬家费用', '4800元'), grounding('其中女性占54%。').names('女性比例', '54%'), grounding('身高88厘米，体重12.5公斤。').names('重量', '88厘米')], [true, true, false]);
+});
+
+test('a label that opens or ends with a word that only ties is a piece cut out of a phrase', () => {
+  assert.equal(grounding('Treatment failure occurred in 12.6% of the five-day group.').names('of the five-day group', '12.6%'), false);
+  assert.equal(grounding('First-period absences fell by 15%.').names('First-period absences fell by', '15%'), false);
+  assert.equal(grounding('一份午餐平均卖12元，成本却要16元左右。').names('成本却要', '16元左右'), false);
+  assert.equal(grounding('一份午餐平均卖12元，成本却要16元左右。').names('成本', '16元左右'), true);
+  assert.equal(grounding('医生看了一眼，说已经出了十六颗。').names('说已经出了', '十六颗'), false);
+  assert.equal(grounding('注册用户到月底是3200人。').names('注册用户到月底是', '3200人'), false);
+  assert.equal(grounding('We aim for 10 hours a week.').names('a week', '10 hours a week'), false, 'an article opening a piece of its own value');
+  assert.equal(grounding('We aim for 10 hours a week.').names('Hours a week', '10'), true);
+  assert.equal(grounding('A year on Mars lasts 687 days.').names('A year on Mars', '687 days'), true, 'an article may open a name');
+  assert.equal(grounding('在线人数达到1200人。').names('在线人数', '1200人'), true, '在 opens a word');
+});
+
+test('a whole passage begins and ends where a sentence, a list item or a cell does, or after a marker, and a lead may break off', () => {
   const text = grounding(
     'Do not take ibuprofen while you are on warfarin. Together they raise the risk.\nCaution: the stairs are steep.\nNonna said, "salt it like the sea", and tasted it.\n- Rotate the key\n注意：楼梯很陡。他说那几分钟是他自己的。',
     ['held words'],
@@ -552,40 +604,119 @@ test('a whole passage begins and ends where a sentence, a line, a cell or quoted
     'Together they raise the risk',
     'Caution: the stairs are steep.',
     'the stairs are steep',
-    'salt it like the sea',
     'Rotate the key',
     '楼梯很陡。',
   ]) {
     assert.equal(text.whole(passage), true, passage);
   }
-  for (const passage of ['take ibuprofen while you are on warfarin.', 'Do not take ibuprofen', 'they raise the risk', 'are steep', 'salt it', 'Nonna said', '那几分钟是他自己的。', 'held words', 'Do not take paracetamol.']) {
+  for (const passage of ['take ibuprofen while you are on warfarin.', 'Do not take ibuprofen', 'they raise the risk', 'are steep', 'salt it', 'salt it like the sea', 'Nonna said', '那几分钟是他自己的。', 'held words', 'Do not take paracetamol.']) {
     assert.equal(text.whole(passage), false, passage);
   }
   assert.deepEqual([text.leads('Do not take ibuprofen while'), text.leads('take ibuprofen while'), text.leads('Together they'), text.leads('held')], [true, false, true, false]);
   assert.deepEqual([text.begins('Do not take ibuprofen'), text.begins('do not, take'), text.begins('take ibuprofen'), text.begins('')], [true, true, false, false]);
-  const report = grounding('Reminder for whoever is on call: the key expires on 3 December.');
-  assert.equal(report.whole('the key expires on 3 December.'), false, 'a colon after more than three words opens no passage');
 });
 
-test('a text defines a term by a meaning that follows it, or by a whole passage in its sentence or the next one over', () => {
+test('a passage begins after a colon only where the words before it are a marker', () => {
+  for (const [lead, passage] of [
+    ['Caution', 'the floor is wet.'], ['Note', 'the office is closed on Monday.'], ['Warning', 'hot oil spits.'], ['Important', 'bring your passport.'],
+    ['Reminder', 'the key expires on 3 December.'], ['Tip', 'salt the water.'], ['Please note', 'the office is closed.'], ['Results', 'none of the 40 patients improved.'],
+    ['注意', '不要空腹吃药。'], ['提醒', '明天八点出发。'], ['小心', '地滑。'], ['警告', '高压危险。'], ['提示', '先断电。'], ['温馨提示', '不要空腹吃药。'],
+  ]) {
+    assert.equal(grounding(`${lead}: ${passage}`).whole(passage!), true, `${lead}:`);
+  }
+  for (const [lead, passage] of [
+    ['Wrong', 'store the vaccine in the freezer.'], ['Myth', 'vaccines cause autism.'], ['Claim', 'the drug is safe in pregnancy.'], ["Don't", 'water in full sun.'],
+    ['Not recommended', 'giving honey to babies.'], ['Hypothesis', 'the drug halves the risk.'], ['Reminder for whoever is on call', 'the key expires on 3 December.'],
+    ['禁止', '在加油站吸烟。'], ['错误', '发烧时多穿衣服捂汗。'], ['谣言', '喝白酒可以杀死病毒。'], ['不要', '把电池扔进火里。'], ['先说结论', '方向没错。'],
+  ]) {
+    assert.equal(grounding(`${lead}: ${passage} Then more.`).whole(passage!), false, `${lead}:`);
+  }
+  assert.equal(grounding('Wrong:\nstore the vaccine in the freezer.').whole('store the vaccine in the freezer.'), false, 'a lead on a line of its own');
+  assert.equal(grounding('Note:\nthe office is closed.').whole('the office is closed.'), true);
+});
+
+test('a line break is a passage edge only after a sentence end or a list item, before a list item, or at an empty line', () => {
+  assert.equal(grounding('Do not\ntake ibuprofen while you are on warfarin.').whole('take ibuprofen while you are on warfarin.'), false);
+  assert.equal(grounding('服药期间请勿\n饮酒或驾驶机动车，以免发生危险。').whole('饮酒或驾驶机动车，以免发生危险。'), false);
+  assert.equal(grounding('You may drive\nonly after the drowsiness has passed.').whole('You may drive'), false, 'nor may one end there');
+  assert.equal(grounding('Weekend in Porto\nWe took the early train.').whole('We took the early train.'), false, 'a heading line ends no sentence either');
+  assert.equal(grounding('Do not run.\nWalk to the exit.').whole('Walk to the exit.'), true);
+  assert.equal(grounding('别碰电线！\n先断电').whole('先断电'), true);
+  assert.equal(grounding('Bring:\n- a torch\n- water').whole('a torch'), true);
+  assert.equal(grounding('- Rotate the key\nThen clear the accounts').whole('Rotate the key'), true, 'a list item ends at its line');
+  assert.equal(grounding('Weekend in Porto\n\nWe took the early train.').whole('We took the early train.'), true);
+  assert.equal(grounding('Do not\ntake ibuprofen while you are on warfarin.').quotes('Do not take ibuprofen while you are on warfarin.'), true, 'the sentence runs on over the line');
+});
+
+test("someone's words are a whole passage, or quoted words that are a sentence of their own", () => {
+  const pass = grounding('At the top of the pass he said, "Same time next year, and you carry the stove." I said yes.');
+  assert.deepEqual([pass.said('Same time next year, and you carry the stove.'), pass.whole('Same time next year, and you carry the stove.')], [true, false], 'a quote card may begin at the mark, a callout may not');
+  assert.equal(grounding('他说：“那几分钟是只属于他自己的。”').said('那几分钟是只属于他自己的。'), true);
+  assert.equal(grounding('“妈妈，云是不是天空盖的被子？”——豆豆，三岁半').said('妈妈，云是不是天空盖的被子？'), true, 'closed by a question mark inside the quote');
+  assert.equal(grounding('Nonna said, "salt it like the sea", and tasted it.').said('salt it like the sea'), true, 'closed before a comma');
+  assert.equal(grounding('He said "the plan works" was a lie.').said('the plan works'), false, 'words that are part of a sentence of the text');
+  assert.equal(grounding('"Sugar makes children hyperactive" is a myth that trials have failed to support.').said('Sugar makes children hyperactive'), false);
+  assert.equal(grounding('"Never," she said, "take the pills with alcohol."').said('take the pills with alcohol.'), false, 'the rest of a quotation the sentence broke');
+  assert.equal(grounding('"Never," she said, "take the pills with alcohol."').said('Never'), true);
+  assert.equal(grounding('He said, "Bring the frame and the photo."').said('Bring the frame'), false, 'the quoted words whole');
+});
+
+test('a text defines a term in one sentence that opens with the term: the whole sentence, or the rest of it after a link', () => {
   const text = grounding(
     'Parallax is the apparent shift of an object when the viewer moves. Survivorship bias: looking only at what made it through.\n' +
       'When a factory vents waste into a river, the cost does not vanish. It lands on the people downstream. Costs of this kind are called externalities. A tomato is not a vegetable.\n' +
       '沉没成本，指的是已经付出而且收不回来的成本。',
   );
   assert.equal(text.defines('Parallax', 'the apparent shift of an object when the viewer moves'), true);
+  assert.equal(text.defines('Parallax', 'Parallax is the apparent shift of an object when the viewer moves.'), true, 'the whole sentence');
   assert.equal(text.defines('Parallax', 'the apparent shift of an object'), false, 'a meaning cut short');
   assert.equal(text.defines('Parallax', 'shift of an object when the viewer moves.'), false, 'more than a link stands between them');
   assert.equal(text.defines('Survivorship bias', 'looking only at what made it through.'), true);
   assert.equal(text.defines('Parallax', 'looking only at what made it through.'), false, 'the meaning of another term');
-  assert.equal(text.defines('externalities', 'Costs of this kind are called externalities.'), true);
-  assert.equal(text.defines('externalities', 'It lands on the people downstream.'), true, 'the sentence before');
-  assert.equal(text.defines('externalities', 'When a factory vents waste into a river, the cost does not vanish.'), false, 'two sentences before');
-  assert.equal(text.defines('externalities', 'When a factory vents waste into a river, the cost does not vanish. It lands on the people downstream.'), true, 'a passage that reaches the sentence before');
+  assert.equal(text.defines('externalities', 'Costs of this kind are called externalities.'), false, 'a sentence that holds the term and does not open with it');
+  assert.equal(text.defines('externalities', 'It lands on the people downstream.'), false, 'the sentence before');
+  assert.equal(text.defines('externalities', 'When a factory vents waste into a river, the cost does not vanish. It lands on the people downstream.'), false);
   assert.equal(text.defines('A tomato', 'a vegetable.'), false);
   assert.equal(text.defines('沉没成本', '已经付出而且收不回来的成本。'), true);
-  assert.equal(text.defines('成本', '已经付出而且收不回来的成本。'), true, 'the term may be the last words of a longer one');
+  assert.equal(text.defines('沉没成本', '指的是已经付出而且收不回来的成本。'), true, 'the link may open the meaning');
+  assert.equal(text.defines('成本', '已经付出而且收不回来的成本。'), false, 'the last words of the term that opens the sentence are no term of it');
   assert.equal(text.defines('Parallax', ''), false);
   const lines = grounding('Term: Parallax\nDefinition: the apparent shift of an object\nBias: an error of selection');
-  assert.deepEqual([lines.defines('Parallax', 'the apparent shift of an object'), lines.defines('Bias', 'an error of selection'), lines.defines('Parallax', 'an error of selection')], [true, true, false], 'two lines that each open with a lead pair what follows');
+  assert.equal(lines.defines('Parallax', 'the apparent shift of an object'), false, 'the meaning on another line under a lead of its own');
+  assert.equal(grounding('The word sonder means the sense that every passer-by has a life as vivid as your own.').defines('sonder', 'the sense that every passer-by has a life as vivid as your own.'), true);
+  assert.equal(grounding('所谓内卷，就是无效的过度竞争。').defines('内卷', '无效的过度竞争。'), true);
+  assert.equal(grounding('Note: parallax is the apparent shift.').defines('parallax', 'the apparent shift.'), true);
+});
+
+test('a sentence that reports, denies or turns a term around gives it no meaning, and neither does the next sentence', () => {
+  for (const text of ['Some say mindfulness is just relaxation.', 'People say mindfulness is just relaxation.', 'It is a myth that mindfulness is just relaxation.', 'It is not true that mindfulness is just relaxation.', 'Contrary to belief, mindfulness is just relaxation.', 'Nobody here believes that mindfulness is just relaxation.']) {
+    assert.equal(grounding(text).defines('mindfulness', 'just relaxation.'), false, text);
+  }
+  for (const text of ['有人说内卷是指努力工作。这是误解。', '据说内卷是指努力工作。', '都说内卷是指努力工作。', '很多人误以为内卷是指努力工作。', '内卷并不是努力工作。']) {
+    assert.equal(grounding(text).defines('内卷', '努力工作。'), false, text);
+  }
+  assert.equal(grounding('The opposite of love is indifference.').defines('love', 'indifference.'), false);
+  assert.equal(grounding("A common mistake is thinking that 'literally' means 'figuratively'.").defines('literally', "'figuratively'."), false);
+  assert.equal(grounding('Inflation is a general rise in prices. Deflation is the opposite, a general fall.').defines('inflation', 'Deflation is the opposite, a general fall.'), false);
+  assert.equal(grounding('Entropy. It measures disorder in a system.').defines('Entropy', 'It measures disorder in a system.'), false);
+});
+
+test('an entry is asserted where no sentence that holds it opens with a condition it leaves behind', () => {
+  const plan = grounding('Ask Maria whether her team would test it. If she agrees we need the build ready, a short script, and someone to take notes. If she does not, fall back to the five customers.');
+  assert.deepEqual([plan.asserts('a short script'), plan.asserts('someone to take notes'), plan.asserts('fall back to the five customers')], [false, false, false]);
+  assert.deepEqual([plan.asserts('If she agrees we need the build ready'), plan.asserts('Ask Maria whether her team would test it')], [true, true], 'an entry that carries its condition, or none');
+  for (const [text, entry] of [['When you arrive, collect your badge and your key.', 'collect your badge'], ['Unless it rains, bring a hat.', 'bring a hat'], ['如果下雨，带伞和雨衣。', '雨衣'], ['要是她同意，我们需要场地。', '场地'], ['- If it rains: umbrella, coat', 'coat']]) {
+    assert.equal(grounding(text!).asserts(entry!), false, text);
+  }
+  assert.equal(grounding('Bring a hat and a coat.').asserts('a coat'), true);
+  assert.equal(grounding('If she agrees we need a script. Write a script anyway.').asserts('a script'), true, 'stated outside the condition too');
+  assert.equal(grounding('If she agrees we need a script.', ['a script']).asserts('a script'), true, 'a value held beside the words');
+});
+
+test('a conversation is three lines or more that open with a name, of two people at least, one of whom speaks twice', () => {
+  assert.equal(grounding('Mum: Has anyone seen the photo?\nBen: I think it is in the blue album\nMum: I looked.').converses(), true);
+  assert.equal(grounding('用户：选哪个？\n\n助手：先看她的意愿。\n\n用户：她比较好动。').converses(), true);
+  assert.equal(grounding('Height: 330 m\nBuilt: 1889\nFloors: 3').converses(), false, 'no one speaks twice');
+  assert.equal(grounding('Note: one\nNote: two\nCaution: three').converses(), false, 'a marker is no speaker');
+  assert.equal(grounding('Q: Why is the sky blue?\nA: Air scatters blue light.').converses(), false);
 });
