@@ -7,10 +7,16 @@ import type { ComponentId } from '../src/core/views.ts';
 import { kit } from './kit.ts';
 
 export const ACTIVITIES = ['research', 'brainstorming', 'memories'] as const;
+/**
+ * Who wrote a sample and its key. `reviewers` are the 120 that two independent reviewers wrote before the model chose any card.
+ * `authors` are those written with this work, for the kinds of content the model was added to draw.
+ */
+export const ORIGINS = ['reviewers', 'authors'] as const;
 
 /** One item of the sample set, with the card a person would pick for it. */
 export interface Sample {
   key: string;
+  origin: (typeof ORIGINS)[number];
   activity: (typeof ACTIVITIES)[number];
   language: 'en' | 'zh';
   /** What the user did to make the item. */
@@ -46,11 +52,38 @@ export interface Outcome {
 const ASKED_AT_ONCE = 24;
 
 /**
- * Runs the real Renderer over the whole set with the given model. Each sample is the root of its own tree, so no arrangement is looked for,
- * and the unsure ones go through in passes of `ASKED_AT_ONCE`, the most one pass asks about.
+ * A model that gives each sample the reply an earlier run saved for it, and none to a sample that run did not ask about.
+ * It answers the Renderer's question about cards and nothing else. `keyOf` names the sample a node of this run holds.
  */
-export async function run(model: ModelClient, list: Sample[] = samples()): Promise<{ outcomes: Outcome[]; notes: string[] }> {
+export function replaying(saved: { key: string; reply?: Entry }[], keyOf: (nodeId: string) => string | undefined): ModelClient {
+  const said = new Map(saved.flatMap(({ key, reply }) => (reply ? [[key, reply] as const] : [])));
+  const never = (): never => {
+    throw new Error('a replay answers only for cards');
+  };
+  return {
+    json: async (req) => {
+      if (req.role !== 'renderer.components') return never();
+      const items = [...req.user.matchAll(/^id: (.+)$/gm)].flatMap(([, id]) => {
+        const reply = said.get(keyOf(id!) ?? '');
+        return reply ? [{ ...reply, id: id! }] : [];
+      });
+      return req.schema.parse({ items });
+    },
+    search: never,
+    image: never,
+    transcribe: never,
+  };
+}
+
+/**
+ * Runs the real Renderer over the whole set with the given model, or with one made for this run from the sample each node holds.
+ * Each sample is the root of its own tree, so no arrangement is looked for, and the unsure ones go through in passes of `ASKED_AT_ONCE`,
+ * the most one pass asks about.
+ */
+export async function run(given: ModelClient | ((keyOf: (nodeId: string) => string | undefined) => ModelClient), list: Sample[] = samples()): Promise<{ outcomes: Outcome[]; notes: string[] }> {
   const k = kit();
+  const keys = new Map<string, string>();
+  const model = typeof given === 'function' ? given((nodeId) => keys.get(nodeId)) : given;
   const replies = new Map<string, Entry>();
   const listening: ModelClient = {
     json: async (req) => {
@@ -73,6 +106,7 @@ export async function run(model: ModelClient, list: Sample[] = samples()): Promi
       commands: [{ type: 'addItem', item: sample.item }, { type: 'createTree', tree: { id: treeId, title: sample.key, rootId: root.id, digest: '', createdAt: ctx.now() }, root }],
     });
     const ruled = byRule(sample.item, assetUrl);
+    keys.set(root.id, sample.key);
     return { sample, id: root.id, ruled: ruled.component, asked: unsure(sample.item, ruled) };
   });
 

@@ -4,7 +4,7 @@ import { Item } from '../src/core/domain.ts';
 import { byRule, grounded, unsure } from '../src/core/roles/renderer.ts';
 import { COMPONENT_IDS, isValidView } from '../src/core/views.ts';
 import { FakeModel } from '../src/fake/model.ts';
-import { ACTIVITIES, agrees, assetUrl, run, samples } from './formats.ts';
+import { ACTIVITIES, agrees, assetUrl, ORIGINS, run, samples } from './formats.ts';
 
 const SAMPLES = samples();
 
@@ -20,17 +20,27 @@ test('the sample set is whole: built items, a known card expected of each, and a
   for (const activity of ACTIVITIES) for (const language of ['en', 'zh']) assert.ok(SAMPLES.filter((sample) => sample.activity === activity && sample.language === language).length >= 10, `${activity} in ${language}`);
 });
 
-/**
- * How many samples of each activity the rules alone draw as a person would. A change to a rule that lowers one of these
- * made format choice worse: fix the rule, or change a sample's key only where a person would agree and say so in docs/formats.md.
- */
-const RULES_AGREE = { research: 42, brainstorming: 42, memories: 45 };
+test('every sample says who wrote it: the 120 two independent reviewers wrote, and those the authors wrote for the cards the model draws', () => {
+  for (const sample of SAMPLES) assert.equal(sample.origin, /^[AB]-/.test(sample.key) ? 'reviewers' : 'authors', sample.key);
+  assert.deepEqual(ORIGINS.map((origin) => SAMPLES.filter((sample) => sample.origin === origin).length), [120, 47]);
+});
 
-test('the rules alone agree with a person on at least as many samples of each activity as they did', () => {
-  for (const activity of ACTIVITIES) {
-    const of = SAMPLES.filter((sample) => sample.activity === activity);
-    const missed = of.filter((sample) => !agrees(sample, byRule(sample.item, assetUrl).component)).map((sample) => `${sample.key} ${sample.expect} drawn as ${byRule(sample.item, assetUrl).component}`);
-    assert.ok(of.length - missed.length >= RULES_AGREE[activity], `${activity}: ${of.length - missed.length} of ${of.length}, was ${RULES_AGREE[activity]}. Missed: ${missed.join('; ')}`);
+/**
+ * How many samples of each group and activity the rules alone draw as a person would. The two groups are held apart, because the
+ * authors' samples are the kinds of content no rule can draw, and a gain there says nothing of the reviewers' set. A change to a rule
+ * that lowers one of these made format choice worse: fix the rule, or change a sample's key only where a person would agree and say so
+ * in docs/formats.md.
+ */
+const RULES_AGREE = { reviewers: { research: 39, brainstorming: 37, memories: 40 }, authors: { research: 5, brainstorming: 7, memories: 9 } };
+
+test('the rules alone agree with a person on at least as many samples of each group and activity as they did', () => {
+  for (const origin of ORIGINS) {
+    for (const activity of ACTIVITIES) {
+      const of = SAMPLES.filter((sample) => sample.origin === origin && sample.activity === activity);
+      const missed = of.filter((sample) => !agrees(sample, byRule(sample.item, assetUrl).component)).map((sample) => `${sample.key} ${sample.expect} drawn as ${byRule(sample.item, assetUrl).component}`);
+      const was = RULES_AGREE[origin][activity];
+      assert.ok(of.length - missed.length >= was, `${origin}, ${activity}: ${of.length - missed.length} of ${of.length}, was ${was}. Missed: ${missed.join('; ')}`);
+    }
   }
 });
 

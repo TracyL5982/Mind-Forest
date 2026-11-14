@@ -2,6 +2,7 @@
  "items": [
   {
    "key": "A-R01",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "article, one table deep inside: link to a long article; one two-row table in the middle",
@@ -53,6 +54,7 @@
   },
   {
    "key": "A-R02",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "article, one quotable line: link to a long essay that quotes one person once",
@@ -89,6 +91,7 @@
   },
   {
    "key": "A-R03",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "文章，模型只摘了一段: link to a Chinese article; the model fills only the passage \"worth quoting\"",
@@ -124,6 +127,7 @@
   },
   {
    "key": "A-R04",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "tool home page: link to a product page, no structure",
@@ -156,6 +160,7 @@
   },
   {
    "key": "A-R05",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "paper pick: Scout pick from the papers source",
@@ -197,6 +202,7 @@
   },
   {
    "key": "A-R06",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "paper pick that also carries a chart: Scout paper pick whose record also has data.chart",
@@ -251,6 +257,7 @@
   },
   {
    "key": "A-R07",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "statistic pick: Scout pick from the data source: a series by year",
@@ -299,6 +306,7 @@
   },
   {
    "key": "A-R08",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "图书: Scout book pick with a cover picture",
@@ -337,6 +345,7 @@
   },
   {
    "key": "A-R09",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "pasted CSV: CSV pasted from a spreadsheet",
@@ -396,6 +405,7 @@
   },
   {
    "key": "A-R10",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "long essay, one statistic: a 1,800 character essay that states one figure",
@@ -434,6 +444,7 @@
   },
   {
    "key": "A-R11",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "段落里的定义: a long Chinese paragraph that defines one term in passing",
@@ -466,6 +477,7 @@
   },
   {
    "key": "A-R12",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "definition: a one-line definition",
@@ -498,6 +510,7 @@
   },
   {
    "key": "A-R13",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "comparison with pros and cons inside: a 1,400 character comparison of two databases; one short pros/cons passage",
@@ -535,6 +548,7 @@
   },
   {
    "key": "A-R14",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "问答: a short question with its answer",
@@ -567,6 +581,7 @@
   },
   {
    "key": "A-R15",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "调查占比: survey shares that sum to 100",
@@ -612,6 +627,7 @@
   },
   {
    "key": "A-R16",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "一组数据: several labelled figures",
@@ -660,6 +676,7 @@
   },
   {
    "key": "A-R17",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "code with a table in a comment: a pasted Python function whose docstring holds a small table",
@@ -706,6 +723,7 @@
   },
   {
    "key": "A-R18",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "quotation: a quotation with its speaker",
@@ -743,6 +761,7 @@
   },
   {
    "key": "A-R19",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "注意事项: a caution",
@@ -774,6 +793,7 @@
   },
   {
    "key": "A-R20",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "how-to page: link to a page that is a procedure",
@@ -814,6 +834,7 @@
   },
   {
    "key": "A-B01",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "short to-do: \"Buy milk\"",
@@ -845,6 +866,7 @@
   },
   {
    "key": "A-B02",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "短想法: a short thought",
@@ -874,6 +896,7 @@
   },
   {
    "key": "A-B03",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "short question, no answer: a question with no answer",
@@ -905,6 +928,7 @@
   },
   {
    "key": "A-B04",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "two-item list: a list of two",
@@ -941,6 +965,7 @@
   },
   {
    "key": "A-B05",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "利弊: short pros and cons",
@@ -979,6 +1004,7 @@
   },
   {
    "key": "A-B06",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "palette: a palette with hex values",
@@ -1023,6 +1049,7 @@
   },
   {
    "key": "A-B07",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "plan that mentions two colours: a renovation plan; says the door goes red and the walls stay white",
@@ -1068,6 +1095,7 @@
   },
   {
    "key": "A-B08",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "会议记录: meeting note with a checklist and a date",
@@ -1112,6 +1140,7 @@
   },
   {
    "key": "A-B09",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "名字备选: five name candidates",
@@ -1149,6 +1178,7 @@
   },
   {
    "key": "A-B10",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "markdown table: a feature comparison pasted as a markdown table",
@@ -1203,6 +1233,7 @@
   },
   {
    "key": "A-B11",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "budget split: a budget in percent",
@@ -1248,6 +1279,7 @@
   },
   {
    "key": "A-B12",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "目标数字: one target figure",
@@ -1284,6 +1316,7 @@
   },
   {
    "key": "A-B13",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "长段想法: a long unstructured brain-dump",
@@ -1313,6 +1346,7 @@
   },
   {
    "key": "A-B14",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "计划步骤: a numbered plan",
@@ -1349,6 +1383,7 @@
   },
   {
    "key": "A-B15",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "plan that names one person: a 400 character plan that involves one named person",
@@ -1386,6 +1421,7 @@
   },
   {
    "key": "A-B16",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "pasted code: a pasted JavaScript function",
@@ -1415,6 +1451,7 @@
   },
   {
    "key": "A-B17",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "chat import: an imported assistant conversation",
@@ -1460,6 +1497,7 @@
   },
   {
    "key": "A-B18",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "chat takeaway: a takeaway Intake cut from that conversation",
@@ -1491,6 +1529,7 @@
   },
   {
    "key": "A-B19",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "web pick: Scout pick of a web article (no picture)",
@@ -1526,6 +1565,7 @@
   },
   {
    "key": "A-B20",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "video pick: Scout video pick",
@@ -1558,6 +1598,7 @@
   },
   {
    "key": "A-M01",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "photo with a date and a place: a beach photo; the model titles it with the place",
@@ -1590,6 +1631,7 @@
   },
   {
    "key": "A-M02",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "photo, no place: a birthday cake",
@@ -1619,6 +1661,7 @@
   },
   {
    "key": "A-M03",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "外婆家的院子: a photo of a courtyard",
@@ -1648,6 +1691,7 @@
   },
   {
    "key": "A-M04",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "note that mentions a place in passing: a note about a grandfather; Chicago is mentioned once",
@@ -1679,6 +1723,7 @@
   },
   {
    "key": "A-M05",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "diary entry titled with a city: a 400 character diary entry about a dinner; the title has the city",
@@ -1713,6 +1758,7 @@
   },
   {
    "key": "A-M06",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "外婆的饺子: a recipe: ingredients and steps",
@@ -1757,6 +1803,7 @@
   },
   {
    "key": "A-M07",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "museum pick: Scout pick from a museum collection",
@@ -1794,6 +1841,7 @@
   },
   {
    "key": "A-M08",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "a cafe to remember: a note that is about one place",
@@ -1825,6 +1873,7 @@
   },
   {
    "key": "A-M09",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "西湖: a note about a place",
@@ -1856,6 +1905,7 @@
   },
   {
    "key": "A-M10",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "外婆的话: something grandmother used to say",
@@ -1890,6 +1940,7 @@
   },
   {
    "key": "A-M11",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "行程表: a trip itinerary as a table",
@@ -1944,6 +1995,7 @@
   },
   {
    "key": "A-M12",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "日记: a long diary entry with a date",
@@ -1975,6 +2027,7 @@
   },
   {
    "key": "A-M13",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "露营清单: a packing checklist",
@@ -2017,6 +2070,7 @@
   },
   {
    "key": "A-M14",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "video titled with a place: a dropped video of a child's first steps; the model titles it with the beach",
@@ -2048,6 +2102,7 @@
   },
   {
    "key": "A-M15",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "wedding in figures: several labelled facts",
@@ -2098,6 +2153,7 @@
   },
   {
    "key": "A-M16",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "a long letter: a 1,000 character letter the user typed in; the model fills the passage \"worth quoting\"",
@@ -2134,6 +2190,7 @@
   },
   {
    "key": "A-M17",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "Aunt Mei: a note about one person",
@@ -2171,6 +2228,7 @@
   },
   {
    "key": "A-M18",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "游记链接: link to a long travel blog post; its title names the place",
@@ -2204,6 +2262,7 @@
   },
   {
    "key": "A-M19",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "a time: \"Flight home at 10:45\"",
@@ -2237,6 +2296,7 @@
   },
   {
    "key": "A-M20",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "photo of a handwritten recipe card: a photo of grandmother's recipe card; the model reads the steps off it",
@@ -2273,6 +2333,7 @@
   },
   {
    "key": "B-R01",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "court ruling write-up: saved link: a 3,400-character legal news page on an appeal ruling, one judge quoted once, case facts named",
@@ -2328,6 +2389,7 @@
   },
   {
    "key": "B-R02",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "drug interaction table page: saved link: a clinical reference page that is a short introduction and one eight-row table",
@@ -2411,6 +2473,7 @@
   },
   {
    "key": "B-R03",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "pasted trial abstract: pasted text: a 1,000-character trial abstract with four headline figures",
@@ -2463,6 +2526,7 @@
   },
   {
    "key": "B-R04",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "journal article pick: Scout pick from a papers source, medicine",
@@ -2505,6 +2569,7 @@
   },
   {
    "key": "B-R05",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "dataset pick, series by year: Scout pick from a statistics source: consumer price inflation by year",
@@ -2558,6 +2623,7 @@
   },
   {
    "key": "B-R06",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "dataset pick, shares of a whole: Scout pick from a statistics source: where a household budget goes, five shares that sum to 100",
@@ -2611,6 +2677,7 @@
   },
   {
    "key": "B-R07",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "pasted legal definition: pasted text: one term and its meaning, 230 characters",
@@ -2643,6 +2710,7 @@
   },
   {
    "key": "B-R08",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "API documentation page: saved link: a 2,300-character documentation page for one function, with a three-row parameter table and a code sample in the middle",
@@ -2699,6 +2767,7 @@
   },
   {
    "key": "B-R09",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "pasted mortgage comparison: pasted text: a Markdown table of three mortgage products with one line above it",
@@ -2762,6 +2831,7 @@
   },
   {
    "key": "B-R10",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "pasted Python function: pasted text: a 14-line Python function with a docstring",
@@ -2795,6 +2865,7 @@
   },
   {
    "key": "B-R11",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "book pick: Scout pick from a books source, history, with a cover",
@@ -2834,6 +2905,7 @@
   },
   {
    "key": "B-R12",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "museum object pick: Scout pick from a museum collection: a botanical plate, picture stored",
@@ -2872,6 +2944,7 @@
   },
   {
    "key": "B-R13",
+   "origin": "reviewers",
    "activity": "research",
    "language": "en",
    "what": "web page pick: Scout pick from the web source: a passage of a gardening advice page, with its maker and date",
@@ -2908,6 +2981,7 @@
   },
   {
    "key": "B-R15",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "民法典居住权解读: saved link: a 1,500-character Chinese explainer on a civil code provision, quoting one article",
@@ -2946,6 +3020,7 @@
   },
   {
    "key": "B-R16",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "药品说明书摘录: pasted text: the dosage section of a medicine leaflet as label and value lines",
@@ -3005,6 +3080,7 @@
   },
   {
    "key": "B-R17",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "个税税率表: pasted text: a seven-row tax table copied from a spreadsheet, tab separated",
@@ -3087,6 +3163,7 @@
   },
   {
    "key": "B-R18",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "中文论文: Scout pick from a papers source, Chinese, language study",
@@ -3127,6 +3204,7 @@
   },
   {
    "key": "B-R19",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "名词解释: pasted text: one finance term and its meaning",
@@ -3159,6 +3237,7 @@
   },
   {
    "key": "B-R20",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "张居正百科: saved link: a 1,100-character Chinese encyclopedia page about one historical person",
@@ -3217,6 +3296,7 @@
   },
   {
    "key": "B-R21",
+   "origin": "reviewers",
    "activity": "research",
    "language": "zh",
    "what": "高考报名人数: Scout pick from a statistics source, Chinese: exam entrants by year in 万",
@@ -3266,6 +3346,7 @@
   },
   {
    "key": "B-B01",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "one-line thought: typed text: a single line of nine words",
@@ -3297,6 +3378,7 @@
   },
   {
    "key": "B-B02",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "refinancing, for and against: typed text: a question with a list for and a list against, 420 characters",
@@ -3338,6 +3420,7 @@
   },
   {
    "key": "B-B03",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "renovation checklist: typed text: a tick-box list of seven jobs, three done",
@@ -3386,6 +3469,7 @@
   },
   {
    "key": "B-B05",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "recipe draft: typed text: a recipe being worked out, with an ingredient list, five numbered steps and a timing, 560 characters",
@@ -3438,6 +3522,7 @@
   },
   {
    "key": "B-B06",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "question and own answer: typed text: one question and the answer the user settled on",
@@ -3472,6 +3557,7 @@
   },
   {
    "key": "B-B07",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "nursery palette: typed text: four paint colours with hex values",
@@ -3520,6 +3606,7 @@
   },
   {
    "key": "B-B08",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "pasted assistant conversation: pasted text: a four-turn conversation with an assistant about a 10 km training plan",
@@ -3565,6 +3652,7 @@
   },
   {
    "key": "B-B10",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "Scout direction with steps: Scout-written direction: a paragraph and five steps",
@@ -3601,6 +3689,7 @@
   },
   {
    "key": "B-B12",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "split dump, pricing part: one of three parts the model split a 1,550-character brain dump into: prices and a target",
@@ -3647,6 +3736,7 @@
   },
   {
    "key": "B-B13",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "split dump, channels part: one of three parts: four ways to find students written as one sentence, then two more sentences",
@@ -3685,6 +3775,7 @@
   },
   {
    "key": "B-B14",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "split dump, open questions part: one of three parts: open questions with no answers",
@@ -3716,6 +3807,7 @@
   },
   {
    "key": "B-B17",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "library README: saved link: a 1,900-character repository page with a three-step install in the middle",
@@ -3753,6 +3845,7 @@
   },
   {
    "key": "B-B18",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "一句话的想法: typed text: one line of fourteen characters",
@@ -3784,6 +3877,7 @@
   },
   {
    "key": "B-B19",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "换工作的利弊: typed text: a heading, three points for and three against",
@@ -3825,6 +3919,7 @@
   },
   {
    "key": "B-B20",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "装修预算分配: typed text: five budget shares in percent that sum to 100",
@@ -3897,6 +3992,7 @@
   },
   {
    "key": "B-B21",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "学琴计划清单: typed text: a heading and six things to arrange, no tick marks",
@@ -3935,6 +4031,7 @@
   },
   {
    "key": "B-B22",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "红烧肉做法: typed text: a dish, its ingredients on one line and five steps",
@@ -3980,6 +4077,7 @@
   },
   {
    "key": "B-B23",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "Scout 写的方向: Scout-written direction in Chinese: a title and one paragraph, no steps",
@@ -4008,6 +4106,7 @@
   },
   {
    "key": "B-B24",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "zh",
    "what": "和助手的对话: pasted text: a four-turn Chinese conversation with an assistant about choosing an after-school class [parseTranscript returned null: filed as text]",
@@ -4037,6 +4136,7 @@
   },
   {
    "key": "B-B25",
+   "origin": "reviewers",
    "activity": "brainstorming",
    "language": "en",
    "what": "video pick: Scout video pick: a sourdough shaping demonstration",
@@ -4070,6 +4170,7 @@
   },
   {
    "key": "B-M01",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "recital photo: dropped photo: a child at a piano on a school stage",
@@ -4103,6 +4204,7 @@
   },
   {
    "key": "B-M02",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "match clip: dropped video: a goal in a children's football match",
@@ -4147,6 +4249,7 @@
   },
   {
    "key": "B-M03",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "birthday dinner journal entry: typed text: a 1,000-character journal entry about a family dinner, with one thing the father said",
@@ -4189,6 +4292,7 @@
   },
   {
    "key": "B-M04",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "a place and a line about it: typed text: a place name on the first line and two sentences about a day there; the model writes a descriptive title",
@@ -4225,6 +4329,7 @@
   },
   {
    "key": "B-M05",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "grandmother's recipe from memory: typed text: a family recipe with an ingredient line, six steps written as sentences, and a memory at the end",
@@ -4275,6 +4380,7 @@
   },
   {
    "key": "B-M06",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "something a child said: typed text: a child's sentence in quotation marks, who said it and where",
@@ -4315,6 +4421,7 @@
   },
   {
    "key": "B-M07",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "baby milestones: typed text: five milestones as label and value lines",
@@ -4373,6 +4480,7 @@
   },
   {
    "key": "B-M08",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "race result: typed text: one sentence with a finishing time",
@@ -4412,6 +4520,7 @@
   },
   {
    "key": "B-M09",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "local news page about our concert: saved link: a 900-character local news report of a choir concert, naming the conductor and the sum raised",
@@ -4465,6 +4574,7 @@
   },
   {
    "key": "B-M10",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "vaccination record: typed text: a child's vaccinations as a small table with three columns",
@@ -4532,6 +4642,7 @@
   },
   {
    "key": "B-M11",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "pasted family group chat: pasted text: eight lines of a family message thread, names before each line",
@@ -4570,6 +4681,7 @@
   },
   {
    "key": "B-M13",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "one remembered figure: typed text: a label, a colon and a measurement",
@@ -4609,6 +4721,7 @@
   },
   {
    "key": "B-M15",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "photo of a handwritten recipe card: dropped photo: a handwritten card, whose words the model reads out",
@@ -4651,6 +4764,7 @@
   },
   {
    "key": "B-M23",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "en",
    "what": "places we lived: typed text: a heading and five lines, each a span of years and a town",
@@ -4691,6 +4805,7 @@
   },
   {
    "key": "B-M16",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "过年日记: typed text: a 420-character journal entry about New Year at grandmother's house",
@@ -4732,6 +4847,7 @@
   },
   {
    "key": "B-M17",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "一个地名和一句话: typed text: a city name on the first line and one sentence about living there; the model keeps the name as the title",
@@ -4765,6 +4881,7 @@
   },
   {
    "key": "B-M18",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "孩子说的话: typed text: a child's sentence in quotation marks, with who and when",
@@ -4802,6 +4919,7 @@
   },
   {
    "key": "B-M19",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "全家福: dropped photo: a family portrait, described in Chinese",
@@ -4839,6 +4957,7 @@
   },
   {
    "key": "B-M20",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "奶奶的腌萝卜: typed text: a family pickle method in four steps, with a remark at the end",
@@ -4878,6 +4997,7 @@
   },
   {
    "key": "B-M21",
+   "origin": "reviewers",
    "activity": "memories",
    "language": "zh",
    "what": "爸爸的体检指标: typed text: eight check-up readings as label and value lines",
@@ -4945,11 +5065,14 @@
   },
   {
    "key": "C01",
+   "origin": "authors",
    "activity": "research",
    "language": "en",
    "what": "pasted text: a 1,000-character summary of a sleep study, with three headline figures Intake extracted",
    "expect": "sheet",
-   "accept": [],
+   "accept": [
+    "note"
+   ],
    "item": {
     "id": "formats-C01",
     "tags": [
@@ -4989,12 +5112,14 @@
   },
   {
    "key": "C02",
+   "origin": "authors",
    "activity": "research",
    "language": "en",
    "what": "pasted text: an 850-character write-up of an interview with a ferry captain, one line quoted",
    "expect": "sheet",
    "accept": [
-    "quote"
+    "quote",
+    "note"
    ],
    "item": {
     "id": "formats-C02",
@@ -5025,6 +5150,7 @@
   },
   {
    "key": "C03",
+   "origin": "authors",
    "activity": "research",
    "language": "zh",
    "what": "粘贴的文字：一份约500字的社区食堂调研小结，里面有三个关键数字",
@@ -5069,11 +5195,14 @@
   },
   {
    "key": "C04",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "en",
    "what": "typed notes: 800 characters from a planning meeting, prose with a budget figure and three open questions",
    "expect": "sheet",
-   "accept": [],
+   "accept": [
+    "note"
+   ],
    "item": {
     "id": "formats-C04",
     "tags": [
@@ -5100,6 +5229,7 @@
   },
   {
    "key": "C05",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "zh",
    "what": "打字记下的复盘：约400字，叙述里夹着两个数字和三条下一步",
@@ -5131,11 +5261,14 @@
   },
   {
    "key": "C06",
+   "origin": "authors",
    "activity": "memories",
    "language": "en",
    "what": "journal entry: 800 characters about a hut-to-hut walk, with distances Intake extracted and one remembered line",
    "expect": "sheet",
-   "accept": [],
+   "accept": [
+    "note"
+   ],
    "item": {
     "id": "formats-C06",
     "tags": [
@@ -5175,11 +5308,14 @@
   },
   {
    "key": "C07",
+   "origin": "authors",
    "activity": "memories",
    "language": "zh",
    "what": "日记：约350字，记孩子两岁体检，有身高体重和一句孩子说的话",
    "expect": "sheet",
-   "accept": [],
+   "accept": [
+    "note"
+   ],
    "item": {
     "id": "formats-C07",
     "tags": [
@@ -5215,6 +5351,7 @@
   },
   {
    "key": "C08",
+   "origin": "authors",
    "activity": "research",
    "language": "en",
    "what": "reading notes: 750 characters on a book chapter, with one copied sentence and three takeaways at the end",
@@ -5246,6 +5383,7 @@
   },
   {
    "key": "C09",
+   "origin": "authors",
    "activity": "memories",
    "language": "en",
    "what": "journal entry: a 700-character account of a first marathon, with the finish time and place",
@@ -5288,6 +5426,7 @@
   },
   {
    "key": "C10",
+   "origin": "authors",
    "activity": "research",
    "language": "en",
    "what": "pasted text: a one-paragraph medicine warning",
@@ -5319,6 +5458,7 @@
   },
   {
    "key": "C11",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "en",
    "what": "typed reminder to the team about an expiring key",
@@ -5352,6 +5492,7 @@
   },
   {
    "key": "C12",
+   "origin": "authors",
    "activity": "memories",
    "language": "zh",
    "what": "打字记下的提醒：家人过敏",
@@ -5383,6 +5524,7 @@
   },
   {
    "key": "C13",
+   "origin": "authors",
    "activity": "research",
    "language": "zh",
    "what": "粘贴的文字：药品说明里的一条警示",
@@ -5414,6 +5556,7 @@
   },
   {
    "key": "C14",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "zh",
    "what": "打字记下的提醒：上线前的注意事项",
@@ -5445,6 +5588,7 @@
   },
   {
    "key": "C15",
+   "origin": "authors",
    "activity": "memories",
    "language": "en",
    "what": "typed note about the family cabin",
@@ -5476,6 +5620,7 @@
   },
   {
    "key": "C16",
+   "origin": "authors",
    "activity": "research",
    "language": "en",
    "what": "pasted text: one sentence that defines a term",
@@ -5507,6 +5652,7 @@
   },
   {
    "key": "C17",
+   "origin": "authors",
    "activity": "research",
    "language": "zh",
    "what": "粘贴的文字：一句话解释一个术语",
@@ -5538,6 +5684,7 @@
   },
   {
    "key": "C18",
+   "origin": "authors",
    "activity": "research",
    "language": "en",
    "what": "pasted text: a question and its answer in two sentences",
@@ -5569,6 +5716,7 @@
   },
   {
    "key": "C19",
+   "origin": "authors",
    "activity": "memories",
    "language": "zh",
    "what": "打字记下的：奶奶回答的一个问题",
@@ -5600,6 +5748,7 @@
   },
   {
    "key": "C20",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "en",
    "what": "typed paragraph weighing a decision, points for and against in prose",
@@ -5631,6 +5780,7 @@
   },
   {
    "key": "C21",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "zh",
    "what": "打字记下的：一个决定的好处和坏处",
@@ -5662,6 +5812,7 @@
   },
   {
    "key": "C22",
+   "origin": "authors",
    "activity": "memories",
    "language": "en",
    "what": "typed from memory: how grandad lit the stove, a procedure told as a paragraph",
@@ -5696,6 +5847,7 @@
   },
   {
    "key": "C23",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "en",
    "what": "typed line: candidate names for a café",
@@ -5727,6 +5879,7 @@
   },
   {
    "key": "C24",
+   "origin": "authors",
    "activity": "research",
    "language": "en",
    "what": "pasted text: three figures about Mars in one sentence",
@@ -5760,6 +5913,7 @@
   },
   {
    "key": "C25",
+   "origin": "authors",
    "activity": "research",
    "language": "en",
    "what": "pasted text: a rent figure for each of five years",
@@ -5794,6 +5948,7 @@
   },
   {
    "key": "C26",
+   "origin": "authors",
    "activity": "memories",
    "language": "en",
    "what": "typed line: what Dad said at the airport",
@@ -5825,6 +5980,7 @@
   },
   {
    "key": "C27",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "zh",
    "what": "打字记下的：这个月开销的占比",
@@ -5859,6 +6015,7 @@
   },
   {
    "key": "C28",
+   "origin": "authors",
    "activity": "research",
    "language": "en",
    "what": "pasted text: a small table copied out of a spreadsheet, tab separated",
@@ -5890,6 +6047,7 @@
   },
   {
    "key": "C29",
+   "origin": "authors",
    "activity": "memories",
    "language": "en",
    "what": "journal entry: 420 characters about an ordinary evening, with a passing number",
@@ -5921,6 +6079,7 @@
   },
   {
    "key": "C30",
+   "origin": "authors",
    "activity": "memories",
    "language": "zh",
    "what": "日记：约200字，回老家的一个下午",
@@ -5952,6 +6111,7 @@
   },
   {
    "key": "C31",
+   "origin": "authors",
    "activity": "research",
    "language": "en",
    "what": "pasted text: a 480-character argument from an essay, no figures",
@@ -5983,6 +6143,7 @@
   },
   {
    "key": "C32",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "en",
    "what": "typed musing: a product thought that asks itself a question and does not answer it",
@@ -6014,6 +6175,7 @@
   },
   {
    "key": "C33",
+   "origin": "authors",
    "activity": "research",
    "language": "zh",
    "what": "粘贴的文字：一段约200字的论述，没有数字",
@@ -6045,6 +6207,7 @@
   },
   {
    "key": "C34",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "zh",
    "what": "随手记下的想法：约150字，里面有带引号的词",
@@ -6076,6 +6239,7 @@
   },
   {
    "key": "C35",
+   "origin": "authors",
    "activity": "memories",
    "language": "en",
    "what": "typed memory: a description of a place, with a year mentioned",
@@ -6107,6 +6271,7 @@
   },
   {
    "key": "C36",
+   "origin": "authors",
    "activity": "research",
    "language": "en",
    "what": "pasted text: a 500-character passage of an essay that explains a term in passing",
@@ -6138,6 +6303,7 @@
   },
   {
    "key": "C37",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "en",
    "what": "typed story of how a project went, told in order but no procedure",
@@ -6169,6 +6335,7 @@
   },
   {
    "key": "D01",
+   "origin": "authors",
    "activity": "memories",
    "language": "zh",
    "what": "打字记下的提醒：外婆家的井盖",
@@ -6198,6 +6365,7 @@
   },
   {
    "key": "D02",
+   "origin": "authors",
    "activity": "research",
    "language": "zh",
    "what": "打字记下的提醒：一份问卷的局限",
@@ -6227,6 +6395,7 @@
   },
   {
    "key": "D03",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "zh",
    "what": "打字记下的提醒：发版的时间",
@@ -6256,6 +6425,7 @@
   },
   {
    "key": "D04",
+   "origin": "authors",
    "activity": "research",
    "language": "zh",
    "what": "粘贴的文字：一句话解释一个术语",
@@ -6285,6 +6455,7 @@
   },
   {
    "key": "D05",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "zh",
    "what": "打字记下的：一个术语是什么意思",
@@ -6314,6 +6485,7 @@
   },
   {
    "key": "D06",
+   "origin": "authors",
    "activity": "research",
    "language": "zh",
    "what": "粘贴的文字：一个问题和它的答案",
@@ -6343,11 +6515,14 @@
   },
   {
    "key": "D07",
+   "origin": "authors",
    "activity": "memories",
    "language": "zh",
    "what": "打字记下的：问爸爸的一个问题和他的回答",
    "expect": "qa",
-   "accept": [],
+   "accept": [
+    "note"
+   ],
    "item": {
     "id": "formats-D07",
     "kind": "text",
@@ -6372,6 +6547,7 @@
   },
   {
    "key": "D08",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "zh",
    "what": "打字记下的一个想法，二十来个字",
@@ -6401,11 +6577,14 @@
   },
   {
    "key": "D09",
+   "origin": "authors",
    "activity": "brainstorming",
    "language": "zh",
    "what": "打字记下的一个想法，三十多个字",
    "expect": "idea",
-   "accept": [],
+   "accept": [
+    "note"
+   ],
    "item": {
     "id": "formats-D09",
     "kind": "text",
@@ -6430,11 +6609,14 @@
   },
   {
    "key": "D10",
+   "origin": "authors",
    "activity": "memories",
    "language": "zh",
    "what": "打字记下的一个想法：以后想和妈妈做的事",
    "expect": "idea",
-   "accept": [],
+   "accept": [
+    "note"
+   ],
    "item": {
     "id": "formats-D10",
     "kind": "text",

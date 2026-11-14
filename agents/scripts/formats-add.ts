@@ -33,7 +33,7 @@ function text(key: string, activity: Sample['activity'], language: Sample['langu
     id: `formats-${key}`, archived: false, revision: 0, kind: 'text', ...labels(said, plainly(body, 'note')), text: body, data: structure(said, body),
     origin: { by: 'user' }, source: { from: 'paste', capturedAt: CAPTURED },
   });
-  added.push({ key, activity, language, what, expect, accept, item });
+  added.push({ key, origin: 'authors', activity, language, what, expect, accept, item });
 }
 
 // ---- short Chinese texts of 16 to 60 characters, which the idea rule drew as ideas when it stopped at 60 characters in every script.
@@ -45,10 +45,10 @@ text('D03', 'brainstorming', 'zh', '打字记下的提醒：发版的时间', 'c
 text('D04', 'research', 'zh', '粘贴的文字：一句话解释一个术语', 'definition', '幸存者偏差：只看到经过筛选留下来的人或事，而忽略了被淘汰的那些。');
 text('D05', 'brainstorming', 'zh', '打字记下的：一个术语是什么意思', 'definition', '最小可行产品，就是只做核心功能、能拿去给真实用户试的第一个版本。');
 text('D06', 'research', 'zh', '粘贴的文字：一个问题和它的答案', 'qa', '为什么飞机舷窗是圆的？因为方形的角会让应力集中，容易产生裂纹。');
-text('D07', 'memories', 'zh', '打字记下的：问爸爸的一个问题和他的回答', 'qa', '爸爸为什么总在车里坐一会儿才上楼？他说那几分钟是只属于他自己的。');
+text('D07', 'memories', 'zh', '打字记下的：问爸爸的一个问题和他的回答', 'qa', '爸爸为什么总在车里坐一会儿才上楼？他说那几分钟是只属于他自己的。', {}, ['note']);
 text('D08', 'brainstorming', 'zh', '打字记下的一个想法，二十来个字', 'idea', '要不要办一个只开在周日早上的社区旧书交换摊');
-text('D09', 'brainstorming', 'zh', '打字记下的一个想法，三十多个字', 'idea', '如果把说明书做成一张可以折进包装盒的漫画海报，会不会更多人愿意看完');
-text('D10', 'memories', 'zh', '打字记下的一个想法：以后想和妈妈做的事', 'idea', '等妈妈退休了，带她把年轻时下乡的那几个村子重新走一遍，拍成一本相册');
+text('D09', 'brainstorming', 'zh', '打字记下的一个想法，三十多个字', 'idea', '如果把说明书做成一张可以折进包装盒的漫画海报，会不会更多人愿意看完', {}, ['note']);
+text('D10', 'memories', 'zh', '打字记下的一个想法：以后想和妈妈做的事', 'idea', '等妈妈退休了，带她把年轻时下乡的那几个村子重新走一遍，拍成一本相册', {}, ['note']);
 
 for (const { key, item } of added) {
   const size = [...item.text.normalize('NFKC')].length;
