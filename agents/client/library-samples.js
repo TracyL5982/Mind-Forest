@@ -637,6 +637,64 @@ export const SAMPLES = {
         }
       ]
     }
+  },
+  "explorable": {
+    "item": {
+      "id": "sample-explorable-field",
+      "kind": "text",
+      "text": "On a full-frame camera the sensor is 36 mm wide, so the field of view narrows as the focal length grows. At 24 mm the field of view is 73.7°. At 50 mm it is 39.6°. At 200 mm it is 10.3°.",
+      "summary": "",
+      "tags": [],
+      "data": {},
+      "source": {
+        "from": "paste",
+        "capturedAt": "2026-11-14T00:00:00.000Z"
+      },
+      "origin": {
+        "by": "user"
+      },
+      "archived": false,
+      "revision": 0,
+      "title": "Field of view against focal length"
+    },
+    "props": {
+      "controls": [
+        {
+          "kind": "slider",
+          "name": "f",
+          "label": "focal length",
+          "unit": "mm",
+          "min": 12,
+          "max": 300,
+          "step": 2,
+          "values": [
+            24,
+            50,
+            200
+          ]
+        }
+      ],
+      "output": {
+        "kind": "chart",
+        "label": "field of view",
+        "unit": "°",
+        "formula": [
+          2,
+          18,
+          "f",
+          "/",
+          "atan",
+          "*",
+          57.2958,
+          "*"
+        ],
+        "values": [
+          73.7,
+          39.6,
+          10.3
+        ]
+      }
+    }
   }
 };
 
@@ -807,6 +865,153 @@ export const SHEETS = [
           ]
         }
       ]
+    }
+  }
+];
+
+export const EXPLORABLES = [
+  {
+    "item": {
+      "id": "sample-explorable-field",
+      "kind": "text",
+      "text": "On a full-frame camera the sensor is 36 mm wide, so the field of view narrows as the focal length grows. At 24 mm the field of view is 73.7°. At 50 mm it is 39.6°. At 200 mm it is 10.3°.",
+      "summary": "",
+      "tags": [],
+      "data": {},
+      "source": {
+        "from": "paste",
+        "capturedAt": "2026-11-14T00:00:00.000Z"
+      },
+      "origin": {
+        "by": "user"
+      },
+      "archived": false,
+      "revision": 0,
+      "title": "Field of view against focal length"
+    },
+    "props": {
+      "controls": [
+        {
+          "kind": "slider",
+          "name": "f",
+          "label": "focal length",
+          "unit": "mm",
+          "min": 12,
+          "max": 300,
+          "step": 2,
+          "values": [
+            24,
+            50,
+            200
+          ]
+        }
+      ],
+      "output": {
+        "kind": "chart",
+        "label": "field of view",
+        "unit": "°",
+        "formula": [
+          2,
+          18,
+          "f",
+          "/",
+          "atan",
+          "*",
+          57.2958,
+          "*"
+        ],
+        "values": [
+          73.7,
+          39.6,
+          10.3
+        ]
+      }
+    }
+  },
+  {
+    "item": {
+      "id": "sample-explorable-dolly",
+      "kind": "text",
+      "text": "Three ways to shoot a dolly zoom.\nZoom only: the lens zooms in while the camera stays put, so the background grows with the subject.\nDolly only: the camera moves in on a fixed lens, so the subject grows and the background barely changes.\nBoth: the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it.",
+      "summary": "",
+      "tags": [],
+      "data": {},
+      "source": {
+        "from": "paste",
+        "capturedAt": "2026-11-14T00:00:00.000Z"
+      },
+      "origin": {
+        "by": "user"
+      },
+      "archived": false,
+      "revision": 0,
+      "title": "Three ways to shoot a dolly zoom"
+    },
+    "props": {
+      "controls": [
+        {
+          "kind": "segmented",
+          "label": "Three ways to shoot a dolly zoom",
+          "states": [
+            {
+              "name": "Zoom only",
+              "text": "the lens zooms in while the camera stays put, so the background grows with the subject."
+            },
+            {
+              "name": "Dolly only",
+              "text": "the camera moves in on a fixed lens, so the subject grows and the background barely changes."
+            },
+            {
+              "name": "Both",
+              "text": "the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it."
+            }
+          ]
+        }
+      ],
+      "output": {
+        "kind": "text"
+      }
+    }
+  },
+  {
+    "item": {
+      "id": "sample-explorable-aperture",
+      "kind": "text",
+      "text": "光圈开大还是收小，决定了照片里有多少是清楚的。\n大光圈：背景虚化得很厉害，只有对焦的那一层是清楚的。\n小光圈：从前景到远山都清楚，但快门要放慢。",
+      "summary": "",
+      "tags": [],
+      "data": {},
+      "source": {
+        "from": "paste",
+        "capturedAt": "2026-11-14T00:00:00.000Z"
+      },
+      "origin": {
+        "by": "user"
+      },
+      "archived": false,
+      "revision": 0,
+      "title": "光圈与景深"
+    },
+    "props": {
+      "controls": [
+        {
+          "kind": "toggle",
+          "label": "光圈",
+          "states": [
+            {
+              "name": "大光圈",
+              "text": "背景虚化得很厉害，只有对焦的那一层是清楚的。"
+            },
+            {
+              "name": "小光圈",
+              "text": "从前景到远山都清楚，但快门要放慢。"
+            }
+          ]
+        }
+      ],
+      "output": {
+        "kind": "text"
+      }
     }
   }
 ];

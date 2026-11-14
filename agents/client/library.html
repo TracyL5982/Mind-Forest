@@ -43,7 +43,7 @@
   <p>Every way the Renderer can draw one card (components) and every way it can arrange several sibling cards (composites). This page draws them with the same code and styles as the live client, from sample data.</p>
   <p>Solid cards are yours. Dashed amber cards are picks the librarian brought and you have not kept.</p>
   <p>Under each sample is its type name and its footprint in pixels, which is worked out from the content and never measured.</p>
-  <p>The first twelve types are drawn from an item's kind and its words. The fourteen after them are drawn from structure the item carries, such as its facts, its rows, its entries or a catalogue's record, or from a passage of its words. The last, a sheet, is assembled from parts of those kinds when no one card covers the item. Each is shown from the sample the service gives it, then with other content, in Chinese, and at its extremes, some of them opened.</p>
+  <p>The first twelve types are drawn from an item's kind and its words. The fourteen after them are drawn from structure the item carries, such as its facts, its rows, its entries or a catalogue's record, or from a passage of its words. A sheet is assembled from parts of those kinds when no one card covers the item, and an explorable has controls you change in the opened card. Each is shown from the sample the service gives it, then with other content, in Chinese, and at its extremes, some of them opened.</p>
   <p>Any card can carry one line of chips under its content: a date, a place, people and, for what the agents brought, where it came from. A date is always whole, and a longer place, name or source is clipped inside its chip. Each type is shown once without chips and once with them. The line adds 28 pixels and nothing else changes.</p>
 </header>
 
@@ -59,7 +59,7 @@ import { arrange } from './js/composites/index.js';
 import { Panel } from './js/panel.js';
 import { measure } from './js/input.js';
 import { useMaps } from './js/map.js';
-import { SAMPLES, SHEETS } from './library-samples.js';
+import { EXPLORABLES, SAMPLES, SHEETS } from './library-samples.js';
 
 const TINT = '#9fc3ff';
 
@@ -184,10 +184,28 @@ const STRUCTURED_SAMPLES = [
   ['swatch', 'rules', 'Colours with their names and values.', drawn('swatch')],
   ['place', 'rules', 'A short note whose title is the name of a place, with its picture when it has one, and a map when the item knows where the place is.', drawn('place')],
   ['sheet', 'model', 'A card assembled from two to four parts, for an item with more than one kind of thing worth seeing that no card of its own covers: its opening beside a few figures, a list, a small table or words someone said. Each part is drawn as the card of its kind draws it, under one title, each after the first under a hairline.', drawn('sheet')],
+  ['explorable', 'model', 'A card you change to see how something works, for an item that relates quantities or contrasts states. A slider sets a quantity of a formula checked against the values the item states, and a toggle or a segmented control switches between states the item describes. The card shows the first state under a mark; open it to use the controls, and a result the item does not state is marked computed.', drawn('explorable')],
 ];
 
 /** The same types with other content, to show how each footprint follows what the card holds. */
+const slider = (label, name, unit, min, max, step, values) => ({ kind: 'slider', name, label, unit, min, max, step, values });
 const VARIANTS = {
+  explorable: [
+    ['A figure, from two stated values', make('explorable', {
+      controls: [slider('focal length', 'f', 'mm', 12, 300, 2, [24, 50])],
+      output: { kind: 'figure', label: 'field of view', unit: '°', formula: [2, 18, 'f', '/', 'atan', '*', 57.2958, '*'], values: [73.7, 39.6] },
+    }, { title: 'Field of view at two focal lengths', text: 'At 24 mm the field of view is 73.7°, and at 50 mm it is 39.6°.' }), 'kept', true],
+    ['A long unit, set in the smaller size', make('explorable', {
+      controls: [slider('hours of daylight in the greenhouse', 't', 'h', 0, 24, 0.5, [6, 12])],
+      output: { kind: 'figure', label: 'growth per day', unit: 'millimetres of new stem per plant', formula: [0.8, 't', '*'], values: [4.8, 9.6] },
+    }, { title: 'Daylight and stem growth' })],
+    ['Two controls, four states and long names, as a pick', make('explorable', { controls: [
+      { kind: 'segmented', label: 'Light', states: [
+        { name: 'Hard light from a small source far away', text: 'A small source far away throws a shadow with a crisp edge, and every pore and fold of the skin stands out under it, which suits a weathered face and few others.' },
+        { name: 'Soft', text: 'Soft light wraps around the face.' }, { name: 'Bounced', text: 'Bounced light fills the shadows.' }, { name: 'Window', text: 'Window light falls off fast.' }] },
+      { kind: 'toggle', label: 'Diffusion', states: [{ name: 'Off', text: 'The shadow edge is sharp.' }, { name: 'On', text: 'The shadow edge is soft.' }] },
+    ], output: { kind: 'text' } }, { title: 'How light falls on a face, from a hard source to a soft one and back again' }), 'pick', true],
+  ],
   list: [
     ['Bullets', make('list', { items: ['Tent', 'Stove and two gas canisters', 'Two head torches and spare batteries for the walk back after dark', 'Water filter'] }, { title: 'Bring to the lake' })],
     ['Twelve entries', make('list', { items: ['Passport', 'Visa printout', 'Travel insurance', 'Chargers', 'Adapter', 'Camera', 'Film', 'Notebook', 'Rain jacket', 'Walking boots', 'First aid kit', 'House keys to the neighbour'], checked: [true, true, true, true, false, true, false, false, false, false, false, false] }, { title: 'Before the flight to Lisbon' }), 'kept', true],
@@ -380,6 +398,7 @@ const CHIPS = {
   swatch: { data: { where: 'The kitchen' } },
   place: { data: { when: '清晨', people: ['小林', '阿青'] } },
   sheet: { data: { when: 'March 2025', where: 'Nine clinics', people: ['A. Mensah', 'K. Osei', 'L. Boateng'] } },
+  explorable: { data: { when: 'Week 2', where: 'Studio 2' } },
 };
 
 /**
@@ -391,6 +410,10 @@ const ROWS = {
     [SHEETS[1], { data: { when: 'Last May', where: 'Porto', people: ['Ines'] } }],
     [SHEETS[2], { data: { when: '下周五', where: '行政部', people: ['小林', '阿青'] } }],
   ].map(([{ item, props }, chips]) => [item.title, make('sheet', props, item), chips]),
+  explorable: [
+    [EXPLORABLES[1], { data: { when: 'Week 3', where: 'Studio 2' } }],
+    [EXPLORABLES[2], { data: { when: '周六上午', where: '西湖' } }],
+  ].map(([{ item, props }, chips]) => [item.title, make('explorable', props, item), chips]),
 };
 const CHIP_LABEL = { pick: 'Pick with chips', kept: 'The same pick, kept' };
 

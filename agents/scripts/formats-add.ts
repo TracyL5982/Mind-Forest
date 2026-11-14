@@ -50,6 +50,16 @@ text('D08', 'brainstorming', 'zh', '打字记下的一个想法，二十来个�
 text('D09', 'brainstorming', 'zh', '打字记下的一个想法，三十多个字', 'idea', '如果把说明书做成一张可以折进包装盒的漫画海报，会不会更多人愿意看完', {}, ['note']);
 text('D10', 'memories', 'zh', '打字记下的一个想法：以后想和妈妈做的事', 'idea', '等妈妈退休了，带她把年轻时下乡的那几个村子重新走一遍，拍成一本相册', {}, ['note']);
 
+// ---- explainers, which an explorable shows best: a value that follows from another by a formula, or one thing in two to four states.
+// Written on 14 November 2026 with the explorable card, after the measured runs in docs/formats.md. Intake's model extracted nothing from any.
+
+text('E01', 'research', 'en', 'pasted notes: how the field of view follows the focal length', 'explorable', 'On a full-frame camera the sensor is 36 mm wide, so the field of view narrows as the focal length grows. At 24 mm the field of view is 73.7°, at 50 mm it is 39.6°, and at 200 mm it is 10.3°.', {}, ['chart']);
+text('E02', 'research', 'zh', '粘贴的笔记：光圈大小怎样改变景深', 'explorable', '光圈开大还是收小，决定了照片里有多少是清楚的。\n大光圈：背景虚化得很厉害，只有对焦的那一层是清楚的。\n小光圈：从前景到远山都清楚，但快门要放慢。', {}, ['note']);
+text('E03', 'brainstorming', 'en', 'typed notes: three ways to shoot one shot', 'explorable', 'Three ways to shoot a dolly zoom.\nZoom only: the lens zooms in while the camera stays put, so the background grows with the subject.\nDolly only: the camera moves in on a fixed lens, so the subject grows and the background barely changes.\nBoth: the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it.', {}, ['note']);
+text('E04', 'brainstorming', 'zh', '打字记下的：复利怎么算', 'explorable', '复利就是利息也生利息。一万元本金，年利率百分之五，每年复利一次，存十年变成16289元，存二十年变成26533元，所以越早开始存越划算。', {}, ['note']);
+text('E05', 'memories', 'en', 'typed memory: how fast the dough rose', 'explorable', 'Grandma said the dough tells you the weather. In the cold kitchen at 20 °C it rose in about 4 hours, but on a summer day at 30 °C it was ready in 2 hours, so in August she baked twice a day.', {}, ['note']);
+text('E06', 'memories', 'zh', '打字记下的回忆：学骑车', 'explorable', '学骑车那年夏天，爸爸一直扶着后座。\n扶着的时候：车子很稳，可我总想回头看他还在不在。\n松开以后：我反而骑得更直，因为只能看着前面的路。', {}, ['note']);
+
 for (const { key, item } of added) {
   const size = [...item.text.normalize('NFKC')].length;
   if (key.startsWith('D') && (size < 16 || size > 60)) throw new Error(`${key} has ${size} characters, outside 16 to 60`);

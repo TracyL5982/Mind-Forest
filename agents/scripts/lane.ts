@@ -23,7 +23,7 @@
  *   crowd=<n>          load a tree of n note cards. Default 200. `crowd=<n>:chips` gives every
  *                      other card a date and a place.
  *   card=<type>:<json> add one kept card of that type in a tree named Lane. The type is any of the
- *                      twenty-five in docs/libraries.md, or one no client knows. The card keeps the
+ *                      twenty-eight in docs/libraries.md, or one no client knows. The card keeps the
  *                      view it is given, whatever its item holds: the stand-in Renderer redraws every
  *                      other tree by the rules and leaves this one as placed. The JSON is the card's
  *                      props, or { item, props, pick } to also set the item's title, summary,

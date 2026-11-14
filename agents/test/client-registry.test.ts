@@ -6,7 +6,7 @@ const load = (path: string) => import(new URL(`../client/js/${path}`, import.met
 
 test('every card type in the client registry can be sized, drawn and opened', async () => {
   const { COMPONENTS } = await load('components/index.js');
-  assert.deepEqual(Object.keys(COMPONENTS), ['note', 'quote', 'fact', 'image', 'video', 'audio', 'link', 'chart', 'person', 'chat', 'code', 'steps', 'facts', 'table', 'list', 'breakdown', 'qa', 'callout', 'excerpt', 'definition', 'idea', 'proscons', 'swatch', 'artwork', 'reference', 'place', 'sheet']);
+  assert.deepEqual(Object.keys(COMPONENTS), ['note', 'quote', 'fact', 'image', 'video', 'audio', 'link', 'chart', 'person', 'chat', 'code', 'steps', 'facts', 'table', 'list', 'breakdown', 'qa', 'callout', 'excerpt', 'definition', 'idea', 'proscons', 'swatch', 'artwork', 'reference', 'place', 'sheet', 'explorable']);
   for (const [name, kind] of Object.entries<Record<string, unknown>>(COMPONENTS)) {
     for (const part of ['size', 'draw', 'detail']) assert.equal(typeof kind[part], 'function', `${name}.${part}`);
   }

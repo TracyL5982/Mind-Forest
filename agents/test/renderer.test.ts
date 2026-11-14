@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Command, Group, Id, Item, Node, View } from '../src/core/domain.ts';
 import { byModel, byRule, CHOSEN, grounded, renderer, type Chosen, type ComponentsReply, type CompositesReply } from '../src/core/roles/renderer.ts';
-import { SAMPLES, SHEETS, STRUCTURED_IDS, sampleAssetUrl, type StructuredId } from '../src/core/samples.ts';
+import { EXPLORABLES, SAMPLES, SHEETS, STRUCTURED_IDS, sampleAssetUrl, type StructuredId } from '../src/core/samples.ts';
 import { Pipeline } from '../src/core/pipeline.ts';
 import { makeNode } from '../src/core/roles/types.ts';
 import { CHECKS, COMPONENT_IDS, isValidGroup, isValidView, ROOM } from '../src/core/views.ts';
@@ -72,7 +72,7 @@ const view = (k: Kit, id: Id): View => k.mind.node(id).view;
 const groups = (k: Kit): Group[] => [...k.mind.groups.values()];
 
 function entry(fields: Partial<ComponentsReply['items'][number]> & { id: Id }): ComponentsReply['items'][number] {
-  return { component: 'note', subject: '', passage: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [], ...fields };
+  return { component: 'note', subject: '', passage: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [], controls: [], formula: '', ...fields };
 }
 
 function proposal(fields: Partial<CompositesReply['groups'][number]> & { parent: Id; members: Id[] }): CompositesReply['groups'][number] {
@@ -952,11 +952,11 @@ test('a conversation stays a chat whatever else its data holds', () => {
 
 test('every sample is drawn as its type, with props the library accepts and the item states', () => {
   assert.deepEqual(Object.keys(CHECKS), COMPONENT_IDS, 'every component has a content check');
-  assert.equal(COMPONENT_IDS.length, 27);
+  assert.equal(COMPONENT_IDS.length, 28);
   for (const id of STRUCTURED_IDS) {
     const { item, props } = SAMPLES[id];
     const made = byRule(item, sampleAssetUrl);
-    if (id === 'callout' || id === 'sheet') assert.equal(made.component, 'note', `no rule chooses a ${id}`);
+    if (id === 'callout' || id === 'sheet' || id === 'explorable') assert.equal(made.component, 'note', `no rule chooses a ${id}`);
     else assert.deepEqual(made, { component: id, props });
     assert.ok(isValidView({ component: id, props }), `${id} props are valid`);
     assert.ok(grounded({ component: id, props }, item, sampleAssetUrl), `${id} props stand in the item`);
@@ -970,6 +970,10 @@ test('every sample is drawn as its type, with props the library accepts and the 
   }
   assert.ok(SHEETS.some(({ item }) => /[一-鿿]/.test(item.title)));
   assert.deepEqual([...new Set(SHEETS.flatMap(({ props }) => props.sections.map((section) => section.kind)))].sort(), ['excerpt', 'figures', 'heading', 'list', 'table', 'text']);
+
+  assert.deepEqual(EXPLORABLES.map(({ props }) => props.controls.map((control) => control.kind).join()), ['slider', 'segmented', 'toggle']);
+  for (const { item, props } of EXPLORABLES) assert.ok(grounded({ component: 'explorable', props }, item, sampleAssetUrl), `the explorable for ${item.title} stands in the item`);
+  assert.ok(EXPLORABLES.some(({ item }) => /[一-鿿]/.test(item.title)));
 });
 
 test('a prop the item does not state is refused, for every structured type', () => {
@@ -1011,6 +1015,15 @@ test('a prop the item does not state is refused, for every structured type', () 
       { sections: [...p('sheet').sections.slice(0, 2), { kind: 'table', heads: ['Group', 'Failed'], rows: [['five days', '12.6%'], ['ten days', '21.4%']] }] },
       { sections: [...p('sheet').sections.slice(0, 2), { kind: 'excerpt', text: 'five days is enough', by: 'The Lancet' }] },
       { sections: [...p('sheet').sections.slice(0, 2), { kind: 'picture', src: 'https://elsewhere.example/x.jpg' }] },
+    ],
+    explorable: [
+      { ...p('explorable'), controls: [{ ...p('explorable').controls[0], values: [24, 86, 200] }] },
+      { ...p('explorable'), controls: [{ ...p('explorable').controls[0], label: 'zoom' }] },
+      { ...p('explorable'), controls: [{ ...p('explorable').controls[0], unit: 'inches' }] },
+      { ...p('explorable'), output: { ...p('explorable').output, values: [73.7, 39.6, 10.4] } },
+      { ...p('explorable'), output: { ...p('explorable').output, label: 'angle of view' } },
+      { ...p('explorable'), output: { ...p('explorable').output, formula: [...p('explorable').output.formula, 1.05, '*'] } },
+      { ...p('explorable'), output: { ...p('explorable').output, formula: [...p('explorable').output.formula, 'g', '*'] } },
     ],
   };
   for (const id of STRUCTURED_IDS) {
@@ -1166,6 +1179,20 @@ test('an address in the data states nothing, a table cell holds no cell break, a
 
 // ---- the cards the model chooses
 
+type Control = ComponentsReply['items'][number]['controls'][number];
+/** A toggle or segmented control of a reply, with each state's name and its text. */
+const control = (kind: 'toggle' | 'segmented', label: string, states: [string, string][]): Control => ({
+  kind, label, states: states.map(([name]) => name), texts: states.map(([, text]) => text), name: '', unit: '', min: 0, max: 0, values: [],
+});
+const slider = (fields: Partial<Control>): Control => ({ kind: 'slider', label: '', states: [], texts: [], name: '', unit: '', min: 0, max: 0, values: [], ...fields });
+const DOLLY_STATES: [string, string][] = [
+  ['Zoom only', 'the lens zooms in while the camera stays put, so the background grows with the subject.'],
+  ['Dolly only', 'the camera moves in on a fixed lens, so the subject grows and the background barely changes.'],
+  ['Both', 'the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it.'],
+];
+const DOLLY = `Three ways to shoot a dolly zoom.\n${DOLLY_STATES.map(([name, text]) => `${name}: ${text}`).join('\n')}`;
+const FIELD = 'On a full-frame camera the field of view narrows as the focal length grows. At 24 mm the field of view is 73.7°. At 50 mm it is 39.6°. At 200 mm it is 10.3°.';
+
 const said = (component: Chosen, slots: Partial<ComponentsReply['items'][number]>) => entry({ id: '', component, ...slots });
 type Part = ComponentsReply['items'][number]['sections'][number];
 const part = (kind: Part['kind'], slots: Partial<Part> = {}): Part => ({ kind, text: '', by: '', lines: [], ...slots });
@@ -1263,6 +1290,13 @@ const CLAIMS: Record<Exclude<Chosen, 'note' | 'idea' | 'sheet'>, { text: string;
     lacked: { passage: 'The house protects day-dreaming.' },
     fails: 'shows text, which the content does not state',
   },
+  explorable: {
+    text: DOLLY,
+    held: { controls: [control('segmented', 'Three ways to shoot a dolly zoom', DOLLY_STATES)] },
+    props: { controls: [{ kind: 'segmented', label: 'Three ways to shoot a dolly zoom', states: DOLLY_STATES.map(([name, text]) => ({ name, text })) }], output: { kind: 'text' } },
+    lacked: { controls: [control('segmented', 'Three ways to shoot a dolly zoom', [...DOLLY_STATES.slice(0, 2), ['Both', 'The camera and the lens both stay put.']])] },
+    fails: 'shows controls[0].states[2].text, which the content does not state',
+  },
 };
 
 test('each card the model may choose is drawn from a claim its text holds, and one the text does not hold keeps the note and names the prop in the run log', async () => {
@@ -1275,7 +1309,7 @@ test('each card the model may choose is drawn from a claim its text holds, and o
     for (const id of ids) assert.equal(view(k, id).component, 'note', 'the rules are unsure of each');
     k.model.on('renderer.components', () => ({ items: types.map((type, n) => ({ ...said(type, CLAIMS[type][which]), id: ids[n]! })) })).on('renderer.composites', () => ({ groups: [] }));
     await render(k, ids);
-    assert.equal(k.model.calls.filter((call) => call.role === 'renderer.components').length, 2, 'thirteen items in two calls');
+    assert.equal(k.model.calls.filter((call) => call.role === 'renderer.components').length, 2, 'fourteen items in two calls');
     return { k, ids };
   };
 
@@ -1286,6 +1320,44 @@ test('each card the model may choose is drawn from a claim its text holds, and o
   const lacked = await asked('lacked');
   for (const id of lacked.ids) assert.deepEqual(view(lacked.k, id), { component: 'note', props: {}, by: 'renderer' });
   assert.deepEqual(lacked.k.notes, types.map((type) => `renderer: Kept "${type} lacked" as the rules drew it: the model's ${type} ${CLAIMS[type].fails}.`));
+});
+
+test('a slider is drawn when its formula gives each value the item states within 1 percent, and a formula that misses by 5 percent or cannot be read keeps the note and says why', async () => {
+  const k = kit();
+  const { ids } = grow(k, ['matches', 'misses', 'unknown function', 'no value'].map((title) => ({ title, text: FIELD })));
+  const fov = (formula: string, min = 12): Partial<ComponentsReply['items'][number]> => ({
+    controls: [slider({ label: 'focal length', name: 'f', unit: 'mm', min, max: 300, values: [24, 50, 200] })],
+    formula,
+    subject: 'field of view',
+    unit: '°',
+    numbers: [73.7, 39.6, 10.3],
+  });
+  const replies = [fov('2 * atan(18 / f) * 57.2958'), fov('2 * atan(18 / f) * 57.2958 * 1.05'), fov('2 * atan2(18, f) * 57.2958'), fov('2 * atan(18 / f) * 57.2958', 0)];
+  k.model.on('renderer.components', () => ({ items: replies.map((reply, n) => ({ ...said('explorable', reply), id: ids[n]! })) })).on('renderer.composites', () => ({ groups: [] }));
+  await render(k, ids);
+  assert.deepEqual(view(k, ids[0]!), {
+    component: 'explorable',
+    props: {
+      controls: [{ kind: 'slider', name: 'f', label: 'focal length', unit: 'mm', min: 12, max: 300, step: 2, values: [24, 50, 200] }],
+      output: { kind: 'chart', label: 'field of view', unit: '°', formula: [2, 18, 'f', '/', 'atan', '*', 57.2958, '*'], values: [73.7, 39.6, 10.3] },
+    },
+    by: 'renderer',
+  });
+  for (const id of ids.slice(1)) assert.equal(view(k, id).component, 'note');
+  assert.deepEqual(k.notes, [
+    'renderer: Kept "misses" as the rules drew it: the model\'s explorable has a formula that gives 77.43 at focal length 24, where the item states 73.7.',
+    'renderer: Kept "unknown function" as the rules drew it: the model\'s explorable has a formula that cannot be read: it calls the unknown function "atan2".',
+    'renderer: Kept "no value" as the rules drew it: the model\'s explorable has a formula that has no value at focal length 0.',
+  ]);
+
+  const two = kit();
+  const narrows = 'On a full-frame camera the field of view narrows as the focal length grows: at 24 mm it is 73.7°, and at 50 mm it is 39.6°.';
+  const pair = grow(two, [{ title: 'Two stated', text: narrows }]).ids;
+  two.model.on('renderer.components', () => ({ items: [{ ...said('explorable', { ...fov('2 * atan(18 / f) * 57.2958'), controls: [slider({ label: 'focal length', name: 'f', unit: 'mm', min: 12, max: 300, values: [24, 50] })], numbers: [73.7, 39.6] }), id: pair[0]! }] })).on('renderer.composites', () => ({ groups: [] }));
+  await render(two, pair);
+  assert.equal((view(two, pair[0]!).props as { output: { kind: string } }).output.kind, 'figure', 'two stated values are drawn as a figure');
+  assert.ok(grounded(view(two, pair[0]!), two.mind.itemOf(pair[0]!), url));
+  assert.ok(!grounded(view(two, pair[0]!), { ...two.mind.itemOf(pair[0]!), text: narrows.replace('50 mm', '85 mm') }, url), 'a stated value the item no longer writes');
 });
 
 test('the model is asked only about text the rules left as a note or an idea: no link, picture, conversation, code, short line or structure a rule drew', async () => {

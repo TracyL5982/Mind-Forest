@@ -25,6 +25,7 @@ import * as artwork from './artwork.js';
 import * as reference from './reference.js';
 import * as place from './place.js';
 import * as sheet from './sheet.js';
+import * as explorable from './explorable.js';
 import { h, s } from '../dom.js';
 import { chips } from '../chips.js';
 import { wordsOf } from '../words.js';
@@ -40,7 +41,7 @@ import { CHIP_LINE, say, textWidth } from './shared.js';
  */
 export const COMPONENTS = {
   note, quote, fact, image, video, audio, link, chart, person, chat, code, steps,
-  facts, table, list, breakdown, qa, callout, excerpt, definition, idea, proscons, swatch, artwork, reference, place, sheet,
+  facts, table, list, breakdown, qa, callout, excerpt, definition, idea, proscons, swatch, artwork, reference, place, sheet, explorable,
 };
 
 export const componentOf = (node) => (Object.hasOwn(COMPONENTS, node.view?.component) ? node.view.component : 'note');

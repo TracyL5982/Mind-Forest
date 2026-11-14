@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Sound, type Item, type View } from './domain.ts';
+import { evaluate, reserved, wellFormed } from './formula.ts';
 import type { Grounding } from './grounding.ts';
 import { JOINS, KINDS, LIMITS, ROLES, withinLimits, type Box, type Part } from './layout.ts';
 
@@ -33,6 +34,9 @@ export const ROOM = {
   reason: { spaced: 140, spaceless: 70 },
   /** The name of a matrix's axis. */
   axis: 32,
+  /** The most values an item may state for a slider, and the most stops a slider has between its ends. */
+  stated: 8,
+  stops: 1000,
 } as const;
 
 /** The bound of a pair that holds for this text. */
@@ -54,6 +58,94 @@ export const SECTION = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('excerpt'), text: words.refine((text) => text.length <= roomOf(ROOM.passage, text)), by: z.string().optional() }),
 ]);
 export type Section = z.infer<typeof SECTION>;
+
+/** One state of a toggle or a segmented control: its name, and the item's own sentences that say what holds in it. */
+const STATE = z.strictObject({ name: words.max(ROOM.label), text: words.refine((text) => text.length <= roomOf(ROOM.passage, text)) });
+
+/** A quantity's name in a formula: a letter, then letters, digits or "_", and no name the language gives a step. */
+const QUANTITY = z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,15}$/).refine((name) => !reserved(name));
+
+/**
+ * One control of an `explorable`. A toggle switches between two named states and a segmented control among two to four. A slider sets
+ * one quantity of the formula from `min` to `max` in steps of `step`, and `values` are the values the item states for it, each on a step.
+ */
+export const CONTROL = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('toggle'), label: words.max(ROOM.label), states: z.array(STATE).length(2) }),
+  z.strictObject({ kind: z.literal('segmented'), label: words.max(ROOM.label), states: z.array(STATE).min(2).max(4) }),
+  z.strictObject({
+    kind: z.literal('slider'),
+    name: QUANTITY,
+    label: words.max(ROOM.label),
+    unit: z.string().optional(),
+    min: z.number(),
+    max: z.number(),
+    step: z.number().positive(),
+    values: z.array(z.number()).min(2).max(ROOM.stated),
+  }),
+]);
+export type Control = z.infer<typeof CONTROL>;
+type Slider = Extract<Control, { kind: 'slider' }>;
+
+/** What a formula gives, with its label and unit. `values` are the results the item states, the nth at each slider's nth value. */
+const RESULT = { label: words.max(ROOM.label), unit: z.string().optional(), formula: z.array(z.union([z.number(), z.string()])), values: z.array(z.number()).min(2).max(ROOM.stated) };
+
+/** What an `explorable` shows: the text of each control's state, or what its formula gives as a figure or as a curve across the first slider. */
+export const OUTPUT = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('text') }),
+  z.strictObject({ kind: z.literal('figure'), ...RESULT }),
+  z.strictObject({ kind: z.literal('chart'), ...RESULT }),
+]);
+
+/** How many steps a slider has from end to end. */
+export const stopsOf = ({ min, max, step }: Slider): number => Math.round((max - min) / step);
+/** The value at a slider's nth step, to twelve significant digits, so that steps of 0.1 land on 0.3 and not beside it. */
+export const stopAt = ({ min, step }: Slider, n: number): number => Number((min + n * step).toPrecision(12));
+const onStop = (slider: Slider, value: number): boolean => Math.abs(stopAt(slider, Math.round((value - slider.min) / slider.step)) - value) <= slider.step * 1e-6;
+
+/** How near a formula must come to each value the item states, as a share of that value. */
+export const WITHIN = 0.01;
+
+/**
+ * Text that switches with each toggle or segmented control, or one result of sliders: never both. A slider's ends lie on its steps,
+ * and so does each value it states, between them. Every slider states as many values as the result, and the formula reads only sliders.
+ */
+function explores({ controls, output }: { controls: Control[]; output: z.infer<typeof OUTPUT> }): boolean {
+  const sliders = controls.filter((control): control is Slider => control.kind === 'slider');
+  if (output.kind === 'text') return sliders.length === 0 && controls.every((control) => 'states' in control && new Set(control.states.map((state) => state.name)).size === control.states.length);
+  const names = sliders.map((slider) => slider.name);
+  return (
+    sliders.length === controls.length &&
+    new Set(names).size === names.length &&
+    sliders.every((slider) => {
+      const steps = (slider.max - slider.min) / slider.step;
+      return slider.min < slider.max && Math.abs(steps - stopsOf(slider)) < 1e-6 && stopsOf(slider) <= ROOM.stops && slider.values.length === output.values.length &&
+        slider.values.every((value) => value >= slider.min && value <= slider.max && onStop(slider, value));
+    }) &&
+    wellFormed(output.formula, names)
+  );
+}
+
+/**
+ * Where an explorable's formula fails its item, or nothing. At each set of values the item states, it must give the result the item
+ * states there, within `WITHIN` of it, and it must have a value at every step of each slider, the others at their first stated values.
+ */
+export function misses({ controls, output }: PropsOf<'explorable'>): string | undefined {
+  if (output.kind === 'text') return undefined;
+  const sliders = controls as Slider[];
+  const at = (n: number) => Object.fromEntries(sliders.map((slider) => [slider.name, slider.values[n]!]));
+  const named = (values: Record<string, number>) => sliders.map((slider) => `${slider.label} ${values[slider.name]}`).join(', ');
+  for (const [n, stated] of output.values.entries()) {
+    const got = evaluate(output.formula, at(n));
+    if (got === undefined || Math.abs(got - stated) > Math.max(WITHIN * Math.abs(stated), 1e-9)) return `gives ${got === undefined ? 'no value' : Number(got.toPrecision(4))} at ${named(at(n))}, where the item states ${stated}`;
+  }
+  for (const slider of sliders) {
+    for (let n = 0; n <= stopsOf(slider); n++) {
+      const values = { ...at(0), [slider.name]: stopAt(slider, n) };
+      if (evaluate(output.formula, values) === undefined) return `has no value at ${named(values)}`;
+    }
+  }
+  return undefined;
+}
 
 /**
  * The component library: every way one item can be drawn.
@@ -147,6 +239,11 @@ export const COMPONENTS = {
     const parts = sections.filter((section) => section.kind !== 'heading');
     return sections.length - parts.length <= 1 && sections.slice(1).every((section) => section.kind !== 'heading') && parts.length >= 2 && parts.some((section) => section.kind !== 'text');
   }),
+  /**
+   * A card a reader changes to see how a concept works: one to three controls and what they change. A toggle or a segmented control
+   * shows the text of its state. Sliders set the quantities of a formula, whose result is shown as a figure or as a curve.
+   */
+  explorable: z.strictObject({ controls: z.array(CONTROL).min(1).max(3), output: OUTPUT }).refine(explores),
 } as const;
 export type ComponentId = keyof typeof COMPONENTS;
 export const COMPONENT_IDS = Object.keys(COMPONENTS) as ComponentId[];
@@ -168,8 +265,9 @@ export type PropsOf<C extends ComponentId> = z.infer<(typeof COMPONENTS)[C]>;
  * - `label`: words of the content that name the `value` beside them in the props: every one stands in the sentence, line or table row that holds the value.
  * - `point`: the same for the number at the same place in the `values` beside them, as a chart's labels are.
  * - `choice`: how to draw, not what to show.
+ * - `computes`: a token of a formula, which is held to the item by what it gives, in its component's `also`.
  */
-export type Stated = 'says' | 'cell' | 'quotes' | 'whole' | 'lead' | 'meaning' | 'writes' | 'unit' | 'paints' | 'own' | 'label' | 'point' | 'choice';
+export type Stated = 'says' | 'cell' | 'quotes' | 'whole' | 'lead' | 'meaning' | 'writes' | 'unit' | 'paints' | 'own' | 'label' | 'point' | 'choice' | 'computes';
 
 type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never;
 type Fields<T> = { readonly [K in keyof T]-?: Check<NonNullable<T[K]>> };
@@ -258,6 +356,25 @@ export const CHECKS: ContentChecks = {
         },
       },
     },
+  },
+  explorable: {
+    props: {
+      controls: {
+        byKind: {
+          toggle: { label: 'says', states: { name: 'says', text: 'whole' } },
+          segmented: { label: 'says', states: { name: 'says', text: 'whole' } },
+          slider: { name: 'choice', label: 'says', unit: 'unit', min: 'choice', max: 'choice', step: 'choice', values: 'writes' },
+        },
+      },
+      output: {
+        byKind: {
+          text: {},
+          figure: { label: 'says', unit: 'unit', formula: 'computes', values: 'writes' },
+          chart: { label: 'says', unit: 'unit', formula: 'computes', values: 'writes' },
+        },
+      },
+    },
+    also: (p) => misses(p) === undefined,
   },
 };
 

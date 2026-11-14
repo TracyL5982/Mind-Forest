@@ -32,6 +32,8 @@ const WORDS = {
     where: 'Where',
     people: 'People',
     origin: 'Origin',
+    explore: 'Explore',
+    computed: 'computed',
   },
   zh: {
     untitled: '未命名',
@@ -59,6 +61,8 @@ const WORDS = {
     where: '地点',
     people: '人物',
     origin: '来源',
+    explore: '可探索',
+    computed: '计算值',
   },
 };
 

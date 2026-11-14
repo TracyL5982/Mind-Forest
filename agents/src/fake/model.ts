@@ -313,7 +313,51 @@ export function describe(text: string): Description {
   };
 }
 
-const NOTE: Omit<Entry, 'id'> = { component: 'note', subject: '', passage: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [] };
+type Control = Entry['controls'][number];
+const STATE = /^(\p{L}[\p{L} ]{0,29})[:：]\s*([^\d;；].*[.!?。！？])$/u;
+const FORMULA = /`([^`]+)`/;
+const NUMBER = /-?\d[\d,]*(?:\.\d+)?/g;
+const SPACED = /[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}]/u;
+
+/**
+ * What a model would make an explorable of, read by pattern instead:
+ *   Three ways to shoot a dolly zoom            a segmented control, or a toggle for two: two to four lines of a name, a colon and
+ *   Zoom only: the lens zooms in, so ….         a sentence, under a first line that names what they contrast
+ *   … the field of view is `2 * atan(18 / f) * 57.2958` degrees, for a focal length f in mm.
+ *   At 24 mm the field of view is 73.7°. …      a slider: a formula in backticks with one name in it that is no function's,
+ *                                               which "for a <label> <name> in <unit>" names, and two or more sentences that each
+ *                                               write a value and its result
+ * The slider runs from half the least stated value to half as much again as the most.
+ */
+function explored(text: string, lines: string[]): Omit<Entry, 'id'> | undefined {
+  const states = lines.slice(1).map((line) => STATE.exec(line)).filter((found) => found !== null);
+  if (states.length >= 2 && states.length <= 4 && states.length === lines.length - 1 && lines[0]!.length <= 40) {
+    const label = lines[0]!.replace(/[.。:：]$/, '');
+    const control: Control = { kind: states.length === 2 ? 'toggle' : 'segmented', label, states: states.map((found) => found[1]!.trim()), texts: states.map((found) => found[2]!.trim()), name: '', unit: '', min: 0, max: 0, values: [] };
+    return { ...NOTE, component: 'explorable', controls: [control] };
+  }
+  const formula = FORMULA.exec(text)?.[1];
+  if (!formula) return undefined;
+  // The formula is passed on as written, so the Renderer's own check reads it, and refuses one it cannot read.
+  const named = [...new Set(formula.match(/\b[A-Za-z_]\w*\b(?!\s*\()/g) ?? [])];
+  if (named.length !== 1) return undefined;
+  const [name] = named as [string];
+  const pairs = text.replace(FORMULA, '').split(/(?<=[.!?])\s+|(?<=[。！？])/).flatMap((sentence) => {
+    const found = [...sentence.matchAll(NUMBER)];
+    if (found.length !== 2) return [];
+    const after = sentence.slice(found[1]!.index + found[1]![0].length);
+    return [{ at: Number(found[0]![0].replace(/,/g, '')), value: Number(found[1]![0].replace(/,/g, '')), unit: /^\s?([°%‰]|\p{L}+)/u.exec(after)?.[1] ?? '' }];
+  });
+  if (pairs.length < 2) return undefined;
+  const label = new RegExp(`for (?:a|an|the) ([\\p{L} ]+?) ${name}\\b`, 'u').exec(text)?.[1] ?? name;
+  const unit = new RegExp(`\\b${name} in ([^\\s.,;]+)`, 'u').exec(text)?.[1] ?? '';
+  const subject = /the ([\p{L} ]+?) is `/u.exec(text)?.[1] ?? '';
+  const values = pairs.map((pair) => pair.at);
+  const slider: Control = { kind: 'slider', label, states: [], texts: [], name, unit, min: Math.floor(Math.min(...values) / 2), max: Math.ceil(Math.max(...values) * 1.5), values };
+  return { ...NOTE, component: 'explorable', controls: [slider], formula, subject, unit: SPACED.test(pairs[0]!.unit) ? '' : pairs[0]!.unit, numbers: pairs.map((pair) => pair.value) };
+}
+
+const NOTE: Omit<Entry, 'id'> = { component: 'note', subject: '', passage: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [], controls: [], formula: '' };
 
 const MARKED = /^(caution|warning|note):\s*(\S.*)$/i;
 const LABELLED = /^(\p{L}[\p{L} ]{1,29}):\s+(\S.*)$/u;
@@ -325,6 +369,7 @@ const NUMBER_FIRST = /^[$€£¥]?\d/;
  *   Cost: €240                        a figure of a sheet, when the value starts with a number
  *   Best: the bridge; the bookshop    a list of a sheet, its entries set apart by ";"
  * A sheet is a text with a figure or a list written so, and a sentence beside them. Its first line is the heading.
+ * An explorable is a text in one of two forms, as `explored` reads them.
  * A text holding "fake:invent" is given a figure it never states, to show the content check keeping the note.
  * A text in none of these forms keeps the card it has `now`.
  */
@@ -333,6 +378,8 @@ export function choose(text: string, now: 'note' | 'idea' = 'note'): Omit<Entry,
   if (/fake:invent/.test(text)) return { ...NOTE, component: 'fact', subject: 'Share', passage: '99%' };
   const marked = lines.map((line) => MARKED.exec(line)).find(Boolean);
   if (marked) return { ...NOTE, component: 'callout', passage: marked[2]!.trim(), tone: marked[1]!.toLowerCase() === 'note' ? 'note' : 'caution' };
+  const explorable = explored(text, lines);
+  if (explorable) return explorable;
 
   const labelled = lines.flatMap((line) => {
     const found = LABELLED.exec(line);

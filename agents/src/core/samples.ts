@@ -1,12 +1,12 @@
 import type { Item } from './domain.ts';
-import { byRule } from './roles/renderer.ts';
+import { byModel, byRule, type Entry } from './roles/renderer.ts';
 import { COMPONENT_IDS, type ComponentId, type PropsOf } from './views.ts';
 
 export { COMPONENT_IDS };
 
-/** The card types a rule chooses from the structure an item carries, and `callout` and `sheet`, which only a model chooses. */
+/** The card types a rule chooses from the structure an item carries, and `callout`, `sheet` and `explorable`, which only a model chooses. */
 export const STRUCTURED_IDS = [
-  'facts', 'table', 'list', 'breakdown', 'qa', 'callout', 'excerpt', 'definition', 'idea', 'proscons', 'swatch', 'artwork', 'reference', 'place', 'sheet',
+  'facts', 'table', 'list', 'breakdown', 'qa', 'callout', 'excerpt', 'definition', 'idea', 'proscons', 'swatch', 'artwork', 'reference', 'place', 'sheet', 'explorable',
 ] as const satisfies readonly ComponentId[];
 export type StructuredId = (typeof STRUCTURED_IDS)[number];
 
@@ -77,6 +77,53 @@ export const SHEETS: { item: Item; props: PropsOf<'sheet'> }[] = [
     },
   },
 ];
+
+const EMPTY: Omit<Entry, 'id' | 'component'> = {
+  subject: '', passage: '', by: '', tone: '', lines: [], labels: [], numbers: [], left: [], right: [], unit: '', emphasis: '', sections: [], controls: [], formula: '',
+};
+type Control = Entry['controls'][number];
+const states = (kind: 'toggle' | 'segmented', label: string, given: [string, string][]): Control => ({
+  kind, label, states: given.map(([name]) => name), texts: given.map(([, text]) => text), name: '', unit: '', min: 0, max: 0, values: [],
+});
+
+const DOLLY: [string, string][] = [
+  ['Zoom only', 'the lens zooms in while the camera stays put, so the background grows with the subject.'],
+  ['Dolly only', 'the camera moves in on a fixed lens, so the subject grows and the background barely changes.'],
+  ['Both', 'the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it.'],
+];
+const APERTURE: [string, string][] = [
+  ['大光圈', '背景虚化得很厉害，只有对焦的那一层是清楚的。'],
+  ['小光圈', '从前景到远山都清楚，但快门要放慢。'],
+];
+
+/**
+ * Three items that explain by changing something, each with the explorable that the Renderer's model path builds from a reply: a
+ * slider for the field of view against focal length, a three-way control for a dolly zoom, and a toggle in Chinese.
+ */
+export const EXPLORABLES: { item: Item; props: PropsOf<'explorable'> }[] = ([
+  {
+    item: item('explorable-field', {
+      title: 'Field of view against focal length',
+      text: 'On a full-frame camera the sensor is 36 mm wide, so the field of view narrows as the focal length grows. At 24 mm the field of view is 73.7°. At 50 mm it is 39.6°. At 200 mm it is 10.3°.',
+    }),
+    reply: {
+      controls: [{ kind: 'slider', label: 'focal length', states: [], texts: [], name: 'f', unit: 'mm', min: 12, max: 300, values: [24, 50, 200] }],
+      formula: '2 * atan(18 / f) * 57.2958', subject: 'field of view', unit: '°', numbers: [73.7, 39.6, 10.3],
+    },
+  },
+  {
+    item: item('explorable-dolly', { title: 'Three ways to shoot a dolly zoom', text: `Three ways to shoot a dolly zoom.\n${DOLLY.map(([name, text]) => `${name}: ${text}`).join('\n')}` }),
+    reply: { controls: [states('segmented', 'Three ways to shoot a dolly zoom', DOLLY)] },
+  },
+  {
+    item: item('explorable-aperture', { title: '光圈与景深', text: `光圈开大还是收小，决定了照片里有多少是清楚的。\n${APERTURE.map(([name, text]) => `${name}：${text}`).join('\n')}` }),
+    reply: { controls: [states('toggle', '光圈', APERTURE)] },
+  },
+] satisfies { item: Item; reply: Partial<Entry> }[]).map(({ item: made, reply }) => {
+  const verdict = byModel({ ...EMPTY, ...reply, id: made.id, component: 'explorable' }, made, sampleAssetUrl);
+  if (!('draw' in verdict)) throw new Error(`the sample explorable "${made.title}" is refused: ${JSON.stringify(verdict)}`);
+  return { item: made, props: verdict.draw.props as PropsOf<'explorable'> };
+});
 
 const ITEMS: Record<StructuredId, Item> = {
   facts: item('facts', {
@@ -162,12 +209,14 @@ const ITEMS: Record<StructuredId, Item> = {
     data: { where: '西湖', image: 'https://example.org/west-lake.jpg' },
   }),
   sheet: SHEETS[0]!.item,
+  explorable: EXPLORABLES[0]!.item,
 };
 
 /** The props of the types no rule chooses. */
 const CHOSEN: Partial<Record<StructuredId, Record<string, unknown>>> = {
   callout: { text: 'Anything above 40 °C kills the yeast.', tone: 'caution' } satisfies PropsOf<'callout'>,
   sheet: SHEETS[0]!.props,
+  explorable: EXPLORABLES[0]!.props,
 };
 
 /** One realistic item for each of these types, with the props the Renderer gives it. */

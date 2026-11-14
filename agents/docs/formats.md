@@ -17,8 +17,8 @@ The set is `test/fixtures/formats.json`. Each entry has these fields.
 
 | Field | Meaning |
 |---|---|
-| `key` | A short name. `A-` and `B-` items come from two reviewers who each wrote sixty items. `C` and `D` items were written for the model. |
-| `origin` | `reviewers` for the `A-` and `B-` items, `authors` for the `C` and `D` items. |
+| `key` | A short name. `A-` and `B-` items come from two reviewers who each wrote sixty items. `C`, `D` and `E` items were written for the model. |
+| `origin` | `reviewers` for the `A-` and `B-` items, `authors` for the `C`, `D` and `E` items. |
 | `activity` | `research`, `brainstorming` or `memories`. |
 | `language` | `en` or `zh`. |
 | `what` | What the user did to make the item. |
@@ -54,6 +54,8 @@ The 47 items written for the model are of five kinds:
 - Ten Chinese texts of 21 to 33 characters, the `D` items: three cautions, two definitions, two questions with their answers and three ideas. Intake extracted nothing from any of them. A rule cannot tell them apart, so the model must.
 
 Beside the items, `pools` holds ten sets of siblings under one parent, each with the arrangement a person would draw them as: an `overview` in English and in Chinese, a `moodboard`, a `gallery`, a `ranked` set of picks, a Chinese `matrix`, and four where no group is right. `npm test` runs each through the real Renderer with a model that proposes no group, and checks that the rules make the expected arrangement where plain code makes it and no group anywhere else. The `ranked` and `matrix` pools are the model's to arrange. `npm run formats` does not score pools yet.
+
+Six more, the `E` items, were written with the explorable card on 14 November 2026, after every run this page reports, so the counts and scores here are of the 167 before them and no live run has scored them yet. They are explainers, one for each activity in each language: a value that follows from another by a formula, as the field of view follows the focal length, or one thing in two to four states, as a dolly zoom shot three ways. The expected card is `explorable`. Intake extracted nothing from any of them, so the rules draw each as a note.
 
 ## Score the rules
 
