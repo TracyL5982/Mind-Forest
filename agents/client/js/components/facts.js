@@ -8,8 +8,9 @@ const HALF = (COLUMN - BETWEEN) / 2;
 const ROW_GAP = 12;
 /** A row of figures is set in the middle size or the smallest, never the largest, which is a lone fact's. */
 const [MIDDLE, SMALL] = FIGURES.slice(1);
-const SMALL_LETTER = SMALL[2];
-/** The most lines a value is given, as on a fact card. */
+/** The most lines a value is given at the middle size, on a row of its own, before the card steps down. */
+const MIDDLE_LINES = 2;
+/** The most lines a value is given at the smallest size, as on a fact card. */
 const MOST_LINES = 8;
 
 const pairs = (props) => list(props.facts).map((fact) => ({ label: text(fact?.label).trim(), value: text(fact?.value).trim() }));
@@ -20,10 +21,11 @@ const fitsMiddle = (fact, room) => figureNeed(fact.value, MIDDLE) <= room * 100;
 /**
  * Facts sit two to a row when both values fit half a row at the middle size. Any other has the
  * whole row. Every figure of a card is set in one size, so figures side by side and one under
- * another match: the middle size while each value fits its room there, and the smallest when one
- * does not fit even a whole row. At the smallest size a value that needs more wraps and its row
- * grows with it, up to `MOST_LINES`. A value that needs more lines still is a passage, not a
- * figure: it is cut there with an ellipsis, and the opened card has it whole.
+ * another match: the middle size while each value fits its room there in `MIDDLE_LINES`, so a long
+ * value wraps on its own row beside short figures that keep their size, and the smallest when one
+ * needs more. At the smallest size a value wraps and its row grows with it, up to `MOST_LINES`. A
+ * value that needs more lines still is a passage, not a figure: it is cut there with an ellipsis,
+ * and the opened card has it whole.
  */
 function plan(item, props) {
   const facts = pairs(props);
@@ -33,11 +35,12 @@ function plan(item, props) {
     rows.push({ room: paired ? HALF : COLUMN, cells: facts.slice(i, i + (paired ? 2 : 1)) });
   }
   const fits = (step, row, cell) => figureNeed(cell.value, step) <= row.room * 100;
-  const size = rows.every((row) => row.cells.every((cell) => fits(MIDDLE, row, cell))) ? MIDDLE : SMALL;
-  const [cls, lead] = size;
+  const middle = (row, cell) => fits(MIDDLE, row, cell) || wrap(cell.value, row.room, MIDDLE[2], MIDDLE_LINES + 1) <= MIDDLE_LINES;
+  const size = rows.every((row) => row.cells.every((cell) => middle(row, cell))) ? MIDDLE : SMALL;
+  const [cls, lead, letter] = size;
   const drawn = rows.map((row) => {
     const cells = row.cells.map((cell) => {
-      const needs = fits(size, row, cell) ? 1 : wrap(cell.value, row.room, SMALL_LETTER, MOST_LINES + 1);
+      const needs = fits(size, row, cell) ? 1 : wrap(cell.value, row.room, letter, MOST_LINES + 1);
       const lines = Math.min(needs, MOST_LINES);
       const labelLines = wrap(cell.label, row.room, TEXT_LETTER, 2);
       return { ...cell, cut: needs > MOST_LINES, labelLines, height: lines * lead + labelLines * TEXT };
