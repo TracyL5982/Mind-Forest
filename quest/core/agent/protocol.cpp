@@ -394,6 +394,7 @@ std::optional<Activity> readActivity(const Json& j, Why& why) {
                                                    {"error", Activity::State::error}}),
                        .message = f.string("message"),
                        .nodeId = f.optionalId<NodeId>("nodeId"),
+                       .label = f.optionalString("label"),
                    });
 }
 
@@ -408,7 +409,7 @@ std::optional<Inbound> message(const Fields& f, T value) {
 
 std::optional<Inbound> readHello(const Json& j, Why& why) {
     Fields f(j, why);
-    // `voice` and `hearing` came later than version 1; a service without them reads as one with neither.
+    // `voice`, `hearing` and `live` came later than version 1; a service without them reads as one with none.
     return message(f, Hello{
                           .protocol = int(f.whole("protocol")),
                           .snapshot = f.nested("snapshot", readSnapshot),
@@ -418,6 +419,7 @@ std::optional<Inbound> readHello(const Json& j, Why& why) {
                           .hearing = j["hearing"].isNull()
                                          ? Hearing::browser
                                          : f.choice<Hearing>("hearing", {{"browser", Hearing::browser}, {"service", Hearing::service}}),
+                          .live = f.optionalBoolean("live").value_or(false),
                       });
 }
 

@@ -304,6 +304,39 @@ std::vector<float> chime() {
     return s;
 }
 
+namespace {
+
+/// A note that rises to `peak` over `attack` seconds and decays to a thousandth of it by `length`, added into `s`.
+void note(std::vector<float>& s, double begin, double pitch, double peak, double attack, double length) {
+    for (size_t n = size_t(begin * Listener::rate); n < size_t((begin + length) * Listener::rate) && n < s.size(); n++) {
+        double t = double(n) / Listener::rate - begin;
+        double gain = t < attack ? peak * t / attack : peak * std::pow(0.001, (t - attack) / (length - attack));
+        s[n] += float(gain * std::sin(2 * M_PI * pitch * t));
+    }
+}
+
+}  // namespace
+
+std::vector<float> sentTone() {
+    std::vector<float> s(size_t(Listener::rate * 0.18), 0.f);
+    note(s, 0, 784, 0.12, 0.006, 0.09);
+    note(s, 0.07, 587, 0.12, 0.006, 0.11);
+    return s;
+}
+
+std::vector<float> thinkingLoop() {
+    std::vector<float> s(size_t(Listener::rate * 1.6), 0.f);
+    // Slow swells rather than strikes, so it reads as waiting, not as another signal.
+    for (auto [begin, pitch] : {std::pair{0.05, 392.0}, std::pair{0.55, 523.25}}) {
+        for (size_t n = size_t(begin * Listener::rate); n < size_t((begin + 0.5) * Listener::rate); n++) {
+            double t = double(n) / Listener::rate - begin;
+            double swell = std::pow(std::sin(M_PI * t / 0.5), 2);
+            s[n] += float(0.04 * swell * std::sin(2 * M_PI * pitch * t));
+        }
+    }
+    return s;
+}
+
 // MARK: - WAV
 
 namespace {

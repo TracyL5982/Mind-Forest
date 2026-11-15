@@ -212,17 +212,21 @@ TEST(optionalFieldsMayBeMissing) {
     Inbound older = parseInbound(edited(fixture("hello.json"), [](Json j) {
         Json out = Json::object();
         for (const auto& [key, value] : j.members()) {
-            if (key != "voice" && key != "hearing" && key != "undo") out.set(key, value);
+            if (key != "voice" && key != "hearing" && key != "undo" && key != "live") out.set(key, value);
         }
         return out;
     }));
     auto* hello = std::get_if<Hello>(&older);
-    CHECK(hello, "a hello without voice, hearing or undo reads: %s", kindOf(older).c_str());
-    if (hello) CHECK(!hello->voice && hello->hearing == Hearing::browser && !hello->undo, "and has none of them");
+    CHECK(hello, "a hello without voice, hearing, live or undo reads: %s", kindOf(older).c_str());
+    if (hello) CHECK(!hello->voice && hello->hearing == Hearing::browser && !hello->live && !hello->undo, "and has none of them");
 
-    Inbound hearing = parseInbound(edited(fixture("hello.json"), [](Json j) { return j.set("hearing", "service").set("voice", true); }));
+    Inbound hearing = parseInbound(edited(fixture("hello.json"), [](Json j) { return j.set("hearing", "service").set("voice", true).set("live", true); }));
     auto* withHearing = std::get_if<Hello>(&hearing);
-    CHECK(withHearing && withHearing->hearing == Hearing::service && withHearing->voice, "hearing service, voice true");
+    CHECK(withHearing && withHearing->hearing == Hearing::service && withHearing->voice && withHearing->live, "hearing service, voice and live true");
+
+    Inbound labelled = parseInbound(R"({"t":"activity","activity":{"id":"a1","role":"scout","state":"start","message":"Looking for films with a dolly zoom in them","label":"Finding dolly zooms"}})");
+    auto* withLabel = std::get_if<Activity>(&labelled);
+    CHECK(withLabel && withLabel->label == std::optional<std::string>("Finding dolly zooms"), "an activity's label: %s", kindOf(labelled).c_str());
 
     Change keep = std::get<Change>(parseInbound(recordedText("Keep a pick")));
     CHECK(!keep.set.part && !keep.set.undoes && keep.set.alsoUndoes.empty(), "a plain set has no part or undoes");
@@ -246,7 +250,7 @@ TEST(optionalFieldsMayBeMissing) {
         if (raw(text)["t"].string("") != "activity" || raw(text)["activity"].has("nodeId")) continue;
         Inbound message = parseInbound(text);
         auto* activity = std::get_if<Activity>(&message);
-        CHECK(activity && !activity->nodeId, "an activity without a node: %s", kindOf(message).c_str());
+        CHECK(activity && !activity->nodeId && !activity->label, "an activity without a node or label: %s", kindOf(message).c_str());
         sawActivityWithoutNode = true;
     }
     CHECK(sawActivityWithoutNode, "the session has an activity without a node");

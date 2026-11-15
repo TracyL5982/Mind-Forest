@@ -16,9 +16,14 @@ struct Fetch {
     platform::Request request;
     std::function<void(platform::Response)> done;
 };
+struct Silent : platform::Sound {
+    bool stopped = false;
+    void stop() override { stopped = true; }
+};
 struct Play {
     std::string path;
     std::function<void(bool)> done;
+    std::shared_ptr<Silent> sound;
 };
 
 /// The /live socket as the voice opened it: what it sent, and the events the test plays the service with.
@@ -68,10 +73,6 @@ std::string dataDir() {
 struct Quiet : platform::Microphone {
     void stop() override {}
 };
-struct Silent : platform::Sound {
-    void stop() override {}
-};
-
 struct Socket : agent::Socket {
     SocketEvents events;
     std::vector<std::string> sent;
@@ -95,30 +96,47 @@ Sound whole(Sound s) {
     return s;
 }
 
+/// How a test's voice is made: what the service's hello says, and whether `-mute` is on.
+struct Made {
+    bool serviceSpeaks = true;
+    std::string name = "momo";
+    bool live = true;
+    bool muted = false;
+};
+
 /// A voice on a live connection to the scripted session, in the tree "t1" with the card "n1" open.
 struct Talking {
     std::shared_ptr<Transport> transport = std::make_shared<Transport>();
     Client client{*Address::parse("127.0.0.1:8790", "tok"), transport};
-    Voice voice{client, [] { return Scene{NodeId{"n1"}, {}, TreeId{"t1"}}; }, std::nullopt};
+    Voice voice;
     double now = 0;
 
-    explicit Talking(bool serviceSpeaks, const std::string& name = "momo") {
+    explicit Talking(Made made) : voice(client, [] { return Scene{NodeId{"n1"}, {}, TreeId{"t1"}}; }, std::nullopt, made.muted) {
         host = Host{};
         client.tick(100);
         transport->socket->events.opened();
         transport->socket->events.text(sessionTexts().front());
         client.drain();
         Settings settings;
-        settings.agentName = name;
-        voice.joined(settings, serviceSpeaks);
+        settings.agentName = made.name;
+        voice.joined(settings, made.serviceSpeaks, made.live);
     }
-    /// The microphone hears the sound, a tenth of a second at a time, and the frame thread runs after each.
-    void hear(const Sound& sound) {
+    explicit Talking(bool serviceSpeaks, const std::string& name = "momo") : Talking(Made{serviceSpeaks, name}) {}
+    /// The microphone hears the sound, a tenth of a second at a time, and the frame thread runs after each, then `each`.
+    void hear(const Sound& sound, const std::function<void()>& each = nullptr) {
         std::vector<float> s = sound.withHiss();
         for (size_t at = 0; at < s.size(); at += Listener::pieceLength) {
             host.microphone.heard(s.data() + at, std::min(size_t(Listener::pieceLength), s.size() - at));
             frame(0.1);
+            if (each) each();
         }
+    }
+    Presence::State shows() const { return voice.presence().state; }
+    /// The voice's own sounds, by file, in the order played.
+    std::vector<std::string> played() const {
+        std::vector<std::string> out;
+        for (const Play& p : host.plays) out.push_back(std::filesystem::path(p.path).filename().string());
+        return out;
     }
     void frame(double seconds = 0) {
         now += seconds;
@@ -251,8 +269,9 @@ bool writeFile(const std::string& path, const std::string& contents) {
 std::string dataDirectory() { return dataDir(); }
 void fetch(Request request, std::function<void(Response)> done) { host.fetches.push_back({std::move(request), std::move(done)}); }
 SoundRef playSound(const std::string& path, std::function<void(bool)> done) {
-    host.plays.push_back({path, std::move(done)});
-    return std::make_shared<Silent>();
+    auto sound = std::make_shared<Silent>();
+    host.plays.push_back({path, std::move(done), sound});
+    return sound;
 }
 SocketRef openSocket(const std::string& url, SocketEvents events) {
     auto socket = std::make_shared<LiveSocket>();
@@ -294,8 +313,9 @@ TEST(voiceSendsWhatFollowsTheNameAsAnUtter) {
     Talking t(false);
     CHECK(t.voice.state() == std::nullopt, "no sign until sound comes");
     t.hear(Sound().quiet(1).say("command").quiet(2));
-    CHECK_EQ(host.plays.size(), size_t(1));
-    CHECK(!host.plays.empty() && host.plays[0].path == dataDir() + "/agent-chime.wav", "a chime on the name");
+    CHECK(t.played() == std::vector<std::string>({"agent-chime.wav", "agent-sent.wav", "agent-thinking.wav"}),
+          "a chime on the name, the sent tone as the recording ends, then the thinking loop");
+    CHECK(t.shows() == Presence::State::thinking, "thinking");
     auto posts = t.fetchesTo("/api/transcribe");
     CHECK_EQ(posts.size(), size_t(1));
     if (posts.empty()) return;
@@ -316,8 +336,10 @@ TEST(voiceSendsWhatFollowsTheNameAsAnUtter) {
         CHECK_EQ(u["scene"]["treeId"].string(""), "t1");
         CHECK_EQ(u["scene"]["focus"].string(""), "n1");
     }
+    CHECK_EQ(t.voice.presence().userText, "Show me more like this.");
     t.hear(Sound().quiet(0.2));
     CHECK(t.voice.state() == Listener::State::waiting, "listening for the name again");
+    CHECK(t.shows() == Presence::State::thinking, "thinking until the reply is heard");
 }
 
 TEST(voiceSendsNothingWhenNothingWasHeard) {
@@ -686,4 +708,234 @@ TEST(liveStreamsWhenReadyBeforeTheListenerHasLoaded) {
     t.hear(whole(Sound().quiet(1).say("command").quiet(1.5)));
     CHECK_EQ(t.liveSent("start").size(), size_t(1));
     CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(0));
+}
+
+namespace {
+
+Activity started(const std::string& id, const std::string& message, std::optional<std::string> label = std::nullopt) {
+    return Activity{.id = id, .role = "scout", .state = Activity::State::start, .message = message, .nodeId = std::nullopt, .label = label};
+}
+Activity ended(const std::string& id) { return Activity{.id = id, .role = "scout", .state = Activity::State::done, .message = "", .nodeId = std::nullopt, .label = std::nullopt}; }
+
+/// A second of Momo's voice, loud as speech.
+std::vector<int16_t> aSecondOfVoice() {
+    std::vector<int16_t> out(24000);
+    for (size_t i = 0; i < out.size(); i++) out[i] = int16_t(6000 * std::sin(2 * M_PI * 220 * double(i) / 24000));
+    return out;
+}
+
+}  // namespace
+
+TEST(presenceFollowsALiveTurn) {
+    using S = Presence::State;
+    Talking t(true);
+    t.goLive();
+    float loudest = 0;
+    std::vector<S> seen;
+    t.hear(whole(Sound().quiet(1).say("command").quiet(1.5)), [&] {
+        if (seen.empty() || seen.back() != t.shows()) seen.push_back(t.shows());
+        if (t.shows() == S::listening) loudest = std::max(loudest, t.voice.presence().level);
+    });
+    CHECK(seen == std::vector<S>({S::waiting, S::listening}), "waiting, then listening from the name (%zu states)", seen.size());
+    CHECK(loudest >= 0.5f && loudest <= 1, "the level follows the voice heard (%.2f at its loudest)", loudest);
+    CHECK(t.played() == std::vector<std::string>({"agent-chime.wav"}), "only the chime while the user speaks");
+    t.serviceSays(R"({"t":"over","turn":1})");
+    CHECK(t.shows() == S::sent, "sent as the turn is over");
+    CHECK(t.played() == std::vector<std::string>({"agent-chime.wav", "agent-sent.wav"}), "with the sent tone");
+    CHECK_EQ(t.voice.presence().userText, "");
+    t.serviceSays(R"({"t":"heard","turn":1,"text":"Show me more","final":false})");
+    CHECK_EQ(t.voice.presence().userText, "Show me more");
+    CHECK(!t.voice.presence().userFinal, "partial words");
+    t.serviceSays(R"({"t":"heard","turn":1,"text":"Show me more like this.","final":true})");
+    CHECK_EQ(t.voice.presence().userText, "Show me more like this.");
+    CHECK(t.voice.presence().userFinal, "the final words");
+    t.frame(0.3);
+    CHECK(t.shows() == S::sent, "sent for 0.4 s");
+    CHECK_EQ(host.plays.size(), size_t(2));
+    t.frame(0.15);
+    CHECK(t.shows() == S::thinking, "then thinking");
+    CHECK(t.played() == std::vector<std::string>({"agent-chime.wav", "agent-sent.wav", "agent-thinking.wav"}), "the loop as the sent tone ends");
+    if (host.plays.size() != 3) return;
+    host.plays[2].done(true);
+    t.frame(0.1);
+    CHECK(t.played().size() == 4 && t.played()[3] == "agent-thinking.wav", "the loop again once it has played");
+    if (host.plays.size() != 4) return;
+    t.voice.activity(started("a1", "Looking for films with a slow dolly zoom in them"));
+    t.frame(0.1);
+    CHECK(t.shows() == S::thinking, "a spoken turn thinks on while work starts, until Momo answers");
+    t.serviceSays(audioFrame("r1", aSecondOfVoice()));
+    CHECK(t.shows() == S::responding, "responding at the first sound of the reply");
+    CHECK(host.plays[3].sound->stopped, "the loop stops at once");
+    t.serviceSays(R"({"t":"text","id":"r1","text":"Here are three older films with one."})");
+    t.frame(0.5);
+    std::string half = t.voice.presence().momoText;
+    CHECK(!half.empty() && half.size() < std::string("Here are three older films with one.").size(), "Momo's words come as they are heard: \"%s\"", half.c_str());
+    CHECK(t.voice.presence().level >= 0.5f, "the level follows Momo's voice (%.2f)", t.voice.presence().level);
+    t.serviceSays(R"({"t":"done","id":"r1"})");
+    t.frame(0.6);
+    CHECK(!host.players.empty() && host.players[0]->finished, "finished");
+    host.players[0]->done(true);
+    t.frame();
+    CHECK(t.shows() == S::working, "working once Momo is done, while the work goes on");
+    CHECK_EQ(t.voice.presence().momoText, "Here are three older films with one.");
+    CHECK_EQ(t.voice.presence().doing, "Looking for films with a slow…");
+    t.voice.activity(started("a2", "Reading three articles about it", "Reading 3 articles"));
+    t.frame(1);
+    CHECK_EQ(t.voice.presence().doing, "Reading 3 articles");
+    size_t plays = host.plays.size(), players = host.players.size();
+    t.frame(5);
+    CHECK_EQ(host.plays.size(), plays);
+    CHECK_EQ(host.players.size(), players);
+    t.voice.activity(ended("a2"));
+    t.voice.activity(ended("a1"));
+    t.frame();
+    CHECK(t.shows() == S::waiting, "waiting once the work is done");
+    CHECK_EQ(host.plays.size(), plays);
+    t.serviceSays(R"({"t":"text","id":"r2","text":"I found two more.","kind":"results"})");
+    CHECK_EQ(t.voice.presence().userText, "");
+}
+
+TEST(presenceRevealsWordsWithoutSpacesAWholeCharacterAtATime) {
+    Talking t(true);
+    t.askLive();
+    const std::string said = "我在找更多关于老地图的东西。";
+    t.serviceSays(audioFrame("r1", aSecondOfVoice()));
+    t.serviceSays(Json::object().set("t", "text").set("id", "r1").set("text", said).dump());
+    t.frame(0.5);
+    std::string half = t.voice.presence().momoText;
+    CHECK(!half.empty() && half.size() < said.size(), "some of it, not all: \"%s\"", half.c_str());
+    CHECK(said.compare(0, half.size(), half) == 0 && (uint8_t(said[half.size()]) & 0xC0) != 0x80, "a prefix that ends on a whole character");
+}
+
+TEST(presenceQuietEndsThinking) {
+    using S = Presence::State;
+    Talking t(true);
+    t.askLive();
+    t.frame(0.5);
+    CHECK(t.shows() == S::thinking, "thinking");
+    CHECK_EQ(host.plays.size(), size_t(3));
+    if (host.plays.size() < 3) return;
+    t.serviceSays(R"({"t":"quiet","turn":2})");
+    CHECK(t.shows() == S::thinking, "quiet for another turn does not end this one");
+    t.serviceSays(R"({"t":"quiet","turn":1})");
+    CHECK(t.shows() == S::waiting, "waiting: no reply is coming");
+    CHECK(host.plays[2].sound->stopped, "the loop stopped");
+    host.plays[2].done(false);
+    t.frame(1);
+    CHECK_EQ(host.plays.size(), size_t(3));
+}
+
+TEST(presenceThinksNoLongerThanItsCap) {
+    Talking t(true);
+    t.askLive();
+    t.frame(0.5);
+    t.frame(Voice::longestThought - 0.2);
+    CHECK(t.shows() == Presence::State::thinking, "thinking");
+    t.frame(0.3);
+    CHECK(t.shows() == Presence::State::waiting, "not past the cap");
+}
+
+TEST(presenceNameWhileThinkingStopsTheLoop) {
+    Talking t(true);
+    t.askLive();
+    t.frame(0.5);
+    CHECK_EQ(host.plays.size(), size_t(3));
+    if (host.plays.size() < 3) return;
+    t.hear(Sound().quiet(0.5).say("hey-momo").quiet(0.5));
+    CHECK(t.shows() == Presence::State::listening, "listening to the new turn");
+    CHECK(host.plays[2].sound->stopped, "the loop stopped");
+    CHECK_EQ(t.liveSent("start").size(), size_t(2));
+}
+
+TEST(presenceARowPickIsSentThenThinksUntilTheWorkStarts) {
+    using S = Presence::State;
+    Talking t(true);
+    t.goLive();
+    t.hear(Sound().quiet(0.5));
+    t.voice.asked("How did Hitchcock use the dolly zoom?");
+    t.frame();
+    CHECK(t.shows() == S::sent, "sent");
+    CHECK(t.played() == std::vector<std::string>({"agent-sent.wav"}), "with the sent tone");
+    if (host.plays.size() != 1) return;
+    CHECK_EQ(t.voice.presence().userText, "How did Hitchcock use the dolly zoom?");
+    CHECK(t.voice.presence().userFinal, "as asked");
+    t.frame(0.5);
+    CHECK(t.shows() == S::thinking, "thinking");
+    CHECK(t.played() == std::vector<std::string>({"agent-sent.wav", "agent-thinking.wav"}), "with the loop");
+    t.voice.activity(started("a1", "Looking for dolly zooms", "Finding dolly zooms"));
+    t.frame();
+    CHECK(t.shows() == S::working, "working once the work starts");
+    CHECK_EQ(t.voice.presence().doing, "Finding dolly zooms");
+    CHECK(host.plays.size() == 2 && host.plays[1].sound->stopped, "the loop stopped");
+
+    t.voice.activity(ended("a1"));
+    t.voice.asked("Show me a dolly zoom on film");
+    t.voice.activity(started("a2", "Looking for films"));
+    t.frame(0.2);
+    CHECK(t.shows() == S::sent, "sent for its while, though the work started at once");
+    t.frame(0.3);
+    CHECK(t.shows() == S::working, "then working, without thinking");
+    CHECK_EQ(t.played().size(), size_t(3));
+}
+
+TEST(presenceMutedMakesNoSoundYetTakesTheTime) {
+    using S = Presence::State;
+    Talking t(Made{.muted = true});
+    t.goLive();
+    t.hear(whole(Sound().quiet(1).say("command").quiet(1.5)));
+    CHECK(t.shows() == S::listening, "listening, without a chime");
+    t.serviceSays(R"({"t":"over","turn":1})");
+    t.frame(0.5);
+    CHECK(t.shows() == S::thinking, "thinking, without the tone or the loop");
+    t.serviceSays(audioFrame("r1", aSecondOfVoice()));
+    t.serviceSays(R"({"t":"text","id":"r1","text":"Here are three."})");
+    t.serviceSays(R"({"t":"done","id":"r1"})");
+    t.frame(0.5);
+    CHECK(t.shows() == S::responding, "responding for as long as Momo's voice lasts");
+    CHECK(t.voice.presence().level >= 0.5f, "with the level of the voice (%.2f)", t.voice.presence().level);
+    t.frame(0.4);
+    CHECK(t.shows() == S::responding, "still");
+    t.frame(0.2);
+    CHECK(t.shows() == S::waiting, "then waiting");
+    CHECK_EQ(t.voice.presence().momoText, "Here are three.");
+    t.voice.asked("What else is like this?");
+    t.frame(1);
+    CHECK_EQ(host.plays.size(), size_t(0));
+    CHECK_EQ(host.players.size(), size_t(0));
+
+    Talking old(Made{.live = false, .muted = true});
+    old.hear(Sound().quiet(1).say("command").quiet(2));
+    old.voice.say("Bringing more.");
+    old.frame();
+    CHECK_EQ(old.fetchesTo("/api/transcribe").size(), size_t(1));
+    CHECK_EQ(old.fetchesTo("/api/speak").size(), size_t(0));
+    CHECK_EQ(host.plays.size(), size_t(0));
+}
+
+TEST(liveOpensOnlyWhileTheHelloOffersIt) {
+    Talking t(Made{.live = false});
+    t.frame();
+    t.frame(10);
+    CHECK_EQ(host.sockets.size(), size_t(0));
+    Settings settings;
+    t.voice.joined(settings, true, true);
+    t.goLive();
+    if (host.sockets.empty()) return;
+    t.voice.joined(settings, true, false);
+    CHECK(host.sockets[0]->closed, "a hello without a live voice closes /live");
+    t.frame(10);
+    CHECK_EQ(host.sockets.size(), size_t(1));
+    t.hear(Sound().quiet(0.5).say("command").quiet(2));
+    CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(1));
+    CHECK_EQ(t.liveSent("start").size(), size_t(0));
+    t.voice.joined(settings, true, true);
+    t.frame();
+    CHECK_EQ(host.sockets.size(), size_t(2));
+    if (host.sockets.size() < 2) return;
+    host.sockets[1]->events.closed("status 404");
+    t.frame();
+    t.frame(4.9);
+    CHECK_EQ(host.sockets.size(), size_t(2));
+    t.frame(0.2);
+    CHECK_EQ(host.sockets.size(), size_t(3));
 }

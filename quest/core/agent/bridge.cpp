@@ -107,7 +107,7 @@ std::shared_ptr<Bridge> Bridge::fromFlags(OceanModel& model) {
 Bridge::Bridge(OceanModel& model, Address address, std::shared_ptr<Transport> transport, std::optional<std::string> dump)
     : model(model), client(std::move(address), std::move(transport)), dump(std::move(dump)), walk(Flags::integer("agentWalk")),
       keyboardTest(Flags::has("keyboardTest")) {
-    if (Flags::string("agentVoice").value_or("on") != "off") voice = std::make_unique<Voice>(client, [this] { return scene(); }, Flags::string("wakeClip"));
+    if (Flags::string("agentVoice").value_or("on") != "off") voice = std::make_unique<Voice>(client, [this] { return scene(); }, Flags::string("wakeClip"), Flags::has("mute"));
 }
 
 void Bridge::frame(double t) {
@@ -117,7 +117,7 @@ void Bridge::frame(double t) {
         std::visit(overloaded{
                        [&](Synced& s) {
                            synced(s.delta);
-                           if (voice) voice->joined(s.settings, s.voice);
+                           if (voice) voice->joined(s.settings, s.voice, s.live);
                        },
                        [&](Changed& c) {
                            if (Flags::has("agentLog")) {
@@ -126,7 +126,10 @@ void Bridge::frame(double t) {
                            }
                            changed(c.delta, c.set.origin.by == Origin::By::agent);
                        },
-                       [&](Activity& a) { activity(a); },
+                       [&](Activity& a) {
+                           activity(a);
+                           if (voice) voice->activity(a);
+                       },
                        [&](Say& s) {
                            logLine("[agent] says: " + s.text);
                            if (voice) voice->say(s.text);
@@ -621,7 +624,7 @@ void Bridge::converse(int nodeID, const std::string& question) {
         model.arrive(moved.added);
         model.restyle();
     }
-    client.send(Outbound::ask(id, question));
+    if (client.send(Outbound::ask(id, question)) && voice) voice->asked(question);
     logLine("[agent] asked: " + question);
 }
 
@@ -642,22 +645,10 @@ void Bridge::showPresence() {
         if (!model.art || !model.lineMaterial) return;
         presenceView = std::make_unique<PresenceView>(model.art, *model.lineMaterial, model.root_);
     }
-    // Until the voice says what it is doing itself (WS17), it is read from what the voice shows now.
-    using S = Presence::State;
-    std::optional<Listener::State> state = voice->state();
-    presence.state = !state ? S::off
-                     : *state == Listener::State::hearing ? S::listening
-                     : *state == Listener::State::working ? S::thinking
-                     : *state == Listener::State::speaking ? S::responding
-                                                           : S::waiting;
-    presence.momoText = voice->saying();
-    presence.workingOn.reset();
+    presence = voice->presence();
     for (const auto& [id, t] : thinking) {
         auto p = trees.find(t.tree);
-        if (presence.state == S::waiting && p != trees.end() && standing(p->second)) {
-            presence.state = S::working;
-            presence.workingOn = t.node;
-        }
+        if (presence.state == Presence::State::working && p != trees.end() && standing(p->second)) presence.workingOn = t.node;
     }
     std::optional<Vec3> at;
     if (presence.workingOn) {
@@ -668,8 +659,10 @@ void Bridge::showPresence() {
 }
 
 bool Bridge::speaking() const {
-    // TODO(WS17): ask the new voice's own state. Until then: the user is recorded, or a reply is on its way or playing.
-    return voice && (voice->state() == Listener::State::hearing || !voice->saying().empty());
+    using S = Presence::State;
+    if (!voice) return false;
+    S state = voice->presence().state;
+    return state == S::listening || state == S::sent || state == S::thinking || state == S::responding;
 }
 
 void Bridge::goOn() {
@@ -774,7 +767,7 @@ bool Bridge::askMark(int nodeID, const Mark& mark) {
     auto s = p->service.find(nodeID);
     if (s == p->service.end()) return true;
     std::string need = "About this part of it: " + OceanModel::described(mark);
-    client.send(Outbound::ask(NodeId{s->second}, need));
+    if (client.send(Outbound::ask(NodeId{s->second}, need)) && voice) voice->asked(need);
     logLine("[agent] asked about a mark: " + OceanModel::described(mark));
     return true;
 }

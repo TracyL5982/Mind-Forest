@@ -382,3 +382,19 @@ TEST(listenerStreamsNothingOfTheNameAndThePauseAfterIt) {
           double(long(asked) - begins) / second);
     CHECK(begins <= long(asked), "and before the request (%.2f s after it)", double(begins - long(asked)) / second);
 }
+
+TEST(ownSoundsAreShortSoftAndApart) {
+    auto peak = [](const std::vector<float>& s, size_t from, size_t to) {
+        float most = 0;
+        for (size_t i = from; i < std::min(to, s.size()); i++) most = std::max(most, std::abs(s[i]));
+        return most;
+    };
+    std::vector<float> tone = sentTone(), loop = thinkingLoop(), ring = chime();
+    double toneSeconds = double(tone.size()) / Listener::rate, loopSeconds = double(loop.size()) / Listener::rate;
+    CHECK(toneSeconds >= 0.15 && toneSeconds <= 0.2, "the sent tone lasts %.2f s", toneSeconds);
+    CHECK(loopSeconds >= 1.2 && loopSeconds <= 2.4, "the thinking loop lasts %.2f s", loopSeconds);
+    CHECK(peak(tone, 0, tone.size()) <= peak(ring, 0, ring.size()), "the tone no louder than the chime");
+    CHECK(peak(loop, 0, loop.size()) < peak(tone, 0, tone.size()) / 2, "the loop quieter than the tone (%.3f)", peak(loop, 0, loop.size()));
+    CHECK(peak(loop, 0, 16) < 0.001f && peak(loop, loop.size() - second / 20, loop.size()) < 0.001f, "the loop begins and ends in silence, so it repeats without a seam");
+    CHECK(tone != std::vector<float>(ring.begin(), ring.begin() + long(std::min(ring.size(), tone.size()))), "the tone is not the chime");
+}

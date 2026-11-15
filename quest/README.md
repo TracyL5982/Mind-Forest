@@ -78,11 +78,18 @@ where it is while you look about and glides round once you have turned away from
 `-presenceDemo` plays every state on a 34 s loop with made-up words, without the service. The first time, the headset
 asks to use the microphone; refused, it does
 not ask again until the app starts again, and replies are still spoken. A microphone that stops is opened again after
-1, 2, 4, 8, then every 15 s. When the service has a live voice (its `/live` socket answers `ready`), the words go
-another way: after the name the microphone streams to the service until it says your turn is over, and Momo's own
-voice streams back and plays as it arrives. Saying "hey Momo" while Momo speaks stops it and starts a new turn, except
-while what it is saying names itself. The log says how long after your last word the turn ended and Momo answered.
-Without `/live`, or while it is closed (it is tried again every 5 s), everything is as above. `-agentVoice off`
+1, 2, 4, 8, then every 15 s. When the service has a live voice (hello's `live`), the headset opens its `/live`
+socket and the words go another way: after the name the microphone streams to the service until it says your turn
+is over, and Momo's own voice streams back and plays as it arrives. Saying "hey Momo" while Momo speaks stops it and
+starts a new turn, except while what it is saying names itself. The log says how long after your last word the turn
+ended and Momo answered. Without `/live`, or while it is closed (it is tried again every 5 s while hello offers it),
+everything is as above. The voice says what it is doing and the orb shows it: waiting, listening from the name,
+sent for 0.4 s as your turn ends, thinking until the first sound of Momo's answer (or word that none is coming, at
+most 20 s), responding while Momo speaks, working while the agent works after it, then waiting. Besides the chime the
+headset makes two sounds of its own: a short falling tone as your turn is sent, and a quiet loop while Momo thinks.
+Nothing sounds while the agent works. A question picked or typed under a card is sent and thought about the same way,
+until Momo answers or the work starts. `-mute` silences every sound the app makes, Momo's voice too, and the orb still
+follows the voice it would have heard. `-agentVoice off`
 turns it off; `-wakeClip <file.wav>` (16 kHz mono 16-bit) is heard in place of the microphone; `-micSource
 communication` reads Android's echo-cancelled source instead of the recognizer's. The listener is sherpa-onnx's
 keyword spotter, which `tools/fetch-voice.sh` fetches into `quest/vendor/` (the builds run it); `core/agent/test/run.sh`

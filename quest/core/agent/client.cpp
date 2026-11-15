@@ -186,6 +186,7 @@ void Client::receive(Inbound message, std::vector<Event>& events) {
                            .undo = std::move(hello.undo),
                            .voice = hello.voice,
                            .hearing = hello.hearing,
+                           .live = hello.live,
                        });
                    },
                    [&](Change& change) {

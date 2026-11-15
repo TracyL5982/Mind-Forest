@@ -68,6 +68,7 @@ struct Synced {
     std::optional<std::string> undo;
     bool voice = false;
     Hearing hearing = Hearing::browser;
+    bool live = false;
 };
 
 /// A change set is in the mirror.

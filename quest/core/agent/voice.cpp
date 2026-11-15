@@ -24,12 +24,17 @@ struct Voice::Ears {
     std::atomic<Listener::State> state{Listener::State::waiting};
     /// Sound has come (on the Quest, only once the user allows the microphone), and the microphone has not failed since.
     std::atomic<bool> live{false};
+    /// The RMS of the last sound heard.
+    std::atomic<float> loudness{0};
 
     explicit Ears(std::unique_ptr<Spotter> spotter) : listener(std::make_unique<Listener>(std::move(spotter))) {}
 
     /// The sound thread.
     void heard(const float* samples, size_t count) {
         std::lock_guard<std::mutex> h(hearing);
+        double sum = 0;
+        for (size_t i = 0; i < count; i++) sum += double(samples[i]) * samples[i];
+        if (count) loudness = float(std::sqrt(sum / double(count)));
         std::vector<Listener::Event> out;
         std::vector<std::unique_ptr<Spotter>> retired = apply(out);
         double now = mediaTime();
@@ -152,6 +157,42 @@ std::optional<std::vector<int16_t>> samplesOf(const std::string& base64) {
     return out;
 }
 
+/// Loudness for the presence, 0 to 1, from an RMS in -1...1: by decibels, so speech near the microphone or Momo's
+/// voice (about -30 to -15 dBFS) sits at 0.5 to 0.9, and the room's hiss near 0.
+float levelOf(float rms) {
+    float db = 20 * std::log10(std::max(rms, 1e-6f));
+    return std::clamp((db + 48) / 36, 0.f, 1.f);
+}
+
+/// The first `share` of the text, ending on a whole word, or on a whole character in words without spaces, as Chinese.
+std::string revealed(const std::string& text, double share) {
+    if (share >= 1) return text;
+    size_t upTo = size_t(std::max(0.0, share) * double(text.size()));
+    if (text.find(' ') == std::string::npos) {
+        while (upTo > 0 && (uint8_t(text[upTo]) & 0xC0) == 0x80) upTo--;
+        return text.substr(0, upTo);
+    }
+    size_t space = text.rfind(' ', upTo);
+    return space == std::string::npos ? "" : text.substr(0, space);
+}
+
+/// What the presence says the agent is doing: the activity's label, or the first six words of its message.
+std::string doingOf(const Activity& a) {
+    if (a.label && !a.label->empty()) return *a.label;
+    std::string out;
+    int words = 0;
+    size_t at = 0;
+    while (at < a.message.size()) {
+        size_t begin = a.message.find_first_not_of(' ', at);
+        if (begin == std::string::npos) break;
+        size_t end = std::min(a.message.find(' ', begin), a.message.size());
+        if (words == 6) return out + "…";
+        out += (words++ ? " " : "") + a.message.substr(begin, end - begin);
+        at = end;
+    }
+    return out;
+}
+
 std::string titled(const std::string& name) {
     std::string out = name;
     bool start = true;
@@ -164,12 +205,36 @@ std::string titled(const std::string& name) {
 
 }  // namespace
 
-Voice::Voice(Client& client, std::function<Scene()> scene, std::optional<std::string> clip)
-    : client(client), scene(std::move(scene)), clip(std::move(clip)) {}
+/// Momo's voice played to no one. It ends once the voice has had as long as it takes to hear what was written, which the
+/// voice tells it (`caughtUp`).
+class Voice::Unheard : public platform::Stream {
+public:
+    explicit Unheard(std::function<void(bool)> done) : done(std::move(done)) {}
+    void write(const int16_t*, size_t) override {}
+    void finish() override { finished = true; }
+    void stop() override { end(false); }
+    void caughtUp() {
+        if (finished) end(true);
+    }
+
+private:
+    std::function<void(bool)> done;
+    bool finished = false;
+    void end(bool played) {
+        if (!done) return;
+        auto d = std::move(done);
+        done = nullptr;
+        d(played);
+    }
+};
+
+Voice::Voice(Client& client, std::function<Scene()> scene, std::optional<std::string> clip, bool muted)
+    : client(client), scene(std::move(scene)), clip(std::move(clip)), muted(muted) {}
 
 Voice::~Voice() {
     if (microphone) microphone->stop();
     if (sound) sound->stop();
+    if (auto* t = std::get_if<Thinking>(&turn); t && t->loop) t->loop->stop();
     if (sounding) sounding->player->stop();
     if (auto* c = std::get_if<Connecting>(&link)) c->socket->close();
     if (auto* r = std::get_if<Ready>(&link)) r->socket->close();
@@ -182,10 +247,19 @@ std::optional<Listener::State> Voice::state() const {
 
 std::string Voice::name() const { return titled(spelled); }
 
-void Voice::joined(const Settings& settings, bool speaks) {
+void Voice::joined(const Settings& settings, bool speaks, bool live) {
     serviceSpeaks = speaks;
+    liveOffered = live;
     wanted = settings.agentName;
-    if (std::holds_alternative<Unopened>(link)) link = Shut{};
+    // Work going on before a reconnect may have ended unseen.
+    working.clear();
+    if (live) {
+        if (auto* shut = std::get_if<Shut>(&link)) shut->retryAt = 0;
+    } else {
+        if (auto* c = std::get_if<Connecting>(&link)) c->socket->close();
+        if (auto* r = std::get_if<Ready>(&link)) r->socket->close();
+        liveDown("the service has no live voice", clock);
+    }
     if (!started) start();
     else if (ears && wanted != spelled && wanted != refused) respell();
 }
@@ -204,6 +278,8 @@ void Voice::start() {
     }
     modelDir = tokens.substr(0, tokens.rfind('/'));
     chimePath = platform::dataDirectory() + "/agent-chime.wav";
+    sentPath = platform::dataDirectory() + "/agent-sent.wav";
+    loopPath = platform::dataDirectory() + "/agent-thinking.wav";
     struct Made {
         std::shared_ptr<const Vocabulary> vocabulary;
         std::unique_ptr<Spotter> spotter;
@@ -211,11 +287,13 @@ void Voice::start() {
         std::string why;
     };
     auto made = std::make_shared<Made>();
-    std::string dir = modelDir, name = wanted, chimeFile = chimePath;
+    std::string dir = modelDir, name = wanted, chimeFile = chimePath, sentFile = sentPath, loopFile = loopPath;
     std::optional<std::string> clipFile = clip;
     Async::run(
-        [made, dir, name, chimeFile, clipFile] {
+        [made, dir, name, chimeFile, sentFile, loopFile, clipFile] {
             platform::writeFile(chimeFile, wavFile(chime()));
+            platform::writeFile(sentFile, wavFile(sentTone()));
+            platform::writeFile(loopFile, wavFile(thinkingLoop()));
             if (clipFile) {
                 std::optional<std::string> bytes = platform::readFile(*clipFile);
                 made->clip = bytes ? readWav(*bytes) : std::nullopt;
@@ -316,7 +394,7 @@ void Voice::say(const std::string& text) {
         logLine("[voice] the live voice says it");
         return;
     }
-    if (!serviceSpeaks) return;
+    if (!serviceSpeaks || muted) return;
     pending = text;
     if (ears) {
         send(AskToSpeak{});
@@ -371,6 +449,12 @@ void Voice::transcribe(const std::string& wav) {
 }
 
 void Voice::frame(double now) {
+    double dt = std::max(0.0, now - clock);
+    clock = now;
+    if (sounding) {
+        sounding->played = std::min(sounding->played + dt, double(sounding->written) / sounding->rate);
+        if (sounding->unheard && sounding->played * sounding->rate >= double(sounding->written)) sounding->unheard->caughtUp();
+    }
     std::vector<Listener::Event> events;
     Listener::Busy busy;
     if (ears) {
@@ -383,14 +467,16 @@ void Voice::frame(double now) {
         std::visit(overloaded{
                        [&](Listener::Woke& w) {
                            logLine("[voice] heard " + w.keyword);
-                           send(ChimeStarted{});
                            std::weak_ptr<Inbox> box = inbox;
-                           platform::playSound(chimePath, [box](bool) {
-                               if (auto b = box.lock()) {
-                                   std::lock_guard<std::mutex> g(b->lock);
-                                   b->chimesEnded++;
-                               }
-                           });
+                           if (play(chimePath, [box](bool) {
+                                   if (auto b = box.lock()) {
+                                       std::lock_guard<std::mutex> g(b->lock);
+                                       b->chimesEnded++;
+                                   }
+                               })) {
+                               send(ChimeStarted{});
+                           }
+                           turnTo(Listening{});
                            if (w.streaming) beginTurn();
                        },
                        [&](Listener::Streamed& piece) {
@@ -403,13 +489,16 @@ void Voice::frame(double now) {
                            logLine("[voice] a minute went by without the turn being over, so it stops streaming");
                            sendLive(Json::object().set("t", "end"));
                            streaming.reset();
+                           turnTo(Sent{clock});
                        },
                        [&](Listener::Recorded& r) {
                            logLine(fmt("[voice] recorded %.1f s, sending it to be transcribed", r.seconds));
                            transcribe(r.wav);
+                           turnTo(Sent{clock, muted || !serviceSpeaks});
                        },
                        [&](Listener::NothingSaid&) {
                            logLine("[voice] nothing was said after the name");
+                           turnTo(Idle{});
                            if (!streaming) return;
                            sendLive(Json::object().set("t", "cancel"));
                            streaming.reset();
@@ -428,6 +517,7 @@ void Voice::frame(double now) {
     std::vector<int> played;
     std::vector<FromLive> fromLive;
     std::vector<int> streamsPlayed;
+    std::vector<std::pair<int, bool>> loopsEnded;
     int chimesEnded = 0;
     bool failed = false, refused = false;
     {
@@ -437,6 +527,7 @@ void Voice::frame(double now) {
         played.swap(inbox->played);
         fromLive.swap(inbox->live);
         streamsPlayed.swap(inbox->streamsPlayed);
+        loopsEnded.swap(inbox->loopsEnded);
         std::swap(chimesEnded, inbox->chimesEnded);
         std::swap(failed, inbox->microphoneFailed);
         std::swap(refused, inbox->microphoneRefused);
@@ -468,29 +559,41 @@ void Voice::frame(double now) {
         std::string text = t.text;
         size_t first = text.find_first_not_of(" \t\n"), last = text.find_last_not_of(" \t\n");
         text = first == std::string::npos ? "" : text.substr(first, last - first + 1);
+        bool sent = false;
         if (!t.ok) logLine("[voice] the recording could not be turned into text (" + t.why + ")");
         else if (text.empty()) logLine("[voice] nothing was heard after the name");
         else if (!client.send(Outbound::utter(text, true, scene()))) logLine("[voice] not connected, so \"" + text + "\" was not sent");
-        else logLine("[voice] said: " + text);
+        else sent = true;
+        if (sent) {
+            logLine("[voice] said: " + text);
+            shown.userText = text;
+            shown.userFinal = true;
+        } else {
+            endThinking();
+        }
         send(Done{});
     }
     for (const Fetched& f : fetched) {
         if (f.reply != reply) continue;
         if (!f.ok) {
             logLine("[voice] the reply could not be spoken (" + f.why + ")");
+            endThinking();
             send(ReplyEnded{});
             spoken.clear();
             continue;
         }
         std::weak_ptr<Inbox> box = inbox;
         int number = f.reply;
-        sound = platform::playSound(f.file, [box, number](bool) {
+        sound = play(f.file, [box, number](bool) {
             if (auto b = box.lock()) {
                 std::lock_guard<std::mutex> g(b->lock);
                 b->played.push_back(number);
             }
         });
-        if (sound) logLine("[voice] speaking: " + spoken);
+        if (!sound) continue;
+        logLine("[voice] speaking: " + spoken);
+        if (awaiting()) turnTo(Idle{});
+        shown.momoText = spoken;
     }
     for (int number : played) {
         if (number != reply) continue;
@@ -507,6 +610,7 @@ void Voice::frame(double now) {
     }
     for (int number : streamsPlayed) {
         if (!sounding || sounding->number != number) continue;
+        shown.momoText = sounding->text;
         sounding.reset();
         if (live && !live->player && !live->held.empty() && startPlayer(*live)) continue;
         send(ReplyEnded{});
@@ -516,7 +620,25 @@ void Voice::frame(double now) {
         }
         logLine("[voice] done speaking");
     }
-    if (auto* shut = std::get_if<Shut>(&link); shut && now >= shut->retryAt && client.state() == Client::State::live) openLive(now);
+    for (auto [number, played] : loopsEnded) {
+        auto* t = std::get_if<Thinking>(&turn);
+        if (t && t->number == number && played) startLoop(*t);
+    }
+    if (auto* sent = std::get_if<Sent>(&turn); sent && now - sent->at >= sentFor) {
+        Thinking next;
+        next.since = now;
+        next.endsWithWork = sent->endsWithWork;
+        if (sent->settled) turnTo(Idle{});
+        else turnTo(std::move(next));
+    }
+    if (auto* t = std::get_if<Thinking>(&turn); t && now - t->since >= longestThought) {
+        logLine(fmt("[voice] no answer came in %.0f s, so Momo stops thinking", longestThought));
+        turnTo(Idle{});
+    }
+    if (auto* shut = std::get_if<Shut>(&link); shut && liveOffered && now >= shut->retryAt && client.state() == Client::State::live) {
+        openLive(now);
+    }
+    show();
     if (Flags::has("agentLog") && busy.heard - busyLogged >= 60) {
         busyLogged = busy.heard;
         logLine(fmt("[voice] spotting takes %.1f ms of CPU a second of sound (%.0f s heard)", 1000 * busy.spotting / busy.heard, busy.heard));
@@ -545,7 +667,9 @@ void Voice::openLive(double now) {
             std::string t = m["t"].string("");
             if (t == "ready") deliver(LiveReady{m["rate"].integer(24000)});
             else if (t == "over") deliver(LiveOver{m["turn"].integer(0)});
-            else if (t == "text") deliver(LiveText{m["id"].string(""), m["text"].string("")});
+            else if (t == "heard") deliver(LiveHeard{m["turn"].integer(0), m["text"].string(""), m["final"].boolean(false)});
+            else if (t == "quiet") deliver(LiveQuiet{m["turn"].integer(0)});
+            else if (t == "text") deliver(LiveText{m["id"].string(""), m["text"].string(""), m["kind"].string("") == "results"});
             else if (t == "done") deliver(LiveDone{m["id"].string("")});
             else if (t == "failed") deliver(LiveFailed{m["why"].string("")});
             else if (t == "audio") {
@@ -576,30 +700,32 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                        send(SetMode{Listener::Mode::stream});
                        logLine(fmt("[voice] Momo's live voice is on (%d Hz)", rate));
                    },
-                   [&](LiveClosed& c) {
-                       bool wasReady = std::holds_alternative<Ready>(link);
-                       link = Shut{now + liveRetry};
-                       if (wasReady || c.why != liveWhy) logLine("[voice] the live voice is off (" + c.why + "), so the headset transcribes and speaks as before");
-                       liveWhy = c.why;
-                       if (!wasReady) return;
-                       send(SetMode{Listener::Mode::record});
-                       endTurn();
-                       hushLive();
-                   },
+                   [&](LiveClosed& c) { liveDown(c.why, now); },
                    [&](LiveOver& o) {
                        if (streaming != o.turn) return;
                        endTurn();
+                       turnTo(Sent{now});
                        if (lastWord <= 0) return;
                        logLine(fmt("[voice] turn %d over %.2f s after the last word", o.turn, mediaTime() - lastWord));
                        answering = lastWord;
+                   },
+                   [&](LiveHeard& h) {
+                       if (h.turn != wordsOf) return;
+                       shown.userText = h.text;
+                       shown.userFinal = h.final;
+                   },
+                   [&](LiveQuiet& q) {
+                       if (q.turn == wordsOf) endThinking();
                    },
                    [&](LiveFailed& f) {
                        logLine("[voice] the live voice failed: " + f.why);
                        endTurn();
                        hushLive();
+                       if (!std::holds_alternative<Idle>(turn)) turnTo(Idle{});
                    },
                    [&](LiveAudio& a) {
                        if (streaming || !std::holds_alternative<Ready>(link)) return;
+                       if (awaiting()) turnTo(Idle{});
                        LiveReply& r = liveReply(a.id);
                        if (!r.player && sounding) {
                            r.held.insert(r.held.end(), a.pcm.begin(), a.pcm.end());
@@ -607,7 +733,7 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                        }
                        if (!r.player && !startPlayer(r)) return;
                        if (!sounding || sounding->number != r.player) return;
-                       sounding->player->write(a.pcm.data(), a.pcm.size());
+                       sounding->write(a.pcm.data(), a.pcm.size());
                        if (answering) {
                            logLine(fmt("[voice] Momo answered %.2f s after the last word", mediaTime() - *answering));
                            answering.reset();
@@ -615,8 +741,15 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                    },
                    [&](LiveText& t) {
                        if (streaming) return;
+                       bool begins = !live || live->id != t.id;
                        LiveReply& r = liveReply(t.id);
+                       r.text = t.text;
                        spoken = t.text;
+                       if (sounding && sounding->number == r.player) sounding->text = t.text;
+                       if (begins && t.results && std::holds_alternative<Idle>(turn)) {
+                           shown.userText.clear();
+                           shown.userFinal = false;
+                       }
                        bool interruptible = lower(t.text).find(lower(spelled)) == std::string::npos;
                        if (interruptible == r.interruptible) return;
                        r.interruptible = interruptible;
@@ -643,10 +776,11 @@ void Voice::beginTurn() {
     if (!std::holds_alternative<Ready>(link)) {
         logLine("[voice] the live voice closed as the name was heard, so nothing is sent");
         send(TurnOver{});
+        turnTo(Idle{});
         return;
     }
     hushLive();
-    streaming = ++turns;
+    streaming = wordsOf = ++turns;
     lastWord = 0;
     answering.reset();
     sendLive(Json::object().set("t", "start").set("turn", *streaming).set("scene", sceneJson(scene())));
@@ -673,22 +807,135 @@ bool Voice::startPlayer(LiveReply& r) {
     if (!ready) return false;
     std::weak_ptr<Inbox> box = inbox;
     int number = r.player = ++players;
-    platform::StreamRef player = platform::playStream(ready->rate, [box, number](bool) {
+    auto played = [box, number](bool) {
         if (auto b = box.lock()) {
             std::lock_guard<std::mutex> g(b->lock);
             b->streamsPlayed.push_back(number);
         }
-    });
+    };
+    std::shared_ptr<Unheard> unheard = muted ? std::make_shared<Unheard>(played) : nullptr;
+    platform::StreamRef player = unheard ? unheard : platform::playStream(ready->rate, played);
     if (!player) {
         logLine("[voice] Momo's voice could not be played");
         return false;
     }
-    sounding = Sounding{number, player};
+    sounding = Sounding{};
+    sounding->number = number;
+    sounding->player = player;
+    sounding->unheard = unheard;
+    sounding->rate = ready->rate;
+    sounding->text = r.text;
+    shown.momoText.clear();
     send(ReplyStreams{r.interruptible});
-    if (!r.held.empty()) player->write(r.held.data(), r.held.size());
+    if (!r.held.empty()) sounding->write(r.held.data(), r.held.size());
     r.held.clear();
     if (r.finished) player->finish();
     return true;
+}
+
+void Voice::Sounding::write(const int16_t* samples, size_t count) {
+    player->write(samples, count);
+    written += count;
+    int fiftieth = std::max(1, rate / 50);
+    for (size_t i = 0; i < count; i++) {
+        double v = samples[i] / 32768.0;
+        sum += v * v;
+        if (++summed < fiftieth) continue;
+        loudness.push_back(float(std::sqrt(sum / summed)));
+        sum = 0;
+        summed = 0;
+    }
+}
+
+void Voice::liveDown(const std::string& why, double now) {
+    bool wasReady = std::holds_alternative<Ready>(link);
+    link = Shut{now + liveRetry};
+    if (wasReady || why != liveWhy) logLine("[voice] the live voice is off (" + why + "), so the headset transcribes and speaks as before");
+    liveWhy = why;
+    if (!wasReady) return;
+    send(SetMode{Listener::Mode::record});
+    endTurn();
+    hushLive();
+    if (!std::holds_alternative<Idle>(turn)) turnTo(Idle{});
+}
+
+// MARK: - What it shows and its own sounds
+
+platform::SoundRef Voice::play(const std::string& path, std::function<void(bool)> done) {
+    if (muted) return nullptr;
+    return platform::playSound(path, std::move(done));
+}
+
+void Voice::turnTo(Turn next) {
+    if (auto* t = std::get_if<Thinking>(&turn); t && t->loop) t->loop->stop();
+    turn = std::move(next);
+    if (std::holds_alternative<Listening>(turn)) {
+        shown.userText.clear();
+        shown.userFinal = false;
+        shown.momoText.clear();
+    }
+    if (std::holds_alternative<Sent>(turn)) play(sentPath, [](bool) {});
+    if (auto* t = std::get_if<Thinking>(&turn)) startLoop(*t);
+}
+
+void Voice::startLoop(Thinking& t) {
+    std::weak_ptr<Inbox> box = inbox;
+    int number = t.number = ++loops;
+    t.loop = play(loopPath, [box, number](bool played) {
+        if (auto b = box.lock()) {
+            std::lock_guard<std::mutex> g(b->lock);
+            b->loopsEnded.emplace_back(number, played);
+        }
+    });
+}
+
+void Voice::endThinking() {
+    if (auto* sent = std::get_if<Sent>(&turn)) sent->settled = true;
+    else if (std::holds_alternative<Thinking>(turn)) turnTo(Idle{});
+}
+
+void Voice::asked(const std::string& question) {
+    wordsOf = 0;
+    shown.momoText.clear();
+    shown.userText = question;
+    shown.userFinal = true;
+    turnTo(Sent{clock, true});
+}
+
+void Voice::activity(const Activity& a) {
+    std::erase_if(working, [&](const Activity& w) { return w.id == a.id; });
+    if (a.state != Activity::State::start) return;
+    working.push_back(a);
+    bool endsWithWork = std::visit(overloaded{
+                                       [](const Sent& s) { return s.endsWithWork; },
+                                       [](const Thinking& t) { return t.endsWithWork; },
+                                       [](const auto&) { return false; },
+                                   },
+                                   turn);
+    if (endsWithWork) endThinking();
+}
+
+void Voice::show() {
+    using S = Presence::State;
+    bool speaks = sounding || sound;
+    shown.state = std::visit(overloaded{
+                                 [](const Listening&) { return S::listening; },
+                                 [](const Sent&) { return S::sent; },
+                                 [](const Thinking&) { return S::thinking; },
+                                 [&](const Idle&) { return speaks ? S::responding : !working.empty() ? S::working : state() ? S::waiting : S::off; },
+                             },
+                             turn);
+    shown.level = 0;
+    if (shown.state == S::listening && ears) shown.level = levelOf(ears->loudness);
+    if (shown.state == S::responding && sounding) {
+        size_t at = size_t(sounding->played * 50);
+        if (at < sounding->loudness.size()) shown.level = levelOf(sounding->loudness[at]);
+        double heard = sounding->written ? sounding->played * sounding->rate / double(sounding->written) : 0;
+        // More audio than words may have come, so what is shown only grows.
+        std::string words = revealed(sounding->text, heard);
+        if (words.size() > shown.momoText.size()) shown.momoText = words;
+    }
+    shown.doing = working.empty() ? "" : doingOf(working.back());
 }
 
 Voice::LiveReply& Voice::liveReply(const std::string& id) {

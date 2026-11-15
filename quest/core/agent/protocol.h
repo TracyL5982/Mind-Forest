@@ -202,6 +202,8 @@ struct Activity {
     State state = State::start;
     std::string message;
     std::optional<NodeId> nodeId;
+    /// A few words on the step, for showing; `message` stands in when the service gives none.
+    std::optional<std::string> label;
 };
 
 /// Who should turn speech into text: the service (record and POST /api/transcribe) or the client's own recognizer.
@@ -219,6 +221,8 @@ struct Hello {
     /// Whether GET /api/speak reads replies aloud.
     bool voice = false;
     Hearing hearing = Hearing::browser;
+    /// Whether Momo's live voice answers on /live.
+    bool live = false;
 };
 struct Change {
     ChangeSet set;

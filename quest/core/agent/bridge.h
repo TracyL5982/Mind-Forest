@@ -146,7 +146,7 @@ private:
     };
     std::optional<Going> going;
     void goOn();
-    /// Whether the user or Momo is speaking: the only thing the bridge asks of the voice.
+    /// Whether the user is heard, Momo thinks about what they said, or Momo speaks.
     bool speaking() const;
     /// Brings a card of the standing tree into view the way hands go to one: a card that leads a layer stands on it, any
     /// other opens on its group's layer, which stands first, each card on the way leading its own layer.
