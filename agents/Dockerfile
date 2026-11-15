@@ -6,6 +6,8 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.json ./
 COPY src ./src
+# The core measures text with the web client's own card code.
+COPY client/js ./client/js
 COPY starter ./starter
 ENV MIND_PALACE_HOSTED=1 \
     MIND_PALACE_DATA=/data \

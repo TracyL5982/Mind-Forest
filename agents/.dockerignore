@@ -2,5 +2,6 @@
 !package.json
 !package-lock.json
 !tsconfig.json
-!src/**
-!starter/**
+!src
+!starter
+!client/js
