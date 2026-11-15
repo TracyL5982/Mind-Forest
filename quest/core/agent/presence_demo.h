@@ -1,4 +1,4 @@
-// `-presenceDemo`: Momo's presence going through every state on a 30 s loop, with made-up words and voice, so its look
+// `-presenceDemo`: Momo's presence going through every state on a 34 s loop, with made-up words and voice, so its look
 // and motion can be judged without the service. Working, it looks to the open card when a tree stands (`-cards`).
 // Once a loop it logs what the view took a frame on the frame thread.
 #pragma once
@@ -20,7 +20,7 @@ public:
 
     void frame(double now);
 
-    static constexpr double loop = 30;
+    static constexpr double loop = 34;
     /// What the voice would say `t` s into the loop, written into `p` (its words reuse their room).
     static void at(double t, Presence& p);
 

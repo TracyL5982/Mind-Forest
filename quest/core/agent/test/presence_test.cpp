@@ -43,9 +43,15 @@ Presence say(S state, std::string user = "", std::string momo = "", bool final =
     return p;
 }
 
+Presence doing(std::string what, std::string momo = "Because.") {
+    Presence p = say(S::working, "", std::move(momo));
+    p.doing = std::move(what);
+    return p;
+}
+
 /// Each character a centimetre wide, so a 20 cm line holds 20.
 Caption caption() {
-    return Caption([](const std::string& s) { return 0.01f * float(s.size()); }, 0.2f);
+    return Caption([](const std::string& s, Speaker) { return 0.01f * float(s.size()); }, 0.2f);
 }
 
 double clock = 0;
@@ -240,7 +246,7 @@ TEST(theHintShowsAtFirstAndAfterAWakeWithNothingSaid) {
     Caption c = caption();
     run(c, say(S::waiting), 0.5);
     auto rest = resting(c);
-    CHECK(rest.size() == 1 && rest[0]->text == "Say “Hey Momo”" && rest[0]->who == Speaker::aside, "the hint at first");
+    CHECK(rest.size() == 1 && rest[0]->text == "Say “Hey Momo”" && rest[0]->who == Speaker::status, "the hint at first");
     run(c, say(S::waiting), Caption::hintFor + 0.5);
     CHECK(c.lines().empty(), "the hint goes after %g s", Caption::hintFor);
     run(c, say(S::listening), 2);
@@ -261,6 +267,58 @@ TEST(theNextTurnPushesTheLastReplyUpAndOut) {
     CHECK(rest.size() == 2 && rest[0]->who == Speaker::user && rest[1]->who == Speaker::user, "the new question fills both lines");
     const Caption::Line* old = shown(c, "room stretches.");
     CHECK(!old || (old->toOpacity == 0 && old->y > rest[0]->y), "the reply's line rises out above them");
+}
+
+TEST(workingSaysWhatTheAgentIsDoingUnderMomosLastWords) {
+    Caption c = caption();
+    run(c, say(S::listening, "Why?"), 0.3);
+    run(c, say(S::responding, "Why?", "Because."), 1);
+    run(c, doing("Searching films"), 1);
+    auto rest = resting(c);
+    CHECK(rest.size() == 2 && rest[0]->text == "Because." && rest[1]->text == "Searching films", "Momo's words over what it is doing");
+    CHECK(rest.size() == 2 && rest[1]->who == Speaker::status, "what it is doing is set as status, not speech");
+    run(c, doing("Searching films"), Caption::linger);
+    rest = resting(c);
+    CHECK(rest.size() == 1 && rest[0]->text == "Searching films", "once Momo's words have stayed their while, only what it is doing");
+}
+
+TEST(whatTheAgentIsDoingRollsToTheNextWithoutTheTwoStandingTogether) {
+    Caption c = caption();
+    run(c, say(S::listening, "Why?"), 0.3);
+    run(c, say(S::responding, "Why?", "Because."), 1);
+    run(c, doing("Searching films"), 1);
+    const Caption::Line* above = shown(c, "Because.");
+    float aboveY = above ? above->y : 0;
+    bool together = false, crossed = false, intoAbove = false;
+    float risen = 0;
+    for (int f = 0; f < 90; f++) {
+        run(c, doing("Reading 3 articles"), frame);
+        const Caption::Line* was = shown(c, "Searching films");
+        const Caption::Line* now = shown(c, "Reading 3 articles");
+        if (was && now && was->opacity > 0.05f && now->opacity > 0.05f) {
+            crossed = true;
+            together = together || std::fabs(was->y - now->y) < 0.25f;
+        }
+        if (was && was->opacity > 0.05f) intoAbove = intoAbove || aboveY - was->y < 0.6f;
+        if (was && now) risen = std::max(risen, was->y - now->toY);
+    }
+    CHECK(crossed, "the two cross-fade, the new coming in as the old goes");
+    CHECK(!together, "but never on the same line");
+    CHECK(!intoAbove, "nor does the old one reach Momo's line above it");
+    CHECK(risen > 0.15f, "the old one lifts as it goes: %.2f lines", double(risen));
+    CHECK(!shown(c, "Searching films"), "and is gone");
+    auto rest = resting(c);
+    CHECK(rest.size() == 2 && rest[1]->text == "Reading 3 articles", "the new one rests where the old one was");
+}
+
+TEST(whatTheAgentIsDoingIsOneLineCutShort) {
+    Caption c = caption();
+    run(c, say(S::listening, "Why?"), 0.3);
+    run(c, doing("Searching every film that has used a dolly zoom", ""), 1);
+    auto rest = resting(c);
+    CHECK(rest.size() == 1, "%zu lines", rest.size());
+    CHECK(rest.size() == 1 && rest[0]->text == "Searching every…", "cut short: \"%s\"", rest.empty() ? "" : rest[0]->text.c_str());
+    CHECK(rest.size() == 1 && rest[0]->width <= 0.2f + 1e-4f, "within a line");
 }
 
 TEST(offTakesEveryWordAway) {
@@ -289,6 +347,15 @@ TEST(theOrbSwellsWithTheVoiceItAnswersOnly) {
     CHECK(g.look().warmth < 0.1f, "listening, it takes the user's white: %.2f", double(g.look().warmth));
     step(say(S::responding, "", "", true, 0.7f), 1.5f);
     CHECK(g.look().warmth > 0.9f && g.look().voice > 0.5f, "speaking, Momo's amber, swelling with its voice");
+}
+
+TEST(workingTheOrbRipplesGentlyAndDoesNotTakeTheThinkingLights) {
+    Glow g;
+    double now = 0;
+    for (float t = 0; t < 2; t += frame) g.update(say(S::thinking), now += frame, frame);
+    CHECK(g.look().shimmer > 0.9f && g.look().ripple < 0.05f, "thinking: lights circle it");
+    for (float t = 0; t < 2.5f; t += frame) g.update(doing("Reading"), now += frame, frame);
+    CHECK(g.look().ripple > 0.9f && g.look().shimmer < 0.05f, "working: rings go out from it, and no lights circle it");
 }
 
 TEST(sendingGathersTheOrbOnceAndOffFadesIt) {

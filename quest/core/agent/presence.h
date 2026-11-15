@@ -14,6 +14,7 @@ struct Presence {
     std::string momoText;
     float level = 0;
     std::optional<int> workingOn;
+    std::string doing;
 };
 
 }  // namespace agent

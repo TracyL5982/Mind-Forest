@@ -33,7 +33,7 @@ void firstWords(const std::string& text, int count, std::string& into) {
 
 std::shared_ptr<PresenceDemo> PresenceDemo::fromFlags(OceanModel& model) {
     if (!Flags::has("presenceDemo")) return nullptr;
-    logLine("[presence] demo: every state on a 30 s loop");
+    logLine("[presence] demo: every state on a 34 s loop");
     return std::make_shared<PresenceDemo>(model);
 }
 
@@ -42,6 +42,7 @@ void PresenceDemo::at(double t, Presence& p) {
     t = std::fmod(t, loop);
     p.level = 0;
     p.workingOn.reset();
+    p.doing.clear();
     auto phase = [&](double from, double to) { return t >= from && t < to; };
     if (phase(0, 3)) {
         p.state = S::waiting;
@@ -63,10 +64,11 @@ void PresenceDemo::at(double t, Presence& p) {
         p.state = S::responding;
         firstWords(reply, int((t - 10.2) * 3.3) + 1, p.momoText);
         p.level = t < 20 ? voice(t) : 0.05f;
-    } else if (phase(20.5, 25.5)) {
+    } else if (phase(20.5, 29.5)) {
         p.state = S::working;
         p.workingOn = 0;
-    } else if (phase(25.5, 29)) {
+        p.doing = t < 23.5 ? "Searching films with a dolly zoom" : t < 26.5 ? "Reading 3 articles" : "Laying out 2 cards";
+    } else if (phase(29.5, 33)) {
         p.state = S::waiting;
     } else {
         p.state = S::off;
