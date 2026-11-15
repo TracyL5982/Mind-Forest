@@ -417,6 +417,11 @@ void OceanModel::runFlags() {
     at("outAt", [](OceanModel& m) { m.stepOut(); });
     at("forwardAt", [](OceanModel& m) { m.moveLayer(-1); });
     at("placeAt", [](OceanModel& m) { m.carryOne(); });
+    // NOTE(port): added for Quest. `-carryAt t` carries the cover `-carry <i>` (the first, if not given) along the shelf,
+    // drawn `-carryRight` and `-carryUp` metres.
+    at("carryAt", [](OceanModel& m) {
+        m.carryCoverByFlag(Flags::integer("carry"), m.stage.r * float(Flags::number("carryRight")) + m.stage.u * float(Flags::number("carryUp")));
+    });
     at("markAt", [](OceanModel& m) { m.markByFlag(Flags::string("mark").value_or("words")); });
     at("askMarkAt", [](OceanModel& m) {
         if (std::optional<int> id = m.tree ? m.tree->focus() : std::nullopt) m.askMark(*id);
@@ -497,6 +502,23 @@ void OceanModel::pickOffer(int k) {
 }
 
 /// Carries one card on the layer aside, as a hand would.
+void OceanModel::carryCoverByFlag(int i, Vec3 d) {
+    if (i < 0 || i >= int(shelf.size())) return;
+    EntityRef on = shelf[size_t(i)].mover->entity;
+    Vec3 start = on->position;
+    logLine("[ocean] carrying the cover of " + shelf[size_t(i)].tree->title + " by flag");
+    pinchChanged(on, start, start);
+    const int steps = 12;
+    for (int k = 1; k <= steps; k++) {
+        after(0.5 * double(k) / steps, [this, on, start, d, k] {
+            if (press) pinchChanged(on, start + d * (float(k) / float(steps)), start);
+        });
+    }
+    after(0.55, [this, start, d] {
+        if (press) pinchEnded(start + d);
+    });
+}
+
 void OceanModel::carryOne() {
     if (!tree) return;
     // (Each `.sorted { $0.id < $1.id }` and then `.first`: the map is in that order.)

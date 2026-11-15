@@ -312,6 +312,8 @@ Vec2 OceanModel::freeSpot() const {
         for (const Shelved& cover : shelf) {
             if (distance(cover.spot, s) < 14) taken = true;
         }
+        // AGENT: an agent service's tree can come while a tree taken off the shelf stands: the place it goes back to is kept.
+        if (standingSpot && distance(*standingSpot, s) < 14) taken = true;
         if (!taken) return s;
     }
     return Vec2{float(int(shelf.size()) % 5) * 20 - 40, 44};
@@ -497,14 +499,17 @@ void OceanModel::shelveWaiting() {
 /// Writes the shelf down. A tree taken off the shelf and still standing is kept at the place it left.
 void OceanModel::saveShelf() {
     shelfDirty = false;
+    // AGENT: joined to the agent service, the shelf holds the service's trees, which the service keeps; the bridge writes
+    // down where their covers hang (core/agent/spots.h), and the headset's own shelf file is left as it was.
+    if (agentBridge) {
+        agentBridge->saveShelf();
+        return;
+    }
     std::string url = shelfURL();
     if (url.empty() || !catalog) return;
     std::vector<ShelfFile::Item> items = shelfWaiting;     // (none, by the time anything is written: see `update`)
-    // AGENT: a tree the agent service grows is kept by the service, and comes back with the next connection (`grows`).
-    for (const Shelved& cover : shelf) {
-        if (cover.tree->grows) items.push_back(ShelfFile::Item{cover.tree->saved(), cover.spot});
-    }
-    if (tree && tree->grows && standingSpot) items.push_back(ShelfFile::Item{tree->saved(), *standingSpot});
+    for (const Shelved& cover : shelf) items.push_back(ShelfFile::Item{cover.tree->saved(), cover.spot});
+    if (tree && standingSpot) items.push_back(ShelfFile::Item{tree->saved(), *standingSpot});
     std::string data = ShelfFile(int(catalog->clips.size()), catalog->worksKey, items).json().dump();
     platform::writeFile(url, data);
 }

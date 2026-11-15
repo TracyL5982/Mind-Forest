@@ -1004,6 +1004,10 @@ private:
     /// Carries one card on the layer aside, as a hand would.
     void carryOne();
 
+    /// NOTE(port): added for Quest. Carries the cover `i` along the shelf, as a hand would: a pinch on it, drawn by `d`
+    /// over half a second and let go there.
+    void carryCoverByFlag(int i, Vec3 d);
+
     /// Marks part of the open card, as a drag across it would.
     void markByFlag(const std::string& kind);
 
