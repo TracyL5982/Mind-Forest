@@ -113,9 +113,9 @@ const calls = (model: FakeModel) => model.calls.filter((c) => c.role === 'questi
 
 /** A tree grown from a dropped thought. A drop alone only joins the knowledge base, so the test asks for the tree, without a word said. */
 async function rootOf(run: Running, text: string): Promise<string> {
-  const ids = await run.pipeline.dump([{ kind: 'text', text }]);
+  const dropped = await run.pipeline.dump([{ kind: 'text', text }]);
   await run.pipeline.idle();
-  await run.pipeline.makeTree(text, ids);
+  await run.pipeline.makeTree(text, dropped.items.map((i) => i.id));
   await run.pipeline.idle();
   return [...run.mind.trees.values()].find((t) => run.mind.itemOf(t.rootId).text === text)!.rootId;
 }
