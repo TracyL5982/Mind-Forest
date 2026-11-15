@@ -11,7 +11,7 @@ import { kit, type Kit } from './kit.ts';
 const PAPERS = { id: 'papers', name: 'Research papers', goodFor: 'What studies found.', query: 'Title words.', show: 1 };
 const PAPER: Found = { title: 'Vertigo and the dolly zoom', by: 'A. Researcher', date: '2011', text: 'We measured viewer discomfort.', url: 'https://doi.example/10.1/zoom', kind: 'paper' };
 
-const note = (title: string) => ({ angle: title, format: 'note', title, body: 'Something new.', why: 'new', tags: [], lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [], formula: '', numbers: [], unit: '', images: [], source: '', lookups: [] });
+const note = (title: string) => ({ angle: title, format: 'note', title, body: 'Something new.', why: 'new', tags: [], lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [], images: [], source: '', lookups: [] });
 const find = (title: string, lookup: string) => ({ ...note(title), format: 'find', source: 'papers', lookups: [lookup] });
 
 /** The real roles over a scripted model, recording what the agent says and where it moves the view, in order. */

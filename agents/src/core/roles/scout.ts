@@ -7,7 +7,7 @@ import { givesWay, KNOWN_MOST, LIBRARY_TOOL, MINDSTORM, newSlots, ROUND_MOST, sa
 import { fittedTitle } from '../fitted.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
-import { byRule, Explore } from './renderer.ts';
+import { byRule } from './renderer.ts';
 import { AGENT, idFrom, makeItem, makeNode, pickStatus, type RoleContext, type Roles, type Turn } from './types.ts';
 
 const ROLE = 'scout';
@@ -37,7 +37,8 @@ type Written = (typeof WRITTEN)[number];
  * One direction as the model writes it. Structured output wants every key present, so an empty string or list means "none".
  * A written format's contents go in a few slots every written format shares: `lines` are steps, list entries, "label | value"
  * figures or table rows, `pros` and `cons` the two sides, `subject` a question or a term, `passage` an answer, a meaning, a warning
- * or words someone said, and `by` who said them. An explorable is written in the slots the Renderer's look call writes one in.
+ * or words someone said, and `by` who said them. An explorable switches between states: asked for sliders too, the model set
+ * them over quantities it made up, whose formulas could not hold.
  */
 const Direction = z.object({
   angle: z.string(),
@@ -52,10 +53,7 @@ const Direction = z.object({
   subject: z.string(),
   passage: z.string(),
   by: z.string(),
-  controls: Explore.shape.controls,
-  formula: z.string(),
-  numbers: z.array(z.number()),
-  unit: z.string(),
+  controls: z.array(z.object({ kind: z.enum(['toggle', 'segmented']), label: z.string(), states: z.array(z.string()), texts: z.array(z.string()) })),
   images: z.array(z.object({ title: z.string(), prompt: z.string() })),
   source: z.string(),
   lookups: z.array(z.string()),
@@ -63,7 +61,7 @@ const Direction = z.object({
 type Direction = z.infer<typeof Direction>;
 const isWritten = (d: Direction): d is Direction & { format: Written } => (WRITTEN as readonly string[]).includes(d.format);
 /** The written slots of a direction that is no written idea. */
-const UNWRITTEN = { lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [], formula: '', numbers: [], unit: '' } satisfies Partial<Direction>;
+const UNWRITTEN = { lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [] } satisfies Partial<Direction>;
 const Ideas = z.object({ reading: z.string(), directions: z.array(Direction) });
 
 const Ratings = z.object({
@@ -432,9 +430,8 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
         : count === 3
           ? '- Mix the formats: at least one "find" and at least one written idea.'
           : '- Prefer different formats.',
-      '- Write each idea in the written format that shows it best, chosen by what the idea is: examples or options are a list, figures are facts, several things compared on the same points are a table, and so on. A note is for an argument, a story, a what-if or an objection that needs its sentences.',
       '- Use "image" or "gallery" when seeing something new helps: the user has a picture or a visual subject, or asked to see something. Then include at least one. For a subject that is not visual, leave them out.',
-      '- Write any "image" or "gallery" direction last, after the others.',
+      '- Write the written ideas first, since each lands the moment it is written, and any "image" or "gallery" direction last, after the others.',
       '',
       'For each direction:',
       '- angle: two to five words naming the direction.',
@@ -442,20 +439,21 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
       '- title: about 26 characters in English or 18 in Chinese, so it stands whole on the two lines a small card gives a title; specific, no trailing period.',
       '- why: under eight words, shown on the thread that joins this card to the original. It names where this direction goes ("what the studies found").',
       '- tags: 2 to 4 short lowercase words.',
-      '- body, lines, pros, cons, subject, passage, by, controls, formula, numbers, unit, images, source, lookups: as the format says. Leave the ones a format does not use empty.',
+      '- body, lines, pros, cons, subject, passage, by, controls, images, source, lookups: as the format says. Leave the ones a format does not use empty.',
       '',
-      'Written formats, each the content itself, with names, numbers and specifics:',
-      '- "note": body is two to four sentences of real substance: a concrete idea, a what-if, an objection, a piece of knowledge. Not a description of what the user already has, and not advice to explore something.',
-      '- "steps": lines is three to six short steps for making or trying something, in order, without numbers. body is one sentence saying what the steps achieve.',
-      '- "list": lines is three to seven entries of one kind in no particular order, such as examples, places, names or ideas, each a few words or one sentence. body is one sentence that introduces them.',
-      '- "facts": lines is two to six figures or attributes, each written "label | value", the value a number, a date or a few words. body is one sentence that introduces them.',
-      '- "table": lines is several things compared on the same points: the heads first, then two to six rows, the cells of each line separated by " | ", every row with a cell for each head. body is one sentence that introduces it.',
-      '- "quote": passage is words someone really said or wrote, exactly as they said them, at most 300 characters, and by is who said them. Only words you know were said so, never a paraphrase. body is one sentence on why they matter.',
-      '- "qa": subject is a question the user would want answered, and passage its answer in one to three sentences. body is one sentence of context, or empty.',
-      '- "definition": subject is a term, and passage what it means in one or two sentences, without repeating the term. body is one sentence of context, or empty.',
-      '- "proscons": pros and cons are two to four points each, for and against one choice, each a few words or one sentence. body is one sentence naming the choice.',
-      '- "callout": passage is a warning, a caveat or a pitfall the user must not miss, in one or two sentences. body is one sentence of context, or empty.',
-      '- "explorable": the idea shows how one thing changes with another, so the user learns by changing it. controls has one control. To contrast two to four states, its kind is "segmented", or "toggle" for two; label names what changes, states are the short names of the states, and texts one sentence for each state, in the same order. To relate quantities, its kind is "slider", with label, unit, name (a short name for the quantity, used in formula), min and max (the range worth exploring), and values (two to five values of it); formula gives the result from name, written with numbers, + - * / ^, brackets and min, max, round, sqrt, exp, ln, and nothing else; subject names the result, unit is its unit, and numbers is the result at each of the values, as the formula gives it. body is one sentence on what it shows.',
+      'Written formats. Choose the one that fits what the idea is, a note only when the idea needs its sentences. Each is the content itself, with names, numbers and specifics:',
+      '- "note": an argument, a story, a what-if or an objection. body is two to four sentences of real substance, not a description of what the user already has and not advice to explore something.',
+      '- "steps": how to make or try something. lines is three to six steps in order, without numbers, and body says in one sentence what they achieve.',
+      '- "list": examples, options, names or places of one kind. lines is three to seven entries, each a few words or one sentence, and body introduces them in one sentence.',
+      '- "facts": figures or attributes. lines is two to six "label | value" lines, each value a number, a date or a few words, and body introduces them.',
+      '- "table": several things compared on the same points. lines is the heads, then two to six rows, with " | " between cells and a cell for every head, and body introduces it.',
+      '- "quote": someone\'s real words, exactly as said or written, never a paraphrase, at most 300 characters. passage is the words, by who said them, and body why they matter.',
+      '- "qa": subject is a question the user would ask, and passage its answer in one to three sentences.',
+      '- "definition": subject is a term, and passage what it means in one or two sentences, without the term.',
+      '- "proscons": a choice weighed. pros and cons are two to four points each, and body names the choice.',
+      '- "callout": a warning or a pitfall the user must not miss. passage says it in one or two sentences.',
+      '- "explorable": one thing in two to four states to switch between. controls has one control: kind "toggle" for two states or "segmented" for more, label naming what changes, states their short names, and texts one sentence for each, in order.',
+      '- Where a written format does not ask for body, it is one sentence of context or empty.',
       '',
       'Other formats:',
       '- "image": images has one entry. Its prompt is a complete prompt for an image generator: subject, composition, style, palette, light. When it extends a picture the user dropped, carry over that picture\'s style and palette so it reads as the same world. body is one sentence saying what it shows.',
@@ -651,32 +649,15 @@ const FORMS: Record<Written, { name: string; fill: (d: Direction) => Form }> = {
       const [control] = d.controls;
       if (!control || d.controls.length > 1) return { lines: [d.body], data: {}, lacks: `${d.controls.length} controls, where it takes one` };
       const label = oneLine(control.label, 60);
-      if (control.kind === 'slider') {
-        // The item is each value and its result, one to a line, which the card's curve shows whole. A slider's card draws no lines over
-        // itself, so the body is only the item's summary.
-        const results = d.numbers;
-        const lines = control.values.map((value, n) => `${label} ${measured(value, control.unit)}: ${oneLine(d.subject, 60)} ${results[n] === undefined ? '' : measured(results[n]!, d.unit)}`.trim());
-        return {
-          lines,
-          data: { explorable: { controls: [control], formula: d.formula, subject: d.subject, unit: d.unit, numbers: results } },
-          lacks: atLeast(control.values.length, 2, 'values') ?? (results.length !== control.values.length ? `${results.length} results for its ${control.values.length} values` : !d.formula.trim() ? 'no formula' : undefined),
-        };
-      }
       const states = control.states.map((name, n) => ({ name: oneLine(name, 40), text: oneLine(control.texts[n] ?? '', 300) }));
       const lines = states.map(({ name, text }) => (text ? `${name}: ${text}` : name));
       return {
         lines: [d.body, label, ...lines],
-        data: { explorable: { controls: [{ ...control, kind: states.length === 2 ? 'toggle' : 'segmented', states: states.map((s) => s.name), texts: lines }], formula: '', subject: '', unit: '', numbers: [] } },
+        data: { explorable: { controls: [{ kind: states.length === 2 ? 'toggle' : 'segmented', label, states: states.map((s) => s.name), texts: lines, name: '', unit: '', min: 0, max: 0, values: [] }], formula: '', subject: '', unit: '', numbers: [] } },
         lacks: atLeast(states.length, 2, 'states') ?? (states.length > 4 ? `${states.length} states, more than the 4 it holds` : states.some((state) => !state.name || !state.text) ? 'a state without its name or its words' : undefined),
       };
     },
   },
-};
-
-/** A number with its unit as a text writes it: a word after a space, a mark such as "%" against it. */
-const measured = (value: number, unit: string): string => {
-  const sign = unit.trim();
-  return !sign ? String(value) : /^\p{L}/u.test(sign) ? `${value} ${sign}` : `${value}${sign}`;
 };
 
 /**

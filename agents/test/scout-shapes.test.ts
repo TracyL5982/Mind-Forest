@@ -5,7 +5,7 @@ import { byRule } from '../src/core/roles/renderer.ts';
 import { scout } from '../src/core/roles/scout.ts';
 import { AGENT, kit, type Kit } from './kit.ts';
 
-const EMPTY = { lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [], formula: '', numbers: [], unit: '', images: [], source: '', lookups: [] };
+const EMPTY = { lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [], images: [], source: '', lookups: [] };
 
 function written(format: string, title: string, fields: Record<string, unknown>) {
   return { angle: `angle of ${title}`, format, title, body: '', why: `toward ${title}`, tags: ['horror'], ...EMPTY, ...fields };
@@ -85,24 +85,20 @@ const SHAPES: { direction: ReturnType<typeof written>; card: string; props: Reco
     },
   },
   {
-    direction: written('explorable', 'How long the fuse burns', {
-      body: 'A fuse burns at a steady 2 cm a second.',
-      controls: [control({ kind: 'slider', label: 'Fuse length', name: 'length', unit: 'cm', min: 0, max: 40, values: [10, 20, 30] })],
-      formula: 'length / 2',
-      subject: 'Seconds to the blast',
-      unit: 's',
-      numbers: [5, 10, 15],
+    direction: written('explorable', 'Shown or kept offscreen', {
+      controls: [control({ kind: 'toggle', label: 'The monster', states: ['Shown', 'Hidden'], texts: ['The threat is concrete and the payoff earned.', 'The mystery holds and the dread grows.'] })],
     }),
     card: 'explorable',
     props: {
-      controls: [{ kind: 'slider', name: 'length', label: 'Fuse length', unit: 'cm', min: 0, max: 40, step: 1, values: [10, 20, 30] }],
-      output: { kind: 'chart', label: 'Seconds to the blast', unit: 's', formula: ['length', 2, '/'], values: [5, 10, 15] },
+      controls: [{ kind: 'toggle', label: 'The monster', states: [{ name: 'Shown', text: 'Shown: The threat is concrete and the payoff earned.' }, { name: 'Hidden', text: 'Hidden: The mystery holds and the dread grows.' }] }],
+      output: { kind: 'text' },
+      above: ['The monster'],
     },
   },
 ];
 
 function control(fields: Record<string, unknown>) {
-  return { kind: 'slider', label: '', states: [], texts: [], name: '', unit: '', min: 0, max: 0, values: [], ...fields };
+  return { kind: 'segmented', label: '', states: [], texts: [], ...fields };
 }
 
 for (const { direction, card, props } of SHAPES) {
@@ -143,9 +139,9 @@ const SHORT: { direction: ReturnType<typeof written>; says: RegExp; words: strin
     words: ['Noon: Every corner is visible.'],
   },
   {
-    direction: written('explorable', 'Results missing', { controls: [control({ label: 'Fuse length', name: 'length', unit: 'cm', min: 0, max: 40, values: [10, 20] })], formula: 'length / 2', subject: 'Seconds', unit: 's', numbers: [5] }),
-    says: /not an explorable: it has 1 results for its 2 values/,
-    words: ['Fuse length 10 cm: Seconds 5 s', 'Fuse length 20 cm: Seconds'],
+    direction: written('explorable', 'A state left unsaid', { controls: [control({ label: 'Light', states: ['Noon', 'Dusk', 'Night'], texts: ['Every corner is visible.', 'The far end is grey.'] })] }),
+    says: /not an explorable: it has a state without its name or its words/,
+    words: ['Noon: Every corner is visible.', 'Dusk: The far end is grey.', 'Night'],
   },
   { direction: written('proscons', 'One side', { pros: ['Concrete', 'Earned'], cons: ['Dated'] }), says: /not pros and cons: it has only 1 of the 2 points against it needs/, words: ['Concrete', 'Earned', 'Dated'] },
 ];
@@ -189,12 +185,3 @@ test('a bullet or a number the model puts in front of an entry is the card\'s to
   assert.deepEqual(cardOf(figured.k, figured.items[0]!).props, { facts: [{ label: 'Released', value: '1982' }, { label: 'Director', value: 'John Carpenter' }] });
 });
 
-test('an explorable whose formula does not give the results it states lands as plain text, and the log names the card the text gets', async () => {
-  const { k, items } = await landed(
-    written('explorable', 'A wrong formula', { controls: [control({ label: 'Fuse length', name: 'length', unit: 'cm', min: 0, max: 40, values: [10, 20, 30] })], formula: 'length * 2', subject: 'Seconds', unit: 's', numbers: [5, 10, 15] }),
-  );
-
-  assert.notEqual(cardOf(k, items[0]!).component, 'explorable');
-  assert.ok(items[0]!.text.includes('Fuse length 30 cm: Seconds 15 s'));
-  assert.ok(k.notes.some((n) => /"A wrong formula" lands as plain text, not an explorable: the card's check draws it as/.test(n)), k.notes.join('\n'));
-});
