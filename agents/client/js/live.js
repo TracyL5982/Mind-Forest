@@ -4,18 +4,20 @@ const LEAD_S = 0.05;
 
 /**
  * Momo's live voice: the service's `/live` socket (docs/protocol.md, "The live voice"). After the name the page's microphone goes to the
- * service, which hands it to the realtime model, and Momo's voice comes back and plays as it arrives, one response after another.
- * `onReady(on)`: the voice is there or gone. `onOver()`: the user's turn has been heard. `onSpeaking(playing, interruptible)`: Momo
- * started or stopped being heard; saying the name stops it unless what it says names itself. `onText(text)`: what Momo has said so far.
+ * service, whose realtime model hears the turn and writes it down, and Momo's voice comes back and plays as it arrives, one response
+ * after another. The model never answers by itself: what it says is the pipeline's.
+ * `onReady(on)`: the voice is there or gone. `onOver()`: the user's turn has been heard and is on its way. `onHeard(text, final)`: what
+ * the user said so far. `onQuiet()`: no reply is coming, or the voice failed. `onSpeaking(playing, interruptible)`: Momo started or
+ * stopped being heard; saying the name stops it unless what it says names itself. `onText(text)`: what Momo has said so far.
  */
 export class LiveVoice {
-  constructor({ token, name, onReady, onOver, onSpeaking, onText }) {
-    Object.assign(this, { token, name, onReady, onOver, onSpeaking, onText });
+  constructor({ token, name, onReady, onOver, onHeard, onQuiet, onSpeaking, onText }) {
+    Object.assign(this, { token, name, onReady, onOver, onHeard, onQuiet, onSpeaking, onText });
     this.ready = false;
     this.rate = 24000;
+    /** The latest turn, and whether the microphone goes to the service for it. */
     this.turns = 0;
-    /** The turn whose microphone goes to the service, while it does. */
-    this.streaming = null;
+    this.streaming = false;
     this.context = null;
     this.sources = new Set();
     this.until = 0;
@@ -24,6 +26,7 @@ export class LiveVoice {
     this.complete = false;
     this.speaking = false;
     this.interruptible = true;
+    /** Muted, Momo's responses go on being followed, unheard. */
     this.muted = false;
     this.open();
   }
@@ -42,8 +45,10 @@ export class LiveVoice {
       if (this.ws !== ws) return;
       const was = this.ready;
       this.ready = false;
-      this.streaming = null;
+      const turn = this.streaming;
+      this.streaming = false;
       this.stop();
+      if (turn) this.onQuiet();
       if (was) this.onReady(false);
       this.retry = setTimeout(() => this.open(), RETRY_MS);
     };
@@ -59,8 +64,8 @@ export class LiveVoice {
   start(scene) {
     if (!this.ready) return false;
     this.stop();
-    this.streaming = ++this.turns;
-    this.send({ t: 'start', turn: this.streaming, scene });
+    this.streaming = true;
+    this.send({ t: 'start', turn: ++this.turns, scene });
     return true;
   }
 
@@ -72,13 +77,13 @@ export class LiveVoice {
   /** The page stopped streaming at its longest: what was sent is the turn. */
   end() {
     if (this.streaming) this.send({ t: 'end' });
-    this.streaming = null;
+    this.streaming = false;
   }
 
   /** Nothing was said after the name. */
   cancel() {
     if (this.streaming) this.send({ t: 'cancel' });
-    this.streaming = null;
+    this.streaming = false;
   }
 
   /** Stops Momo at once, and drops what was waiting to be heard. */
@@ -103,13 +108,17 @@ export class LiveVoice {
       this.rate = f.rate;
       this.onReady(true);
     } else if (f.t === 'over') {
-      if (f.turn !== this.streaming) return;
-      this.streaming = null;
+      if (f.turn !== this.turns) return;
+      this.streaming = false;
       this.onOver();
+    } else if (f.t === 'heard') {
+      if (f.turn === this.turns && f.text) this.onHeard(f.text, f.final);
+    } else if (f.t === 'quiet') {
+      if (f.turn === this.turns) this.onQuiet();
     } else if (f.t === 'failed') {
-      if (this.streaming) this.onOver();
-      this.streaming = null;
+      this.streaming = false;
       this.stop();
+      this.onQuiet();
     } else if (this.streaming) {
       // Sound and words for an answer the user's new turn is cancelling.
     } else if (f.t === 'audio') {
@@ -126,13 +135,21 @@ export class LiveVoice {
     }
   }
 
-  /** Queues a piece after what is already queued, so one response follows another without overlapping. */
+  /** A piece of response `id`, heard unless muted. */
   play(id, pcm) {
-    if (this.muted) return;
     if (id !== this.current) {
       this.current = id;
       this.complete = false;
     }
+    if (!this.muted) this.schedule(pcm);
+    if (!this.speaking) {
+      this.speaking = true;
+      this.onSpeaking(true, this.interruptible);
+    }
+  }
+
+  /** Queues a piece after what is already queued, so one response follows another without overlapping. */
+  schedule(pcm) {
     this.context ??= new AudioContext();
     const bytes = Uint8Array.from(atob(pcm), (c) => c.charCodeAt(0));
     const samples = new Int16Array(bytes.buffer, 0, bytes.length >> 1);
@@ -151,10 +168,6 @@ export class LiveVoice {
       this.sources.delete(source);
       this.settle();
     };
-    if (!this.speaking) {
-      this.speaking = true;
-      this.onSpeaking(true, this.interruptible);
-    }
   }
 
   /** Momo has stopped being heard once everything queued has played and the last response has no more to come. */

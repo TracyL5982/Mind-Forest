@@ -18,13 +18,13 @@ export async function wakeProblem() {
  * Hands-free talking. While on, the page listens on this device for "hey <name>" or "hi <name>" and sends no sound anywhere.
  * On the phrase it chimes, records until the speaker pauses, and hands the recording to `onRecorded`. It does not listen while a reply plays.
  * Streaming (`stream(true)`, for the service's live voice), it calls `onStart` on the phrase and hands each piece after it to `onPiece`
- * until `over()`; `onEnd(said)` says it stopped by itself, with nothing said or at its longest. While an interruptible reply plays it
+ * until `over()`. `onEnd(said)` says it stopped by itself, with nothing said or (streaming) at its longest. While an interruptible reply plays it
  * still listens for the phrase, so saying it stops the reply.
  * state: 'off' | 'starting' | 'waiting' | 'hearing' | 'working' | 'speaking'
  */
 export class HandsFree {
-  constructor({ onState, onRecorded, onProblem, onStart, onPiece, onEnd }) {
-    Object.assign(this, { onState, onRecorded, onProblem, onStart, onPiece, onEnd });
+  constructor({ cues, onState, onRecorded, onProblem, onStart, onPiece, onEnd }) {
+    Object.assign(this, { cues, onState, onRecorded, onProblem, onStart, onPiece, onEnd });
     this.state = 'off';
     this.streams = false;
     this.interruptible = false;
@@ -143,7 +143,7 @@ export class HandsFree {
 
   heard(m) {
     if (m.t === 'wake') {
-      chime(this.parts?.context);
+      this.cues.chime();
       this.set('hearing');
       if (m.streaming) this.onStart();
     } else if (m.t === 'piece') {
@@ -153,7 +153,7 @@ export class HandsFree {
       this.set('waiting');
       this.sync();
     } else if (m.t === 'nothing') {
-      if (this.streams) this.onEnd(false);
+      this.onEnd(false);
       this.set('waiting');
       this.sync();
       this.onProblem('Nothing was said after the name.');
@@ -203,9 +203,51 @@ function microphoneAt16k(parts) {
   }
 }
 
+/**
+ * The page's own sounds, all quiet: the chime when the name is heard, the sent tone when the user's turn ends, and the thinking loop
+ * from then until Momo's reply is heard. Muted, it makes none.
+ */
+export class Cues {
+  constructor() {
+    this.context = null;
+    this.loop = null;
+    this.muted = false;
+  }
+
+  /** Playing needs a gesture in most browsers: call this from one. */
+  unlock() {
+    void this.audio().resume();
+  }
+
+  audio() {
+    this.context ??= new AudioContext();
+    return this.context;
+  }
+
+  mute(on) {
+    this.muted = on;
+    if (on) this.thinking(false);
+  }
+
+  chime() {
+    if (!this.muted) chime(this.audio());
+  }
+
+  sent() {
+    if (!this.muted) sentTone(this.audio());
+  }
+
+  thinking(on) {
+    if (on && !this.loop && !this.muted) this.loop = thinkingLoop(this.audio());
+    if (!on && this.loop) {
+      this.loop.stop();
+      this.loop = null;
+    }
+  }
+}
+
 /** Two short rising notes: the agent heard its name. */
 function chime(context) {
-  if (!context) return;
   const now = context.currentTime;
   for (const [i, pitch] of [660, 990].entries()) {
     const tone = context.createOscillator();
@@ -218,4 +260,58 @@ function chime(context) {
     tone.start(now + i * 0.09);
     tone.stop(now + i * 0.09 + 0.13);
   }
+}
+
+/** How long the sent tone lasts, so thinking can begin as it ends. */
+export const SENT_MS = 180;
+
+/** One soft note gliding down, a sixth of a second: what was said is on its way. The chime rises; this falls. */
+function sentTone(context) {
+  const now = context.currentTime;
+  const end = now + SENT_MS / 1000;
+  const tone = context.createOscillator();
+  const gain = context.createGain();
+  tone.type = 'triangle';
+  tone.frequency.setValueAtTime(520, now);
+  tone.frequency.exponentialRampToValueAtTime(300, end - 0.01);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.14, now + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.001, end - 0.01);
+  tone.connect(gain).connect(context.destination);
+  tone.start(now);
+  tone.stop(end);
+}
+
+/** Two low, soft swells every 1.6 seconds, looped until stopped. */
+function thinkingLoop(context) {
+  const rate = context.sampleRate;
+  const buffer = context.createBuffer(1, Math.round(rate * 1.6), rate);
+  const data = buffer.getChannelData(0);
+  const length = Math.round(rate * 0.45);
+  for (const [from, pitch] of [[0, 247], [0.6, 220]]) {
+    const at = Math.round(from * rate);
+    for (let i = 0; i < length; i++) {
+      const t = i / rate;
+      const swell = Math.sin((Math.PI * i) / length) ** 2;
+      data[at + i] = 0.045 * swell * (Math.sin(2 * Math.PI * pitch * t) + 0.25 * Math.sin(4 * Math.PI * pitch * t));
+    }
+  }
+  const source = context.createBufferSource();
+  const gain = context.createGain();
+  source.buffer = buffer;
+  source.loop = true;
+  const now = context.currentTime;
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(1, now + 0.15);
+  source.connect(gain).connect(context.destination);
+  source.start(now);
+  return {
+    stop() {
+      const at = context.currentTime;
+      gain.gain.cancelScheduledValues(at);
+      gain.gain.setValueAtTime(gain.gain.value, at);
+      gain.gain.linearRampToValueAtTime(0, at + 0.08);
+      source.stop(at + 0.1);
+    },
+  };
 }

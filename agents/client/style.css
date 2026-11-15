@@ -717,15 +717,19 @@ input[type='text']:focus, textarea:focus { outline: none; border-color: rgba(255
 .dump-target small { font-size: 11px; color: var(--ink-2); }
 .mic { border-radius: 50%; padding: 0; }
 .mic[data-state='waiting'] { border-color: var(--tie); color: var(--tie); }
-.mic[data-state='starting'], .mic[data-state='speaking'] { border-color: var(--tie); color: var(--tie); opacity: 0.6; }
-.mic[data-state='listening'], .mic[data-state='hearing'] { background: var(--ink); color: #111317; border-color: var(--ink); animation: listening 1.3s ease-in-out infinite; }
-.mic[data-state='working'] { opacity: 0.6; }
+.mic[data-state='starting'], .mic[data-state='responding'] { border-color: var(--tie); color: var(--tie); opacity: 0.6; }
+.mic[data-state='listening'] { background: var(--ink); color: #111317; border-color: var(--ink); animation: listening 1.3s ease-in-out infinite; }
+.mic[data-state='sent'] { background: var(--pick); color: #111317; border-color: var(--pick); }
+.mic[data-state='thinking'] { border-color: var(--pick); color: var(--pick); animation: pondering 1.6s ease-in-out infinite; }
+.mic[data-state='working'] { border-color: var(--pick); color: var(--pick); opacity: 0.6; }
 @keyframes listening { 50% { box-shadow: 0 0 0 8px rgba(236, 235, 230, 0.14); } }
+@keyframes pondering { 50% { box-shadow: 0 0 0 6px rgba(236, 235, 230, 0.08); opacity: 0.7; } }
 .caption { display: flex; flex-direction: column; gap: 2px; padding: 0 6px; }
 .caption:empty { display: none; }
 .caption p { font-size: 13.5px; line-height: 1.35; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .caption b { font-weight: 600; margin-right: 8px; color: var(--ink-2); font-size: 12px; }
 .caption p.is-faint span { color: var(--ink-2); }
+.caption p.caption-doing { color: var(--ink-3); font-size: 12px; font-style: italic; }
 
 .sheet { width: min(580px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 20px; border-radius: 22px; color: var(--ink); overflow: auto; }
 .sheet::backdrop { background: rgba(5, 6, 9, 0.6); }
@@ -779,5 +783,5 @@ input[type='text']:focus, textarea:focus { outline: none; border-color: rgba(255
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card-face.is-arriving, .pane, .think i, .mic[data-state='listening'], .mic[data-state='hearing'] { animation: none; }
+  .card-face.is-arriving, .pane, .think i, .mic[data-state='listening'], .mic[data-state='thinking'] { animation: none; }
 }
