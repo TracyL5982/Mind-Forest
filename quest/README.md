@@ -70,8 +70,12 @@ Without `-agent` nothing changes. With the scripted service (`npm run dev:fake`)
 Talking to it works as in the web client. The headset listens on the device for "hey Momo" or "hi Momo" (the
 service's agent name), and nothing it hears leaves the headset unless it began with the name. After the name it
 chimes and records until you pause for 1.2 s; the service transcribes that and acts on it, and its reply is spoken
-when the service has a voice. A line of words low in front of you says what it is doing: `Say "Hey Momo"`,
-`Listening…`, `Thinking…`, then the reply. The first time, the headset asks to use the microphone; refused, it does
+when the service has a voice. Momo is a soft glowing orb low in front of you, with the words beside it: yours in
+white as the voice hears them, then `Thinking…`, then Momo's reply in amber as it is spoken. The orb breathes with the
+voice it hears, gathers in as what you said is sent, has lights circling it while it thinks, and points to the card it
+is working on. It stays where it is while you look about and glides round once you have turned away from it;
+`-presenceDemo` plays every state on a 30 s loop with made-up words, without the service. The first time, the headset
+asks to use the microphone; refused, it does
 not ask again until the app starts again, and replies are still spoken. A microphone that stops is opened again after
 1, 2, 4, 8, then every 15 s. `-agentVoice off`
 turns it off; `-wakeClip <file.wav>` (16 kHz mono 16-bit) is heard in place of the microphone; `-micSource

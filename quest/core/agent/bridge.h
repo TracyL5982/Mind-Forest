@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "agent/client.h"
+#include "agent/presence_view.h"
 #include "agent/voice.h"
 #include "ocean/catalog.h"
 #include "ocean/tree.h"
@@ -66,10 +67,10 @@ private:
     Client client;
     /// Talking to the agent: on with `-agent`, unless `-agentVoice off`.
     std::unique_ptr<Voice> voice;
-    /// A line of words low in front of you that says what the voice is doing, and the words it shows.
-    EntityRef sign;
-    std::string signWords;
-    void showVoice();
+    /// Momo low in front of you: an orb that shows what the voice is doing, with the words said beside it.
+    std::unique_ptr<PresenceView> presenceView;
+    Presence presence;
+    void showPresence();
     /// Where the user is, for what they say: the standing tree and its open card.
     Scene scene();
     std::optional<std::string> dump;
