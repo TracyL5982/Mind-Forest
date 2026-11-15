@@ -113,10 +113,19 @@ const open: OpenRealtime = (on) => {
   };
 };
 let webDollars = 0;
+/** Each web answer of the turn: how long the search model took, and how many searches it made, or that it failed. */
+let searched: { ms: number; searches?: number; failed?: string }[] = [];
 const webAnswer = async (question: string) => {
-  const answered = await ask(fetch, { apiKey: key }, question);
-  webDollars += answered.dollars;
-  return answered.text;
+  const at = performance.now();
+  try {
+    const answered = await ask(fetch, { apiKey: key }, question);
+    searched.push({ ms: Math.round(performance.now() - at), searches: answered.searches });
+    webDollars += answered.dollars;
+    return answered.text;
+  } catch (err) {
+    searched.push({ ms: Math.round(performance.now() - at), failed: err instanceof Error ? err.message : String(err) });
+    throw err;
+  }
 };
 
 // ---- one request
@@ -156,6 +165,7 @@ async function turn(base: string, token: string, r: Request, scene: object): Pro
   while (!frames.some((f) => f.frame.t === 'ready')) await sleep(5);
   const tapFrom = taps.length;
   const webBefore = webDollars;
+  searched = [];
 
   live.send(JSON.stringify({ t: 'start', turn: 1, scene }));
   const began = performance.now();
@@ -240,7 +250,9 @@ async function turn(base: string, token: string, r: Request, scene: object): Pro
     firstSoundMs: after(firstAudio),
     toolMs: web && webOutput ? Math.round(webOutput.at - web.at) : null,
     answerMs: after(answer?.firstAudioAt),
-    responses: responses.map((x) => ({ purpose: x.purpose, status: x.status, firstAudioMs: after(x.firstAudioAt), doneMs: after(x.doneAt), text: x.text })),
+    outputMs: after(webOutput?.at),
+    searched,
+    responses: responses.map((x) => ({ purpose: x.purpose, status: x.status, createdMs: after(x.createdAt), firstAudioMs: after(x.firstAudioAt), doneMs: after(x.doneAt), text: x.text })),
     calls: calls.map((c) => ({ name: c.name, args: c.args, atMs: after(c.at) })),
     notes: notes.map((n) => ({ atMs: after(n.at), text: n.text })),
     activities: activities.map((a) => ({ atMs: after(a.at), role: a.role, state: a.state, label: a.label })),
