@@ -86,6 +86,8 @@ struct View {
     std::string component;
     Content props;
     std::string by;
+    /// The service is choosing the card's look, which lands within 12 s: an in-progress card stands in its place.
+    bool composing = false;
     bool operator==(const View&) const = default;
 };
 

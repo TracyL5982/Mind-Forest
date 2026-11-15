@@ -98,6 +98,11 @@ std::optional<std::string> cardOf(const Ref& ref) {
     return card->id;
 }
 
+bool composing(const std::string& noteID) {
+    const Kind* kind = kindOf(noteID);
+    return kind && std::string(kind->name) == "composing";
+}
+
 bool seat(const std::string& noteID, const Node& node) {
     auto piece = pieces().find(noteID);
     return piece != pieces().end() && put(noteID, piece->second.view, piece->second.item, node);
@@ -117,6 +122,13 @@ std::optional<Vec2> smallSize(const std::string& noteID) {
 std::optional<Piece> small(Art& art, const std::string& noteID) {
     const Shown* s = shownOf(noteID);
     std::optional<Drawn> d = s ? cards::small(noteID, smallScale) : std::nullopt;
+    if (!d) return std::nullopt;
+    return face(art, noteID, d->key, d->size, d->draw);
+}
+
+std::optional<Piece> frame(Art& art, const std::string& noteID) {
+    const Shown* s = shownOf(noteID);
+    std::optional<Drawn> d = s ? cards::frame(noteID, smallScale) : std::nullopt;
     if (!d) return std::nullopt;
     return face(art, noteID, d->key, d->size, d->draw);
 }

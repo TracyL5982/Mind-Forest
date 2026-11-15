@@ -237,7 +237,7 @@ export const COMPONENTS = {
     medium: z.string().optional(),
     holder: z.string().optional(),
   }),
-  /** A paper or a book. `more` is true when it has further authors than the list names. */
+  /** A paper or a book. `more` is true when it has further authors than the list names. `cover` is a book's cover, drawn beside its details. */
   reference: z.strictObject({
     kind: z.enum(['paper', 'book']),
     authors: z.array(z.string()),
@@ -245,6 +245,7 @@ export const COMPONENTS = {
     year: z.string().optional(),
     venue: z.string().optional(),
     url: z.string().optional(),
+    cover: z.string().optional(),
   }),
   /** A place by name. `src` is the item's picture, when it has one. */
   place: z.strictObject({ name: z.string().min(1), src: z.string().optional() }),
@@ -616,7 +617,7 @@ export const CHECKS: ContentChecks = {
   swatch: { props: { colours: { name: 'says', value: 'paints' } } },
   artwork: { props: { src: 'own', maker: 'says', date: 'says', medium: 'says', holder: 'says' } },
   reference: {
-    props: { kind: 'own', authors: 'says', more: 'choice', year: 'says', venue: 'says', url: 'own' },
+    props: { kind: 'own', authors: 'says', more: 'choice', year: 'says', venue: 'says', url: 'own', cover: 'own' },
     also: (p, item) => p.more === undefined || item.data.authorsCut === true,
   },
   place: { props: { name: 'says', src: 'own' } },

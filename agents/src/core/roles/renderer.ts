@@ -461,10 +461,21 @@ const byAgent = (item: Item) => item.origin.by === 'agent';
  * the line that says who made the page and when.
  */
 function passageOf(item: Item): string | undefined {
-  if (item.kind !== 'text' || !byAgent(item) || !item.source.url) return undefined;
+  if (item.kind !== 'text' || !byAgent(item) || !item.source.url || item.data.kind === 'repository') return undefined;
   const label = [...new Set([item.data.by, item.data.date, item.data.from].flatMap((part) => str(part) ?? []))].join(', ');
   const text = item.text.trim();
   return text && uniform(text) !== uniform(label) ? text : undefined;
+}
+
+/**
+ * What a source says of a record in its own words, as a repository's short description: the item's text without the line under it
+ * that says who made the record and when, which the card names otherwise.
+ */
+function blurbOf(item: Item): string | undefined {
+  const label = [...new Set([item.data.by, item.data.date, item.data.from].flatMap((part) => str(part) ?? []))].join(', ');
+  const text = item.text.trim();
+  const own = label && text.endsWith(label) ? text.slice(0, -label.length).trim() : text;
+  return own || undefined;
 }
 
 const captionOf = (item: Item) => (item.summary.trim() && item.summary.trim().length <= CAPTION ? item.summary.trim() : undefined);
@@ -498,7 +509,7 @@ const RULES: Rule[] = [
     component: 'reference',
     reads: 'catalogue',
     when: (item) => referenceKind(item) !== undefined,
-    props: (item) => {
+    props: (item, asked) => {
       const listed = entriesOf(item.data.authors);
       const by = str(item.data.by);
       return compact({
@@ -508,7 +519,18 @@ const RULES: Rule[] = [
         year: /(?<!\d)\d{4}(?!\d)/.exec(str(item.data.date) ?? '')?.[0],
         venue: str(item.data.venue),
         url: item.source.url,
+        // A book is known by its cover, which the reference card draws beside its details.
+        cover: pictureOf(item, asked),
       });
+    },
+  },
+  {
+    component: 'link',
+    reads: 'catalogue',
+    when: (item) => item.data.kind === 'repository' && Boolean(item.source.url),
+    props: (item) => {
+      const url = item.source.url!;
+      return compact({ url, site: str(item.data.site) ?? siteOf(url), description: blurbOf(item), image: str(item.data.image) });
     },
   },
   {

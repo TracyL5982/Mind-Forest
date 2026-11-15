@@ -921,6 +921,25 @@ test('a page the Scout picked draws as the passage it chose, with the site it is
   assert.equal(chosen({ ...pick, data: { ...data, chart: { labels: ['2019', '2020'], values: [12, 15] } } }), 'chart');
 });
 
+test('a book the Scout found with its cover draws as a reference card with the cover beside its details, and a paper with none as before', () => {
+  const book = { ...PHOTO, title: 'A History of Horror', text: 'The genre told through its films.\n\nWheeler Winston Dixon, 2010, Books', origin: SCOUT, data: { kind: 'book', by: 'Wheeler Winston Dixon', date: '2010', from: 'Books' }, source: { ...PHOTO.source, url: 'https://books.apple.com/book/1' } };
+  const drawn = ruled(book);
+  assert.equal(drawn.component, 'reference', 'what the catalogue says it is');
+  assert.equal((drawn.props as { cover?: string }).cover, url(PHOTO.source!.asset!), 'with its own stored picture as the cover');
+  assert.ok(grounded(drawn, kit().item(book), url), 'the cover is the item\'s own picture');
+  const paper = ruled({ title: 'Predictability and accuracy', origin: SCOUT, data: { kind: 'paper', by: 'K. Gajos' } });
+  assert.equal((paper.props as { cover?: string }).cover, undefined, 'a paper with no picture has no cover');
+});
+
+test('a code repository the Scout found draws as a link card with its own short description, and a page\'s passage stays an excerpt', () => {
+  const blurb = 'The Generative UI framework 19638 stars. Written in TypeScript.';
+  const repo = { title: 'vercel-labs/json-render', text: `${blurb}\n\nvercel-labs, updated 2026-11-14, GitHub`, origin: { by: 'agent' as const, role: 'scout', tool: 'code' }, data: { kind: 'repository', site: 'github.com', by: 'vercel-labs', date: 'updated 2026-11-14', from: 'GitHub' }, source: { ...WEB, url: 'https://github.com/vercel-labs/json-render' } };
+  assert.deepEqual(ruled(repo), { component: 'link', props: { url: 'https://github.com/vercel-labs/json-render', site: 'github.com', description: blurb } });
+  const passage = 'Lime raises the pH slowly, over a season, and works faster when it is dug in than when it is left on the surface.';
+  const page = { title: 'Soil pH', text: `${passage}\n\nRoyal Horticultural Society, 2024, Web`, origin: SCOUT, data: { site: 'www.rhs.example', by: 'Royal Horticultural Society', date: '2024', from: 'Web' }, source: { ...WEB, url: 'https://www.rhs.example/soil-ph' } };
+  assert.equal(chosen(page), 'excerpt', 'a real passage of a page');
+});
+
 test('a structure with more entries than its card shows is no card of its item, however much of the item they are', () => {
   const eight = Array.from({ length: 8 }, (_v, n) => ({ label: 'L', value: `${n}` }));
   const written = (count: number) => `${'x'.repeat(20)}\n${saying({ facts: eight.slice(0, count) })}`;

@@ -89,8 +89,8 @@ export interface Found {
   seconds?: number;
   steps?: string[];
   chart?: { labels: string[]; values: number[]; unit?: string };
-  /** What kind of thing the record is, when its source knows. */
-  kind?: 'artwork' | 'paper' | 'book';
+  /** What kind of thing the record is, when its source knows. A repository's text is its own short description, and no passage. */
+  kind?: 'artwork' | 'paper' | 'book' | 'repository';
   /** What a work is made of, as its holder catalogues it. */
   medium?: string;
   /** The museum or collection that holds a work. */

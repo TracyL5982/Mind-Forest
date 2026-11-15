@@ -54,9 +54,24 @@ void head(const Pen& pen, const std::string& kind, const std::string& year, floa
 }
 
 
-/// Its kind and year over a rule, the title in two lines, and the first author.
+/// A book's cover at the face's left, two by three as a cover stands, with the card's words beside it.
+constexpr int COVER_WIDE = 54, COVER_TALL = 81, COVER_GAP = 12;
+
+/// Its cover when it has one, then its kind and year over a rule, the title in two lines, and the first author, beside it.
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
+    std::string cover = text(props["cover"]);
+    if (!cover.empty()) {
+        if (c.pen) {
+            CGRect box = c.pen->px(face::LEFT, face::TOP, COVER_WIDE, COVER_TALL);
+            c.pen->ctx.setFillColor(palette::media);
+            c.pen->ctx.fill(box);
+            c.pen->picture(cover, box, true, c.words);
+            c.pen->mask(box, 3 * c.pen->k, c.look.fill);
+        }
+        c.x = face::LEFT + COVER_WIDE + COVER_GAP;
+        c.width = face::COL - COVER_WIDE - COVER_GAP;
+    }
     if (c.pen) head(*c.pen, p.label, p.year, c.x, c.y, c.width, true);
     c.gap(face::META + 14);
     std::vector<std::string> names;
@@ -73,6 +88,7 @@ void lay(Col& c, const Item& item, const Json& props) {
         c.lines(first, Measure::meta, 1, palette::ink2);
     }
     if (c.more) c.cue(cueMore(c.words));
+    if (!cover.empty()) c.y = std::max(c.y, float(face::TOP + COVER_TALL));
 }
 
 Footprint size(const Item& item, const Json& props) {
@@ -90,6 +106,19 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
 void detail(Sheet& sheet, const Item& item, const Json& props) {
     constexpr Setting line{15, 21, Font::Weight::medium};
     Plan p = plan(item, props);
+    // The cover whole, as tall as a cover reads at the opened card's size, before the head.
+    if (std::string cover = text(props["cover"]); !cover.empty()) {
+        float aspect = aspectOf(cover).value_or(2.f / 3), tall = std::min(220.f, sheet.most), wide = std::min(Sheet::width, tall * aspect);
+        sheet.picture = CGRect{Sheet::left * sheet.k, (sheet.y + (sheet.first ? 0 : Sheet::gap)) * sheet.k, wide * sheet.k, tall * sheet.k};
+        Words words = item.words;
+        sheet.part(tall, [cover, wide, tall, words](const Pen& pen, float y) {
+            CGRect box = pen.px(Sheet::left, y, wide, tall);
+            pen.ctx.setFillColor(palette::media);
+            pen.ctx.fill(box);
+            pen.picture(cover, box, false, words);
+            pen.mask(box, 6 * pen.k, palette::glass);
+        });
+    }
     std::vector<Chip> listed = sources(item);
     auto unlisted = [&](const std::string& s) {
         return std::none_of(listed.begin(), listed.end(), [&](const Chip& chip) { return chip.text == s; }) ? s : "";
@@ -122,8 +151,10 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     }
 }
 
+std::vector<std::string> pictures(const Json& props) { return {text(props["cover"])}; }
+
 Kind make() {
-    Kind k{"reference", size, {"venue", "date", "authors"}, draw, detail};
+    Kind k{"reference", size, {"venue", "date", "authors"}, draw, detail, pictures};
     k.opens = Kind::Opens::link;
     return k;
 }

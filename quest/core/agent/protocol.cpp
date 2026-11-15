@@ -277,6 +277,7 @@ std::optional<View> readView(const Json& j, Why& why) {
                        .component = f.string("component"),
                        .props = f.object("props"),
                        .by = f.string("by"),
+                       .composing = f.optionalBoolean("composing").value_or(false),
                    });
 }
 

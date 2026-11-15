@@ -261,6 +261,24 @@ TEST(optionalFieldsMayBeMissing) {
     Inbound nullUndo = parseInbound(edited(recordedText("Keep a pick"), [](Json j) { return j.set("undo", nullptr); }));
     auto* change = std::get_if<Change>(&nullUndo);
     CHECK(change && !change->undo, "undo null is none");
+
+    CHECK(!final.snapshot.nodes.front().view.composing, "a view without composing is a finished card");
+}
+
+TEST(aComposingViewReadsAsComposing) {
+    Inbound composing = parseInbound(edited(fixture("hello.json"), [](Json j) {
+        Json snapshot = j["snapshot"];
+        Json nodes = Json::list();
+        for (const Json& n : snapshot["nodes"].array()) {
+            Json node = n;
+            Json view = node["view"];
+            nodes.push(node.set("view", view.set("composing", true)));
+        }
+        return j.set("snapshot", snapshot.set("nodes", nodes));
+    }));
+    auto* hello = std::get_if<Hello>(&composing);
+    CHECK(hello && !hello->snapshot.nodes.empty(), "a hello whose cards compose reads: %s", kindOf(composing).c_str());
+    if (hello) CHECK(hello->snapshot.nodes.front().view.composing && !hello->snapshot.nodes.front().view.component.empty(), "composing: true, beside the rules' card");
 }
 
 TEST(theOtherMessagesRead) {
