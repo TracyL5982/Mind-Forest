@@ -7,7 +7,9 @@
 #   tools/agent.sh status             what adb sees and whether the service answers
 # The service must be running on this Mac: (cd agents && npm start). Its access key is read from agents/data/token
 # (or MIND_PALACE_DATA/token, or MIND_PALACE_TOKEN).
+# It works on the copy installed with QUEST_APP_SUFFIX=.agents unless QUEST_APP_SUFFIX says otherwise ("" for the first).
 set -e
+export QUEST_APP_SUFFIX="${QUEST_APP_SUFFIX-.agents}"
 source "$(dirname "$0")/env.sh"
 PORT="${MIND_PALACE_PORT:-8787}"
 TOKEN="${MIND_PALACE_TOKEN:-$(cat "${MIND_PALACE_DATA:-$REPO_ROOT/agents/data}/token" 2>/dev/null || true)}"

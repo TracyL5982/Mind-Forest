@@ -46,6 +46,27 @@ The Quest 3 has no eye tracking, so:
   `adb pull /sdcard/Android/data/com.kaifengwu.mindpalace.ocean/files/out/hands.txt`
 - Hands only. Controllers do nothing.
 
+## Joining the agent service
+
+The agents (`agents/`, a service on the Mac) can grow the ocean's trees: your mindstorm's trees stand and
+hang on the shelf, a pinch on a card opens it and the Scout's picks come up round it with dashed threads,
+a pinch on a pick keeps it, the knife deletes, and a clap sends the tree on as a handoff. The plan and
+its state are in [agent-plan.md](agent-plan.md).
+
+This build installs beside the app already on the headset, as "Mind Palace Ocean (agents)", because it is
+signed on another machine (`QUEST_APP_SUFFIX=.agents` works on it; run `push_media.sh` once for it too).
+
+```bash
+(cd agents && npm start)                     # the service, on this Mac
+QUEST_APP_SUFFIX=.agents quest/tools/run.sh --build
+quest/tools/agent.sh usb                     # over the cable; `wifi` moves adb to Wi-Fi, `resume` after sleep
+```
+
+Launch flags: `-agent <address>` and `-agentToken <token>` join (agent.sh passes both); `-agentDump The%20words`
+drops words in once connected (`%20` for spaces: the launcher splits flags at spaces); `-agentWalk <n>`
+pinches the first new pick n times, for runs with no hands; `-agentLog` logs every change set.
+Without `-agent` nothing changes. With the scripted service (`npm run dev:fake`) nothing costs money.
+
 ## Build and run
 
 Needs the Android SDK (platform 34, build-tools 34, NDK 27.2, CMake 3.22) in `~/Library/Android/sdk`,

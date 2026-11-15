@@ -1,11 +1,12 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
+import { Readable } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { ModelClient } from '../core/ports.ts';
 import { Pipeline, type Outbound } from '../core/pipeline.ts';
-import { DEFAULT_SETTINGS, type Handoff, type Roles, type Settings } from '../core/roles/types.ts';
+import { DEFAULT_SETTINGS, type Handoff, type Playback, type Roles, type Settings } from '../core/roles/types.ts';
 import { Mindstorm } from '../core/state.ts';
 import { spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
@@ -31,6 +32,8 @@ export interface ServerOptions {
   /** Turns recorded speech into text, told the card titles. When present the client records instead of using the browser's recognition. */
   transcribe?: Transcribe;
   settings?: Partial<Settings>;
+  /** The only folder a linked file may be served from. Defaults to the repository's `public/clips/full`. */
+  films?: string;
   log?: (line: string) => void;
 }
 
@@ -60,7 +63,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   mkdirSync(opts.dataDir, { recursive: true });
   const token = opts.token ?? savedToken(join(opts.dataDir, 'token'));
   const store = new SqliteStore(join(opts.dataDir, 'mindstorm.sqlite'));
-  const assets = new DiskAssets(join(opts.dataDir, 'assets'));
+  const assets = new DiskAssets(join(opts.dataDir, 'assets'), '', opts.films);
   const handoffDir = join(opts.dataDir, 'handoffs');
   mkdirSync(handoffDir, { recursive: true });
 
@@ -68,6 +71,13 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   mind.load(store.all());
   const settings: Settings = { ...DEFAULT_SETTINGS, ...opts.settings };
   const sockets = new Set<WebSocket>();
+  /** What each connection said it can play. A connection that has not said is taken to be a browser. */
+  const plays = new Map<WebSocket, Playback>();
+  const playback = (): Playback => {
+    const said = [...plays.values()];
+    const files = said.length === 0 ? [] : said.map((p) => p.files).reduce((both, next) => both.filter((ext) => next.includes(ext)));
+    return { embeds: said.every((p) => p.embeds), files };
+  };
   const broadcast = (message: unknown) => {
     const text = JSON.stringify(message);
     for (const ws of sockets) if (ws.readyState === ws.OPEN) ws.send(text);
@@ -97,6 +107,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     newId: () => randomUUID(),
     now: () => new Date().toISOString(),
     emit,
+    playback,
   });
 
   async function bundle(handoff: Handoff): Promise<{ name: string; url: string; markdown: string; files: string[] }> {
@@ -168,10 +179,11 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     }
     if (req.method === 'GET' && path === '/api/state') return json(res, 200, { snapshot: mind.snapshot(), settings });
     if (req.method === 'GET' && path.startsWith('/assets/')) {
-      const id = path.slice('/assets/'.length);
-      const asset = await assets.get(id);
-      if (!asset) return json(res, 404, { error: 'no such asset' });
-      return ranged(req, res, asset.bytes, asset.mime);
+      const stored = assets.open(path.slice('/assets/'.length));
+      if (!stored) return json(res, 404, { error: 'no such asset' });
+      if ('url' in stored) return relay(req, res, stored.url, stored.mime);
+      if ('bytes' in stored) return ranged(req, res, stored.mime, stored.bytes.length, (start, end) => res.end(stored.bytes.subarray(start, end + 1)));
+      return ranged(req, res, stored.mime, stored.size, (start, end) => void createReadStream(stored.file, { start, end }).on('error', () => res.destroy()).pipe(res));
     }
     if (req.method === 'GET' && path.startsWith('/handoffs/')) {
       const file = join(handoffDir, normalize(path.slice('/handoffs/'.length)).replace(/^(\.\.[/\\])+/, ''));
@@ -201,7 +213,10 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   wss.on('connection', (ws: WebSocket) => {
     sockets.add(ws);
     ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser' }));
-    ws.on('close', () => sockets.delete(ws));
+    ws.on('close', () => {
+      sockets.delete(ws);
+      plays.delete(ws);
+    });
     ws.on('message', (raw) => {
       let message: ClientMessage;
       try {
@@ -210,12 +225,15 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         ws.send(JSON.stringify({ t: 'error', message: `bad message: ${String(err instanceof Error ? err.message : err).slice(0, 300)}` }));
         return;
       }
-      void handle(message).catch((err) => ws.send(JSON.stringify({ t: 'error', message: String(err instanceof Error ? err.message : err) })));
+      void handle(message, ws).catch((err) => ws.send(JSON.stringify({ t: 'error', message: String(err instanceof Error ? err.message : err) })));
     });
   });
 
-  async function handle(m: ClientMessage): Promise<void> {
+  async function handle(m: ClientMessage, ws: WebSocket): Promise<void> {
     switch (m.t) {
+      case 'client':
+        plays.set(ws, m.media);
+        return;
       case 'dump':
         await pipeline.dump(m.dumps);
         return;
@@ -224,6 +242,9 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         return;
       case 'focus':
         pipeline.focus(m.nodeId);
+        return;
+      case 'questions':
+        ws.send(JSON.stringify({ t: 'questions', nodeId: m.nodeId, questions: await pipeline.questions(m.nodeId) }));
         return;
       case 'ask':
         await pipeline.ask(m.nodeId, m.need);
@@ -253,6 +274,9 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   }
 
   await new Promise<void>((ready) => http.listen(opts.port, opts.host, ready));
+  // Another process writing this data folder while the service runs would corrupt it. `npm run import-library` checks for this file.
+  const lock = join(opts.dataDir, 'service.pid');
+  writeFileSync(lock, String(process.pid));
   const address = http.address();
   const port = typeof address === 'object' && address ? address.port : opts.port;
   return {
@@ -265,6 +289,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       wss.close();
       await new Promise<void>((done) => http.close(() => done()));
       store.close();
+      rmSync(lock, { force: true });
     },
   };
 }
@@ -298,24 +323,49 @@ async function body(req: IncomingMessage, limit: number): Promise<Uint8Array> {
   return new Uint8Array(Buffer.concat(chunks));
 }
 
-/** Video elements ask for byte ranges, and some browsers refuse to play without them. */
-function ranged(req: IncomingMessage, res: ServerResponse, bytes: Uint8Array, mime: string): void {
+/** Video elements ask for byte ranges, and some browsers refuse to play without them. `send` writes bytes start to end, both included. */
+function ranged(req: IncomingMessage, res: ServerResponse, mime: string, size: number, send: (start: number, end: number) => void): void {
   const match = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
   const base = { 'Content-Type': mime, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=31536000, immutable' };
   if (!match) {
-    res.writeHead(200, { ...base, 'Content-Length': bytes.length });
-    res.end(bytes);
-    return;
+    res.writeHead(200, { ...base, 'Content-Length': size });
+    if (size === 0) return void res.end();
+    return send(0, size - 1);
   }
-  const start = match[1] ? Number(match[1]) : Math.max(0, bytes.length - Number(match[2]));
-  const end = match[1] && match[2] ? Math.min(Number(match[2]), bytes.length - 1) : bytes.length - 1;
-  if (start > end || start >= bytes.length) {
-    res.writeHead(416, { 'Content-Range': `bytes */${bytes.length}` });
+  const start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]));
+  const end = match[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+  if (start > end || start >= size) {
+    res.writeHead(416, { 'Content-Range': `bytes */${size}` });
     res.end();
     return;
   }
-  res.writeHead(206, { ...base, 'Content-Range': `bytes ${start}-${end}/${bytes.length}`, 'Content-Length': end - start + 1 });
-  res.end(bytes.subarray(start, end + 1));
+  res.writeHead(206, { ...base, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': end - start + 1 });
+  send(start, end);
+}
+
+/** A linked remote file, streamed through the service so a client only ever fetches from it. The client's byte range goes to the source. */
+async function relay(req: IncomingMessage, res: ServerResponse, url: string, mime: string): Promise<void> {
+  const stop = new AbortController();
+  res.on('close', () => stop.abort());
+  let upstream: Response;
+  try {
+    upstream = await fetch(url, {
+      headers: { 'User-Agent': 'MindPalace/0.1 (local prototype)', ...(req.headers.range ? { Range: req.headers.range } : {}) },
+      redirect: 'follow',
+      signal: stop.signal,
+    });
+  } catch {
+    if (!stop.signal.aborted) json(res, 502, { error: 'the source of this file could not be reached' });
+    return;
+  }
+  const headers: Record<string, string> = { 'Content-Type': upstream.headers.get('content-type') ?? mime, 'Cache-Control': 'private, max-age=86400' };
+  for (const name of ['content-length', 'content-range', 'accept-ranges']) {
+    const value = upstream.headers.get(name);
+    if (value) headers[name] = value;
+  }
+  res.writeHead(upstream.status, headers);
+  if (!upstream.body) return void res.end();
+  Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream).on('error', () => res.destroy()).pipe(res);
 }
 
 function serveStatic(res: ServerResponse, dir: string, path: string): void {
@@ -332,7 +382,7 @@ const LIKELY_WORDS = 900;
 export function likelyWords(mind: Mindstorm, treeId: string | null): string {
   const inView = treeId && mind.trees.has(treeId) ? mind.treeNodes(treeId).map((n) => mind.item(n.itemId).title) : [];
   const trees = [...mind.trees.values()].map((t) => t.title);
-  const newest = [...mind.items.values()].slice(-40).reverse().map((i) => i.title);
+  const newest = [...mind.items.values()].filter((i) => mind.nodesOfItem(i.id).length > 0).slice(-40).reverse().map((i) => i.title);
   const titles: string[] = [];
   let length = 0;
   for (const title of new Set([...inView, ...trees, ...newest].map((t) => t.trim()).filter(Boolean))) {

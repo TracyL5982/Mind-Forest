@@ -11,6 +11,8 @@ export interface JsonRequest<T> {
   /** Public URLs or data: URLs of video the model should watch. */
   videos?: string[];
   effort?: 'low' | 'medium' | 'high';
+  /** A short answer the user is waiting on. The host answers it with a smaller, faster model and as little reasoning as it allows. */
+  quick?: boolean;
 }
 
 export interface WebResult {
@@ -68,6 +70,18 @@ export interface Found {
   media?: string;
   steps?: string[];
   chart?: { labels: string[]; values: number[]; unit?: string };
+  /** What kind of thing the record is, when its source knows. */
+  kind?: 'artwork' | 'paper' | 'book';
+  /** What a work is made of, as its holder catalogues it. */
+  medium?: string;
+  /** The museum or collection that holds a work. */
+  holder?: string;
+  /** The authors in order, as many as the source lists. `by` may shorten them. */
+  authors?: string[];
+  /** True when the source cut `authors` short, so there are more than are listed. */
+  authorsCut?: boolean;
+  /** The journal, conference or repository a paper appeared in. */
+  venue?: string;
 }
 
 /** A video that can be played inside a client. */
@@ -118,6 +132,12 @@ export interface Tools {
 
 export interface Assets {
   put(bytes: Uint8Array, mime: string, name?: string): Promise<{ id: string }>;
+  /**
+   * An asset whose bytes stay where they are, a remote address or a file on the host, streamed through the service when asked for.
+   * For playable media too large to copy. Never called with an address a client supplied.
+   */
+  link(from: string, mime: string, name?: string): Promise<{ id: string }>;
+  /** The bytes, when the host holds them. Null for an asset linked to a remote address. */
   get(id: string): Promise<{ bytes: Uint8Array; mime: string; name?: string } | null>;
   /** The address a client loads the asset from. */
   url(id: string): string;

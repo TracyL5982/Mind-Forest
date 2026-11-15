@@ -35,7 +35,7 @@ import subprocess
 import sys
 import time
 
-APP = "com.kaifengwu.mindpalace.ocean"
+APP = "com.kaifengwu.mindpalace.ocean" + os.environ.get("QUEST_APP_SUFFIX", "")
 ACTIVITY = "com.kaifengwu.mindpalace.MainActivity"
 FILES = f"/sdcard/Android/data/{APP}/files"
 HERE = os.path.dirname(os.path.abspath(__file__))

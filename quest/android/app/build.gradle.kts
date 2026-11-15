@@ -11,6 +11,11 @@ android {
     defaultConfig {
         // The same identifier as the visionOS ocean target.
         applicationId = "com.kaifengwu.mindpalace.ocean"
+        // -PappSuffix=.agents installs a second copy beside the first, with its own files and media
+        // (a build signed on another machine cannot be installed over the first without removing it).
+        val suffix = (project.findProperty("appSuffix") as String?) ?: ""
+        applicationIdSuffix = suffix
+        manifestPlaceholders["appLabel"] = if (suffix.isEmpty()) "Mind Palace Ocean" else "Mind Palace Ocean ($suffix)".replace("(.", "(")
         minSdk = 29
         targetSdk = 34
         versionCode = 1
@@ -58,4 +63,6 @@ android {
 
 dependencies {
     implementation("org.khronos.openxr:openxr_loader_for_android:1.1.58")
+    // The agent service's WebSocket and HTTP (Net.kt).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

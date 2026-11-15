@@ -18,6 +18,8 @@ interface Adapter extends Source {
 
 const AGENT_NAME = 'MindPalace/0.1 (local prototype)';
 const PER_SEARCH = 6;
+/** The Internet Archive's MP4 copies, the ones every browser and the headset play first. "MPEG4" may be an original in an older codec. */
+const ARCHIVE_FORMATS = ['h.264', '512Kb MPEG4', 'h.264 IA', 'MPEG4'];
 const WEB_PREFERENCE =
   'Prefer pages with substance: original reporting, studies, official and first-hand sources, case studies, and long pieces by people who know the subject. ' +
   'Leave out listicles, "best of" roundups, affiliate reviews, pages written to rank in search, shops, and encyclopedia entries.';
@@ -89,12 +91,14 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
   // ---- museums
 
   type Museum = (query: string, max: number) => Promise<Found[]>;
-  const work = (title: string, by: string, date: string, medium: string, from: string, url: string, image: string): Found => ({ title, by, date, text: medium, from, url, image });
+  /** `said` is what the catalogue says the work is, shown as its text. `medium` is only what it is made of. */
+  const work = (title: string, by: string, date: string, said: string, medium: string, holder: string, url: string, image: string): Found =>
+    ({ title, by, date, text: said, from: holder, url, image, kind: 'artwork', holder, ...(medium ? { medium } : {}) });
 
   const chicago: Museum = async (query, max) => {
     const json = await ask(`https://api.artic.edu/api/v1/artworks/search?q=${q(query)}&limit=${max}&fields=id,title,artist_title,date_display,medium_display,image_id`);
     return list(json.data).filter((w) => str(w.image_id)).map((w) =>
-      work(str(w.title), str(w.artist_title), str(w.date_display), str(w.medium_display), 'Art Institute of Chicago', `https://www.artic.edu/artworks/${w.id}`, `https://www.artic.edu/iiif/2/${str(w.image_id)}/full/843,/0/default.jpg`));
+      work(str(w.title), str(w.artist_title), str(w.date_display), str(w.medium_display), str(w.medium_display), 'Art Institute of Chicago', `https://www.artic.edu/artworks/${w.id}`, `https://www.artic.edu/iiif/2/${str(w.image_id)}/full/843,/0/default.jpg`));
   };
   const met: Museum = async (query, max) => {
     const base = 'https://collectionapi.metmuseum.org/public/collection';
@@ -102,18 +106,19 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     // The search answers with ids only, and works still in copyright come back without a picture.
     const works = await Promise.all(list(found.objectIDs).slice(0, max * 2).map((id) => ask(`${base}/v1/objects/${id}`).catch(() => null)));
     return works.flatMap((w) => (w && str(w.primaryImageSmall)
-      ? [work(str(w.title), str(w.artistDisplayName), str(w.objectDate), str(w.medium), 'The Metropolitan Museum of Art', str(w.objectURL), str(w.primaryImageSmall))]
+      ? [work(str(w.title), str(w.artistDisplayName), str(w.objectDate), str(w.medium), str(w.medium), 'The Metropolitan Museum of Art', str(w.objectURL), str(w.primaryImageSmall))]
       : [])).slice(0, max);
   };
   const cleveland: Museum = async (query, max) => {
     const json = await ask(`https://openaccess-api.clevelandart.org/api/artworks/?q=${q(query)}&has_image=1&limit=${max}`);
     return list(json.data).filter((w) => str(w.images?.web?.url)).map((w) =>
-      work(str(w.title), str(w.creators?.[0]?.description), str(w.creation_date), str(w.technique) || str(w.type), 'Cleveland Museum of Art', str(w.url), str(w.images.web.url)));
+      work(str(w.title), str(w.creators?.[0]?.description), str(w.creation_date), str(w.technique) || str(w.type), str(w.technique), 'Cleveland Museum of Art', str(w.url), str(w.images.web.url)));
   };
+  // The V&A search says what kind of object a work is ("Teapot"), never what it is made of, so it gives no medium.
   const victoriaAndAlbert: Museum = async (query, max) => {
     const json = await ask(`https://api.vam.ac.uk/v2/objects/search?q=${q(query)}&images_exist=1&page_size=${max}`);
     return list(json.records).filter((w) => str(w._images?._iiif_image_base_url)).map((w) =>
-      work(str(w._primaryTitle) || str(w.objectType), str(w._primaryMaker?.name), str(w._primaryDate), str(w.objectType), 'Victoria and Albert Museum', `https://collections.vam.ac.uk/item/${w.systemNumber}`, `${str(w._images._iiif_image_base_url)}full/!960,960/0/default.jpg`));
+      work(str(w._primaryTitle) || str(w.objectType), str(w._primaryMaker?.name), str(w._primaryDate), str(w.objectType), '', 'Victoria and Albert Museum', `https://collections.vam.ac.uk/item/${w.systemNumber}`, `${str(w._images._iiif_image_base_url)}full/!960,960/0/default.jpg`));
   };
   const MUSEUMS = [chicago, met, cleveland, victoriaAndAlbert];
   const PER_MUSEUM = 4;
@@ -136,6 +141,10 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
 
   // ---- research
 
+  /** What OpenAlex calls a work, as the kind a card draws. A chapter, a dataset or anything else gets no kind. */
+  const WORK_KINDS: Record<string, Found['kind']> = { article: 'paper', preprint: 'paper', review: 'paper', letter: 'paper', dissertation: 'paper', book: 'book', monograph: 'book' };
+  const OPENALEX_AUTHORS = 100;
+
   const papers: Adapter = {
     id: 'papers',
     name: 'Research papers',
@@ -143,13 +152,21 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     query: 'Three to six words a paper on this would have in its title or abstract.',
     show: 2,
     async search(query) {
-      const json = await ask(`https://api.openalex.org/works?search=${q(query)}&filter=cited_by_count:>10&per-page=8&select=id,doi,title,publication_year,authorships,abstract_inverted_index,cited_by_count`);
+      const json = await ask(`https://api.openalex.org/works?search=${q(query)}&filter=cited_by_count:>10&per-page=8&select=id,doi,title,type,publication_year,authorships,is_authors_truncated,primary_location,abstract_inverted_index,cited_by_count`);
       return list(json.results).map((w): Found => {
         const words: string[] = [];
         for (const [word, places] of Object.entries((w.abstract_inverted_index ?? {}) as Record<string, number[]>)) for (const at of places) words[at] = word;
         const authors = list(w.authorships).map((a) => str(a.author?.display_name)).filter(Boolean);
         const cited = Number(w.cited_by_count) || 0;
+        const venue = str(w.primary_location?.source?.display_name);
+        const kind = WORK_KINDS[str(w.type)];
+        // The search lists at most 100 authors. Eight live records with a cut list all came without `is_authors_truncated`, so the count decides.
+        const authorsCut = w.is_authors_truncated === true || list(w.authorships).length >= OPENALEX_AUTHORS;
         return {
+          ...(kind ? { kind } : {}),
+          ...(authors.length > 0 ? { authors } : {}),
+          ...(authorsCut ? { authorsCut } : {}),
+          ...(venue ? { venue } : {}),
           title: plain(str(w.title)),
           by: authors.length > 2 ? `${authors[0]} et al.` : authors.join(' and '),
           date: str(w.publication_year),
@@ -162,6 +179,9 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
 
   // ---- books
 
+  /** Apple names several authors in one string, as "A, B & C". */
+  const authorsOf = (names: string): string[] => names.split(/\s+&\s+|,\s+(?!(?:Jr|Sr|II|III|IV)\b)/).map((n) => n.trim()).filter(Boolean);
+
   const books: Adapter = {
     id: 'books',
     name: 'Books',
@@ -170,12 +190,16 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     show: 2,
     async search(query) {
       const json = await ask(`https://itunes.apple.com/search?term=${q(query)}&media=ebook&limit=${PER_SEARCH}`);
-      return list(json.results).map((b): Found => ({
-        title: str(b.trackName), by: str(b.artistName), date: str(b.releaseDate).slice(0, 4),
-        text: [plain(str(b.description)).slice(0, 1500), list(b.genres).length > 0 ? `Shelved under: ${list(b.genres).filter((g) => g !== 'Books').slice(0, 5).join(', ')}.` : ''].filter(Boolean).join('\n'),
-        url: str(b.trackViewUrl),
-        ...(str(b.artworkUrl100) ? { image: str(b.artworkUrl100).replace('100x100bb', '600x600bb') } : {}),
-      })).filter((f) => f.text.length > 120);
+      return list(json.results).map((b): Found => {
+        const authors = authorsOf(str(b.artistName));
+        return {
+          kind: 'book', ...(authors.length > 0 ? { authors } : {}),
+          title: str(b.trackName), by: str(b.artistName), date: str(b.releaseDate).slice(0, 4),
+          text: [plain(str(b.description)).slice(0, 1500), list(b.genres).length > 0 ? `Shelved under: ${list(b.genres).filter((g) => g !== 'Books').slice(0, 5).join(', ')}.` : ''].filter(Boolean).join('\n'),
+          url: str(b.trackViewUrl),
+          ...(str(b.artworkUrl100) ? { image: str(b.artworkUrl100).replace('100x100bb', '600x600bb') } : {}),
+        };
+      }).filter((f) => f.text.length > 120);
     },
   };
 
@@ -342,6 +366,45 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     },
   };
 
+  // ---- films that play as a file, for a client that cannot show a player from another site
+
+  const archive: Adapter = {
+    id: 'archive',
+    name: 'Internet Archive',
+    goodFor: 'Old films, newsreels, industrial and teaching films, lectures and home movies, played in the card. Strong on the twentieth century and on how things were made or done. Weak on anything recent.',
+    query: 'Two or three plain words such a film would have in its title or subjects ("bread baking", "steam locomotive", "Hitchcock").',
+    show: 1,
+    async search(query) {
+      // The catalogue requires every word, so a search that finds nothing is tried again with its last word dropped.
+      let docs: Json[] = [];
+      for (let words = query.replace(/[^\p{L}\p{N}\s'-]/gu, ' ').split(/\s+/).filter(Boolean); words.length > 0 && docs.length === 0; words = words.slice(0, -1)) {
+        const terms = words.join(' ');
+        const params = new URLSearchParams({ q: `(title:(${terms}) OR subject:(${terms})) AND mediatype:movies AND NOT collection:(tvnews OR deemphasize OR stream_only)`, rows: '6', output: 'json' });
+        params.append('fl[]', 'identifier');
+        params.append('sort[]', 'downloads desc');
+        docs = list((await ask(`https://archive.org/advancedsearch.php?${params}`)).response?.docs);
+      }
+      const found = await Promise.all(docs.map(async (doc): Promise<Found | null> => {
+        const id = str(doc.identifier);
+        const item = await ask(`https://archive.org/metadata/${q(id)}`).catch(() => null);
+        const file = list(item?.files)
+          .filter((f) => /\.mp4$/i.test(str(f.name)) && ARCHIVE_FORMATS.includes(str(f.format)))
+          .sort((a, b) => ARCHIVE_FORMATS.indexOf(str(a.format)) - ARCHIVE_FORMATS.indexOf(str(b.format)))[0];
+        if (!item || !file) return null;
+        const about = item.metadata ?? {};
+        const one = (value: unknown) => str(Array.isArray(value) ? value[0] : value);
+        return {
+          title: plain(one(about.title)) || id, by: plain(one(about.creator)), date: (one(about.date) || one(about.year)).slice(0, 4),
+          text: plain(one(about.description)).slice(0, 1500) || plain(one(about.title)),
+          from: 'Internet Archive', url: `https://archive.org/details/${id}`,
+          media: `https://archive.org/download/${q(id)}/${str(file.name).split('/').map(q).join('/')}`,
+          image: `https://archive.org/services/img/${q(id)}`,
+        };
+      }));
+      return found.flatMap((f) => f ?? []);
+    },
+  };
+
   // ---- sources that need a key. The key travels in the address, so a failure reports its status and nothing else.
 
   const tmdbKey = opts.keys?.TMDB_API_KEY;
@@ -386,7 +449,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
       const one = (value: unknown) => str(list(value)[0]);
       return list(json.items).filter((r) => one(r.edmIsShownBy) || one(r.edmPreview)).map((r): Found => ({
         title: plain(one(r.title)), by: /^https?:/.test(one(r.dcCreator)) ? '' : one(r.dcCreator), date: one(r.year),
-        text: plain(one(r.dcDescription)).slice(0, 600), from: one(r.dataProvider) || 'Europeana',
+        text: plain(one(r.dcDescription)).slice(0, 600), from: one(r.dataProvider) || 'Europeana', ...(one(r.dataProvider) ? { holder: one(r.dataProvider) } : {}),
         url: str(r.guid).split('?')[0]!, image: one(r.edmIsShownBy) || one(r.edmPreview),
       }));
     },
@@ -408,7 +471,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     },
   };
 
-  const adapters: Adapter[] = [web, papers, books, data, discussions, code, answers, museums, boards, podcasts, recipes, ...(guardianKey ? [news] : []), ...(tmdbKey ? [films] : []), ...(europeanaKey ? [heritage] : [])];
+  const adapters: Adapter[] = [web, papers, books, data, discussions, code, answers, museums, boards, podcasts, recipes, archive, ...(guardianKey ? [news] : []), ...(tmdbKey ? [films] : []), ...(europeanaKey ? [heritage] : [])];
   const byId = new Map(adapters.map((a) => [a.id, a]));
 
   return {

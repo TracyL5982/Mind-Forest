@@ -16,6 +16,21 @@ const NOTHING = {
   personName: '',
   personRole: '',
   when: '',
+  where: '',
+  people: [],
+  pros: [],
+  cons: [],
+  tableHeads: [],
+  tableRows: [],
+  question: '',
+  answer: '',
+  term: '',
+  definition: '',
+  items: [],
+  checklist: [],
+  colours: [],
+  excerptText: '',
+  excerptAt: '',
 };
 const described = (title: string, more: object = {}) => ({
   title,
@@ -123,6 +138,7 @@ test('a small video is watched and a large one is filed by name with a note', as
   assert.match(sent[0]![0]!, /^data:video\/mp4;base64,/);
   assert.deepEqual(items.map((i) => [i.kind, i.title]), [['video', 'A short clip'], ['video', 'beach walk take2']]);
   assert.equal(items[1]!.source.asset, large.id);
+  assert.deepEqual(items.map((i) => i.data.mediaUrl), [`/assets/${small.id}`, `/assets/${large.id}`], 'each plays from the service');
   assert.ok(k.notes.some((n) => n.includes('beach-walk_take2.mp4') && n.includes('15 MB')));
   assertWellFormed(items);
 });
@@ -223,6 +239,421 @@ test('structure is kept only when the content holds it', async () => {
   assert.equal('when' in item!.data, false);
   assert.equal('person' in item!.data, false);
 });
+
+/** The data Intake keeps when the model answers a pasted `text` with `reply`. */
+async function extracted(text: string, reply: object): Promise<Item['data']> {
+  const k = kit();
+  k.model.on('intake.text', () => ({ entries: [{ dump: 0, text: '', ...described('Pasted', reply) }] }));
+  const [item] = await intake(k.ctx, [{ kind: 'text', text }]);
+  return item!.data;
+}
+
+const STRUCTURED: { field: string; text: string; reply: object; kept: object; wrong: object; left?: object }[] = [
+  {
+    field: 'where',
+    text: 'We stayed two nights in Lisbon, near the river.',
+    reply: { where: 'Lisbon' },
+    kept: { where: 'Lisbon' },
+    wrong: { where: 'Porto' },
+  },
+  {
+    field: 'people',
+    text: 'Dinner with Ana Lima and Ben Okri after the talk.',
+    reply: { people: ['Ana Lima', 'Ben Okri'] },
+    kept: { people: ['Ana Lima', 'Ben Okri'] },
+    wrong: { people: ['Ana Lima', 'Carl Jung'] },
+    left: { people: ['Ana Lima'] },
+  },
+  {
+    field: 'pros',
+    text: 'Moving to Rust.\nPros: no data races, one binary.\nCons: slow builds.',
+    reply: { pros: ['No data races', 'one binary'] },
+    kept: { pros: ['No data races', 'one binary'] },
+    wrong: { pros: ['It is fashionable'] },
+  },
+  {
+    field: 'cons',
+    text: 'Moving to Rust.\nPros: no data races, one binary.\nCons: slow builds.',
+    reply: { cons: ['slow builds'] },
+    kept: { cons: ['slow builds'] },
+    wrong: { cons: ['Nobody knows it'] },
+  },
+  {
+    field: 'table',
+    text: 'Plan | Price | Seats\nSolo | $8 | 1\nTeam | $20 | 5\nOrg | $1,200 | 100',
+    reply: { tableHeads: ['Plan', 'Price', 'Seats'], tableRows: ['Solo | $8 | 1', '| Team | $20 | 5 |', 'Org | $1,200 | 100'] },
+    kept: { table: { heads: ['Plan', 'Price', 'Seats'], rows: [['Solo', '$8', '1'], ['Team', '$20', '5'], ['Org', '$1,200', '100']] } },
+    wrong: { tableHeads: ['Plan', 'Price', 'Seats'], tableRows: ['Solo | $8 | 1', 'Team | $45 | 5', 'Org | $1,200'] },
+    left: { table: { heads: ['Plan', 'Price', 'Seats'], rows: [['Solo', '$8', '1']] } },
+  },
+  {
+    field: 'question and answer',
+    text: 'Why is the sky blue? Air scatters short wavelengths the most.',
+    reply: { question: 'Why is the sky blue?', answer: 'Air scatters short wavelengths the most.' },
+    kept: { question: 'Why is the sky blue?', answer: 'Air scatters short wavelengths the most.' },
+    wrong: { question: 'Why is the sky blue?', answer: 'Because it reflects the sea.' },
+  },
+  {
+    field: 'term and definition',
+    text: 'Parallax: the apparent shift of an object when the viewer moves.',
+    reply: { term: 'Parallax', definition: 'the apparent shift of an object when the viewer moves' },
+    kept: { term: 'Parallax', definition: 'the apparent shift of an object when the viewer moves' },
+    wrong: { term: 'Parallax', definition: 'an error in a viewfinder' },
+  },
+  {
+    field: 'items and checklist',
+    text: 'Packing:\n[x] passport\n[ ] charger\n[x] rain coat',
+    reply: { items: ['passport', 'charger', 'rain coat'], checklist: [true, false, true] },
+    kept: { items: ['passport', 'charger', 'rain coat'], checklist: [true, false, true] },
+    wrong: { items: ['passport', 'sunglasses', 'rain coat'], checklist: [true, false, true] },
+    left: { items: ['passport', 'rain coat'], checklist: [true, true] },
+  },
+  {
+    field: 'colours',
+    text: 'Palette: Ember #E4572E, #17BEBB and plain navy.',
+    reply: { colours: [{ name: 'Ember', value: '#E4572E' }, { name: 'Lagoon', value: '#17BEBB' }, { name: '', value: 'Navy' }] },
+    kept: { colours: [{ name: 'Ember', value: '#E4572E' }, { name: '#17BEBB', value: '#17BEBB' }, { name: 'navy', value: 'navy' }] },
+    wrong: { colours: [{ name: 'Gold', value: '#FFC914' }, { name: 'Ember', value: 'ember' }] },
+  },
+  {
+    field: 'excerpt',
+    text: 'Chapter 3. The house remembers. Every stair keeps the weight of who climbed it.',
+    reply: { excerptText: 'Every stair keeps the weight of who climbed it.', excerptAt: 'Chapter 3' },
+    kept: { excerpt: { text: 'Every stair keeps the weight of who climbed it.', at: 'Chapter 3' } },
+    wrong: { excerptText: 'Every wall keeps a secret.', excerptAt: 'Chapter 3' },
+  },
+];
+
+for (const { field, text, reply, kept, wrong, left = {} } of STRUCTURED) {
+  test(`${field} is kept when the text states it and dropped when it does not`, async () => {
+    assert.deepEqual(await extracted(text, reply), kept);
+    assert.deepEqual(await extracted(text, wrong), left);
+  });
+}
+
+test('where an excerpt sits is dropped alone when the text does not say it', async () => {
+  const data = await extracted('The house remembers. Every stair keeps the weight.', { excerptText: 'Every stair keeps the weight.', excerptAt: 'the closing page' });
+  assert.deepEqual(data, { excerpt: { text: 'Every stair keeps the weight.' } });
+});
+
+test('a list is a checklist only when the text itself marks each item, and the marks are the text\'s', async () => {
+  assert.deepEqual(await extracted('Bring: tent, stove, map.', { items: ['tent', 'stove', 'map'], checklist: [true, true, false] }), { items: ['tent', 'stove', 'map'] });
+  assert.deepEqual(await extracted('☑ tent\n☐ stove\nmap', { items: ['tent', 'stove', 'map'], checklist: [true, false, false] }), { items: ['tent', 'stove', 'map'] });
+  assert.deepEqual(await extracted('[x] tent\n[ ] stove', { items: ['tent', 'stove'], checklist: [false, true] }), { items: ['tent', 'stove'], checklist: [true, false] });
+  assert.deepEqual(await extracted('[x] tent\n[ ] stove', { items: ['tent', 'stove'], checklist: [] }), { items: ['tent', 'stove'] });
+});
+
+test('a list needs two different entries, whatever their case', async () => {
+  const text = 'Bring: passport, charger.';
+  assert.deepEqual(await extracted(text, { items: ['passport'] }), {});
+  assert.deepEqual(await extracted(text, { items: ['passport', 'Passport', 'PASSPORT'] }), {});
+  assert.deepEqual(await extracted(text, { items: ['passport', 'umbrella'] }), {});
+  assert.deepEqual(await extracted(text, { items: ['passport', 'Charger', 'charger'] }), { items: ['passport', 'Charger'] });
+  assert.deepEqual(await extracted(text, { people: ['Charger', 'charger'], pros: ['passport', 'PASSPORT'] }), { people: ['Charger'], pros: ['passport'] });
+});
+
+test('a word, a number or a symbol the text only holds inside something else is not stated', async () => {
+  const text = 'A comparison of options for the manager, founded in 1950 with 1,200 euros. It was an important hundred-page report.';
+  const reply = {
+    where: 'Paris',
+    people: ['Ana', '?'],
+    pros: ['...', 'port'],
+    cons: ['5', '200'],
+    colours: [{ name: '', value: 'red' }, { name: '', value: 'tan' }, { name: '', value: '#195' }],
+    question: 'Why?',
+    answer: 'A comparison of options',
+    term: 'manager',
+    definition: '—',
+  };
+  assert.deepEqual(await extracted(text, reply), {});
+  assert.deepEqual(await extracted(text, { where: 'the Manager', cons: ['1200', '1950'], pros: ['hundred page report'] }), { where: 'the Manager', cons: ['1200', '1950'], pros: ['hundred page report'] });
+  assert.deepEqual(await extracted('Call 555 about the coffee.', { colours: [{ name: '', value: '#555' }, { name: '', value: '#fee' }] }), {}, 'a hex colour needs its "#" in the text');
+  assert.deepEqual(await extracted('北京是中国的首都，人口2189万。', { where: '北京', people: ['上海'], cons: ['189'] }), { where: '北京' });
+});
+
+test('both halves of a pair must be in the text', async () => {
+  const text = 'Why is the sky blue? Air scatters short wavelengths the most.\nParallax: the apparent shift of an object when the viewer moves.';
+  assert.deepEqual(await extracted(text, { question: 'Why is grass green?', answer: 'Air scatters short wavelengths the most.' }), {});
+  assert.deepEqual(await extracted(text, { term: 'Refraction', definition: 'the apparent shift of an object when the viewer moves' }), {});
+});
+
+test('a fact, a date and a named person are kept only when the text writes them', async () => {
+  const text = 'Ada Lovelace wrote the first program in 1843. The notes ran to 65 pages.';
+  const stated = { facts: [{ label: 'Length', value: '65 pages' }], when: '1843', personName: 'Ada Lovelace', personRole: 'Mathematician' };
+  assert.deepEqual(await extracted(text, stated), { facts: [{ label: 'Length', value: '65 pages' }], when: '1843', person: { name: 'Ada Lovelace', role: 'Mathematician' } });
+  assert.deepEqual(await extracted(text, { facts: [{ label: 'Length', value: '5 pages' }, { label: 'Year', value: '1843' }], when: '4 July 1843', personName: 'Charles Babbage', personRole: 'Engineer' }), {
+    facts: [{ label: 'Year', value: '1843' }],
+  });
+});
+
+test('a chart value is a whole number of the text, not digits inside another', async () => {
+  const text = 'Sales were 1,200 in May and 3.5 in June of 1950.';
+  assert.deepEqual(await extracted(text, { chartLabels: ['May', 'June'], chartValues: [1200, 3.5] }), { chart: { labels: ['May', 'June'], values: [1200, 3.5] } });
+  for (const chartValues of [[200, 3.5], [1200, 35], [1200, 5], [1200, -3.5]]) assert.deepEqual(await extracted(text, { chartLabels: ['May', 'June'], chartValues }), {}, String(chartValues));
+});
+
+test('a chart value written in a magnitude is kept with the unit that carries it', async () => {
+  const text = '人口：北京2189万，上海2487万。';
+  const chart = { labels: ['北京', '上海'], values: [2189, 2487], unit: '万' };
+  assert.deepEqual(await extracted(text, { chartLabels: chart.labels, chartValues: chart.values, chartUnit: '万' }), { chart });
+  assert.deepEqual(await extracted(text, { chartLabels: chart.labels, chartValues: chart.values }), {}, 'without the unit the bare numbers are not written');
+  assert.deepEqual(await extracted(text, { chartLabels: chart.labels, chartValues: chart.values, chartUnit: '亿' }), {});
+  assert.deepEqual(await extracted('Revenue was $120k in Q1 and $140k in Q2.', { chartLabels: ['Q1', 'Q2'], chartValues: [120, 140], chartUnit: 'k' }), {
+    chart: { labels: ['Q1', 'Q2'], values: [120, 140], unit: 'k' },
+  });
+});
+
+const CODE: [language: string, source: string][] = [
+  ['javascript', 'function debounce(fn, ms) {\n  let t;\n  return (...args) => {\n    clearTimeout(t);\n    t = setTimeout(() => fn(...args), ms);\n  };\n}'],
+  ['python', 'import math\n\ndef area(r):\n    return math.pi * r ** 2\n\nprint(area(2))'],
+  ['c', '#include <stdio.h>\n\nint main(void) {\n    printf("hello\\n");\n    return 0;\n}'],
+  ['java', 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("hello");\n    }\n}'],
+  ['rust', 'use std::collections::HashMap;\n\nfn main() {\n    let mut seen = HashMap::new();\n    seen.insert("a", 1);\n    println!("{:?}", seen);\n}'],
+];
+
+const PROSE = [
+  'Dumplings\n2 cups flour\n1 cup water\nMix the flour and water, rest for 30 minutes.\nRoll thin, fill, and boil until they float.',
+  'Two roads diverged in a yellow wood,\nAnd sorry I could not travel both\nAnd be one traveler, long I stood\nAnd looked down one as far as I could',
+  'Packing:\n- tent\n- stove\n- map (the big one)\n- matches',
+  '把客厅改成工作室这件事想了很久。\n书桌放在窗边，光线最好。\n沙发留一张小的，朋友来了还能坐。\n最麻烦的是那面书墙，要重新打。',
+  'Meeting notes\nAna will draft the plan by Friday.\nBen checks the budget; Carl books the room.\nWe meet again on the 12th.',
+  'Why the launch slipped:\n1. The vendor was late.\n2. QA found a crash (fixed).\n3. Legal wanted another week.',
+  'Dear Mei,\nThank you for the tea set; we use it every Sunday.\nThe children ask when you will visit.\nWith love,\nNan',
+  'Pros: fast builds, one small binary.\nCons: a steep start.\nVerdict: try it on the next service.',
+  'Plan | Price | Seats\nSolo | $8 | 1\nTeam | $20 | 5\nOrg | $1,200 | 100',
+  'Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.\nThat is also why sunsets are red.',
+  'if the weather holds we go on Saturday\nfor now nobody has a tent\nlet me know who can drive',
+];
+
+test('pasted code is kept as code, fenced or bare, in five languages', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Snippet', { facts: [{ label: 'args', value: 'fn' }] }) })) }));
+  const bare = await intake(k.ctx, CODE.map(([, source]) => ({ kind: 'text' as const, text: `\n${source}\n` })));
+  assert.deepEqual(bare.map((item) => item.data.code), CODE.map(([, source]) => ({ source })));
+  assert.deepEqual(bare.map((item) => item.kind), CODE.map(() => 'text'));
+  assert.equal(bare[0]!.text, `\n${CODE[0]![1]}\n`, 'the paste itself is the text');
+  assert.deepEqual(bare[0]!.data.facts, [{ label: 'args', value: 'fn' }], 'what the model read off it is kept beside the code');
+
+  const fenced = await intake(k.ctx, CODE.map(([language, source]) => ({ kind: 'text' as const, text: `\`\`\`${language}\n${source}\n\`\`\`` })));
+  assert.deepEqual(fenced.map((item) => item.data.code), CODE.map(([language, source]) => ({ language, source })));
+  const [untagged, prose, two] = await intake(k.ctx, [
+    { kind: 'text', text: '```\nSELECT name FROM users\n```' },
+    { kind: 'text', text: 'Try this:\n```\nSELECT name FROM users\n```\nIt lists them.' },
+    { kind: 'text', text: '```\na\n```\nand\n```\nb\n```' },
+  ]);
+  assert.deepEqual(untagged!.data.code, { source: 'SELECT name FROM users' });
+  assert.equal(prose!.data.code, undefined, 'a fence inside prose is not the whole paste');
+  assert.equal(two!.data.code, undefined);
+  assertWellFormed([...bare, ...fenced]);
+});
+
+test('prose is never taken for code', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Words') })) }));
+  const items = await intake(k.ctx, PROSE.map((text) => ({ kind: 'text' as const, text })));
+  items.forEach((item, n) => assert.equal(item.data.code, undefined, PROSE[n]));
+  assert.equal(items.length, PROSE.length);
+});
+
+const COMMENTED: [what: string, source: string][] = [
+  ['a table in a docstring', 'def rate(tier):\n    """\n    tier | rate\n    free | 10\n    pro  | 100\n    """\n    return {"free": 10, "pro": 100}[tier]\n\nprint(rate("pro"))'],
+  ['prose in a block comment', '/*\n * Debounce waits until the calls stop.\n * It is the usual fix for a search box\n * that fires on every key\n */\nfunction debounce(fn, ms) {\n  let t;\n  return wrap(fn, ms, t);\n}'],
+  ['prose in line comments', '// Reads the limit for a tier\n// The tiers are free and pro\n// Anything else is an error\nconst limit = RATES[tier];\nif (limit === undefined) throw new Error(tier);\nreturn limit;'],
+  ['hash comments', '# The radius is in metres\n# The result is in square metres\n# Nothing is rounded\nimport math\ndef area(r):\n    return math.pi * r ** 2\nprint(area(2))'],
+  ['a docstring in single quotes', "def area(r):\n    '''\n    Area of a circle\n    r is the radius in metres\n    Nothing is rounded here\n    '''\n    return 3.14159 * r ** 2\nprint(area(2))"],
+  ['dash comments', '-- Everyone who signed up this year\n-- and has not paid yet\n-- newest first\nSELECT name FROM users WHERE (paid = 0);\nSELECT count(*) FROM users WHERE (paid != 0);\nDELETE FROM sessions WHERE (age > 30);'],
+  ['a glob that looks like an open comment', 'import { glob } from "glob";\nconst files = glob("src/*.ts");\nfor (const file of files) {\n  check(file);\n}'],
+];
+
+const DOCUMENTS = [
+  '# Trip to Lisbon\n\n## Getting there\nThe train from Porto takes three hours.\nBook the morning one.\n\n## Staying\nAlfama is steep but close to everything.',
+  '# Reading list\n- The Poetics of Space\n- Ways of Seeing\n## Later\n- Species of Spaces',
+  '# 周末计划\n\n## 周六\n上午去西湖边走走。\n下午在家整理书架。\n\n## 周日\n和朋友吃饭。',
+  '# Notes\n// not sure about this yet\nAsk Ana about the budget.\nCall the venue.\n-- me',
+  'Two comments and a thought:\n# first\n# second\nThat is all.',
+  '"""\nA poem kept in quotes\nfor no reason at all\n"""\nand a line after it',
+  '/* an aside\nthat runs over lines */\nThen the letter proper.\nIt has three lines\nand none is code.',
+];
+
+test('code is still code when its comments or docstring hold prose or a table', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Snippet') })) }));
+  const items = await intake(k.ctx, COMMENTED.map(([, source]) => ({ kind: 'text' as const, text: source })));
+  items.forEach((item, n) => assert.deepEqual(item.data.code, { source: COMMENTED[n]![1] }, COMMENTED[n]![0]));
+  const [two] = await intake(k.ctx, [{ kind: 'text', text: '# Only two lines are code\n# under these comments\nimport math\nprint(math.pi)' }]);
+  assert.equal(two!.data.code, undefined, 'three lines of code must remain outside the comments');
+});
+
+test('a document with headings, or with a comment in it, is not code', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Words') })) }));
+  const items = await intake(k.ctx, DOCUMENTS.map((text) => ({ kind: 'text' as const, text })));
+  items.forEach((item, n) => assert.equal(item.data.code, undefined, DOCUMENTS[n]));
+});
+
+const EVERYDAY: [what: string, text: string][] = [
+  ['quantities in brackets', 'Milk (2 pints)\nEggs (a dozen)\nBread (wholemeal)\nButter (unsalted)\nApples (six)'],
+  ['phone numbers with a label in brackets', 'Mum 07700 900123 (mobile)\nDad 07700 900456 (work)\nDr Patel 0161 496 0000 (surgery)\nSchool office 0161 496 0111 (mornings only)'],
+  ['books with a year in brackets', 'The Body Keeps the Score, van der Kolk (2014)\nWhy We Sleep, Walker (2017)\nBreath, Nestor (2020)\nBeing Mortal, Gawande (2014)'],
+  ['Chinese lines ending in a half-width bracket', '牛奶(两盒)\n鸡蛋(一打)\n豆腐(老的)\n小葱(一把)'],
+  ['lines ending in a smiley', 'First day at the new school went fine :)\nShe already has a friend called Noor :)\nForgot her lunch box, the office lent her one :)'],
+  ['arrows written as =>', 'rent goes up => we move further out\nfurther out => longer commute for both of us\nlonger commute => we need the second car after all'],
+  ['chores that begin with a keyword', 'return library books\nclass photo money due friday\nlet the plumber in at ten\nimport contacts to the new phone'],
+  ['a recipe with bracketed remarks', 'Roast the squash at 200 (fan 180)\nToast the seeds in a dry pan (watch them)\nBlend with the stock (about 800 ml)'],
+  ['sentences ending in a semicolon', 'Things the solicitor said;\nthe searches take three weeks;\nthe seller has not answered the enquiries;\nwe should not book the removal van yet;'],
+  ['a budget written with equals signs', 'rent = 800\nfood = 300\nfun = 100'],
+  ['chores that begin as a query does', 'update the mailing list\ncreate a logo for the choir\njoin the gym before March\nselect a venue'],
+  ['names with an at sign', '@ana\n@ben\n@carl'],
+  ['prices with a dollar sign set apart', '$ 5 for coffee\n$ 12 for lunch\n$ 40 for the train'],
+  ['a to-do list with headings', '# Today\ncall the bank\n# Tomorrow\npost the forms'],
+];
+
+test('everyday notes with brackets, arrows, smileys, semicolons or equals signs are not code', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Words') })) }));
+  const items = await intake(k.ctx, EVERYDAY.map(([, text]) => ({ kind: 'text' as const, text })));
+  assert.equal(items.length, EVERYDAY.length);
+  items.forEach((item, n) => assert.equal(item.data.code, undefined, EVERYDAY[n]![0]));
+});
+
+const UNFENCED: [what: string, language: string | undefined, source: string][] = [
+  ['a Python function with a docstring, assignments and a loop', undefined, 'def amortise(principal, annual_rate, years):\n    """Monthly payment and total interest for a repayment loan."""\n    r = annual_rate / 12\n    n = years * 12\n    if r == 0:\n        return principal / n, 0.0\n    payment = principal * r / (1 - (1 + r) ** -n)\n    total = payment * n\n    return payment, total - principal\n\n\nfor rate in (0.0419, 0.0445):\n    monthly, interest = amortise(250_000, rate, 25)\n    print(f"{rate:.2%}: {monthly:,.0f} a month, {interest:,.0f} interest")'],
+  ['Python with a decorator and typed assignments', undefined, '@dataclass\nclass Loan:\n    principal: float = 0.0\n    years: int = 25\n\nloan = Loan()\nrate: float = 0.04\ntry:\n    check(loan)\nexcept ValueError:\n    raise'],
+  ['a SQL query with no semicolon inside it', undefined, "SELECT m.name, COUNT(p.id) AS payments, SUM(p.amount) AS total\nFROM members m\nLEFT JOIN payments p ON p.member_id = m.id\nWHERE p.paid_on >= DATE '2026-01-01'\nGROUP BY m.name\nHAVING SUM(p.amount) > 100\nORDER BY total DESC\nLIMIT 20;"],
+  ['a SQL query in lower case', undefined, 'select name, email\nfrom members\nwhere joined > 2020\norder by name;'],
+  ['a JSON object over lines', 'json', '{\n  "compilerOptions": {\n    "target": "ES2022",\n    "strict": true\n  },\n  "include": ["src", "test"]\n}'],
+  ['a JSON array over lines', 'json', '[\n  { "name": "Ana", "paid": true },\n  { "name": "Ben", "paid": false }\n]'],
+  ['a terminal transcript that is mostly output', 'sh', "$ git status\nOn branch main\nYour branch is ahead of 'origin/main' by 2 commits.\n$ git log --oneline -2\n3f2a1bc Fix the date parser\n9e0d7aa Add tests for leap years\n$ git push"],
+];
+
+test('code with no fence is code: Python with a docstring, SQL, a JSON file as json and a terminal transcript as sh', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Snippet') })) }));
+  const items = await intake(k.ctx, UNFENCED.map(([, , source]) => ({ kind: 'text' as const, text: source })));
+  items.forEach((item, n) => {
+    const [what, language, source] = UNFENCED[n]!;
+    assert.deepEqual(item.data.code, { ...(language ? { language } : {}), source }, what);
+  });
+  const [oneLine, broken, scalar, command] = await intake(k.ctx, [
+    { kind: 'text', text: '{"name": "config", "retries": 3}' },
+    { kind: 'text', text: '{\n  name: config,\n  retries: three\n}' },
+    { kind: 'text', text: '"just\\na\\nstring"' },
+    { kind: 'text', text: 'Run this first\n$ npm install\nand tell me what it prints' },
+  ]);
+  assert.equal(oneLine!.data.code, undefined, 'JSON on one line');
+  assert.equal(broken!.data.code, undefined, 'braces around words that are not JSON');
+  assert.equal(scalar!.data.code, undefined, 'a JSON string');
+  assert.equal(command!.data.code, undefined, 'one command inside a note');
+});
+
+const LEFT_AS_NOTES: [what: string, language: string, source: string][] = [
+  ['YAML', 'yaml', 'services:\n  web:\n    image: nginx:1.27\n    ports:\n      - "8080:80"\n  db:\n    image: postgres:16\n    restart: unless-stopped'],
+  ['HTML', 'html', '<form action="/join" method="post">\n  <label for="email">Email</label>\n  <input id="email" name="email" type="email" required>\n  <button type="submit">Join the choir list</button>\n</form>'],
+  ['minified JavaScript', 'js', '!function(){var e=document.querySelectorAll("[data-toggle]");for(var t=0;t<e.length;t++)e[t].addEventListener("click",function(n){n.preventDefault();this.classList.toggle("open")})}();'],
+];
+
+test('YAML, HTML and one line of minified JavaScript are notes unless fenced, since YAML reads as a plain list', async () => {
+  const k = kit();
+  k.model.on('intake.text', (req) => ({ entries: [...req.user.matchAll(/Dump (\d+)/g)].map((dump) => ({ dump: Number(dump[1]), text: '', ...described('Config') })) }));
+  const bare = await intake(k.ctx, LEFT_AS_NOTES.map(([, , source]) => ({ kind: 'text' as const, text: source })));
+  bare.forEach((item, n) => assert.equal(item.data.code, undefined, LEFT_AS_NOTES[n]![0]));
+  const fenced = await intake(k.ctx, LEFT_AS_NOTES.map(([, language, source]) => ({ kind: 'text' as const, text: `\`\`\`${language}\n${source}\n\`\`\`` })));
+  assert.deepEqual(fenced.map((item) => item.data.code), LEFT_AS_NOTES.map(([, language, source]) => ({ language, source })));
+});
+
+test('a long paste of code stays one item, and code is kept when the model fails', async () => {
+  const k = kit();
+  const long = Array.from({ length: 80 }, (_v, n) => `const value${n} = compute(${n});`).join('\n');
+  k.model.on('intake.text', () => ({ entries: Array.from({ length: 4 }, (_v, n) => ({ dump: 0, text: `Part ${n}.`, ...described(`Part ${n}`) })) }));
+  const whole = await intake(k.ctx, [{ kind: 'text', text: long }]);
+  assert.equal(whole.length, 1);
+  assert.deepEqual([whole[0]!.text, whole[0]!.data.code], [long, { source: long }]);
+
+  k.model.on('intake.text', () => {
+    throw new Error('down');
+  });
+  const [plain] = await intake(k.ctx, [{ kind: 'text', text: CODE[1]![1] }]);
+  assert.deepEqual(plain!.data, { code: { source: CODE[1]![1] } });
+});
+
+test('a quotation or an excerpt cannot be stitched across two sentences or two lines', async () => {
+  const text = 'Air scatters short blue wavelengths more than long red ones.\nRayleigh scattering: scattering of light by small particles. It is why the sky is blue.';
+  assert.deepEqual(await extracted(text, { excerptText: 'red ones Rayleigh scattering', quoteText: 'small particles it is why' }), {});
+  assert.deepEqual(await extracted(text, { excerptText: 'scattering of light by small particles. It is why the sky is blue.' }), {
+    excerpt: { text: 'scattering of light by small particles. It is why the sky is blue.' },
+  });
+});
+
+test('a table is read from fenced rows without shifting a column, and its divider and repeated heads are left out', async () => {
+  const text = '| Plan | Price | Seats |\n|---|:-:|--:|\n| Basic | 5 | 1 |\n| Team | 20 | 10 |';
+  const heads = ['Plan', 'Price', 'Seats'];
+  const whole = { table: { heads, rows: [['Basic', '5', '1'], ['Team', '20', '10']] } };
+  assert.deepEqual(await extracted(text, { tableHeads: heads, tableRows: ['| Plan | Price | Seats |', '|---|:-:|--:|', '| Basic | 5 | 1 |', '| Team | 20 | 10 |'] }), whole);
+  assert.deepEqual(await extracted(text, { tableHeads: heads, tableRows: ['--- | --- | ---', 'plan | price | seats', 'Basic | 5 | 1', 'Team | 20 | 10'] }), whole);
+  assert.deepEqual(await extracted(text, { tableHeads: heads, tableRows: ['| Basic | 5 |', '| 5 |', '| Team | 20 | 10 |'] }), { table: { heads, rows: [['Team', '20', '10']] } }, 'a fenced row that is short is dropped, not shifted');
+  assert.deepEqual(await extracted(text, { tableHeads: heads, tableRows: ['Basic | 5 | ', 'Team |  | 10'] }), { table: { heads, rows: [['Basic', '5', ''], ['Team', '', '10']] } });
+  assert.deepEqual(await extracted(text, { tableHeads: heads, tableRows: ['|---|---|---|'] }), {});
+});
+
+test('a table needs every head and every cell in the text', async () => {
+  const text = 'Plan | Price | Seats\nBasic | 5 | 1\nOrg | $1,200 | 100';
+  const rows = ['Basic | 5 | 1'];
+  assert.deepEqual(await extracted(text, { tableHeads: ['Plan', 'Cost', 'Seats'], tableRows: rows }), {});
+  assert.deepEqual(await extracted(text, { tableHeads: ['Plan', 'Pri', 'Seat'], tableRows: rows }), {});
+  assert.deepEqual(await extracted(text, { tableHeads: ['#', 'Plan', 'Price'], tableRows: ['1 | Basic | 5'] }), {});
+  assert.deepEqual(await extracted(text, { tableHeads: ['Plan', 'Price', 'Seats'], tableRows: ['Org | $20 | 100', 'Basic | ✓ | 1', 'Seats Basic | 5 | 1', 'Basic | -5 | 1', 'Org | $1200 | 100'] }), {
+    table: { heads: ['Plan', 'Price', 'Seats'], rows: [['Org', '$1200', '100']] },
+  });
+});
+
+const INVENTED = { where: 'Atlantis', people: ['Carl Jung'], pros: ['cheap'], tableHeads: ['a', 'b'], tableRows: ['1 | 2'], excerptText: 'never written', colours: [{ name: 'Ghost', value: '#123456' }], when: '2077', personName: 'Carl Jung' };
+
+test('a link is held to its page: a value the page does not write is dropped', async () => {
+  const k = kit();
+  const url = 'https://example.com/trip';
+  k.world.pages.set(url, { url, title: 'Trip notes', text: 'Three days away in Porto with Ana Lima.', site: 'example.com' });
+  k.model.on('intake.link', () => described('Trip', { ...INVENTED, where: 'Porto', people: ['Carl Jung', 'Ana Lima'] }));
+
+  const [link] = await intake(k.ctx, [{ kind: 'link', url }]);
+
+  assert.deepEqual(link!.data, { where: 'Porto', people: ['Ana Lima'], site: 'example.com' });
+});
+
+test('each part of a split text is held to the text: a value it does not write is dropped', async () => {
+  const k = kit();
+  const long = `${'First idea about Lisbon. '.repeat(40)}\n\n${'Second idea about Porto. '.repeat(40)}`;
+  k.model.on('intake.text', () => ({
+    entries: [
+      { dump: 0, text: 'First idea about Lisbon.', ...described('First', { ...INVENTED, where: 'Lisbon' }) },
+      { dump: 0, text: 'Second idea about Porto.', ...described('Second', INVENTED) },
+    ],
+  }));
+
+  const parts = await intake(k.ctx, [{ kind: 'text', text: long }]);
+
+  assert.deepEqual(parts.map((part) => part.data), [{ where: 'Lisbon' }, {}]);
+});
+
+for (const [kind, mime, name] of [['image', 'image/jpeg', 'beach.jpg'], ['video', 'video/mp4', 'nazare-clip.mp4']] as const) {
+  test(`${kind === 'image' ? 'a photo' : 'a video'} is held to the model's own description and the file name`, async () => {
+    const media = async (description: string, more: object) => {
+      const k = kit();
+      const { id } = await k.assets.put(new Uint8Array([1, 2, 3]), mime, name);
+      k.model.on(`intake.${kind}`, () => ({ ...described('Two friends on a beach', more), description }));
+      const [item] = await intake(k.ctx, [{ kind: 'asset', asset: id, mime, name }]);
+      const { mediaUrl, ...said } = item!.data;
+      if (kind === 'video') assert.match(String(mediaUrl), /^\/assets\//, 'a dropped video plays from the service');
+      else assert.equal(mediaUrl, undefined);
+      return said;
+    };
+    const named = { where: 'Nazaré', people: ['Ana Lima', 'Ben Okri'] };
+
+    assert.deepEqual(await media('Ana Lima and Ben Okri stand on the sand at Nazaré.', named), named);
+    assert.deepEqual(await media('Two people on sand.', { ...INVENTED, ...named }), {});
+    assert.deepEqual(await media('', { ...INVENTED, ...named }), {});
+    assert.deepEqual(await media('Waves.', { where: kind === 'image' ? 'beach' : 'nazare' }), { where: kind === 'image' ? 'beach' : 'nazare' }, 'the file name counts as content');
+  });
+}
 
 const CHATGPT_EXPORT = [
   {

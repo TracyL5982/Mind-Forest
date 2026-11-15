@@ -2,6 +2,8 @@
 // `// MARK: - Placing by hand`, `// MARK: - Marking` and `// MARK: - The ocean: peeking and bringing in`.
 #include "oceanmodel.h"
 
+#include "../agent/bridge.h"
+
 #include <cmath>
 #include <cstdlib>
 
@@ -101,6 +103,12 @@ void OceanModel::take(int id) {
     if (tree->condensed(*node) && !node->head && node->parent) target = *node->parent;
     const TreeNode* asked = find(*tree, target);
     bool fresh = asked ? asked->children.empty() : true;
+    // AGENT: in a tree the agent service grows, a pinch opens a card where it stands, to show its details; a layer
+    // starts from it only when there is a conversation about it (agent::Bridge::ask).
+    if (agentBridge && agentBridge->opens(target)) {
+        restyle();
+        return;
+    }
     Tree::Change moved = tree->focus(target);
     if (fresh && !moved.added.empty()) {
         think(target, Pace::think);
@@ -232,6 +240,7 @@ void OceanModel::askGardener(int nodeID, int k) {
     if (!(tree && catalog && tree->focus() == nodeID)) return;
     CardRef c = card(nodeID);
     if (!(c && k >= 0 && k < int(c->asks.size()) && !pressing)) return;
+    if (agentBridge && agentBridge->ask(nodeID, k)) return;     // AGENT
     std::optional<OceanNote> note = catalog->answer(c->asks[k], c->ref, tree->held());
     if (!note) return;
     logLine("[ocean] asked: " + c->asks[k].question);
@@ -246,6 +255,7 @@ void OceanModel::askMark(int nodeID) {
     Mark mark = found->second;
     CardRef c = card(nodeID);
     if (!c || pressing) return;
+    if (agentBridge && agentBridge->askMark(nodeID, mark)) return;     // AGENT
     std::optional<OceanNote> note = catalog->answer(mark, c->ref, tree->held());
     if (!note) return;
     logLine("[ocean] asked about a mark: " + described(mark));
@@ -301,6 +311,7 @@ void OceanModel::prune(int id) {
     if (!tree || pressing) return;
     std::vector<TreeNode> gone = tree->prune(id);
     if (gone.empty()) return;
+    if (agentBridge) agentBridge->pruned(id, gone);     // AGENT
     dismiss(gone, true);
     logLine(fmt("[ocean] pruned %d", int(gone.size())));
     restyle();

@@ -1,6 +1,7 @@
 import {
   Command,
   CommandError,
+  inLibrary,
   type ChangeSet,
   type EntityName,
   type EntityOf,
@@ -69,8 +70,12 @@ export class Mindstorm {
     return this.maps.group;
   }
 
+  /**
+   * A draft that changes nothing comes back with no patches and is not numbered or kept: it takes no seq and can never be undone.
+   * So `seq` rises by exactly one for every set a client is sent.
+   */
   apply(draft: Draft): ChangeSet {
-    return this.commit(draft, () => {
+    return this.commit(draft, {}, () => {
       for (const raw of draft.commands) this.run(Command.parse(raw));
     });
   }
@@ -99,7 +104,8 @@ export class Mindstorm {
     const first = Math.min(...whole.map((c) => c.seq));
     const followers = this.history.filter((c) => c.seq > first && !c.undoes && !this.undone.has(c.id) && !whole.includes(c) && housekeeping(c));
     const reverting = [...followers, ...whole].sort((x, y) => y.seq - x.seq);
-    const set = this.commit({ origin, label: `Undo: ${target.label}`, commands: [] }, () => {
+    const undoing = { undoes: target.id, alsoUndoes: reverting.filter((c) => c !== target).map((c) => c.id) };
+    const set = this.commit({ origin, label: `Undo: ${target.label}`, commands: [] }, undoing, () => {
       for (const one of reverting) {
         for (const p of [...one.patches].reverse()) {
           const current = this.maps[p.entity].get(p.id) ?? null;
@@ -110,8 +116,6 @@ export class Mindstorm {
         }
       }
     });
-    set.undoes = target.id;
-    set.alsoUndoes = reverting.filter((c) => c !== target).map((c) => c.id);
     for (const one of reverting) this.undone.add(one.id);
     return set;
   }
@@ -202,9 +206,18 @@ export class Mindstorm {
   nodesOfItem(itemId: Id): Node[] {
     return [...(this.itemNodes.get(itemId) ?? [])].map((id) => this.maps.node.get(id)!);
   }
-  /** Items that are not archived and sit in no tree. */
-  inbox(): Item[] {
-    return [...this.maps.item.values()].filter((i) => !i.archived && !this.itemNodes.get(i.id)?.size);
+  /** What the user dropped that no tree holds: the loose part of their knowledge base. The library is not listed. */
+  unplaced(): Item[] {
+    return [...this.maps.item.values()].filter((i) => !i.archived && !inLibrary(i) && !this.itemNodes.get(i.id)?.size);
+  }
+  /**
+   * Whether the item is something the user knows, to draw on when a tree is grown: what they dropped, the library, and anything
+   * they kept. An agent's unkept pick is a suggestion, not knowledge yet.
+   */
+  known(itemId: Id): boolean {
+    const item = this.maps.item.get(itemId);
+    if (!item || item.archived) return false;
+    return inLibrary(item) || item.origin.by === 'user' || [...(this.itemNodes.get(itemId) ?? [])].some((id) => this.maps.node.get(id)!.status === 'kept');
   }
   linksOf(nodeId: Id): Link[] {
     return [...this.maps.link.values()].filter((l) => l.a === nodeId || l.b === nodeId);
@@ -213,14 +226,15 @@ export class Mindstorm {
     return this.children(parent).reduce((max, n) => Math.max(max, n.order), -1) + 1;
   }
 
-  /** Full-text search over items that are not archived. */
-  search(query: string, opts: { limit?: number; exclude?: ReadonlySet<Id> } = {}): (Hit & { item: Item })[] {
-    return this.index.search(query, opts).map((h) => ({ ...h, item: this.item(h.id) }));
+  /** Full-text search over items that are not archived. `placed` leaves out items that no tree holds, such as most of the library. */
+  search(query: string, opts: { limit?: number; exclude?: ReadonlySet<Id>; placed?: boolean } = {}): (Hit & { item: Item })[] {
+    const skip = (id: Id) => Boolean(opts.exclude?.has(id)) || (Boolean(opts.placed) && !this.itemNodes.get(id)?.size);
+    return this.index.search(query, { limit: opts.limit, skip }).map((h) => ({ ...h, item: this.item(h.id) }));
   }
 
   // ---- internals
 
-  private commit(draft: Draft, body: () => void): ChangeSet {
+  private commit(draft: Draft, undoing: Pick<ChangeSet, 'undoes' | 'alsoUndoes'>, body: () => void): ChangeSet {
     if (this.working) throw new CommandError('invalid', 'apply is not re-entrant');
     this.working = [];
     try {
@@ -232,18 +246,21 @@ export class Mindstorm {
       this.working = null;
       throw err;
     }
+    const patches = squash(this.working);
+    this.working = null;
+    const counts = patches.length > 0 || undoing.undoes !== undefined;
     const set: ChangeSet = {
       id: this.opts.newId(),
-      seq: ++this.seq,
+      seq: counts ? ++this.seq : this.seq,
       at: this.opts.now(),
       origin: draft.origin,
       label: draft.label,
       commands: draft.commands,
       ...(draft.part ? { part: draft.part } : {}),
-      patches: squash(this.working),
+      patches,
+      ...undoing,
     };
-    this.working = null;
-    this.history.push(set);
+    if (counts) this.history.push(set);
     return set;
   }
 
@@ -424,7 +441,9 @@ export class Mindstorm {
     for (const n of [...gone].reverse()) this.del('node', n.id);
     for (const itemId of new Set(gone.map((n) => n.itemId))) {
       const item = this.item(itemId);
-      if (!this.itemNodes.get(itemId)?.size && !item.archived) this.put('item', { ...item, archived: true });
+      // Taking away an agent's suggestion of something the user dropped leaves it in their knowledge base.
+      const suggested = item.origin.by === 'user' && gone.every((n) => n.itemId !== itemId || (n.status === 'pick' && n.origin.by === 'agent'));
+      if (!this.itemNodes.get(itemId)?.size && !item.archived && !inLibrary(item) && !suggested) this.put('item', { ...item, archived: true });
     }
     if (root.parent === null) this.del('tree', root.treeId);
   }

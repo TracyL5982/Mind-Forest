@@ -2,9 +2,12 @@
 // implement this: the Quest (android/, OpenXR) and a Mac preview window
 // (desktop/), which exists so a change can be looked at without the headset.
 #pragma once
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "vecmath.h"
 #include "scene.h"
@@ -123,3 +126,68 @@ using VideoPlayerRef = std::shared_ptr<VideoPlayer>;
 namespace platform {
 VideoPlayerRef makeVideoPlayer();
 }
+
+// MARK: - Network
+// For the agent service: one WebSocket and plain HTTP. Nothing here runs on the frame thread, and
+// nothing calls back on it either; the caller hands results over (see core/agent/client.h).
+
+namespace platform {
+
+/// A WebSocket, `ws://` or `wss://`.
+class Socket {
+public:
+    virtual ~Socket() = default;
+    /// Queues a text message. False once the socket has closed.
+    virtual bool send(const std::string& text) = 0;
+    /// Closes it. `closed` still follows, once.
+    virtual void close() = 0;
+};
+using SocketRef = std::shared_ptr<Socket>;
+
+/// What a socket says, on a thread of the host's.
+struct SocketEvents {
+    std::function<void()> opened;
+    std::function<void(const std::string& text)> text;
+    /// Once, when it closes or could not open; `why` is for the log.
+    std::function<void(const std::string& why)> closed;
+};
+/// Opens a WebSocket. The host pings it every 20 s, so a connection that died without a word is noticed.
+SocketRef openSocket(const std::string& url, SocketEvents events);
+
+struct Request {
+    std::string method = "GET";
+    std::string url;
+    std::vector<std::pair<std::string, std::string>> headers;
+    std::string body;
+    /// When set, the reply's body goes to this file rather than into `Response::body`.
+    std::string saveTo;
+    double timeout = 30;
+};
+struct Response {
+    int status = 0;             // 0 when no reply came
+    std::string contentType;
+    std::string body;
+    std::string error;          // why no reply came, or why the file could not be written
+};
+/// One HTTP request, on a thread of the host's; `done` is called there.
+void fetch(Request request, std::function<void(Response)> done);
+
+}  // namespace platform
+
+// MARK: - Typing
+// The system keyboard, for typing to the agent where speaking won't do.
+
+namespace platform {
+
+/// What the user types, on a thread of the host's: the whole text after each change, then once the end.
+struct KeyboardEvents {
+    std::function<void(const std::string& text)> typed;
+    /// `sent`: ended with the keyboard's send key, rather than closed.
+    std::function<void(const std::string& text, bool sent)> done;
+};
+/// Brings up the system keyboard holding `text`. False where there is none to bring up.
+bool showKeyboard(const std::string& text, KeyboardEvents events);
+void hideKeyboard();
+
+}  // namespace platform
+

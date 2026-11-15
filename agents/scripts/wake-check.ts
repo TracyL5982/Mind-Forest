@@ -28,7 +28,7 @@ const run = await startServer({
   roles: { ...fakeRoles, conductor: async (ctx, input) => (acted.push(input.utterance), fakeRoles.conductor(ctx, input)) },
   ...(env.OPENAI_API_KEY ? { transcribe: openaiTranscribe(fetch, { apiKey: env.OPENAI_API_KEY }) } : {}),
 });
-await run.pipeline.dump([{ kind: 'text', text: 'Sourdough rises slowly in winter' }]);
+await run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: Sourdough rises slowly in winter' }]);
 await run.pipeline.idle();
 
 const chrome = join(homedir(), 'Library/Caches/ms-playwright');

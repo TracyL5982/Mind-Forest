@@ -26,10 +26,31 @@ export type Source = z.infer<typeof Source>;
 /**
  * Structured content a component can draw. Content roles fill it; the Renderer only reads it.
  * Known keys: chart {labels, values, unit?}, steps string[], messages {role, text}[], facts {label, value}[],
- * person {name, role?}, quote {text, by?}, code {language, source}, when string (a date), site string.
+ * person {name, role?}, quote {text, by?}, code {language?, source}, when string (a date), site string,
+ * where string, people string[], pros string[], cons string[], table {heads, rows string[][]}, question and answer,
+ * term and definition, items string[] with checklist boolean[], colours {name, value}[], excerpt {text, at?},
+ * mediaUrl and thumbnailUrl (service addresses of a playable file and its still), embed (a player only a browser can show),
+ * library (a LibraryRef).
+ * A Scout pick also carries what its source catalogued: kind (artwork, paper or book), medium, holder, authors string[],
+ * authorsCut true (when the source lists only the first of them), venue.
  */
 export const ItemData = z.record(z.string(), z.unknown());
 export type ItemData = z.infer<typeof ItemData>;
+
+/**
+ * Where a library item lives in the headset's own media, so a headset draws it from there:
+ * a film by its index in clips.json, a work by its id in works.json, a note or a tag of ocean.json by its id.
+ */
+export const LibraryRef = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('film'), key: z.number().int().nonnegative() }),
+  z.object({ kind: z.literal('work'), key: z.string().min(1) }),
+  z.object({ kind: z.literal('note'), key: z.string().min(1) }),
+  z.object({ kind: z.literal('tag'), key: z.string().min(1) }),
+]);
+export type LibraryRef = z.infer<typeof LibraryRef>;
+
+/** `source.from` of the headset's films, works, notes and tags. */
+export const LIBRARY = 'library';
 
 export const Item = z.object({
   id: Id,
@@ -45,6 +66,11 @@ export const Item = z.object({
   revision: z.number().int().nonnegative(),
 });
 export type Item = z.infer<typeof Item>;
+
+/** A library item lives in the library whether or not a tree holds it. */
+export function inLibrary(item: Item): boolean {
+  return item.source.from === LIBRARY;
+}
 
 export const View = z.object({
   component: z.string(),
@@ -123,7 +149,7 @@ export const Command = z.discriminatedUnion('type', [
   z.object({ type: z.literal('addNode'), node: Node }),
   /** Moves the node and everything under it. `treeId` moves it into another tree. */
   z.object({ type: z.literal('moveNode'), id: Id, parent: Id, treeId: Id.optional(), order: z.number().optional() }),
-  /** Removes the node and everything under it. Items left with no node are archived. */
+  /** Removes the node and everything under it. Items left with no node are archived, except the library's and what the user dropped that only an agent's unkept pick held. */
   z.object({ type: z.literal('deleteNode'), id: Id }),
   z.object({ type: z.literal('keepPick'), id: Id }),
   z.object({ type: z.literal('setWhy'), id: Id, why: z.string(), importance: z.number().min(0).max(1).optional() }),

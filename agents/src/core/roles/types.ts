@@ -1,4 +1,4 @@
-import type { Command, Id, Item, Node, Origin } from '../domain.ts';
+import type { Command, Id, Item, ItemKind, Node, Origin } from '../domain.ts';
 import type { Assets, ModelClient, Tools } from '../ports.ts';
 import type { Mindstorm } from '../state.ts';
 import { defaultView } from '../views.ts';
@@ -6,13 +6,11 @@ import { defaultView } from '../views.ts';
 export interface Settings {
   /** 'provisional': agent picks stay dashed until the user keeps them. 'immediate': they arrive kept. */
   picksMode: 'provisional' | 'immediate';
-  /** New picks the Scout brings per run. */
+  /** New picks the Scout asks for per run, beside what the user already has that it brings into the round. */
   picksPerRun: number;
-  /** Most links to existing content the Scout may draw per run. */
-  maxLinksPerRun: number;
-  /** A link to existing content needs at least this strength, 0…1. */
-  linkThreshold: number;
-  /** Whether filing a dump also scouts picks for it. */
+  /** A tie to something the user already has is strong, and brings it into a round or files a dump under a card, at this rating or above, 0…1. */
+  strongTie: number;
+  /** Whether a tree the user asks for gets its first round of picks straight away. */
   scoutOnDump: boolean;
   /** What the user calls the agent. "Hey" or "hi" and this name wake it. */
   agentName: string;
@@ -21,11 +19,18 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   picksMode: 'provisional',
   picksPerRun: 5,
-  maxLinksPerRun: 2,
-  linkThreshold: 0.8,
+  strongTie: 0.8,
   scoutOnDump: true,
   agentName: 'momo',
 };
+
+/** What the connected clients can play: player pages from other sites (embeds), and which file types. */
+export interface Playback {
+  /** False while any connected client cannot show an embedded player, such as the headset. */
+  embeds: boolean;
+  /** File extensions every client that said so can play. Empty when no client has said. */
+  files: string[];
+}
 
 /** What every role is handed. Roles read `mind` and return commands. Only the pipeline applies them. */
 export interface RoleContext {
@@ -34,6 +39,8 @@ export interface RoleContext {
   tools: Tools;
   assets: Assets;
   settings: Settings;
+  /** Asked at the moment of choosing, because clients come and go. */
+  playback: () => Playback;
   newId: () => Id;
   now: () => string;
   /** A line for the run log. Shown to the user as the agent's work state. */
@@ -74,6 +81,8 @@ export type Intent =
   | { kind: 'handoff'; scope: Scope; note: string }
   /** The user is dictating something to keep. */
   | { kind: 'capture'; text: string }
+  /** A new tree: about `subject`, or grown from items the user already has, such as what they just dropped or the card they have open. */
+  | { kind: 'tree'; subject: string; itemIds: Id[] }
   | { kind: 'keep'; nodeIds: Id[] }
   | { kind: 'undo' }
   /** Nothing to do but reply. */
@@ -85,6 +94,23 @@ export interface Conducted {
   say: string;
 }
 
+/** What a card's suggested questions are written from: the card, where it stands, and the cards round it. Every text is already clipped. */
+export interface CardBrief {
+  title: string;
+  kind: ItemKind;
+  /** Who put it here, and from where. */
+  from: string;
+  why: string;
+  summary: string;
+  text: string;
+  /** Titles from the tree's root down to the card's parent. */
+  path: string[];
+  /** Titles of the cards under it. */
+  under: string[];
+  /** Titles of the cards beside it. */
+  beside: string[];
+}
+
 export interface Handoff {
   /** File name without extension. */
   name: string;
@@ -94,16 +120,27 @@ export interface Handoff {
   assets: string[];
 }
 
+/** The user asked for a tree to be made of what they dropped. `title` is what they called it, or empty. */
+export interface TreeRequest {
+  title: string;
+}
+
 export interface Roles {
-  conductor(ctx: RoleContext, input: { utterance: string; scene: Scene; history: Turn[] }): Promise<Conducted>;
+  /** `dropped` is what the user dropped last, so "start a tree on this" can mean it. */
+  conductor(ctx: RoleContext, input: { utterance: string; scene: Scene; history: Turn[]; dropped?: Id[] }): Promise<Conducted>;
   /** Turns dumps into items. Does not add them. */
   intake(ctx: RoleContext, dumps: RawDump[]): Promise<Item[]>;
-  /** Places items that are not in the mindstorm yet. Returns createTree and addNode commands; the pipeline adds the items first. */
-  filer(ctx: RoleContext, items: Item[]): Promise<Command[]>;
   /**
-   * Brings new content to the anchor.
-   * 'refresh' replaces the anchor's unkept picks. 'more' adds to them.
-   * Returns addItem + addNode for each pick, deleteNode for replaced picks, and at most `maxLinksPerRun` links.
+   * Places what was dropped. Every item joins the knowledge base whether placed or not; the pipeline adds those that are new.
+   * Asked for a tree, the items become one new tree. Otherwise an item with a strong fit under a card of a tree is hung there as a pick,
+   * and the rest are placed nowhere. Returns createTree and addNode commands.
+   */
+  filer(ctx: RoleContext, items: Item[], request?: TreeRequest): Promise<Command[]>;
+  /**
+   * Brings content to the anchor: what the user already has that is strongly tied to it, and new content.
+   * New picks join the anchor's round and none is taken away here. Near the cap, the picks already there come back rated against the
+   * question as `setWhy` importances, and the pipeline lets the least related give way.
+   * Returns addItem + addNode for each new pick, addNode alone for what the user already has, and setWhy for re-rated picks.
    * Picks that are ready early may be handed to `deliver` so the user sees them sooner; the rest are returned.
    */
   scout(
@@ -111,7 +148,6 @@ export interface Roles {
     input: {
       anchor: Id;
       need?: string;
-      mode: 'refresh' | 'more';
       count?: number;
       /** The recent conversation, so a need is read in context. */
       history?: Turn[];
@@ -122,6 +158,8 @@ export interface Roles {
   /** Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup. */
   renderer(ctx: RoleContext, input: { nodeIds: Id[] }): Promise<Command[]>;
   packager(ctx: RoleContext, input: { scope: Scope; note?: string }): Promise<Handoff>;
+  /** Up to four short questions the user is likely to ask next about an open card. Throws when the model fails. */
+  questions(ctx: RoleContext, input: { card: CardBrief; history: Turn[] }): Promise<string[]>;
 }
 
 export const AGENT = (role: string, tool?: string): Origin => ({ by: 'agent', role, ...(tool ? { tool } : {}) });
@@ -165,6 +203,14 @@ export function makeNode(
     view: defaultView(item, (id) => ctx.assets.url(id)),
     order: (fields.parent && ctx.mind.nodes.has(fields.parent) ? ctx.mind.nextOrder(fields.parent) : 0) + (fields.offset ?? 0),
   };
+}
+
+/**
+ * An id as a model wrote it back. Shown "item library:film:53", a model often returns the whole of that, so the word before the id
+ * and any quotes or brackets around it are dropped.
+ */
+export function idFrom(raw: string): string {
+  return raw.trim().replace(/^(?:item|node|tree)\s+/i, '').replace(/^["'“\[(]+|["'”\])]+$/g, '');
 }
 
 /** The status an agent's pick starts with under the current setting. */

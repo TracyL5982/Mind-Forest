@@ -1,6 +1,6 @@
 /** Written last by scripts/fetch-wake.ts, so it is there only when every listener file is. */
 const LISTENER = 'vendor/sherpa-onnx/versions.json';
-/** Measured on synthetic speech (scripts/wake-measure.py, DECISIONS.md). */
+/** Measured on synthetic speech (scripts/wake-measure.py, DECISIONS.md 36). */
 const TUNING = { threshold: 0.05, boost: 2.0, highForHi: true };
 const AFTER_REPLY_MS = 300;
 /** A reply that never reports its end stops holding the listener after this long. */

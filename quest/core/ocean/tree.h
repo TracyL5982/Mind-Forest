@@ -199,7 +199,8 @@ public:
     static constexpr std::array<float, 9> ringAngles{20, 60, 100, 140, 180, 220, 260, 300, 340};
 
     /// `init(root:title:maker:catalog:)`
-    Tree(const Ref& ref, const std::string& title, Maker maker, const std::shared_ptr<Catalog>& catalog);
+    // AGENT: `grows` false makes a tree the agent service grows: its root starts with nothing round it (see `grows` below).
+    Tree(const Ref& ref, const std::string& title, Maker maker, const std::shared_ptr<Catalog>& catalog, bool grows = true);
 
     std::set<Ref> held() const;
 
@@ -320,6 +321,17 @@ public:
 
     /// Cuts `id` away, with everything grown from it. Returns what left.
     std::vector<TreeNode> prune(int id);
+
+    // AGENT: a tree the agent service grows (core/agent/bridge.*). Its nodes come from the service, so
+    // focusing a card does not ask the catalog, and they are placed here the way the gardener's are.
+    /// Whether focusing a card asks the catalog for what to set round it.
+    bool grows = true;
+    /// Hangs `ref` from `parent` in the next free place round it. Returns its id, or -1 if `parent` is not here.
+    int graft(const Ref& ref, int parent, const std::string& why, Tone tone, bool kept, std::optional<float> imp);
+    /// What a node says on its thread, whether it is kept, and how much it matters.
+    void revise(int id, const std::string& why, bool kept, std::optional<float> imp);
+    /// Opens a card where it stands, to show what it holds, without starting a layer from it.
+    bool open(int id);
 
     /// Puts a card somewhere else in its group, by hand. Returns what moved.
     std::vector<int> place(int id, Vec2 xy);

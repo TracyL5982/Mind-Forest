@@ -28,11 +28,15 @@ if (fake) {
     apiKey: env.MODEL_API_KEY,
     baseUrl: env.MUSE_LLM_BASE_URL || undefined,
     model: env.MUSE_LLM_MODEL || undefined,
+    quickModel: env.MIND_PALACE_QUICK_MODEL || undefined,
     tokenBudget: env.MIND_PALACE_TOKEN_BUDGET ? Number(env.MIND_PALACE_TOKEN_BUDGET) : undefined,
     onCall: (c) => console.log(`  model ${c.kind} ${c.role} ${c.ok ? 'ok' : 'FAILED'} ${c.ms}ms${c.tokens ? ` ${c.tokens} tokens` : ''}`),
   });
   roles = (await import('../core/roles/index.ts')).roles;
 }
+
+// One role's failure that nothing caught must not take the whole service down with the user's session.
+process.on('unhandledRejection', (err) => console.error(`[service] a failure nothing caught: ${err instanceof Error ? err.stack : String(err)}`));
 
 const running = await startServer({
   port: Number(env.MIND_PALACE_PORT ?? 8787),

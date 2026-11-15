@@ -1,6 +1,8 @@
 // Port of visionos/MindPalace/Ocean/OceanModel.swift: `// MARK: - Cards`.
 #include "oceanmodel.h"
 
+#include "../agent/bridge.h"
+
 #include <cmath>
 
 // MARK: - Cards
@@ -269,6 +271,7 @@ void OceanModel::buildOpen(CardView& c, const TreeNode& node) {
     }
     c.openHolder->addChild(c.askHolder);
     c.asks = catalog->asks(c.ref, previousPiece(node.id));
+    if (agentBridge) agentBridge->rows(node, c.asks);     // AGENT
     buildRows(c);
     c.refresh();
 }

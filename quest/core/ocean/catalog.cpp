@@ -5,6 +5,7 @@
 #include <cstdlib>
 
 #include "../platform.h"
+#include "../cards/ocean.h"
 #include "tree.h"
 
 namespace {
@@ -507,6 +508,7 @@ Vec2 Catalog::pictureSize(const OceanNote& note) const {
 
 /// An open note, m. Its width never changes; its height goes with what it carries.
 Vec2 Catalog::openSize(const OceanNote& note) const {
+    if (std::optional<Vec2> card = cards::ocean::openSize(note.id)) return *card;    // NOTE(port): added for Quest (core/cards).
     switch (note.kind()) {
     case OceanNote::Kind::text: return {Metrics::openNoteWidth, note.diagram ? 0.372f : 0.27f};
     case OceanNote::Kind::chart: return {Metrics::openNoteWidth, 0.372f};

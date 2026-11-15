@@ -3,6 +3,8 @@
 // by hand. (See oceanmodel.h for where the rest is.)
 #include "oceanmodel.h"
 
+#include "../agent/bridge.h"
+
 #include <cmath>
 #include <cstdlib>
 
@@ -34,6 +36,7 @@ void OceanModel::start() {
     this->library = library;
     this->art = art;
     this->catalog = catalog;
+    agentBridge = agent::Bridge::fromFlags(*this);     // AGENT
     catalog->chipWidth = [art](const std::string& name) { return art->chipWidth(name); };
     catalog->smallSize = [this](const Ref& ref) { return bodies(ref).small; };
     lineMaterial = Material::line();
@@ -136,6 +139,7 @@ void OceanModel::update(float dt) {
     time += double(std::min(dt, 1.0f / 40));
     if (!built) build();
     double now = time;
+    if (agentBridge) agentBridge->frame(now);     // AGENT
 
     if (!scheduled.empty()) {
         std::vector<Scheduled> due;

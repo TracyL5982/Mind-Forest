@@ -1,39 +1,25 @@
 /**
  * Drives the web client in a real browser against the service with stand-in agents.
  * Run: node --no-warnings --import tsx test/client.e2e.ts
- * Screenshots land in docs/screenshots. Set MIND_PALACE_CHROMIUM to use another browser.
+ * Screenshots land in a new folder under the system's temporary folder, and the last line printed
+ * names it. Set MIND_PALACE_SHOTS=docs/screenshots to replace the tracked ones on purpose.
+ * Set MIND_PALACE_CHROMIUM to use another browser.
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
-import type { Command, Item, Node } from '../src/core/domain.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running } from '../src/node/server.ts';
+import { COMPONENT_IDS, STRUCTURED_IDS } from '../src/core/samples.ts';
+import { CHIPPED, LONG_PLACE, PLACED, PNG, STRUCTURED, bootFake, browserPath, chipped, crowd, showcase, spills, unknownShape } from './stage.ts';
 
 const here = import.meta.dirname;
-const shots = join(here, '../docs/screenshots');
+const shots = process.env.MIND_PALACE_SHOTS ? resolve(process.env.MIND_PALACE_SHOTS) : mkdtempSync(join(tmpdir(), 'mp-shots-'));
 mkdirSync(shots, { recursive: true });
-
-function browserPath(): string {
-  if (process.env.MIND_PALACE_CHROMIUM) return process.env.MIND_PALACE_CHROMIUM;
-  const cache = join(homedir(), 'Library/Caches/ms-playwright');
-  const builds = existsSync(cache) ? readdirSync(cache).sort().reverse() : [];
-  for (const build of builds) {
-    for (const inner of [
-      'chrome-headless-shell-mac-arm64/chrome-headless-shell',
-      'chrome-headless-shell-mac-x64/chrome-headless-shell',
-      'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-      'chrome-mac-x64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-    ]) {
-      if (existsSync(join(cache, build, inner))) return join(cache, build, inner);
-    }
-  }
-  throw new Error('No Chromium found. Set MIND_PALACE_CHROMIUM to a browser executable.');
-}
 
 let passed = 0;
 /** With E2E_KEEP_GOING=1 a failed check is reported and the rest still run, to see every check that fails on older code. */
@@ -91,67 +77,6 @@ async function overlaps(page: Page): Promise<string[]> {
   });
 }
 
-const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAHUlEQVQI12NkYPjPgA0wYRWlqgTj////cRhFJzsAGGgEB+4vOSMAAAAASUVORK5CYII='), (c) => c.charCodeAt(0));
-
-/** One tree that holds every component and every composite, and a link to another tree. */
-function showcase(image: string, other: string): Command[] {
-  const at = new Date().toISOString();
-  const commands: Command[] = [];
-  let n = 0;
-  const add = (parent: string | null, component: string, props: Record<string, unknown>, title: string, extra: Partial<Item> = {}, status: Node['status'] = 'kept'): string => {
-    const id = `show-${n++}`;
-    const item: Item = { id: `item-${id}`, kind: 'text', title, text: '', summary: '', tags: [], data: {}, source: { from: 'paste', capturedAt: at }, origin: { by: 'user' }, archived: false, revision: 0, ...extra };
-    const node: Node = { id, treeId: 'show', itemId: item.id, parent, status, why: status === 'pick' ? 'Worth a look' : '', importance: 0.5, origin: { by: 'user' }, view: { component, props, by: 'renderer' }, order: n };
-    commands.push({ type: 'addItem', item });
-    if (parent === null) commands.push({ type: 'createTree', tree: { id: 'show', title: 'Every shape', rootId: id, digest: '', createdAt: at }, root: node });
-    else commands.push({ type: 'addNode', node });
-    return id;
-  };
-  const group = (anchor: string, composite: string, title: string, members: string[], props: Record<string, unknown>) =>
-    commands.push({ type: 'setGroup', group: { id: `group-${composite}`, treeId: 'show', anchor, composite, title, members, props } });
-
-  const root = add(null, 'note', { emphasis: 'one of each' }, 'Every way a card can be drawn', { summary: 'Eleven components and six ways to arrange them.' });
-  const quote = add(root, 'quote', { text: 'The camera is a tool for learning how to see without a camera.', by: 'Dorothea Lange' }, 'Lange on seeing');
-  add(root, 'fact', { value: '42%', label: 'of viewers leave in the first minute' }, 'Drop-off in minute one');
-  add(root, 'image', { src: image, caption: 'A still from the beach scene' }, 'Beach still');
-  add(root, 'video', { src: image, poster: image, caption: 'The dolly zoom, slowed down' }, 'Dolly zoom clip');
-  add(root, 'link', { url: 'https://example.com/vertigo', site: 'example.com', description: 'How one shot changed the grammar of suspense.' }, 'The Vertigo effect, explained');
-  add(root, 'chart', { chart: 'line', labels: ['1960', '1980', '2000', '2020'], values: [3, 9, 14, 11], unit: 'films', mark: 2 }, 'Use by decade');
-  add(root, 'person', { name: 'Irmin Roberts', role: 'Second-unit cameraman' }, 'Who built it');
-  add(root, 'chat', { messages: [{ role: 'user', text: 'Why does the room seem to stretch?' }, { role: 'assistant', text: 'The lens zooms in while the camera pulls back, so the subject holds still and the background rushes away.' }], source: 'claude' }, 'Asking about the stretch');
-  add(root, 'code', { language: 'js', source: 'const fov = 2 * Math.atan(width / (2 * distance));\ncamera.zoom = base / Math.tan(fov / 2);\nrender();' }, 'Field of view');
-  add(root, 'steps', { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] }, 'How to try it');
-  add(root, 'hologram', { depth: 3 }, 'A shape this client has never heard of', { summary: 'Unknown shapes fall back to a note.' });
-
-  const gallery = [1, 2, 3].map((i) => add(quote, 'image', { src: image }, `Frame ${i}`));
-  group(quote, 'gallery', 'Frames', gallery, {});
-  const timeline = ['1958', '1975', '1990'].map((year) => add(gallery[0]!, 'note', {}, `Used in ${year}`, { summary: 'A famous use of the shot.' }));
-  group(gallery[0]!, 'timeline', 'Through the years', timeline, { labels: Object.fromEntries(timeline.map((id, i) => [id, ['1958', '1975', '1990'][i]])) });
-  const compared = ['Zoom lens', 'Prime and a dolly'].map((name) => add(timeline[2]!, 'note', {}, name, { summary: 'One way to get the shot.' }, 'pick'));
-  group(timeline[2]!, 'comparison', 'Two ways to shoot it', compared, { criteria: ['Cost', 'Look'], cells: { [compared[0]!]: ['Low', 'Slight breathing'], [compared[1]!]: ['High', 'Clean'] } });
-  const sequence = ['Frame the subject', 'Start the pull', 'Land the zoom'].map((name) => add(compared[1]!, 'note', {}, name));
-  group(compared[1]!, 'sequence', 'The move', sequence, {});
-  const cluster = ['Unease', 'Vertigo', 'Dread'].map((name) => add(sequence[2]!, 'fact', { value: name, label: 'what it evokes' }, name));
-  group(sequence[2]!, 'cluster', '', cluster, { theme: 'Feelings' });
-  const pile = Array.from({ length: 5 }, (_, i) => add(cluster[2]!, 'note', {}, `Another example ${i + 1}`, { summary: 'One more film that uses it.' }));
-  group(cluster[2]!, 'stack', '5 more', pile, {});
-  commands.push({ type: 'link', link: { id: 'show-link', a: quote, b: other, why: 'Same shot', strength: 0.9 } });
-  return commands;
-}
-
-function crowd(total: number): Command[] {
-  const at = new Date().toISOString();
-  const commands: Command[] = [];
-  for (let i = 0; i < total; i++) {
-    const item: Item = { id: `crowd-item-${i}`, kind: 'text', title: `Thought ${i + 1}`, text: '', summary: 'One of many, to see how the field holds up.', tags: [], data: {}, source: { from: 'paste', capturedAt: at }, origin: { by: 'user' }, archived: false, revision: 0 };
-    const node: Node = { id: `crowd-${i}`, treeId: 'crowd', itemId: item.id, parent: i === 0 ? null : `crowd-${Math.floor((i - 1) / 4)}`, status: i % 3 === 2 ? 'pick' : 'kept', why: i % 3 === 2 ? 'Related' : '', importance: 0.5, origin: { by: 'user' }, view: { component: 'note', props: {}, by: 'default' }, order: i };
-    commands.push({ type: 'addItem', item });
-    if (i === 0) commands.push({ type: 'createTree', tree: { id: 'crowd', title: 'A crowd', rootId: node.id, digest: '', createdAt: at }, root: node });
-    else commands.push({ type: 'addNode', node });
-  }
-  return commands;
-}
-
 async function main(): Promise<void> {
   const browser = await chromium.launch({ executablePath: browserPath(), headless: true });
   const problems: string[] = [];
@@ -174,9 +99,23 @@ async function main(): Promise<void> {
       await shot(page, 'desktop-1-empty');
     });
 
+    await check('a plain thought goes into the knowledge base, is listed there, and starts no tree', async () => {
+      await page.getByLabel('A thought for the mindstorm').fill('Remember the lens cap');
+      await page.getByRole('button', { name: 'Add', exact: true }).click();
+      await page.locator('.kb-chip', { hasText: 'Knowledge base 1' }).waitFor();
+      await page.locator('#toast', { hasText: 'is in your knowledge base' }).waitFor();
+      assert.equal(await count(page, '.card'), 0);
+      assert.equal(await count(page, '.tree-chip'), 0);
+      assert.equal(await page.locator('#empty').isVisible(), false);
+      await page.locator('.kb-chip').click();
+      await page.locator('#kb-list li', { hasText: 'Remember the lens cap' }).waitFor();
+      await page.mouse.click(700, 450);
+      await until('the list to close', async () => !(await page.locator('#kb').isVisible()));
+    });
+
     let rootId = '';
-    await check('a typed thought becomes a tree with one solid card and four dashed picks', async () => {
-      await page.getByLabel('A thought for the mindstorm').fill('The dolly zoom makes dread out of geometry');
+    await check('a thought that asks for a tree becomes one, with one solid card and four dashed picks', async () => {
+      await page.getByLabel('A thought for the mindstorm').fill('Start a tree on this: The dolly zoom makes dread out of geometry');
       await page.getByRole('button', { name: 'Add', exact: true }).click();
       await page.locator('.card.is-kept').first().waitFor();
       await page.locator('.card.is-thinking .think').first().waitFor();
@@ -243,7 +182,7 @@ async function main(): Promise<void> {
       const before = await places(page, firstTree);
       await page.evaluate(() => {
         const data = new DataTransfer();
-        data.setData('text/plain', 'Sourdough starters need feeding on a schedule');
+        data.setData('text/plain', 'Sourdough starters need feeding on a schedule. Start a tree on this.');
         document.body.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
       });
       await until('two trees', async () => (await count(page, '.tree-chip')) === 2);
@@ -253,6 +192,20 @@ async function main(): Promise<void> {
       assert.deepEqual(await places(page, firstTree), before);
       assert.deepEqual(await overlaps(page), []);
       await shot(page, 'desktop-4-second-tree');
+    });
+
+    await check("an opened card offers the librarian's questions about it, and picking one asks it", async () => {
+      await page.locator('.card.is-root', { hasText: 'Sourdough' }).click();
+      const offered = page.locator('#panel').getByRole('group', { name: 'Suggested questions' });
+      assert.equal(await offered.isVisible(), false, 'until the reply comes the card shows what it showed before, and none of the last card');
+      await offered.getByRole('button', { name: /^Where does Sourdough/ }).waitFor();
+      const before = await offered.getByRole('button').allTextContents();
+      assert.equal(before.length, 3);
+      await shot(page, 'desktop-4b-questions');
+      await offered.getByRole('button', { name: before[0] }).click();
+      await page.locator('.card', { hasText: `An essay on ${before[0]}` }).waitFor();
+      await until('the new picks to join the old', async () => (await count(page, '.card.is-pick')) === 12);
+      assert.deepEqual(await offered.getByRole('button').allTextContents(), before.slice(1), 'the asked question leaves the list');
     });
 
     await check('the tree list glides between trees', async () => {
@@ -268,18 +221,19 @@ async function main(): Promise<void> {
       await page.getByRole('button', { name: 'Send' }).click();
       await page.locator('#caption').getByText('show me more').waitFor();
       await page.locator('#caption').getByText('Here is more.').waitFor();
-      await until('twelve picks', async () => (await count(page, '.card.is-pick')) === 12);
+      await until('sixteen picks', async () => (await count(page, '.card.is-pick')) === 16);
       await settle(page);
       assert.deepEqual(await overlaps(page), []);
     });
 
-    await check('Ask about a card replaces its picks, with a thinking mark while it works', async () => {
+    await check('Ask about a card adds to its picks, with a thinking mark while it works, and at ten the least related make room', async () => {
       const panel = page.locator('#panel');
       await panel.getByLabel('Ask about this card').fill('who invented it');
       await panel.getByRole('button', { name: 'Ask' }).click();
       await page.locator(`.card[data-id="${rootId}"].is-thinking`).waitFor();
       await page.locator('.card', { hasText: 'An essay on who invented it' }).waitFor();
-      await until('the old picks to leave', async () => (await count(page, '.card.is-pick')) === 8);
+      await until('the card to hold ten picks', async () => (await count(page, '.card.is-pick')) === 18);
+      assert.equal(run.mind.picks(rootId).length, 10);
     });
 
     await check('dragging a card onto another moves it under that card', async () => {
@@ -313,14 +267,19 @@ async function main(): Promise<void> {
       assert.equal(await panel.isVisible(), false);
     });
 
-    await check('a chosen file and a typed address land as a picture card and a link card', async () => {
+    await check('a chosen file goes into the knowledge base, "start a tree on this" makes it a picture card, and a typed address is kept as a link', async () => {
       await page.locator('#file-pick').setInputFiles({ name: 'still.png', mimeType: 'image/png', buffer: Buffer.from(PNG) });
-      const picture = page.locator('.card[data-component="image"]', { hasText: 'still.png' });
+      await page.locator('#toast', { hasText: '“still.png” is in your knowledge base' }).waitFor();
+      await page.getByLabel('Talk to the librarian').fill('start a tree on this');
+      await page.getByRole('button', { name: 'Send' }).click();
+      const picture = page.locator('.card.is-root[data-component="image"]', { hasText: 'still.png' });
       await picture.waitFor();
       await until('the picture to load', () => picture.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0));
       await page.getByLabel('A thought for the mindstorm').fill('https://example.org/lenses');
       await page.getByLabel('A thought for the mindstorm').press('Enter');
-      await page.locator('.card[data-component="link"]', { hasText: 'example.org' }).first().waitFor();
+      await page.locator('.kb-chip').click();
+      await page.locator('#kb-list li', { hasText: 'example.org' }).waitFor();
+      await page.locator('.kb-chip').click();
       await run.pipeline.idle();
     });
 
@@ -370,10 +329,19 @@ async function main(): Promise<void> {
       const image = ((await up.json()) as { url: string }).url;
       assert.ok(run.pipeline.userCommands('Add every shape', showcase(image, rootId)));
       await page.locator('.tree-chip', { hasText: 'Every shape' }).waitFor();
-      for (const component of ['note', 'quote', 'fact', 'image', 'video', 'link', 'chart', 'person', 'chat', 'code', 'steps']) {
-        assert.ok((await count(page, `.card[data-component="${component}"]`)) > 0, `${component} is drawn`);
+      for (const component of COMPONENT_IDS) {
+        assert.ok((await count(page, `.card[data-id^="show-"][data-component="${component}"]`)) > 0, `${component} is drawn`);
       }
-      assert.equal(await page.locator('.card', { hasText: 'A shape this client has never heard of' }).getAttribute('data-component'), 'note');
+      for (const id of STRUCTURED_IDS) assert.equal(await page.locator(`.card[data-id="${STRUCTURED[id]}"]`).getAttribute('data-component'), id);
+      await run.pipeline.idle();
+      assert.equal(run.mind.treeNodes('show').filter((node) => node.view.by !== 'renderer').length, 0);
+      assert.equal(run.pipeline.undoLabel(), 'Add every shape', 'the stand-in Renderer, which draws by the real rules, found no card of the tree to redraw');
+      assert.ok(run.pipeline.userCommands('Add an unknown shape', unknownShape()));
+      const unknown = page.locator('.card', { hasText: 'A shape this client has never heard of' });
+      await unknown.waitFor();
+      await run.pipeline.idle();
+      assert.equal(run.mind.treeNodes(PLACED)[0]!.view.component, 'hologram');
+      assert.equal(await unknown.getAttribute('data-component'), 'note');
       for (const composite of ['gallery', 'timeline', 'comparison', 'sequence', 'cluster', 'stack']) {
         assert.equal(await count(page, `.pane[data-composite="${composite}"]`), 1, `${composite} is drawn`);
       }
@@ -383,11 +351,172 @@ async function main(): Promise<void> {
       assert.equal(await page.locator('.card[data-component="image"] img').first().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), true, 'the uploaded picture loads');
       await page.locator('.tree-chip', { hasText: 'Every shape' }).click();
       assert.deepEqual(await overlaps(page), []);
+      assert.deepEqual(await spills(page), [], 'no card holds more than its footprint');
       await shot(page, 'desktop-8-every-shape');
       await page.getByRole('button', { name: 'Open 5' }).click();
       await until('the pile to open', async () => (await count(page, '.card.is-under')) === 0);
       await page.getByRole('button', { name: 'Close', exact: true }).click();
       await until('the pile to close', async () => (await count(page, '.card.is-under')) === 4);
+    });
+
+    await check('a card whose item holds a date, a place, people or an origin shows them as one line of chips', async () => {
+      const up = await desktop.request.post(`${run.url}/api/assets?name=still.png`, { headers: { Authorization: 'Bearer secret', 'Content-Type': 'image/png' }, data: Buffer.from(PNG) });
+      assert.ok(run.pipeline.userCommands('Add cards with chips', chipped(((await up.json()) as { url: string }).url)));
+      await page.locator('.tree-chip', { hasText: 'With chips' }).click();
+      await settle(page);
+      const card = (id: string) => page.locator(`.card[data-id="${id}"]`);
+      const chips = (id: string) => card(id).locator('.chip').allTextContents();
+      const tall = (id: string) => card(id).evaluate((el: HTMLElement) => [parseFloat(el.style.width), parseFloat(el.style.height)]);
+
+      assert.deepEqual(await chips(CHIPPED.photo), ['12 May 1958', 'Bodega Bay']);
+      const [photo, plain] = [await tall(CHIPPED.photo), await tall(CHIPPED.plainPhoto)];
+      assert.deepEqual(photo, [plain[0], plain[1]! + 28], 'the photo with chips is taller by the chip line and no wider');
+      assert.equal(await card(CHIPPED.plainNote).locator('.chip-line').count(), 0, 'a card with nothing to say has no chip line');
+      assert.deepEqual(await chips(CHIPPED.link), ['2019'], 'a link does not repeat its site, as its origin or as its author');
+      assert.equal(await card(CHIPPED.museum).getAttribute('data-component'), 'artwork', 'a work a museum holds is drawn as an artwork');
+      assert.deepEqual(await card(CHIPPED.museum).locator('.artwork-by, .artwork-holder').allTextContents(), ['Utagawa Hiroshige, 1857', 'The Metropolitan Museum of Art']);
+      assert.deepEqual(await chips(CHIPPED.museum), [], 'and no chip repeats the date and the holder on its plate');
+      assert.equal(await card(CHIPPED.paper).getAttribute('data-component'), 'reference', 'a paper is drawn as a reference');
+      assert.deepEqual(await card(CHIPPED.paper).locator('.reference-year, .reference-authors, .reference-venue').allTextContents(), ['2019', 'T. Screech, M. Forrer, H. Smith', 'Journal of Japanese Studies']);
+      assert.deepEqual(await chips(CHIPPED.paper), [], 'and no chip repeats its year, its authors or its journal');
+      const four = await chips(CHIPPED.four);
+      assert.deepEqual(four, ['Summer 1958', 'Bancroft Library'], 'the origin comes straight after the date, and what has no room is left to the opened card');
+      assert.equal(await card(CHIPPED.four).locator('.chip[data-kind="origin"]').getAttribute('title'), 'Origin: Bancroft Library');
+
+      const clipped = (el: HTMLElement) => el.scrollWidth > el.clientWidth && getComputedStyle(el).textOverflow === 'ellipsis';
+      const crew = card(CHIPPED.people).locator('.chip');
+      assert.equal(await crew.locator('.chip-text').textContent(), 'Ada Lovelace, Grace Hopper');
+      assert.equal(await crew.locator('.chip-count').textContent(), '+3');
+      assert.ok(await crew.locator('.chip-text').evaluate(clipped), 'five people on a note: the names are clipped with an ellipsis');
+      assert.ok(await crew.evaluate((el) => el.querySelector('.chip-count')!.getBoundingClientRect().right <= el.getBoundingClientRect().right), 'and the count is whole inside the chip');
+      const long = card(CHIPPED.longPlace).locator('.chip-text');
+      assert.equal(await long.textContent(), LONG_PLACE);
+      assert.ok(await long.evaluate(clipped), 'a long place is clipped with an ellipsis');
+      const dates = await page.locator('.card[data-id^="chips-"] .chip[data-kind="when"] .chip-text').evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).map((el) => el.textContent));
+      assert.deepEqual(dates, [], 'every date is whole');
+      const loose = await page.locator('.card[data-id^="chips-"] .chip').evaluateAll((els) => els.flatMap((el) => {
+        const chip = el as HTMLElement;
+        const line = chip.parentElement!;
+        const scale = line.getBoundingClientRect().width / line.offsetWidth;
+        const wide = chip.getBoundingClientRect().width / scale;
+        const text = chip.querySelector('.chip-text')!;
+        const past = chip.getBoundingClientRect().right > line.getBoundingClientRect().right + 0.5;
+        const short = text.scrollWidth > text.clientWidth && wide < parseFloat(chip.style.flexBasis) - 0.5;
+        return past || short ? [`${chip.textContent} is ${wide.toFixed(1)} px for a box of ${chip.style.flexBasis}`] : [];
+      }));
+      assert.deepEqual(loose, [], 'no chip runs past its line, and a clipped chip has at least its box');
+      const lines = await page.locator('.card[data-id^="chips-"] .chip-line').evaluateAll((els) => els.map((el) => (el as HTMLElement).offsetHeight));
+      assert.ok(lines.length >= 7 && lines.every((height) => height === 20), `every chip line is one line tall, got ${lines}`);
+      assert.deepEqual(await overlaps(page), []);
+      assert.deepEqual(await spills(page), []);
+
+      const box = (id: string) => card(id).evaluate((el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+      const top = await box(CHIPPED.pileTop);
+      for (const [i, id] of CHIPPED.pileUnder.entries()) {
+        const under = await box(id);
+        assert.ok(Math.abs(under[2]! - top[2]!) < 0.5 && Math.abs(under[3]! - top[3]!) < 0.5, 'a card under a plain top card is cut to the top card, though its own chips make it taller');
+        assert.ok(under[0]! > top[0]! + i && under[1]! > top[1]! + i, 'and shows only below and to the right of it');
+      }
+
+      await card(CHIPPED.four).click();
+      const facts = page.locator('#panel .facts');
+      assert.deepEqual(await facts.locator('dd[data-chip]').allTextContents(), ['Summer 1958', 'Bancroft Library', 'Bodega Bay', 'Ada Lovelace, Grace Hopper, Edsger Dijkstra'], 'the opened card lists every source in full');
+      assert.deepEqual((await facts.locator('dt').allTextContents()).slice(0, 4), ['When', 'Origin', 'Where', 'People']);
+      assert.ok(!(await facts.locator('dt').allTextContents()).includes('From'), 'what the agents brought names its origin, and no second place it came from');
+      await card(CHIPPED.plainNote).click();
+      assert.equal(await facts.locator('dd[data-chip]').count(), 0);
+      assert.deepEqual((await facts.locator('dt').allTextContents()).slice(0, 1), ['From'], 'what the user added says how it arrived');
+
+      await card(CHIPPED.museum).click();
+      assert.deepEqual(await facts.locator('dd[data-chip]').allTextContents(), ['1857', 'The Metropolitan Museum of Art'], 'the opened artwork still lists its date and its holder');
+
+      const size = await tall(CHIPPED.four);
+      await card(CHIPPED.four).click();
+      await page.locator('#panel').getByRole('button', { name: 'Keep', exact: true }).click();
+      await until('the card to be kept', async () => (await card(CHIPPED.four).getAttribute('aria-label'))!.startsWith('Card:'));
+      await settle(page);
+      assert.deepEqual(await chips(CHIPPED.four), four, 'a kept pick still says where it came from');
+      assert.deepEqual(await tall(CHIPPED.four), size, 'and is the size it was as a pick');
+      assert.deepEqual(await facts.locator('dd[data-chip="origin"]').allTextContents(), ['Bancroft Library']);
+      await page.keyboard.press('Escape');
+    });
+
+    await check('each of the fourteen structured types is drawn from what the service makes of a pasted text or a request', async () => {
+      const paste = (text: string) => page.evaluate((pasted) => {
+        const data = new DataTransfer();
+        data.setData('text/plain', pasted);
+        document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+      }, text);
+      /** What to paste for each type, words its card then shows, and a part only that type draws, with how many of it. */
+      const pasted: [string, string, string, string, number][] = [
+        ['facts', 'Tokyo Tower\nHeight = 333 m\nBuilt = 1958\nFloors = 2', '333 m', '.figure', 3],
+        ['table', 'Tier | Cost\nBasic | $5\nPlus | $12', 'Basic', '.table-cell.is-number:not(.is-head)', 2],
+        ['list', 'Packing\n[x] passport\n[ ] charger', 'passport', '.list-box', 2],
+        ['breakdown', 'Budget\nChart: Rent 50%, Food 30%, Other 20%', '50%', '.breakdown-bar', 3],
+        ['qa', 'Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.', 'Air scatters', '.qa-voice', 2],
+        ['callout', 'Varnishing the table\nCaution: wet varnish scratches for a week.', 'wet varnish', '.callout.is-caution', 1],
+        ['excerpt', 'The house remembers.\n> Every stair keeps the weight of who climbed it.\nAt: Chapter 3', 'Every stair keeps', '.excerpt-where', 1],
+        ['definition', 'Term: Bokeh\nDefinition: the look of the parts of a picture that are out of focus', 'out of focus', '.definition-text', 1],
+        ['idea', 'Build a treehouse', 'Build a treehouse', '.idea-spark', 1],
+        ['proscons', 'Buying the van\nPros: room for the dog, cheap to insure\nCons: slow uphill', 'slow uphill', '.proscons-mark', 3],
+        ['swatch', 'Palette: Rust #B7410E, Moss #8A9A5B', '#8A9A5B', '.swatch-block', 2],
+        ['place', 'Lisbon\nWhere: Lisbon', 'Lisbon', '.place-pin', 1],
+      ];
+      await page.keyboard.press('Escape');
+      for (const [type, text, shown, part, parts] of pasted) {
+        await paste(`Start a tree on this:\n${text}`);
+        const made = page.locator(`.card.is-kept[data-component="${type}"]`, { hasText: shown }).last();
+        await made.waitFor();
+        assert.equal(await made.locator(part).count(), parts, `${type} draws ${parts} of ${part}`);
+        // Each paste starts a tree the view follows, but one can sit off the screen while the field settles, so each tree is visited until the card is on screen.
+        for (const chip of [null, ...(await page.locator('.tree-chip').all())]) {
+          if (chip) await chip.click();
+          await settle(page);
+          const box = await made.boundingBox();
+          const view = page.viewportSize()!;
+          if (box && box.x >= 0 && box.y >= 0 && box.x + box.width <= view.width && box.y + box.height <= view.height) break;
+        }
+        await made.click();
+        const printed = (await page.locator('#panel .panel-summary, #panel .panel-text').allInnerTexts()).join('\n');
+        assert.ok(!printed.includes(shown), `an opened ${type} does not print "${shown}" again under its own form`);
+        const opened = await page.locator('#panel .panel-scroll').innerText();
+        if (type === 'table' || type === 'callout') assert.equal(opened.split(shown).length, 2, `an opened ${type} says "${shown}" once`);
+        if (type === 'table') assert.equal(await page.locator('#panel .panel-text').count(), 0, 'an opened table does not print the pasted rows again under its cells');
+        if (type === 'table') {
+          const drawn = await page.locator('#panel .detail-table').elementHandle();
+          const known = Number((await page.locator('.kb-chip').textContent())!.replace(/\D+/g, ''));
+          await paste('Remember to water the fig tree on Sunday morning');
+          await page.locator('.kb-chip', { hasText: `Knowledge base ${known + 1}` }).waitFor();
+          await run.pipeline.idle();
+          assert.ok(await drawn!.evaluate((el) => el.isConnected), 'an opened table is not drawn again when something else arrives, so it keeps its scroll place');
+        }
+        await page.keyboard.press('Escape');
+      }
+      await run.pipeline.idle();
+      const asked: [string, string, string, string][] = [
+        ['artwork', 'find a museum painting of stairs', 'Stairwell, seen from above', '.artwork-mat img'],
+        ['reference', 'find a paper on the dolly zoom', 'Perceived depth under opposed zoom and camera motion', '.reference-head'],
+      ];
+      for (const [type, need, title, part] of asked) {
+        await page.locator('.card.is-kept[data-component="place"]', { hasText: 'Lisbon' }).last().click();
+        await page.getByLabel('Ask about this card').fill(need);
+        await page.getByRole('button', { name: 'Ask', exact: true }).click();
+        const brought = page.locator(`.card.is-pick[data-component="${type}"]`, { hasText: title });
+        await brought.waitFor();
+        assert.equal(await brought.locator(part).count(), 1, `${type} draws ${part}`);
+        assert.deepEqual(await brought.locator('.chip').allTextContents(), [], `no chip repeats what the ${type} shows`);
+        await run.pipeline.idle();
+      }
+      await until('the museum picture to load', () => page.locator('.card[data-component="artwork"] .artwork-mat img').last().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0));
+      await page.keyboard.press('Escape');
+      await settle(page);
+      assert.deepEqual(await spills(page), []);
+    });
+
+    await check('every card type in the registry can be sized, drawn and opened', async () => {
+      const missing = await page.evaluate<string[]>(`import('/js/components/index.js').then(({ COMPONENTS }) =>
+        Object.entries(COMPONENTS).flatMap(([name, kind]) => ['size', 'draw', 'detail'].filter((part) => typeof kind[part] !== 'function').map((part) => name + '.' + part)))`);
+      assert.deepEqual(missing, []);
     });
 
     await check('the service can move the view to a card', async () => {
@@ -398,6 +527,18 @@ async function main(): Promise<void> {
       const box = (await page.locator(`.card[data-id="${target}"]`).boundingBox())!;
       assert.ok(box.x > 0 && box.x + box.width < 1440 - 384 && box.y > 60 && box.y + box.height < 900, 'the card is in view beside the panel');
       await shot(page, 'desktop-9-navigated');
+      await page.keyboard.press('Escape');
+    });
+
+    await check('opening a card shows it and brings no picks', async () => {
+      const target = 'show-2';
+      assert.equal(run.mind.children(target).length, 0);
+      await page.locator(`.card[data-id="${target}"]`).click();
+      await page.locator('#panel').getByRole('button', { name: 'More' }).waitFor();
+      await new Promise((r) => setTimeout(r, 1500));
+      await run.pipeline.idle();
+      assert.equal(run.mind.children(target).length, 0);
+      assert.equal(await page.locator(`.card[data-id="${target}"].is-thinking`).count(), 0);
       await page.keyboard.press('Escape');
     });
 
@@ -454,6 +595,25 @@ async function main(): Promise<void> {
           .filter((el) => el.offsetParent !== null && el.getBoundingClientRect().height < 44)
           .map((el) => el.id || el.textContent));
         assert.deepEqual(short, []);
+      }
+    });
+
+    await check('the library page draws every card type inside the footprint it states, at both widths', async () => {
+      for (const view of [page, small]) {
+        await view.goto(`${run.url}/library.html`);
+        await view.locator('#composites .lib-entry').last().waitFor();
+        const stated = await view.locator('#components .lib-size').allTextContents();
+        for (const type of COMPONENT_IDS) {
+          assert.ok(stated.some((line) => new RegExp(`^${type} \\d+ by \\d+$`).test(line)), `${type} states its footprint`);
+        }
+        for (const type of COMPONENT_IDS) {
+          const cards = view.locator(`#components .card[data-component="${type}"]`);
+          assert.ok((await cards.filter({ has: view.locator('.chip-line') }).count()) > 0, `${type} is shown with chips`);
+          assert.ok((await cards.filter({ hasNot: view.locator('.chip-line') }).count()) > 0, `${type} is shown without chips`);
+        }
+        assert.deepEqual(await spills(view), []);
+        const size = await view.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
+        assert.equal(size[0], size[1], 'the page does not scroll sideways');
       }
     });
 
@@ -595,7 +755,7 @@ async function listeningService(dir: string, clientDir: string) {
       return 'Hey Momo, show me more like this.';
     },
   });
-  await server.pipeline.dump([{ kind: 'text', text: 'Sourdough rises slowly in winter' }]);
+  await server.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: Sourdough rises slowly in winter' }]);
   await server.pipeline.idle();
   return { server, acted, posted };
 }
@@ -840,13 +1000,13 @@ async function wakeChecks(): Promise<void> {
 }
 
 const dataDir = mkdtempSync(join(tmpdir(), 'mp-e2e-'));
-const boot = (port: number) => startServer({ port, host: '127.0.0.1', dataDir, clientDir: join(here, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret' });
+const boot = (port: number) => bootFake({ port, dataDir, asPlaced: (treeId) => treeId === PLACED });
 let run: Running = await boot(0);
 try {
   // E2E_WAKE_ONLY=1 runs only the listening checks.
   if (!process.env.E2E_WAKE_ONLY) await main();
   await wakeChecks();
-  console.log(`\n${passed} checks passed. Screenshots are in docs/screenshots.`);
+  console.log(`\n${passed} checks passed. Screenshots are in ${shots}.`);
   if (failed.length > 0) {
     console.log(`${failed.length} failed:\n${failed.map((name) => `  ${name}`).join('\n')}`);
     process.exitCode = 1;

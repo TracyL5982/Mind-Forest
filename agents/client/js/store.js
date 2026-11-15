@@ -79,7 +79,12 @@ export class Store {
       groups.push(live);
       for (const id of members) groupOf.set(id, live);
     }
-    return { trees, children, depth, colour, order, groups, groupOf };
+    // The knowledge base's loose part: what the user dropped that no node holds. The headset's library is not listed.
+    const held = new Set([...this.node.values()].map((node) => node.itemId));
+    const unplaced = [...this.item.values()]
+      .filter((item) => !item.archived && item.source?.from !== 'library' && !held.has(item.id))
+      .sort((a, b) => (a.source?.capturedAt < b.source?.capturedAt ? 1 : -1));
+    return { trees, children, depth, colour, order, groups, groupOf, unplaced };
   }
 
   itemOf(nodeId) {

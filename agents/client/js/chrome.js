@@ -107,9 +107,30 @@ export class WorkLog {
 }
 
 export function showTrees(trees, current, onPick) {
-  $('trees').replaceChildren(...trees.map((tree) =>
-    h('button', { class: `tree-chip ${tree.id === current ? 'is-current' : ''}`, type: 'button', title: tree.digest || tree.title, text: tree.title || 'Untitled', onclick: () => onPick(tree.id) })));
+  const known = $('kb-list').childElementCount;
+  const chip = known > 0 && h('button', {
+    class: 'kb-chip', type: 'button', 'aria-controls': 'kb', 'aria-expanded': String(!$('kb').hidden),
+    title: 'What you dropped that no tree holds yet', text: `Knowledge base ${known}`, onclick: () => toggleKnowledge($('kb').hidden),
+  });
+  $('trees').replaceChildren(...[chip, ...trees.map((tree) =>
+    h('button', { class: `tree-chip ${tree.id === current ? 'is-current' : ''}`, type: 'button', title: tree.digest || tree.title, text: tree.title || 'Untitled', onclick: () => onPick(tree.id) }))].filter(Boolean));
 }
+
+/** The list of what no tree holds. Call before showTrees, whose first chip opens it and counts it. */
+export function showKnowledge(items) {
+  $('kb-list').replaceChildren(...items.map((item) =>
+    h('li', null, h('b', { text: item.title || item.summary || 'Untitled' }), h('span', { text: [item.kind, item.summary].filter(Boolean).join(' · ') }))));
+  if (items.length === 0) toggleKnowledge(false);
+}
+
+function toggleKnowledge(open) {
+  $('kb').hidden = !open;
+  document.querySelector('.kb-chip')?.setAttribute('aria-expanded', String(open));
+}
+
+document.addEventListener('pointerdown', (e) => {
+  if (!$('kb').hidden && !e.target.closest('#kb, .kb-chip')) toggleKnowledge(false);
+});
 
 export function showUndo(label) {
   $('undo-label').textContent = label ? `Undo: ${label}` : 'Undo';

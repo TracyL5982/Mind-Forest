@@ -1,0 +1,9 @@
+{"t":"dump","dumps":[{"kind":"text","text":"Dolly zoom\nThe camera moves away while zooming in, so the subject stays the same size and the background swells behind it."}]}
+{"t":"keep","nodeIds":["ab3e7b92-e740-41b2-80f7-a33b85aa3fe2"]}
+{"t":"focus","nodeId":"ab3e7b92-e740-41b2-80f7-a33b85aa3fe2"}
+{"t":"commands","label":"Cut a card","commands":[{"type":"deleteNode","id":"ad8c9958-1393-49ac-b984-43e8092332b1"}]}
+{"t":"undo"}
+{"t":"settings","patch":{"picksPerRun":3}}
+{"t":"utter","text":"more like this","final":true,"scene":{"focus":"fe7ab0f7-3aaa-4ce5-88a0-69e67fb87b89","selection":[],"treeId":"1690f5e5-ebe1-404e-9e57-e6d8ce2245aa"}}
+{"t":"handoff","scope":{"treeIds":[],"nodeIds":[]}}
+{"t":"keep","nodeIds":[]}

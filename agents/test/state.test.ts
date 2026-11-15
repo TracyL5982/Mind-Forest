@@ -7,12 +7,12 @@ import { kit } from './kit.ts';
 
 const USER = { by: 'user' as const };
 
-test('a seeded tree is searchable and has no inbox', () => {
+test('a seeded tree is searchable and leaves nothing unplaced', () => {
   const k = kit();
   const { treeId, nodeIds } = k.seedTree('Film', ['Dolly zoom', 'Vertigo staircase', 'Jaws beach scene']);
   assert.equal(k.mind.treeNodes(treeId).length, 3);
   assert.equal(k.mind.search('vertigo')[0]?.item.title, 'Vertigo staircase');
-  assert.equal(k.mind.inbox().length, 0);
+  assert.equal(k.mind.unplaced().length, 0);
   assert.equal(k.mind.depth(nodeIds[1]!), 1);
 });
 
@@ -153,4 +153,56 @@ test('when an earlier part was changed since, undo still takes back the latest p
   assert.equal(k.mind.itemOf(nodeIds[2]!).title, 'B');
   assert.equal(k.mind.itemOf(nodeIds[1]!).title, 'A edited by the user');
   assert.ok(edit.id);
+});
+
+test('a library item is never listed as unplaced, outlives its last node, and is found unless only placed items are asked for', () => {
+  const k = kit();
+  const { nodeIds } = k.seedTree('Film', ['Dolly zoom']);
+  const vertigo = k.item({ title: 'Vertigo', kind: 'video', source: { from: 'library', capturedAt: '' }, data: { library: { kind: 'film', key: 25 } } });
+  k.mind.apply({ origin: USER, label: 'library', commands: [{ type: 'addItem', item: vertigo }] });
+  assert.deepEqual(k.mind.unplaced(), []);
+  assert.equal(k.mind.search('vertigo')[0]?.item.id, vertigo.id);
+  assert.deepEqual(k.mind.search('vertigo', { placed: true }), []);
+
+  const node = makeNode(k.ctx, vertigo, { treeId: k.mind.node(nodeIds[0]!).treeId, parent: nodeIds[0]!, status: 'pick', why: 'the same shot', origin: USER });
+  k.mind.apply({ origin: USER, label: 'hang', commands: [{ type: 'addNode', node }] });
+  assert.equal(k.mind.search('vertigo', { placed: true })[0]?.item.id, vertigo.id);
+
+  k.mind.apply({ origin: USER, label: 'drop', commands: [{ type: 'deleteNode', id: node.id }] });
+  assert.equal(k.mind.item(vertigo.id).archived, false);
+  assert.deepEqual(k.mind.unplaced(), []);
+  assert.equal(k.mind.search('vertigo')[0]?.item.id, vertigo.id);
+});
+
+test('a change set that changes nothing takes no seq and is never what undo takes back', () => {
+  const k = kit();
+  const { treeId } = k.seedTree('Film', ['Dolly zoom']);
+  const renamed = k.mind.apply({ origin: USER, label: 'rename', commands: [{ type: 'renameTree', id: treeId, title: 'Cinema' }] });
+
+  const nothing = k.mind.apply({ origin: USER, label: 'rename again', commands: [{ type: 'renameTree', id: treeId, title: 'Cinema' }] });
+  const next = k.mind.apply({ origin: USER, label: 'rename back', commands: [{ type: 'renameTree', id: treeId, title: 'Film' }] });
+
+  assert.deepEqual(nothing.patches, []);
+  assert.equal(next.seq, renamed.seq + 1);
+  assert.ok(!k.mind.changes().some((c) => c.id === nothing.id), 'it is not in the history');
+  k.mind.undo();
+  assert.equal(k.mind.undoTarget()?.id, renamed.id, 'the undo after next takes back the last real change');
+});
+
+test('taking away an agent\'s pick of something the user dropped leaves it in the knowledge base, and deleting their own card does not', () => {
+  const k = kit();
+  const { treeId, nodeIds } = k.seedTree('Film', ['Root', 'Mine']);
+  const dropped = k.item({ title: 'A dropped thought' });
+  const pick = makeNode(k.ctx, dropped, { treeId, parent: nodeIds[0]!, status: 'pick', why: 'fits', origin: { by: 'agent', role: 'filer', tool: 'mindstorm' } });
+  k.mind.apply({ origin: USER, label: 'drop', commands: [{ type: 'addItem', item: dropped }, { type: 'addNode', node: pick }] });
+
+  k.mind.apply({ origin: { by: 'agent', role: 'scout' }, label: 'refresh', commands: [{ type: 'deleteNode', id: pick.id }] });
+  assert.equal(k.mind.item(dropped.id).archived, false);
+  assert.deepEqual(k.mind.unplaced().map((i) => i.id), [dropped.id]);
+  assert.equal(k.mind.known(dropped.id), true);
+
+  const mine = k.mind.node(nodeIds[1]!).itemId;
+  k.mind.apply({ origin: USER, label: 'delete', commands: [{ type: 'deleteNode', id: nodeIds[1]! }] });
+  assert.equal(k.mind.item(mine).archived, true);
+  assert.equal(k.mind.known(mine), false);
 });

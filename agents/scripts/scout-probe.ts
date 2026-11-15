@@ -43,6 +43,8 @@ const ctx: RoleContext = {
   mind, model, assets, newId, now,
   tools: makeTools({ model, assets, keys: env }),
   settings: { ...DEFAULT_SETTINGS },
+  // NO_EMBEDS=1 stands for a headset connected: videos are looked for as files that play directly.
+  playback: () => ({ embeds: !process.env.NO_EMBEDS, files: [] }),
   note: (role, message) => console.log(`  note ${role}: ${message}`),
 };
 const wanted = process.argv[2] ?? '';
@@ -65,9 +67,13 @@ const show = (label: string, commands: Awaited<ReturnType<typeof scout>>) => {
     if (c.type === 'addItem') {
       const i = c.item;
       console.log(`- [${i.kind} via ${i.origin.tool}] ${i.title}\n    thread: ${whys.get(i.id)}\n    ${i.summary}${i.source.url ? `\n    source: ${i.source.url}` : ''}${i.source.asset ? `\n    asset: ${assets.url(i.source.asset)}` : ''}${i.data.steps ? `\n    steps: ${JSON.stringify(i.data.steps)}` : ''}${i.data.chart ? `\n    chart: ${JSON.stringify(i.data.chart)}` : ''}\n    text: ${i.text.replace(/\s+/g, ' ').slice(0, 260)}`);
+    } else if (c.type === 'addNode' && !commands.some((o) => o.type === 'addItem' && o.item.id === c.node.itemId)) {
+      console.log(`- [existing ${mind.item(c.node.itemId).source.from} item] ${mind.item(c.node.itemId).title}\n    thread: ${c.node.why} (${c.node.importance})`);
+    } else if (c.type === 'link') {
+      console.log(`- link to "${mind.itemOf(c.link.b).title}": ${c.link.why} (${c.link.strength})`);
     } else if (c.type !== 'addNode') console.log(`- ${c.type}`);
   }
 };
-const rest = await scout(ctx, { anchor: anchor.id, need: process.argv[3], mode: 'more', deliver: (commands) => show('delivered early', commands) });
+const rest = await scout(ctx, { anchor: anchor.id, need: process.argv[3], deliver: (commands) => show('delivered early', commands) });
 show('returned', rest);
 console.log(`\ntokens: ${model.spent}`);

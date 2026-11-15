@@ -178,7 +178,7 @@ std::u16string trimmingCharacters(const std::u16string& s, const std::function<b
 
 FontMetrics Font::metrics() const {
     static std::map<std::pair<float, int>, FontMetrics> known;
-    auto key = std::make_pair(pointSize, int(weight));
+    auto key = std::make_pair(pointSize, faceCode(*this));
     auto it = known.find(key);
     if (it != known.end()) return it->second;
     FontMetrics m = platform::fontMetrics(*this);
@@ -231,7 +231,7 @@ const TextFrame& layoutText(const std::string& string, const TextAttributes& att
     float line = askedLineHeight(attributes);
     std::string key = string;
     key += '\x1f';
-    key += fmt("%g|%d|%d|%g|%g|%g|%d|%d", double(attributes.font.pointSize), int(attributes.font.weight), attributes.kern ? 1 : 0,
+    key += fmt("%g|%d|%d|%g|%g|%g|%d|%d", double(attributes.font.pointSize), faceCode(attributes.font), attributes.kern ? 1 : 0,
                double(attributes.kern.value_or(0)), double(line), double(w), maxLines, carets ? 1 : 0);
     auto it = known.find(key);
     if (it != known.end()) return it->second;
@@ -327,7 +327,7 @@ void Canvas::drawText(const std::string& string, CGPoint at, const TextAttribute
     strings.push_back(string);
     const Color& c = attributes.foregroundColor;
     commands.insert(commands.end(), {at.x, at.y, width < 1e6f ? width : unwrapped, float(maxLines), attributes.font.pointSize,
-                                     float(int(attributes.font.weight)), attributes.kern ? 1.f : 0.f, attributes.kern.value_or(0),
+                                     float(faceCode(attributes.font)), attributes.kern ? 1.f : 0.f, attributes.kern.value_or(0),
                                      askedLineHeight(attributes), c.r, c.g, c.b, c.a});
 }
 

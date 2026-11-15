@@ -2,6 +2,8 @@
 // `// MARK: - The shelf of covers` and `// MARK: - The strip: what you can say and do`.
 #include "oceanmodel.h"
 
+#include "../agent/bridge.h"
+
 #include <cmath>
 #include <cstdio>
 
@@ -214,6 +216,7 @@ void OceanModel::pressTree(bool send) {
     stir();
     double now = time;
     if (send) tree->sent = true;
+    if (agentBridge) agentBridge->pressed(*tree, send);     // AGENT
     // The cards whose pictures the cover shows go to where those float; the rest give way.
     CoverPlan plan = coverPlan(*tree);
     std::vector<int> ids;
@@ -441,6 +444,9 @@ void OceanModel::loadShelf(const std::shared_ptr<Catalog>& catalog) {
         bool& flag;
         ~Done() { flag = true; }
     } done{shelfLoaded};
+    // AGENT: joined to the agent service, the shelf holds the service's trees only (the bridge hangs them),
+    // so the trees this app keeps itself, and the two it starts with, stay in their file untouched.
+    if (agentBridge) return;
     std::string url = shelfURL();
     if (Flags::has("freshShelf") && !url.empty()) std::remove(url.c_str());
     std::optional<std::string> data = url.empty() ? std::nullopt : platform::readFile(url);
@@ -494,8 +500,11 @@ void OceanModel::saveShelf() {
     std::string url = shelfURL();
     if (url.empty() || !catalog) return;
     std::vector<ShelfFile::Item> items = shelfWaiting;     // (none, by the time anything is written: see `update`)
-    for (const Shelved& cover : shelf) items.push_back(ShelfFile::Item{cover.tree->saved(), cover.spot});
-    if (tree && standingSpot) items.push_back(ShelfFile::Item{tree->saved(), *standingSpot});
+    // AGENT: a tree the agent service grows is kept by the service, and comes back with the next connection (`grows`).
+    for (const Shelved& cover : shelf) {
+        if (cover.tree->grows) items.push_back(ShelfFile::Item{cover.tree->saved(), cover.spot});
+    }
+    if (tree && tree->grows && standingSpot) items.push_back(ShelfFile::Item{tree->saved(), *standingSpot});
     std::string data = ShelfFile(int(catalog->clips.size()), catalog->worksKey, items).json().dump();
     platform::writeFile(url, data);
 }

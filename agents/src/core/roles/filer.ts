@@ -1,79 +1,89 @@
 import { z } from 'zod';
 import type { Command, Id, Item, Node, Tree } from '../domain.ts';
+import { MINDSTORM } from '../round.ts';
 import { tokenize } from '../search.ts';
-import { makeNode, type RoleContext, type Roles } from './types.ts';
+import { AGENT, idFrom, makeNode, pickStatus, type RoleContext, type Roles, type TreeRequest } from './types.ts';
 
 const ROLE = 'filer';
 const MAX_TREES = 8;
 const MAX_PARENTS = 12;
 const MAX_ITEMS = 40;
-const FIT = 0.5;
 
 const Answer = z.object({
   placements: z.array(
     z.object({
       itemId: z.string(),
-      place: z.enum(['existing', 'new']),
       parentNodeId: z.string(),
-      treeTitle: z.string(),
-      joinsItemId: z.string(),
+      strength: z.number(),
       why: z.string(),
     }),
   ),
 });
 type Answer = z.infer<typeof Answer>;
 
-/** Where one new item goes: under a node already in the mindstorm, under another item of the same batch, or as the root of a new tree. */
+/**
+ * Where one dropped item goes: under a card already in a tree, under another item of the same drop, or as the root of the tree
+ * the user asked for. An item with no placement stays in the knowledge base, and no tree holds it.
+ */
 type Placement =
-  | { at: 'node'; parent: Id; why: string }
+  | { at: 'card'; parent: Id; why: string }
   | { at: 'item'; under: Id; why: string }
-  | { at: 'root'; title: string; why: string };
+  | { at: 'root'; title: string };
 
 interface Shortlisted {
   tree: Tree;
   parents: Node[];
 }
 
-export const filer: Roles['filer'] = async (ctx, items) => {
+export const filer: Roles['filer'] = async (ctx, items, request) => {
   if (items.length === 0) return [];
   const batch = new Map(items.map((i) => [i.id, i]));
-  const placements = new Map<Id, Placement>();
-
-  for (const item of items) {
-    const fromChat = chatPlacement(ctx, item, batch);
-    if (fromChat) placements.set(item.id, fromChat);
-  }
-
-  const open = items.filter((i) => !placements.has(i.id));
-  if (open.length > MAX_ITEMS) ctx.note(ROLE, `${open.length - MAX_ITEMS} items were filed by search alone, the batch was too large to judge at once`);
-  const asked = open.slice(0, MAX_ITEMS);
-  if (asked.length > 0) {
-    const trees = shortlist(ctx, asked);
-    try {
-      const answer = await ctx.model.json({
-        role: ROLE,
-        system: SYSTEM,
-        user: prompt(ctx, asked, trees),
-        schema: Answer,
-        effort: 'medium',
-      });
-      for (const [id, placement] of validate(ctx, answer, batch)) placements.set(id, placement);
-    } catch (err) {
-      ctx.note(ROLE, `the model did not answer (${message(err)}), filing by search instead`);
-    }
-  }
-
-  for (const item of items) {
-    if (!placements.has(item.id)) placements.set(item.id, fallback(ctx, item));
-  }
-  for (const item of items) {
-    if (loops(item.id, placements)) placements.set(item.id, fallback(ctx, item));
-  }
-  return emit(ctx, items, batch, placements);
+  const placements = request ? grow(items, batch, request) : await place(ctx, items, batch);
+  return emit(ctx, items, batch, placements, Boolean(request));
 };
 
 const SYSTEM =
-  'You are the Filer of a spatial brainstorming app. The user drops things in, and you decide where each new item belongs among their trees of ideas.';
+  'You are the Filer of a spatial brainstorming app. Everything the user drops in joins their knowledge base. You decide whether a new item also belongs under one card of the trees they are growing.';
+
+/** Asked for a tree: the first item that is not a chat's takeaway is its root, each takeaway hangs under its chat, the rest under the root. */
+function grow(items: Item[], batch: ReadonlyMap<Id, Item>, request: TreeRequest): Map<Id, Placement> {
+  const chatOf = (item: Item) => {
+    const chat = item.data.fromChat;
+    return typeof chat === 'string' && chat !== item.id && batch.has(chat) ? chat : null;
+  };
+  const root = items.find((i) => !chatOf(i)) ?? items[0]!;
+  const out = new Map<Id, Placement>([[root.id, { at: 'root', title: treeTitle(request.title) || treeTitle(nameOf(root)) }]]);
+  for (const item of items) {
+    if (item === root) continue;
+    const chat = chatOf(item);
+    out.set(item.id, chat ? { at: 'item', under: chat, why: 'taken from this chat' } : { at: 'item', under: root.id, why: 'dropped with it' });
+  }
+  return out;
+}
+
+/** Not asked for a tree: only a strong fit under a card is placed, and the model is asked only when there are trees to place under. */
+async function place(ctx: RoleContext, items: Item[], batch: ReadonlyMap<Id, Item>): Promise<Map<Id, Placement>> {
+  const out = new Map<Id, Placement>();
+  for (const item of items) {
+    const fromChat = chatPlacement(ctx, item, batch);
+    if (fromChat) out.set(item.id, fromChat);
+  }
+  const open = items.filter((i) => !out.has(i.id));
+  if (open.length > MAX_ITEMS) ctx.note(ROLE, `${open.length - MAX_ITEMS} items were kept in the knowledge base unjudged, the drop was too large to judge at once`);
+  const asked = open.slice(0, MAX_ITEMS);
+  const trees = asked.length > 0 ? shortlist(ctx, asked) : [];
+  if (trees.length > 0) {
+    try {
+      const answer = await ctx.model.json({ role: ROLE, system: SYSTEM, user: prompt(ctx, asked, trees), schema: Answer, effort: 'medium' });
+      for (const [id, placement] of validate(ctx, answer, batch)) out.set(id, placement);
+    } catch (err) {
+      ctx.note(ROLE, `the model did not answer (${message(err)}), what was dropped stays in the knowledge base`);
+    }
+  }
+  // A takeaway goes where its chat goes, and nowhere when its chat is placed nowhere.
+  for (const [id, p] of out) if (p.at === 'item' && !out.has(p.under)) out.delete(id);
+  return out;
+}
 
 function prompt(ctx: RoleContext, items: Item[], trees: Shortlisted[]): string {
   const itemLines = items.map((i) => {
@@ -90,17 +100,16 @@ function prompt(ctx: RoleContext, items: Item[], trees: Shortlisted[]): string {
     ].join('\n'),
   );
   return [
-    'New items to place:',
+    'Just dropped in:',
     itemLines.join('\n'),
     '',
-    trees.length > 0 ? `Existing trees, each with the nodes an item could hang under:\n${treeLines.join('\n')}` : 'There are no existing trees yet.',
+    `The user's trees, each with the cards an item could hang under:\n${treeLines.join('\n')}`,
     '',
+    'Everything dropped stays in the knowledge base on its own. Hang an item under a card only when it plainly belongs there: the same specific subject, a direct example, answer, cause or contradiction of what the card holds. A shared word or a broad topic is not enough. Most items belong under no card.',
     'Return one placement for every item, using the ids exactly as written.',
-    '- place "existing": the item really belongs to the topic of an existing tree. Set parentNodeId to the node it should hang under, the most specific one that fits. Leave treeTitle and joinsItemId empty.',
-    '- place "new": the item is about something none of the trees cover. A weak or surface match is not enough to join a tree, so start a new one.',
-    '  When several new items share one new topic, they form one tree together: one of them is the root (joinsItemId empty, treeTitle set to a short human title of 2 to 5 words), and each of the others sets joinsItemId to the id of the item it hangs under and leaves treeTitle empty.',
-    '- why: one short phrase saying why the item sits there.',
-    'Set every field you do not use to an empty string.',
+    '- parentNodeId: the card it belongs under, the most specific one that fits. Empty when none does.',
+    '- strength: how strongly it belongs there, from 0 to 1. Be strict: 0.8 or above only when the user would be glad to find it there. 0 when parentNodeId is empty.',
+    '- why: one short phrase saying why it sits there. Empty when parentNodeId is empty.',
   ].join('\n');
 }
 
@@ -111,7 +120,7 @@ function chatPlacement(ctx: RoleContext, item: Item, batch: ReadonlyMap<Id, Item
   const why = 'taken from this chat';
   if (batch.has(chatId)) return { at: 'item', under: chatId, why };
   const node = ctx.mind.nodesOfItem(chatId)[0];
-  return node ? { at: 'node', parent: node.id, why } : null;
+  return node ? { at: 'card', parent: node.id, why } : null;
 }
 
 function shortlist(ctx: RoleContext, items: Item[]): Shortlisted[] {
@@ -121,7 +130,7 @@ function shortlist(ctx: RoleContext, items: Item[]): Shortlisted[] {
 
   for (const item of items) {
     const terms = new Set(tokenize(`${item.title} ${item.tags.join(' ')}`));
-    for (const hit of ctx.mind.search(`${item.title} ${item.tags.join(' ')} ${oneLine(item.summary, 300)}`, { limit: 8 })) {
+    for (const hit of ctx.mind.search(`${item.title} ${item.tags.join(' ')} ${oneLine(item.summary, 300)}`, { limit: 8, placed: true })) {
       for (const node of ctx.mind.nodesOfItem(hit.id)) {
         if (node.status !== 'kept') continue;
         bump(treeScore, node.treeId, hit.coverage);
@@ -154,45 +163,21 @@ function shortlist(ctx: RoleContext, items: Item[]): Shortlisted[] {
 function validate(ctx: RoleContext, answer: Answer, batch: ReadonlyMap<Id, Item>): Map<Id, Placement> {
   const out = new Map<Id, Placement>();
   for (const p of answer.placements) {
-    const item = batch.get(p.itemId);
-    if (!item || out.has(item.id)) continue;
-    const why = oneLine(p.why, 80);
-    if (p.place === 'existing') {
-      // The model sometimes names the tree where a node was asked for. Its root is what it meant.
-      const parent = ctx.mind.nodes.get(p.parentNodeId) ?? ctx.mind.nodes.get(ctx.mind.trees.get(p.parentNodeId)?.rootId ?? '');
-      if (parent && ctx.mind.trees.has(parent.treeId)) out.set(item.id, { at: 'node', parent: parent.id, why: why || 'belongs to this topic' });
-      continue;
-    }
-    if (p.joinsItemId === '') {
-      out.set(item.id, { at: 'root', title: treeTitle(p.treeTitle) || treeTitle(nameOf(item)), why: why || 'starts this topic' });
-    } else if (batch.has(p.joinsItemId) && p.joinsItemId !== item.id) {
-      out.set(item.id, { at: 'item', under: p.joinsItemId, why: why || 'part of the same idea' });
-    }
+    const item = batch.get(idFrom(p.itemId));
+    if (!item || out.has(item.id) || !(p.strength >= ctx.settings.strongTie)) continue;
+    // The model sometimes names the tree where a node was asked for. Its root is what it meant.
+    const named = idFrom(p.parentNodeId);
+    const parent = ctx.mind.nodes.get(named) ?? ctx.mind.nodes.get(ctx.mind.trees.get(named)?.rootId ?? '');
+    if (parent?.status === 'kept') out.set(item.id, { at: 'card', parent: parent.id, why: oneLine(p.why, 80) || 'belongs here' });
   }
   return out;
 }
 
-function fallback(ctx: RoleContext, item: Item): Placement {
-  for (const hit of ctx.mind.search(`${item.title} ${item.tags.join(' ')}`, { limit: 5 })) {
-    if (hit.coverage <= FIT) continue;
-    const parent = ctx.mind.nodesOfItem(hit.id).find((n) => n.status === 'kept');
-    if (parent) return { at: 'node', parent: parent.id, why: `close to "${oneLine(hit.item.title, 40)}"` };
-  }
-  return { at: 'root', title: treeTitle(nameOf(item)), why: 'starts this topic' };
-}
-
-function loops(start: Id, placements: ReadonlyMap<Id, Placement>): boolean {
-  const seen = new Set<Id>();
-  for (let p = placements.get(start); p?.at === 'item'; p = placements.get(p.under)) {
-    if (p.under === start) return true;
-    // A loop further along that does not include `start` is broken when its own members are checked.
-    if (seen.has(p.under)) return false;
-    seen.add(p.under);
-  }
-  return false;
-}
-
-function emit(ctx: RoleContext, items: Item[], batch: ReadonlyMap<Id, Item>, placements: ReadonlyMap<Id, Placement>): Command[] {
+/**
+ * The tree the user asked for is theirs, so its cards are kept. Anything else is the agent's suggestion: a pick, holding the item
+ * the user dropped, that leaves it in the knowledge base when it is taken away.
+ */
+function emit(ctx: RoleContext, items: Item[], batch: ReadonlyMap<Id, Item>, placements: ReadonlyMap<Id, Placement>, asked: boolean): Command[] {
   const commands: Command[] = [];
   const placed = new Map<Id, Node>();
   const addedUnder = new Map<Id, number>();
@@ -204,24 +189,25 @@ function emit(ctx: RoleContext, items: Item[], batch: ReadonlyMap<Id, Item>, pla
     let node: Node;
     if (p.at === 'root') {
       const treeId = ctx.newId();
-      node = makeNode(ctx, item, { treeId, parent: null, status: 'kept', why: p.why, origin: item.origin });
+      node = makeNode(ctx, item, { treeId, parent: null, status: 'kept', why: 'starts this topic', origin: item.origin });
       commands.push({
         type: 'createTree',
         tree: { id: treeId, title: p.title, rootId: node.id, digest: oneLine(item.summary || item.title || item.text, 160), createdAt: ctx.now() },
         root: node,
       });
     } else {
-      const parent = p.at === 'node' ? ctx.mind.node(p.parent) : place(batch.get(p.under)!);
+      const parent = p.at === 'card' ? ctx.mind.node(p.parent) : place(batch.get(p.under)!);
       const offset = addedUnder.get(parent.id) ?? 0;
       addedUnder.set(parent.id, offset + 1);
-      node = makeNode(ctx, item, { treeId: parent.treeId, parent: parent.id, status: 'kept', why: p.why, origin: item.origin, offset });
+      const status = asked ? 'kept' : pickStatus(ctx);
+      node = makeNode(ctx, item, { treeId: parent.treeId, parent: parent.id, status, why: p.why, origin: asked ? item.origin : AGENT(ROLE, MINDSTORM), offset });
       commands.push({ type: 'addNode', node });
     }
     placed.set(item.id, node);
     return node;
   };
 
-  for (const item of items) place(item);
+  for (const item of items) if (placements.has(item.id)) place(item);
   return commands;
 }
 
@@ -230,7 +216,7 @@ function nameOf(item: Item): string {
 }
 
 function treeTitle(raw: string): string {
-  return raw
+  const title = raw
     .replace(/["“”]/g, '')
     .trim()
     .split(/\s+/)
@@ -238,6 +224,7 @@ function treeTitle(raw: string): string {
     .slice(0, 5)
     .join(' ')
     .replace(/[.,;:!?]+$/, '');
+  return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
 function oneLine(text: string, max: number): string {
