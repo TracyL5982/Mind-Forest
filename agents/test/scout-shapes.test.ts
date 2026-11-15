@@ -5,7 +5,7 @@ import { byRule, renderer } from '../src/core/roles/renderer.ts';
 import { scout } from '../src/core/roles/scout.ts';
 import { AGENT, kit, type Kit } from './kit.ts';
 
-const EMPTY = { lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [], images: [], source: '', lookups: [] };
+const EMPTY = { lines: [], pros: [], cons: [], subject: '', passage: '', by: '', images: [], source: '', lookups: [] };
 
 function written(format: string, title: string, fields: Record<string, unknown>) {
   return { angle: `angle of ${title}`, format, title, body: '', why: `toward ${title}`, tags: ['horror'], ...EMPTY, ...fields };
@@ -72,34 +72,7 @@ const SHAPES: { direction: ReturnType<typeof written>; card: string; props: Reco
     card: 'callout',
     props: { text: 'A naked flame near a petrol can on set burns the crew, not the Thing.', tone: 'caution', above: ['The blood test as staged in 1982.'] },
   },
-  {
-    direction: written('explorable', 'The scene at three hours', {
-      body: 'The same corridor as the light goes.',
-      controls: [control({ kind: 'segmented', label: 'Light', states: ['Noon', 'Dusk', 'Night'], texts: ['Every corner is visible.', 'The far end is grey.', 'Only the torch beam shows.'] })],
-    }),
-    card: 'explorable',
-    props: {
-      controls: [{ kind: 'segmented', label: 'Light', states: [{ name: 'Noon', text: 'Noon: Every corner is visible.' }, { name: 'Dusk', text: 'Dusk: The far end is grey.' }, { name: 'Night', text: 'Night: Only the torch beam shows.' }] }],
-      output: { kind: 'text' },
-      above: ['The same corridor as the light goes.', 'Light'],
-    },
-  },
-  {
-    direction: written('explorable', 'Shown or kept offscreen', {
-      controls: [control({ kind: 'toggle', label: 'The monster', states: ['Shown', 'Hidden'], texts: ['The threat is concrete and the payoff earned.', 'The mystery holds and the dread grows.'] })],
-    }),
-    card: 'explorable',
-    props: {
-      controls: [{ kind: 'toggle', label: 'The monster', states: [{ name: 'Shown', text: 'Shown: The threat is concrete and the payoff earned.' }, { name: 'Hidden', text: 'Hidden: The mystery holds and the dread grows.' }] }],
-      output: { kind: 'text' },
-      above: ['The monster'],
-    },
-  },
 ];
-
-function control(fields: Record<string, unknown>) {
-  return { kind: 'segmented', label: '', states: [], texts: [], ...fields };
-}
 
 for (const { direction, card, props } of SHAPES) {
   test(`${card} "${direction.title}" the Scout writes lands as its card, which shows every field it wrote`, async () => {
@@ -143,16 +116,6 @@ const SHORT: { direction: ReturnType<typeof written>; says: RegExp; words: strin
   { direction: written('qa', 'No answer', { subject: 'Why does the test work?' }), says: /not a question and answer: it has no answer/, words: ['Why does the test work?'] },
   { direction: written('definition', 'No meaning', { subject: 'Mexican standoff' }), says: /not a definition: it has no meaning/, words: ['Mexican standoff'] },
   { direction: written('callout', 'No warning', { body: 'Something to watch for.' }), says: /not a callout: it has no warning/, words: ['Something to watch for.'] },
-  {
-    direction: written('explorable', 'One state', { controls: [control({ kind: 'toggle', label: 'Light', states: ['Noon'], texts: ['Every corner is visible.'] })] }),
-    says: /not an explorable: it has only 1 of the 2 states it needs/,
-    words: ['Noon: Every corner is visible.'],
-  },
-  {
-    direction: written('explorable', 'A state left unsaid', { controls: [control({ label: 'Light', states: ['Noon', 'Dusk', 'Night'], texts: ['Every corner is visible.', 'The far end is grey.'] })] }),
-    says: /not an explorable: it has a state without its name or its words/,
-    words: ['Noon: Every corner is visible.', 'Dusk: The far end is grey.', 'Night'],
-  },
   { direction: written('proscons', 'One side', { pros: ['Concrete', 'Earned'], cons: ['Dated'] }), says: /not pros and cons: it has only 1 of the 2 points against it needs/, words: ['Concrete', 'Earned', 'Dated'] },
 ];
 

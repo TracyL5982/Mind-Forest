@@ -24,7 +24,6 @@ function direction(format: Format, title: string, more: Record<string, unknown> 
     subject: '',
     passage: '',
     by: '',
-    controls: [],
     images: [],
     source: '',
     lookups: [],
