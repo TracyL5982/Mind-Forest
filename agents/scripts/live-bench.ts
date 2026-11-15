@@ -113,13 +113,13 @@ const open: OpenRealtime = (on) => {
   };
 };
 let webDollars = 0;
-/** Each web answer of the turn: how long the search model took, and how many searches it made, or that it failed. */
-let searched: { ms: number; searches?: number; failed?: string }[] = [];
+/** Each web answer of the turn: how long the search model took, how many searches it made, the pages it cited and read, or that it failed. */
+let searched: { ms: number; searches?: number; cited?: string[]; read?: string[]; failed?: string }[] = [];
 const webAnswer = async (question: string) => {
   const at = performance.now();
   try {
     const answered = await ask(fetch, { apiKey: key }, question);
-    searched.push({ ms: Math.round(performance.now() - at), searches: answered.searches });
+    searched.push({ ms: Math.round(performance.now() - at), searches: answered.searches, cited: answered.cited, read: answered.read });
     webDollars += answered.dollars;
     return answered.text;
   } catch (err) {
