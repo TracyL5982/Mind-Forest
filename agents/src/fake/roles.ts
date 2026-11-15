@@ -156,7 +156,7 @@ export const fakeRoles: Roles = {
       const ruled = byRule(item, assetUrl);
       // Where the real Renderer would ask the model, the fake's own choice goes through the same checks.
       const draw = (unsure(item, ruled) && drawn(ctx, { id, ...choose(item.text, ruled.component === 'idea' ? 'idea' : 'note') }, item)) || ruled;
-      const same = draw.component === node.view.component && JSON.stringify(draw.props) === JSON.stringify(node.view.props);
+      const same = !node.view.composing && draw.component === node.view.component && JSON.stringify(draw.props) === JSON.stringify(node.view.props);
       return same ? [] : [{ type: 'setView', id, view: { ...draw, by: 'renderer' } }];
     });
     return [...views, ...assembled(ctx, nodeIds)];

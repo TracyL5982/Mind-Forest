@@ -72,7 +72,11 @@ test('a plain dump joins the knowledge base with no tree; asked for a tree it gr
   const root = [...run.mind.trees.values()][0]!.rootId;
   const picks = run.mind.picks(root);
   assert.equal(picks.length, 4);
-  assert.equal(picks.find((p) => p.view.component === 'chart')?.view.by, 'renderer', 'the Renderer upgraded the default view');
+  const chart = picks.find((p) => p.view.component === 'chart')!;
+  const landed = c.seen
+    .flatMap((m) => (m.t === 'change' ? (m.set as { patches: { entity: string; id: string; before: unknown; after: { view: { component: string } } }[] }).patches : []))
+    .find((p) => p.entity === 'node' && p.id === chart.id && p.before === null);
+  assert.equal(landed?.after.view.component, 'chart', 'the chart pick lands as the chart it stays');
 
   c.ws.send(JSON.stringify({ t: 'keep', nodeIds: [picks[0]!.id] }));
   await c.until((m) => m.t === 'change' && (m.set as { label: string }).label === 'Keep a pick');
@@ -183,14 +187,31 @@ test('one undo takes back one real change, along with the format choices that fo
   await run.pipeline.idle();
   await new Promise((r) => setTimeout(r, 1200));
   await run.pipeline.idle();
-  const root = [...run.mind.trees.values()][0]!.rootId;
+  const tree = [...run.mind.trees.values()][0]!;
+  const root = tree.rootId;
   assert.equal(run.mind.picks(root).length, 4);
+  const restyled = c.seen
+    .filter((m) => m.t === 'change' && (m.set as { label: string }).label === 'Choose formats')
+    .flatMap((m) => (m.set as { patches: { id: string }[] }).patches.map((p) => p.id));
+  assert.ok(run.mind.picks(root).every((p) => !restyled.includes(p.id)), 'the picks land in their final look, so no format change follows them');
+
+  const text = 'A rack focus moves the plane of focus from one subject to another during a shot, so the eye follows it without a cut.';
+  const item = { id: 'note-rack', kind: 'text', title: 'Rack focus', text, summary: '', tags: [], data: {}, origin: { by: 'user' }, source: { from: 'paste', capturedAt: '2026-11-15T00:00:00.000Z' }, archived: false, revision: 0 };
+  const view = { component: 'note', props: {}, by: 'default', composing: true };
+  const node = { id: 'node-rack', treeId: tree.id, itemId: item.id, parent: root, status: 'kept', why: '', importance: 0.5, origin: { by: 'user' }, view, order: 9 };
+  c.ws.send(JSON.stringify({ t: 'commands', label: 'Add a note', commands: [{ type: 'addItem', item }, { type: 'addNode', node }] }));
+  const settled = await c.until((m) => (m.t === 'change' && (m.set as { label: string; patches: { id: string }[] }).label === 'Choose formats' && (m.set as { patches: { id: string }[] }).patches.some((p) => p.id === 'node-rack')) || m.t === 'error');
+  assert.equal(settled.t, 'change', JSON.stringify(settled));
+  assert.equal(run.mind.node('node-rack').view.composing, undefined, 'the composing note lands');
   const last = c.seen.filter((m) => m.t === 'change').at(-1)!;
   assert.equal((last.set as { label: string }).label, 'Choose formats', 'the latest change is housekeeping');
-  assert.match(last.undo as string, /^Picks for/, 'but undo names the real change before it');
-
+  assert.equal(last.undo, 'Add a note', 'but undo names the real change before it');
   c.ws.send(JSON.stringify({ t: 'undo' }));
   await c.until((m) => m.t === 'change' && typeof (m.set as { undoes?: string }).undoes === 'string');
+  assert.equal(run.mind.nodes.has('node-rack'), false, 'the note is gone in one press, with its format');
+
+  c.ws.send(JSON.stringify({ t: 'undo' }));
+  await c.until((m) => m.t === 'change' && (m.set as { undoes?: string }).undoes !== undefined && run.mind.picks(root).length === 0);
   assert.equal(run.mind.picks(root).length, 0, 'the picks are gone in one press');
   assert.equal(run.mind.trees.size, 1);
   await run.pipeline.idle();

@@ -223,20 +223,27 @@ async function linkItem(run: Run, url: string): Promise<Item> {
 
   const plain = plainly(`${page.title}\n${page.text}`, 'link');
   if (page.title.trim()) plain.title = clip(squash(page.title), TITLE_MAX);
-  const reply = page.text.trim()
-    ? await ask(run, {
-        role: 'intake.link',
-        system: LINK_SYSTEM,
-        user: `Address: ${url}\nSite: ${page.site}\nPage title: ${page.title}\n\nPage text:\n"""\n${middleOut(page.text, 6000)}\n"""`,
-        schema: LinkReply,
-      })
-    : null;
+  const [reply, picture] = await Promise.all([
+    page.text.trim()
+      ? ask(run, {
+          role: 'intake.link',
+          system: LINK_SYSTEM,
+          user: `Address: ${url}\nSite: ${page.site}\nPage title: ${page.title}\n\nPage text:\n"""\n${middleOut(page.text, 6000)}\n"""`,
+          schema: LinkReply,
+        })
+      : null,
+    page.image ? ctx.tools.web.picture(page.image) : null,
+  ]);
   const site = page.site || host;
   return makeItem(ctx, {
     ...link,
     ...(reply ? labels(reply, plain) : plain),
     text: clip(page.text, 8000),
-    data: { ...(reply ? structure(reply, `${page.title}\n${page.text}`) : {}), ...(site ? { site } : {}) },
+    data: {
+      ...(reply ? structure(reply, `${page.title}\n${page.text}`) : {}),
+      ...(site ? { site } : {}),
+      ...(picture ? { image: ctx.assets.url(picture.asset) } : {}),
+    },
   });
 }
 

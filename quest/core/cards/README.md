@@ -9,6 +9,8 @@ Each card takes the sizes of the sizing spec (`quest-card-sizing.md`, "Build spe
 
 The library draws all 28 of the web's components. The explorable is drawn as it stands first; its opened card writes its states and result out, and its controls do not work on the Quest yet. A component the library does not know is drawn as a note with no props, as on the web. Composites (a group's arrangement) are not drawn.
 
+A view with `composing: true` is a card whose look the service is still choosing (agents/docs/protocol.md). Whatever its component, it is drawn as the in-progress card of `composing.cpp`: the item's kind and where it came from, "Note · Dropped in" or "Link · nytimes.com", over three soft bars, and none of its title or words; opened, it says it is being laid out. The scene runs a band of light across it (`OceanModel::composeFrame`), and when the finished view comes, its wordless frame (`cards::frame`) eases to the finished card's size and the finished card comes up inside it (`OceanModel::settleCard`, called from the bridge's redraw). A reference card with `cover` draws a book's cover at its small face's left with its details beside it.
+
 ## What the bridge calls
 
 All calls run on the frame thread.

@@ -1,5 +1,8 @@
 import type { z } from 'zod';
 
+/** A request the user waits on, or background work that waits behind the user's when requests are held. */
+export type Priority = 'user' | 'background';
+
 export interface JsonRequest<T> {
   /** Which role is asking. The scripted fake routes on it. */
   role: string;
@@ -14,6 +17,11 @@ export interface JsonRequest<T> {
   effort?: 'minimal' | 'low' | 'medium' | 'high';
   /** An answer the user is waiting on. The host answers it with a smaller, faster model. */
   quick?: boolean;
+  /**
+   * Who waits on the answer, which decides its place when the host holds requests for a rate limit. A request that does not say is
+   * one the user waits on, so a forgotten one never waits behind background work.
+   */
+  priority?: Priority;
   /**
    * Called with the reply's text so far each time more of it is written, for a role that acts on the start of a reply.
    * A host that cannot stream calls it once, with the whole text. The returned value is the whole reply, as without it.
@@ -54,6 +62,7 @@ export interface Page {
   title: string;
   text: string;
   site: string;
+  /** The picture the page names as its own preview, as a whole http(s) address. */
   image?: string;
 }
 
@@ -89,8 +98,12 @@ export interface Found {
   seconds?: number;
   steps?: string[];
   chart?: { labels: string[]; values: number[]; unit?: string };
-  /** What kind of thing the record is, when its source knows. */
-  kind?: 'artwork' | 'paper' | 'book';
+  /**
+   * What kind of thing the record is, when its source knows, which decides its card (DECISIONS 55). A repository's text is its own
+   * short description, a page's, an article's or a question's is where it starts, an answer's answers its title, a thread's is what
+   * people wrote, and a recipe's is its ingredients and its numbered steps.
+   */
+  kind?: 'artwork' | 'paper' | 'book' | 'repository' | 'page' | 'article' | 'question' | 'answer' | 'thread' | 'film' | 'recipe';
   /** What a work is made of, as its holder catalogues it. */
   medium?: string;
   /** The museum or collection that holds a work. */

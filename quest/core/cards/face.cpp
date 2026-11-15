@@ -54,9 +54,9 @@ std::string ellipsized(const std::string& s, int lines, const std::function<int(
     return cuts.empty() ? "\u2026" : at(cuts[lo]);
 }
 
-Titled titled(const std::string& title, float column, Measure m) {
+Titled titled(const std::string& title, float column, Measure m, int most) {
     if (title.empty()) return {};
-    std::string said = ellipsized(title, face::TITLE_LINES, [&](const std::string& s) { return counted(s, int(column), m); });
+    std::string said = ellipsized(title, most, [&](const std::string& s) { return counted(s, int(column), m); });
     return {said, counted(said, int(column), m)};
 }
 
@@ -190,11 +190,11 @@ int Col::lines(const std::string& s, Measure m, int max, Color color, float afte
     return shown;
 }
 
-bool Col::title(const std::string& s, float atX, float column) {
+bool Col::title(const std::string& s, float atX, float column, int most) {
     if (ended) return false;
     if (s.empty()) return true;
     float w = column > 0 ? column : width, at = atX < 0 ? x : atX;
-    Titled t = titled(s, w, Measure::title);
+    Titled t = titled(s, w, Measure::title, most);
     say(t.said, setting::faceTitle, t.lines, at, y, w, palette::ink);
     y += float(t.lines * face::TITLE);
     inked = y;
@@ -259,6 +259,31 @@ void Col::cue(const std::string& said) {
     y = std::max(std::min(y, float(face::H - face::BOTTOM - face::CUE)), inked);
     say(said, setting::faceMeta, 1, x, y, width, look.accent);
     y += face::CUE;
+}
+
+namespace {
+constexpr float SIDE_GAP = 12;
+void pictureAt(Col& c, const std::string& src, float x, float wide, float tall) {
+    if (!c.pen) return;
+    CGRect box = c.pen->px(x, c.y, wide, tall);
+    c.pen->ctx.setFillColor(palette::media);
+    c.pen->ctx.fill(box);
+    c.pen->picture(src, box, true, c.words);
+    c.pen->mask(box, 3 * c.pen->k, c.look.fill);
+}
+}  // namespace
+
+float sidePicture(Col& c, const std::string& src, float wide, float tall) {
+    pictureAt(c, src, c.x, wide, tall);
+    c.x += wide + SIDE_GAP;
+    c.width -= wide + SIDE_GAP;
+    return c.y + tall;
+}
+
+float sidePictureRight(Col& c, const std::string& src, float wide, float tall) {
+    pictureAt(c, src, c.x + c.width - wide, wide, tall);
+    c.width -= wide + SIDE_GAP;
+    return c.y + tall;
 }
 
 }  // namespace cards

@@ -19,6 +19,8 @@ struct Resolved {
     Json props;
 };
 Resolved resolve(const Json& view) {
+    // A card still composing stands as the in-progress card, whatever the rules drew it as meanwhile.
+    if (view["composing"].isBool() && view["composing"].boolean()) return {kindNamed("composing"), Json::object()};
     if (const Kind* kind = kindNamed(text(view["component"]))) return {kind, view["props"].isObject() ? view["props"] : Json::object()};
     return {&note(), Json::object()};
 }
@@ -182,6 +184,11 @@ Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
                                      pen.words(badge, 19 + 11, y + 11 + 5, badgeWidth, 1, setting::badge, palette::ink2);
                                  }});
 
+    // An in-progress card shows none of its item's words until it is finished, opened or not.
+    if (std::string(kind.name) == "composing") {
+        kind.detail(sheet, item, e.view.props);
+        return Laid{k, viewTall, pictureTall, std::move(sheet.blocks), std::move(sheet.runs), sheet.picture, std::min(sheet.y + 16, LONGEST)};
+    }
     std::string title = item.titleOrUntitled();
     sheet.paragraph(title, setting::heading, palette::ink);
     if (!e.node.why.empty()) {
@@ -422,6 +429,24 @@ std::optional<Drawn> small(const std::string& noteID, float k) {
         pen.corners(w, h, look.radius);
         pen.edge(w, h, look);
         if (pick) kicker(pen, look, kind->radius);
+    };
+    return d;
+}
+
+std::optional<Drawn> frame(const std::string& noteID, float k) {
+    auto it = store().find(noteID);
+    if (it == store().end()) return std::nullopt;
+    const Entry& e = it->second;
+    Look look = lookOf(e);
+    float w = float(e.sized.size.width), h = float(e.sized.size.height);
+    Drawn d;
+    d.key = "card-f:" + noteID + "#" + std::to_string(e.revision);
+    d.size = CGSize{std::ceil(w * k), std::ceil(h * k)};
+    d.draw = [=](Canvas& ctx) {
+        Pen pen{ctx, k};
+        pen.face(w, h, look);
+        pen.corners(w, h, look.radius);
+        pen.edge(w, h, look);
     };
     return d;
 }

@@ -80,11 +80,6 @@ const USER: Origin = { by: 'user' };
 /** A tree's subject up to this many characters is its root's title. A longer one, or a link, is read by Intake. */
 const SUBJECT_MOST = 120;
 const MAX_PARALLEL_SCOUTS = 2;
-/**
- * The most passes the Renderer makes over what one change brought in. One pass asks the model about 24 items, so four passes answer
- * for a drop of up to 96. Past that, and after a pass in which every call failed, an item keeps its plain card until it is next touched.
- */
-const RENDER_PASSES = 4;
 
 /**
  * The one place roles are run and their commands applied.
@@ -468,24 +463,24 @@ export class Pipeline {
     ].filter((id) => mind.nodes.has(id));
     const edited = set.patches.flatMap((p) => (p.entity === 'item' && saysOtherwise(p as Patch<'item'>) ? mind.nodesOfItem(p.id).map((n) => n.id) : []));
     this.digest(set);
-    if (nodeIds.length > 0) this.render(nodeIds, edited, 1);
+    if (nodeIds.length > 0) this.render(nodeIds, edited);
   }
 
-  /**
-   * One pass of the Renderer over these nodes. The nodes it still owes an answer go into another pass, which starts only when this
-   * one has ended: a drop of sixty items is asked about in three passes one after another, never in all their calls at once.
-   */
-  private render(nodeIds: Id[], edited: Id[], pass: number): void {
+  /** Cards left composing when the service last stopped are composed again, so none stands in progress for good. */
+  resume(): void {
+    const composing = [...this.deps.mind.nodes.values()].filter((node) => node.view.composing).map((node) => node.id);
+    if (composing.length > 0) this.render(composing, []);
+  }
+
+  /** One pass of the Renderer over these nodes. Every card it brings to the model lands within the pass. */
+  private render(nodeIds: Id[], edited: Id[]): void {
     const mind = this.deps.mind;
     this.track(
       this.work('renderer', `Laying out ${nodeIds.length === 1 ? 'a card' : `${nodeIds.length} cards`}`, nodeIds[0], async () => {
-        let owed: Id[] = [];
         const show = (commands: Command[]) => {
           if (commands.length > 0) this.apply(AGENT('renderer'), 'Choose formats', commands);
         };
-        show(await this.deps.roles.renderer(this.ctx, { nodeIds: nodeIds.filter((id) => mind.nodes.has(id)), edited, again: pass > 1, later: (ids) => (owed = ids), deliver: show }));
-        const left = owed.filter((id) => mind.nodes.has(id));
-        if (left.length > 0 && pass < RENDER_PASSES) this.render(left, [], pass + 1);
+        show(await this.deps.roles.renderer(this.ctx, { nodeIds: nodeIds.filter((id) => mind.nodes.has(id)), edited, deliver: show }));
       }).catch((err) => this.fail('renderer', err)),
     );
   }

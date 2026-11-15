@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Sound, type Item, type View } from './domain.ts';
+import { Sound, type Item } from './domain.ts';
 import { evaluate, reserved, wellFormed } from './formula.ts';
 import { ABOVE, numbered, type Grounding, type Piece, type Shown, type Way } from './grounding.ts';
 import { JOINS, KINDS, LIMITS, ROLES, withinLimits, type Box, type Part } from './layout.ts';
@@ -171,7 +171,8 @@ export const COMPONENTS = {
   image: z.object({ src: z.string(), caption: z.string().optional(), aspect: z.number().optional() }),
   video: z.object({ src: z.string(), poster: z.string().optional(), caption: z.string().optional() }),
   /** A recording: where it plays from, and its length and loudness when they are known. The item's text is its transcript. */
-  audio: z.strictObject({ src: z.string().min(1), seconds: Sound.shape.seconds.optional(), peaks: Sound.shape.peaks }),
+  /** A recording that plays. `image` is its cover art, when its source gives one. */
+  audio: z.strictObject({ src: z.string().min(1), seconds: Sound.shape.seconds.optional(), peaks: Sound.shape.peaks, image: z.string().optional() }),
   /** A web page: site, title, description, optional picture. */
   link: z.object({ url: z.string(), site: z.string(), description: z.string().optional(), image: z.string().optional() }),
   chart: z.object({
@@ -237,7 +238,7 @@ export const COMPONENTS = {
     medium: z.string().optional(),
     holder: z.string().optional(),
   }),
-  /** A paper or a book. `more` is true when it has further authors than the list names. */
+  /** A paper or a book. `more` is true when it has further authors than the list names. `cover` is a book's cover, drawn beside its details. */
   reference: z.strictObject({
     kind: z.enum(['paper', 'book']),
     authors: z.array(z.string()),
@@ -245,6 +246,7 @@ export const COMPONENTS = {
     year: z.string().optional(),
     venue: z.string().optional(),
     url: z.string().optional(),
+    cover: z.string().optional(),
   }),
   /** A place by name. `src` is the item's picture, when it has one. */
   place: z.strictObject({ name: z.string().min(1), src: z.string().optional() }),
@@ -520,7 +522,7 @@ export const CHECKS: ContentChecks = {
   },
   image: { props: { src: 'own', caption: 'own', aspect: 'choice' } },
   video: { props: { src: 'own', poster: 'own', caption: 'own' } },
-  audio: { props: { src: 'own', seconds: 'own', peaks: 'own' } },
+  audio: { props: { src: 'own', seconds: 'own', peaks: 'own', image: 'own' } },
   link: { props: { url: 'own', site: 'own', description: 'own', image: 'own' } },
   chart: {
     props: { chart: 'choice', labels: 'shown', values: 'shown', unit: 'unit', mark: 'choice', above: 'shown', heads: 'shown' },
@@ -616,7 +618,7 @@ export const CHECKS: ContentChecks = {
   swatch: { props: { colours: { name: 'says', value: 'paints' } } },
   artwork: { props: { src: 'own', maker: 'says', date: 'says', medium: 'says', holder: 'says' } },
   reference: {
-    props: { kind: 'own', authors: 'says', more: 'choice', year: 'says', venue: 'says', url: 'own' },
+    props: { kind: 'own', authors: 'says', more: 'choice', year: 'says', venue: 'says', url: 'own', cover: 'own' },
     also: (p, item) => p.more === undefined || item.data.authorsCut === true,
   },
   place: { props: { name: 'says', src: 'own' } },
@@ -745,51 +747,6 @@ export function isValidView(view: { component: string; props: unknown }): boolea
 export function isValidGroup(group: { composite: string; props: unknown }): boolean {
   const schema = COMPOSITES[group.composite as CompositeId];
   return schema !== undefined && schema.safeParse(group.props).success;
-}
-
-/**
- * A picture's or a video's file and still. The item's own stored file comes first, then a file the service streams (`mediaUrl`),
- * and only then the page it came from, for a video that only plays embedded. The still is always a service asset.
- */
-export function mediaOf(item: Item, assetUrl: (id: string) => string): { src: string; poster?: string } | null {
-  const named = (value: unknown) => (typeof value === 'string' && value.trim() ? value : undefined);
-  const src = item.source.asset ? assetUrl(item.source.asset) : (named(item.data.mediaUrl) ?? named(item.source.url));
-  if (!src) return null;
-  const poster = item.kind === 'video' ? named(item.data.thumbnailUrl) : undefined;
-  return poster ? { src, poster } : { src };
-}
-
-/** The view a node gets the moment it exists, before the Renderer has looked at it. */
-export function defaultView(item: Item, assetUrl: (id: string) => string): View {
-  const media = mediaOf(item, assetUrl);
-  const view = (component: ComponentId, props: Record<string, unknown>): View => ({ component, props, by: 'default' });
-  switch (item.kind) {
-    case 'image':
-      return media ? view('image', { src: media.src }) : view('note', {});
-    case 'video':
-      return media ? view('video', media) : view('note', {});
-    case 'audio': {
-      const props = recording(item, assetUrl);
-      return props ? view('audio', props) : view('note', {});
-    }
-    case 'link':
-      return item.source.url
-        ? view('link', { url: item.source.url, site: siteOf(item.source.url), description: item.summary || undefined })
-        : view('note', {});
-    case 'chat': {
-      const messages = Array.isArray(item.data.messages) ? (item.data.messages as { role: string; text: string }[]) : [];
-      return messages.length > 0
-        ? view('chat', { messages: messages.slice(0, 4).map((m) => ({ role: m.role, text: m.text.slice(0, 280) })) })
-        : view('note', {});
-    }
-    case 'code': {
-      const code = item.data.code as { language?: string; source?: string } | undefined;
-      return view('code', { language: code?.language ?? 'text', source: code?.source ?? item.text });
-    }
-    case 'text':
-    case 'file':
-      return view('note', {});
-  }
 }
 
 /**

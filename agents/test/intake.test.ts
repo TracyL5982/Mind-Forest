@@ -130,6 +130,42 @@ test('a link that cannot be read still becomes an item, without asking the model
   assertWellFormed(items);
 });
 
+/** A page about the dolly zoom, dropped in, whose head names `image` as its own picture. */
+function droppedPage(k: Kit, image?: string): string {
+  const url = 'https://example.com/dolly-zoom';
+  k.world.pages.set(url, { url, title: 'The dolly zoom', text: 'Hitchcock used it in Vertigo.', site: 'example.com', ...(image ? { image } : {}) });
+  k.model.on('intake.link', () => described('How the dolly zoom works'));
+  return url;
+}
+
+test('a dropped link brings its page\'s own picture, kept by the service, and its link card shows it', async () => {
+  const k = kit();
+  const preview = 'https://example.com/preview-1200x630.jpg';
+  k.world.pictures.add(preview);
+
+  const [link] = await intake(k.ctx, [{ kind: 'link', url: droppedPage(k, preview) }]);
+
+  assert.deepEqual([...k.assets.files.keys()], ['asset-1']);
+  assert.equal(link!.data.image, '/assets/asset-1');
+  const card = byRule(link!, (id) => `/assets/${id}`);
+  assert.equal(card.component, 'link');
+  assert.equal(card.props.image, '/assets/asset-1');
+  assertWellFormed([link!]);
+});
+
+test('a dropped link whose picture does not load lands as one with no picture', async () => {
+  const bare = kit();
+  const [plain] = await intake(bare.ctx, [{ kind: 'link', url: droppedPage(bare) }]);
+  const broken = kit();
+  const [unloaded] = await intake(broken.ctx, [{ kind: 'link', url: droppedPage(broken, 'https://example.com/gone.jpg') }]);
+
+  assert.equal(plain!.title, 'How the dolly zoom works');
+  assert.deepEqual(plain!.data, { site: 'example.com' });
+  assert.equal('image' in byRule(plain!, (id) => `/assets/${id}`).props, false);
+  assert.equal(broken.assets.files.size, 0);
+  assert.deepEqual(unloaded, plain);
+});
+
 test('an image is captioned by the model, which is sent the bytes as a data URL', async () => {
   const k = kit();
   const { id } = await k.assets.put(Uint8Array.from([137, 80, 78, 71]), 'image/png', 'IMG_0042.png');

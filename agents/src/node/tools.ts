@@ -143,17 +143,23 @@ async function readPage(send: typeof fetch, url: string): Promise<Page | null> {
     const title = meta('og:title') || decode(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? '').trim() || url;
     const body = /text\/html|xml/.test(type) ? textOf(html) : html;
     const description = meta('og:description') || meta('description');
-    const image = meta('og:image');
+    const image = webAddress(meta('og:image'), res.url || url);
     return {
       url: res.url || url,
       title: title.slice(0, 300),
       text: `${description ? `${description}\n\n` : ''}${body}`.slice(0, MAX_TEXT),
       site: meta('og:site_name') || siteOf(res.url || url),
-      ...(image ? { image: new URL(image, res.url || url).href } : {}),
+      ...(image ? { image } : {}),
     };
   } catch {
     return null;
   }
+}
+
+/** `address` read against the page at `base`, or undefined when it is no web address. A picture is only ever fetched from the web. */
+function webAddress(address: string, base: string): string | undefined {
+  const parsed = address.trim() ? URL.parse(address, base) : null;
+  return parsed && /^https?:$/.test(parsed.protocol) ? parsed.href : undefined;
 }
 
 function textOf(html: string): string {

@@ -9,7 +9,7 @@ import type { Mindstorm } from './state.ts';
 /**
  * Momo's tools in a live conversation: each a function the realtime model may call, run on the service and answered at once. Those
  * that act call the pipeline as the Conductor's intents do (`Pipeline.perform`); work that goes on (a Scout run, an organize, a
- * handoff) is started and told later. Why it is built this way is in agents/DECISIONS.md (51).
+ * handoff) is started and told later. Why it is built this way is in agents/DECISIONS.md (58).
  */
 
 /** What a call is answered with: told to the model as JSON. */

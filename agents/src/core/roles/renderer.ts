@@ -461,10 +461,29 @@ const byAgent = (item: Item) => item.origin.by === 'agent';
  * the line that says who made the page and when.
  */
 function passageOf(item: Item): string | undefined {
-  if (item.kind !== 'text' || !byAgent(item) || !item.source.url) return undefined;
+  if (item.kind !== 'text' || !byAgent(item) || !item.source.url || OWN_CARD.has(String(item.data.kind))) return undefined;
   const label = [...new Set([item.data.by, item.data.date, item.data.from].flatMap((part) => str(part) ?? []))].join(', ');
   const text = item.text.trim();
   return text && uniform(text) !== uniform(label) ? text : undefined;
+}
+
+/**
+ * The kinds of record drawn as a link card: something that lives at an address, with what its source says of it beside its title. Two
+ * blind readers chose it for each of these in the source audit (DECISIONS 55), over the excerpt or the picture they were drawn as.
+ */
+const LINKED = new Set(['repository', 'page', 'article', 'question', 'film']);
+/** The kinds whose record is never a passage: a link's, an answer's, a recipe's, and a thread's, which is what several people wrote. */
+const OWN_CARD = new Set([...LINKED, 'answer', 'recipe', 'thread']);
+
+/**
+ * What a source says of a record in its own words, as a repository's short description: the item's text without the line under it
+ * that says who made the record and when, which the card names otherwise.
+ */
+function blurbOf(item: Item): string | undefined {
+  const label = [...new Set([item.data.by, item.data.date, item.data.from].flatMap((part) => str(part) ?? []))].join(', ');
+  const text = item.text.trim();
+  const own = label && text.endsWith(label) ? text.slice(0, -label.length).trim() : text;
+  return own || undefined;
 }
 
 const captionOf = (item: Item) => (item.summary.trim() && item.summary.trim().length <= CAPTION ? item.summary.trim() : undefined);
@@ -498,7 +517,7 @@ const RULES: Rule[] = [
     component: 'reference',
     reads: 'catalogue',
     when: (item) => referenceKind(item) !== undefined,
-    props: (item) => {
+    props: (item, asked) => {
       const listed = entriesOf(item.data.authors);
       const by = str(item.data.by);
       return compact({
@@ -508,7 +527,35 @@ const RULES: Rule[] = [
         year: /(?<!\d)\d{4}(?!\d)/.exec(str(item.data.date) ?? '')?.[0],
         venue: str(item.data.venue),
         url: item.source.url,
+        // A book is known by its cover, which the reference card draws beside its details.
+        cover: pictureOf(item, asked),
       });
+    },
+  },
+  {
+    component: 'link',
+    reads: 'catalogue',
+    when: (item) => LINKED.has(String(item.data.kind)) && Boolean(item.source.url),
+    props: (item, asked) => {
+      const url = item.source.url!;
+      return compact({ url, site: str(item.data.site) ?? siteOf(url), description: blurbOf(item), image: pictureOf(item, asked) });
+    },
+  },
+  {
+    component: 'qa',
+    reads: 'catalogue',
+    when: (item) => item.data.kind === 'answer' && item.title.trim() !== '' && blurbOf(item) !== undefined,
+    props: (item) => ({ question: item.title.trim(), answer: blurbOf(item)! }),
+  },
+  {
+    component: 'sheet',
+    reads: 'catalogue',
+    when: (item) => item.data.kind === 'recipe',
+    props: (item, asked) => {
+      // Its picture, the line of its ingredients and its numbered steps, each as the record writes it. One too long for a sheet is drawn as its picture.
+      const [ingredients, ...steps] = (blurbOf(item) ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
+      const src = pictureOf(item, asked);
+      return { sections: [...(src ? [{ kind: 'picture', src }] : []), { kind: 'text', text: ingredients ?? '' }, { kind: 'list', items: steps }] };
     },
   },
   {
@@ -523,7 +570,13 @@ const RULES: Rule[] = [
     when: (item, asked) => mediaOf(item, 'video', asked) !== undefined,
     props: (item, asked) => compact({ src: mediaOf(item, 'video', asked), poster: str(item.data.thumbnailUrl), caption: captionOf(item) }),
   },
-  { component: 'audio', reads: 'kind', when: (item, { assetUrl }) => recording(item, assetUrl) !== undefined, props: (item, { assetUrl }) => recording(item, assetUrl)! },
+  {
+    component: 'audio',
+    reads: 'kind',
+    when: (item, { assetUrl }) => recording(item, assetUrl) !== undefined,
+    // An episode a source found is known by its cover art, which plays beside it.
+    props: (item, { assetUrl }) => compact({ ...recording(item, assetUrl)!, image: str(item.data.thumbnailUrl) }),
+  },
   { component: 'code', reads: 'kind', when: (item) => codeOf(item) !== undefined, props: (item) => codeOf(item)! },
   ...[
     extracted('breakdown', breakdownOf, ({ labels, values, unit }) => ({ labels, values, unit })),
@@ -1030,24 +1083,34 @@ export function drawn(ctx: RoleContext, reply: Entry, item: Item): Draw | undefi
 /**
  * Whether the rules are unsure of an item, so the model is asked: text of some length that is no link, picture, recording, conversation
  * or code, which the rules drew as a note, or as an idea, where the model can tell a thought from a chore, a caution or a definition.
+ * An idea the Scout wrote is never asked about: the Scout gave it its shape as it wrote it, and the look call kept nearly every one a note.
  */
 export const unsure = (item: Item, draw: Draw): boolean => {
-  if (!WHOLE.has(draw.component) || (item.kind !== 'text' && item.kind !== 'file')) return false;
+  if (!WHOLE.has(draw.component) || (item.kind !== 'text' && item.kind !== 'file') || item.origin.tool === 'idea') return false;
   const said = item.text.trim() || (draw.component === 'idea' ? item.title : '');
   return sizeOf(said) >= (SPACELESS.test(said) ? AMBIGUOUS_FROM.spaceless : AMBIGUOUS_FROM.spaced);
 };
 
+/**
+ * The view a node is made with: the rules' card, which is its final look, unless the model is to be asked about it. Then it is the
+ * rules' note or idea marked composing, and the Renderer's pass gives its look within `COMPOSE_MS`.
+ */
+export function firstView(item: Item, assetUrl: (id: string) => string): View {
+  const draw = byRule(item, assetUrl);
+  return { ...draw, by: 'default', ...(unsure(item, draw) ? { composing: true as const } : {}) };
+}
+
 
 /**
- * What the model answered for the unsure items of one pass, by node: the card that stands, or nothing when its answer was refused.
- * An item with no entry here got no answer, because its call failed, the reply left it out, or the pass was full. `replied` is
- * whether any call of the pass got an answer back.
+ * What the model answered for the unsure items of one pass within `waitMs`, by node: the card that stands, or nothing when its answer
+ * was refused. An item with no entry here got no answer in time, because its call failed, the reply left it out, or it came late. An
+ * answer that comes after `waitMs` is not drawn: its card has landed by then.
  */
-async function askComponents(ctx: RoleContext, open: Open[]): Promise<{ answers: Map<Id, Draw | undefined>; replied: boolean }> {
+async function composed(ctx: RoleContext, asked: Open[], waitMs: number): Promise<Map<Id, Draw | undefined>> {
   const answers = new Map<Id, Draw | undefined>();
-  const asked = open.slice(0, MAX_ASKED_ITEMS);
+  if (asked.length === 0) return answers;
   const asset = { assetUrl: (id: string) => ctx.assets.url(id) };
-  let replied = false;
+  let landed = false;
 
   /**
    * One call. A call whose answer came back unreadable is asked once more as two halves, one after the other, since a smaller
@@ -1056,8 +1119,10 @@ async function askComponents(ctx: RoleContext, open: Open[]): Promise<{ answers:
   const ask = async (part: Open[], again: boolean): Promise<void> => {
     let reply: ComponentsReply;
     try {
-      reply = await ctx.model.json({ role: `${ROLE}.components`, system: COMPONENTS_SYSTEM, user: componentsPrompt(part, asset), schema: ComponentsReply, effort: 'low' });
+      // On the quick model: it chose as well as the main one in three runs each, and answered a call of 8 cards in 6 s at most against 49 (DECISIONS 54).
+      reply = await ctx.model.json({ role: `${ROLE}.components`, system: COMPONENTS_SYSTEM, user: componentsPrompt(part, asset), schema: ComponentsReply, effort: 'low', quick: true });
     } catch (err) {
+      if (landed) return;
       const halves = again && err instanceof Unreadable;
       const items = `${part.length} ${part.length === 1 ? 'item' : 'items'}`;
       ctx.note(ROLE, `A call to choose components for ${items} failed (${message(err)}). ${halves ? 'Asking once more, in two halves.' : `Kept the rule-based views of ${part.length === 1 ? 'it' : 'them'}.`}`);
@@ -1066,7 +1131,10 @@ async function askComponents(ctx: RoleContext, open: Open[]): Promise<{ answers:
       for (const some of [part.slice(0, half), part.slice(half)]) if (some.length > 0) await ask(some, false);
       return;
     }
-    replied = true;
+    if (landed) {
+      ctx.note(ROLE, `The model chose components for ${part.length} ${part.length === 1 ? 'item' : 'items'} after their cards had landed, so they stay as the rules drew them.`);
+      return;
+    }
     // An entry counts once, and only for an item this call asked about.
     const waiting = new Map(part.map(({ node, item }) => [node.id, item]));
     for (const entry of reply.items) {
@@ -1077,8 +1145,12 @@ async function askComponents(ctx: RoleContext, open: Open[]): Promise<{ answers:
 
   const calls = Math.ceil(asked.length / ASKED_PER_CALL);
   const each = Math.ceil(asked.length / calls);
-  await Promise.all(Array.from({ length: calls }, (_v, n) => ask(asked.slice(n * each, (n + 1) * each), true)));
-  return { answers, replied };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<void>((done) => (timer = setTimeout(done, waitMs)));
+  await Promise.race([Promise.all(Array.from({ length: calls }, (_v, n) => ask(asked.slice(n * each, (n + 1) * each), true))), late]);
+  clearTimeout(timer);
+  landed = true;
+  return new Map(answers);
 }
 
 // ---- composites
@@ -1438,6 +1510,8 @@ async function askComposites(ctx: RoleContext, pools: Pool[], changed: ReadonlyS
       user: compositesPrompt(ctx, asked),
       schema: CompositesReply,
       effort: 'low',
+      // The groups come after the cards' own looks, off the path to the card (44).
+      priority: 'background',
     });
   } catch (err) {
     ctx.note(ROLE, `The model could not look for composites (${message(err)}). Kept the rule-based groups.`);
@@ -1460,31 +1534,43 @@ function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function sameView(a: { component: string; props: unknown }, b: { component: string; props: unknown }): boolean {
-  return a.component === b.component && stable(a.props) === stable(b.props);
+function sameView(a: { component: string; props: unknown; composing?: true }, b: { component: string; props: unknown; composing?: true }): boolean {
+  return a.component === b.component && stable(a.props) === stable(b.props) && a.composing === b.composing;
 }
+
+/** How long a composing card waits for the model's look before it lands as the rules drew it. */
+export const COMPOSE_MS = 12_000;
+
+/**
+ * The cards of each mindstorm a pass is composing now. Another pass over one of them, as when the user keeps it while it composes,
+ * leaves it to the pass that asked, so it is asked about once and lands once.
+ */
+const COMPOSING = new WeakMap<object, Set<Id>>();
 
 /**
  * Chooses a component for each given node and composites for their siblings. Rules first, the model only where rules cannot tell.
- * On an unsure item, `by: 'renderer'` says the model answered for the item as it is, so it is not asked again until the item changes.
- * An unsure item the pass got no answer for keeps `by: 'default'`, and `later` is told of it, unless no call of the pass got an
- * answer back: then the model is down, and the item waits for its next change. The views go to `deliver` as soon as they are
- * chosen, so a card takes its look without waiting on the main model's answer on how its siblings group, which takes 3 to 25 s.
+ * A card the model is asked about composes: it is marked so when it is made (`firstView`), or here, before the call, when an edit or
+ * an older card brings it to the model. Within `waitMs` it lands once, as the model's card or, when the answer was refused, did not
+ * come or came late, as the rules drew it. Either is final, `by: 'renderer'`, and is not asked about again until the item changes,
+ * so a card never turns into another after it lands. The views go to `deliver` as soon as they are chosen, so a card takes its look
+ * without waiting on the main model's answer on how its siblings group, which takes 3 to 25 s.
  */
-export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], again = false, later, deliver }) => {
+export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], deliver, waitMs = COMPOSE_MS }) => {
   const nodes = [...new Set(nodeIds)].flatMap((id) => ctx.mind.nodes.get(id) ?? []);
   const changed = new Set(edited);
   const draws = new Map<Id, Draw>();
   const open: Open[] = [];
   const assetUrl = (id: string) => ctx.assets.url(id);
+  const busy = COMPOSING.get(ctx.mind) ?? COMPOSING.set(ctx.mind, new Set()).get(ctx.mind)!;
   for (const node of nodes) {
     const item = ctx.mind.items.get(node.itemId);
-    if (!item) continue;
+    if (!item || busy.has(node.id)) continue;
     const draw = byRule(item, assetUrl);
     const ambiguous = unsure(item, draw);
-    // An earlier answer that still stands in the text is kept, so a second pass costs no model call and cannot lose it.
+    // An earlier answer that still stands in the text is kept, so a second pass costs no model call and cannot lose it: an idea the
+    // Scout wrote too, which is no longer asked about but may carry the look the model gave it before.
     // A note or an idea shows nothing an edit could contradict, so after an edit the model is asked about it again.
-    if (ambiguous && node.view.by === 'renderer' && grounded(node.view, item, assetUrl) && !(WHOLE.has(node.view.component) && changed.has(node.id))) continue;
+    if ((ambiguous || item.origin.tool === 'idea') && node.view.by === 'renderer' && grounded(node.view, item, assetUrl) && !(WHOLE.has(node.view.component) && changed.has(node.id))) continue;
     draws.set(node.id, draw);
     if (ambiguous) open.push({ node, item, now: draw.component });
   }
@@ -1500,29 +1586,35 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
   };
   const pools = survey(ctx, parents, look, groups);
 
-  const composites = again ? undefined : askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups);
-  const { answers, replied } = await askComponents(ctx, open);
+  const composing = open.flatMap(({ node }): Command[] => (node.view.composing ? [] : [{ type: 'setView', id: node.id, view: { ...draws.get(node.id)!, by: 'default', composing: true } }]));
+  if (deliver && composing.length > 0) deliver(composing);
+  const asked = open.slice(0, MAX_ASKED_ITEMS);
+  if (open.length > asked.length) ctx.note(ROLE, `${open.length - asked.length} more cards than one pass asks about landed as the rules drew them.`);
+  const composites = askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups);
+  for (const { node } of open) busy.add(node.id);
+  const answers = await composed(ctx, asked, waitMs).finally(() => open.forEach(({ node }) => busy.delete(node.id)));
   for (const [id, draw] of answers) if (draw) draws.set(id, draw);
-  // The mind may have changed while the model was asked: a card that gave way to a fuller round is not drawn.
+  // The mind may have changed while the model was asked: a card that gave way to a fuller round is not drawn, and one whose item was
+  // edited meanwhile, which another pass left to this one, is composed again for the text it has now.
   const there = (id: Id) => ctx.mind.nodes.has(id);
+  const edits = new Set(open.flatMap(({ node, item }) => (ctx.mind.items.get(node.itemId)?.revision !== item.revision ? [node.id] : [])));
 
-  const asked = new Set(open.map(({ node }) => node.id));
+  const landing = new Set(open.map(({ node }) => node.id));
   let views: Command[] = [];
   for (const node of nodes) {
     const draw = draws.get(node.id);
-    if (!draw || !there(node.id)) continue;
-    // An unsure item the model did not answer for keeps the rule's card as a default, so the next pass asks again.
-    const by = asked.has(node.id) && !answers.has(node.id) ? 'default' : 'renderer';
-    if (sameView(draw, node.view) && (!asked.has(node.id) || node.view.by === by)) continue;
-    const view: View = { ...draw, by };
+    if (!draw || !there(node.id) || edits.has(node.id)) continue;
+    const now = ctx.mind.node(node.id).view;
+    if (sameView(draw, now) && (!landing.has(node.id) || now.by === 'renderer')) continue;
+    const view: View = { ...draw, by: 'renderer' };
     views.push({ type: 'setView', id: node.id, view });
   }
-  const owed = open.flatMap(({ node }) => (answers.has(node.id) ? [] : [node.id]));
-  if (owed.length > 0 && replied) later?.(owed);
   if (deliver && views.length > 0) {
     deliver(views);
     views = [];
   }
+  const again = [...edits].filter(there);
+  if (again.length > 0) views.push(...(await renderer(ctx, { nodeIds: again, edited: again, deliver, waitMs })));
   await composites;
   for (const pool of pools) ARRANGED.forEach((rule, row) => rule.late && settle(ctx, pool, groups, row, look));
   // Another pass may have grouped a card, or the user kept one, while the model was asked: such a group no longer holds.

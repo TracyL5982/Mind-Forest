@@ -612,6 +612,14 @@ private:
     /// Draws a card's faces again where they stand. A face drawn anew takes the old one's place once it is
     /// painted (`repaintCards`, each frame), so the card never shows an empty face in between.
     void redrawCard(CardView& c);
+    /// NOTE(port): added for Quest (core/cards). A card that was composing has its finished look: the finished card
+    /// is made where it stands, the in-progress card eases to its size under it, and the finished card comes up inside
+    /// it. Nothing fades out and back in.
+    void settleCard(int id);
+    /// The light running across each composing card, and the in-progress cards easing to their finished size. Each frame.
+    void composeFrame(double now);
+    EntityRef shimmerBand(Art& art, Vec2 body);
+    void startSettle(CardView& old, CardView& made, double now);
     struct Repaint {
         int id;
         EntityRef quad;

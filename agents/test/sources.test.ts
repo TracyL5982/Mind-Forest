@@ -161,13 +161,13 @@ const ABSTRACT = Object.fromEntries(Array.from({ length: 60 }, (_v, n) => [`word
 const openAlexWork = (more: object) => ({ id: 'https://openalex.org/W9', title: 'A work', publication_year: 2011, authorships: [{ author: { display_name: 'A. Researcher' } }], abstract_inverted_index: ABSTRACT, cited_by_count: 40, ...more });
 
 test('a work from the paper index is filed as what the index says it is: a paper, a book, or neither', async () => {
-  const types = ['article', 'preprint', 'review', 'book', 'monograph', 'book-chapter', 'dataset', undefined];
+  const types = ['article', 'preprint', 'review', 'conference-paper', 'book', 'monograph', 'book-chapter', 'dataset', undefined];
   const { asked, found } = scripted({ 'api.openalex.org': { results: types.map((type) => openAlexWork({ type })) } });
 
   const works = await found.search('papers', 'visual perception');
 
   assert.match(asked[0]!, /select=[^&]*\btype\b/);
-  assert.deepEqual(works.map((w) => w.kind), ['paper', 'paper', 'paper', 'book', 'book', undefined, undefined, undefined]);
+  assert.deepEqual(works.map((w) => w.kind), ['paper', 'paper', 'paper', 'paper', 'book', 'book', undefined, undefined, undefined]);
 });
 
 test('a paper whose author list the index cut short says so', async () => {

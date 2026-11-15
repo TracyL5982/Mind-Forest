@@ -2,7 +2,7 @@ import type { Command, Id, Item, ItemKind, Node, Origin, Sound } from '../domain
 import { shortTitleOf } from '../fitted.ts';
 import type { Assets, ModelClient, Tools } from '../ports.ts';
 import type { Mindstorm } from '../state.ts';
-import { defaultView } from '../views.ts';
+import { firstView } from './renderer.ts';
 
 export interface Settings {
   /** 'provisional': agent picks stay dashed until the user keeps them. 'immediate': they arrive kept. */
@@ -170,16 +170,11 @@ export interface Roles {
   /**
    * Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup.
    * `edited` names the nodes whose item's title, text or data changed since it was last drawn.
-   * One pass asks the model about a bounded number of items. `later` is told the nodes it still owes an answer, because the pass was
-   * full or a call failed, so the caller can run another pass over them. It is told nothing after a pass in which every call failed:
-   * the model is then down, and another pass would only wait on it again. `again` marks such a pass: it looks at cards alone, since
-   * the first pass already looked for arrangements among the siblings. The views may be handed to `deliver` as soon as they are
-   * chosen, so a card takes its look without waiting on how its siblings group.
+   * A card the model is asked about lands within `waitMs` (12 s unless given), as the model's card or as the rules drew it, and is
+   * final. The views may be handed to `deliver` as soon as they are chosen, so a card takes its look without waiting on how its
+   * siblings group; a card brought to the model that was not made composing is marked so through `deliver` before the call.
    */
-  renderer(
-    ctx: RoleContext,
-    input: { nodeIds: Id[]; edited?: Id[]; again?: boolean; later?: (nodeIds: Id[]) => void; deliver?: (commands: Command[]) => void },
-  ): Promise<Command[]>;
+  renderer(ctx: RoleContext, input: { nodeIds: Id[]; edited?: Id[]; deliver?: (commands: Command[]) => void; waitMs?: number }): Promise<Command[]>;
   packager(ctx: RoleContext, input: { scope: Scope; note?: string }): Promise<Handoff>;
   /** Up to four short questions the user is likely to ask next about an open card. Throws when the model fails. */
   questions(ctx: RoleContext, input: { card: CardBrief; history: Turn[] }): Promise<string[]>;
@@ -219,7 +214,10 @@ export function withShortTitle(data: Item['data'], title: string): Item['data'] 
   return short ? { ...rest, shortTitle: short } : rest;
 }
 
-/** A node for an item, with its default view. `order` continues after the parent's existing children plus `offset`. */
+/**
+ * A node for an item, with the rules' card for it, final unless the model is to be asked, when it is marked composing (`firstView`).
+ * `order` continues after the parent's existing children plus `offset`.
+ */
 export function makeNode(
   ctx: RoleContext,
   item: Item,
@@ -234,7 +232,7 @@ export function makeNode(
     why: fields.why,
     importance: fields.importance ?? 0.5,
     origin: fields.origin,
-    view: defaultView(item, (id) => ctx.assets.url(id)),
+    view: firstView(item, (id) => ctx.assets.url(id)),
     order: (fields.parent && ctx.mind.nodes.has(fields.parent) ? ctx.mind.nextOrder(fields.parent) : 0) + (fields.offset ?? 0),
   };
 }

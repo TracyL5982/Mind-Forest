@@ -479,6 +479,7 @@ Json cardItem(const Item& item) {
     if (item.source.url) source.set("url", *item.source.url);
     source.set("capturedAt", item.source.capturedAt);
     Json out = Json::object();
+    out.set("kind", item.kind);
     out.set("title", item.title);
     out.set("text", item.text);
     out.set("summary", item.summary);
@@ -497,6 +498,7 @@ bool Bridge::paint(const Item& item, const Node& node) {
     Json view = Json::object();
     view.set("component", node.view.component);
     view.set("props", Json(node.view.props));
+    if (node.view.composing) view.set("composing", true);
     bool changed = cards::put(noteID, view, cardItem(item), cards::Node{node.status == Node::Status::pick, !node.parent, node.why});
     fetchPictures(noteID);
     return changed;
@@ -524,6 +526,11 @@ void Bridge::redraw(int localId) {
     auto found = model.cards.find(localId);
     const TreeNode* n = model.tree ? model.find(*model.tree, localId) : nullptr;
     if (!n || found == model.cards.end()) return;
+    // A card that was composing does not fade: the finished card comes up inside it.
+    if (found->second->shape) {
+        model.settleCard(localId);
+        return;
+    }
     OceanModel::CardRef old = found->second;
     model.cards.erase(found);
     for (const Entity* e : old->extras) model.picks.erase(e);
