@@ -1,12 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { grounding } from '../src/core/grounding.ts';
+import { grounding, type Piece } from '../src/core/grounding.ts';
 import { structure } from '../src/core/roles/intake/describe.ts';
 import { blank } from '../src/fake/model.ts';
 
 const says = (text: string, claim: string) => grounding(text).says(claim);
-const quotes = (text: string, passage: string) => grounding(text).quotes(passage);
 const kept = (text: string, reply: Partial<ReturnType<typeof blank>>): Record<string, any> => structure({ ...blank(), ...reply }, text);
+const entry = (text: string): Piece => ({ text, entry: true });
+const loose = (text: string): Piece => ({ text, entry: false });
+/** How the pieces read as the whole of the text under its title, or nothing. */
+const shows = (text: string, pieces: Piece[], title = '') => grounding(text, { title }).shows([{ pieces }]);
+/** The lines drawn over the pieces when they read as the whole text. */
+const above = (text: string, pieces: Piece[], title = '') => shows(text, pieces, title)?.above;
 
 test('a word is stated only as a whole word', () => {
   for (const [text, claim] of [
@@ -88,21 +93,6 @@ test('a script written without spaces is matched as a run of characters', () => 
   assert.equal(says('ไปเที่ยวกรุงเทพ', 'กรุงเทพ'), true);
 });
 
-test('a passage is one stretch of the text: it cannot be stitched across a sentence end, a table row or a table cell', () => {
-  const text = grounding('Air scatters short blue wavelengths more than long red ones.\nRayleigh scattering: scattering of light. Dr. Ito agrees, mostly.\nPlan | Price | Seats\nBasic | 5 | 1');
-  assert.equal(text.quotes('red ones Rayleigh scattering'), false);
-  assert.equal(text.quotes('scattering of light Dr'), false);
-  assert.equal(text.quotes('Price Seats'), false);
-  assert.equal(text.quotes('Seats Basic'), false);
-  assert.equal(text.says('red ones Rayleigh scattering'), true, 'plain words may run over the break');
-
-  assert.equal(text.quotes('short blue wavelengths more than long red ones'), true);
-  assert.equal(text.quotes('Rayleigh scattering: scattering of light'), true);
-  assert.equal(text.quotes('Ito agrees mostly'), true, 'a comma is not a break');
-  assert.equal(text.quotes('scattering of light. Dr. Ito agrees'), true, 'a passage that keeps the sentence end is the text as written');
-  assert.equal(text.quotes('long red ones.\nRayleigh scattering'), true);
-  assert.equal(text.quotes('Every stair keeps the weight'), false);
-});
 
 test('a hex colour is stated only whole, with its "#"', () => {
   assert.equal(grounding('Ember #E4572E here').paints('#e4572e'), true);
@@ -120,18 +110,6 @@ test('a hex colour is stated only whole, with its "#"', () => {
   }
 });
 
-test('a check mark is read off the line that holds the words', () => {
-  const text = grounding('Packing:\n- [x] passport\n- [ ] phone charger\n☑ tent\n☐ stove\nmap ✓\nrain coat\n✔ **boots**');
-  assert.equal(text.ticks('passport'), true);
-  assert.equal(text.ticks('phone charger'), false);
-  assert.equal(text.ticks('tent'), true);
-  assert.equal(text.ticks('stove'), false);
-  assert.equal(text.ticks('map'), true);
-  assert.equal(text.ticks('boots'), true);
-  assert.equal(text.ticks('rain coat'), undefined, 'the mark on the line above is not this line\'s');
-  assert.equal(text.ticks('umbrella'), undefined);
-  assert.equal(grounding('Bring: tent, stove, map.').ticks('tent'), undefined);
-});
 
 test('the text and the claim are compared in one written form', () => {
   assert.equal(says('１９５８年３月、東京で開催。', '1958年3月'), true, 'full-width digits');
@@ -145,51 +123,8 @@ test('the text and the claim are compared in one written form', () => {
   assert.equal(says('한글.txt', '한글'), true, 'decomposed Hangul');
   assert.equal(says('The Lis​bon office and a compar­ison.', 'bon'), false, 'an invisible character splits no word');
   assert.equal(says('The Lis​bon office and a compar­ison.', 'comparison'), true);
-  assert.equal(grounding('帐篷 ✔️\n炉子 ☐').ticks('帐篷'), true, 'a variation selector is no part of a mark');
 });
 
-test('a line break inside a sentence is white space to a passage', () => {
-  assert.equal(quotes('"The only way to do great work\nis to love what you do."\n— Steve Jobs', 'The only way to do great work is to love what you do.'), true);
-  assert.equal(quotes('他说：我们无法在截止日期之\n前达成一致，所以工作停止了。', '我们无法在截止日期之前达成一致'), true);
-  assert.equal(quotes('Line one of the poem\nLine two of the poem', 'Line one of the poem / Line two of the poem'), true);
-  assert.equal(quotes('Chapter 3\n\nThe eye is not a camera. It does not record;\nit selects.', 'The eye is not a camera. It does not record; it selects.'), true);
-});
-
-test('a passage does not cross a sentence end, an empty line, a table cell, or the start of a list item or table row', () => {
-  for (const [text, passage] of [
-    ['It was red. Ones were blue.', 'was red ones were'],
-    ['A heading\n\nThe first line', 'heading the first'],
-    ['Plan | Price', 'Plan Price'],
-    ['Name\tAge\nAnna\t30', 'Age Anna'],
-    ['- red apples\n- green pears', 'apples green'],
-    ['* red apples\n* green pears', 'apples green'],
-    ['• red apples\n• green pears', 'apples green'],
-    ['1. red apples\n2. green pears', 'apples 2 green'],
-    ['[x] red apples\n[ ] green pears', 'apples green'],
-    ['☑ red apples\n☐ green pears', 'apples green'],
-    ['| red apples |\n| green pears |', 'apples green'],
-    ['他去了北京。上海很热。', '北京上海'],
-    ['太好了！我们走吧', '好了我们'],
-  ] as const) {
-    assert.equal(quotes(text, passage), false, `"${passage}" in "${text}"`);
-  }
-  assert.equal(quotes('It was red. Ones were blue.', 'It was red. Ones were blue.'), true, 'a passage that carries the break may cross it');
-  assert.equal(quotes('- red apples\n- green pears', 'red apples\n- green pears'), true);
-  assert.equal(quotes('他去了北京。上海很热。', '北京。上海'), true);
-  assert.equal(quotes('\tAn indented line that runs\n\tover two lines.', 'runs over two lines'), true, 'a tab that indents a line starts no cell');
-});
-
-test('the period of an abbreviation ends no sentence', () => {
-  assert.equal(quotes('Then Dr. Smith said the plan was fine.', 'Dr Smith said the plan was fine'), true);
-  assert.equal(quotes('It weighs approx. 5 kg and that is fine.', 'approx 5 kg and that is fine'), true);
-  assert.equal(quotes('We flew to St. Petersburg in May.', 'flew to St Petersburg in May'), true);
-  assert.equal(quotes('The U.S. office is closed.', 'The US office is closed'), true);
-  assert.equal(says('Lead: Anna (U.S. office).', 'US office'), true);
-  assert.equal(says('Lead: Anna (US office).', 'U.S. office'), true);
-  assert.equal(quotes('Signed J. K. Rowling in ink.', 'J K Rowling in ink'), true);
-  assert.equal(quotes('We met at 3 p.m. in the hall.', 'at 3 pm in the hall'), true);
-  assert.equal(quotes('The plan was fine. Smith said so.', 'fine Smith said'), false);
-});
 
 test('a short claim does not cross a table cell, a list item, a table row or a CJK full stop', () => {
   for (const [text, claim] of [
@@ -213,7 +148,7 @@ test('a number is compared by value: leading zeros and trailing decimal zeros do
   assert.equal(says('Budget was 5.0 million.', '5 million'), true);
   assert.equal(says('Budget was 5 million.', '5.00 million'), true);
   const text = grounding('Budget was 5.0 million and 1,200.00 dollars.');
-  assert.equal(text.writes(5), true);
+  assert.equal(text.writes(5_000_000), true);
   assert.equal(text.writes(1200), true);
   assert.equal(text.writes(200), false);
 });
@@ -234,13 +169,24 @@ test('a dash before a number is its sign, and a dash between two numbers is a ra
   assert.equal(grounding('Born 1958-03-01.').says('1958-03-01'), true);
 });
 
-test('a dash that may be a sign, a bullet or a range states both readings', () => {
-  const range = grounding('Pages 5 -10 cover it.');
-  assert.equal(range.writes(10), true);
-  assert.equal(range.writes(-10), true);
-  const bullets = grounding('To buy:\n-5 apples\n-3 pears');
-  assert.equal(bullets.says('5 apples'), true);
-  assert.equal(bullets.says('-3 pears'), true);
+test('a minus sign, a word that says one, brackets around money and a magnitude word are part of the number', () => {
+  for (const [text, signed, bare] of [
+    ['Sales growth: 2023 +8%, 2024 -3%.', '-3%', '3%'],
+    ['To buy:\n-5 apples', '-5 apples', '5 apples'],
+    ['Pages 5 -10 cover it.', '-10', '10'],
+    ['这个季度增长率为负3%。', '负3%', '3%'],
+    ['明天最低气温零下5度。', '零下5度', '5度'],
+    ['It was minus 3 at dawn.', '-3', '3'],
+    ['Revenue £4.2m, net income (£1.3m).', '(£1.3m)', '£1.3m'],
+    ['Leeds has about 800 thousand people.', '800,000', '800'],
+    ['A loss of (£250).', '-£250', '£250'],
+  ] as const) {
+    assert.equal(says(text, signed), true, `"${signed}" in "${text}"`);
+    assert.equal(says(text, bare), false, `"${bare}" in "${text}"`);
+  }
+  assert.deepEqual([says('这个季度增长率为负3%。', '-3%'), says('It was minus 3 at dawn.', 'minus 3')], [true, true], 'either way of writing the sign');
+  assert.deepEqual([says('Leeds has 800 thousand people.', '800k'), grounding('It drew 2 million views.').writes(2_000_000), says('It cost $5m.', '$5 million')], [true, true, true]);
+  assert.equal(says('The vote (2019) was close.', '2019'), true, 'a year in brackets is no loss');
   assert.equal(says('It fell by 5 overnight.', '-5'), false);
 });
 
@@ -387,45 +333,13 @@ test('a symbol that carries meaning is part of the claim', () => {
   assert.equal(says('A steep learning curve.', 'steep/learning curve'), true, 'a slash between words is punctuation');
 });
 
-test('a check mark belongs to the line whose whole text is the item', () => {
-  const longerFirst = grounding('- [x] milk chocolate\n- [ ] milk');
-  assert.equal(longerFirst.ticks('milk chocolate'), true);
-  assert.equal(longerFirst.ticks('milk'), false);
-  const shorterLast = grounding('[ ] Buy milk chocolate\n[x] Buy milk');
-  assert.equal(shorterLast.ticks('Buy milk chocolate'), false);
-  assert.equal(shorterLast.ticks('Buy milk'), true);
-  assert.equal(grounding('[x] tent pegs\n[ ] stove\ntent').ticks('tent'), undefined, 'a plain line takes no mark from a longer one');
-  assert.equal(grounding('[x] tent, stove, map').ticks('tent'), undefined);
-  assert.equal(grounding('tent [x] stove [ ] map').ticks('stove'), undefined);
-
-  assert.deepEqual(kept('- [x] milk chocolate\n- [ ] milk', { items: ['milk chocolate', 'milk'], checklist: [false, true] }).checklist, [true, false]);
-  assert.deepEqual(kept('[x] tent pegs\n[ ] stove\ntent', { items: ['tent', 'stove'], checklist: [true, false] }), { items: ['tent', 'stove'] });
-});
-
-test('every usual way to write a check mark is read, before the item, after it, or in the next table cell', () => {
-  for (const done of ['✔', '✓', '☑', '[x]', '[X]', '✅']) {
-    assert.equal(grounding(`${done} tent\nstove`).ticks('tent'), true, done);
-    assert.equal(grounding(`tent ${done}`).ticks('tent'), true, `${done} after`);
-  }
-  for (const open of ['☐', '[ ]', '[]', '✗', '✘', '☒', '❌']) {
-    assert.equal(grounding(`${open} tent\nstove`).ticks('tent'), false, open);
-    assert.equal(grounding(`tent ${open}`).ticks('tent'), false, `${open} after`);
-  }
-  const table = grounding('| tent | ✓ |\n| stove | ☐ |\n| map | 2 |');
-  assert.equal(table.ticks('tent'), true);
-  assert.equal(table.ticks('stove'), false);
-  assert.equal(table.ticks('map'), undefined);
-  const numbered = grounding('1. [x] tent\n2. [ ] **stove**');
-  assert.equal(numbered.ticks('tent'), true);
-  assert.equal(numbered.ticks('stove'), false);
-});
-
-test('a table may leave its first head empty, and a dash the text does not write is an empty cell', () => {
+test('a table leaves a head empty where the text does, and a dash the text does not write is an empty cell', () => {
   const rows = [['North', '10', '12'], ['South', '7', '9']];
   const said = { tableHeads: ['', 'Q1', 'Q2'], tableRows: ['North | 10 | 12', 'South | 7 | 9'] };
   assert.deepEqual(kept('| | Q1 | Q2 |\n|---|---|---|\n| North | 10 | 12 |\n| South | 7 | 9 |', said).table, { heads: ['', 'Q1', 'Q2'], rows });
   assert.deepEqual(kept('\tQ1\tQ2\nNorth\t10\t12\nSouth\t7\t9', said).table, { heads: ['', 'Q1', 'Q2'], rows });
-  assert.equal(kept('Plan\tPrice\t\nSolo\t$8\t1', { tableHeads: ['Plan', 'Price', ''], tableRows: ['Solo | $8 | 1'] }).table, undefined, 'only the first head');
+  assert.deepEqual(kept('Plan\tPrice\t\nSolo\t$8\t1', { tableHeads: ['Plan', 'Price', ''], tableRows: ['Solo | $8 | 1'] }).table?.heads, ['Plan', 'Price', ''], 'a head the text leaves empty');
+  assert.equal(kept('Plan\tPrice\tSeats\nSolo\t$8\t1', { tableHeads: ['Plan', 'Price', ''], tableRows: ['Solo | $8 | 1'] }).table, undefined, 'and none it writes');
 
   const text = 'Plan\tPrice\tSeats\nPro\t$1,200\t\nTeam Plus\t\t10';
   for (const dash of ['-', '–', '—']) {
@@ -445,17 +359,17 @@ test('a hex colour of three, four, six or eight digits is kept', () => {
 test('an empty text states nothing', () => {
   const text = grounding('');
   assert.equal(text.says('anything'), false);
-  assert.equal(text.quotes('anything'), false);
+  assert.equal(text.shows([{ pieces: [{ text: 'anything', entry: true }] }]), undefined);
   assert.equal(text.writes(0), false);
   assert.equal(text.paints('#fff'), false);
 });
 
-test('a tab inside a line is white space to a passage and a cell break to a short claim', () => {
+test('a tab in a line of prose is white space, and a cell break to a short claim only where lines side by side part cells with it', () => {
   const said = 'The   best  camera\tis the one you have with you, people say.';
-  assert.equal(quotes(said, 'The best camera is the one you have with you'), true);
-  assert.equal(says(said, 'best camera is the one'), false);
-  assert.equal(quotes('Plan | Price', 'Plan Price'), false, 'a "|" still parts two cells');
-  assert.equal(quotes('Stay hungry.\n\nStay foolish.', 'Stay hungry. Stay foolish.'), false, 'and an empty line still ends a passage');
+  assert.ok(shows(said, [entry('The best camera is the one you have with you, people say.')]));
+  assert.equal(shows(said, [entry('The best camera is the one you have with you')]), undefined);
+  assert.equal(says('Name\tAge\nAnna\t30', 'Age Anna'), false, 'a pasted table');
+  assert.ok(shows('Name\tAge\nAnna\t30', ['Name', 'Age', 'Anna', '30'].map(entry)));
 });
 
 test('a degree sign on a claim number must be on the number in the text', () => {
@@ -507,4 +421,91 @@ test('a number counted in a unit that scales it is written only with that unit a
   const revenue = grounding('Revenue was $120k in Q1, $1.5M in Q2 and $90 in Q3.');
   assert.deepEqual([revenue.writes(120, 'k'), revenue.writes(1.5, 'M'), revenue.writes(90, 'k'), revenue.writes(90, '$'), revenue.writes(120)], [true, true, false, true, false]);
   assert.deepEqual([revenue.writes(120, '$k'), revenue.writes(90, '$k'), revenue.writes(120, '€k')], [true, false, false], 'a currency sign may lead the unit');
+});
+
+
+test('a card shows its whole item: every word and mark of the text, in its order, and nothing else', () => {
+  const ducks = 'Feed them oats.\nScatter food on the bank.\nNever throw bread.';
+  assert.ok(shows(ducks, ['Feed them oats.', 'Scatter food on the bank.', 'Never throw bread.'].map(entry)));
+  assert.equal(shows(ducks, ['Feed them oats.', 'Scatter food on the bank.'].map(entry)), undefined, 'a line left out');
+  assert.equal(shows(ducks, ['Scatter food on the bank.', 'Feed them oats.', 'Never throw bread.'].map(entry)), undefined, 'lines out of order');
+  assert.equal(shows(ducks, ['Feed them oats.', 'Scatter food on the bank.', 'throw bread.'].map(entry)), undefined, 'a line cut');
+  assert.equal(shows(ducks, ['Feed them oats.', 'Scatter food on the bank.', 'Never throw bread.', 'Ask a ranger.'].map(entry)), undefined, 'a line added');
+  assert.ok(shows('Take two tablets. Rest for a day.', ['Take two tablets.', 'Rest for a day.'].map(entry)), 'sentences of one line are entries of their own');
+  assert.equal(shows('Take two tablets. Rest for a day.', ['Take two', 'tablets. Rest for a day.'].map(entry)), undefined, 'an entry begins and ends where a sentence does');
+  assert.ok(shows('Height: 330 m', [loose('Height'), loose('330 m')]), 'a loose piece, such as a label, need not');
+});
+
+test('the headings, labels and opening prose over the structure are drawn above it, and nothing that stands after any of it', () => {
+  assert.deepEqual(above("Pregnancy food\nDon't:\n- Eat raw eggs.\n- Eat liver pâté.", ['Eat raw eggs.', 'Eat liver pâté.'].map(entry), 'Pregnancy food'), ["Don't:"], 'the title is drawn as the title');
+  assert.deepEqual(above('## Things to avoid\n### In the kitchen\n- Leave oil on the hob.', [entry('Leave oil on the hob.')]), ['Things to avoid', 'In the kitchen']);
+  assert.deepEqual(above('Everything below is wrong.\n\nPut butter on a burn.\n\nMake them sick.', ['Put butter on a burn.', 'Make them sick.'].map(entry)), ['Everything below is wrong.']);
+  assert.deepEqual(above('Results: the drug does not work in children.', [entry('the drug does not work in children.')]), ['Results:']);
+  assert.equal(shows('## Dosing\nGive 10 ml.\n## Correction\nThe dose above is wrong.', [entry('Give 10 ml.')]), undefined, 'a correction after the structure is no line over it');
+  assert.equal(shows('Advice:\n- Sleep babies on their front.\nUpdate:\nWithdrawn in 1991.', [entry('Sleep babies on their front.')]), undefined);
+  const lead = `${'A sentence that opens the item and runs on. '.repeat(7)}\n- one\n- two`;
+  assert.equal(shows(lead, ['one', 'two'].map(entry)), undefined, 'opening prose past its room is no line over a card');
+  assert.deepEqual(above(lead.slice(0, 135) + '\n- one\n- two', ['one', 'two'].map(entry))?.length, 1);
+});
+
+test('lines a card already carries over it are read as they are, and only those', () => {
+  const text = 'Avoid:\n- Raw oysters\n- Liver pâté';
+  const pieces = ['Raw oysters', 'Liver pâté'].map(entry);
+  assert.ok(grounding(text).shows([{ pieces }], ['Avoid:']));
+  assert.equal(grounding(text).shows([{ pieces }], []), undefined, 'none, where the item has a heading over the list');
+  assert.equal(grounding(text).shows([{ pieces }], ['Allowed:']), undefined);
+});
+
+test('every mark is a word of its line: ticks, crosses, arrows, signs, brackets, a question mark and quotation marks inside a piece', () => {
+  const vaccine = 'Storing the vaccine\n✗ Keep it in the freezer.\n✓ Keep it in the fridge.';
+  assert.equal(shows(vaccine, ['Keep it in the freezer.', 'Keep it in the fridge.'].map(entry), 'Storing the vaccine'), undefined, 'a cross left off');
+  assert.ok(shows(vaccine, ['✗ Keep it in the freezer.', '✓ Keep it in the fridge.'].map(entry), 'Storing the vaccine'));
+  assert.equal(shows('| Metric | Change |\n|---|---|\n| Revenue | ▼ 12% |', ['Metric', 'Change', 'Revenue', '12%'].map(entry)), undefined);
+  assert.equal(shows('Net income | (1,234)', [loose('Net income'), loose('1,234')]), undefined);
+  assert.ok(shows('Net income | (1,234)', [loose('Net income'), loose('(1234)')]), 'thousands written either way');
+  assert.equal(shows('Margin: -3%', [loose('Margin'), loose('3%')]), undefined);
+  assert.equal(shows('Ibuprofen is safe in pregnancy?', [entry('Ibuprofen is safe in pregnancy.')]), undefined);
+  assert.equal(shows('Doctors call this a "safe" dose.', [entry('Doctors call this a safe dose.')]), undefined, 'scare quotes');
+  assert.ok(shows('"Stay hungry, stay foolish." Steve Jobs', [loose('Stay hungry, stay foolish.'), loose('Steve Jobs')]), 'quotation marks around a piece are its card\'s to draw');
+  assert.ok(shows('A: I think we should sell.\nB: Absolutely not.', ['A: I think we should sell.', 'B: Absolutely not.'].map(entry)));
+  assert.equal(shows('A: I think we should sell.\nB: Absolutely not.', ['I think we should sell.', 'Absolutely not.'].map(entry)), undefined, 'a speaker\'s mark stays on its line');
+});
+
+test('a check box is no word: it is read off its line for a checklist, and a tick or a cross written on a line is no check box', () => {
+  assert.deepEqual(shows('[x] Tent\n[ ] Head torch', ['Tent', 'Head torch'].map(entry))?.boxes, [true, false]);
+  assert.deepEqual(shows('- Tent\n- Head torch', ['Tent', 'Head torch'].map(entry))?.boxes, [undefined, undefined]);
+  assert.deepEqual(shows('✓ Tent\n✗ Head torch', ['✓ Tent', '✗ Head torch'].map(entry))?.boxes, [undefined, undefined]);
+});
+
+test('a table is every row and cell as written, a cell bound to its row, and a grid of two columns may stand without its heads row', () => {
+  const table = '| Medicine | In pregnancy |\n|---|---|\n| Ibuprofen | Avoid after 20 weeks |\n| Paracetamol | Safe |';
+  assert.deepEqual(shows(table, ['Medicine', 'In pregnancy', 'Ibuprofen', 'Avoid after 20 weeks', 'Paracetamol', 'Safe'].map(entry))?.rows, [2, 2, 2]);
+  assert.equal(shows(table, ['Medicine', 'In pregnancy', 'Ibuprofen', 'Safe', 'Paracetamol', 'Avoid after 20 weeks'].map(entry)), undefined, 'rows rewired');
+  assert.equal(shows(table, ['Medicine', 'In pregnancy', 'Ibuprofen Avoid', 'after 20 weeks', 'Paracetamol', 'Safe'].map(entry)), undefined, 'a cell moved');
+  const grid = grounding(table).shows([{ pieces: ['Ibuprofen', 'Avoid after 20 weeks', 'Paracetamol', 'Safe'].map(loose), headless: true }]);
+  assert.deepEqual(grid?.heads, ['Medicine', 'In pregnancy']);
+  assert.ok(shows('Drug\tIn pregnancy\nIbuprofen\tAvoid', ['Drug', 'In pregnancy', 'Ibuprofen', 'Avoid'].map(entry)), 'a pasted tab table');
+  assert.ok(shows('country,gdp\nNorway,87900\nKenya,2100', ['country', 'gdp', 'Norway', '87900', 'Kenya', '2100'].map(entry)), 'comma-separated rows');
+  assert.equal(grounding('光圈开大还是收小，决定了照片里有多少是清楚的。\n大光圈：背景虚化。\n小光圈：快门要放慢。').shows([{ pieces: [entry('大光圈：背景虚化。')] }])?.rows, undefined, 'a full-width comma parts no cells');
+});
+
+test('a slot stands on one heading or label of the item and reads what it says', () => {
+  const sides = grounding('For going now:\n- Locks in 4.19%\nAgainst:\n- A fee of £2,100').shows([{ pieces: [{ slot: 'heading' }, entry('Locks in 4.19%'), { slot: 'heading' }, entry('A fee of £2,100')] }]);
+  assert.deepEqual(sides?.slots, ['For going now:', 'Against:']);
+  assert.equal(grounding('Pros\nFast and cheap.').shows([{ pieces: [{ slot: 'label' }, entry('Fast and cheap.')] }]), undefined, 'a heading line is no label of a line');
+  assert.ok(grounding('Parallax: the shift of an object.').shows([{ pieces: [{ slot: 'label', says: 'Parallax' }, entry('the shift of an object.')] }]));
+  assert.equal(grounding('Weather: the shift of an object.').shows([{ pieces: [{ slot: 'label', says: 'Parallax' }, entry('the shift of an object.')] }]), undefined);
+});
+
+test('a conversation\'s speakers label nothing, and a line that asks heads the answer after it', () => {
+  const talk = 'Mum: Has anyone seen the photo?\nBen: It is in the blue album.\nMum: I looked.';
+  assert.equal(shows(talk, ['It is in the blue album.', 'I looked.'].map(entry)), undefined);
+  assert.deepEqual(above('Can I freeze rice?\n\nYes, within an hour.', [entry('Yes, within an hour.')]), ['Can I freeze rice?']);
+});
+
+test('words are set apart only when they are whole sentences, lines or cells, and the count is how far into the text they end', () => {
+  const text = grounding('Bath time rules\nDo not:\nLeave a child alone in the bath.\nTest the water first.');
+  assert.ok(text.units('Leave a child alone in the bath.')! < text.units('Test the water first.')!);
+  assert.equal(text.units('a child alone'), undefined);
+  assert.equal(grounding('Honey is not safe for babies.').units('safe for babies'), undefined);
 });

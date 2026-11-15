@@ -1,10 +1,8 @@
 /**
- * The short facts a card can carry on one line under its content: when, where, who, and, for an
- * item the agents brought, where it came from. They are read from the item alone, so no model
- * output is involved and a card keeps its chips when a pick is kept.
+ * The short facts the opened card lists for an item: when, where, who, and, for an item the agents
+ * brought, where it came from. They are read from the item alone, so no model output is involved and
+ * a card keeps them when a pick is kept. The small face draws none of them.
  */
-
-const CHIP_LIMIT = 3;
 
 /** The first of these the item holds is its date. The Scout writes `date`. */
 const WHEN = ['when', 'date'];
@@ -45,20 +43,6 @@ function sources(item) {
     found.length > 0 && { kind: 'people', key, text: found.slice(0, NAMED).join(', '), names: found },
   ].filter(Boolean);
   return held.filter((source, i) => !held.slice(0, i).some((earlier) => earlier.text === source.text));
-}
-
-/**
- * The chips a card may draw: at most three `{ kind, text }`, in the order when, origin, where,
- * people. `shown` lists the `item.data` keys the card's type already draws. A source read from one
- * of them, or that says the same as one of them, is left out. A people chip for more than two
- * people also has `count`, how many it leaves unnamed.
- */
-export function chips(item, shown = []) {
-  const said = shown.map((key) => str(item?.data?.[key])).filter(Boolean);
-  return sources(item)
-    .filter((source) => !shown.includes(source.key) && !said.includes(source.text))
-    .slice(0, CHIP_LIMIT)
-    .map(({ kind, text, names: all }) => (all?.length > NAMED ? { kind, text, count: all.length - NAMED } : { kind, text }));
 }
 
 /** Every source in full, for the opened card: `{ kind, label, text }`, with each person named. */

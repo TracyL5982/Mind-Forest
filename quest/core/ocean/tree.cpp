@@ -5,6 +5,8 @@
 #include <functional>
 #include <limits>
 
+#include "../cards/ocean.h"
+
 namespace {
 
 /// `nodes[id]`, to read: null when it isn't there.
@@ -392,6 +394,10 @@ std::vector<int> Tree::place(int id, Vec2 xy) {
 
 /// Half the open card's width, and how far it reaches up and down.
 Tree::Extent Tree::openExtent(const Ref& ref) const {
+    // NOTE(port): added for Quest. A piece drawn as a card is its card, with nothing under it (core/cards).
+    if (std::optional<std::string> card = cards::ocean::cardOf(ref)) {
+        if (std::optional<Vec2> s = cards::ocean::openSize(*card)) return {s->x / 2, s->y / 2, s->y / 2};
+    }
     switch (ref.kind) {
     case Ref::Kind::film: {
         Vec2 s = Metrics::film(Metrics::openFilm, Metrics::openFilmMaxHeight, catalog->clips[size_t(ref.index)].aspect);

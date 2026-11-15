@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Assets, ModelClient, Page, Playable, SocialPost, Tools } from '../core/ports.ts';
+import type { Assets, Geocoder, ModelClient, Page, Playable, SocialPost, Tools } from '../core/ports.ts';
 import { siteOf } from '../core/views.ts';
 import { makeSources, plain } from './sources.ts';
 
@@ -10,6 +10,8 @@ export interface ToolOptions {
   /** Keys for sources that need one, by the name they have in the env file. A source without its key is left out. */
   keys?: Record<string, string | undefined>;
   fetch?: typeof fetch;
+  /** Given only when maps are on. */
+  geocoder?: Geocoder;
 }
 
 const CodeReply = z.object({ title: z.string(), language: z.string(), source: z.string() });
@@ -69,6 +71,7 @@ export function makeTools(opts: ToolOptions): Tools {
           effort: 'medium',
         }),
     },
+    geocoder: opts.geocoder,
   };
 }
 

@@ -82,9 +82,10 @@ public:
     bool mipmaps = false;
     /// Kept until uploaded, then dropped.
     ImageRef pending;
-    /// When it was made, and (if it took long enough to notice) when it reached the screen: the renderer
-    /// shows a card that is still waiting for its picture as a faint shimmer, and lets the picture in gently.
-    double madeAt = 0, fadeFrom = 0;
+    /// When it was first wanted on screen, and (if it took long enough to notice) when it reached the screen:
+    /// the renderer shows a card that is still waiting for its picture as a faint shimmer, and lets the picture
+    /// in gently. A picture made ahead of being shown has waited for nothing.
+    double wantedAt = 0, fadeFrom = 0;
     /// Renderer's: the GL name, and for a video, that it is an external texture.
     unsigned gl = 0;
     bool external = false;

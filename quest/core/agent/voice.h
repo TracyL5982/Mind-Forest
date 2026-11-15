@@ -3,7 +3,8 @@
 // through the service's voice (GET /api/speak). Nothing it hears leaves the headset unless it began with the name.
 //
 // The microphone, or `-wakeClip <file.wav>` in its place, feeds the listener on the host's sound thread. The frame
-// thread hears what came of it through a locked queue and does the rest; nothing here blocks a frame.
+// thread asks things of the listener through a queue, applied by whichever thread holds the listener next, and hears
+// what came of it through another; it never waits for the sound thread.
 #pragma once
 #include <memory>
 #include <mutex>
@@ -31,10 +32,14 @@ public:
     void renamed(const std::string& name);
     /// A reply to speak. One that arrives while the user is recorded waits until the recording ends.
     void say(const std::string& text);
-    /// Once a frame, on the frame thread.
-    void frame();
+    /// Once a frame, on the frame thread, with the frame's clock in seconds.
+    void frame(double now);
 
-    /// nullopt while it does not listen: until the model is ready and sound comes, and once the microphone fails.
+    /// Seconds before each try to open the microphone again after it failed. The last repeats.
+    static constexpr double reopenDelays[] = {1, 2, 4, 8, 15};
+
+    /// nullopt while it does not listen: until the model is ready and sound comes, while the microphone is down, and
+    /// for good once the user refuses it.
     std::optional<Listener::State> state() const;
     /// The name it answers to, as said: "Momo".
     std::string name() const;
@@ -43,13 +48,14 @@ public:
 
 private:
     struct Done {};
-    struct ReplyPlaying {
-        bool playing;
-    };
+    struct AskToSpeak {};
+    struct ReplyEnded {};
+    struct ChimeStarted {};
+    struct ChimeEnded {};
     struct Respell {
         std::unique_ptr<Spotter> spotter;
     };
-    using Command = std::variant<Done, ReplyPlaying, Respell>;
+    using Command = std::variant<Done, AskToSpeak, ReplyEnded, ChimeStarted, ChimeEnded, Respell>;
     /// The listener and what crosses to it: the sound thread hears; the frame thread sends commands and takes events.
     struct Ears;
     struct Transcript {
@@ -69,6 +75,9 @@ private:
         std::vector<Transcript> transcripts;
         std::vector<Fetched> fetched;
         std::vector<int> played;
+        int chimesEnded = 0;
+        bool microphoneFailed = false;
+        bool microphoneRefused = false;
     };
 
     Client& client;
@@ -77,6 +86,8 @@ private:
     std::shared_ptr<Ears> ears;
     std::shared_ptr<Inbox> inbox = std::make_shared<Inbox>();
     platform::MicrophoneRef microphone;
+    int microphoneFailures = 0;     // in a row, since sound last came
+    double reopenAt = -1;
     std::shared_ptr<const Vocabulary> vocabulary;
     std::string modelDir;
     bool started = false;
@@ -84,7 +95,7 @@ private:
     std::string wanted = "momo";    // the name the service gave
     std::string refused;            // a name the spotter cannot spell, already said so
     bool serviceSpeaks = false;
-    std::optional<std::string> held;    // a reply that came while the user was recorded
+    std::optional<std::string> pending;     // a reply waiting for the listener's leave to play
     int reply = 0;                  // the reply playing or on its way; earlier ones are let go
     platform::SoundRef sound;
     std::string spoken;
@@ -92,6 +103,7 @@ private:
     double busyLogged = 0;
 
     void start();
+    void openMicrophone();
     void respell();
     void send(Command command);
     void transcribe(const std::string& wav);

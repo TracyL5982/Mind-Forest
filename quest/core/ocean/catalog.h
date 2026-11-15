@@ -477,6 +477,9 @@ public:
 
     /// An open note, m. Its width never changes; its height goes with what it carries.
     Vec2 openSize(const OceanNote& note) const;
+    /// NOTE(port): added for Quest. The same for a kind of note, which a card opens as (core/cards).
+    static Vec2 openSize(OceanNote::Kind kind, bool diagram, float aspect);
+    static Vec2 pictureSize(float aspect);
 
     /// A piece's tags: what it is about first, each kind's rarest first.
     /// NOTE(port): `tags(of:)` in the Swift; `tags` is also the field, so the label is kept.

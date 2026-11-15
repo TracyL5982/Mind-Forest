@@ -1,4 +1,5 @@
 // components/note.js: plain paper. The one line the model sets apart hangs from a rule.
+#include "face.h"
 #include "kind.h"
 
 namespace cards {
@@ -24,27 +25,30 @@ Plan plan(const Item& item, const Json& props) {
     return p;
 }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    return {WIDTH, FRAME + p.titleLines * TITLE + (p.emphasis.empty() ? 0 : 6 + TEXT) + (p.bodyLines ? 6 + p.bodyLines * TEXT : 0)};
+/// A title, the body under it in whole lines, and the cue when the body runs on.
+void lay(Col& c, const Item& item, const Json&) {
+    const std::string& body = !item.summary.empty() ? item.summary : item.text;
+    std::string shown = !body.empty() && body != item.title ? body : "";
+    if (!c.title(item.titleOrUntitled())) return;
+    if (!shown.empty() && c.room() >= face::GAP + face::BODY) {
+        c.gap(face::GAP);
+        c.lines(shown, Measure::body, 99, c.look.ink2);
+    } else if (!shown.empty()) {
+        c.more = true;
+    }
+    if (c.more) c.cue(cueMore(c.words));
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
-    Plan p = plan(item, props);
-    float x = 16, column = width - 32, y = 14;
-    pen.words(p.title, x, y, column, p.titleLines, setting::title, palette::ink);
-    y += float(p.titleLines * TITLE);
-    if (!p.emphasis.empty()) {
-        y += 6;
-        pen.ctx.setFillColor(look.accent);
-        pen.ctx.fill(pen.px(x, y, 2, TEXT));
-        Setting italic = setting::text;
-        italic.italic = true;
-        pen.words(p.emphasis, x + 11, y, column - 11, 1, italic, palette::ink);
-        y += TEXT;
-    }
-    if (p.bodyLines) pen.words(p.body, x, y + 6, column, p.bodyLines, setting::text, look.ink2);
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
 }
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
+
 
 void detail(Sheet&, const Item&, const Json&) {}
 

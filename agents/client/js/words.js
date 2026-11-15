@@ -1,6 +1,6 @@
 /**
  * The words a card draws that are not the item's own: a name for a title that is missing, the
- * count of what a card leaves out, the names of a side, a kind, a tone and a voice. Each is here
+ * cue that says what a small face leaves out, the names of a side, a kind, a tone and a voice. Each is here
  * once in English and once in Chinese, and a card takes the set that matches its item, so a
  * Chinese card is Chinese throughout. A footprint is worked out with the same words the card draws.
  * docs/libraries.md repeats the table.
@@ -8,9 +8,19 @@
 const WORDS = {
   en: {
     untitled: 'Untitled',
-    more: (count) => `and ${count} more`,
-    moreOf: (rows, columns) => `and ${[rows > 0 && `${rows} more row${rows === 1 ? '' : 's'}`, columns > 0 && `${columns} more column${columns === 1 ? '' : 's'}`].filter(Boolean).join(', ')}`,
+    cue: {
+      more: 'More',
+      left: (n) => `${n} more`,
+      rows: (n) => `${n} ${n === 1 ? 'row' : 'rows'}`,
+      points: (n, first, last) => `${n} ${n === 1 ? 'point' : 'points'}${first && last ? `, ${first} to ${last}` : ''}`,
+      parts: (n) => `${n} ${n === 1 ? 'part' : 'parts'}`,
+      lines: (n, language) => `${n} ${n === 1 ? 'line' : 'lines'}${language ? ` of ${language}` : ''}`,
+      sides: (pros, cons) => `${pros} for, ${cons} against`,
+      controls: (n) => `${n} ${n === 1 ? 'control' : 'controls'}`,
+    },
     others: ' and others',
+    /** The first of a work's authors, and how many more it names or that the list it came from left out. */
+    firstAuthor: (first, others, more) => (more ? `${first} and others` : others > 0 ? `${first} and ${others} ${others === 1 ? 'other' : 'others'}` : first),
     pros: 'For',
     cons: 'Against',
     paper: 'Paper',
@@ -22,6 +32,7 @@ const WORDS = {
     link: 'link',
     noPicture: 'Picture unavailable',
     noClip: 'This clip has no file to play.',
+    noSound: 'This recording has no file to play.',
     noData: 'No data',
     chart: 'Chart',
     done: 'Done',
@@ -31,12 +42,23 @@ const WORDS = {
     where: 'Where',
     people: 'People',
     origin: 'Origin',
+    explore: 'Explore',
+    computed: 'computed',
   },
   zh: {
     untitled: '未命名',
-    more: (count) => `还有 ${count} 项`,
-    moreOf: (rows, columns) => `还有 ${[rows > 0 && `${rows} 行`, columns > 0 && `${columns} 列`].filter(Boolean).join('、')}`,
+    cue: {
+      more: '更多',
+      left: (n) => `还有 ${n} 项`,
+      rows: (n) => `${n} 行`,
+      points: (n, first, last) => `${n} 个数据点${first && last ? `，${first} 至 ${last}` : ''}`,
+      parts: (n) => `${n} 部分`,
+      lines: (n, language) => `${n} 行${language ? ` ${language}` : '代码'}`,
+      sides: (pros, cons) => `${pros} 条优点，${cons} 条缺点`,
+      controls: (n) => `${n} 个控件`,
+    },
     others: ' 等',
+    firstAuthor: (first, others, more) => (more || others > 0 ? `${first} 等` : first),
     pros: '优点',
     cons: '缺点',
     paper: '论文',
@@ -48,6 +70,7 @@ const WORDS = {
     link: '链接',
     noPicture: '图片无法显示',
     noClip: '这段视频没有可播放的文件。',
+    noSound: '这段录音没有可播放的文件。',
     noData: '暂无数据',
     chart: '图表',
     done: '已完成',
@@ -57,6 +80,8 @@ const WORDS = {
     where: '地点',
     people: '人物',
     origin: '来源',
+    explore: '可探索',
+    computed: '计算值',
   },
 };
 

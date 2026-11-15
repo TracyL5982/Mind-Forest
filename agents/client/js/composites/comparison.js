@@ -1,6 +1,6 @@
 import { h } from '../dom.js';
-import { TEXT, TEXT_LETTER, fold } from '../components/shared.js';
-import { HEAD, PAD, row } from './shared.js';
+import { TEXT_LETTER, fold } from '../components/shared.js';
+import { HEAD, LINE, PAD, row } from './shared.js';
 
 export const name = 'Comparison';
 
@@ -14,7 +14,7 @@ export function arrange(group, ids, sizes) {
   const { at, right, tall } = row(ids, sizes, { gap: 16, left: PAD + LABEL });
   const cell = (id, i) => String(group.props.cells?.[id]?.[i] ?? '') || '–';
   /** A row is as tall as the most lines any of its cells needs, up to two. */
-  const rows = criteria.map((criterion, i) => ROOM + TEXT * Math.max(
+  const rows = criteria.map((criterion, i) => ROOM + LINE * Math.max(
     fold(criterion, LABEL - 10, TEXT_LETTER, 2),
     ...ids.map((id) => fold(cell(id, i), Math.floor(sizes.get(id)[0]) - INSET, TEXT_LETTER, 2))));
   const tops = rows.map((_, i) => HEAD + tall + 12 + rows.slice(0, i).reduce((sum, tallness) => sum + tallness, 0));

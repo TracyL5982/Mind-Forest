@@ -5,6 +5,7 @@
 //   quest/desktop/build.sh && quest/desktop/preview -demo
 //   preview -walk 3 -shot /tmp/walk.png -shotAt 6      run 6 s of app time at once, save a picture, quit
 //   preview ... -shot /tmp/run.png -shotAt 30 -shotEvery 1   also save /tmp/run-<n>.png each second until then
+//   preview -cards -frames /tmp/open -framesFrom 3 -framesTo 4    save every frame from 3 s to 4 s, then quit
 //
 // - Move the mouse: the hand ray goes through the pointer. Click: pinch. Drag: a pinch held and moved.
 // - Right-drag: turn the head. Scroll: both hands pinching, pulled apart or together.
@@ -52,6 +53,9 @@ int main(int argc, char** argv) {
     double shotAt = Flags::number("shotAt") > 0 ? Flags::number("shotAt") : 3;
     double shotEvery = Flags::number("shotEvery");
     int shots = 0;
+    auto frames = Flags::string("frames");
+    double framesFrom = Flags::number("framesFrom"), framesTo = Flags::number("framesTo") > 0 ? Flags::number("framesTo") : framesFrom + 1;
+    bool offscreen = shot || frames;
 
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -60,15 +64,15 @@ int main(int argc, char** argv) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_SAMPLES, 4);
-    glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, shot ? GLFW_FALSE : GLFW_TRUE);
-    if (shot) glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, offscreen ? GLFW_FALSE : GLFW_TRUE);
+    if (offscreen) glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     GLFWwindow* window = glfwCreateWindow(width, height, "Mind Palace Ocean (Quest preview)", nullptr, nullptr);
     if (!window) {
         fprintf(stderr, "no window\n");
         return 1;
     }
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(shot ? 0 : 1);
+    glfwSwapInterval(offscreen ? 0 : 1);
     glfwSetScrollCallback(window, [](GLFWwindow*, double, double dy) { scrolled += dy; });
 
     // The scene stands where the head faces when it starts, so the head starts facing ahead and is
@@ -109,11 +113,11 @@ int main(int argc, char** argv) {
         // (`-realtime` keeps the wall clock even for a picture: for looking at what waiting looks like. A hidden
         // window does not wait for the display, so its frames are held to 90 a second to keep app time with the clock.)
         static const bool realtime = Flags::has("realtime");
-        if (shot && realtime) {
+        if (offscreen && realtime) {
             while (glfwGetTime() < last + 1.0 / 90) std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         double wall = glfwGetTime();
-        float dt = shot && !realtime ? 1.f / 90 : float(std::min(0.1, std::max(1.0 / 240, wall - last)));
+        float dt = offscreen && !realtime ? 1.f / 90 : float(std::min(0.1, std::max(1.0 / 240, wall - last)));
         last = wall;
         elapsed += dt;
 
@@ -135,7 +139,7 @@ int main(int argc, char** argv) {
         // `-aimX <-1…1> -aimY <-1…1>` aims the ray at a place in the window without a mouse (0 0 is the middle,
         // 1 1 the top right), and `-pinchAt <s>` / `-releaseAt <s>` pinch there: for checking picks in a picture.
         bool scripted = Flags::has("aimX") || Flags::has("aimY");
-        if (!shot || scripted) {
+        if (!offscreen || scripted) {
             // The right hand: a ray from the eye through the pointer; the pinch moves with it at arm's length.
             float nx = float(mx / ww * 2 - 1) * t * aspect, ny = float(1 - my / wh * 2) * t;
             if (scripted) {
@@ -174,7 +178,7 @@ int main(int argc, char** argv) {
             magnify = 1;
             scene->magnifyEnded();
         }
-        Async::drain(shot.has_value() && !realtime);      // for a picture, wait for what is being read, so it comes out the same each time
+        Async::drain(offscreen && !realtime);      // for a picture, wait for what is being read, so it comes out the same each time
         Cost::reset();
         double updateBegan = mediaTime();
         scene->update(dt);
@@ -219,10 +223,7 @@ int main(int argc, char** argv) {
         frame.triangles = renderer.stats.triangles;
         perf.add(frame, logFps);
 
-        bool closing = shot && elapsed >= shotAt;
-        if (closing || (shot && shotEvery > 0 && elapsed >= shotEvery * (shots + 1))) {
-            std::string path = *shot;
-            if (!closing) path = path.substr(0, path.rfind('.')) + fmt("-%d", ++shots) + path.substr(path.rfind('.'));
+        auto save = [&](const std::string& path) {
             glFinish();
             std::vector<uint8_t> pixels(size_t(fw) * fh * 4);
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
@@ -230,7 +231,17 @@ int main(int argc, char** argv) {
             bool ok = host::savePNG(path, fw, fh, pixels);
             fprintf(stderr, "%s %s (%d draws, %d triangles)\n", ok ? "saved" : "could not save", path.c_str(), renderer.stats.drawCalls,
                     renderer.stats.triangles);
+        };
+        bool closing = shot && elapsed >= shotAt;
+        if (closing || (shot && shotEvery > 0 && elapsed >= shotEvery * (shots + 1))) {
+            std::string path = *shot;
+            if (!closing) path = path.substr(0, path.rfind('.')) + fmt("-%d", ++shots) + path.substr(path.rfind('.'));
+            save(path);
             if (closing) break;
+        }
+        if (frames && elapsed >= framesFrom) {
+            save(fmt("%s/%05d.png", frames->c_str(), int(std::lround(elapsed * 1000))));
+            if (elapsed >= framesTo) break;
         }
         glfwSwapBuffers(window);
     }

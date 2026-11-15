@@ -1,5 +1,9 @@
+import { TEXT_LETTER, wrap } from '../components/shared.js';
+
 export const PAD = 18;
 export const HEAD = 40;
+/** The line of the words an arrangement sets beside its cards, in the field's text size, `--lead-text` in style.css. */
+export const LINE = 17;
 
 /** Members side by side, tops aligned. Offsets are card centres from the block's top-left corner. */
 export function row(ids, sizes, { gap, left = PAD, top = HEAD }) {
@@ -36,3 +40,6 @@ export function grid(ids, sizes, { columns, gap }) {
 }
 
 export const squarish = (n) => (n <= 3 ? n : n === 4 ? 2 : 3);
+
+/** The lines a line of words set beside a card takes in a column `width` px wide, counted as the structured cards count theirs. None for no words. */
+export const linesOf = (str, width) => (str ? wrap(str, Math.floor(width), TEXT_LETTER, Infinity) : 0);

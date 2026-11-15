@@ -355,7 +355,25 @@ In a real browser with a fake microphone (`scripts/wake-check.ts`), OpenAI's tra
 
 **Alternative.** Picovoice Porcupine needs an account and a key on every device. openWakeWord needs a model trained for each name. Both fix the name in advance.
 
-## 39. Voice: the Conductor answers on the quick model
+## 39. One home: a source's recording is a film or a sound by its file, and plays from the service
+
+**Decision.** `tracy/agents` holds the Quest app, the service and the card libraries in one line, merged from `tracy/quest-net`. Both lines had decided what a source's playable record becomes, and the merge keeps both rules. A record whose file is a film (`.mp4`, `.m4v` or `.webm`) is a video item. Any other is an audio item, with the length its source gives as `sound.seconds`, which the audio card draws. Either way its file is linked as a service asset and its cover is stored, so a client loads only the service's own addresses (entry 26).
+
+**Why.** The card library line made a podcast episode an audio card that played from the episode's own address. The Quest line made every playable record a video streamed through the service, because it had no audio kind and every address a card loads must be the service's. The same `Found.media` field carries Internet Archive films and podcast episodes, so the file's type tells them apart.
+
+**The headset.** Its card registry (`quest/core/cards`) knows the note, quote and image cards and draws any other component as a note. A podcast pick is a note there, as a video card it was before the merge.
+
+**Also.** The browser checks from the card library line that dropped a recording or pasted an explainer now ask for a tree first, since a drop starts no tree unless asked (entry 29). The check that opening a card brings nothing compares the card's children before and after, since the Every shape tree now hangs a map under that card.
+
+## 40. One home: the Vision Pro adapter stays out
+
+**Decision.** The merge keeps `visionos/` as the Quest line has it, without the adapter in `visionos/MindPalace/Ocean/Agent/` and its hooks in `OceanModel.swift`, `Notes.swift` and `Info.plist`.
+
+**Why.** The Quest line left the adapter out on purpose when the service joined it (1dc37a6, 14 November), and every merge since kept it out. Its `OceanModel.swift` differs from the agents line's by 388 changed lines, so the adapter's hooks do not apply as they were. The Quest app is the final home, and Vision Pro was the prototype.
+
+**To bring it back.** The five files and the hooks are as they were at 088452d. Putting them back means writing the hooks again against the Quest line's `OceanModel.swift` and typechecking with the visionOS 2.5 simulator SDK, since visionOS 26 cannot be built on this Mac.
+
+## 41. Voice: the Conductor answers on the quick model
 
 **Decision.** The Conductor's one model call is marked `quick`, so it goes to `MIND_PALACE_QUICK_MODEL` (`muse-ember-1.0`) at minimal effort, as the suggested questions already did (35). The plain rules for instant commands and tree requests are unchanged.
 
@@ -374,7 +392,7 @@ The user's own utterance was the slowest on the main model (8.0 and 11.5 s) and 
 
 **Alternative.** The main model at minimal effort: measured on the questions (35), it barely changed the time.
 
-## 40. Voice: Momo says when results land
+## 42. Voice: Momo says when results land
 
 **Decision.** When a Scout run ends, the service sends one `say` and, unless the user has turned to something else since asking, a `navigate` to the card just before it. Every Scout run is one the user asked for: an `ask`, a `more`, an utterance the Conductor took for either, or the first round of a tree the user asked for, by voice, by a typed drop or from Telegram. A drop the Filer places runs no Scout and says nothing.
 
@@ -382,7 +400,7 @@ The user's own utterance was the slowest on the main model (8.0 and 11.5 s) and 
 
 **The line.** Plain code writes it (`src/core/announce.ts`), at most about 20 words: how many picks came, under which card, and one or two of them by kind and title, real material before written ideas, such as `Five new things under generative UI: a film "Her" and a paper "Predictability and accuracy in adaptive user interfaces".` When two do not fit it names one: `…, including a film "Her".` A kind comes from the source when the source says what a pick is (a film from TMDB is a film though it came as its poster), else from the item. A title loses what follows a colon, a bracket or a bar, and a cut title never ends on "of" or "the". With nothing new: `I found nothing new for generative UI.`, and the view stays where it is.
 
-**When.** The run's end, so the count is whole and "nothing" can be said. The Conductor's reply always comes first, since the run starts after it. A run is over once its slots are full, or only pictures are still being made, or every slot left is held by one (41), so the line comes with the last find that can land, not with work that can no longer land or a picture that takes another 10 to 20 s. That picture lands after the line, with no second line.
+**When.** The run's end, so the count is whole and "nothing" can be said. The Conductor's reply always comes first, since the run starts after it. A run is over once its slots are full, or only pictures are still being made, or every slot left is held by one (43), so the line comes with the last find that can land, not with work that can no longer land or a picture that takes another 10 to 20 s. That picture lands after the line, with no second line.
 
 **The view.** The pipeline counts each time the user turns to something: opening a card (`focus`), being taken somewhere, asking about a card. A run moves the view to its card only when nothing was turned to since it began, or the latest thing was that card. The user who asked and then went to another tree hears where the picks went without being taken back.
 
@@ -396,7 +414,7 @@ The user's own utterance was the slowest on the main model (8.0 and 11.5 s) and 
 
 **Alternatives.** Announce the first delivery: the count would be partial and nothing could be said of a run that brings nothing. Always move the view: it would take the user away from what they turned to.
 
-## 41. Scout: choosing on the quick model, and a run's slots shared among its directions
+## 43. Scout: choosing on the quick model, and a run's slots shared among its directions
 
 **Decision.** `scout.curate`, which chooses among the records a search returned, is marked `quick`. Thinking of directions (`scout.ideate`) and rating ties (`scout.rate`) stay on the main model. Because the quick model made the finds arrive in a different order, a run's slots are now shared out:
 
@@ -430,23 +448,21 @@ Earlier pairs said the same. An hour before, with the main model twice as slow: 
 
 **Alternatives.** Choose on the main model and keep first come, first served: 20 s more to the last find. Count a gallery as one slot: it is three cards. Never generate a picture the run might not keep: with one direction more than the slots, no picture would ever be made.
 
-## 42. Renderer: components on the quick model, composites on the main one, and a card's look does not wait
+## 44. Renderer: a card's look does not wait on how its siblings group
 
-**Decision.** `renderer.components` is marked `quick`. `renderer.composites`, which decides whether siblings are drawn as one arrangement, stays on the main model. The views are handed to the pipeline as soon as the components are chosen, through a `deliver` like the Scout's, and the groups follow when the main model answers. A view or group naming a card that is gone by then is left out, and a timeline or comparison is drawn from the siblings that stayed.
+**Decision.** Both of the Renderer's calls stay on the main model. The views are handed to the pipeline as soon as the components are chosen, through a `deliver` like the Scout's, and the groups follow when the main model answers. A view or group naming a card that is gone by then is left out, and a timeline or comparison is drawn from the siblings that stayed.
 
 **Why.** Every view, the ones the rules choose included (steps, excerpt, reference), waited for both model calls, and the composites call took 2.9 to 24.8 s. A card that arrived as a plain note turned into its steps or its excerpt 7 to 12 s later. When a card gave way to a fuller round during that wait, the group that named it failed the whole batch, views included: "renderer: failed: missing: no node …" in two of the first three runs.
 
-**Measured.** With `COMPARE_ROLES` in the three runs of 41: components, 3 calls, the same component every time (a note), with a different phrase picked out for emphasis, in 1.2 to 2.5 s against 5.4 to 6.1 s. Every value a component shows is checked against the item's text before it is drawn, so the quick model cannot draw a number or a quote the item does not hold. Composites, 8 calls: the main model proposed a group 3 times (a comparison of two UI wiring options, a comparison of two books, a cluster of three standoff films), the quick model never. So composites stay where they are, off the path to the card.
+**The quick model, measured and not kept.** With `COMPARE_ROLES` in the three runs of 43, components took 1.2 to 2.5 s on the quick model against 5.4 to 6.1 s, and chose the same component in all 3 calls. That was on the components prompt before the card library's sizing work (g11) rewrote it into a much stricter one, so the switch was dropped when that work was merged in, and is to be measured again on the new prompt. Composites, 8 calls: the main model proposed a group 3 times (a comparison of two UI wiring options, a comparison of two books, a cluster of three standoff films), the quick model never, so they stay on the main model, now off the path to the card.
 
-**Alternative.** Composites on the quick model as well: about 1 s, and no groups.
-
-## 43. Voice: every line goes through one say, marked reply or results
+## 45. Voice: every line goes through one say, marked reply or results
 
 **Decision.** The pipeline has one private `say`, and every line the agent speaks goes through it, the summary of an organize typed in a client included, which the server used to send itself. Each `say` carries `kind`: `reply` for the answer to what was just said (the Conductor's line, a question back such as "What should the tree be about?") and `results` for what finished work brought (a run's line, an organize's summary, a handoff being ready).
 
 **Why.** A real-time speech model is to become the agent's ears and voice (WS17). It takes what the pipeline says from one place, and a client can now tell the quick answer from the later news, to speak them differently or let the news wait. A client that reads no `kind` speaks both as before. The headset reads `say` for its `text` and ignores other fields.
 
-## 44. Activity: a short label for every step
+## 46. Activity: a short label for every step
 
 **Decision.** Each `activity` carries `label`: at most seven words saying what is being done in this step, true of it, for a client to show live. `detail` is optional longer text: what the user asked, a picture's prompt, an error. `message` stays, set to the label or the error, for clients that read it. Roles run their steps through `ctx.step(role, label, body, {nodeId, detail})`, which the pipeline turns into a start and an end. The Scout shows each of its steps on its card: thinking of directions, checking what the user already has, each search ("Searching research papers for adaptive menus"), fetching pictures, reading what a search returned ("Reading 6 results from Hacker News"), making a picture, looking for a video. The Renderer says "Laying out 2 cards", the Conductor "Working out what you mean". Titles in labels are cut at a whole word and never end on "of", "and" or "why" (`src/core/brief.ts`).
 
@@ -454,7 +470,7 @@ Earlier pairs said the same. An hour before, with the main model twice as slow: 
 
 **Checked.** `test/labels.test.ts` runs every role over a scripted model, a drop, a tree, a spoken ask with a find, a picture and a video, an organize and a handoff, and holds every label to two to seven words in one line, every step to an end, and a Scout run to showing each kind of step on its card.
 
-## 45. Scout: directions are read as the model writes them, at minimal effort, and ties are rated on the quick model
+## 47. Scout: directions are read as the model writes them, at minimal effort, and ties are rated on the quick model
 
 **Decision.** The Scout asks the main model for its directions at minimal effort and reads the reply as it is written (`onText` on the request, server-sent events from the Meta API, `completeElements` in `src/core/partial-json.ts`). Each direction is taken the moment it is whole and starts at once: a written idea lands, a find searches, a picture is made. The rating of ties to what the user already has moves to the quick model, and what it brings lands as soon as it is rated, before any new content. A run is over while the model is still writing once nothing it could write would land. The model is asked to write a picture direction first, since a picture takes longest.
 

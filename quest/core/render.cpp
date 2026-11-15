@@ -449,8 +449,9 @@ void Renderer::collect(const Entity* e, const Mat4& parent, float opacity, const
             if (Texture* texture = material.kind == Material::Kind::unlit ? material.texture.get() : nullptr) {
                 if (!texture->gl) {
                     // Not on the GPU yet. If its pixels are still being drawn, nothing shows at first, then a placeholder.
+                    if (texture->pending && !texture->wantedAt) texture->wantedAt = frameTime;
                     if (texture->pending && !texture->pending->ready.load()) {
-                        double waited = frameTime - texture->madeAt;
+                        double waited = frameTime - texture->wantedAt;
                         if (waited < placeholderAfter) drawn = false;
                         item.waiting = float(std::min(1.0, (waited - placeholderAfter) / 0.25));
                         see = true;
@@ -658,7 +659,7 @@ void Renderer::submit(const Item& item, const Views& views, double time, const M
             placeholder = true;
             texture = nullptr;
         } else {
-            double waited = frameTime - texture->madeAt;
+            double waited = texture->wantedAt ? frameTime - texture->wantedAt : 0;
             upload(texture);
             // It was long enough in coming to have been noticed: let it in gently, from the next frame.
             if (waited > gentleAfter) {

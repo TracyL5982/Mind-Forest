@@ -47,6 +47,7 @@ CTFontRef systemFont(const Font& font) {
             if ((made = CTFontCreateWithName(name, font.pointSize, nullptr))) break;
         }
     }
+    if (font.design == Font::Design::mono) made = CTFontCreateUIFontForLanguage(kCTFontUIFontUserFixedPitch, font.pointSize, nullptr);
     if (!made) made = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, font.pointSize, nullptr);
     if (made && font.italic) {
         if (CTFontRef slanted = CTFontCreateCopyWithSymbolicTraits(made, font.pointSize, nullptr, kCTFontItalicTrait, kCTFontItalicTrait)) {

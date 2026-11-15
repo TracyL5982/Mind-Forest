@@ -46,7 +46,7 @@ object Sound {
         if (code != ASK) return
         val waiting = synchronized(this) { asking.also { asking = null } } ?: return
         if (granted) start(waiting.first, waiting.second)
-        else microphoneFailed(waiting.first, "the microphone is not allowed for this app".toByteArray(Charsets.UTF_8))
+        else microphoneDenied(waiting.first)
     }
 
     /** Everything about the recorder happens on its own thread, so neither making it nor reading it costs a frame. */
@@ -130,5 +130,6 @@ object Sound {
 
     @JvmStatic external fun heard(handle: Long, samples: ShortArray, count: Int)
     @JvmStatic external fun microphoneFailed(handle: Long, why: ByteArray)
+    @JvmStatic external fun microphoneDenied(handle: Long)
     @JvmStatic external fun played(handle: Long, toEnd: Boolean)
 }

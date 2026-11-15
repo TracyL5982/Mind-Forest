@@ -2,24 +2,26 @@ import { h, s, clamp } from '../dom.js';
 import { wordsOf } from '../words.js';
 
 /**
- * The line heights and card padding in style.css, in px. A card's footprint is worked out from
- * these and never measured, so they change together with `--lead-*` and `.card-body`.
+ * Every small face is `WIDTH` px wide and at most `HEIGHT` px tall, the box the ring of cards round an opened card holds on the
+ * headset, where one px is one mm at 1.5 m. A face is worked out from these and the line heights in style.css and never measured,
+ * so they change together with `--lead-*` and `.card-body`.
  */
-export const DISPLAY = 36;
-export const TITLE = 21;
-export const TEXT = 17;
+export const WIDTH = 210;
+export const HEIGHT = 146;
+export const TITLE = 24;
+export const TEXT = 22;
+/** A meta line: a label, a count, a source, a speaker. */
+export const META = 18;
+/** The last row of a face that leaves something out, which says what is left. */
+export const CUE = 18;
+/** Under a title. */
+export const GAP = 6;
 /** Top and bottom padding plus the border of a padded card, and 2 px to spare. */
 export const FRAME = 30;
 /** Left and right padding plus the border of a padded card, and 1 px to spare. */
 export const SIDES = 33;
-/**
- * The same without the px to spare: a passage in the serif counts its lines in the whole line box,
- * because a character set with Han draws exactly 16 px there, so fifteen of them fill a 240 px line
- * to the last px and a px held back would push the fifteenth onto a line of its own.
- */
-export const PADDING = 32;
-/** What a card with chips adds to its height: the line of chips and the gap above it. */
-export const CHIP_LINE = 28;
+/** The text column of a padded face. */
+export const COLUMN = WIDTH - SIDES;
 
 export const text = (value) => (typeof value === 'string' ? value : '');
 export const list = (value) => (Array.isArray(value) ? value : []);
@@ -121,9 +123,17 @@ export const TEXT_LETTER = 72;
 export const QUOTE_LETTER = 78;
 /** One letter of the same serif set upright, as a passage and a definition are. It counts in the quote's column. */
 export const PASSAGE_LETTER = 92;
+/**
+ * The faces a small face draws in, measured by scripts/advances.ts: the title at 18 px, body text at 16 px in medium, and a meta
+ * line at 13.5 px in medium. Each is counted with its own widths. A meta line draws wider for its size than the title face does,
+ * so neither is counted in the other. Body text is one more than the title face's letter only so that each face has its own.
+ */
+export const TITLE_FACE = 104;
+export const BODY_FACE = 94;
+export const META_FACE = 80;
 
 /** A letter width names its face. Any letter but these is one of a figure's sizes. */
-const FACES = [[TITLE_LETTER], [TEXT_LETTER], [QUOTE_LETTER, PASSAGE_LETTER]];
+const FACES = [[TITLE_LETTER, TITLE_FACE, BODY_FACE, META_FACE], [TEXT_LETTER], [QUOTE_LETTER, PASSAGE_LETTER]];
 const FACE_OF = new Map(FACES.flatMap((letters, face) => letters.map((letter) => [letter, face])));
 const faceOf = (letter) => FACE_OF.get(letter) ?? FACES.length;
 
@@ -157,14 +167,19 @@ export const up = (a, b) => Math.floor((a + b - 1) / b);
  * any one character runs, because a figure cut short would mislead. Digits are all one width, so
  * each is counted at exactly that.
  */
-export const FIGURES = [['', 36, 210, 2148], ['is-mid', 28, 149, 1506], ['is-small', 21, 105, 1001]];
+export const FIGURES = [['', 36, 210, 2148], ['is-mid', 28, 149, 1506], ['is-small', 24, 119, 1127]];
 const DIGIT = 11;
+/** The smallest size is the title's, 18 px. Its widths are those measured at 16 px, scaled by 18 / 16 and rounded up. */
+const toSmall = (hundredths) => Math.ceil((hundredths * 18) / 16);
 
 /** A figure's width on one line in hundredths of a px, at one of `FIGURES`. */
 export const figureNeed = (value, [, , letter, digit]) => span(value, letter) * letter - (value.match(/[0-9]/g)?.length ?? 0) * (DIGIT * letter - digit);
 
 /** The px a string is given at the text size. Most strings draw a little narrower. */
 export const textWidth = (str) => up(span(str) * TEXT_LETTER, 100);
+
+/** The px a string is given on one meta line, counted as `MEASURES.meta` counts it. */
+export const metaWidth = (str) => up(advance(str, META_FACE), 100);
 
 /**
  * Han, hangul syllables and kana letters. A line may end after any of them, so a string made only
@@ -232,10 +247,13 @@ export const ADVANCES = new Map([
   [PASSAGE_LETTER, [447, 542, 532, 892, 892, 1410, 1332, 274, 673, 673, 729, 1335, 447, 563, 447, 740, 892, 892, 892, 892, 892, 892, 892, 892, 892, 892, 447, 447, 1335, 1335, 1335, 755, 1602, 1158, 998, 1134, 1252, 1017, 938, 1190, 1273, 546, 534, 1111, 917, 1459, 1295, 1285, 945, 1285, 1127, 868, 1012, 1262, 1149, 1662, 1140, 1057, 1070, 673, 740, 673, 1602, 802, 802, 772, 892, 717, 902, 783, 501, 828, 940, 477, 441, 876, 470, 1410, 937, 884, 899, 895, 627, 711, 578, 943, 788, 1242, 850, 780, 758, 673, 802, 673, 1335]],
   [FIGURES[0][2], [649, 1021, 1493, 2125, 2150, 2953, 2341, 883, 1239, 1239, 1473, 2150, 777, 1466, 777, 990, 2150, 2150, 2150, 2150, 2150, 2150, 2150, 2150, 2150, 2150, 777, 777, 2150, 2150, 2150, 1763, 2983, 2294, 2128, 2381, 2341, 1909, 1826, 2434, 2437, 850, 1835, 2165, 1810, 2884, 2394, 2520, 2050, 2519, 2127, 2099, 2007, 2372, 2253, 3232, 2274, 2205, 2110, 1239, 990, 1239, 2150, 1904, 1674, 1808, 1977, 1801, 1974, 1836, 1154, 1964, 1934, 772, 770, 1773, 775, 2875, 1904, 1898, 1966, 1964, 1179, 1695, 1151, 1904, 1743, 2618, 1733, 1776, 1670, 1239, 780, 1239, 2150]],
   [FIGURES[1][2], [467, 719, 1081, 1494, 1508, 2126, 1651, 634, 876, 876, 1038, 1508, 573, 1034, 573, 692, 1508, 1508, 1508, 1508, 1508, 1508, 1508, 1508, 1508, 1508, 573, 573, 1508, 1508, 1508, 1235, 2104, 1617, 1506, 1672, 1654, 1349, 1290, 1712, 1723, 604, 1294, 1533, 1279, 2036, 1692, 1774, 1452, 1774, 1505, 1480, 1422, 1677, 1589, 2281, 1606, 1555, 1490, 876, 692, 876, 1508, 1347, 1162, 1275, 1401, 1270, 1398, 1297, 818, 1390, 1367, 545, 544, 1259, 550, 2039, 1347, 1341, 1391, 1390, 844, 1200, 818, 1347, 1235, 1853, 1227, 1259, 1186, 876, 556, 876, 1508]],
-  [FIGURES[2][2], [358, 497, 825, 1002, 1002, 1567, 1121, 482, 613, 613, 711, 1002, 482, 711, 482, 467, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 482, 482, 1002, 1002, 1002, 819, 1420, 1095, 1039, 1118, 1129, 927, 888, 1152, 1181, 435, 885, 1060, 884, 1381, 1161, 1193, 1006, 1193, 1039, 1010, 988, 1149, 1081, 1543, 1093, 1058, 1017, 613, 467, 613, 1002, 931, 739, 873, 971, 872, 971, 892, 580, 962, 939, 388, 388, 886, 400, 1414, 931, 923, 965, 965, 621, 834, 586, 931, 861, 1275, 853, 881, 838, 613, 407, 613, 1002]],
+  [FIGURES[2][2], [358, 497, 825, 1002, 1002, 1567, 1121, 482, 613, 613, 711, 1002, 482, 711, 482, 467, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 1002, 482, 482, 1002, 1002, 1002, 819, 1420, 1095, 1039, 1118, 1129, 927, 888, 1152, 1181, 435, 885, 1060, 884, 1381, 1161, 1193, 1006, 1193, 1039, 1010, 988, 1149, 1081, 1543, 1093, 1058, 1017, 613, 467, 613, 1002, 931, 739, 873, 971, 872, 971, 892, 580, 962, 939, 388, 388, 886, 400, 1414, 931, 923, 965, 965, 621, 834, 586, 931, 861, 1275, 853, 881, 838, 613, 407, 613, 1002].map(toSmall)],
+  [TITLE_FACE, [419, 566, 922, 1135, 1136, 1749, 1271, 546, 694, 694, 811, 1136, 543, 811, 543, 535, 1153, 846, 1085, 1130, 1163, 1119, 1155, 1018, 1169, 1155, 543, 543, 1136, 1136, 1136, 930, 1611, 1236, 1175, 1269, 1282, 1052, 1008, 1308, 1336, 494, 999, 1197, 1003, 1563, 1316, 1355, 1139, 1355, 1175, 1143, 1121, 1303, 1221, 1743, 1235, 1196, 1155, 694, 535, 694, 1136, 1053, 849, 989, 1100, 989, 1099, 1013, 657, 1089, 1063, 444, 443, 999, 455, 1593, 1053, 1047, 1093, 1093, 700, 944, 664, 1053, 974, 1435, 963, 994, 950, 694, 464, 694, 1136]],
+  [BODY_FACE, [410, 494, 785, 1002, 1002, 1511, 1128, 475, 608, 608, 735, 1002, 475, 735, 475, 475, 1010, 741, 960, 999, 1025, 986, 1016, 902, 1024, 1016, 475, 475, 1002, 1002, 1002, 816, 1446, 1082, 1044, 1132, 1146, 939, 902, 1174, 1182, 428, 868, 1053, 896, 1388, 1174, 1214, 1010, 1214, 1039, 1013, 1000, 1164, 1075, 1543, 1086, 1049, 1039, 608, 475, 608, 1002, 930, 772, 875, 975, 883, 975, 902, 577, 968, 938, 389, 389, 872, 400, 1397, 930, 933, 969, 968, 611, 833, 580, 930, 861, 1250, 841, 871, 850, 608, 408, 608, 1002]],
+  [META_FACE, [363, 433, 678, 861, 861, 1291, 969, 418, 530, 530, 636, 861, 418, 636, 418, 418, 868, 641, 825, 858, 882, 847, 874, 777, 880, 874, 418, 418, 861, 861, 861, 705, 1236, 928, 897, 971, 983, 810, 777, 1007, 1013, 377, 747, 905, 772, 1188, 1007, 1041, 868, 1041, 894, 871, 861, 999, 924, 1318, 932, 902, 893, 530, 418, 530, 861, 800, 668, 755, 839, 761, 839, 777, 502, 832, 807, 344, 344, 752, 353, 1196, 800, 803, 833, 833, 532, 719, 507, 800, 743, 1072, 725, 750, 733, 530, 361, 530, 861]],
 ]);
 /** How wide a character set with Han draws in each of those faces, in hundredths of a px: the size the face is set in, less its letter spacing. */
-const EM = new Map([[TITLE_LETTER, 1591], [TEXT_LETTER, 1250], [PASSAGE_LETTER, 1600], [FIGURES[0][2], 3332], [FIGURES[1][2], 2352], [FIGURES[2][2], 1568]]);
+const EM = new Map([[TITLE_FACE, 1790], [BODY_FACE, 1600], [META_FACE, 1350], [TITLE_LETTER, 1591], [TEXT_LETTER, 1250], [PASSAGE_LETTER, 1600], [FIGURES[0][2], 3332], [FIGURES[1][2], 2352], [FIGURES[2][2], toSmall(1568)]]);
 const SQUARE = /[\u3000-\u30ff\u3400-\u9fff\uff01-\uff60\uffe0-\uffe6]/;
 
 /**
@@ -258,41 +276,166 @@ export function advance(str, letter) {
 }
 
 /**
- * How many lines a string is given in a column too narrow for `fold`, where one long word can
- * leave half a line empty. The words are laid out one by one, each as wide as `advance` counts it.
- * A line may end at white space and where `parts` says a word parts, and nowhere else, which is at
- * most where a page breaks. A word wider than a line starts a line of its own and is broken
- * wherever a line ends.
+ * Where each line of a string ends, as an index into it, in a column `width` px wide. The words are laid out one by one, each as
+ * wide as `advance` counts it. A line may end at white space and where `parts` says a word parts, and nowhere else, which is at
+ * most where a page breaks. A word wider than a line starts a line of its own and is broken wherever a line ends.
  */
-export function wrap(str, width, letter, max) {
+function ends(str, width, letter) {
   const room = width * 100;
   const space = advance(' ', letter);
-  let lines = 1;
+  const lines = [];
   let used = 0;
-  const place = (wide, gap) => {
+  let at = 0;
+  const place = (wide, gap, end) => {
     if (used > 0 && used + gap + wide > room) {
-      lines += 1;
+      lines.push(at);
       used = 0;
     }
     used += (used > 0 ? gap : 0) + wide;
+    at = end;
   };
-  for (const word of str.split(/\s+/).filter(Boolean)) {
+  for (const { 0: word, index } of str.matchAll(/\S+/gu)) {
     let gap = space;
     let unit = '';
+    let end = index;
     const chars = [...word];
     chars.forEach((ch, i) => {
       unit += ch;
+      end += ch.length;
       const next = chars[i + 1];
       if (next !== undefined && !parts(chars, i)) return;
       const wide = advance(unit, letter);
-      if (wide <= room) place(wide, gap);
-      else [...unit].forEach((part, k) => place(advance(part, letter), k === 0 ? room : 0));
+      if (wide <= room) place(wide, gap, end);
+      else {
+        let from = end - unit.length;
+        [...unit].forEach((part, k) => place(advance(part, letter), k === 0 ? room : 0, (from += part.length)));
+      }
       gap = 0;
       unit = '';
     });
   }
-  return clamp(lines, 1, max);
+  lines.push(at);
+  return lines;
 }
+
+/** How many lines a string takes in a column `width` px wide, as `ends` lays it out, from 1 to `max`. */
+export const wrap = (str, width, letter, max) => clamp(ends(str, width, letter).length, 1, max);
+
+/**
+ * How each kind of line on a small face is counted, in the widths of the face it is drawn in, and how tall its line is. A heading
+ * over a structure is the title's semibold at the body size, which is the 16 px title face. A passage, a quotation and a meaning
+ * are the upright serif. A figure's three sizes are 34, 24 and 18 px.
+ */
+export const MEASURES = {
+  title: { letter: TITLE_FACE, lead: TITLE },
+  head: { letter: TITLE_LETTER, lead: TEXT },
+  body: { letter: BODY_FACE, lead: TEXT },
+  meta: { letter: META_FACE, lead: META },
+  passage: { letter: PASSAGE_LETTER, lead: TEXT },
+  display: { letter: FIGURES[0][2], lead: FIGURES[0][1] },
+  middle: { letter: FIGURES[1][2], lead: FIGURES[1][1] },
+  figure: { letter: FIGURES[2][2], lead: FIGURES[2][1] },
+};
+const counted = (column, measure) => [column, MEASURES[measure].letter];
+
+/** The lines a string takes on a face in a column `column` px wide, counted as `measure` counts it. */
+export const linesOf = (str, column, measure) => ends(str, ...counted(column, measure)).length;
+
+/** What a cut leaves at its end that only joins it to what was cut. */
+const JOINING = /[\s,;:，；：、–—-]+$/u;
+
+/**
+ * The start of a string that stands on `most` lines with an ellipsis after it: cut where a word ends, at a hyphen that joins two
+ * words, or after any character of a script written without spaces, and without the marks that only joined it to the rest. A word longer than the lines is cut
+ * between the characters a reader sees.
+ */
+function shortened(str, width, letter, most) {
+  const fits = (words) => ends(`${words}…`, width, letter).length <= most;
+  const cuts = [...str.matchAll(/\S(?=\s)|[A-Za-z](?=-[A-Za-z])|[\u3041-\u3096\u30a1-\u30fa\u30fc\u3400-\u9fff\uac00-\ud7af]|[\u3001\u3002\uff0c\uff1b\uff1a\uff1f\uff01\uff09\u300b]/gu)]
+    .map((m) => str.slice(0, m.index + m[0].length).replace(JOINING, '')).filter(Boolean).reverse();
+  let kept = cuts.find(fits);
+  if (kept === undefined) {
+    kept = '';
+    for (const part of graphemes(str)) {
+      if (!fits(kept + part)) break;
+      kept += part;
+    }
+  }
+  return `${kept}…`;
+}
+
+/**
+ * The most of a string that stands on `most` whole lines of a column: all of it when it fits, else its first words, to where its
+ * last whole line ends. `whole` says nothing was left out. A face draws exactly these words, so it never cuts a line, clamps one
+ * or ends one with an ellipsis. A title is the one exception: `ellipsis` cuts one that needs more than `most` lines at a whole
+ * word and ends it with an ellipsis, which says what is left out, so it counts as whole and brings no cue.
+ */
+export function fit(str, column, measure, most = Infinity, ellipsis = false) {
+  if (!str) return { words: '', lines: 0, whole: true };
+  const [width, letter] = counted(column, measure);
+  const lines = ends(str, width, letter);
+  if (lines.length <= most) return { words: str, lines: lines.length, whole: true };
+  if (ellipsis && most > 0) {
+    const words = shortened(str, width, letter, most);
+    return { words, lines: ends(words, width, letter).length, whole: true };
+  }
+  return { words: most > 0 ? str.slice(0, lines[most - 1]).trimEnd() : '', lines: Math.max(0, most), whole: false };
+}
+
+/**
+ * A small face, laid out from its rows top to bottom. A row of `words` stands on whole lines, as many as it needs up to `most`;
+ * any other row is `tall` px and whole. Each takes `gap` px above it. A row the face has no room for is left out, and every row
+ * after it, so what shows is always the start of the card; a row of words that does not fit whole shows the whole lines that do,
+ * unless it is a `unit`, one of what the cue counts, such as a list's entry, which is whole or left out. A `keep` row is shown
+ * whatever is left out above it, as a quote's speaker is.
+ *
+ * When anything is left out, the last row is the cue, `CUE` px: `cue(units)` says what is left, given the units left out, or
+ * "More" when it gives nothing, as when words were cut. `more` says the item holds something no row shows. The face is `HEIGHT`
+ * px at most, and a row's `draw(row)` is handed the row with the `words` and `lines` it shows. A row of words that draws a box
+ * round them, as a chat's bubble does, adds the box's `pad` px to its lines. `frame` is the px of padding and border above and
+ * below the rows.
+ */
+export function lay(rows, { words: said = wordsOf(), cue = () => '', more = false, frame = FRAME } = {}) {
+  const lead = (row) => MEASURES[row.measure ?? 'body'].lead;
+  const shownIn = (row, most) => {
+    const shown = fit(row.words, row.column ?? COLUMN, row.measure ?? 'body', most, row.ellipsis);
+    return { ...row, ...shown, height: shown.lines * lead(row) + (row.pad ?? 0) };
+  };
+  const sized = rows.filter(Boolean).map((row) => (row.words === undefined ? { ...row, gap: row.gap ?? 0, height: row.tall } : shownIn({ ...row, gap: row.gap ?? 0 }, row.most)));
+  const need = sized.reduce((sum, row) => sum + row.gap + row.height, frame);
+  if (!more && need <= HEIGHT && sized.every((row) => row.whole !== false)) return { rows: sized, height: need, cue: '' };
+
+  let room = HEIGHT - frame - CUE - sized.filter((row) => row.keep).reduce((sum, row) => sum + row.gap + row.height, 0);
+  const shown = [];
+  let units = 0;
+  let stopped = false;
+  for (const row of sized) {
+    if (row.keep) {
+      shown.push(row);
+      continue;
+    }
+    if (stopped || row.gap + row.height > room) {
+      const lines = Math.floor((room - row.gap - (row.pad ?? 0)) / lead(row));
+      if (!stopped && row.words !== undefined && !row.unit && lines > 0) shown.push(shownIn(row, lines));
+      stopped = true;
+      if (row.unit) units += 1;
+      continue;
+    }
+    shown.push(row);
+    room -= row.gap + row.height;
+  }
+  const height = shown.reduce((sum, row) => sum + row.gap + row.height, frame) + CUE;
+  return { rows: shown, height, cue: cue(units) || said.cue.more };
+}
+
+/** A face as `lay` sets it out: each row at its own height with its gap above it, and the cue last. */
+export const drawFace = ({ rows, cue }) => [
+  rows.map((row) => h('div', { class: 'face-row', style: { marginTop: `${row.gap}px`, height: `${row.height}px` } }, row.draw(row))),
+  cue && h('div', { class: 'face-cue', text: cue }),
+];
+
+/** A row of words drawn as they are shown, in an element of `cls`. */
+export const wordsIn = (cls) => (row) => say('div', cls, row.words);
 
 const segmenter = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
 
@@ -329,32 +472,63 @@ export const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0, 2).
 /** Text in its own element. `dir` lets Arabic and Hebrew align and shorten from their own side. */
 export const say = (tag, cls, str) => h(tag, { class: cls, dir: 'auto', text: str });
 
-/** What a card writes under the rows it shows when it holds more. */
-export const andMore = (count, item) => h('div', { class: 'card-foot', text: wordsOf(item).more(count) });
+/** A line set in bold as the item writes it, with `**` or `__`, which the card draws bold without them. */
+const STRONG = /^(\*\*|__)([^*_]+)\1([:：]?)$/u;
+/** A line that heads what is under it: one that ends with a colon, or with a letter or a digit and no stop. */
+const HEADING = /[:：\p{L}\p{N}]$/u;
+
+/** The lines over a card's structure, each with whether it heads what is under it. */
+function overOf(props) {
+  return list(props.above).map((line) => text(line).trim()).filter(Boolean).map((line) => {
+    const strong = STRONG.exec(line);
+    const words = strong ? `${strong[2]}${strong[3]}` : line;
+    return { words, head: strong !== null || HEADING.test(words) };
+  });
+}
 
 /**
- * Shares `room` px among columns that need `needs`. A column that needs no more than an equal
- * share of what is left takes what it needs, and the others share the rest equally.
+ * The item's own headings, labels and opening prose that a structured card draws over its structure, as rows of its face: each
+ * line on lines of its own, in the body face and the full colour of the structure, a heading or a label in the title's weight.
+ * They come first, so the face shows them before any of the structure they head, and none is left out to make room for it.
+ * `gap` is the px above the first.
  */
-export function spread(needs, room) {
-  const widths = needs.map(() => 0);
-  let open = needs.map((_, i) => i);
-  while (open.length > 0) {
-    const each = Math.max(0, Math.floor(room / open.length));
-    const whole = open.filter((i) => needs[i] <= each);
-    for (const i of whole.length > 0 ? whole : open) {
-      widths[i] = whole.length > 0 ? needs[i] : each;
-      room -= widths[i];
-    }
-    open = whole.length > 0 ? open.filter((i) => !whole.includes(i)) : [];
-  }
-  return widths;
+export const aboveRows = (props, { column = COLUMN, gap = GAP } = {}) => overOf(props).map((line, i) => ({
+  words: line.words, measure: line.head ? 'head' : 'body', column, gap: i === 0 ? gap : 0,
+  draw: wordsIn(line.head ? 'face-above is-head' : 'face-above'),
+}));
+
+/** The most lines each head of a heads row is given. */
+const HEAD_LINES = 2;
+
+/**
+ * The heads row of the two columns a card's figures or bars come from, `props.heads`, as a row of its face: each head in meta in
+ * half the column less 17 px between them, the first at the start and the second at the end, over 4 px and a hairline. None when
+ * the view has no heads.
+ */
+export function headsRow(props, { column = COLUMN, gap = GAP } = {}) {
+  const heads = list(props.heads).map((head) => text(head).trim());
+  if (heads.length !== 2 || heads.every((head) => !head)) return null;
+  const shown = heads.map((head) => fit(head, Math.floor((column - 17) / 2), 'meta', HEAD_LINES));
+  return {
+    tall: Math.max(...shown.map((head) => head.lines)) * META + 5, gap, whole: shown.every((head) => head.whole),
+    draw: () => h('div', { class: 'face-heads' }, shown.map((head) => say('div', '', head.words))),
+  };
 }
 
 /** The item's title, or the word for one that is missing. */
 export const titleOf = (item) => item.title || wordsOf(item).untitled;
 
-export const title = (item, lines = 2) => say('div', `card-title clamp-${lines}`, titleOf(item));
+/** The most lines a title, or a name that stands for it, takes on a small face. */
+export const TITLE_LINES = 2;
+
+/**
+ * The title a small face shows: `item.data.shortTitle`, the start of a source's own title the service gives it, else the title. The
+ * opened card shows the whole title.
+ */
+export const faceTitleOf = (item) => text(item.data?.shortTitle).trim() || titleOf(item);
+
+/** The title as a row of a face: whole on up to two lines, else its first two cut at a whole word and ended with an ellipsis. */
+export const titleRow = (item, { column = COLUMN, gap = 0 } = {}) => ({ words: faceTitleOf(item), measure: 'title', column, most: TITLE_LINES, ellipsis: true, gap, draw: wordsIn('card-title') });
 
 /** A short label that names what a card is: a language, where a chat came from, a kind of group. */
 export const kind = (label) => h('span', { class: /\p{Script=Han}/u.test(label) ? 'kind is-han' : 'kind', text: label });
@@ -365,15 +539,6 @@ export function picture(src, alt, ctx, missing = () => h('div', { class: 'media-
   img.addEventListener('error', () => img.replaceWith(missing()));
   return img;
 }
-
-/** A picture or poster at a fixed height, with its caption, when it has one, on a plate below. */
-export const framed = (height, caption, lines, media) => [
-  h('div', { class: 'media-frame', style: { height: `${height}px` } }, media),
-  caption && h('div', { class: 'media-plate' }, say('div', `media-caption clamp-${lines}`, caption)),
-];
-
-/** The height `framed` takes: the picture and the border, and the plate's padding and caption. */
-export const framedHeight = (height, lines) => height + 2 + (lines ? 19 + lines * TEXT : 0);
 
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumSignificantDigits: 3 });
 const short = (value) => compact.format(value);

@@ -12,7 +12,7 @@ The Packager returns a `name`, such as `dolly-zoom-handoff-2026-11-13`, and the 
 | --- | --- |
 | `<name>/handoff.md` | The handoff as Markdown. Paste this file into the receiving agent. |
 | `<name>/handoff.json` | The same content as data, for an agent or a script that parses the handoff. |
-| `<name>/assets/<id>` | One file for each image, video, or document in the handoff. |
+| `<name>/assets/<id>` | One file for each image, video, recording, or document in the handoff. |
 
 The host also writes `<name>.md` beside the zip file. This is the file that travels alone: a paired Telegram chat receives it with every handoff, and the user shares it into any agent app. It names no file of the bundle. See One file that travels alone.
 

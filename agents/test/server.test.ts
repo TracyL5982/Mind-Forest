@@ -146,7 +146,7 @@ test('the fake service files pasted structure as item data, and brings a museum 
     await new Promise((r) => setTimeout(r, 1200));
     await run.pipeline.idle();
   };
-  c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this:\nMoving the service to Rust\nPros: no data races, one binary\nCons: slow builds' }] }));
+  c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this:\nMoving the service to Rust\nPros:\n- no data races\n- one binary\nCons:\n- slow builds' }] }));
   await c.until((m) => m.t === 'change');
   await settled();
 

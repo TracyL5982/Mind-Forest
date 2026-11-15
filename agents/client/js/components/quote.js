@@ -1,29 +1,36 @@
 import { h } from '../dom.js';
-import { FRAME, QUOTE_LETTER, TEXT, TITLE, fold, say, text } from './shared.js';
+import { WIDTH, aboveRows, drawFace, lay, say, text, wordsIn } from './shared.js';
+import { wordsOf } from '../words.js';
 
-const WIDTH = 288;
 /** The quote's wider side padding and the border, and 1 px to spare. */
 const COLUMN = WIDTH - 41;
+/** The quotation mark over the words, and the gap under it. */
 const MARK = 22;
+/** The dash before the speaker, and the gap after it. */
+const DASH = 22;
 
 const words = (item, props) => text(props.text) || item.text || item.title || '';
-const lines = (item, props) => fold(words(item, props), COLUMN, QUOTE_LETTER, 5);
 const mark = () => h('div', { class: 'quote-mark', text: '“', 'aria-hidden': 'true' });
-const by = (props, clamped) => text(props.by) && h('div', { class: 'quote-by' }, say('span', clamped, props.by));
+const by = (said) => said && h('div', { class: 'quote-by' }, say('span', '', said));
 
-export const shows = [];
+/** The lines the item writes over it, the mark, the quotation upright in the serif, and the speaker, which the face keeps. */
+function face(item, props) {
+  const above = aboveRows(props, { column: COLUMN, gap: 0 });
+  return lay([
+    ...above,
+    { tall: MARK, gap: above.length > 0 ? 6 : 0, draw: mark },
+    { words: words(item, props), measure: 'passage', column: COLUMN, draw: wordsIn('quote-text') },
+    text(props.by) && { words: text(props.by), measure: 'meta', column: COLUMN - DASH, most: 2, gap: 8, keep: true, draw: (row) => by(row.words) },
+  ], { words: wordsOf(item) });
+}
 
-export const size = (item, props) => [WIDTH, FRAME + MARK + lines(item, props) * TITLE + (text(props.by) ? 8 + TEXT : 0)];
+export const size = (item, props) => [WIDTH, face(item, props).height];
 
-export const draw = (item, props) => [
-  mark(),
-  say('blockquote', `quote-text clamp-${lines(item, props)}`, words(item, props)),
-  by(props, 'clamp-1'),
-];
+export const draw = (item, props) => drawFace(face(item, props));
 
 export const detail = (item, props) => [
   h('div', { class: 'detail-quote' },
     mark(),
     say('blockquote', 'quote-text', words(item, props)),
-    by(props, '')),
+    by(text(props.by))),
 ];

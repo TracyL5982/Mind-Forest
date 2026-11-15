@@ -1,10 +1,12 @@
-import type { Item, ItemData } from '../domain.ts';
+import type { Item, ItemData, Sound } from '../domain.ts';
 import type { JsonRequest } from '../ports.ts';
 import { mostRecent, parseChatJson, parseTranscript, type Conversation } from './intake/chat.ts';
 import { codeIn } from './intake/code.ts';
 import {
   CHAT_SYSTEM,
   ChatReply,
+  fittedSummary,
+  fittedTitle,
   labels,
   LINK_SYSTEM,
   LinkReply,
@@ -14,6 +16,7 @@ import {
   TEXT_SYSTEM,
   TextReply,
 } from './intake/describe.ts';
+import { located } from './intake/located.ts';
 import { asUrl, clip, decodeText, firstLine, middleOut, nameStem, plainly, squash, TITLE_MAX, toBase64, type Described } from './intake/plain.ts';
 import { AGENT, makeItem, type RawDump, type RoleContext, type Roles } from './types.ts';
 
@@ -25,6 +28,8 @@ const MAX_CONVERSATIONS = 20;
 const MAX_TAKEAWAYS = 5;
 const MAX_PARTS = 6;
 const MAX_VIDEO_BYTES = 15 * 1024 * 1024;
+/** The most the service's own transcription endpoint takes. */
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 /** Texts up to this length share a model call. Longer ones get their own and may be split. */
 const SHORT_TEXT = 1500;
 const BATCH_SIZE = 8;
@@ -43,6 +48,8 @@ type Job =
   | { type: 'text'; text: string; arrival: Arrival }
   | { type: 'link'; url: string }
   | { type: 'media'; kind: 'image' | 'video'; asset: string; name: string; dataUrl: string | null }
+  /** `bytes` is null when the file is too large to send to be transcribed. */
+  | { type: 'audio'; asset: string; mime: string; name: string; bytes: Uint8Array | null; sound: Sound }
   | { type: 'file'; asset: string; mime: string; name: string }
   | { type: 'chat'; conversation: Conversation; arrival: Arrival };
 
@@ -66,6 +73,7 @@ export const intake: Roles['intake'] = async (ctx, dumps) => {
     else if (job.type === 'file') slots[slot] = [fileItem(ctx, job)];
     else if (job.type === 'link') tasks.push(async () => void (slots[slot] = [await linkItem(run, job.url)]));
     else if (job.type === 'media') tasks.push(async () => void (slots[slot] = [await mediaItem(run, job)]));
+    else if (job.type === 'audio') tasks.push(async () => void (slots[slot] = [await audioItem(run, job)]));
     else tasks.push(async () => void (slots[slot] = await chatItems(run, job.conversation, job.arrival)));
   });
   for (const batch of batches(texts)) {
@@ -84,7 +92,7 @@ export const intake: Roles['intake'] = async (ctx, dumps) => {
   if (run.failures > 0) {
     ctx.note(ROLE, `The model failed on ${run.failures} of ${run.calls} descriptions. Those items have plain titles and tags.`);
   }
-  return slots.flat();
+  return located(ctx, slots.flat());
 };
 
 async function recognise(ctx: RoleContext, dump: RawDump): Promise<Job[]> {
@@ -103,6 +111,16 @@ async function recognise(ctx: RoleContext, dump: RawDump): Promise<Job[]> {
     if (tooLarge) ctx.note(ROLE, `"${name}" is over 15 MB, too large to watch, so it is filed by name only.`);
     const dataUrl = tooLarge ? null : `data:${dump.mime};base64,${toBase64(file.bytes)}`;
     return [{ type: 'media', kind, asset: dump.asset, name, dataUrl }];
+  }
+  if (dump.mime.startsWith('audio/')) {
+    // The client measures what it can decode, so a recording it could not decode would not play in it either.
+    if (!dump.sound) {
+      ctx.note(ROLE, `"${name}" could not be played as sound, so it is filed by name only.`);
+      return [{ type: 'file', asset: dump.asset, mime: dump.mime, name }];
+    }
+    const tooLarge = file.bytes.length >= MAX_AUDIO_BYTES;
+    if (tooLarge) ctx.note(ROLE, `"${name}" is over 25 MB, too large to transcribe, so it has no transcript.`);
+    return [{ type: 'audio', asset: dump.asset, mime: dump.mime, name, bytes: tooLarge ? null : file.bytes, sound: dump.sound }];
   }
   const text = decodeText(file.bytes, dump.mime, name);
   if (text === null || !text.trim()) return [{ type: 'file', asset: dump.asset, mime: dump.mime, name }];
@@ -248,6 +266,36 @@ async function mediaItem(run: Run, job: Extract<Job, { type: 'media' }>): Promis
   });
 }
 
+/** A recording, described from its transcript as a text is. A transcription that fails leaves it with no transcript. */
+async function audioItem(run: Run, job: Extract<Job, { type: 'audio' }>): Promise<Item> {
+  const { ctx } = run;
+  const heard = job.bytes
+    ? await ctx.model.transcribe({ audio: job.bytes, mime: job.mime }).catch(() => {
+        ctx.note(ROLE, `Could not transcribe "${job.name}", so it has no transcript.`);
+        return '';
+      })
+    : '';
+  const transcript = heard.trim();
+  const plain = transcript ? plainly(transcript, 'recording', job.name) : { ...plainly(nameStem(job.name), 'recording', job.name), summary: `A recording dropped in as ${job.name}.` };
+  const reply = transcript
+    ? await ask(run, {
+        role: 'intake.text',
+        system: TEXT_SYSTEM,
+        user: `Dump 0 (the transcript of a recording, file name: ${job.name}):\n"""\n${middleOut(transcript, PROMPT_TEXT)}\n"""`,
+        schema: TextReply,
+      })
+    : null;
+  const entry = reply?.entries.find((e) => e.dump === 0);
+  return makeItem(ctx, {
+    kind: 'audio',
+    ...(entry ? labels(entry, plain) : plain),
+    text: transcript,
+    data: { ...(entry ? structure(entry, transcript) : {}), sound: job.sound },
+    origin: USER,
+    source: { from: 'drop', asset: job.asset },
+  });
+}
+
 function fileItem(ctx: RoleContext, job: Extract<Job, { type: 'file' }>): Item {
   const extension = /\.([A-Za-z0-9]{1,8})$/.exec(job.name)?.[1]?.toLowerCase();
   return makeItem(ctx, {
@@ -288,12 +336,13 @@ async function chatItems(run: Run, conversation: Conversation, arrival: Arrival)
     .map((t) => ({ title: squash(t.title), text: t.text.trim() }))
     .filter((t) => t.text)
     .slice(0, MAX_TAKEAWAYS)
+    .map((t) => ({ ...t, title: t.title ? fittedTitle(clip(t.title, TITLE_MAX)) : clip(firstLine(t.text), TITLE_MAX) }))
     .map((t) =>
       makeItem(ctx, {
         kind: 'text',
-        title: clip(t.title || firstLine(t.text), TITLE_MAX),
+        title: t.title,
         text: t.text,
-        summary: clip(squash(t.text), 320),
+        summary: fittedSummary(squash(t.text), t.title),
         tags: described.tags,
         data: { fromChat: chat.id },
         origin: AGENT(ROLE),

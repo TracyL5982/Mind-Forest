@@ -1,36 +1,35 @@
 import { h } from '../dom.js';
-import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, say, text, wrap } from './shared.js';
+import { COLUMN, WIDTH, aboveRows, drawFace, lay, say, text } from './shared.js';
 import { wordsOf } from '../words.js';
 
-const WIDTH = 272;
 /** The letter that names each voice, and the gap after it. */
 const MARK = 22;
-const COLUMN = WIDTH - SIDES - MARK;
 /** The rule between the question and the answer, and the room either side of it. */
 const RULE = 17;
 
 function plan(props) {
-  const question = text(props.question).trim();
-  const answer = text(props.answer).trim();
-  return { question, answer, questionLines: wrap(question, COLUMN, TITLE_LETTER, 4), answerLines: wrap(answer, COLUMN, TEXT_LETTER, 6) };
+  return { question: text(props.question).trim(), answer: text(props.answer).trim() };
 }
 
-export const shows = [];
+/** The lines the item writes over it, then the question at the title's size and, under a rule, the answer. */
+function face(item, props) {
+  const { question, answer } = plan(props);
+  const words = wordsOf(item);
+  const above = aboveRows(props, { gap: 0 });
+  return lay([
+    ...above,
+    { words: question, measure: 'title', column: COLUMN - MARK, gap: above.length > 0 ? 6 : 0, draw: (row) => voice(words.question, 'is-question', say('div', 'card-title', row.words)) },
+    { words: answer, column: COLUMN - MARK, gap: RULE, draw: (row) => voice(words.answer, 'is-answer', say('div', 'qa-answer', row.words)) },
+  ], { words });
+}
 
 export function size(item, props) {
-  const { questionLines, answerLines } = plan(props);
-  return [WIDTH, FRAME + questionLines * TITLE + RULE + answerLines * TEXT];
+  return [WIDTH, face(item, props).height];
 }
+
+export const draw = (item, props) => drawFace(face(item, props));
 
 const voice = (mark, cls, words) => h('div', { class: `qa-voice ${cls}` }, h('span', { class: 'qa-mark', 'aria-hidden': 'true', text: mark }), words);
-
-export function draw(item, props) {
-  const { question, answer, questionLines, answerLines } = plan(props);
-  return [
-    voice(wordsOf(item).question, 'is-question', say('div', `card-title clamp-${questionLines}`, question)),
-    voice(wordsOf(item).answer, 'is-answer', say('div', `qa-answer clamp-${answerLines}`, answer)),
-  ];
-}
 
 /** Both whole. A question that is the opened card's own title is not asked again. */
 export function detail(item, props) {

@@ -16,14 +16,15 @@
  *   app                open the app and connect to the service
  *   think=<text>       type a thought into the dock and wait for its picks
  *   shapes             load the Every shape tree: each card type and each arrangement. `shapes=eleven`
- *                      leaves out the fourteen types drawn from structure, to compare with a client
- *                      that does not draw them.
+ *                      leaves out the types drawn from structure or assembled from parts, the recording
+ *                      and the arrangements added after the first six, to compare with a client that
+ *                      does not draw them.
  *   chips              load the With chips tree: cards whose items carry a date, a place, people
  *                      or an origin, twins that carry none, and a timeline of cards with chips
  *   crowd=<n>          load a tree of n note cards. Default 200. `crowd=<n>:chips` gives every
  *                      other card a date and a place.
  *   card=<type>:<json> add one kept card of that type in a tree named Lane. The type is any of the
- *                      twenty-five in docs/libraries.md, or one no client knows. The card keeps the
+ *                      twenty-eight in docs/libraries.md, or one no client knows. The card keeps the
  *                      view it is given, whatever its item holds: the stand-in Renderer redraws every
  *                      other tree by the rules and leaves this one as placed. The JSON is the card's
  *                      props, or { item, props, pick } to also set the item's title, summary,
@@ -31,9 +32,11 @@
  *                      A card shows chips for what its item's data holds: card=note:{"item":{"data":{"when":"1958","where":"Rome"}}}
  *                      The step prints the card's footprint and the text of each chip.
  *   group=<kind>:<json> arrange the cards added since the last group as a gallery, timeline,
- *                      comparison, sequence, cluster or stack. The JSON is the group's props, and
+ *                      comparison, sequence, cluster, stack or layout. The JSON is the group's props, and
  *                      may hold a title. A key $0, $1, ... stands for the first, second, ... card:
  *                      group=timeline:{"title":"Years","labels":{"$0":"1958","$1":"1975","$2":"1990"}}
+ *                      A value "$0" stands for a card too, as a layout's tree names its members:
+ *                      group=layout:{"tree":{"kind":"row","label":"Two","children":[{"kind":"card","id":"$0","role":"lead"},{"kind":"card","id":"$1","role":"normal"},{"kind":"card","id":"$2","role":"minor"}]}}
  *   tree=<text>        go to the tree whose name holds this text. The field zooms out to fit it,
  *                      and never zooms in past 100 percent.
  *   zoom=<percent>     zoom the field about the middle of the page
@@ -60,7 +63,8 @@ import { parseArgs } from 'node:util';
 import { chromium, type Page } from 'playwright-core';
 import type { Command, Item, Node } from '../src/core/domain.ts';
 import type { Running } from '../src/node/server.ts';
-import { PNG, TOKEN, bootFake, browserPath, chipped, crowd, showcase, spills } from '../test/stage.ts';
+import { PNG, TOKEN, bootFake, browserPath, chipped, crowd, faceFaults, showcase, stored } from '../test/stage.ts';
+import { tones } from '../src/fake/model.ts';
 
 const { values: flags, positionals: steps } = parseArgs({
   allowPositionals: true,
@@ -127,6 +131,7 @@ function loneCard(type: string, { item: fields = {}, props = {}, pick = false }:
 
 /** Swaps a key `$n` for the id of the nth loose card, at any depth. */
 function named(value: unknown): unknown {
+  if (typeof value === 'string' && /^\$\d+$/.test(value)) return loose[Number(value.slice(1))] ?? value;
   if (Array.isArray(value)) return value.map(named);
   if (value === null || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value).map(([key, inner]) => [/^\$\d+$/.test(key) ? (loose[Number(key.slice(1))] ?? key) : key, named(inner)]));
@@ -168,7 +173,7 @@ const STEPS: Record<string, Step> = {
   },
   async shapes(value, page, run) {
     const other = [...run.mind.trees.values()][0]?.rootId;
-    if (!run.pipeline.userCommands('Add every shape', showcase(await still(page, run), other, { structured: value !== 'eleven' }))) throw new Error('the service refused the Every shape tree');
+    if (!run.pipeline.userCommands('Add every shape', showcase(await still(page, run), other, value === 'eleven' ? { structured: false } : { sound: await stored(page, run, tones(4), 'audio/wav', 'memo.wav') }))) throw new Error('the service refused the Every shape tree');
     await page.locator('.tree-chip', { hasText: 'Every shape' }).waitFor();
     await run.pipeline.idle();
   },
@@ -182,7 +187,7 @@ const STEPS: Record<string, Step> = {
     const total = Number(count) || 200;
     if (!run.pipeline.userCommands('Add a crowd', crowd(total, { chips: mode === 'chips' }))) throw new Error('the service refused the crowd');
     await page.waitForFunction((n) => document.querySelectorAll('.card[data-id^="crowd-"]').length === n, total);
-    return `${total} cards drawn, ${await page.locator('.card[data-id^="crowd-"] .chip-line').count()} with chips`;
+    return `${total} cards drawn`;
   },
   async card(value, page, run) {
     const cut = value.indexOf(':');
@@ -268,7 +273,7 @@ const STEPS: Record<string, Step> = {
   },
   async fits(_, page) {
     await settle(page);
-    const found = await spills(page);
+    const found = await faceFaults(page);
     if (found.length > 0) throw new Error(`${found.length} parts do not fit, the first is ${found[0]}`);
     return `${await page.locator('.card').count()} cards, every part fits`;
   },

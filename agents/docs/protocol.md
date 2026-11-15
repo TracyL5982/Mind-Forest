@@ -13,6 +13,7 @@ A client is anything that shows the mindstorm: the web client, the Ocean app, a 
 Five maps keyed by id: `item`, `node`, `tree`, `link`, `group`. Shapes are in `src/core/domain.ts`.
 
 - **Item.** One piece of content: `kind`, `title`, `text`, `summary`, `tags`, `data`, `source` (`from`, `url`, `asset`), `origin`.
+  - `title` is the item's whole title. A title the model wrote stands on the two lines a small card face gives a title; a source's own title, a paper's, a work's, a page's, a file's name, or one a person wrote, is kept whole. `data.shortTitle`, a string, is then what a small face shows of it: its first whole clause or words that fit two lines, with no ellipsis. It is there only when the whole title does not fit, and the service sets it again whenever the title changes. A client's small face shows `data.shortTitle` when it is there, else `title`, and its opened card shows `title`. docs/libraries.md gives the rule.
 - **Node.** An item's place in a tree: `treeId`, `itemId`, `parent` (null for a root), `status` (`kept` or `pick`), `why`, `importance` (0 to 1), `view` (`component`, `props`), `order` among siblings.
 - **Tree.** `title`, `rootId`, `digest`.
 - **Link.** A tie between two nodes, usually across trees: `a`, `b`, `why`, `strength`.
@@ -74,7 +75,7 @@ A client fetches only from the service. Every address in an item or a view that 
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `hello` | `protocol`, `snapshot`, `settings`, `undo`, `voice`, `hearing` | Sent once on connect. `settings.agentName` is what the user calls the agent, `momo` unless renamed (see Voice). `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
+| `hello` | `protocol`, `snapshot`, `settings`, `maps`, `undo`, `voice`, `hearing` | Sent once on connect. `settings.agentName` is what the user calls the agent, `momo` unless renamed (see Voice). `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `maps` is the map tile provider, `{ tiles, credit, link? }`, or null when maps are off, in which case a client asks no tile server for anything. See Maps in `docs/libraries.md`. `undo` is the label of what an undo would take back now, or null. |
 | `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. `set.seq` is exactly one more than the last `seq` the client holds, from `hello.snapshot.seq` or the previous `change`. Any other value means the client missed a change: reconnect for a fresh `hello`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
 | `activity` | `activity` | One step of the agent's work: `id`, `role`, `state` (`start`, `done`, `error`), `label`, optional `detail`, `message`, optional `nodeId`. Show a thinking mark on `nodeId` between `start` and `done`. See What the agent is doing below. |
 | `say` | `text`, `kind` | One short line for the agent to speak. `kind` is `reply`, the answer to what was just said, or `results`, what a finished piece of work brought. A client that reads no `kind` speaks both alike. See When the agent speaks below. |
@@ -112,7 +113,7 @@ The picks of a run arrive in several `change` sets before its `say`: what the us
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `dump` | `dumps` | Things dropped into the mindstorm. Each is `{kind:'text', text, name?}`, `{kind:'link', url}`, or `{kind:'asset', asset, mime, name?}`. Upload files first (below). They join the knowledge base, and start a tree only when a text asks for one (see The knowledge base). |
+| `dump` | `dumps` | Things dropped into the mindstorm. Each is `{kind:'text', text, name?}`, `{kind:'link', url}`, or `{kind:'asset', asset, mime, name?, sound?}`. Upload files first (below). A recording (a `mime` that starts `audio/`) carries `sound: {seconds, peaks}`, which the client measured when it decoded the file, because the service never decodes sound: see the audio card in `docs/libraries.md`. A recording sent with no `sound` is filed by name. They join the knowledge base, and start a tree only when a text asks for one (see The knowledge base). |
 | `utter` | `text`, `final`, `scene` | Speech as text. Send partials with `final: false` as they arrive and the last one with `final: true`. A leading wake phrase is dropped before the service acts, and an utterance that is only the phrase asks nothing (see Voice). |
 | `focus` | `nodeId` | The user opened or looked at a node, to see it whole. It brings no picks. "Start a tree on this" means this node from now on, rather than the latest drop. |
 | `ask` | `nodeId`, `need` | A typed or picked question about a node. It joins the conversation the agent reads, as a spoken one does. What it brings joins the node's round (see Rounds). |
@@ -171,4 +172,3 @@ The user wakes the agent by saying "hey" or "hi" and its name, `settings.agentNa
 - Does not listen while a reply is playing.
 
 The service drops a leading wake phrase from `/api/transcribe` replies and from `utter` text: "hey" or "hi", then the name, in any case, with any punctuation around them and a space or hyphen allowed inside the name ("Hi, Mo-mo!"). "Hey Momo, undo that" is acted on as "Undo that". The phrase anywhere else, or another greeting ("hello Momo"), is left as it was.
-

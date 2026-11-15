@@ -1,5 +1,7 @@
 /**
- * Times the two pure passes every item goes through on its way to a card:
+ * Times the two pure passes every item goes through on its way to a card.
+ * An item whose card names a value or shows a passage says it in its text, as an item Intake built does, so the rule pass reads the words too.
+ * The passes are:
  * Intake's `structure()` over 500 descriptions, and the Renderer's rule pass over 500 items.
  * `structure()` is timed twice: over descriptions that fill every kind of field, and over ones that fill only
  * the fields the first version of Intake read, which is the like-for-like figure across checkouts.
@@ -60,25 +62,25 @@ const SAID: ((n: number) => Partial<typeof EMPTY>)[] = [
 ];
 
 const DRAWN: ((n: number) => Partial<Item>)[] = [
-  () => ({ data: { chart: { labels: ['1960s', '1980s', '2000s'], values: [3, 9, 14], unit: 'films' } } }),
+  () => ({ text: 'Films by decade.\n1960s: 3 films\n1980s: 9 films\n2000s: 14 films', data: { chart: { labels: ['1960s', '1980s', '2000s'], values: [3, 9, 14], unit: 'films' } } }),
   () => ({ data: { steps: ['Pull back', 'Zoom in', 'Hold the subject size'] } }),
-  () => ({ data: { quote: { text: 'Salt it like the sea', by: 'Nonna' } } }),
+  () => ({ text: 'Nonna said, "Salt it like the sea."', data: { quote: { text: 'Salt it like the sea', by: 'Nonna' } } }),
   () => ({ data: { person: { name: 'Ana Lima', role: 'Editor' } } }),
-  () => ({ data: { facts: [{ label: 'viewers who notice it', value: '70%' }] } }),
+  () => ({ text: 'About 70% of the viewers who notice it look away.', data: { facts: [{ label: 'viewers who notice it', value: '70%' }] } }),
   (n) => ({ kind: 'image', summary: 'A stairwell seen from above.', source: { from: 'drop', asset: `asset-${n}`, capturedAt: '2026-11-14T00:00:00.000Z' } }),
   (n) => ({ kind: 'link', summary: 'A long read.', data: { site: 'example.com' }, source: { from: 'link', url: `https://example.com/read-${n}`, capturedAt: '2026-11-14T00:00:00.000Z' } }),
   () => ({ kind: 'chat', data: { messages: [{ role: 'user', text: 'Why does the room stretch?' }, { role: 'assistant', text: 'The lens zooms in while the camera pulls back.' }] } }),
   () => ({ data: { pros: ['fast builds'], cons: ['a steep start'], table: { heads: ['Plan', 'Price'], rows: [['Solo', '$8']] } } }),
   (n) => ({ text: pasted(n) }),
-  () => ({ data: { chart: { labels: ['Rent', 'Food', 'Other'], values: [50, 30, 20], unit: '%' } } }),
+  () => ({ text: 'Rent: 50%\nFood: 30%\nOther: 20%', data: { chart: { labels: ['Rent', 'Food', 'Other'], values: [50, 30, 20], unit: '%' } } }),
   () => ({ data: { table: { heads: ['Plan', 'Price', 'Seats'], rows: [['Solo', '$8', '1'], ['Team', '$20', '5'], ['Org', '$1,200', '100']] } } }),
   () => ({ data: { items: ['the tent', 'the stove', 'the map'], checklist: [true, false, true] } }),
   () => ({ data: { question: 'Why is the sky blue?', answer: 'Air scatters short wavelengths the most.' } }),
-  () => ({ data: { term: 'Parallax', definition: 'the apparent shift of an object when the viewer moves' } }),
-  () => ({ data: { excerpt: { text: 'Every stair keeps the weight of who climbed it.', at: 'Chapter 3' }, site: 'example.com' } }),
+  () => ({ text: 'Parallax: the apparent shift of an object when the viewer moves.', data: { term: 'Parallax', definition: 'the apparent shift of an object when the viewer moves' } }),
+  () => ({ text: 'Every stair keeps the weight of who climbed it.', data: { excerpt: { text: 'Every stair keeps the weight of who climbed it.', at: 'Chapter 3' }, site: 'example.com' } }),
   () => ({ data: { pros: ['fast builds', 'one small binary'], cons: ['a steep start'] } }),
   () => ({ data: { colours: [{ name: 'Ember', value: '#E4572E' }, { name: 'Lagoon', value: '#17BEBB' }, { name: 'navy', value: 'navy' }] } }),
-  () => ({ data: { facts: [{ label: 'Seats', value: '100' }, { label: 'Price', value: '$1,200' }, { label: 'Plan', value: 'Org' }] } }),
+  () => ({ text: 'Seats: 100\nPrice: $1,200\nPlan: Org', data: { facts: [{ label: 'Seats', value: '100' }, { label: 'Price', value: '$1,200' }, { label: 'Plan', value: 'Org' }] } }),
   (n) => ({
     kind: 'image', origin: { by: 'agent', role: 'scout' }, data: { kind: 'artwork', by: 'Ilse Brandt', date: '1928', medium: 'Gelatin silver print', holder: 'The Example Museum of Art' },
     source: { from: 'web', url: `https://museum.example/works/${n}`, asset: `asset-${n}`, capturedAt: '2026-11-14T00:00:00.000Z' },

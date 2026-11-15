@@ -27,6 +27,17 @@ export interface WebResult {
   snippet: string;
 }
 
+/**
+ * The model answered, and its answer is not of the schema asked for: empty, no JSON, or of another shape. A smaller question may
+ * be answered where this one was not. A request that got no answer, as after a timeout or a lost connection, fails with any other error.
+ */
+export class Unreadable extends Error {
+  /** For a role whose reply did not parse, or broke the schema where these issues say. */
+  constructor(role: string, why: string | { path: PropertyKey[]; message: string }[]) {
+    super(`${role}: the reply is unreadable (${typeof why === 'string' ? why : why.slice(0, 2).map(({ path, message }) => `${path.join('.') || 'reply'}: ${message}`).join('; ')})`);
+  }
+}
+
 /** The model. Hosts provide the real one; tests provide a scripted one. */
 export interface ModelClient {
   /** One reply, constrained to the schema and parsed. */
@@ -72,8 +83,10 @@ export interface Found {
   /** The collection or channel it came from, when that is narrower than the source. */
   from?: string;
   image?: string;
-  /** Audio or video that plays in place. */
+  /** A recording that plays in place, such as a podcast episode or a film. */
   media?: string;
+  /** How long `media` plays, in seconds, when the source says. */
+  seconds?: number;
   steps?: string[];
   chart?: { labels: string[]; values: number[]; unit?: string };
   /** What kind of thing the record is, when its source knows. */
@@ -134,6 +147,20 @@ export interface Tools {
   code: {
     generate(prompt: string): Promise<{ title: string; language: string; source: string }>;
   };
+  /** Present only when maps are switched on, because a lookup sends a place's name off the machine. */
+  geocoder?: Geocoder;
+}
+
+/** A point on the earth in degrees, as GPS gives it: `lat` from -90 to 90, north positive, and `lon` from -180 to 180, east positive. */
+export interface LatLon {
+  lat: number;
+  lon: number;
+}
+
+/** Finds where a named place is. */
+export interface Geocoder {
+  /** Null when the place is not known or the lookup failed. Never throws. */
+  locate(name: string): Promise<LatLon | null>;
 }
 
 export interface Assets {

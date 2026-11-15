@@ -17,6 +17,9 @@
 #include "art.h"
 #include "bend.h"
 
+/// NOTE(port): added for Quest. How far the open face stands in front of the small one, m (see the constructor).
+constexpr float openLift = 0.0015f;
+
 /// One node of the standing tree as it appears: a small card that can grow,
 /// in place, into its open form. Its origin is the middle of its picture (or
 /// panel, or label), so growing never shifts it.
@@ -77,6 +80,12 @@ public:
     double goneAt = std::numeric_limits<double>::infinity();
     std::optional<int> home;            // its film's or work's place in the ocean
     EntityRef picture;                  // an open work's picture
+    // NOTE(port): added for Quest (core/cards). An open card's frame; the panel that scrolls in its window,
+    // and the bar that says where; and, while a pinch held still has armed a mark, what it will mark.
+    EntityRef openFace;
+    EntityRef openPanel;
+    EntityRef scrollBar;
+    EntityRef armHolder;
     bool pictureFull = false;           // … shown from its own file (asked for, or there), not from the atlas
     bool step = false;                  // it is a layer's first card, standing on the path
     bool lit = true;                    // it glows while it is on the layer you work on
@@ -200,6 +209,15 @@ public:
     void loop(std::optional<Span> range);
 
     void hide();
+
+    // NOTE(port): added for Quest. Something drawn just in front of the film, which shows and goes with it:
+    // the round corners of an agent's card's poster (core/cards).
+    void cover(const EntityRef& e);
+
+private:
+    EntityRef covering;
+
+public:
 
     /// Shows the picture once it is really running, so the still never
     /// gives way to a black frame.

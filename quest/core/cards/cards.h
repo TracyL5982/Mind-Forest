@@ -18,14 +18,15 @@ namespace cards {
 
 /// What the tree says of a card besides its view and its item.
 struct Node {
-    /// `node.status == "pick"`: amber, a dashed edge, a darker face.
+    /// `node.status == "pick"`: a dashed edge, a darker face and a SUGGESTED kicker.
     bool pick = false;
     /// The first card of a tree (`node.parent` is null): a lighter face and a white edge.
     bool root = false;
     /// `node.why`, which the opened card says.
     std::string why;
-    /// The tree's colour for this card (the web's `store.view.colour`). Its marks take it.
-    Color accent = palette::trunk;
+    /// The tone of the card's place in the tree, as its thread is drawn (`TreeNode::tone`). Its marks take
+    /// the tone's colour, where the web's take the tree's.
+    Tone tone = Tone::note;
 };
 
 /// The footprint the web gives this view and item, px.
@@ -52,15 +53,33 @@ struct Drawn {
     CGSize size;
     std::function<void(Canvas&)> draw;
 };
-/// The opened card: also the text a hand can mark and where its picture is.
-struct Opened : Drawn {
+/// The opened card: a frame of a fixed size, and the whole panel (panel.js) drawn once, which shows through
+/// a window in the frame and scrolls there.
+struct Opened {
+    std::string key;
+    /// The frame, pixels: the card's open size.
+    CGSize size;
+    /// Where the panel shows inside the frame, pixels, clear of the frame's round corners.
+    CGRect window;
+    /// The whole panel, pixels tall; as wide as the frame.
+    float contentTall = 0;
+    /// The text a hand can mark, and where its picture is, pixels on the panel.
     std::vector<Run> runs;
     std::optional<CGRect> picture;
+    /// Draws the frame, and the whole panel, each into a picture of its own.
+    std::function<void(Canvas&)> frame, content;
 };
 /// A note's card small, `k` pixels to a web px.
 std::optional<Drawn> small(const std::string& noteID, float k);
-/// A note's card opened, `k` pixels to a web px.
-std::optional<Opened> opened(const std::string& noteID, float k);
+/// A note's card opened in a frame `viewTall` px tall, its pictures at most `pictureTall` px, `k` pixels to a web px.
+/// It is laid out once and kept until the card is put again: a picture that comes later moves nothing.
+std::optional<Opened> opened(const std::string& noteID, float k, float viewTall, float pictureTall);
+/// Rises each time a note's card is put anew, and not when a picture comes; 0 for a note with no card.
+int generation(const std::string& noteID);
+/// The type a note's card is drawn as.
+const Kind* kindOf(const std::string& noteID);
+/// The width over the height of the first picture a note's card shows, as first known: its own, `props.aspect`, or the web's 1.35.
+std::optional<float> pictureAspect(const std::string& noteID);
 /// Its footprint, px.
 std::optional<Footprint> footprintOf(const std::string& noteID);
 /// Rises each time what a note's card draws changes; 0 for a note with no card.

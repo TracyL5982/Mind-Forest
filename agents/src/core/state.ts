@@ -15,7 +15,9 @@ import {
   type Snapshot,
   type Tree,
 } from './domain.ts';
+import { withShortTitle } from './roles/types.ts';
 import { SearchIndex, type Hit } from './search.ts';
+import { isValidGroup, MEMBERS, type CompositeId } from './views.ts';
 
 export interface Draft {
   origin: Origin;
@@ -321,10 +323,12 @@ export class Mindstorm {
           throw new CommandError('conflict', `item ${c.id} is at revision ${item.revision}, not ${c.expectRevision}`);
         }
         const { data, ...rest } = c.patch;
+        const merged = data ? { ...item.data, ...data } : item.data;
         this.put('item', {
           ...item,
           ...defined(rest),
-          data: data ? { ...item.data, ...data } : item.data,
+          // A new title brings its own short title for a small face, or none when it fits whole.
+          data: rest.title === undefined ? merged : withShortTitle(merged, rest.title),
           revision: item.revision + 1,
         });
         return;
@@ -379,7 +383,18 @@ export class Mindstorm {
             throw new CommandError('invalid', `node ${id} is not in tree ${c.group.treeId}`);
           }
         }
-        if (members.length < 2) throw new CommandError('invalid', 'a group needs at least two members');
+        const composite = c.group.composite as CompositeId;
+        if (!Object.hasOwn(MEMBERS, composite)) throw new CommandError('invalid', `no composite is called ${c.group.composite}`);
+        const [fewest, most] = MEMBERS[composite];
+        if (members.length < fewest || members.length > most) {
+          throw new CommandError('invalid', `a ${composite} holds ${most === Infinity ? `at least ${fewest}` : fewest === most ? fewest : `${fewest} to ${most}`} members, not ${members.length}`);
+        }
+        if (!isValidGroup(c.group)) throw new CommandError('invalid', `the props of a ${composite} are not what it takes`);
+        if (new Set(members.map((id) => this.node(id).status)).size > 1) throw new CommandError('invalid', 'a group holds picks or kept cards, never both');
+        for (const group of this.maps.group.values()) {
+          const shared = group.id !== c.group.id && members.find((id) => group.members.includes(id));
+          if (shared) throw new CommandError('invalid', `node ${shared} is already in group ${group.id}`);
+        }
         this.put('group', { ...c.group, members });
         return;
       }

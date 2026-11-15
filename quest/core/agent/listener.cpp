@@ -23,9 +23,8 @@ constexpr int pause = 12;
 constexpr int nothingSaid = 80;
 constexpr int longest = 600;
 constexpr int echo = 3;
-/// The chime plays as the recording starts, and the headset's microphone has no echo cancelling to take it out. It
-/// is not taken for speech: it starts up to a few tenths of a second after the name is spotted and lasts a quarter second.
-constexpr int chimeHeard = 6;
+/// The chime lasts a quarter second; one that never says it ended is taken to have ended after this.
+constexpr int longestChime = 10;
 /// A reply that never says it ended stops holding the listener after this long.
 constexpr int longestReply = 900;
 
@@ -45,7 +44,7 @@ Listener::Listener(std::unique_ptr<Spotter> spotter) : spotter(std::move(spotter
 Listener::State Listener::state() const {
     if (std::holds_alternative<Recording>(phase)) return State::hearing;
     if (std::holds_alternative<Working>(phase)) return State::working;
-    return reply.kind == Reply::Kind::none ? State::waiting : State::speaking;
+    return reply.kind == Own::Kind::none ? State::waiting : State::speaking;
 }
 
 std::vector<Listener::Event> Listener::hear(const float* samples, size_t count) {
@@ -71,11 +70,18 @@ void Listener::hearPiece(Piece p, std::vector<Event>& events) {
     State now = state();
     if (now == State::waiting) spot(piece, events);
     else if (now == State::hearing) record(piece, events);
-    if (reply.kind != Reply::Kind::none) {
-        reply.pieces++;
-        if (reply.pieces >= (reply.kind == Reply::Kind::echo ? echo : longestReply)) reply = Reply{};
+    chiming.tick(longestChime);
+    if (reply.kind != Own::Kind::none) {
+        reply.tick(longestReply);
         settle();
     }
+}
+
+void Listener::Own::tick(int longest) {
+    if (kind == Kind::none) return;
+    pieces++;
+    if (kind == Kind::playing && pieces >= longest) *this = Own{Kind::echo, 0};
+    else if (kind == Kind::echo && pieces >= echo) *this = Own{};
 }
 
 void Listener::spot(const Piece& piece, std::vector<Event>& events) {
@@ -135,7 +141,7 @@ void Listener::record(const Piece& piece, std::vector<Event>& events) {
     r.pieces.push_back(piece);
     r.sinceWake++;
     r.quietest = std::min(r.quietest, piece.level);
-    if (r.sinceWake > chimeHeard && speech(piece.level, r.quietest)) {
+    if (chiming.kind == Own::Kind::none && speech(piece.level, r.quietest)) {
         r.spoke = true;
         r.lastVoice = r.sinceWake;
     }
@@ -144,8 +150,8 @@ void Listener::record(const Piece& piece, std::vector<Event>& events) {
     if (!paused && !silent && r.sinceWake < longest) return;
     if (!r.spoke) {
         phase = Between{};
-        settle();
         events.push_back(NothingSaid{});
+        ended(events);
         return;
     }
     std::vector<float> samples;
@@ -153,8 +159,17 @@ void Listener::record(const Piece& piece, std::vector<Event>& events) {
     for (const Piece& p : r.pieces) samples.insert(samples.end(), p.samples.begin(), p.samples.end());
     Recorded done{wavFile(samples), double(r.pieces.size()) / 10};
     phase = Working{};
-    settle();
     events.push_back(std::move(done));
+    ended(events);
+}
+
+void Listener::ended(std::vector<Event>& events) {
+    if (replyHeld) {
+        replyHeld = false;
+        reply = Own{Own::Kind::playing, 0};
+        events.push_back(Speak{});
+    }
+    settle();
 }
 
 void Listener::done() {
@@ -163,14 +178,31 @@ void Listener::done() {
     settle();
 }
 
-void Listener::replyPlaying(bool playing) {
-    reply = Reply{playing ? Reply::Kind::playing : Reply::Kind::echo, 0};
+bool Listener::askToSpeak() {
+    if (std::holds_alternative<Recording>(phase)) {
+        replyHeld = true;
+        return false;
+    }
+    reply = Own{Own::Kind::playing, 0};
+    settle();
+    return true;
+}
+
+void Listener::replyEnded() {
+    reply = Own{Own::Kind::echo, 0};
     settle();
 }
 
-void Listener::respell(std::unique_ptr<Spotter> next) {
-    spotter = std::move(next);
+void Listener::chimeStarted() { chiming = Own{Own::Kind::playing, 0}; }
+
+void Listener::chimeEnded() {
+    if (chiming.kind == Own::Kind::playing) chiming = Own{Own::Kind::echo, 0};
+}
+
+std::unique_ptr<Spotter> Listener::respell(std::unique_ptr<Spotter> next) {
+    std::swap(spotter, next);
     if (state() == State::waiting) listen();
+    return next;
 }
 
 void Listener::listen() {
