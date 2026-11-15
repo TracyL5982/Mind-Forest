@@ -67,11 +67,18 @@ def spotter(model, keywords_file, threshold, boost, trailing):
 
 
 def hear(kws, audio):
-    """Seconds into `audio` at which the phrase was spotted, each with the keyword."""
+    """Seconds into `audio` at which the phrase was spotted, each with the keyword.
+    Like the web client, a fresh stream starts after each second without speech, before the spotter clears itself (scripts/wake-quiet.py)."""
     stream = kws.create_stream()
-    heard = []
+    heard, ring, quiet = [], [], 0.0
     for start in range(0, len(audio), PIECE):
-        stream.accept_waveform(RATE, audio[start : start + PIECE])
+        piece = audio[start : start + PIECE]
+        loud = float(np.sqrt((piece ** 2).mean()))
+        ring = (ring + [loud])[-30:]
+        quiet = 0.0 if loud > max(0.015, 3 * min(ring)) else quiet + 0.1
+        if quiet >= 1.0:
+            stream, quiet = kws.create_stream(), 0.0
+        stream.accept_waveform(RATE, piece)
         while kws.is_ready(stream):
             kws.decode_stream(stream)
             word = kws.get_result(stream)

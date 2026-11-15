@@ -136,7 +136,7 @@ function receive(message) {
     }
     case 'say':
       caption('librarian', message.text);
-      if (!muted) speak(message.text, voiced ? conn.speechUrl(message.text) : null);
+      if (!muted) reply(message.text);
       return;
     case 'heard':
       caption('you', message.text, { faint: !message.final });
@@ -280,7 +280,6 @@ $('talk').addEventListener('submit', (e) => {
 const agentName = () => (store.settings?.agentName ?? 'momo').trim().replace(/(^|\s)(\p{L})/gu, (_, gap, letter) => gap + letter.toUpperCase());
 /** null when the page can listen for the name, otherwise why not. Undefined until the microphone is first pressed. */
 let cannotListen;
-let toldWhy = false;
 let micState = 'off';
 
 const MIC = {
@@ -311,8 +310,21 @@ const voice = new Voice({
   transcribe: (blob) => conn.transcribe(blob, currentTree()),
 });
 
+/** A reply that arrives while the user is being recorded waits until the recording ends, so it is not recorded into what they say. */
+let waitingReply = null;
+function reply(text) {
+  if (handsFree.state === 'hearing') waitingReply = text;
+  else speak(text, voiced ? conn.speechUrl(text) : null);
+}
+
 const handsFree = new HandsFree({
-  onState: showMic,
+  onState: (state) => {
+    showMic(state);
+    if (state === 'hearing' || waitingReply === null) return;
+    const text = waitingReply;
+    waitingReply = null;
+    if (!muted) reply(text);
+  },
   onProblem: toast,
   onRecorded: async (blob) => {
     try {
@@ -332,11 +344,13 @@ window.handsFreeBusy = () => handsFree.busy();
 $('mic').addEventListener('click', async () => {
   if (cannotListen === undefined) {
     cannotListen = await wakeProblem();
-    if (cannotListen) showMic('idle');
+    // The press asked for hands-free listening, not a recording, so it only says why that is off.
+    if (cannotListen) {
+      showMic('idle');
+      return toast(`This page cannot listen for "Hey ${agentName()}": ${cannotListen}. Tap the microphone again to talk once.`);
+    }
   }
   if (cannotListen === null) return handsFree.on ? handsFree.stop() : handsFree.start(agentName());
-  if (!toldWhy) toast(`This page cannot listen for "Hey ${agentName()}": ${cannotListen}. Tap the microphone each time you talk.`);
-  toldWhy = true;
   voice.toggle();
 });
 

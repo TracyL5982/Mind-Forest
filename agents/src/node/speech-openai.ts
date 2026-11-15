@@ -4,15 +4,20 @@ const MANNER = 'Warm, calm and unhurried, like a friend who knows a lot and is g
 
 export type Speak = (text: string, signal: AbortSignal) => Promise<ReadableStream<Uint8Array>>;
 
+/** How long OpenAI may take to start answering before a reply is given up, so a stalled reply does not keep a client's microphone waiting. */
+const FIRST_BYTE_MS = 15000;
+
 /** Spoken replies from OpenAI's speech model, as MP3 that arrives while it is made, so playback starts early. */
-export function openaiSpeech(send: typeof fetch, opts: { apiKey: string; model?: string; voice?: string }): Speak {
+export function openaiSpeech(send: typeof fetch, opts: { apiKey: string; model?: string; voice?: string; firstByteMs?: number }): Speak {
   return async (text, signal) => {
+    const late = new AbortController();
+    const timer = setTimeout(() => late.abort(new Error('OpenAI speech did not answer in time')), opts.firstByteMs ?? FIRST_BYTE_MS);
     const res = await send('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: opts.model || SPEECH_MODEL, voice: opts.voice || SPEECH_VOICE, input: text, instructions: MANNER, response_format: 'mp3' }),
-      signal,
-    });
+      signal: AbortSignal.any([signal, late.signal]),
+    }).finally(() => clearTimeout(timer));
     if (!res.ok || !res.body) throw new Error(`OpenAI speech answered ${res.status}`);
     return res.body;
   };

@@ -161,7 +161,10 @@ function spot(piece) {
  * Starts the recording one piece before the phrase, so what follows it is kept whole and what came before stays here.
  * The spotter's timestamps place the phrase only by its span: they restart after 1.5 seconds of quiet while `start_time` does not move.
  * From the latest the phrase can have begun, the start is moved back to where its sound begins, or forward past quiet to it.
- * A short command said straight after the name ("hey Momo, more") can end before the name is spotted, so sound in the last piece counts as speech.
+ * A short command said straight after the name ("hey Momo, more") can end before the name is spotted. So speech after the phrase counts, and the
+ * pause that ends the recording is timed from it. The phrase ends at the first dip once its span has passed, since its first word piece
+ * is reported after its sound begins and its last near the end. A dip is a piece under a fifth of the phrase's loudest, as a quick speaker may not go quiet,
+ * and only a piece as loud as that after the dip is a word, so the fading end of "Momo" is not taken for one.
  */
 function wake(result) {
   const times = result.timestamps ?? [];
@@ -176,7 +179,12 @@ function wake(result) {
   }
   const pieces = ring.slice(Math.max(0, start - 1));
   const quietest = Math.min(...pieces.map(level));
-  heard = { pieces, quietest, spoke: speech(pieces.at(-1), quietest), sinceWake: 0, lastVoice: 0 };
+  let phraseEnd = start + Math.max(0, Math.round(span / PIECE_S) - 1);
+  const dip = Math.max(...ring.slice(start, phraseEnd + 1).map(level)) / 5;
+  while (phraseEnd < ring.length && level(ring[phraseEnd]) >= dip) phraseEnd++;
+  let lastVoice = -Infinity;
+  for (let i = phraseEnd + 1; i < ring.length; i++) if (level(ring[i]) >= dip) lastVoice = (i + 1 - ring.length) * PIECE_S;
+  heard = { pieces, quietest, spoke: lastVoice > -Infinity, sinceWake: 0, lastVoice };
   mode = 'hearing';
   self.postMessage({ t: 'wake', keyword: result.keyword, beforeS: pieces.length * PIECE_S });
 }

@@ -7,7 +7,7 @@ import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running, type ServerOptions } from '../src/node/server.ts';
-import type { Hints } from '../src/node/speech-openai.ts';
+import { openaiSpeech, type Hints } from '../src/node/speech-openai.ts';
 
 interface Msg {
   t: string;
@@ -238,4 +238,12 @@ test('the agent is called Momo until renamed, and a leading "hey" and its name a
   later.ws.close();
   c.ws.close();
   await run.close();
+});
+
+test('a spoken reply that OpenAI never starts answering is given up', { timeout: 2000 }, async () => {
+  const stalled: typeof fetch = (_url, init) => new Promise((_, failed) => init!.signal!.addEventListener('abort', () => failed(init!.signal!.reason)));
+  const speak = openaiSpeech(stalled, { apiKey: 'key', firstByteMs: 50 });
+  const started = Date.now();
+  await assert.rejects(speak('Looking into that.', new AbortController().signal), /did not answer in time/);
+  assert.ok(Date.now() - started < 1000);
 });

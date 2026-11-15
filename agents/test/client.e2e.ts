@@ -36,6 +36,8 @@ function browserPath(): string {
 }
 
 let passed = 0;
+/** With E2E_KEEP_GOING=1 a failed check is reported and the rest still run, to see every check that fails on older code. */
+const failed: string[] = [];
 async function check(name: string, run: () => Promise<void>): Promise<void> {
   try {
     await run();
@@ -43,7 +45,9 @@ async function check(name: string, run: () => Promise<void>): Promise<void> {
     console.log(`ok   ${name}`);
   } catch (err) {
     console.log(`FAIL ${name}`);
-    throw err;
+    if (!process.env.E2E_KEEP_GOING) throw err;
+    console.log(`     ${String(err instanceof Error ? err.message : err).split('\n')[0]}`);
+    failed.push(name);
   }
 }
 
@@ -465,10 +469,10 @@ async function main(): Promise<void> {
  * A spoken clip for the fake microphone, made with a macOS voice: quiet, the words, then quiet for the page to notice the pause.
  * The quiet is a faint hiss, 60 dB below full scale, as a real room is never silent.
  */
-function spoken(text: string, dir: string, quietFirst = 1): string {
+function spoken(text: string, dir: string, quietFirst = 1, wordsPerMinute?: number): string {
   const aiff = join(dir, 'clip.aiff');
-  const wav = join(dir, `${text.replace(/\W+/g, '-').slice(0, 30)}.wav`);
-  execFileSync('say', ['-v', 'Samantha', '-o', aiff, text]);
+  const wav = join(dir, `${text.replace(/\W+/g, '-').slice(0, 30)}-${quietFirst}-${wordsPerMinute ?? 'usual'}.wav`);
+  execFileSync('say', ['-v', 'Samantha', ...(wordsPerMinute ? ['-r', String(wordsPerMinute)] : []), '-o', aiff, text]);
   execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1', aiff, join(dir, 'speech.wav')]);
   const speech = readFileSync(join(dir, 'speech.wav'));
   const pcm = speech.subarray(speech.indexOf('data') + 8);
@@ -511,9 +515,14 @@ const STAND_IN_PIECES: [string, number][] = [
  * It cannot tell words apart: it "hears the phrase" at the first sound that lasts 0.6 seconds, and places the phrase where that sound began.
  * It keeps the keywords the page gave it, so the check can read them.
  */
-function standInClient(dir: string): string {
-  const client = join(dir, 'client');
+function clientWithout(dir: string, name: string): string {
+  const client = join(dir, name);
   cpSync(join(here, '../client'), client, { recursive: true, filter: (from) => !from.includes('/vendor') });
+  return client;
+}
+
+function standInClient(dir: string): string {
+  const client = clientWithout(dir, 'stand-in');
   const vendor = join(client, 'vendor/sherpa-onnx');
   mkdirSync(vendor, { recursive: true });
   const varint = (n: number) => {
@@ -555,70 +564,114 @@ function standInClient(dir: string): string {
   return client;
 }
 
-/**
- * The page listening for its name, with a clip played into a fake microphone. Needs macOS's `say`.
- * With the listener files (npm run fetch-wake), the real spotter hears the clips. Without them a stand-in does, which tests the page's half only,
- * and the check that needs the real spotter to tell words apart is skipped and says so.
- */
-async function wakeChecks(): Promise<void> {
-  const real = existsSync(join(here, '../client/vendor/sherpa-onnx/versions.json'));
-  const dir = mkdtempSync(join(tmpdir(), 'mp-wake-'));
+/** What the service was sent, judged by its loudness in tenths of a second. */
+interface Upload {
+  mime: string;
+  seconds: number;
+  /** Seconds of quiet before the first sound. */
+  quietFirst: number;
+  /** Stretches of sound with at least 0.2 seconds of quiet between them. */
+  sounds: number;
+  loudest: number;
+}
+
+function upload(audio: Uint8Array, mime: string): Upload {
+  const samples = new Int16Array(audio.slice(44).buffer);
+  const level = (from: number, to: number) => Math.sqrt(samples.slice(from, to).reduce((sum, s) => sum + (s / 32768) ** 2, 0) / Math.max(1, to - from));
+  const loud = Array.from({ length: Math.floor(samples.length / 1600) }, (_, i) => level(i * 1600, (i + 1) * 1600) >= 0.01);
+  const sounds = loud.filter((on, i) => on && !loud[i - 1] && !loud[i - 2]).length;
+  return { mime, seconds: samples.length / 16000, quietFirst: loud.indexOf(true) / 10, sounds, loudest: Math.max(...loud.map((_, i) => level(i * 1600, (i + 1) * 1600))) };
+}
+
+/** A service whose transcriber hears "Hey Momo, show me more like this." in anything, and keeps what it was sent and what the Conductor acted on. */
+async function listeningService(dir: string, clientDir: string) {
   const acted: string[] = [];
-  const posted: { mime: string; seconds: number; quietFirst: number; loudest: number }[] = [];
+  const posted: Upload[] = [];
   const server = await startServer({
-    port: 0, host: '127.0.0.1', dataDir: join(dir, 'data'), clientDir: real ? join(here, '../client') : standInClient(dir), model: new FakeModel(), token: 'secret',
+    port: 0, host: '127.0.0.1', dataDir: mkdtempSync(join(dir, 'data-')), clientDir, model: new FakeModel(), token: 'secret',
     roles: { ...fakeRoles, conductor: async (ctx, input) => (acted.push(input.utterance), fakeRoles.conductor(ctx, input)) },
     transcribe: async (audio, mime) => {
-      const samples = new Int16Array(audio.slice(44).buffer);
-      const level = (from: number, to: number) => Math.sqrt(samples.slice(from, to).reduce((sum, s) => sum + (s / 32768) ** 2, 0) / Math.max(1, to - from));
-      const tenths = Array.from({ length: Math.floor(samples.length / 1600) }, (_, i) => level(i * 1600, (i + 1) * 1600));
-      const firstSound = tenths.findIndex((l) => l >= 0.01);
-      posted.push({ mime, seconds: samples.length / 16000, quietFirst: firstSound / 10, loudest: Math.max(...tenths) });
+      posted.push(upload(audio, mime));
       return 'Hey Momo, show me more like this.';
     },
   });
   await server.pipeline.dump([{ kind: 'text', text: 'Sourdough rises slowly in winter' }]);
   await server.pipeline.idle();
-  const open = async (clip: string) => {
-    const browser = await chromium.launch({
-      executablePath: browserPath(), headless: true,
-      args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${clip}%noloop`, '--autoplay-policy=no-user-gesture-required'],
-    });
-    const page = await browser.newPage();
-    const problems: string[] = [];
-    page.on('console', (m) => { if (m.type() === 'error') problems.push(m.text()); });
-    page.on('pageerror', (err) => problems.push(String(err)));
-    await page.goto(`${server.url}/#token=secret`);
-    await page.locator('#status[data-state="live"]').waitFor();
-    await page.evaluate(() => {
-      const seen: string[] = [];
-      (window as unknown as { micStates: string[] }).micStates = seen;
-      new MutationObserver(() => seen.push(document.querySelector('#mic')!.getAttribute('data-state')!)).observe(document.querySelector('#mic')!, { attributes: true, attributeFilter: ['data-state'] });
-    });
-    /** The mic's states since it was pressed, each run of one state counted once. */
-    const states = async () => {
-      const seen = await page.evaluate(() => (window as unknown as { micStates: string[] }).micStates);
-      return seen.slice(seen.indexOf('starting')).filter((state, i, all) => state !== all[i - 1]);
-    };
-    return { browser, page, problems, states };
+  return { server, acted, posted };
+}
+
+/**
+ * A page of `server` in a browser whose microphone plays `clip`. `micStates()` lists the mic's states since it was first pressed.
+ * With `holdMicMs`, the page's microphone requests are counted (`asked`), held that long like a permission prompt, and their streams kept (`opened`).
+ */
+async function openWithMicrophone(server: Running, clip: string, holdMicMs?: number) {
+  const browser = await chromium.launch({
+    executablePath: browserPath(), headless: true,
+    args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${clip}%noloop`, '--autoplay-policy=no-user-gesture-required'],
+  });
+  const page = await browser.newPage();
+  const problems: string[] = [];
+  page.on('console', (m) => { if (m.type() === 'error') problems.push(m.text()); });
+  page.on('pageerror', (err) => problems.push(String(err)));
+  if (holdMicMs !== undefined) await page.addInitScript(watchMicrophone, holdMicMs);
+  await page.goto(`${server.url}/#token=secret`);
+  await page.locator('#status[data-state="live"]').waitFor();
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { micStates: string[] }).micStates = seen;
+    new MutationObserver(() => seen.push(document.querySelector('#mic')!.getAttribute('data-state')!)).observe(document.querySelector('#mic')!, { attributes: true, attributeFilter: ['data-state'] });
+  });
+  const micStates = async () => {
+    const seen = await page.evaluate(() => (window as unknown as { micStates: string[] }).micStates);
+    return seen.slice(seen.indexOf('starting')).filter((state, i, all) => state !== all[i - 1]);
   };
+  const mic = () => page.getAttribute('#mic', 'data-state');
+  return { browser, page, problems, micStates, mic };
+}
+
+/** Runs in the page before its scripts: see `holdMicMs` in openWithMicrophone. */
+function watchMicrophone(holdMs: number): void {
+  const w = window as unknown as { asked: number; opened: MediaStream[] };
+  w.asked = 0;
+  w.opened = [];
+  const ask = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  navigator.mediaDevices.getUserMedia = async (constraints) => {
+    w.asked += 1;
+    await new Promise((later) => setTimeout(later, holdMs));
+    const stream = await ask(constraints);
+    w.opened.push(stream);
+    return stream;
+  };
+}
+
+/**
+ * The page listening for its name, with a clip played into a fake microphone. Needs macOS's `say`.
+ * With the listener files (npm run fetch-wake), the real spotter hears the clips. Without them a stand-in does, which tests the page's half only,
+ * and the checks that need the real spotter to tell words apart are skipped and say so.
+ */
+async function wakeChecks(): Promise<void> {
+  const real = existsSync(join(here, '../client/vendor/sherpa-onnx/versions.json'));
+  const needsReal = (name: string) => console.log(`skip ${name}: it needs the real spotter (npm run fetch-wake)`);
+  const dir = mkdtempSync(join(tmpdir(), 'mp-wake-'));
+  const main = await listeningService(dir, real ? join(here, '../client') : standInClient(dir));
+  const { server, acted, posted } = main;
   try {
     const woke = real
       ? 'the page wakes on "hey Momo", records what follows, and the service acts on it without the name'
       : 'with a stand-in spotter, the page records from just before the phrase to the pause, the service acts without the name, and the page does not listen while the reply plays';
     await check(woke, async () => {
-      // Three seconds of quiet first: the spotter restarts its clock after 1.5 seconds of it, which must not move where the recording starts.
-      const { browser, page, problems, states } = await open(spoken('Hey Momo, show me more like this.', dir, 3));
+      // Three seconds of quiet first: the spotter clears itself after 1.5 seconds of it, which must neither lose the phrase nor move where the recording starts.
+      const { browser, page, problems, micStates, mic } = await openWithMicrophone(server, spoken('Hey Momo, show me more like this.', dir, 3));
       try {
         await page.locator('.card').first().click();
         await page.locator('#mic').click();
-        await until('the page waiting for its name', async () => (await page.getAttribute('#mic', 'data-state')) === 'waiting', 15000);
+        await until('the page waiting for its name', async () => (await mic()) === 'waiting', 15000);
         assert.equal(await page.getAttribute('#talk-text', 'placeholder'), 'Say "Hey Momo", or type');
         if (!real) assert.equal(await page.workers()[0]!.evaluate(() => (self as unknown as { standInKeywords: string }).standInKeywords), '▁HE Y ▁MO MO @HEY_MOMO\n▁HI ▁MO MO @HI_MOMO\n▁HIGH ▁MO MO @HI_MOMO');
-        await until('the page hearing the speaker', async () => (await states()).includes('hearing'), 15000);
+        await until('the page hearing the speaker', async () => (await micStates()).includes('hearing'), 15000);
         await until('the recording posted', async () => posted.length === 1, 15000);
         await page.locator('#caption').getByText('Show me more like this.').waitFor();
-        await until('the reply heard and the page waiting again', async () => (await states()).join() === 'starting,waiting,hearing,working,waiting,speaking,waiting', 10000);
+        await until('the reply heard and the page waiting again', async () => (await micStates()).join() === 'starting,waiting,hearing,working,waiting,speaking,waiting', 10000);
         assert.deepEqual(acted, ['Show me more like this.']);
         assert.equal(posted[0]!.mime, 'audio/wav');
         assert.ok(posted[0]!.seconds > 2.4 && posted[0]!.seconds < 4.6, `the recording holds the phrase, the command and the pause: ${posted[0]!.seconds} s`);
@@ -629,22 +682,155 @@ async function wakeChecks(): Promise<void> {
       }
     });
 
-    if (!real) console.log('skip without "hey Momo" nothing is recorded or sent: it needs the real spotter (npm run fetch-wake)');
-    else await check('without "hey Momo" nothing is recorded or sent', async () => {
+    const quietThenTalk = 'after quiet and other talk, nothing said before "hey Momo" is sent';
+    if (!real) needsReal(quietThenTalk);
+    else await check(quietThenTalk, async () => {
       const before = posted.length;
-      const { browser, page, problems, states } = await open(spoken('Show me more like this, and keep the first two.', dir));
+      const { browser, page, problems, mic } = await openWithMicrophone(server, spoken('I was reading about winter bread all morning. Hey Momo, show me more like this.', dir, 4));
       try {
+        await page.locator('.card').first().click();
         await page.locator('#mic').click();
-        await until('the page waiting for its name', async () => (await page.getAttribute('#mic', 'data-state')) === 'waiting', 15000);
-        await page.waitForTimeout(8000);
-        assert.equal(posted.length, before);
-        assert.equal(acted.length, 1);
-        assert.deepEqual(await states(), ['starting', 'waiting']);
-        await page.locator('#mic').click();
-        assert.equal(await page.getAttribute('#mic', 'data-state'), 'off');
+        await until('the recording posted', async () => posted.length === before + 1, 20000);
+        const sent = posted.at(-1)!;
+        assert.ok(sent.quietFirst > 0 && sent.sounds <= 2, `the recording holds "Hey Momo" and what follows, not the talk before: ${JSON.stringify(sent)}`);
+        assert.equal(acted.at(-1), 'Show me more like this.');
+        await until('the page waiting again', async () => (await mic()) === 'waiting', 10000);
         assert.deepEqual(problems, []);
       } finally {
         await browser.close();
+      }
+    });
+
+    const quick = 'a quick "hey Momo, more" is sent as soon as the speaker stops';
+    if (!real) needsReal(quick);
+    else await check(quick, async () => {
+      const before = posted.length;
+      const { browser, page, problems, micStates } = await openWithMicrophone(server, spoken('Hey Momo, more.', dir, 1, 210));
+      try {
+        await page.locator('.card').first().click();
+        await page.locator('#mic').click();
+        await until('the page hearing the speaker', async () => (await micStates()).includes('hearing'), 15000);
+        await until('the recording posted within 4 seconds of the name', async () => posted.length === before + 1, 4000);
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+
+    const without = 'without "hey Momo" nothing is recorded or sent';
+    if (!real) needsReal(without);
+    else await check(without, async () => {
+      const before = posted.length;
+      const actedBefore = acted.length;
+      const { browser, page, problems, micStates, mic } = await openWithMicrophone(server, spoken('Show me more like this, and keep the first two.', dir));
+      try {
+        await page.locator('#mic').click();
+        await until('the page waiting for its name', async () => (await mic()) === 'waiting', 15000);
+        await page.waitForTimeout(8000);
+        assert.equal(posted.length, before);
+        assert.equal(acted.length, actedBefore);
+        assert.deepEqual(await micStates(), ['starting', 'waiting']);
+        await page.locator('#mic').click();
+        assert.equal(await mic(), 'off');
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+
+    await check('turning listening off while the browser asks for the microphone closes the microphone', async () => {
+      const { browser, page, problems, mic } = await openWithMicrophone(server, spoken('Show me more like this.', dir), 1500);
+      try {
+        await page.locator('#mic').click();
+        await until('the microphone asked for', () => page.evaluate(() => (window as unknown as { asked: number }).asked === 1), 15000);
+        await page.locator('#mic').click();
+        await page.waitForTimeout(2500);
+        assert.equal(await mic(), 'off');
+        const live = await page.evaluate(() => (window as unknown as { opened: MediaStream[] }).opened.flatMap((s) => s.getTracks()).filter((t) => t.readyState === 'live').length);
+        assert.equal(live, 0);
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+
+    await check('turning listening off and on just after a reply ends does not leave the page deaf', async () => {
+      const { browser, page, problems, mic } = await openWithMicrophone(server, spoken('Show me more like this.', dir));
+      try {
+        await page.locator('#mic').click();
+        await until('the page waiting for its name', async () => (await mic()) === 'waiting', 15000);
+        await page.getByLabel('Talk to the librarian').fill('note to self, buy flour');
+        await page.getByRole('button', { name: 'Send' }).click();
+        await until('the reply playing', async () => (await mic()) === 'speaking', 10000);
+        await page.locator('#mute').click();
+        await page.locator('#mic').click();
+        await page.locator('#mic').click();
+        await until('the page started again', async () => (await mic()) !== 'starting', 15000);
+        await page.waitForTimeout(1000);
+        assert.equal(await mic(), 'waiting');
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+
+    await check('a hold that arrives while the listener records does not lose the recording', async () => {
+      const standIn = await listeningService(dir, standInClient(mkdtempSync(join(dir, 'worker-'))));
+      const browser = await chromium.launch({ executablePath: browserPath(), headless: true });
+      try {
+        const page = await browser.newPage();
+        await page.goto(`${standIn.server.url}/#token=secret`);
+        // A string, because the TypeScript runner names inner functions with a helper the page does not have.
+        const outcome = (await page.evaluate(`(async () => {
+          const worker = new Worker('js/wake-worker.js');
+          const audio = new MessageChannel();
+          const said = [];
+          worker.addEventListener('message', (e) => said.push(e.data.t));
+          const next = (kind) => new Promise((done) => {
+            const heard = (e) => { if (e.data.t === kind) { worker.removeEventListener('message', heard); done(); } };
+            worker.addEventListener('message', heard);
+          });
+          const piece = (loud) => Float32Array.from({ length: 1600 }, (_, i) => (loud ? loud * Math.sin(i / 3) : (Math.random() - 0.5) * 0.002));
+          const feed = (count, loud) => { for (let i = 0; i < count; i++) audio.port1.postMessage(piece(loud)); };
+          const ready = next('ready');
+          worker.postMessage({ t: 'start', name: 'Momo', tuning: { threshold: 0.05, boost: 2, highForHi: true }, audio: audio.port2 }, [audio.port2]);
+          await ready;
+          worker.postMessage({ t: 'listen' });
+          const woke = next('wake');
+          feed(10, 0);
+          feed(12, 0.2);
+          await woke;
+          worker.postMessage({ t: 'hold' });
+          const recorded = next('recorded');
+          feed(5, 0.2);
+          feed(20, 0);
+          return Promise.race([recorded.then(() => said), new Promise((done) => setTimeout(() => done(said), 3000))]);
+        })()`)) as string[];
+        assert.ok(outcome.includes('recorded'), `the listener said ${outcome.join(', ')}`);
+      } finally {
+        await browser.close();
+        await standIn.server.close();
+      }
+    });
+
+    await check('on a page that cannot listen for its name, the first press says why and records nothing, and the next press records once', async () => {
+      const plain = await listeningService(dir, clientWithout(dir, 'plain'));
+      const { browser, page, problems, mic } = await openWithMicrophone(plain.server, spoken('Show me more like this.', dir), 0);
+      try {
+        await page.locator('#mic').click();
+        await page.locator('#toast').getByText('Tap the microphone again to talk once.').waitFor();
+        assert.equal(await mic(), 'idle');
+        assert.match((await page.getAttribute('#mic', 'title'))!, /Hands-free listening is off because the listener files are not on this service/);
+        await page.waitForTimeout(1000);
+        assert.equal(await page.evaluate(() => (window as unknown as { asked: number }).asked), 0);
+        assert.equal(plain.posted.length, 0);
+        await page.locator('#mic').click();
+        await until('one recording sent', async () => plain.posted.length === 1, 15000);
+        assert.equal(await page.evaluate(() => (window as unknown as { asked: number }).asked), 1);
+        assert.deepEqual(problems.filter((p) => !p.includes('404')), []);
+      } finally {
+        await browser.close();
+        await plain.server.close();
       }
     });
   } finally {
@@ -657,9 +843,14 @@ const dataDir = mkdtempSync(join(tmpdir(), 'mp-e2e-'));
 const boot = (port: number) => startServer({ port, host: '127.0.0.1', dataDir, clientDir: join(here, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret' });
 let run: Running = await boot(0);
 try {
-  await main();
+  // E2E_WAKE_ONLY=1 runs only the listening checks.
+  if (!process.env.E2E_WAKE_ONLY) await main();
   await wakeChecks();
   console.log(`\n${passed} checks passed. Screenshots are in docs/screenshots.`);
+  if (failed.length > 0) {
+    console.log(`${failed.length} failed:\n${failed.map((name) => `  ${name}`).join('\n')}`);
+    process.exitCode = 1;
+  }
 } finally {
   await run.close();
 }

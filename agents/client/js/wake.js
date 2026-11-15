@@ -34,6 +34,7 @@ export class HandsFree {
 
   async start(name) {
     if (this.on) return;
+    this.name = name;
     this.set('starting');
     const worker = new Worker('js/wake-worker.js');
     const channel = new MessageChannel();
@@ -82,7 +83,10 @@ export class HandsFree {
     this.set('off');
   }
 
+  /** A new name rebuilds the spotter, which drops a phrase being said, so the same name does nothing. */
   rename(name) {
+    if (name === this.name) return;
+    this.name = name;
     this.parts?.worker.postMessage({ t: 'name', name });
   }
 
