@@ -190,6 +190,8 @@ struct Settings {
     PicksMode picksMode = PicksMode::provisional;
     int picksPerRun = 0;
     bool scoutOnDump = false;
+    /// What the user calls the agent: "hey" or "hi" and this name wake it.
+    std::string agentName = "momo";
 };
 
 /// Work the agent began or ended, on a node when it is about one.

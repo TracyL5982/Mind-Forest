@@ -72,6 +72,13 @@ TEST(helloReadsTheWholeSnapshot) {
     Inbound read = parseInbound(newer);
     auto* fresh = std::get_if<Hello>(&read);
     CHECK(fresh && fresh->settings.picksPerRun == 5, "a hello whose settings name strongTie and no link settings reads (got %s)", kindOf(read).c_str());
+    CHECK(fresh && fresh->settings.agentName == "momo", "a service that names no agent calls it Momo");
+    Inbound named = parseInbound(edited(text, [](Json j) {
+        j.set("settings", Json::object().set("picksMode", "provisional").set("picksPerRun", 5).set("scoutOnDump", true).set("agentName", "Juno"));
+        return j;
+    }));
+    auto* juno = std::get_if<Hello>(&named);
+    CHECK(juno && juno->settings.agentName == "Juno", "the agent's name is the service's setting");
 
     for (size_t i = 0; i < hello.snapshot.nodes.size(); i++) {
         const Json& r = j["snapshot"]["nodes"][i];

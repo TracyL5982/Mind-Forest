@@ -381,6 +381,7 @@ std::optional<Settings> readSettings(const Json& j, Why& why) {
                        .picksMode = f.choice<PicksMode>("picksMode", {{"provisional", PicksMode::provisional}, {"immediate", PicksMode::immediate}}),
                        .picksPerRun = int(f.whole("picksPerRun")),
                        .scoutOnDump = f.boolean("scoutOnDump"),
+                       .agentName = f.optionalString("agentName").value_or("momo"),
                    });
 }
 
