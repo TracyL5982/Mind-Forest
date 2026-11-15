@@ -56,8 +56,9 @@ private:
 /// Assets/Scripts/AgentVisual (AgentRing, AgentNoiseDisc) and AgentSphere, with the values its Scene.scene gives them.
 /// Three hollow rings, cyan, magenta and yellow, each bent by Perlin noise, add up to one white ring, with two white
 /// eyes in the middle that blink and dart. A voice makes the rings wobble further and faster, and Momo's own voice
-/// draws them apart into coloured fringes. Two looks are Momo's own: thinking, three dots at its upper right pulse in
-/// turn; while any agent works it wears a monocle, and its eyes glance about, slower and wider than they dart.
+/// draws them apart into coloured fringes. Two looks are Momo's own: thinking, three dots of three sizes pop out from
+/// its upper right one by one and then circle as they hang there; while any agent works it wears a monocle, and its eyes
+/// glance about, slower and wider than they dart.
 class Face {
 public:
     // CurioCity's, in its centimetres, on its ring of 2 cm (the view scales them to Momo's size).
@@ -87,6 +88,15 @@ public:
     static constexpr float monocleRadius = 0.74f;
     static constexpr float monocleShift = 0.12f;
     static constexpr float monocleLine = 0.06f, cordLine = 0.045f;
+
+    /// A thinking dot: where it is, cm from Momo's middle, and how big.
+    struct Dot {
+        Vec2 at;
+        float radius = 0;           // 0 before it has come
+    };
+    static constexpr float dotTurn = 2.4f;  // s each dot takes to circle its place
+    /// Thinking dot `k`, 0 the one nearest Momo, `rising` s after the dots began to come.
+    static Dot dot(int k, float rising);
 
     struct Look {
         float shown = 0;            // 0 gone … 1

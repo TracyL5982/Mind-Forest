@@ -92,6 +92,28 @@ Face::Face(uint32_t seed) : seed(seed ? seed : 1) {
     nextDart = random(dartMin, dartMax);
 }
 
+Face::Dot Face::dot(int k, float rising) {
+    // As the user drew them against Momo: 0.12, 0.18 and 0.25 of its width across, in a trail going up and right from
+    // just outside its upper right, the smallest nearest.
+    static constexpr float home[3][2] = {{2.08f, 2.9f}, {3.3f, 4.0f}, {4.7f, 5.14f}};
+    static constexpr float radii[3] = {0.24f, 0.36f, 0.5f};
+    constexpr float popAt = 0.16f, popFor = 0.22f, orbit = 0.45f;
+    Dot d{{home[k][0], home[k][1]}, 0};
+    float t = (rising - popAt * float(k)) / popFor;
+    if (t <= 0) return d;
+    // Each pops: it grows a little past its size and settles.
+    float back = t >= 1 ? 1 : 1 + 2.70158f * std::pow(t - 1, 3.f) + 1.70158f * std::pow(t - 1, 2.f);
+    d.radius = radii[k] * back;
+    // Once all three have come, each circles its own place, a third of a turn behind the one before, so the three
+    // turn through a line and a triangle and back as they go.
+    float since = rising - 2 * popAt - popFor;
+    if (since <= 0) return d;
+    float swing = orbit * std::min(1.f, since / 0.6f);
+    float a = 2 * pi * since / dotTurn - float(k) * 2 * pi / 3 - pi / 2;
+    d.at += Vec2{std::cos(a), std::sin(a)} * swing;
+    return d;
+}
+
 float Face::random(float lo, float hi) {
     // A small generator of its own, so a face blinks the same way each run and the tests can count on it.
     seed ^= seed << 13;

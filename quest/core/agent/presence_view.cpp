@@ -395,7 +395,9 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
     // The agents' lines stand above the words at rest, or, with none, the lowest beside Momo.
     int rows = caption.resting();
     float top = float(rows) * step / 2;
-    ease(agentsFrom, rows > 0 ? top + small * 0.75f : 0, 0.18f, dt);
+    // While Momo thinks, its dots hang where the lowest lines would be, so the lines stand above them for that while.
+    float above = face.look().dots > 0.5f ? (Face::dot(2, 0).at.y + 1.0f) * size / Face::radius + small * 0.6f : 0;
+    ease(agentsFrom, std::max(rows > 0 ? top + small * 0.75f : 0, above), 0.18f, dt);
     auto keyOf = [](const std::string& role) { return int(std::hash<std::string>{}(role) & 0x7FFFFFFF); };
     for (const Roster::Line& line : roster.lines()) {
         Words& w = wordsFor(agents, keyOf(line.role));
@@ -473,17 +475,11 @@ void PresenceView::draw() {
             pen.stroke(cord, n, Face::cordLine * cm, z, white, alpha);
         }
 
-        // Thinking: three dots at the upper right, clear of the words, coming one after another, then each in turn
-        // brightening, swelling and lifting a little.
+        // Thinking: three dots pop out from the upper right one by one, then circle as they hang there.
         if (l.dots > 0.003f) {
-            float alpha = shown * l.dots;
             for (int k = 0; k < 3; k++) {
-                float come = smooth((l.rising - 0.12f * float(k)) / 0.25f);
-                if (come <= 0) continue;
-                float beat = std::fmod(l.rising / 1.2f - float(k) / 3 + 1, 1.f);
-                float swell = beat < 1 / 3.f ? std::pow(std::sin(beat * 3 * pi), 2.f) : 0;
-                Vec2 dot{1.3f + 0.45f * float(k), 2.35f - 0.3f * (1 - come) + 0.1f * swell};
-                pen.disc(at(dot), 0.15f * (0.6f + 0.4f * come) * (1 + 0.25f * swell) * cm, z, white, alpha * come * (0.5f + 0.5f * swell));
+                Face::Dot d = Face::dot(k, l.rising);
+                if (d.radius > 0) pen.disc(at(d.at), d.radius * cm, z, white, shown * l.dots);
             }
         }
     });
