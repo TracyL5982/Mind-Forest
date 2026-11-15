@@ -169,18 +169,12 @@ float head(const Pen& pen, const Plan& p, float x, float top, float width, int l
 /// The name as a figure, then a map to the edges when the item knows where it is, or its words and the cue.
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
-    Text name = points(p.name);
     bool large = figureLines(p.name, face::COL, MIDDLE) == 1;
     const Figure& size = large ? MIDDLE : SMALLEST;
-    // The name is the face's title: whole up to three lines, or three and the cue right under them.
-    int need = large ? 1 : figureLines(p.name, face::COL, SMALLEST), lines = std::min(face::TITLE_LINES, need);
-    if (c.pen) c.heldBack = figure(*c.pen, p.name, c.x, c.y, c.width, lines, size, palette::ink) || c.heldBack;
-    c.gap(float(lines * size.lineHeight));
-    if (need > lines) {
-        c.more = true;
-        c.cue(cueMore(c.words));
-        return;
-    }
+    // The name is the face's title: in up to two lines, cut with an ellipsis past them.
+    Titled t = large ? Titled{p.name, 1} : titledFigure(p.name, face::COL, SMALLEST);
+    if (c.pen) c.heldBack = figure(*c.pen, t.said, c.x, c.y, c.width, t.lines, size, palette::ink) || c.heldBack;
+    c.gap(float(t.lines * size.lineHeight));
     if (p.at) {
         // The map runs to the foot of the face, or stops short of the cue.
         float tall = c.room() + face::BOTTOM - 1 - (c.more ? face::CUE + face::BOTTOM - 1 : 0);

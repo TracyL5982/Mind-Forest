@@ -15,11 +15,55 @@ int counted(const std::string& s, int column, Measure m, int max) {
     return std::clamp(int(set.lines.size()), 1, std::max(1, max));
 }
 
-Plate plateOf(const std::string& title, float column, Measure m) {
+namespace {
+
+/// A Han character, kana or hangul: a line may break before or after any of them.
+bool ideograph(char32_t c) { return han(c) || (c >= 0x3040 && c <= 0x30FF) || (c >= 0xAC00 && c <= 0xD7AF); }
+/// What is not left at the end of a cut title, before its ellipsis.
+bool trailing(char32_t c) {
+    return isSpace(c) || c == ',' || c == ';' || c == ':' || c == '-' || c == 0x2014 || c == 0x2013 || c == 0x3001 || c == 0xFF0C ||
+           c == 0xFF1B || c == 0xFF1A;
+}
+
+}  // namespace
+
+std::string ellipsized(const std::string& s, int lines, const std::function<int(const std::string&)>& count) {
+    if (s.empty() || count(s) <= lines) return s;
+    Text t = points(s);
+    // Where it may be cut: at the end of a word, or beside a Han character.
+    std::vector<size_t> cuts;
+    for (size_t i = 1; i < t.size(); i++) {
+        if ((isSpace(t[i]) && !isSpace(t[i - 1])) || ideograph(t[i - 1]) || (ideograph(t[i]) && !isSpace(t[i - 1]))) cuts.push_back(i);
+    }
+    auto at = [&](size_t end) {
+        Text head = t.substr(0, end);
+        while (!head.empty() && trailing(head.back())) head.pop_back();
+        return utf8(head) + "\u2026";
+    };
+    // The longest that stands in `lines` lines with its ellipsis; a single word too long for them is cut
+    // at a letter instead.
+    if (cuts.empty() || count(at(cuts.front())) > lines) {
+        cuts.clear();
+        for (size_t i = 1; i < t.size(); i++) cuts.push_back(i);
+    }
+    size_t lo = 0, hi = cuts.size();
+    while (lo + 1 < hi) {
+        size_t mid = (lo + hi) / 2;
+        if (count(at(cuts[mid])) <= lines) lo = mid; else hi = mid;
+    }
+    return cuts.empty() ? "\u2026" : at(cuts[lo]);
+}
+
+Titled titled(const std::string& title, float column, Measure m) {
     if (title.empty()) return {};
-    int need = counted(title, int(column), m);
-    if (need <= face::TITLE_LINES) return {need, false};
-    return {face::TITLE_LINES - 1, true};
+    std::string said = ellipsized(title, face::TITLE_LINES, [&](const std::string& s) { return counted(s, int(column), m); });
+    return {said, counted(said, int(column), m)};
+}
+
+Titled titledFigure(const std::string& title, float column, const Figure& size) {
+    if (title.empty()) return {};
+    std::string said = ellipsized(title, face::TITLE_LINES, [&](const std::string& s) { return figureLines(s, column, size); });
+    return {said, figureLines(said, column, size)};
 }
 
 int figureLines(const std::string& value, float column, const Figure& size) {
@@ -150,20 +194,11 @@ bool Col::title(const std::string& s, float atX, float column) {
     if (ended) return false;
     if (s.empty()) return true;
     float w = column > 0 ? column : width, at = atX < 0 ? x : atX;
-    int need = counted(s, int(w), Measure::title);
-    if (need <= face::TITLE_LINES && float(need * face::TITLE) <= room()) {
-        say(s, setting::faceTitle, need, at, y, w, palette::ink);
-        y += float(need * face::TITLE);
-        inked = y;
-        return true;
-    }
-    int shown = std::max(0, std::min(face::TITLE_LINES, int(std::floor((room() - face::CUE) / face::TITLE))));
-    say(s, setting::faceTitle, shown, at, y, w, palette::ink);
-    y += float(shown * face::TITLE);
+    Titled t = titled(s, w, Measure::title);
+    say(t.said, setting::faceTitle, t.lines, at, y, w, palette::ink);
+    y += float(t.lines * face::TITLE);
     inked = y;
-    more = ended = true;
-    cue(cueMore(words));
-    return false;
+    return true;
 }
 
 bool Col::above(const Json& props, float keep) {

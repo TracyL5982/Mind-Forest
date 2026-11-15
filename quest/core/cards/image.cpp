@@ -29,10 +29,10 @@ int captionLines(const Item& item, const Json& props) {
 
 /// The picture to the edges, then its caption on a plate in whole lines, and the cue under one line.
 void lay(Col& c, const Item& item, const Json& props) {
-    // The caption is the title: whole on the plate, and the picture gives way to it, down to its floor.
+    // The caption is the title: on the plate in up to two lines, and the picture gives way to it.
     std::string said = caption(item, props), src = text(props["src"]);
-    Plate plate = plateOf(said, face::COL, Measure::body);
-    float under = said.empty() ? 0 : 19 + plate.height(face::BODY);
+    Titled plate = titled(said, face::COL, Measure::body);
+    float under = said.empty() ? 0 : 19 + float(plate.lines * face::BODY);
     double given = number(props["aspect"]);
     float aspect = aspectOf(src).value_or(given > 0 ? float(given) : 1.35f);
     float tall = std::min(float(face::H) - 2 - under, std::max(81.f, std::round(float(face::W) / aspect)));
@@ -45,12 +45,8 @@ void lay(Col& c, const Item& item, const Json& props) {
     c.y = 1 + tall + 1;
     if (!said.empty()) {
         c.y += 9;
-        c.say(said, setting::faceBody, plate.lines, c.x, c.y, c.width, palette::ink);
+        c.say(plate.said, setting::faceBody, plate.lines, c.x, c.y, c.width, palette::ink);
         c.y += float(plate.lines * face::BODY);
-        if (plate.cue) {
-            c.more = true;
-            c.cue(cueMore(c.words));
-        }
         c.y += 10;
     }
     c.y -= face::BOTTOM;

@@ -72,9 +72,10 @@ void lay(Col& c, const Item& item, const Json& props) {
         c.cue(cueMore(c.words));
         return;
     }
-    // The source, often the title, is whole up to three lines, and the passage gives way to it.
-    int fromNeed = from.empty() ? 0 : counted(from, face::COL, Measure::meta), fromLines = std::min(face::TITLE_LINES, fromNeed);
-    float under = from.empty() ? 0 : 10 + float(fromLines * face::META) + (fromNeed > fromLines ? face::CUE : 0);
+    // The source, often the title, in up to two lines, and the passage gives way to it.
+    Titled source = titled(from, face::COL, Measure::meta);
+    int fromLines = source.lines;
+    float under = from.empty() ? 0 : 10 + float(fromLines * face::META);
     float top = c.y;
     int quoted = c.lines(p.words, Measure::passage, 99, palette::ink, under, c.x + RULE, face::W - 46, c.width - RULE);
     if (c.pen) {
@@ -83,10 +84,9 @@ void lay(Col& c, const Item& item, const Json& props) {
     }
     if (quoted > 0 && fromLines > 0) {
         c.gap(10);
-        c.say(from, setting::faceMeta, fromLines, c.x, c.y, c.width, palette::ink2);
+        c.say(source.said, setting::faceMeta, fromLines, c.x, c.y, c.width, palette::ink2);
         c.y += float(fromLines * face::META);
         c.inked = c.y;
-        if (fromNeed > fromLines) c.more = true;
     }
     if (c.more) c.cue(cueMore(c.words));
 }

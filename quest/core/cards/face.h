@@ -5,6 +5,7 @@
 // when it has one, so the size and the drawing cannot disagree.
 #pragma once
 #include <array>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -20,8 +21,9 @@ constexpr int TOP = 14, BOTTOM = 16, LEFT = 16, COL = W - SIDES;
 constexpr int TITLE = 24, BODY = 22, META = 18, CUE = 18, GAP = 6;
 /// The pixels a px a face is laid out and drawn at (cards::ocean::smallScale): its lines are counted there.
 constexpr float K = 2;
-/// The most lines a title takes, whole.
-constexpr int TITLE_LINES = 3;
+/// The most lines a title takes on the face. A longer one is cut there, at a whole word (a character in
+/// Chinese), and ends with an ellipsis: the one place a face draws one. The opened card has it whole.
+constexpr int TITLE_LINES = 2;
 }  // namespace face
 
 namespace setting {
@@ -39,14 +41,17 @@ constexpr Setting facePassage{16, 22, Font::Weight::regular, true};
 /// reserves no line it then leaves blank.
 enum class Measure { title, body, meta, passage, head };
 int counted(const std::string& s, int column, Measure m, int max = 99);
-/// The lines of a title on a plate under a picture: whole up to three; a longer one keeps two and the cue,
-/// so the picture keeps 52 px at least. Its plate's height, with `lead` px a line.
-struct Plate {
+/// `s` as it stands in at most `lines` lines, by `count`, which says how many lines a string takes: itself
+/// when it fits, or cut at a whole word (a character in Chinese) and ended with an ellipsis.
+std::string ellipsized(const std::string& s, int lines, const std::function<int(const std::string&)>& count);
+/// A title in at most `face::TITLE_LINES` lines of `column` px, set as `m`, and how many lines it takes.
+struct Titled {
+    std::string said;
     int lines = 0;
-    bool cue = false;
-    float height(float lead) const { return float(lines) * lead + (cue ? face::CUE : 0); }
 };
-Plate plateOf(const std::string& title, float column, Measure m);
+Titled titled(const std::string& title, float column, Measure m);
+/// The same, for a title set as a figure (a term, a place's name).
+Titled titledFigure(const std::string& title, float column, const Figure& size);
 /// How many lines a figure takes in `column` px on the face, as the host sets it.
 int figureLines(const std::string& value, float column, const Figure& size);
 /// How wide `s` is counted on one line, px, as `counted` counts it.
@@ -100,9 +105,9 @@ struct Col {
     /// Draws whole lines only, `n` of them at most, at (x, y) px.
     void say(const std::string& s, const Setting& t, int n, float x, float y, float width, Color color) const;
     void gap(float px) { y += px; }
-    /// The title first, whole, on as many lines as it needs up to three, at `atX` in `column` px (the face's
-    /// column if not given). A longer one shows its first three, or as many as the room holds, with the cue
-    /// right under them, and the face ends there: false then.
+    /// The title first, at `atX` in `column` px (the face's column if not given): whole in up to two lines,
+    /// or its first two cut with an ellipsis (`titled`). The face goes on under it. False when the face had
+    /// already ended.
     bool title(const std::string& s, float atX = -1, float column = -1);
     /// The item's lines over the structure, in order and whole, 6 px under what came before (or, first on the
     /// face, 6 px over what follows), each keeping the cue's row free under it. A line that does not fit ends
