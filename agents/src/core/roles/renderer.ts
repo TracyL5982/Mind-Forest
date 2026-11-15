@@ -996,10 +996,7 @@ const REFUSED: Record<Extract<Verdict, { refused: string }>['refused'], (prop?: 
   invalid: () => 'is not one the library accepts',
   formula: (_prop, because) => `has a formula that ${because}`,
   unstated: (prop) => `shows ${prop}, which the content does not state`,
-  part: (prop) =>
-    prop
-      ? `sets ${prop} apart, which is not whole sentences or lines among the content's first`
-      : 'is not the whole content, every line in order and every mark as it is written, or leaves unseen a line that is not one more entry',
+  part: (prop) => (prop ? `sets ${prop} apart, which is not whole sentences or lines among the content's first` : 'is not the whole content, every line in order and every mark as it is written'),
   long: (prop) => `shows ${prop}, which is longer than a card has room for`,
 };
 const LEFT: Record<Why, string> = {
