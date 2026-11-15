@@ -297,9 +297,19 @@ void OceanModel::runFlags() {
     int brief = Flags::integer("brief");
     if (brief > 0) after(0.8, [this, brief] { startBrief(brief - 1); });
     // NOTE(port): added for Quest. `-cards` stands the agent's card library as a tree (core/cards/gallery.h), unless
-    // `-brief` or `-saved` asks for another.
-    if (int library = Flags::has("cards") && catalog ? cards::gallery(*catalog) : -1; library >= 0 && brief <= 0 && !Flags::has("saved")) {
-        after(0.8, [this, library] { startBrief(library); });
+    // `-brief` or `-saved` asks for another. With an agent (`-agent`) the service's trees take the stand, and the
+    // library is left out, or hung on the shelf as a cover with `-cardsGallery`.
+    bool agent = Flags::string("agent").has_value();
+    if (int library = Flags::has("cards") && catalog && (!agent || Flags::has("cardsGallery")) ? cards::gallery(*catalog) : -1; library >= 0) {
+        if (agent) {
+            after(0.8, [this, library] {
+                if (std::optional<Ref> ref = Ref::make(catalog->briefs[library].root)) {
+                    shelve(std::make_shared<Tree>(*ref, catalog->briefs[library].title, Maker::gardener, catalog), std::nullopt);
+                }
+            });
+        } else if (brief <= 0 && !Flags::has("saved")) {
+            after(0.8, [this, library] { startBrief(library); });
+        }
     }
     // (`d.object(forKey: "saved") as? Int ?? (d.string(forKey: "saved").flatMap { Int($0) })`: a whole number, or nothing.)
     std::optional<int> saved;
