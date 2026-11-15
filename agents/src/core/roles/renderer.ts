@@ -641,7 +641,8 @@ async function askComponents(ctx: RoleContext, open: { node: Node; item: Item }[
       system: COMPONENTS_SYSTEM,
       user: componentsPrompt(asked),
       schema: ComponentsReply,
-      effort: 'low',
+      // Every value it gives is checked against the text before it is drawn, so the quick model can choose no worse than the main one.
+      quick: true,
     });
     for (const entry of reply.items) {
       const item = byId.get(entry.id);
@@ -910,7 +911,7 @@ function sameView(a: { component: string; props: unknown }, b: { component: stri
 }
 
 /** Chooses a component for each given node and composites for their siblings. Rules first, the model only where rules cannot tell. */
-export const renderer: Roles['renderer'] = async (ctx, { nodeIds }) => {
+export const renderer: Roles['renderer'] = async (ctx, { nodeIds, deliver }) => {
   const nodes = [...new Set(nodeIds)].flatMap((id) => ctx.mind.nodes.get(id) ?? []);
   const draws = new Map<Id, Draw>();
   const open: { node: Node; item: Item }[] = [];
@@ -932,17 +933,24 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds }) => {
   const groups: Command[] = [];
   const pools = survey(ctx, parents, componentOf, groups);
 
-  const [chosen] = await Promise.all([askComponents(ctx, open), askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);
-  for (const [id, draw] of chosen) draws.set(id, draw);
-  for (const pool of pools) stack(ctx, pool, componentOf, groups);
-
-  const views: Command[] = [];
+  const composites = askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups);
+  for (const [id, draw] of await askComponents(ctx, open)) draws.set(id, draw);
+  // The mind may have changed while the model was asked: a card that gave way to a fuller round is not drawn.
+  const there = (id: Id) => ctx.mind.nodes.has(id);
+  let views: Command[] = [];
   for (const node of nodes) {
     const draw = draws.get(node.id);
-    if (!draw || sameView(draw, node.view)) continue;
+    if (!draw || !there(node.id) || sameView(draw, node.view)) continue;
     const view: View = { ...draw, by: 'renderer' };
     views.push({ type: 'setView', id: node.id, view });
   }
-  const removals = groups.filter((c) => c.type === 'removeGroup');
-  return [...views, ...removals, ...groups.filter((c) => c.type !== 'removeGroup')];
+  if (deliver && views.length > 0) {
+    deliver(views);
+    views = [];
+  }
+  await composites;
+  for (const pool of pools) stack(ctx, pool, componentOf, groups);
+  const standing = groups.filter((c) => (c.type === 'setGroup' ? there(c.group.anchor) && c.group.members.every(there) : c.type !== 'removeGroup' || ctx.mind.groups.has(c.id)));
+  const removals = standing.filter((c) => c.type === 'removeGroup');
+  return [...views, ...removals, ...standing.filter((c) => c.type !== 'removeGroup')];
 };

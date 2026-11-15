@@ -916,3 +916,54 @@ test('an address in the data states nothing, a table cell holds no cell break, a
   const said = k.item({ title: 'Cameras', text: 'The   best  camera\tis the one you have with you, people say.' });
   assert.ok(grounded({ component: 'quote', props: { text: 'The best camera is the one you have with you' } }, said, url));
 });
+
+/** Holds the question of how siblings group until the test lets go, so the test can act while the model is still being asked. */
+function slowComposites(k: Kit, reply: () => CompositesReply): { asked: Promise<void>; open: () => void } {
+  let open!: () => void;
+  let wasAsked!: () => void;
+  const gate = new Promise<void>((r) => (open = r));
+  const asked = new Promise<void>((r) => (wasAsked = r));
+  const json = k.model.json.bind(k.model);
+  k.model.json = (async (req: Parameters<typeof json>[0]) => {
+    if (req.role !== 'renderer.composites') return json(req);
+    wasAsked();
+    await gate;
+    return req.schema.parse(reply());
+  }) as typeof k.model.json;
+  return { asked, open };
+}
+
+test('a card takes its look before the model has said how its siblings group', async () => {
+  const k = kit();
+  const { ids } = grow(k, [
+    { title: 'Recipe', data: { steps: ['Boil water', 'Add pasta'] }, status: 'pick' },
+    { title: 'One', text: PLAIN, status: 'pick' },
+    { title: 'Two', text: PLAIN, status: 'pick' },
+    { title: 'Three', text: PLAIN, status: 'pick' },
+  ]);
+  const composites = slowComposites(k, () => ({ groups: [] }));
+  const early: Command[][] = [];
+
+  const run = renderer(k.ctx, { nodeIds: ids, deliver: (commands) => early.push(commands) });
+  await composites.asked;
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert.deepEqual(early.flat().map((c) => (c.type === 'setView' ? [c.id, c.view.component] : [c.type])), [[ids[0], 'steps']]);
+  composites.open();
+  assert.deepEqual(await run, []);
+});
+
+test('a group the model proposed for a card that gave way while it was asked is not applied', async () => {
+  const k = kit();
+  const { root, ids } = grow(k, ['One', 'Two', 'Three', 'Four'].map((title) => ({ title, text: PLAIN, status: 'pick' as const })));
+  const composites = slowComposites(k, () => ({ groups: [proposal({ parent: root, composite: 'cluster', theme: 'Moves', members: ids.slice(0, 3) })] }));
+
+  const run = renderer(k.ctx, { nodeIds: ids });
+  await composites.asked;
+  k.mind.apply({ origin: { by: 'agent', role: 'scout' }, label: 'make room', commands: [{ type: 'deleteNode', id: ids[0]! }] });
+  composites.open();
+  const commands = await run;
+
+  assert.ok(!commands.some((c) => c.type === 'setGroup'), 'the group named a card that is gone');
+  if (commands.length > 0) k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands });
+});

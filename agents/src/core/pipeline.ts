@@ -427,8 +427,10 @@ export class Pipeline {
     if (nodeIds.length === 0) return;
     this.track(
       this.work('renderer', 'Choosing how to show this', nodeIds[0], async () => {
-        const commands = await this.deps.roles.renderer(this.ctx, { nodeIds: nodeIds.filter((id) => mind.nodes.has(id)) });
-        if (commands.length > 0) this.apply(AGENT('renderer'), 'Choose formats', commands);
+        const show = (commands: Command[]) => {
+          if (commands.length > 0) this.apply(AGENT('renderer'), 'Choose formats', commands);
+        };
+        show(await this.deps.roles.renderer(this.ctx, { nodeIds: nodeIds.filter((id) => mind.nodes.has(id)), deliver: show }));
       }).catch((err) => this.fail('renderer', err)),
     );
   }

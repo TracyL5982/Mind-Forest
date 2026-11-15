@@ -160,8 +160,11 @@ export interface Roles {
     },
   ): Promise<Command[]>;
   organizer(ctx: RoleContext, input: { request: string; scope: Scope; focus?: Id }): Promise<{ commands: Command[]; summary: string }>;
-  /** Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup. */
-  renderer(ctx: RoleContext, input: { nodeIds: Id[] }): Promise<Command[]>;
+  /**
+   * Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup.
+   * The views may be handed to `deliver` as soon as they are chosen, so a card takes its look without waiting on how its siblings group.
+   */
+  renderer(ctx: RoleContext, input: { nodeIds: Id[]; deliver?: (commands: Command[]) => void }): Promise<Command[]>;
   packager(ctx: RoleContext, input: { scope: Scope; note?: string }): Promise<Handoff>;
   /** Up to four short questions the user is likely to ask next about an open card. Throws when the model fails. */
   questions(ctx: RoleContext, input: { card: CardBrief; history: Turn[] }): Promise<string[]>;
