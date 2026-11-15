@@ -170,6 +170,17 @@ JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_Sound_microphoneDenied(JNIE
     if (denied) denied();
 }
 
+JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_Sound_microphoneAsking(JNIEnv*, jclass, jlong handle) {
+    std::function<void()> asking;
+    {
+        std::lock_guard<std::mutex> g(registry);
+        auto m = microphones.find(handle);
+        if (m == microphones.end()) return;
+        asking = m->second.asking;
+    }
+    if (asking) asking();
+}
+
 JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_Sound_played(JNIEnv*, jclass, jlong handle, jboolean toEnd) {
     std::function<void(bool)> done;
     {

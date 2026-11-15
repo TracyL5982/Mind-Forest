@@ -9,6 +9,8 @@ import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.media.MediaRecorder
+import android.os.Handler
+import android.os.Looper
 import android.os.Process
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
@@ -25,6 +27,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 object Sound {
     private const val ASK = 41
     private const val RATE = 16000
+    /** Ms Momo's caption says why before the system asks, so the reason is read first. */
+    private const val REASON_FIRST = 1500L
 
     private class Mic(val running: AtomicBoolean, val thread: Thread)
 
@@ -46,7 +50,10 @@ object Sound {
             return
         }
         synchronized(this) { asking = handle to source }
-        activity.runOnUiThread { activity.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), ASK) }
+        microphoneAsking(handle)
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (synchronized(this) { asking?.first == handle }) activity.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), ASK)
+        }, REASON_FIRST)
     }
 
     /** From MainActivity.onRequestPermissionsResult. */
@@ -227,5 +234,6 @@ object Sound {
     @JvmStatic external fun heard(handle: Long, samples: ShortArray, count: Int)
     @JvmStatic external fun microphoneFailed(handle: Long, why: ByteArray)
     @JvmStatic external fun microphoneDenied(handle: Long)
+    @JvmStatic external fun microphoneAsking(handle: Long)
     @JvmStatic external fun played(handle: Long, toEnd: Boolean)
 }

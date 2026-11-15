@@ -857,7 +857,8 @@ void run() {
 extern "C" {
 
 JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_MainActivity_nativeStart(JNIEnv* env, jobject self, jobjectArray args, jstring mediaDir,
-                                                                             jstring dataDir, jstring outDir) {
+                                                                             jobject assets, jstring dataDir, jstring outDir, jstring server,
+                                                                             jstring appKey) {
     jni::attach(env, self);
     auto text = [&](jstring s) {
         const char* c = env->GetStringUTFChars(s, nullptr);
@@ -873,12 +874,16 @@ JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_MainActivity_nativeStart(JN
         env->DeleteLocalRef(s);
     }
     host::mediaDir = text(mediaDir);
+    host::useAssets(env, assets);
     host::dataDir = text(dataDir);
     host::outDir = text(outDir);
 #ifndef OCEAN_NO_SCENE
-    // Started from the app library there are no flags: the app joins the agent service it was last started with.
+    // Started from the app library there are no flags: the app joins the agent service it was last started with, or the
+    // judging build its own.
     std::string remembered = host::dataDir + "/agent-connection.json";
-    agent::Launch launch = agent::launch(arguments, platform::readFile(remembered));
+    std::optional<agent::BuiltIn> builtIn;
+    if (std::string address = text(server); !address.empty()) builtIn = agent::BuiltIn{address, text(appKey)};
+    agent::Launch launch = agent::launch(arguments, platform::readFile(remembered), builtIn);
     if (launch.file == agent::Launch::File::save) platform::writeFile(remembered, launch.text);
     if (launch.file == agent::Launch::File::forget) std::remove(remembered.c_str());
     arguments = launch.arguments;

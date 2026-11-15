@@ -3,6 +3,7 @@ package com.kaifengwu.mindpalace
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.AssetManager
 import android.net.Uri
 import android.os.Bundle
 import java.io.File
@@ -16,8 +17,10 @@ import java.io.File
  *   adb shell am start -n com.kaifengwu.mindpalace.ocean/com.kaifengwu.mindpalace.MainActivity --es args "-demo -fps"
  *
  * Media (the visionOS bundle's resources: ocean.json, clips/, works/) is not
- * inside the APK. It is copied once to the app's external files folder by
- * quest/tools/push_media.sh, so installing a new build takes seconds.
+ * inside a developer build's APK. It is copied once to the app's external files
+ * folder by quest/tools/push_media.sh, so installing a new build takes seconds.
+ * The judging build (quest/tools/judge.sh) carries it inside the APK, and reads
+ * it from there; it also joins its own service, BuildConfig.SERVER.
  */
 class MainActivity : Activity() {
     companion object {
@@ -26,7 +29,9 @@ class MainActivity : Activity() {
         }
     }
 
-    private external fun nativeStart(args: Array<String>, mediaDir: String, dataDir: String, outDir: String)
+    private external fun nativeStart(
+        args: Array<String>, mediaDir: String, assets: AssetManager, dataDir: String, outDir: String, server: String, appKey: String
+    )
     private external fun nativeStop()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,7 +41,8 @@ class MainActivity : Activity() {
         val media = File(external, "media")
         val out = File(external, "out").apply { mkdirs() }
         copyListenerModel()
-        nativeStart(args.toTypedArray(), media.absolutePath, filesDir.absolutePath, out.absolutePath)
+        Media.assets = assets
+        nativeStart(args.toTypedArray(), media.absolutePath, assets, filesDir.absolutePath, out.absolutePath, BuildConfig.SERVER, BuildConfig.APP_KEY)
     }
 
     /** The keyword model comes inside the APK; the spotter reads files, so it is copied to the app's own files once per build. */

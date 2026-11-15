@@ -154,6 +154,33 @@ The host adds its own: `-hz`, `-scale`, `-msaa`, `-ffr`, `-cpuLevel`, `-gpuLevel
 `-uploadBudget`, `-perf`, `-quitAfter`, `-shotAt`, `-shotEvery`, `-testScene` (described at the top of
 `android/app/src/main/cpp/main.cpp`).
 
+## The judging build
+
+One APK a judge installs and opens, with nothing else to do: "Mind Palace" (`com.kaifengwu.mindpalace.ocean.judge`),
+installed beside the two apps above and replacing neither.
+
+```bash
+quest/tools/judge.sh             # build it and check its id, name, signature and the media inside
+quest/tools/judge.sh --install   # and install it on the headset on the cable
+```
+
+- **Its service.** It joins the service named in `~/.mind-palace/judging.properties` (`server=https://…`, `appKey=…`) by
+  itself, with the cards, and never reads or keeps `agent-connection.json`. Started with `-agent`, it joins that one for
+  that launch only. Every URL it opens carries the app key and the headset's own id (`token=…&device=…`): 32 hex digits
+  made on its first launch and kept in its own files (`device-id`), so the hosted service keeps each headset's
+  mindstorm apart. Developer builds send the id too, and the service on the Mac ignores it.
+- **When it can't reach the service**, Momo shows with "Can’t reach Momo, retrying" in its caption, and the app tries
+  again after 1, 2, 4 and 8 s, then every 15 s.
+- **The microphone.** The first time, Momo's caption says "Allow the microphone to talk to Momo", and the system asks
+  1.5 s later. Refused, the caption says "No microphone, so type or pick to ask Momo" for 10 s, and typing and picking
+  work as before. Nothing else is asked: passthrough and hands need no permission while the app runs.
+- **The media** (about 700 MB) is inside the APK, stored uncompressed under `assets/media` with the list of it
+  (`index.txt`), and read from there: pictures by `ImageDecoder` from the APK, films by `MediaPlayer` from the APK's
+  own file, text through the NDK's asset manager. Nothing is copied out at first launch.
+- **Signing.** Release-signed with `~/.mind-palace/keys/judge.jks`, its passwords in `keys/judge.properties` beside it.
+  A later APK installs over this one only if it is signed with the same key, so keep both. Raise `version` in
+  `judging.properties` for each APK handed out.
+
 ## Measuring performance
 
 ```bash
