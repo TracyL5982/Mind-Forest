@@ -142,7 +142,8 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
   // ---- research
 
   /** What OpenAlex calls a work, as the kind a card draws. A chapter, a dataset or anything else gets no kind. */
-  const WORK_KINDS: Record<string, Found['kind']> = { article: 'paper', preprint: 'paper', review: 'paper', letter: 'paper', dissertation: 'paper', book: 'book', monograph: 'book' };
+  // OpenAlex calls most of what conferences publish a conference paper: three of the audit's searches in research on interfaces led with one.
+  const WORK_KINDS: Record<string, Found['kind']> = { article: 'paper', 'conference-paper': 'paper', preprint: 'paper', review: 'paper', letter: 'paper', dissertation: 'paper', book: 'book', monograph: 'book' };
   const OPENALEX_AUTHORS = 100;
 
   const papers: Adapter = {
