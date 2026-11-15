@@ -73,7 +73,8 @@ void lay(Col& c, const Item& item, const Json& props) {
         c.width = face::COL - COVER_WIDE - COVER_GAP;
     }
     if (c.pen) head(*c.pen, p.label, p.year, c.x, c.y, c.width, true);
-    c.gap(face::META + 14);
+    // Beside a cover the column is narrow, so the rule sits closer and a name may take a second line.
+    c.gap(face::META + (cover.empty() ? 14 : 8));
     std::vector<std::string> names;
     for (const Json& a : props["authors"].array()) {
         std::string n = trimmed(a);
@@ -85,7 +86,7 @@ void lay(Col& c, const Item& item, const Json& props) {
         std::string first = names[0];
         int rest = int(names.size()) - 1 + (props["more"].boolean() ? 1 : 0);
         if (rest > 0) first += c.words.chinese ? " 等 " + std::to_string(rest + 1) + " 人" : " and " + std::to_string(rest) + (rest == 1 ? " other" : " others");
-        c.lines(first, Measure::meta, 1, palette::ink2);
+        c.lines(first, Measure::meta, cover.empty() ? 1 : 2, palette::ink2);
     }
     if (c.more) c.cue(cueMore(c.words));
     if (!cover.empty()) c.y = std::max(c.y, float(face::TOP + COVER_TALL));
@@ -106,9 +107,9 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
 void detail(Sheet& sheet, const Item& item, const Json& props) {
     constexpr Setting line{15, 21, Font::Weight::medium};
     Plan p = plan(item, props);
-    // The cover whole, as tall as a cover reads at the opened card's size, before the head.
+    // The cover whole, before the head, small enough that the head shows under it in the first view.
     if (std::string cover = text(props["cover"]); !cover.empty()) {
-        float aspect = aspectOf(cover).value_or(2.f / 3), tall = std::min(220.f, sheet.most), wide = std::min(Sheet::width, tall * aspect);
+        float aspect = aspectOf(cover).value_or(2.f / 3), tall = std::min(150.f, sheet.most), wide = std::min(Sheet::width, tall * aspect);
         sheet.picture = CGRect{Sheet::left * sheet.k, (sheet.y + (sheet.first ? 0 : Sheet::gap)) * sheet.k, wide * sheet.k, tall * sheet.k};
         Words words = item.words;
         sheet.part(tall, [cover, wide, tall, words](const Pen& pen, float y) {

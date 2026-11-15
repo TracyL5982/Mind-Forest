@@ -9,6 +9,7 @@
  *   npm run formats -- --save out.json   also writes each sample's rule card, the model's reply, the verdict on it and the card drawn
  *   npm run formats -- --replay out.json puts the replies a run saved through the Renderer as it is now, with no model: what a change
  *                                        to a check makes of answers the model already gave
+ *   npm run formats -- --quick           asks the look call on the quick model, as a request marked quick is answered
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { ModelClient } from '../src/core/ports.ts';
@@ -33,13 +34,18 @@ else {
     console.error('MODEL_API_KEY is not set. Put it in ~/.muse-garden.env, or run with --fake.');
     process.exit(1);
   }
-  name = env.MUSE_LLM_MODEL || 'muse-spark-1.3';
-  model = new MetaModel({
+  const quick = process.argv.includes('--quick');
+  name = quick ? `${env.MIND_PALACE_QUICK_MODEL || 'muse-ember-1.0'}, quick` : env.MUSE_LLM_MODEL || 'muse-spark-1.3';
+  const host = new MetaModel({
     apiKey: env.MODEL_API_KEY,
     baseUrl: env.MUSE_LLM_BASE_URL || undefined,
     model: env.MUSE_LLM_MODEL || undefined,
+    quickModel: env.MIND_PALACE_QUICK_MODEL || undefined,
     onCall: (call) => calls.push({ ok: call.ok, ms: call.ms, tokens: call.tokens ?? 0 }),
   });
+  model = quick
+    ? { json: (req) => host.json(req.role === 'renderer.components' ? { ...req, quick: true } : req), search: (req) => host.search(req), image: (req) => host.image(req), transcribe: (req) => host.transcribe(req) }
+    : host;
 }
 
 const { outcomes, notes } = await run(model);

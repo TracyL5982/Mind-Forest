@@ -236,7 +236,8 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
       const json = await ask(`https://api.github.com/search/repositories?q=${q(query)}&per_page=${PER_SEARCH}`);
       return list(json.items).filter((r) => str(r.description)).map((r): Found => ({
         kind: 'repository',
-        title: str(r.full_name), by: str(r.owner?.login), date: `updated ${str(r.pushed_at).slice(0, 10)}`,
+        // The project's own name: its owner is who made it, and the name alone leaves the card room for what the project says it is.
+        title: str(r.name) || str(r.full_name), by: str(r.owner?.login), date: `updated ${str(r.pushed_at).slice(0, 10)}`,
         text: [str(r.description), `${r.stargazers_count} stars.`, str(r.language) ? `Written in ${str(r.language)}.` : '', list(r.topics).length > 0 ? `Topics: ${list(r.topics).slice(0, 6).join(', ')}.` : ''].filter(Boolean).join(' '),
         url: str(r.html_url),
       }));
