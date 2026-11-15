@@ -106,7 +106,7 @@ Every line the agent speaks is a `say`. `kind` tells the two apart: `reply` is t
 - **A newer run on the same card.** Asking again about a card while its run still works starts a new run. The older run's picks that already arrived stay, the rest of it is dropped, and only the newer run is announced, counting only its own picks.
 - **After organizing and a handoff.** `kind: 'results'`. What the Organizer did, and "Your handoff is ready: …". A question back, such as "What should the tree be about?", is a `reply`.
 
-The picks of a run arrive in several `change` sets before its `say`: written ideas and what the user already has first, then each find as it is ready. A run ends once its places are full, or once only a generated picture is still being made, so the `say` does not wait on work that can no longer land or on a picture that takes another 10 to 20 s. That picture arrives after the `say`, in a `change` of its own, with no second line.
+The picks of a run arrive in several `change` sets before its `say`: what the user already has as soon as it is rated, then each direction on its own as soon as it is ready, a written idea the moment the model has written it, a find once it is searched and chosen. A run ends once its places are full, or once only a generated picture is still being made, so the `say` does not wait on work that can no longer land or on a picture that takes another 10 to 20 s. That picture arrives after the `say`, in a `change` of its own, with no second line.
 
 ## Client to service
 

@@ -439,3 +439,57 @@ Earlier pairs said the same. An hour before, with the main model twice as slow: 
 **Measured.** With `COMPARE_ROLES` in the three runs of 41: components, 3 calls, the same component every time (a note), with a different phrase picked out for emphasis, in 1.2 to 2.5 s against 5.4 to 6.1 s. Every value a component shows is checked against the item's text before it is drawn, so the quick model cannot draw a number or a quote the item does not hold. Composites, 8 calls: the main model proposed a group 3 times (a comparison of two UI wiring options, a comparison of two books, a cluster of three standoff films), the quick model never. So composites stay where they are, off the path to the card.
 
 **Alternative.** Composites on the quick model as well: about 1 s, and no groups.
+
+## 43. Voice: every line goes through one say, marked reply or results
+
+**Decision.** The pipeline has one private `say`, and every line the agent speaks goes through it, the summary of an organize typed in a client included, which the server used to send itself. Each `say` carries `kind`: `reply` for the answer to what was just said (the Conductor's line, a question back such as "What should the tree be about?") and `results` for what finished work brought (a run's line, an organize's summary, a handoff being ready).
+
+**Why.** A real-time speech model is to become the agent's ears and voice (WS17). It takes what the pipeline says from one place, and a client can now tell the quick answer from the later news, to speak them differently or let the news wait. A client that reads no `kind` speaks both as before. The headset reads `say` for its `text` and ignores other fields.
+
+## 44. Activity: a short label for every step
+
+**Decision.** Each `activity` carries `label`: at most seven words saying what is being done in this step, true of it, for a client to show live. `detail` is optional longer text: what the user asked, a picture's prompt, an error. `message` stays, set to the label or the error, for clients that read it. Roles run their steps through `ctx.step(role, label, body, {nodeId, detail})`, which the pipeline turns into a start and an end. The Scout shows each of its steps on its card: thinking of directions, checking what the user already has, each search ("Searching research papers for adaptive menus"), fetching pictures, reading what a search returned ("Reading 6 results from Hacker News"), making a picture, looking for a video. The Renderer says "Laying out 2 cards", the Conductor "Working out what you mean". Titles in labels are cut at a whole word and never end on "of", "and" or "why" (`src/core/brief.ts`).
+
+**Why.** The user sees what the agent is doing on the headset while it works after the reply. Before, some lines were a whole request ("Looking for: something interesting to look at about generative UI") and some said nothing ("Choosing how to show this", "Listening"). The model's own reading of a card ("reads it as: …") is a `note`, a log line, not an activity.
+
+**Checked.** `test/labels.test.ts` runs every role over a scripted model, a drop, a tree, a spoken ask with a find, a picture and a video, an organize and a handoff, and holds every label to two to seven words in one line, every step to an end, and a Scout run to showing each kind of step on its card.
+
+## 45. Scout: directions are read as the model writes them, at minimal effort, and ties are rated on the quick model
+
+**Decision.** The Scout asks the main model for its directions at minimal effort and reads the reply as it is written (`onText` on the request, server-sent events from the Meta API, `completeElements` in `src/core/partial-json.ts`). Each direction is taken the moment it is whole and starts at once: a written idea lands, a find searches, a picture is made. The rating of ties to what the user already has moves to the quick model, and what it brings lands as soon as it is rated, before any new content. A run is over while the model is still writing once nothing it could write would land. The model is asked to write a picture direction first, since a picture takes longest.
+
+**Why.** The user: "it needs 30-60 seconds?? really??" The target they set is the first card about 10 s after the request and all of a run's cards within about 20 s. Thinking of directions was 19 to 25 s of it, and nothing could start until all six were written.
+
+**Measured, the model.** `scripts/ideate-compare.ts` caught the Scout's own request for three cards (the user's "help me find something interesting to look at" on generative UI, world building for the rural illustration with its picture, and "examples of standoffs in horror films") and sent it to each setting twice, alternating.
+
+| Setting | Time to write six directions, 6 runs |
+|---|---|
+| `muse-spark-1.3`, low effort (before) | 18.9 to 24.8 s |
+| `muse-spark-1.3`, minimal effort (adopted) | 11.1 to 15.2 s |
+| `muse-ember-1.0`, low effort | 3.3 to 4.9 s |
+| `muse-ember-1.0`, minimal effort | 2.7 to 4.1 s |
+| `gpt-5.4-mini`, low effort | 7.7 to 9.6 s (it refuses minimal) |
+
+The horror request decided it. Asked for examples, the main model at either effort named them: The Thing's blood test, Ripley at the airlock, the Get Out teacup, The Shining, the Halloween closet, A Quiet Place. Both quick models and gpt-5.4-mini wrote searches about the subject instead ("Books on the horror showdown tradition", "Essays on horror face-offs"), which the prompt names a failure. On the other two cards they were on topic but more generic. The directions are side by side at https://claude.ai/artifact/UeTq7jLUhs8bxLQGVV1SAm. Two blind readers (Opus, not told which setting wrote which set) ranked the six sets of each card. On every card both put a low-effort set first. The minimal-effort sets came next and never failed the request, though both of its world-building sets had a find with no search words and one horror set used Get Out twice. Both readers failed both quick-model horror sets for giving no examples.
+
+**Measured, the rating.** On the same three cards the quick model rated in 1.3 to 3.7 s against 9.7 to 15.7 s. Neither model brought a tie in any of the twelve runs, and the picks already there were rated alike, the quick model more steadily than the main one, whose two runs on one card disagreed on six of eight picks. With the directions this fast, a rating on the main model would have held back the first card.
+
+**Measured, end to end.** `scripts/ask-timing.ts`, the user's utterance on the generative UI card, from the transcript, alternating with a plain copy of 36914c7, three runs each:
+
+| | Before | After |
+|---|---|---|
+| Momo's reply | median 8.5 s (7.0 to 8.7) | median 1.0 s (0.9 to 1.3) |
+| First card | median 27.0 s (26.4 to 31.6) | median 12.0 s (7.7 to 13.9) |
+| First find | median 35.8 s (34.1 to 41.3) | median 12.0 s (11.9 to 13.9) |
+| The line saying what came | none | median 14.4 s (14.0 to 15.3) |
+| Last card | median 39.7 s (39.2 to 42.0) | median 27.1 s (23.3 to 30.5), a generated picture each time |
+
+Three runs just before, without the picture first, had the first card at 8.0, 9.2 and 13.0 s and the last at 30.7, 34.7 and 12.9 s (no picture). On the other two cards the first card came at 11.4 and 13.3 s and the line at 15.6 and 21.4 s, and the horror run brought The Shining, The Thing, Alien and Nope.
+
+**What bounds it.** The first direction is ready 5 to 8 s after the request reaches the model: it reasons for 240 to 510 tokens and writes its one-sentence reading before the directions. A find lands 1 to 5 s after its direction. A generated picture takes 9 to 24 s on its own, measured at 10.3 to 12.5 s alone with a short prompt and either size, so a run that makes one cannot have every card within 20 s. Its line does not wait for it.
+
+**A wrong first measurement.** The first streamed runs showed every search starting when the directions ended. The timing script read each reply to its end before handing it to the client, which undid the streaming. It now reads its copy on the side.
+
+**Cost.** The same six runs used, before, about 92,000 tokens a run (32,000 main-model, 54,000 for three pictures a run, none of them kept, 6,000 OpenAI search) and, after, about 63,000 (11,000 main-model, 30,000 quick-model, 19,000 for one picture). At the rate in 2, about $0.11 and $0.075.
+
+**Alternatives.** The quick model for directions: four times faster, and it loses the concrete examples. Split the six directions over two calls: twice as fast to write, but two calls that cannot see each other repeat angles, and the prompt that keeps them apart would have to be rewritten and judged again. Streaming kept the prompt as it was.
