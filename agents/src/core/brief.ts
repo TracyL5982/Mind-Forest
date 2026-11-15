@@ -44,5 +44,10 @@ export function label(doing: string, name: string, most = LABEL_WORDS): string {
   return room >= 1 && name.trim() ? `${doing} ${briefly(name, room)}` : doing;
 }
 
+/** The words of `text` that carry its meaning, without the small words a cut title must not end on. */
+export function contentWords(text: string): string[] {
+  return text.split(/\s+/).filter((word) => word && !DANGLING.has(word.toLowerCase().replace(/\p{P}+/gu, '')));
+}
+
 /** What a live label may hold: a few words, read at a glance. */
 export const LABEL_WORDS = 7;

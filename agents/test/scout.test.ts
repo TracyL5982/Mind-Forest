@@ -846,3 +846,27 @@ test('the run is over while the model is still writing, once nothing it writes c
   await until(() => k.mind.picks(anchor).length === 2);
   assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title, 'The shot at night']);
 });
+
+test('a find that came with no searches searches its title, whole on the web and cut to three plain words in a catalogue', async () => {
+  const k = kit({ picksPerRun: 2 });
+  const film = k.seedTree('Film', ['Dolly zoom']);
+  k.world.sources = [WEB, PAPERS];
+  const searched: string[] = [];
+  const search = k.ctx.tools.sources.search;
+  k.ctx.tools.sources.search = async (id, query) => (searched.push(`${id}: ${query}`), search(id, query));
+  k.model
+    .on('scout.ideate', () => ({
+      reading: '',
+      directions: [
+        direction('find', 'What the Studies Measured About the Dolly Zoom', { source: 'papers', lookups: [] }),
+        direction('find', 'Why These Fields Are Yellow', { source: 'web', lookups: ['', ' '] }),
+      ],
+    }))
+    .on('scout.curate', () => ({ chosen: [] }));
+
+  await scout(k.ctx, { anchor: film.nodeIds[0]! });
+
+  assert.ok(searched.includes('papers: Studies Measured Dolly'), JSON.stringify(searched));
+  assert.ok(searched.includes('web: Why These Fields Are Yellow'), JSON.stringify(searched));
+  assert.ok(!searched.some((s) => /: $/.test(s)), 'no search is ever empty');
+});

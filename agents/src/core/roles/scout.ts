@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { inLibrary, type Command, type Id, type Item, type ItemData, type Node } from '../domain.ts';
 import type { Found, Source } from '../ports.ts';
-import { label } from '../brief.ts';
+import { contentWords, label } from '../brief.ts';
 import { completeElements } from '../partial-json.ts';
 import { givesWay, KNOWN_MOST, LIBRARY_TOOL, MINDSTORM, newSlots, ROUND_MOST, sameness, treeKeys, urlKey } from '../round.ts';
 import { fittedTitle } from '../fitted.ts';
@@ -398,9 +398,8 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
       const web = sources.find((src) => src.id === 'web');
       const source = sources.find((src) => src.id === d.source.trim()) ?? web;
       if (!source) return [];
-      const wanted = d.lookups.map((l) => oneLine(l, 120)).filter(Boolean);
       const onWeb = () => gather(ctx, web!, [oneLine(d.title, 120)], taken);
-      const pool = await gather(ctx, source, wanted.length > 0 ? wanted : [oneLine(d.title, 120)], taken);
+      const pool = await gather(ctx, source, lookupsOf(ctx, d, source), taken);
       const rescue = web && source.id !== 'web';
       // A thin pool usually ends with nothing, so the slow web search starts now instead of after the model has said no.
       const early = rescue && pool.fresh.length < THIN_POOL ? onWeb() : null;
@@ -706,6 +705,19 @@ async function rate(ctx: RoleContext, run: Run, seen: ReadonlySet<string>, wante
     })
     .slice(0, KNOWN_MOST);
   return { ties, relevance };
+}
+
+/**
+ * What a find searches its source for: the searches the model wrote, or when it wrote none, its title, as it is for the web and
+ * cut to three plain words for a keyword catalogue, where each extra word removes results.
+ */
+function lookupsOf(ctx: RoleContext, d: Direction, source: Source): string[] {
+  const written = d.lookups.map((l) => oneLine(l, 120)).filter(Boolean);
+  if (written.length > 0) return written;
+  const title = oneLine(d.title, 120);
+  const query = source.id === 'web' ? title : contentWords(title).slice(0, 3).join(' ') || title;
+  ctx.note(ROLE, `"${oneLine(d.title, 60)}" came with no searches; searching ${source.name} for "${query}"`);
+  return [query];
 }
 
 /** A source as a label names it: a common noun in lower case ("research papers", "the web"), a name as it is ("Hacker News"). */
