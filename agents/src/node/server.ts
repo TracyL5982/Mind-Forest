@@ -281,7 +281,11 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         cards: (set) => landedCards(mind, set),
         nameOf: (nodeId) => (mind.nodes.has(nodeId) ? nameOf(mind.itemOf(nodeId)) : 'this card'),
         spoken: (turn) => pipeline.spoken(turn),
-        activity: (activity) => emit({ t: 'activity', activity }),
+        // Momo's own steps (a web search) are this device's alone: another headset's orb would show it working.
+        activity: (activity) => {
+          log(`[momo] ${activity.state}: ${activity.label}`);
+          if (own && own.readyState === own.OPEN) own.send(JSON.stringify({ t: 'activity', activity }));
+        },
         log,
       },
       (frame) => {

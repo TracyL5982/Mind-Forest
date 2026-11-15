@@ -35,6 +35,8 @@ export interface Activity {
   message: string;
   /** The node the work is about, so a client can show the work state in place. */
   nodeId?: Id;
+  /** The step is a whole Scout run on `nodeId`, not one of its parts, which name the card too. */
+  whole?: true;
 }
 
 /** `reply`: what the agent answers at once to what was said. `results`: what a piece of work brought, said when it is done. */
@@ -437,7 +439,7 @@ export class Pipeline {
           this.afterContent(set);
         };
         bring(await this.deps.roles.scout(this.ctx, { anchor, need, history: this.history.slice(-6), deliver: bring }));
-      }, need);
+      }, need, true);
     } catch (err) {
       this.fail('scout', err);
     }
@@ -528,9 +530,9 @@ export class Pipeline {
     this.deps.emit({ t: 'change', set });
   }
 
-  private async work<T>(role: string, label: string, nodeId: Id | undefined, body: () => Promise<T>, detail?: string): Promise<T> {
+  private async work<T>(role: string, label: string, nodeId: Id | undefined, body: () => Promise<T>, detail?: string, whole?: true): Promise<T> {
     const id = this.deps.newId();
-    const about = { id, role, label, ...(detail ? { detail } : {}), nodeId };
+    const about = { id, role, label, ...(detail ? { detail } : {}), nodeId, ...(whole ? { whole } : {}) };
     this.deps.emit({ t: 'activity', activity: { ...about, state: 'start', message: label } });
     try {
       const result = await body();

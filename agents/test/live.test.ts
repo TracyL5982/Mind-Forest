@@ -74,7 +74,8 @@ const pcm = (samples: number[]) => {
 };
 const tick = () => new Promise((ok) => setTimeout(ok, 0));
 const card = (title: string, anchor = 'n1'): CardNote => ({ anchor, under: 'Night stairs', kind: 'a picture', title, from: 'Rijksmuseum', why: 'The light' });
-const scout = (id: string, state: Activity['state'], nodeId = 'n1') => ({ t: 'activity', activity: { id, role: 'scout', state, label: 'Looking into Night stairs', message: '', nodeId } }) as const;
+/** A Scout run's own step on its card (`whole`), or one of its parts, which name the card too. */
+const scout = (id: string, state: Activity['state'], nodeId = 'n1', whole = true) => ({ t: 'activity', activity: { id, role: 'scout', state, label: 'Looking into Night stairs', message: '', nodeId, ...(whole ? { whole } : {}) } }) as const;
 const landed = (...titles: string[]) => ({ t: 'change', set: { titles } as unknown as ChangeSet }) as const;
 
 function voice(opts: { batchMs?: number; answerWaitMs?: number } = {}) {
@@ -275,11 +276,10 @@ test('cards of a run this device asked for are walked through: the first at once
   assert.equal(model.told().at(-1), '[From the agents] Your handoff is ready: night-stairs.');
 });
 
-test("a run's steps all name its card: the run is the step begun while none was open, it may bring nothing, and a card after its wrap-up is news of its own", () => {
+test("a run may bring nothing, a step that is not a run's own ends nothing, and a card after its wrap-up is news of its own", () => {
   const n = new Narration(6000);
   n.began('run', 'n1', 'Night stairs');
-  n.began('search', 'n1', 'Night stairs');
-  assert.equal(n.ended('search'), false, 'a step of the run');
+  assert.equal(n.ended('search'), false, 'a part of the run');
   assert.equal(n.next(0), null);
   assert.equal(n.ended('run'), true);
   assert.match(n.next(1)!, /^\[All done\] The search for "Night stairs" brought nothing new/);
@@ -288,7 +288,56 @@ test("a run's steps all name its card: the run is the step begun while none was 
   assert.match(n.next(10_000)!, /^\[More cards landed\] Under "Night stairs", 1 more: a picture "A late picture"/);
   n.began('again', 'n1', 'Night stairs');
   n.landed(card('Fresh'));
-  assert.match(n.next(20_000)!, /^\[Card landed\] The first card under "Night stairs": a picture "Fresh"/, 'a run begun once no step was open is new');
+  assert.match(n.next(20_000)!, /^\[Card landed\] The first card under "Night stairs": a picture "Fresh"/, 'a run begun after the last ended is new');
+});
+
+test('a newer run on a card Momo is walking through goes on as one run: the older one ending says nothing, and the wrap-up waits for the last', () => {
+  const { v, model, clock } = voice();
+  v.heard({ t: 'start', turn: 1, scene: SCENE });
+  model.hears('item-1', 'Find me bread pictures.');
+  model.begins('r0');
+  model.ends('r0');
+  v.observed(scout('older', 'start'));
+  v.observed(scout('older-search', 'start', 'n1', false));
+  v.observed(scout('newer', 'start'));
+  v.observed(scout('older-search', 'done', 'n1', false));
+  v.observed(scout('older', 'done'));
+  assert.ok(!model.told().some((t) => t.startsWith('[All done]')), `nothing is said of the older run, whose cards the pipeline drops: ${model.told().join(' | ')}`);
+  v.observed(landed('Rye loaf'));
+  assert.match(model.told().at(-1)!, /^\[Card landed\] The first card under "Night stairs": a picture "Rye loaf"/);
+  model.begins('r1', 'results');
+  model.ends('r1');
+  v.observed(scout('picture', 'start', 'n1', false));
+  clock.now += 4000;
+  v.observed(scout('newer', 'done'));
+  v.observed({ t: 'say', text: 'One new thing under Night stairs.', kind: 'results' });
+  assert.match(model.told().at(-1)!, /^\[All done\] The search for "Night stairs" is finished: 1 new card in all\./, 'the wrap-up comes as the run ends, though its picture is still being made');
+  assert.ok(!model.told().some((t) => t.includes('One new thing')));
+});
+
+test("a run on a card deleted while it ran, which the pipeline closes with no line, does not swallow the next line from the agents", async () => {
+  const { v, model } = voice();
+  v.heard({ t: 'start', turn: 1, scene: SCENE });
+  model.hears('item-1', 'Find me bread pictures.');
+  model.begins('r0');
+  model.ends('r0');
+  v.observed(scout('run', 'start'));
+  v.observed(scout('run', 'done'));
+  model.begins('r1', 'results');
+  model.ends('r1');
+  await tick();
+  v.observed({ t: 'say', text: 'Your handoff is ready: bread.', kind: 'results' });
+  assert.equal(model.told().at(-1), '[From the agents] Your handoff is ready: bread.');
+});
+
+test('a session OpenAI says has expired is closed at once, and the next name opens a new one', () => {
+  const { v, model, of } = voice();
+  v.heard({ t: 'start', turn: 1, scene: SCENE });
+  model.last.event({ type: 'error', error: { type: 'invalid_request_error', code: 'session_expired', message: 'Your session hit the maximum duration of 60 minutes.' } });
+  assert.equal(model.last.shut, true);
+  assert.deepEqual(of('failed').map((f) => f.t), ['failed'], 'the turn being heard fails');
+  v.heard({ t: 'start', turn: 2, scene: SCENE });
+  assert.equal(model.sessions.length, 2);
 });
 
 test('the name while Momo speaks stops it and cuts its voice in the conversation where the device was; a response asked for that had not begun is cancelled when it does', () => {
@@ -462,6 +511,14 @@ test("the service refuses /live without a live voice; with one, what Momo starts
   assert.ok(picks(headset.got).length > 0 && picks(headset.got).every((m) => m.yours === true), "the run's cards are the headset's own");
   assert.ok(picks(page.got).length > 0 && picks(page.got).every((m) => m.yours === undefined), "and reach the page as everyone's");
   assert.equal(JSON.parse(model.outputs()[0]!.output).started, true);
+
+  model.hears('item-2', 'Hey Momo, who won the Booker this year?');
+  model.begins('r2');
+  model.calls('r2', 'c2', 'web_answer', { question: 'Booker Prize 2026' });
+  model.ends('r2');
+  const momo = (got: typeof headset.got) => got.filter((m) => m.t === 'activity' && (m as { activity?: { role: string } }).activity?.role === 'momo');
+  await until(() => momo(headset.got).length >= 2);
+  assert.deepEqual(momo(page.got), [], "Momo's own steps reach only the headset that asked");
   live.close();
   headset.ws.close();
   page.ws.close();

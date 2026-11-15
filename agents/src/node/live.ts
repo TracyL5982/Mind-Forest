@@ -235,8 +235,8 @@ export class Upsampler {
 
 /** A Scout run this device asked for, while its cards land. */
 interface Run {
-  /** The run's own step, whose end is the run's. */
-  step: string;
+  /** The runs' own steps still open on the card: a newer run on it goes on as this one, which ends when the last of them does. */
+  steps: Set<string>;
   anchor: string;
   under: string;
   told: number;
@@ -250,28 +250,28 @@ const described = (c: CardNote) =>
 
 /**
  * When Momo hears of the cards a run brings. The first card of a run is told the moment it lands; later ones are gathered and told
- * together at most every `batchMs`; the run's end is a wrap-up with whatever was not told yet. A newer run on the same card takes
- * the older one's place, as the pipeline's own rule has it.
+ * together at most every `batchMs`; the run's end is a wrap-up with whatever was not told yet. A newer run on a card while one is
+ * under way goes on as the same run: the pipeline drops the older one's later cards and says nothing at its end, so the run ends
+ * when the last of its runs' steps does. Only a run's own step counts (`Activity.whole`): its parts name the card too, and a picture
+ * still being made after the run is over lands as one more.
  */
 export class Narration {
   private runs: Run[] = [];
-  /** The Scout's steps open on each card. Every step of a run names its card, so the run is the one begun while none was open. */
-  private open = new Map<string, Set<string>>();
   /** Cards whose runs were told done, by name, for a card that lands after: a picture made after the run was over. */
   private finished = new Map<string, string>();
   private lastTold = Number.NEGATIVE_INFINITY;
 
   constructor(private readonly batchMs = BATCH_MS) {}
 
-  /** A Scout step on `anchor` began, as this device asked: a new run, or a step of the one under way. */
+  /** A Scout run on `anchor` began, as this device asked: a new run, or a newer one on a card whose run is under way. */
   began(step: string, anchor: string, under: string): void {
-    const open = this.open.get(anchor) ?? new Set<string>();
-    if (open.size === 0) {
-      this.runs = this.runs.filter((r) => r.anchor !== anchor);
-      this.runs.push({ step, anchor, under, told: 0, waiting: [], ended: false });
+    const going = this.runs.find((r) => r.anchor === anchor && r.steps.size > 0 && !r.ended);
+    if (going) {
+      going.steps.add(step);
+      return;
     }
-    open.add(step);
-    this.open.set(anchor, open);
+    this.runs = this.runs.filter((r) => r.anchor !== anchor);
+    this.runs.push({ steps: new Set([step]), anchor, under, told: 0, waiting: [], ended: false });
   }
 
   /** A card under the run on its card; one that lands after the run was told done is news of its own. */
@@ -280,18 +280,19 @@ export class Narration {
     const under = this.finished.get(card.anchor);
     if (!run && under === undefined) return;
     if (!run) {
-      run = { step: '', anchor: card.anchor, under: under!, told: 1, waiting: [], ended: false };
+      run = { steps: new Set(), anchor: card.anchor, under: under!, told: 1, waiting: [], ended: false };
       this.runs.push(run);
     }
     run.waiting.push(card);
   }
 
-  /** The step ended. True when it was a run's own. */
+  /** A run's step ended. True when it was the last open on its card, so the run is over. */
   ended(step: string): boolean {
-    for (const open of this.open.values()) open.delete(step);
-    const run = this.runs.find((r) => r.step === step && !r.ended);
-    if (run) run.ended = true;
-    return Boolean(run);
+    const run = this.runs.find((r) => r.steps.has(step) && !r.ended);
+    if (!run) return false;
+    run.steps.delete(step);
+    if (run.steps.size === 0) run.ended = true;
+    return run.ended;
   }
 
   /** The note to give now, if one is due. */
@@ -404,8 +405,11 @@ export class LiveVoice {
   private narration: Narration;
   /** Lines from the pipeline waiting to be told. */
   private notes: string[] = [];
-  /** A run's step just ended, and its closing line, which the wrap-up stands for, is still to come. */
-  private runEnded = false;
+  /**
+   * A run just ended, and its closing line, which the wrap-up stands for, may follow at once. The pipeline says it in the same
+   * turn of the event loop, or not at all for a card deleted while it ran, so this lasts until the loop turns.
+   */
+  private runEnded: ReturnType<typeof setTimeout> | null = null;
   private wake: ReturnType<typeof setTimeout> | null = null;
   /** When everything sent to the device so far will have played there. */
   private playedUntil = 0;
@@ -498,15 +502,23 @@ export class LiveVoice {
     if (message.t === 'activity') {
       const a = message.activity;
       if (a.role !== 'scout') return;
-      if (a.state === 'start' && a.nodeId) this.narration.began(a.id, a.nodeId, this.deps.nameOf(a.nodeId));
-      else if (a.state !== 'start' && this.narration.ended(a.id)) this.runEnded = true;
+      if (a.state === 'start' && a.nodeId && a.whole) this.narration.began(a.id, a.nodeId, this.deps.nameOf(a.nodeId));
+      else if (a.state !== 'start' && this.narration.ended(a.id)) {
+        if (this.runEnded) clearTimeout(this.runEnded);
+        this.runEnded = setTimeout(() => (this.runEnded = null), 0);
+        this.runEnded.unref?.();
+      }
     } else if (message.t === 'change') {
       const cards = this.deps.cards(message.set);
       if (cards.length === 0) return;
       for (const card of cards) this.narration.landed(card);
     } else if (message.t === 'say') {
-      if (message.kind === 'results' && this.runEnded) this.runEnded = false;
-      else this.notes.push(`[From the agents] ${message.text}`);
+      if (message.kind === 'results' && this.runEnded) {
+        clearTimeout(this.runEnded);
+        this.runEnded = null;
+      } else {
+        this.notes.push(`[From the agents] ${message.text}`);
+      }
     } else {
       return;
     }
@@ -515,8 +527,8 @@ export class LiveVoice {
 
   /** The device left. */
   close(): void {
-    for (const timer of [this.idle, this.wake, this.expected?.timer]) if (timer) clearTimeout(timer);
-    this.idle = this.wake = this.expected = null;
+    for (const timer of [this.idle, this.wake, this.expected?.timer, this.runEnded]) if (timer) clearTimeout(timer);
+    this.idle = this.wake = this.expected = this.runEnded = null;
     this.session?.close();
     this.session = null;
   }
@@ -730,6 +742,13 @@ export class LiveVoice {
       case 'error': {
         const error = e.error as { message?: string; code?: string } | undefined;
         this.deps.log(`[live] the model refused an event: ${error?.code ?? ''} ${error?.message ?? ''}`.trim());
+        if (error?.code === 'session_expired') {
+          // OpenAI ends a session after 60 minutes and may leave its socket open: a new one opens at the next name.
+          const session = this.session;
+          this.lost('the session expired');
+          session?.close();
+          return;
+        }
         if (error?.code === 'conversation_already_has_active_response' && this.asked) {
           // The turn detection began one first. What was asked waits for it to end, unless it was that same turn's answer.
           if (this.asked.retry) this.refused = this.asked.purpose;
