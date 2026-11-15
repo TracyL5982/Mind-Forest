@@ -17,12 +17,13 @@ function api(): { fetch: typeof fetch; sent: { model: string; reasoning: { effor
 
 const ask = { role: 'test', system: 's', user: 'u', schema: z.object({ answer: z.string() }) };
 
-test('a quick request goes to the quick model with the least reasoning, and any other to the main model', async () => {
+test('a quick request goes to the quick model with the least reasoning unless it asks for more, and any other to the main model', async () => {
   const wire = api();
   const model = new MetaModel({ apiKey: 'k', fetch: wire.fetch });
   assert.deepEqual(await model.json({ ...ask, quick: true }), { answer: 'yes' });
   await model.json({ ...ask, effort: 'medium' });
-  assert.deepEqual(wire.sent.map((b) => [b.model, b.reasoning.effort]), [['muse-ember-1.0', 'minimal'], ['muse-spark-1.3', 'medium']]);
+  await model.json({ ...ask, quick: true, effort: 'low' });
+  assert.deepEqual(wire.sent.map((b) => [b.model, b.reasoning.effort]), [['muse-ember-1.0', 'minimal'], ['muse-spark-1.3', 'medium'], ['muse-ember-1.0', 'low']]);
 
   const chosen = api();
   await new MetaModel({ apiKey: 'k', fetch: chosen.fetch, quickModel: 'muse-other' }).json({ ...ask, quick: true });
@@ -45,4 +46,50 @@ test('a quick request that goes unanswered is tried again after its own short wa
   clearInterval(open);
   assert.equal(asked, 2);
   assert.ok(Date.now() - started < 5000);
+});
+
+/** A reply as the Responses API streams it: server-sent events, the text in pieces, split across reads wherever the network splits it. */
+function streamed(pieces: string[], cutEvery = 7): Response {
+  const events = [
+    { type: 'response.created' },
+    { type: 'response.output_item.added', item: { type: 'message' } },
+    ...pieces.map((delta) => ({ type: 'response.output_text.delta', delta })),
+    { type: 'response.completed', response: { usage: { total_tokens: 30 } } },
+  ];
+  const wire = events.map((e) => `event: ${e.type}\r\ndata: ${JSON.stringify(e)}\r\n\r\n`).join('');
+  const bytes = new TextEncoder().encode(wire);
+  return new Response(new ReadableStream({
+    start(c) {
+      for (let i = 0; i < bytes.length; i += cutEvery) c.enqueue(bytes.slice(i, i + cutEvery));
+      c.close();
+    },
+  }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+}
+
+test('a request that reads its reply as it is written is streamed, and handed the text so far after each piece', async () => {
+  const sent: { stream?: boolean }[] = [];
+  const fetch = (async (_url: string, init: RequestInit) => {
+    sent.push(JSON.parse(String(init.body)));
+    return streamed(['{"answer":', '"ye', 's"}']);
+  }) as typeof globalThis.fetch;
+  const seen: string[] = [];
+
+  const reply = await new MetaModel({ apiKey: 'k', fetch }).json({ ...ask, onText: (soFar) => seen.push(soFar) });
+
+  assert.deepEqual(reply, { answer: 'yes' });
+  assert.deepEqual(seen, ['{"answer":', '{"answer":"ye', '{"answer":"yes"}']);
+  assert.equal(sent[0]!.stream, true);
+});
+
+test('a streamed reply that breaks after some text was handed on is not asked again', async () => {
+  let asked = 0;
+  const fetch = (async () => {
+    asked++;
+    const bytes = new TextEncoder().encode(`data: ${JSON.stringify({ type: 'response.output_text.delta', delta: '{"ans' })}\n\n`);
+    let reads = 0;
+    return new Response(new ReadableStream({ pull(c) { if (reads++ === 0) c.enqueue(bytes); else c.error(new Error('connection cut')); } }), { status: 200 });
+  }) as typeof globalThis.fetch;
+
+  await assert.rejects(new MetaModel({ apiKey: 'k', fetch }).json({ ...ask, onText: () => {} }), /connection cut/);
+  assert.equal(asked, 1);
 });

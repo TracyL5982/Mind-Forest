@@ -10,9 +10,15 @@ export interface JsonRequest<T> {
   images?: string[];
   /** Public URLs or data: URLs of video the model should watch. */
   videos?: string[];
-  effort?: 'low' | 'medium' | 'high';
-  /** A short answer the user is waiting on. The host answers it with a smaller, faster model and as little reasoning as it allows. */
+  /** How much the model reasons. A quick request reasons as little as the host allows unless this says otherwise. */
+  effort?: 'minimal' | 'low' | 'medium' | 'high';
+  /** An answer the user is waiting on. The host answers it with a smaller, faster model. */
   quick?: boolean;
+  /**
+   * Called with the reply's text so far each time more of it is written, for a role that acts on the start of a reply.
+   * A host that cannot stream calls it once, with the whole text. The returned value is the whole reply, as without it.
+   */
+  onText?: (soFar: string) => void;
 }
 
 export interface WebResult {
