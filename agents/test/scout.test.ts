@@ -770,3 +770,28 @@ test('the run is over once its slots are full, without waiting on a direction th
   assert.ok(rest, 'the run ended');
   assert.equal(picked(k, anchor).length, 3);
 });
+
+test('the run is over once every slot left is held by a picture still being made, and a find still out cannot take it', async () => {
+  const { k, anchor } = crowded(direction('image', 'The shot at night', { images: [{ title: 'Night', prompt: 'the staircase at night' }] }));
+  const painting = gate();
+  const slow = gate();
+  const generate = k.ctx.tools.images.generate;
+  k.ctx.tools.images.generate = async (prompt) => {
+    await painting.wait;
+    return generate(prompt);
+  };
+  const search = k.ctx.tools.sources.search;
+  k.ctx.tools.sources.search = async (id, query) => {
+    if (query === 'later') await slow.wait;
+    return search(id, query);
+  };
+
+  const rest = await Promise.race([scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }), new Promise<null>((r) => setTimeout(() => r(null), 500))]);
+
+  assert.ok(rest, 'the run ended with the picture and a find still out');
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['books record 1', 'news record 1']);
+  painting.open();
+  slow.open();
+  await until(() => k.mind.picks(anchor).length === 3);
+  assert.equal(picked(k, anchor)[2]!.title, 'The shot at night');
+});

@@ -163,8 +163,12 @@ export const scout: Roles['scout'] = async (ctx, input) => {
   // A gallery makes only the pictures it could keep: one, and more only when there are slots to spare.
   const spare = Math.max(0, room - made.length);
   // The run is over once its slots are full, so what it says it brought does not wait on work that can no longer land. With somewhere
-  // to deliver, it is also over when only pictures are still being made: they take 10 to 20 s, and each is delivered when it is ready.
-  const over = () => out.size === 0 || room <= 0 || (input.deliver !== undefined && [...out].every(pictured));
+  // to deliver, it is also over when only pictures are still being made, or every slot left is held by one: a picture takes 10 to
+  // 20 s and is delivered when it is ready, and a find still out lands after it only if a picture fails.
+  const over = () => {
+    const held = [...out].filter(pictured).length;
+    return out.size === 0 || room <= 0 || (input.deliver !== undefined && (held === out.size || room <= held));
+  };
   await new Promise<void>((done) => {
     if (over()) done();
     for (const d of made) {
