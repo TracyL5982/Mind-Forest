@@ -967,3 +967,21 @@ test('a group the model proposed for a card that gave way while it was asked is 
   assert.ok(!commands.some((c) => c.type === 'setGroup'), 'the group named a card that is gone');
   if (commands.length > 0) k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands });
 });
+
+test('a timeline the model proposed is still drawn from the siblings that stayed when one gave way while it was asked', async () => {
+  const k = kit();
+  const dated = (title: string, when: string) => ({ title, text: `${title}, ${when}.`, summary: `Made in ${when}`, status: 'pick' as const, why: 'a step in the timeline' });
+  const { root, ids } = grow(k, [dated('Sketchpad', '1963'), dated('Mother of All Demos', '1968'), dated('Alto', '1973'), dated('Macintosh', '1984'), dated('Web', '1991')]);
+  const composites = slowComposites(k, () => ({ groups: [proposal({ parent: root, composite: 'timeline', members: ids, labels: ['1963', '1968', '1973', '1984', '1991'] })] }));
+
+  const run = renderer(k.ctx, { nodeIds: ids });
+  await composites.asked;
+  k.mind.apply({ origin: { by: 'agent', role: 'scout' }, label: 'make room', commands: [{ type: 'deleteNode', id: ids[0]! }] });
+  composites.open();
+  const commands = await run;
+
+  const timeline = commands.find((c) => c.type === 'setGroup');
+  assert.ok(timeline && timeline.type === 'setGroup', 'the timeline is kept');
+  assert.deepEqual(timeline.group.members, ids.slice(1));
+  k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands });
+});

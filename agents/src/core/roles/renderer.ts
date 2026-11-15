@@ -874,10 +874,11 @@ async function askComposites(ctx: RoleContext, pools: Pool[], changed: ReadonlyS
     const members = [...new Set(g.members)];
     const pool = asked.find((p) => p.parent.id === g.parent && members.length > 0 && members.every((id) => p.asked.includes(id)));
     if (!pool) continue;
+    // A sibling that gave way to a fuller round while the model was asked is not read.
     const draft = draftFrom(
       ctx,
       g,
-      members.filter((id) => !pool.taken.has(id)),
+      members.filter((id) => !pool.taken.has(id) && ctx.mind.nodes.has(id)),
     );
     if (draft) add(ctx, pool, draft, out);
   }
