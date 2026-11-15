@@ -44,6 +44,7 @@ export type Source = z.infer<typeof Source>;
  * term and definition, items string[] with checklist boolean[], colours {name, value}[], excerpt {text, at?},
  * at {lat, lon} (where the item is, in degrees, from a photo's GPS position or a lookup of `where`),
  * mediaUrl and thumbnailUrl (service addresses of a playable file and its still), embed (a player only a browser can show),
+ * image (the address of a picture of the item's own, such as the service's copy of the preview picture a dropped page names),
  * library (a LibraryRef).
  * A Scout pick also carries what its source catalogued: kind (artwork, paper or book), medium, holder, authors string[],
  * authorsCut true (when the source lists only the first of them), venue.

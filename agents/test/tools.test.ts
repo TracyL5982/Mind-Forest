@@ -6,7 +6,7 @@ import { MemoryAssets } from './kit.ts';
 
 const PAGE = 'https://example.com/post/1';
 
-/** The web as the service sees it: each address answers with its response, and any other with a 404. */
+/** The web as the service sees it. Each address answers with its response, and any other with a 404. */
 function web(answers: Record<string, () => Response>) {
   const send = (async (input: string | URL | Request) => answers[String(input)]?.() ?? new Response('', { status: 404 })) as typeof fetch;
   const assets = new MemoryAssets();
