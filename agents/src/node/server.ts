@@ -275,7 +275,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         name: () => spokenName(settings.agentName),
         words: (scene) => likelyWords(mind, scene.treeId ?? null),
         tools: toolSpecs,
-        call: (name, args, scene) => asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer: live.webAnswer })),
+        call: (name, args, scene, said) => asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer: live.webAnswer, said })),
         label: toolLabel,
         where: (scene) => whereNote(pipeline.ctx, scene),
         cards: (set) => landedCards(mind, set),

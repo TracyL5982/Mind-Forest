@@ -10,7 +10,7 @@ import type { DeviceFrame } from './protocol.ts';
  * microphone goes to the model, whose turn detection hears when the user is done; the model answers in its own words, from what it
  * knows, or through its tools (`core/voice-tools.ts`): a quick web answer, the user's saved cards, and the pipeline's moves, such as
  * new cards on the open card. As the cards of a run this device asked for land, the service tells the model in short notes, and it
- * walks the user through them. The frames are in docs/protocol.md; why it is built this way is in agents/DECISIONS.md (57 to 59).
+ * walks the user through them. The frames are in docs/protocol.md; why it is built this way is in agents/DECISIONS.md (57 to 59, 61).
  */
 
 export type SayKind = 'reply' | 'results';
@@ -63,6 +63,11 @@ const PAUSE_MS = 1800;
 const PIECE_SAMPLES = 1600;
 /** How long the turn detection may take to begin the turn's answer before the service asks for it. */
 const ANSWER_WAIT_MS = 4000;
+/**
+ * How long after a turn was over a call waits for the turn's words to be written down. In the live benches the transcription took
+ * 0.51 s at the median and 1.49 s at the slowest (403 turns); 2 of 77 calls that started a Scout run came before it, by 50 and 68 ms.
+ */
+const SAID_MS = 1500;
 /** Calls whose output Momo always speaks from. The others act, and Momo said what it is doing as it called them. */
 const ANSWERS = new Set(['web_answer', 'look_up_mindstorm']);
 
@@ -117,8 +122,8 @@ export interface LiveDeps {
   words: (scene: Scene) => string;
   /** The tools the model may call, as the session declares them. */
   tools: () => Record<string, unknown>[];
-  /** Runs one call as this device's own request. */
-  call: (name: string, args: string, scene: Scene) => Promise<ToolOutput>;
+  /** Runs one call as this device's own request. `said`: the user's words in the turn that made it, for a call that needs them. */
+  call: (name: string, args: string, scene: Scene, said: () => Promise<string | undefined>) => Promise<ToolOutput>;
   /** A few words for the orb while a call runs, or nothing for a call too quick to show. */
   label: (name: string, args: string) => string | undefined;
   /** Where the user is, in a few lines, for the model. */
@@ -381,6 +386,8 @@ export class LiveVoice {
   private words = { turn: 0, text: '' };
   /** Pieces of turns being written down, by the model's item. */
   private transcribing = new Map<string, { turn: number; text: string; over: number }>();
+  /** Calls waiting on a turn's words, each looking again as a piece is written down or fails. */
+  private waiting = new Set<() => void>();
   private scene: Scene = { selection: [] };
   /** What Momo was last told of where the user is. */
   private toldWhere: string | null = null;
@@ -641,6 +648,7 @@ export class LiveVoice {
         this.device({ t: 'heard', turn: t.turn, text: whole, final: true });
         const clean = withoutWakePhrase(text, this.deps.name()).trim();
         if (clean) this.deps.spoken({ who: 'user', text: clean });
+        for (const look of [...this.waiting]) look();
         return;
       }
       case 'conversation.item.input_audio_transcription.failed': {
@@ -648,6 +656,7 @@ export class LiveVoice {
         if (!t) return;
         this.transcribing.delete(e.item_id as string);
         this.deps.log(`[live] turn ${t.turn} could not be written down: ${JSON.stringify(e.error ?? '')}`);
+        for (const look of [...this.waiting]) look();
         return;
       }
       case 'response.created': {
@@ -777,7 +786,7 @@ export class LiveVoice {
     step('start');
     let output: ToolOutput;
     try {
-      output = await this.deps.call(name, args, this.scene);
+      output = await this.deps.call(name, args, this.scene, () => this.said(turn));
     } catch (err) {
       output = { error: `It failed: ${err instanceof Error ? err.message : String(err)}` };
     }
@@ -789,6 +798,30 @@ export class LiveVoice {
     const answer = ANSWERS.has(name) || 'error' in output || 'why' in output || (turn !== undefined && this.answering?.turn === turn);
     this.ready.push({ call, output: JSON.stringify(output), answer, ...(turn !== undefined ? { turn } : {}) });
     this.drain();
+  }
+
+  /** The user's words in `turn`, without the name, once written down: a piece still being written is waited for until `SAID_MS` after the turn was over. */
+  private async said(turn: number | undefined): Promise<string | undefined> {
+    if (turn === undefined) return undefined;
+    const writing = () => [...this.transcribing.values()].filter((t) => t.turn === turn);
+    if (writing().length > 0) {
+      const left = Math.max(...writing().map((t) => t.over)) + SAID_MS - this.now();
+      await new Promise<void>((done) => {
+        const stop = () => {
+          clearTimeout(timer);
+          this.waiting.delete(look);
+          done();
+        };
+        const look = () => writing().length === 0 && stop();
+        const timer = setTimeout(stop, Math.max(0, left));
+        this.waiting.add(look);
+      });
+      if (writing().length > 0) {
+        this.deps.log(`[live] turn ${turn} not written down ${SAID_MS} ms after it was over: the call goes on without the user's words`);
+        return undefined;
+      }
+    }
+    return this.words.turn === turn && this.words.text ? this.words.text : undefined;
   }
 
   /**

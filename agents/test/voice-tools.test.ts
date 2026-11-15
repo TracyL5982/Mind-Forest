@@ -4,13 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
+import type { Roles } from '../src/core/roles/types.ts';
 import { landedCards, runTool, shapeOf, toolLabel, toolSpecs, whereNote } from '../src/core/voice-tools.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer } from '../src/node/server.ts';
 
-async function world() {
-  const run = await startServer({ port: 0, host: '127.0.0.1', dataDir: mkdtempSync(join(tmpdir(), 'mp-tools-')), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret' });
+async function world(roles: Roles = fakeRoles) {
+  const run = await startServer({ port: 0, host: '127.0.0.1', dataDir: mkdtempSync(join(tmpdir(), 'mp-tools-')), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles, token: 'secret' });
   await run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: Sourdough rises slowly in winter' }]);
   await run.pipeline.idle();
   const tree = [...run.mind.trees.values()][0]!;
@@ -20,8 +21,8 @@ async function world() {
   const ws = new WebSocket(`${run.url.replace('http', 'ws')}/ws?token=secret`);
   ws.on('message', (raw) => said.push(JSON.parse(String(raw))));
   await new Promise((ok) => ws.on('open', ok));
-  const call = async (name: string, args: object, focus = root, webAnswer?: (q: string) => Promise<string>) => {
-    const out = await runTool(name, JSON.stringify(args), { pipeline: run.pipeline, scene: { focus, treeId: tree.id, selection: [] }, webAnswer });
+  const call = async (name: string, args: object, focus = root, webAnswer?: (q: string) => Promise<string>, said?: () => Promise<string | undefined>) => {
+    const out = await runTool(name, JSON.stringify(args), { pipeline: run.pipeline, scene: { focus, treeId: tree.id, selection: [] }, webAnswer, said });
     await run.pipeline.idle();
     await new Promise((r) => setTimeout(r, 20));
     return out;
@@ -53,6 +54,32 @@ test('find_new brings new cards onto the open card and answers at once; more_lik
     assert.equal(out.on, 'Sourdough rises slowly in winter');
     assert.ok(w.run.mind.picks(w.root).length > before, 'a Scout run on the open card brought picks');
     assert.equal((await w.call('more_like_this', { narrower: '' })).started, true);
+  } finally {
+    await w.close();
+  }
+});
+
+test("a narrower Momo gives more_like_this goes to the Scout beside the user's words as its reading, or alone when no words came, as find_new's subject does", async () => {
+  const asked: { need?: string; reading?: string }[] = [];
+  const w = await world({
+    ...fakeRoles,
+    scout: (ctx, input) => {
+      asked.push({ need: input.need, reading: input.reading });
+      return fakeRoles.scout(ctx, input);
+    },
+  });
+  try {
+    asked.length = 0;
+    await w.call('more_like_this', { narrower: 'older ones' }, w.root, undefined, async () => 'More of these, but older ones.');
+    await w.call('more_like_this', { narrower: '' }, w.root, undefined, async () => 'Keep going.');
+    await w.call('more_like_this', { narrower: 'older ones' }, w.root, undefined, async () => undefined);
+    await w.call('find_new', { subject: 'rye bread', angle: 'old recipes' });
+    assert.deepEqual(asked, [
+      { need: 'More of these, but older ones.', reading: 'older ones' },
+      { need: undefined, reading: undefined },
+      { need: undefined, reading: 'older ones' },
+      { need: undefined, reading: 'rye bread, old recipes' },
+    ]);
   } finally {
     await w.close();
   }

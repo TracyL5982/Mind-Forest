@@ -94,6 +94,8 @@ interface Run {
   anchor: Node;
   item: Item;
   need: string;
+  /** How Momo read a spoken request: told beside `need` as a suggestion, or alone when the user's words were not written down. */
+  reading: string;
   /** The anchor, where it sits, what surrounds it and what was said, as prose for every prompt of the run. */
   brief: string;
   /** The nearest picture at or above the anchor, for the model to look at. */
@@ -122,7 +124,8 @@ export const scout: Roles['scout'] = async (given, input) => {
   }
   const item = ctx.mind.itemOf(anchor.id);
   const need = oneLine(input.need ?? '', 400);
-  const run: Run = { anchor, item, need, brief: describe(ctx, anchor, item, need, input.history ?? []), picture: await pictureFor(ctx, anchor) };
+  const reading = oneLine(input.reading ?? '', 400);
+  const run: Run = { anchor, item, need, reading, brief: describe(ctx, anchor, item, need, reading, input.history ?? []), picture: await pictureFor(ctx, anchor) };
   const wanted = Math.max(1, Math.floor(input.count ?? ctx.settings.picksPerRun));
   // Nothing the run brings may repeat what the tree holds, except that what the user already has may take the place of the same thing brought new.
   const seen = new Set(treeKeys(ctx.mind, anchor.treeId).keys());
@@ -149,7 +152,7 @@ export const scout: Roles['scout'] = async (given, input) => {
     room--;
     lane.filled++;
     for (const key of keys) seen.add(key);
-    const why = oneLine(d.why, 80) || oneLine(d.angle, 80) || (need ? `for "${oneLine(need, 60)}"` : `from ${oneLine(nameOf(item), 60)}`);
+    const why = oneLine(d.why, 80) || oneLine(d.angle, 80) || (need || reading ? `for "${oneLine(need || reading, 60)}"` : `from ${oneLine(nameOf(item), 60)}`);
     // Made for what the user asked just now, so nothing in the round is more related to it.
     return [{ type: 'addItem', item: pick }, under(pick, { why, importance: 1, tool })];
   };
@@ -342,7 +345,14 @@ const SYSTEM = `You are the Scout of Mind Palace, a spatial brainstorming app. P
 
 You are a widely read partner, as at home in science, technology, business and history as in art, film and craft. You are not a search engine. Everything you bring is shown as a card inside the app, so each card must be the content itself: something to read, look at, listen to or watch on the spot. Never tell the user to go and look something up.`;
 
-function describe(ctx: RoleContext, anchor: Node, item: Item, need: string, history: Turn[]): string {
+/** How Momo read a spoken request, beside the user's words or in place of words that were not written down. Never told as theirs. */
+function readingOf(need: string, reading: string): string {
+  return need
+    ? `How the voice assistant the user spoke to read it, a suggestion and not the user's words: "${reading}". It may help with what they meant, such as what "this" refers to. Where the two differ, the user's words win.`
+    : `The user asked by voice and their words were not written down. How the voice assistant they spoke to read the request, not the user's words: "${reading}".`;
+}
+
+function describe(ctx: RoleContext, anchor: Node, item: Item, need: string, reading: string, history: Turn[]): string {
   const { mind } = ctx;
   const path = mind.path(anchor.id);
   const above = path.slice(0, -1).map((n) => {
@@ -368,7 +378,8 @@ function describe(ctx: RoleContext, anchor: Node, item: Item, need: string, hist
     siblings.length > 0 ? `Beside it:\n${siblings.join('\n')}` : '',
     hanging.length > 0 ? `Already hanging off it. Do not repeat these or their directions:\n${hanging.join('\n')}` : 'Nothing hangs off it yet.',
     said.length > 0 ? `The recent conversation:\n${said.join('\n')}` : '',
-    need ? `What the user just asked for: "${need}"` : 'The user has not said what they want.',
+    need ? `What the user just asked for: "${need}"` : reading ? '' : 'The user has not said what they want.',
+    reading ? readingOf(need, reading) : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -396,8 +407,8 @@ async function pictureFor(ctx: RoleContext, anchor: Node): Promise<string | unde
  * examples a request for examples asks for.
  */
 async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Direction) => void): Promise<void> {
-  const asked = run.need
-    ? `The user asked for "${run.need}". Every direction must serve that request as it applies to this very thing, not the topic in general. Asked for "world building" on a picture, you build the world of that picture: who lives there, its places, its history, its rules. Asked for "examples from horror films", every direction is such an example.`
+  const asked = run.need || run.reading
+    ? `${run.need ? `The user asked for "${run.need}".` : `The voice assistant read the user's request as "${run.reading}".`} Every direction must serve that request as it applies to this very thing, not the topic in general. Asked for "world building" on a picture, you build the world of that picture: who lives there, its places, its history, its rules. Asked for "examples from horror films", every direction is such an example.`
     : 'The user gave no explanation, so show them where this could go. Each direction leaves from something specific you can see or read in it and heads somewhere different.';
   const seen = new Set<string>();
   let offered = 0;
@@ -520,7 +531,7 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
       format: video ? 'video' : 'find',
       title: oneLine(look.title, 120) || search,
       // A video shows its direction's body as its text. A find's goes only to the model choosing among the records.
-      body: video ? '' : run.need ? `What the user asked for: "${run.need}".` : '',
+      body: video ? '' : run.need ? `What the user asked for: "${run.need}".` : run.reading ? `What the voice assistant read the user's request as: "${run.reading}".` : '',
       why: look.why,
       tags: look.tags,
       ...UNWRITTEN,
@@ -979,7 +990,7 @@ interface Rated {
 async function rate(ctx: RoleContext, run: Run, seen: ReadonlySet<string>, wanted: number): Promise<Rated> {
   const { item, anchor } = run;
   const coverage = new Map<Id, number>();
-  for (const query of [item.title, `${item.title} ${item.tags.join(' ')}`, run.need]) {
+  for (const query of [item.title, `${item.title} ${item.tags.join(' ')}`, run.need, run.reading]) {
     if (!query.trim()) continue;
     for (const hit of ctx.mind.search(query, { limit: KNOWN_CANDIDATES * 2 })) {
       if (hit.coverage < KNOWN_COVERAGE || !ctx.mind.known(hit.id) || sameness(hit.item).some((key) => seen.has(key))) continue;
