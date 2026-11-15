@@ -84,7 +84,7 @@ test('a two-tree handoff holds both outlines, plain labels, each URL once, inner
   assert.match(md, /summary: He explains the shot\./);
   assert.match(md, /- user: Which lens\?\n\s+- assistant: A 35mm\./);
 
-  const order = ['## What to do next', '## Outline', '## Connections', '## Open questions', '## Sources', '## Attached files'].map((h) => md.indexOf(h));
+  const order = ['## What to do next', '## Outline', '## Connections', '## Open questions', '## Sources', '## Pictures and files'].map((h) => md.indexOf(h));
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
   assert.ok(order.every((i) => i > 0));
   assert.match(md, /Write a one-page shot list/);
@@ -95,9 +95,47 @@ test('a two-tree handoff holds both outlines, plain labels, each URL once, inner
   assert.ok(!md.includes('should not appear'));
   assert.equal(md.split('](https://example.com/lenses)').length - 1, 1, 'a URL is listed once in Sources');
   assert.match(md, /\[Hitchcock interview\]\(https:\/\/example\.com\/hitchcock\)/);
-  assert.match(md, new RegExp(`\`assets/${w.photo}\`: staircase\\.jpg \\(image/jpeg\\)`));
+  assert.match(out.bundled, new RegExp(`\`assets/${w.photo}\`: staircase\\.jpg \\(image/jpeg\\)`));
   assert.deepEqual(out.assets, [w.photo]);
   assert.equal(out.name, 'film-and-1-more-handoff-2026-11-13');
+});
+
+/** A node's lines in a handoff's Markdown: its bold line and the fields under it, up to the next node. */
+function block(md: string, title: string): string {
+  const lines = md.split('\n');
+  const start = lines.findIndex((l) => l.trimStart().startsWith(`- **${title}**`));
+  assert.ok(start >= 0, `"${title}" is in the outline`);
+  const end = lines.findIndex((l, i) => i > start && /^\s*- \*\*/.test(l));
+  return lines.slice(start, end < 0 ? undefined : end).join('\n');
+}
+
+test('the file that travels alone names no attached file: each picture is described, with the web address it came from', async () => {
+  const w = await world();
+  scriptModel(w.k);
+  const capturedAt = '2026-11-13T00:00:00.000Z';
+  const { id: found } = await w.k.assets.put(new Uint8Array([4]), 'image/jpeg', 'poster.jpg');
+  const { id: made } = await w.k.assets.put(new Uint8Array([5]), 'image/png', 'spiral.png');
+  hang(w.k, w.film.treeId, w.dolly, { title: 'Vertigo poster', kind: 'image', summary: 'The spiral poster.', source: { from: 'web', url: 'https://example.com/vertigo-poster', asset: found, capturedAt } }, 'kept');
+  hang(w.k, w.film.treeId, w.dolly, { title: 'Spiral sketch', kind: 'image', summary: 'A spiral staircase from above.', source: { from: 'image-gen', asset: made, capturedAt } }, 'pick');
+  hang(w.k, w.film.treeId, w.dolly, { title: 'Zoom reel', kind: 'video', data: { mediaUrl: 'https://media.example.org/zoom.mp4' }, source: { from: 'web', url: 'https://example.org/zoom', capturedAt } }, 'pick');
+
+  const out = await packager(w.k.ctx, { scope: { treeIds: [w.film.treeId], nodeIds: [] } });
+
+  assert.ok(!out.markdown.includes('assets/'), 'the travelling file names no file of the bundle');
+  assert.match(block(out.markdown, 'Staircase still'), /- picture: not attached\. The summary and text here describe it\./);
+  const poster = block(out.markdown, 'Vertigo poster');
+  assert.match(poster, /- summary: The spiral poster\./);
+  assert.match(poster, /- url: https:\/\/example\.com\/vertigo-poster/);
+  assert.match(poster, /- picture: not attached\./);
+  const sketch = block(out.markdown, 'Spiral sketch');
+  assert.match(sketch, /- picture: not attached, made by an image generator\./);
+  assert.ok(!/- (url|media):/.test(sketch), 'a generated picture is described only');
+  assert.match(block(out.markdown, 'Zoom reel'), /- media: https:\/\/media\.example\.org\/zoom\.mp4/);
+  assert.match(out.markdown, /## Pictures and files\n\nNo file comes with this one\. The 3 pictures, videos and files in the outline are described in words/);
+  assert.ok(!out.markdown.includes('## Attached files'));
+
+  for (const id of [w.photo, found, made]) assert.ok(out.bundled.includes(`assets/${id}`), 'the bundle still says where each file sits');
+  assert.equal(out.title, 'Film');
 });
 
 test('the JSON parses and nests nodes under their parents', async () => {

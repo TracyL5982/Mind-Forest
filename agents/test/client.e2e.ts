@@ -13,6 +13,7 @@ import { chromium, type Locator, type Page } from 'playwright-core';
 import type { Running } from '../src/node/server.ts';
 import { COMPONENT_IDS, STRUCTURED_IDS } from '../src/core/samples.ts';
 import { CHIPPED, LONG_PLACE, PLACED, PNG, STRUCTURED, bootFake, browserPath, chipped, crowd, showcase, spills, unknownShape } from './stage.ts';
+import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 
 const shots = process.env.MIND_PALACE_SHOTS ? resolve(process.env.MIND_PALACE_SHOTS) : mkdtempSync(join(tmpdir(), 'mp-shots-'));
 mkdirSync(shots, { recursive: true });
@@ -285,6 +286,36 @@ async function main(): Promise<void> {
       await page.getByRole('radio', { name: 'Dashed until kept' }).click();
       await page.locator('[data-mode="provisional"][aria-checked="true"]').waitFor();
       await page.keyboard.press('Escape');
+    });
+
+    await check('the Telegram row says how to turn it on, pairs with a one-time link, shows who is paired, and unpairs', async () => {
+      await page.getByRole('button', { name: 'Settings' }).click();
+      await page.locator('#telegram-state', { hasText: 'Add TELEGRAM_BOT_TOKEN' }).waitFor();
+      await page.getByRole('button', { name: 'Settings' }).click();
+
+      const bot = await new FakeBot().start();
+      const contact = await bootFake({ telegram: { token: BOT_TOKEN, api: bot.url, pollSeconds: 0 } });
+      const view = await desktop.newPage();
+      watch(view);
+      try {
+        await view.goto(`${contact.url}/#token=secret`);
+        await view.locator('#status[data-state="live"]').waitFor();
+        await view.getByRole('button', { name: 'Settings' }).click();
+        await view.locator('#telegram-state', { hasText: 'Not paired.' }).waitFor();
+        await view.getByRole('button', { name: 'Pair' }).click();
+        const link = (await view.getByRole('link', { name: 'Open in Telegram' }).getAttribute('href'))!;
+        assert.match(link, /^https:\/\/t\.me\/mind_palace_test_bot\?start=[A-Za-z0-9_-]+$/);
+        bot.push(ADA, { text: `/start ${new URL(link).searchParams.get('start')}` });
+        await view.locator('#telegram-state', { hasText: 'Paired with Ada Lovelace.' }).waitFor({ timeout: 8000 });
+        assert.equal(await view.getByRole('link', { name: 'Open in Telegram' }).isVisible(), false);
+        await shot(view, 'desktop-11-telegram');
+        await view.getByRole('button', { name: 'Unpair' }).click();
+        await view.locator('#telegram-state', { hasText: 'Not paired.' }).waitFor();
+      } finally {
+        await view.close();
+        await contact.close();
+        await bot.close();
+      }
     });
 
     await check('the work log lists what each role did', async () => {

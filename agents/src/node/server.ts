@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { Readable } from 'node:stream';
@@ -9,9 +9,11 @@ import { Pipeline, type Outbound } from '../core/pipeline.ts';
 import { DEFAULT_SETTINGS, type Handoff, type Playback, type Roles, type Settings } from '../core/roles/types.ts';
 import { Mindstorm } from '../core/state.ts';
 import { DiskAssets } from './assets.ts';
+import { whereItWent, type Delivery, type Desk } from './contact.ts';
 import { ClientMessage, PROTOCOL_VERSION } from './protocol.ts';
 import type { Speak, Transcribe } from './speech-openai.ts';
 import { SqliteStore } from './store.ts';
+import { Telegram, type TelegramOptions } from './telegram.ts';
 import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
 
@@ -33,6 +35,8 @@ export interface ServerOptions {
   settings?: Partial<Settings>;
   /** The only folder a linked file may be served from. Defaults to the repository's `public/clips/full`. */
   films?: string;
+  /** Mind Palace as a Telegram contact, reached with this bot's token. */
+  telegram?: Omit<TelegramOptions, 'desk' | 'file' | 'log'>;
   log?: (line: string) => void;
 }
 
@@ -84,7 +88,10 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   const emit = (message: Outbound) => {
     if (message.t === 'handoff') {
       void bundle(message.handoff).then(
-        (made) => broadcast({ t: 'handoff', ...made }),
+        (made) => {
+          broadcast({ t: 'handoff', ...made });
+          void telegram?.deliver({ title: message.handoff.title, file: `${made.name}.md`, markdown: message.handoff.markdown });
+        },
         (err) => broadcast({ t: 'note', role: 'packager', message: `failed: ${String(err)}` }),
       );
       return;
@@ -108,10 +115,19 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     playback,
   });
 
+  const desk: Desk = {
+    dump: async (dumps) => whereItWent(mind, await pipeline.dump(dumps)),
+    keep: async (bytes, mime, name) => (await assets.put(bytes, mime, name)).id,
+    transcribe: opts.transcribe && ((audio, mime) => opts.transcribe!(audio, mime, likelyWords(mind, null))),
+    latest: () => latestHandoff(handoffDir),
+  };
+  const telegram = opts.telegram ? new Telegram({ ...opts.telegram, desk, file: join(opts.dataDir, 'telegram.json'), log }) : null;
+  const contact = () => ({ available: telegram !== null, ...(telegram?.status() ?? { ready: false, paired: null }) });
+
   async function bundle(handoff: Handoff): Promise<{ name: string; url: string; markdown: string; files: string[] }> {
     const name = handoff.name.replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'handoff';
     const files: { name: string; bytes: Uint8Array }[] = [
-      { name: `${name}/handoff.md`, bytes: new TextEncoder().encode(handoff.markdown) },
+      { name: `${name}/handoff.md`, bytes: new TextEncoder().encode(handoff.bundled) },
       { name: `${name}/handoff.json`, bytes: new TextEncoder().encode(JSON.stringify(handoff.json, null, 2)) },
     ];
     for (const id of handoff.assets) {
@@ -176,6 +192,16 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       return;
     }
     if (req.method === 'GET' && path === '/api/state') return json(res, 200, { snapshot: mind.snapshot(), settings });
+    if (req.method === 'GET' && path === '/api/telegram') return json(res, 200, contact());
+    if (req.method === 'POST' && path === '/api/telegram/pair') {
+      if (!telegram) return json(res, 404, { error: 'TELEGRAM_BOT_TOKEN is not set' });
+      const link = telegram.pair();
+      return link ? json(res, 200, { link }) : json(res, 503, { error: 'Telegram has not answered yet' });
+    }
+    if (req.method === 'POST' && path === '/api/telegram/unpair') {
+      telegram?.unpair();
+      return json(res, 200, contact());
+    }
     if (req.method === 'GET' && path.startsWith('/assets/')) {
       const stored = assets.open(path.slice('/assets/'.length));
       if (!stored) return json(res, 404, { error: 'no such asset' });
@@ -275,6 +301,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   // Another process writing this data folder while the service runs would corrupt it. `npm run import-library` checks for this file.
   const lock = join(opts.dataDir, 'service.pid');
   writeFileSync(lock, String(process.pid));
+  telegram?.start();
   const address = http.address();
   const port = typeof address === 'object' && address ? address.port : opts.port;
   return {
@@ -283,6 +310,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     pipeline,
     mind,
     async close() {
+      await telegram?.close();
       for (const ws of sockets) ws.terminate();
       wss.close();
       await new Promise<void>((done) => http.close(() => done()));
@@ -290,6 +318,18 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       rmSync(lock, { force: true });
     },
   };
+}
+
+/** The newest handoff file, as it was written beside its zip. */
+function latestHandoff(dir: string): Delivery | null {
+  const newest = readdirSync(dir)
+    .filter((file) => file.endsWith('.md'))
+    .map((file) => ({ file, at: statSync(join(dir, file)).mtimeMs }))
+    .sort((a, b) => b.at - a.at)[0];
+  if (!newest) return null;
+  const markdown = readFileSync(join(dir, newest.file), 'utf8');
+  const title = /^# Handoff: (.+)$/.exec(markdown.split('\n', 1)[0]!)?.[1]?.trim() || newest.file.replace(/\.md$/, '');
+  return { title, file: newest.file, markdown };
 }
 
 function savedToken(path: string): string {

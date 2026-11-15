@@ -80,7 +80,7 @@ A client fetches only from the service. Every address in an item or a view that 
 | `say` | `text` | One short line for the agent to speak. |
 | `heard` | `text`, `final` | The transcript the service is acting on. |
 | `navigate` | `nodeId?`, `treeId?` | Move the user's view to that node or tree. |
-| `handoff` | `name`, `url`, `markdown`, `files` | A handoff bundle is ready. `url` is a zip to download. |
+| `handoff` | `name`, `url`, `markdown`, `files` | A handoff bundle is ready. `url` is a zip to download. `markdown` is the handoff as one file that names no attached file, the file a paired Telegram chat receives. |
 | `settings` | `settings` | Settings changed. |
 | `note` | `role`, `message` | A log line. Optional to show. |
 | `error` | `message` | The last message from this client was rejected. |
@@ -129,6 +129,10 @@ Under an open card a client offers a few things to ask, so the user can start a 
 | `GET /assets/<id>` | | The bytes. Supports byte ranges for video. A file the service streams from its source answers with the source's status and range. The service streams only the address it stored for that asset, never one named in the request, and a file on its own disk only from `public/clips/full`. |
 | `POST /api/transcribe?tree=<id>` | Audio bytes, with `Content-Type` (`audio/wav`, `audio/webm`, `audio/mp4`, `audio/mpeg`, `audio/ogg`) | `{text}`. The titles of the cards in `tree`, then of every tree and the newest cards, are given to the recognizer as words the user is likely to say. |
 | `GET /handoffs/<name>.zip` | | The bundle. |
+| `GET /handoffs/<name>.md` | | The handoff as one Markdown file that travels alone. |
+| `GET /api/telegram` | | `{available, ready, paired}`. `available` is false when the service has no `TELEGRAM_BOT_TOKEN`. `ready` is true once Telegram has answered the service. `paired` is the paired person's name, or null. |
+| `POST /api/telegram/pair` | | `{link}`, a `https://t.me/<bot>?start=<code>` address. Opening it in Telegram and pressing Start pairs that Telegram account, replacing any pairing before it. The code works once, for 10 minutes, and a new `pair` replaces it. 404 without a bot token, 503 before Telegram has answered. |
+| `POST /api/telegram/unpair` | | `{available, ready, paired}` with `paired` null. Nothing from Telegram is heard until the next pairing. |
 | `GET /api/speak?text=<reply>` | | MP3 of the reply read aloud, streamed as it is made. 404 when the service has no voice. Takes the token as `?token=` so an audio element can play it directly. |
 | `GET /api/state` | | `{snapshot, settings}` |
 | `GET /api/health` | | `{ok, protocol}`. No token needed. |

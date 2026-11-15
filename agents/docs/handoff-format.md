@@ -6,7 +6,7 @@ The Packager role builds the bundle in `src/core/roles/packager.ts`. This page d
 
 ## Files
 
-The Packager returns a `name`, such as `dolly-zoom-handoff-2026-11-13`. The host in `src/node/server.ts` writes `<name>.zip`, which unpacks to one folder:
+The Packager returns a `name`, such as `dolly-zoom-handoff-2026-11-13`, and the handoff written twice: once as one file that travels alone, and once for the bundle. The host in `src/node/server.ts` writes `<name>.zip`, which unpacks to one folder:
 
 | File | Contents |
 | --- | --- |
@@ -14,9 +14,9 @@ The Packager returns a `name`, such as `dolly-zoom-handoff-2026-11-13`. The host
 | `<name>/handoff.json` | The same content as data, for an agent or a script that parses the handoff. |
 | `<name>/assets/<id>` | One file for each image, video, or document in the handoff. |
 
-The host also writes a copy of the Markdown file as `<name>.md` beside the zip file.
+The host also writes `<name>.md` beside the zip file. This is the file that travels alone: a paired Telegram chat receives it with every handoff, and the user shares it into any agent app. It names no file of the bundle. See One file that travels alone.
 
-The Markdown file and the JSON file hold the same nodes, links, sources, and assets. Both files refer to an asset by the path `assets/<id>`.
+The bundle's Markdown file and the JSON file hold the same nodes, links, sources, and assets. Both files refer to an asset by the path `assets/<id>`.
 
 ## Labels
 
@@ -38,9 +38,21 @@ The Markdown file has these sections, in this order:
 4. **Connections.** The links between two nodes that are both in the handoff, each with its reason.
 5. **Open questions.** Three to six questions that the material raises. The file has no such section when the model call fails.
 6. **Sources.** Every URL in the handoff, listed once, with the title of the first node that uses the URL.
-7. **Attached files.** Every asset path, with the file name and the MIME type.
+7. **Attached files.** Every asset path, with the file name and the MIME type. The file that travels alone has **Pictures and files** here instead.
 
 A handoff can hold one branch of a tree. In that case, a sentence under the tree heading names the nodes above the branch.
+
+A node whose item is a picture or a video from the web, such as a found recording, has a `media` field: the address of the picture or recording itself. It appears only when that address is on the web and differs from `url`.
+
+## One file that travels alone
+
+`<name>.md` holds the same sections, with three differences, so that it means the same thing to an agent that gets only this file.
+
+- A node with a file has a field in place of `file: assets/<id>`: `picture: not attached. The summary and text here describe it.` for a picture, `video: …` for a video, and `file: …` for anything else. The summary and the text are the words Intake wrote when it looked at the picture or watched the video.
+- The web address the picture or video came from is its `url`, or its `media` address. A picture an agent generated has `picture: not attached, made by an image generator.` and no address: it is described only.
+- **Attached files** becomes **Pictures and files**, which says how many of them the outline describes in words, or that the handoff has none.
+
+The file names no `assets/` path. The zip keeps its files and its paths for anyone who needs the originals.
 
 ## JSON file
 
@@ -140,7 +152,7 @@ If two branches of one tree are in the handoff, `trees` has two entries with the
 2. Read "What to do next" for the task.
 3. Read the outline. Treat `own` nodes as what the user thinks, `kept` nodes as material the user accepted, and `suggestion` nodes as leads to check.
 4. Read "Connections" for relations that cross branches or trees.
-5. Open a source URL or a file in `assets/` when the task needs the original and not the summary.
+5. Open a source URL, or a file in `assets/` when you have the bundle, when the task needs the original and not the summary.
 6. Refer to a node by its title and its id when you report back, so that the user can find the node in the app.
 
 An agent that parses `handoff.json` must check that `format` is `mind-palace-handoff` and that `version` is `1` before it reads the other fields.
