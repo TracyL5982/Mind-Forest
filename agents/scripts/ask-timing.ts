@@ -39,10 +39,20 @@ interface Span { what: string; start: number; end: number; detail: string }
 let calls: Call[] = [];
 let spans: Span[] = [];
 let openai = { calls: 0, input: 0, output: 0 };
+/** Requests still out. A run can be over while a picture is still being made, and it lands after. */
+let inflight = 0;
+const tracked = async (input: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> => {
+  inflight++;
+  try {
+    return await fetch(input, init);
+  } finally {
+    inflight--;
+  }
+};
 const counting: typeof fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
   const start = at();
-  const res = await fetch(input, init);
+  const res = await tracked(input, init);
   if (url.host === 'api.openai.com') {
     const u = res.ok ? (((await res.clone().json().catch(() => ({}))) as { usage?: { input_tokens?: number; output_tokens?: number } }).usage ?? {}) : {};
     openai.calls++;
@@ -54,7 +64,7 @@ const counting: typeof fetch = async (input, init) => {
 };
 const metaFetch: typeof fetch = async (input, init) => {
   const start = at();
-  const res = await fetch(input, init);
+  const res = await tracked(input, init);
   const sent = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as { model?: string; text?: { format?: { name?: string } } };
   const u = res.ok ? (((await res.clone().json().catch(() => ({}))) as { usage?: { input_tokens?: number; output_tokens?: number; output_tokens_details?: { reasoning_tokens?: number } } }).usage ?? {}) : {};
   calls.push({ kind: String(input).replace(/.*\/v1/, ''), role: sent.text?.format?.name ?? '?', model: sent.model ?? '?', start, end: at(), input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, reasoning: u.output_tokens_details?.reasoning_tokens ?? 0, ok: res.ok });
@@ -158,6 +168,8 @@ for (let run = 1; run <= runs; run++) {
   t0 = performance.now();
   pipeline.utter(said, { focus: anchor.id, selection: [], treeId: anchor.treeId }, true);
   await pipeline.idle();
+  for (let waited = 0; inflight > 0 && waited < 150_000; waited += 200) await new Promise((r) => setTimeout(r, 200));
+  await pipeline.idle();
   result.idle = at();
   results.push(result);
 
@@ -187,7 +199,7 @@ for (let run = 1; run <= runs; run++) {
   const conductorCall = calls.find((c) => c.role === 'conductor');
   console.log(`  SUMMARY run ${run}: conductor ${conductorCall ? conductorCall.end - conductorCall.start : 0} ms, first say ${result.says[0]?.at ?? '-'} ms, ` +
     `first pick ${scoutSets[0]?.at ?? '-'} ms, last pick ${scoutSets.at(-1)?.at ?? '-'} ms, ${scoutSets.reduce((s, l) => s + l.picks.length, 0)} picks in ${scoutSets.length} deliveries, ` +
-    `last view ${result.landed.filter((l) => l.role === 'renderer').at(-1)?.at ?? '-'} ms, idle ${result.idle} ms`);
+    `last view ${result.landed.filter((l) => l.role === 'renderer').at(-1)?.at ?? '-'} ms, line ${result.says.length > 1 ? result.says.at(-1)!.at : '-'} ms, idle ${result.idle} ms`);
   console.log(`  TOKENS run ${run}: ${[...byModel].map(([m, t]) => `${m} ${t.calls} calls ${t.input} in + ${t.output} out (${t.reasoning} reasoning)`).join('; ')}; openai ${openai.calls} calls ${openai.input} in + ${openai.output} out`);
 }
 if (out) writeFileSync(out, JSON.stringify(results, null, 2));
