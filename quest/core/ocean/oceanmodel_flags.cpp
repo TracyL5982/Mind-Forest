@@ -501,7 +501,6 @@ void OceanModel::pickOffer(int k) {
     take(ring[size_t(k * 2) % ring.size()].id);
 }
 
-/// Carries one card on the layer aside, as a hand would.
 void OceanModel::carryCoverByFlag(int i, Vec3 d) {
     if (i < 0 || i >= int(shelf.size())) return;
     EntityRef on = shelf[size_t(i)].mover->entity;
@@ -519,6 +518,7 @@ void OceanModel::carryCoverByFlag(int i, Vec3 d) {
     });
 }
 
+/// Carries one card on the layer aside, as a hand would.
 void OceanModel::carryOne() {
     if (!tree) return;
     // (Each `.sorted { $0.id < $1.id }` and then `.first`: the map is in that order.)
