@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { Unreadable, type JsonRequest, type ModelClient, type WebResult } from '../core/ports.ts';
+import { Unreadable, type JsonRequest, type ModelClient, type Priority, type WebResult } from '../core/ports.ts';
+import { RateWindow } from './rate-window.ts';
 
 export interface MetaModelOptions {
   apiKey: string;
@@ -17,8 +18,13 @@ export interface MetaModelOptions {
   fetch?: typeof fetch;
   /** Total tokens this client may spend before it refuses further requests. Guards against a runaway loop. */
   tokenBudget?: number;
-  /** Called after every request, for the run log and the cost tally, with the model and effort asked for and the tries it took. */
-  onCall?: (call: { kind: string; role: string; ms: number; ok: boolean; tokens?: number; model?: string; effort?: string; tries?: number }) => void;
+  /** How long a request counts against the key's rate limit after it arrives. Measured, a minute. */
+  rateWindowMs?: number;
+  /**
+   * Called after every request, for the run log and the cost tally, with the model and effort asked for, the tries it took and how
+   * long it was held for the rate window.
+   */
+  onCall?: (call: { kind: string; role: string; ms: number; ok: boolean; tokens?: number; model?: string; effort?: string; tries?: number; heldMs?: number }) => void;
 }
 
 interface OutputItem {
@@ -33,6 +39,7 @@ export class MetaModel implements ModelClient {
   private readonly base: string;
   private readonly model: string;
   private readonly send: typeof fetch;
+  private readonly window: RateWindow;
   /** Tokens spent so far by this client. */
   spent = 0;
 
@@ -40,6 +47,7 @@ export class MetaModel implements ModelClient {
     this.base = (opts.baseUrl ?? 'https://api.meta.ai/v1').replace(/\/+$/, '');
     this.model = opts.model ?? 'muse-spark-1.3';
     this.send = opts.fetch ?? fetch.bind(globalThis);
+    this.window = new RateWindow(opts.rateWindowMs);
   }
 
   async json<T>(req: JsonRequest<T>): Promise<T> {
@@ -65,7 +73,10 @@ export class MetaModel implements ModelClient {
       },
     };
     const waitMs = req.quick ? (this.opts.quickWaitMs ?? 20_000) : undefined;
-    const text = req.onText ? await this.streamed(req.role, body, req.onText, waitMs) : finalText(await this.responses('json', req.role, body, waitMs));
+    const priority = req.priority ?? 'user';
+    const text = req.onText
+      ? await this.streamed(req.role, body, req.onText, waitMs, priority)
+      : finalText(await this.responses('json', req.role, body, waitMs, priority));
     if (!text) throw new Unreadable(req.role, 'no text');
     let json: unknown;
     try {
@@ -173,92 +184,119 @@ export class MetaModel implements ModelClient {
    * One reply read as it is written, over server-sent events, its text handed to `onText` after each piece.
    * It is tried again only while nothing has been handed on, since a second answer could differ from what was already acted on.
    */
-  private async streamed(role: string, body: object, onText: (soFar: string) => void, waitMs = 120_000): Promise<string> {
+  private async streamed(role: string, body: object, onText: (soFar: string) => void, waitMs = 120_000, priority: Priority = 'user'): Promise<string> {
     const budget = this.opts.tokenBudget ?? 5_000_000;
     if (this.spent >= budget) throw new Error(`${role}: token budget of ${budget} is used up; restart the service to reset it`);
     const started = Date.now();
     const asked = askedFor(body);
+    const call = { tries: 0, heldMs: 0 };
     let lastError = '';
     let handedOn = false;
-    let tries = 0;
     for (let attempt = 0; attempt < 3 && !handedOn; attempt++) {
-      tries = attempt + 1;
       if (attempt > 0) await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
       try {
-        const res = await this.send(`${this.base}/responses`, {
+        const got = await this.limited(priority, '/responses', {
           method: 'POST',
           headers: { Authorization: `Bearer ${this.opts.apiKey}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
           body: JSON.stringify({ ...body, stream: true }),
-          signal: AbortSignal.timeout(waitMs),
+        }, waitMs, call, async (res): Promise<{ status: number; error: string } | { text: string; tokens?: number }> => {
+          if (!res.ok || !res.body) return { status: res.status, error: `${res.status} ${(await res.text()).slice(0, 400)}` };
+          let text = '';
+          let tokens: number | undefined;
+          for await (const event of serverEvents(res.body)) {
+            // A message the model writes before its answer is replaced by the answer.
+            if (event.type === 'response.output_item.added' && event.item?.type === 'message') text = '';
+            if (event.type === 'response.output_text.delta' && event.delta) {
+              text += event.delta;
+              handedOn = true;
+              onText(text);
+            }
+            if (event.type === 'response.completed') tokens = event.response?.usage?.total_tokens;
+            if (event.type === 'response.failed' || event.type === 'error') throw new Error(`${role}: the reply failed: ${JSON.stringify(event).slice(0, 300)}`);
+          }
+          return { text, tokens };
         });
-        if (!res.ok || !res.body) {
-          lastError = `${res.status} ${(await res.text()).slice(0, 400)}`;
-          if (res.status !== 429 && res.status < 500) break;
+        if ('error' in got) {
+          lastError = got.error;
+          if (got.status < 500) break;
           continue;
         }
-        let text = '';
-        let tokens: number | undefined;
-        for await (const event of serverEvents(res.body)) {
-          // A message the model writes before its answer is replaced by the answer.
-          if (event.type === 'response.output_item.added' && event.item?.type === 'message') text = '';
-          if (event.type === 'response.output_text.delta' && event.delta) {
-            text += event.delta;
-            handedOn = true;
-            onText(text);
-          }
-          if (event.type === 'response.completed') tokens = event.response?.usage?.total_tokens;
-          if (event.type === 'response.failed' || event.type === 'error') throw new Error(`${role}: the reply failed: ${JSON.stringify(event).slice(0, 300)}`);
-        }
-        this.spent += tokens ?? 0;
-        this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: true, tokens, ...asked, tries });
-        return text;
+        this.spent += got.tokens ?? 0;
+        this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: true, tokens: got.tokens, ...asked, ...call });
+        return got.text;
       } catch (err) {
         lastError = String(err);
       }
     }
-    this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: false, ...asked, tries });
+    this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: false, ...asked, ...call });
     throw new Error(`${role}: model request failed: ${lastError}`);
   }
 
-  private async responses(kind: string, role: string, body: unknown, waitMs?: number): Promise<OutputItem[]> {
-    const json = (await this.post(kind, role, '/responses', body, waitMs)) as { output?: OutputItem[]; status?: string };
+  private async responses(kind: string, role: string, body: unknown, waitMs?: number, priority?: Priority): Promise<OutputItem[]> {
+    const json = (await this.post(kind, role, '/responses', body, waitMs, priority)) as { output?: OutputItem[]; status?: string };
     if (!Array.isArray(json.output)) throw new Error(`${role}: malformed response`);
     return json.output;
   }
 
-  private async post(kind: string, role: string, path: string, body: unknown, waitMs = 120_000): Promise<unknown> {
+  private async post(kind: string, role: string, path: string, body: unknown, waitMs = 120_000, priority: Priority = 'user'): Promise<unknown> {
     const budget = this.opts.tokenBudget ?? 5_000_000;
     if (this.spent >= budget) throw new Error(`${role}: token budget of ${budget} is used up; restart the service to reset it`);
     const started = Date.now();
     const asked = askedFor(body);
+    const call = { tries: 0, heldMs: 0 };
     let lastError = '';
-    let tries = 0;
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
-      tries = attempt + 1;
-      let res: Response;
+      let got: { ok: boolean; status: number; text: string };
       try {
-        res = await this.send(`${this.base}${path}`, {
+        got = await this.limited(priority, path, {
           method: 'POST',
           headers: { Authorization: `Bearer ${this.opts.apiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(waitMs),
-        });
+        }, waitMs, call, async (res) => ({ ok: res.ok, status: res.status, text: await res.text() }));
       } catch (err) {
         lastError = String(err);
         continue;
       }
-      if (res.ok) {
-        const json = (await res.json()) as { usage?: { total_tokens?: number } };
+      if (got.ok) {
+        const json = JSON.parse(got.text) as { usage?: { total_tokens?: number } };
         this.spent += json.usage?.total_tokens ?? 0;
-        this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: true, tokens: json.usage?.total_tokens, ...asked, tries });
+        this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: true, tokens: json.usage?.total_tokens, ...asked, ...call });
         return json;
       }
-      lastError = `${res.status} ${(await res.text()).slice(0, 400)}`;
-      if (res.status !== 429 && res.status < 500) break;
+      lastError = `${got.status} ${got.text.slice(0, 400)}`;
+      if (got.status < 500) break;
     }
-    this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: false, ...asked, tries });
+    this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: false, ...asked, ...call });
     throw new Error(`${role}: model request failed: ${lastError}`);
+  }
+
+  /**
+   * One request, sent once the rate window has room for it and its answer read by `use`, since the API counts a request from when its
+   * answer ends. Refused for the rate, it is sent again once the window has room, until it has been held a window and a half.
+   * Retried on a fixed backoff instead, it gave up after 5 s, long before the window had room.
+   */
+  private async limited<T>(
+    priority: Priority,
+    path: string,
+    init: RequestInit,
+    waitMs: number,
+    call: { tries: number; heldMs: number },
+    use: (res: Response) => Promise<T>,
+  ): Promise<T> {
+    for (;;) {
+      const slot = await this.window.take(priority);
+      call.heldMs += slot.heldMs;
+      call.tries++;
+      try {
+        const res = await this.send(`${this.base}${path}`, { ...init, signal: AbortSignal.timeout(waitMs) });
+        this.window.read(res);
+        if (res.status !== 429 || call.heldMs >= this.window.ms * 1.5) return await use(res);
+        await res.body?.cancel();
+      } finally {
+        slot.done();
+      }
+    }
   }
 }
 
