@@ -73,7 +73,11 @@ chimes and records until you pause for 1.2 s; the service transcribes that and a
 when the service has a voice. A line of words low in front of you says what it is doing: `Say "Hey Momo"`,
 `Listening…`, `Thinking…`, then the reply. The first time, the headset asks to use the microphone; refused, it does
 not ask again until the app starts again, and replies are still spoken. A microphone that stops is opened again after
-1, 2, 4, 8, then every 15 s. `-agentVoice off`
+1, 2, 4, 8, then every 15 s. When the service has a live voice (its `/live` socket answers `ready`), the words go
+another way: after the name the microphone streams to the service until it says your turn is over, and Momo's own
+voice streams back and plays as it arrives. Saying "hey Momo" while Momo speaks stops it and starts a new turn, except
+while what it is saying names itself. The log says how long after your last word the turn ended and Momo answered.
+Without `/live`, or while it is closed (it is tried again every 5 s), everything is as above. `-agentVoice off`
 turns it off; `-wakeClip <file.wav>` (16 kHz mono 16-bit) is heard in place of the microphone; `-micSource
 communication` reads Android's echo-cancelled source instead of the recognizer's. The listener is sherpa-onnx's
 keyword spotter, which `tools/fetch-voice.sh` fetches into `quest/vendor/` (the builds run it); `core/agent/test/run.sh`

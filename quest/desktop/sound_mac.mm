@@ -1,9 +1,10 @@
 // platform.h's sound on the Mac preview: AVAudioEngine's input for the microphone, converted to 16 kHz mono,
-// and AVAudioPlayer for files.
+// AVAudioPlayer for files, and an AVAudioPlayerNode of its own engine for each stream.
 #import <AVFoundation/AVFoundation.h>
 
 #include <atomic>
 #include <mutex>
+#include <set>
 
 #include "platform.h"
 
@@ -72,6 +73,87 @@ public:
           [d.player stop];
           ended(d, false);
         });
+    }
+};
+
+/// A stream's engine and what its buffers' completions share. The host keeps it until it ends.
+struct StreamState {
+    AVAudioEngine* engine = nil;
+    AVAudioPlayerNode* node = nil;
+    AVAudioFormat* format = nil;
+    std::shared_ptr<Ending> ending;
+    std::mutex lock;
+    int queued = 0;             // buffers scheduled and not yet played
+    bool finished = false;
+    bool stopped = false;
+};
+
+std::mutex streamsLock;
+std::set<std::shared_ptr<StreamState>> streams;
+
+/// Once: says how it ended, then lets the engine go on the main queue, never inside one of its own callbacks.
+void endStream(const std::shared_ptr<StreamState>& s, bool played) {
+    if (s->ending->fired) return;
+    s->ending->finish(played);
+    std::shared_ptr<StreamState> keep = s;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [keep->node stop];
+      [keep->engine stop];
+      std::lock_guard<std::mutex> g(streamsLock);
+      streams.erase(keep);
+    });
+}
+
+class MacStream : public platform::Stream {
+public:
+    std::shared_ptr<StreamState> state;
+
+    void write(const int16_t* samples, size_t count) override {
+        if (count == 0) return;
+        {
+            std::lock_guard<std::mutex> g(state->lock);
+            if (state->stopped || state->finished) return;
+            state->queued++;
+        }
+        AVAudioPCMBuffer* buffer = [[AVAudioPCMBuffer alloc] initWithPCMFormat:state->format frameCapacity:AVAudioFrameCount(count)];
+        buffer.frameLength = AVAudioFrameCount(count);
+        float* out = buffer.floatChannelData[0];
+        for (size_t i = 0; i < count; i++) out[i] = float(samples[i]) / 32768.f;
+        std::weak_ptr<StreamState> weak = state;
+        [state->node scheduleBuffer:buffer
+             completionCallbackType:AVAudioPlayerNodeCompletionDataPlayedBack
+                  completionHandler:^(AVAudioPlayerNodeCompletionCallbackType) {
+                    std::shared_ptr<StreamState> s = weak.lock();
+                    if (!s) return;
+                    bool last;
+                    {
+                        std::lock_guard<std::mutex> g(s->lock);
+                        s->queued--;
+                        last = s->finished && !s->stopped && s->queued == 0;
+                    }
+                    if (last) endStream(s, true);
+                  }];
+    }
+
+    void finish() override {
+        bool last;
+        {
+            std::lock_guard<std::mutex> g(state->lock);
+            if (state->finished || state->stopped) return;
+            state->finished = true;
+            last = state->queued == 0;
+        }
+        if (last) endStream(state, true);
+    }
+
+    void stop() override {
+        {
+            std::lock_guard<std::mutex> g(state->lock);
+            if (state->stopped) return;
+            state->stopped = true;
+        }
+        [state->node stop];
+        endStream(state, false);
     }
 };
 
@@ -155,6 +237,31 @@ SoundRef playSound(const std::string& path, std::function<void(bool played)> don
     auto sound = std::make_shared<MacSound>();
     sound->delegate = d;
     return sound;
+}
+
+StreamRef playStream(int rate, std::function<void(bool played)> done) {
+    auto state = std::make_shared<StreamState>();
+    state->ending = std::make_shared<Ending>();
+    state->ending->done = std::move(done);
+    state->engine = [AVAudioEngine new];
+    state->node = [AVAudioPlayerNode new];
+    state->format = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:rate channels:1];
+    [state->engine attachNode:state->node];
+    [state->engine connect:state->node to:state->engine.mainMixerNode format:state->format];
+    [state->engine prepare];
+    NSError* error = nil;
+    if (!state->format || ![state->engine startAndReturnError:&error]) {
+        state->ending->finish(false);
+        return nullptr;
+    }
+    [state->node play];
+    {
+        std::lock_guard<std::mutex> g(streamsLock);
+        streams.insert(state);
+    }
+    auto stream = std::make_shared<MacStream>();
+    stream->state = state;
+    return stream;
 }
 
 }  // namespace platform

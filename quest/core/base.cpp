@@ -1,6 +1,8 @@
 #include "base.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <mutex>
 #include <cstdlib>
 
@@ -23,6 +25,49 @@ std::string fmt(const char* format, ...) {
     std::string out(n > 0 ? size_t(n) : 0, '\0');
     if (n > 0) vsnprintf(out.data(), size_t(n) + 1, format, args);
     va_end(args);
+    return out;
+}
+
+namespace {
+const char base64Letters[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+}
+
+std::string base64Encode(const std::string& bytes) {
+    std::string out;
+    out.reserve((bytes.size() + 2) / 3 * 4);
+    for (size_t at = 0; at < bytes.size(); at += 3) {
+        size_t n = std::min(size_t(3), bytes.size() - at);
+        uint32_t v = 0;
+        for (size_t i = 0; i < 3; i++) v = v << 8 | (i < n ? uint8_t(bytes[at + i]) : 0);
+        for (size_t i = 0; i < 4; i++) out += i <= n ? base64Letters[(v >> (18 - 6 * i)) & 63] : '=';
+    }
+    return out;
+}
+
+std::optional<std::string> base64Decode(const std::string& text) {
+    if (text.size() % 4) return std::nullopt;
+    size_t pad = 0;
+    while (pad < 2 && pad < text.size() && text[text.size() - 1 - pad] == '=') pad++;
+    std::string out;
+    out.reserve(text.size() / 4 * 3);
+    uint32_t v = 0;
+    size_t letters = text.size() - pad;
+    for (size_t i = 0; i < letters; i++) {
+        const char* found = text[i] ? std::strchr(base64Letters, text[i]) : nullptr;
+        if (!found) return std::nullopt;
+        v = v << 6 | uint32_t(found - base64Letters);
+        if (i % 4 == 3) {
+            out += char(v >> 16);
+            out += char(v >> 8 & 0xff);
+            out += char(v & 0xff);
+            v = 0;
+        }
+    }
+    if (letters % 4 == 2) out += char(v >> 4 & 0xff);
+    if (letters % 4 == 3) {
+        out += char(v >> 10 & 0xff);
+        out += char(v >> 2 & 0xff);
+    }
     return out;
 }
 

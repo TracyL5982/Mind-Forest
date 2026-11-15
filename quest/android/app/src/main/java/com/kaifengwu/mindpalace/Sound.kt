@@ -6,14 +6,17 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioRecord
+import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.os.Process
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * platform.h's sound on the Quest: the microphone through AudioRecord at 16 kHz mono, and sound files through
- * MediaPlayer. `handle` says which native object an event is for.
+ * platform.h's sound on the Quest: the microphone through AudioRecord at 16 kHz mono, sound files through
+ * MediaPlayer, and streamed speech through an AudioTrack fed from its own thread. `handle` says which native object an
+ * event is for.
  *
  * The microphone reads from VOICE_RECOGNITION, the source meant for a recognizer: no echo cancelling or noise
  * suppression that could blur the name, and the listener does not listen while a reply plays, so the agent's own
@@ -27,6 +30,11 @@ object Sound {
 
     private val mics = HashMap<Long, Mic>()
     private val players = HashMap<Long, MediaPlayer>()
+    /** A stream's samples on their way to its thread, and whether it was told to stop. */
+    private class Speech(val queue: LinkedBlockingQueue<ShortArray>, val stopped: AtomicBoolean)
+    private val speeches = HashMap<Long, Speech>()
+    /** Put on a stream's queue: nothing more comes. */
+    private val END = ShortArray(0)
     /** A microphone waiting for the user's leave: its handle and source. */
     private var asking: Pair<Long, Int>? = null
 
@@ -125,6 +133,94 @@ object Sound {
     private fun finish(handle: Long, toEnd: Boolean) {
         val player = players.remove(handle) ?: return
         player.release()
+        played(handle, toEnd)
+    }
+
+    /** The frame thread only queues; the stream's own thread writes, so a write never waits on the track. */
+    @JvmStatic
+    fun openStream(rate: Int, handle: Long) {
+        val speech = Speech(LinkedBlockingQueue(), AtomicBoolean(false))
+        synchronized(this) { speeches[handle] = speech }
+        Thread({ speak(rate, handle, speech) }, "speech").start()
+    }
+
+    @JvmStatic
+    fun writeStream(handle: Long, samples: ShortArray) {
+        synchronized(this) { speeches[handle] }?.queue?.offer(samples)
+    }
+
+    @JvmStatic
+    fun finishStream(handle: Long) {
+        synchronized(this) { speeches[handle] }?.queue?.offer(END)
+    }
+
+    @JvmStatic
+    fun stopStream(handle: Long) {
+        val speech = synchronized(this) { speeches[handle] } ?: return
+        speech.stopped.set(true)
+        speech.queue.offer(END)
+    }
+
+    /** Plays what is queued as it comes; once finished, waits for the playback head to reach the last frame written. */
+    private fun speak(rate: Int, handle: Long, speech: Speech) {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+        val least = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        val track = try {
+            AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()
+                )
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .setBufferSizeInBytes(maxOf(least, rate / 5 * 2))
+                .build()
+        } catch (e: Exception) {
+            null
+        }
+        if (track == null || track.state != AudioTrack.STATE_INITIALIZED) {
+            track?.release()
+            synchronized(this) { speeches.remove(handle) }
+            played(handle, false)
+            return
+        }
+        track.play()
+        var written = 0L
+        var toEnd = false
+        try {
+            feed@ while (!speech.stopped.get()) {
+                val samples = speech.queue.take()
+                if (samples === END) {
+                    toEnd = true
+                    break
+                }
+                var at = 0
+                while (at < samples.size && !speech.stopped.get()) {
+                    val n = track.write(samples, at, samples.size - at, AudioTrack.WRITE_NON_BLOCKING)
+                    if (n < 0) break@feed
+                    if (n == 0) Thread.sleep(5)
+                    at += n
+                }
+                written += at
+            }
+            // A track that never reaches the end (a stalled device) is let go a couple of seconds after it should have.
+            val deadline = System.nanoTime() + written * 1_000_000_000L / rate + 2_000_000_000L
+            while (toEnd && !speech.stopped.get() && (track.playbackHeadPosition.toLong() and 0xffffffffL) < written && System.nanoTime() < deadline) {
+                Thread.sleep(10)
+            }
+        } catch (e: InterruptedException) {
+            toEnd = false
+        }
+        toEnd = toEnd && !speech.stopped.get()
+        if (toEnd) {
+            track.stop()
+        } else {
+            track.pause()
+            track.flush()
+        }
+        track.release()
+        synchronized(this) { speeches.remove(handle) }
         played(handle, toEnd)
     }
 

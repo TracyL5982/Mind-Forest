@@ -1,5 +1,6 @@
 #include "voice.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -31,7 +32,11 @@ struct Voice::Ears {
         std::lock_guard<std::mutex> h(hearing);
         std::vector<Listener::Event> out;
         std::vector<std::unique_ptr<Spotter>> retired = apply(out);
-        for (Listener::Event& e : listener->hear(samples, count)) out.push_back(std::move(e));
+        double now = mediaTime();
+        for (Listener::Event& e : listener->hear(samples, count)) {
+            if (auto* piece = std::get_if<Listener::Streamed>(&e)) piece->heard = now;
+            out.push_back(std::move(e));
+        }
         live = true;
         publish(out);
     }
@@ -67,6 +72,9 @@ private:
                            [&](ChimeStarted&) { listener->chimeStarted(); },
                            [&](ChimeEnded&) { listener->chimeEnded(); },
                            [&](Respell& r) { retired.push_back(listener->respell(std::move(r.spotter))); },
+                           [&](SetMode& m) { listener->setMode(m.mode); },
+                           [&](TurnOver&) { listener->turnOver(); },
+                           [&](ReplyStreams& r) { listener->replyStreams(r.interruptible); },
                        },
                        c);
         }
@@ -109,6 +117,41 @@ private:
     std::thread thread;
 };
 
+std::string lower(std::string s) {
+    for (char& c : s) {
+        if (c >= 'A' && c <= 'Z') c = char(c - 'A' + 'a');
+    }
+    return s;
+}
+
+/// The service's /live socket, beside its /ws: ws://host:port/live?token=…
+std::string liveUrl(const Address& address) {
+    std::string base = address.http;
+    if (base.rfind("https:", 0) == 0) base = "wss:" + base.substr(6);
+    else if (base.rfind("http:", 0) == 0) base = "ws:" + base.substr(5);
+    return base + "/live?token=" + queryEscape(address.token);
+}
+
+/// 16-bit little-endian PCM, as /live carries the microphone.
+std::string pcm16(const std::vector<float>& samples) {
+    std::string out;
+    out.reserve(samples.size() * 2);
+    for (float v : samples) {
+        uint16_t s = uint16_t(int16_t(std::clamp(v, -1.f, 1.f) * 32767));
+        out += char(s & 0xff);
+        out += char(s >> 8);
+    }
+    return out;
+}
+
+std::optional<std::vector<int16_t>> samplesOf(const std::string& base64) {
+    std::optional<std::string> bytes = base64Decode(base64);
+    if (!bytes || bytes->size() % 2) return std::nullopt;
+    std::vector<int16_t> out(bytes->size() / 2);
+    for (size_t i = 0; i < out.size(); i++) out[i] = int16_t(uint16_t(uint8_t((*bytes)[2 * i])) | uint16_t(uint8_t((*bytes)[2 * i + 1])) << 8);
+    return out;
+}
+
 std::string titled(const std::string& name) {
     std::string out = name;
     bool start = true;
@@ -127,6 +170,9 @@ Voice::Voice(Client& client, std::function<Scene()> scene, std::optional<std::st
 Voice::~Voice() {
     if (microphone) microphone->stop();
     if (sound) sound->stop();
+    if (sounding) sounding->player->stop();
+    if (auto* c = std::get_if<Connecting>(&link)) c->socket->close();
+    if (auto* r = std::get_if<Ready>(&link)) r->socket->close();
 }
 
 std::optional<Listener::State> Voice::state() const {
@@ -139,6 +185,7 @@ std::string Voice::name() const { return titled(spelled); }
 void Voice::joined(const Settings& settings, bool speaks) {
     serviceSpeaks = speaks;
     wanted = settings.agentName;
+    if (std::holds_alternative<Unopened>(link)) link = Shut{};
     if (!started) start();
     else if (ears && wanted != spelled && wanted != refused) respell();
 }
@@ -263,6 +310,10 @@ void Voice::send(Command command) {
 }
 
 void Voice::say(const std::string& text) {
+    if (std::holds_alternative<Ready>(link)) {
+        logLine("[voice] the live voice says it");
+        return;
+    }
     if (!serviceSpeaks) return;
     pending = text;
     if (ears) {
@@ -338,12 +389,29 @@ void Voice::frame(double now) {
                                    b->chimesEnded++;
                                }
                            });
+                           if (w.streaming) beginTurn();
+                       },
+                       [&](Listener::Streamed& piece) {
+                           if (!streaming) return;
+                           sendLive(Json::object().set("t", "audio").set("pcm", base64Encode(pcm16(piece.samples))));
+                           if (piece.speech) lastWord = piece.heard;
+                       },
+                       [&](Listener::Cut&) {
+                           if (!streaming) return;
+                           logLine("[voice] a minute went by without the turn being over, so it stops streaming");
+                           sendLive(Json::object().set("t", "end"));
+                           streaming.reset();
                        },
                        [&](Listener::Recorded& r) {
                            logLine(fmt("[voice] recorded %.1f s, sending it to be transcribed", r.seconds));
                            transcribe(r.wav);
                        },
-                       [&](Listener::NothingSaid&) { logLine("[voice] nothing was said after the name"); },
+                       [&](Listener::NothingSaid&) {
+                           logLine("[voice] nothing was said after the name");
+                           if (!streaming) return;
+                           sendLive(Json::object().set("t", "cancel"));
+                           streaming.reset();
+                       },
                        [&](Listener::Speak&) {
                            if (!pending) return;
                            speak(*pending);
@@ -356,6 +424,8 @@ void Voice::frame(double now) {
     std::vector<Transcript> transcripts;
     std::vector<Fetched> fetched;
     std::vector<int> played;
+    std::vector<FromLive> fromLive;
+    std::vector<int> streamsPlayed;
     int chimesEnded = 0;
     bool failed = false, refused = false;
     {
@@ -363,6 +433,8 @@ void Voice::frame(double now) {
         transcripts.swap(inbox->transcripts);
         fetched.swap(inbox->fetched);
         played.swap(inbox->played);
+        fromLive.swap(inbox->live);
+        streamsPlayed.swap(inbox->streamsPlayed);
         std::swap(chimesEnded, inbox->chimesEnded);
         std::swap(failed, inbox->microphoneFailed);
         std::swap(refused, inbox->microphoneRefused);
@@ -425,10 +497,204 @@ void Voice::frame(double now) {
         send(ReplyEnded{});
         logLine("[voice] done speaking");
     }
+    for (FromLive& f : fromLive) {
+        int current = 0;
+        if (auto* c = std::get_if<Connecting>(&link)) current = c->number;
+        if (auto* r = std::get_if<Ready>(&link)) current = r->number;
+        if (f.socket == current) heardLive(f.frame, now);
+    }
+    for (int number : streamsPlayed) {
+        if (!sounding || sounding->number != number) continue;
+        sounding.reset();
+        if (live && !live->player && !live->held.empty() && startPlayer(*live)) continue;
+        send(ReplyEnded{});
+        if (live && live->player == number) {
+            live.reset();
+            spoken.clear();
+        }
+        logLine("[voice] done speaking");
+    }
+    if (auto* shut = std::get_if<Shut>(&link); shut && now >= shut->retryAt && client.state() == Client::State::live) openLive(now);
     if (Flags::has("agentLog") && busy.heard - busyLogged >= 60) {
         busyLogged = busy.heard;
         logLine(fmt("[voice] spotting takes %.1f ms of CPU a second of sound (%.0f s heard)", 1000 * busy.spotting / busy.heard, busy.heard));
     }
+}
+
+}  // namespace agent
+
+namespace agent {
+
+void Voice::openLive(double now) {
+    int number = ++sockets;
+    std::weak_ptr<Inbox> box = inbox;
+    auto deliver = [box, number](LiveFrame frame) {
+        auto b = box.lock();
+        if (!b) return;
+        std::lock_guard<std::mutex> g(b->lock);
+        b->live.push_back(FromLive{number, std::move(frame)});
+    };
+    platform::SocketRef socket = platform::openSocket(liveUrl(client.address()), {
+        [] {},
+        [deliver](const std::string& text) {
+            std::optional<Json> j = Json::parse(text);
+            if (!j) return;
+            const Json& m = *j;
+            std::string t = m["t"].string("");
+            if (t == "ready") deliver(LiveReady{m["rate"].integer(24000)});
+            else if (t == "over") deliver(LiveOver{m["turn"].integer(0)});
+            else if (t == "text") deliver(LiveText{m["id"].string(""), m["text"].string("")});
+            else if (t == "done") deliver(LiveDone{m["id"].string("")});
+            else if (t == "failed") deliver(LiveFailed{m["why"].string("")});
+            else if (t == "audio") {
+                std::optional<std::vector<int16_t>> pcm = samplesOf(m["pcm"].string(""));
+                if (pcm) deliver(LiveAudio{m["id"].string(""), std::move(*pcm)});
+                else logLine("[voice] the live voice sent sound that is not base64 16-bit PCM");
+            }
+        },
+        [deliver](const std::string& why) { deliver(LiveClosed{why}); },
+    });
+    if (socket) link = Connecting{socket, number};
+    else link = Shut{now + liveRetry};
+}
+
+bool Voice::sendLive(const Json& frame) {
+    auto* r = std::get_if<Ready>(&link);
+    return r && r->socket->send(frame.dump());
+}
+
+void Voice::heardLive(LiveFrame& frame, double now) {
+    std::visit(overloaded{
+                   [&](LiveReady& r) {
+                       auto* c = std::get_if<Connecting>(&link);
+                       if (!c) return;
+                       int rate = r.rate > 0 ? r.rate : 24000;
+                       link = Ready{c->socket, c->number, rate};
+                       liveWhy.clear();
+                       send(SetMode{Listener::Mode::stream});
+                       logLine(fmt("[voice] Momo's live voice is on (%d Hz)", rate));
+                   },
+                   [&](LiveClosed& c) {
+                       bool wasReady = std::holds_alternative<Ready>(link);
+                       link = Shut{now + liveRetry};
+                       if (wasReady || c.why != liveWhy) logLine("[voice] the live voice is off (" + c.why + "), so the headset transcribes and speaks as before");
+                       liveWhy = c.why;
+                       if (!wasReady) return;
+                       send(SetMode{Listener::Mode::record});
+                       endTurn();
+                       hushLive();
+                   },
+                   [&](LiveOver& o) {
+                       if (streaming != o.turn) return;
+                       endTurn();
+                       if (lastWord <= 0) return;
+                       logLine(fmt("[voice] turn %d over %.2f s after the last word", o.turn, mediaTime() - lastWord));
+                       answering = lastWord;
+                   },
+                   [&](LiveFailed& f) {
+                       logLine("[voice] the live voice failed: " + f.why);
+                       endTurn();
+                       hushLive();
+                   },
+                   [&](LiveAudio& a) {
+                       if (streaming || !std::holds_alternative<Ready>(link)) return;
+                       LiveReply& r = liveReply(a.id);
+                       if (!r.player && sounding) {
+                           r.held.insert(r.held.end(), a.pcm.begin(), a.pcm.end());
+                           return;
+                       }
+                       if (!r.player && !startPlayer(r)) return;
+                       if (!sounding || sounding->number != r.player) return;
+                       sounding->player->write(a.pcm.data(), a.pcm.size());
+                       if (answering) {
+                           logLine(fmt("[voice] Momo answered %.2f s after the last word", mediaTime() - *answering));
+                           answering.reset();
+                       }
+                   },
+                   [&](LiveText& t) {
+                       if (streaming) return;
+                       LiveReply& r = liveReply(t.id);
+                       spoken = t.text;
+                       bool interruptible = lower(t.text).find(lower(spelled)) == std::string::npos;
+                       if (interruptible == r.interruptible) return;
+                       r.interruptible = interruptible;
+                       if (sounding && sounding->number == r.player) send(ReplyStreams{interruptible});
+                   },
+                   [&](LiveDone& d) {
+                       if (streaming || !live || live->id != d.id) return;
+                       if (!live->player && !live->held.empty()) {
+                           live->finished = true;
+                           return;
+                       }
+                       if (sounding && sounding->number == live->player) {
+                           sounding->player->finish();
+                           return;
+                       }
+                       live.reset();
+                       if (!sounding) spoken.clear();
+                   },
+               },
+               frame);
+}
+
+void Voice::beginTurn() {
+    if (!std::holds_alternative<Ready>(link)) {
+        logLine("[voice] the live voice closed as the name was heard, so nothing is sent");
+        send(TurnOver{});
+        return;
+    }
+    hushLive();
+    streaming = ++turns;
+    lastWord = 0;
+    answering.reset();
+    sendLive(Json::object().set("t", "start").set("turn", *streaming).set("scene", sceneJson(scene())));
+}
+
+void Voice::endTurn() {
+    if (!streaming) return;
+    send(TurnOver{});
+    streaming.reset();
+}
+
+void Voice::hushLive() {
+    if (sounding) {
+        sounding->player->stop();
+        sounding.reset();
+        send(ReplyEnded{});
+    }
+    if (live) spoken.clear();
+    live.reset();
+}
+
+bool Voice::startPlayer(LiveReply& r) {
+    auto* ready = std::get_if<Ready>(&link);
+    if (!ready) return false;
+    std::weak_ptr<Inbox> box = inbox;
+    int number = r.player = ++players;
+    platform::StreamRef player = platform::playStream(ready->rate, [box, number](bool) {
+        if (auto b = box.lock()) {
+            std::lock_guard<std::mutex> g(b->lock);
+            b->streamsPlayed.push_back(number);
+        }
+    });
+    if (!player) {
+        logLine("[voice] Momo's voice could not be played");
+        return false;
+    }
+    sounding = Sounding{number, player};
+    send(ReplyStreams{r.interruptible});
+    if (!r.held.empty()) player->write(r.held.data(), r.held.size());
+    r.held.clear();
+    if (r.finished) player->finish();
+    return true;
+}
+
+Voice::LiveReply& Voice::liveReply(const std::string& id) {
+    if (!live || live->id != id) {
+        live = LiveReply{};
+        live->id = id;
+    }
+    return *live;
 }
 
 }  // namespace agent

@@ -497,6 +497,17 @@ Json idList(const std::vector<I>& ids) {
 
 Json named(const char* t) { return Json::object().set("t", t); }
 
+}  // namespace
+
+Json sceneJson(const Scene& scene) {
+    Json s = Json::object().set("selection", idList(scene.selection));
+    if (scene.focus) s.set("focus", scene.focus->value);
+    if (scene.treeId) s.set("treeId", scene.treeId->value);
+    return s;
+}
+
+namespace {
+
 Json scope(const Scope& s) { return Json::object().set("treeIds", idList(s.treeIds)).set("nodeIds", idList(s.nodeIds)); }
 
 }  // namespace
@@ -550,10 +561,7 @@ Outbound Outbound::dump(const std::vector<Dump>& dumps) {
 }
 
 Outbound Outbound::utter(const std::string& text, bool final, const Scene& scene) {
-    Json s = Json::object().set("selection", idList(scene.selection));
-    if (scene.focus) s.set("focus", scene.focus->value);
-    if (scene.treeId) s.set("treeId", scene.treeId->value);
-    return Outbound(named("utter").set("text", text).set("final", final).set("scene", std::move(s)));
+    return Outbound(named("utter").set("text", text).set("final", final).set("scene", sceneJson(scene)));
 }
 
 Outbound Outbound::focus(const NodeId& nodeId) { return Outbound(named("focus").set("nodeId", nodeId.value)); }

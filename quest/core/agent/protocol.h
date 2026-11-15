@@ -286,6 +286,8 @@ struct Scene {
     std::vector<NodeId> selection;
     std::optional<TreeId> treeId;
 };
+/// As the service reads it, in an `utter` and in /live's `start`.
+Json sceneJson(const Scene& scene);
 
 /// What an organize or handoff covers. Empty means everything.
 struct Scope {

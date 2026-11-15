@@ -262,3 +262,104 @@ TEST(listenerTakesACommandSaidAWhileAfterTheChime) {
     double longer = double(samplesIn(recorded[0].first)) / second;
     CHECK(longer >= double(spoken) / second + 1.2, "the recording holds the command said 1.5 s after the chime (%.1f s long)", longer);
 }
+
+namespace {
+
+/// The streamed pieces' samples, end to end.
+size_t samplesIn(const std::vector<std::pair<Listener::Streamed, size_t>>& pieces) {
+    size_t n = 0;
+    for (const auto& [piece, at] : pieces) n += piece.samples.size();
+    return n;
+}
+
+}  // namespace
+
+TEST(listenerStreamsWhatFollowsItsNameUntilTheTurnIsOver) {
+    Listener listener(spotterFor("momo"));
+    listener.setMode(Listener::Mode::stream);
+    Sound sound;
+    sound.quiet(1);
+    size_t phrase = sound.size();
+    sound.say("command");
+    size_t spoken = sound.size();
+    sound.quiet(3);
+    std::vector<Said> heard = hearAll(listener, sound);
+    auto woke = only<Listener::Woke>(heard);
+    CHECK_EQ(woke.size(), size_t(1));
+    CHECK(!woke.empty() && woke[0].first.streaming, "it says it streams");
+    CHECK_EQ(only<Listener::Recorded>(heard).size(), size_t(0));
+    CHECK_EQ(only<Listener::NothingSaid>(heard).size(), size_t(0));
+    CHECK(listener.state() == Listener::State::hearing, "a pause does not end it");
+    auto pieces = only<Listener::Streamed>(heard);
+    CHECK(!pieces.empty(), "pieces were streamed");
+    if (pieces.empty()) return;
+    long begins = long(sound.size() / Listener::pieceLength * Listener::pieceLength) - long(samplesIn(pieces));
+    CHECK(begins <= long(phrase) && begins >= long(phrase) - long(second * 3 / 10), "it begins %.2f s from the name",
+          double(begins - long(phrase)) / second);
+    long firstWord = -1, lastWord = -1;
+    for (size_t i = 0; i < pieces.size(); i++) {
+        if (!pieces[i].first.speech) continue;
+        if (firstWord < 0) firstWord = begins + long(i * Listener::pieceLength);
+        lastWord = begins + long((i + 1) * Listener::pieceLength);
+    }
+    CHECK(firstWord >= long(phrase) + long(second * 3 / 10), "the name is not words (the first word at %.2f s from it)",
+          double(firstWord - long(phrase)) / second);
+    CHECK(lastWord >= long(spoken) - long(second * 4 / 10) && lastWord <= long(spoken) + long(second * 2 / 10),
+          "the last word ends %.2f s from the end of the command", double(lastWord - long(spoken)) / second);
+    listener.turnOver();
+    CHECK(listener.state() == Listener::State::waiting, "the turn is over");
+    CHECK_EQ(only<Listener::Streamed>(hearAll(listener, Sound().quiet(1))).size(), size_t(0));
+    CHECK_EQ(only<Listener::Woke>(hearAll(listener, Sound().say("hey-momo").quiet(1))).size(), size_t(1));
+}
+
+TEST(listenerStreamsNothingSaidAfterEightSeconds) {
+    Listener listener(spotterFor("momo"));
+    listener.setMode(Listener::Mode::stream);
+    std::vector<Said> heard = hearAll(listener, Sound().quiet(1).say("hey-momo").quiet(10));
+    CHECK_EQ(only<Listener::NothingSaid>(heard).size(), size_t(1));
+    CHECK_EQ(only<Listener::Cut>(heard).size(), size_t(0));
+    size_t words = 0;
+    for (const auto& [piece, at] : only<Listener::Streamed>(heard)) words += piece.speech;
+    CHECK_EQ(words, size_t(0));
+    CHECK(listener.state() == Listener::State::waiting, "waiting for its name again");
+}
+
+TEST(listenerStopsStreamingAfterAMinute) {
+    Listener listener(spotterFor("momo"));
+    listener.setMode(Listener::Mode::stream);
+    Sound sound;
+    sound.quiet(1).say("command");
+    while (sound.size() < 64 * second) sound.quiet(0.3).say("talk");
+    std::vector<Said> heard = hearAll(listener, sound);
+    auto woke = only<Listener::Woke>(heard);
+    auto cut = only<Listener::Cut>(heard);
+    CHECK_EQ(woke.size(), size_t(1));
+    CHECK_EQ(cut.size(), size_t(1));
+    if (woke.empty() || cut.empty()) return;
+    double after = double(cut[0].second - woke[0].second) / second;
+    CHECK(after >= 59.9 && after <= 60.2, "cut %.2f s after the name", after);
+    CHECK_EQ(only<Listener::NothingSaid>(heard).size(), size_t(0));
+}
+
+TEST(listenerStreamingDoesNotTakeItsChimeForWords) {
+    Listener listener(spotterFor("momo"));
+    listener.setMode(Listener::Mode::stream);
+    std::vector<Said> heard = hearWithChime(listener, Sound().quiet(1).say("hey-momo").quiet(1), [](Sound& s) { s.quiet(10); });
+    size_t words = 0;
+    for (const auto& [piece, at] : only<Listener::Streamed>(heard)) words += piece.speech;
+    CHECK_EQ(words, size_t(0));
+    CHECK_EQ(only<Listener::NothingSaid>(heard).size(), size_t(1));
+}
+
+TEST(listenerHearsItsNameWhileAnInterruptibleReplyStreams) {
+    auto wakes = [](Listener::Mode mode, bool interruptible) {
+        Listener listener(spotterFor("momo"));
+        listener.setMode(mode);
+        hearAll(listener, Sound().quiet(0.5));
+        listener.replyStreams(interruptible);
+        return only<Listener::Woke>(hearAll(listener, Sound().quiet(0.3).say("hey-momo").quiet(1))).size();
+    };
+    CHECK_EQ(wakes(Listener::Mode::stream, true), size_t(1));
+    CHECK_EQ(wakes(Listener::Mode::stream, false), size_t(0));
+    CHECK_EQ(wakes(Listener::Mode::record, true), size_t(0));
+}

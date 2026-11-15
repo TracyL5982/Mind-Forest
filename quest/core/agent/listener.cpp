@@ -42,7 +42,7 @@ double cpuSeconds() {
 Listener::Listener(std::unique_ptr<Spotter> spotter) : spotter(std::move(spotter)) {}
 
 Listener::State Listener::state() const {
-    if (std::holds_alternative<Recording>(phase)) return State::hearing;
+    if (std::holds_alternative<Recording>(phase) || std::holds_alternative<Streaming>(phase)) return State::hearing;
     if (std::holds_alternative<Working>(phase)) return State::working;
     return reply.kind == Own::Kind::none ? State::waiting : State::speaking;
 }
@@ -67,9 +67,9 @@ void Listener::hearPiece(Piece p, std::vector<Event>& events) {
     ring.push_back(std::move(p));
     while (int(ring.size()) > ringPieces) ring.pop_front();
     const Piece& piece = ring.back();
-    State now = state();
-    if (now == State::waiting) spot(piece, events);
-    else if (now == State::hearing) record(piece, events);
+    if (spotsNow()) spot(piece, events);
+    else if (std::holds_alternative<Recording>(phase)) record(piece, events);
+    else if (std::holds_alternative<Streaming>(phase)) stream(piece, events);
     chiming.tick(longestChime);
     if (reply.kind != Own::Kind::none) {
         reply.tick(longestReply);
@@ -117,23 +117,54 @@ void Listener::wake(const Spotter::Found& found, std::vector<Event>& events) {
     } else {
         while (start < n - 1 && !speech(ring[start].level, floor)) start++;
     }
-    Recording r;
-    r.pieces.assign(ring.begin() + std::max(0, start - 1), ring.end());
-    r.quietest = std::numeric_limits<float>::infinity();
-    for (const Piece& p : r.pieces) r.quietest = std::min(r.quietest, p.level);
+    int from = std::max(0, start - 1);
+    float quietest = std::numeric_limits<float>::infinity();
+    for (int i = from; i < n; i++) quietest = std::min(quietest, ring[i].level);
     int phraseEnd = start + std::max(0, int(std::lround(span / 0.1)) - 1);
     float loudest = -std::numeric_limits<float>::infinity();
     for (int i = start; i <= phraseEnd && i < n; i++) loudest = std::max(loudest, ring[i].level);
     float dip = loudest / 5;
     while (phraseEnd < n && ring[phraseEnd].level >= dip) phraseEnd++;
+    auto word = [&](int i) { return i > phraseEnd && ring[i].level >= dip; };
+    if (mode == Mode::stream) {
+        Streaming st;
+        st.quietest = quietest;
+        for (int i = from; i < n; i++) st.spoke = st.spoke || word(i);
+        phase = st;
+        settle();
+        events.push_back(Woke{found.keyword, true});
+        for (int i = from; i < n; i++) events.push_back(Streamed{ring[i].samples, word(i)});
+        return;
+    }
+    Recording r;
+    r.pieces.assign(ring.begin() + from, ring.end());
+    r.quietest = quietest;
     for (int i = phraseEnd + 1; i < n; i++) {
-        if (ring[i].level < dip) continue;
+        if (!word(i)) continue;
         r.spoke = true;
         r.lastVoice = i + 1 - n;
     }
     phase = std::move(r);
     settle();
     events.push_back(Woke{found.keyword});
+}
+
+/// Every piece is handed over, marked as words or not by the recording's rule. It does not end on a pause: the turn is
+/// over when the service says so (`turnOver`), or after 8 seconds with nothing said, or at 60 seconds.
+void Listener::stream(const Piece& piece, std::vector<Event>& events) {
+    Streaming& st = std::get<Streaming>(phase);
+    st.sinceWake++;
+    st.quietest = std::min(st.quietest, piece.level);
+    bool words = chiming.kind == Own::Kind::none && speech(piece.level, st.quietest);
+    st.spoke = st.spoke || words;
+    events.push_back(Streamed{piece.samples, words});
+    bool silent = !st.spoke && st.sinceWake >= nothingSaid;
+    bool cut = st.sinceWake >= longest;
+    if (!silent && !cut) return;
+    phase = Between{};
+    if (silent) events.push_back(NothingSaid{});
+    else events.push_back(Cut{});
+    ended(events);
 }
 
 void Listener::record(const Piece& piece, std::vector<Event>& events) {
@@ -178,14 +209,32 @@ void Listener::done() {
     settle();
 }
 
+void Listener::setMode(Mode m) {
+    mode = m;
+    settle();
+}
+
+void Listener::turnOver() {
+    if (!std::holds_alternative<Streaming>(phase)) return;
+    phase = Between{};
+    settle();
+}
+
 bool Listener::askToSpeak() {
     if (std::holds_alternative<Recording>(phase)) {
         replyHeld = true;
         return false;
     }
     reply = Own{Own::Kind::playing, 0};
+    interruptible = false;
     settle();
     return true;
+}
+
+void Listener::replyStreams(bool may) {
+    if (reply.kind != Own::Kind::playing) reply = Own{Own::Kind::playing, 0};
+    interruptible = may;
+    settle();
 }
 
 void Listener::replyEnded() {
@@ -201,7 +250,7 @@ void Listener::chimeEnded() {
 
 std::unique_ptr<Spotter> Listener::respell(std::unique_ptr<Spotter> next) {
     std::swap(spotter, next);
-    if (state() == State::waiting) listen();
+    if (spotsNow()) listen();
     return next;
 }
 
@@ -210,8 +259,13 @@ void Listener::listen() {
     if (Between* between = std::get_if<Between>(&phase)) between->quiet = 0;
 }
 
+bool Listener::spotsNow() const {
+    if (!std::holds_alternative<Between>(phase)) return false;
+    return reply.kind == Own::Kind::none || (mode == Mode::stream && interruptible);
+}
+
 void Listener::settle() {
-    bool now = state() == State::waiting;
+    bool now = spotsNow();
     if (now && !spotting) listen();
     spotting = now;
 }
