@@ -77,7 +77,7 @@ const card = (title: string, anchor = 'n1'): CardNote => ({ anchor, under: 'Nigh
 const scout = (id: string, state: Activity['state'], nodeId = 'n1') => ({ t: 'activity', activity: { id, role: 'scout', state, label: 'Looking into Night stairs', message: '', nodeId } }) as const;
 const landed = (...titles: string[]) => ({ t: 'change', set: { titles } as unknown as ChangeSet }) as const;
 
-function voice(opts: { batchMs?: number } = {}) {
+function voice(opts: { batchMs?: number; answerWaitMs?: number } = {}) {
   const model = new Scripted();
   const frames: VoiceFrame[] = [];
   const called: { name: string; args: string; scene: Scene }[] = [];
@@ -106,6 +106,7 @@ function voice(opts: { batchMs?: number } = {}) {
       now: () => clock.now,
       idleMs: 60_000,
       batchMs: opts.batchMs ?? 6000,
+      answerWaitMs: opts.answerWaitMs,
     },
     (f) => frames.push(f),
   );
@@ -153,8 +154,8 @@ test("the user's words follow as they are written down, the turn is over as Momo
   const { model, frames, spoken, turn } = voice();
   turn(1, 'Hey Momo, who painted Girl with a Pearl Earring?');
   assert.deepEqual(frames.slice(1), [
-    { t: 'heard', turn: 1, text: 'Hey Momo, who painted Girl with a Pearl Earring?', final: false },
-    { t: 'heard', turn: 1, text: 'Hey Momo, who painted Girl with a Pearl Earring?', final: true },
+    { t: 'heard', turn: 1, text: 'Who painted Girl with a Pearl Earring?', final: false },
+    { t: 'heard', turn: 1, text: 'Who painted Girl with a Pearl Earring?', final: true },
   ]);
   assert.equal(model.sent('response.create').length, 0, 'the turn detection asks for the answer itself');
   model.begins('r1');
@@ -359,6 +360,16 @@ test('a turn the turn detection ended at a pause goes on when the user does: its
   const heard = frames.filter((f) => f.t === 'heard' && f.final);
   assert.deepEqual(heard.at(-1), { t: 'heard', turn: 1, text: 'So why did Vermeer paint so few pictures?', final: true });
   assert.deepEqual(frames.filter((f) => f.t === 'over'), [{ t: 'over', turn: 1 }], 'over once, as the answer to all of it begins');
+});
+
+test('a turn the turn detection ended but never answered is answered on the service\'s asking', async () => {
+  const { model, frames, turn } = voice({ answerWaitMs: 5 });
+  turn(1, 'Hello?');
+  assert.equal(model.sent('response.create').length, 0);
+  await new Promise((ok) => setTimeout(ok, 20));
+  assert.deepEqual(model.sent('response.create').map((e) => e.response), [{ metadata: { purpose: 'reply' } }]);
+  model.begins('r1', 'reply');
+  assert.deepEqual(frames.filter((f) => f.t === 'over'), [{ t: 'over', turn: 1 }]);
 });
 
 test('a web answer is spoken without its links', () => {

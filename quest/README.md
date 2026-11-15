@@ -86,8 +86,10 @@ where it is while you look about and glides round once you have turned away from
 asks to use the microphone; refused, it does
 not ask again until the app starts again, and replies are still spoken. A microphone that stops is opened again after
 1, 2, 4, 8, then every 15 s. When the service has a live voice (hello's `live`), the headset opens its `/live`
-socket and the words go another way: after the name the microphone streams to the service until it says your turn
-is over, and Momo's own voice streams back and plays as it arrives. Saying "hey Momo" while Momo speaks stops it and
+socket, named for its own connection (hello's `connection`), and the words go another way: after the name the
+microphone streams to the service until it says your turn is over, and Momo answers you itself, in its own voice,
+which streams back and plays as it arrives: from what it knows, a quick web answer, your saved cards, or by starting
+new cards, which it then tells you about as they land, with no say of the pipeline's needed. Saying "hey Momo" while Momo speaks stops it and
 starts a new turn, except while what it is saying names itself. The log says how long after your last word the turn
 ended and Momo answered. Without `/live`, or while it is closed (it is tried again every 5 s while hello offers it),
 everything is as above. The voice says what it is doing and the orb shows it: waiting, listening from the name,

@@ -59,7 +59,7 @@ const BATCH_MS = 6000;
  * recorder's own 1.2 s cut every request said with a thinking pause of 1.4 to 2.3 s, three of which the detection kept whole, and
  * 1.8 s keeps those (DECISIONS 51).
  */
-const PAUSE_PIECES = 18;
+const PAUSE_MS = 1800;
 const PIECE_SAMPLES = 1600;
 /** How long the turn detection may take to begin the turn's answer before the service asks for it. */
 const ANSWER_WAIT_MS = 4000;
@@ -104,6 +104,8 @@ export interface LiveOptions {
   hearing: string;
   /** For the reasoning models: how hard it thinks before it speaks. */
   effort?: 'minimal' | 'low' | 'medium' | 'high';
+  /** Quiet after the last word that ends a turn the turn detection has not, in ms; 0 leaves it to the detection. */
+  pauseMs?: number;
 }
 
 export interface LiveDeps {
@@ -133,6 +135,7 @@ export interface LiveDeps {
   now?: () => number;
   idleMs?: number;
   batchMs?: number;
+  answerWaitMs?: number;
 }
 
 // ---- Momo's character
@@ -177,6 +180,7 @@ Say a few words of your own as you call these ("Keeping that one", "Going up"). 
 Messages in square brackets come from Mind Palace, not from the user.
 - [Where the user is] says what the user has open. "This" and "it" mean that card.
 - [Card landed], [More cards landed] and [All done] tell you what a search you started brought. Tell the user right away, like a friend pointing something out: the first card in a sentence or two, later ones in one short line ("two more: …"), and at the end a one-sentence wrap-up that says which you would look at first and offers one next step.
+- Never mention the notes themselves ("the note says"): tell what landed as a friend would.
 - Say only what a note says about a card. Never add a fact, date, name or claim about a card that its note does not state, and never describe what a card looks like or shows beyond its note. Your own taste is fine when it is plainly an opinion ("sounds like a rabbit hole").
 - [From the agents] is a line from Mind Palace's other agents for the user. Say it briefly in your own words, and claim nothing it does not say.
 
@@ -438,9 +442,10 @@ export class LiveVoice {
           const words = level > Math.max(0.015, h.quietest * 3);
           if (words) h.spoke = true;
           h.quiet = words ? 0 : h.quiet + 1;
-          if (h.spoke && h.quiet === PAUSE_PIECES && !h.committed) {
-            this.deps.log(`[live] turn ${h.turn}: ${PAUSE_PIECES * 100} ms of quiet after the last word, so it is over`);
-            return this.endTurn(this.now() - PAUSE_PIECES * 100);
+          const pause = (this.deps.options.pauseMs ?? PAUSE_MS) / 100;
+          if (pause > 0 && h.spoke && h.quiet === pause && !h.committed) {
+            this.deps.log(`[live] turn ${h.turn}: ${pause * 100} ms of quiet after the last word, so it is over`);
+            return this.endTurn(this.now() - pause * 100);
           }
         }
         return;
@@ -457,10 +462,10 @@ export class LiveVoice {
     }
   }
 
-  /** All of a turn's words so far: the pieces written down before, then `text`. */
+  /** All of a turn's words so far, the pieces written down before and then `text`, without the name that woke Momo. */
   private wordsOf(turn: number, text: string): string {
     const before = this.words.turn === turn ? this.words.text : '';
-    return [before, text.trim()].filter(Boolean).join(' ');
+    return withoutWakePhrase([before, text.trim()].filter(Boolean).join(' '), this.deps.name()).trim();
   }
 
   /** The turn is over on the service's side: the device stopped sending, or the user paused. The answer is asked for with the commit. */
@@ -586,8 +591,8 @@ export class LiveVoice {
           if (this.expected?.turn !== heard.turn) return;
           this.expected = null;
           this.deps.log(`[live] turn ${heard.turn}: no answer began, so one is asked for`);
-          this.drain(heard.turn);
-        }, ANSWER_WAIT_MS);
+          if (!this.speaking && !this.asked) this.ask({ kind: 'reply', turn: heard.turn }, false);
+        }, this.deps.answerWaitMs ?? ANSWER_WAIT_MS);
         timer.unref?.();
         this.expected = { turn: heard.turn, at: now, timer };
         return;
@@ -757,14 +762,13 @@ export class LiveVoice {
 
   /**
    * Hands the model what waits once nobody has the floor (the user is not being heard and Momo is not answering): calls' outputs
-   * first, since the user waits on them, then lines from the pipeline, then what landed. `turn`: a turn whose answer never began.
+   * first, since the user waits on them, then lines from the pipeline, then what landed.
    */
-  private drain(turn?: number): void {
+  private drain(): void {
     if (this.wake) clearTimeout(this.wake);
     this.wake = null;
     if (!this.session || this.hearing || this.speaking || this.asked || this.expected) return;
     const now = this.now();
-    if (turn !== undefined) return this.ask({ kind: 'reply', turn });
     if (this.refused) {
       const again = this.refused;
       this.refused = null;

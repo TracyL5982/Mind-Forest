@@ -43,7 +43,7 @@ if (fake) {
 }
 
 /** Momo's real-time voice. MIND_PALACE_LIVE_TURN is `semantic`, or `server:<ms>` for a pause of that length. */
-const liveModel = env.MIND_PALACE_LIVE_MODEL || 'gpt-realtime-2.1-mini';
+const liveModel = env.MIND_PALACE_LIVE_MODEL || 'gpt-realtime-2.1';
 const turn = /^server:(\d+)$/.exec(env.MIND_PALACE_LIVE_TURN ?? '');
 const liveOptions: LiveOptions = {
   model: liveModel,
@@ -51,6 +51,7 @@ const liveOptions: LiveOptions = {
   turn: turn ? { kind: 'server', ms: Number(turn[1]) } : { kind: 'semantic' },
   hearing: env.MIND_PALACE_HEARING_MODEL || HEARING_MODEL,
   effort: (env.MIND_PALACE_LIVE_EFFORT as LiveOptions['effort']) || 'minimal',
+  ...(env.MIND_PALACE_LIVE_PAUSE ? { pauseMs: Number(env.MIND_PALACE_LIVE_PAUSE) } : {}),
 };
 
 // One role's failure that nothing caught must not take the whole service down with the user's session.

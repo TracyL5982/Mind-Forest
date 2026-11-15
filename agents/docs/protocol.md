@@ -193,7 +193,7 @@ Service to client:
 | Frame | Meaning |
 |---|---|
 | `{t:'ready', rate}` | Sent on connect. Momo's voice comes at `rate` Hz (24000). |
-| `{t:'over', turn}` | The user's turn has been heard. Stop sending the microphone. The turn is sent: play the sent tone and think until Momo's reply begins. |
+| `{t:'over', turn}` | The user's turn has been heard and Momo's answer begins. Stop sending the microphone. The turn is sent: play the sent tone and think until Momo is first heard. Until `over` the client keeps sending: the turn detection may take a pause for the end and hear the user go on, and the service ends a turn itself after 1.8 s of quiet after the last word. |
 | `{t:'heard', turn, text, final}` | What the user said in turn `turn`, all of it so far: the words as they are transcribed, which begins after `over`, then once more with `final: true`. For showing: Momo hears the turn itself. |
 | `{t:'quiet', turn}` | No answer is coming for turn `turn`: Momo's response to it said nothing and waits on no tool. Stop thinking. |
 | `{t:'text', id, text, kind}` | Response `id` begins or goes on: all Momo has said in it so far, and which kind it is, `reply` (an answer to what the user said, at once or after a tool) or `results` (Momo telling what the agents brought or did). A new `id` is a new response. |

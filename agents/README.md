@@ -60,6 +60,7 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 | `MIND_PALACE_LIVE` | on with `OPENAI_API_KEY` | `off` turns Momo's live voice (`/live`) off; clients then record, transcribe and hear replies read aloud. |
 | `MIND_PALACE_LIVE_MODEL` | `gpt-realtime-2.1` | The realtime model that is Momo's live voice. `gpt-realtime-2.1-mini` costs a third as much. See DECISIONS 51. |
 | `MIND_PALACE_LIVE_TURN` | `semantic` | How the live voice hears that you are done: `semantic`, or `server:<ms>` for a pause of that many milliseconds. |
+| `MIND_PALACE_LIVE_PAUSE` | 1800 | Milliseconds of quiet after your last word that end your turn when the turn detection has not. 1200 answers sooner and cuts a request said with a thinking pause. |
 | `MIND_PALACE_LIVE_EFFORT` | `minimal` | How hard the realtime model thinks before it answers. |
 | `MIND_PALACE_WEB_MODEL` | `gpt-5.4-mini` | The model behind Momo's quick web answers. |
 

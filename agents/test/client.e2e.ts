@@ -1048,7 +1048,8 @@ async function wakeChecks(): Promise<void> {
         await until('the recording posted', async () => posted.length === 1, 15000);
         await page.locator('#caption').getByText('Show me more like this.').waitFor();
         // The reply, then the line on what the run brought, which may cut the reply short with the stand-in agents' instant runs.
-        await until('the reply heard and the page waiting again', async () => /^starting,waiting,listening,sent,(thinking,)?responding,(working,)?waiting(,responding,(working,)?waiting)?$/.test((await micStates()).join()), 25000);
+        await until('the reply heard and the page waiting again', async () => /^starting,waiting,listening,sent,(thinking,)?responding,(working,|waiting,)*waiting(,responding,(working,|waiting,)*waiting)?$/.test((await micStates()).join()), 25000)
+          .catch(async (err) => assert.fail(`${err instanceof Error ? err.message : err}: ${(await micStates()).join()}`));
         assert.deepEqual(acted, ['Show me more like this.']);
         assert.equal(posted[0]!.mime, 'audio/wav');
         assert.ok(posted[0]!.seconds > 2.4 && posted[0]!.seconds < 4.6, `the recording holds the phrase, the command and the pause: ${posted[0]!.seconds} s`);
@@ -1260,10 +1261,11 @@ async function liveChecks(): Promise<void> {
     const later = (ms: number, event: RealtimeEvent) => setTimeout(() => on.event(event), ms);
     const say = (at: number, words: string, purpose?: string) => {
       const id = `r${++responses}`;
+      // The answer begins, and is first heard a little after, as the model's are.
       later(at, { type: 'response.created', response: { id, metadata: purpose ? { purpose } : null } });
-      for (let k = 0; k < 8; k++) later(at + 10, { type: 'response.output_audio.delta', response_id: id, item_id: `${id}-audio`, delta: tone.toString('base64') });
-      later(at + 20, { type: 'response.output_audio_transcript.delta', response_id: id, delta: words });
-      later(at + 30, { type: 'response.done', response: { id, status: 'completed' } });
+      for (let k = 0; k < 8; k++) later(at + 600, { type: 'response.output_audio.delta', response_id: id, item_id: `${id}-audio`, delta: tone.toString('base64') });
+      later(at + 610, { type: 'response.output_audio_transcript.delta', response_id: id, delta: words });
+      later(at + 620, { type: 'response.done', response: { id, status: 'completed' } });
     };
     const hear = () => {
       const item_id = `item-${++items}`;
