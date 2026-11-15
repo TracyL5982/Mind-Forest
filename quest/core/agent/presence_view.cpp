@@ -176,18 +176,16 @@ struct Pen {
         band(outer, inner, n, c, z, colour, alpha);
     }
 
-    /// A filled round blob, drawn out along `along` by `stretch` and as much narrower across, so it keeps its area.
-    void blob(Vec2 c, float radius, Vec2 along, float stretch, float z, Vec3 colour, float alpha) {
+    /// A filled round dot.
+    void disc(Vec2 c, float radius, float z, Vec3 colour, float alpha) {
         constexpr int n = 18;
         if (alpha < 0.002f || radius <= 0 || !room(1 + 2 * n, 9 * n)) return;
-        Vec2 across{-along.y, along.x};
         int centre = nv;
         put(c, z, colour, alpha);
         for (int i = 0; i < n; i++) {
-            float a = float(i) * 2 * pi / n;
-            Vec2 p = c + along * (std::cos(a) * radius * stretch) + across * (std::sin(a) * radius / stretch);
-            put(p, z, colour, alpha);
-            put(p + outward(p - c) * feather, z, colour, 0);
+            Vec2 d{std::cos(float(i) * 2 * pi / n), std::sin(float(i) * 2 * pi / n)};
+            put(c + d * radius, z, colour, alpha);
+            put(c + d * (radius + feather), z, colour, 0);
         }
         for (int i = 0; i < n; i++) triangle(centre, centre + 1 + 2 * i, centre + 1 + 2 * ((i + 1) % n));
         stitch(centre + 1, n, 2, true);
@@ -397,7 +395,7 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
     // The agents' lines stand above the words at rest, or, with none, the lowest beside Momo.
     int rows = caption.resting();
     float top = float(rows) * step / 2;
-    // While Momo thinks, its bubbles rise where the lowest lines would be, so the lines stand above them for that while.
+    // While Momo thinks, its bubbles hang where the lowest lines would be, so the lines stand above them for that while.
     float above = face.look().dots > 0.5f ? Face::bubblesTop * size / Face::radius + small * 0.6f : 0;
     ease(agentsFrom, std::max(rows > 0 ? top + small * 0.75f : 0, above), 0.18f, dt);
     auto keyOf = [](const std::string& role) { return int(std::hash<std::string>{}(role) & 0x7FFFFFFF); };
@@ -477,13 +475,11 @@ void PresenceView::draw() {
             pen.stroke(cord, n, Face::cordLine * cm, z, white, alpha);
         }
 
-        // Thinking: bubbles rise from the upper right, each pushed out and growing as the next pops, the largest bursting.
+        // Thinking: three bubbles form at the upper right, each new one easing the others out, then circle there.
         if (l.dots > 0.003f) {
-            Face::Bubbles bubbles = Face::bubbles(l.rising);
-            for (int k = 0; k < bubbles.count; k++) {
-                const Face::Bubble& b = bubbles.all[k];
-                pen.blob(at(b.at), b.radius * cm, b.along, b.stretch, z, white, shown * l.dots * b.alpha);
-                if (b.ring > 0) pen.circle(at(b.at), b.ring * cm, 0.05f * cm, z, white, shown * l.dots * b.ringAlpha);
+            for (int j = 0; j < 3; j++) {
+                Face::Dot d = Face::dot(j, l.rising);
+                pen.disc(at(d.at), d.radius * cm, z, white, shown * l.dots);
             }
         }
     });

@@ -396,63 +396,66 @@ TEST(theLooksTakePrecedenceAsPlanned) {
     run(f, say(S::listening), 0.5f);
     run(f, say(S::sent), 0.2f);
     run(f, say(S::responding, "", "", true, 0.8f), Face::dotsAtLeast - f.look().rising - 0.02f);
-    CHECK(f.look().dots > 0.95f && Face::bubbles(f.look().rising).count == 3,
-          "Momo answering 0.2 s after the turn is sent: the dots stay until all three are in (%.2f)", double(f.look().dots));
+    CHECK(f.look().dots > 0.95f && Face::dot(2, f.look().rising).radius > 0,
+          "Momo answering 0.2 s after the turn is sent: the bubbles stay until all three have settled (%.2f)", double(f.look().dots));
     run(f, say(S::responding, "", "", true, 0.8f), 0.6f);
     CHECK(f.look().dots < 0.05f, "then fade: %.2f", double(f.look().dots));
 }
 
-TEST(thinkingBubblesPopAndPushEachOtherOutTheLargestBursting) {
-    using B = Face::Bubbles;
-    auto at = [](float t) { return Face::bubbles(t); };
+TEST(thinkingBubblesFormOneByOneEasingTheOthersOutThenCircle) {
+    auto d = [](int j, float t) { return Face::dot(j, t); };
     float width = 2 * Face::radius;
-    B one = at(0.1f), two = at(0.25f), three = at(0.5f);
-    CHECK(one.count == 1 && one.all[0].radius > 0 && one.all[0].at.x < 2.3f, "pop 1: one small bubble, just off Momo's upper right");
-    CHECK(two.count == 2 && two.all[0].at.y > two.all[1].at.y + 0.5f && two.all[0].radius > two.all[1].radius,
-          "pop 2: a new small one at the base, and the first pushed out, growing");
-    CHECK(three.count == 3 && three.all[0].at.y > three.all[1].at.y && three.all[1].at.y > three.all[2].at.y, "pop 3: three in a trail");
-    B settled = at(0.95f);
-    CHECK(settled.count == 3 && std::fabs(2 * settled.all[2].radius / width - 0.12f) < 0.005f &&
-              std::fabs(2 * settled.all[1].radius / width - 0.18f) < 0.005f && std::fabs(2 * settled.all[0].radius / width - 0.25f) < 0.005f,
-          "the first now the largest: 0.25, 0.18 and 0.12 of Momo's width across, as the user drew them");
-    float most = 0;
-    for (float t = 0.15f; t < 0.3f; t += 0.005f) most = std::max(most, at(t).all[0].radius);
-    CHECK(most > 0.36f * 1.03f, "pushes are springy: the first grows past the middle size before it settles (%.3f cm)", double(most));
-    float drawn = 0, squashed = 2;
-    for (float t = 0.15f; t < 0.4f; t += 0.005f) drawn = std::max(drawn, at(t).all[1].stretch), squashed = std::min(squashed, at(t).all[1].stretch);
-    CHECK(drawn > 1.15f && squashed < 0.9f, "and squash and stretch as they pop: %.2f to %.2f", double(squashed), double(drawn));
+    CHECK(d(0, 0).radius == 0 && d(1, 0.3f).radius == 0 && d(2, 0.65f).radius == 0, "none before its turn");
+    CHECK(d(0, 0.15f).radius > 0 && d(0, 0.15f).radius < 0.24f && length(d(0, 0.15f).at - d(2, 1.1f).at) < 0.01f,
+          "the first swells up at the base");
+    Vec2 base = d(2, 1.1f).at, middle = d(1, 1.1f).at, end = d(0, 1.1f).at;
+    Face::Dot first = d(0, 0.55f), second = d(1, 0.55f);
+    CHECK(second.radius > 0 && length(second.at - base) < 0.01f, "the second swells up at the base");
+    CHECK(first.at.y > base.y + 0.2f && first.at.y < middle.y - 0.2f && first.radius > 0.24f && first.radius < 0.36f,
+          "easing the first out toward the middle place, growing as it goes");
+    Face::Dot third = d(2, 0.9f);
+    CHECK(third.radius > 0 && d(1, 0.9f).at.y > base.y + 0.2f && d(0, 0.9f).at.y > middle.y + 0.2f, "the third eases both out");
+    CHECK(std::fabs(2 * d(0, 1.1f).radius / width - 0.25f) < 0.005f && std::fabs(2 * d(1, 1.1f).radius / width - 0.18f) < 0.005f &&
+              std::fabs(2 * d(2, 1.1f).radius / width - 0.12f) < 0.005f && Face::dotsAtLeast <= 1.11f,
+          "settled by %.2f s: the first the largest, at the far end; 0.25, 0.18 and 0.12 of Momo's width, as drawn", double(Face::dotsAtLeast));
+    CHECK(length(base) < length(middle) && length(middle) < length(end) && base.x > 0 && end.y > base.y, "a trail up and right from Momo's upper right");
 
-    B fourth = at(1.05f), after = at(1.3f);
-    CHECK(fourth.count == 4 && fourth.all[0].alpha < 1 && fourth.all[0].ring > fourth.all[0].radius,
-          "the fourth pop pushes the largest past the end: it bursts, with a faint ring");
-    CHECK(after.count == 3, "and is gone, three left");
-    // A pop shows as the newest bubble being small again.
-    int pops = 0;
-    float was = at(2).all[at(2).count - 1].radius;
-    for (float t = 2.005f; t < 2 + Face::bubbling; t += 0.005f) {
-        B b = at(t);
-        float newest = b.all[b.count - 1].radius;
-        if (newest < was - 0.1f) pops++;
-        was = newest;
-    }
-    CHECK(pops == 3, "three new bubbles every %.1f s: %d", double(Face::bubbling), pops);
-
-    bool clear = true, waits = true;
-    float highest = 0;
-    for (float t = 0; t < 8; t += 0.01f) {
-        B b = at(t);
-        for (int k = 0; k < b.count; k++) {
-            const Face::Bubble& u = b.all[k];
-            float reach = std::max(u.radius * std::max(u.stretch, 1.f), u.ring);
-            highest = std::max(highest, u.at.y + reach);
-            // Clear of Momo's ring, even bent its furthest, and of the words beside it.
-            clear = clear && length(u.at) - reach > Face::radius * 1.15f && (u.at.x + reach < Face::radius * 1.5f || u.at.y - reach > Face::radius);
+    // Forming, they float: never faster than gliding a place in its time, eased, and never shrinking but a hair.
+    float fastest = 0, shrank = 0, most = 0;
+    for (int j = 0; j < 3; j++) {
+        Face::Dot was = d(j, 0);
+        for (float t = 0.01f; t <= Face::dotsAtLeast; t += 0.01f) {
+            Face::Dot now = d(j, t);
+            fastest = std::max(fastest, length(now.at - was.at) / 0.01f);
+            shrank = std::max(shrank, was.radius - now.radius);
+            if (j == 2) most = std::max(most, now.radius);
+            was = now;
         }
-        if (t > 0.75f && t < 0.95f) waits = waits && std::fabs(b.all[1].stretch - 1) < 0.1f && std::fabs(b.all[1].stretch - 1) > 0;
     }
-    CHECK(clear, "clear of Momo and its words");
-    CHECK(highest <= Face::bubblesTop, "no higher than the agents' lines are lifted past: %.2f cm", double(highest));
-    CHECK(waits, "waiting, a bubble wobbles a little");
+    CHECK(fastest < 8, "floating, not shot: %.1f cm/s at most", double(fastest));
+    CHECK(shrank < 0.005f && most < 0.24f * 1.02f, "swelling with at most a hair past its size: %.3f cm back", double(shrank));
+
+    float bent = 0, straight = 1e9f, wandered = 0;
+    bool clear = true;
+    for (float t = 2; t < 2 + Face::dotTurn; t += 0.01f) {
+        Vec2 p[3];
+        for (int j = 0; j < 3; j++) {
+            Face::Dot u = d(j, t);
+            p[j] = u.at;
+            wandered = std::max(wandered, length(u.at - d(j, Face::dotsAtLeast).at));
+            // Clear of Momo's ring, even bent its furthest, and of the words beside it, and the same each turn.
+            clear = clear && length(u.at) - u.radius > Face::radius * 1.15f && (u.at.x + u.radius < Face::radius * 1.5f || u.at.y - u.radius > Face::radius) &&
+                    u.at.y + u.radius <= Face::bubblesTop && length(d(j, t + Face::dotTurn).at - u.at) < 1e-3f;
+        }
+        Vec2 along = p[0] - p[2];
+        float off = std::fabs(along.x * (p[1].y - p[2].y) - along.y * (p[1].x - p[2].x)) / length(along);
+        bent = std::max(bent, off);
+        straight = std::min(straight, off);
+    }
+    CHECK(bent > 0.4f, "settled, they turn through a triangle: the middle one %.2f cm off the line of the others", double(bent));
+    CHECK(straight < 0.05f, "and through a line: %.3f cm", double(straight));
+    CHECK(wandered < 0.5f, "each about its own place, and only three: %.2f cm at most", double(wandered));
+    CHECK(clear, "clear of Momo and its words, below where the agents' lines are lifted to, the same each turn");
 }
 
 namespace {
