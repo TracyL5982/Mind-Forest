@@ -70,9 +70,10 @@ void CardView::apply(double now, const Stage::Spot& spot, float boost, float cur
     }
 
     float m = openMix.value(now);
-    if (!(std::fabs(m - shownMix) > 0.0005f || std::fabs(step - shownStep) > 0.004f)) return;
+    if (!(std::fabs(m - shownMix) > 0.0005f || std::fabs(step - shownStep) > 0.004f || appear != shownAppear)) return;
     shownMix = m;
     shownStep = step;
+    shownAppear = appear;
     moved = true;
     stepHolder->isEnabled = step > 0.005f;
     if (step > 0.996f) stepHolder->opacity.reset(); else stepHolder->opacity = step;
@@ -82,8 +83,8 @@ void CardView::apply(double now, const Stage::Spot& spot, float boost, float cur
     openHolder->isEnabled = m > 0.005f && openBuilt;
     smallHolder->scale = Vec3::repeating(1 + (g - 1) * m);
     openHolder->scale = Vec3::repeating(1 / g + (1 - 1 / g) * m);
-    float smallAlpha = (openBuilt ? 1 - smoothstep(0.35f, 0.8f, m) : 1) * (1 - step);
-    float openAlpha = smoothstep(0.2f, 0.7f, m);
+    float smallAlpha = (openBuilt ? 1 - smoothstep(0.35f, 0.8f, m) : 1) * (1 - step) * appear;
+    float openAlpha = smoothstep(0.2f, 0.7f, m) * appear;
     if (smallAlpha > 0.996f) smallHolder->opacity.reset(); else smallHolder->opacity = smallAlpha;
     if (openAlpha > 0.996f) openHolder->opacity.reset(); else openHolder->opacity = openAlpha;
     if (badge) {

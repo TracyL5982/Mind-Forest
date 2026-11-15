@@ -280,9 +280,8 @@ void OceanModel::settleCard(int id) {
     old->xy.go(made->xy.target(), time, SETTLE);
     if (old->shape) old->shape->position.z = -0.002f;
     old->goneAt = time + SETTLE + APPEAR + 0.05;
-    float shown = made->alpha.target();
-    made->alpha.set(0);
-    made->alpha.go(shown, time, SETTLE * 0.55f, APPEAR, Ease::out);
+    made->appear = 0;
+    made->appearAt = time + SETTLE * 0.55f;
     touch(old->goneAt + 0.1);
 }
 
@@ -294,6 +293,11 @@ void OceanModel::composeFrame(double now) {
             c.shimmer->position.x = (t - 0.5f) * c.smallBody.x * (1 - BAND);
             c.shimmer->opacity = std::clamp(std::sin(float(M_PI) * t), 0.f, 1.f);
             c.changed();
+        }
+        if (c.appearAt) {
+            float t = std::clamp(float((now - *c.appearAt) / APPEAR), 0.f, 1.f);
+            c.appear = 1 - (1 - t) * (1 - t);
+            if (t >= 1) c.appearAt.reset();
         }
         if (c.settle && c.shape) {
             float t = std::clamp(float((now - c.settle->start) / SETTLE), 0.f, 1.f), e = t * t * (3 - 2 * t);

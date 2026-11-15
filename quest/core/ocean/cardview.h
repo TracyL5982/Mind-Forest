@@ -96,6 +96,10 @@ public:
         double start;
     };
     std::optional<Settle> settle;
+    /// How much of its faces show, 0…1, as a finished card comes up inside the composing one; its card, its glow and
+    /// what it leads stay as they are, so the glass of its group never thins.
+    float appear = 1;
+    std::optional<double> appearAt;
     bool pictureFull = false;           // … shown from its own file (asked for, or there), not from the atlas
     bool step = false;                  // it is a layer's first card, standing on the path
     bool lit = true;                    // it glows while it is on the layer you work on
@@ -125,6 +129,7 @@ private:
     float shownAlpha = -1;
     float shownMix = -1;
     float shownStep = 0;
+    float shownAppear = 1;
 
 public:
     CardView(const TreeNode& node, Vec2 smallBody, Vec2 openBody);
