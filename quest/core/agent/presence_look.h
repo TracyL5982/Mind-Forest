@@ -94,7 +94,14 @@ public:
         Vec2 at;
         float radius = 0;           // 0 before it has come
     };
-    static constexpr float dotTurn = 2.4f;  // s each dot takes to circle its place
+    // When the dots come and how long they stay. Momo's first sound comes about 0.7 s after a turn is sent, so the
+    // dots start as it is sent, pop quickly, and once begun stay until all three are in, then fade gently.
+    static constexpr bool dotsWhenSent = true;          // false: only once thinking, Voice::sentFor after the turn is sent
+    static constexpr float dotPopEvery = 0.15f;         // s from one dot beginning to pop to the next
+    static constexpr float dotPop = 0.18f;              // s a dot takes to pop
+    static constexpr float dotsAtLeast = 2 * dotPopEvery + dotPop;  // s they show once begun: until all three are in
+    static constexpr float dotsFade = 0.2f;             // s, about, they take to fade
+    static constexpr float dotTurn = 2.4f;              // s each dot takes to circle its place
     /// Thinking dot `k`, 0 the one nearest Momo, `rising` s after the dots began to come.
     static Dot dot(int k, float rising);
 

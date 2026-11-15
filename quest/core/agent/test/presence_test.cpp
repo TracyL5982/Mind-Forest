@@ -393,16 +393,23 @@ TEST(theLooksTakePrecedenceAsPlanned) {
     CHECK(f.look().rising < 0.2f, "a new thought's dots come from the start: %.2f s", double(f.look().rising));
     run(f, say(S::off), 2);
     CHECK(f.look().shown < 0.01f && f.look().dots < 0.01f, "off, Momo is gone");
+    run(f, say(S::listening), 0.5f);
+    run(f, say(S::sent), 0.2f);
+    run(f, say(S::responding, "", "", true, 0.8f), Face::dotsAtLeast - f.look().rising - 0.02f);
+    CHECK(f.look().dots > 0.95f && Face::dot(2, f.look().rising).radius > 0,
+          "Momo answering 0.2 s after the turn is sent: the dots stay until all three are in (%.2f)", double(f.look().dots));
+    run(f, say(S::responding, "", "", true, 0.8f), 0.6f);
+    CHECK(f.look().dots < 0.05f, "then fade: %.2f", double(f.look().dots));
 }
 
 TEST(thinkingDotsPopOneByOneThenCircleThroughALineAndATriangle) {
     auto r = [](int k, float t) { return Face::dot(k, t).radius; };
     CHECK(r(0, 0) == 0 && r(1, 0) == 0 && r(2, 0) == 0, "none before they begin");
     CHECK(r(0, 0.1f) > 0 && r(1, 0.1f) == 0, "the one nearest Momo first");
-    CHECK(r(1, 0.3f) > 0 && r(2, 0.3f) == 0, "then the middle one");
-    CHECK(r(2, 0.6f) > 0, "then the farthest");
+    CHECK(r(1, 0.2f) > 0 && r(2, 0.2f) == 0, "then the middle one");
+    CHECK(r(2, 0.35f) > 0 && Face::dotsAtLeast < 0.55f, "then the farthest, all three in by %.2f s", double(Face::dotsAtLeast));
     float most = 0;
-    for (float t = 0.48f; t < 0.7f; t += 0.01f) most = std::max(most, r(2, t));
+    for (float t = 0.3f; t < 0.6f; t += 0.01f) most = std::max(most, r(2, t));
     CHECK(most > r(2, 1) * 1.05f, "each pops, a little past its size before it settles");
     float width = 2 * Face::radius;
     CHECK(std::fabs(2 * r(0, 1) / width - 0.12f) < 0.01f && std::fabs(2 * r(1, 1) / width - 0.18f) < 0.01f &&

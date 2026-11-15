@@ -97,16 +97,16 @@ Face::Dot Face::dot(int k, float rising) {
     // just outside its upper right, the smallest nearest.
     static constexpr float home[3][2] = {{2.08f, 2.9f}, {3.3f, 4.0f}, {4.7f, 5.14f}};
     static constexpr float radii[3] = {0.24f, 0.36f, 0.5f};
-    constexpr float popAt = 0.16f, popFor = 0.22f, orbit = 0.45f;
+    constexpr float orbit = 0.45f;
     Dot d{{home[k][0], home[k][1]}, 0};
-    float t = (rising - popAt * float(k)) / popFor;
+    float t = (rising - dotPopEvery * float(k)) / dotPop;
     if (t <= 0) return d;
     // Each pops: it grows a little past its size and settles.
     float back = t >= 1 ? 1 : 1 + 2.70158f * std::pow(t - 1, 3.f) + 1.70158f * std::pow(t - 1, 2.f);
     d.radius = radii[k] * back;
     // Once all three have come, each circles its own place, a third of a turn behind the one before, so the three
     // turn through a line and a triangle and back as they go.
-    float since = rising - 2 * popAt - popFor;
+    float since = rising - dotsAtLeast;
     if (since <= 0) return d;
     float swing = orbit * std::min(1.f, since / 0.6f);
     float a = 2 * pi * since / dotTurn - float(k) * 2 * pi / 3 - pi / 2;
@@ -192,11 +192,13 @@ void Face::update(const Presence& p, float dt) {
     }
     ease(l.monocle, searching ? 1.f : 0.f, 0.18f, dt);
 
-    // Thinking, from the moment the turn is sent until Momo answers or the work begins, the dots come and pulse.
-    bool thinks = p.state == S::sent || p.state == S::thinking;
+    // Thinking, from the moment the turn is sent until Momo answers or the work begins, the dots come and turn. Once
+    // begun they stay until all three are in, so a quick answer never cuts them off, then fade, turning as they go.
+    bool thinks = p.state == S::thinking || (dotsWhenSent && p.state == S::sent);
     if (thinks && l.dots < 0.02f) l.rising = 0;
-    if (thinks) l.rising += dt;
-    ease(l.dots, thinks ? 1.f : 0.f, thinks ? 0.12f : 0.1f, dt);
+    bool on = thinks || (l.dots > 0.02f && l.rising < dotsAtLeast);
+    if (on || l.dots > 0.003f) l.rising += dt;
+    ease(l.dots, on ? 1.f : 0.f, on ? 0.12f : dotsFade / 2, dt);
 }
 
 // MARK: - Caption
