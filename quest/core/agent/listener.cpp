@@ -27,6 +27,10 @@ constexpr int echo = 3;
 constexpr int longestChime = 10;
 /// A reply that never says it ended stops holding the listener after this long.
 constexpr int longestReply = 900;
+/// Streaming, what follows the name goes out from this long before its first word, so a word begun while the chime
+/// played, when nothing counts as words, is kept whole. The name alone and the pause after it are never sent, so the
+/// model cannot take the pause for the end of the turn.
+constexpr int heldBack = 8;
 
 /// Speech is louder than both a floor and three times the quietest moment, the rule the web client's recorder uses.
 bool speech(float level, float quietest) { return level > std::max(0.015f, quietest * 3); }
@@ -130,10 +134,17 @@ void Listener::wake(const Spotter::Found& found, std::vector<Event>& events) {
         Streaming st;
         st.quietest = quietest;
         for (int i = from; i < n; i++) st.spoke = st.spoke || word(i);
-        phase = st;
+        // A request said straight after the name goes out with it; otherwise only from just before its first word.
+        if (!st.spoke) {
+            for (int i = std::max(phraseEnd + 1, n - heldBack); i < n; i++) st.held.push_back(ring[i].samples);
+        }
+        bool spoke = st.spoke;
+        phase = std::move(st);
         settle();
         events.push_back(Woke{found.keyword, true});
-        for (int i = from; i < n; i++) events.push_back(Streamed{ring[i].samples, word(i)});
+        if (spoke) {
+            for (int i = from; i < n; i++) events.push_back(Streamed{ring[i].samples, word(i)});
+        }
         return;
     }
     Recording r;
@@ -156,8 +167,17 @@ void Listener::stream(const Piece& piece, std::vector<Event>& events) {
     st.sinceWake++;
     st.quietest = std::min(st.quietest, piece.level);
     bool words = chiming.kind == Own::Kind::none && speech(piece.level, st.quietest);
-    st.spoke = st.spoke || words;
-    events.push_back(Streamed{piece.samples, words});
+    if (st.spoke) {
+        events.push_back(Streamed{piece.samples, words});
+    } else if (words) {
+        for (std::vector<float>& before : st.held) events.push_back(Streamed{std::move(before), false});
+        st.held.clear();
+        st.spoke = true;
+        events.push_back(Streamed{piece.samples, true});
+    } else {
+        st.held.push_back(piece.samples);
+        if (int(st.held.size()) > heldBack) st.held.pop_front();
+    }
     bool silent = !st.spoke && st.sinceWake >= nothingSaid;
     bool cut = st.sinceWake >= longest;
     if (!silent && !cut) return;

@@ -112,6 +112,8 @@ private:
         float quietest = 0;
         bool spoke = false;
         int sinceWake = 0;
+        /// Until the first word after the name: the last pieces heard, which go out just before it.
+        std::deque<std::vector<float>> held;
     };
     struct Working {};
     /// A sound of the agent's own, a reply or the chime: playing, or its echo fading after it ended.

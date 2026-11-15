@@ -363,3 +363,22 @@ TEST(listenerHearsItsNameWhileAnInterruptibleReplyStreams) {
     CHECK_EQ(wakes(Listener::Mode::stream, false), size_t(0));
     CHECK_EQ(wakes(Listener::Mode::record, true), size_t(0));
 }
+
+TEST(listenerStreamsNothingOfTheNameAndThePauseAfterIt) {
+    Listener listener(spotterFor("momo"));
+    listener.setMode(Listener::Mode::stream);
+    Sound sound;
+    sound.quiet(1).say("hey-momo").quiet(1.5);
+    size_t asked = sound.size();
+    sound.say("more").quiet(2);
+    std::vector<Said> heard = hearAll(listener, sound);
+    CHECK_EQ(only<Listener::Woke>(heard).size(), size_t(1));
+    CHECK_EQ(only<Listener::NothingSaid>(heard).size(), size_t(0));
+    auto pieces = only<Listener::Streamed>(heard);
+    CHECK(!pieces.empty(), "what was asked was streamed");
+    if (pieces.empty()) return;
+    long begins = long(sound.size() / Listener::pieceLength * Listener::pieceLength) - long(samplesIn(pieces));
+    CHECK(begins >= long(asked) - long(second), "it begins %.2f s before the request, after the name and most of the pause",
+          double(long(asked) - begins) / second);
+    CHECK(begins <= long(asked), "and before the request (%.2f s after it)", double(begins - long(asked)) / second);
+}
