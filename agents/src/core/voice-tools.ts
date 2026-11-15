@@ -84,8 +84,9 @@ function plain(deps: ToolDeps, fast: Fast): ToolOutput {
   }
   if (intent.kind === 'navigate' && intent.nodeId) {
     const title = nameOf(ctx.mind.itemOf(intent.nodeId));
+    const top = ctx.mind.node(intent.nodeId).parent === null;
     performed(deps, intent);
-    return { done: true, opened: title };
+    return { done: true, opened: title, ...(fast.kind === 'up' ? { moved: top ? 'up one level, to the tree\'s first card' : 'up one level' } : {}) };
   }
   performed(deps, intent);
   return { done: true };
@@ -116,24 +117,29 @@ export const TOOLS: Record<string, Tool> = {
     run: (args, deps) => {
       const ctx = deps.pipeline.ctx;
       const { mind } = ctx;
+      const query = text(args, 'query');
+      const told = (item: Item, node: Node | undefined) => ({
+        ...(node ? { card: node.id } : {}),
+        title: item.title || nameOf(item),
+        kind: item.kind,
+        // A suggestion the Scout brought and the user has not kept is not something they saved.
+        saved: !node || node.status === 'kept' || mind.known(item.id),
+        where: whereIs(ctx, item, node),
+        says: clip((item.summary || item.text).replace(/\s+/g, ' ').trim(), 280),
+      });
+      const note = 'Tell the user only what these say. Say "saved" only of those with saved true; the others are suggestions not yet kept. Name no other card. `card` is an id for go_to.';
+      // "What's in my generative UI tree": the tree itself, its first card and what hangs from it, not whatever else shares its words.
+      const tree = treeNamed(ctx, query);
+      if (tree) {
+        const nodes = mind.treeNodes(tree).slice(0, LOOKUP_HITS * 3);
+        return { tree: mind.tree(tree).title, cards: nodes.map((n) => told(mind.itemOf(n.id), n)), note };
+      }
       const hits = mind
-        .search(text(args, 'query'), { limit: LOOKUP_HITS * 3 })
+        .search(query, { limit: LOOKUP_HITS * 3 })
         .filter((hit) => mind.known(hit.id) || mind.nodesOfItem(hit.id).length > 0)
         .slice(0, LOOKUP_HITS);
-      if (hits.length === 0) return { found: [], note: 'Nothing the user saved matches. Say so plainly.' };
-      return {
-        found: hits.map(({ item }) => {
-          const node = mind.nodesOfItem(item.id)[0];
-          return {
-            ...(node ? { card: node.id } : {}),
-            title: item.title || nameOf(item),
-            kind: item.kind,
-            where: whereIs(ctx, item, node),
-            says: clip((item.summary || item.text).replace(/\s+/g, ' ').trim(), 280),
-          };
-        }),
-        note: 'Tell the user only what these say. `card` is an id for go_to.',
-      };
+      if (hits.length === 0) return { found: [], note: 'Nothing the user saved matches. Say so plainly, and name no card.' };
+      return { found: hits.map(({ item }) => told(item, mind.nodesOfItem(item.id)[0])), note };
     },
   },
 

@@ -81,7 +81,7 @@ const running = await startServer({
       ? {
           open: openaiRealtime({ apiKey: env.OPENAI_API_KEY, model: liveModel }),
           options: liveOptions,
-          webAnswer: openaiWebAnswer(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_WEB_MODEL || undefined, log: (line) => console.log(line) }),
+          webAnswer: openaiWebAnswer(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_WEB_MODEL || undefined, effort: env.MIND_PALACE_WEB_EFFORT || undefined, log: (line) => console.log(line) }),
         }
       : undefined,
   transcribe: !fake && env.OPENAI_API_KEY ? openaiTranscribe(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_HEARING_MODEL }) : undefined,

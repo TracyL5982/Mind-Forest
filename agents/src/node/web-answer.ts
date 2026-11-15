@@ -34,11 +34,12 @@ function instructions(today: string): string {
   return `You answer questions for a voice assistant that talks with its user like a knowledgeable friend. Today is ${today}.
 Answer in one or two short sentences meant to be heard: no lists, no markdown, no links, no addresses, no sources named in brackets.
 Search the web when the answer depends on anything recent, current or scheduled; otherwise answer from what you know.
-Say plainly when something has not happened yet, is only planned or announced, or is not certain. Never state a planned event as done.`;
+Say plainly when something has not happened yet, is only planned or announced, or is not certain. Never state a planned event as done.
+Give the date of each event you name. Asked about this week, month or year, name only what the sources date within it, and nothing that happened earlier.`;
 }
 
 /** Asks once. `log` hears what it cost. */
-export function openaiWebAnswer(send: typeof fetch, opts: { apiKey: string; model?: string; now?: () => Date; log?: (line: string) => void }): WebAnswer {
+export function openaiWebAnswer(send: typeof fetch, opts: { apiKey: string; model?: string; effort?: string; now?: () => Date; log?: (line: string) => void }): WebAnswer {
   return async (question) => {
     const answered = await ask(send, opts, question);
     opts.log?.(`[voice] web answer, ${answered.searches} search${answered.searches === 1 ? '' : 'es'}, $${answered.dollars.toFixed(4)}: ${answered.text}`);
@@ -46,7 +47,7 @@ export function openaiWebAnswer(send: typeof fetch, opts: { apiKey: string; mode
   };
 }
 
-export async function ask(send: typeof fetch, opts: { apiKey: string; model?: string; now?: () => Date }, question: string): Promise<Answered> {
+export async function ask(send: typeof fetch, opts: { apiKey: string; model?: string; effort?: string; now?: () => Date }, question: string): Promise<Answered> {
   const today = (opts.now?.() ?? new Date()).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const res = await send('https://api.openai.com/v1/responses', {
     method: 'POST',
@@ -56,7 +57,7 @@ export async function ask(send: typeof fetch, opts: { apiKey: string; model?: st
       instructions: instructions(today),
       input: question,
       tools: [{ type: 'web_search' }],
-      reasoning: { effort: 'none' },
+      reasoning: { effort: opts.effort || 'none' },
     }),
     signal: AbortSignal.timeout(WAIT_MS),
   });

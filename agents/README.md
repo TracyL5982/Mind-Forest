@@ -63,6 +63,7 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 | `MIND_PALACE_LIVE_PAUSE` | 1800 | Milliseconds of quiet after your last word that end your turn when the turn detection has not. 1200 answers sooner and cuts a request said with a thinking pause. |
 | `MIND_PALACE_LIVE_EFFORT` | `minimal` | How hard the realtime model thinks before it answers. |
 | `MIND_PALACE_WEB_MODEL` | `gpt-5.4-mini` | The model behind Momo's quick web answers. |
+| `MIND_PALACE_WEB_EFFORT` | `none` | How hard it thinks: `low` dated a launch right more often in an earlier measure, about 0.5 s slower at the median. |
 
 ## Check it
 

@@ -61,12 +61,17 @@ test('find_new brings new cards onto the open card and answers at once; more_lik
 test('look_up_mindstorm answers from what the user has, saying where each thing is', async () => {
   const w = await world();
   try {
-    const out = (await w.call('look_up_mindstorm', { query: 'sourdough winter' })) as { found: { title: string; where: string; card?: string }[] };
+    const out = (await w.call('look_up_mindstorm', { query: 'sourdough winter' })) as { found: { title: string; where: string; card?: string; saved: boolean }[] };
     assert.equal(out.found[0]!.title, 'Sourdough rises slowly in winter');
     assert.match(out.found[0]!.where, /the root of the tree/);
     assert.equal(out.found[0]!.card, w.root);
     const none = (await w.call('look_up_mindstorm', { query: 'zeppelin' })) as { found: unknown[]; note: string };
     assert.deepEqual(none.found, []);
+    assert.equal(out.found[0]!.saved, true);
+    const tree = (await w.call('look_up_mindstorm', { query: `my ${w.tree.title} tree` })) as { tree: string; cards: { card?: string; saved: boolean }[] };
+    assert.equal(tree.tree, w.tree.title, 'a tree named is the tree itself');
+    assert.equal(tree.cards.length, w.run.mind.treeNodes(w.tree.id).length);
+    assert.equal(tree.cards.find((c) => c.card === w.pick.id)?.saved, false, 'a suggestion not yet kept is not saved');
   } finally {
     await w.close();
   }
@@ -82,7 +87,7 @@ test('keep, undo and go_to act as the Conductor would, and go_to only opens', as
     assert.equal(w.run.mind.node(w.pick.id).status, 'pick');
 
     const nodes = w.run.mind.nodes.size;
-    assert.deepEqual(await w.call('go_to', { to: 'up' }, w.pick.id), { done: true, opened: 'Sourdough rises slowly in winter' });
+    assert.deepEqual(await w.call('go_to', { to: 'up' }, w.pick.id), { done: true, opened: 'Sourdough rises slowly in winter', moved: "up one level, to the tree's first card" });
     assert.deepEqual(w.said.filter((m) => m.t === 'navigate').at(-1), { t: 'navigate', nodeId: w.root });
     const named = await w.call('go_to', { to: w.run.mind.itemOf(w.pick.id).title }, w.root);
     assert.equal(named.done, true);
