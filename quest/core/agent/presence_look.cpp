@@ -91,16 +91,16 @@ namespace {
 
 /// What the orb settles into in each state, in the order of `Presence::State`.
 struct Pose {
-    float shown, glow, size, warmth, shimmer, breath, hears;
+    float shown, glow, size, warmth, shimmer, breath, ripple, hears;
 };
 constexpr Pose poses[] = {
-    /* off */        {0, 0.0f, 0.8f, 1, 0, 0, 0},
-    /* waiting */    {1, 0.28f, 0.78f, 1, 0, 0, 0},
-    /* listening */  {1, 0.8f, 1.0f, 0, 0, 0, 1},
-    /* sent */       {1, 0.95f, 0.85f, 0.5f, 0, 0, 0},
-    /* thinking */   {1, 0.62f, 0.9f, 1, 1, 0, 0},
-    /* responding */ {1, 0.85f, 1.0f, 1, 0, 0, 1},
-    /* working */    {1, 0.4f, 0.84f, 1, 0, 1, 0},
+    /* off */        {0, 0.0f, 0.8f, 1, 0, 0, 0, 0},
+    /* waiting */    {1, 0.28f, 0.78f, 1, 0, 0, 0, 0},
+    /* listening */  {1, 0.8f, 1.0f, 0, 0, 0, 0, 1},
+    /* sent */       {1, 0.95f, 0.85f, 0.5f, 0, 0, 0, 0},
+    /* thinking */   {1, 0.62f, 0.9f, 1, 1, 0, 0, 0},
+    /* responding */ {1, 0.85f, 1.0f, 1, 0, 0, 0, 1},
+    /* working */    {1, 0.45f, 0.84f, 1, 0, 1, 1, 0},
 };
 
 }  // namespace
@@ -116,6 +116,7 @@ void Glow::update(const Presence& p, double now, float dt) {
     ease(look_.warmth, to.warmth, 0.35f, dt);
     ease(look_.shimmer, to.shimmer, 0.4f, dt);
     ease(look_.breath, to.breath, 0.6f, dt);
+    ease(look_.ripple, to.ripple, 0.6f, dt);
     ease(hears, to.hears, 0.12f, dt);
     // A voice rises at once and falls away slowly, as a meter does, so the orb swells with each word and does not flicker.
     float heard = clamp(p.level, 0, 1);
@@ -127,16 +128,29 @@ void Glow::update(const Presence& p, double now, float dt) {
 
 // MARK: - Caption
 
-Caption::Caption(std::function<float(const std::string&)> width, float most) : measure(std::move(width)), most(most) {
-    space = std::max(0.f, measure("x x") - measure("xx"));
+Caption::Caption(Measure width, float most) : measure(std::move(width)), most(most) {
+    space = std::max(0.f, measure("x x", Speaker::user) - measure("xx", Speaker::user));
 }
 
-float Caption::wordWidth(const std::string& word) {
-    auto known = widths.find(word);
+float Caption::wordWidth(const std::string& word, Speaker who) {
+    auto key = std::make_pair(word, who);
+    auto known = widths.find(key);
     if (known != widths.end()) return known->second;
-    float w = measure(word);
-    widths[word] = w;
+    float w = measure(word, who);
+    widths[key] = w;
     return w;
+}
+
+Speaker Caption::speaker(Part part) {
+    switch (part) {
+    case Part::user: return Speaker::user;
+    case Part::momo: return Speaker::momo;
+    case Part::hint:
+    case Part::listening:
+    case Part::thinking:
+    case Part::doing: return Speaker::status;
+    }
+    return Speaker::status;
 }
 
 void Caption::startTurn(double now) {
@@ -162,10 +176,18 @@ void Caption::startTurn(double now) {
 
 void Caption::wrap() {
     entries.clear();
+    std::vector<std::string> words;
     for (const Run& r : runs) {
+        Speaker who = speaker(r.part);
+        words.clear();
+        for (size_t at = r.text.find_first_not_of(" \t\n"); at != std::string::npos; at = r.text.find_first_not_of(" \t\n", at)) {
+            size_t end = std::min(r.text.find_first_of(" \t\n", at), r.text.size());
+            words.push_back(r.text.substr(at, end - at));
+            at = end;
+        }
         std::string line;
         float w = 0;
-        int index = 0;
+        int index = r.part == Part::doing ? doings % 4096 : 0;
         auto put = [&] {
             if (line.empty()) return;
             int key = (turn << 16) | (int(r.part) << 12) | std::min(index, 4095);
@@ -174,22 +196,29 @@ void Caption::wrap() {
             line.clear();
             w = 0;
         };
-        size_t at = 0;
-        while (at < r.text.size()) {
-            size_t start = r.text.find_first_not_of(" \t\n", at);
-            if (start == std::string::npos) break;
-            size_t end = r.text.find_first_of(" \t\n", start);
-            if (end == std::string::npos) end = r.text.size();
-            std::string word = r.text.substr(start, end - start);
-            at = end;
-            float ww = wordWidth(word);
-            if (!line.empty() && w + space + ww > most) put();
-            if (!line.empty()) {
-                line += ' ';
-                w += space;
+        auto fits = [&](size_t i, float room) { return line.empty() || w + space + wordWidth(words[i], who) <= room; };
+        auto add = [&](size_t i) {
+            w += (line.empty() ? 0 : space) + wordWidth(words[i], who);
+            line += (line.empty() ? "" : " ") + words[i];
+        };
+        if (r.part == Part::doing) {
+            // What the agent is doing is a few words, never a paragraph: one line, cut short where it must be.
+            bool whole = true;
+            for (size_t i = 0; i < words.size() && whole; i++) whole = fits(i, most) && (add(i), true);
+            if (!whole) {
+                line.clear();
+                w = 0;
+                float ellipsis = wordWidth("…", who);
+                for (size_t i = 0; i < words.size() && fits(i, most - ellipsis); i++) add(i);
+                line += "…";
+                w += ellipsis;
             }
-            line += word;
-            w += ww;
+            put();
+            continue;
+        }
+        for (size_t i = 0; i < words.size(); i++) {
+            if (!fits(i, most)) put();
+            add(i);
         }
         put();
     }
@@ -197,9 +226,10 @@ void Caption::wrap() {
 
 float Caption::tone(const Entry& e) const {
     switch (e.part) {
-    case Part::hint: return 0.5f;
-    case Part::listening: return 0.5f;
-    case Part::thinking: return 0.7f;
+    case Part::hint: return 0.75f;
+    case Part::listening: return 0.9f;
+    case Part::thinking: return 1;
+    case Part::doing: return 1;
     case Part::user: return e.current && !userFinal ? 0.8f : 1;
     case Part::momo: return 1;
     }
@@ -222,6 +252,10 @@ void Caption::update(const Presence& p, const std::string& name, double now, flo
     }
     userFinal = p.userFinal;
     if (!p.momoText.empty() && p.momoText != momo) momo = p.momoText;
+    if (p.doing != doing) {
+        doing = p.doing;
+        doings++;
+    }
     if (state == S::off || (!history.empty() && now > historyUntil)) history.clear();
     if (name != hintName) {
         hintName = name;
@@ -242,7 +276,11 @@ void Caption::update(const Presence& p, const std::string& name, double now, flo
     case S::off: break;
     case S::waiting:
     case S::working:
-        if (turnShows) {
+        if (state == S::working && !doing.empty()) {
+            // Momo's last words stay above what it is doing until they have stayed their while.
+            if (turnShows && !momo.empty()) add(Part::momo, momo);
+            add(Part::doing, doing);
+        } else if (turnShows) {
             if (!user.empty()) add(Part::user, user);
             if (!momo.empty()) add(Part::momo, momo);
         } else if (state == S::waiting && hintEarned) {
@@ -294,9 +332,8 @@ void Caption::place(float dt) {
         auto found = std::find_if(lines_.begin(), lines_.end(), [&](const Line& l) { return l.key == e.key; });
         if (found == lines_.end()) {
             if (toOpacity == 0) continue;
-            Speaker who = e.part == Part::user ? Speaker::user : e.part == Part::momo || e.part == Part::thinking ? Speaker::momo : Speaker::aside;
             // It rises into its place as it comes.
-            lines_.push_back(Line{e.key, who, e.text, e.width, toY - 0.45f, 0});
+            lines_.push_back(Line{e.key, speaker(e.part), e.part, e.text, e.width, toY - 0.45f, 0});
             found = lines_.end() - 1;
         } else if (found->text != e.text) {
             found->text = e.text;
@@ -305,21 +342,32 @@ void Caption::place(float dt) {
         found->toY = toY;
         found->toOpacity = toOpacity;
         found->seen = true;
+        found->gone = false;
     }
+    // One thing the agent is doing gives way to the next by rolling: the old lifts a little and fades as the new rises
+    // in from under it once the old is half gone, so the two pass and never stand on the same line, nor the old on the
+    // line above. Any other line waits for the one whose place it takes to be gone.
+    auto rolls = [](const Line& a, const Line& b) { return a.part == Part::doing && b.part == Part::doing; };
     auto inTheWay = [&](const Line& l) {
         return std::any_of(lines_.begin(), lines_.end(), [&](const Line& o) {
-            return !o.seen && o.opacity > 0.03f && std::fabs(o.y - l.toY) < 0.6f;
+            return !o.seen && o.opacity > (rolls(o, l) ? 0.5f : 0.03f) && std::fabs(o.y - l.toY) < 0.6f;
         });
     };
     for (size_t i = old; i < lines_.size(); i++) lines_[i].yields = inTheWay(lines_[i]);
     for (Line& l : lines_) {
-        if (!l.seen) l.toOpacity = 0;
+        if (!l.seen) {
+            l.toOpacity = 0;
+            if (!l.gone && l.part == Part::doing) l.toY += 0.25f;
+            l.gone = true;
+        }
         if (!(dt > 0)) continue;
-        l.y = damp(l.y, l.toY, l.ySpeed, 0.16f, 20, dt);
+        l.y = damp(l.y, l.toY, l.ySpeed, l.part == Part::doing ? 0.24f : 0.16f, 20, dt);
         if (l.yields && inTheWay(l)) continue;
         l.yields = false;
-        // A line that is gone, or replaced, goes quickly, so the one in its place is not kept waiting.
-        ease(l.opacity, l.toOpacity, l.toOpacity > l.opacity ? 0.1f : l.seen ? 0.12f : 0.05f, dt);
+        // A line that is gone, or replaced, goes quickly, so the one in its place is not kept waiting; what the agent
+        // is doing comes and goes gently.
+        float tau = l.part == Part::doing ? (l.gone ? 0.1f : 0.2f) : l.toOpacity > l.opacity ? 0.1f : l.seen ? 0.12f : 0.05f;
+        ease(l.opacity, l.toOpacity, tau, dt);
     }
     lines_.erase(std::remove_if(lines_.begin(), lines_.end(), [](const Line& l) { return l.toOpacity == 0 && l.opacity < 0.01f; }),
                  lines_.end());

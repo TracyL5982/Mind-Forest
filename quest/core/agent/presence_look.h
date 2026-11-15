@@ -64,6 +64,7 @@ public:
         float warmth = 1;       // 0 the user's white, 1 Momo's amber
         float shimmer = 0;      // thinking: lights circling it
         float breath = 0;       // working: a slow rise and fall
+        float ripple = 0;       // working: soft rings going out from it
         float voice = 0;        // the voice it answers to, smoothed, as far as this state answers it
         float gather = -1;      // 0…1 through gathering in, -1 when not
     };
@@ -79,12 +80,14 @@ private:
     double sentAt = -10;
 };
 
-/// Who a line of words is from: the user, Momo (its words, and "Thinking…"), or neither (the hint, "Listening…").
-enum class Speaker { user, momo, aside };
+/// Whose a line of words is: the user's words, Momo's, or a word on what is happening (the hint, "Listening…",
+/// "Thinking…", what the agent is doing), each set in a style of its own.
+enum class Speaker { user, momo, status };
 
 /// The words beside the orb: what the user says while they say it, then "Thinking…", then Momo's words as they are
-/// spoken. They wrap to a width; the last two lines rest beside the orb, the upper one fainter, and an older line
-/// rises and fades as a new one comes. A turn's words stay a while after it ends, then fade.
+/// spoken, then, while the agent works, a few words on what it is doing. They wrap to a width; the last two lines rest
+/// beside the orb, the upper one fainter, and an older line rises and fades as a new one comes. A turn's words stay a
+/// while after it ends, then fade. What the agent is doing is one line, which rolls up and out as the next rolls in.
 class Caption {
 public:
     static constexpr int rows = 2;              // lines at rest
@@ -92,9 +95,12 @@ public:
     static constexpr double hintFor = 10;       // s the hint stays
     static constexpr float upper = 0.6f;        // how much of itself the upper line shows
 
+    enum class Part { hint, listening, user, thinking, momo, doing };
+
     struct Line {
         int key;            // a line of a turn keeps its key while its words change
         Speaker who;
+        Part part;
         std::string text;
         float width;        // m, as measured
         float y = 0;        // in lines, up from the middle of the lines at rest
@@ -102,10 +108,12 @@ public:
         float toY = 0, toOpacity = 0, ySpeed = 0;
         bool yields = false;    // it takes another line's place, and shows only once that one has gone
         bool seen = false;
+        bool gone = false;      // no longer wanted, and fading
     };
 
-    /// `width` measures words as they will be drawn, m; `most` is the widest a line may be.
-    Caption(std::function<float(const std::string&)> width, float most);
+    using Measure = std::function<float(const std::string&, Speaker)>;
+    /// `width` measures words as they will be drawn in a speaker's style, m; `most` is the widest a line may be.
+    Caption(Measure width, float most);
     /// `name` is what the agent answers to, for the hint.
     void update(const Presence& p, const std::string& name, double now, float dt);
     /// Every line that shows or is fading, at rest or not.
@@ -116,7 +124,6 @@ public:
     int resting() const;
 
 private:
-    enum class Part { hint, listening, user, thinking, momo };
     struct Run {
         Part part;
         std::string text;
@@ -130,14 +137,15 @@ private:
         bool current;       // this turn's, not the last one's
     };
 
-    std::function<float(const std::string&)> measure;
+    Measure measure;
     float most;
-    std::map<std::string, float> widths;    // each word's, this turn
+    std::map<std::pair<std::string, Speaker>, float> widths;    // each word's, this turn
     float space = 0;
 
     Presence::State state = Presence::State::off;
     int turn = 0;
-    std::string user, momo, hint, hintName;
+    std::string user, momo, hint, hintName, doing;
+    int doings = 0;                         // what the agent has been doing, one by one: each its own line
     bool userFinal = false;
     double quietSince = -1e9;               // when the last turn ended
     std::optional<double> hintFrom;
@@ -151,7 +159,8 @@ private:
 
     void startTurn(double now);
     void wrap();
-    float wordWidth(const std::string& word);
+    float wordWidth(const std::string& word, Speaker who);
+    static Speaker speaker(Part part);
     float tone(const Entry& e) const;
     void place(float dt);
 };

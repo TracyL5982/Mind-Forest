@@ -13,6 +13,7 @@ namespace {
 constexpr float pi = 3.14159265f;
 constexpr float core = 0.0105f;         // m: the orb's radius at its full size, about half a degree at 1.25 m
 constexpr float type = 0.0165f;         // m: the words' size, as large to the eye as an open card's title
+constexpr float statusType = 0.015f;    // m: a word on what is happening, a little smaller, in italics
 constexpr float most = 0.3f;            // m: the widest a line may be, some 35 characters
 constexpr float textLeft = 0.03f;       // m from the orb's middle to where the words start
 constexpr float pad = 6;                // px round the words in their picture
@@ -20,13 +21,29 @@ constexpr float pad = 6;                // px round the words in their picture
 const Vec3 white{1, 1, 1};
 const Color userInk = Color::hex(0xECEBE6);     // the web client's ink
 const Color momoInk = Color::hex(0xF2C27A);     // and its amber, the agent's colour
+const Color statusInk = Color::hex(0xA3A39C);   // and its quieter ink, for what is not said
 const Vec3 amber = momoInk.linear();
 const Vec3 paper = userInk.linear();
 const Vec3 night = Color::hex(0x0B0D11).linear();
 
 void ease(float& v, float target, float tau, float dt) { v += (target - v) * (1 - std::exp(-dt / tau)); }
 
-Font typeface(const Art& art) { return art.font(type, Font::Weight::medium); }
+/// Speech is set upright in the web client's ink or amber; a word on what is happening, in italics and quieter.
+Font typeface(const Art& art, Speaker who) {
+    if (who != Speaker::status) return art.font(type, Font::Weight::medium);
+    Font f = art.font(statusType, Font::Weight::regular);
+    f.italic = true;
+    return f;
+}
+
+Color inkOf(Speaker who) {
+    switch (who) {
+    case Speaker::user: return userInk;
+    case Speaker::momo: return momoInk;
+    case Speaker::status: return statusInk;
+    }
+    return userInk;
+}
 
 /// Writes soft light into a mesh, in the orb's own plane: x right, y up, z toward the eyes.
 struct Pen {
@@ -169,8 +186,9 @@ void fill(const LowLevelMeshRef& mesh, std::vector<uint32_t>& scratch, const Bou
 }  // namespace
 
 PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& line, EntityRef parent)
-    : art(art), caption([art](const std::string& s) { return art->width(s, typeface(*art)) / Art::ppm; }, most),
-      lights(mesh(1000, 5100)), mist(mesh(64, 192)), scratch(5100), step(std::ceil(typeface(*art).lineHeight()) / Art::ppm * 1.08f) {
+    : art(art), caption([art](const std::string& s, Speaker who) { return art->width(s, typeface(*art, who)) / Art::ppm; }, most),
+      lights(mesh(1000, 5100)), mist(mesh(64, 192)), scratch(5100),
+      step(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm * 1.08f) {
     // The ocean's dust is seen through and drawn after everything else, so the mist says where it stands; the light
     // does not, or a fading part of it would hide the words.
     Material dark = line;
@@ -185,8 +203,8 @@ PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& line, Entit
 PresenceView::~PresenceView() { group->removeFromParent(); }
 
 EntityRef PresenceView::picture(const std::string& text, Speaker who, float& width) const {
-    Font f = typeface(*art);
-    Color ink = who == Speaker::momo ? momoInk : userInk;
+    Font f = typeface(*art, who);
+    Color ink = inkOf(who);
     float w = art->width(text, f) + 2 * pad, h = std::ceil(f.lineHeight()) + 2 * pad;
     std::optional<Piece> piece = art->piece(std::nullopt, w, h, [&](Canvas&, CGSize) {
         drawString(text, CGPoint{pad, pad}, art->attributes(f, ink));
@@ -332,6 +350,11 @@ void PresenceView::draw(double now) {
         pen.light(lean, r * 1.25f, colour, look.shown * std::min(1.f, 0.4f + 0.6f * brightness), 0.85f);
         for (int k = 0; k < 3; k++) {
             if (depth[k] >= 0) mote(k);
+        }
+        // Working: a soft ring goes out from the orb every so often, as from something busy and calm.
+        if (look.ripple > 0.003f) {
+            float u = std::fmod(t / 2.6f, 1.f), out = 1 - (1 - u) * (1 - u);
+            pen.ring({}, r * (1.3f + 2.4f * out), r * (0.9f - 0.5f * u), colour, look.shown * look.ripple * 0.3f * (1 - u) * (1 - u));
         }
         // Sending: a ring closes in on the orb.
         if (look.gather >= 0) {
