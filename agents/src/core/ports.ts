@@ -62,6 +62,7 @@ export interface Page {
   title: string;
   text: string;
   site: string;
+  /** The picture the page names as its own preview, as a whole http(s) address. */
   image?: string;
 }
 
