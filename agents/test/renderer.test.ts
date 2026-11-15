@@ -2397,3 +2397,29 @@ test('a timeline the model proposed is still drawn from the siblings that stayed
   assert.deepEqual(timeline.group.members, ids.slice(1));
   k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands });
 });
+
+test('two passes asked about the same siblings at once group a card once: the later group naming a card already grouped is left out', async () => {
+  const k = kit();
+  const { root, ids } = grow(k, ['One', 'Two', 'Three', 'Four'].map((title) => ({ title, text: PLAIN, status: 'pick' as const })));
+  const gates: (() => void)[] = [];
+  const json = k.model.json.bind(k.model);
+  k.model.json = (async (req: Parameters<typeof json>[0]) => {
+    if (req.role !== 'renderer.composites') return json(req);
+    await new Promise<void>((r) => gates.push(r));
+    return req.schema.parse({ groups: [proposal({ parent: root, composite: 'cluster', theme: 'Moves', members: ids.slice(0, 3) })] });
+  }) as typeof k.model.json;
+
+  const first = renderer(k.ctx, { nodeIds: ids });
+  const second = renderer(k.ctx, { nodeIds: ids });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(gates.length, 2, 'both passes are asking');
+  gates[0]!();
+  const a = await first;
+  k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands: a });
+  gates[1]!();
+  const b = await second;
+
+  assert.equal(a.filter((c) => c.type === 'setGroup').length, 1);
+  assert.equal(b.filter((c) => c.type === 'setGroup').length, 0, "the cards are already in the first pass's group");
+  if (b.length > 0) k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands: b });
+});

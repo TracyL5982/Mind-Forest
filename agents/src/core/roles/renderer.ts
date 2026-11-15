@@ -1525,7 +1525,14 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
   }
   await composites;
   for (const pool of pools) ARRANGED.forEach((rule, row) => rule.late && settle(ctx, pool, groups, row, look));
-  const standing = groups.filter((c) => (c.type === 'setGroup' ? there(c.group.anchor) && c.group.members.every(there) : c.type !== 'removeGroup' || ctx.mind.groups.has(c.id)));
+  // Another pass may have grouped a card, or the user kept one, while the model was asked: such a group no longer holds.
+  const removing = new Set(groups.flatMap((c) => (c.type === 'removeGroup' ? [c.id] : [])));
+  const holds = ({ id, anchor, members }: Group) =>
+    there(anchor) &&
+    members.every(there) &&
+    new Set(members.map((m) => ctx.mind.node(m).status)).size === 1 &&
+    ![...ctx.mind.groups.values()].some((g) => g.id !== id && !removing.has(g.id) && g.members.some((m) => members.includes(m)));
+  const standing = groups.filter((c) => (c.type === 'setGroup' ? holds(c.group) : c.type !== 'removeGroup' || ctx.mind.groups.has(c.id)));
   // Two parents of one pass may each find that a group no longer holds.
   const removals = [...new Map(standing.flatMap((c) => (c.type === 'removeGroup' ? [[c.id, c] as const] : []))).values()];
   return [...views, ...removals, ...standing.filter((c) => c.type !== 'removeGroup')];
