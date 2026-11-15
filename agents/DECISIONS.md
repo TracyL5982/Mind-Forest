@@ -259,7 +259,9 @@ After the first hands-on session the picks were judged dull: every pick was a we
 
 **Why importance.** It already meant how much a node matters, and the Renderer already keeps the most important of a crowded set out of its "more" stack. Stored on the node, the rating survives to the next change: a drop the Filer hangs at a full card between conversations makes room by the last rating. A rating that came back for a pick the guard then removes is dropped with it; applied after the removal, it had failed the whole delivery.
 
-**Cost.** One rating call per conversational run once the round is near full, even when nothing the user has is a candidate. Measured in tests only.
+**Cost.** One rating call per conversational run once the round is near full, even when nothing the user has is a candidate.
+
+**Measured live once.** On a copy of the user's data, the Kubrick tree's first round held 7 picks. Asked "how does he set music against the picture", the run re-rated the 7 against the question (0.15 to 0.55, where they had been 0.95 and 1), 4 new picks joined, and the one rated lowest, the TMDB film "2010", made room: 10 picks, nothing repeated. The picture generations of that run failed with their connection cut mid-reply, which this change does not touch; the earlier two runs made their pictures.
 
 **Web client.** Opening a card already showed its details with Ask and More. It still sends `focus`, which now brings nothing. The empty page's text says a new tree gets a first round and asking brings more.
 
