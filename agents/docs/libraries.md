@@ -6,12 +6,14 @@ The schemas live in `src/core/views.ts`. The Renderer role in `src/core/roles/re
 
 ## How a view reaches the client
 
-1. A node is created with a default view (`view.by` is `default`). The default comes from the item's kind alone, so it arrives at once.
-2. The pipeline hands the new or changed nodes to the Renderer.
-3. The Renderer returns `setView` for each node whose view should change, and `setGroup` or `removeGroup` for composites. A view it chose has `view.by` set to `renderer`.
-4. The client swaps the view in place.
+1. A node is created with the card the rules choose for its item (`view.by` is `default`), so it arrives at once in the look it keeps. The rules are the Renderer's `byRule`: a picture, a recording, a book, a chart or a list a source carried is drawn as such the moment the node exists.
+2. When the rules cannot tell, because the item is the user's own text of some length that they drew as a note or an idea, the model is asked. The node is then created composing (`view.composing` is `true`), with the rules' note or idea as its component. A client that reads `composing` draws an in-progress card in its place; one that does not draws the note.
+3. The pipeline hands the new or changed nodes to the Renderer. A composing node gets one `setView` within 12 s: the model's card, or the rules' card when the answer was refused, did not come or came late. It has `view.by` set to `renderer` and no `composing`, and it is final: a card never turns into another after it lands, unless its item is edited. An edited card the model is asked about again composes first.
+4. The Renderer returns `setGroup` or `removeGroup` for composites, and the client swaps the view in place.
 
-A view is `{ component, props, by }`. Props carry only what the item does not already hold. Draw from the item plus the props. The title always comes from `item.title`.
+An idea the Scout writes lands as it is written: the model is not asked about it.
+
+A view is `{ component, props, by, composing? }`. Props carry only what the item does not already hold. Draw from the item plus the props. The title always comes from `item.title`.
 
 A group is `{ id, treeId, anchor, composite, title, members, props }`. `anchor` is the parent node. `members` are node ids, in drawing order. `title` may be empty.
 
@@ -559,7 +561,7 @@ Every value dropped and every card refused writes one line to the run log that n
 3. Otherwise each section is checked alone. A figure, entry or row that fails is dropped, and a section that still fails is left out. Each is then cut to the room a sheet has: a heading to 80 characters and a text to 280, at the end of a word and with an ellipsis, and four figures, eight entries and five rows. A section that is then no longer valid is left out.
 4. What is left must be a valid sheet, of two to four sections with at most one heading and that first, two that are no heading, and one that is no text. It must show 20 percent of the item, its heading not counted. A sheet that shows less is still drawn when one of its text parts is the item's own opening: the text begins with it, and it is at least 120 characters, or 60 in a script written without spaces. That is what a sheet is for: a long item's opening beside a key figure or a key line.
 
-**Passes.** One pass of the Renderer asks about at most 24 unsure items, in calls of at most 8 made at once and split evenly, so ten items go in two calls of five. A call that fails or times out is tried once more as two halves. An item the model answered for gets `view.by` set to `renderer`, with the model's card or, when that was refused, the rules' card, and is not asked about again until it changes. An item with no answer, because its call failed, the reply left it out or the pass was full, keeps the rules' card with `view.by` set to `default`. When the pass ends, the pipeline runs another over those items, one pass after another and four at most for one change, so a drop of up to 96 items is answered for. A later pass looks at cards alone, since the first one already looked for arrangements. Past four passes an item keeps its plain card until it is next touched.
+**Passes.** One pass of the Renderer asks about at most 24 unsure items, in calls of at most 8 made at once and split evenly, so ten items go in two calls of five. A call answered unreadably is tried once more as two halves. Every card the pass asks about lands within 12 s with `view.by` set to `renderer`: the model's card, or the rules' card when the answer was refused, did not come or came after 12 s, or when the item was past the 24 of the pass. A landed card is not asked about again until its item changes, so no later pass turns it into another card.
 
 ### The content check
 

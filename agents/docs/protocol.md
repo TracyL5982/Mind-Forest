@@ -14,7 +14,7 @@ Five maps keyed by id: `item`, `node`, `tree`, `link`, `group`. Shapes are in `s
 
 - **Item.** One piece of content: `kind`, `title`, `text`, `summary`, `tags`, `data`, `source` (`from`, `url`, `asset`), `origin`.
   - `title` is the item's whole title. A title the model wrote stands on the two lines a small card face gives a title; a source's own title, a paper's, a work's, a page's, a file's name, or one a person wrote, is kept whole. `data.shortTitle`, a string, is then what a small face shows of it: its first whole clause or words that fit two lines, with no ellipsis. It is there only when the whole title does not fit, and the service sets it again whenever the title changes. A client's small face shows `data.shortTitle` when it is there, else `title`, and its opened card shows `title`. docs/libraries.md gives the rule.
-- **Node.** An item's place in a tree: `treeId`, `itemId`, `parent` (null for a root), `status` (`kept` or `pick`), `why`, `importance` (0 to 1), `view` (`component`, `props`), `order` among siblings.
+- **Node.** An item's place in a tree: `treeId`, `itemId`, `parent` (null for a root), `status` (`kept` or `pick`), `why`, `importance` (0 to 1), `view` (`component`, `props`, `by`, and `composing` while its look is being chosen), `order` among siblings.
 - **Tree.** `title`, `rootId`, `digest`.
 - **Link.** A tie between two nodes, usually across trees: `a`, `b`, `why`, `strength`.
 - **Group.** A composite: `anchor` (the parent node), `composite`, `title`, `members` (node ids), `props`.
@@ -25,6 +25,7 @@ Drawing rules:
 - Draw a link as a dashed, bowed line between its two nodes, labelled with `why`. The Organizer can make links. The Scout no longer does: it brings what the user already has into the round instead (below).
 - A node's layer is its depth: the number of parents above it.
 - `view.component` and `view.props` say how to draw a node. `group.composite` says how to arrange its members. Both libraries are documented in `docs/libraries.md`. A client that does not know a component draws it as `note`.
+- `view.composing: true` says the agents are still choosing the card's look. It is set only on a card the model is asked about, such as a note the user dropped in from Telegram, the headset or typing, and goes within 12 s, when one `change` sets the finished view. A client draws an in-progress card in its place: the headset shows the item's kind and where it came from, such as "Note · Dropped in", over a soft moving shimmer, and none of its title or text, then eases the in-progress card to the finished card's size and shows the finished card inside it. A client that ignores the field draws `component` and `props`, the rules' note or idea, as before. Every other card is made in the look it keeps.
 - An asset address such as `/assets/<id>` is relative to the service.
 
 ## The knowledge base

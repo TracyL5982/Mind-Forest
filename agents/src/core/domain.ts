@@ -90,8 +90,13 @@ export function inLibrary(item: Item): boolean {
 export const View = z.object({
   component: z.string(),
   props: z.record(z.string(), z.unknown()),
-  /** 'default' came from the kind-to-component rule; 'renderer' is the Renderer's choice. */
+  /** 'default' is the rules' card, as the node was made; 'renderer' is the Renderer's choice, which is final until the item changes. */
   by: z.enum(['default', 'renderer']),
+  /**
+   * The model is choosing this card's look, which lands within 12 s. Until then a client draws an in-progress card in its place, and
+   * a client that does not read this draws `component` and `props`: the rules' card, a note or an idea.
+   */
+  composing: z.literal(true).optional(),
 });
 export type View = z.infer<typeof View>;
 

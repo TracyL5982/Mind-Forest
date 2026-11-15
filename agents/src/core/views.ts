@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Sound, type Item, type View } from './domain.ts';
+import { Sound, type Item } from './domain.ts';
 import { evaluate, reserved, wellFormed } from './formula.ts';
 import { ABOVE, numbered, type Grounding, type Piece, type Shown, type Way } from './grounding.ts';
 import { JOINS, KINDS, LIMITS, ROLES, withinLimits, type Box, type Part } from './layout.ts';
@@ -745,51 +745,6 @@ export function isValidView(view: { component: string; props: unknown }): boolea
 export function isValidGroup(group: { composite: string; props: unknown }): boolean {
   const schema = COMPOSITES[group.composite as CompositeId];
   return schema !== undefined && schema.safeParse(group.props).success;
-}
-
-/**
- * A picture's or a video's file and still. The item's own stored file comes first, then a file the service streams (`mediaUrl`),
- * and only then the page it came from, for a video that only plays embedded. The still is always a service asset.
- */
-export function mediaOf(item: Item, assetUrl: (id: string) => string): { src: string; poster?: string } | null {
-  const named = (value: unknown) => (typeof value === 'string' && value.trim() ? value : undefined);
-  const src = item.source.asset ? assetUrl(item.source.asset) : (named(item.data.mediaUrl) ?? named(item.source.url));
-  if (!src) return null;
-  const poster = item.kind === 'video' ? named(item.data.thumbnailUrl) : undefined;
-  return poster ? { src, poster } : { src };
-}
-
-/** The view a node gets the moment it exists, before the Renderer has looked at it. */
-export function defaultView(item: Item, assetUrl: (id: string) => string): View {
-  const media = mediaOf(item, assetUrl);
-  const view = (component: ComponentId, props: Record<string, unknown>): View => ({ component, props, by: 'default' });
-  switch (item.kind) {
-    case 'image':
-      return media ? view('image', { src: media.src }) : view('note', {});
-    case 'video':
-      return media ? view('video', media) : view('note', {});
-    case 'audio': {
-      const props = recording(item, assetUrl);
-      return props ? view('audio', props) : view('note', {});
-    }
-    case 'link':
-      return item.source.url
-        ? view('link', { url: item.source.url, site: siteOf(item.source.url), description: item.summary || undefined })
-        : view('note', {});
-    case 'chat': {
-      const messages = Array.isArray(item.data.messages) ? (item.data.messages as { role: string; text: string }[]) : [];
-      return messages.length > 0
-        ? view('chat', { messages: messages.slice(0, 4).map((m) => ({ role: m.role, text: m.text.slice(0, 280) })) })
-        : view('note', {});
-    }
-    case 'code': {
-      const code = item.data.code as { language?: string; source?: string } | undefined;
-      return view('code', { language: code?.language ?? 'text', source: code?.source ?? item.text });
-    }
-    case 'text':
-    case 'file':
-      return view('note', {});
-  }
 }
 
 /**

@@ -1030,24 +1030,34 @@ export function drawn(ctx: RoleContext, reply: Entry, item: Item): Draw | undefi
 /**
  * Whether the rules are unsure of an item, so the model is asked: text of some length that is no link, picture, recording, conversation
  * or code, which the rules drew as a note, or as an idea, where the model can tell a thought from a chore, a caution or a definition.
+ * An idea the Scout wrote is never asked about: the Scout gave it its shape as it wrote it, and the look call kept nearly every one a note.
  */
 export const unsure = (item: Item, draw: Draw): boolean => {
-  if (!WHOLE.has(draw.component) || (item.kind !== 'text' && item.kind !== 'file')) return false;
+  if (!WHOLE.has(draw.component) || (item.kind !== 'text' && item.kind !== 'file') || item.origin.tool === 'idea') return false;
   const said = item.text.trim() || (draw.component === 'idea' ? item.title : '');
   return sizeOf(said) >= (SPACELESS.test(said) ? AMBIGUOUS_FROM.spaceless : AMBIGUOUS_FROM.spaced);
 };
 
+/**
+ * The view a node is made with: the rules' card, which is its final look, unless the model is to be asked about it. Then it is the
+ * rules' note or idea marked composing, and the Renderer's pass gives its look within `COMPOSE_MS`.
+ */
+export function firstView(item: Item, assetUrl: (id: string) => string): View {
+  const draw = byRule(item, assetUrl);
+  return { ...draw, by: 'default', ...(unsure(item, draw) ? { composing: true as const } : {}) };
+}
+
 
 /**
- * What the model answered for the unsure items of one pass, by node: the card that stands, or nothing when its answer was refused.
- * An item with no entry here got no answer, because its call failed, the reply left it out, or the pass was full. `replied` is
- * whether any call of the pass got an answer back.
+ * What the model answered for the unsure items of one pass within `waitMs`, by node: the card that stands, or nothing when its answer
+ * was refused. An item with no entry here got no answer in time, because its call failed, the reply left it out, or it came late. An
+ * answer that comes after `waitMs` is not drawn: its card has landed by then.
  */
-async function askComponents(ctx: RoleContext, open: Open[]): Promise<{ answers: Map<Id, Draw | undefined>; replied: boolean }> {
+async function composed(ctx: RoleContext, asked: Open[], waitMs: number): Promise<Map<Id, Draw | undefined>> {
   const answers = new Map<Id, Draw | undefined>();
-  const asked = open.slice(0, MAX_ASKED_ITEMS);
+  if (asked.length === 0) return answers;
   const asset = { assetUrl: (id: string) => ctx.assets.url(id) };
-  let replied = false;
+  let landed = false;
 
   /**
    * One call. A call whose answer came back unreadable is asked once more as two halves, one after the other, since a smaller
@@ -1058,6 +1068,7 @@ async function askComponents(ctx: RoleContext, open: Open[]): Promise<{ answers:
     try {
       reply = await ctx.model.json({ role: `${ROLE}.components`, system: COMPONENTS_SYSTEM, user: componentsPrompt(part, asset), schema: ComponentsReply, effort: 'low' });
     } catch (err) {
+      if (landed) return;
       const halves = again && err instanceof Unreadable;
       const items = `${part.length} ${part.length === 1 ? 'item' : 'items'}`;
       ctx.note(ROLE, `A call to choose components for ${items} failed (${message(err)}). ${halves ? 'Asking once more, in two halves.' : `Kept the rule-based views of ${part.length === 1 ? 'it' : 'them'}.`}`);
@@ -1066,7 +1077,10 @@ async function askComponents(ctx: RoleContext, open: Open[]): Promise<{ answers:
       for (const some of [part.slice(0, half), part.slice(half)]) if (some.length > 0) await ask(some, false);
       return;
     }
-    replied = true;
+    if (landed) {
+      ctx.note(ROLE, `The model chose components for ${part.length} ${part.length === 1 ? 'item' : 'items'} after their cards had landed, so they stay as the rules drew them.`);
+      return;
+    }
     // An entry counts once, and only for an item this call asked about.
     const waiting = new Map(part.map(({ node, item }) => [node.id, item]));
     for (const entry of reply.items) {
@@ -1077,8 +1091,12 @@ async function askComponents(ctx: RoleContext, open: Open[]): Promise<{ answers:
 
   const calls = Math.ceil(asked.length / ASKED_PER_CALL);
   const each = Math.ceil(asked.length / calls);
-  await Promise.all(Array.from({ length: calls }, (_v, n) => ask(asked.slice(n * each, (n + 1) * each), true)));
-  return { answers, replied };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<void>((done) => (timer = setTimeout(done, waitMs)));
+  await Promise.race([Promise.all(Array.from({ length: calls }, (_v, n) => ask(asked.slice(n * each, (n + 1) * each), true))), late]);
+  clearTimeout(timer);
+  landed = true;
+  return new Map(answers);
 }
 
 // ---- composites
@@ -1460,26 +1478,37 @@ function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function sameView(a: { component: string; props: unknown }, b: { component: string; props: unknown }): boolean {
-  return a.component === b.component && stable(a.props) === stable(b.props);
+function sameView(a: { component: string; props: unknown; composing?: true }, b: { component: string; props: unknown; composing?: true }): boolean {
+  return a.component === b.component && stable(a.props) === stable(b.props) && a.composing === b.composing;
 }
+
+/** How long a composing card waits for the model's look before it lands as the rules drew it. */
+export const COMPOSE_MS = 12_000;
+
+/**
+ * The cards of each mindstorm a pass is composing now. Another pass over one of them, as when the user keeps it while it composes,
+ * leaves it to the pass that asked, so it is asked about once and lands once.
+ */
+const COMPOSING = new WeakMap<object, Set<Id>>();
 
 /**
  * Chooses a component for each given node and composites for their siblings. Rules first, the model only where rules cannot tell.
- * On an unsure item, `by: 'renderer'` says the model answered for the item as it is, so it is not asked again until the item changes.
- * An unsure item the pass got no answer for keeps `by: 'default'`, and `later` is told of it, unless no call of the pass got an
- * answer back: then the model is down, and the item waits for its next change. The views go to `deliver` as soon as they are
- * chosen, so a card takes its look without waiting on the main model's answer on how its siblings group, which takes 3 to 25 s.
+ * A card the model is asked about composes: it is marked so when it is made (`firstView`), or here, before the call, when an edit or
+ * an older card brings it to the model. Within `waitMs` it lands once, as the model's card or, when the answer was refused, did not
+ * come or came late, as the rules drew it. Either is final, `by: 'renderer'`, and is not asked about again until the item changes,
+ * so a card never turns into another after it lands. The views go to `deliver` as soon as they are chosen, so a card takes its look
+ * without waiting on the main model's answer on how its siblings group, which takes 3 to 25 s.
  */
-export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], again = false, later, deliver }) => {
+export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], deliver, waitMs = COMPOSE_MS }) => {
   const nodes = [...new Set(nodeIds)].flatMap((id) => ctx.mind.nodes.get(id) ?? []);
   const changed = new Set(edited);
   const draws = new Map<Id, Draw>();
   const open: Open[] = [];
   const assetUrl = (id: string) => ctx.assets.url(id);
+  const busy = COMPOSING.get(ctx.mind) ?? COMPOSING.set(ctx.mind, new Set()).get(ctx.mind)!;
   for (const node of nodes) {
     const item = ctx.mind.items.get(node.itemId);
-    if (!item) continue;
+    if (!item || busy.has(node.id)) continue;
     const draw = byRule(item, assetUrl);
     const ambiguous = unsure(item, draw);
     // An earlier answer that still stands in the text is kept, so a second pass costs no model call and cannot lose it.
@@ -1500,25 +1529,27 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
   };
   const pools = survey(ctx, parents, look, groups);
 
-  const composites = again ? undefined : askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups);
-  const { answers, replied } = await askComponents(ctx, open);
+  const composing = open.flatMap(({ node }): Command[] => (node.view.composing ? [] : [{ type: 'setView', id: node.id, view: { ...draws.get(node.id)!, by: 'default', composing: true } }]));
+  if (deliver && composing.length > 0) deliver(composing);
+  const asked = open.slice(0, MAX_ASKED_ITEMS);
+  if (open.length > asked.length) ctx.note(ROLE, `${open.length - asked.length} more cards than one pass asks about landed as the rules drew them.`);
+  const composites = askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups);
+  for (const { node } of asked) busy.add(node.id);
+  const answers = await composed(ctx, asked, waitMs).finally(() => asked.forEach(({ node }) => busy.delete(node.id)));
   for (const [id, draw] of answers) if (draw) draws.set(id, draw);
   // The mind may have changed while the model was asked: a card that gave way to a fuller round is not drawn.
   const there = (id: Id) => ctx.mind.nodes.has(id);
 
-  const asked = new Set(open.map(({ node }) => node.id));
+  const landing = new Set(open.map(({ node }) => node.id));
   let views: Command[] = [];
   for (const node of nodes) {
     const draw = draws.get(node.id);
     if (!draw || !there(node.id)) continue;
-    // An unsure item the model did not answer for keeps the rule's card as a default, so the next pass asks again.
-    const by = asked.has(node.id) && !answers.has(node.id) ? 'default' : 'renderer';
-    if (sameView(draw, node.view) && (!asked.has(node.id) || node.view.by === by)) continue;
-    const view: View = { ...draw, by };
+    const now = ctx.mind.node(node.id).view;
+    if (sameView(draw, now) && (!landing.has(node.id) || now.by === 'renderer')) continue;
+    const view: View = { ...draw, by: 'renderer' };
     views.push({ type: 'setView', id: node.id, view });
   }
-  const owed = open.flatMap(({ node }) => (answers.has(node.id) ? [] : [node.id]));
-  if (owed.length > 0 && replied) later?.(owed);
   if (deliver && views.length > 0) {
     deliver(views);
     views = [];
