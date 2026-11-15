@@ -516,3 +516,39 @@ So the kept setting brings the first card 13 s sooner and the line 25 s after th
 **Decision.** `makeTree` with a subject of up to 120 characters that is not a link makes the root item itself, titled with the subject as the user said it. A longer subject, or a link, still goes through Intake.
 
 **Why.** On the headset the user said "Can you start a new tree on Dutch artist?". The plain rules heard the request and its subject, but the subject went through Intake like a dropped note, which titled it "Dutch artist reference note", and the tree was rooted in that. The user asked for a tree about Dutch artists, not about a note. It also waited 7 s on Intake's model call before the tree appeared. `test/mindstorm.test.ts` checks that utterance, "start a tree about …", "Make a new tree on …", and one in Chinese the Conductor hears.
+
+## 49. Scout: a fast lane brings the first cards while the main model thinks
+
+**Decision.** Two lanes write a Scout run's directions, and they share its slots.
+
+- **The fast lane** starts with the run. The quick model (`scout.looks`, minimal effort) names two or three catalogues likely to hold the subject, or a video, and what to type into each. Each is searched, the quick model chooses its one best record, and the card lands once ties to what the user has are rated. It never searches the web, never makes a picture, and never retries a find on the web.
+- **The inventive lane** is the main model at low effort, streamed, each direction started as it is written, as in 47. It now writes pictures last.
+- **Slots.** The fast lane fills at most two slots and never half of them. A third look's card waits and lands only into a slot left free at the end. The inventive lane is taken for one direction more than the slots the fast lane has left it. Its first picks never take a slot the fast lane's finds still out could fill.
+- **Pictures.** While the main model writes, until it has written a picture, one slot is kept for one. A pick that waited for that slot lands first once the model has finished without a picture.
+- **No repeats.** The lanes share the addresses taken and the tree's sameness keys, so a record both find lands once (`test/scout.test.ts`).
+- The run's line comes when nothing more can land, as before.
+
+**Why.** The user: "It's okay to have some cards that come later, but 20 seconds without any cards landing is not acceptable." Nothing could land before the main model wrote its first direction, and it wrote the picture first. The target set in the voice plan is a first card within 8 s (median), never over 12 s, with the inventive cards still landing.
+
+**Measured.** `scratchpad/ws22/bin/service-runs.mts` ran each request through the real service, a copy started per run on its own port from a fresh copy of the mindstorm, with a client that plays as the headset does. Five requests on five cards (something interesting on generative UI, Dutch art, standoffs in horror films, world building on the rural illustration, what studies found on mixed-initiative interfaces), each twice per side. The sides alternated, the first side alternating by pair, 10 runs each, with 20 s between runs. Load average 2.6 to 6.2 on 8 cores. Every model request was logged with its status: none was refused for the rate limit. Times are from the request to what the client received.
+
+| | Before (22a65ed) | After |
+|---|---|---|
+| Momo's reply | 1.2 s (0.8 to 2.0) | 1.2 s (0.9 to 1.4) |
+| First card | 20.6 s (14.6 to 30.8) | 4.1 s (3.5 to 6.3) |
+| First card of the inventive lane | 20.6 s (14.6 to 30.8) | 16.8 s (10.6 to 21.7) |
+| Longest wait for a card before the line | 20.6 s (14.6 to 30.8) | 12.1 s (6.2 to 18.0) |
+| Cards by 20 s | 0 (0 to 4) | 4 (2 to 5) |
+| The line saying what came | 25.7 s (17.7 to 33.0) | 24.2 s (19.1 to 29.4) |
+| Last card | 28.4 s (20.8 to 42.5) | 37.8 s (21.2 to 48.7) |
+| Cards of each lane | 5 inventive | 1 or 2 fast, 3 or 4 inventive |
+| Generated pictures kept | 8 of 10 runs | 7 of 10 runs |
+| Model requests a run | 10 (7 to 12) | 14 (9 to 16) |
+
+In one run of Dutch art the rating also brought two paintings of the headset's library at 3.5 s, the only ties in the 20 runs. The runs without a picture are the two on studies, where neither side wrote one, and on the other side one picture the image model refused (400). Three requests failed on their own, none for load: a choosing request too large to send (413) and one refused (400) before, and that picture after. The last card comes later because the picture is now written last: it lands 10.6 s (0 to 27.0) after the line, against 2.6 s.
+
+**What bounds it.** The first card waits on the Conductor (1.2 s median, quick model), the fast lane's choice of catalogues (1.3 s, 1.1 to 1.9), the search (0.1 to 1.2 s), and choosing the record (1.3 s median). A catalogue of pictures fetches up to eight pictures and shows them to the model first, so a run whose three looks were all museums, boards and heritage had its first card at 6.3 s, the slowest. The rating of ties, 1.7 s (1.4 to 2.5), runs beside it and is usually done first. The wait after the fast cards is the main model, which wrote its directions in 23.5 s (18.4 to 28.6).
+
+**Cost.** Four more model requests a run (the choice of catalogues, two or three choosing calls, and a Renderer pass or two more for the earlier deliveries), and about 22,000 more tokens: at the rate in 2, about $0.078 a run against $0.052. With the key's limit of 60 requests a minute shared by every process, one run of the fast lane peaks at 16 in a minute against 12.
+
+**Alternatives.** Search the user's words with no model in front: words such as "something interesting" name no subject, and on "adaptive menus" only the web and papers gave a usable top record (voice plan). Minimal effort for the main model: first card about 12 s, with the directions the blind readers ranked lower (47); the fast lane brings the first cards sooner and keeps low effort. More than two fast slots: the inventive lane's directions are the ones the readers ranked, so they keep most of the run. Count pictures as any direction: written last, a picture would find every slot full and never be made.
