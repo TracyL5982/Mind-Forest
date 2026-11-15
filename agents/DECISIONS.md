@@ -354,3 +354,32 @@ In a real browser with a fake microphone (`scripts/wake-check.ts`), OpenAI's tra
 **Not measured.** Real voices, a real room, a microphone across the room, and the Quest. Synthetic speech is clean and evenly paced, so real use is likely worse. Names other than Momo.
 
 **Alternative.** Picovoice Porcupine needs an account and a key on every device. openWakeWord needs a model trained for each name. Both fix the name in advance.
+
+## 39. Live voice: Momo hears and speaks through OpenAI's realtime model, and the pipeline still decides
+
+**Decision.** After the wake phrase a client streams its microphone to the service on `/live`, and the service relays it to `gpt-realtime-2.1-mini` in one realtime session per client (`src/node/live.ts`). The model is Momo's ears and voice. It speaks a short preamble in its own words and calls its one tool, `act`, with the user's request, which the service hands to the pipeline as a final `utter` in the client's scene. The Conductor and the rest decide what happens. The first `say` after an `act` goes back as that call's result, and every other `say`, and every `say` with `kind: 'results'`, goes in as news. The model voices both in the same session, so announcements need no `/api/speak`. Its voice streams back as 24 kHz PCM and plays as it arrives. The wake phrase stays on the device (38). The model's semantic turn detection, at its most eager, ends the turn, in place of the 1.2 s pause rule. While Momo speaks no microphone sound is sent, because the headset has no echo cancelling, but the phrase is still listened for: saying it stops Momo and starts a new turn, except while what Momo is saying names itself. Without a live voice (no OpenAI key, `MIND_PALACE_LIVE=off`) `/live` is refused and the clients use 38's path.
+
+**Why.** The user waited about 15 s to hear anything on the Quest (headset build 36914c7): the 1.2 s pause rule ended the recording 4.0 s after the wake, transcription took 1.4 s, the Conductor 9.9 s and fetching the speech 1.6 s. They want Momo to register them almost at once, never with a canned phrase, and chose a real-time speech model over a fast text model with streamed speech.
+
+**Measured.** `scripts/live-measure.ts` streams spoken clips to a running service at the pace they were said, against a copy of the user's data with the real models. From the end of speech to Momo's first sound:
+
+| Model, turn detection | Turns | First sound | Of it, after the model heard the end | Per turn |
+|---|---|---|---|---|
+| mini, semantic (eager), three runs | 17 | 1.07 to 1.84 s; run medians 1.11, 1.49, 1.61 s | 0.36 to 0.77 s | $0.0045 to $0.0058 |
+| mini, server VAD at 500 ms | 5 | 1.04 to 1.15 s | 0.30 to 0.38 s | $0.0046 |
+| full `gpt-realtime-2.1`, server VAD at 500 ms | 7 | 1.33 to 1.54 s | 0.63 to 0.83 s | $0.025 |
+| mini, semantic, Mac preview with `-wakeClip`, headset clock | 6 | 1.13 to 1.59 s, median 1.35 s | 0.30 to 0.62 s | about $0.005 |
+
+The rest of each number is the turn detection waiting for the user to be done, 0.7 to 1.2 s. The model's own part moved between runs, from 0.3 to 0.4 s in one run to 0.5 to 0.8 s in the next, with the same clips. That spread is on OpenAI's side and is not explained. Mini is faster than the full model and a fifth of its cost, and on these clips it called `act` and spoke as well, so it is the default (`MIND_PALACE_LIVE_MODEL`). Server VAD was up to 0.4 s faster but ended "I'd like to see … something about old maps" at an 800 ms pause inside it. Semantic detection kept that sentence whole in both runs that heard it, so it is the default (`MIND_PALACE_LIVE_TURN=server:<ms>` for the other). Reasoning effort is `minimal`. A turn costs about half a cent: the user's audio, Momo's voice at 1 token per 50 ms, and the instructions. All the measuring used about $0.40 of the realtime model.
+
+**Found by measuring.**
+- After "Hey Momo." and a pause, both kinds of turn detection ended the turn on the name, and Momo greeted the user while the request was lost. So a client sends nothing until the first word after the phrase, and then from 0.8 s before it. The phrase is sent only when the request follows straight on.
+- The model called `act` without a word until it was told to speak a preamble first, since `act` takes seconds. It added the scene to the request, said "Hey Momo" back to the user, said "I've found an ocean wave picture" when the reply only said it was looking, and once answered "show me more like this" without `act`. The instructions now say each of these, in the labelled parts OpenAI's prompting guide for its realtime models suggests.
+- A call the pipeline never answers (it drops a repeated utterance while it acts) left the model saying it was "still waiting". A call still open when the user speaks again is now closed as still working, and its late reply is news.
+- On the Mac a local service answered `/live` before the listener's model had loaded, and the first wake was recorded the old way.
+
+**Not done.** A reply played while the user is cut off is not truncated in the conversation, so the model may think the user heard all of it. Answers to "what is this card about?" ran 13 to 15 s despite the instructions. Nothing caps them.
+
+**Alternative.** GPT-Live (`gpt-live-1`) is OpenAI's newer full-duplex voice model with "client delegation". It costs $0.05 a minute of open session, and its delegation event carries no request text, so the service would match transcripts itself. With a turn holding a session for 15 to 20 s, that is about 1.5 cents a turn (inferred, not measured), three times mini's. The realtime API bills only tokens, so an idle session costs nothing and can wait for the results announcement.
+
+**Not measured.** The Quest itself: its network, AudioTrack's start-up, the room, and real voices. The headset's stream player has not been compiled yet.
