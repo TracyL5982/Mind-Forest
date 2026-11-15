@@ -187,25 +187,25 @@ export const scout: Roles['scout'] = async (given, input) => {
       });
   };
 
-  try {
-    await ctx.step(ROLE, label('Thinking of directions for', nameOf(item)), () =>
-      ideate(ctx, run, asked, (d) => {
-        void rated.then(() => {
-          accept(d);
-          check();
-        });
-      }),
-    );
-  } catch (err) {
-    ctx.note(ROLE, `could not think of directions (${message(err)})${arrived > 0 ? '' : ', the picks stay as they are'}`);
-  }
-  await rated;
-  thought = true;
-  if (arrived === 0) {
-    ctx.note(ROLE, 'no directions came back, the picks stay as they are');
-    return commands;
-  }
-  check();
+  // The run can be over before the model has finished writing, once nothing it writes could still land.
+  void (async () => {
+    try {
+      await ctx.step(ROLE, label('Thinking of directions for', nameOf(item)), () =>
+        ideate(ctx, run, asked, (d) => {
+          void rated.then(() => {
+            accept(d);
+            check();
+          });
+        }),
+      );
+    } catch (err) {
+      ctx.note(ROLE, `could not think of directions (${message(err)})${arrived > 0 ? '' : ', the picks stay as they are'}`);
+    }
+    await rated;
+    thought = true;
+    if (arrived === 0) ctx.note(ROLE, 'no directions came back, the picks stay as they are');
+    check();
+  })();
   await finished;
   return commands;
 };
@@ -302,6 +302,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
           ? '- Mix the formats: at least one "find" and at least one "note".'
           : '- Prefer different formats.',
       '- Use "image" or "gallery" when seeing something new helps: the user has a picture or a visual subject, or asked to see something. Then include at least one. For a subject that is not visual, leave them out.',
+      '- Write an "image" or "gallery" direction first, since a picture takes longest to make.',
       '',
       'For each direction:',
       '- angle: two to five words naming the direction.',

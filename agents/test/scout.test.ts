@@ -822,3 +822,24 @@ test('a direction starts the moment the model has written it: a written idea lan
   assert.equal(searched[0], 'dolly zoom', 'the find started once it was written');
   assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), [NOTE.title, PAPER.title].sort());
 });
+
+test('the run is over while the model is still writing, once nothing it writes could land', async () => {
+  const night = direction('image', 'The shot at night', { images: [{ title: 'Night', prompt: 'the staircase at night' }] });
+  const { k, anchor } = setup({ picksPerRun: 2 }, [NOTE, night]);
+  const writing = gate();
+  const json = k.model.json.bind(k.model);
+  k.model.json = (async (req: Parameters<typeof json>[0]) => {
+    if (req.role !== 'scout.ideate') return json(req);
+    const reply = { reading: '', directions: [NOTE, night] };
+    req.onText?.(JSON.stringify(reply).replace(/\]\}$/, ''));
+    await writing.wait;
+    return req.schema.parse(reply);
+  }) as typeof k.model.json;
+
+  const rest = await Promise.race([scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }), new Promise<null>((r) => setTimeout(() => r(null), 500))]);
+
+  assert.ok(rest, 'the run ended before the model finished writing');
+  writing.open();
+  await until(() => k.mind.picks(anchor).length === 2);
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title, 'The shot at night']);
+});
