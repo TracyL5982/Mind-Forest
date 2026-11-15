@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Sound, type Item, type View } from './domain.ts';
 import { evaluate, reserved, wellFormed } from './formula.ts';
-import { ABOVE, type Grounding, type Piece, type Shown, type Way } from './grounding.ts';
+import { ABOVE, numbered, type Grounding, type Piece, type Shown, type Way } from './grounding.ts';
 import { JOINS, KINDS, LIMITS, ROLES, withinLimits, type Box, type Part } from './layout.ts';
 import { MAP } from './map.ts';
 
@@ -316,7 +316,11 @@ type ContentChecks = {
 };
 
 const entry = (text: string): Piece => ({ text, entry: true });
+/** An entry of a list, a step or a point, which is one line of the item: a heading under it is never a part of it. */
+const lined = (text: string): Piece => ({ text, entry: true, line: true });
 const loose = (text: string): Piece => ({ text, entry: false });
+/** Words quoted from the item, which may run over its lines. */
+const passage = (text: string): Piece => ({ text, entry: false, passage: true });
 const SIDE: Piece = { slot: 'heading' };
 /** The words, folded for a comparison of how one passage opens another. */
 const fold = (text: string) => text.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -361,6 +365,84 @@ function written<P>(props: P, way: Way, shown: Shown): P {
   return swap(props, '') as P;
 }
 
+/** A quotation's words, whose card draws the marks around them: a pair the item sets around them is the card's. */
+const quoted = (text: string): Piece => ({ text, entry: false, passage: true, marked: true });
+
+/** A line that asks or answers, as "Q:" and "问：" do, after the first line of an answer. */
+const ASKED = /\n\s*(?:q|a|问|答)\s*[:：]/iu;
+
+/** A quotation mark that opens a quotation, and one that closes it; and what may stand between a speaker and the words they said. */
+const QUOTED = { open: /["'“‘「『«]$/u, close: /^[.!?。！？…,，]*["'”’」』»]/u, between: /^\s*[:：,，—–-]+\s*$/u, apart: /^[\s:：,，—–-]*$/u };
+
+/**
+ * Whether the words a quote card gives a speaker are a quotation of theirs: inside a pair of the item's quotation marks, apart from
+ * the speaker on their line by a colon, a comma or a dash, or on a line of their own with the speaker on another. "Mum said nothing at
+ * all. Dad said, …" quotes nothing of Mum's. `pieces` are where the words and the speaker stand among the way's text pieces.
+ */
+function attributed(shown: Shown, [words, speaker]: [number, number]): boolean {
+  const [[before, after], [byBefore, byAfter]] = [shown.beside[words]!, shown.beside[speaker]!];
+  if (QUOTED.open.test(before) && QUOTED.close.test(after)) return true;
+  const [said, by] = [shown.texts[words]!, shown.texts[speaker]!];
+  // The words and the speaker on one line have what stands between them to read; on two lines, what ends one and opens the other.
+  const between = words > speaker ? (before.startsWith(byBefore + by) ? before.slice(byBefore.length + by.length) : undefined) : byBefore.startsWith(before + said) ? byBefore.slice(before.length + said.length) : undefined;
+  return between !== undefined ? QUOTED.between.test(between) : QUOTED.apart.test(words > speaker ? byAfter + before : after + byBefore);
+}
+
+/** What may follow a term in a script written without spaces: a mark, or the word that says what it is, "是", "指", "就是". */
+const AFTER_TERM = /^(?:[\s\p{P}\p{S}]|是|指|即|就是|叫|称|意为|意思是|也就是)/u;
+/** Whether a meaning opens with the whole term: the term ends where a word ends, so 病毒 is no term of "病毒性肺炎是…". */
+function opens(term: string, meaning: string): boolean {
+  const [said, written] = [fold(term), fold(meaning)];
+  if (!said || !written.startsWith(said)) return false;
+  const rest = written.slice(said.length);
+  return rest === '' || (SPACELESS.test(said.at(-1)!) ? AFTER_TERM.test(rest) : !/^[\p{L}\p{N}]/u.test(rest));
+}
+
+/**
+ * An explorable whose output is its text shows the whole item as its states' words, in order, and each state's name is the label of
+ * that state's own line, drawn as the item writes it: the state's words open with the name and a colon, or the name labels or heads
+ * the line they are.
+ */
+function statesOf(p: PropsOf<'explorable'>, text: Grounding): PropsOf<'explorable'> | undefined {
+  const states = p.controls.flatMap((control) => ('states' in control ? control.states : []));
+  const renamed = (q: PropsOf<'explorable'>, nameOf: (state: { name: string; text: string }, n: number) => string | undefined): PropsOf<'explorable'> | undefined => {
+    let n = 0;
+    const controls = q.controls.map((control) => ('states' in control ? { ...control, states: control.states.map((state) => ({ ...state, name: nameOf(state, n++) ?? '' })) } : control));
+    return controls.every((control) => !('states' in control) || control.states.every((state) => state.name)) ? ({ ...q, controls } as PropsOf<'explorable'>) : undefined;
+  };
+  const labelOf = (words: string, name: string) => {
+    const label = /^(.{1,80}?)\s*[:：]/u.exec(words)?.[1];
+    return label !== undefined && fold(label) === fold(name) ? label : undefined;
+  };
+  return (
+    framed(p, text, [{ pieces: states.map((state) => entry(state.text)) }], (q) => renamed(q, (state) => labelOf(state.text, state.name))) ??
+    framed(p, text, [{ pieces: states.flatMap((state): Piece[] => [{ slot: 'heading', says: state.name }, entry(state.text)]) }], (q, shown) =>
+      renamed(q, (_state, n) => shown.slots[n]?.replace(/\s*[:：]\s*$/u, '')),
+    )
+  );
+}
+
+/** A sign of the number after it, as a word or a mark: what the item writes just before a figure's value may not be one. */
+const SIGNED = /(?:^|[^\p{L}])(?:minus|negative)$|(?:负|零下)$|[−+±▼▲↓↑]$/iu;
+/** A number the item writes as one, "1/2" or "4,5", which a label and a value may not share. */
+const RUNS_ON = { before: /\d[/,]$/, after: /^[/,]\d/ };
+
+/**
+ * Whether each figure's value is a whole number as the item writes it, with its sign: no label ends in the sign of the value after it
+ * ("Margin minus | 3%", "利润率：负 | 3%", "零下" on the line over "25度") and no label or value takes a part of one number ("Dose: 1 |
+ * 2 tablet" of "1/2 tablet").
+ * `value` says which pieces are values, by their place among the way's text pieces.
+ */
+const figured = (shown: Shown, value: (n: number) => boolean): boolean =>
+  // A table's figures read across its row, the label in the first column, as its heads do.
+  !(shown.rows && shown.way % 2 === 1) &&
+  shown.beside.every(
+    ([before, after], n) =>
+      !RUNS_ON.before.test(before) && !RUNS_ON.after.test(after) && !(value(n) && (SIGNED.test(before.trimEnd()) || (shown.way % 2 === 0 && SIGNED.test(shown.texts[n - 1]!.trimEnd())))),
+  );
+/** The values of a way that sets each label before its value, the first way of two, or after it. */
+const valuesOf = (shown: Shown) => (n: number) => n % 2 === (shown.way % 2 === 0 ? 1 : 0);
+
 /** A facts grid or a chart drawn from a table of two columns carries that table's heads row, and one drawn from other lines none. */
 const headed = <P extends { heads?: [string, string] }>(props: P, shown: Shown): P => {
   const { heads: _drawn, ...rest } = props;
@@ -373,6 +455,7 @@ function points(labels: string[], values: number[], unit: string | undefined): W
   // A unit led by a currency sign stands around its number: "$120k" writes 120 in "$k".
   const around = /^\p{Sc}./u.test(sign) ? [(v: number) => `${sign[0]}${v}${sign.slice(1)}`] : [];
   const forms = sign ? [(v: number) => `${v}${sign}`, (v: number) => `${sign}${v}`, ...around, String] : [String];
+  // Each form gives a way of the label first and then one of the value first, so the even ways set the label first.
   return forms.flatMap((form) => [
     { pieces: labels.flatMap((label, n) => [loose(label), loose(form(values[n]!))]), headless: true },
     { pieces: labels.flatMap((label, n) => [loose(form(values[n]!)), loose(label)]), headless: true },
@@ -387,9 +470,9 @@ function sheetWays(sections: Section[]): Way[] {
     const next: Piece[][] =
       section.kind === 'heading' || section.kind === 'text' ? [[entry(section.text)]]
       : section.kind === 'figures' ? [[...label, ...section.facts.flatMap((fact) => [loose(fact.label), loose(fact.value)])]]
-      : section.kind === 'list' ? [[...label, ...section.items.map(entry)]]
+      : section.kind === 'list' ? [[...label, ...section.items.map(lined)]]
       : section.kind === 'table' ? [[...label, ...[...section.heads, ...section.rows.flat()].map(entry)]]
-      : section.kind === 'excerpt' ? (section.by ? [[loose(section.text), loose(section.by)], [loose(section.by), loose(section.text)]] : [[loose(section.text)]])
+      : section.kind === 'excerpt' ? (section.by ? [[passage(section.text), loose(section.by)], [loose(section.by), passage(section.text)]] : [[passage(section.text)]])
       : [[]];
     ways = ways.flatMap((way) => next.map((more) => [...way, ...more]));
   }
@@ -412,12 +495,17 @@ export const CHECKS: ContentChecks = {
     props: { text: 'shown', by: 'shown', above: 'shown' },
     // Who said the words is shown as the item writes it, or not at all.
     frame: (p, text) =>
-      framed(p, text, p.by ? [{ pieces: [loose(p.text), loose(p.by)] }, { pieces: [loose(p.by), loose(p.text)] }, { pieces: [loose(p.text)], drops: ['by'] }] : [{ pieces: [loose(p.text)] }]),
+      framed(p, text, p.by ? [{ pieces: [quoted(p.text), loose(p.by)] }, { pieces: [loose(p.by), quoted(p.text)] }, { pieces: [quoted(p.text)], drops: ['by'] }] : [{ pieces: [quoted(p.text)] }], (q, shown) =>
+        q.by === undefined || attributed(shown, shown.way === 0 ? [0, 1] : [1, 0]) ? q : undefined,
+      ),
   },
   fact: {
     props: { value: 'shown', label: 'shown', above: 'shown', heads: 'shown' },
     also: (p) => p.value.length <= 32,
-    frame: (p, text) => framed(p, text, [{ pieces: [loose(p.label), loose(p.value)], headless: true }, { pieces: [loose(p.value), loose(p.label)], headless: true }], headed),
+    frame: (p, text) =>
+      framed(p, text, [{ pieces: [loose(p.label), loose(p.value)], headless: true }, { pieces: [loose(p.value), loose(p.label)], headless: true }], (q, shown) =>
+        figured(shown, valuesOf(shown)) ? headed(q, shown) : undefined,
+      ),
   },
   image: { props: { src: 'own', caption: 'own', aspect: 'choice' } },
   video: { props: { src: 'own', poster: 'own', caption: 'own' } },
@@ -426,21 +514,23 @@ export const CHECKS: ContentChecks = {
   chart: {
     props: { chart: 'choice', labels: 'shown', values: 'shown', unit: 'unit', mark: 'choice', above: 'shown', heads: 'shown' },
     also: (p) => p.labels.length >= 2 && p.labels.length === p.values.length,
-    frame: (p, text) => framed(p, text, points(p.labels, p.values, p.unit), headed),
+    frame: (p, text) => framed(p, text, points(p.labels, p.values, p.unit), (q, shown) => (figured(shown, valuesOf(shown)) ? headed(q, shown) : undefined)),
   },
   person: {
     props: { name: 'says', role: 'line', image: 'own' },
-    frame: (p, text) => {
-      const { role: _named, ...rest } = p;
-      return !p.role || text.units(p.role) !== undefined ? p : rest;
-    },
+    // A person card shows its whole item, the name and the line that says who they are, and nothing else is written there.
+    frame: (p, text) =>
+      framed<typeof p & { above?: string[] }>(p, text, [{ pieces: [loose(p.name), ...(p.role ? [entry(p.role)] : [])] }], (q, shown) => (shown.above.length === 0 ? q : undefined)),
   },
   chat: { props: { messages: { role: 'own', text: 'own' }, source: 'own' } },
   code: { props: { language: 'choice', source: 'own' } },
   steps: {
     props: { steps: 'shown', above: 'shown' },
     also: (p) => p.steps.length >= 2,
-    frame: (p, text) => framed(p, text, [{ pieces: p.steps.map(entry) }]),
+    // A steps card numbers its steps itself, so the item's own numbers must be the ones it draws: a step that keeps its number is no step.
+    // Its steps are all lines the item numbers 1, 2, 3 and on, or none are, so it never numbers a line the item leaves unnumbered after them.
+    frame: (p, text) =>
+      framed(p, text, [{ pieces: p.steps.map(lined) }], (q, shown) => (q.steps.some(numbered) || new Set(shown.counted).size > 1 ? undefined : q)),
   },
   facts: {
     props: { facts: { label: 'shown', value: 'shown' }, more: 'choice', above: 'shown', heads: 'shown' },
@@ -448,13 +538,15 @@ export const CHECKS: ContentChecks = {
     frame: (p, text) =>
       p.more !== undefined
         ? undefined
-        : framed(p, text, [{ pieces: p.facts.flatMap((f) => [loose(f.label), loose(f.value)]), headless: true }, { pieces: p.facts.flatMap((f) => [loose(f.value), loose(f.label)]), headless: true }], headed),
+        : framed(p, text, [{ pieces: p.facts.flatMap((f) => [loose(f.label), loose(f.value)]), headless: true }, { pieces: p.facts.flatMap((f) => [loose(f.value), loose(f.label)]), headless: true }], (q, shown) =>
+            figured(shown, valuesOf(shown)) ? headed(q, shown) : undefined,
+          ),
   },
   table: {
     props: { heads: 'shown', rows: 'shown', above: 'shown' },
     // Every row and every cell of one table, each row as the item writes it.
     frame: (p, text) =>
-      framed(p, text, [{ pieces: [...p.heads, ...p.rows.flat()].map(entry) }], (q, shown) =>
+      framed(p, text, [{ pieces: [...p.heads, ...p.rows.flat()].map(entry), grid: p.heads.length }], (q, shown) =>
         shown.rows?.length === q.rows.length + 1 && shown.rows.every((cells) => cells === q.heads.length) ? q : undefined,
       ),
   },
@@ -462,7 +554,7 @@ export const CHECKS: ContentChecks = {
     props: { items: 'shown', checked: 'shown', above: 'shown' },
     // A mark is the check box on the entry's own line. A tick or a cross the line writes is a word of the entry, and no check box.
     frame: (p, text) =>
-      framed(p, text, [{ pieces: p.items.map(entry) }], (q, shown) =>
+      framed(p, text, [{ pieces: p.items.map(lined) }], (q, shown) =>
         (q.checked ? q.checked.every((mark, n) => shown.boxes[n] === mark) : shown.boxes.every((box) => box === undefined)) ? q : undefined,
       ),
   },
@@ -470,17 +562,18 @@ export const CHECKS: ContentChecks = {
   breakdown: {
     props: { labels: 'shown', values: 'shown', unit: 'unit', above: 'shown', heads: 'shown' },
     also: (p) => Math.abs(p.values.reduce((sum, value) => sum + value, 0) - 100) <= 1,
-    frame: (p, text) => framed(p, text, points(p.labels, p.values, p.unit), headed),
+    frame: (p, text) => framed(p, text, points(p.labels, p.values, p.unit), (q, shown) => (figured(shown, valuesOf(shown)) ? headed(q, shown) : undefined)),
   },
   qa: {
     props: { question: 'shown', answer: 'shown', above: 'shown' },
     // The card's two slots say what "Q:" and "A:" say, so it may draw them in place of the marks.
+    // One question and its answer: an answer that runs on into the next question is no answer of this one.
     frame: (p, text) =>
       framed(p, text, [
         { pieces: [entry(p.question), entry(p.answer)] },
         { pieces: [{ ...entry(`Q: ${p.question}`), for: p.question }, { ...entry(`A: ${p.answer}`), for: p.answer }] },
         { pieces: [{ ...entry(`问：${p.question}`), for: p.question }, { ...entry(`答：${p.answer}`), for: p.answer }] },
-      ]),
+      ], (q) => (ASKED.test(q.answer) ? undefined : q)),
   },
   callout: { props: { text: 'shown', tone: 'choice', above: 'shown' }, frame: (p, text) => framed(p, text, [{ pieces: [entry(p.text)] }]) },
   excerpt: {
@@ -497,7 +590,7 @@ export const CHECKS: ContentChecks = {
     // The item says what the term means only where its meaning opens with the term, "Parallax is the shift…", or the term labels the
     // line it opens, "Parallax: the shift…". A term on a line of its own may head the meaning of another: "Weather⏎Climate is…".
     frame: (p, text) =>
-      fold(p.definition).startsWith(fold(p.term))
+      opens(p.term, p.definition)
         ? framed(p, text, [{ pieces: [entry(p.definition)] }])
         : framed(p, text, [{ pieces: [{ slot: 'label', says: p.term }, entry(p.definition)] }]),
   },
@@ -506,7 +599,7 @@ export const CHECKS: ContentChecks = {
     props: { pros: 'shown', cons: 'shown', heads: 'shown', above: 'shown' },
     // Each side stands under the heading or label the item gives it, which the card draws over it in place of a label of its own.
     frame: (p, text) =>
-      framed({ ...p }, text, [{ pieces: [SIDE, ...p.pros.map(entry), SIDE, ...p.cons.map(entry)] }], (q, shown) => {
+      framed({ ...p }, text, [{ pieces: [SIDE, ...p.pros.map(lined), SIDE, ...p.cons.map(lined)] }], (q, shown) => {
         const sides: [string, string] = [shown.slots[0]!, shown.slots[1]!];
         return q.heads === undefined || alike(q.heads, sides) ? { ...q, heads: sides } : undefined;
       }),
@@ -555,7 +648,7 @@ export const CHECKS: ContentChecks = {
     },
     also: (p) => misses(p) === undefined,
     // What the states say, every one in the item's order, is the whole item. A formula's result is held to it by `also`.
-    frame: (p, text) => (p.output.kind !== 'text' ? p : framed(p, text, [{ pieces: p.controls.flatMap((control) => ('states' in control ? control.states.map((state) => entry(state.text)) : [])) }])),
+    frame: (p, text) => (p.output.kind !== 'text' ? p : statesOf(p, text)),
   },
 };
 

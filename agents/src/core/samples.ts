@@ -62,7 +62,7 @@ export const SHEETS: { item: Item; props: PropsOf<'sheet'> }[] = [
         { kind: 'text', text: 'We took the early train on Friday and walked the river both days.' },
         { kind: 'figures', facts: [{ label: 'Two nights', value: '€240' }, { label: 'Train, each', value: '€38' }] },
         { kind: 'list', label: 'Best:', items: ['the bridge at dusk', 'the tiled station', 'grilled sardines by the water'] },
-        { kind: 'excerpt', text: 'I would come back just for the sardines.', by: 'Ines said' },
+        { kind: 'excerpt', text: '"I would come back just for the sardines."', by: 'Ines said' },
       ],
     },
   },
