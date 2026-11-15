@@ -212,6 +212,9 @@ void OceanModel::pressTree(bool send) {
     screen->hide();
     screenNode = std::nullopt;
     stir();
+    // Every voice of the tree draws in to one note; then the card it has become leaves.
+    bool quiet = quietPress;
+    sound("press", quiet ? 0.45f : 1);
     double now = time;
     if (send) tree->sent = true;
     // The cards whose pictures the cover shows go to where those float; the rest give way.
@@ -247,7 +250,8 @@ void OceanModel::pressTree(bool send) {
     Vec3 at = front.center + front.normal * 0.02f;
     std::optional<Vec2> spot = standingSpot;
     standingSpot = std::nullopt;
-    after(double(Pace::press) - 0.04, [this, tree, front, at, spot, send] {
+    after(double(Pace::press) - 0.04, [this, tree, front, at, spot, send, quiet] {
+        if (!quiet) sound(send ? "send" : "put_away", 1, 0.2);
         // The live cards give way to the one card they've become.
         std::map<int, CardRef> old = std::move(cards);
         cards.clear();

@@ -21,8 +21,8 @@ platform::Hand hands[2];
 namespace platform {
 
 std::string resourcePath(const std::string& name) {
-    // (The works' small copies are made by tools/push_media.sh into media-src/quest.)
-    std::string path = name.rfind("works-small/", 0) == 0 ? host::repoRoot + "/media-src/quest/" + name
+    // (The works' small copies and the sounds are made by tools/push_media.sh into media-src/quest.)
+    std::string path = name.rfind("works-small/", 0) == 0 || name.rfind("sounds/", 0) == 0 ? host::repoRoot + "/media-src/quest/" + name
         : name.rfind("clips/", 0) == 0 || name.rfind("works/", 0) == 0
         ? host::repoRoot + "/public/" + name
         : host::repoRoot + "/visionos/MindPalace/Resources/" + name;

@@ -10,7 +10,7 @@ OUT=build
 mkdir -p $OUT
 FLAGS="-std=c++20 -O2 -g -Wall -Wno-unused-variable -Wno-unused-function -Wno-missing-braces -Wno-deprecated-declarations \
   -I$CORE -I$CORE/ocean -I. -I/opt/homebrew/include -DREPO_ROOT=\"$REPO\""
-sources=(main.cpp platform_mac.mm $CORE/base.cpp $CORE/json.cpp $CORE/scene.cpp $CORE/render.cpp $CORE/input.cpp $CORE/perf.cpp $CORE/async.cpp $CORE/app.cpp)
+sources=(main.cpp platform_mac.mm audio_mac.cpp $CORE/audio.cpp $CORE/base.cpp $CORE/json.cpp $CORE/scene.cpp $CORE/render.cpp $CORE/input.cpp $CORE/perf.cpp $CORE/async.cpp $CORE/app.cpp)
 if [ "$1" = "--host-only" ]; then
   FLAGS="$FLAGS -DOCEAN_NO_SCENE"
 else
@@ -33,5 +33,5 @@ status=0
 for p in "${pids[@]}"; do wait $p || status=1; done
 [ $status = 0 ] || exit 1
 xcrun clang++ "${objects[@]}" -o preview -L/opt/homebrew/lib -lglfw -framework OpenGL -framework Cocoa -framework IOKit \
-  -framework CoreGraphics -framework CoreText -framework ImageIO -framework CoreFoundation -framework Foundation
+  -framework CoreGraphics -framework CoreText -framework ImageIO -framework CoreFoundation -framework Foundation -framework AudioToolbox -framework CoreAudio
 echo "built quest/desktop/preview"

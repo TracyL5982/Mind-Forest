@@ -47,6 +47,14 @@ if [ -s "$SMALL/.todo" ]; then
 fi
 rm -f "$SMALL/.todo"
 
+# The app's own sounds (about 80 MB of wav), made by quest/sound/synth.py beside the other caches in
+# media-src: made again whenever the script is newer than what it last made. Needs numpy and scipy.
+SOUNDS="$REPO_ROOT/media-src/quest/sounds"
+if [ ! -f "$SOUNDS/manifest.json" ] || [ "$REPO_ROOT/quest/sound/synth.py" -nt "$SOUNDS/manifest.json" ]; then
+  echo "sounds: making them"
+  python3 "$REPO_ROOT/quest/sound/synth.py" --out "$SOUNDS" || echo "sounds: could not be made (python3 with numpy and scipy is needed); the app runs silent without them"
+fi
+
 adb push "$REPO_ROOT/visionos/MindPalace/Resources/ocean.json" $DEVICE_FILES/media/ocean.json | tail -1
 # Notes' own pictures: the visionOS bundle holds them at its top, beside ocean.json.
 for f in "$REPO_ROOT"/visionos/MindPalace/Resources/Ocean/*; do
@@ -55,4 +63,5 @@ done
 sync_dir "$REPO_ROOT/public/clips" clips
 sync_dir "$REPO_ROOT/public/works" works
 sync_dir "$SMALL" works-small
+[ -f "$SOUNDS/manifest.json" ] && sync_dir "$SOUNDS" sounds
 adb shell "du -sh $DEVICE_FILES/media"

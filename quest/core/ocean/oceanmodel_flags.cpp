@@ -42,11 +42,16 @@ void OceanModel::pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) {
         if (!c) return;
         if (tree && tree->focus() == id) {
             // A drag across the open card marks part of it.
-            if (!marking && length(d) > 0.02f) markBegin(id, onCard(*c, began));
+            if (!marking && length(d) > 0.02f) {
+                markBegin(id, onCard(*c, began));
+                if (marking) sound("mark_begin");
+            }
             if (marking) markMove(onCard(*c, point));
         } else if (movable(id) && length(d) > 0.02f) {
             // A card follows the hand that holds it, and what hangs from it comes along.
             Vec3 lifted = d + c->normal * 0.02f;
+            if (!press->lifted) soundAt("lift", c->position);
+            press->lifted = true;
             c->drag.set(lifted);
             for (int r : press->riders) {
                 if (const CardRef& rider = card(r)) rider->drag.set(lifted);
@@ -57,7 +62,11 @@ void OceanModel::pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) {
     }
     case Pick::Kind::shelf: {
         int uid = held.index;
-        if (length(d) > 0.035f) carry(uid, d);
+        if (length(d) > 0.035f) {
+            if (!press->lifted) sound("lift");
+            press->lifted = true;
+            carry(uid, d);
+        }
         break;
     }
     default:
@@ -112,6 +121,7 @@ void OceanModel::pinchEnded(Vec3 point) {
             if (i != shelf.end()) {
                 i->spot = *spot;
                 shelfDirty = true;
+                soundAt("place", i->mover->entity->position);
             }
         }
         break;
@@ -190,6 +200,7 @@ void OceanModel::handle(const Hands::Event& event) {
     case Hands::Event::Kind::cut:
         if (std::optional<int> id = threadCrossed(event.from, event.to)) {
             logLine(fmt("[ocean] knife: cut %d", *id));
+            soundAt("cut", event.to);
             hands->cutLanded();
             prune(*id);
         }

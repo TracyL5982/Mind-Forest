@@ -39,6 +39,7 @@
 
 #include "app.h"
 #include "async.h"
+#include "audio.h"
 #include "base.h"
 #include "canvas.h"
 #include "host.h"
@@ -556,8 +557,10 @@ void run() {
                     running = ok(xrBeginSession(session, &begin), "xrBeginSession");
                     setLevels();
                     markThread();
+                    hostaudio::start();
                 } else if (state == XR_SESSION_STATE_STOPPING) {
                     running = false;
+                    hostaudio::stop();          // the headset is off or the app is put aside: nothing sounds
                     xrEndSession(session);
                 } else if (state == XR_SESSION_STATE_EXITING || state == XR_SESSION_STATE_LOSS_PENDING) {
                     ended = true;
@@ -841,6 +844,7 @@ void run() {
     }
 
     perf.close();
+    hostaudio::stop();
     scene.reset();
     if (session != XR_NULL_HANDLE) xrDestroySession(session);
     if (instance != XR_NULL_HANDLE) xrDestroyInstance(instance);

@@ -280,6 +280,38 @@ private:
     std::optional<int> holoLit;
     void drawHandGlow(double now, float dt);
     bool pointerHidden(int hand) override { return holoTouching && hand == holoHand; }
+
+    // MARK: Sound (oceanmodel_sound.cpp)
+    // NOTE(port): added for Quest: the visionOS app has no sounds of its own yet. The sounds are made
+    // by quest/sound/synth.py and played by core/audio.h; what follows says when. Everything is in one
+    // key. A layer has a chord, struck as you arrive on it; a single thing (a card that arrives, a
+    // level of the small tree) has a single note. Nothing sounds because the head moved.
+    /// A sound, once: `gain` on top of its own, `after` seconds from now.
+    void sound(const char* name, float gain = 1, double after = 0);
+    /// The same, heard from where `at` is: a little to the left or the right. (`sound(_:at:)`)
+    void soundAt(const char* name, Vec3 at, float gain = 1, double after = 0);
+    /// A layer's chord, struck upward on coming nearer and downward on stepping back.
+    void soundLayer(int layer, bool forward, double after = 0);
+    /// One note for each card the gardener brings, up the chord of the layer they come to.
+    void soundNotes(int count, double delay);
+    /// The note of a level of the small tree: its layer's root, a step higher for each level.
+    void soundLevel(int level);
+    /// What sounds for as long as something lasts: the ocean under everything, the gardener
+    /// thinking, the next layer's chord as a fist nears its gate; and what is noticed by watching
+    /// (the layer changed, a hand closed or opened, a finger moved on the small tree).
+    void updateSound(double now);
+    void pointerLanded(int hand, const EntityRef& entity) override;
+    const Tree* soundTree = nullptr;                    // the tree whose layer was last heard
+    int soundDepth = 0;
+    double soundLayerAfter = 0;                         // the next layer chord waits this long (a card is still on its way up)
+    double thinkFrom = 0, thinkUntil = 0;
+    double stirSounded = -100, landSounded = -100;
+    const Entity* landedLast[2] = {nullptr, nullptr};   // the last two things a ray's arrival sounded on
+    std::vector<HandGlow::Grab> fistsDrawn;             // the closed hands the gauge was last drawn for (`drawHandGlow`)
+    bool fistSounding[2] = {false, false};
+    std::string swelling;                               // the layer chord that is held now, for a fist nearing its gate
+    std::optional<int> levelSounded;                    // the small tree's level last heard
+    bool quietPress = false;                            // the tree is pressed only to make way for another
     // NOTE(port): added for Quest. The tree follows a carrying fist with some weight (see `panBy`):
     // where the fist has asked it to be, and whether it is still on its way there.
     Vec2 panAsked = Vec2::zero();
@@ -334,6 +366,7 @@ private:
         Vec3 start;
         bool cancelled;
         std::vector<int> riders;
+        bool lifted = false;                // NOTE(port): added for Quest: what is held has come away from its place (its sound has played)
     };
     std::optional<Press> press;
     double time = 0.0;

@@ -11,6 +11,7 @@
 void OceanModel::stand(TreeRef t) {
     tree = t;
     pressing = false;
+    sound("stand");
     marks.clear();
     t->focus(t->current);           // a tree kept with nothing in focus gets its suggestions back
     const TreeNode* current = find(*t, t->current);
@@ -84,7 +85,9 @@ void OceanModel::whenClear(std::function<void()> next) {
     if (!tree) {
         next();
     } else {
+        quietPress = true;          // only making way: the tree that follows is what is heard
         pressTree(false);
+        quietPress = false;
         after(double(Pace::press) + 0.25, std::move(next));
     }
 }
@@ -101,10 +104,14 @@ void OceanModel::take(int id) {
     if (tree->condensed(*node) && !node->head && node->parent) target = *node->parent;
     const TreeNode* asked = find(*tree, target);
     bool fresh = asked ? asked->children.empty() : true;
+    // The card's own note now; its new layer's chord a moment later, as it rises (`updateSound`).
+    if (const CardRef& c = card(target)) soundAt("take", c->position); else sound("take");
+    soundLayerAfter = 0.14;
     Tree::Change moved = tree->focus(target);
     if (fresh && !moved.added.empty()) {
         think(target, Pace::think);
         arrive(moved.added, double(Pace::think));
+        soundNotes(int(moved.added.size()), double(Pace::think));
     } else {
         arrive(moved.added);
     }
@@ -122,6 +129,8 @@ void OceanModel::think(int id, float seconds) {
     e->position = {0, c->openBody.y / 2 + 0.03f, 0.004f};
     c->root->addChild(e);
     fadeIn(e, 0.3, 0.3f);
+    thinkFrom = time + 0.3;
+    thinkUntil = time + double(seconds);
     after(double(seconds), [this, e] { fadeOut(e, 0.3f); });
 }
 
@@ -175,15 +184,18 @@ void OceanModel::dismiss(const std::vector<TreeNode>& gone, bool cut) {
 /// On a pinch at nothing: out of a zoom, then out of the focus (the card closes, and its group draws in).
 void OceanModel::stepOut() {
     if (peek) {
+        soundAt("peek_return", peek->mover->entity->position);
         clearPeek();
         return;
     }
     if (!tree || pressing) return;
     if (zoom.target() > 0.01f) {
+        sound("zoom_out");
         setZoom(0, 0.7f);
         return;
     }
     if (!tree->focused) return;
+    sound("step_out");
     tree->unfocus();
     logLine("[ocean] stepped out of the focus");
     restyle(false);
@@ -203,6 +215,7 @@ void OceanModel::goTo(int head) {
 /// moves out of its way.
 void OceanModel::zoomIn() {
     float next = zoom.target() < 0.2f ? 0.45f : (zoom.target() < 0.7f ? 1.f : 0.f);
+    if (tree && !pressing && tree->focused) sound(next > zoom.target() ? "zoom_in" : "zoom_out");
     setZoom(next, 0.7f);
 }
 
@@ -235,6 +248,8 @@ void OceanModel::askGardener(int nodeID, int k) {
     std::optional<OceanNote> note = catalog->answer(c->asks[k], c->ref, tree->held());
     if (!note) return;
     logLine("[ocean] asked: " + c->asks[k].question);
+    sound("ask");
+    soundLayerAfter = 0.3;      // the question first, then the layer its answer makes
     bring(*note, "You asked");
 }
 
@@ -249,6 +264,8 @@ void OceanModel::askMark(int nodeID) {
     std::optional<OceanNote> note = catalog->answer(mark, c->ref, tree->held());
     if (!note) return;
     logLine("[ocean] asked about a mark: " + described(mark));
+    sound("ask");
+    soundLayerAfter = 0.3;      // the question first, then the layer its answer makes
     bring(*note, "You marked");
 }
 
@@ -271,6 +288,9 @@ void OceanModel::bring(const OceanNote& note, const std::string& why) {
     if (const TreeNode* n = find(*tree, made->id)) makeCard(*n, 0);
     think(made->id, Pace::think);
     arrive(made->added, double(Pace::think));
+    // The question was left open; what comes back closes it, and then a note for each thing it brings.
+    sound("answer", 1, double(Pace::think));
+    soundNotes(int(made->added.size()), double(Pace::think) + 0.35);
     logLine(fmt("[ocean] answer: %d new, %d ties", int(made->added.size()), int(tree->links.size())));
     restyle();
 }
@@ -284,6 +304,7 @@ void OceanModel::openLink(int nodeID) {
     // (`URL(string: link.url)`: nothing that isn't an address.)
     if (link.url.empty()) return;
     logLine("[ocean] opening " + link.url);
+    sound("link");
     // `UIApplication.shared.open(url)`: on the Quest the system's browser opens over the app.
     platform::openURL(link.url);
 }
@@ -346,6 +367,7 @@ void OceanModel::drop(int id, const std::vector<int>& riders, Vec3 d) {
     settle(id);
     for (int m : riders) settle(m);
     touch(time + 0.3);
+    soundAt("place", held->position);
     logLine("[ocean] placed " + (catalog ? catalog->short_(n.ref) : std::string()) + fmt(" by hand, with %d more", int(riders.size())));
     restyle(false);
 }
@@ -497,6 +519,7 @@ void OceanModel::markEnd() {
     }
     Mark made = *m.made;
     marks[m.id] = made;
+    sound("mark_made");
     if (made.kind == Mark::Kind::time && screenNode == m.id) screen->loop(Screen::Span{made.from, made.to});
     buildRows(c);
     if (tree) {
@@ -570,6 +593,7 @@ void OceanModel::peekAt(int film) {
     peek = Peek{film, m, width};
     shell->setOut(film, true);
     touch(time + double(Pace::fly));
+    soundAt("peek", to);
     logLine("[ocean] peek: " + catalog->title(ref));
 }
 
@@ -620,6 +644,7 @@ void OceanModel::bringIn(int film) {
                 c->sourceScale = fromScale * fromWidth / c->smallBody.x;
             }
         }
+        if (fromPoint) soundAt("bring_in", *fromPoint); else sound("bring_in");
         logLine("[ocean] brought in: " + catalog->title(ref));
         restyle();
     } else {

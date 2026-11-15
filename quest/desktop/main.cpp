@@ -20,6 +20,7 @@
 
 #include "app.h"
 #include "async.h"
+#include "audio.h"
 #include "base.h"
 #include "host_mac.h"
 #include "input.h"
@@ -85,6 +86,13 @@ int main(int argc, char** argv) {
     world->addChild(scene->root());
     world->addChild(input.visuals());
     scene->start();
+    // Sound: through the Mac's output when the preview runs as a window. A picture is made faster
+    // than time passes, so it plays nothing; `-soundOut <file.wav>` writes what would have been
+    // heard, frame by frame of the app's own time, to listen to or to measure afterwards.
+    auto soundOut = Flags::string("soundOut");
+    std::vector<float> heard;
+    double heardUntil = 0;
+    if (!shot && !soundOut) hostaudio::start();
 
     Perf perf;
     bool logFps = Flags::has("fps") || Flags::has("perf");
@@ -169,6 +177,14 @@ int main(int argc, char** argv) {
         Cost::reset();
         double updateBegan = mediaTime();
         scene->update(dt);
+        if (soundOut) {
+            int frames = int((elapsed - heardUntil) * audio::sampleRate);
+            if (frames > 0) {
+                heardUntil += double(frames) / audio::sampleRate;
+                heard.resize(heard.size() + size_t(frames) * 2);
+                audio::render(heard.data() + heard.size() - size_t(frames) * 2, frames);
+            }
+        }
         double updateMs = (mediaTime() - updateBegan) * 1000;
         // `-hitches` lists updates over 4 ms; `-hitches <ms>` sets the line (the headset's chip is about six times slower).
         if (Flags::has("hitches") && updateMs > (Flags::number("hitches") > 0 ? Flags::number("hitches") : 4)) {
@@ -221,6 +237,22 @@ int main(int argc, char** argv) {
             break;
         }
         glfwSwapBuffers(window);
+    }
+    hostaudio::stop();
+    if (soundOut) {
+        // 16 bit stereo wav.
+        std::vector<int16_t> pcm(heard.size());
+        for (size_t i = 0; i < heard.size(); i++) pcm[i] = int16_t(std::lround(std::min(1.f, std::max(-1.f, heard[i])) * 32767));
+        uint32_t bytes = uint32_t(pcm.size() * 2), rate = audio::sampleRate, byteRate = rate * 4, riff = 36 + bytes, sixteen = 16;
+        uint16_t one = 1, two = 2, four = 4, bits = 16;
+        if (FILE* f = fopen(soundOut->c_str(), "wb")) {
+            fwrite("RIFF", 1, 4, f); fwrite(&riff, 4, 1, f); fwrite("WAVEfmt ", 1, 8, f); fwrite(&sixteen, 4, 1, f);
+            fwrite(&one, 2, 1, f); fwrite(&two, 2, 1, f); fwrite(&rate, 4, 1, f); fwrite(&byteRate, 4, 1, f);
+            fwrite(&four, 2, 1, f); fwrite(&bits, 2, 1, f); fwrite("data", 1, 4, f); fwrite(&bytes, 4, 1, f);
+            fwrite(pcm.data(), 2, pcm.size(), f);
+            fclose(f);
+            fprintf(stderr, "saved %s (%.1f s; %s)\n", soundOut->c_str(), double(pcm.size()) / 2 / audio::sampleRate, audio::describe().c_str());
+        }
     }
     scene.reset();
     glfwTerminate();

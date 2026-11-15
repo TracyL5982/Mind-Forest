@@ -365,6 +365,8 @@ public:
     /// Quest only: whether a hand's ray and dot should not be drawn or used right now (0 left, 1 right),
     /// because that hand is doing something its fingers do themselves.
     virtual bool pointerHidden(int hand) { return false; }
+    /// Quest only: a hand's ray has come to rest on something it was not on before (the entity whose hover lights).
+    virtual void pointerLanded(int hand, const EntityRef& entity) {}
     /// How much the room around is dimmed, 0...1 (visionOS: preferredSurroundingsEffect); 0 leaves it alone.
     virtual float surroundingsDim() { return 0; }
 };

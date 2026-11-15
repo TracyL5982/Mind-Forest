@@ -157,6 +157,27 @@ and what must run there is spread over frames:
 picture so the waiting look can be seen; `-rasterTest` checks the background path on the headset before
 any session starts.
 
+## Sound
+
+The visionOS app has no sounds of its own yet; these are the Quest's (and the Mac preview's).
+
+- **The sounds** are synthesized by `quest/sound/synth.py` (numpy, scipy): about 80 wav files, 80 MB, all in
+  one key (D Lydian) so anything that overlaps agrees. Each layer has a chord, a stack of fifths that
+  climbs a step per layer; single things (a card that arrives, a level of the small tree) have single notes.
+  `tools/push_media.sh` makes them into `media-src/quest/sounds` whenever the script is newer, and sends
+  them with the rest of the media. Without them the app runs silent.
+- **The mixer** is `core/audio.*`: one-shot voices and loops whose level can be eased, mixed on the audio
+  thread without locks. `android/.../audio_android.cpp` plays it through AAudio while the session runs;
+  `desktop/audio_mac.cpp` through the Mac's output.
+- **When each is heard** is in `core/ocean/oceanmodel_sound.cpp` and at the place each thing happens
+  (`sound("take")` in `take`). The layer's chord is struck whenever the layer you stand on changes, by any
+  means: upward on coming nearer, downward on stepping back. While a fist nears a layer's gate, that
+  layer's chord is held and swells with the gauge's arc. The ocean's bed draws back under a film's sound.
+- **Flags:** `-mute` or `-noSound` for none, `-sound <0…1>` for how loud (0.8), `-soundLog` to log each sound
+  as it is asked for. In the preview, `-soundOut <file.wav>` (with `-shot`) writes what would have been heard.
+- **To listen to them one by one:** `sketches/sound/index.html` (not in git), fed by
+  `python3 quest/sound/synth.py --page sketches/sound`.
+
 ## Looking at it on the Mac
 
 ```bash

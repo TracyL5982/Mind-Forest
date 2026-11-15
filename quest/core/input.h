@@ -78,6 +78,7 @@ private:
         float shown = 0;
     };
     PalaceScene* scene;
+    const Entity* landed[2] = {nullptr, nullptr};     // what each hand's ray last rested on
     HandState hands[2];
     EntityRef overlay;
     /// The pinch that holds something: which hand, what, where it landed, where the hand was, and the gain.

@@ -3,6 +3,8 @@
 // by hand. (See oceanmodel.h for where the rest is.)
 #include "oceanmodel.h"
 
+#include "../audio.h"
+
 #include <cmath>
 #include <cstdlib>
 
@@ -56,6 +58,7 @@ void OceanModel::start() {
     }
     // NOTE(port): `await tracker.start()` has nothing to do: the host tracks the head (platform::head).
     hands->start();
+    audio::start();     // NOTE(port): added for Quest (oceanmodel_sound.cpp)
     loaded = true;
 }
 
@@ -154,6 +157,7 @@ void OceanModel::update(float dt) {
     lookAtOcean(dt);
     followPan(dt);
     drawHandGlow(now, dt);
+    updateSound(now);
     shelveWaiting();
 
     standMore();
@@ -282,6 +286,11 @@ std::optional<float> OceanModel::number(const std::string& flag) {
 
 /// Something happened above: the ocean is stirred, and settles into a new arrangement.
 void OceanModel::stir() {
+    // (Heard now and then, not with every pick: most things that stir it have a sound of their own.)
+    if (time - stirSounded > 6) {
+        sound("stir", 0.7f);
+        stirSounded = time;
+    }
     stirred.go(stirred.target() + 1, time, 2.4f, Ease::glide);
     touch(time + 2.45);
 }
@@ -698,6 +707,7 @@ void OceanModel::feelHologram() {
         holoArmed = false;
         hologram->hover(true, now);
         hologram->select(hologram->current, now);
+        soundAt("holo_wake", hologram->entity->convertTo(Vec3::zero(), nullptr));
         logLine("[ocean] a hand over the small tree");
     }
     if (pointer->pinch > 0.03f) holoArmed = true;
@@ -1006,5 +1016,6 @@ void OceanModel::drawHandGlow(double now, float dt) {
         }
     }
 
+    fistsDrawn = grabs;
     handGlow->draw(eye, grabs, fingers, now, dt);
 }
