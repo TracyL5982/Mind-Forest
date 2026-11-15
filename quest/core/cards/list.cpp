@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <optional>
 
+#include "parts.h"
 #include "rows.h"
 
 namespace cards {
@@ -165,10 +166,9 @@ std::vector<std::string> written(const Item& item, const std::vector<std::string
 }
 
 /// `.list.is-full`: every entry whole, at 14 px on 20 px lines, 8 px apart.
-void detail(Sheet& sheet, const Item& item, const Json& props) {
+void entriesDetail(Sheet& sheet, const Item& item, const std::vector<std::string>& entries, const std::optional<std::vector<bool>>& checked) {
     constexpr Setting line{14, 20};
-    Plan p = plan(item, props);
-    std::vector<std::string> labels = written(item, p.entries);
+    std::vector<std::string> labels = written(item, entries);
     float column = Sheet::width - MARK;
     std::vector<float> rows;
     float tall = 0;
@@ -179,7 +179,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     Color accent = sheet.look.accent;
     sheet.part(tall, [=](const Pen& pen, float y) {
         for (size_t i = 0; i < labels.size(); i++) {
-            std::optional<bool> done = doneAt(p, i);
+            std::optional<bool> done = checked ? std::optional((*checked)[i]) : std::nullopt;
             mark(pen, done, Sheet::left, y + 4, accent, palette::ink3, palette::face);
             pen.words(labels[i], Sheet::left + MARK, y, column, 0, line, done.value_or(false) ? palette::ink2 : palette::ink);
             y += rows[i] + 8;
@@ -188,9 +188,18 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     for (const std::string& label : labels) sheet.said.push_back(label);
 }
 
+void detail(Sheet& sheet, const Item& item, const Json& props) {
+    Plan p = plan(item, props);
+    entriesDetail(sheet, item, p.entries, p.checked);
+}
+
 const Kind kind{"list", size, {}, draw, detail};
 const Registered registered{kind};
 
 }  // namespace
+
+void entryMark(const Pen& pen, float x, float y, const Look& look) { mark(pen, std::nullopt, x, y, look.accent, look.ink3, look.fill); }
+
+void listEntries(Sheet& sheet, const Item& item, const std::vector<std::string>& entries) { entriesDetail(sheet, item, entries, std::nullopt); }
 
 }  // namespace cards

@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include "kind.h"
+#include "parts.h"
 #include "text.h"
 
 namespace cards {
@@ -159,8 +160,8 @@ struct Plan {
     std::string foot;
 };
 
-/// The first rows and columns, as many as fit, each column as wide as table.js's `plan` gives it.
-Plan plan(const Item& item, const Json& props) {
+/// The first rows and columns, as many as fit in `room` px, each column as wide as table.js's `plan` gives it.
+Plan plan(const Item& item, const Json& props, int room = ROOM) {
     Grid g = grid(props);
     std::vector<Row> shown(g.rows.begin(), g.rows.begin() + long(std::min(g.rows.size(), size_t(MOST_ROWS))));
     struct Column {
@@ -181,7 +182,7 @@ Plan plan(const Item& item, const Json& props) {
     int second = columns.size() > 1 ? leastOf(columns[1], columns[1].numbers) : 0;
     for (size_t i = 0; i < columns.size(); i++) {
         Column& c = columns[i];
-        c.floor = i == 0 ? std::max(c.numbers, std::min({c.want, FIRST_FLOOR, std::max(WORDS_FLOOR, ROOM - BETWEEN - second)})) : c.numbers;
+        c.floor = i == 0 ? std::max(c.numbers, std::min({c.want, FIRST_FLOOR, std::max(WORDS_FLOOR, room - BETWEEN - second)})) : c.numbers;
         c.least = leastOf(c, c.floor);
     }
     auto least = [&](int count) {
@@ -190,14 +191,14 @@ Plan plan(const Item& item, const Json& props) {
         return sum;
     };
     int count = std::min(int(columns.size()), MOST_COLUMNS);
-    while (count > 1 && least(count) > ROOM) count -= 1;
+    while (count > 1 && least(count) > room) count -= 1;
     int floors = 0;
     std::vector<int> wants;
     for (int i = 0; i < count; i++) {
         floors += columns[size_t(i)].floor;
         wants.push_back(columns[size_t(i)].want - columns[size_t(i)].floor);
     }
-    std::vector<int> extra = spread(wants, ROOM - BETWEEN * (count - 1) - floors);
+    std::vector<int> extra = spread(wants, room - BETWEEN * (count - 1) - floors);
     Plan p;
     for (int i = 0; i < count; i++) {
         p.heads.push_back(g.heads[size_t(i)]);
@@ -217,9 +218,12 @@ Plan plan(const Item& item, const Json& props) {
     return p;
 }
 
+/// How tall the rows a plan shows stand under their heads, with the line that counts what is left out.
+int ruledHeight(const Plan& p) { return ROW * (1 + int(p.rows.size())) + (p.foot.empty() ? 0 : 8 + TEXT); }
+
 Footprint size(const Item& item, const Json& props) {
     Plan p = plan(item, props);
-    return {p.width, FRAME + p.titleLines * TITLE + 8 + ROW * (1 + int(p.rows.size())) + (p.foot.empty() ? 0 : 8 + TEXT)};
+    return {p.width, FRAME + p.titleLines * TITLE + 8 + ruledHeight(p)};
 }
 
 // MARK: - The small face
@@ -238,11 +242,8 @@ void cell(const Pen& pen, const Text& said, float left, float wide, float top, b
     pen.words(s, x, top, number || fits ? drawn + 1 : wide, 1, t, color);
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    Plan p = plan(item, props);
-    float x = 16, column = width - 32, y = 14;
-    pen.words(item.titleOrUntitled(), x, y, column, p.titleLines, setting::title, palette::ink);
-    y += float(p.titleLines * TITLE + 8);
+/// The heads and the rows a plan shows, ruled, with their top-left at (x, y) px.
+void ruled(const Pen& pen, const Look& look, const Plan& p, float x, float y, float column) {
     pen.ctx.setFillColor(palette::line);
     for (size_t r = 0; r <= p.rows.size(); r++) pen.ctx.fill(pen.px(x, y + float(ROW * r) + 23, column, 1));
     // `justify-content: space-between` shares what the columns leave of the line among the gaps.
@@ -259,6 +260,13 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
         }
         left += wide + gap;
     }
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
+    Plan p = plan(item, props);
+    float x = 16, column = width - 32, y = 14;
+    pen.words(item.titleOrUntitled(), x, y, column, p.titleLines, setting::title, palette::ink);
+    ruled(pen, look, p, x, y + float(p.titleLines * TITLE + 8), column);
     if (!p.foot.empty()) pen.words(p.foot, x, body - 14 - TEXT, column, 1, setting::text, look.ink3);
 }
 
@@ -385,5 +393,28 @@ const Kind kind = make();
 const Registered registered{kind};
 
 }  // namespace
+
+std::optional<int> tableHeight(const Item& item, const Json& section, int room) {
+    Plan p = plan(item, section, room);
+    return p.heads.empty() ? std::nullopt : std::optional(ruledHeight(p));
+}
+
+std::vector<std::string> tableWords(const Item& item, const Json& section, int room) {
+    Plan p = plan(item, section, room);
+    std::vector<std::string> out;
+    for (const Text& head : p.heads) out.push_back(utf8(head));
+    for (const Row& row : p.rows) {
+        for (const Text& cell : row) out.push_back(utf8(cell));
+    }
+    return out;
+}
+
+void drawTable(const Pen& pen, const Look& look, const Item& item, const Json& section, int room, float x, float y, float column) {
+    Plan p = plan(item, section, room);
+    ruled(pen, look, p, x, y, column);
+    if (!p.foot.empty()) pen.words(p.foot, x, y + float(ROW * (1 + int(p.rows.size())) + 8), column, 1, setting::text, look.ink3);
+}
+
+void listTable(Sheet& sheet, const Json& section) { detail(sheet, Item{}, section); }
 
 }  // namespace cards

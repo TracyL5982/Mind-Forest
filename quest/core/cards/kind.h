@@ -70,6 +70,8 @@ struct Kind {
     void (*detail)(Sheet& sheet, const Item& item, const Json& props);
     /// The pictures it shows, by address.
     std::vector<std::string> (*pictures)(const Json& props) = nullptr;
+    /// In place of `shows`, for a type that draws what its props hold (a sheet): the keys it draws.
+    std::vector<std::string> (*showsOf)(const Item& item, const Json& props) = nullptr;
     float radius = 12;
     enum class Face { plain, sunk, wash } face = Face::plain;
     /// Which of the ocean's own notes it opens as: its box is that note's (cards::ocean::openBox).

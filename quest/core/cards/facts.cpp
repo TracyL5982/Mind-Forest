@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "figures.h"
+#include "parts.h"
 
 namespace cards {
 
@@ -100,40 +101,35 @@ Footprint size(const Item& item, const Json& props) {
     return {WIDTH, FRAME + p.titleLines * TITLE + (p.grid.rows.empty() ? 0 : 12 + p.grid.height) + (p.more ? 8 + TEXT : 0)};
 }
 
-/// Each row is as tall as its taller figure and label as drawn, as a grid row is.
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    Plan p = plan(item, props);
-    float x = 16, column = width - 32, y = 14;
-    pen.words(p.title, x, y, column, p.titleLines, setting::title, palette::ink);
-    y += float(p.titleLines * TITLE + 12);
+/// The rows of figures with their top-left at (x, y) px. Each row is as tall as its taller figure and
+/// label as drawn, as a grid row is.
+void figuresAt(const Pen& pen, const Look& look, const Grid& grid, float x, float y, float column) {
     float half = (column - BETWEEN) / 2;
-    for (const Row& row : p.grid.rows) {
+    for (const Row& row : grid.rows) {
         float tallest = 0;
         for (size_t i = 0; i < row.cells.size(); i++) {
             const Cell& c = row.cells[i];
             float left = x + float(i) * (half + BETWEEN), room = row.cells.size() == 1 ? column : half;
             int lines = c.cut ? MOST_LINES : 0;
-            float valueTall = figureHeight(c.fact.value, room, lines, p.grid.size, pen.k);
-            figure(pen, c.fact.value, left, y, room, lines, p.grid.size, palette::ink);
+            float valueTall = figureHeight(c.fact.value, room, lines, grid.size, pen.k);
+            figure(pen, c.fact.value, left, y, room, lines, grid.size, palette::ink);
             pen.words(c.fact.label, left, y + valueTall, room, c.labelLines, setting::text, look.ink2);
             tallest = std::max(tallest, valueTall + heightOf(c.fact.label, room, c.labelLines, setting::text, pen.k));
         }
         y += tallest + ROW_GAP;
     }
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
+    Plan p = plan(item, props);
+    float x = 16, column = width - 32, y = 14;
+    pen.words(p.title, x, y, column, p.titleLines, setting::title, palette::ink);
+    figuresAt(pen, look, p.grid, x, y + float(p.titleLines * TITLE + 12), column);
     if (p.more) pen.words(item.words.more(p.more), x, body - 14 - TEXT, column, 1, setting::text, look.ink3);
 }
 
-/// `.detail-figures`: every fact the item holds, when the card shows only the first of them, each label
-/// beside its value, whole.
-void detail(Sheet& sheet, const Item& item, const Json& props) {
-    std::vector<Fact> held;
-    for (const Json& fact : item.data["facts"].array()) {
-        Fact f{trimmed(fact["label"]), trimmed(fact["value"])};
-        if (!f.label.empty() && !f.value.empty()) held.push_back(f);
-    }
-    std::vector<Fact> shown = pairs(props);
-    std::vector<Fact> facts = held.size() > shown.size() ? held : shown;
-
+/// `.detail-figures`: each label beside its value, whole.
+void listed(Sheet& sheet, const std::vector<Fact>& facts) {
     constexpr Setting label{14, 20};
     constexpr Setting value{14, 20, Font::Weight::bold};
     float k = sheet.k, inner = Sheet::width - 32, labels = 0;
@@ -163,6 +159,17 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     }
 }
 
+/// Every fact the item holds, when the card shows only the first of them.
+void detail(Sheet& sheet, const Item& item, const Json& props) {
+    std::vector<Fact> held;
+    for (const Json& fact : item.data["facts"].array()) {
+        Fact f{trimmed(fact["label"]), trimmed(fact["value"])};
+        if (!f.label.empty() && !f.value.empty()) held.push_back(f);
+    }
+    std::vector<Fact> shown = pairs(props);
+    listed(sheet, held.size() > shown.size() ? held : shown);
+}
+
 Kind make() {
     Kind k{"facts", size, {}, draw, detail};
     k.face = Kind::Face::sunk;
@@ -174,5 +181,22 @@ const Kind kind = make();
 const Registered registered{kind};
 
 }  // namespace
+
+int figuresHeight(const Json& section) { return grid(pairs(section)).height; }
+
+std::vector<std::string> figureWords(const Json& section) {
+    std::vector<std::string> out;
+    for (const Fact& f : pairs(section)) {
+        out.push_back(f.label);
+        out.push_back(f.value);
+    }
+    return out;
+}
+
+void drawFigures(const Pen& pen, const Look& look, const Json& section, float x, float y, float column) {
+    figuresAt(pen, look, grid(pairs(section)), x, y, column);
+}
+
+void listFigures(Sheet& sheet, const Json& section) { listed(sheet, pairs(section)); }
 
 }  // namespace cards

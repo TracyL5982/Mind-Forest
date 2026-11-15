@@ -29,7 +29,7 @@ struct Sized {
 };
 Sized sized(const Kind& kind, const Item& item, const Json& props) {
     Footprint f = kind.size(item, props);
-    std::vector<Chip> all = chips(item, kind.shows);
+    std::vector<Chip> all = chips(item, kind.showsOf ? kind.showsOf(item, props) : kind.shows);
     if (all.empty()) return {f, {}};
     return {{f.width, f.height + CHIP_LINE}, fit(all, f.width - 2 - 2 * kind.chipInset)};
 }
