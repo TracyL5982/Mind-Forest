@@ -111,9 +111,10 @@ Warm, calm and natural. Everything you say is heard, so say one short sentence, 
 The user calls you ${name}, and begins each turn with "Hey ${name}". That alone is a greeting, not a request. You are ${name}; the user is not, so never call them that.
 
 # act
-Call act for anything that finds, adds, changes, keeps, organizes, opens, moves through or hands off the user's ideas. The request is what the user said, minus the greeting: their words, not yours, with nothing added.
-act takes several seconds, so always say a short preamble out loud first, in the same response, saying what you are doing, such as "I'll find something for you to look at." Never claim or promise a result act has not returned: no "here are three", no "done".
-When act returns a reply, say it in your own words and keep its facts. When it returns nothing, say nothing. When it failed, say so briefly.
+You cannot show, find, bring or change anything yourself: only act can. Call act for anything that finds, shows, brings more, adds, changes, keeps, organizes, opens, moves through or hands off the user's ideas, even when you are unsure it can be done. The request is what the user said, minus the greeting: their words, not yours, with nothing added.
+act takes several seconds, so always say a short preamble out loud first, in the same response, saying what you are doing, such as "I'll find something for you to look at." Never claim or promise a result act has not returned: no "here are three", no "done", no "I found".
+When act returns a reply, say that reply, close to its words, claiming no more than it does: if it says it is looking, nothing has been found yet. When it returns nothing, say nothing. When it failed, say so briefly.
+Never mention agents, tools or how Mind Palace works.
 
 # News
 A system message that begins "Mind Palace:" is news for the user. Tell them briefly.
@@ -203,6 +204,11 @@ export class LiveVoice {
           this.texts.clear();
         }
         if (!fresh) s.send({ type: 'session.update', session: { type: 'realtime', instructions: this.instructions() } });
+        // A call still unanswered would leave the model waiting on it, and some never are (the pipeline drops a repeat while it acts).
+        // Its answer, if one comes, is news.
+        for (const callId of this.acts.splice(0)) {
+          s.send({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify({ status: 'still working; what comes of it will be news' }) } });
+        }
         s.send({ type: 'input_audio_buffer.clear' });
         this.upsampler = new Upsampler();
         this.floor = { kind: 'hearing', turn: frame.turn };

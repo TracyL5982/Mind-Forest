@@ -117,17 +117,17 @@ test('a say with no act waiting, or a results announcement, is news; it waits wh
   v.heard({ t: 'start', turn: 1, scene: SCENE });
   model.answer('r1', { words: 'On it.', act: 'more like this' });
   v.heard({ t: 'start', turn: 2, scene: SCENE });
+  const news = () => model.sent('conversation.item.create').map((e) => e.item as { type: string; role?: string; content?: { text: string }[] }).filter((i) => i.type === 'message');
   v.said('Three new cards on Hokusai are in.', 'results');
-  assert.equal(model.sent('conversation.item.create').length, 0, 'nothing is voiced while the user speaks');
+  assert.equal(news().length, 0, 'nothing is voiced while the user speaks');
 
   model.answer('r2', { words: 'Sure.' });
-  const items = model.sent('conversation.item.create').map((e) => e.item as { type: string; role?: string; content?: { text: string }[] });
-  assert.deepEqual(items.map((i) => i.type), ['message']);
-  assert.equal(items[0]!.role, 'system');
-  assert.match(items[0]!.content![0]!.text, /Three new cards on Hokusai/);
+  assert.equal(news().length, 1);
+  assert.equal(news()[0]!.role, 'system');
+  assert.match(news()[0]!.content![0]!.text, /Three new cards on Hokusai/);
 
   v.said('Bringing more.');
-  assert.equal(model.sent('conversation.item.create').length, 1, 'a reply waits while the news is being said');
+  assert.equal(news().length, 1, 'what is said next waits while the news is being said');
 });
 
 test('saying the name while Momo speaks stops that answer, and nothing more of it reaches the device', () => {
@@ -247,4 +247,17 @@ test('the service refuses /live without a live voice, and with one voices what t
   assert.ok(JSON.parse(output.output).reply, 'the pipeline answered the act and its say came back as the result');
   ws.close();
   await run.close();
+});
+
+test('a call still unanswered when the user speaks again is closed, so the model is not left waiting, and its late reply is news', () => {
+  const { v, model } = voice();
+  v.heard({ t: 'start', turn: 1, scene: SCENE });
+  model.answer('r1', { words: 'Bringing more.', act: 'show me more like this' });
+  v.heard({ t: 'start', turn: 2, scene: SCENE });
+  const closed = model.sent('conversation.item.create').map((e) => e.item as { type: string; call_id: string });
+  assert.deepEqual(closed.map((i) => [i.type, i.call_id]), [['function_call_output', 'call-r1']]);
+  model.answer('r2', { words: 'Sure.' });
+  v.said('Bringing more.');
+  const late = model.sent('conversation.item.create').at(-1)!.item as { type: string; role: string };
+  assert.equal(late.type, 'message', 'the late reply is news');
 });

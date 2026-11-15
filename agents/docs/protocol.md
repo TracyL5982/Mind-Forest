@@ -173,7 +173,7 @@ Client to service:
 | Frame | Meaning |
 |---|---|
 | `{t:'start', turn, scene}` | The wake phrase was heard. Turn `turn` (1, 2, … per socket) follows as audio. It also stops whatever Momo is saying. |
-| `{t:'audio', pcm}` | The microphone at 16000 Hz, from a moment before the phrase until `over`. Nothing before the phrase. |
+| `{t:'audio', pcm}` | The microphone at 16000 Hz until `over`: from 0.8 s before the first word after the phrase, or from a moment before the phrase when the request follows straight on. Nothing before the phrase, and not the phrase alone. |
 | `{t:'end'}` | The client stopped sending before `over` (it sends a minute at most): take what was sent. |
 | `{t:'cancel'}` | Nothing was said after the phrase for 8 seconds: drop the turn. |
 
