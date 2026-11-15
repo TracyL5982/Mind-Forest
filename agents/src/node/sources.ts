@@ -441,7 +441,8 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
         kind: 'film',
         text: str(m.overview), from: 'The Movie Database',
         url: `https://www.themoviedb.org/${m.media_type}/${m.id}`,
-        image: `https://image.tmdb.org/t/p/w780${str(m.backdrop_path) || str(m.poster_path)}`,
+        // Its poster, which a link card stands beside its synopsis; a still when it has none.
+        image: `https://image.tmdb.org/t/p/w780${str(m.poster_path) || str(m.backdrop_path)}`,
       }));
     },
   };

@@ -563,3 +563,18 @@ Read strictly, one quick run fell one sample under three main runs that all scor
 **Why.** A composing card waits 12 s at most (49). On the main model a call for 8 cards took 13 to 49 s, so in a drop of several notes most landed as the rules drew them; the quick model answered every call in 6 s or less, at four fifths of the tokens.
 
 **Alternatives.** Stay on the main model: the same choices within a sample, with most cards of a multi-note drop landing before their answer. Ask the main model one card per call: shorter calls, at more calls and tokens.
+
+## 53. Looks: every source's records get the card two blind readers chose
+
+**Decision.** Each source says what kind of thing its records are (`Found.kind`, carried to `item.data.kind`), and the rules draw each kind as two blind readers chose for it. A web page, a news article, a Stack Overflow question, a GitHub repository and a film or series are link cards with the record's own words beside the title, a film with its poster. A page a DOI names is a paper's reference card, and OpenAlex's conference papers are papers. An answer is a question and its answer. A recipe is a sheet of its picture, its line of ingredients and its numbered steps, when the sheet can hold them whole. A Europeana painting is an artwork, and one its concepts call a photograph stays a picture. A podcast episode plays beside its cover art, and a Hacker News thread is a note. On the headset a film's poster stands at the right of its link card, an episode's art at the left of its player, and a sheet's picture in a band across its top. A find no source catalogued, as every one already in the user's data, is drawn as before, so no card there changes.
+
+**How it was chosen.** Each of the 15 sources was searched with three queries and no model (`scratchpad/ws24/audit/fetch.ts`), and the first record each could show was made into the item the Scout makes and drawn with the rules. Two readers on different models (Opus and Sonnet), shown the 45 records and the card types but not today's cards, chose the card for each (`audit/readers.md`, `reader-a.md`, `reader-b.md`). They agreed on 34 and today's rules agreed with them on 15 of those. Where they differed, the card kept is the one that holds the whole record and shows more of it:
+
+- Threads: note over chat. The chat card shows a user's side and an answer, and would leave out comments and who wrote each.
+- Questions: link over note, which shows the same words and also where they live. An answer: a question and its answer over a note, for the same reason.
+- Episodes: with their cover art, which is the episode's own and shows more.
+- Recipes: a sheet with the picture over steps. Steps hold the ingredients only as an opening of 280 characters at most, and drop the picture.
+
+**What differs still.** One record of 45: a curry whose line of ingredients runs to 388 characters, past the 280 a sheet's text holds, stays its picture, where the readers chose a sheet or steps. Neither card can hold it whole. The table before and after is `audit/table-final.md`.
+
+**Alternatives.** Change the rules for every find, catalogued or not: cards already in the user's data would turn into others when next touched. Keep excerpts for pages and articles: both readers chose the link for all six, one of them torn on the news.
