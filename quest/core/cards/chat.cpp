@@ -108,7 +108,7 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
 
 /// `.detail-chat`: up to 40 messages whole, at 13.5 px, 7 px apart, then the source.
 void detail(Sheet& sheet, const Item& item, const Json& props) {
-    constexpr Setting line{13.5f, 18.9f};
+    constexpr Setting line{15, 21, Font::Weight::medium};
     const Json& held = item.data["messages"];
     std::vector<Message> messages = messagesOf(held.isNull() ? props["messages"] : held, 40);
     std::string source = text(props["source"]);

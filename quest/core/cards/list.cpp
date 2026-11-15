@@ -142,7 +142,7 @@ std::vector<std::string> written(const Item& item, const std::vector<std::string
 
 /// `.list.is-full`: every entry whole, at 14 px on 20 px lines, 8 px apart.
 void entriesDetail(Sheet& sheet, const Item& item, const std::vector<std::string>& entries, const std::optional<std::vector<bool>>& checked) {
-    constexpr Setting line{14, 20};
+    constexpr Setting line{15, 21, Font::Weight::medium};
     std::vector<std::string> labels = written(item, entries);
     float column = Sheet::width - MARK;
     std::vector<float> rows;

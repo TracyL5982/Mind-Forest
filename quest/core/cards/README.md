@@ -4,8 +4,8 @@ This folder draws the agent service's cards with the web client's layout, type s
 
 Each card takes the sizes of the sizing spec (`quest-card-sizing.md`, "Build spec", with its numbers from `derive.mjs`). A small face is 210 px wide and at most 146 px tall. Its lines are counted with the web's `wrap` and letter widths, never measured, and its words are set in the host's fonts inside that footprint. The web keeps its own sizes until it adopts the spec, so for now the two clients' footprints differ by design.
 
-- **The small face** holds whole lines only, up to what its type allows (`face.h`, and each type's `lay`). When anything is left out, its last row is the cue: "More", or a count such as "3 more" or "12 rows", in meta in the card's colour. Nothing is cut, ellipsised or shrunk. Chart, code, table, breakdown and pros and cons show a designed preview. Chips are not on the small face.
-- **The opened card** of a text, chart or link card is a fixed 384 by 311 px frame, 46 by 37.2 cm. A picture card keeps the ocean's open note for its picture. The whole panel is drawn once, as one picture, and shows through a window in the frame. It holds everything: the type's full form, the text, the tags and every chip source in full.
+- **The small face** holds whole lines only, up to what its type allows (`face.h`, and each type's `lay`). When anything is left out, its last row is the cue: "More", or a count such as "3 more" or "12 rows", in meta in the card's colour. Nothing is cut, ellipsised or shrunk. Chart, code, table, breakdown and pros and cons show a designed preview. Chips are not on the small face. The title is 18 px semibold, the body 16 px medium, and meta, labels and the cue 13.5 px medium.
+- **The opened card** of a text, chart or link card is a fixed 384 by 311 px frame, 46 by 37.2 cm. A picture card keeps the ocean's open note for its picture. The whole panel is drawn once, as one picture, and shows through a window in the frame. It holds everything: the type's full form, the text, the tags and every chip source in full. Its title is 21 px semibold, what is read 15 px medium, and labels, tags and chips 11.5 px. Some parts of a type's opened form are still at the web's sizes: those set with `setting::text` (12.5 px), the table's cells, code and the chart's axes.
 
 The library draws all 28 of the web's components. The explorable is drawn as it stands first; its opened card writes its states and result out, and its controls do not work on the Quest yet. A component the library does not know is drawn as a note with no props, as on the web. Composites (a group's arrangement) are not drawn.
 
@@ -116,7 +116,7 @@ adb shell cp -r /sdcard/Android/data/com.kaifengwu.mindpalace.ocean/files/media 
 
 ## Checks
 
-`test/run.sh` sizes every sample of the web's golden file, `agents/test/footprints.json`, and holds each to the spec: 210 px wide, no taller than its type's tallest face in `derive.mjs` and 146 px, and no chip line. It no longer matches the web's sizes, which change when the web adopts the spec. For quote, qa and idea, `derive.mjs` works out the shorter of the two cases its own limit allows, so the check holds those to the taller one.
+`test/run.sh` sizes every sample of the web's golden file, `agents/test/footprints.json`, and holds each to the spec: 210 px wide, no taller than its type's tallest face in `derive.mjs` and 146 px, and no chip line. It no longer matches the web's sizes, which change when the web adopts the spec. For quote, qa and idea, `derive.mjs` works out the shorter of the two cases its own limit allows, and for facts it leaves out a value that takes two lines, so the check holds those to the taller case.
 
 ```bash
 quest/core/cards/test/run.sh <genui/integration checkout>/agents/test/footprints.json

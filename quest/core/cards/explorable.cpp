@@ -277,7 +277,7 @@ void lay(Col& c, const Item& item, const Json& props) {
             pen.ctx.addLine(CGPoint{(c.x + x1) * pen.k, (c.y + 2 + y1) * pen.k});
             pen.ctx.strokePath();
         }
-        label(pen, item.words.chinese ? "可探索" : "Explore", c.x + 20, c.y, palette::ink2);
+        label(pen, item.words.chinese ? "可探索" : "Explore", c.x + 20, c.y, palette::ink2, setting::faceLabelSize);
     }
     c.gap(22);
     c.lines(item.titleOrUntitled(), Measure::title, 1, palette::ink);

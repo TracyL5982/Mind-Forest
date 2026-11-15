@@ -108,7 +108,7 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
 
 /// `.detail-proscons`: every point whole, one side under the other.
 void detail(Sheet& sheet, const Item& item, const Json& props) {
-    constexpr Setting open{14, 20};
+    constexpr Setting open{15, 21, Font::Weight::medium};
     Plan p = plan(item, props);
     std::array<std::vector<float>, 2> talls;
     float tall = 14;

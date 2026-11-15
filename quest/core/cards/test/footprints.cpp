@@ -18,10 +18,11 @@ namespace {
 /// derive.mjs, section 6: the tallest face of each type, px. Its recipe for three types works out one of the
 /// two cases its own limit allows, and the other is taller; those three hold to the taller one here:
 /// quote 144 (3 lines and the speaker, no cue; derive 140), qa 132 (a 2-line question, 1 answer line and
-/// the cue; derive 130) and idea 142 (3 lines at 18 px and the cue; derive 136).
+/// the cue; derive 130) and idea 142 (3 lines at 18 px and the cue; derive 136). And facts 146: a value too
+/// long for one line at 24 px takes two at 18 px, as the fact card's does, which derive leaves out (130).
 const std::map<std::string, int> TALLEST{
     {"note", 146},     {"quote", 144},      {"fact", 140},    {"image", 146},   {"video", 146},      {"audio", 146},     {"link", 146},
-    {"chart", 146},    {"person", 140},     {"chat", 136},    {"code", 102},    {"steps", 134},      {"facts", 130},     {"table", 124},
+    {"chart", 146},    {"person", 140},     {"chat", 136},    {"code", 102},    {"steps", 134},      {"facts", 146},     {"table", 124},
     {"list", 140},     {"breakdown", 128},  {"qa", 132},      {"callout", 144}, {"excerpt", 146},    {"definition", 134}, {"idea", 142},
     {"proscons", 131}, {"swatch", 145},     {"artwork", 146}, {"reference", 134}, {"place", 146},    {"sheet", 146},     {"explorable", 126},
 };

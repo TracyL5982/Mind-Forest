@@ -274,16 +274,16 @@ struct Set {
     float spacing;
 };
 
-constexpr Setting SMALL_CAPITALS{11, 17};
-
-Set setOf(const std::string& label) {
+/// In capitals at `size`, spaced out, or as written when it holds Han, on a line of the size's meta lead.
+Set setOf(const std::string& label, float size) {
+    Setting t{size, std::round(size * 4 / 3), Font::Weight::medium};
     Text written = points(label);
-    if (std::any_of(written.begin(), written.end(), han)) return {label, setting::text, 0.04f * setting::text.size};
+    if (std::any_of(written.begin(), written.end(), han)) return {label, t, 0.04f * size};
     std::string shown = label;
     for (char& c : shown) {
         if (c >= 'a' && c <= 'z') c = char(c - 32);
     }
-    return {shown, SMALL_CAPITALS, 0.07f * setting::text.size};
+    return {shown, t, 0.07f * size};
 }
 
 TextAttributes attributesOf(const Set& set, Color color, float k) {
@@ -299,15 +299,15 @@ float baseline(const Setting& t, float k) {
     return t.lead / 2 + (m.ascent - m.descent) / 2 / k;
 }
 
-float labelWidth(const std::string& label, float k) {
-    Set set = setOf(label);
+float labelWidth(const std::string& label, float k, float size) {
+    Set set = setOf(label, size);
     return stringSize(set.shown, attributesOf(set, Color::white(), k)).width / k;
 }
 
-void label(const Pen& pen, const std::string& label, float x, float y, Color color) {
-    Set set = setOf(label);
-    float k = pen.k, drop = baseline(setting::text, k) - baseline(set.setting, k);
-    pen.ctx.drawText(set.shown, CGPoint{x * k, (y + drop) * k - lift(set.setting, k)}, attributesOf(set, color, k), (labelWidth(label, k) + 1) * k, 1);
+void label(const Pen& pen, const std::string& label, float x, float y, Color color, float size) {
+    Set set = setOf(label, size);
+    float k = pen.k;
+    pen.ctx.drawText(set.shown, CGPoint{x * k, y * k - lift(set.setting, k)}, attributesOf(set, color, k), (labelWidth(label, k, size) + 1) * k, 1);
 }
 
 }  // namespace cards

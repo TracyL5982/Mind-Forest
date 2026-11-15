@@ -13,7 +13,7 @@ namespace {
 
 constexpr int WIDTH = 272;
 constexpr int POSTER = 153;
-constexpr Setting NOTE{13.5f, 18.9f};
+constexpr Setting NOTE{15, 21, Font::Weight::medium};
 
 std::string caption(const Item& item, const Json& props) {
     std::string given = text(props["caption"]);

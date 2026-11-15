@@ -17,7 +17,7 @@ constexpr int MAT = 196;
 /// The border, the plate's padding above and below its lines, and 2 px to spare.
 constexpr int PLATE = 26;
 /// `.detail-artwork`
-constexpr Setting LABEL{13.5f, 19};
+constexpr Setting LABEL{15, 21, Font::Weight::medium};
 
 struct Plan {
     std::string by, medium, holder;

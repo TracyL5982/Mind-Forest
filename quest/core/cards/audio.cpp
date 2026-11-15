@@ -19,7 +19,7 @@ constexpr int STRIP = 40;
 constexpr int GAP = 6;
 /// One bar of the waveform and the space after it, in the units of its view box, which is stretched to the room it has.
 constexpr float BAR = 2, STEP = 3, WAVE = 24;
-constexpr Setting NOTE{13.5f, 18.9f};
+constexpr Setting NOTE{15, 21, Font::Weight::medium};
 
 /// A length in seconds as a clock writes it: 0:20, 12:05, 1:02:03.
 std::string clock(double seconds) {
@@ -85,13 +85,14 @@ void wave(const Pen& pen, const std::vector<float>& peaks, CGRect box, Color col
 }
 
 /// `.audio-strip` with its top at y px, from x to `right`.
-void strip(const Pen& pen, const Look& look, const std::vector<float>& peaks, const std::string& length, float x, float y, float right) {
+void strip(const Pen& pen, const Look& look, const std::vector<float>& peaks, const std::string& length, float x, float y, float right,
+           const Setting& said = setting::body) {
     disc(pen, look, pen.px(x, y + 4, 32, 32));
     play(pen, x + 12, y + 4 + 9, 11, 14, look.accent);
     float end = right;
     if (!length.empty()) {
-        float w = pen.width(length, setting::text);
-        pen.words(length, right - w, y + (STRIP - TEXT) / 2.f, w + 1, 1, setting::text, look.ink2);
+        float w = pen.width(length, said);
+        pen.words(length, right - w, y + (STRIP - said.lead) / 2.f, w + 1, 1, said, look.ink2);
         end -= w + 10;
     }
     wave(pen, peaks, pen.px(x + 32 + 10, y + (STRIP - WAVE) / 2, end - (x + 32 + 10), WAVE), mix(look.accent, 0.58f, look.fill));
@@ -120,7 +121,7 @@ void lay(Col& c, const Item& item, const Json& props) {
     std::string words = heard(item);
     c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + STRIP);
     c.gap(face::GAP);
-    if (c.pen) strip(*c.pen, c.look, peaksOf(props), lengthOf(props), c.x, c.y, c.x + c.width);
+    if (c.pen) strip(*c.pen, c.look, peaksOf(props), lengthOf(props), c.x, c.y, c.x + c.width, setting::faceMeta);
     c.gap(STRIP);
     if (!words.empty() && c.room() >= face::GAP + face::BODY) {
         c.gap(face::GAP);

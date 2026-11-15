@@ -119,8 +119,8 @@ void figuresAt(const Pen& pen, const Look& look, const Grid& grid, float x, floa
 
 /// `.detail-figures`: each label beside its value, whole.
 void listed(Sheet& sheet, const std::vector<Fact>& facts) {
-    constexpr Setting label{14, 20};
-    constexpr Setting value{14, 20, Font::Weight::bold};
+    constexpr Setting label{15, 21, Font::Weight::medium};
+    constexpr Setting value{15, 21, Font::Weight::bold};
     float k = sheet.k, inner = Sheet::width - 32, labels = 0;
     for (const Fact& f : facts) labels = std::max(labels, std::ceil(widthOf(f.label, label, k)));
     // `minmax(0, max-content) minmax(40%, 1fr)`, 16 px apart.
@@ -166,8 +166,9 @@ void lay(Col& c, const Item& item, const Json& props) {
     // A value on two lines stands 8 px under the title, so a title line, the value and the cue all fit.
     float row = float(valueLines * size.lineHeight + face::META), over = valueLines == 2 ? 8 : 12;
     bool left = facts.size() > shown;
-    if (need > 2) c.more = true;
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, over + row + (left || c.more ? face::CUE : 0));
+    // What is left out is known before the title, which then keeps the cue's row free.
+    if (left || need > 2) c.more = true;
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, over + row);
     c.gap(over);
     float room = shown == 2 ? float(half) : float(face::COL);
     if (c.pen) {
@@ -178,7 +179,6 @@ void lay(Col& c, const Item& item, const Json& props) {
         }
     }
     c.gap(row);
-    if (left) c.more = true;
     if (c.more) c.cue(left ? cueCount(c.words, int(facts.size() - shown)) : cueMore(c.words));
 }
 

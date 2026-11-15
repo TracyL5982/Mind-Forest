@@ -40,9 +40,9 @@ Plan plan(const Item& item, const Json& props) {
 }
 
 /// `.callout-head`: the glyph, then the tone's name, on a line of text.
-void head(const Pen& pen, const Tone& tone, const std::string& name, float x, float y) {
+void head(const Pen& pen, const Tone& tone, const std::string& name, float x, float y, float size = setting::labelSize) {
     strokes(pen, x, y + (TEXT - 14) / 2.f, tone.glyph, 1.2f, tone.colour);
-    label(pen, name, x + 14 + 6, y, tone.colour);
+    label(pen, name, x + 14 + 6, y, tone.colour, size);
 }
 
 
@@ -53,7 +53,7 @@ void lay(Col& c, const Item& item, const Json& props) {
     if (c.pen) {
         c.pen->ctx.setFillColor(tone.colour);
         c.pen->ctx.fill(c.pen->px(1, 1, STRIPE, face::H));
-        head(*c.pen, tone, tone.name.in(item.words), INSET, c.y + 3);
+        head(*c.pen, tone, tone.name.in(item.words), INSET, c.y + 3, setting::faceLabelSize);
     }
     c.x = INSET;
     c.width = face::W - INSET - 16;

@@ -41,11 +41,14 @@ Plan plan(const Item& item, const Json& props) {
 }
 
 /// `.reference-head`: the kind, the year at the far end on the same baseline and cut to the room left, and the rule.
-void head(const Pen& pen, const std::string& kind, const std::string& year, float x, float y, float column) {
-    label(pen, kind, x, y, palette::ink2);
-    float room = column - labelWidth(kind, pen.k) - 10;
-    float w = std::min(pen.width(year, setting::text), room);
-    pen.words(year, x + column - w, y, w + 0.5f, 1, setting::text, palette::ink2);
+void head(const Pen& pen, const std::string& kind, const std::string& year, float x, float y, float column, bool face = false) {
+    // On the small face in meta; on the opened card the kind is a label and the year is read.
+    float size = face ? setting::faceLabelSize : setting::labelSize;
+    const Setting& said = face ? setting::faceMeta : setting::body;
+    label(pen, kind, x, y, palette::ink2, size);
+    float room = column - labelWidth(kind, pen.k, size) - 10;
+    float w = std::min(pen.width(year, said), room);
+    pen.words(year, x + column - w, y, w + 0.5f, 1, said, palette::ink2);
     pen.ctx.setFillColor(palette::line2);
     pen.ctx.fill(pen.px(x, y + TEXT + 6, column, 1));
 }
@@ -54,7 +57,7 @@ void head(const Pen& pen, const std::string& kind, const std::string& year, floa
 /// Its kind and year over a rule, the title in two lines, and the first author.
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
-    if (c.pen) head(*c.pen, p.label, p.year, c.x, c.y, c.width);
+    if (c.pen) head(*c.pen, p.label, p.year, c.x, c.y, c.width, true);
     c.gap(face::META + 14);
     std::vector<std::string> names;
     for (const Json& a : props["authors"].array()) {
@@ -85,7 +88,7 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
 /// `.detail-reference`: the head again in a box, then the authors and the venue whole, each left out when
 /// the opened card's list of sources says it in the same words. A cut list of authors says so, so it stays.
 void detail(Sheet& sheet, const Item& item, const Json& props) {
-    constexpr Setting line{13.5f, 19};
+    constexpr Setting line{15, 21, Font::Weight::medium};
     Plan p = plan(item, props);
     std::vector<Chip> listed = sources(item);
     auto unlisted = [&](const std::string& s) {

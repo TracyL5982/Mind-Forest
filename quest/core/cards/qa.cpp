@@ -36,11 +36,11 @@ void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(props);
     const float gutter = 22;
     c.gap(8);
-    if (c.pen) label(*c.pen, fixed::question.in(item.words), c.x, c.y + 3, c.look.accent);
+    if (c.pen) label(*c.pen, fixed::question.in(item.words), c.x, c.y + 3, c.look.accent, setting::faceLabelSize);
     c.lines(p.question, Measure::title, 2, palette::ink, p.answer.empty() ? 0 : face::GAP + face::BODY, c.x + gutter, face::W - 55, c.width - gutter);
     if (!p.answer.empty() && c.room() >= face::GAP + face::BODY) {
         c.gap(face::GAP);
-        if (c.pen) label(*c.pen, fixed::answer.in(item.words), c.x, c.y + 2, palette::ink2);
+        if (c.pen) label(*c.pen, fixed::answer.in(item.words), c.x, c.y + 2, palette::ink2, setting::faceLabelSize);
         c.lines(p.answer, Measure::body, 99, c.look.ink2, 0, c.x + gutter, face::W - 55, c.width - gutter);
     } else if (!p.answer.empty()) {
         c.more = true;
@@ -61,7 +61,7 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
 
 /// `.detail-qa`: both whole. A question that is the opened card's own title is not asked again.
 void detail(Sheet& sheet, const Item& item, const Json& props) {
-    constexpr Setting answer{14, 20};
+    constexpr Setting answer{15, 21, Font::Weight::medium};
     Plan p = plan(props);
     bool asks = p.question != item.title;
     float column = Sheet::width - MARK;

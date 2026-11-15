@@ -13,7 +13,7 @@ constexpr int SHOWN = 5;
 constexpr int ROW = 20;
 constexpr int GAP = 8;
 /// `.step-n`: its figure, 12.5 px in a line of its own size, set in the middle of the 20 px disc.
-constexpr Setting NUMBER{12.5f, ROW, Font::Weight::semibold};
+constexpr Setting NUMBER{13.5f, ROW, Font::Weight::semibold};
 
 /// `String(step)`.
 std::vector<std::string> stepsOf(const Json& props) {
@@ -74,7 +74,7 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
 
 /// `.steps.is-full`: every step whole, at 14 px on 20 px lines, its number at its first line.
 void detail(Sheet& sheet, const Item&, const Json& props) {
-    constexpr Setting line{14, 20};
+    constexpr Setting line{15, 21, Font::Weight::medium};
     std::vector<std::string> steps = stepsOf(props);
     float column = Sheet::width - ROW - 10;
     std::vector<float> rows;

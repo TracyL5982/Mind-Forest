@@ -20,7 +20,7 @@ constexpr int FRAME_UNDER = 29;
 constexpr int SHOWN = 6;
 constexpr int GAP = 5;
 /// `.swatch-rows.is-full`
-constexpr Setting FULL{14, 20};
+constexpr Setting FULL{15, 21, Font::Weight::medium};
 
 struct Colour {
     std::string name, value;

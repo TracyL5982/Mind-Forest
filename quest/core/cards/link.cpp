@@ -39,7 +39,7 @@ Plan plan(const Item& item, const Json& props) {
 
 /// `.link-site`, `w` px wide with its top-left at (x, y): the site's first letter on a tile, the site, and
 /// an arrow out. On the card it has a rule under it; opened, it is a box of its own.
-void bar(const Pen& pen, float x, float y, float w, const std::string& site, bool boxed) {
+void bar(const Pen& pen, float x, float y, float w, const std::string& site, bool boxed, const Setting& said = setting::body) {
     CGRect r = pen.px(x, y, w, BAR);
     pen.ctx.setFillColor(Color::white(1, 0.025f));
     float inner = boxed ? BAR - 2 : BAR - 1, top = boxed ? y + 1 : y;
@@ -64,16 +64,16 @@ void bar(const Pen& pen, float x, float y, float w, const std::string& site, boo
     std::string letter = capital(site);
     float letterWidth = pen.width(letter, DOT);
     pen.words(letter, left + (17 - letterWidth) / 2, dotTop + 3, letterWidth + 1, 1, DOT, Art::ink);
-    float lineTop = top + (inner - TEXT) / 2, outWidth = std::ceil(pen.width(OUT, setting::text));
-    pen.words(OUT, right - outWidth, lineTop, outWidth + 1, 1, setting::text, palette::ink3);
+    float lineTop = top + (inner - said.lead) / 2, outWidth = std::ceil(pen.width(OUT, said));
+    pen.words(OUT, right - outWidth, lineTop, outWidth + 1, 1, said, palette::ink3);
     float host = left + 17 + 8;
-    pen.words(site, host, lineTop, right - outWidth - 8 - host, 1, setting::text, palette::ink2);
+    pen.words(site, host, lineTop, right - outWidth - 8 - host, 1, said, palette::ink2);
 }
 
 
 /// The address bar across the top, the title, the description in whole lines, and the cue. No thumbnail.
 void lay(Col& c, const Item& item, const Json& props) {
-    if (c.pen) bar(*c.pen, 1, 1, face::W - 2, siteOf(item, props), false);
+    if (c.pen) bar(*c.pen, 1, 1, face::W - 2, siteOf(item, props), false, setting::faceMeta);
     c.y = 30 + 13;
     std::string about = text(props["description"]);
     if (about.empty()) about = item.summary;

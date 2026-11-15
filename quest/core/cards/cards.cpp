@@ -253,7 +253,7 @@ Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
     float tall = 1 + 12;
     for (const auto& fact : facts) {
         if (!rows.empty()) breaks.push_back(tall - 3);
-        rows.push_back(std::max(18.2f, heightOf(fact.second, valueWidth, 0, setting::fact, k)));
+        rows.push_back(std::max(setting::body.lead, heightOf(fact.second, valueWidth, 0, setting::body, k)));
         tall += rows.back() + 6;
     }
     tall -= 6;
@@ -265,7 +265,7 @@ Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
             y += 13;
             for (size_t i = 0; i < facts.size(); i++) {
                 pen.words(facts[i].first, Sheet::left, y, labels + 1, 1, setting::fact, look.ink3);
-                pen.words(facts[i].second, Sheet::left + labels + 14, y, valueWidth, 0, setting::fact, look.ink2);
+                pen.words(facts[i].second, Sheet::left + labels + 14, y, valueWidth, 0, setting::body, look.ink2);
                 y += rows[i] + 6;
             }
         },

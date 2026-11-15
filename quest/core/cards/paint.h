@@ -68,15 +68,19 @@ constexpr Setting title{16, 21, Font::Weight::semibold};
 constexpr Setting text{12.5f, 17, Font::Weight::medium};
 constexpr Setting quote{16, 21, Font::Weight::regular, true, true};
 constexpr Setting mark{34, 36, Font::Weight::regular, true};
-// The opened card (`.panel`), where a line is 1.4 of its size unless it says otherwise.
-constexpr Setting badge{12, 16.8f};
+// The opened card (`.panel`), by the sizing spec: the title 21 px semibold, every line that is read 15 px
+// medium, and labels, tags and chips 11.5 px medium.
+constexpr Setting badge{11.5f, 16.8f, Font::Weight::medium};
 constexpr Setting heading{21, 25.62f, Font::Weight::semibold};
-constexpr Setting whyLabel{11.5f, 16.1f};
-constexpr Setting why{14, 19.6f};
-constexpr Setting body{15, 21};
-constexpr Setting caption{13.5f, 18.9f};
-constexpr Setting tag{12.5f, 17.5f};
-constexpr Setting fact{13, 18.2f};
+constexpr Setting whyLabel{11.5f, 16.1f, Font::Weight::medium};
+constexpr Setting why{15, 21, Font::Weight::medium};
+constexpr Setting body{15, 21, Font::Weight::medium};
+constexpr Setting caption{15, 21, Font::Weight::medium};
+constexpr Setting tag{11.5f, 17.5f, Font::Weight::medium};
+/// A fact's label in the list at the opened card's foot; its value is `body`.
+constexpr Setting fact{11.5f, 21, Font::Weight::medium};
+/// The size of a kind label (`label`) on the opened card, and on the small face, where nothing read is under 13.5 px.
+constexpr float labelSize = 11.5f, faceLabelSize = 13.5f;
 }  // namespace setting
 
 /// Text attributes for a setting at `k` pixels to a px.
@@ -141,8 +145,8 @@ float baseline(const Setting& t, float k);
 /// `.kind`, in the text's line, its top-left at (x, y) px: a short label set in small capitals, or as
 /// written when it holds Han. The canvas has no small capitals, so it sets capitals a size down on the
 /// text's baseline.
-float labelWidth(const std::string& label, float k);
-void label(const Pen& pen, const std::string& label, float x, float y, Color color);
+float labelWidth(const std::string& label, float k, float size = setting::labelSize);
+void label(const Pen& pen, const std::string& label, float x, float y, Color color, float size = setting::labelSize);
 
 /// A picture a card shows, as the caller has it.
 struct Picture {
