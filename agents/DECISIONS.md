@@ -813,3 +813,45 @@ The shorter lead-in is not kept. It is real at its part, 0.23 to 0.29 s, about 3
 **What would reach 5 s.** None of these is taken here, since each trades what the user chose: web answers at effort none (`MIND_PALACE_WEB_EFFORT=none`, about 0.7 to 1 s sooner by 59, with dates wrong more often), ending turns after 1.2 or 1.5 s of quiet (`MIND_PALACE_LIVE_PAUSE`, cutting thinking pauses), or a quicker search than OpenAI's.
 
 **Measured with.** The bench with this commit's changes, run through a copy that swapped the lead-in's wording per turn, and three throwaway probes (the search model streamed, the realtime model's call order, a cold against a warm connection), kept outside the repository. About $3.30 of OpenAI calls: $1.60 for the bench, $1.38 for the search probes, $0.32 for the order probe.
+
+## 62. Live voice: the run log keeps the pages each web answer cited and read
+
+(61 is left to the live voice's other change on its own branch.)
+
+**Decision.** The run log's line for each web answer ends with the pages the answer cited (its `url_citation` annotations) and every page its searches read (`include: ['web_search_call.action.sources']`), without the search's `utm_source` tag, or "nothing"; `scripts/live-bench.ts` records both with each answer (`src/node/web-answer.ts`). Nothing else changes: the search model's instructions are 59's, and Momo's instructions and what Momo is handed are as before.
+
+**Why.** The user wants Momo's web answers right. The errors seen were 2025 launches given as this month's, CRS-25 called this month's launch, WORN's closing date, and the Thyssen-Bornemisza's Vermeer show left out, and nobody could say which pages an answer came from, since none were kept. Most answers cite nothing (17 of 29 in one check), so the pages read are the record. The logged pages have already explained two errors: the WORN date, which the Rijksmuseum's own pages give both ways (27 March 2027 on its What's on listing, 21 March on the exhibition page), and a year error, a 2025 launch read off NASA's launch archive as 16 November 2026. The year error did not come up on either side in the three runs below, so the logged pages are how its cause will be found when it does.
+
+**Tried and not kept.** Each against 59's instructions, graded against the pages: the Booker on 9 November 2026; the Rijksmuseum's shows, open 9:00 to 17:00 daily; nothing launched by NASA this month and CRS-25 no earlier than 29 November 2026; the Mauritshuis on Mondays, 13:00 to 18:00; the Thyssen-Bornemisza and Mauritshuis exchange, on now, 9 October 2026 to 10 January 2027 in Madrid and 15 October 2026 to 17 January 2027 in The Hague.
+
+- Handing Momo each claim's site, "(source: rijksmuseum.nl)", with Momo told to name it. Momo named them naturally ("according to the Booker Prize site", 4 of 4), but the user found it overkill and more words.
+- Telling the search to give a number or date only from a page it cites. The search cites only some spans, so right facts would be dropped.
+- Three rules for the search model together: (a) each date with its year, and a word or two on whether it has happened, is on now or is only scheduled; (b) the year checked against a period asked about, and anything outside it left out or named as outside; (c) for what is on at a named place or whether it is open, the venue's own site first. Against 59's instructions, the five requests below, three rounds alternating, and three more Vermeer answers: the Vermeer answer named the show on now in 1 of 6 against 4 of 6; 3 of 24 calls timed out against none of 15, and in a voice run both Vermeer calls timed out and Momo had no answer; the NASA and Vermeer answers made 2 or 3 searches against 1. Nothing else was right more often.
+- Each rule alone, the five requests, three rounds with the order rotated, 60 answers:
+
+| | 59's instructions | (a) year and status | (b) year against the period | (c) a named venue's site first |
+|---|---|---|---|---|
+| Right, of 15 | 13: NASA's "three small spacecraft launched on November 9, 2026" (they flew on 1 and 20 October); the Vermeer show on now missed once | 15 | 12: Madrid given The Hague's dates once; the Vermeer show on now missed twice | 13: the Vermeer show on now missed twice |
+| Vermeer show on now named | 2 of 3 | 3 of 3 | 1 of 3 | 1 of 3 |
+| Time-outs | 0 | 0 | 0 | 0 |
+| Median time; paired against 59's | 3.99 s | 4.39 s; -0.09 s | 4.38 s; +0.22 s | 4.53 s; +0.06 s, Vermeer 2 to 4 searches, up to 9.8 s |
+| Words, median and total of 15 | 41, 513 | 30, 492 | 27, 533 | 30, 460 |
+
+(b) and (c) were right no more often and missed the Vermeer show on now. (a) was right in 15 against 13, so it was tried through Momo's voice, where the user's bar is Momo's words: kept only if Momo says no more than 10% more words across the answers, with no more time-outs and right at least as often.
+
+- (a) through Momo's voice: `scripts/live-bench.ts` on `gpt-realtime-2.1`, the five requests, three runs a side alternating (with (a), without, and so on), the code otherwise the same on both sides. Momo's words are those of the turn's last response.
+
+| | With (a) | Without |
+|---|---|---|
+| Momo's words over the 15 answers (median) | 568 (39) | 486 (25): (a) is 16.9% more |
+| Per request: Booker, Rijksmuseum, NASA, Mauritshuis, Vermeer | 56, 159, 127, 75, 151 | 63, 159, 71, 68, 125 |
+| The web answer's words over the 15 (median) | 586 (48) | 486 (24) |
+| Right, of 15 | 13: the Vermeer show on now missed twice | 13: missed once, and once the Madrid show "planned to open on October 9", five weeks after it opened |
+| Time-outs | 0 | 1, a Vermeer call, asked again and answered |
+| End of speech to the answer heard, median | 8.74 s | 7.69 s |
+
+(a) fails on words: the NASA answers took in ESCAPADE's flybys and its 2025 launch, and "it's still only planned", and the Vermeer answers ran longer. It is not kept.
+
+**Not done.** A longer wait than 10 s for a web answer: not taken.
+
+**Measured with.** Throwaway scripts outside the repository that called `ask` with each set of instructions, keeping each response's citations, pages read and searches, and `scripts/live-bench.ts`, run from a copy whose web answer added (a) or not, for the voice runs. About $5.35 of OpenAI calls, $1.60 of them for the voice comparison.
