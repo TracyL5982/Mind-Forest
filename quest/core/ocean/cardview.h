@@ -80,7 +80,12 @@ public:
     double goneAt = std::numeric_limits<double>::infinity();
     std::optional<int> home;            // its film's or work's place in the ocean
     EntityRef picture;                  // an open work's picture
-    EntityRef openFace;                 // NOTE(port): added for Quest. An open card's face, which turns its pages (core/cards).
+    // NOTE(port): added for Quest (core/cards). An open card's frame; the panel that scrolls in its window,
+    // and the bar that says where; and, while a pinch held still has armed a mark, what it will mark.
+    EntityRef openFace;
+    EntityRef openPanel;
+    EntityRef scrollBar;
+    EntityRef armHolder;
     bool pictureFull = false;           // … shown from its own file (asked for, or there), not from the atlas
     bool step = false;                  // it is a layer's first card, standing on the path
     bool lit = true;                    // it glows while it is on the layer you work on

@@ -290,30 +290,6 @@ void OceanModel::openLink(int nodeID) {
     platform::openURL(link.url);
 }
 
-// NOTE(port): added for Quest (core/cards). The face keeps its place and size and shows the next page;
-// what was marked on the page it showed goes with it, and its film plays only on the page with its picture.
-void OceanModel::turnPage(int nodeID) {
-    const CardRef& c = card(nodeID);
-    std::optional<std::string> drawn = c && c->openFace && art ? cards::ocean::cardOf(c->ref) : std::nullopt;
-    if (!drawn) return;
-    const std::string& id = *drawn;
-    cards::ocean::turn(id);
-    std::optional<Piece> face = cards::ocean::open(*art, id);
-    if (!face) return;
-    repaints.erase(std::remove_if(repaints.begin(), repaints.end(), [&](const Repaint& r) { return r.quad == c->openFace; }), repaints.end());
-    art->shade(c->openFace, face->texture, 0);
-    if (cards::ocean::pages(id) > 1) cards::ocean::open(*art, id, (cards::ocean::page(id) + 1) % cards::ocean::pages(id));
-    c->layout = cards::ocean::layout(id);
-    if (marking && marking->id == nodeID) marking = std::nullopt;
-    marks.erase(nodeID);
-    if (c->markHolder) c->markHolder->removeFromParent();
-    c->markHolder = nullptr;
-    buildRows(*c);
-    c->changed();
-    touch(time + 0.3);
-    if (screenNode == nodeID || (c->layout && c->layout->picture)) restyle(false);
-}
-
 void OceanModel::moveLayer(int direction) {
     if (!tree || pressing) return;
     std::optional<Tree::Change> moved = direction > 0 ? tree->stepBack() : tree->stepForward();

@@ -39,6 +39,7 @@ void OceanModel::start() {
     // NOTE(port): added for Quest. `-cards` draws the ocean's notes, films and works as the agent's cards; a tag keeps its chip (core/cards).
     if (Flags::has("cards")) {
         cards::ocean::hold(catalog);
+        cardGestures = true;
         logLine(fmt("[cards] the ocean as cards: %d notes, %d films, %d works; kept the ocean's own drawing: %d tags", int(catalog->notes.size()),
                     int(catalog->clips.size()), int(catalog->works.size()), int(catalog->tags.size())));
     }
@@ -204,6 +205,7 @@ void OceanModel::update(float dt) {
     // NOTE(port): added for Quest (core/cards).
     landPictures();
     repaintCards();
+    holdPress();
 
     if (now < busyUntil + 0.1) {
         if (shell) shell->setShift(stirred.value(now));

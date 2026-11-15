@@ -1,7 +1,8 @@
 // Draws every gallery sample's card, small and opened, to PNG files with the Mac's fonts, at 2 pixels to
 // a web px, and lists them in manifest.json, so each can be set beside the web's own drawing
-// (quest/tools/cards_compare.mjs). The opened card is drawn in the pages the Quest shows it in: the first
-// is <id>-open.png, the others <id>-open-2.png and on.
+// (quest/tools/cards_compare.mjs). The opened card is drawn as the Quest shows it, its frame with the panel in
+// the window at its top, as <id>-open.png; when the panel runs on past the window, scrolled to its end as
+// <id>-open-end.png; and the whole panel as <id>-panel.png.
 //   quest/core/cards/test/faces.sh <out folder>
 #include <cstdio>
 
@@ -62,9 +63,18 @@ int main(int argc, char** argv) {
             }
             bool ok = save(render(*cards::small(id, k)), out + "/" + id + "-small.png");
             cards::Opened opened = *cards::ocean::opened(id, k);
-            for (int p = 0; ok && p < int(opened.pages.size()); p++) {
-                cards::Drawn page{opened.key, opened.size, [&](Canvas& ctx) { opened.draw(ctx, p); }};
-                ok = save(render(page), out + "/" + id + "-open" + (p ? "-" + std::to_string(p + 1) : "") + ".png");
+            ImageRef panel = render(cards::Drawn{opened.key, CGSize{opened.size.width, opened.contentTall}, opened.content});
+            ok = ok && save(panel, out + "/" + id + "-panel.png");
+            float most = opened.contentTall - opened.size.height;
+            for (float off : most > 0 ? std::vector<float>{0, most} : std::vector<float>{0}) {
+                cards::Drawn view{opened.key, opened.size, [&](Canvas& ctx) {
+                                      opened.frame(ctx);
+                                      ctx.saveGState();
+                                      ctx.clip(opened.window);
+                                      ctx.drawImage(panel, CGRect{0, -off, opened.size.width, opened.contentTall});
+                                      ctx.restoreGState();
+                                  }};
+                ok = ok && save(render(view), out + "/" + id + (off > 0 ? "-open-end.png" : "-open.png"));
             }
             if (!ok) {
                 fprintf(stderr, "could not draw %s\n", id.c_str());

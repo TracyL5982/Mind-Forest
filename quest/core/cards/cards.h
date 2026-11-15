@@ -53,30 +53,27 @@ struct Drawn {
     CGSize size;
     std::function<void(Canvas&)> draw;
 };
-/// A stretch of the opened card, px from its top.
-struct Span {
-    float from, to;
-};
-/// The opened card as pages of one size: the web's panel, cut where one of its parts ends or between two lines.
+/// The opened card: a frame of a fixed size, and the whole panel (panel.js) drawn once, which shows through
+/// a window in the frame and scrolls there.
 struct Opened {
     std::string key;
-    /// A page, pixels.
+    /// The frame, pixels: the card's open size.
     CGSize size;
-    struct Page {
-        /// The text a hand can mark, and where its picture is, pixels on the page.
-        std::vector<Run> runs;
-        std::optional<CGRect> picture;
-    };
-    std::vector<Page> pages;
-    std::function<void(Canvas&, int page)> draw;
-    /// A part taller than a page with no place to end a page in it was cut in two.
-    bool cut = false;
+    /// Where the panel shows inside the frame, pixels, clear of the frame's round corners.
+    CGRect window;
+    /// The whole panel, pixels tall; as wide as the frame.
+    float contentTall = 0;
+    /// The text a hand can mark, and where its picture is, pixels on the panel.
+    std::vector<Run> runs;
+    std::optional<CGRect> picture;
+    /// Draws the frame, and the whole panel, each into a picture of its own.
+    std::function<void(Canvas&)> frame, content;
 };
 /// A note's card small, `k` pixels to a web px.
 std::optional<Drawn> small(const std::string& noteID, float k);
-/// A note's card opened in pages `pageTall` px tall, its pictures at most `pictureTall` px, `k` pixels to a web px.
-/// It is laid out once and kept until the card is put again: a picture that comes later changes no page.
-std::optional<Opened> opened(const std::string& noteID, float k, float pageTall, float pictureTall);
+/// A note's card opened in a frame `viewTall` px tall, its pictures at most `pictureTall` px, `k` pixels to a web px.
+/// It is laid out once and kept until the card is put again: a picture that comes later moves nothing.
+std::optional<Opened> opened(const std::string& noteID, float k, float viewTall, float pictureTall);
 /// Rises each time a note's card is put anew, and not when a picture comes; 0 for a note with no card.
 int generation(const std::string& noteID);
 /// The type a note's card is drawn as.

@@ -35,11 +35,9 @@ OceanNote::Kind noteKind(Kind::Opens opens) {
 /// How a card shows in the ocean: worked out once for each time it is put.
 struct Shown {
     int generation = 0;
-    /// Pixels to a web px, small.
-    float smallK = 0;
     Vec2 small, open;
-    /// A page, and the tallest picture on it, web px.
-    float pageTall = 0, pictureTall = INFINITY;
+    /// The opened card's frame, and the tallest picture in it, web px.
+    float viewTall = 0, pictureTall = INFINITY;
 };
 
 const Shown* shownOf(const std::string& noteID) {
@@ -54,16 +52,18 @@ const Shown* shownOf(const std::string& noteID) {
     auto piece = pieces().find(noteID);
     float aspect = piece != pieces().end() && piece->second.aspect ? *piece->second.aspect : pictureAspect(noteID).value_or(1.35f);
     s = Shown{now};
-    s.smallK = std::min(Metrics::smallNoteWidth / float(f->width), smallCeiling / float(f->height)) * Art::ppm;
-    s.small = {std::ceil(float(f->width) * s.smallK) / Art::ppm, std::ceil(float(f->height) * s.smallK) / Art::ppm};
-    s.open = Catalog::openSize(noteKind(kind->opens), false, aspect);
-    s.pageTall = s.open.y * Art::ppm / openScale;
+    s.small = {float(f->width) * smallScale / Art::ppm, float(f->height) * smallScale / Art::ppm};
+    // A text, chart or link card opens to the 46 by 37.2 cm box; a picture keeps the ocean's picture rule.
+    s.open = kind->opens == Kind::Opens::picture ? Catalog::openSize(noteKind(kind->opens), false, aspect)
+                                                 : Vec2{Metrics::openNoteWidth, OPEN_TALL * openScale / Art::ppm};
+    s.viewTall = s.open.y * Art::ppm / openScale;
     if (kind->opens == Kind::Opens::picture) s.pictureTall = Catalog::pictureSize(aspect).y * Art::ppm / openScale;
     return &s;
 }
 
-std::map<std::string, int>& shownPage() {
-    static std::map<std::string, int> all;
+/// How far each open card's panel is scrolled, px from its top.
+std::map<std::string, float>& scrolled() {
+    static std::map<std::string, float> all;
     return all;
 }
 
@@ -106,7 +106,7 @@ bool seat(const std::string& noteID, const Node& node) {
 std::optional<Opened> opened(const std::string& noteID, float k) {
     const Shown* s = shownOf(noteID);
     if (!s) return std::nullopt;
-    return cards::opened(noteID, k, s->pageTall, s->pictureTall);
+    return cards::opened(noteID, k, s->viewTall, s->pictureTall);
 }
 
 std::optional<Vec2> smallSize(const std::string& noteID) {
@@ -116,7 +116,7 @@ std::optional<Vec2> smallSize(const std::string& noteID) {
 
 std::optional<Piece> small(Art& art, const std::string& noteID) {
     const Shown* s = shownOf(noteID);
-    std::optional<Drawn> d = s ? cards::small(noteID, s->smallK) : std::nullopt;
+    std::optional<Drawn> d = s ? cards::small(noteID, smallScale) : std::nullopt;
     if (!d) return std::nullopt;
     return face(art, noteID, d->key, d->size, d->draw);
 }
@@ -133,43 +133,92 @@ std::optional<Piece> corners(Art& art, Vec2 size) {
     });
 }
 
-int pages(const std::string& noteID) {
+float overflow(const std::string& noteID) {
     std::optional<Opened> o = opened(noteID);
-    return o ? int(o->pages.size()) : 0;
+    return o ? std::max(0.f, (o->contentTall - o->size.height) / openScale) : 0;
 }
 
-int page(const std::string& noteID) {
-    int count = pages(noteID);
-    auto it = shownPage().find(noteID);
-    return it == shownPage().end() || count == 0 ? 0 : std::min(it->second, count - 1);
+float scroll(const std::string& noteID) {
+    auto it = scrolled().find(noteID);
+    return it == scrolled().end() ? 0 : it->second;
 }
 
-void turn(const std::string& noteID) {
-    int count = pages(noteID);
-    if (count > 1) shownPage()[noteID] = (page(noteID) + 1) % count;
+bool scrollTo(const std::string& noteID, float offset) {
+    float to = std::clamp(offset, 0.f, overflow(noteID)), was = scroll(noteID);
+    scrolled()[noteID] = to;
+    return std::fabs(to - was) > 0.01f;
 }
 
 std::optional<NoteLayout> layout(const std::string& noteID) {
     std::optional<Opened> o = opened(noteID);
     if (!o) return std::nullopt;
-    int p = page(noteID);
-    const Opened::Page& shown = o->pages[size_t(p)];
+    float off = scroll(noteID) * openScale, top = o->window.minY() + off, bottom = o->window.maxY() + off;
     NoteLayout layout{o->size};
-    layout.picture = shown.picture;
-    // A piece's picture is drawn whole inside its frame: its film plays, and a hand marks it, where it is.
-    if (auto piece = pieces().find(noteID); layout.picture && piece != pieces().end() && piece->second.aspect) {
-        layout.picture = contained(*layout.picture, *piece->second.aspect);
+    // A picture can be marked, and its film plays, only while all of it is in view at the top.
+    if (o->picture && off < 0.5f && o->picture->maxY() <= bottom) {
+        layout.picture = o->picture;
+        if (auto piece = pieces().find(noteID); piece != pieces().end() && piece->second.aspect) {
+            layout.picture = contained(*layout.picture, *piece->second.aspect);
+        }
     }
-    for (const Run& run : shown.runs) layout.blocks.push_back(std::make_shared<TextBlock>(run.text, run.at, run.width, run.lines, run.attributes));
-    layout.draw.push_back([draw = o->draw, p](Canvas& ctx) { draw(ctx, p); });
+    for (const Run& run : o->runs) {
+        if (run.at.y < top - 1 || run.at.y >= bottom) continue;
+        CGPoint at{run.at.x, run.at.y - off};
+        layout.blocks.push_back(std::make_shared<TextBlock>(run.text, at, run.width, run.lines, run.attributes));
+    }
     return layout;
 }
 
-std::optional<Piece> open(Art& art, const std::string& noteID, std::optional<int> page) {
+std::optional<Piece> open(Art& art, const std::string& noteID) {
     std::optional<Opened> o = opened(noteID);
     if (!o) return std::nullopt;
-    int p = std::clamp(page.value_or(ocean::page(noteID)), 0, int(o->pages.size()) - 1);
-    return face(art, noteID, o->key + "/" + std::to_string(p), o->size, [&](Canvas& ctx) { o->draw(ctx, p); });
+    return face(art, noteID, o->key, o->size, o->frame);
+}
+
+std::optional<Piece> panel(Art& art, const std::string& noteID) {
+    std::optional<Opened> o = opened(noteID);
+    if (!o) return std::nullopt;
+    return face(art, noteID, o->key + "/panel", CGSize{o->size.width, o->contentTall}, o->content);
+}
+
+void showPanel(const EntityRef& quad, const std::string& noteID) {
+    std::optional<Opened> o = opened(noteID);
+    if (!(quad && quad->model && o)) return;
+    const CGRect& w = o->window;
+    float off = scroll(noteID) * openScale, tall = std::max(1.f, o->contentTall);
+    float hw = w.width() / 2 / Art::ppm, hh = w.height() / 2 / Art::ppm;
+    Vec2 c{(w.midX() - o->size.width / 2) / Art::ppm, (o->size.height / 2 - w.midY()) / Art::ppm};
+    float u0 = w.minX() / o->size.width, u1 = w.maxX() / o->size.width;
+    float vTop = 1 - (w.minY() + off) / tall, vBottom = 1 - (w.maxY() + off) / tall;
+    std::vector<Vec3> positions{{c.x - hw, c.y - hh, 0}, {c.x + hw, c.y - hh, 0}, {c.x + hw, c.y + hh, 0}, {c.x - hw, c.y + hh, 0}};
+    std::vector<Vec2> uvs{{u0, vBottom}, {u1, vBottom}, {u1, vTop}, {u0, vTop}};
+    // A bent card shows its own mesh in place of the flat one: that is given a new flat one, which it bends again.
+    if (quad->model->mesh && !quad->model->mesh->isLowLevel()) {
+        quad->model->mesh->replace(std::move(positions), std::move(uvs), {0, 1, 2, 0, 2, 3});
+    } else {
+        quad->model->mesh = Mesh::generate(std::move(positions), std::move(uvs), {0, 1, 2, 0, 2, 3});
+    }
+}
+
+std::optional<Vec2> window(const std::string& noteID) {
+    std::optional<Opened> o = opened(noteID);
+    if (!o) return std::nullopt;
+    return Vec2{(o->size.height / 2 - o->window.maxY()) / Art::ppm, (o->size.height / 2 - o->window.minY()) / Art::ppm};
+}
+
+void showIndicator(const EntityRef& bar, const std::string& noteID) {
+    std::optional<Opened> o = opened(noteID);
+    if (!(bar && o)) return;
+    float most = overflow(noteID);
+    bar->isEnabled = most > 0;
+    if (most <= 0) return;
+    // 4 px wide inside the right edge, on a track 12 px from the top and the foot; the thumb is the share in view.
+    float track = o->size.height - 2 * INDICATOR_END * openScale, view = o->window.height();
+    float tall = std::max(track * view / (view + most * openScale), 16 * openScale);
+    float y = INDICATOR_END * openScale + (track - tall) * (scroll(noteID) / most);
+    bar->scale = {1, tall / Art::ppm / INDICATOR_UNIT, 1};
+    bar->position = {(o->size.width / 2 - (INDICATOR_EDGE + INDICATOR_WIDE / 2) * openScale) / Art::ppm,
+                     (o->size.height / 2 - y - tall / 2) / Art::ppm, 0.0006f};
 }
 
 }  // namespace cards::ocean

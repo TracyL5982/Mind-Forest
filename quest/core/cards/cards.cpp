@@ -27,21 +27,17 @@ struct Sized {
     /// The chips as the line draws them.
     std::vector<Chip> line;
 };
-Sized sized(const Kind& kind, const Item& item, const Json& props) {
-    Footprint f = kind.size(item, props);
-    std::vector<Chip> all = chips(item, kind.showsOf ? kind.showsOf(item, props) : kind.shows);
-    if (all.empty()) return {f, {}};
-    return {{f.width, f.height + CHIP_LINE}, fit(all, f.width - 2 - 2 * kind.chipInset)};
-}
+/// The small face holds no chips on the Quest: they are listed on the opened card (the sizing spec, section 1).
+Sized sized(const Kind& kind, const Item& item, const Json& props) { return {kind.size(item, props), {}}; }
 
-/// The opened card laid out once, for the page and picture heights it was asked for.
+/// The opened card laid out once, for the view and picture heights it was asked for.
 struct Laid {
-    float k, pageTall, pictureTall;
+    float k, viewTall, pictureTall;
     std::vector<Block> blocks;
     std::vector<Run> runs;
     std::optional<CGRect> picture;
-    std::vector<Span> pages;
-    bool cut = false;
+    /// Where the panel ends, px.
+    float end = 0;
 };
 
 struct Entry {
@@ -145,51 +141,16 @@ const char* label(Chip::Kind kind) {
     return "";
 }
 
-constexpr float WIDTH = 384, TOP = 16, FOOT = 17, MARK = 22;
-/// The least a picture is shrunk to so it stays on the first page, px.
+constexpr float WIDTH = 384;
+/// The panel shows through a window inside the card's frame, clear of its round corners, px.
+constexpr float INSET_X = 3, INSET_Y = 10;
+/// The least a picture is shrunk to so it shows whole in the first view, px.
 constexpr float LEAST = 140;
-
-/// The panel `end` px long cut into pages `tall` px tall: each page ends where a part does, or between two
-/// lines of one. Only a part with no such place that is taller than a page is cut, and `cut` says so.
-std::vector<Span> paginate(const std::vector<Block>& blocks, float end, float tall, bool& cut) {
-    if (end + FOOT <= tall) return {Span{0, end}};
-    std::vector<float> ends;
-    for (const Block& b : blocks) {
-        ends.push_back(b.top + b.height);
-        for (float at : b.breaks) ends.push_back(b.top + at);
-    }
-    std::sort(ends.begin(), ends.end());
-    std::vector<Span> pages;
-    float from = 0;
-    while (from < end) {
-        float room = tall - (pages.empty() ? 0 : TOP) - FOOT - MARK, limit = from + room;
-        if (end <= limit) {
-            pages.push_back({from, end});
-            break;
-        }
-        float to = from;
-        for (float at : ends) {
-            if (at > from + 1 && at <= limit) to = at;
-        }
-        if (to <= from) {
-            to = limit;
-            cut = true;
-        }
-        pages.push_back({from, to});
-        from = to;
-        // The gap between two parts starts no page.
-        for (const Block& b : blocks) {
-            if (b.top >= from - 0.5f) {
-                from = std::max(from, std::min(b.top, end));
-                break;
-            }
-        }
-    }
-    return pages;
-}
+/// The tallest panel a card draws, px: ten views or so, within what one texture holds.
+constexpr float LONGEST = 3200;
 
 /// The web's panel (panel.js) laid out top to bottom, its badge first.
-Laid layOut(const Entry& e, float k, float pageTall, float pictureTall) {
+Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
     const Kind& kind = *e.view.kind;
     const Item& item = e.item;
     Look look = lookOf(e);
@@ -221,10 +182,10 @@ Laid layOut(const Entry& e, float k, float pageTall, float pictureTall) {
             pen.words(why, Sheet::left, y + 16.1f, Sheet::width, 0, setting::why, pick ? palette::ink2 : palette::ink);
         });
     }
-    // A picture is no taller than what the first page has left under the title, or, when that is too little
-    // to show one, than a page.
-    float under = pageTall - FOOT - MARK - sheet.y - Sheet::gap;
-    sheet.most = std::min(pictureTall, under >= LEAST ? under : pageTall - TOP - FOOT - MARK);
+    // A picture is no taller than what the first view has left under the title, or, when that is too little
+    // to show one, than a view.
+    float under = viewTall - INSET_Y - sheet.y - Sheet::gap;
+    sheet.most = std::min(pictureTall, under >= LEAST ? under : viewTall - 2 * INSET_Y);
     kind.detail(sheet, item, e.view.props);
 
     // The sources, in full, as `chipSources` lists them.
@@ -310,59 +271,37 @@ Laid layOut(const Entry& e, float k, float pageTall, float pictureTall) {
         },
         breaks);
 
-    Laid laid{k, pageTall, pictureTall, std::move(sheet.blocks), std::move(sheet.runs), sheet.picture, {}, false};
-    laid.pages = paginate(laid.blocks, sheet.y, pageTall, laid.cut);
-    return laid;
+    return Laid{k, viewTall, pictureTall, std::move(sheet.blocks), std::move(sheet.runs), sheet.picture, std::min(sheet.y + 16, LONGEST)};
 }
 
 Opened open(const std::string& noteID, const Entry& e) {
     const Laid& laid = *e.laid;
-    float k = laid.k, width = WIDTH, height = laid.pageTall;
-    int count = int(laid.pages.size());
+    // The panel runs on until its end can stand at the window's foot.
+    float k = laid.k, width = WIDTH, height = laid.viewTall, end = std::max(laid.end + INSET_Y, height);
     Opened out;
     out.key = "card-o:" + noteID + "#" + std::to_string(e.revision);
     out.size = CGSize{std::ceil(width * k), std::ceil(height * k)};
-    out.cut = laid.cut;
-    for (int i = 0; i < count; i++) {
-        Span span = laid.pages[size_t(i)];
-        float pad = i == 0 ? 0 : TOP, shift = (pad - span.from) * k;
-        Opened::Page page;
-        for (const Run& run : laid.runs) {
-            float top = run.at.y / k;
-            if (top + 1 < span.from || top >= span.to) continue;
-            Run moved = run;
-            moved.at.y += shift;
-            page.runs.push_back(moved);
-        }
-        if (laid.picture && laid.picture->minY() / k >= span.from - 1 && laid.picture->minY() / k < span.to) {
-            page.picture = CGRect{laid.picture->minX(), laid.picture->minY() + shift, laid.picture->width(), laid.picture->height()};
-        }
-        out.pages.push_back(page);
-    }
-    std::vector<Block> blocks = laid.blocks;
-    std::vector<Span> pages = laid.pages;
-    bool pick = e.node.pick;
-    out.draw = [=](Canvas& ctx, int i) {
+    out.window = CGRect{INSET_X * k, INSET_Y * k, (width - 2 * INSET_X) * k, (height - 2 * INSET_Y) * k};
+    out.contentTall = std::ceil(end * k);
+    out.runs = laid.runs;
+    out.picture = laid.picture;
+    out.frame = [=](Canvas& ctx) {
         Pen pen{ctx, k};
         Look panel;
         panel.fill = palette::glass;
         panel.edge = palette::line;
         panel.radius = 20;
         pen.face(width, height, panel);
-        Span span = pages[size_t(i)];
-        float pad = i == 0 ? 0 : TOP;
-        ctx.saveGState();
-        ctx.clip(pen.px(0, pad, width, span.to - span.from));
-        for (const Block& b : blocks) {
-            if (b.top < span.to && b.top + b.height > span.from) b.draw(pen, b.top - span.from + pad);
-        }
-        ctx.restoreGState();
-        if (count > 1) {
-            std::string mark = std::to_string(i + 1) + " / " + std::to_string(count);
-            float w = std::ceil(widthOf(mark, setting::fact, k)) + 1;
-            pen.words(mark, width - Sheet::left - w, height - FOOT - MARK + 4, w, 1, setting::fact, palette::ink3);
-        }
         pen.edge(width, height, panel);
+    };
+    std::vector<Block> blocks = laid.blocks;
+    out.content = [=](Canvas& ctx) {
+        Pen pen{ctx, k};
+        ctx.setFillColor(palette::glass);
+        ctx.fill(pen.px(0, 0, width, end));
+        for (const Block& b : blocks) {
+            if (b.top < end) b.draw(pen, b.top);
+        }
     };
     return out;
 }
@@ -457,11 +396,10 @@ std::optional<Drawn> small(const std::string& noteID, float k) {
     const Entry& e = it->second;
     Look look = lookOf(e);
     Footprint f = e.sized.size;
-    std::vector<Chip> line = e.sized.line;
     const Kind* kind = e.view.kind;
     Item item = e.item;
     Json props = e.view.props;
-    float w = float(f.width), h = float(f.height), body = line.empty() ? h : h - CHIP_LINE;
+    float w = float(f.width), h = float(f.height), body = h;
     bool pick = e.node.pick;
     Drawn d;
     d.key = "card-s:" + noteID + "#" + std::to_string(e.revision);
@@ -470,7 +408,6 @@ std::optional<Drawn> small(const std::string& noteID, float k) {
         Pen pen{ctx, k};
         pen.face(w, h, look);
         kind->draw(pen, look, item, props, w, body);
-        if (!line.empty()) pen.chips(line, 1 + float(kind->chipInset), h - 1 - float(kind->chipBottom) - 20, look);
         pen.corners(w, h, look.radius);
         pen.edge(w, h, look);
         if (pick) suggested(pen, look, *kind);
@@ -478,11 +415,11 @@ std::optional<Drawn> small(const std::string& noteID, float k) {
     return d;
 }
 
-std::optional<Opened> opened(const std::string& noteID, float k, float pageTall, float pictureTall) {
+std::optional<Opened> opened(const std::string& noteID, float k, float viewTall, float pictureTall) {
     auto it = store().find(noteID);
     if (it == store().end()) return std::nullopt;
     Entry& e = it->second;
-    if (!e.laid || e.laid->k != k || e.laid->pageTall != pageTall || e.laid->pictureTall != pictureTall) e.laid = layOut(e, k, pageTall, pictureTall);
+    if (!e.laid || e.laid->k != k || e.laid->viewTall != viewTall || e.laid->pictureTall != pictureTall) e.laid = layOut(e, k, viewTall, pictureTall);
     return open(noteID, e);
 }
 

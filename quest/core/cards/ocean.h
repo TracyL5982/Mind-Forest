@@ -1,11 +1,11 @@
 // Where the ocean's notes meet the card library: notes.cpp, catalog.cpp and the scene ask these first, and a
 // note with a card is drawn as the web client draws it. Everything here answers nothing for a note without one.
 //
-// A card takes the ocean's own sizes. Small, it is as wide as the ocean's small note, and no taller than
-// `smallCeiling`. Opened, it is the
-// ocean's open note of the kind it opens as (Kind::opens), and what the web's panel holds beyond that
-// note's height goes on further pages of the same size. Both are worked out when the scene first asks
-// for them and kept until the card is put again, so a picture that comes later never moves a card.
+// A card takes the sizing spec's sizes (sizing/quest-card-sizing.md). Small, one web px is a millimetre at
+// 1.5 m, so a face is at most 21 by 14.6 cm. Opened, a text, chart or link card is a fixed 46 by 37.2 cm frame,
+// a picture card the ocean's open note for its picture, and the web's whole panel shows through a window in
+// the frame and scrolls there. Both sizes are worked out when the scene first asks for them and kept until
+// the card is put again, so a picture that comes later never moves a card.
 //
 // Under `-cards` the ocean's own notes, films and works are cards too (pieces.h). Each is made the first
 // time the scene asks about it, under the id `cardOf` gives, and its sizes come from the ocean's own
@@ -22,9 +22,14 @@ namespace cards::ocean {
 
 /// The web's px to the opened card's pixels: the web's 384 px panel is as wide as the ocean's open note.
 constexpr float openScale = Metrics::openNoteWidth * Art::ppm / 384;
-/// The tallest a card is small, m: about the ocean's tallest small card, a portrait film with its title on a
-/// label under it (Art::filmSmall). A card that would be taller at the small note's width is drawn smaller.
-constexpr float smallCeiling = Metrics::smallFilmMaxHeight + 0.006f + 1.2f * Art::Size::label + 2 * Art::pad.y;
+/// The web's px to the small face's pixels: a px is a millimetre.
+constexpr float smallScale = Art::ppm / 1000;
+/// The opened frame of a text, chart or link card, px: 37.2 cm.
+constexpr float OPEN_TALL = 311;
+/// The scroll indicator: its height before it is stretched to the share in view, m; and, px, its width, how
+/// far it stands in from the frame's right edge, and how far its track stops short of the top and the foot.
+constexpr float INDICATOR_UNIT = 0.01f;
+constexpr float INDICATOR_WIDE = 4, INDICATOR_EDGE = 4, INDICATOR_END = 12;
 
 /// Draws the notes, films and works of `catalog` as cards from now on (`-cards`).
 void hold(const std::shared_ptr<const Catalog>& catalog);
@@ -39,21 +44,30 @@ bool seat(const std::string& noteID, const Node& node);
 std::optional<Vec2> smallSize(const std::string& noteID);
 /// Its picture.
 std::optional<Piece> small(Art& art, const std::string& noteID);
-/// A note's card opened, m: one page.
+/// A note's card opened, m: its frame.
 std::optional<Vec2> openSize(const std::string& noteID);
-/// Where the parts of the page it shows sit: the words a hand can mark and its picture.
+/// Where the parts of the panel in view sit, at the scroll it stands at: the words a hand can mark and its picture.
 std::optional<NoteLayout> layout(const std::string& noteID);
-/// The picture of the page it shows, or of another page, made ahead so it is there when it is wanted.
-std::optional<Piece> open(Art& art, const std::string& noteID, std::optional<int> page = std::nullopt);
+/// The frame's picture.
+std::optional<Piece> open(Art& art, const std::string& noteID);
+/// The whole panel's picture, made with the frame's, before the card can open.
+std::optional<Piece> panel(Art& art, const std::string& noteID);
+/// Sets a quad of the panel's picture to show the part of it in the window, at the scroll it stands at.
+void showPanel(const EntityRef& quad, const std::string& noteID);
+/// How far the panel runs on past the window, px: 0 when it fits.
+float overflow(const std::string& noteID);
+/// How far it is scrolled, px from its top. It is 0 until scrolled, and is set to 0 when the card opens.
+float scroll(const std::string& noteID);
+/// Scrolls it, held between its top and its end. True when it moved.
+bool scrollTo(const std::string& noteID, float offset);
+/// The window's foot and top on the frame, m from its middle.
+std::optional<Vec2> window(const std::string& noteID);
+/// Places and sizes the thin bar at the frame's edge that says where the view is, and hides it while the panel fits.
+void showIndicator(const EntityRef& bar, const std::string& noteID);
 /// The round corners of an opened card's picture, `size` m, to lay over a film that plays on it: the
 /// opened card's face outside each corner, clear inside, as the poster under the film is cut.
 std::optional<Piece> corners(Art& art, Vec2 size);
-/// How many pages it has (0 for a note with no card), and which it shows, from 0.
-int pages(const std::string& noteID);
-int page(const std::string& noteID);
-/// Shows its next page, or its first after its last.
-void turn(const std::string& noteID);
-/// Its pages, `k` pixels to a web px (the scene's `openScale`).
+/// Its frame and panel, `k` pixels to a web px (the scene's `openScale`).
 std::optional<Opened> opened(const std::string& noteID, float k = openScale);
 
 }  // namespace cards::ocean

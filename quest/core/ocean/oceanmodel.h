@@ -307,8 +307,7 @@ private:
     std::optional<int> zoomedFor;
     std::optional<float> magnifyBase;
     struct Pick {
-        // NOTE(port): `page` added for Quest: the row that turns a card's pages (core/cards).
-        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink, page };
+        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink };
         Kind kind = Kind::background;
         int index = 0;                      // card, ask, askMark, openLink: the card; speck: the piece; brief: which one; shelf: the cover's uid
         int question = 0;                   // ask: which of the card's questions
@@ -324,7 +323,6 @@ private:
         static Pick ask(int id, int question) { return {Kind::ask, id, question}; }
         static Pick askMark(int id) { return {Kind::askMark, id, 0}; }
         static Pick openLink(int id) { return {Kind::openLink, id, 0}; }
-        static Pick page(int id) { return {Kind::page, id, 0}; }
     };
     // (Keyed by the entity's address: ObjectIdentifier.)
     std::map<const Entity*, Pick> picks;
@@ -336,6 +334,17 @@ private:
         Vec3 start;
         bool cancelled;
         std::vector<int> riders;
+        // NOTE(port): added for Quest (core/cards). Under `-cards` a pinch on the open card scrolls it or, held
+        // still first, marks it: when it began, where it is now, whether the hold has armed a mark, and what
+        // the drag was claimed for. A claimed drag is never a tap.
+        enum class Claim { open, scroll, mark, spent };
+        double began = 0;
+        Vec3 at = Vec3::zero();
+        bool armed = false;
+        Claim claim = Claim::open;
+        /// Scrolling: the offset, px, and the point on the face, m, where the scroll was claimed.
+        float scrollFrom = 0;
+        Vec2 scrollAt = Vec2::zero();
     };
     std::optional<Press> press;
     double time = 0.0;
@@ -745,8 +754,24 @@ private:
 
     void openLink(int nodeID);
 
-    /// NOTE(port): added for Quest. Shows the next page of an open card's face (core/cards).
-    void turnPage(int nodeID);
+    // NOTE(port): added for Quest (core/cards). An open card's panel scrolls inside its frame, and a pinch held
+    // still arms a mark first (`-cards`).
+    /// Scrolls an open card's panel to `offset` px from its top, held to its range, and moves what is shown on it.
+    void scrollCard(CardView& c, float offset);
+    void solid(const EntityRef& quad);
+    /// When the card has finished growing and the layer has stopped gliding.
+    double settledAt(const CardView& c) const;
+    /// Arms a mark at `a` on the open face when it lies on words or the picture: the word takes the mark's
+    /// stroke, the picture an outline. False, and nothing shown, anywhere else.
+    bool arm(CardView& c, Vec2 a);
+    void disarm(CardView& c);
+    /// Checks each frame whether the pinch on the open card has been held still long enough to arm.
+    void holdPress();
+    /// A point of a card's open face in the world, for pinches made by flag.
+    Vec3 facePoint(const CardView& c, Vec2 at) const;
+    /// Pinches the open card by flag, as a hand would: held `hold` s at `from`, then drawn to `to` over `over` s.
+    void pinchByFlag(Vec2 from, Vec2 to, double hold, double over);
+    bool cardGestures = false;
 
     void moveLayer(int direction);
 
