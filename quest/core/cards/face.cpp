@@ -54,9 +54,9 @@ std::string ellipsized(const std::string& s, int lines, const std::function<int(
     return cuts.empty() ? "\u2026" : at(cuts[lo]);
 }
 
-Titled titled(const std::string& title, float column, Measure m) {
+Titled titled(const std::string& title, float column, Measure m, int most) {
     if (title.empty()) return {};
-    std::string said = ellipsized(title, face::TITLE_LINES, [&](const std::string& s) { return counted(s, int(column), m); });
+    std::string said = ellipsized(title, most, [&](const std::string& s) { return counted(s, int(column), m); });
     return {said, counted(said, int(column), m)};
 }
 
@@ -190,11 +190,11 @@ int Col::lines(const std::string& s, Measure m, int max, Color color, float afte
     return shown;
 }
 
-bool Col::title(const std::string& s, float atX, float column) {
+bool Col::title(const std::string& s, float atX, float column, int most) {
     if (ended) return false;
     if (s.empty()) return true;
     float w = column > 0 ? column : width, at = atX < 0 ? x : atX;
-    Titled t = titled(s, w, Measure::title);
+    Titled t = titled(s, w, Measure::title, most);
     say(t.said, setting::faceTitle, t.lines, at, y, w, palette::ink);
     y += float(t.lines * face::TITLE);
     inked = y;
