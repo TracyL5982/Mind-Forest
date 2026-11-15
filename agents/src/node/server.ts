@@ -292,7 +292,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
 
   wss.on('connection', (ws: WebSocket) => {
     sockets.add(ws);
-    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser' }));
+    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser', live: Boolean(opts.live) }));
     ws.on('close', () => {
       sockets.delete(ws);
       plays.delete(ws);

@@ -5,6 +5,7 @@ import { Panel } from './panel.js';
 import { bindField, bindDump, textDump } from './input.js';
 import { Voice, speak, hush, watchReplies } from './voice.js';
 import { HandsFree, wakeProblem } from './wake.js';
+import { LiveVoice } from './live.js';
 import { HandoffSheet, WorkLog, bindGate, bindSettings, bindTelegram, caption, showGate, showKnowledge, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
 
 const $ = (id) => document.getElementById(id);
@@ -25,6 +26,8 @@ let drawQueued = false;
 let refit = false;
 let muted = false;
 let voiced = false;
+/** Momo's live voice, once the service is reached: it speaks every reply itself while it is ready. */
+let live = null;
 try { muted = localStorage.getItem(MUTED) === '1'; } catch { /* keeps the default */ }
 
 function send(message) {
@@ -103,6 +106,15 @@ function receive(message) {
       showMic();
       voiced = message.voice === true;
       voice.serviceHears = message.hearing === 'service';
+      if (message.live) live ??= new LiveVoice({
+        token: conn.token,
+        name: agentName,
+        onReady: (on) => handsFree.stream(on),
+        onOver: () => handsFree.over(),
+        onSpeaking: (playing, interruptible) => handsFree.replyPlaying(playing, interruptible),
+        onText: (text) => caption('librarian', text),
+      });
+      if (live) live.muted = muted;
       showSettings(store.settings);
       log.reset();
       for (const id of field.thinking.keys()) field.thinking.set(id, 0);
@@ -321,6 +333,7 @@ const voice = new Voice({
 /** A reply that arrives while the user is being recorded waits until the recording ends, so it is not recorded into what they say. */
 let waitingReply = null;
 function reply(text) {
+  if (live?.ready) return;
   if (handsFree.state === 'hearing') waitingReply = text;
   else speak(text, voiced ? conn.speechUrl(text) : null);
 }
@@ -344,6 +357,9 @@ const handsFree = new HandsFree({
     }
     handsFree.done();
   },
+  onStart: () => live?.start(scene()),
+  onPiece: (pcm) => live?.audio(pcm),
+  onEnd: (said) => (said ? live?.end() : live?.cancel()),
 });
 watchReplies((playing) => handsFree.replyPlaying(playing));
 /** For scripts/wake-check.ts, which measures how hard the listener works. */
@@ -358,6 +374,7 @@ $('mic').addEventListener('click', async () => {
       return toast(`This page cannot listen for "Hey ${agentName()}": ${cannotListen}. Tap the microphone again to talk once.`);
     }
   }
+  live?.unlock();
   if (cannotListen === null) return handsFree.on ? handsFree.stop() : handsFree.start(agentName());
   voice.toggle();
 });
@@ -369,6 +386,8 @@ function showMute() {
 $('mute').addEventListener('click', () => {
   muted = !muted;
   if (muted) hush();
+  if (live) live.muted = muted;
+  if (muted) live?.stop();
   try { localStorage.setItem(MUTED, muted ? '1' : '0'); } catch { /* lasts for this visit only */ }
   showMute();
 });

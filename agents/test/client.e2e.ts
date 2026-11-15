@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
+import type { OpenRealtime } from '../src/node/live.ts';
 import { startServer, type Running } from '../src/node/server.ts';
 import { COMPONENT_IDS, STRUCTURED_IDS } from '../src/core/samples.ts';
 import { CHIPPED, LONG_PLACE, PLACED, PNG, STRUCTURED, bootFake, browserPath, chipped, crowd, showcase, spills, unknownShape } from './stage.ts';
@@ -1030,6 +1031,80 @@ async function wakeChecks(): Promise<void> {
   }
 }
 
+/**
+ * The page with the service's live voice, played by a scripted realtime model: after "hey Momo" the page streams the microphone to /live,
+ * the model's first answer calls act, and the pipeline's reply comes back as the act's result and is played as Momo's voice.
+ */
+async function liveChecks(): Promise<void> {
+  if (!existsSync(join(here, '../client/vendor/sherpa-onnx/versions.json'))) return console.log('skip the live voice checks: they need the real spotter (npm run fetch-wake)');
+  const dir = mkdtempSync(join(tmpdir(), 'mp-live-'));
+  const acted: string[] = [];
+  const spoke: string[] = [];
+  const appended: number[] = [];
+  const outputs: string[] = [];
+  /** A tenth of a second of a tone, as the model's voice: 24 kHz 16-bit PCM. */
+  const tone = Buffer.alloc(4800);
+  for (let i = 0; i < 2400; i++) tone.writeInt16LE(Math.round(8000 * Math.sin((2 * Math.PI * 440 * i) / 24000)), i * 2);
+  const open: OpenRealtime = (on) => {
+    let responses = 0;
+    const respond = (words: string, act?: string) => {
+      const id = `r${++responses}`;
+      setTimeout(() => {
+        on.event({ type: 'response.created', response: { id } });
+        for (let k = 0; k < 8; k++) on.event({ type: 'response.output_audio.delta', response_id: id, delta: tone.toString('base64') });
+        on.event({ type: 'response.output_audio_transcript.delta', response_id: id, delta: words });
+        if (act) on.event({ type: 'response.function_call_arguments.done', response_id: id, name: 'act', call_id: `call-${id}`, arguments: JSON.stringify({ request: act }) });
+        on.event({ type: 'response.done', response: { id, status: 'completed' } });
+      }, 50);
+    };
+    return {
+      send(e) {
+        if (e.type === 'input_audio_buffer.append') {
+          appended.push(Buffer.from(e.audio as string, 'base64').length / 2 / 24000);
+          if (appended.length === 12) respond('Sure, more like this.', 'show me more like this');
+        }
+        if (e.type === 'conversation.item.create') outputs.push(JSON.stringify(e.item));
+        if (e.type === 'response.create') respond('Bringing more.');
+      },
+      close() {},
+    };
+  };
+  const server = await startServer({
+    port: 0, host: '127.0.0.1', dataDir: mkdtempSync(join(dir, 'data-')), clientDir: join(here, '../client'), model: new FakeModel(), token: 'secret',
+    roles: { ...fakeRoles, conductor: async (ctx, input) => (acted.push(input.utterance), fakeRoles.conductor(ctx, input)) },
+    transcribe: async () => 'not used',
+    speak: async (text) => (spoke.push(text), new Response(new Uint8Array(0)).body!),
+    live: { open, options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' } } },
+  });
+  await server.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: Sourdough rises slowly in winter' }]);
+  await server.pipeline.idle();
+  try {
+    await check('with a live voice, the page streams what follows "hey Momo", plays Momo as it comes, and leaves replies to it', async () => {
+      const { browser, page, problems, micStates } = await openWithMicrophone(server, spoken('Hey Momo, show me more like this.', dir, 3));
+      try {
+        await page.locator('.card').first().click();
+        await page.locator('#mic').click();
+        await until('the act reaching the Conductor', async () => acted.length === 1, 20000);
+        assert.equal(acted[0], 'show me more like this');
+        await until('the reply given back as the act\'s result', async () => outputs.some((o) => o.includes('function_call_output')), 10000);
+        await until('Momo heard and the page waiting again', async () => (await micStates()).join().endsWith('speaking,waiting'), 10000);
+        const states = await micStates();
+        assert.ok(states.includes('hearing') && !states.includes('working'), `streamed, not recorded: ${states.join()}`);
+        const seconds = appended.reduce((a, b) => a + b, 0);
+        assert.ok(seconds > 0.5 && seconds < 3, `only what followed the name was sent, not the quiet before it: ${seconds.toFixed(2)} s`);
+        assert.deepEqual(spoke, [], 'the page did not speak the reply itself');
+        await page.locator('#caption').getByText('Bringing more.').waitFor();
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+  } finally {
+    await server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 const dataDir = mkdtempSync(join(tmpdir(), 'mp-e2e-'));
 const boot = (port: number) => bootFake({ port, dataDir, asPlaced: (treeId) => treeId === PLACED });
 let run: Running = await boot(0);
@@ -1037,6 +1112,7 @@ try {
   // E2E_WAKE_ONLY=1 runs only the listening checks.
   if (!process.env.E2E_WAKE_ONLY) await main();
   await wakeChecks();
+  await liveChecks();
   console.log(`\n${passed} checks passed. Screenshots are in ${shots}.`);
   if (failed.length > 0) {
     console.log(`${failed.length} failed:\n${failed.map((name) => `  ${name}`).join('\n')}`);

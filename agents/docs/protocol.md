@@ -74,7 +74,7 @@ A client fetches only from the service. Every address in an item or a view that 
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `hello` | `protocol`, `snapshot`, `settings`, `undo`, `voice`, `hearing` | Sent once on connect. `settings.agentName` is what the user calls the agent, `momo` unless renamed (see Voice). `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
+| `hello` | `protocol`, `snapshot`, `settings`, `undo`, `voice`, `hearing`, `live` | Sent once on connect. `settings.agentName` is what the user calls the agent, `momo` unless renamed (see Voice). `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. `live` is true when the service has Momo's live voice on `/live` (see Voice). `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
 | `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. `set.seq` is exactly one more than the last `seq` the client holds, from `hello.snapshot.seq` or the previous `change`. Any other value means the client missed a change: reconnect for a fresh `hello`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
 | `activity` | `activity` | Work state: `id`, `role`, `state` (`start`, `done`, `error`), `message`, optional `nodeId`. Show a thinking mark on `nodeId` between `start` and `done`. |
 | `say` | `text` | One short line for the agent to speak. |
@@ -155,7 +155,7 @@ The service drops a leading wake phrase from `/api/transcribe` replies and from 
 
 ### The live voice: `/live`
 
-When the service has a live voice (an OpenAI key, and `MIND_PALACE_LIVE` is not `off`), a client can talk to Momo in real time on a second WebSocket, `/live?token=<token>`. Without one the upgrade is refused with 404, and the client uses the path above. The service holds one OpenAI realtime session per `/live` socket, opened at the first wake and closed after 5 quiet minutes or with the socket. The key stays in the service. Audio is base64 of 16-bit little-endian mono PCM, one JSON object per text frame.
+When the service has a live voice (an OpenAI key, and `MIND_PALACE_LIVE` is not `off`), `hello.live` is true and a client can talk to Momo in real time on a second WebSocket, `/live?token=<token>`. Without one the upgrade is refused with 404, and the client uses the path above. The service holds one OpenAI realtime session per `/live` socket, opened at the first wake and closed after 5 quiet minutes or with the socket. The key stays in the service. Audio is base64 of 16-bit little-endian mono PCM, one JSON object per text frame.
 
 Service to client:
 

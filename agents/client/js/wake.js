@@ -17,12 +17,17 @@ export async function wakeProblem() {
 /**
  * Hands-free talking. While on, the page listens on this device for "hey <name>" or "hi <name>" and sends no sound anywhere.
  * On the phrase it chimes, records until the speaker pauses, and hands the recording to `onRecorded`. It does not listen while a reply plays.
+ * Streaming (`stream(true)`, for the service's live voice), it calls `onStart` on the phrase and hands each piece after it to `onPiece`
+ * until `over()`; `onEnd(said)` says it stopped by itself, with nothing said or at its longest. While an interruptible reply plays it
+ * still listens for the phrase, so saying it stops the reply.
  * state: 'off' | 'starting' | 'waiting' | 'hearing' | 'working' | 'speaking'
  */
 export class HandsFree {
-  constructor({ onState, onRecorded, onProblem }) {
-    Object.assign(this, { onState, onRecorded, onProblem });
+  constructor({ onState, onRecorded, onProblem, onStart, onPiece, onEnd }) {
+    Object.assign(this, { onState, onRecorded, onProblem, onStart, onPiece, onEnd });
     this.state = 'off';
+    this.streams = false;
+    this.interruptible = false;
     this.replying = false;
     this.parts = null;
     this.resume = null;
@@ -52,6 +57,7 @@ export class HandsFree {
         };
         worker.onerror = (event) => failed(new Error(event.message || 'the listener did not load'));
         worker.postMessage({ t: 'start', name, tuning: TUNING, audio: channel.port2 }, [channel.port2]);
+        worker.postMessage({ t: 'stream', on: this.streams });
       });
       current();
       parts.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -90,6 +96,19 @@ export class HandsFree {
     this.parts?.worker.postMessage({ t: 'name', name });
   }
 
+  /** From the next phrase on, what follows it is streamed (true) or recorded (false). */
+  stream(on) {
+    this.streams = on;
+    this.parts?.worker.postMessage({ t: 'stream', on });
+  }
+
+  /** Streaming, the turn has been heard: listen for the name again. */
+  over() {
+    this.parts?.worker.postMessage({ t: 'over' });
+    if (this.state === 'hearing') this.set('waiting');
+    this.sync();
+  }
+
   /** The recording has been dealt with: listen for the name again. */
   done() {
     if (this.state === 'working') this.set('waiting');
@@ -97,9 +116,10 @@ export class HandsFree {
   }
 
   /** A reply started or stopped playing. The room's echo of it fades for a moment before listening starts again. */
-  replyPlaying(playing) {
+  replyPlaying(playing, interruptible = false) {
     clearTimeout(this.resume);
     this.replying = true;
+    this.interruptible = playing && interruptible;
     this.resume = setTimeout(() => {
       this.replying = false;
       this.sync();
@@ -125,7 +145,15 @@ export class HandsFree {
     if (m.t === 'wake') {
       chime(this.parts?.context);
       this.set('hearing');
+      if (m.streaming) this.onStart();
+    } else if (m.t === 'piece') {
+      this.onPiece(m.pcm);
+    } else if (m.t === 'cut') {
+      this.onEnd(true);
+      this.set('waiting');
+      this.sync();
     } else if (m.t === 'nothing') {
+      if (this.streams) this.onEnd(false);
       this.set('waiting');
       this.sync();
       this.onProblem('Nothing was said after the name.');
@@ -144,7 +172,7 @@ export class HandsFree {
   sync() {
     if (!this.parts || (this.state !== 'waiting' && this.state !== 'speaking')) return;
     this.set(this.replying ? 'speaking' : 'waiting');
-    this.parts.worker.postMessage({ t: this.replying ? 'hold' : 'listen' });
+    this.parts.worker.postMessage({ t: this.replying && !this.interruptible ? 'hold' : 'listen' });
   }
 
   set(state) {
