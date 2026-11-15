@@ -62,12 +62,27 @@ const counting: typeof fetch = async (input, init) => {
   }
   return res;
 };
+type Usage = { input_tokens?: number; output_tokens?: number; output_tokens_details?: { reasoning_tokens?: number } };
+/** The usage a reply reports, read from the body whole or from the last event of a stream. */
+function usageOf(body: string): Usage {
+  try {
+    return ((JSON.parse(body) as { usage?: Usage }).usage ?? {});
+  } catch {
+    const completed = body.split('\n').filter((l) => l.startsWith('data:') && l.includes('"response.completed"')).at(-1);
+    return completed ? ((JSON.parse(completed.slice(5)) as { response?: { usage?: Usage } }).response?.usage ?? {}) : {};
+  }
+}
 const metaFetch: typeof fetch = async (input, init) => {
   const start = at();
   const res = await tracked(input, init);
   const sent = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as { model?: string; text?: { format?: { name?: string } } };
-  const u = res.ok ? (((await res.clone().json().catch(() => ({}))) as { usage?: { input_tokens?: number; output_tokens?: number; output_tokens_details?: { reasoning_tokens?: number } } }).usage ?? {}) : {};
-  calls.push({ kind: String(input).replace(/.*\/v1/, ''), role: sent.text?.format?.name ?? '?', model: sent.model ?? '?', start, end: at(), input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, reasoning: u.output_tokens_details?.reasoning_tokens ?? 0, ok: res.ok });
+  // The copy is read on the side, so a reply that streams reaches the client as it is written.
+  inflight++;
+  void res.clone().text().catch(() => '').then((body) => {
+    inflight--;
+    const u = res.ok ? usageOf(body) : {};
+    calls.push({ kind: String(input).replace(/.*\/v1/, ''), role: sent.text?.format?.name ?? '?', model: sent.model ?? '?', start, end: at(), input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, reasoning: u.output_tokens_details?.reasoning_tokens ?? 0, ok: res.ok });
+  });
   return res;
 };
 const meta = new MetaModel({ apiKey: env.MODEL_API_KEY ?? '', baseUrl: env.MUSE_LLM_BASE_URL || undefined, model: env.MUSE_LLM_MODEL || undefined, quickModel: env.MIND_PALACE_QUICK_MODEL || undefined, fetch: metaFetch });
@@ -173,7 +188,7 @@ for (let run = 1; run <= runs; run++) {
   result.idle = at();
   results.push(result);
 
-  const scoutSets = result.landed.filter((l) => l.role === 'scout');
+  const scoutSets = result.landed.filter((l) => l.role === 'scout' && l.picks.length > 0);
   console.log(`\n=== run ${run}: "${said}" on "${mind.itemOf(anchor.id).title}"${quickRoles.size ? ` (quick: ${[...quickRoles].join(', ')})` : ''}`);
   for (const s of result.says) console.log(`  ${String(s.at).padStart(6)} say "${s.text}"`);
   for (const n of result.navigates) console.log(`  ${String(n.at).padStart(6)} navigate ${n.nodeId ?? n.treeId}`);
@@ -198,7 +213,7 @@ for (let run = 1; run <= runs; run++) {
   }
   const conductorCall = calls.find((c) => c.role === 'conductor');
   console.log(`  SUMMARY run ${run}: conductor ${conductorCall ? conductorCall.end - conductorCall.start : 0} ms, first say ${result.says[0]?.at ?? '-'} ms, ` +
-    `first pick ${scoutSets[0]?.at ?? '-'} ms, last pick ${scoutSets.at(-1)?.at ?? '-'} ms, ${scoutSets.reduce((s, l) => s + l.picks.length, 0)} picks in ${scoutSets.length} deliveries, ` +
+    `first pick ${scoutSets[0]?.at ?? '-'} ms, first find ${scoutSets.find((l) => l.picks.some((p) => p.tool !== 'idea'))?.at ?? '-'} ms, last pick ${scoutSets.at(-1)?.at ?? '-'} ms, ${scoutSets.reduce((s, l) => s + l.picks.length, 0)} picks in ${scoutSets.length} deliveries, ` +
     `last view ${result.landed.filter((l) => l.role === 'renderer').at(-1)?.at ?? '-'} ms, line ${result.says.length > 1 ? result.says.at(-1)!.at : '-'} ms, idle ${result.idle} ms`);
   console.log(`  TOKENS run ${run}: ${[...byModel].map(([m, t]) => `${m} ${t.calls} calls ${t.input} in + ${t.output} out (${t.reasoning} reasoning)`).join('; ')}; openai ${openai.calls} calls ${openai.input} in + ${openai.output} out`);
 }
