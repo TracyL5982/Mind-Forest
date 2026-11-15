@@ -73,6 +73,9 @@ public:
     std::string name() const;
     /// The reply being spoken, while one is.
     const std::string& saying() const { return spoken; }
+    /// A reply has come from the service and has not begun to sound yet: Momo is about to speak. At most `lineWait`.
+    bool lineComing() const { return lineAt >= 0 && clock - lineAt < lineWait; }
+    static constexpr double lineWait = 5;
 
 private:
     struct Done {};
@@ -214,6 +217,15 @@ private:
     std::optional<LiveReply> live;
     /// `-mute`'s stand-in for the host's stream player.
     class Unheard;
+    /// `-mute`'s stand-in for a reply file: it plays nothing, and is heard to its end once its words would have been said.
+    struct UnheardFile : platform::Sound {
+        void stop() override {}
+    };
+    struct UnheardReply {
+        int number = 0;
+        double until = 0;
+    };
+    std::optional<UnheardReply> unheardReply;
     /// The player sounding: the last one started, which a finished response's may still be as the next one's text comes.
     /// While it sounds the listener is told a reply plays.
     struct Sounding {
@@ -237,6 +249,7 @@ private:
     std::string sentPath, loopPath;
     double busyLogged = 0;
     double clock = 0;               // the last frame's
+    double lineAt = -1;             // when the reply that has not begun to sound came, or -1
 
     /// The user's turn, as Momo's presence shows it: from the name to the first sound of Momo's answer. Outside a
     /// turn the presence is read from whether Momo's voice sounds and from the work in progress.

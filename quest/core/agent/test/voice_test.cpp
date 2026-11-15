@@ -807,6 +807,24 @@ TEST(presenceRevealsWordsWithoutSpacesAWholeCharacterAtATime) {
     CHECK(said.compare(0, half.size(), half) == 0 && (uint8_t(said[half.size()]) & 0xC0) != 0x80, "a prefix that ends on a whole character");
 }
 
+TEST(aReplyThatHasComeIsComingUntilItSoundsAndThinkingAloneIsNot) {
+    Talking t(true);
+    t.askLive();
+    t.frame(0.5);
+    CHECK(t.shows() == Presence::State::thinking, "thinking");
+    CHECK(!t.voice.lineComing(), "nothing is coming while Momo works out the reply");
+    t.voice.say("Back to the start.");
+    t.frame();
+    CHECK(t.voice.lineComing(), "the reply has come and is about to sound");
+    t.serviceSays(audioFrame("r1", aSecondOfVoice()));
+    CHECK(!t.voice.lineComing(), "it sounds");
+    Talking quiet(true);
+    quiet.askLive();
+    quiet.voice.say("A line the voice never says.");
+    quiet.frame(Voice::lineWait + 0.1);
+    CHECK(!quiet.voice.lineComing(), "a reply that never sounds is waited for at most lineWait");
+}
+
 TEST(presenceQuietEndsThinking) {
     using S = Presence::State;
     Talking t(true);
@@ -908,7 +926,17 @@ TEST(presenceMutedMakesNoSoundYetTakesTheTime) {
     old.voice.say("Bringing more.");
     old.frame();
     CHECK_EQ(old.fetchesTo("/api/transcribe").size(), size_t(1));
-    CHECK_EQ(old.fetchesTo("/api/speak").size(), size_t(0));
+    std::vector<Fetch> speech = old.fetchesTo("/api/speak");
+    CHECK_EQ(speech.size(), size_t(1));
+    if (speech.size() != 1) return;
+    speech[0].done(ok(""));
+    old.frame(0.1);
+    CHECK(old.shows() == Presence::State::responding, "the reply is heard, silently");
+    CHECK_EQ(old.voice.presence().momoText, "Bringing more.");
+    old.frame(0.5);
+    CHECK(old.shows() == Presence::State::responding, "for as long as its words take");
+    old.frame(1);
+    CHECK(old.shows() != Presence::State::responding, "and then it is over");
     CHECK_EQ(host.plays.size(), size_t(0));
 }
 
