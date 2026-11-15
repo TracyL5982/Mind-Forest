@@ -413,6 +413,28 @@ test('the request and the conversation reach the model with the card they are ab
   assert.match(prompt, /user: I like the staircase/);
 });
 
+test("a typed request is told to both lanes as the user's words, with no reading beside them", async () => {
+  const { k, anchor } = setup();
+  const told: Record<string, string> = {};
+  k.model
+    .on('scout.ideate', (req) => {
+      told.ideate = req.user;
+      return { reading: '', directions: [NOTE] };
+    })
+    .on('scout.looks', (req) => {
+      told.looks = req.user;
+      return { looks: [] };
+    });
+
+  await scout(k.ctx, { anchor, need: 'examples from horror films', history: [{ who: 'user', text: 'examples from horror films' }] });
+
+  for (const prompt of [told.ideate!, told.looks!]) {
+    assert.match(prompt, /^What the user just asked for: "examples from horror films"$/m);
+    assert.doesNotMatch(prompt, /voice assistant|not written down/);
+  }
+  assert.match(told.ideate!, /The user asked for "examples from horror films"\. Every direction must serve that request/);
+});
+
 test('with the model down nothing changes and the user is told', async () => {
   const k = kit();
   const film = k.seedTree('Film', ['Dolly zoom']);

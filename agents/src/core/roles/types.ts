@@ -77,12 +77,18 @@ export interface Scope {
   nodeIds: Id[];
 }
 
+/**
+ * What a Scout run is asked for. `need` is in the user's own words: typed, picked, or said and written down. `reading` is how Momo
+ * read a spoken request: a suggestion beside those words, or all there is when they were not written down in time.
+ */
+export type Asked = { need: string; reading?: string } | { need?: undefined; reading: string };
+
 /** What the Conductor decided an utterance means. */
 export type Intent =
   /** A question or need about the anchor: bring content that answers it. */
-  | { kind: 'ask'; anchor: Id; need: string }
-  /** More of what is already around the anchor. */
-  | { kind: 'more'; anchor: Id; need?: string }
+  | ({ kind: 'ask'; anchor: Id } & Asked)
+  /** More of what is already around the anchor, narrowed when the user narrowed it. */
+  | { kind: 'more'; anchor: Id; need?: string; reading?: string }
   | { kind: 'navigate'; nodeId?: Id; treeId?: Id }
   | { kind: 'organize'; request: string; scope: Scope }
   | { kind: 'handoff'; scope: Scope; note: string }
@@ -159,7 +165,10 @@ export interface Roles {
     ctx: RoleContext,
     input: {
       anchor: Id;
+      /** What the user asked for, in their own words. */
       need?: string;
+      /** How Momo read a spoken request (`Asked`): told as a suggestion, never as the user's words. */
+      reading?: string;
       count?: number;
       /** The recent conversation, so a need is read in context. */
       history?: Turn[];

@@ -333,9 +333,8 @@ export class Pipeline {
   async perform(intent: Intent, scene: Scene): Promise<void> {
     switch (intent.kind) {
       case 'ask':
-        return this.runScout(intent.anchor, intent.need);
       case 'more':
-        return this.more(intent.anchor, intent.need);
+        return this.runScout(intent.anchor, intent.need, intent.reading);
       case 'navigate':
         this.deps.emit({ t: 'navigate', nodeId: intent.nodeId, treeId: intent.treeId });
         if (intent.nodeId) this.focus(intent.nodeId);
@@ -418,7 +417,7 @@ export class Pipeline {
    * Every run is one the user asked for, so when it ends the agent says what it brought, and brings the card into view unless
    * the user has turned to something else since asking.
    */
-  private async runScout(anchor: Id, need: string | undefined): Promise<void> {
+  private async runScout(anchor: Id, need: string | undefined, reading?: string): Promise<void> {
     const { mind } = this.deps;
     if (!mind.nodes.has(anchor)) return;
     const run = (this.scoutRun.get(anchor) ?? 0) + 1;
@@ -426,20 +425,22 @@ export class Pipeline {
     const asked = this.attend(anchor);
     const brought: Id[] = [];
     const title = mind.itemOf(anchor).title;
+    // The request as the user is shown it: their own words, or Momo's reading only when there are none.
+    const request = need || reading;
     try {
-      await this.work('scout', label(need ? 'Looking into' : 'Finding more for', title), anchor, async () => {
+      await this.work('scout', label(request ? 'Looking into' : 'Finding more for', title), anchor, async () => {
         // The picks of one run arrive in several deliveries. They share a part, so one undo takes the whole run back.
         const part = this.deps.newId();
         const bring = (commands: Command[]) => {
           // A card deleted while its picks were being found takes the run with it.
           if (this.scoutRun.get(anchor) !== run || commands.length === 0 || !this.deps.mind.nodes.has(anchor)) return;
-          const set = this.apply(AGENT('scout'), need ? `Picks for: ${need}`.slice(0, 120) : `Picks for "${title}"`, admit(this.deps.mind, commands), part);
+          const set = this.apply(AGENT('scout'), request ? `Picks for: ${request}`.slice(0, 120) : `Picks for "${title}"`, admit(this.deps.mind, commands), part);
           if (!set) return;
           brought.push(...newNodeIds(set).filter((id) => mind.nodes.get(id)?.parent === anchor));
           this.afterContent(set);
         };
-        bring(await this.deps.roles.scout(this.ctx, { anchor, need, history: this.history.slice(-6), deliver: bring }));
-      }, need, true);
+        bring(await this.deps.roles.scout(this.ctx, { anchor, need, reading, history: this.history.slice(-6), deliver: bring }));
+      }, request, true);
     } catch (err) {
       this.fail('scout', err);
     }

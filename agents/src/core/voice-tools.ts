@@ -9,7 +9,7 @@ import type { Mindstorm } from './state.ts';
 /**
  * Momo's tools in a live conversation: each a function the realtime model may call, run on the service and answered at once. Those
  * that act call the pipeline as the Conductor's intents do (`Pipeline.perform`); work that goes on (a Scout run, an organize, a
- * handoff) is started and told later. Why it is built this way is in agents/DECISIONS.md (59).
+ * handoff) is started and told later. Why it is built this way is in agents/DECISIONS.md (59, 61).
  */
 
 /** What a call is answered with: told to the model as JSON. */
@@ -20,6 +20,11 @@ export interface ToolDeps {
   scene: Scene;
   /** A spoken answer from the web for anything current, with no links in it. */
   webAnswer?: (question: string) => Promise<string>;
+  /**
+   * What the user said in the turn that made the call, without the name, once it is written down; nothing when it was not in time.
+   * A run Momo starts is asked in these words, and Momo's own wording goes beside them as its reading (`Asked`).
+   */
+  said?: () => Promise<string | undefined>;
 }
 
 interface Tool {
@@ -151,12 +156,12 @@ export const TOOLS: Record<string, Tool> = {
       { subject: str('What to find, as a short self-contained phrase.'), angle: str('Optional: a narrower angle, such as "only paintings" or "less famous ones". Empty for none.') },
       ['subject', 'angle'],
     ),
-    run: (args, deps) => {
+    run: async (args, deps) => {
       const ctx = deps.pipeline.ctx;
       const seen = see(ctx, deps.scene);
       const subject = text(args, 'subject');
       const angle = text(args, 'angle');
-      const need = angle ? `${subject}, ${angle}` : subject;
+      const reading = angle ? `${subject}, ${angle}` : subject;
       const named = treeNamed(ctx, subject);
       const anchor = seen.anchor ?? (named ? ctx.mind.tree(named).rootId : undefined);
       if (!anchor) {
@@ -164,8 +169,10 @@ export const TOOLS: Record<string, Tool> = {
         performed(deps, { kind: 'tree', subject, itemIds: [] });
         return { started: true, newTree: subject, note: STARTED };
       }
-      performed(deps, { kind: 'ask', anchor, need: need || nameOf(ctx.mind.itemOf(anchor)) });
-      return { started: true, on: nameOf(ctx.mind.itemOf(anchor)), note: STARTED };
+      const on = nameOf(ctx.mind.itemOf(anchor));
+      const need = await deps.said?.();
+      performed(deps, { kind: 'ask', anchor, ...(need ? { need, ...(reading ? { reading } : {}) } : { reading: reading || on }) });
+      return { started: true, on, note: STARTED };
     },
   },
 
@@ -185,13 +192,16 @@ export const TOOLS: Record<string, Tool> = {
   more_like_this: {
     description: 'More cards like the ones around the open card ("more", "more like this", "keep going"), optionally narrowed ("more, but older films").',
     parameters: object({ narrower: str('How to narrow it, or empty.') }, ['narrower']),
-    run: (args, deps) => {
+    run: async (args, deps) => {
       const ctx = deps.pipeline.ctx;
       const seen = see(ctx, deps.scene);
       if (!seen.anchor) return { started: false, why: 'Nothing is open. Ask the user to look at a card.' };
+      const on = nameOf(ctx.mind.itemOf(seen.anchor));
       const narrower = text(args, 'narrower');
-      performed(deps, { kind: 'more', anchor: seen.anchor, ...(narrower ? { need: narrower } : {}) });
-      return { started: true, on: nameOf(ctx.mind.itemOf(seen.anchor)), note: STARTED };
+      // Plain "more" carries no wording of Momo's, so it waits for nothing.
+      const need = narrower ? await deps.said?.() : undefined;
+      performed(deps, { kind: 'more', anchor: seen.anchor, ...(need ? { need } : {}), ...(narrower ? { reading: narrower } : {}) });
+      return { started: true, on, note: STARTED };
     },
   },
 

@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import type { ChangeSet } from '../src/core/domain.ts';
 import type { Activity } from '../src/core/pipeline.ts';
+import { scout as scoutRole } from '../src/core/roles/scout.ts';
 import type { Scene, Turn } from '../src/core/roles/types.ts';
 import type { CardNote } from '../src/core/voice-tools.ts';
 import { FakeModel } from '../src/fake/model.ts';
@@ -40,11 +41,17 @@ class Scripted {
   }
   /** The model hears the end of the user's turn and writes it down. */
   hears(item: string, words: string) {
-    const s = this.last;
-    s.event({ type: 'input_audio_buffer.speech_stopped', item_id: item });
-    s.event({ type: 'input_audio_buffer.committed', item_id: item });
-    s.event({ type: 'conversation.item.input_audio_transcription.delta', item_id: item, delta: words });
-    s.event({ type: 'conversation.item.input_audio_transcription.completed', item_id: item, transcript: words, usage: { type: 'tokens', input_tokens: 30, output_tokens: 8, input_token_details: { text_tokens: 10, audio_tokens: 20 } } });
+    this.commits(item);
+    this.last.event({ type: 'conversation.item.input_audio_transcription.delta', item_id: item, delta: words });
+    this.writes(item, words);
+  }
+  /** The model hears the end of the user's turn, and has not written it down yet. */
+  commits(item: string) {
+    this.last.event({ type: 'input_audio_buffer.speech_stopped', item_id: item });
+    this.last.event({ type: 'input_audio_buffer.committed', item_id: item });
+  }
+  writes(item: string, words: string) {
+    this.last.event({ type: 'conversation.item.input_audio_transcription.completed', item_id: item, transcript: words, usage: { type: 'tokens', input_tokens: 30, output_tokens: 8, input_token_details: { text_tokens: 10, audio_tokens: 20 } } });
   }
   /** A response begins: the turn detection's own (no metadata) or one the service asked for. */
   begins(id: string, purpose?: string) {
@@ -85,7 +92,7 @@ function voice(opts: { batchMs?: number; answerWaitMs?: number } = {}) {
   const spoken: Turn[] = [];
   const steps: Activity[] = [];
   const clock = { now: 1000 };
-  const answers: Record<string, () => Promise<Record<string, unknown>>> = {};
+  const answers: Record<string, (said: () => Promise<string | undefined>) => Promise<Record<string, unknown>>> = {};
   const v = new LiveVoice(
     {
       open: model.open,
@@ -93,9 +100,9 @@ function voice(opts: { batchMs?: number; answerWaitMs?: number } = {}) {
       name: () => 'Momo',
       words: (scene) => `Night stairs; Vertigo (${scene.treeId ?? 'no tree'})`,
       tools: () => [{ type: 'function', name: 'web_answer' }],
-      call: (name, args, scene) => {
+      call: (name, args, scene, said) => {
         called.push({ name, args, scene });
-        return answers[name]?.() ?? Promise.resolve({ started: true });
+        return answers[name]?.(said) ?? Promise.resolve({ started: true });
       },
       label: (name) => (name === 'web_answer' ? 'Searching the web for NASA' : undefined),
       where: (scene) => `The user has open the card "Night stairs" (${scene.focus ?? 'nothing'}).`,
@@ -426,6 +433,45 @@ test('a turn the turn detection ended but never answered is answered on the serv
   assert.deepEqual(frames.filter((f) => f.t === 'over'), [{ t: 'over', turn: 1 }]);
 });
 
+test("a call that needs the user's words waits while they are written down, and goes on without them once writing fails or 1.5 s after the turn was over", async () => {
+  const { v, model, clock, answers } = voice();
+  const got: (string | undefined)[] = [];
+  answers.find_new = async (said) => {
+    got.push(await said());
+    return { started: true };
+  };
+  const call = (n: number) => {
+    model.begins(`r${n}`);
+    model.calls(`r${n}`, `c${n}`, 'find_new', { subject: "Vermeer's use of light", angle: 'focusing on domestic interiors' });
+  };
+  v.heard({ t: 'start', turn: 1, scene: SCENE });
+  model.commits('item-1');
+  call(1);
+  await tick();
+  assert.deepEqual(got, [], 'not while the turn is still being written down');
+  model.writes('item-1', "Hey Momo, show me some examples of Vermeer's use of light.");
+  await tick();
+  assert.deepEqual(got, ["Show me some examples of Vermeer's use of light."], 'the whole turn as written down, without the name');
+  model.ends('r1');
+
+  v.heard({ t: 'start', turn: 2, scene: SCENE });
+  model.commits('item-2');
+  model.last.event({ type: 'conversation.item.input_audio_transcription.failed', item_id: 'item-2', error: { message: 'audio unclear' } });
+  call(2);
+  await tick();
+  assert.deepEqual(got.slice(1), [undefined], 'a turn that could not be written down is not waited for');
+  model.ends('r2');
+
+  v.heard({ t: 'start', turn: 3, scene: SCENE });
+  model.commits('item-3');
+  clock.now += 1450;
+  call(3);
+  await tick();
+  assert.equal(got.length, 2, 'waited for until 1.5 s after the turn was over');
+  await new Promise((ok) => setTimeout(ok, 120));
+  assert.deepEqual(got.slice(2), [undefined]);
+});
+
 test('a web answer is spoken without its links', () => {
   assert.equal(
     withoutLinks('M. John Harrison won it for The End of Everything. ([thebookerprizes.com](https://thebookerprizes.com/x?utm_source=openai))'),
@@ -523,4 +569,67 @@ test("the service refuses /live without a live voice; with one, what Momo starts
   headset.ws.close();
   page.ws.close();
   await run.close();
+});
+
+test("a spoken request reaches the Scout as the user said it, with Momo's reading beside it as a suggestion, or that reading alone when the words were not written down", async () => {
+  const prompts: string[] = [];
+  const note = { angle: 'light', format: 'note', title: 'Light from the left', body: 'Windows on the left.', why: 'the light', tags: ['light'], lines: [], pros: [], cons: [], subject: '', passage: '', by: '', images: [], source: '', lookups: [] };
+  const brain = new FakeModel()
+    .on('scout.ideate', (req) => {
+      prompts.push(req.user);
+      return { reading: 'Paintings.', directions: [note] };
+    })
+    .on('scout.looks', () => ({ looks: [] }));
+  const model = new Scripted();
+  const run = await startServer({
+    port: 0, host: '127.0.0.1', dataDir: mkdtempSync(join(tmpdir(), 'mp-live-')), clientDir: join(import.meta.dirname, '../client'), model: brain, roles: { ...fakeRoles, scout: scoutRole }, token: 'secret',
+    live: { open: model.open, options: { model: 'gpt-realtime-2.1', voice: 'marin', turn: { kind: 'semantic' }, hearing: 'gpt-4o-transcribe' } },
+  });
+  await run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: A Maid Asleep' }]);
+  await run.pipeline.idle();
+  const tree = [...run.mind.trees.values()][0]!;
+  const until = async (ok: () => boolean) => {
+    while (!ok()) await new Promise((r) => setTimeout(r, 5));
+  };
+  const live = new WebSocket(`${run.url.replace('http', 'ws')}/live?token=secret`);
+  await new Promise((ok) => live.on('open', ok));
+  const started = () => (model.sessions.length > 0 ? model.sent('input_audio_buffer.clear').length : 0);
+  const turn = async (n: number) => {
+    const before = started();
+    live.send(JSON.stringify({ t: 'start', turn: n, scene: { focus: tree.rootId, treeId: tree.id, selection: [] } }));
+    await until(() => started() > before);
+  };
+  const finds = async (n: number, args: object) => {
+    const before = prompts.length;
+    model.begins(`r${n}`);
+    model.says(`r${n}`, 'Ooh, let me find some.');
+    model.calls(`r${n}`, `c${n}`, 'find_new', args);
+    model.ends(`r${n}`);
+    await until(() => prompts.length > before);
+    await run.pipeline.idle();
+    return prompts.at(-1)!;
+  };
+  try {
+    prompts.length = 0;
+
+    await turn(1);
+    model.hears('item-1', "Hey Momo, show me some examples of Vermeer's use of light.");
+    const spoken = await finds(1, { subject: "Vermeer's use of light", angle: 'focusing on domestic interiors and side lighting' });
+    assert.match(spoken, /What the user just asked for: "Show me some examples of Vermeer's use of light\."/);
+    assert.match(spoken, /The user asked for "Show me some examples of Vermeer's use of light\."\. Every direction must serve that request/);
+    assert.match(spoken, /voice assistant the user spoke to read it, a suggestion and not the user's words: "Vermeer's use of light, focusing on domestic interiors and side lighting"\. .*Where the two differ, the user's words win\./);
+    assert.deepEqual(spoken.match(/^user: .*$/gm), ["user: Show me some examples of Vermeer's use of light."], "the conversation holds the user's sentence once, and no line of Momo's as the user's");
+
+    await turn(2);
+    model.commits('item-2');
+    model.last.event({ type: 'conversation.item.input_audio_transcription.failed', item_id: 'item-2', error: { message: 'audio unclear' } });
+    const unheard = await finds(2, { subject: 'old maps of Delft', angle: '' });
+    assert.doesNotMatch(unheard, /What the user just asked for/);
+    assert.doesNotMatch(unheard, /The user asked for "old maps of Delft"/, "Momo's words are never told as the user's");
+    assert.match(unheard, /The user asked by voice and their words were not written down\. How the voice assistant they spoke to read the request, not the user's words: "old maps of Delft"\./);
+    assert.match(unheard, /The voice assistant read the user's request as "old maps of Delft"\. Every direction must serve that request/);
+  } finally {
+    live.close();
+    await run.close();
+  }
 });
