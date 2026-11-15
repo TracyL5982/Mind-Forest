@@ -399,3 +399,31 @@ test('the seq a client receives rises by exactly one from hello, also across cha
   const from = (hello.snapshot as { seq: number }).seq;
   assert.deepEqual(seqs, seqs.map((_s, i) => from + 1 + i));
 });
+
+test('a change is marked yours only on the connection whose request made it, so a client can tell the tree it asked for from one asked for elsewhere', { timeout: 20000 }, async () => {
+  const { run } = await boot();
+  const headset = await connect(run);
+  const page = await connect(run);
+  const createsTree = (m: Msg) => m.t === 'change' && (m.set as { patches: { entity: string; before: unknown }[] }).patches.some((p) => p.entity === 'tree' && p.before === null);
+  const trees = (c: { seen: Msg[] }) => c.seen.filter(createsTree);
+  const until = async (n: number) => {
+    while (trees(headset).length < n || trees(page).length < n) await new Promise((r) => setTimeout(r, 20));
+  };
+
+  headset.ws.send(JSON.stringify({ t: 'utter', text: 'Hey Momo, make a tree about dolly zooms', final: true, scene: { selection: [] } }));
+  await until(1);
+  await run.pipeline.idle();
+  page.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this: the long take in Children of Men' }] }));
+  await until(2);
+  await run.pipeline.idle();
+  await run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: rack focus' }]);
+  await until(3);
+  await run.pipeline.idle();
+
+  assert.equal(run.mind.trees.size, 3);
+  assert.deepEqual(trees(headset).map((m) => m.yours), [true, undefined, undefined], 'the headset asked for the first tree alone');
+  assert.deepEqual(trees(page).map((m) => m.yours), [undefined, true, undefined], 'the page asked for the second alone');
+  headset.ws.close();
+  page.ws.close();
+  await run.close();
+});

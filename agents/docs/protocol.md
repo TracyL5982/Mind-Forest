@@ -76,7 +76,7 @@ A client fetches only from the service. Every address in an item or a view that 
 | `t` | Fields | Meaning |
 |---|---|---|
 | `hello` | `protocol`, `snapshot`, `settings`, `maps`, `undo`, `voice`, `hearing` | Sent once on connect. `settings.agentName` is what the user calls the agent, `momo` unless renamed (see Voice). `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `maps` is the map tile provider, `{ tiles, credit, link? }`, or null when maps are off, in which case a client asks no tile server for anything. See Maps in `docs/libraries.md`. `undo` is the label of what an undo would take back now, or null. |
-| `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. `set.seq` is exactly one more than the last `seq` the client holds, from `hello.snapshot.seq` or the previous `change`. Any other value means the client missed a change: reconnect for a fresh `hello`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
+| `change` | `set`, `undo`, `yours?` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. `set.seq` is exactly one more than the last `seq` the client holds, from `hello.snapshot.seq` or the previous `change`. Any other value means the client missed a change: reconnect for a fresh `hello`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. `yours` is true on the copy sent to the connection whose message started the work that made the change, and absent on every other copy (see Whose change). |
 | `activity` | `activity` | Work state: `id`, `role`, `state` (`start`, `done`, `error`), `message`, optional `nodeId`. Show a thinking mark on `nodeId` between `start` and `done`. |
 | `say` | `text` | One short line for the agent to speak. |
 | `heard` | `text`, `final` | The transcript the service is acting on. |
@@ -88,6 +88,12 @@ A client fetches only from the service. Every address in an item or a view that 
 | `questions` | `nodeId`, `questions` | The reply to this connection's own `questions` message, sent to it alone. See Suggested questions below. |
 
 `origin` on a change set is `{by: 'user' | 'agent', role?, tool?}`. Use it to animate agent changes differently from the user's own.
+
+### Whose change
+
+Every client sees every change, and one user may have several clients open: the headset, the web page, Telegram. `yours` tells a client which changes it asked for. A tree made from this connection's `utter` or `dump` ("make a tree about …") comes in a `change` with `yours: true`. The same change reaches the other connections without it, as does a tree asked for over Telegram or `POST /api/dump`. The headset stands a tree it asked for in front of the user and hangs every other new tree on its shelf, so another client never takes over its view.
+
+The mark follows the work a message starts, through the model calls that follow, for as long as that work runs. Picks that wait in the Scout's queue may carry the mark of whichever request freed their place, so rely on it for the change a request makes itself, such as the `createTree`.
 
 ## Client to service
 
