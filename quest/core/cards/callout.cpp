@@ -58,6 +58,10 @@ void lay(Col& c, const Item& item, const Json& props) {
     c.x = INSET;
     c.width = face::W - INSET - 16;
     c.gap(24);
+    if (!c.above(props)) {
+        c.cue(cueMore(c.words));
+        return;
+    }
     c.lines(p.words, Measure::title, 3, palette::ink, 0, -1, face::W - 39);
     if (c.more) c.cue(cueMore(c.words));
 }

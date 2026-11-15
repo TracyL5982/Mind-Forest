@@ -288,6 +288,7 @@ float widestWord(const std::string& s, const Setting& t, float k) {
 void lay(Col& c, const Item& item, const Json& props) {
     Grid g = grid(props);
     c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + face::META + 4 + face::CUE);
+    c.above(props);
     c.gap(face::GAP);
     std::string heads;
     size_t i = 0;

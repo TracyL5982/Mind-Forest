@@ -75,6 +75,8 @@ constexpr Setting heading{21, 25.62f, Font::Weight::semibold};
 constexpr Setting whyLabel{11.5f, 16.1f, Font::Weight::medium};
 constexpr Setting why{15, 21, Font::Weight::medium};
 constexpr Setting body{15, 21, Font::Weight::medium};
+/// A heading over a structure (`props.above`): the title's weight at the reading size.
+constexpr Setting bodyHead{15, 21, Font::Weight::semibold};
 constexpr Setting caption{15, 21, Font::Weight::medium};
 constexpr Setting tag{11.5f, 17.5f, Font::Weight::medium};
 /// A fact's label in the list at the opened card's foot; its value is `body`.

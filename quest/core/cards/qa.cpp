@@ -35,13 +35,26 @@ Plan plan(const Json& props) {
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(props);
     const float gutter = 22;
+    if (!c.above(props)) {
+        c.cue(cueMore(c.words));
+        return;
+    }
     c.gap(8);
-    if (c.pen) label(*c.pen, fixed::question.in(item.words), c.x, c.y + 3, c.look.accent, setting::faceLabelSize);
-    c.lines(p.question, Measure::title, 2, palette::ink, p.answer.empty() ? 0 : face::GAP + face::BODY, c.x + gutter, face::W - 55, c.width - gutter);
-    if (!p.answer.empty() && c.room() >= face::GAP + face::BODY) {
+    // The question first; the answer only under it.
+    float top = c.y;
+    int asked = c.lines(p.question, Measure::title, 2, palette::ink, p.answer.empty() ? 0 : face::GAP + face::BODY, c.x + gutter, face::W - 55, c.width - gutter);
+    if (asked == 0) {
+        c.more = true;
+        c.cue(cueMore(c.words));
+        return;
+    }
+    if (c.pen) label(*c.pen, fixed::question.in(item.words), c.x, top + 3, c.look.accent, setting::faceLabelSize);
+    if (!p.answer.empty() && c.room() >= face::GAP + face::BODY + (c.more ? face::CUE : 0)) {
         c.gap(face::GAP);
-        if (c.pen) label(*c.pen, fixed::answer.in(item.words), c.x, c.y + 2, palette::ink2, setting::faceLabelSize);
-        c.lines(p.answer, Measure::body, 99, c.look.ink2, 0, c.x + gutter, face::W - 55, c.width - gutter);
+        float at = c.y;
+        if (c.lines(p.answer, Measure::body, 99, c.look.ink2, 0, c.x + gutter, face::W - 55, c.width - gutter) > 0 && c.pen) {
+            label(*c.pen, fixed::answer.in(item.words), c.x, at + 2, palette::ink2, setting::faceLabelSize);
+        }
     } else if (!p.answer.empty()) {
         c.more = true;
     }

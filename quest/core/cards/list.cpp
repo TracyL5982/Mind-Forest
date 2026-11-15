@@ -171,10 +171,12 @@ void lay(Col& c, const Item& item, const Json& props) {
     c.lines(p.title, Measure::title, 2, palette::ink, p.entries.empty() ? 0 : 10 + face::BODY);
     c.width += tally;
     if (c.pen && !p.tally.empty()) c.say(p.tally, setting::faceMeta, 1, c.x + c.width - tally + 10, face::TOP + 3, tally, palette::ink2);
+    // The item's own lines over the entries come first, and the entries under them.
+    bool open = c.above(props);
     c.gap(10);
     const int column = face::COL - MARK;
     size_t i = 0;
-    for (; i < p.entries.size(); i++) {
+    for (; open && i < p.entries.size(); i++) {
         int need = counted(p.entries[i], column, Measure::body);
         int shown = std::min(need, 2);
         bool after = i + 1 < p.entries.size() || need > shown;

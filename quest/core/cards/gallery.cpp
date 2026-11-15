@@ -76,6 +76,20 @@ void hang(Catalog& catalog, const std::string& parent, std::vector<Link> links, 
 std::optional<Json> readSamples() {
     std::optional<Json> samples = Json::parse(samplesJson);
     if (!samples) return std::nullopt;
+    // Each sample with lines over its structure joins its type's samples, after the page's own.
+    if (std::optional<Json> lines = Json::parse(linesSamplesJson)) {
+        Json types = Json::list();
+        for (const Json& type : (*samples)["types"].array()) {
+            Json t = type;
+            Json cards = type["cards"];
+            for (const Json& extra : lines->array()) {
+                if (extra["type"].string("") == type["type"].string("")) cards.push(extra);
+            }
+            t.set("cards", cards);
+            types.push(t);
+        }
+        samples->set("types", types);
+    }
     for (const auto& [name, p] : (*samples)["pictures"].members()) {
         setSample(name, Sample{colour(p["a"].string("")), colour(p["b"].string("")), p["w"].real(640), p["h"].real(440)});
     }

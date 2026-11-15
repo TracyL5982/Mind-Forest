@@ -281,6 +281,7 @@ void lay(Col& c, const Item& item, const Json& props) {
     }
     c.gap(22);
     c.lines(item.titleOrUntitled(), Measure::title, 1, palette::ink);
+    c.above(props);
     std::string out = p.output.kind == Output::Kind::text ? (p.texts.empty() ? "" : p.texts[0].first)
                                                           : (p.output.label.empty() ? p.shown : p.shown + " " + p.output.label);
     if (!out.empty()) {

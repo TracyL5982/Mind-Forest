@@ -40,10 +40,11 @@ void number(const Pen& pen, Color accent, int i, float x, float y) {
 void lay(Col& c, const Item& item, const Json& props) {
     std::vector<std::string> steps = stepsOf(props);
     c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, steps.empty() ? 0 : 10 + face::BODY);
+    bool open = c.above(props);
     c.gap(10);
     const int column = face::COL - 32;
     size_t i = 0;
-    for (; i < steps.size(); i++) {
+    for (; open && i < steps.size(); i++) {
         int need = counted(steps[i], column, Measure::body);
         int shown = std::min(need, i == 0 ? 2 : 1);
         if (i > 0 && need > 1) break;

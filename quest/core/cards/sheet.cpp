@@ -235,7 +235,7 @@ void drawPart(const Pen& pen, const Look& look, const Item& item, const Part& pa
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
     c.lines(p.title, Measure::title, 2, palette::ink, p.parts.empty() ? 0 : face::GAP + face::BODY);
-    if (!p.parts.empty()) {
+    if (!p.parts.empty() && c.above(props)) {
         const Part& part = p.parts.front();
         c.gap(face::GAP);
         float top = c.y, most = std::min(68.f, c.room() - (p.parts.size() > 1 ? face::CUE : 0));
@@ -274,7 +274,9 @@ void lay(Col& c, const Item& item, const Json& props) {
         }
         c.y = std::min(c.y, top + most);
     }
-    if (p.parts.size() > 1) {
+    if (c.ended) {
+        c.cue(cueParts(c.words, int(p.parts.size())));
+    } else if (p.parts.size() > 1) {
         c.more = true;
         c.cue(cueParts(c.words, int(p.parts.size() - 1)));
     } else if (c.more) {

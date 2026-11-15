@@ -68,13 +68,17 @@ Plan plan(const Item& item, const Json& props) {
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
     std::string from = !p.where.empty() ? p.where : item.title;
+    if (!c.above(props)) {
+        c.cue(cueMore(c.words));
+        return;
+    }
     float top = c.y;
-    c.lines(p.words, Measure::passage, 99, palette::ink, from.empty() ? 0 : 10 + face::META, c.x + RULE, face::W - 46, c.width - RULE);
+    int quoted = c.lines(p.words, Measure::passage, 99, palette::ink, from.empty() ? 0 : 10 + face::META, c.x + RULE, face::W - 46, c.width - RULE);
     if (c.pen) {
         c.pen->ctx.setFillColor(c.look.accent);
         c.pen->ctx.fill(c.pen->px(c.x, top, 2, c.y - top));
     }
-    if (!from.empty() && c.room() >= 10 + face::META) {
+    if (quoted > 0 && !from.empty() && c.room() >= 10 + face::META + (c.more ? face::CUE : 0)) {
         c.gap(10);
         c.lines(from, Measure::meta, 1, palette::ink2);
     }

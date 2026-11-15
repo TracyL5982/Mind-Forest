@@ -303,6 +303,12 @@ void paint(const Pen& pen, const Plot& p, float x, float y, const Look& look) {
 void lay(Col& c, const Item& item, const Json& props) {
     Series s = series(props);
     c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + 38 + face::GAP + face::META);
+    // The item's lines and the heads row over the shape come first; the shape takes what is left, or is left out.
+    if (!(c.above(props) && c.heads(props)) || c.room() - 2 * face::GAP - face::META < 38) {
+        c.more = true;
+        c.cue(cueMore(c.words));
+        return;
+    }
     c.gap(face::GAP);
     float shape = c.room() - face::GAP - face::META;
     if (c.pen && !s.values.empty()) {

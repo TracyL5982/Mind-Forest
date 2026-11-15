@@ -6,6 +6,7 @@
 #include <ctime>
 #include <map>
 
+#include "face.h"
 #include "said.h"
 
 namespace cards {
@@ -104,7 +105,8 @@ const char* cameFrom(const Item& item, std::string& made) {
                                                          {"idea", "An idea from the librarian"}};
     if (auto it = how.find(item.sourceFrom); it != how.end()) return it->second;
     if (item.sourceFrom.rfind("chat-export", 0) == 0) return "From a chat you exported";
-    made = (item.agent ? "Brought by the librarian (" : "You added this (") + item.sourceFrom + ")";
+    made = item.agent ? "Brought by the librarian" : "You added this";
+    if (!item.sourceFrom.empty()) made += " (" + item.sourceFrom + ")";
     return made.c_str();
 }
 
@@ -186,6 +188,24 @@ Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
     // to show one, than a view.
     float under = viewTall - INSET_Y - sheet.y - Sheet::gap;
     sheet.most = std::min(pictureTall, under >= LEAST ? under : viewTall - 2 * INSET_Y);
+    // The item's own lines over its structure, in order, and the heads row over a structure of two columns.
+    for (const Over& line : oversOf(e.view.props)) {
+        sheet.paragraph(line.words, line.head ? setting::bodyHead : setting::body, palette::ink);
+        sheet.said.push_back(line.words);
+    }
+    const std::string named = kind.name;
+    if (std::optional<std::array<std::string, 2>> h = headsOf(e.view.props); h && (named == "facts" || named == "fact" || named == "chart" || named == "breakdown")) {
+        const float half = std::floor((Sheet::width - 17) / 2);
+        float tall = std::max(heightOf((*h)[0], half, 0, setting::body, k), heightOf((*h)[1], half, 0, setting::body, k));
+        sheet.part(tall + 4 + 1, [h = *h, half, tall](const Pen& pen, float y) {
+            pen.words(h[0], Sheet::left, y, half, 0, setting::body, palette::ink2);
+            float w = std::min(half, std::ceil(pen.width(h[1], setting::body)) + 1);
+            pen.words(h[1], Sheet::left + Sheet::width - w, y, w + 1, 0, setting::body, palette::ink2);
+            pen.ctx.setFillColor(palette::line);
+            pen.ctx.fill(pen.px(Sheet::left, y + tall + 4, Sheet::width, 1));
+        });
+        sheet.said.insert(sheet.said.end(), h->begin(), h->end());
+    }
     kind.detail(sheet, item, e.view.props);
 
     // The sources, in full, as `chipSources` lists them.

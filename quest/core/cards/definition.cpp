@@ -47,6 +47,10 @@ float headword(const Pen& pen, const Plan& p, float x, float y, float width, int
 /// The term as a figure, the meaning upright in the serif in whole lines, and the cue.
 void lay(Col& c, const Item&, const Json& props) {
     Plan p = plan(props);
+    if (!c.above(props)) {
+        c.cue(cueMore(c.words));
+        return;
+    }
     c.gap(10);
     Text term = points(p.term);
     bool large = figureNeed(term, MIDDLE) <= face::COL * 100;
@@ -54,6 +58,12 @@ void lay(Col& c, const Item&, const Json& props) {
     const Figure& size = large ? MIDDLE : SMALLEST;
     // A term longer than two lines shows its first two, and the cue.
     if (termNeed > 2) c.more = true;
+    if (float(10 + termLines * size.lineHeight) > c.room() - face::CUE) {
+        c.more = true;
+        c.y = std::max(c.y - 10, float(face::TOP));
+        c.cue(cueMore(c.words));
+        return;
+    }
     if (c.pen) c.heldBack = figure(*c.pen, p.term, c.x, c.y, c.width, termLines, size, palette::ink) || c.heldBack;
     c.gap(float(termLines * size.lineHeight));
     c.lines(p.meaning, Measure::passage, 99, c.look.ink2, 0, -1, face::W - 32);

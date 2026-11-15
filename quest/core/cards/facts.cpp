@@ -153,7 +153,38 @@ void lay(Col& c, const Item& item, const Json& props) {
     std::vector<Fact> facts = pairs(props);
     if (facts.empty()) {
         c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink);
+        c.above(props);
         if (c.more) c.cue(cueMore(c.words));
+        return;
+    }
+    if (headsOf(props)) {
+        // Under a heads row each fact is a row: its label under the first head, its value under the second at
+        // the column's end. The title, the item's lines and the heads row come first, and the rows that fit whole.
+        c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + face::META + 5 + 8 + face::BODY);
+        bool open = c.above(props) && c.heads(props);
+        const float half = std::floor((c.width - 17) / 2);
+        size_t i = 0;
+        for (; open && i < facts.size(); i++) {
+            Text v = points(facts[i].value);
+            bool middle = figureNeed(v, MIDDLE) <= int(half) * 100;
+            const Figure& size = middle ? MIDDLE : SMALLEST;
+            int valueLines = middle ? 1 : wrap(v, int(half), SMALLEST.letter, 3);
+            // A value on one line is as wide as it is counted, and the label has the rest of the row.
+            float valueWide = valueLines == 1 ? std::min(half, std::ceil(float(figureNeed(v, size)) / 100)) : half;
+            float labelWide = c.width - 12 - valueWide;
+            int labelLines = counted(facts[i].label, int(labelWide), Measure::body);
+            float tall = std::max(float(labelLines * face::BODY), float(valueLines * size.lineHeight)), before = i == 0 ? 8.f : 6.f;
+            if (labelLines > 2 || valueLines > 2 || before + tall + (i + 1 < facts.size() ? face::CUE : 0) > c.room()) break;
+            c.gap(before);
+            if (c.pen) {
+                c.say(facts[i].label, setting::faceBody, labelLines, c.x, c.y, labelWide, c.look.ink2);
+                float w = valueLines == 1 ? std::min(valueWide, std::ceil(widthOf(facts[i].value, figureSetting(size), c.pen->k)) + 1) : valueWide;
+                c.heldBack = figure(*c.pen, facts[i].value, c.x + c.width - w, c.y, w + 1, valueLines, size, palette::ink) || c.heldBack;
+            }
+            c.gap(tall);
+        }
+        if (i < facts.size()) c.more = true;
+        if (c.more) c.cue(i < facts.size() ? cueCount(c.words, int(facts.size() - i)) : cueMore(c.words));
         return;
     }
     // Two figures side by side when both fit half the column at the middle size; else the first alone, at the
@@ -169,6 +200,12 @@ void lay(Col& c, const Item& item, const Json& props) {
     // What is left out is known before the title, which then keeps the cue's row free.
     if (left || need > 2) c.more = true;
     c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, over + row);
+    // The item's lines over the figures come first; the row of figures follows when it still fits whole.
+    if (!c.above(props) || over + row > c.room() - (c.more ? face::CUE : 0)) {
+        c.more = true;
+        c.cue(cueCount(c.words, int(facts.size())));
+        return;
+    }
     c.gap(over);
     float room = shown == 2 ? float(half) : float(face::COL);
     if (c.pen) {

@@ -12,6 +12,9 @@ namespace cards {
 
 /// The samples, as quest/tools/cards_samples.mjs wrote them (samples.cpp).
 extern const char* const samplesJson;
+/// Samples with the item's own lines over a structure, or a heads row, that samples.cpp predates
+/// (samples_lines.cpp): `[{type, label, status, view, item}]`.
+extern const char* const linesSamplesJson;
 /// The samples read, with the pictures they draw made known: `{pictures, types: [{type, when, cards:
 /// [{label, status, view, item}]}]}`.
 std::optional<Json> readSamples();

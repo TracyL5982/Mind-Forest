@@ -82,6 +82,11 @@ float bars(const Pen& pen, const std::vector<Part>& rows, float x, float top, fl
 void lay(Col& c, const Item& item, const Json& props) {
     Parts p = parts(props);
     c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + 16 + 8 + face::BODY + 4 + face::CUE);
+    if (!(c.above(props) && c.heads(props)) || c.room() < face::GAP + 16 + 8 + face::CUE) {
+        c.more = true;
+        c.cue(cueParts(c.words, int(props["labels"].array().size())));
+        return;
+    }
     c.gap(face::GAP);
     if (c.pen) {
         const Pen& pen = *c.pen;
@@ -104,6 +109,8 @@ void lay(Col& c, const Item& item, const Json& props) {
             if (row.value > largest->value) largest = &row;
         }
         std::string share = p.total > 0 ? std::to_string(int(std::lround(largest->value / p.total * 100))) + "%" : largest->written;
+        // The cue that counts the parts always follows: its row is kept.
+        c.more = true;
         c.lines(largest->label + " " + share, Measure::body, 1, c.look.ink2);
     }
     c.gap(4);

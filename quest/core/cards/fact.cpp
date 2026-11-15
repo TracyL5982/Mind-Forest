@@ -52,9 +52,50 @@ void lay(Col& c, const Item& item, const Json& props) {
     if (value.empty()) value = "\xE2\x80\x93";
     std::string foot = !item.title.empty() && item.title != value && item.title != label ? item.title : "";
     Text v = points(value);
+    // The item's lines over the figure, and its heads row, come first.
+    if (!(c.above(props) && c.heads(props))) {
+        c.cue(cueMore(c.words));
+        return;
+    }
+    if (headsOf(props)) {
+        // Under a heads row the label stands under the first head and the value under the second, at the column's end.
+        const float half = std::floor((c.width - 17) / 2);
+        bool middle = figureNeed(v, MIDDLE) <= int(half) * 100;
+        const Figure& size = middle ? MIDDLE : SMALLEST;
+        int valueNeed = middle ? 1 : wrap(v, int(half), SMALLEST.letter, 3), valueLines = std::min(2, valueNeed);
+        // A value on one line is as wide as it is counted, and the label has the rest of the row.
+        float valueWide = valueLines == 1 ? std::min(half, std::ceil(float(figureNeed(v, size)) / 100)) : half;
+        float labelWide = c.width - 12 - valueWide;
+        int labelNeed = label.empty() ? 0 : counted(label, int(labelWide), Measure::body), labelLines = std::min(2, labelNeed);
+        float tall = std::max(float(labelLines * face::BODY), float(valueLines * size.lineHeight));
+        if (8 + tall > c.room() - face::CUE) {
+            c.more = true;
+            c.cue(cueMore(c.words));
+            return;
+        }
+        if (valueNeed > 2 || labelNeed > 2) c.more = true;
+        c.gap(8);
+        if (c.pen) {
+            c.say(label, setting::faceBody, labelLines, c.x, c.y, labelWide, c.look.ink2);
+            float w = valueLines == 1 ? std::min(valueWide, std::ceil(widthOf(value, figureSetting(size), c.pen->k)) + 1) : valueWide;
+            c.heldBack = figure(*c.pen, value, c.x + c.width - w, c.y, w + 1, valueLines, size, palette::ink) || c.heldBack;
+        }
+        c.gap(tall);
+        if (!foot.empty() && c.room() >= 8 + face::META + (c.more ? face::CUE : 0)) {
+            c.gap(8);
+            c.lines(foot, Measure::meta, 1, palette::ink2);
+        }
+        if (c.more) c.cue(cueMore(c.words));
+        return;
+    }
     const Figure& size = figureNeed(v, LARGEST) <= face::COL * 100 ? LARGEST : figureNeed(v, MIDDLE) <= face::COL * 100 ? MIDDLE : SMALLEST;
     int valueLines = &size == &SMALLEST ? std::min(2, wrap(v, face::COL, SMALLEST.letter, 3)) : 1;
     if (&size == &SMALLEST && wrap(v, face::COL, SMALLEST.letter, 3) > 2) c.more = true;
+    if (float(valueLines * size.lineHeight) > c.room() - face::CUE) {
+        c.more = true;
+        c.cue(cueMore(c.words));
+        return;
+    }
     if (c.pen) c.heldBack = figure(*c.pen, value, c.x, c.y, c.width, valueLines, size, palette::ink) || c.heldBack;
     c.gap(float(valueLines * size.lineHeight));
     if (!label.empty()) {

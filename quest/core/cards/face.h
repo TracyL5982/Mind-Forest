@@ -4,7 +4,10 @@
 // shrunk. Each type lays its face out once through `Col`, which sizes it when it has no pen and draws it
 // when it has one, so the size and the drawing cannot disagree.
 #pragma once
+#include <array>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "kind.h"
 
@@ -21,16 +24,30 @@ namespace setting {
 constexpr Setting faceTitle{18, 24, Font::Weight::semibold};
 constexpr Setting faceBody{16, 22, Font::Weight::medium};
 constexpr Setting faceMeta{13.5f, 18, Font::Weight::medium};
+/// A heading or a label over a structure (`props.above`): the title's weight at the body size.
+constexpr Setting faceHead{16, 22, Font::Weight::semibold};
 /// A quotation, a passage, a meaning: the upright serif at the body size.
 constexpr Setting facePassage{16, 22, Font::Weight::regular, true};
 }  // namespace setting
 
 /// How lines are counted on the small face (derive.mjs `faces`): in the web's title face, which is never
 /// narrower than the medium the words are drawn in, the column scaled to the size; a passage in its serif.
-enum class Measure { title, body, meta, passage };
+enum class Measure { title, body, meta, passage, head };
 int counted(const std::string& s, int column, Measure m, int max = 99);
+/// How wide `s` is counted on one line, px, as `counted` counts it.
+float countedWidth(const std::string& s, Measure m);
 /// The size a measure draws at.
 const Setting& settingOf(Measure m);
+
+/// One of the item's own lines over a card's structure (`props.above`), as the web reads them: a line set
+/// in bold (`**...**`) or one ending in a colon, a letter or a digit heads what is under it.
+struct Over {
+    std::string words;
+    bool head = false;
+};
+std::vector<Over> oversOf(const Json& props);
+/// The heads row over the two columns a card's figures or bars come from (`props.heads`): two heads, not both empty.
+std::optional<std::array<std::string, 2>> headsOf(const Json& props);
 
 /// The words of the cue, in the card's language.
 std::string cueMore(const Words& w);
@@ -51,6 +68,10 @@ struct Col {
     float y = face::TOP;
     /// Something is left out: the face ends with the cue.
     bool more = false;
+    /// A line over the structure was held back: nothing under it is drawn, and the face ends with the cue.
+    bool ended = false;
+    /// The foot of the last lines `lines`, `above` and `heads` set, px: the cue never rises over them.
+    float inked = 0;
     /// For the checks: lines were held back from a text, and the cue was drawn.
     mutable bool heldBack = false;
     bool cued = false;
@@ -64,6 +85,13 @@ struct Col {
     /// Draws whole lines only, `n` of them at most, at (x, y) px.
     void say(const std::string& s, const Setting& t, int n, float x, float y, float width, Color color) const;
     void gap(float px) { y += px; }
+    /// The item's lines over the structure, in order and whole, 6 px under what came before (or, first on the
+    /// face, 6 px over what follows), each keeping the cue's row free under it. A line that does not fit ends
+    /// the face: it is held back, and so is everything under it. False then.
+    bool above(const Json& props);
+    /// The heads row in meta over a hairline, each head over its half of the column. False, and the face ends,
+    /// when it does not fit over the cue's row.
+    bool heads(const Json& props);
     /// The last row: the words in meta in the accent. (The spec's 12 px fade above it is left out: under whole
     /// lines it could only lie over letters, and on the bare face it shows nothing.)
     void cue(const std::string& said);

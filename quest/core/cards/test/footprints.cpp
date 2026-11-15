@@ -1,9 +1,9 @@
 // Checks every card type this library draws, on the web client's own samples (agents/test/footprints.json),
 // against the sizing spec's numbers: derive.mjs in sizing/quest-card-sizing.md, section 6, gives the tallest
-// face each type can draw. Each sample must be 210 px wide, no taller than its type's tallest and 146 px,
-// and carry no chip line, since chips are listed on the opened card. The web keeps its own sizes until it
-// adopts the spec, so its golden sizes are not compared here; once it does, this goes back to matching them
-// to the px.
+// face each type can draw. Each sample must be 210 px wide, no taller than its type's tallest and 146 px
+// (146 px alone for one with the item's lines over its structure or a heads row), and carry no chip line,
+// since chips are listed on the opened card. The web keeps its own sizes until it adopts the spec, so its
+// golden sizes are not compared here; once it does, this goes back to matching them to the px.
 //   quest/core/cards/test/run.sh <path to agents/test/footprints.json>
 #include <cstdio>
 #include <fstream>
@@ -60,7 +60,10 @@ int main(int argc, char** argv) {
         view.set("props", sample["props"]);
         cards::Footprint got = cards::footprint(view, sample["item"]);
         auto most = TALLEST.find(type);
-        int cap = most == TALLEST.end() ? 146 : std::min(146, most->second);
+        // The item's own lines over a structure, and a heads row, come before what derive.mjs counts, and the
+        // face then holds what fits under them: such a face is held to 146 px alone.
+        bool over = sample["props"].has("above") || (sample["props"].has("heads") && type != "table");
+        int cap = most == TALLEST.end() || over ? 146 : std::min(146, most->second);
         bool chips = !cards::chipsOf(view, sample["item"]).empty();
         t.tallest = std::max(t.tallest, got.height);
         t.web = std::max(t.web, sample["size"][1].integer());

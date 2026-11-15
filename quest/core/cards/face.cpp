@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "item.h"
+
 namespace cards {
 
 int counted(const std::string& s, int column, Measure m, int max) {
@@ -12,8 +14,22 @@ int counted(const std::string& s, int column, Measure m, int max) {
     case Measure::body: return wrap(t, column, TITLE_LETTER, max);
     case Measure::meta: return wrap(t, int(std::floor(float(column) * 16 / setting::faceMeta.size)), TITLE_LETTER, max);
     case Measure::passage: return wrap(t, column, PASSAGE_LETTER, max);
+    // A heading at the body size is counted in the title face, which is its own.
+    case Measure::head: return wrap(t, column, TITLE_LETTER, max);
     }
     return 1;
+}
+
+float countedWidth(const std::string& s, Measure m) {
+    Text t = points(s);
+    switch (m) {
+    case Measure::title: return float(cards::advance(t, TITLE_LETTER)) * setting::faceTitle.size / 16 / 100;
+    case Measure::meta: return float(cards::advance(t, TITLE_LETTER)) * setting::faceMeta.size / 16 / 100;
+    case Measure::passage: return float(cards::advance(t, PASSAGE_LETTER)) / 100;
+    case Measure::body:
+    case Measure::head: return float(cards::advance(t, TITLE_LETTER)) / 100;
+    }
+    return 0;
 }
 
 const Setting& settingOf(Measure m) {
@@ -22,8 +38,57 @@ const Setting& settingOf(Measure m) {
     case Measure::body: return setting::faceBody;
     case Measure::meta: return setting::faceMeta;
     case Measure::passage: return setting::facePassage;
+    case Measure::head: return setting::faceHead;
     }
     return setting::faceBody;
+}
+
+namespace {
+
+/// The last letter of a line says whether it heads what follows: a colon, a letter or a digit, and no stop.
+bool heads(const Text& t) {
+    if (t.empty()) return false;
+    char32_t c = t.back();
+    if (c == ':' || c == 0xFF1A) return true;
+    if (c < 0x80) return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    static const std::u32string stops = U"\u3002\uFF0E\uFF0C\u3001\uFF1B\uFF01\uFF1F\u300D\u300F\uFF09\u3011\u2026\u2014\u2013\u201D\u2019\u00BB";
+    return stops.find(c) == std::u32string::npos;
+}
+
+}  // namespace
+
+std::vector<Over> oversOf(const Json& props) {
+    std::vector<Over> out;
+    for (const Json& line : props["above"].array()) {
+        Text t = trim(points(text(line)));
+        if (t.empty()) continue;
+        Over o;
+        // `**words**` or `__words__`, with a colon after it or none.
+        for (const char32_t* mark : {U"**", U"__"}) {
+            Text m(mark);
+            Text tail = t.size() > 4 && (t.back() == ':' || t.back() == 0xFF1A) ? Text(1, t.back()) : Text();
+            Text core = t.substr(0, t.size() - tail.size());
+            if (core.size() > 4 && core.compare(0, 2, m) == 0 && core.compare(core.size() - 2, 2, m) == 0) {
+                Text inner = core.substr(2, core.size() - 4);
+                if (inner.find_first_of(U"*_") == Text::npos) {
+                    t = inner + tail;
+                    o.head = true;
+                }
+            }
+        }
+        o.words = utf8(t);
+        o.head = o.head || heads(t);
+        out.push_back(o);
+    }
+    return out;
+}
+
+std::optional<std::array<std::string, 2>> headsOf(const Json& props) {
+    const std::vector<Json>& given = props["heads"].array();
+    if (given.size() != 2) return std::nullopt;
+    std::array<std::string, 2> h{utf8(trim(points(text(given[0])))), utf8(trim(points(text(given[1]))))};
+    if (h[0].empty() && h[1].empty()) return std::nullopt;
+    return h;
 }
 
 std::string cueMore(const Words& w) { return w.chinese ? "更多" : "More"; }
@@ -65,7 +130,7 @@ void Col::say(const std::string& s, const Setting& t, int n, float atX, float at
 }
 
 int Col::lines(const std::string& s, Measure m, int max, Color color, float after, float at, float column, float drawn) {
-    if (s.empty() || max <= 0) return 0;
+    if (s.empty() || max <= 0 || ended) return 0;
     const Setting& t = settingOf(m);
     float col = column < 0 ? width : column;
     int need = counted(s, int(col), m);
@@ -79,11 +144,64 @@ int Col::lines(const std::string& s, Measure m, int max, Color color, float afte
     shown = std::max(0, shown);
     say(s, t, shown, at < 0 ? x : at, y, drawn > 0 ? drawn : col, color);
     y += float(shown) * t.lead;
+    if (shown > 0) inked = y;
     return shown;
+}
+
+bool Col::above(const Json& props) {
+    std::vector<Over> over = oversOf(props);
+    if (ended) return false;
+    if (over.empty()) return true;
+    bool first = y <= face::TOP;
+    if (!first) gap(face::GAP);
+    for (const Over& line : over) {
+        Measure m = line.head ? Measure::head : Measure::body;
+        const Setting& t = settingOf(m);
+        int need = counted(line.words, int(width), m);
+        int fit = std::max(0, int(std::floor((room() - face::CUE) / t.lead)));
+        int shown = std::min(need, fit);
+        say(line.words, t, shown, x, y, width, palette::ink);
+        y += float(shown) * t.lead;
+        if (shown > 0) inked = y;
+        if (shown < need) {
+            more = ended = true;
+            return false;
+        }
+    }
+    if (first) gap(face::GAP);
+    return true;
+}
+
+bool Col::heads(const Json& props) {
+    std::optional<std::array<std::string, 2>> h = headsOf(props);
+    if (ended) return false;
+    if (!h) return true;
+    // The second stands at the column's end, as wide as it is when that is no more than half; the first has the rest.
+    const float half = std::floor((width - 17) / 2);
+    float second = std::min(half, std::ceil(countedWidth((*h)[1], Measure::meta))), first = width - 17 - second;
+    int lines = std::max({1, counted((*h)[0], int(first), Measure::meta), counted((*h)[1], int(second), Measure::meta)});
+    float tall = face::GAP + float(lines * face::META) + 4 + 1;
+    if (tall > room() - face::CUE) {
+        more = ended = true;
+        return false;
+    }
+    gap(face::GAP);
+    if (pen) {
+        say((*h)[0], setting::faceMeta, lines, x, y, first, palette::ink2);
+        float w = std::min(second, std::ceil(widthOf((*h)[1], setting::faceMeta, pen->k)));
+        say((*h)[1], setting::faceMeta, lines, x + width - w, y, w + 1, palette::ink2);
+        pen->ctx.setFillColor(palette::line);
+        pen->ctx.fill(pen->px(x, y + float(lines * face::META) + 4, width, 1));
+    }
+    gap(float(lines * face::META) + 4 + 1);
+    inked = y;
+    return true;
 }
 
 void Col::cue(const std::string& said) {
     cued = true;
+    // A gap left open for what then did not fit closes up over the cue's row, but never over words drawn.
+    y = std::max(std::min(y, float(face::H - face::BOTTOM - face::CUE)), inked);
     say(said, setting::faceMeta, 1, x, y, width, look.accent);
     y += face::CUE;
 }

@@ -33,13 +33,24 @@ void by(const Pen& pen, const std::string& who, float x, float y, float column, 
 
 /// The mark, the quotation upright in the serif, the speaker under a short rule, and the cue.
 void lay(Col& c, const Item& item, const Json& props) {
+    if (!c.above(props)) {
+        c.cue(cueMore(c.words));
+        return;
+    }
     c.x = 20;
     c.width = face::W - 40;
     std::string said = words(item, props), who = text(props["by"]);
+    // The mark stands only over at least one line of the words.
+    if (float(MARK + face::BODY) + (who.empty() ? 0.f : 8.f + face::META) > c.room() - face::CUE) {
+        c.more = true;
+        c.cue(cueMore(c.words));
+        return;
+    }
     if (c.pen) c.say(OPEN_QUOTE, setting::mark, 1, c.x, c.y + MARK_DROP, c.width, c.look.accent);
     c.gap(MARK);
-    c.lines(said, Measure::passage, 99, palette::ink, who.empty() ? 0 : 8 + face::META, -1, face::W - 41, c.width);
-    if (!who.empty() && c.room() >= 8 + face::META) {
+    int quoted = c.lines(said, Measure::passage, 99, palette::ink, who.empty() ? 0 : 8 + face::META, -1, face::W - 41, c.width);
+    // The speaker only under the words they said.
+    if (quoted > 0 && !who.empty() && c.room() >= 8 + face::META + (c.more ? face::CUE : 0)) {
         c.gap(8);
         if (c.pen) {
             c.pen->ctx.setFillColor(BY);

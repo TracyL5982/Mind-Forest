@@ -78,14 +78,21 @@ void point(const Pen& pen, const Way& way, Color accent, Color ink2, const std::
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
     c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, 10 + face::BODY + 5 + face::BODY + face::CUE);
+    // The item's lines come first. Its heads name the sides: each stands in meta over its side's point.
+    bool open = c.above(props);
+    std::optional<std::array<std::string, 2>> named = headsOf(props);
     c.gap(10);
     const int column = face::COL - 20;
     bool first = true;
-    for (size_t s = 0; s < 2; s++) {
+    for (size_t s = 0; open && s < 2; s++) {
         const Side& side = p.sides[s];
         if (side.points.empty() || counted(side.points[0], column, Measure::body) > 1) continue;
+        const std::string head = named ? (*named)[s] : "";
+        int headLines = head.empty() ? 0 : counted(head, face::COL, Measure::meta);
+        if ((first ? 0 : 5) + headLines * face::META + face::BODY > c.room() - face::CUE) break;
         if (!first) c.gap(5);
         first = false;
+        if (headLines) c.lines(head, Measure::meta, headLines, palette::ink2);
         if (c.pen) {
             strokes(*c.pen, c.x, c.y + 6, ways()[s].mark, 1.6f, ways()[s].accent ? c.look.accent : palette::ink2);
             c.say(side.points[0], setting::faceBody, 1, c.x + 20, c.y, float(column), palette::ink);
@@ -112,14 +119,18 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     Plan p = plan(item, props);
     std::array<std::vector<float>, 2> talls;
     float tall = 14;
+    // The item's heads name its sides, in place of the card's own words.
+    std::optional<std::array<std::string, 2>> named = headsOf(props);
+    std::array<float, 2> heads{float(HEAD), float(HEAD)};
     for (size_t s = 0; s < 2; s++) {
-        tall += HEAD;
+        if (named && !(*named)[s].empty()) heads[s] = heightOf((*named)[s], Sheet::width, 0, setting::body, sheet.k) + 4;
+        tall += heads[s];
         for (const std::string& said : p.sides[s].points) {
             talls[s].push_back(std::max(15.f, heightOf(said, Sheet::width - MARK, 0, open, sheet.k)));
             tall += talls[s].back();
         }
         tall += float(std::max(0, int(talls[s].size()) - 1) * 7);
-        sheet.said.push_back(ways()[s].name.in(item.words));
+        sheet.said.push_back(named && !(*named)[s].empty() ? (*named)[s] : ways()[s].name.in(item.words));
         sheet.said.insert(sheet.said.end(), p.sides[s].points.begin(), p.sides[s].points.end());
     }
     Words words = item.words;
@@ -127,8 +138,9 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     sheet.part(tall, [=](const Pen& pen, float y) {
         for (size_t s = 0; s < 2; s++) {
             const Way& way = ways()[s];
-            label(pen, way.name.in(words), Sheet::left, y, palette::ink2);
-            y += HEAD;
+            if (named && !(*named)[s].empty()) pen.words((*named)[s], Sheet::left, y, Sheet::width, 0, setting::body, palette::ink2);
+            else label(pen, way.name.in(words), Sheet::left, y, palette::ink2);
+            y += heads[s];
             for (size_t i = 0; i < talls[s].size(); i++) {
                 point(pen, way, accent, palette::ink2, p.sides[s].points[i], Sheet::left, y, 5, Sheet::width, 0, open);
                 y += talls[s][i] + 7;
