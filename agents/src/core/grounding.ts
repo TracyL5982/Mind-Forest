@@ -64,6 +64,11 @@ export interface Shown {
   boxes: (boolean | undefined)[];
   /** Each text piece as the item writes it, which a card draws in place of the words it was given. */
   texts: string[];
+  /**
+   * What each text piece stands on: lines of a list (`item`), cells of a table (`cell`), or anything else (`prose`), which may say what
+   * the lines before it mean. A card that counts the pieces it leaves out reads this, so no unshown piece can turn the shown ones.
+   */
+  kinds: ('item' | 'cell' | 'prose')[];
   /** How many cells stand in each row of the item, when the card's pieces are a table and nothing else. */
   rows?: number[];
 }
@@ -881,7 +886,7 @@ class Whole {
     return [first.of.slice(start), ...middle, last.of.slice(0, end)].join('\n');
   }
 
-  private read(units: Unit[], way: Way, cells: boolean): Pick<Shown, 'slots' | 'boxes' | 'texts'> | undefined {
+  private read(units: Unit[], way: Way, cells: boolean): Pick<Shown, 'slots' | 'boxes' | 'texts' | 'kinds'> | undefined {
     if (units.length === 0) return undefined;
     const words: string[] = [];
     /** The unit each word stands in, where it stands in its line, and the units by the word they start at. */
@@ -898,6 +903,11 @@ class Whole {
     const slots: string[] = [];
     const boxes: (boolean | undefined)[] = [];
     const texts: string[] = [];
+    const kinds: Shown['kinds'] = [];
+    const kindOf = (from: number, to: number): Shown['kinds'][number] => {
+      const covered = new Set(units.slice(owner[from]!, owner[to - 1]! + 1).map((unit) => unit.kind));
+      return covered.size === 1 && covered.has('item') ? 'item' : covered.size === 1 && covered.has('cell') ? 'cell' : 'prose';
+    };
     let at = 0;
     for (const piece of way.pieces) {
       if ('slot' in piece) {
@@ -920,6 +930,7 @@ class Whole {
         if (!cells) return undefined;
         boxes.push(undefined);
         texts.push('');
+        kinds.push('cell');
         continue;
       }
       while (QUOTE.has(words[at] ?? '') && words[at] !== asked[0]) at++;
@@ -929,12 +940,13 @@ class Whole {
       const first = units[owner[at] ?? -1];
       boxes.push(first ? this.lines[first.line]!.box : undefined);
       texts.push(this.written(units, owner, spans, at, at + asked.length, aligned && starts.has(at) && starts.has(at + asked.length), /[.!?。！？…;；,，:：]["'”’」』]*\s*$/u.test(piece.text)));
+      kinds.push(kindOf(at, at + asked.length));
       at += asked.length;
       while (QUOTE.has(words[at] ?? '') && !(starts.has(at) && piece.entry)) at++;
       if (aligned && !edge(at, -1) && !edge(at, 1)) return undefined;
     }
     while (QUOTE.has(words[at] ?? '')) at++;
-    return at === words.length ? { slots, boxes, texts } : undefined;
+    return at === words.length ? { slots, boxes, texts, kinds } : undefined;
   }
 
   units(asked: string): number | undefined {

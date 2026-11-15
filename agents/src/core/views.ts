@@ -35,6 +35,13 @@ export const ROOM = {
   axis: 32,
   /** How far into its item's text the words a note sets apart may end, so the note draws them where they stand among its first lines. */
   emphasis: { spaced: 180, spaceless: 90 },
+  /**
+   * How many entries of a list, steps and points of one side, and rows and columns of a table, a card draws before it counts the rest as
+   * "+N more". What it leaves out must be more lines of the same list or rows of the same table, never a line that may say what the shown
+   * ones mean. The client keeps its own copies of these in list.js, steps.js, proscons.js and table.js. A sheet's sections hold no more
+   * entries or rows than it draws.
+   */
+  shown: { list: 6, steps: 5, side: 4, rows: 6, columns: 5 },
   /** The most values an item may state for a slider, and the most stops a slider has between its ends. */
   stated: 8,
   stops: 1000,
@@ -361,6 +368,19 @@ function written<P>(props: P, way: Way, shown: Shown): P {
   return swap(props, '') as P;
 }
 
+/**
+ * Whether the pieces from `from` up to `to`, which a card counts instead of drawing, are each one more entry of its list or steps (`item`)
+ * or one more cell of its table (`cell`). A sentence under them, which may say what they mean, is neither.
+ */
+const unseen = (shown: Shown, from: number, to: number, kind: 'item' | 'cell'): boolean => shown.kinds.slice(from, to).every((one) => one === kind);
+
+/**
+ * Whether a table has no more columns than a card draws, and each row past those it draws is a full row, with as many cells filled as
+ * heads, so a note set in a row's first cell is never what goes unseen.
+ */
+const rowsCounted = (heads: string[], rows: string[][]): boolean =>
+  heads.length <= ROOM.shown.columns && rows.slice(ROOM.shown.rows).every((row) => row.filter((cell) => cell.trim()).length >= heads.filter((head) => head.trim()).length);
+
 /** A facts grid or a chart drawn from a table of two columns carries that table's heads row, and one drawn from other lines none. */
 const headed = <P extends { heads?: [string, string] }>(props: P, shown: Shown): P => {
   const { heads: _drawn, ...rest } = props;
@@ -440,7 +460,7 @@ export const CHECKS: ContentChecks = {
   steps: {
     props: { steps: 'shown', above: 'shown' },
     also: (p) => p.steps.length >= 2,
-    frame: (p, text) => framed(p, text, [{ pieces: p.steps.map(entry) }]),
+    frame: (p, text) => framed(p, text, [{ pieces: p.steps.map(entry) }], (q, shown) => (unseen(shown, ROOM.shown.steps, q.steps.length, 'item') ? q : undefined)),
   },
   facts: {
     props: { facts: { label: 'shown', value: 'shown' }, more: 'choice', above: 'shown', heads: 'shown' },
@@ -455,7 +475,7 @@ export const CHECKS: ContentChecks = {
     // Every row and every cell of one table, each row as the item writes it.
     frame: (p, text) =>
       framed(p, text, [{ pieces: [...p.heads, ...p.rows.flat()].map(entry) }], (q, shown) =>
-        shown.rows?.length === q.rows.length + 1 && shown.rows.every((cells) => cells === q.heads.length) ? q : undefined,
+        shown.rows?.length === q.rows.length + 1 && shown.rows.every((cells) => cells === q.heads.length) && rowsCounted(q.heads, q.rows) ? q : undefined,
       ),
   },
   list: {
@@ -463,7 +483,10 @@ export const CHECKS: ContentChecks = {
     // A mark is the check box on the entry's own line. A tick or a cross the line writes is a word of the entry, and no check box.
     frame: (p, text) =>
       framed(p, text, [{ pieces: p.items.map(entry) }], (q, shown) =>
-        (q.checked ? q.checked.every((mark, n) => shown.boxes[n] === mark) : shown.boxes.every((box) => box === undefined)) ? q : undefined,
+        (q.checked ? q.checked.every((mark, n) => shown.boxes[n] === mark) : shown.boxes.every((box) => box === undefined)) &&
+        unseen(shown, ROOM.shown.list, q.items.length, 'item')
+          ? q
+          : undefined,
       ),
   },
   // Shares of one whole add up to it. A percent that the text rounded may leave the sum one off.
@@ -508,7 +531,9 @@ export const CHECKS: ContentChecks = {
     frame: (p, text) =>
       framed({ ...p }, text, [{ pieces: [SIDE, ...p.pros.map(entry), SIDE, ...p.cons.map(entry)] }], (q, shown) => {
         const sides: [string, string] = [shown.slots[0]!, shown.slots[1]!];
-        return q.heads === undefined || alike(q.heads, sides) ? { ...q, heads: sides } : undefined;
+        const pros = q.pros.length;
+        const counted = unseen(shown, ROOM.shown.side, pros, 'item') && unseen(shown, pros + ROOM.shown.side, pros + q.cons.length, 'item');
+        return (q.heads === undefined || alike(q.heads, sides)) && counted ? { ...q, heads: sides } : undefined;
       }),
   },
   swatch: { props: { colours: { name: 'says', value: 'paints' } } },

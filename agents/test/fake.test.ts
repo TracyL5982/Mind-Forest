@@ -175,7 +175,7 @@ test('the fake chooses a callout, a sheet or a note for a text the rules left as
   assert.deepEqual(k.notes, []);
 
   assert.equal((await paste('Survey of 40 viewers\nWhat they noticed in the scene, in their own words. fake:invent')).component, 'note');
-  assert.deepEqual(k.notes, ['renderer: Kept "Survey of 40 viewers" as the rules drew it: the model\'s fact is not the whole content, every line in order and every mark as it is written.']);
+  assert.deepEqual(k.notes, ['renderer: Kept "Survey of 40 viewers" as the rules drew it: the model\'s fact is not the whole content, every line in order and every mark as it is written, or leaves unseen a line that is not one more entry.']);
 });
 
 test('the fake makes an explorable of a text that contrasts states or gives a formula, and the real checks refuse a formula that cannot be read or misses', async () => {

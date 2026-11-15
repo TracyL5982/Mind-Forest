@@ -115,7 +115,7 @@ Since 14 November 2026 a structured card shows its whole item. Its structure cha
 - A member's line in an arrangement, the reason a ranked or matrix member stands where it does or the change between two states, is that member's whole text.
 - Values that are tokens, such as numbers, dates, names, the labels of an arrangement's members, a timeline's dates, a map's places and an explorable's stated values, keep the check that their words stand in the item. A number there is one token with its sign: a comparison cell "3%" of a member that says "Margin: -3%" is refused.
 - A sheet's figures, list or table may stand under the item's own label for them, as `label`, so a list stands under "Best:".
-- What does not fit a card's room is drawn as a note, which shows the whole item. No section, entry, row or passage is cut to fit.
+- What does not fit a card's room is drawn as a note, which shows the whole item. A list, steps, a side of pros and cons or a table may count the rest of its entries or rows as "and 2 more" only when each one it leaves unseen is one more entry of the same list, or one more full row of the same table. A sentence under the entries, a note set in a row or a sixth column is never what it leaves out.
 
 Deleted with the premise: the reversing-word table and the test of the units beside and over a passage, the rules that joined a line to the next, the quotation and speech-verb heuristics, the label words read in their other forms, the floor of a sheet's opening, the share a card must show of its item (a person card and a palette, which show a piece of their item and not its words, keep it), and the dropping of a figure, an entry or a row that fails. Kept for token values: the number reader with its sign, brackets around money and magnitudes, which the comparison cell above needs.
 
@@ -141,6 +141,20 @@ A card shows its whole item, and its layout still chooses what to set large. The
 - A note sets apart a whole sentence where it stands, which may be a turn of a dialogue only when the dialogue's speakers are no labels.
 
 Against the integration head before this round, the reviewers' fall from 112 to 109 on the rules and from 112, 111 and 112 to 109, 108 and 109 with the model. The authors' with the model go from 41, 41 and 40 to 39, 40 and 41. What the model loses: callouts of one sentence out of two (`C10`, `C14`, `C15`), sheets that pick figures out of a long item (`C03`, `C05`), and facts under labels the model wrote (`C24`). Gained: definitions the text gives whole (`C26`, `D04`). No live run was allowed, so the new prompts are unmeasured; the saved replies were written to the old ones.
+
+### What a card leaves unseen
+
+A card that counts "and 2 more" or ends a line in "…" does not show all of its item, and what it hides may turn what it shows. Nine probes put a turn past the cut: a line under eight tips that says all of them are myths, the same in Chinese, a warning under six steps, a "Retracted" note in a table's eighth row, a line under five pros, a sixth column, a ninth bullet, a fifth column too wide for the card, and a heading over a list of nine with a line under it. Two more hold eight plain tips and eight full rows, which may be counted. Before the count was held, all nine were drawn with the turn unseen. Now 2 are:
+
+- An entry written as one more entry: "- All of the above are myths." as the ninth bullet. It is a line of the list, so the count may leave it out.
+- A column the table drops because it has no room for it, which the service cannot see: a fifth column "Forecast, not results" beside four columns of ten-digit figures. The client drops columns from the end until the rest fit, and only it measures them.
+
+Over every format sample, by the rules and by the two saved runs that drew a card, 104 of 264 cards end a line in "…": 92 of 169 notes, two steps cards whose step is longer than its line, and one or two each of charts, chats, a definition, an excerpt, code, links and a video. Three count more: two tables of more rows and one list of more entries, each leaving out only rows or entries. The count rule changes none of them.
+
+Two cuts by "…" stand inside a structured card, where what they hide may govern what the card shows:
+
+- A steps card sets each step on one line. A step longer than its line loses its end, which may be the condition on it.
+- A sheet's passage stops at six lines, which a passage within its 280 characters may pass: in the format samples 136 characters of Chinese or 248 of English need a seventh. A probe of 178 Chinese characters whose last sentence says not to use the list under it is drawn with that sentence cut.
 
 ## The fourth round: whole units
 

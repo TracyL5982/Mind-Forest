@@ -1325,7 +1325,7 @@ const FIELD = 'On a full-frame camera the field of view narrows as the focal len
 
 const said = (component: Chosen, slots: Partial<ComponentsReply['items'][number]>) => entry({ id: '', component, ...slots });
 /** What the run log says of a card whose words are not its whole item. */
-const WHOLE = 'is not the whole content, every line in order and every mark as it is written';
+const WHOLE = 'is not the whole content, every line in order and every mark as it is written, or leaves unseen a line that is not one more entry';
 type Part = ComponentsReply['items'][number]['sections'][number];
 const part = (kind: Part['kind'], slots: Partial<Part> = {}): Part => ({ kind, text: '', by: '', lines: [], ...slots });
 
@@ -2234,4 +2234,23 @@ test('a number that opens a line is an entry\'s only when white space follows it
   }
   assert.deepEqual(verdict('Steps:\n1. Stop the writer.\n2. Copy the file.', 'steps', { lines: ['Stop the writer.', 'Copy the file.'] }), { draw: { component: 'steps', props: { steps: ['Stop the writer.', 'Copy the file.'], above: ['Steps:'] } } }, 'a step number with a space after its stop');
   assert.deepEqual(verdict('步骤：\n1、关掉电源\n2、拆下灯罩', 'steps', { lines: ['关掉电源', '拆下灯罩'] }), { draw: { component: 'steps', props: { steps: ['关掉电源', '拆下灯罩'], above: ['步骤：'] } } }, 'a number before 、');
+});
+
+test('a card counts as more only further entries of its list or rows of its table, so a line under them that turns them is never what it leaves out', () => {
+  const tips = ['Rest for a few days', 'Drink hot lemon', 'Take vitamin C every hour', 'Sweat it out in a sauna', 'Starve a fever', 'Drink milk for the cough', 'Wear a scarf to bed', 'Eat raw garlic'];
+  const listed = `Tips for a cold:\n${tips.map((tip) => `- ${tip}`).join('\n')}`;
+  const turned = `${listed}\nAll of the above are myths.`;
+  assert.ok('refused' in verdict(turned, 'list', { lines: [...tips, 'All of the above are myths.'] }), 'the line that turns the tips would go unseen past the sixth');
+  assert.equal(ruled({ title: 'Tips', text: turned, data: { items: [...tips, 'All of the above are myths.'] } }).component, 'note', 'the rules draw the turned tips as a note');
+  assert.deepEqual(verdict(listed, 'list', { lines: tips }), { draw: { component: 'list', props: { items: tips, above: ['Tips for a cold:'] } } }, 'eight plain tips may count two');
+  const steps = ['Pour the oil into the pan', 'Heat until it smokes', 'Add the wet chips', 'Cover with a lid', 'Leave it on high', 'Walk away for a minute'];
+  const chips = `Chips the old way:\n${steps.map((step, n) => `${n + 1}. ${step}`).join('\n')}\nNever do any of this: it starts a fire.`;
+  assert.ok('refused' in verdict(chips, 'steps', { lines: [...steps, 'Never do any of this: it starts a fire.'] }), 'the warning under the steps would go unseen past the fifth');
+  assert.ok('refused' in verdict('Pros:\n- a\n- b\n- c\n- d\n- e\nNone of these is true.\nCons:\n- f', 'proscons', { left: ['a', 'b', 'c', 'd', 'e', 'None of these is true.'], right: ['f'] }), 'the line under the pros would go unseen past the fourth');
+  const doses = Array.from({ length: 7 }, (_, n) => `| Drug ${n + 1} | ${10 * (n + 1)} mg |`);
+  const withdrawn = `| Drug | Dose |\n|---|---|\n${doses.join('\n')}\n| Retracted: every dose above was withdrawn in 2020 | |`;
+  assert.ok('refused' in verdict(withdrawn, 'table', { lines: ['Drug | Dose', ...doses.map((row) => row.slice(1, -1)), 'Retracted: every dose above was withdrawn in 2020 |'] }), 'a note set in a row past the sixth would go unseen');
+  const full = [...doses, '| Drug 8 | 80 mg |'];
+  assert.ok('draw' in verdict(`| Drug | Dose |\n|---|---|\n${full.join('\n')}`, 'table', { lines: ['Drug | Dose', ...full.map((row) => row.slice(1, -1))] }), 'eight full rows may count two');
+  assert.ok('refused' in verdict('| a | b | c | d | e | Status |\n|---|---|---|---|---|---|\n| 1 | 2 | 3 | 4 | 5 | Retracted |', 'table', { lines: ['a | b | c | d | e | Status', '1 | 2 | 3 | 4 | 5 | Retracted'] }), 'a sixth column would go unseen');
 });
