@@ -63,7 +63,7 @@ import { parseArgs } from 'node:util';
 import { chromium, type Page } from 'playwright-core';
 import type { Command, Item, Node } from '../src/core/domain.ts';
 import type { Running } from '../src/node/server.ts';
-import { PNG, TOKEN, bootFake, browserPath, chipped, crowd, showcase, spills, stored } from '../test/stage.ts';
+import { PNG, TOKEN, bootFake, browserPath, chipped, crowd, faceFaults, showcase, stored } from '../test/stage.ts';
 import { tones } from '../src/fake/model.ts';
 
 const { values: flags, positionals: steps } = parseArgs({
@@ -187,7 +187,7 @@ const STEPS: Record<string, Step> = {
     const total = Number(count) || 200;
     if (!run.pipeline.userCommands('Add a crowd', crowd(total, { chips: mode === 'chips' }))) throw new Error('the service refused the crowd');
     await page.waitForFunction((n) => document.querySelectorAll('.card[data-id^="crowd-"]').length === n, total);
-    return `${total} cards drawn, ${await page.locator('.card[data-id^="crowd-"] .chip-line').count()} with chips`;
+    return `${total} cards drawn`;
   },
   async card(value, page, run) {
     const cut = value.indexOf(':');
@@ -273,7 +273,7 @@ const STEPS: Record<string, Step> = {
   },
   async fits(_, page) {
     await settle(page);
-    const found = await spills(page);
+    const found = await faceFaults(page);
     if (found.length > 0) throw new Error(`${found.length} parts do not fit, the first is ${found[0]}`);
     return `${await page.locator('.card').count()} cards, every part fits`;
   },

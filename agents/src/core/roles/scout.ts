@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { inLibrary, type Command, type Id, type Item, type ItemData, type Node } from '../domain.ts';
 import type { Found, Source } from '../ports.ts';
 import { givesWay, KNOWN_MOST, LIBRARY_TOOL, MINDSTORM, newSlots, ROUND_MOST, sameness, treeKeys, urlKey } from '../round.ts';
+import { fittedTitle } from '../fitted.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
 import { AGENT, idFrom, makeItem, makeNode, pickStatus, type RoleContext, type Roles, type Turn } from './types.ts';
@@ -232,7 +233,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number): Promise<Direct
       'For each direction:',
       '- angle: two to five words naming the direction.',
       '- format: one of the formats below.',
-      '- title: under 60 characters, specific, no trailing period.',
+      '- title: about 26 characters in English or 18 in Chinese, so it stands whole on the two lines a small card gives a title; specific, no trailing period.',
       '- why: under eight words, shown on the thread that joins this card to the original. It names where this direction goes ("what the studies found").',
       '- tags: 2 to 4 short lowercase words.',
       '- body, steps, images, source, lookups: as the format says. Leave the ones a format does not use empty.',
@@ -268,7 +269,7 @@ type Made = { item: Item; tool: string };
 
 function common(d: Direction, tool: string) {
   return {
-    title: oneLine(d.title, 120),
+    title: fittedTitle(oneLine(d.title, 120)),
     tags: [...new Set(d.tags.map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 6),
     origin: AGENT(ROLE, tool),
   };
@@ -352,7 +353,7 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
             tool: 'web',
             item: makeItem(ctx, {
               ...common(d, 'web'),
-              title: oneLine(d.title || video.title, 120),
+              title: fittedTitle(oneLine(d.title, 120)) || oneLine(video.title, 120),
               kind: 'video',
               text: [d.body.trim(), video.title].filter(Boolean).join('\n\n'),
               summary: oneLine(d.body || video.title, 400),

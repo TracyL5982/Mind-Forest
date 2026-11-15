@@ -1,6 +1,6 @@
 import { h } from '../dom.js';
-import { TEXT, text, textWidth } from '../components/shared.js';
-import { HEAD, PAD, linesOf } from './shared.js';
+import { text, textWidth } from '../components/shared.js';
+import { HEAD, LINE, PAD, linesOf } from './shared.js';
 
 export const name = 'Matrix';
 
@@ -22,13 +22,13 @@ export function arrange(group, ids, sizes) {
     const [w, hgt] = sizes.get(id);
     const reason = text(group.props.reasons?.[id]).trim();
     const lines = linesOf(reason, w);
-    return { id, w, hgt, reason, lines, tall: hgt + (lines ? BELOW + lines * TEXT : 0) };
+    return { id, w, hgt, reason, lines, tall: hgt + (lines ? BELOW + lines * LINE : 0) };
   });
   const at = (i) => placed[i] ?? { w: 0, tall: 0 };
   const cols = [0, 1].map((c) => Math.ceil(Math.max(at(c).w, at(c + 2).w)));
   const rows = [0, 1].map((r) => Math.ceil(Math.max(at(2 * r).tall, at(2 * r + 1).tall)));
   const left = PAD + AXIS;
-  const top = HEAD + (y ? TEXT + 6 : 0);
+  const top = HEAD + (y ? LINE + 6 : 0);
   const gridW = cols[0] + GAP + cols[1];
   const gridH = rows[0] + GAP + rows[1];
   const centres = new Map();
@@ -38,12 +38,12 @@ export function arrange(group, ids, sizes) {
     const cellLeft = left + (c ? cols[0] + GAP : 0) + (cols[c] - w) / 2;
     const cellTop = top + (r ? rows[0] + GAP : 0) + (rows[r] - tall) / 2;
     centres.set(id, { x: cellLeft + w / 2, y: cellTop + hgt / 2 });
-    if (count) lines.push(h('div', { class: 'arr-words mx-why', dir: 'auto', style: { left: `${cellLeft}px`, top: `${cellTop + hgt + BELOW}px`, width: `${w}px`, height: `${count * TEXT}px` }, text: reason }));
+    if (count) lines.push(h('div', { class: 'arr-words mx-why', dir: 'auto', style: { left: `${cellLeft}px`, top: `${cellTop + hgt + BELOW}px`, width: `${w}px`, height: `${count * LINE}px` }, text: reason }));
   });
   const bottom = top + gridH;
   const inner = Math.max(AXIS + gridW, textWidth(y), textWidth(x));
   return {
-    at: centres, w: PAD * 2 + inner, h: bottom + UNDER + (x ? TEXT : 0) + PAD,
+    at: centres, w: PAD * 2 + inner, h: bottom + UNDER + (x ? LINE : 0) + PAD,
     marks: [
       h('div', { class: 'mx-split is-across', style: { left: `${left}px`, top: `${top + rows[0] + GAP / 2}px`, width: `${gridW}px` } }),
       h('div', { class: 'mx-split is-down', style: { left: `${left + cols[0] + GAP / 2}px`, top: `${top}px`, height: `${gridH}px` } }),

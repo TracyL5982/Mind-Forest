@@ -1,30 +1,35 @@
 import { h } from '../dom.js';
-import { initials, picture, say, text } from './shared.js';
+import { COLUMN, MEASURES, TITLE_LINES, WIDTH, drawFace, fit, initials, lay, picture, say, text } from './shared.js';
+import { wordsOf } from '../words.js';
+
+/** The round face and the gap beside it. */
+const FACE = 48;
+const BESIDE = 12;
+const MOST_LINES = 2;
 
 const nameOf = (item, props) => text(props.name) || item.title || '';
 
 /** A round face: the picture, or the initials when there is none or it fails to load. */
-const face = (name, props, ctx) => h('div', { class: 'person-face' },
+const portrait = (name, props, ctx) => h('div', { class: 'person-face' },
   text(props.image) ? picture(props.image, name, ctx, () => initials(name)) : initials(name));
 
-export const shows = [];
-
-export const size = () => [252, 88];
-
-export function draw(item, props, ctx) {
-  const name = nameOf(item, props);
-  return [
-    face(name, props, ctx),
-    h('div', { class: 'person-main' },
-      say('div', 'card-title clamp-1', name),
-      text(props.role) && say('div', 'card-text clamp-1', props.role),
-      item.title !== name && say('div', 'card-foot clamp-1', item.title),
-    ),
-  ];
+/** The face beside the name at the title's size, cut as a title is past two lines, and the role under it, whole on up to two. */
+function face(item, props, ctx) {
+  const name = fit(nameOf(item, props), COLUMN - FACE - BESIDE, 'title', TITLE_LINES, true);
+  const role = fit(text(props.role).trim(), COLUMN - FACE - BESIDE, 'body', MOST_LINES);
+  return lay([{
+    tall: Math.max(FACE, name.lines * MEASURES.title.lead + role.lines * MEASURES.body.lead), whole: name.whole && role.whole,
+    draw: () => h('div', { class: 'person-row' }, portrait(nameOf(item, props), props, ctx),
+      h('div', { class: 'person-main' }, say('div', 'card-title', name.words), role.words && say('div', 'card-text', role.words))),
+  }], { words: wordsOf(item) });
 }
+
+export const size = (item, props) => [WIDTH, face(item, props).height];
+
+export const draw = (item, props, ctx) => drawFace(face(item, props, ctx));
 
 export const detail = (item, props, ctx) => [
   h('div', { class: 'detail-person' },
-    face(nameOf(item, props), props, ctx),
+    portrait(nameOf(item, props), props, ctx),
     h('div', null, say('div', 'card-title', nameOf(item, props)), say('div', 'card-text', text(props.role)))),
 ];

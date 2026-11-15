@@ -1,31 +1,15 @@
 import { h } from '../dom.js';
-import { FRAME, PADDING, PASSAGE_LETTER, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, aboveOf, andMore, drawAbove, list, picture, say, text, titleOf, wrap } from './shared.js';
-import { figures, grid, listed, pairs } from './facts.js';
-import { entry, entryLines, stacked, written } from './list.js';
-import { detail as opened, plan as tableOf, ruled, ruledHeight } from './table.js';
+import { COLUMN, CUE, GAP, HEIGHT, WIDTH, aboveRows, drawFace, lay, list, picture, say, text, titleRow, wordsIn } from './shared.js';
+import { UNDER_TITLE, figureRows, listed, pairs } from './facts.js';
+import { entry, written } from './list.js';
+import { detail as opened, headsLine } from './table.js';
+import { wordsOf } from '../words.js';
 
-const WIDTH = 320;
-const COLUMN = WIDTH - SIDES;
-/** A picture leads the card in a band this tall, across its whole width. */
-const PICTURE = 140;
-const TITLE_LINES = 3;
-const TEXT_LINES = 6;
-/** As many entries as a sheet's list may hold. A list sent with more counts the rest. */
-const ENTRIES = 8;
-const PASSAGE_LINES = 5;
-/**
- * The text counts its lines in the whole line box, without the px to spare: a character set with Han draws exactly 12.5 px in the
- * text face, so twenty-three of them fill the 288 px line to the last half px, and a px held back would push the last onto a line of its own.
- */
-const LINE = WIDTH - PADDING;
-/** A passage's line: the whole line box less the rule down its left side and the gap after it, as on an excerpt card. */
-const PASSAGE = LINE - 14;
-/** The line of who said the words, less the short rule before them and the gap after it. */
-const BY = COLUMN - 22;
-/** A part after the first is set apart by a hairline, with this much room above it and below it. */
-const ABOVE = 10;
-const BELOW = 10;
-const RULED = ABOVE + 1 + BELOW;
+/** A list's mark and the gap after it, as on a list card. */
+const MARK = 20;
+/** A passage's column: the column less the rule down its left side and the gap after it. */
+const PASSAGE = COLUMN - 14;
+const ENTRY_LINES = 2;
 
 const flat = (words) => words.replace(/\s+/g, ' ');
 const said = (words) => flat(words).trim().toLowerCase();
@@ -41,133 +25,117 @@ function whole(item, words) {
   return words;
 }
 
-const saidBy = (by, lines) => h('div', { class: 'sheet-by' }, say('span', lines ? `clamp-${lines}` : '', by));
+const saidBy = (by) => h('div', { class: 'sheet-by' }, say('span', '', by));
 
 /**
- * Each kind of section the column holds, laid out and drawn as the card of its own kind does it. `lead` is how far under the
- * title the part sits when it comes first, as on that card. `plan` gives what the part draws and how tall it is, or nothing when
- * the section has nothing to show. `says` is every string the part draws on the card, and `detail` the part on the opened card.
+ * Each kind of section the column holds. `plan` gives what the part holds, or nothing when the section has nothing to show.
+ * `lead` is how far under the title the part sits, as on the card of its own kind. `rows` is the part's own preview as rows of the
+ * face, as many as it has room for, which under a title of one line and the cue is 68 px: three lines of text, a row of figures,
+ * two entries, the heads of a table and the count of its rows, or a passage over who said it, who is always shown. The first row
+ * of figures stands in the `room` px the face leaves it. `detail` is the whole part on the opened card.
  */
 const PARTS = {
   text: {
-    lead: 6,
-    plan(section) {
+    lead: GAP,
+    plan: (section) => {
       const words = flat(text(section.text).trim());
-      const lines = wrap(words, LINE, TEXT_LETTER, TEXT_LINES);
-      return words && { words, lines, height: lines * TEXT };
+      return words && { words };
     },
-    says: ({ words }) => [words],
-    draw: ({ words, lines }) => say('div', `card-text clamp-${lines}`, words),
+    rows: ({ words }, gap) => [{ words, gap, draw: wordsIn('card-text') }],
     detail: ({ words }, item) => say('p', 'detail-sheet-text', whole(item, words)),
   },
   figures: {
-    lead: 12,
-    plan(section) {
+    lead: UNDER_TITLE,
+    plan: (section) => {
       const facts = pairs(section);
-      const laid = grid(facts);
-      return facts.length > 0 && { facts, laid, height: laid.height };
+      return facts.length > 0 && { facts };
     },
-    says: ({ facts }) => facts.flatMap(({ label, value }) => [label, value]),
-    draw: ({ laid }) => figures(laid),
+    rows: ({ facts }, gap, words, room) => figureRows(facts, { gap, room }),
     detail: ({ facts }) => listed(facts),
   },
   list: {
     lead: 10,
-    plan(section) {
-      const entries = list(section.items).map((one) => text(one).trim());
-      const rows = entries.slice(0, ENTRIES).map((one) => entryLines(one, COLUMN));
-      const more = entries.length - rows.length;
-      return rows.length > 0 && { entries, rows, more, height: stacked(rows) + (more > 0 ? 8 + TEXT : 0) };
+    plan: (section) => {
+      const entries = list(section.items).map((one) => text(one).trim()).filter(Boolean);
+      return entries.length > 0 && { entries };
     },
-    says: ({ entries, rows }) => entries.slice(0, rows.length),
-    draw: ({ entries, rows, more }, item, words) => [
-      h('ul', { class: 'list' }, rows.map((lines, i) => entry(entries[i], undefined, `clamp-${lines}`, words))),
-      more > 0 && andMore(more, item),
-    ],
+    rows: ({ entries }, gap, words) => entries.map((label, i) => ({
+      words: label, column: COLUMN - MARK, most: ENTRY_LINES, unit: true, gap: i === 0 ? gap : 5,
+      draw: (row) => entry(row.words, undefined, '', words, 'div'),
+    })),
     detail: ({ entries }, item, words) => h('ul', { class: 'list is-full' }, written(item, entries).map((label) => entry(label, undefined, '', words))),
   },
   table: {
-    lead: 8,
-    plan(section, item) {
-      const laid = tableOf(item, section, COLUMN);
-      return laid.heads.length > 0 && { section, laid, height: ruledHeight(laid) };
+    lead: GAP,
+    plan: (section) => {
+      const named = headsLine(list(section.heads).map((head) => text(head).trim()));
+      return named && { section, named, count: list(section.rows).length };
     },
-    says: ({ laid }) => [...laid.heads, ...laid.rows.flat()],
-    draw: ({ laid }) => [ruled(laid), laid.foot && h('div', { class: 'card-foot', text: laid.foot })],
+    rows: ({ named, count }, gap, words) => [
+      { words: named, measure: 'meta', most: 2, gap, draw: wordsIn('table-heads') },
+      count > 0 && { words: words.cue.rows(count), measure: 'meta', most: 1, gap: 4, draw: wordsIn('sheet-count') },
+    ],
     detail: ({ section }, item) => opened(item, section),
   },
   excerpt: {
-    lead: 10,
-    plan(section) {
+    lead: GAP,
+    plan: (section) => {
       const passage = text(section.text).trim();
-      const words = flat(passage);
-      const by = text(section.by).trim();
-      const lines = wrap(words, PASSAGE, PASSAGE_LETTER, PASSAGE_LINES);
-      const byLines = by ? wrap(by, BY, TEXT_LETTER, 2) : 0;
-      return words && { passage, words, by, lines, byLines, height: lines * TITLE + (by ? 4 + byLines * TEXT : 0) };
+      return passage && { passage, words: flat(passage), by: text(section.by).trim() };
     },
-    says: ({ words, by }) => [words, by],
-    draw: ({ words, by, lines, byLines }) => [say('blockquote', `excerpt-text clamp-${lines}`, words), by && saidBy(by, byLines)],
-    detail: ({ passage, by }) => h('div', { class: 'detail-excerpt' }, say('blockquote', 'excerpt-text', passage), by && saidBy(by, 0)),
+    rows: ({ words, by }, gap) => [
+      { words, measure: 'passage', column: PASSAGE, gap, draw: wordsIn('sheet-passage') },
+      by && { words: by, measure: 'meta', column: COLUMN - 22, most: 1, gap: 4, keep: true, draw: (row) => saidBy(row.words) },
+    ],
+    detail: ({ passage, by }) => h('div', { class: 'detail-excerpt' }, say('blockquote', 'excerpt-text', passage), by && saidBy(by)),
   },
 };
 
 /**
- * The card's one title is its heading, or the item's title when it has none. Its first picture leads the card. Every other
- * section is a part of the column, in the order given, each after the first under a hairline.
+ * The card's one title is its heading, or the item's title when it has none. Its first picture leads the opened card, and every
+ * other section is a part, in the order given; the item's own label of a part, "Best:", stands over it as the lines over a card
+ * stand over its structure.
  */
 function plan(item, props) {
   const sections = list(props.sections).filter((section) => section !== null && typeof section === 'object');
-  const first = (kind, key) => text(sections.find((section) => section.kind === kind)?.[key]).trim();
-  const heading = first('heading', 'text');
-  const title = heading || titleOf(item);
+  const src = sections.filter((section) => section.kind === 'picture').map((section) => text(section.src).trim()).find(Boolean) ?? '';
+  const heading = text(sections.find((section) => section.kind === 'heading')?.text).trim();
   const parts = sections.flatMap((section) => {
     const kind = Object.hasOwn(PARTS, section.kind) ? PARTS[section.kind] : undefined;
-    const part = kind?.plan(section, item);
-    if (!part) return [];
-    // The item's own label of the figures, list or table, "Best:", stands over the part as the lines over a card stand over its structure.
-    const label = aboveOf({ above: section.label ? [section.label] : [] }, COLUMN);
-    return [{ ...part, kind, label, height: part.height + label.height }];
+    const part = kind?.plan(section);
+    return part ? [{ ...part, kind, label: text(section.label).trim() }] : [];
   });
-  return { heading, title, src: first('picture', 'src'), titleLines: wrap(title, COLUMN, TITLE_LETTER, TITLE_LINES), above: aboveOf(props, COLUMN), parts };
+  return { heading, title: heading || text(item.data?.shortTitle).trim() || text(item.title).trim() || wordsOf(item).untitled, src, parts };
 }
 
-const before = (part, i) => (i === 0 ? part.kind.lead : RULED);
-
-/** The `item.data` keys whose value the card draws as one of its strings, a list of names when it draws each name, so no chip says it again. */
-export function shows(item, props) {
-  const { title, above, parts } = plan(item, props);
-  const drawn = new Set([title, ...above.lines.map((line) => line.words), ...parts.flatMap((part) => [...part.label.lines.map((line) => line.words), ...part.kind.says(part)])].map((words) => words.trim()).filter(Boolean));
-  const isDrawn = (value) => typeof value === 'string' && drawn.has(value.trim());
-  return Object.entries(item?.data ?? {}).flatMap(([key, value]) => {
-    const names = Array.isArray(value) ? value.filter((name) => typeof name === 'string' && name.trim()) : [];
-    return isDrawn(value) || (names.length > 0 && names.every(isDrawn)) ? [key] : [];
-  });
+/**
+ * The title, the lines the item writes over the card, then its first part as its own preview. The cue counts the other parts the
+ * opened card shows, its picture among them.
+ */
+function face(item, props) {
+  const words = wordsOf(item);
+  const { title, src, parts } = plan(item, props);
+  const [first] = parts;
+  const others = Math.max(0, parts.length - 1) + (src ? 1 : 0);
+  const label = first?.label ? aboveRows({ above: [first.label] }, { gap: first.kind.lead }) : [];
+  const top = [{ ...titleRow(item), words: title }, ...aboveRows(props), ...label];
+  const gap = label.length > 0 ? GAP : first?.kind.lead;
+  return lay([
+    ...top,
+    ...(first ? first.kind.rows(first, gap, words, HEIGHT - lay(top, { words }).height - gap - CUE) : []),
+  ], { words, more: others > 0, cue: () => (others > 0 ? words.cue.parts(others) : '') });
 }
 
-export function size(item, props) {
-  const { src, titleLines, above, parts } = plan(item, props);
-  return [WIDTH, (src ? PICTURE : 0) + FRAME + titleLines * TITLE + above.height + parts.reduce((sum, part, i) => sum + before(part, i) + part.height, 0)];
-}
+export const size = (item, props) => [WIDTH, face(item, props).height];
 
-export function draw(item, props, ctx) {
-  const { title, src, titleLines, above, parts } = plan(item, props);
-  return [
-    src && h('div', { class: 'media-frame', style: { height: `${PICTURE}px` } }, picture(src, title, ctx)),
-    h('div', { class: 'sheet-under' },
-      say('div', `card-title clamp-${titleLines}`, title),
-      drawAbove(above),
-      parts.map((part, i) => h('div', { class: i === 0 ? 'sheet-part' : 'sheet-part is-ruled', style: i === 0 ? { marginTop: `${part.kind.lead}px` } : { marginTop: `${ABOVE}px`, paddingTop: `${BELOW}px` } },
-        drawAbove(part.label), part.kind.draw(part, item, ctx.words)))),
-  ];
-}
+export const draw = (item, props) => drawFace(face(item, props));
 
-/** The picture whole, the heading when the opened card's title is not already it, and each part whole, in order. */
+/** The picture whole, the heading when the opened card's title is not already it, and each part whole, in order, under its label. */
 export function detail(item, props, ctx) {
   const { heading, title, src, parts } = plan(item, props);
   return [
     src && h('div', { class: 'detail-media' }, picture(src, title, ctx)),
     heading && said(heading) !== said(text(item.title)) && say('div', 'card-title detail-sheet-heading', heading),
-    parts.map((part) => [drawAbove(part.label), part.kind.detail(part, item, ctx.words)]),
+    parts.map((part) => [part.label && say('div', 'detail-sheet-label', part.label), part.kind.detail(part, item, ctx.words)]),
   ];
 }

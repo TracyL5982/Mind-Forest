@@ -1,30 +1,9 @@
 import { h, s, clamp } from '../dom.js';
-import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, aboveOf, cut, drawAbove, figureNeed, kind, list, say, text, title, titleOf, wrap } from './shared.js';
+import { GAP, WIDTH, aboveRows, drawFace, kind, lay, list, say, text, titleRow, wordsIn } from './shared.js';
 import { wordsOf } from '../words.js';
 
-const WIDTH = 288;
-const COLUMN = WIDTH - SIDES;
-/** The mark that says the card can be explored, and the room under it. */
-const MARK = TEXT + 4;
-/** The room above what the controls change, and above each control's row. */
-const OUT_GAP = 10;
-const ROW_GAP = 8;
-/** A control's row on the card: its states as pills, or a slider's reading beside its track. */
-const ROW = 28;
-const PILL_GAP = 4;
-const PILL_PAD = 12;
-const TRACK = 96;
-/** Each state's text on the card, and the room between two controls' texts. */
-const STATE_LINES = 4;
-const TEXT_GAP = 6;
-/** A result's label, the room under its figure, and the curve under that. */
-const LABEL_LINES = 2;
-const FIGURE_GAP = 2;
-const PLOT = 96;
-const PLOT_GAP = 8;
-const [, MID_LEAD, MID_LETTER] = FIGURES[1];
-const [SMALL_CLASS, SMALL_LEAD, SMALL_LETTER] = FIGURES[2];
-const VALUE_LINES = 3;
+/** The row of the mark that says the card can be explored. */
+const MARK_ROW = 22;
 
 const ARITY = { '+': 2, '-': 2, '*': 2, '/': 2, '^': 2, neg: 1, min: 2, max: 2, round: 1, sqrt: 1, exp: 1, ln: 1, atan: 1 };
 const APPLY = {
@@ -115,32 +94,35 @@ export function resultAt(sliders, output, at) {
 
 const firstAt = (sliders) => Object.fromEntries(sliders.map((slider) => [slider.name, slider.values[0]]));
 
-/** How the card lays out its default state: every state first, every slider on the first value the item states. */
-function plan(item, props) {
+/** The controls the card works by, what they change, and for a formula its result where every slider stands on its first stated value. */
+function plan(props) {
   const controls = controlsOf(props);
   const output = outputOf(props);
   const sliders = controls.filter((control) => control.kind === 'slider');
-  const switches = controls.filter((control) => control.kind !== 'slider');
-  const titleLines = wrap(titleOf(item), COLUMN, TITLE_LETTER, 2);
-  if (output.kind === 'text' || sliders.length === 0) {
-    const texts = switches.map((control) => ({ words: control.states[0].text, lines: wrap(control.states[0].text, COLUMN, TEXT_LETTER, STATE_LINES) }));
-    const height = texts.reduce((sum, { lines }) => sum + lines * TEXT, 0) + TEXT_GAP * Math.max(0, texts.length - 1);
-    return { controls: switches, output: { kind: 'text' }, titleLines, texts, height };
-  }
-  const result = resultAt(sliders, output, firstAt(sliders));
-  const mid = figureNeed(result.shown, FIGURES[1]) <= COLUMN * 100;
-  const valueLines = mid ? 1 : wrap(result.shown, COLUMN, SMALL_LETTER, VALUE_LINES);
-  const figure = { cls: mid ? 'is-mid' : SMALL_CLASS, lead: mid ? MID_LEAD : SMALL_LEAD, valueLines, labelLines: output.label ? wrap(output.label, COLUMN, TEXT_LETTER, LABEL_LINES) : 0 };
-  const height = figure.valueLines * figure.lead + FIGURE_GAP + figure.labelLines * TEXT + (output.kind === 'chart' ? PLOT_GAP + PLOT : 0);
-  return { controls: sliders, output, titleLines, result, figure, height };
+  if (output.kind === 'text' || sliders.length === 0) return { controls: controls.filter((control) => control.kind !== 'slider'), output: { kind: 'text' } };
+  return { controls: sliders, output, result: resultAt(sliders, output, firstAt(sliders)) };
 }
 
-export const shows = [];
-
-export function size(item, props) {
-  const { controls, titleLines, height } = plan(item, props);
-  return [WIDTH, FRAME + MARK + titleLines * TITLE + aboveOf(props, COLUMN).height + OUT_GAP + height + controls.length * (ROW_GAP + ROW)];
+/**
+ * The mark that says the card can be explored, the title, the lines the item writes over it, and what the controls change: the
+ * label of a formula's result, or the first state's text, on the whole lines the face has room for. The controls are on the opened
+ * card, and the cue counts them.
+ */
+function face(item, props) {
+  const words = wordsOf(item);
+  const { controls, output } = plan(props);
+  const changed = output.kind === 'text' ? controls[0]?.states[0].text ?? '' : output.label;
+  return lay([
+    { tall: MARK_ROW, draw: () => mark(words) },
+    titleRow(item),
+    ...aboveRows(props),
+    changed && { words: changed, measure: 'body', most: 2, gap: GAP, draw: wordsIn('explore-said') },
+  ], { words, more: controls.length > 0, cue: () => (controls.length > 0 ? words.cue.controls(controls.length) : '') });
 }
+
+export const size = (item, props) => [WIDTH, face(item, props).height];
+
+export const draw = (item, props) => drawFace(face(item, props));
 
 const GLYPH = 'M1.5 4h11M1.5 10h11M4.5 2.2v3.6M9.5 8.2v3.6';
 const mark = (words) => h('div', { class: 'explore-mark' },
@@ -179,40 +161,6 @@ function curve(sliders, output, at, width, height) {
   const ends = [[first.min, left, 'start'], [first.max, width - right, 'end']];
   root.append(now, ...ends.map(([v, ex, anchor]) => s('text', { class: 'chart-tick', x: ex, y: height - 5, 'text-anchor': anchor, text: reading(first, v) })));
   return { el: root, place };
-}
-
-/** One control's row on the card, as it stands by default. Nothing on it responds: a drag on the field moves the card. */
-function row(control) {
-  if (control.kind === 'slider') {
-    const share = (control.values[0] - control.min) / (control.max - control.min);
-    const words = `${control.label} ${reading(control, control.values[0])}`.trim();
-    return h('div', { class: 'explore-row' },
-      say('span', 'explore-reading', cut(words, COLUMN - TRACK - 8, TEXT_LETTER)),
-      h('span', { class: 'explore-track', style: { width: `${TRACK}px` } }, h('span', { class: 'explore-knob', style: { left: `${share * 100}%` } })));
-  }
-  const pill = Math.floor((COLUMN - PILL_GAP * (control.states.length - 1)) / control.states.length);
-  return h('div', { class: 'explore-row' }, control.states.map((state, i) =>
-    say('span', `explore-pill${i === 0 ? ' is-on' : ''}`, cut(state.name, pill - PILL_PAD, TEXT_LETTER))));
-}
-
-const figureOf = (figure, result, label) => h('div', { class: 'explore-figure' },
-  say('div', `fact-value ${figure.cls}`, result.shown),
-  label && say('div', `fact-label clamp-${figure.labelLines}`, label));
-
-export function draw(item, props) {
-  const layout = plan(item, props);
-  const words = wordsOf(item);
-  const sliders = layout.controls.filter((control) => control.kind === 'slider');
-  return [
-    mark(words),
-    title(item, layout.titleLines),
-    drawAbove(aboveOf(props, COLUMN)),
-    h('div', { class: 'explore-out' },
-      layout.output.kind === 'text'
-        ? layout.texts.map(({ words: said, lines }) => say('div', `explore-text clamp-${lines}`, said))
-        : [figureOf(layout.figure, layout.result, layout.output.label), layout.output.kind === 'chart' && curve(sliders, layout.output, firstAt(sliders), COLUMN, PLOT).el]),
-    layout.controls.map(row),
-  ];
 }
 
 /** A row of buttons of which one is chosen, moved along by the arrow keys, Home and End. */
@@ -257,7 +205,7 @@ function toggle(control, choose) {
 
 /** Every control working, and what they change. Each state's text is in the view, and only the chosen one shows. */
 export function detail(item, props) {
-  const layout = plan(item, props);
+  const layout = plan(props);
   const words = wordsOf(item);
   const labelled = (control, input) => h('div', { class: 'explore-control' },
     control.label && control.label !== item.title && say('div', 'explore-name', control.label), input);

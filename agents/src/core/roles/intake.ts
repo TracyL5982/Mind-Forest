@@ -5,6 +5,8 @@ import { codeIn } from './intake/code.ts';
 import {
   CHAT_SYSTEM,
   ChatReply,
+  fittedSummary,
+  fittedTitle,
   labels,
   LINK_SYSTEM,
   LinkReply,
@@ -334,12 +336,13 @@ async function chatItems(run: Run, conversation: Conversation, arrival: Arrival)
     .map((t) => ({ title: squash(t.title), text: t.text.trim() }))
     .filter((t) => t.text)
     .slice(0, MAX_TAKEAWAYS)
+    .map((t) => ({ ...t, title: t.title ? fittedTitle(clip(t.title, TITLE_MAX)) : clip(firstLine(t.text), TITLE_MAX) }))
     .map((t) =>
       makeItem(ctx, {
         kind: 'text',
-        title: clip(t.title || firstLine(t.text), TITLE_MAX),
+        title: t.title,
         text: t.text,
-        summary: clip(squash(t.text), 320),
+        summary: fittedSummary(squash(t.text), t.title),
         tags: described.tags,
         data: { fromChat: chat.id },
         origin: AGENT(ROLE),

@@ -19,11 +19,10 @@ A group is `{ id, treeId, anchor, composite, title, members, props }`. `anchor` 
 
 `client/library.html` draws every component and composite from sample data with the live client's code. Open it to see the current look. Under each sample it states the type name and the footprint.
 
-- Each component is one module, `client/js/components/<type>.js`, that exports `size`, `draw`, `detail` and `shows`. `detail` draws the type's part of the opened card, and for the types that count rows it draws every row the card left out. The opened card says what else it prints. Each composite is one module in `client/js/composites/`. The `index.js` in each folder is the registry.
-- `size(item, props)` is the card's footprint in px. It is worked out from the content and never measured, so the field can be laid out before anything is drawn. The next section gives the rule. The registry adds 28 px to the height of a card that has chips.
-- `shows` lists the chip sources the type already draws, as `item.data` keys. A sheet's `shows` is a function of the item and the props, because what it draws is in its sections. See Chips.
-- Text on the field is set in three sizes, named `--type-display`, `--type-title` and `--type-text` in `client/style.css`. A figure that is too long for its card steps down to a middle size, then to the title size. A fact's value, a row of facts, an idea, a term and a place name are figures.
-- Each type has its own face, so types can be told apart when zoomed out. A note is plain. A quote is a serif on a face washed with the tree's colour. A fact is one large figure on a darker face. A picture or clip has tight corners and its caption on a plate below. A recording has a round play mark beside its waveform and its length, over the first words of its transcript. A link sits under an address bar. A chart has gridlines and a scale. A person has a round face beside the name. A chat is speech bubbles. Code is fixed-width with a numbered gutter. Steps are numbers down a rail. Facts are figures two to a row on a fact's darker face. A table is ruled rows with numbers set to the right. A list has a dot or a tick box before each entry. A breakdown is level bars with a share at the end of each. A question and its answer carry a `Q` and an `A`. A callout has a band down its left edge. An excerpt is an upright serif beside a rule. A definition is a large headword over a short rule. An idea is large words under a spark. Pros and cons are two columns, each under the heading its item gives it. A swatch has a band of its colours across the top. An artwork sits whole on a mat a shade lighter than its card, over a label. A reference has its kind and year over a rule. A place has a round pin beside a large name, under a small map when its item knows where it is. A sheet is one card under one title, whose parts are each drawn as the card of their kind draws them and set apart by a hairline, with its picture, when it has one, in a band across the top.
+- Each component is one module, `client/js/components/<type>.js`, that exports `size`, `draw` and `detail`. `detail` draws the type's part of the opened card, and for the types that count rows it draws every row the card left out. The opened card says what else it prints. Each composite is one module in `client/js/composites/`. The `index.js` in each folder is the registry.
+- `size(item, props)` is the card's footprint in px: 210 wide and at most 146 tall for every type. It is worked out from the content and never measured, so the field can be laid out before anything is drawn. The next section gives the rule. A card's sources (its date, place, people and origin) are listed on the opened card and never on the small face, so they add nothing to a footprint.
+- A small face is set in four sizes, named in `client/style.css`: a figure (`--type-display`, 34 px on 36, and `--type-display-2`, 24 px on 28), a title (`--type-title`, 18 px on 24), body text (`--type-body`, 16 px on 22) and a meta line (`--type-meta`, 13.5 px on 18). These are comfortably read on the headset at 1.5 m, where a face px is a mm. Body and meta lines are white at 0.82 (`--face-ink`) and weight 500 or more. A quotation, a passage and a meaning are an upright serif at the body size. Nothing on a face is italic, and nothing read is under 13.5 px but the map's credit. A figure too long for its face steps down to the middle size, then to the title size. A fact's value, a row of facts, an idea, a term and a place name are figures. The arrangements' words and the field around the cards keep `--type-text`, 12.5 px on 17.
+- Each type has its own face, so types can be told apart when zoomed out. A note is plain. A quote is a serif on a face washed with the tree's colour. A fact is one large figure on a darker face. A picture or clip has tight corners and its caption on a plate below. A recording has a round play mark beside its waveform and its length, over the first words of its transcript. A link sits under an address bar. A chart is the shape of its values over a count of its points, and opens to gridlines and a scale. A person has a round face beside the name. A chat is speech bubbles. Code says how many lines it has in what language, and opens to its source in a fixed-width face. Steps are numbers down a rail. Facts are figures two to a row on a fact's darker face. A table names its heads and counts its rows, and opens to ruled rows with numbers set to the right. A list has a dot or a tick box before each entry. A breakdown is one bar split into its parts, and opens to level bars with a share at the end of each. A question and its answer carry a `Q` and an `A`. A callout has a band down its left edge. An excerpt is an upright serif beside a rule. A definition is a large headword over a short rule. An idea is large words under a spark. Pros and cons are a row for each side, under the heading its item gives it. A swatch has a band of its colours across the top. An artwork sits whole on a mat a shade lighter than its card, over a label. A reference has its kind and year over a rule. A place has a round pin beside a large name, over a small map when its item knows where it is. A sheet is one card under one title, whose first part is drawn as the card of its kind previews it, and whose opened card has every part.
 - A card's marks take its tree's colour. While the card is a pick they are amber, its border is dashed and its face is darker. A pick's face is never see-through.
 - Amber is also the three dots on a card the agents are working on. Teal is the links between cards, and the ring on the card that a dragged card would land under. No card type uses either for anything else. A caution callout is coral, and a remark is grey.
 - Every card has corners of 12 px, and 4 px when it leads with a picture: an image, a video, an artwork.
@@ -32,13 +31,49 @@ A group is `{ id, treeId, anchor, composite, title, members, props }`. `anchor` 
 - A small label in capitals names what the look alone cannot: a group frame's kind, a code card's language when it is known, and where a chat came from. A clip and a recording are named by their play marks and a chat by its bubbles, so none of them carries a label for its type.
 - A group frame is a faint wash and a hairline.
 - The field draws a pick at 0.86 of its footprint and the first card of a tree at 1.12. Every other card is drawn at 1. A selected card keeps its scale. Selecting adds a ring outside the card and changes no size.
-- A card's drawn size is its footprint times its scale, kept as a fraction: a 240 by 51 pick is 206.4 by 43.86. Layout works on drawn sizes and card centres in IEEE doubles and rounds nothing on the way, so equal footprints give equal positions. The web client rounds once, when it writes a card's top-left corner to the page, to one decimal place of a px. The one exception is inside a gallery, a cluster and an opened stack, where the cell sizes are rounded up as that section says.
+- A card's drawn size is its footprint times its scale, kept as a fraction: a 210 by 54 pick is 180.6 by 46.44. Layout works on drawn sizes and card centres in IEEE doubles and rounds nothing on the way, so equal footprints give equal positions. The web client rounds once, when it writes a card's top-left corner to the page, to one decimal place of a px. The one exception is inside a gallery, a cluster and an opened stack, where the cell sizes are rounded up as that section says.
 
 ## How a card's footprint is worked out
 
-A second client must give every card the same footprint as the web client, because the field is laid out from footprints alone. This section is the whole rule. `test/footprints.json` holds sample cards with the footprint each must get. `npm test` checks the web client against it, and a second client should run the same file through its own code.
+A second client must give every card the same footprint as the web client, because the field is laid out from footprints alone. This section is the whole rule. `test/footprints.json` holds sample cards with the footprint each must get, as the web client counts them. `npm test` checks the web client against it, and a second client should run the same file through its own code.
+
+The Quest client counts lines with the host's own font layout, not with the width tables below. It does not need the three faces the web measured to keep inside 146 px, because the box, the line heights, the rows and their order are the same in both clients. `footprints.json` is the web's count, and the Quest's own count of the same sample may differ by a line where the two fonts break a line differently.
 
 All arithmetic is in whole numbers. `up(a, b)` is `a / b` rounded up. `clamp(v, lo, hi)` holds `v` between `lo` and `hi`. A prop that is not a string counts as an empty string. A prop "is set" when it is a string that is not empty, so a string of spaces is set. A card whose component is unknown is sized as a note with no props. `textWidth(str)` is `up(span(str) * 72, 100)`, the px a string is given at the text size.
+
+### The face
+
+Every small face is `WIDTH = 210` px wide and at most `HEIGHT = 146` px tall. That is the box the ring of cards round an opened card holds on the headset without overlap, at one face px to one mm at 1.5 m, and the Quest client draws the same face. A picture-led face could be narrower, but none is.
+
+A face is an ordered list of rows, top to bottom, which `lay(rows, { words, cue, more, frame })` in `client/js/components/shared.js` sets out. `size` is `[210, lay(...).height]`, and `draw` draws the same rows, so the two cannot disagree. A row is one of two shapes:
+
+- A row of words: `{ words, measure, column, most, gap, pad, unit, keep }`. It stands on whole lines, `fit(words, column, measure, most)` of them: all its lines when they number `most` or fewer, else its first `most` lines, which is the string up to where its last whole line ends, counted by `wrap` below. Its height is its lines times the measure's line height, and `pad` more for a box drawn round the words, as a chat's bubble is.
+- A row of `tall` px, which is whole. It may say `whole: false` when it left something out inside itself, as a person's name cut to two lines does.
+
+Each row has `gap` px above it. `frame` is the px of padding and border above and below the rows, `FRAME` for a padded face. Then:
+
+```
+need = frame + the sum of gap + height over the rows
+need <= 146, more is false and no row left anything out:  every row shows, and there is no cue
+otherwise:  room = 146 - frame - CUE - the gap + height of every keep row
+            for each row in order:
+              a keep row shows
+              after a row that did not fit, the row is left out
+              a row whose gap + height fits room shows, and room drops by it
+              a row of words that is no unit and does not fit shows the whole lines that fit in room - gap - pad, if any
+              any other row that does not fit is left out
+            height = frame + the gap + height of every row shown + CUE
+```
+
+So a face always shows the start of the card, in order, and a later row never stands in for an earlier one. A `unit`, one of what the cue counts, such as a list's entry, is whole or left out. A `keep` row, such as a quote's speaker, is shown whatever is left out above it.
+
+**The cue** is the last row, `CUE = 18` px, in meta and the card's accent colour, at the start of the row. It says what is left out: `cue(units)` given how many units were left out, as `3 more`, `12 rows` or `2 parts`, or the fixed word `More` when it gives nothing, as when words were cut. The words are under Fixed words. `more` says the item holds something no row shows, such as the facts past the ones a view gives, so the face ends with the cue though every row fits.
+
+**Whole lines only.** A face draws exactly the words `fit` gives each row and sets each row at the height it counted. Nothing is clamped or clipped, and no line is cut. The one ellipsis on a face is a title's, below.
+
+**A title on the face.** A title, or a name that stands for one, takes at most `TITLE_LINES = 2` lines at the title's size. One that needs more shows its first two lines cut where a word ends, at a hyphen that joins two words, or after any character of a script written without spaces, without the marks that joined it to the rest, and ends with an ellipsis, `…`. The ellipsis says what is left out, so the cut brings no cue, and the rest of the face follows as it would. `fit(str, column, measure, most, ellipsis)` gives it. The opened card shows the whole title.
+
+**Two titles of an item.** `item.title` is the item's whole title. A title the model writes, for Intake's items, a chat's takeaways, the Scout's directions and the Renderer's groups, is held to the face's two lines when it is made, by `fittedTitle` in `src/core/fitted.ts`: its first whole clause that fits and says something, else its first whole words, or characters where a script has no spaces, with no ellipsis. The prompts ask for about 26 characters in English or 18 in Chinese. A title from a source, a paper's, a work's, a film's, a page's, a file's name, or one a person wrote, is never rewritten. `item.data.shortTitle` holds what a small face shows of it, `fittedTitle(title)`, and is there only when the whole title does not fit two lines. `makeItem` sets it for every item, and an `editItem` that changes the title sets it again or takes it away. A face shows `item.data.shortTitle` when it is there, else `item.title`, cut as above. The opened card and search use `item.title`. The spec's 12 px fade above the cue is not drawn: under whole lines it could only lie over letters, and over the bare face it shows nothing. The Quest client leaves it out for the same reason. `scripts/faces.ts` draws every sample in `test/footprints.json` in a real browser and prints any face that breaks this rule, and the browser test runs the same check.
 
 ### The width of a string
 
@@ -91,19 +126,32 @@ A string can break anywhere when every one of its code points is a kana letter, 
 
 For any other string, the `20 * letter` allows two letters a line for breaking between words. Punctuation, spaces, digits and Latin letters all make a string one of these, because a line may not start with a comma or split a word.
 
-A string that needs more lines than `max` is drawn cut with an ellipsis. A fact's value is the one exception, given under fact.
+No small face uses `fold`. It counts the words an arrangement sets beside its cards, which are clamped to `max` lines, as a comparison's cells are.
 
 ### Lines counted word by word
 
-The sixteen structured types, from facts to place, the sheet and the explorable, count lines with `wrap` and never with `fold`. Their columns go down to 119 px, where one long word can leave half a line empty, and `fold` allows for no such thing. `wrap` lays the words out one by one, each as wide as the web client draws it, so it ends a line where the page does. The lines over a structure and a heads row are counted with `wrap` on every type that draws them, a quote, a fact, a chart and steps among them.
+Every small face counts its lines with `wrap`, through `fit` and `linesOf`. `wrap` lays the words out one by one, each as wide as the web client draws it, so it ends a line where the page does.
 
-`wrap` counts in six faces, each named by its letter: the title (93), the text (72), the passage (92), and a figure's largest (210), middle (149) and smallest (105) sizes. The passage is the quote's serif set upright, as an excerpt's passage and a definition's meaning are, and `PASSAGE_LETTER = 92`. With any other letter, `advance(str, letter)` below is `span(str, face) * letter`.
+`wrap` counts in nine faces, each named by its letter: the title at 16 px (93), the text at 12.5 px (72), the passage (92), a figure's largest (210), middle (149) and smallest (119) sizes, and the three faces a small face draws its words in: the title at 18 px (`TITLE_FACE = 104`), body text at 16 px in medium (`BODY_FACE = 94`) and a meta line at 13.5 px in medium (`META_FACE = 80`). The passage is the quote's serif set upright, as a quotation, an excerpt's passage and a definition's meaning are, and `PASSAGE_LETTER = 92`. With any other letter, `advance(str, letter)` below is `span(str, face) * letter`.
+
+A face counts each kind of line in the face it is drawn in, `MEASURES` in `shared.js`:
+
+| Measure | Counts in | Line height | For |
+|---|---|---|---|
+| `title` | 104 | 24 | A title, a question, a callout's words, a term or a name that steps down to the title's size |
+| `head` | 93 | 22 | A heading over a structure, set in the title's weight at the body size, and a side of pros and cons |
+| `body` | 94 | 22 | Body text, entries, steps, messages, captions, an answer |
+| `meta` | 80 | 18 | A meta line: a speaker, a source, a count, a table's heads, a first author |
+| `passage` | 92 | 22 | A quotation, a passage, a meaning |
+| `display`, `middle`, `figure` | 210, 149, 119 | 36, 28, 24 | A figure at 34, 24 and 18 px |
+
+`linesOf(str, column, measure)` is `wrap(str, column, letter, infinity)` in the measure's face. `scripts/advances.ts` measured the three new faces in Chromium with the client's font stack, the same way the 16 px title face was measured. They are measured because the faces cannot be counted in each other: a 13.5 px meta line in medium draws about 1% wider than the 16 px title face scaled to 13.5 px, so counting it so could put a line on a row too few, and the title at 18 px draws about 2% narrower than that face scaled up, which left blank lines under titles. The smallest figure's widths are its 16 px widths scaled by 18 / 16 and rounded up.
 
 `advance(str, letter)` is a string's width on one line in hundredths of a px. Walk the string by code point:
 
 - A code point from U+0020 to U+007E counts what the table below gives it in the face.
-- A code point set with Han counts the face's square: 1591 in the title, 1250 in the text, 1600 in the passage, 3332, 2352 and 1568 in a figure's largest, middle and smallest sizes. These are U+3000 to 30FF, U+3400 to 9FFF, U+FF01 to FF60 and U+FFE0 to FFE6.
-- Take every other code point out, in order, as one string `others`. It counts `span(others, face) * letter`, where the face is the title's, the text's, the quote's for the passage, and a fact value's for a figure. So the two rules about U+200D and U+FE0F run over `others` alone.
+- A code point set with Han counts the face's square: 1591 in the title, 1250 in the text, 1600 in the passage, 3332, 2352 and 1764 in a figure's largest, middle and smallest sizes, and 1790, 1600 and 1350 in the title at 18 px, the body and a meta line. Each is the size the face is set in, less its letter spacing, rounded up. These are U+3000 to 30FF, U+3400 to 9FFF, U+FF01 to FF60 and U+FFE0 to FFE6.
+- Take every other code point out, in order, as one string `others`. It counts `span(others, face) * letter`, where the face is the title's for the title, the three faces a small face draws in, the text's for the text, the quote's for the passage, and a fact value's for a figure. So the two rules about U+200D and U+FE0F run over `others` alone.
 
 `advance` is the sum of the three.
 
@@ -127,105 +175,105 @@ Start with `lines = 1` and `used = 0`. To place something `wide` after a `gap`: 
 
 Place each unit in order. Its width is `advance(unit, letter)`. Its gap is `space` when it is the first unit of its word and 0 otherwise. A unit no wider than `room` is placed whole. A wider unit is placed one code point at a time, each `advance` of that code point alone, however wide it is, the first with a gap of `room`, which starts a new line whenever the line holds anything, and the rest with a gap of 0. `wrap` is `clamp(lines, 1, max)`.
 
-A page may also break in a few places `wrap` does not, such as after a slash, so `wrap` counts at least the lines a page draws. The web client sets the sixteen structured types with kerning off (`font-kerning: none`), so a word is exactly as wide as its characters add up to, and each width in the table is what the character draws in the web client, rounded up, and 2 more. A figure set at 24 px or more, in a facts card, a sheet, an explorable, an idea, a definition's headword and a place's name, is kerned (`font-kerning: normal`), because pairs such as `Ta`, `Wa` and `Av` gape at that size without it. The table still counts its characters unkerned, and kerning only ever draws a line narrower than that: in the web client no pair of the characters U+0020 to U+007E and none of 6,000 random strings drew wider kerned than unkerned at 34 or 24 px. So the count stays at least the lines a page draws. Measured against the web client on 5,600 strings in each of the title and the text faces, in English and in Chinese, `wrap` never counted fewer lines than were drawn, and counted one more for 1 to 4 strings in a hundred. A client that draws with other fonts keeps these widths for its footprints, and must make sure its own text fits them.
+A page may also break in a few places `wrap` does not, such as after a slash, so `wrap` counts at least the lines a page draws. The web client sets the structured types and the lines over a structure with kerning off (`font-kerning: none`), so a word is exactly as wide as its characters add up to, and each width in the table is what the character draws in the web client, rounded up, and 2 more, or 3 more for the three faces `scripts/advances.ts` measured, whose way of measuring gives the 16 px title face up to 0.01 px less than this table holds for it. A figure set at 24 px or more, in a facts card, a sheet, an explorable, an idea, a definition's headword and a place's name, is kerned (`font-kerning: normal`), because pairs such as `Ta`, `Wa` and `Av` gape at that size without it. The table still counts its characters unkerned, and kerning only ever draws a line narrower than that: in the web client no pair of the characters U+0020 to U+007E and none of 6,000 random strings drew wider kerned than unkerned at 34 or 24 px. So the count stays at least the lines a page draws. Measured against the web client on 5,600 strings in each of the title and the text faces, in English and in Chinese, `wrap` never counted fewer lines than were drawn, and counted one more for 1 to 4 strings in a hundred. A client that draws with other fonts keeps these widths for its footprints, and must make sure its own text fits them.
 
-| Character | Code point | Title | Text | Passage | Largest figure | Middle figure | Smallest figure |
-|---|---|---|---|---|---|---|---|
-| space | U+0020 | 384 | 350 | 447 | 649 | 467 | 358 |
-| `!` | U+0021 | 512 | 388 | 542 | 1021 | 719 | 497 |
-| `"` | U+0022 | 833 | 596 | 532 | 1493 | 1081 | 825 |
-| `#` | U+0023 | 1018 | 786 | 892 | 2125 | 1494 | 1002 |
-| `$` | U+0024 | 1018 | 786 | 892 | 2150 | 1508 | 1002 |
-| `%` | U+0025 | 1572 | 1155 | 1410 | 2953 | 2126 | 1567 |
-| `&` | U+0026 | 1139 | 888 | 1332 | 2341 | 1651 | 1121 |
-| `'` | U+0027 | 496 | 370 | 274 | 883 | 634 | 482 |
-| `(` | U+0028 | 627 | 476 | 673 | 1239 | 876 | 613 |
-| `)` | U+0029 | 627 | 476 | 673 | 1239 | 876 | 613 |
-| `*` | U+002A | 731 | 588 | 729 | 1473 | 1038 | 711 |
-| `+` | U+002B | 1018 | 786 | 1335 | 2150 | 1508 | 1002 |
-| `,` | U+002C | 496 | 370 | 447 | 777 | 573 | 482 |
-| `-` | U+002D | 731 | 588 | 563 | 1466 | 1034 | 711 |
-| `.` | U+002E | 496 | 370 | 447 | 777 | 573 | 482 |
-| `/` | U+002F | 484 | 380 | 740 | 990 | 692 | 467 |
-| `0` | U+0030 | 1034 | 786 | 892 | 2150 | 1508 | 1002 |
-| `1` | U+0031 | 760 | 579 | 892 | 2150 | 1508 | 1002 |
-| `2` | U+0032 | 973 | 753 | 892 | 2150 | 1508 | 1002 |
-| `3` | U+0033 | 1014 | 782 | 892 | 2150 | 1508 | 1002 |
-| `4` | U+0034 | 1042 | 803 | 892 | 2150 | 1508 | 1002 |
-| `5` | U+0035 | 1004 | 771 | 892 | 2150 | 1508 | 1002 |
-| `6` | U+0036 | 1035 | 795 | 892 | 2150 | 1508 | 1002 |
-| `7` | U+0037 | 914 | 710 | 892 | 2150 | 1508 | 1002 |
-| `8` | U+0038 | 1048 | 797 | 892 | 2150 | 1508 | 1002 |
-| `9` | U+0039 | 1035 | 795 | 892 | 2150 | 1508 | 1002 |
-| `:` | U+003A | 496 | 370 | 447 | 777 | 573 | 482 |
-| `;` | U+003B | 496 | 370 | 447 | 777 | 573 | 482 |
-| `<` | U+003C | 1018 | 786 | 1335 | 2150 | 1508 | 1002 |
-| `=` | U+003D | 1018 | 786 | 1335 | 2150 | 1508 | 1002 |
-| `>` | U+003E | 1018 | 786 | 1335 | 2150 | 1508 | 1002 |
-| `?` | U+003F | 834 | 640 | 755 | 1763 | 1235 | 819 |
-| `@` | U+0040 | 1441 | 1146 | 1602 | 2983 | 2104 | 1420 |
-| `A` | U+0041 | 1109 | 841 | 1158 | 2294 | 1617 | 1095 |
-| `B` | U+0042 | 1055 | 820 | 998 | 2128 | 1506 | 1039 |
-| `C` | U+0043 | 1137 | 894 | 1134 | 2381 | 1672 | 1118 |
-| `D` | U+0044 | 1148 | 907 | 1252 | 2341 | 1654 | 1129 |
-| `E` | U+0045 | 945 | 743 | 1017 | 1909 | 1349 | 927 |
-| `F` | U+0046 | 907 | 714 | 938 | 1826 | 1290 | 888 |
-| `G` | U+0047 | 1173 | 932 | 1190 | 2434 | 1712 | 1152 |
-| `H` | U+0048 | 1198 | 927 | 1273 | 2437 | 1723 | 1181 |
-| `I` | U+0049 | 449 | 333 | 546 | 850 | 604 | 435 |
-| `J` | U+004A | 897 | 671 | 534 | 1835 | 1294 | 885 |
-| `K` | U+004B | 1075 | 822 | 1111 | 2165 | 1533 | 1060 |
-| `L` | U+004C | 901 | 709 | 917 | 1810 | 1279 | 884 |
-| `M` | U+004D | 1398 | 1091 | 1459 | 2884 | 2036 | 1381 |
-| `N` | U+004E | 1180 | 927 | 1295 | 2394 | 1692 | 1161 |
-| `O` | U+004F | 1213 | 963 | 1285 | 2520 | 1774 | 1193 |
-| `P` | U+0050 | 1023 | 793 | 945 | 2050 | 1452 | 1006 |
-| `Q` | U+0051 | 1213 | 963 | 1285 | 2519 | 1774 | 1193 |
-| `R` | U+0052 | 1055 | 815 | 1127 | 2127 | 1505 | 1039 |
-| `S` | U+0053 | 1026 | 795 | 868 | 2099 | 1480 | 1010 |
-| `T` | U+0054 | 1007 | 791 | 1012 | 2007 | 1422 | 988 |
-| `U` | U+0055 | 1168 | 920 | 1262 | 2372 | 1677 | 1149 |
-| `V` | U+0056 | 1095 | 841 | 1149 | 2253 | 1589 | 1081 |
-| `W` | U+0057 | 1559 | 1209 | 1662 | 3232 | 2281 | 1543 |
-| `X` | U+0058 | 1107 | 847 | 1140 | 2274 | 1606 | 1093 |
-| `Y` | U+0059 | 1072 | 818 | 1057 | 2205 | 1555 | 1058 |
-| `Z` | U+005A | 1037 | 826 | 1070 | 2110 | 1490 | 1017 |
-| `[` | U+005B | 627 | 476 | 673 | 1239 | 876 | 613 |
-| `\` | U+005C | 484 | 380 | 740 | 990 | 692 | 467 |
-| `]` | U+005D | 627 | 476 | 673 | 1239 | 876 | 613 |
-| `^` | U+005E | 1018 | 786 | 1602 | 2150 | 1508 | 1002 |
-| `_` | U+005F | 947 | 728 | 802 | 1904 | 1347 | 931 |
-| `` ` `` | U+0060 | 762 | 624 | 802 | 1674 | 1162 | 739 |
-| `a` | U+0061 | 889 | 688 | 772 | 1808 | 1275 | 873 |
-| `b` | U+0062 | 988 | 767 | 892 | 1977 | 1401 | 971 |
-| `c` | U+0063 | 890 | 698 | 717 | 1801 | 1270 | 872 |
-| `d` | U+0064 | 988 | 767 | 902 | 1974 | 1398 | 971 |
-| `e` | U+0065 | 910 | 713 | 783 | 1836 | 1297 | 892 |
-| `f` | U+0066 | 594 | 451 | 501 | 1154 | 818 | 580 |
-| `g` | U+0067 | 979 | 760 | 828 | 1964 | 1390 | 962 |
-| `h` | U+0068 | 955 | 734 | 940 | 1934 | 1367 | 939 |
-| `i` | U+0069 | 404 | 308 | 477 | 772 | 545 | 388 |
-| `j` | U+006A | 404 | 307 | 441 | 770 | 544 | 388 |
-| `k` | U+006B | 899 | 677 | 876 | 1773 | 1259 | 886 |
-| `l` | U+006C | 416 | 315 | 470 | 775 | 550 | 400 |
-| `m` | U+006D | 1426 | 1086 | 1410 | 2875 | 2039 | 1414 |
-| `n` | U+006E | 947 | 728 | 937 | 1904 | 1347 | 931 |
-| `o` | U+006F | 941 | 737 | 884 | 1898 | 1341 | 923 |
-| `p` | U+0070 | 981 | 762 | 899 | 1966 | 1391 | 965 |
-| `q` | U+0071 | 981 | 760 | 895 | 1964 | 1390 | 965 |
-| `r` | U+0072 | 634 | 475 | 627 | 1179 | 844 | 621 |
-| `s` | U+0073 | 850 | 653 | 711 | 1695 | 1200 | 834 |
-| `t` | U+0074 | 601 | 453 | 578 | 1151 | 818 | 586 |
-| `u` | U+0075 | 947 | 728 | 943 | 1904 | 1347 | 931 |
-| `v` | U+0076 | 876 | 676 | 788 | 1743 | 1235 | 861 |
-| `w` | U+0077 | 1286 | 967 | 1242 | 2618 | 1853 | 1275 |
-| `x` | U+0078 | 866 | 654 | 850 | 1733 | 1227 | 853 |
-| `y` | U+0079 | 894 | 677 | 780 | 1776 | 1259 | 881 |
-| `z` | U+007A | 856 | 673 | 758 | 1670 | 1186 | 838 |
-| `{` | U+007B | 627 | 476 | 673 | 1239 | 876 | 613 |
-| `\|` | U+007C | 423 | 322 | 802 | 780 | 556 | 407 |
-| `}` | U+007D | 627 | 476 | 673 | 1239 | 876 | 613 |
-| `~` | U+007E | 1018 | 786 | 1335 | 2150 | 1508 | 1002 |
+| Character | Code point | Title | Text | Passage | Largest figure | Middle figure | Smallest figure | Title at 18 px | Body | Meta |
+|---|---|---|---|---|---|---|---|---|---|---|
+| space | U+0020 | 384 | 350 | 447 | 649 | 467 | 403 | 419 | 410 | 363 |
+| `!` | U+0021 | 512 | 388 | 542 | 1021 | 719 | 560 | 566 | 494 | 433 |
+| `"` | U+0022 | 833 | 596 | 532 | 1493 | 1081 | 929 | 922 | 785 | 678 |
+| `#` | U+0023 | 1018 | 786 | 892 | 2125 | 1494 | 1128 | 1135 | 1002 | 861 |
+| `$` | U+0024 | 1018 | 786 | 892 | 2150 | 1508 | 1128 | 1136 | 1002 | 861 |
+| `%` | U+0025 | 1572 | 1155 | 1410 | 2953 | 2126 | 1763 | 1749 | 1511 | 1291 |
+| `&` | U+0026 | 1139 | 888 | 1332 | 2341 | 1651 | 1262 | 1271 | 1128 | 969 |
+| `'` | U+0027 | 496 | 370 | 274 | 883 | 634 | 543 | 546 | 475 | 418 |
+| `(` | U+0028 | 627 | 476 | 673 | 1239 | 876 | 690 | 694 | 608 | 530 |
+| `)` | U+0029 | 627 | 476 | 673 | 1239 | 876 | 690 | 694 | 608 | 530 |
+| `*` | U+002A | 731 | 588 | 729 | 1473 | 1038 | 800 | 811 | 735 | 636 |
+| `+` | U+002B | 1018 | 786 | 1335 | 2150 | 1508 | 1128 | 1136 | 1002 | 861 |
+| `,` | U+002C | 496 | 370 | 447 | 777 | 573 | 543 | 543 | 475 | 418 |
+| `-` | U+002D | 731 | 588 | 563 | 1466 | 1034 | 800 | 811 | 735 | 636 |
+| `.` | U+002E | 496 | 370 | 447 | 777 | 573 | 543 | 543 | 475 | 418 |
+| `/` | U+002F | 484 | 380 | 740 | 990 | 692 | 526 | 535 | 475 | 418 |
+| `0` | U+0030 | 1034 | 786 | 892 | 2150 | 1508 | 1128 | 1153 | 1010 | 868 |
+| `1` | U+0031 | 760 | 579 | 892 | 2150 | 1508 | 1128 | 846 | 741 | 641 |
+| `2` | U+0032 | 973 | 753 | 892 | 2150 | 1508 | 1128 | 1085 | 960 | 825 |
+| `3` | U+0033 | 1014 | 782 | 892 | 2150 | 1508 | 1128 | 1130 | 999 | 858 |
+| `4` | U+0034 | 1042 | 803 | 892 | 2150 | 1508 | 1128 | 1163 | 1025 | 882 |
+| `5` | U+0035 | 1004 | 771 | 892 | 2150 | 1508 | 1128 | 1119 | 986 | 847 |
+| `6` | U+0036 | 1035 | 795 | 892 | 2150 | 1508 | 1128 | 1155 | 1016 | 874 |
+| `7` | U+0037 | 914 | 710 | 892 | 2150 | 1508 | 1128 | 1018 | 902 | 777 |
+| `8` | U+0038 | 1048 | 797 | 892 | 2150 | 1508 | 1128 | 1169 | 1024 | 880 |
+| `9` | U+0039 | 1035 | 795 | 892 | 2150 | 1508 | 1128 | 1155 | 1016 | 874 |
+| `:` | U+003A | 496 | 370 | 447 | 777 | 573 | 543 | 543 | 475 | 418 |
+| `;` | U+003B | 496 | 370 | 447 | 777 | 573 | 543 | 543 | 475 | 418 |
+| `<` | U+003C | 1018 | 786 | 1335 | 2150 | 1508 | 1128 | 1136 | 1002 | 861 |
+| `=` | U+003D | 1018 | 786 | 1335 | 2150 | 1508 | 1128 | 1136 | 1002 | 861 |
+| `>` | U+003E | 1018 | 786 | 1335 | 2150 | 1508 | 1128 | 1136 | 1002 | 861 |
+| `?` | U+003F | 834 | 640 | 755 | 1763 | 1235 | 922 | 930 | 816 | 705 |
+| `@` | U+0040 | 1441 | 1146 | 1602 | 2983 | 2104 | 1598 | 1611 | 1446 | 1236 |
+| `A` | U+0041 | 1109 | 841 | 1158 | 2294 | 1617 | 1232 | 1236 | 1082 | 928 |
+| `B` | U+0042 | 1055 | 820 | 998 | 2128 | 1506 | 1169 | 1175 | 1044 | 897 |
+| `C` | U+0043 | 1137 | 894 | 1134 | 2381 | 1672 | 1258 | 1269 | 1132 | 971 |
+| `D` | U+0044 | 1148 | 907 | 1252 | 2341 | 1654 | 1271 | 1282 | 1146 | 983 |
+| `E` | U+0045 | 945 | 743 | 1017 | 1909 | 1349 | 1043 | 1052 | 939 | 810 |
+| `F` | U+0046 | 907 | 714 | 938 | 1826 | 1290 | 999 | 1008 | 902 | 777 |
+| `G` | U+0047 | 1173 | 932 | 1190 | 2434 | 1712 | 1296 | 1308 | 1174 | 1007 |
+| `H` | U+0048 | 1198 | 927 | 1273 | 2437 | 1723 | 1329 | 1336 | 1182 | 1013 |
+| `I` | U+0049 | 449 | 333 | 546 | 850 | 604 | 490 | 494 | 428 | 377 |
+| `J` | U+004A | 897 | 671 | 534 | 1835 | 1294 | 996 | 999 | 868 | 747 |
+| `K` | U+004B | 1075 | 822 | 1111 | 2165 | 1533 | 1193 | 1197 | 1053 | 905 |
+| `L` | U+004C | 901 | 709 | 917 | 1810 | 1279 | 995 | 1003 | 896 | 772 |
+| `M` | U+004D | 1398 | 1091 | 1459 | 2884 | 2036 | 1554 | 1563 | 1388 | 1188 |
+| `N` | U+004E | 1180 | 927 | 1295 | 2394 | 1692 | 1307 | 1316 | 1174 | 1007 |
+| `O` | U+004F | 1213 | 963 | 1285 | 2520 | 1774 | 1343 | 1355 | 1214 | 1041 |
+| `P` | U+0050 | 1023 | 793 | 945 | 2050 | 1452 | 1132 | 1139 | 1010 | 868 |
+| `Q` | U+0051 | 1213 | 963 | 1285 | 2519 | 1774 | 1343 | 1355 | 1214 | 1041 |
+| `R` | U+0052 | 1055 | 815 | 1127 | 2127 | 1505 | 1169 | 1175 | 1039 | 894 |
+| `S` | U+0053 | 1026 | 795 | 868 | 2099 | 1480 | 1137 | 1143 | 1013 | 871 |
+| `T` | U+0054 | 1007 | 791 | 1012 | 2007 | 1422 | 1112 | 1121 | 1000 | 861 |
+| `U` | U+0055 | 1168 | 920 | 1262 | 2372 | 1677 | 1293 | 1303 | 1164 | 999 |
+| `V` | U+0056 | 1095 | 841 | 1149 | 2253 | 1589 | 1217 | 1221 | 1075 | 924 |
+| `W` | U+0057 | 1559 | 1209 | 1662 | 3232 | 2281 | 1736 | 1743 | 1543 | 1318 |
+| `X` | U+0058 | 1107 | 847 | 1140 | 2274 | 1606 | 1230 | 1235 | 1086 | 932 |
+| `Y` | U+0059 | 1072 | 818 | 1057 | 2205 | 1555 | 1191 | 1196 | 1049 | 902 |
+| `Z` | U+005A | 1037 | 826 | 1070 | 2110 | 1490 | 1145 | 1155 | 1039 | 893 |
+| `[` | U+005B | 627 | 476 | 673 | 1239 | 876 | 690 | 694 | 608 | 530 |
+| `\` | U+005C | 484 | 380 | 740 | 990 | 692 | 526 | 535 | 475 | 418 |
+| `]` | U+005D | 627 | 476 | 673 | 1239 | 876 | 690 | 694 | 608 | 530 |
+| `^` | U+005E | 1018 | 786 | 1602 | 2150 | 1508 | 1128 | 1136 | 1002 | 861 |
+| `_` | U+005F | 947 | 728 | 802 | 1904 | 1347 | 1048 | 1053 | 930 | 800 |
+| `` ` `` | U+0060 | 762 | 624 | 802 | 1674 | 1162 | 832 | 849 | 772 | 668 |
+| `a` | U+0061 | 889 | 688 | 772 | 1808 | 1275 | 983 | 989 | 875 | 755 |
+| `b` | U+0062 | 988 | 767 | 892 | 1977 | 1401 | 1093 | 1100 | 975 | 839 |
+| `c` | U+0063 | 890 | 698 | 717 | 1801 | 1270 | 981 | 989 | 883 | 761 |
+| `d` | U+0064 | 988 | 767 | 902 | 1974 | 1398 | 1093 | 1099 | 975 | 839 |
+| `e` | U+0065 | 910 | 713 | 783 | 1836 | 1297 | 1004 | 1013 | 902 | 777 |
+| `f` | U+0066 | 594 | 451 | 501 | 1154 | 818 | 653 | 657 | 577 | 502 |
+| `g` | U+0067 | 979 | 760 | 828 | 1964 | 1390 | 1083 | 1089 | 968 | 832 |
+| `h` | U+0068 | 955 | 734 | 940 | 1934 | 1367 | 1057 | 1063 | 938 | 807 |
+| `i` | U+0069 | 404 | 308 | 477 | 772 | 545 | 437 | 444 | 389 | 344 |
+| `j` | U+006A | 404 | 307 | 441 | 770 | 544 | 437 | 443 | 389 | 344 |
+| `k` | U+006B | 899 | 677 | 876 | 1773 | 1259 | 997 | 999 | 872 | 752 |
+| `l` | U+006C | 416 | 315 | 470 | 775 | 550 | 450 | 455 | 400 | 353 |
+| `m` | U+006D | 1426 | 1086 | 1410 | 2875 | 2039 | 1591 | 1593 | 1397 | 1196 |
+| `n` | U+006E | 947 | 728 | 937 | 1904 | 1347 | 1048 | 1053 | 930 | 800 |
+| `o` | U+006F | 941 | 737 | 884 | 1898 | 1341 | 1039 | 1047 | 933 | 803 |
+| `p` | U+0070 | 981 | 762 | 899 | 1966 | 1391 | 1086 | 1093 | 969 | 833 |
+| `q` | U+0071 | 981 | 760 | 895 | 1964 | 1390 | 1086 | 1093 | 968 | 833 |
+| `r` | U+0072 | 634 | 475 | 627 | 1179 | 844 | 699 | 700 | 611 | 532 |
+| `s` | U+0073 | 850 | 653 | 711 | 1695 | 1200 | 939 | 944 | 833 | 719 |
+| `t` | U+0074 | 601 | 453 | 578 | 1151 | 818 | 660 | 664 | 580 | 507 |
+| `u` | U+0075 | 947 | 728 | 943 | 1904 | 1347 | 1048 | 1053 | 930 | 800 |
+| `v` | U+0076 | 876 | 676 | 788 | 1743 | 1235 | 969 | 974 | 861 | 743 |
+| `w` | U+0077 | 1286 | 967 | 1242 | 2618 | 1853 | 1435 | 1435 | 1250 | 1072 |
+| `x` | U+0078 | 866 | 654 | 850 | 1733 | 1227 | 960 | 963 | 841 | 725 |
+| `y` | U+0079 | 894 | 677 | 780 | 1776 | 1259 | 992 | 994 | 871 | 750 |
+| `z` | U+007A | 856 | 673 | 758 | 1670 | 1186 | 943 | 950 | 850 | 733 |
+| `{` | U+007B | 627 | 476 | 673 | 1239 | 876 | 690 | 694 | 608 | 530 |
+| `\|` | U+007C | 423 | 322 | 802 | 780 | 556 | 458 | 464 | 408 | 361 |
+| `}` | U+007D | 627 | 476 | 673 | 1239 | 876 | 690 | 694 | 608 | 530 |
+| `~` | U+007E | 1018 | 786 | 1335 | 2150 | 1508 | 1128 | 1136 | 1002 | 861 |
 
 ### Figures
 
@@ -233,25 +281,28 @@ A figure is set in one of three sizes, each with its line height in px, its lett
 
 | Size | Line height | Letter | Digit |
 |---|---|---|---|
-| largest | 36 | 210 | 2148 |
-| middle | 28 | 149 | 1506 |
-| smallest | 21 | 105 | 1001 |
+| largest, 34 px | 36 | 210 | 2148 |
+| middle, 24 px | 28 | 149 | 1506 |
+| smallest, 18 px | 24 | 119 | 1127 |
 
-`figureNeed(value, size) = span(value, fact value) * letter - digits * (11 * letter - digit)`, where `digits` is how many of `0` to `9` the value holds. It is the value's width on one line in hundredths of a px. Where a type wraps a figure, it counts the lines with `wrap` and the letter of the figure's size: 210, 149 or 105.
+The smallest size is the title's. Its letter and digit are those of the 16 px size it replaced, 105 and 1001, scaled by 18 / 16 and rounded up, and so are its widths in the table above.
 
-### Sharing a width
-
-`spread(needs, room)` shares `room` px among columns that need `needs`. Start with every column open and nothing given. Repeat: `each = max(0, floor(room / open columns))`. Every open column whose need is no more than `each` is given its need, `room` drops by that, and the column closes. When no open column is that small, every open column is given `each` and the rule ends. It also ends when no column is open.
+`figureNeed(value, size) = span(value, fact value) * letter - digits * (11 * letter - digit)`, where `digits` is how many of `0` to `9` the value holds. It is the value's width on one line in hundredths of a px. Where a type wraps a figure, it counts the lines with `wrap` and the letter of the figure's size: 210, 149 or 119.
 
 ### Constants
 
 | Name | Value | Meaning |
 |---|---|---|
-| `DISPLAY` | 36 | Line height of a figure, in px |
-| `TITLE` | 21 | Line height of a title |
-| `TEXT` | 17 | Line height of text |
-| `FRAME` | 30 | Top and bottom padding and border of a padded card, with 2 px to spare |
-| `SIDES` | 33 | Left and right padding and border of a padded card, with 1 px to spare |
+| `WIDTH` | 210 | Every small face's width, in px |
+| `HEIGHT` | 146 | The most a small face is tall |
+| `TITLE` | 24 | Line height of a title |
+| `TEXT` | 22 | Line height of body text |
+| `META` | 18 | Line height of a meta line |
+| `CUE` | 18 | The cue's row |
+| `GAP` | 6 | Under a title, and between the lines over a structure and what they follow |
+| `FRAME` | 30 | Top and bottom padding and border of a padded face, with 2 px to spare |
+| `SIDES` | 33 | Left and right padding and border of a padded face, with 1 px to spare |
+| `COLUMN` | 177 | The text column of a padded face, `WIDTH - SIDES` |
 | `PASSAGE_LETTER` | 92 | The letter that names the upright serif of a passage |
 
 ### Fixed words
@@ -261,11 +312,16 @@ A card draws a few words that are not the item's own. Each has an English and a 
 | Where | English | Chinese |
 |---|---|---|
 | The title of an item that has none, on the card and the opened card | `Untitled` | `未命名` |
-| Under the rows a card shows, when it holds N more | `and N more` | `还有 N 项` |
-| Under a table that leaves out R rows | `and R more rows`, `and 1 more row` | `还有 R 行` |
-| Under a table that leaves out C columns | `and C more columns`, `and 1 more column` | `还有 C 列` |
-| Under a table that leaves out both | `and R more rows, C more columns` | `还有 R 行、C 列` |
-| After a reference's authors when the list is cut | ` and others`, with the space | ` 等`, with the space |
+| The cue, when a face leaves words out | `More` | `更多` |
+| The cue of a list, steps, a chat, facts or a swatch that leaves N entries out | `N more` | `还有 N 项` |
+| The cue of a table of R rows | `R rows`, `1 row` | `R 行` |
+| The cue of a chart of N points, and its count line, with its first and last labels when they fit | `N points`, `N points, A to B` | `N 个数据点`, `N 个数据点，A 至 B` |
+| The cue of a breakdown of N parts, and of a sheet with N parts after its first | `N parts`, `1 part` | `N 部分` |
+| A code card's line, with its language when it is known | `N lines of L`, `1 line` | `N 行 L`, `N 行代码` |
+| The cue of pros and cons with P for and C against | `P for, C against` | `P 条优点，C 条缺点` |
+| The cue of an explorable with N controls | `N controls`, `1 control` | `N 个控件` |
+| A reference's first author, when it names N others or its list was cut | `A and N others`, `A and 1 other`, `A and others` | `A 等` |
+| After the opened reference's authors when the list is cut | ` and others`, with the space | ` 等`, with the space |
 | The two sides of pros and cons, in a view that names no heads | `For`, `Against` | `优点`, `缺点` |
 | A reference's kind | `Paper`, `Book` | `论文`, `图书` |
 | A callout's tone | `Caution`, `Note` | `注意`, `备注` |
@@ -275,7 +331,6 @@ A card draws a few words that are not the item's own. Each has an English and a 
 | An opened clip with nothing to play | `This clip has no file to play.` | `这段视频没有可播放的文件。` |
 | An opened recording with nothing to play | `This recording has no file to play.` | `这段录音没有可播放的文件。` |
 | A chart with no values | `No data` | `暂无数据` |
-| The label a chip shows on hover | `When`, `Where`, `People`, `Origin` | `时间`, `地点`, `人物`, `来源` |
 | What a tick box says to a screen reader | `Done`, `Not done` | `已完成`, `未完成` |
 | What a checklist's count says on hover | `2 of 4 done` | `已完成 2/4` |
 | The mark on a card that can be explored | `Explore` | `可探索` |
@@ -285,172 +340,73 @@ A card draws a few words that are not the item's own. Each has an English and a 
 
 ### Lines over a structure
 
-Fifteen types may carry `props.above`: quote, fact, facts, chart, breakdown, steps, list, table, qa, callout, excerpt, definition, proscons, sheet and explorable. It holds the item's own headings, labels and opening prose that stand over the card's structure, each one line of the item as the item writes it, such as `Don'ts:`, `Results:` or a sentence that opens the item. The Renderer sets it, so a card shows its whole item.
+Fifteen types may carry `props.above`: quote, fact, facts, chart, breakdown, steps, list, table, qa, callout, excerpt, definition, proscons, sheet and explorable. It holds the item's own headings, labels and opening prose that stand over the card's structure, each one line of the item as the item writes it, such as `Don'ts:`, `Results` or a sentence that opens the item. They are what keeps a list under `Don'ts:` from reading as advice.
 
-The entries are the strings of `props.above` in order, each trimmed, without the empty ones. An entry wrapped in `**` or `__` with no `*` or `_` inside, and a `:` or `：` after the closing pair or none, as `**Don'ts:**` is, is drawn without the pair, as `Don'ts:`. An entry is a head when it was so wrapped, or when it ends with `:`, `：`, or a letter or a digit (Unicode categories `L` and `N`), which no sentence does. Each entry is drawn on lines of its own, in the text face at the text size and in the full colour of the structure, never smaller or fainter, so a heading reads before what it heads. A head is set in the title's weight and letter spacing at the text size, which draws the title face smaller by 25 to 32, so its lines are counted in the title face on a column as much wider:
+The entries are the strings of `props.above` in order, each trimmed, without the empty ones. An entry wrapped in `**` or `__` with no `*` or `_` inside, and a `:` or `：` after the closing pair or none, as `**Don'ts:**` is, is drawn without the pair, as `Don'ts:`. An entry is a head when it was so wrapped, or when it ends with `:`, `：`, a letter or a digit. A head is set in the title's weight at the body size and counted in the `head` measure, and any other entry in the `body` measure. Each entry is a row of words of its own, in the full colour of the structure, the first `GAP` px under what comes before it.
 
-```
-lines(entry, column) = wrap(entry, floor(column * 32 / 25), 93, 12)   for a head
-lines(entry, column) = wrap(entry, column, 72, 12)                    for any other
-above(column)        = 0                                              with no entry
-above(column)        = 6 + 17 * the sum of lines(entry, column)       otherwise
-```
+**Order on a small face.** A face shows the item's lines in order from the top: first the title where the type has one, then the `above` lines, then the `heads` row, then the entries of its structure, up to the height limit, then the cue. An `above` or `heads` line is never skipped to make room for an entry. If the `above` lines alone fill the face, the face is the title, those lines and the cue. This follows `lay`'s rule, since each line is a row before the structure's rows. A quote, a fact, a question and answer, a callout, an excerpt and a definition have no title on the face, so their lines come first, over the quotation mark, the value, the question, the tone, the passage and the headword. An explorable's lines come after its mark and its title. A sheet's own label of its first part, as `Best:`, stands over that part as a line over a structure.
 
-The 6 is the room between the lines and what comes before or after them. Each entry is drawn clamped to its lines. Twelve lines is a ceiling for a view sent straight to a client: the longest opening prose the Renderer sends, 280 characters or 140 in a script written without spaces, takes nine lines in the narrowest column, a callout's 217 px.
+This takes the place of the spec's line that the lines over a structure go to the opened card only: on the small face they would be left out exactly where they say what the entries are.
 
-A card draws the lines after its title and before its structure: on facts, a chart, a breakdown, steps, a list, a table, pros and cons, a sheet and an explorable. A card whose structure leads it draws them first, over the structure: a quote over its quotation mark, a fact over its value, a question and answer over the question, a callout over the glyph and the word that name its tone, an excerpt over its passage and a definition over its term. Each type below adds `above(column)` to its height, with its own column.
-
-`aboveWidth` is the px the widest entry needs to stand on one line: `up(advance(entry, 93) * 25, 3200) + 1` for a head and `up(advance(entry, 72), 100)` for any other, and 0 with no entry. A fact and a table, which are as wide as their words, take it in.
-
-**The heads row.** A fact, facts, a chart and a breakdown may carry `props.heads`, the heads row of the table of two columns their figures come from, such as `Metric` and `Change`. There is a heads row when `props.heads` is a list of two strings and one of them, trimmed, is not empty. The card draws it after the lines over its structure and before its figures or bars: the first head at the start and the second set to the end, each in half the column less 17 px between them, in the text face over a hairline. So a breakdown's share stands under the second head, and a fact's or facts' value stands under it too, because under a heads row each figure is set beside its label (see facts).
-
-```
-half         = floor((column - 17) / 2)
-headLines    = max(wrap(first, half, 72, 3), wrap(second, half, 72, 3))
-heads(column) = 0                         with no heads row
-heads(column) = 6 + 17 * headLines + 5    otherwise
-```
-
-The 6 is the room above the row, and the 5 is 4 px and the hairline under it. Each head is drawn clamped to `headLines`.
+**The heads row.** A fact, facts, a chart and a breakdown may carry `props.heads`, the heads row of the table of two columns their figures come from, such as `Metric` and `Change`. There is a heads row when `props.heads` is a list of two strings and one of them, trimmed, is not empty. It is one row: each head in meta in half the column less 17 px, `half = floor((177 - 17) / 2) = 80`, whole on up to 2 lines, the first at the start and the second at the end, over 4 px and a hairline. Its height is `18 * max(lines of the two) + 5`, and it is `GAP` px under what comes before it. A head that needs more than 2 lines shows 2 and the face ends with the cue.
 
 ### Each type
 
-`title` below is `item.title`, or the fixed word for a missing title when that is empty: `Untitled`, or `未命名` on a Chinese card. `item.title` is never trimmed.
+`title` below is `item.title`, or the fixed word for a missing title when that is empty: `Untitled`, or `未命名` on a Chinese card. `item.title` is never trimmed. Every type is 210 wide and its height is what `lay` gives the rows named, at most 146. A face is padded (`FRAME` 30, column 177) unless its line says otherwise. "The title" is a row of the title measure in the face's column, `item.data.shortTitle` else `title`, whole on up to 2 lines, else cut with an ellipsis as A title on the face says. Each row's `gap` is the px above it. "Above" is the lines over a structure, and "heads" the heads row, each as the previous section gives them. Under a title of 1 line, a face holds about 3 lines of body text, 20 to 25 letters or 11 Chinese characters a line.
 
-- **note.** Width 240. `titleLines = fold(title, 207, 93, 2)`. The emphasis is `props.emphasis`, trimmed. The body is `item.text`, else `item.summary`, when the emphasis is set, and `item.summary`, else `item.text`, when it is not. It is left out when it is empty or equal to `item.title`. The emphasis is drawn in place, marked where it stands in the body: to find it, fold the body and the emphasis by walking each by code point. A white space character, as JavaScript's `\s` reads it, becomes one space, and is dropped when the folded string is empty or already ends with a space. A dash from U+2010 to 2015, or U+2212, becomes `-`. A quotation mark, one of `"` `'` `‘` `’` `“` `”` `«` `»` `「` `」` `『` `』` `` ` `` `´`, is dropped. Any other code point is its NFKC form. Trim the folded emphasis and find its first place in the folded body. The words stand from the body's code point that gave the first folded character to the end of the one that gave the last, quotation marks inside them and all. When they are found, `reach = fold(the body up to the end of the words, 207, 72, 8)` and `bodyLines = fold(body, 207, 72, max(3, reach))`, so the body shows enough lines to reach the end of them. Otherwise `bodyLines = fold(body, 207, 72, 3)`, and nothing is marked. Height is `30 + 21 * titleLines`, plus `6 + 17 * bodyLines` when there is a body. The words are marked in colour alone, so they take the room they take unmarked. The Renderer keeps an emphasis only when it ends within the first 180 characters of the text, or 90 in a script written without spaces, which `reach` counts in at most eight lines.
-- **quote.** Width 288. The words are `props.text`, else `item.text`, else `item.title`. `lines = fold(words, 247, 78, 5)`. Height is `52 + above(247) + 21 * lines`, plus 25 when `props.by` is set. When the words draw in fewer lines than they were given, the spare room sits between the words and the speaker.
-- **fact.** The value is `props.value`, or `–` (U+2013) when that is empty. It is set in the first of three sizes that fits it on one line of 287 px. The sizes are a line height of 36 with a letter of 210 and a digit of 2148, 28 with 149 and 1506, and 21 with 105 and 1001. A digit is the drawn width of each of `0` to `9` in hundredths of a px, and replaces the 11 tenths the table gives it: `need = span(value, fact value) * letter - digits * (11 * letter - digit)`, where `digits` is how many of `0` to `9` the value holds. A size fits when `need <= 28700`. When none fits, it takes the last size and `valueLines = fold(value, 287, 105, 8)`, which counts in the fact value face and counts a digit as the table does. The card grows a line of 21 px for each line the value needs at that size, up to eight lines. Otherwise `valueLines = 1`. `valueWidth` is 287 when `valueLines` is more than 1 and `up(need, 100)` at the size taken otherwise. `labelWidth = up(span(props.label, text) * 72, 100)`. Width is `clamp(33 + max(valueWidth, labelWidth, aboveWidth), 200, 320)`. `labelLines = fold(props.label, width - 33, 72, 2)`, or 0 with no label. The foot is `item.title` when it is not empty and differs from the value and from the label. Height is `40 + above(width - 33) + valueLines * lineHeight + 17 * labelLines`, plus 25 when there is a foot. With a heads row the card is 320 wide, and its label and value, each trimmed, are set as one row of a facts card under a heads row, as facts below gives it: height is `30 + above(287) + heads(287)` and the row's height, plus 25 when there is a foot. A value's letter is the widest any one character of English other than a digit runs, digits are all one width, and every other character counts the widest it draws, so a value fits the lines it is given. A client must never cut a fact's value or end it with an ellipsis, because a figure cut short misleads. A client draws the value with no line clamp. If the value still draws wider than it was counted, it wraps onto a further line, breaking inside a word where it must, and stays whole. The card keeps the size given here. Eight lines is the ceiling, so that a paragraph filed as a value cannot make a tower. A value that needs more than eight lines at the smallest size is the one value a card may hide the end of: it runs past the bottom of the card and the card's edge clips it, still with no ellipsis. The opened view draws every value whole at any length, and scrolls when it is taller than the view.
-- **image.** Width 240. The picture is `clamp(round(240 / aspect), 130, 260)` px tall, where `aspect` is `Number(props.aspect)`, or 1.35 when that is zero or not a number, the division is in IEEE doubles, and `round` is `floor(x + 0.5)`. The caption is `props.caption`, else `item.title` as written, so an empty title gives no caption and never `Untitled`. `captionLines = fold(caption, 207, 72, 2)`, or 0 with no caption. Height is the picture plus 2, plus `19 + 17 * captionLines` when there is a caption.
-- **video.** Width 272. The poster is 153 px tall. The caption is as for image, with `captionLines = fold(caption, 239, 72, 2)`. Height is 155, plus `19 + 17 * captionLines` when there is a caption.
-- **audio.** Width 272. `titleLines = wrap(title, 239, 93, 2)`. The words are `item.text` with each run of white space turned into one space and the ends trimmed. When `item.title`, treated the same way, is not empty and the words equal it, there are no words. When the words start with it followed by a space, that much is taken off the front, so a transcript that opens with its title does not say it twice. `bodyLines = wrap(words, 239, 72, 3)`, or 0 with no words. Both are counted word by word, so the card sets them without kerning, as it sets the structured types. Height is `30 + 21 * titleLines + 6 + 40`, plus `6 + 17 * bodyLines` when there are words. The 40 is the strip that holds the play mark, the waveform and the length, which is the same for any props.
-- **link.** Width is 316 when `props.image` is set and 272 when it is not. The text column is 187 px with a picture and 239 without. `titleLines = fold(title, column, 93, 2)`. The description is `props.description`, else `item.summary`. `aboutLines = fold(description, column, 72, 2)`, or 0 with none. `main = 21 * titleLines`, plus `4 + 17 * aboutLines` when there is a description. Height is `56 + main`, and at least 120 with a picture.
-- **chart.** Width 300. Height is `195 + above(267) + heads(267)`, plus 17 when `props.unit` is set.
-- **person.** 252 by 88.
-- **chat.** Width 288. The first 3 messages are shown. Each bubble is `12 + 17 * fold(message.text, 199, 72, 2)` px tall. Height is 51, plus 2 when there is a message, plus 6 and the bubble's height for each bubble, plus 23 when `props.source` is set.
-- **code.** Width 304. The lines are `props.source` split at each line feed. Height is `59 + 17 * clamp(lineCount, 1, 7)`.
-- **steps.** Width 256. `rows` is the number of steps, at most 5. Height is `51 + above(223)`, plus `10 + 20 * rows + 8 * (rows - 1)` when there is a step, plus 25 when there are more than 5 steps.
-
-The sixteen types below trim the white space from both ends of each string prop before they use it, and a prop "is set" for them when something is left. That holds for a string inside a list or an object too: a fact's label and value, a table's head and cell, an entry, a point, a colour's name and value, an author. To trim is to do what JavaScript's `trim` does: take off U+0009 to 000D, U+0020, U+00A0, U+1680, U+2000 to 200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF at both ends. `item.title`, `item.summary` and `item.text` are never trimmed, by any type. They count every line with `wrap`. A prop of the wrong type counts as an empty string or an empty list.
-
-- **facts.** Width 320. The facts are `props.facts` in order, each a `label` and a `value`, both trimmed. A row is 287 px wide and half a row is 135. Walk the facts in order: a fact shares a row with the one after it when there is one and `figureNeed(value, middle) <= 13500` for both values, and has the row to itself otherwise. `room` is 135 for each fact of a shared row and 287 for a fact alone. Every figure of the card is set in one size: the middle size when every value on the card has `figureNeed(value, middle) <= room * 100` or `wrap(value, room, 149, 3) <= 2`, which only a fact alone can fail, and the smallest otherwise. So a long value takes a whole row and wraps there onto a second line at the middle size, short figures keep the middle size beside it, and only a value that needs more than two lines of a whole row at the middle size sets every figure small. A value with `figureNeed(value, size) <= room * 100` at the size taken has 1 line. At the middle size any other has `wrap(value, room, 149, 3)` lines, which is at most 2 and can be 1, because `wrap` counts each character at the width it draws and `figureNeed` at the widest. At the smallest size any other has `min(wrap(value, room, 105, 9), 8)` lines, and is cut when `wrap(value, room, 105, 9)` is 9. `labelLines = wrap(label, room, 72, 2)`. A fact's height is `valueLines * lineHeight + 17 * labelLines`, and a row is as tall as its taller fact. Under a heads row each fact has a row to itself and `room` is 135 for every fact: its label stands in the first half of the row, under the first head, and its value in the second half, set to the end, under the second head. The size is chosen as above with these rooms, the lines of each value and label are counted as above, and a row is as tall as the larger of `valueLines * lineHeight` and `17 * labelLines`. `titleLines = wrap(title, 287, 93, 2)`. Height is `30 + 21 * titleLines + above(287) + heads(287)`, plus 12, the rows and 12 between each two rows when there is a fact, plus 25 when `props.more` is a whole number above 0. The card then writes `and N more` in its fixed words. A value that is not cut is drawn with no line clamp and no ellipsis, like a fact's. A value that is cut is no figure but a passage: it is drawn on eight lines and ends with an ellipsis, the one sign on a facts card that there is more, and the opened card has it whole. The rule table gives no such card, because it leaves an item with a value over 60 characters to its other rows, so only a view sent straight to a client can hold one. A fact takes its direction from its value, so an Arabic figure and its label sit on the same side.
-- **table.** The cells are `props.heads` and `props.rows`, and the table has as many columns as it has heads. A row's cell for a column it does not reach is an empty string, and a cell past the last head is not read. The card shows the first 6 rows. A cell's width is `textWidth(cell) + 1`: the count is whole px already, and a string can draw up to 0.4 px wider than it counts, so a column given exactly the count could end a cell that fits with an ellipsis. A cell is a number when its width is at most 261, so it can stand beside a first column of 44 px, and it matches `^(?:[-+−–~≈<>≤≥±]\s?)?(?:[A-Z]{0,3}\p{Sc}\s?|[A-Z]{3}\s)?[-+−–]?\d[\d,'’:/\s]*(?:\.\d[\d,'’:/\s]*)?[%％‰]?(?:\s?[\p{L}\p{Sc}°µ²³/]+(?:\s[\p{L}\p{Sc}°µ²³/]+)?)?$`: a sign, a currency prefix and a sign again, each when it is there, then digits with separators and at most one decimal point, a percent sign when it is there, and a unit of at most two words. A currency prefix is a currency sign with up to three capitals before it, as `$`, `US$`, `HK$` and `€`, or a code of three capitals and a space, as `RMB ` and `USD `. So `$1,234,567,890.12 USD`, `US$ 1,200`, `24.9 billion km` and `62 平` are numbers, and `1.2.3` and `Q3` are not. A head is never a number. For column `i`, over its shown cells: `want` is the widest width of the head and of every shown cell. `numbers` is the widest width of those that are numbers, and 0 with none. `floor` is `numbers`, except for the first column, which names each row: its `floor` is `max(numbers, min(want, 120, max(44, 319 - 14 - second)))`, where `second` is `least` of the second column, below, or 0 when there is none. The column is a number column when at least one of its shown cells is not empty and every one that is not empty is a number. `least` is `floor` for a number column and `max(floor, min(want, 44))` for any other. `least(count)` is the sum of `least` over the first `count` columns, plus `14 * (count - 1)`. Start with `count = min(columns, 5)` and take 1 off while `count > 1` and `least(count) > 319`. The columns share `spread(want - floor for each, 319 - 14 * (count - 1) - the sum of floor)`, and a column's width is its `floor` plus its share. So a number is never cut, whether its column holds only numbers or words too, the first column has 120 px or all it needs unless a number in the second column needs the room, down to 44 px, and words are cut to their column with an ellipsis. When that leaves too little for the last columns, they are dropped and counted. A number column is set to the right, and a number beside words stays on the left with them. Width is `clamp(33 + max(the widths + 14 * (count - 1), aboveWidth), 200, 352)`, and the columns keep their widths in a wider card, set apart. `titleLines = wrap(title, width - 33, 93, 2)`. Height is `30 + 21 * titleLines + above(width - 33) + 8 + 24 * (1 + shown rows)`, plus 25 when rows or columns are left out. The card then counts them in the fixed words of the next section: `and N more rows`, `and N more columns`, or both with a comma between, with `row` and `column` for one.
-- **list.** Width 256. The entries are `props.items`. The list is a checklist when it has at least one entry and `props.checked` is as long as `props.items`. A checklist writes `done/count` beside its title, such as `2/4`, where `count` is every entry and `done` every entry whose mark is true, shown or not. `titleLines = wrap(title, 223, 93, 2)`, in a column narrower by `10 + textWidth(tally)` on a checklist. The first 6 entries are shown, each on `wrap(entry, 203, 72, 2)` lines. Height is `30 + 21 * titleLines + above(223)`, plus 10, 17 for each line and 5 between each two entries when there is an entry, plus 25 when there are more than 6 entries.
-- **breakdown.** Width 300. The parts are the first 8 of `props.labels`. The unit is written under the title when `props.unit` is set and is not `%` or `％`. Height is `30 + 21 * wrap(title, 267, 93, 2) + above(267) + heads(267)`, plus 17 with a unit under the title, plus `10 + 17 * parts + 7 * (parts - 1)` when there is a part. Inside the card, each part is a label, a bar and its share on one line. A share is the value with a comma between thousands and at most six decimals, and `%` straight after it when the unit is a percent sign. The shares take `shares = the widest textWidth of a share`. The labels take `min(the widest textWidth of a label, 128, max(48, 251 - shares - 72))` and are cut with an ellipsis. The bars have what is left, with 8 px either side. A value that is no number or is below 0 draws as 0. A bar's length is its value over the sum of the values of the parts shown, as a share of the room the bars have, so the bars of one card add up to one whole length. A part whose share is written as `0` draws no bar, and no part draws a bar when the sum is 0. A share is never cut.
-- **qa.** Width 272. `questionLines = wrap(props.question, 217, 93, 4)` and `answerLines = wrap(props.answer, 217, 72, 6)`. Height is `47 + above(239) + 21 * questionLines + 17 * answerLines`.
-- **callout.** Width 256. `lines = wrap(props.text, 217, 93, 5)`. The foot is `item.title` when it is not empty and differs from the text. Height is `53 + above(217) + 21 * lines`, plus 25 when there is a foot.
-- **excerpt.** Width 288. The passage is `props.text`. The Scout ends the text of a page it picked with a blank line and a line that says who made it, when and where it was found, which the card leaves out: take the values of `item.data.by`, `item.data.date` and `item.data.from` that are strings and not blank once trimmed, each as written, untrimmed, and in that order, drop each that repeats an earlier one, and join them with a comma and a space. When that is not empty and the passage ends with a line feed, a line feed and exactly that, cut it off and trim the passage again. Then turn each run of white space into one space. `lines = wrap(passage, 242, 92, 6)`, in the whole line box of 242 px: the passage is counted without the px to spare that the other columns keep, because a character set with Han draws exactly 16 px in this serif and fifteen of them fill a 240 px line to the last px. Under the passage go `item.title`, when it is not empty, and one line of `props.at` and `props.source`, those that are set and differ from `item.title` with its ends trimmed, joined by a space, a middle dot (U+00B7) and a space. So a source that is the title is written once. Height is `30 + above(255) + 21 * lines`, plus 10 and 17 for each of those two lines when there is either.
-- **definition.** Width 272. The term is large when `figureNeed(props.term, middle) <= 23900`, and is then 28 px tall. Otherwise it is `21 * wrap(props.term, 239, 93, 2)` px tall. `lines = wrap(props.definition, 240, 92, 6)`, in the whole line box, as an excerpt's passage is. Height is `40 + above(239) + the term's height + 21 * lines`.
-- **idea.** Width 272. The thought is `title`. It is set in the largest figure size when `wrap(title, 239, 210, 3)` is at most 2, and has that many lines of 36 px. Else it is set in the middle size when `wrap(title, 239, 149, 5)` is at most 4, and has that many lines of 28 px. Else it has `min(wrap(title, 239, 105, 6), 5)` lines of 21 px. Height is `52 + lines * lineHeight`. A longer thought can make a shorter card, because it steps down a size. A thought for which `wrap(title, 239, 105, 6)` is 6 is drawn on five lines and ends with an ellipsis. Any other is drawn with no line clamp.
-- **proscons.** Width 320. A side is `props.pros` or `props.cons`, without the points that are empty. Each side is named by its head, `props.heads[0]` or `props.heads[1]` trimmed, or by the fixed word for the side when that is empty. A head is set as a head over a structure is, in the title's weight at the text size, on `headLines = wrap(head, 172, 93, 4)` lines of the side's 135 px. Each side shows its first 4 points, each on `wrap(point, 119, 72, 3)` lines, with a dot before it and no other mark. A side's height is `17 * headLines + 4`, plus 17 for each line of a point, plus 5 between each two points, plus 22 when it has more than 4 points. Height is `30 + 21 * wrap(title, 287, 93, 2) + above(287) + 10`, plus the taller side.
-- **swatch.** Width 256. `rows` is the number of `props.colours`, at most 6. Height is `73 + 21 * wrap(title, 223, 93, 2)`, plus `8 + 17 * rows + 5 * (rows - 1)` when there is a colour, plus 25 when there are more than 6. The band across the top is 44 px tall and holds the first 12 colours in equal parts. A client paints a value only when it matches `^(?:#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|[a-z]{1,30})$` in either case, which is what the schema allows, and leaves any other unpainted. A colour's value is never cut. A colour whose name equals its value, as one pasted without a name has, is written once, as its name.
-- **artwork.** Width 264. The work is shown whole, never cropped, on a mat 196 px tall, a shade lighter than the card's face. The byline is `props.maker` and `props.date`, those that are set, joined by a comma and a space. `titleLines = wrap(title, 231, 93, 2)`. `byLines = wrap(byline, 231, 72, 2)` and `mediumLines = wrap(props.medium, 231, 72, 2)`, each 0 when there is nothing to write. Height is `222 + 21 * titleLines`, plus `2 + 17 * byLines` with a byline, plus `17 * mediumLines`, plus 17 when `props.holder` is set.
-- **reference.** Width 288. The authors are the names in `props.authors` that are not empty, joined by a comma and a space, with the fixed words for a cut list after them when `props.more` is true: ` and others`, or ` 等` on a Chinese card. With no name there is no line of authors, whatever `props.more` is. Height is `62 + 21 * wrap(title, 255, 93, 3)`, plus `6 + 17 * wrap(authors, 255, 72, 2)` when there is a name, plus `2 + 17 * wrap(props.venue, 255, 72, 2)` when `props.venue` is set.
-- **place.** Width 256. The name is `props.name`, else `title`. It is large when `figureNeed(name, middle) <= 18500`. `head` is 28 when it is large, and `max(28, 21 * wrap(name, 185, 93, 2))` otherwise. The body is `item.summary`, else `item.text`, as written. It is left out when it is empty or equal to the name or to `item.title`. That is decided first, and then each run of white space in it is turned into one space. `bodyLines = wrap(body, 223, 72, 3)`. Height is `30 + head`, plus 120 when `props.src` is set, which a string of white space is not, plus 112 when `item.data.at` is a point on the earth as Maps says, plus `8 + 17 * bodyLines` when there is a body. The map counts whether or not the service names a tile provider, so a footprint is worked out from the item and the props alone.
-- **sheet.** Width 320, and every part has the column of 287 px, but where a part says otherwise. The sections are `props.sections` in order, and an entry that is not an object is passed over. A section's `kind` names it. The card has one title: the `text` of the first section whose kind is `heading`, trimmed, or `title` when that is empty or there is no heading. `titleLines = wrap(that title, 287, 93, 3)`. The `src` of the first section whose kind is `picture`, trimmed, is the card's picture, and when it is set the card leads with it in a band 140 px tall across the whole card. A later heading or picture is not drawn. Every section whose kind is `text`, `figures`, `list`, `table` or `excerpt` is a part, in the order given, laid out as the card of its kind lays it out, and a part with nothing to show is left out:
-  - `text`: the words are `text`, trimmed, with each run of white space turned into one space, and the part is left out when they are empty. `lines = wrap(words, 288, 72, 6)`, in the whole line box of 288 px: a character set with Han draws exactly 12.5 px in the text face, so twenty-three of them fill the line to the last half px, and the px to spare that the other columns keep would push the last onto a line of its own. It is `17 * lines` tall, and its lead is 6.
-  - `figures`: the facts are `facts`, each label and value trimmed, laid out exactly as a facts card lays out its facts, in rows of 287 and 135 px, every figure in one size. It is as tall as the rows, plus 12 between each two rows, and its lead is 12. It is left out with no fact.
-  - `list`: the entries are `items`, each trimmed. The first 8 are shown, each on `wrap(entry, 267, 72, 2)` lines. It is 17 for each line plus 5 between each two entries tall, plus 25 when there are more than 8, and the part then writes `and N more` in its fixed words. Its lead is 10. It is left out with no entry.
-  - `table`: `heads` and `rows` laid out by the table rule above, with 287 in place of 319 wherever that rule shares the room among the columns. It is `24 * (1 + shown rows)` tall, plus 25 when it leaves out rows or columns, which it counts as a table card does. Its lead is 8. It is left out with no head.
-  - `excerpt`: the passage is `text`, trimmed, with each run of white space turned into one space, and the part is left out when it is empty. `by` is trimmed. `lines = wrap(passage, 274, 92, 5)`, in the whole line box of 274 px, as an excerpt's passage is counted. `byLines = wrap(by, 265, 72, 2)`. It is `21 * lines` tall, plus `4 + 17 * byLines` when `by` is set, and its lead is 10.
-
-  A `figures`, `list` or `table` section may carry `label`, the item's own line that heads it, such as `Best:`. The part then draws it over itself as one line over a structure is drawn, in a column of 287 px, followed by 6 px, and its height grows by `above(287)` of that one line.
-
-  Height is `30 + 21 * titleLines + above(287)`, plus 140 with a picture, plus the first part's lead and its height, plus 21 and its height for each part after it. The 21 is 10 px above a hairline, the hairline, and 10 px under it. The title, a text, an entry, a passage and `by` are drawn clamped to the lines they were given. A figure and a number in a table are never cut, as on their own cards.
-- **explorable.** Width 288, and every part has the column of 255 px. The controls are the entries of `props.controls` that are objects of a known kind: a `toggle` or a `segmented` with at least two `states` that are objects, each state's `name` and `text` trimmed, and a `slider` whose `values` hold at least one number and whose `min`, `max` and `step` are numbers with `min < max` and `step > 0`, its `label` and `unit` trimmed. Any other entry is passed over. The output is `props.output` when its `kind` is `figure` or `chart`, and text otherwise. When the output is text, or no control is a slider, the card shows the toggles and segmented controls, each with the `text` of its first state: `lines = wrap(text, 255, 72, 4)`, and `body` is 17 for each of those lines, plus 6 between each two controls. Otherwise it shows the sliders, and `shown` is the result where each stands on its first value, written as explorable below writes it. The figure is in the middle size on one line of 28 px when `figureNeed(shown, middle) <= 25500`, and otherwise in the smallest size on `wrap(shown, 255, 105, 3)` lines of 21 px. `labelLines = wrap(output.label, 255, 72, 2)`, or 0 when the label is empty. `body` is the figure's lines times their height, plus `2 + 17 * labelLines`, plus `8 + 96` when the output is a `chart`. `titleLines = wrap(title, 255, 93, 2)`. Height is `30 + 21 + 21 * titleLines + above(255) + 10 + body`, plus 36 for each control shown: its row of 28 and the 8 above it. The 21 after the frame is the mark and the 4 px under it. The title and a state's text are drawn clamped to the lines they were given. A figure is never cut.
-
-### The chip line
-
-A card's footprint is its type's footprint, and 28 px taller when the card has at least one chip. The width never changes, and neither does the height with the number of chips. Whether the node is a pick or kept changes nothing. The Chips section says which chips an item has, and that rule gives at most three, in order. Call them the candidates. A card has chips when it has at least one candidate.
-
-The line draws some of the candidates, each in a box of a width worked out here. This changes what is drawn and never the footprint. No text is cut by this rule. A chip is given its whole text and the width of its box, and the client's own text engine clips the text inside the box.
-
-`room` is the card's width less 40 for a quote, less 26 for an image or a video, less 44 for a callout, and less 32 for every other type. That is the card's 1 px border and the margin each side of the line: 19, 12, 21 and 15 px. Chips are 6 px apart.
-
-`text(chip) = textWidth(chip.text)`. `pad(chip)` is 28, the chip's glyph and padding, and for a people chip with a `count` it is `28 + textWidth(' +N')`, where ` +N` is a space, a plus sign and the count in decimal digits. `need(chip) = pad(chip) + text(chip)`.
-
-1. **The date first.** When the first candidate's kind is `when`, it is drawn and its width is `min(need, room)`. Then `rest = room - that width - 6`, and steps 2 and 3 run on the other candidates with `rest`. With no `when` candidate, `rest = room` and steps 2 and 3 run on every candidate.
-2. **How many of the others are drawn.** Walk the others in order with `left = rest + 6`. For each, `left = left - 6 - pad - min(44, text)`. One is drawn only when `left >= 0` after its own step. One that is left out still takes its step, so no later one is drawn. On a card with no `when` candidate the first is always drawn, whatever `left` is, so a card with chips never has an empty line. The 44 is a floor of 72 px for a chip, less the 28 of its glyph and padding. The opened card lists what the line leaves out.
-3. **How wide each of the others is.** Start with `free = rest - 6 * (drawn others - 1) - the sum of their pads`, and each of them without a share. Repeat: `each = floor(free / chips without a share)`. Every chip without a share whose `text <= each` gets its `text` as its share, and `free` drops by that. When no chip does, every chip without a share gets `each`, and the rule ends. It also ends when every chip has a share. A chip's width is its `pad` plus its share.
-
-So the widths on a line and the gaps between them never add up to more than `room`, a chip beside a date has at least 72 px or its whole text, and a people chip always has room for its count.
-
-**Drawing a chip in its box.** A client draws the chip's glyph, then `chip.text` on one line, then for a people chip with a `count` the count as `+N`, 4 px after the names. It clips `chip.text` to what the box leaves, with an ellipsis, by its own text engine. The count is never clipped: three authors whose second name does not fit read `T. Screech, M. For… +1`. The exact characters that survive the clip are the client's own and are not part of this rule.
-
-The widths are counted from the table, and a string nearly always draws narrower than it counts, so a date is whole unless it alone is wider than the line. A client may close a box up to its text when the text draws narrower than counted, and may let a clipped chip take the px that frees, as the web client does. It must never give a chip less than its width here when its text is clipped, and the chips and gaps must stay inside `room`.
-
-On a note, where `room` is 208: `12 May 1958` has a box of 108 and `Bodega Bay` the 94 left. `Early September 1958` takes 165 and leaves 37, so `Bodega Bay` is left out. A date of 60 letters has the whole line and nothing is drawn beside it.
-
-A sample in `test/footprints.json` whose item has `data` lists in `chips` each chip its card draws, in order: `kind`, the whole `text`, the `width` of its box and, on a people chip that leaves some unnamed, `count`. `origin` in a sample's item is `item.origin`.
+- **note.** The title, then the body at the body measure, gap 6. The body is `item.summary`, else `item.text`, and `item.text`, else `item.summary`, when `props.emphasis` is set. It is left out when it is empty or equal to `item.title`. Under a title of 2 lines it holds 2 lines, and under a title of 1 line, 3. A note that sets words apart marks them where they stand, in colour alone. When the lines the face gives the body from its start do not reach the end of the marked words, the body starts where they start, and the face ends with the cue.
+- **quote.** Padded 13 by 19 px, so its column is 169. Above, gap 0 for the first. The quotation mark, 22 px tall, gap 6 under any line over it. The quotation, `props.text`, else `item.text`, else `item.title`, in the passage measure, upright. The speaker, `props.by`, in meta after a 14 px dash and 8 px, in a column of 147, whole on up to 2 lines, gap 8, kept. So it holds 3 lines and the speaker, or 2, the speaker and the cue.
+- **fact.** Above, gap 0. Heads, gap 6 under a line over it. Without heads: the value, `props.value` trimmed, else `–`, gap 6 under anything over it, at the largest size that holds it on one line in 177 px, 34, 24 or 18 px, its row that size's line height; past that at 18 px on its whole lines, up to 4, its row 24 px a line. A value is never cut: a longer one shows 4 lines and the face ends with the cue. Then a rule 2 px tall, gap 1, and the label, `props.label`, in the body measure on up to 2 lines, gap 1. With heads: one headed row of figures, as facts sets them. Last, the title in meta on up to 2 lines, gap 8, when it is not the value or the label.
+- **image.** Picture-led, with no padding. The caption is `props.caption`, else `item.title`. With a caption, the frame is the 2 px border and 10 px under the caption. The picture is `clamp(round(210 / aspect), 81, room)` px tall, where `aspect` is `props.aspect` or 1.35 and `room` is 144 less the plate: 9 px, the caption's lines, at most 2, or 1 when it needs more, 10 px, and the cue's 18 px when it needs more. The caption is a row of the body measure, gap 9, on up to 2 lines. So the picture is 103 px under a caption of 1 line, 81 under 2, and 85 over 1 line and the cue. Without a caption the frame is 2 and the picture stands alone.
+- **video.** As an image, with the poster at 16:9: `min(118, room)` px tall and 16 / 9 as wide, rounded, centred on a dark band when it is narrower than the face, with its play mark. So 183 by 103 under a caption of 1 line, 144 by 81 under 2.
+- **audio.** The title on up to 2 lines. The strip, 40 px, gap 6: the play mark, the waveform and the length. The transcript, `item.text` with its runs of white space made one, without the title when it opens with the title's words, in the body measure, gap 6. So a title of 1 line leaves 1 line of transcript, and a title of 2 lines the strip and the cue.
+- **link.** The address bar, 30 px, then a part padded 10 above and 13 below, so the frame is 56. The title, then what the page is about, `props.description`, else `item.summary`, in the body measure, gap 4. No thumbnail: the opened card has it. So a title of 1 line has 2 lines under it, and a title of 2 lines has 1 when that is all, else the cue.
+- **chart.** A designed preview, because no label or value reads at the face's sizes. The title, above, heads, then the shape of the values with no text, `clamp(146 - the height of the rows over it - 6 - 6 - 18, 38, 62)` px tall, gap 6, and one meta line, gap 6: the count of points with the first and last labels, `12 points, 2015 to 2026`, when that fits one line, else the count alone, or `No data`. When the face has no room for the shape, that line is the cue.
+- **person.** One row: a round face 48 px across, then 12 px, then the name, `props.name`, else `item.title`, at the title measure, cut as a title is past 2 lines, and the role, `props.role`, in the body measure whole on up to 2 lines, the cue after it when it needs more, both in a column of 117. The row is as tall as the larger of 48 and the lines.
+- **chat.** The title, then each message, `props.messages`, in its bubble: a unit of the body measure in a column of 132, at most 86% of the column less 20 px of padding, whole on up to 2 lines, its row 12 px more than its lines, gap 8 for the first and 6 after. The cue counts the messages left out.
+- **code.** The title, then one meta line, gap 6: how many lines the source has and in what language, `24 lines of Python`. A line of source at 16 px holds about 18 characters, so the face shows none. The language is `props.language`, unless it is `text`. The opened card has the source.
+- **steps.** The title, above, then each step a unit of the body measure in a column of 145 beside its 22 px number, whole on up to 2 lines, gap 6 for the first and 8 after. The cue counts the steps left out.
+- **facts.** The title, above, heads, then the figures a row at a time, each row a unit, the first 4 px under the title, or 6 under heads, and 12 px between rows. Two facts share a row when both values fit 80 px at 24 px; any other has the row. A value is set at 24 px when it fits its room on one line, else at 18 px on whole lines, up to 4; its label is under it in meta on up to 2. Every figure of a face is one size. Under heads each row is headed: the label under the first head, the value under the second. The first row, when it is taller than the room the face leaves it, shows the most lines of its value that leave a line of its label. The cue counts the facts left out and `props.more`.
+- **table.** A designed preview. The title, above, the heads in meta joined by a middle dot as far as they stand whole on one line, with `+N` for the rest after them, gap 6, on up to 2 lines when the first head alone is longer, then 4 px, then the cue, which counts the rows: `12 rows`. A table with no rows has no cue.
+- **list.** The title, in the column less a checklist's tally and 10 px, the tally beside it in meta. Above. Then each entry a unit of the body measure in a column of 157 beside its dot or tick box, whole on up to 2 lines, gap 10 for the first and 5 after. So it holds 3 entries of 1 line, or 2 and the cue. The cue counts the entries left out.
+- **breakdown.** A designed preview. The title, above, heads, one 16 px bar split into the parts by their shares, gap 6, then the largest part as one line of the body measure, its label and its share as the item writes them, `Rent 42%`, with a unit other than a percent sign after, gap 6, on up to 2 lines. The cue always counts the parts: `6 parts`.
+- **qa.** Above, gap 0. The question, `props.question`, at the title measure in a column of 155 beside its letter, gap 6 under a line over it. The answer, `props.answer`, in the body measure in the same column, 17 px under it, with the rule in the middle of that. So under a question of 1 line it holds 3 lines of answer, or 2 and the cue, and under a question of 2 lines, 2, or 1 and the cue.
+- **callout.** Padded 21 px on the left for its band, so its column is 171. Above, gap 0. Its tone in meta beside its glyph, 18 px, gap 6 under a line over it. Its words, `props.text`, at the title measure, gap 6. So it holds 3 lines, and the cue when there are more.
+- **excerpt.** Above, gap 0. The passage, `props.text` without the Scout's closing line, with its runs of white space made one, in the passage measure in a column of 164, gap 6 under a line over it. Then one meta line, gap 10, kept: the item's title and where it is from, `props.at` and `props.source`, joined by a middle dot, without a part that is the title, whole on 1 line, without a dot left at its end. So it holds 4 lines and the source, or 3, the source and the cue.
+- **definition.** Above, gap 0. The headword, `props.term`, at 24 px when it fits 177 px on one line, else at the title measure, cut as a title is past 2 lines, over a short rule, its row the term's lines and 10 px. The meaning, `props.definition`, in the passage measure in a column of 178. So under a headword of 1 line it holds 3 lines of meaning, or 2 and the cue, and under a headword of 2 lines, 2, or 1 and the cue.
+- **idea.** The spark, 22 px. The thought, `title`, as a figure: at 34 px when it stands on 2 lines, else at 24 px on 3, else at 18 px on 3, where a longer thought shows its first 3 lines and the cue.
+- **proscons.** A designed preview. The title, above, then each side that holds a point as one row of the `head` measure on up to 2 lines: the side's head, the item's own, `props.heads`, else `For` or `Against`, in the title's weight, running into its first point after a space, or straight after a stop set with Han. Gap 6 for the first and 0 after. The card adds no sign of its own, so in place of the spec's `+` and `−` each side is named in its item's words. The cue counts both sides, `3 for, 2 against`, when either side holds more than one point.
+- **swatch.** A band 44 px tall of up to 12 of its colours, then the rest padded 12 above and 13 below, so the frame is 73. The title, then each colour a unit: its dot, its name in the body measure whole on up to 2 lines, and its value in meta at the end of the row when the name is not the value, gap 8 for the first and 5 after. The cue counts the colours left out.
+- **artwork.** Picture-led, with no padding. The work whole on a 6 px mat, as large as the plate leaves room for: `146 - 2 - (10 + 24 * titleLines + 9)`, 101 px under a title of 1 line and 77 under 2. The title, gap 10. The maker, the date, the medium and the holder are on the opened card.
+- **reference.** Its kind and year in meta over a rule, a row of 32 px. The title on up to 2 lines. The first author in meta on 1 line, gap 6: `A. Vaswani and 7 others`, or `A. Vaswani and others` when the list was cut. The venue and every author are on the opened card.
+- **place.** The name, `props.name` trimmed, else the face's title, beside a round 28 px pin: at 24 px when it fits 139 px on one line, else at the title measure, cut as a title is past 2 lines, its row the larger of 28 and its lines. With a point on the earth, the face is padded only above the name, so its frame is 17, and under the name, 13 px down, a map 210 by 88. Without one, the face is padded and the words about the place, `item.summary`, else `item.text`, unless they are the name or the title, are under the name in the body measure, gap 8.
+- **sheet.** The title is its heading section's text, else `item.title`. The title, above, then its first part as that part's own preview, each in the room the face leaves: a text's lines (gap 6), a row of figures as facts sets it (4 px under the title), entries as a list sets them (10 px under), a table's heads and the count of its rows (gap 6), or a passage in the passage measure in a column of 163 over who said it, which it keeps. The part's own label, as `Best:`, stands over it. Under a title of 1 line that room is 68 px. The cue counts the other parts, its picture among them: `2 parts`.
+- **explorable.** The explore mark, 22 px. The title. Above. Then what the controls change, in the body measure on up to 2 lines, gap 6: the first state's words for an output of words, else the output's label. The cue counts the controls: `2 controls`. The controls are on the opened card.
 
 ### Text cut to a width
 
-Where the web client shortens a string itself, as it does for a chart's labels, `cut(str, room)` gives the string, or as much of its start as fits `room` px with an ellipsis. It is only used at the text size, so every `span` below is in the text face and the letter is 72. Chips are not cut this way.
-
-```
-cut = str                        when span(str) * 72 <= room * 100
-budget = room * 100 - span('…') * 72
-```
-
-Otherwise split the string into the characters a reader sees, which are the extended grapheme clusters of Unicode Annex 29, and walk them in order with `used = 0` and nothing kept. For each cluster, add `span(cluster) * 72` to `used`, where the cluster is counted alone as a string of its own. When `used` is now more than `budget` and at least one cluster is already kept, stop without keeping this one. Otherwise keep it. So the first cluster is always kept, even when it alone is over the budget. The result is the kept clusters joined, with the white space at its end removed, then `…` (U+2026). White space here is what JavaScript's `trimEnd` removes: U+0009 to 000D, U+0020, U+00A0, U+1680, U+2000 to 200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF. When only white space was kept, the result is `…` alone.
-
-A cluster is counted alone, so the rule about U+200D applies inside a cluster and not across two. An emoji joined from several is one cluster and counts once. A letter that follows a U+200D which ended the cluster before it starts a new cluster, and counts its own width. A cut never lands inside an emoji or between a letter and its accent. The first letter on a link's address bar and a person's initials are whole clusters too.
+No small face cuts a string. `cut(str, room, letter)` shortens a label of the opened chart's plot, and nothing else, to as much of its start as fits `room` px with an ellipsis, counted in the text face: `cut = str` when `span(str) * 72 <= room * 100`, else the longest run of whole grapheme clusters whose `span` fits `room * 100 - span('…') * 72`, then `…`. The opened chart lists every label and value whole in its table whenever its plot cut, thinned or rounded one.
 
 ## Chips
 
-Any card may show one line of chips under its content. A chip is a short fact about the item: when, where it came from, where, or who. A photo with a date and a place reads as a memory without a card type of its own.
-
-Chips are read from the item alone. They never come from `view.props`, so the Renderer and the model have no part in them, and they do not depend on the node, so a card keeps its chips and its size when a pick is kept. `client/js/chips.js` is the whole rule for which chips an item has and has no drawing code. `client/js/components/index.js` fits them to a card.
+A card's sources are short facts about its item: when, where it came from, where, and who. The small face draws none of them, so they add nothing to a footprint, and the opened card lists every one in full. They are read from the item alone. They never come from `view.props`, so the Renderer and the model have no part in them, and they do not depend on the node, so a pick lists the same sources once it is kept. `chipSources(item)` in `client/js/chips.js` is the whole rule.
 
 **Sources, in this order.**
 
-| Kind | Read from | Text on the chip |
-| --- | --- | --- |
-| `when` | The first of `item.data.when` and `item.data.date` that is a source | The string. |
-| `origin` | The first of `item.data.holder`, `item.data.venue`, `item.data.site` and `item.data.from` that is a source. Only when the agents brought the item, which is `item.origin.by === 'agent'`. | The string. |
-| `where` | `item.data.where` | The string. |
-| `people` | The first of `item.data.people` and `item.data.authors` that holds a name, each an array of strings. | The first two names joined by a comma and a space. With more than two names the chip also has `count`, how many it leaves unnamed. |
+| Kind | Label | Read from | Text |
+| --- | --- | --- | --- |
+| `when` | `When` | The first of `item.data.when` and `item.data.date` that is a source | The string. |
+| `origin` | `Origin` | The first of `item.data.holder`, `item.data.venue`, `item.data.site` and `item.data.from` that is a source. Only when the agents brought the item, which is `item.origin.by === 'agent'`. | The string. |
+| `where` | `Where` | `item.data.where` | The string. |
+| `people` | `People` | The first of `item.data.people` and `item.data.authors` that holds a name, each an array of strings. | Every name, joined by a comma and a space. |
 
-A value is trimmed of the white space at both ends. A string is a source only when something is left after that, so an empty string, a string of spaces and a value of another type are passed over, and the next key is tried. A name that is not a string, or is empty once trimmed, is skipped, and an array with no name left is no source.
+A value is trimmed of the white space at both ends. A string is a source only when something is left after that, so an empty string, a string of spaces and a value of another type are passed over, and the next key is tried. A name that is not a string, or is empty once trimmed, is passed over. A source whose text is exactly the text of a source before it is left out, so a work whose one author is its holder names it once.
 
-The Scout writes `date`, `site` and `from` on what it brings, and `holder`, `venue` and `authors` when its source gives them. It also writes `by`, which no chip reads: it is a maker for a museum work, and for other sources a site's name, a score or a cuisine, and a wrong person on a card is worse than none. `when`, `where` and `people` are for what the user makes. The origin keys run from the most exact to the least: the museum that holds a work, the journal a paper is in, the site a page is on, and last the name of the source the Scout searched, such as `The web`.
+The Scout writes `date`, `site` and `from` on what it brings, and `holder`, `venue` and `authors` when its source gives them. It also writes `by`, which no source reads: it is a maker for a museum work, and for other sources a site's name, a score or a cuisine.
 
-What the user made has no origin, so its order is when, where, people. What the agents brought says where it came from straight after its date, before a place or people, so a paper keeps its journal when the line has no room for its authors.
+What the user made has no origin, so its order is when, where, people. What the agents brought says where it came from straight after its date.
 
-**Which chips a card has.**
-
-1. Take the sources the item holds, in the order above.
-2. Drop each one whose text is exactly the text of a source before it. A work whose one author is its holder names it once.
-3. Drop each one whose `item.data` key the card's type already shows, and each one whose text is exactly the trimmed value of such a key. The table below lists these.
-4. Keep the first three. `chips(item, shown)` returns these as `{ kind, text }`, and a people chip that leaves some unnamed also has `count`.
-
-**What each type already shows.**
-
-| Type | Shows |
-| --- | --- |
-| `link` | `site`, in its address bar |
-| `excerpt` | `site` and `from`, in the line under its passage |
-| `artwork` | `holder` and `date`, on its plate |
-| `reference` | `venue`, `date` and `authors` |
-| `place` | `where`, as its name |
-| `sheet` | each key whose value, trimmed, is one of the strings the card draws, trimmed: its title, a text part's words, a figure's label or value, an entry or a table head or cell that it shows, a passage or its `by`. A key that holds a list shows when it holds a string that is not blank and each such string is drawn, so a people chip for Ines is left out under words of hers |
-| every other type | nothing |
-
-So a link the Scout brought whose origin is its site gets no origin chip, and nothing vaguer stands in for it. One with a `holder` or a `venue` that differs from its site gets that as its origin chip. A museum's work drawn as an artwork and a paper drawn as a reference most often have no chips at all, because the card says everything a chip would. The opened card still lists each source.
-
-**The line.**
-
-- A card with at least one chip is 28 px taller than the same card without. A card with none has the footprint its type gives it, no line, and the same markup as before chips existed.
-- The line never wraps. A date is drawn whole, because a date cut short says little. The chips after it share what is left: a card draws fewer than three chips when three would crowd, and clips the text of a chip that is longer than its box. The chip line in the footprint section gives the numbers. `chipsOf(node, item)` returns the chips as drawn, `{ kind, text, width }` and `count` on a people chip that leaves some unnamed, where `text` is whole and `width` is the chip's box in px.
-- A hover on a chip shows its label and its text: `Origin: The Metropolitan Museum of Art`. The labels are `When`, `Origin`, `Where` and `People`, or their Chinese forms on a Chinese card. The opened card labels its list in English.
-- A chip is 20 px tall and set in the text size. It starts with a glyph for its kind, so the kinds are told apart without colour: a clock for `when`, a pin for `where`, a figure for `people`, a turned arrow for `origin`.
-- The glyph takes the card's accent. That is the tree's colour, or amber while the card is a pick. Teal is not used.
-- The origin chip follows the item. A museum pick shows `The Metropolitan…` as a pick and after it is kept, at the same size. An item the user added shows no origin chip, whatever its data holds.
-
-**The opened card** lists every source left after step 2 in full, with no limit of three and without leaving out what the type shows: `When`, `Origin` for an item the agents brought, `Where`, and `People` with every name. `chipSources(item)` returns these as `{ kind, label, text }`. A card with an `Origin` leaves out the `From` line that says how the item arrived, because `Found on the web` beside a museum's name says the same thing less well. Its `Source` link stays.
-
-`item.data.at` makes no chip of its own. A card whose item has `at` and `where` shows the `where` chip as any other card does.
-
-**A known limit.** A card in a timeline shows its year on the axis and again on its `when` chip. The chip stays, because a card's footprint is worked out from its item and props alone. If the chip depended on the group, a card would change size when it joined or left a timeline, and the field could not be laid out from footprints.
+`item.data.at` makes no source of its own.
 
 ## Maps
 
@@ -469,13 +425,15 @@ A map is described to a client as a centre, a zoom and pins, and the client draw
 
 **Drawing.** The map is a box of its height on a plain ground (`#20262c`). The tiles and pins sit in a layer `width` by `height` at the middle of the box, so a box a little wider or narrower than the map keeps the centre in the middle. The tiles are drawn only as far as they lie inside the map. A tile that fails to load leaves the plain ground, so a map with no tiles still shows its pins. Where two tiles meet at a fraction of a device px, as they do on a card drawn at 1.12 or 0.86 or at a fractional position, each covers the px they share only in part and the ground shows through as a hairline. So each tile is drawn a second time under all the tiles, 1 px to the right and 1 px down, which fills that px and moves nothing. The credit is set in 10 px type on a light plate in the map's bottom-right corner, on every map while the service names a provider, whether or not its tiles load. With no provider a map asks for no tile and draws no credit: the plain ground and its pins.
 
-**On a place card.** A place whose item has a point draws a map across the card under its picture and over its name: the card's width, 112 px tall, at zoom 12, centred on the point with one pin on it. At zoom 12 the card shows about ten kilometres by four at the equator, a town or a sight with what is around it. That takes at most four tiles. The opened card draws a map 348 by 200 px, also at zoom 12 with one pin, after the picture, with the credit as a link. That takes at most six.
+**On a place card.** A place whose item has a point draws a map across the face under its name: 210 by 88 px, at zoom 12, centred on the point with one pin on it, in place of the words about the place. At zoom 12 the card shows about ten kilometres by four at the equator, a town or a sight with what is around it. That takes at most four tiles. The opened card draws a map 348 by 200 px, also at zoom 12 with one pin, after the picture, with the credit as a link. That takes at most six.
 
 **In a map arrangement.** The `map` composite draws a map 400 by 320 px with a numbered pin for each place, as its section says. A pin there carries its number in its head in place of the dot, in 11 px figures of weight 700 in the colour of the card's face. At most nine tiles cover it.
 
 **Samples.** `client/library.html` and the tests draw tiles from `client/samples/tiles/{z}/{x}/{y}.svg`, plain squares in two shades that `scripts/sample-tiles.ts` writes for the points and the sample maps they use, so they ask no tile server for anything.
 
 ## The opened card
+
+An opened card holds everything its small face leaves out, and scrolls inside its panel. Its title is 21 px, every line that is read is 15 px, and its labels, tags and the map's credit are at least 11.5 px. On the headset it opens to 46 by 37.2 cm.
 
 An opened card says each thing once. From top to bottom it has the item's title, why a pick is here, the type's own opened form, the summary, what is left of the text, the tags, and the list of sources.
 
@@ -662,12 +620,13 @@ The fallback. A title and a few lines of text.
 
 - **Chosen when** nothing else fits.
 - **Props.** `emphasis?`: one or more whole sentences or lines of the text to set apart, ending within its first 180 characters, or 90 in a script written without spaces. Only the model sets it.
-- **Drawn as** the title and the body. With an emphasis the body is the item's own text, with the words marked where they stand and shown on as many lines as reach the end of them. The note never sets them apart over itself.
+- **Drawn as** the title and the body, on the whole lines Each type gives them. With an emphasis the body is the item's own text, with the words marked where they stand. When the lines from its start do not reach them, the body starts where they start. The note never sets them apart over itself.
+- **The summary is held to the face.** Intake asks the model for one short sentence, about 30 to 45 characters in English or 22 to 33 in Chinese, and `fittedSummary` in `src/core/fitted.ts` holds it to the lines a note's face gives it under its title, counted by this page's rule: `floor((146 - 30 - 24 * titleLines - 6) / 22)`, where `titleLines` is the face title's, at most 2, which is 3 under a title of 1 line and 2 under a title of 2. A longer summary keeps its first whole sentences that fit, else its first whole clause that fits and says something, three words or six Han characters, without the mark that ends the clause. When neither fits it is dropped, and the note shows the item's own first lines. It never ends in an ellipsis. A takeaway from a chat is held the same way. The opened card shows the item's text whole either way.
 - **Item holds.** `title`, and `text` or `summary`.
 
 ### quote
 
-Someone's words, set large.
+Someone's words, upright in a serif.
 
 - **Chosen when** `item.data.quote` exists, or the model finds that a text item is mainly a quotation.
 - **Props.** `text`: the words, without quote marks. `by?`: the speaker.
@@ -699,7 +658,7 @@ A leading number counts only when it carries a currency sign, a percent sign, or
 
 - **Chosen when** the item's kind is `audio` and it has a file or an address to play. Without one it is a note.
 - **Props.** `src`: the stored file, else `data.mediaUrl`, the address a source gave. `seconds?`: how long it plays. `peaks?`: up to 64 numbers from 0 to 1, how loud each equal slice of it is, the loudest 1. Both come from `data.sound`, and the content check holds each to that: they are values the item holds.
-- **Drawn as** the title, then a strip 40 px tall: a round play mark 32 px across in the accent, the waveform, and the length. The waveform takes the room the mark and the length leave, 10 px from each, and is 24 px tall: one bar for each peak, as tall as its peak and at least 1.5 px, set about the middle line, every bar as wide as the others with a gap of half a bar after it, stretched to fill the room. With no peaks it is a flat line 1.5 px thick. The length is `seconds` rounded to a whole second and written as a clock writes it, `m:ss` under an hour and `h:mm:ss` from an hour, such as `0:20`, `42:00` and `1:02:05`, in the text size with figures of one width, and it is left out with no `seconds`. Under the strip go the words of the footprint rule, clamped to their lines with an ellipsis. The play mark is a mark and no control: a press on the card opens it, as on any card. The opened card has the player, and when there are peaks the waveform 56 px tall over it, which fills with the accent as the recording plays, and a press on it plays from that point. Under the player go `item.text` whole, trimmed, with its line breaks, so every word that was heard is there once. With no `src` the opened card says so in the fixed words.
+- **Drawn as** the title on up to two lines, then a strip 40 px tall: a round play mark 32 px across in the accent, the waveform, and the length. The waveform takes the room the mark and the length leave, 10 px from each, and is 24 px tall: one bar for each peak, as tall as its peak and at least 1.5 px, set about the middle line, every bar as wide as the others with a gap of half a bar after it, stretched to fill the room. With no peaks it is a flat line 1.5 px thick. The length is `seconds` rounded to a whole second and written as a clock writes it, `m:ss` under an hour and `h:mm:ss` from an hour, such as `0:20`, `42:00` and `1:02:05`, in meta with figures of one width, and it is left out with no `seconds`. Under the strip go the first whole lines of the transcript the face has room for. The play mark is a mark and no control: a press on the card opens it, as on any card. The opened card has the player, and when there are peaks the waveform 56 px tall over it, which fills with the accent as the recording plays, and a press on it plays from that point. Under the player go `item.text` whole, trimmed, with its line breaks, so every word that was heard is there once. With no `src` the opened card says so in the fixed words.
 - **Item holds.** `source.asset`, the file a person dropped, or `data.mediaUrl`, the address a source gave, such as a podcast episode. `data.sound = { seconds, peaks? }`: for a dropped file the client measured both, and a source may give the length alone. `text`: the transcript, which may be empty when transcription failed, or what a source wrote of the recording. Intake describes a transcript as it describes a text, so `data` may also hold a date, a place or people for the chips.
 - **Measured when dropped.** The service never decodes sound. A client that drops a recording decodes it once and sends `sound` with the dump: `seconds` is the decoded length to the millisecond, and `peaks` is 48 numbers, the loudest sample of each of 48 equal slices over every channel, each divided by the loudest of the 48 and rounded to two places, or all 0 for silence. The web client decodes at 8000 samples a second, which keeps the loudness of a voice and is quick for an hour of sound. A file the client cannot decode is sent with no `sound`, and Intake files it by name as a `file`, because it would not play in that client either.
 
@@ -715,7 +674,7 @@ A web page preview.
 
 - **Chosen when** `item.data.chart` holds at least two labels and as many values and is no breakdown, or the model finds several comparable numbers in a text item.
 - **Props.** `chart`: `bar` or `line`. `labels`. `values`. `unit?`. `mark?`: index of a bar or point to call out, not set today. `above?`. `heads?`: the heads row of the table the points come from, drawn over the plot.
-- **Drawn as** bars or a line over gridlines, with a scale down the left side. Numbers on the scale and on the plot are written short, to three figures, such as `1.61M` and `0.004`. The marked bar or point is brighter and always carries its value. On a card every value is written when there are six or fewer and each fits above its own bar or point. With six bars or points or fewer, every label is written, cut to the width of one bar's step less 6 px. With more, when the labels do not fit side by side, every nth label is written, the marked, first and last ones before the rest, and a label longer than 44 px may be cut. The opened card writes every value that fits on the plot, and when the plot had to thin, cut or round anything it adds a table of every label with its full value. With no values the card says `No data`.
+- **Drawn as** a designed preview on the small face: the shape of the bars or the line with no text, the marked one in the accent, over one meta line that counts the points with the first and last labels. No label or value of a chart reads at the face's sizes. The opened card draws bars or a line over gridlines, with a scale down the left side. Numbers on the scale and on the plot are written short, to three figures, such as `1.61M` and `0.004`. The marked bar or point is brighter and always carries its value. Every value is written that fits above its own bar or point. With six bars or points or fewer, every label is written, cut to the width of one bar's step less 6 px. With more, when the labels do not fit side by side, every nth label is written, the marked, first and last ones before the rest, and a label longer than 44 px may be cut. When the plot had to thin, cut or round anything, the opened card adds a table of every label with its full value. With no values it says `No data`.
 - **Item holds.** `data.chart = { labels, values, unit? }`, or the numbers inside `text`.
 
 The chart is a `line` when every label is a year or a full date and they ascend. Otherwise it is a `bar`.
@@ -732,7 +691,7 @@ A short excerpt of a conversation.
 
 - **Chosen when** the item's kind is `chat` and `data.messages` holds at least one message with text.
 - **Props.** `messages`: at most 4 of `{ role, text }`, each cut to 280 characters, in conversation order. `source?`: where the chat came from, such as `claude`.
-- **Drawn as** the title on its own line, the first 3 messages as bubbles of at most two lines, and the source below them. The opened card shows up to 40 messages in full and the source below them.
+- **Drawn as** the title, then the messages as bubbles, yours on the right, each whole on up to two lines, as many as the face has room for, and the cue counts the rest. The opened card shows up to 40 messages in full and the source below them.
 - **Item holds.** `data.messages = [{ role, text }]`.
 
 The excerpt is the first user message, the longest assistant reply, and the user message just before that reply. System messages are left out.
@@ -741,7 +700,7 @@ The excerpt is the first user message, the longest assistant reply, and the user
 
 - **Chosen when** `item.data.code` holds a source, or the item's kind is `code` and its text is not empty.
 - **Props.** `language`: `text` when unknown. `source`.
-- **Drawn as** at most 7 lines with a numbered gutter. The language is written beside the title unless it is `text`.
+- **Drawn as** the title over one meta line that says how many lines the source has and in what language, `24 lines of Python`, unless the language is `text`. A line of source at the face's size holds about 18 characters, so the small face shows none. The opened card has the source whole in a fixed-width face.
 - **Item holds.** `data.code = { language?, source? }`, or the code as `text`.
 
 ### steps
@@ -758,7 +717,7 @@ Two to six figures about one thing, each with its label.
 
 - **Chosen when** `item.data.facts` holds two or more facts that each have a label and a value, no value is over 60 characters, and they pass the coverage floor.
 - **Props.** `facts`: the first six, each `{ label, value }`. `more?`: how many further facts the item holds. `above?`. `heads?`: the heads row of the table of two columns the facts come from, such as `Metric` and `Change`. Under it the card sets each figure beside its label, one to a row, so a value such as `▼ 12%` reads under `Change`.
-- **Drawn as** the title, then the figures two to a row on a fact's darker face, each over its label. Every figure of a card is set in one size, so no card mixes two sizes of figure. Two figures share a row when both fit half of it at the middle size, and a longer one has a row of its own, where it may wrap onto a second line at the middle size. The card steps down to the smallest size only when a value needs more than two lines of a whole row at the middle size, where a long value wraps. A value of up to 60 characters is always whole. A longer one reaches a card only in a view sent straight to a client, and is then cut at eight lines with an ellipsis. The card writes `and N more` for the facts it leaves out, and the opened card lists every fact in `item.data.facts`.
+- **Drawn as** the title, then the figures two to a row on a fact's darker face, each over its label in meta, a row at a time, as many rows as the face has room for. Every figure of a card is set in one size, so no card mixes two sizes of figure. Two figures share a row when both fit half of it at the middle size, and a longer one has a row of its own. The card steps down to the smallest size when a value needs more than a line at the middle size, where a long value wraps on whole lines. A value is never cut: one too long for the room the face leaves shows the whole lines that leave a line of its label, and the cue says there is more. The cue counts the facts the face leaves out, and the opened card lists every fact in `item.data.facts`.
 - **Item holds.** `data.facts = [{ label, value }]`.
 
 ### table
@@ -767,7 +726,7 @@ Rows and columns.
 
 - **Chosen when** `item.data.table` holds at least one row, and it passes the coverage floor.
 - **Props.** `heads`: one string for each column, and at least two. `rows`: at least one, and each row has one cell for each head, and a cell may be empty. Every row is in the props. The client shows what fits.
-- **Drawn as** the title, then the heads and up to six rows, one line each under a rule, in up to five columns. A column of numbers is set to the right. No number is cut, in a column of numbers or beside words: a column is at least as wide as its widest number, the first column gives way to a long number in the second, down to 44 px, and when the columns no longer fit, the card shows fewer and counts the rest. Words share what is left and are cut with an ellipsis. Each column has 1 px more than its cells count, so a head or a cell that fits by the count is never cut. The card counts the rows and columns it leaves out. The opened card has every cell, with words whole, under heads that stay in place and wrap on whole words. It scrolls both ways inside its own box. Each column is at least as wide as the widest of its first twenty cells, up to 220 px, so a table of many columns scrolls sideways and no cell is squeezed to a word a line. An opened card keeps its scroll place while other cards arrive: a client redraws an opened card only when its node or its item changed.
+- **Drawn as** a designed preview on the small face: the title, then the heads in meta as far as they stand whole on a line with a count of the rest, and the cue, which counts the rows, `12 rows`. No cell of a table reads at the face's sizes. The opened card has every cell, with words whole, under heads that stay in place and wrap on whole words. A column of numbers is set to the right, and a number is never wrapped, so it is never cut. It scrolls both ways inside its own box. Each column is at least as wide as the widest of its first twenty cells, up to 220 px, so a table of many columns scrolls sideways and no cell is squeezed to a word a line. An opened card keeps its scroll place while other cards arrive: a client redraws an opened card only when its node or its item changed.
 - **Item holds.** `data.table = { heads, rows }`.
 
 ### list
@@ -776,7 +735,7 @@ Entries in no particular order, or a checklist.
 
 - **Chosen when** `item.data.items` holds two or more entries, none of them empty, and they pass the coverage floor. An ordered procedure is `steps`, which comes first in the table.
 - **Props.** `items`: the entries. `checked?`: one mark for each entry, from `data.checklist` when it is as long as the entries.
-- **Drawn as** the title, then up to six entries of up to two lines each, with a dot before each. With `checked`, a tick box stands in place of the dot, filled and ticked when the entry is done, the done entries are dimmer, and the title carries a count such as `2/4`. A tick box shows a mark and takes no click. The card writes `and N more`, and the opened card lists every entry whole. A line of `item.text` that starts with a bullet, a number and `.` `)` or `、`, or a tick box, and then with the entry followed by anything but a letter or digit, stands in for the entry in the opened card, so `- Her ration book from 1946 (two coupons still attached)` is written whole there and once.
+- **Drawn as** the title, then the entries, each whole on up to two lines with a dot before it, as many as the face has room for, and the cue counts the rest. With `checked`, a tick box stands in place of the dot, filled and ticked when the entry is done, the done entries are dimmer, and the title carries a count such as `2/4`. A tick box shows a mark and takes no click. The opened card lists every entry whole. A line of `item.text` that starts with a bullet, a number and `.` `)` or `、`, or a tick box, and then with the entry followed by anything but a letter or digit, stands in for the entry in the opened card, so `- Her ration book from 1946 (two coupons still attached)` is written whole there and once.
 - **Item holds.** `data.items = string[]`, and `data.checklist = boolean[]` for a checklist.
 
 ### breakdown
@@ -785,7 +744,7 @@ The parts of one whole.
 
 - **Chosen when** `item.data.chart` is shares of one whole: at most eight values, none below 0, a unit of `%`, `％`, `percent`, `pct` or `百分比`, and a sum from 99 to 101. For what the user made it must also pass the coverage floor. Any other chart data is a `chart`.
 - **Props.** `labels`: two to eight. `values`: one for each label, none below 0. `unit?`. `above?`. `heads?`: the heads row of the table the parts come from, its second head over the shares.
-- **Drawn as** the title, then one line for each part: its label, a level bar, and its share written whole at the end. A bar is as long as its part's share of the whole, so 45 percent fills 45 percent of the room and the bars together fill it once. Never a pie. A percent sign is written on each share. Any other unit is written once, under the title. The opened card draws the same bars with every label whole, and writes each share of the total beside a value that is no percentage.
+- **Drawn as** a designed preview on the small face: the title, one 16 px bar split into the parts by their shares, the largest in the accent, then the largest part as the item writes its label and its share, and the cue, which counts the parts. Never a pie. The opened card draws one line for each part: its label whole, a level bar as long as its part's share of the whole, so 45 percent fills 45 percent of the room and the bars together fill it once, and its share written whole at the end. A percent sign is written on each share. Any other unit is written once, over the bars, and each share of the total is written beside a value that is no percentage.
 - **Item holds.** `data.chart = { labels, values, unit }`.
 
 ### qa
@@ -794,7 +753,7 @@ One question and its answer.
 
 - **Chosen when** `item.data.question` and `item.data.answer` are both set, and they pass the coverage floor.
 - **Props.** `question`. `answer`.
-- **Drawn as** two voices. The question is set as a title beside a `Q`, on up to four lines. Under a rule, the answer is set as text beside an `A`, on up to six. The opened card has both whole, and leaves out the `Q` and the question when the question is the item's title, which the opened card has just written.
+- **Drawn as** two voices. The question is set as a title beside a `Q`, and under a rule the answer is set as body text beside an `A`, each on the whole lines the face has room for. The opened card has both whole, and leaves out the `Q` and the question when the question is the item's title, which the opened card has just written.
 - **Item holds.** `data.question` and `data.answer`.
 
 ### callout
@@ -803,7 +762,7 @@ A caveat or a remark set apart from the rest.
 
 - **Chosen when** the model finds that a text item is mainly a warning, a caveat or a reminder the reader must not miss. No row of the rule table gives it. The stand-in service chooses one for a line that opens `Caution:`, `Warning:` or `Note:`, so clients can be built against it.
 - **Props.** `text`: a whole passage of the item's own text. `tone`: `caution` or `note`.
-- **Drawn as** a band down the left edge of the card in the colour of the tone, coral for a caution and grey for a remark, a glyph and the tone in words, the text on up to five lines, and the item's title as a foot. The tone is never amber, which is a pick's, or teal, which is a link's.
+- **Drawn as** a band down the left edge of the card in the colour of the tone, coral for a caution and grey for a remark, a glyph and the tone in words, then the text at the title's size on up to three lines. The tone is never amber, which is a pick's, or teal, which is a link's.
 - **Item holds.** The passage inside `text`.
 
 ### excerpt
@@ -812,7 +771,7 @@ A passage of a longer source.
 
 - **Chosen when** `item.data.excerpt` exists and passes the coverage floor, or the item is a page the Scout picked: an item the agents brought whose kind is `text`, that has an address, and whose text holds more than the closing line that says who made it and when.
 - **Props.** `text`: the passage. For a page the Scout picked it is the item's whole text, which ends with a blank line and that closing line. `at?`: where the passage sits in its source, such as `Chapter 1`. `source?`: `data.site`, else `data.from`.
-- **Drawn as** the passage in an upright serif beside a rule, on up to six lines, without the Scout's closing line. Under it are the item's title and one line of `at` and `source`, without either when it is the title again. A quote is a person's words, and is set in italics on a washed face under a quotation mark. The opened card has the whole passage with its line breaks, and under it `item.data.by`, the maker the Scout's closing line named, on a line of its own when the line of `at` and `source` does not hold it.
+- **Drawn as** the passage in an upright serif beside a rule, on up to four lines, without the Scout's closing line. Under it, one meta line holds the item's title and `at` and `source`, without either when it is the title again. A quote is a person's words, and is set upright too, on a washed face under a quotation mark. The opened card has the whole passage with its line breaks, and under it `item.data.by`, the maker the Scout's closing line named, on a line of its own when the line of `at` and `source` does not hold it.
 - **Item holds.** `data.excerpt = { text, at? }`, or the passage as `text`.
 
 ### definition
@@ -821,7 +780,7 @@ One term and what it means.
 
 - **Chosen when** `item.data.term` and `item.data.definition` are both set, and they pass the coverage floor.
 - **Props.** `term`. `definition`.
-- **Drawn as** a dictionary entry: the term as a headword, large while it fits one line, over a short rule, then the meaning in an upright serif on up to six lines. The opened card has the meaning whole, under the term when its own title is not already the term.
+- **Drawn as** a dictionary entry: the term as a headword, large while it fits one line, over a short rule, then the meaning in an upright serif on up to three lines. The opened card has the meaning whole, under the term when its own title is not already the term.
 - **Item holds.** `data.term` and `data.definition`.
 
 ### idea
@@ -830,7 +789,7 @@ A short thought.
 
 - **Chosen when** the item is a phrase the user wrote out, as An idea above says.
 - **Props.** None. The client draws `item.title`.
-- **Drawn as** the title set large under a small spark, and nothing else. The size steps down as the thought grows, from the largest figure size on up to two lines, to the middle size on up to four, to the smallest on up to five. The rule table gives this card only to a phrase under 60 characters. A longer title, in a view sent straight to a client, is cut at five lines with an ellipsis and never spills.
+- **Drawn as** the title set large under a small spark, and nothing else. The size steps down as the thought grows, from the largest figure size on up to two lines, to the middle size on up to three, to the smallest on up to three. The rule table gives this card only to a phrase under 60 characters. A longer title, in a view sent straight to a client, shows its first three lines at the smallest size and the cue.
 - **Item holds.** `title`, and `text` when it says the same.
 
 ### proscons
@@ -839,7 +798,7 @@ The points for and the points against.
 
 - **Chosen when** `item.data.pros` and `item.data.cons` each hold at least one point, and they pass the coverage floor.
 - **Props.** `pros`. `cons`. At least one of each. `heads`: the item's own heading or label for each side, as the item writes it, such as `For going now:` and `Against:`, or `好处：` and `坏处：`. `above?`.
-- **Drawn as** the title, then two columns with a rule between them, each under its head, so the sides are told apart by the item's own words. The card writes no label or sign of its own: each point has a plain dot before it, and only a view with no heads names its sides `For` and `Against`. A column shows four points of up to three lines and counts the rest. The opened card lists every point whole under its head, one side under the other.
+- **Drawn as** a designed preview on the small face: the title, then each side as one row, its head in the title's weight running into its first point, so the sides are told apart by the item's own words. The card writes no sign of its own, and only a view with no heads names its sides `For` and `Against`. The cue counts both sides, `3 for, 2 against`, when either holds more than one point. The opened card lists every point whole under its head, each with a plain dot, one side under the other.
 - **Item holds.** `data.pros = string[]` and `data.cons = string[]`.
 
 ### swatch
@@ -848,7 +807,7 @@ Colours with their names.
 
 - **Chosen when** `item.data.colours` holds two or more colours, and they pass the coverage floor.
 - **Props.** `colours`: each `{ name, value }`. `value` is a hex colour of 3, 4, 6 or 8 digits after its `#`, or a CSS colour name of 1 to 30 letters from `a` to `z` in either case, and nothing else, so it is safe to paint. `name` equals `value` when the content gave the colour no name.
-- **Drawn as** a band of the colours across the top of the card, then the title, then one line for each of the first six: a small round dot of the colour, its name, and its value whole at the right, or the value alone when the colour has no other name. No word is set on a colour, so every word reads on any of them. Each dot, and each chip of the opened card, is edged by a black hairline inside and a light grey one (`#b0b0aa`) outside, so its edge holds 3 to 1 whatever its colour: a colour of luminance 0.1 and up against the black, any darker one against the grey, and the grey against every face of a card. A value the client cannot paint leaves hatching in its place. The card writes `and N more`, and the opened card lists every colour.
+- **Drawn as** a band of up to twelve of the colours across the top of the card, then the title, then a row for each colour the face has room for: a small round dot of the colour, its name, and its value whole at the right in meta, or the value alone when the colour has no other name. The cue counts the rest. No word is set on a colour, so every word reads on any of them. Each dot, and each chip of the opened card, is edged by a black hairline inside and a light grey one (`#b0b0aa`) outside, so its edge holds 3 to 1 whatever its colour: a colour of luminance 0.1 and up against the black, any darker one against the grey, and the grey against every face of a card. A value the client cannot paint leaves hatching in its place. The opened card lists every colour.
 - **Item holds.** `data.colours = [{ name, value }]`.
 
 ### artwork
@@ -857,7 +816,7 @@ A work to look at, with what its collection records.
 
 - **Chosen when** `item.data.kind` is `artwork` and the item has a picture: itself when its kind is `image`, a recording's `data.thumbnailUrl`, or a page's `data.image`. This is the first row of the table, so a museum's work is never a plain image.
 - **Props.** `src`: the picture. `maker?`: from `data.by`. `date?`. `medium?`. `holder?`.
-- **Drawn as** the work whole on a mat, never cropped. The mat is a shade lighter than the card's face, kept or pick, and has a hairline under it, so it reads as a mount and never as a hole in the field. Under it is a plate that reads like a museum label: the title, the maker and the date, the medium, and the holder. A plain image fills its frame and has one caption. The opened card has the picture and the lines of the label whole, without the holder when its list of sources names it. No chip repeats the holder or the date.
+- **Drawn as** the work whole on a 6 px mat, never cropped. The mat is a shade lighter than the card's face, kept or pick, and has a hairline under it, so it reads as a mount and never as a hole in the field. Under it is a plate with the title on up to two lines. A plain image fills its frame and has one caption. The opened card has the picture and the lines of the label whole: the maker and the date, the medium, and the holder, without the holder when its list of sources names it.
 - **Item holds.** `data.kind = 'artwork'`, with `data.by`, `data.date`, `data.medium` and `data.holder` as the Scout copied them.
 
 ### reference
@@ -866,7 +825,7 @@ A paper or a book.
 
 - **Chosen when** `item.data.kind` is `paper` or `book`.
 - **Props.** `kind`. `authors`: `data.authors`, else the one name in `data.by`, and it may be empty. `more?`: true when `data.authorsCut` is true and `data.authors` holds at least one name, so the list names only some. It is never set beside the one name from `data.by`. `year?`: the four-digit year in `data.date`. When there is none, the card writes `item.data.date` as it stands, trimmed, in the year's place, so a date such as `late 19th century` is not lost. `venue?`. `url?`: the item's address.
-- **Drawn as** a library card: `Paper` or `Book` and the year over a rule, then the title on up to three lines, the authors on up to two with `and others` when the list is cut, and the venue on up to two. The opened card has the kind and the year, and the authors and the venue whole when its list of sources does not say them in the same words. A list of authors that was cut is always written, because only that line says `and others`. No chip repeats the venue, the date or the authors.
+- **Drawn as** a library card: `Paper` or `Book` and the year over a rule, then the title on up to two lines, and the first author with how many others, `A. Vaswani and 7 others`, or `and others` when the list was cut. The opened card has the kind and the year, and the authors and the venue whole when its list of sources does not say them in the same words. A list of authors that was cut is always written, because only that line says `and others`.
 - **Item holds.** `data.kind`, with `data.authors`, `data.authorsCut`, `data.venue` and `data.date`.
 
 ### place
@@ -875,7 +834,7 @@ A place by name.
 
 - **Chosen when** the item is a short note whose title names the place in `data.where`, as A place above says.
 - **Props.** `name`: `data.where`. `src?`: the item's picture, from `data.image`.
-- **Drawn as** the name set large beside a round pin, with the item's summary or text on up to three lines under it. With `src`, the picture fills a frame 120 px tall across the top of the card. When `item.data.at` is a point, a map 112 px tall with one pin and the provider's credit sits under the picture and over the name, as Maps says. The opened card has the picture whole, a larger map, and the name when neither its own title nor the `Where` of its list of sources is already the name. No chip repeats the place.
+- **Drawn as** the name set large beside a round pin. When `item.data.at` is a point, a map 210 by 88 px with one pin and the provider's credit runs under it to the face's edges, as Maps says. Otherwise the item's summary or text is under the name on the whole lines the face has room for. The opened card has the picture whole when there is `src`, a larger map, and the name when neither its own title nor the `Where` of its list of sources is already the name.
 - **Item holds.** `data.where`, `data.image` for a picture, and `data.at` for the map.
 
 ### sheet
@@ -891,7 +850,7 @@ A card assembled from parts, for an item with more than one kind of thing worth 
   - `table`: `heads` and `rows`, two to four columns and one to five rows, each row with one cell for each head.
   - `picture`: `src`, the item's own picture.
   - `excerpt`: `text`, words the item quotes, whole and at most 400 characters or 200 in a script written without spaces, and `by?`, who said them or where they stand.
-- **Drawn as** one card of the family, not a stack of small cards. It has one face, the plain face of a note, and one title: the heading, or the item's title when there is none, on up to three lines. Under the title each part is drawn as the card of its own kind draws it, in the order given: the text as a note's text, on up to six lines; figures as a facts card sets them, two to a row while both fit and all in one size, each over its label; a list with a dot before each entry; a table of ruled rows with its numbers whole and to the right; words someone said in the upright serif beside a rule, on up to five lines, with who said them after a short rule. The first part sits under the title as it would on its own card, and each part after it sits under a hairline with 10 px above and below it. Nothing is boxed. A picture leads the card in a band 140 px tall across its top, and the card keeps its corners of 12 px. The opened card has the picture whole, then the heading when the opened card's title is not already it, whatever the case and the white space, then each part whole, in order: a text cut short with an ellipsis is given whole, as the rest of the line of the item's text that it begins; figures as a list of each label beside its value; the list with each entry as the item's text writes it, as an opened list has it; the table as an opened table has it; the words someone said with their line breaks, and who said them. The rule for the opened card then prints only what of the item's text the parts leave unsaid. No chip says a value the card draws, as Chips says.
+- **Drawn as** one card of the family, not a stack of small cards. Its small face is the plain face of a note with one title, the heading, or the item's title when there is none, and under it its first part as that part's own card previews it: the text as a note's text, figures as a facts card sets them, entries as a list sets them, a table's heads and the count of its rows, or words someone said in the upright serif over who said them. The part's own label stands over it. The cue counts the other parts, a picture among them. The opened card has the picture whole, then the heading when the opened card's title is not already it, whatever the case and the white space, then each part whole, in order: a text cut short with an ellipsis is given whole, as the rest of the line of the item's text that it begins; figures as a list of each label beside its value; the list with each entry as the item's text writes it, as an opened list has it; the table as an opened table has it; the words someone said with their line breaks, and who said them. The rule for the opened card then prints only what of the item's text the parts leave unsaid.
 - **Item holds.** The words the sections are taken from, in `title` and `text`, and the picture for a `picture` section.
 
 ### explorable
@@ -909,7 +868,7 @@ A card a reader changes to see how a concept works: a dolly zoom shot three ways
   - The program is a list of numbers and strings in postfix order. A number pushes itself. Each of `+ - * /` and `^` takes two values off the stack, the one pushed last on its right, and pushes its result. `neg` takes one and pushes it negated. `min` and `max` take two and push the lesser or the greater, so a `min` of three is two `min` in a row. `round`, `sqrt`, `exp`, `ln` and `atan` take one. Any other string pushes the value of the slider of that name. One value is left at the end, the result. `2 * atan(18 / f) * 57.2958` is `[2, 18, "f", "/", "atan", "*", 57.2958, "*"]`.
   - In IEEE doubles. `round(x)` is `floor(x + 0.5)`, and `atan` is in radians. A result has no value where any step has none: a division by zero, the root of a negative number, the log of a number not above zero, a power with no real value, a name that is no slider, a step short of its arguments, or any step whose result is not a finite number. So `1 / (1 / f)` has no value at `f = 0`.
 - **Written values.** A number is written with a comma between thousands and a fixed number of decimals, and its unit after it: after a space when the unit starts with a letter or a digit that is not of a script written without spaces (U+3040 to 30FF, U+3400 to 9FFF, U+AC00 to D7AF), and straight after it otherwise, as in `50 mm`, `39.6°`, `45%` and `50毫米`. A value has as many decimals as its shortest form in JavaScript has after its point, at most six. Where every slider stands on the values the item states together, the result is the value the item states there, written with its own decimals. Anywhere else it is the formula's value, with as many decimals as the most any stated result has, and it is computed. Where the formula has no value it is `–` (U+2013).
-- **Drawn as** a plain card. Under a mark of two sliders and the word `Explore`, or `可探索` on a Chinese card, in small capitals, the title on up to two lines, then what the controls change in their first state, then a row 28 px tall for each control as it stands. A toggle and a segmented control stand on their first state. Its text is drawn on up to four lines, and its row is a pill for each state, the first filled, each name cut with `cut` to its pill less 12 px, where a pill is `floor((255 - 4 * (states - 1)) / states)` wide. Sliders stand on their first value. The result there is a figure over its label, and for a chart, over a curve 96 px tall across the column: the result across the first slider's range at up to 120 even points, the others where they stand, from the lesser of 0 and the least value to the most, with a dot at each stated value, a ring where the slider stands, and the two ends of the range written under it. A slider's row writes its label and its value, cut with `cut` to 151 px, beside a track 96 px wide whose knob stands at the value's share of the range. Nothing on the card takes a click: a drag on the field moves the card, and the opened card has the controls.
+- **Drawn as** a plain card. Under a mark of two sliders and the word `Explore`, or `可探索` on a Chinese card, in small capitals, the title, then what the controls change: the first state's words for an output of words, else the output's label, on up to two lines. The cue counts the controls, `2 controls`. Nothing on the card takes a click: a drag on the field moves the card, and the opened card has the controls.
 - **The opened card** has every control working, and over them, for sliders, what they change. A control's label is written over it unless it is the item's title. A segmented control is a row of radio buttons with the chosen one filled, which the arrow keys move along, Home and End to the ends. A toggle is a switch that names the state it is in. A slider is a range input, with its value and unit beside it, that the arrow keys move a step at a time. Each is at least 44 px tall and fits the opened card's width. The text of every state is in the view and only the chosen state's shows, so the rule for the opened card prints none of them again. A result is written large, with `computed` (`计算值`) after it when it is computed, over its label and, for a chart, the curve 300 by 150, scaled to the width, with the ring moving as the slider does.
 - **Item holds.** `title` and `text`, which state each state's text, each slider's values and each result.
 
@@ -1102,4 +1061,4 @@ The limits were set from 30 structures written the way the model writes them, ov
 
 ## Adding to a library
 
-Add the schema to `COMPONENTS` or `COMPOSITES` in `src/core/views.ts` and a check to `CHECKS`, add a rule or a model option in `renderer.ts`, add a test in `test/renderer.test.ts`, and add a section here and a line under Each type. For the web client, add a module to `client/js/components/` or `client/js/composites/`, list it in that folder's `index.js` in the order of `views.ts`, and add a sample to `client/library.html`. A component module also exports `shows`, and gets an entry in `CHIPS` in `library.html` so it is drawn once with chips. Add at least four samples to `test/footprints.json`, one of them in Chinese and one at an extreme, and run `scripts/footprints.ts` to fill in their sizes. For a structured type, add a sample to `src/core/samples.ts` and run `scripts/samples.ts`, which writes the file the library page draws from, and add a growing run to `test/client-types.test.ts`. `npm test` fails when a component in `views.ts` lacks its client module, its content check or either part of this page. `isValidView` and `isValidGroup` reject anything a schema does not describe, so the client can trust the props it receives.
+Add the schema to `COMPONENTS` or `COMPOSITES` in `src/core/views.ts` and a check to `CHECKS`, add a rule or a model option in `renderer.ts`, add a test in `test/renderer.test.ts`, and add a section here and a line under Each type. For the web client, add a module to `client/js/components/` or `client/js/composites/`, list it in that folder's `index.js` in the order of `views.ts`, and add a sample to `client/library.html`. A component module lays its face out with `lay` and gets an entry in `CHIPS` in `library.html`, so it is opened once with its sources. Add at least four samples to `test/footprints.json`, one of them in Chinese and one at each limit its face has, run `scripts/footprints.ts` to fill in their sizes, and run `scripts/faces.ts` to see every face drawn and checked in a browser. For a structured type, add a sample to `src/core/samples.ts` and run `scripts/samples.ts`, which writes the file the library page draws from, and add a run of samples to `test/client-types.test.ts`. `npm test` fails when a component in `views.ts` lacks its client module, its content check or either part of this page. `isValidView` and `isValidGroup` reject anything a schema does not describe, so the client can trust the props it receives.

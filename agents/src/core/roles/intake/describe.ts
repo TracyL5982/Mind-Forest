@@ -1,9 +1,12 @@
 import { z } from 'zod';
 import type { ItemData } from '../../domain.ts';
+import { fittedSummary, fittedTitle } from '../../fitted.ts';
 import { grounding, type Grounding } from '../../grounding.ts';
 import { CHECKS, type ComponentId, type PropsOf } from '../../views.ts';
 import { asColour } from './colours.ts';
 import { clip, squash, tidyTags, TITLE_MAX, type Described } from './plain.ts';
+
+export { fittedSummary, fittedTitle };
 
 type Shape = Record<string, z.ZodType>;
 type Reply<S extends Shape> = { [K in keyof S]: z.infer<S[K]> };
@@ -199,8 +202,8 @@ export const ChatReply = z.object({
 export type Description = z.infer<typeof LinkReply>;
 
 const FIELDS = `For each thing you describe, return:
-- title: under 70 characters, specific to this content, no trailing period.
-- summary: one or two sentences saying what it is and why it might matter.
+- title: about 26 characters in English or 18 in Chinese, so it stands whole on the two lines a small card gives a title; specific to this content, no trailing period.
+- summary: one short sentence saying what it is, about 30 to 45 characters in English or 22 to 33 in Chinese, so it stands whole under the title on a small card. Never end it with an ellipsis.
 - tags: 2 to 6 short lowercase topic words.
 Write in the language of the content.
 
@@ -252,10 +255,10 @@ export const CHAT_SYSTEM = `You are the intake clerk of a brainstorming app. The
 You are given the conversation. Long messages are shortened and the middle of a long conversation may be left out.
 
 Return:
-- title: under 70 characters, naming what the conversation was about. No trailing period.
-- summary: one or two sentences on what was worked out or decided.
+- title: about 26 characters in English or 18 in Chinese, naming what the conversation was about, so it stands whole on the two lines a small card gives a title. No trailing period.
+- summary: one short sentence on what was worked out or decided, about 30 to 45 characters in English or 22 to 33 in Chinese, so it stands whole under the title on a small card. Never end it with an ellipsis.
 - tags: 2 to 6 short lowercase topic words.
-- takeaways: up to 5 ideas, conclusions or decisions from the conversation that are worth keeping on their own. Each has a title under 70 characters and a text of one to three sentences that makes sense without the conversation. Return fewer, or none, when the conversation holds fewer.
+- takeaways: up to 5 ideas, conclusions or decisions from the conversation that are worth keeping on their own. Each has a title of about 26 characters in English or 18 in Chinese and a text of one to three sentences that makes sense without the conversation. Return fewer, or none, when the conversation holds fewer.
 Write in the language of the conversation.`;
 
 /** The parts of the model's description worth keeping as drawable data: those that `source`, the text the model described, states. */
@@ -267,11 +270,11 @@ export function structure(d: Description, source: string): ItemData {
   return data;
 }
 
-/** The model's title, summary and tags, with `plain` standing in for anything it left empty. */
+/**
+ * The model's title, summary and tags, with `plain` standing in for anything it left empty. The model's title is held to a small
+ * face's two lines; `plain`'s, a file's name or the item's own first line, is kept whole. The summary is as a note's face holds it.
+ */
 export function labels(d: Described, plain: Described): Described {
-  return {
-    title: clip(squash(d.title) || plain.title, TITLE_MAX),
-    summary: clip(squash(d.summary) || plain.summary, 320),
-    tags: tidyTags(d.tags, plain.tags),
-  };
+  const title = squash(d.title) ? fittedTitle(clip(squash(d.title), TITLE_MAX)) : plain.title;
+  return { title, summary: fittedSummary(squash(d.summary) || plain.summary, title), tags: tidyTags(d.tags, plain.tags) };
 }

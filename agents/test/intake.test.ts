@@ -4,6 +4,7 @@ import { Item } from '../src/core/domain.ts';
 import { gpsOf } from '../src/core/exif.ts';
 import type { JsonRequest } from '../src/core/ports.ts';
 import { intake } from '../src/core/roles/intake.ts';
+import { fittedSummary } from '../src/core/roles/intake/describe.ts';
 import { byRule } from '../src/core/roles/renderer.ts';
 import { DEMO_MEMO, tones } from '../src/fake/model.ts';
 import { kit, type Kit } from './kit.ts';
@@ -62,6 +63,34 @@ function assertWellFormed(items: Item[]) {
     assert.deepEqual(item.tags, item.tags.map((t) => t.toLowerCase()));
   }
 }
+
+test('a summary stands whole under its title on a note\'s small face, cut at a whole sentence or clause, or dropped, and never with an ellipsis', async () => {
+  type Card = { size: (item: unknown, props: unknown) => number[] };
+  const { COMPONENTS } = (await import(new URL('../client/js/components/index.js', import.meta.url).href)) as { COMPONENTS: Record<string, Card> };
+  const { linesOf } = (await import(new URL('../client/js/components/shared.js', import.meta.url).href)) as { linesOf: (str: string, column: number, measure: string) => number };
+  /** A note's face leaves no cue exactly when it shows its whole summary: the frame, the title's lines, two at most, 6 px and the summary's lines. */
+  const whole = (title: string, summary: string) => COMPONENTS.note!.size({ title, summary, text: '' }, {})[1] === 30 + Math.min(2, linesOf(title, 177, 'title')) * 24 + (summary ? 6 + linesOf(summary, 177, 'body') * 22 : 0);
+  const cases: [string, string, string][] = [
+    ['A title', 'A short summary.', 'A short summary.'],
+    ['If the river is the highway', 'Barges carry the grain out and the news in. The road behind the houses is used only by locals, so nobody drives it.', 'Barges carry the grain out and the news in.'],
+    ['North window', 'The light falls across the table in the afternoon, which is why the painter moved her easel twice before settling.', 'The light falls across the table in the afternoon'],
+    ['间隔重复', '间隔重复之所以有效，是因为遗忘是可以预测的，每次在快要忘记之前回想一次就行。', '间隔重复之所以有效，是因为遗忘是可以预测的'],
+    ['A title', 'However, this one is a single clause that runs on and on past every line the note could possibly hold for it here', ''],
+  ];
+  for (const [title, summary, kept] of cases) {
+    const fitted = fittedSummary(summary, title);
+    assert.equal(fitted, kept, summary);
+    assert.ok(whole(title, fitted), `${title}: the note shows ${JSON.stringify(fitted)} whole`);
+    assert.ok(!/(…|\.\.\.)$/.test(fitted), 'no ellipsis');
+  }
+  let tall = 'A title';
+  while (linesOf(tall, 177, 'title') < 4) tall += ' that runs on';
+  assert.equal(fittedSummary('A short summary.', tall), 'A short summary.', 'a title of four lines stands on two on the face, which leaves the summary its two');
+  assert.ok(whole(tall, 'A short summary.'));
+  const one = 'Barges carry the grain out and the news in each day';
+  assert.equal(linesOf(one, 177, 'body') <= 3, true);
+  assert.equal(fittedSummary(one, 'A title'), one, 'three lines under a title of one line');
+});
 
 test('a text that is only a URL becomes a link item read from the page', async () => {
   const k = kit();

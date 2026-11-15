@@ -1,11 +1,6 @@
 import { h } from '../dom.js';
-import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, fold, say, text, title, titleOf } from './shared.js';
-
-const WIDTH = 240;
-const COLUMN = WIDTH - SIDES;
-const LINES = 3;
-/** The most lines a body is given to reach the end of the words it sets apart. The Renderer keeps words that end within 180 characters of the text, or 90 in a script written without spaces, which take eight lines at most. */
-const REACH = 8;
+import { GAP, WIDTH, drawFace, lay, text, titleRow } from './shared.js';
+import { wordsOf } from '../words.js';
 
 const QUOTES = /["'‘’“”«»「」『』`´]/u;
 const DASHES = /[‐‑‒–—―−]/u;
@@ -37,39 +32,33 @@ function find(body, words) {
 }
 
 /**
- * The body is the item's summary, else its text. A note that sets words apart shows its item's own text, with the words marked
- * where they stand, on as many lines as reach the end of them.
+ * The body is the item's summary, else its text, on the whole lines the face has room for under the title. A note that sets words
+ * apart shows its item's own text with the words marked where they stand. When the lines from the start of the text do not reach
+ * them, the body starts where they start, so the face shows them marked, and the cue says there is more.
  */
-function plan(item, props) {
+function face(item, props) {
   const emphasis = text(props.emphasis).trim();
   const body = (emphasis && item.text) || item.summary || item.text;
   const shown = body && body !== item.title ? body : '';
   const at = emphasis && shown ? find(shown, emphasis) : null;
-  const most = at ? Math.max(LINES, fold(shown.slice(0, at[1]), COLUMN, TEXT_LETTER, REACH)) : LINES;
-  return {
-    body: shown,
-    at,
-    titleLines: fold(titleOf(item), COLUMN, TITLE_LETTER, 2),
-    bodyLines: shown ? fold(shown, COLUMN, TEXT_LETTER, most) : 0,
-  };
+  const words = wordsOf(item);
+  const from = (start, more) => lay([
+    titleRow(item),
+    shown && { words: shown.slice(start), gap: GAP, draw: (row) => (at ? marked(row.words, [at[0] - start, at[1] - start]) : say(row.words)) },
+  ], { words, more });
+  const laid = from(0, false);
+  if (!at || (laid.rows[1]?.words.length ?? 0) >= at[1]) return laid;
+  return from(at[0], true);
 }
-
-export const shows = [];
 
 export function size(item, props) {
-  const { titleLines, bodyLines } = plan(item, props);
-  return [WIDTH, FRAME + titleLines * TITLE + (bodyLines ? 6 + bodyLines * TEXT : 0)];
+  return [WIDTH, face(item, props).height];
 }
 
-const marked = (body, [start, end], lines) => h('div', { class: `card-text clamp-${lines}`, dir: 'auto' },
-  body.slice(0, start), h('mark', { class: 'note-mark', text: body.slice(start, end) }), body.slice(end));
+const say = (words) => h('div', { class: 'card-text', dir: 'auto', text: words });
+const marked = (words, [start, end]) => h('div', { class: 'card-text', dir: 'auto' },
+  words.slice(0, start), h('mark', { class: 'note-mark', text: words.slice(start, end) }), words.slice(end));
 
-export function draw(item, props) {
-  const { body, at, titleLines, bodyLines } = plan(item, props);
-  return [
-    title(item, titleLines),
-    body && (at ? marked(body, at, bodyLines) : say('div', `card-text clamp-${bodyLines}`, body)),
-  ];
-}
+export const draw = (item, props) => drawFace(face(item, props));
 
 export const detail = () => [];

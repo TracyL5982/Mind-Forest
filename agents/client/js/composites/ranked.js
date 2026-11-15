@@ -1,6 +1,6 @@
 import { h } from '../dom.js';
-import { TEXT, text } from '../components/shared.js';
-import { HEAD, PAD, linesOf, row } from './shared.js';
+import { text } from '../components/shared.js';
+import { HEAD, LINE, PAD, linesOf, row } from './shared.js';
 
 export const name = 'Ranked';
 
@@ -16,13 +16,13 @@ export function arrange(group, ids, sizes) {
   const most = Math.max(0, ...lines.values());
   const below = HEAD + NUMBER + tall + BELOW;
   return {
-    at, w: right + PAD, h: most > 0 ? below + most * TEXT + PAD : HEAD + NUMBER + tall + PAD,
+    at, w: right + PAD, h: most > 0 ? below + most * LINE + PAD : HEAD + NUMBER + tall + PAD,
     marks: ids.map((id, i) => {
       const [w] = sizes.get(id);
       const left = at.get(id).x - w / 2;
       return [
         h('div', { class: `rank-n ${i === 0 ? 'is-first' : ''}`, style: { left: `${left}px`, top: `${HEAD}px` }, text: String(i + 1) }),
-        lines.get(id) > 0 && h('div', { class: 'arr-words rank-why', dir: 'auto', style: { left: `${left}px`, top: `${below}px`, width: `${w}px`, height: `${lines.get(id) * TEXT}px` }, text: reason(id) }),
+        lines.get(id) > 0 && h('div', { class: 'arr-words rank-why', dir: 'auto', style: { left: `${left}px`, top: `${below}px`, width: `${w}px`, height: `${lines.get(id) * LINE}px` }, text: reason(id) }),
       ];
     }),
   };
