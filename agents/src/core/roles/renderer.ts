@@ -146,6 +146,7 @@ const MessagesData = z.array(z.object({ role: z.string(), text: z.string() }));
 const TableData = z.object({ heads: z.array(z.string()), rows: z.array(z.array(z.string())) });
 const ColoursData = z.array(z.object({ name: z.string(), value: z.string().min(1) }));
 const ExcerptData = z.object({ text: z.string().min(1), at: z.string().optional() });
+const CalloutData = z.object({ text: z.string().min(1), tone: z.enum(['caution', 'note']) });
 const MarksData = z.array(z.boolean());
 const AtData = z.object(POINT.shape);
 
@@ -586,6 +587,8 @@ const RULES: Rule[] = [
   extracted('proscons', sidesOf, (sides) => sides),
   extracted('qa', pairOf('question', 'answer'), (pair) => pair),
   extracted('definition', pairOf('term', 'definition'), (pair) => pair),
+  extracted('callout', (item) => read(CalloutData, item.data.callout), (callout) => callout),
+  extracted('explorable', explorableOf, (props) => props),
   extracted('steps', stepsOf, (steps) => ({ steps })),
   extracted('list', listOf, (list) => compact(list)),
   extracted('quote', (item) => read(QuoteData, item.data.quote), ({ text, by }) => compact({ text, by })),
@@ -892,23 +895,38 @@ const BUILT: Record<Chosen, (reply: Entry, reading: Reading) => Props> = {
   callout: ({ passage, tone }) => ({ text: passage.trim(), tone: tone.trim().toLowerCase() === 'note' ? 'note' : 'caution' }),
   excerpt: ({ passage, by }, { kept, item }) => compact({ text: unquoted(passage), at: kept(by), source: str(item.data.site) ?? str(item.data.from) }),
   sheet: ({ sections }, reading) => ({ sections: sections.map((part) => ({ kind: part.kind, ...SECTIONS[part.kind](part, reading) })) }),
-  explorable: (reply, { text }) => {
-    const stated = (unit: string, values: number[]) => (unit.trim() && unitStands(unit.trim(), values, text) ? unit.trim() : undefined);
-    const controls = reply.controls.map((control, n) => {
-      if (control.kind !== 'slider') return { kind: control.kind, label: control.label.trim(), states: control.states.map((name, at) => ({ name: name.trim(), text: unquoted(control.texts[at] ?? '') })) };
-      const { values } = control;
-      const [min, max] = [Math.min(control.min, ...values), Math.max(control.max, ...values)];
-      return compact({ kind: 'slider', name: control.name.trim(), label: control.label.trim(), unit: stated(control.unit, values), min, max, step: stepFor(min, max, values), values });
-    });
-    const sliders = reply.controls.filter((control) => control.kind === 'slider');
-    if (sliders.length === 0) return { controls, output: { kind: 'text' } };
-    const read = parse(reply.formula, sliders.map((slider) => slider.name.trim()));
-    const values = reply.numbers;
-    // A result the item states at three or more values is drawn as the curve through them.
-    const output = compact({ kind: values.length >= 3 ? 'chart' : 'figure', label: reply.subject.trim(), unit: stated(reply.unit, values), formula: 'program' in read ? read.program : [], values });
-    return { controls, output, ...('error' in read && { unread: read.error }) };
-  },
+  explorable: (reply, { text }) => explorableFrom(reply, text),
 };
+
+/** The slots an explorable is written in, by the model choosing a card or by a role that writes one out with its item. */
+export const Explore = ComponentsReply.shape.items.element.pick({ controls: true, formula: true, subject: true, unit: true, numbers: true });
+export type Explore = z.infer<typeof Explore>;
+
+/** An explorable's props from its slots, read against the item's words; `unread` says why its formula cannot be read. */
+function explorableFrom(reply: Explore, text: Grounding): Props {
+  const stated = (unit: string, values: number[]) => (unit.trim() && unitStands(unit.trim(), values, text) ? unit.trim() : undefined);
+  const controls = reply.controls.map((control) => {
+    if (control.kind !== 'slider') return { kind: control.kind, label: control.label.trim(), states: control.states.map((name, at) => ({ name: name.trim(), text: unquoted(control.texts[at] ?? '') })) };
+    const { values } = control;
+    const [min, max] = [Math.min(control.min, ...values), Math.max(control.max, ...values)];
+    return compact({ kind: 'slider', name: control.name.trim(), label: control.label.trim(), unit: stated(control.unit, values), min, max, step: stepFor(min, max, values), values });
+  });
+  const sliders = reply.controls.filter((control) => control.kind === 'slider');
+  if (sliders.length === 0) return { controls, output: { kind: 'text' } };
+  const read = parse(reply.formula, sliders.map((slider) => slider.name.trim()));
+  const values = reply.numbers;
+  // A result the item states at three or more values is drawn as the curve through them.
+  const output = compact({ kind: values.length >= 3 ? 'chart' : 'figure', label: reply.subject.trim(), unit: stated(reply.unit, values), formula: 'program' in read ? read.program : [], values });
+  return { controls, output, ...('error' in read && { unread: read.error }) };
+}
+
+/** An explorable a role wrote out with its item, built as the model's would be, when its formula reads and gives every result its item states. */
+function explorableOf(item: Item): Props | undefined {
+  const written = read(Explore, item.data.explorable);
+  if (!written) return undefined;
+  const { unread, ...props } = explorableFrom(written, grounding(item.text, { title: item.title }));
+  return unread === undefined && isValidView({ component: 'explorable', props }) && misses(props as PropsOf<'explorable'>) === undefined ? props : undefined;
+}
 
 /**
  * The coarsest step of 1, 2 or 5 times a power of ten that gives a slider at least 40 steps and lands on its ends and on every value

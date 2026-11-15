@@ -10,7 +10,7 @@ import type { DeviceFrame } from './protocol.ts';
  * microphone goes to the model, whose turn detection hears when the user is done; the model answers in its own words, from what it
  * knows, or through its tools (`core/voice-tools.ts`): a quick web answer, the user's saved cards, and the pipeline's moves, such as
  * new cards on the open card. As the cards of a run this device asked for land, the service tells the model in short notes, and it
- * walks the user through them. The frames are in docs/protocol.md; why it is built this way is in agents/DECISIONS.md (56 to 58).
+ * walks the user through them. The frames are in docs/protocol.md; why it is built this way is in agents/DECISIONS.md (57 to 59).
  */
 
 export type SayKind = 'reply' | 'results';
@@ -57,7 +57,7 @@ const BATCH_MS = 6000;
  * Quiet after the last word that ends the turn when the model's turn detection has not, a word being louder than both a floor and
  * three times the quietest moment, as the headset's recorder hears it. The detection waited 2.3 to 2.7 s after short commands; the
  * recorder's own 1.2 s cut every request said with a thinking pause of 1.4 to 2.3 s, three of which the detection kept whole, and
- * 1.8 s keeps those (DECISIONS 58).
+ * 1.8 s keeps those (DECISIONS 59).
  */
 const PAUSE_MS = 1800;
 const PIECE_SAMPLES = 1600;
