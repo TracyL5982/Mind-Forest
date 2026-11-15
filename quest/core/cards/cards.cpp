@@ -29,7 +29,15 @@ struct Sized {
     std::vector<Chip> line;
 };
 /// The small face holds no chips on the Quest: they are listed on the opened card (the sizing spec, section 1).
-Sized sized(const Kind& kind, const Item& item, const Json& props) { return {kind.size(item, props), {}}; }
+/// The item as its small face reads it: with `data.shortTitle`, what the service gives a face of a title too long
+/// for two lines, as its title when there is one (agents/docs/libraries.md, "Two titles of an item"). The
+/// opened card keeps the whole title.
+Item onFace(const Item& item) {
+    Item face = item;
+    if (std::string shortTitle = trimmed(item.data["shortTitle"]); !shortTitle.empty()) face.title = shortTitle;
+    return face;
+}
+Sized sized(const Kind& kind, const Item& item, const Json& props) { return {kind.size(onFace(item), props), {}}; }
 
 /// The opened card laid out once, for the view and picture heights it was asked for.
 struct Laid {
@@ -400,7 +408,7 @@ std::optional<Drawn> small(const std::string& noteID, float k) {
     Look look = lookOf(e);
     Footprint f = e.sized.size;
     const Kind* kind = e.view.kind;
-    Item item = e.item;
+    Item item = onFace(e.item);
     Json props = e.view.props;
     float w = float(f.width), h = float(f.height), body = h;
     bool pick = e.node.pick;

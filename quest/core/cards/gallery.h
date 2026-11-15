@@ -15,6 +15,8 @@ extern const char* const samplesJson;
 /// Samples with the item's own lines over a structure, or a heads row, that samples.cpp predates
 /// (samples_lines.cpp): `[{type, label, status, view, item}]`.
 extern const char* const linesSamplesJson;
+/// Samples with a short title for the face, and one with a long title and none (samples_titles.cpp), the same shape.
+extern const char* const titlesSamplesJson;
 /// The samples read, with the pictures they draw made known: `{pictures, types: [{type, when, cards:
 /// [{label, status, view, item}]}]}`.
 std::optional<Json> readSamples();
