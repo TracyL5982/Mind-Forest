@@ -2270,6 +2270,44 @@ test('a card draws each piece of its item where it stands, with the marks around
   assert.equal(drawn('问：怀孕34周能坐飞机吗？\n答：大多数航空公司允许。\n问：36周以后呢？\n答：基本都不允许。', 'qa', { subject: '怀孕34周能坐飞机吗？', passage: '大多数航空公司允许。\n问：36周以后呢？\n答：基本都不允许。' }), 'part');
 });
 
+test('a figure\'s label is all its line writes before the separator and its value all it writes after, drawn as written; a term is its whole subject; a list keeps the numbers the item writes', () => {
+  const drawn = (text: string, component: Chosen, slots: Partial<ComponentsReply['items'][number]>, title = 'Card') => {
+    const result = verdict(text, component, slots, title);
+    return 'draw' in result ? result.draw.props : result.refused;
+  };
+  // What the value's words leave out after the separator is the value's, and a chart reads its number from all of it.
+  assert.deepEqual(drawn('Margin: - 3%\nRevenue: 12%', 'facts', { lines: ['Margin | 3%', 'Revenue | 12%'] }), { facts: [{ label: 'Margin', value: '- 3%' }, { label: 'Revenue', value: '12%' }] });
+  assert.deepEqual(drawn('Margin: – 3%\nCash: — 2%', 'facts', { lines: ['Margin | 3%', 'Cash | 2%'] }), { facts: [{ label: 'Margin', value: '– 3%' }, { label: 'Cash', value: '— 2%' }] });
+  assert.equal(drawn('Margin: - 3%\nRevenue: 12%', 'chart', { labels: ['Margin', 'Revenue'], numbers: [3, 12], unit: '%' }), 'part', 'a chart reads -3 off "- 3%"');
+  assert.deepEqual(drawn('Margin: - 3%\nRevenue: 12%', 'chart', { labels: ['Margin', 'Revenue'], numbers: [-3, 12], unit: '%' }), { chart: 'bar', labels: ['Margin', 'Revenue'], values: [-3, 12], unit: '%' });
+  assert.deepEqual(drawn('Net income: (1,234)\nRevenue: 4,210', 'chart', { labels: ['Net income', 'Revenue'], numbers: [-1234, 4210], unit: '' }), { chart: 'bar', labels: ['Net income', 'Revenue'], values: [-1234, 4210] }, 'brackets around a figure make it negative');
+  // A label that runs past its separator takes a part of the value with it.
+  for (const [text, lines] of [
+    ['Revenue: down 12%\nRate: under 5%', ['Revenue: down | 12%', 'Rate: under | 5%']],
+    ['Error rate: <5%\nAge: ≥ 18', ['Error rate: < | 5%', 'Age: ≥ | 18']],
+    ['利润率：减3%\n营收：降12%', ['利润率：减 | 3%', '营收：降 | 12%']],
+    ['Dose: 3–5 tablets\nMax: 8 a day', ['Dose: 3 | –5 tablets', 'Max | 8 a day']],
+    ['Rent: 1 200 €\nDose: 1 / 2 tablet', ['Rent: 1 | 200 €', 'Dose: 1 / | 2 tablet']],
+    ['Net income: (1,234)\nRevenue: 4,210', ['Net income: ( | 1,234)', 'Revenue | 4,210']],
+  ] as [string, string[]][]) {
+    assert.equal(drawn(text, 'facts', { lines }), 'part', lines[0]!);
+  }
+  assert.deepEqual(drawn('Revenue: down 12%\nRate: under 5%', 'facts', { lines: ['Revenue | down 12%', 'Rate | under 5%'] }), { facts: [{ label: 'Revenue', value: 'down 12%' }, { label: 'Rate', value: 'under 5%' }] });
+  assert.equal(drawn('Dose 3–5 tablets', 'fact', { subject: 'Dose 3', passage: '–5 tablets' }), 'part', 'nothing between a label and its value in a script written with spaces');
+  // A comma before three digits groups thousands, so the days are figures and no table.
+  assert.deepEqual(drawn('Mon: 5,000\nTue: 7,200\nWed: 6,100', 'chart', { labels: ['Mon', 'Tue', 'Wed'], numbers: [5000, 7200, 6100], unit: '' }), { chart: 'bar', labels: ['Mon', 'Tue', 'Wed'], values: [5000, 7200, 6100] });
+  // A term is all the subject before the word that says what it means.
+  assert.equal(drawn('Apple pie is a baked dessert of apples in pastry.', 'definition', { subject: 'Apple', passage: 'Apple pie is a baked dessert of apples in pastry.' }), 'part');
+  assert.equal(drawn('手指是手掌末端的五个分支。', 'definition', { subject: '手', passage: '手指是手掌末端的五个分支。' }), 'part');
+  assert.deepEqual(drawn('手指是手掌末端的五个分支。', 'definition', { subject: '手指', passage: '手指是手掌末端的五个分支。' }), { term: '手指', definition: '手指是手掌末端的五个分支。' });
+  // A list keeps the numbers the item writes, even 1, 2, 3; a steps card draws those itself.
+  assert.deepEqual(drawn('1. B\n2. D\n3. A', 'list', { lines: ['B', 'D', 'A'] }), { items: ['1. B', '2. D', '3. A'] });
+  assert.deepEqual(drawn('1、王芳\n2、李强\n3、张伟', 'list', { lines: ['王芳', '李强', '张伟'] }), { items: ['1、王芳', '2、李强', '3、张伟'] });
+  assert.deepEqual(drawn('1. B\n2. D\n3. A', 'steps', { lines: ['B', 'D', 'A'] }), { steps: ['B', 'D', 'A'] });
+  // A quotation inside the quoted words keeps its marks.
+  assert.deepEqual(drawn('She said, "He told me \'never sign it.\'"', 'quote', { passage: "He told me 'never sign it.'", by: 'She said' }), { text: "He told me 'never sign it.'", by: 'She said' });
+});
+
 test('a number that opens a line is an entry\'s only when white space follows its stop', () => {
   const rates = 'Rates we were quoted this week by the banks:\n4.2%\n3.1%';
   assert.deepEqual(verdict(rates, 'list', { lines: ['2%', '1%'] }), { refused: 'part', component: 'list' }, 'the decimals of 4.2% and 3.1% are no list numbers');

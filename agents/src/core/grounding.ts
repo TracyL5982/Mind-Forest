@@ -39,21 +39,26 @@ export interface Grounding {
  * label that opens a line, and with `says` only one that says those words. `for` is the prop a piece stands for when the piece adds the
  * mark the card draws in its place, as "Q: " does to a question. A `marked` piece is one whose card draws the quotation marks around it,
  * so a pair the item sets around it is the card's, and never one mark of the pair. A `line` entry, as a list's or a step, stands on one
- * line of the item, so a heading under it is never a part of it.
+ * line of the item, so a heading under it is never a part of it. A `figure` is the label or the value of a figure, a label followed by
+ * its value, which the item writes as a "label: value" line, a row of two cells or one figure of a series.
  */
-export type Piece = { text: string; entry: boolean; for?: string; passage?: boolean; marked?: boolean; line?: boolean } | { slot: 'heading' | 'label'; says?: string };
+export type Piece =
+  | { text: string; entry: boolean; for?: string; passage?: boolean; marked?: boolean; line?: boolean; figure?: 'label' | 'value' }
+  | { slot: 'heading' | 'label'; says?: string };
 
 /**
  * One way a card's pieces may read. `drops` are the props this reading leaves out, as a speaker the item does not write where the
  * card would show it. `headless` lets the card stand on a table of two columns without its heads row, which it then draws over itself.
  * `grid` is the count of columns when the pieces are the cells of one table, row by row: each piece is then the cell at its own row
- * and column, an empty one too.
+ * and column, an empty one too. `numbered` says the card numbers its pieces itself, as a steps card does, so it leaves out the numbers
+ * of lines the item numbers 1, 2, 3; any other card draws them with the line.
  */
 export interface Way {
   pieces: readonly Piece[];
   drops?: readonly string[];
   headless?: boolean;
   grid?: number;
+  numbered?: boolean;
 }
 
 /** The whole item, as a card's way reads it. */
@@ -678,8 +683,10 @@ interface Line {
   text: string;
   cells?: string[];
   box?: boolean;
-  /** The line opens with its number among the item's lines numbered 1, 2, 3 and on, which a card draws in its place. */
+  /** The line opens with its number among the item's lines numbered 1, 2, 3 and on, which a steps card draws in its place. */
   counted?: boolean;
+  /** That number as the line writes it, with the space after it, which any other card draws with the line. */
+  marker?: string;
   /** A label that opens the line, "Myth:", and where the rest of the line starts. */
   label?: { text: string; rest: number };
 }
@@ -730,7 +737,9 @@ function linesOf(source: string, title: string): Line[] {
   const tabbed = (n: number) => raws[n]?.includes('\t') ?? false;
   // Comma-separated rows: three lines or more in a row with the same count of commas and no space after any. A full-width comma of
   // Chinese prose is no column, so the commas are counted as written, before they are made one form.
-  const commas = raws.map((raw) => (/,\s/.test(raw) || !raw.includes(',') ? -1 : raw.split(',').length));
+  // A comma between a digit and three more, as in "Mon: 5,000", groups thousands and parts no cells; one before two digits, as in
+  // "Lisbon,900,25 min", still does.
+  const commas = raws.map((raw) => raw.replace(/(?<=\d),(?=\d{3}(?!\d))/g, '')).map((raw) => (/,\s/.test(raw) || !raw.includes(',') ? -1 : raw.split(',').length));
   const csv = (n: number) => commas[n]! > 1 && [n - 2, n - 1, n].some((from) => [from, from + 1, from + 2].every((at) => commas[at] === commas[n]));
   const counts = lines.flatMap((line) => {
     const m = NUMBERED.exec(line.text);
@@ -759,7 +768,7 @@ function linesOf(source: string, title: string): Line[] {
       const marker = LAYOUT.exec(t)![0];
       line.kind = 'item';
       line.text = t.slice(marker.length).trim();
-      if (NUMBERED.test(marker)) line.counted = true;
+      if (NUMBERED.test(marker)) Object.assign(line, { counted: true, marker: marker.slice(0, NUMBERED.exec(marker)![0].length).trimStart() + (/\s$/.test(marker) ? ' ' : '') });
       if (/\[[xX✓✔]\]|☑/.test(marker)) line.box = true;
       else if (/\[ ?\]|☐/.test(marker)) line.box = false;
     } else if (TICKED.test(t)) line.kind = 'item';
@@ -823,6 +832,22 @@ interface Unit {
   spans: [number, number][];
   /** The text `start`, `end` and `spans` count in: its line's, or its cell's. */
   of: string;
+}
+
+/**
+ * What may stand around a line's figures: before the first, the line's start or a heading label or sentence over them; between two of
+ * a series, a comma or "and"; after the last, the line's end or a stop.
+ */
+const FIGURES = { led: /(?:^|[:：.。!?！？])\s*$/u, series: /^[\s.。,，、;；]*(?:(?:and|和|与|及)\s*)?$/iu, ends: /^[\s.。!！?？,，;；…]*$/u };
+
+/** Where a piece stands in the item, and its own characters there. `start` counts in its first unit's text and `end` in its last's. */
+interface Place {
+  text: string;
+  beside: [string, string];
+  first: Unit;
+  last: Unit;
+  start: number;
+  end: number;
 }
 
 class Whole {
@@ -933,16 +958,66 @@ class Whole {
    * whole units when the piece is an entry, so its marks and stops come with it, and those characters otherwise. Lines are joined by a
    * line break. With it, what the line or cell writes just before the piece and just after it.
    */
-  private written(units: Unit[], owner: number[], spans: [number, number][], from: number, to: number, entry: boolean, stops: boolean): { text: string; beside: [string, string] } {
+  private written(units: Unit[], owner: number[], spans: [number, number][], from: number, to: number, entry: boolean, stops: boolean): Place {
     const [first, last] = [units[owner[from]!]!, units[owner[to - 1]!]!];
     const start = entry ? first.start : spans[from]![0];
     let end = entry ? last.end : spans[to - 1]![1];
     // A piece given with its full stop keeps the item's own, as a quotation does that ends its sentence.
     while (stops && !entry && end < last.end && /[.!?。！？…;；,，:：]/u.test(last.of[end]!)) end++;
     const beside: [string, string] = [first.of.slice(0, start), last.of.slice(end)];
-    if (first === last || (first.line === last.line && first.kind !== 'cell')) return { text: first.of.slice(start, end), beside };
+    if (first === last || (first.line === last.line && first.kind !== 'cell')) return { text: first.of.slice(start, end), beside, first, last, start, end };
     const middle = this.lines.slice(first.line + 1, last.line).map((line) => line.text);
-    return { text: [first.of.slice(start), ...middle, last.of.slice(0, end)].join('\n'), beside };
+    return { text: [first.of.slice(start), ...middle, last.of.slice(0, end)].join('\n'), beside, first, last, start, end };
+  }
+
+  /**
+   * Holds a card's figures to the lines they stand on: each label and then its value, on one line or in one row of two cells. A label is
+   * all its line writes before its separator, ":", "：" or "=", and its value all the line writes after it, up to the line's end or the
+   * comma or "and" that leads to the next figure of a series. What the value's words leave out there, as the sign of "Margin: - 3%",
+   * is drawn with the value. A label that runs past its separator ("Margin: minus | 3%", "Dose: 1 | 2 tablet", "Net income: ( |
+   * 1,234)"), a label and a value with nothing between them in a script written with spaces ("Dose: 3 | –5 tablets"), and a value on
+   * another line than its label are refused.
+   */
+  private figured(places: (Place & { figure?: 'label' | 'value' })[]): boolean {
+    /** The last piece of the figure before, which a figure of the same series follows on its line. */
+    let previous: Place | undefined;
+    for (let n = 0; n < places.length; n++) {
+      const first = places[n]!;
+      if (!first.figure) {
+        previous = undefined;
+        continue;
+      }
+      const second = places[++n];
+      if (!second?.figure || second.figure === first.figure) return false;
+      const [label, value] = first.figure === 'label' ? [first, second] : [second, first];
+      const line = first.first.line;
+      if ([first.last, second.first, second.last].some((unit) => unit.line !== line)) return false;
+      // A row of two cells: each piece is its whole cell.
+      if (first.first.kind === 'cell') {
+        if (second.first.kind !== 'cell' || first.first === second.first) return false;
+        previous = second;
+        continue;
+      }
+      const { of } = first.first;
+      if (/[:：]/u.test(label.text)) return false;
+      const gap = of.slice(first.end, second.start);
+      if (first === label) {
+        const separator = /^\s*(?:[:：=]\s*)?/u.exec(gap)![0];
+        const rest = gap.slice(separator.length);
+        if (/[\p{L}\p{N}]/u.test(rest) || (gap === '' && !CJK.test(of[label.end - 1] ?? ''))) return false;
+        value.start -= rest.length;
+        value.text = of.slice(value.start, value.end);
+      } else if (!(/^\s+$/u.test(gap) || (gap === '' && CJK.test(of[label.start] ?? ''))) || /^[\p{N}\p{Sc}]/u.test(label.text)) {
+        // A value before its label, "42% churn in month one": one number, and its label all the line says after it.
+        return false;
+      }
+      const series = previous !== undefined && previous.last.line === line;
+      if (!(series ? FIGURES.series : FIGURES.led).test(of.slice(series ? previous!.end : 0, first.start))) return false;
+      const next = places[n + 1];
+      if (!(next?.figure && next.first.line === line) && !FIGURES.ends.test(of.slice(second.end))) return false;
+      previous = second;
+    }
+    return true;
   }
 
   private read(units: Unit[], way: Way, cells: boolean): Pick<Shown, 'slots' | 'boxes' | 'texts' | 'beside' | 'counted'> | undefined {
@@ -972,6 +1047,7 @@ class Whole {
     const texts: string[] = [];
     const beside: [string, string][] = [];
     const counted: boolean[] = [];
+    const places: (Place & { figure?: 'label' | 'value' })[] = [];
     let at = 0;
     for (const piece of way.pieces) {
       if ('slot' in piece) {
@@ -993,9 +1069,9 @@ class Whole {
       if (asked.length === 0) {
         if (!cells) return undefined;
         boxes.push(undefined);
-        texts.push('');
-        beside.push(['', '']);
         counted.push(false);
+        const cell = units[owner[at] ?? -1] ?? units.at(-1)!;
+        places.push({ text: '', beside: ['', ''], first: cell, last: cell, start: 0, end: 0, figure: piece.figure });
         continue;
       }
       // "and" between the last two figures of a series in one sentence is the series' layout: "rent 45%, food 25% and savings 30%".
@@ -1013,19 +1089,26 @@ class Whole {
       const [first, last] = [units[owner[at]!]!, units[owner[close - 1]!]!];
       // A label or a figure stands on one line of the item, and on one cell of a table: "Year 2024" of two cells is no label.
       if (cells ? first !== last : (piece.line || (!piece.entry && !piece.passage)) && first.line !== last.line) return undefined;
-      // The quotation marks around the words are drawn with them, as the item sets them, unless the card draws a pair of its own.
+      // The quotation marks around the words are drawn with them, as the item sets them, unless the card draws a pair of its own: then
+      // the marks of a quotation inside the words stay with them, as the closing mark of 'never sign it.' does.
       const paired = open < at && close > at + asked.length;
-      const [from, to] = piece.marked && paired ? [at, at + asked.length] : [open, close];
-      boxes.push(this.lines[first.line]!.box);
-      counted.push(this.lines[first.line]!.counted === true);
+      let inside = 0;
+      for (let k = at; k < at + asked.length; k++) if (QUOTE.has(words[k]!)) inside += closing(k) ? -1 : 1;
+      const [from, to] = piece.marked && paired ? [at, Math.min(close, at + asked.length + Math.max(0, inside))] : [open, close];
+      const line = this.lines[first.line]!;
+      boxes.push(line.box);
+      counted.push(line.counted === true);
       const own = this.written(units, owner, spans, from, to, aligned && starts.has(from) && starts.has(to), /[.!?。！？…;；,，:：]["'”’」』]*\s*$/u.test(piece.text));
-      texts.push(own.text);
-      beside.push(own.beside);
+      // A card that numbers nothing itself draws the item's number with the line it opens.
+      if (line.marker && !way.numbered && own.first === first && own.start === 0 && own.first.start === 0) own.text = line.marker + own.text;
+      places.push({ ...own, figure: piece.figure });
       at = close;
       if (aligned && !edge(at, -1) && !edge(at, 1)) return undefined;
     }
     while (QUOTE.has(words[at] ?? '')) at++;
-    return at === words.length ? { slots, boxes, texts, beside, counted } : undefined;
+    if (at !== words.length || !this.figured(places)) return undefined;
+    for (const place of places) texts.push(place.text), beside.push(place.beside);
+    return { slots, boxes, texts, beside, counted };
   }
 
   units(asked: string): number | undefined {

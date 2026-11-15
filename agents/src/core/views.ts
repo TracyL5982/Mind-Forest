@@ -388,14 +388,19 @@ function attributed(shown: Shown, [words, speaker]: [number, number]): boolean {
   return between !== undefined ? QUOTED.between.test(between) : QUOTED.apart.test(words > speaker ? byAfter + before : after + byBefore);
 }
 
-/** What may follow a term in a script written without spaces: a mark, or the word that says what it is, "是", "指", "就是". */
-const AFTER_TERM = /^(?:[\s\p{P}\p{S}]|是|指|即|就是|叫|称|意为|意思是|也就是)/u;
-/** Whether a meaning opens with the whole term: the term ends where a word ends, so 病毒 is no term of "病毒性肺炎是…". */
+/**
+ * The word or mark that says what a term means, which ends the term: "is" of P10's "Parallax is…" and S19's "Apple pie is…", "describes"
+ * of the P-probes' "Parallax describes…", "是" of
+ * N5's "病毒性肺炎是…" and S20's "手指是…", "，" of "沉没成本，指的是…", "就是" of "复利就是…" and a colon or a dash. A bare "指" is the
+ * second character of 手指 as often as it says what a term means, so it ends a term only as "指的是".
+ */
+const DEFINES = /^(?:\s*(?:[:：—–]|[,，])|\s(?:is|are|means|refers to|describes|denotes)\b|是|即|就是|指的是|意为|意思是|也叫|又称|叫做|称为)/iu;
+/** Whether a meaning opens with the whole term: all its subject before the first word or mark that says what it means, never a part of it. */
 function opens(term: string, meaning: string): boolean {
   const [said, written] = [fold(term), fold(meaning)];
   if (!said || !written.startsWith(said)) return false;
-  const rest = written.slice(said.length);
-  return rest === '' || (SPACELESS.test(said.at(-1)!) ? AFTER_TERM.test(rest) : !/^[\p{L}\p{N}]/u.test(rest));
+  for (let at = 1; at < written.length; at++) if (DEFINES.test(written.slice(at))) return at === said.length;
+  return written === said;
 }
 
 /**
@@ -422,26 +427,25 @@ function statesOf(p: PropsOf<'explorable'>, text: Grounding): PropsOf<'explorabl
   );
 }
 
-/** A sign of the number after it, as a word or a mark: what the item writes just before a figure's value may not be one. */
-const SIGNED = /(?:^|[^\p{L}])(?:minus|negative)$|(?:负|零下)$|[−+±▼▲↓↑]$/iu;
-/** A number the item writes as one, "1/2" or "4,5", which a label and a value may not share. */
-const RUNS_ON = { before: /\d[/,]$/, after: /^[/,]\d/ };
-
 /**
- * Whether each figure's value is a whole number as the item writes it, with its sign: no label ends in the sign of the value after it
- * ("Margin minus | 3%", "利润率：负 | 3%", "零下" on the line over "25度") and no label or value takes a part of one number ("Dose: 1 |
- * 2 tablet" of "1/2 tablet").
- * `value` says which pieces are values, by their place among the way's text pieces.
+ * The number a chart's value writes, read from all of it: a minus, a dash or brackets around it make it negative, so "- 3%" is -3 and
+ * "(1,234)" is -1234, and its digits may be grouped by commas or spaces. A value with a word, a mark or another number in it beside its
+ * unit, as "减3%", "<5%" or "3–5 tablets", writes no one number.
  */
-const figured = (shown: Shown, value: (n: number) => boolean): boolean =>
-  // A table's figures read across its row, the label in the first column, as its heads do.
-  !(shown.rows && shown.way % 2 === 1) &&
-  shown.beside.every(
-    ([before, after], n) =>
-      !RUNS_ON.before.test(before) && !RUNS_ON.after.test(after) && !(value(n) && (SIGNED.test(before.trimEnd()) || (shown.way % 2 === 0 && SIGNED.test(shown.texts[n - 1]!.trimEnd())))),
-  );
-/** The values of a way that sets each label before its value, the first way of two, or after it. */
-const valuesOf = (shown: Shown) => (n: number) => n % 2 === (shown.way % 2 === 0 ? 1 : 0);
+function figureOf(value: string): number | undefined {
+  const m = /^\s*([-−–—]\s*)?(\(\s*)?(?:\p{Sc}\s*|[A-Z]{3}\s)?(\d{1,3}(?:[,\s]\d{3})+|\d+)(\.\d+)?\s*(\))?(\D*)$/u.exec(value);
+  if (!m || Boolean(m[2]) !== Boolean(m[5])) return undefined;
+  const magnitude = Number(m[3]!.replace(/[,\s]/g, '') + (m[4] ?? ''));
+  return m[1] || m[2] ? -magnitude : magnitude;
+}
+
+/** A chart's values are the numbers its item writes as them, each read from all of its value. */
+const charted = <P extends { values: number[]; heads?: [string, string] }>(q: P, shown: Shown): P | undefined =>
+  q.values.every((value, n) => figureOf(shown.texts[2 * n + 1] ?? '') === value) ? headed(q, shown) : undefined;
+
+/** A figure's label and its value, which stand on one line of the item, or in one row of two cells. */
+const figureLabel = (text: string): Piece => ({ text, entry: false, figure: 'label' });
+const figureValue = (text: string): Piece => ({ text, entry: false, figure: 'value' });
 
 /** A facts grid or a chart drawn from a table of two columns carries that table's heads row, and one drawn from other lines none. */
 const headed = <P extends { heads?: [string, string] }>(props: P, shown: Shown): P => {
@@ -449,17 +453,19 @@ const headed = <P extends { heads?: [string, string] }>(props: P, shown: Shown):
   return (shown.heads ? { ...rest, heads: shown.heads } : rest) as P;
 };
 
-/** A chart's points as pieces: each label beside its value, the unit after the value, before it, or not written there. */
+/**
+ * A chart's points as pieces: each label and then its value, the unit after the value, before it, or not written there. A negative value
+ * may be written with a sign its words leave out, as "- 3%", or in brackets, as "(1,234)", so it is looked for without its sign and in
+ * brackets too: `charted` reads the sign from what the value writes.
+ */
 function points(labels: string[], values: number[], unit: string | undefined): Way[] {
   const sign = unit?.trim() ?? '';
   // A unit led by a currency sign stands around its number: "$120k" writes 120 in "$k".
   const around = /^\p{Sc}./u.test(sign) ? [(v: number) => `${sign[0]}${v}${sign.slice(1)}`] : [];
   const forms = sign ? [(v: number) => `${v}${sign}`, (v: number) => `${sign}${v}`, ...around, String] : [String];
-  // Each form gives a way of the label first and then one of the value first, so the even ways set the label first.
-  return forms.flatMap((form) => [
-    { pieces: labels.flatMap((label, n) => [loose(label), loose(form(values[n]!))]), headless: true },
-    { pieces: labels.flatMap((label, n) => [loose(form(values[n]!)), loose(label)]), headless: true },
-  ]);
+  const signs: ((written: (v: number) => string, v: number) => string)[] = [(written, v) => written(v)];
+  if (values.some((v) => v < 0)) signs.push((written, v) => written(Math.abs(v)), (written, v) => (v < 0 ? `(${written(-v)})` : written(v)));
+  return forms.flatMap((form) => signs.map((signed) => ({ pieces: labels.flatMap((name, n) => [figureLabel(name), figureValue(signed(form, values[n]!))]), headless: true })));
 }
 
 /** A sheet's sections as pieces, in order. An excerpt's speaker may stand before its words or after them. */
@@ -469,7 +475,7 @@ function sheetWays(sections: Section[]): Way[] {
     const label = 'label' in section && section.label ? [entry(section.label)] : [];
     const next: Piece[][] =
       section.kind === 'heading' || section.kind === 'text' ? [[entry(section.text)]]
-      : section.kind === 'figures' ? [[...label, ...section.facts.flatMap((fact) => [loose(fact.label), loose(fact.value)])]]
+      : section.kind === 'figures' ? [[...label, ...section.facts.flatMap((fact) => [figureLabel(fact.label), figureValue(fact.value)])]]
       : section.kind === 'list' ? [[...label, ...section.items.map(lined)]]
       : section.kind === 'table' ? [[...label, ...[...section.heads, ...section.rows.flat()].map(entry)]]
       : section.kind === 'excerpt' ? (section.by ? [[passage(section.text), loose(section.by)], [loose(section.by), passage(section.text)]] : [[passage(section.text)]])
@@ -503,9 +509,7 @@ export const CHECKS: ContentChecks = {
     props: { value: 'shown', label: 'shown', above: 'shown', heads: 'shown' },
     also: (p) => p.value.length <= 32,
     frame: (p, text) =>
-      framed(p, text, [{ pieces: [loose(p.label), loose(p.value)], headless: true }, { pieces: [loose(p.value), loose(p.label)], headless: true }], (q, shown) =>
-        figured(shown, valuesOf(shown)) ? headed(q, shown) : undefined,
-      ),
+      framed(p, text, [{ pieces: [figureLabel(p.label), figureValue(p.value)], headless: true }, { pieces: [figureValue(p.value), figureLabel(p.label)] }], headed),
   },
   image: { props: { src: 'own', caption: 'own', aspect: 'choice' } },
   video: { props: { src: 'own', poster: 'own', caption: 'own' } },
@@ -514,7 +518,7 @@ export const CHECKS: ContentChecks = {
   chart: {
     props: { chart: 'choice', labels: 'shown', values: 'shown', unit: 'unit', mark: 'choice', above: 'shown', heads: 'shown' },
     also: (p) => p.labels.length >= 2 && p.labels.length === p.values.length,
-    frame: (p, text) => framed(p, text, points(p.labels, p.values, p.unit), (q, shown) => (figured(shown, valuesOf(shown)) ? headed(q, shown) : undefined)),
+    frame: (p, text) => framed(p, text, points(p.labels, p.values, p.unit), charted),
   },
   person: {
     props: { name: 'says', role: 'line', image: 'own' },
@@ -530,7 +534,7 @@ export const CHECKS: ContentChecks = {
     // A steps card numbers its steps itself, so the item's own numbers must be the ones it draws: a step that keeps its number is no step.
     // Its steps are all lines the item numbers 1, 2, 3 and on, or none are, so it never numbers a line the item leaves unnumbered after them.
     frame: (p, text) =>
-      framed(p, text, [{ pieces: p.steps.map(lined) }], (q, shown) => (q.steps.some(numbered) || new Set(shown.counted).size > 1 ? undefined : q)),
+      framed(p, text, [{ pieces: p.steps.map(lined), numbered: true }], (q, shown) => (q.steps.some(numbered) || new Set(shown.counted).size > 1 ? undefined : q)),
   },
   facts: {
     props: { facts: { label: 'shown', value: 'shown' }, more: 'choice', above: 'shown', heads: 'shown' },
@@ -538,9 +542,7 @@ export const CHECKS: ContentChecks = {
     frame: (p, text) =>
       p.more !== undefined
         ? undefined
-        : framed(p, text, [{ pieces: p.facts.flatMap((f) => [loose(f.label), loose(f.value)]), headless: true }, { pieces: p.facts.flatMap((f) => [loose(f.value), loose(f.label)]), headless: true }], (q, shown) =>
-            figured(shown, valuesOf(shown)) ? headed(q, shown) : undefined,
-          ),
+        : framed(p, text, [{ pieces: p.facts.flatMap((f) => [figureLabel(f.label), figureValue(f.value)]), headless: true }, { pieces: p.facts.flatMap((f) => [figureValue(f.value), figureLabel(f.label)]) }], headed),
   },
   table: {
     props: { heads: 'shown', rows: 'shown', above: 'shown' },
@@ -562,7 +564,7 @@ export const CHECKS: ContentChecks = {
   breakdown: {
     props: { labels: 'shown', values: 'shown', unit: 'unit', above: 'shown', heads: 'shown' },
     also: (p) => Math.abs(p.values.reduce((sum, value) => sum + value, 0) - 100) <= 1,
-    frame: (p, text) => framed(p, text, points(p.labels, p.values, p.unit), (q, shown) => (figured(shown, valuesOf(shown)) ? headed(q, shown) : undefined)),
+    frame: (p, text) => framed(p, text, points(p.labels, p.values, p.unit), charted),
   },
   qa: {
     props: { question: 'shown', answer: 'shown', above: 'shown' },
