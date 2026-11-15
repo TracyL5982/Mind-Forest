@@ -206,6 +206,15 @@ TEST(theSessionArrivesAsEventsInOrder) {
     }
 }
 
+TEST(aChangeKeepsWhetherThisConnectionAskedForIt) {
+    Live live;
+    Json asked = Json::parse(recordedText("Add \"Dolly zoom\"")).value_or(Json());
+    live.socket().events.text(asked.set("yours", true).dump());
+    std::vector<Event> events = live.client.drain();
+    auto* changed = events.size() == 1 ? std::get_if<Changed>(&events[0]) : nullptr;
+    CHECK(changed && changed->yours, "the change this connection asked for says so");
+}
+
 TEST(aGapReconnectsForAFreshHello) {
     Live live;
     FakeSocket& first = live.socket();

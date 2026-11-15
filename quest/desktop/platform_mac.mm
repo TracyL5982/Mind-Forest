@@ -65,7 +65,10 @@ std::optional<std::string> readText(const std::string& name) {
 void openURL(const std::string& url) { logLine("[host] the preview opens no links: " + url); }
 
 std::string dataDirectory() {
-    NSString* dir = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/MindPalaceOceanPreview"];
+    // `-dataDir <folder>` keeps a scripted run's shelf, pictures and spots out of the preview's own.
+    std::optional<std::string> asked = Flags::string("dataDir");
+    NSString* dir = asked ? [NSString stringWithUTF8String:asked->c_str()]
+                          : [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/MindPalaceOceanPreview"];
     [[NSFileManager defaultManager] createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
     return dir.UTF8String;
 }

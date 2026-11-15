@@ -1,5 +1,8 @@
 import type { z } from 'zod';
 
+/** A request the user waits on, or background work that waits behind the user's when requests are held. */
+export type Priority = 'user' | 'background';
+
 export interface JsonRequest<T> {
   /** Which role is asking. The scripted fake routes on it. */
   role: string;
@@ -14,6 +17,11 @@ export interface JsonRequest<T> {
   effort?: 'minimal' | 'low' | 'medium' | 'high';
   /** An answer the user is waiting on. The host answers it with a smaller, faster model. */
   quick?: boolean;
+  /**
+   * Who waits on the answer, which decides its place when the host holds requests for a rate limit. A request that does not say is
+   * one the user waits on, so a forgotten one never waits behind background work.
+   */
+  priority?: Priority;
   /**
    * Called with the reply's text so far each time more of it is written, for a role that acts on the start of a reply.
    * A host that cannot stream calls it once, with the whole text. The returned value is the whole reply, as without it.

@@ -394,6 +394,7 @@ std::optional<Activity> readActivity(const Json& j, Why& why) {
                                                    {"error", Activity::State::error}}),
                        .message = f.string("message"),
                        .nodeId = f.optionalId<NodeId>("nodeId"),
+                       .detail = f.optionalString("detail"),
                    });
 }
 
@@ -423,7 +424,7 @@ std::optional<Inbound> readHello(const Json& j, Why& why) {
 
 std::optional<Inbound> readChange(const Json& j, Why& why) {
     Fields f(j, why);
-    return message(f, Change{.set = f.nested("set", readChangeSet), .undo = f.optionalString("undo")});
+    return message(f, Change{.set = f.nested("set", readChangeSet), .undo = f.optionalString("undo"), .yours = f.optionalBoolean("yours").value_or(false)});
 }
 
 std::optional<Inbound> readActivityMessage(const Json& j, Why& why) {
@@ -443,7 +444,7 @@ std::optional<Inbound> readHeard(const Json& j, Why& why) {
 
 std::optional<Inbound> readNavigate(const Json& j, Why& why) {
     Fields f(j, why);
-    return message(f, Navigate{.nodeId = f.optionalId<NodeId>("nodeId"), .treeId = f.optionalId<TreeId>("treeId")});
+    return message(f, Navigate{.nodeId = f.optionalId<NodeId>("nodeId"), .treeId = f.optionalId<TreeId>("treeId"), .yours = f.optionalBoolean("yours").value_or(false)});
 }
 
 std::optional<Inbound> readHandoff(const Json& j, Why& why) {
