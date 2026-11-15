@@ -69,9 +69,6 @@ std::string percentDecoded(const std::string& s) {
     return out;
 }
 
-/// Seconds between showings of "Thinking…" while the service still works on a card (each showing lasts a little longer).
-constexpr double thinkAgain = 2.2;
-
 /// How long a navigate waits for its tree to stand before it is let go: a cover opens into its tree in about a second.
 constexpr double standsWithin = 5;
 /// How long a navigate waits for speaking to end: longer than a reply, so a voice that never says it ended cannot hold it.
@@ -213,13 +210,6 @@ void Bridge::frame(double t) {
     if (offered) {
         std::optional<int> open = standingTree ? standingTree->tree->focus() : std::nullopt;
         if (!open || !standingTree->service.count(*open) || standingTree->service[*open] != offered->nodeId) offered.reset();
-    }
-    for (auto& [id, t] : thinking) {
-        if (now - t.shown < thinkAgain) continue;
-        auto p = trees.find(t.tree);
-        if (p == trees.end() || !standing(p->second) || !model.card(t.node)) continue;
-        model.think(t.node, float(thinkAgain + 0.4));
-        t.shown = now;
     }
 }
 
@@ -369,19 +359,10 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
 
 void Bridge::activity(const Activity& a) {
     if (a.state != Activity::State::start) {
-        thinking.erase(a.id);
         asking.ended(a.id);
         return;
     }
-    if (!a.nodeId) return;
-    if (a.role == "scout" && a.detail) asking.searching(a.id, a.nodeId->value, *a.detail);
-    for (auto& [key, p] : trees) {
-        auto local = p.local.find(a.nodeId->value);
-        if (local != p.local.end()) {
-            thinking[a.id] = Thinking{key, local->second, -thinkAgain};
-            return;
-        }
-    }
+    if (a.nodeId && a.role == "scout" && a.detail) asking.searching(a.id, a.nodeId->value, *a.detail);
 }
 
 Bridge::Planted* Bridge::plant(const TreeInfo& info) {
@@ -674,17 +655,8 @@ void Bridge::showPresence() {
         if (!model.art || !model.lineMaterial) return;
         presenceView = std::make_unique<PresenceView>(model.art, *model.lineMaterial, model.root_);
     }
-    presence = voice->presence();
-    for (const auto& [id, t] : thinking) {
-        auto p = trees.find(t.tree);
-        if (presence.state == Presence::State::working && p != trees.end() && standing(p->second)) presence.workingOn = t.node;
-    }
-    std::optional<Vec3> at;
-    if (presence.workingOn) {
-        if (const auto& c = model.card(*presence.workingOn)) at = c->root->transformMatrix(nullptr).position();
-    }
     Mat4 head = platform::head().value_or(Mat4::trs(model.stage.origin, Quat::identity(), {1, 1, 1}));
-    presenceView->frame(presence, voice->name(), at, head, now);
+    presenceView->frame(voice->presence(), voice->name(), head, now);
 }
 
 bool Bridge::speaking() const {

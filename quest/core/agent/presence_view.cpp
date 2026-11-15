@@ -11,25 +11,32 @@ namespace agent {
 namespace {
 
 constexpr float pi = 3.14159265f;
-constexpr float core = 0.0105f;         // m: the orb's radius at its full size, about half a degree at 1.25 m
 constexpr float type = 0.0165f;         // m: the words' size, as large to the eye as an open card's title
 constexpr float statusType = 0.015f;    // m: a word on what is happening, a little smaller, in italics
+constexpr float agentType = 0.0115f;    // m: an agent's line, small, above the words
 constexpr float most = 0.3f;            // m: the widest a line may be, some 35 characters
-constexpr float textLeft = 0.03f;       // m from the orb's middle to where the words start
 constexpr float pad = 6;                // px round the words in their picture
+constexpr float feather = 0.0007f;      // m: Momo's edges soften over about one of the headset's pixels at its distance
 
-const Vec3 white{1, 1, 1};
 const Color userInk = Color::hex(0xECEBE6);     // the web client's ink
 const Color momoInk = Color::hex(0xF2C27A);     // and its amber, the agent's colour
 const Color statusInk = Color::hex(0xA3A39C);   // and its quieter ink, for what is not said
-const Vec3 amber = momoInk.linear();
-const Vec3 paper = userInk.linear();
 const Vec3 night = Color::hex(0x0B0D11).linear();
+const Vec3 white{1, 1, 1};
+/// CurioCity's three rings: cyan, magenta and yellow at its colour intensity, set as its display shows them.
+const Vec3 rings[3] = {Color(0, Face::colorIntensity, Face::colorIntensity, 1).linear(),
+                       Color(Face::colorIntensity, 0, Face::colorIntensity, 1).linear(),
+                       Color(Face::colorIntensity, Face::colorIntensity, 0, 1).linear()};
+/// The monocle and the thought bubble, a little softer than the eyes.
+const Vec3 pale = Color(0.9f, 0.9f, 0.9f, 1).linear();
 
 void ease(float& v, float target, float tau, float dt) { v += (target - v) * (1 - std::exp(-dt / tau)); }
+float smooth(float t) { return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t); }
 
-/// Speech is set upright in the web client's ink or amber; a word on what is happening, in italics and quieter.
+/// Speech is set upright in the web client's ink or amber; a word on what is happening in italics and quieter; an
+/// agent's line small.
 Font typeface(const Art& art, Speaker who) {
+    if (who == Speaker::agent) return art.font(agentType, Font::Weight::regular);
     if (who != Speaker::status) return art.font(type, Font::Weight::medium);
     Font f = art.font(statusType, Font::Weight::regular);
     f.italic = true;
@@ -40,12 +47,104 @@ Color inkOf(Speaker who) {
     switch (who) {
     case Speaker::user: return userInk;
     case Speaker::momo: return momoInk;
-    case Speaker::status: return statusInk;
+    case Speaker::status:
+    case Speaker::agent: return statusInk;
     }
     return userInk;
 }
 
-/// Writes soft light into a mesh, in the orb's own plane: x right, y up, z toward the eyes.
+/// CurioCity's 2D Perlin noise (Assets/Scripts/Bubbles/PerlinNoise.ts), as it is: its gradients reach 8 long, so
+/// what it gives is not held to -1…1, and the rings' distortion is tuned to that.
+class Perlin {
+public:
+    Perlin() {
+        static constexpr int permutation[256] = {
+            151, 160, 137, 91,  90,  15,  131, 13,  201, 95,  96,  53,  194, 233, 7,   225, 140, 36,  103, 30,  69,  142,
+            8,   99,  37,  240, 21,  10,  23,  190, 6,   148, 247, 120, 234, 75,  0,   26,  197, 62,  94,  252, 219, 203,
+            117, 35,  11,  32,  57,  177, 33,  88,  237, 149, 56,  87,  174, 20,  125, 136, 171, 168, 68,  175, 74,  165,
+            71,  134, 139, 48,  27,  166, 77,  146, 158, 231, 83,  111, 229, 122, 60,  211, 133, 230, 220, 105, 92,  41,
+            55,  46,  245, 40,  244, 102, 143, 54,  65,  25,  63,  161, 1,   216, 80,  73,  209, 76,  132, 187, 208, 89,
+            18,  169, 200, 196, 135, 130, 116, 188, 159, 86,  164, 100, 109, 198, 173, 186, 3,   64,  52,  217, 226, 250,
+            124, 123, 5,   202, 38,  147, 118, 126, 255, 82,  85,  212, 207, 206, 59,  227, 47,  16,  58,  17,  182, 189,
+            28,  42,  223, 183, 170, 213, 119, 248, 152, 2,   44,  154, 163, 70,  221, 153, 101, 155, 167, 43,  172, 9,
+            129, 22,  39,  253, 19,  98,  108, 110, 79,  113, 224, 232, 178, 185, 112, 104, 218, 246, 97,  228, 251, 34,
+            242, 193, 238, 210, 144, 12,  191, 179, 162, 241, 81,  51,  145, 235, 249, 14,  239, 107, 49,  192, 214, 31,
+            181, 199, 106, 157, 184, 84,  204, 176, 115, 121, 50,  45,  127, 4,   150, 254, 138, 236, 205, 93,  222, 114,
+            67,  29,  24,  72,  243, 141, 128, 195, 78,  66,  215, 61,  156, 180,
+        };
+        for (int i = 0; i < 256; i++) p[i] = p[256 + i] = permutation[i];
+    }
+
+    float noise(float x, float y) const {
+        int X = int(std::floor(x)) & 255, Y = int(std::floor(y)) & 255;
+        x -= std::floor(x);
+        y -= std::floor(y);
+        float u = fade(x), v = fade(y);
+        int A = p[X] + Y, B = p[X + 1] + Y;
+        return lerp(v, lerp(u, grad(p[A], x, y), grad(p[B], x - 1, y)), lerp(u, grad(p[A + 1], x, y - 1), grad(p[B + 1], x - 1, y - 1)));
+    }
+
+private:
+    int p[512];
+    static float fade(float t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+    static float lerp(float t, float a, float b) { return a + t * (b - a); }
+    static float grad(int hash, float x, float y) {
+        int h = hash & 15;
+        float g = float(1 + (h & 7));
+        float u = (h & 8) ? -x : x, v = (h & 4) ? -y : y;
+        return ((h & 1) == 0 ? u : v) * g;
+    }
+};
+
+const Perlin perlin;
+
+/// Where each rim point of a ring points (Bubbles/ShapeGeometry.ts buildRimDirections): evenly round from -60 degrees.
+struct Rim {
+    Vec2 dir[Face::points];
+    Rim() {
+        for (int i = 0; i < Face::points; i++) {
+            float a = -pi / 3 + float(i) / float(Face::points) * 2 * pi;
+            dir[i] = {std::cos(a), std::sin(a)};
+        }
+    }
+};
+const Rim rim;
+
+/// A rim pushed in and out by the noise (getBubblePointsInto, with its reference radius of 40), cm.
+void rimPoints(Vec2* out, float radius, float time, float noiseScale, float distortion) {
+    constexpr float reference = 40;
+    float ratio = radius / reference;
+    for (int i = 0; i < Face::points; i++) {
+        Vec2 d = rim.dir[i];
+        float n = perlin.noise(d.x * noiseScale + time, d.y * noiseScale + time);
+        out[i] = d * (ratio * (reference + n * distortion));
+    }
+}
+
+/// The thought bubble's cloud: overlapping round lobes, as a hand draws one, cm from its middle.
+struct Lobe {
+    Vec2 at;
+    float r;
+};
+constexpr Lobe lobes[] = {{{-0.62f, 0.1f}, 0.46f}, {{-0.22f, 0.36f}, 0.42f}, {{0.27f, 0.4f}, 0.44f}, {{0.66f, 0.06f}, 0.42f},
+                          {{0.36f, -0.3f}, 0.37f}, {{-0.13f, -0.34f}, 0.39f}, {{-0.55f, -0.24f}, 0.34f}, {{0, 0}, 0.55f}};
+
+/// How far from the cloud's middle its outline is along `d`, with each lobe `inset` smaller: the farthest any lobe reaches.
+float cloudReach(Vec2 d, float inset) {
+    float reach = 0;
+    for (const Lobe& l : lobes) {
+        float r = l.r - inset, along = dot(d, l.at), across = along * along - dot(l.at, l.at) + r * r;
+        if (across >= 0) reach = std::max(reach, along + std::sqrt(across));
+    }
+    return reach;
+}
+
+Vec2 outward(Vec2 v) {
+    float l = length(v);
+    return l > 1e-9f ? v * (1 / l) : Vec2{0, 1};
+}
+
+/// Writes light into a mesh, in Momo's own plane: x right, y up, z toward the eyes, every edge softened by `feather`.
 struct Pen {
     LinkVertex* v;
     uint32_t* idx;
@@ -54,82 +153,96 @@ struct Pen {
 
     bool room(int verts, int indices) const { return nv + verts <= vertexCapacity && ni + indices <= indexCapacity; }
     void put(Vec3 p, Vec3 c, float a) { v[nv++] = LinkVertex{p, Vec2(c.x, c.y), Vec2(c.z, std::max(0.f, a))}; }
+    void put(Vec2 p, float z, Vec3 c, float a) { put({p.x, p.y, z}, c, a); }
     void triangle(int a, int b, int c) {
         idx[ni++] = uint32_t(a);
         idx[ni++] = uint32_t(b);
         idx[ni++] = uint32_t(c);
     }
+    /// Joins `strips` + 1 rows of `n` vertices each, laid out row by row within each point, round a closed loop.
+    void stitch(int base, int n, int rows, bool closed) {
+        for (int i = 0; i + (closed ? 0 : 1) < n; i++) {
+            int j = (i + 1) % n;
+            for (int s = 0; s + 1 < rows; s++) {
+                int a = base + rows * i + s, b = base + rows * j + s;
+                triangle(a, a + 1, b + 1);
+                triangle(a, b + 1, b);
+            }
+        }
+    }
 
-    /// A round light facing the eyes, brightest in its middle and gone at its edge, as a glow falls off. `whiten` is how
-    /// far toward white its middle goes.
-    void light(Vec3 c, float radius, Vec3 colour, float alpha, float whiten) {
+    /// A band between two closed outlines round `centre` (BubbleMeshBuilder.updateBand).
+    void band(const Vec2* outer, const Vec2* inner, int n, Vec2 centre, float z, Vec3 colour, float alpha) {
+        if (alpha < 0.002f || !room(4 * n, 18 * n)) return;
+        int base = nv;
+        for (int i = 0; i < n; i++) {
+            put(inner[i] - outward(inner[i] - centre) * feather, z, colour, 0);
+            put(inner[i], z, colour, alpha);
+            put(outer[i], z, colour, alpha);
+            put(outer[i] + outward(outer[i] - centre) * feather, z, colour, 0);
+        }
+        stitch(base, n, 4, true);
+    }
+
+    /// A thin ring round `c`.
+    void circle(Vec2 c, float radius, float width, float z, Vec3 colour, float alpha) {
         constexpr int n = 24;
-        constexpr float rings[] = {0.16f, 0.34f, 0.52f, 0.72f, 1.0f};
-        constexpr int count = int(std::size(rings));
-        if (alpha < 0.002f || !room(1 + count * n, 3 * n + 6 * n * (count - 1))) return;
-        auto fall = [](float r) { return (std::exp(-4.2f * r * r) - std::exp(-4.2f)) / (1 - std::exp(-4.2f)); };
+        Vec2 outer[n], inner[n];
+        for (int i = 0; i < n; i++) {
+            Vec2 d{std::cos(float(i) * 2 * pi / n), std::sin(float(i) * 2 * pi / n)};
+            outer[i] = c + d * radius;
+            inner[i] = c + d * std::max(0.f, radius - width);
+        }
+        band(outer, inner, n, c, z, colour, alpha);
+    }
+
+    /// A filled round dot.
+    void disc(Vec2 c, float radius, float z, Vec3 colour, float alpha) {
+        constexpr int n = 14;
+        if (alpha < 0.002f || !room(1 + 2 * n, 9 * n)) return;
         int centre = nv;
-        put(c, colour + (white - colour) * whiten, alpha);
-        for (float r : rings) {
-            Vec3 tint = colour + (white - colour) * (whiten * (1 - r) * (1 - r));
-            for (int k = 0; k < n; k++) {
-                float a = float(k) * 2 * pi / float(n);
-                put(c + Vec3{std::cos(a), std::sin(a), 0} * (radius * r), tint, alpha * fall(r));
-            }
+        put(c, z, colour, alpha);
+        for (int i = 0; i < n; i++) {
+            Vec2 d{std::cos(float(i) * 2 * pi / n), std::sin(float(i) * 2 * pi / n)};
+            put(c + d * radius, z, colour, alpha);
+            put(c + d * (radius + feather), z, colour, 0);
         }
-        for (int k = 0; k < n; k++) triangle(centre, centre + 1 + k, centre + 1 + (k + 1) % n);
-        for (int ring = 0; ring + 1 < count; ring++) {
-            int in = centre + 1 + ring * n, out = in + n;
-            for (int k = 0; k < n; k++) {
-                int k2 = (k + 1) % n;
-                triangle(in + k, out + k, out + k2);
-                triangle(in + k, out + k2, in + k2);
-            }
-        }
+        for (int i = 0; i < n; i++) triangle(centre, centre + 1 + 2 * i, centre + 1 + 2 * ((i + 1) % n));
+        stitch(centre + 1, n, 2, true);
     }
 
-    /// A soft ring of light round `c`, brightest along its middle.
-    void ring(Vec3 c, float radius, float width, Vec3 colour, float alpha) {
-        constexpr int n = 40;
-        if (alpha < 0.002f || !room(3 * n, 12 * n)) return;
+    /// A filled rectangle, `half` its half size (renderBoundingRect: an eye).
+    void rect(Vec2 c, Vec2 half, float z, Vec3 colour, float alpha) {
+        if (alpha < 0.002f || !room(8, 30)) return;
+        const Vec2 corners[4] = {{1, 1}, {-1, 1}, {-1, -1}, {1, -1}};
         int base = nv;
-        for (int k = 0; k < n; k++) {
-            Vec3 d{std::cos(float(k) * 2 * pi / float(n)), std::sin(float(k) * 2 * pi / float(n)), 0};
-            put(c + d * std::max(0.f, radius - width / 2), colour, 0);
-            put(c + d * radius, colour, alpha);
-            put(c + d * (radius + width / 2), colour, 0);
+        for (const Vec2& k : corners) {
+            put(c + half * k, z, colour, alpha);
+            put(c + (half + Vec2{feather, feather}) * k, z, colour, 0);
         }
-        for (int k = 0; k < n; k++) {
-            int a = base + 3 * k, b = base + 3 * ((k + 1) % n);
-            for (int s = 0; s < 2; s++) {
-                triangle(a + s, a + s + 1, b + s);
-                triangle(a + s + 1, b + s + 1, b + s);
-            }
-        }
+        triangle(base, base + 2, base + 4);
+        triangle(base, base + 4, base + 6);
+        stitch(base, 4, 2, true);
     }
 
-    /// A line from `a` to `b`, turned to face `eye`, soft across its width.
-    void line(Vec3 a, Vec3 b, float width, Vec3 colour, float alphaA, float alphaB, Vec3 eye) {
-        if (!room(6, 12)) return;
-        Vec3 side = cross(b - a, (a + b) * 0.5f - eye);
-        float len = length(side);
-        if (len < 1e-9f) return;
-        side = side / len * (width / 2);
+    /// A line through `points`, `width` across.
+    void stroke(const Vec2* points, int n, float width, float z, Vec3 colour, float alpha) {
+        if (alpha < 0.002f || n < 2 || !room(4 * n, 18 * n)) return;
         int base = nv;
-        put(a - side, colour, 0);
-        put(a, colour, alphaA);
-        put(a + side, colour, 0);
-        put(b - side, colour, 0);
-        put(b, colour, alphaB);
-        put(b + side, colour, 0);
-        for (int k = 0; k < 2; k++) {
-            triangle(base + k, base + k + 1, base + 3 + k);
-            triangle(base + k + 1, base + 4 + k, base + 3 + k);
+        for (int i = 0; i < n; i++) {
+            Vec2 along = outward(points[std::min(n - 1, i + 1)] - points[std::max(0, i - 1)]);
+            Vec2 side{-along.y, along.x};
+            float h = width / 2;
+            put(points[i] - side * (h + feather), z, colour, 0);
+            put(points[i] - side * h, z, colour, alpha);
+            put(points[i] + side * h, z, colour, alpha);
+            put(points[i] + side * (h + feather), z, colour, 0);
         }
+        stitch(base, n, 4, false);
     }
 
-    /// A dark rectangle whose edges soften to nothing over `feather`, rounded at the corners: it stands behind the words.
-    void mist(float left, float right, float bottom, float top, float feather, float z, float alpha) {
+    /// A dark rectangle whose edges soften to nothing over `soft`, rounded at the corners: it stands behind the words.
+    void mist(float left, float right, float bottom, float top, float soft, float z, float alpha) {
         constexpr int steps = 6;
         if (alpha < 0.002f || !room(8 * (steps + 1), 6 + 24 * (steps + 1))) return;
         const Vec2 corners[] = {{right, top}, {left, top}, {left, bottom}, {right, bottom}};
@@ -139,7 +252,7 @@ struct Pen {
                 float a = (float(q) + float(s) / float(steps)) * pi / 2;
                 Vec2 c = corners[q];
                 put({c.x, c.y, z}, night, alpha);
-                put({c.x + std::cos(a) * feather, c.y + std::sin(a) * feather, z}, night, 0);
+                put({c.x + std::cos(a) * soft, c.y + std::sin(a) * soft, z}, night, 0);
             }
         }
         int around = 4 * (steps + 1);
@@ -185,29 +298,36 @@ void fill(const LowLevelMeshRef& mesh, std::vector<uint32_t>& scratch, const Bou
 
 }  // namespace
 
-PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& line, EntityRef parent)
+PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& lineMaterial, EntityRef parent)
     : art(art), caption([art](const std::string& s, Speaker who) { return art->width(s, typeface(*art, who)) / Art::ppm; }, most),
-      lights(mesh(1000, 5100)), mist(mesh(64, 192)), scratch(5100),
-      step(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm * 1.08f) {
-    // The ocean's dust is seen through and drawn after everything else, so the mist says where it stands; the light
-    // does not, or a fading part of it would hide the words.
-    Material dark = line;
+      roster([art](const std::string& s) { return art->width(s, typeface(*art, Speaker::agent)) / Art::ppm; }, most),
+      light(mesh(1400, 5600)), mist(mesh(64, 192)), scratch(5600),
+      step(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm * 1.08f),
+      small(std::ceil(typeface(*art, Speaker::agent).lineHeight()) / Art::ppm * 1.12f), size(step) {
+    // The ocean's dust is seen through and drawn after everything else, so the mist says where it stands; Momo's light
+    // does not, or a fading part of it would hide the words. Momo is light added to what is behind it, as CurioCity
+    // draws it, so its three rings sum to white.
+    Material dark = lineMaterial;
     dark.writesDepth = true;
+    Material added = lineMaterial;
+    added.additive = true;
     group->name = "presence";
     group->addChild(Entity::make(mist, {dark}));
-    group->addChild(Entity::make(lights, {line}));
+    group->addChild(Entity::make(light, {added}));
     group->isEnabled = false;
     parent->addChild(group);
 }
 
 PresenceView::~PresenceView() { group->removeFromParent(); }
 
-EntityRef PresenceView::picture(const std::string& text, Speaker who, float& width) const {
+EntityRef PresenceView::picture(const std::string& text, Speaker who, size_t name, float& width) const {
     Font f = typeface(*art, who);
-    Color ink = inkOf(who);
     float w = art->width(text, f) + 2 * pad, h = std::ceil(f.lineHeight()) + 2 * pad;
     std::optional<Piece> piece = art->piece(std::nullopt, w, h, [&](Canvas&, CGSize) {
-        drawString(text, CGPoint{pad, pad}, art->attributes(f, ink));
+        // An agent's name stands out from what it is doing, in the ink of the user's words.
+        std::string named = text.substr(0, std::min(name, text.size()));
+        drawString(named, CGPoint{pad, pad}, art->attributes(f, userInk));
+        drawString(text.substr(named.size()), CGPoint{pad + art->width(named, f), pad}, art->attributes(f, inkOf(who)));
     });
     if (!piece) return nullptr;
     width = piece->size.x;
@@ -217,15 +337,15 @@ EntityRef PresenceView::picture(const std::string& text, Speaker who, float& wid
     return Entity::make(Mesh::generatePlane(piece->size.x, piece->size.y), {m});
 }
 
-void PresenceView::write(const Caption::Line& line, Words& w) {
-    if (line.text != w.comingText && w.coming) {
+void PresenceView::write(const std::string& text, Speaker who, size_t name, float y, float opacity, Words& w) {
+    if (text != w.comingText && w.coming) {
         w.coming->removeFromParent();
         w.coming = nullptr;
         w.comingText.clear();
     }
-    if (line.text != w.text && !w.coming) {
-        w.comingText = line.text;
-        w.coming = picture(line.text, line.who, w.comingWidth);
+    if (text != w.text && !w.coming) {
+        w.comingText = text;
+        w.coming = picture(text, who, name, w.comingWidth);
     }
     if (w.coming) {
         const TextureRef& t = w.coming->model->materials[0].texture;
@@ -241,125 +361,166 @@ void PresenceView::write(const Caption::Line& line, Words& w) {
             w.comingText.clear();
         }
     }
-    // The caption's opacities are as bright as they look; blending is in linear light, where a tenth looks like a third.
-    float opacity = std::pow(line.opacity * w.appear, 2.2f);
+    // The opacities are as bright as they look; blending is in linear light, where a tenth looks like a third.
+    float o = std::pow(opacity * w.appear, 2.2f);
+    float left = size * 1.5f;   // CurioCity's gap: half Momo's radius past its edge
     auto lay = [&](const EntityRef& e, float width, float o) {
-        e->position = {textLeft + width / 2 - pad / Art::ppm, line.y * step, 0};
+        e->position = {left + width / 2 - pad / Art::ppm, y, 0};
         e->opacity = o;
     };
-    if (w.shown) lay(w.shown, w.width, opacity);
+    if (w.shown) lay(w.shown, w.width, o);
     // The new picture shows as the old one does; with nothing under it yet, it is drawn just enough to be sent to the GPU.
-    if (w.coming && w.coming->parent) lay(w.coming, w.comingWidth, w.shown ? opacity : 0.004f);
+    if (w.coming && w.coming->parent) lay(w.coming, w.comingWidth, w.shown ? o : 0.004f);
 }
 
-void PresenceView::frame(const Presence& presence, const std::string& name, std::optional<Vec3> workingAt, const Mat4& head, double now) {
+void PresenceView::frame(const Presence& presence, const std::string& name, const Mat4& head, double now) {
     float dt = last < 0 ? 0 : float(std::min(0.1, std::max(0.0, now - last)));
     last = now;
     follow.update(head, dt);
-    glow.update(presence, now, dt);
+    face.update(presence, dt);
     caption.update(presence, name, now, dt);
-    const Glow::Look& look = glow.look();
-    bool any = look.shown > 0.003f || !caption.lines().empty() || !words.empty();
+    roster.update(presence.agents, dt);
+    bool any = face.look().shown > 0.003f || !caption.lines().empty() || !words.empty() || !roster.lines().empty() || !agents.empty();
     group->isEnabled = any;
     if (!any) return;
     group->position = follow.position();
     group->orientation = follow.orientation();
 
-    if (presence.state == Presence::State::working && workingAt) workedOn = workingAt;
-    ease(working, presence.state == Presence::State::working && workingAt ? 1.f : 0.f, 0.5f, dt);
-
+    // Every line keeps its picture by its key, and lets it go once the line has gone.
+    auto keep = [&](std::vector<Words>& all, auto&& wanted) {
+        all.erase(std::remove_if(all.begin(), all.end(),
+                                 [&](Words& w) {
+                                     if (wanted(w.key)) return false;
+                                     if (w.shown) w.shown->removeFromParent();
+                                     if (w.coming) w.coming->removeFromParent();
+                                     return true;
+                                 }),
+                  all.end());
+    };
+    auto wordsFor = [&](std::vector<Words>& all, int key) -> Words& {
+        auto w = std::find_if(all.begin(), all.end(), [&](const Words& x) { return x.key == key; });
+        if (w != all.end()) return *w;
+        all.push_back(Words{key, ""});
+        return all.back();
+    };
     for (const Caption::Line& line : caption.lines()) {
-        auto w = std::find_if(words.begin(), words.end(), [&](const Words& x) { return x.key == line.key; });
-        if (w == words.end()) {
-            words.push_back(Words{line.key, ""});
-            w = words.end() - 1;
-        }
-        if (w->shown) ease(w->appear, 1, 0.08f, dt);
-        write(line, *w);
+        Words& w = wordsFor(words, line.key);
+        if (w.shown) ease(w.appear, 1, 0.08f, dt);
+        write(line.text, line.who, 0, line.y * step, line.opacity, w);
     }
-    words.erase(std::remove_if(words.begin(), words.end(),
-                               [&](Words& w) {
-                                   bool kept = std::any_of(caption.lines().begin(), caption.lines().end(),
-                                                           [&](const Caption::Line& l) { return l.key == w.key; });
-                                   if (kept) return false;
-                                   if (w.shown) w.shown->removeFromParent();
-                                   if (w.coming) w.coming->removeFromParent();
-                                   return true;
-                               }),
-                words.end());
+    keep(words, [&](int key) {
+        return std::any_of(caption.lines().begin(), caption.lines().end(), [&](const Caption::Line& l) { return l.key == key; });
+    });
 
-    ease(mistWidth, caption.width(), 0.18f, dt);
-    ease(mistRows, float(std::max(1, caption.resting())), 0.18f, dt);
-    ease(misty, caption.resting() > 0 ? 1.f : 0.f, caption.resting() > 0 ? 0.15f : 0.3f, dt);
-    draw(now);
+    // The agents' lines stand above the words at rest, or, with none, the lowest beside Momo.
+    int rows = caption.resting();
+    float top = float(rows) * step / 2;
+    ease(agentsFrom, rows > 0 ? top + small * 0.75f : 0, 0.18f, dt);
+    auto keyOf = [](const std::string& role) { return int(std::hash<std::string>{}(role) & 0x7FFFFFFF); };
+    for (const Roster::Line& line : roster.lines()) {
+        Words& w = wordsFor(agents, keyOf(line.role));
+        if (w.shown) ease(w.appear, 1, 0.08f, dt);
+        write(line.text, Speaker::agent, line.name, agentsFrom + line.y * small, line.opacity, w);
+    }
+    keep(agents, [&](int key) {
+        return std::any_of(roster.lines().begin(), roster.lines().end(), [&](const Roster::Line& l) { return keyOf(l.role) == key; });
+    });
+
+    int lines = roster.resting();
+    bool misted = rows > 0 || lines > 0;
+    ease(mistWidth, std::max(caption.width(), roster.width()), 0.18f, dt);
+    ease(mistBottom, -std::max(float(std::max(1, rows)) * step / 2, size) - 0.012f, 0.18f, dt);
+    ease(mistTop, std::max(lines > 0 ? agentsFrom + (float(lines) - 0.5f) * small : float(std::max(1, rows)) * step / 2, size) + 0.012f, 0.18f, dt);
+    ease(misty, misted ? 1.f : 0.f, misted ? 0.15f : 0.3f, dt);
+    draw();
 }
 
-void PresenceView::draw(double now) {
-    const Glow::Look& look = glow.look();
-    float t = float(std::fmod(now, 3600.0));
-    Vec3 colour = paper + (amber - paper) * look.warmth;
-    // Thinking, the orb's light rises and falls on the web client's rhythm for the same thing (1.1 s).
-    float pulse = 0.5f + 0.5f * std::sin(t * 2 * pi / 1.1f);
-    float brightness = look.glow * (1 - 0.18f * look.shimmer * pulse) + 0.25f * look.voice;
-    float breath = 1 + 0.07f * look.breath * std::sin(t * 2 * pi / 3.4f);
-    float gathering = look.gather >= 0 ? std::sin(pi * look.gather) : 0;
-    float r = core * look.size * (1 + 0.45f * look.voice) * breath * (1 - 0.22f * gathering);
-    const Vec3 eye{0, 0, Follow::distance};
-    Vec3 target = workedOn ? group->convertFrom(*workedOn, nullptr) : Vec3{0, 1, -1};
-    Vec2 toward = length(target.xy()) > 1e-4f ? normalize(target.xy()) : Vec2{0, 1};
-
+void PresenceView::draw() {
+    const Face::Look& l = face.look();
     // Both meshes say they stand behind the words, so the renderer, which draws what is seen through farthest first,
     // draws them before the words. The mist is written again only while it changes.
-    Vec3 mistNow{mistWidth, mistRows, misty};
-    if (length(mistNow - mistDrawn) > 1e-4f) {
+    Vec4 mistNow{mistWidth, mistBottom, mistTop, misty};
+    if (std::fabs(mistNow.x - mistDrawn.x) + std::fabs(mistNow.y - mistDrawn.y) + std::fabs(mistNow.z - mistDrawn.z) +
+            std::fabs(mistNow.w - mistDrawn.w) > 1e-4f) {
         mistDrawn = mistNow;
         fill(mist, scratch, BoundingBox{{-0.08f, -0.08f, -0.065f}, {0.36f, 0.08f, -0.055f}}, [&](Pen& pen) {
-            float half = mistRows * step / 2 + 0.012f;
-            pen.mist(-0.028f, textLeft + mistWidth + 0.014f, -half, half, 0.026f, -0.03f, 0.8f * misty);
+            pen.mist(-size - 0.006f, size * 1.5f + mistWidth + 0.014f, mistBottom, mistTop, 0.026f, -0.03f, 0.8f * misty);
         });
     }
-    fill(lights, scratch, BoundingBox{{-0.08f, -0.08f, -0.045f}, {0.36f, 0.08f, -0.035f}}, [&](Pen& pen) {
-        // The card being worked on: a short ray of light from the orb toward it, with motes drifting out along it,
-        // and the orb's brightest part leans its way. It points, and stops short of the card's rows.
-        if (working > 0.003f && workedOn) {
-            Vec3 way = length(target) > 1e-4f ? normalize(target) : Vec3{0, 1, 0};
-            Vec3 from = way * (r * 1.4f), to = way * 0.11f;
-            pen.line(from, to, 0.0024f, amber, 0.3f * working, 0, eye);
-            for (int k = 0; k < 2; k++) {
-                float u = std::fmod(t / 2.4f + float(k) * 0.5f, 1.f);
-                pen.light(from + (to - from) * u, core * 0.42f, amber, 0.75f * working * (1 - u) * std::min(1.f, u * 6), 0.5f);
+    fill(light, scratch, BoundingBox{{-0.08f, -0.08f, -0.045f}, {0.08f, 0.1f, -0.035f}}, [&](Pen& pen) {
+        float shown = l.shown;
+        if (shown < 0.003f) return;
+        // CurioCity's centimetres to metres, with the swell of a voice.
+        float cm = size / Face::radius * l.scale;
+        auto at = [&](Vec2 p) { return p * cm; };
+
+        // The three rings (AgentRing.update): each its own noise time, apart as far as the voice parts them.
+        Vec2 outer[Face::points], inner[Face::points];
+        for (int i = 0; i < 3; i++) {
+            float time = l.time + float(i) * l.divergence, f = Face::innerFraction;
+            rimPoints(outer, Face::radius, time, Face::noiseScale, l.distortion);
+            rimPoints(inner, Face::radius * (1 - f), time, Face::noiseScale * (1 - f), l.distortion * (1 - f));
+            for (int k = 0; k < Face::points; k++) {
+                outer[k] = at(outer[k]);
+                inner[k] = at(inner[k]);
             }
+            pen.band(outer, inner, Face::points, {}, float(i - 1) * Face::zGap * cm, rings[i], shown);
         }
 
-        // Thinking: three small lights circle the orb on a tilted ring, passing behind it and in front.
-        Vec3 motes[3];
-        float depth[3];
-        for (int k = 0; k < 3; k++) {
-            float a = t * 2 * pi / 2.6f + float(k) * 2 * pi / 3;
-            motes[k] = {std::cos(a) * r * 2.3f, std::sin(a) * r * 0.7f + std::cos(a) * r * 0.2f, std::sin(a) * r * 1.5f};
-            depth[k] = std::sin(a);
+        // The eyes, tall and thin, squashed as they blink.
+        float z = Face::eyeForward * cm;
+        Vec2 eyes[2];
+        for (int i = 0; i < 2; i++) {
+            eyes[i] = Vec2{(i == 0 ? -1.f : 1.f) * Face::eyeDistance / 2, Face::eyeHeight} + l.gaze;
+            pen.rect(at(eyes[i]), at(Vec2{Face::eyeSize, Face::eyeSize * Face::eyeAspect * l.openness}), z, white, shown);
         }
-        auto mote = [&](int k) {
-            pen.light(motes[k], r * (0.55f + 0.12f * depth[k]), colour, look.shown * look.shimmer * (0.7f + 0.3f * depth[k]), 0.7f);
-        };
-        for (int k = 0; k < 3; k++) {
-            if (depth[k] < 0) mote(k);
+
+        // Searching: a monocle round the eye on the viewer's left, settling on as it comes, with a short cord curling down.
+        if (l.monocle > 0.003f) {
+            float on = smooth(l.monocle), radius = Face::monocleRadius * (1.25f - 0.25f * on);
+            float alpha = shown * on;
+            pen.circle(at(eyes[0]), radius * cm, 0.11f * cm, z, pale, alpha);
+            Vec2 from = eyes[0] + Vec2{std::cos(pi * 1.3f), std::sin(pi * 1.3f)} * radius;
+            const Vec2 c1 = from + Vec2{-0.3f, -0.25f}, c2 = from + Vec2{0.2f, -0.45f}, to = from + Vec2{-0.18f, -0.8f};
+            constexpr int n = 10;
+            Vec2 cord[n];
+            for (int i = 0; i < n; i++) {
+                float t = float(i) / float(n - 1), u = 1 - t;
+                cord[i] = at(from * (u * u * u) + c1 * (3 * u * u * t) + c2 * (3 * u * t * t) + to * (t * t * t));
+            }
+            pen.stroke(cord, n, 0.07f * cm, z, pale, alpha);
         }
-        pen.light({}, r * 3.3f, colour, look.shown * (0.08f + 0.22f * brightness), 0.08f);
-        Vec3 lean = Vec3{toward.x, toward.y, 0} * (r * 0.28f * working);
-        pen.light(lean, r * 1.25f, colour, look.shown * std::min(1.f, 0.4f + 0.6f * brightness), 0.85f);
-        for (int k = 0; k < 3; k++) {
-            if (depth[k] >= 0) mote(k);
-        }
-        // Working: a soft ring goes out from the orb every so often, as from something busy and calm.
-        if (look.ripple > 0.003f) {
-            float u = std::fmod(t / 2.6f, 1.f), out = 1 - (1 - u) * (1 - u);
-            pen.ring({}, r * (1.3f + 2.4f * out), r * (0.9f - 0.5f * u), colour, look.shown * look.ripple * 0.3f * (1 - u) * (1 - u));
-        }
-        // Sending: a ring closes in on the orb.
-        if (look.gather >= 0) {
-            float u = 1 - std::pow(1 - look.gather, 3.f);
-            pen.ring({}, r * (3.6f - 2.6f * u), r * 0.7f, colour, look.shown * 0.75f * gathering);
+
+        // Thinking: two small circles, then a cloud with three dots that brighten in turn, rising at the upper right
+        // and kept clear of the words.
+        if (l.bubble > 0.003f) {
+            float alpha = shown * l.bubble, rise = (1 - smooth(l.rising / 0.6f)) * -0.35f + 0.05f * std::sin(l.rising * 2 * pi / 2.4f);
+            auto pop = [&](float from, float over) {
+                float t = std::clamp((l.rising - from) / over, 0.f, 1.f);
+                return t >= 1 ? 1.f : 1 + 2.70158f * std::pow(t - 1, 3.f) + 1.70158f * std::pow(t - 1, 2.f);
+            };
+            const Vec2 c1{1.38f, 2.0f}, c2{1.78f, 2.42f}, cloud{1.38f, 3.28f};
+            float s1 = pop(0, 0.16f), s2 = pop(0.12f, 0.16f), s3 = pop(0.24f, 0.24f);
+            if (s1 > 0) pen.circle(at(c1 + Vec2{0, rise}), 0.17f * s1 * cm, 0.075f * cm, z, pale, alpha);
+            if (s2 > 0) pen.circle(at(c2 + Vec2{0, rise}), 0.25f * s2 * cm, 0.085f * cm, z, pale, alpha);
+            if (s3 > 0) {
+                constexpr int n = 64;
+                Vec2 out[n], in[n];
+                Vec2 middle = at(cloud + Vec2{0, rise});
+                for (int i = 0; i < n; i++) {
+                    Vec2 d{std::cos(float(i) * 2 * pi / n), std::sin(float(i) * 2 * pi / n)};
+                    out[i] = middle + d * (cloudReach(d, 0) * s3 * cm);
+                    in[i] = middle + d * (cloudReach(d, 0.12f) * s3 * cm);
+                }
+                pen.band(out, in, n, middle, z, pale, alpha);
+                for (int k = 0; k < 3; k++) {
+                    // Each dot brightens and swells in turn, for a third of the beat.
+                    float beat = std::fmod(l.rising / 1.2f - float(k) / 3 + 1, 1.f);
+                    float swell = beat < 1 / 3.f ? std::pow(std::sin(beat * 3 * pi), 2.f) : 0;
+                    pen.disc(middle + at(Vec2{(float(k) - 1) * 0.42f, -0.02f}) * s3, 0.1f * (1 + 0.3f * swell) * s3 * cm, z, pale,
+                             alpha * (0.35f + 0.65f * swell) * smooth((l.rising - 0.4f) / 0.2f));
+                }
+            }
         }
     });
 }

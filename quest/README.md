@@ -77,12 +77,19 @@ nothing costs money.
 Talking to it works as in the web client. The headset listens on the device for "hey Momo" or "hi Momo" (the
 service's agent name), and nothing it hears leaves the headset unless it began with the name. After the name it
 chimes and records until you pause for 1.2 s; the service transcribes that and acts on it, and its reply is spoken
-when the service has a voice. Momo is a soft glowing orb low in front of you, with the words beside it: yours in
-white as the voice hears them, then `Thinking…`, then Momo's reply in amber as it is spoken, then, while the agent
-works, a few words in grey italics on what it is doing. The orb breathes with the voice it hears, gathers in as what
-you said is sent, has lights circling it while it thinks, and ripples and points to the card while it works. It stays
-where it is while you look about and glides round once you have turned away from it;
-`-presenceDemo` plays every state on a 34 s loop with made-up words, without the service. The first time, the headset
+when the service has a voice. Momo sits low in front of you, drawn as in CurioCity (ClandestineOperation's
+`AgentVisual`, with the values its scene gives it): three rings of Perlin noise in cyan, magenta and yellow, added into
+one white ring as wide as two lines of its words, with two tall white eyes that blink and dart. The words are beside
+it: yours in white as the voice hears them, then `Thinking…`, then Momo's reply in amber as it is spoken. The ring
+wobbles with your voice as you speak, and with Momo's as it speaks, when it also parts into coloured fringes. From the
+moment your turn is sent until Momo answers, a thought bubble rises at its upper right, two small circles and a cloud
+whose three dots brighten in turn. While any agent works, Momo wears a monocle and its eyes glance about, and above
+the words a small line for each agent at work says what it is doing (`Scout · Searching museum collections for dancing
+people`, Momo's own web searches as `Momo (librarian) · …`); when an agent's last step ends its line says `finished
+working` for 3 s and goes. A picture still being made keeps the Scout's line and the monocle until it lands. Nothing
+else marks the agent's work: no word or light on the cards. Momo stays where it is while you look about and glides
+round once you have turned away from it; `-presenceDemo` plays every state and look on a 38 s loop with made-up words
+and agents, without the service. The first time, the headset
 asks to use the microphone; refused, it does
 not ask again until the app starts again, and replies are still spoken. A microphone that stops is opened again after
 1, 2, 4, 8, then every 15 s. When the service has a live voice (hello's `live`), the headset opens its `/live`

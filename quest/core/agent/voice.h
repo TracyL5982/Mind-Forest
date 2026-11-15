@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "client.h"
+#include "crew.h"
 #include "json.h"
 #include "listener.h"
 #include "platform.h"
@@ -54,7 +55,7 @@ public:
     void activity(const Activity& a);
     /// Once a frame, on the frame thread, with the frame's clock in seconds.
     void frame(double now);
-    /// What it is doing, as of the last frame. `workingOn` is the caller's to fill.
+    /// What it is doing, as of the last frame.
     const Presence& presence() const { return shown; }
 
     /// Seconds before each try to open the microphone again after it failed. The last repeats.
@@ -274,8 +275,8 @@ private:
     int loops = 0;
     /// The live turn whose words the presence shows, from `heard`; 0 for none.
     int wordsOf = 0;
-    /// Work started and not ended, oldest first.
-    std::vector<Activity> working;
+    /// The agents at work, for their lines and Momo's monocle.
+    Crew crew;
     Presence shown;
 
     void start();
