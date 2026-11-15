@@ -95,8 +95,14 @@ async function overlaps(page: Page): Promise<string[]> {
   return hits;
 }
 
+/**
+ * The checks run with the Mac's speakers on. Chromium's mute does not reach the browser's own voice, which macOS speaks,
+ * so a page under test finishes each line at once, unheard.
+ */
+const QUIET = "if ('speechSynthesis' in window) window.speechSynthesis.speak = (line) => setTimeout(() => line.dispatchEvent(new Event('end')), 0);";
+
 async function main(): Promise<void> {
-  const browser = await chromium.launch({ executablePath: browserPath(), headless: true });
+  const browser = await chromium.launch({ executablePath: browserPath(), headless: true, args: ['--mute-audio'] });
   const problems: string[] = [];
   const watch = (page: Page) => {
     page.on('console', (m) => { if (m.type() === 'error') problems.push(m.text()); });
@@ -104,6 +110,7 @@ async function main(): Promise<void> {
   };
   try {
     const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+    await desktop.addInitScript(QUIET);
     const page = await desktop.newPage();
     watch(page);
 
@@ -715,6 +722,7 @@ async function main(): Promise<void> {
     });
 
     const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
+    await phone.addInitScript(QUIET);
     const small = await phone.newPage();
     watch(small);
     await check('at phone width the same mindstorm opens, and a tapped card fills a sheet', async () => {
@@ -943,9 +951,10 @@ async function listeningService(dir: string, clientDir: string) {
 async function openWithMicrophone(server: Running, clip: string, holdMicMs?: number) {
   const browser = await chromium.launch({
     executablePath: browserPath(), headless: true,
-    args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${clip}%noloop`, '--autoplay-policy=no-user-gesture-required'],
+    args: ['--mute-audio', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${clip}%noloop`, '--autoplay-policy=no-user-gesture-required'],
   });
   const page = await browser.newPage();
+  await page.addInitScript(QUIET);
   const problems: string[] = [];
   page.on('console', (m) => { if (m.type() === 'error') problems.push(m.text()); });
   page.on('pageerror', (err) => problems.push(String(err)));
@@ -1112,9 +1121,10 @@ async function wakeChecks(): Promise<void> {
 
     await check('a hold that arrives while the listener records does not lose the recording', async () => {
       const standIn = await listeningService(dir, standInClient(mkdtempSync(join(dir, 'worker-'))));
-      const browser = await chromium.launch({ executablePath: browserPath(), headless: true });
+      const browser = await chromium.launch({ executablePath: browserPath(), headless: true, args: ['--mute-audio'] });
       try {
         const page = await browser.newPage();
+        await page.addInitScript(QUIET);
         await page.goto(`${standIn.server.url}/#token=secret`);
         // A string, because the TypeScript runner names inner functions with a helper the page does not have.
         const outcome = (await page.evaluate(`(async () => {
