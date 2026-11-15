@@ -351,7 +351,7 @@ TEST(searchingMomoWearsAMonocleAndGlancesAboutWiderAndSlowerThanItDarts) {
             if (now) frames++;
             if (!now && frames > 0) moves.push_back(float(frames) * frame), frames = 0;
             was = f.look().gaze;
-            int at = f.look().gaze.x < -0.3f ? -1 : f.look().gaze.x > 0.3f ? 1 : 0;
+            int at = f.look().gaze.x < -0.12f ? -1 : f.look().gaze.x > 0.12f ? 1 : 0;
             if (at != 0 && at != side) sides++;
             if (at != 0) side = at;
         }
@@ -380,19 +380,19 @@ TEST(theLooksTakePrecedenceAsPlanned) {
     Face f;
     run(f, say(S::listening), 0.5f);
     run(f, say(S::sent), 0.4f);
-    CHECK(f.look().bubble > 0.9f, "the thought bubble rises as the turn is sent: %.2f", double(f.look().bubble));
+    CHECK(f.look().dots > 0.9f, "the thinking dots come as the turn is sent: %.2f", double(f.look().dots));
     run(f, searching(S::thinking), 1);
-    CHECK(f.look().bubble > 0.99f && f.look().monocle > 0.95f, "thinking while an agent works: the cloud shows over the monocle");
-    CHECK(f.look().rising > 1.3f, "the bubble kept rising from where it was: %.2f s", double(f.look().rising));
+    CHECK(f.look().dots > 0.99f && f.look().monocle > 0.95f, "thinking while an agent works: the dots show with the monocle");
+    CHECK(f.look().rising > 1.3f, "the dots kept their beat from where they were: %.2f s", double(f.look().rising));
     run(f, searching(S::responding, 0.8f), 0.35f);
-    CHECK(f.look().bubble < 0.05f, "it fades as Momo starts speaking: %.2f", double(f.look().bubble));
+    CHECK(f.look().dots < 0.05f, "they fade as Momo starts speaking: %.2f", double(f.look().dots));
     CHECK(f.look().monocle > 0.95f && f.look().divergence > 0.5f, "speaking keeps the monocle on while an agent works");
     run(f, say(S::responding, "", "", true, 0.8f), 0.8f);
     CHECK(f.look().monocle < 0.05f && f.look().divergence > 0.5f, "and with no agent at work, speaking alone");
     run(f, say(S::thinking), 0.1f);
-    CHECK(f.look().rising < 0.2f, "a new thought rises from the start: %.2f s", double(f.look().rising));
+    CHECK(f.look().rising < 0.2f, "a new thought's dots come from the start: %.2f s", double(f.look().rising));
     run(f, say(S::off), 2);
-    CHECK(f.look().shown < 0.01f && f.look().bubble < 0.01f, "off, Momo is gone");
+    CHECK(f.look().shown < 0.01f && f.look().dots < 0.01f, "off, Momo is gone");
 }
 
 namespace {

@@ -139,7 +139,7 @@ void PresenceDemo::frame(double now) {
     const Face::Look& l = view->looks().look();
     if (l.openness < 0.5f && !shut) logLine(fmt("[presence] blink at %.2f", t));
     shut = l.openness < 0.5f;
-    int way = l.gaze.x < -0.45f ? -1 : l.gaze.x > 0.45f ? 1 : 0;
+    int way = l.gaze.x < -0.15f ? -1 : l.gaze.x > 0.15f ? 1 : 0;
     if (way != 0 && way != looking) logLine(fmt("[presence] eyes %s at %.2f", way < 0 ? "left" : "right", t));
     if (way != 0) looking = way;
 

@@ -82,8 +82,8 @@ when the service has a voice. Momo sits low in front of you, drawn as in CurioCi
 one white ring as wide as two lines of its words, with two tall white eyes that blink and dart. The words are beside
 it: yours in white as the voice hears them, then `Thinking…`, then Momo's reply in amber as it is spoken. The ring
 wobbles with your voice as you speak, and with Momo's as it speaks, when it also parts into coloured fringes. From the
-moment your turn is sent until Momo answers, a thought bubble rises at its upper right, two small circles and a cloud
-whose three dots brighten in turn. While any agent works, Momo wears a monocle and its eyes glance about, and above
+moment your turn is sent until Momo answers, three dots at its upper right brighten and swell in turn. While any
+agent works, Momo wears a monocle, in fine lines round the eye on your left, and its eyes glance about, and above
 the words a small line for each agent at work says what it is doing (`Scout · Searching museum collections for dancing
 people`, Momo's own web searches as `Momo (librarian) · …`); when an agent's last step ends its line says `finished
 working` for 3 s and goes. A picture still being made keeps the Scout's line and the monocle until it lands. Nothing

@@ -147,7 +147,7 @@ void Face::update(const Presence& p, float dt) {
     if (searching) {
         if (clock >= nextDart) {
             side = -side;
-            target = {side * glanceAmount * random(0.75f, 1), glanceAmount * random(-0.3f, 0.35f)};
+            target = {side * (side < 0 ? glanceToMonocle : glanceAmount) * random(0.75f, 1), glanceAmount * random(-0.3f, 0.35f)};
             nextDart = clock + random(glanceMin, glanceMax);
         }
         l.gaze += (target - l.gaze) * std::min(1.f, glanceEase * dt);
@@ -170,11 +170,11 @@ void Face::update(const Presence& p, float dt) {
     }
     ease(l.monocle, searching ? 1.f : 0.f, 0.18f, dt);
 
-    // Thinking, from the moment the turn is sent until Momo answers or the work begins, a thought bubble rises.
+    // Thinking, from the moment the turn is sent until Momo answers or the work begins, the dots come and pulse.
     bool thinks = p.state == S::sent || p.state == S::thinking;
-    if (thinks && l.bubble < 0.02f) l.rising = 0;
+    if (thinks && l.dots < 0.02f) l.rising = 0;
     if (thinks) l.rising += dt;
-    ease(l.bubble, thinks ? 1.f : 0.f, thinks ? 0.12f : 0.1f, dt);
+    ease(l.dots, thinks ? 1.f : 0.f, thinks ? 0.12f : 0.1f, dt);
 }
 
 // MARK: - Caption

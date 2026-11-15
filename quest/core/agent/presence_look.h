@@ -56,8 +56,8 @@ private:
 /// Assets/Scripts/AgentVisual (AgentRing, AgentNoiseDisc) and AgentSphere, with the values its Scene.scene gives them.
 /// Three hollow rings, cyan, magenta and yellow, each bent by Perlin noise, add up to one white ring, with two white
 /// eyes in the middle that blink and dart. A voice makes the rings wobble further and faster, and Momo's own voice
-/// draws them apart into coloured fringes. Two looks are Momo's own: thinking, a thought bubble rises at its upper
-/// right; while any agent works it wears a monocle, and its eyes glance about, slower and wider than they dart.
+/// draws them apart into coloured fringes. Two looks are Momo's own: thinking, three dots at its upper right pulse in
+/// turn; while any agent works it wears a monocle, and its eyes glance about, slower and wider than they dart.
 class Face {
 public:
     // CurioCity's, in its centimetres, on its ring of 2 cm (the view scales them to Momo's size).
@@ -80,8 +80,13 @@ public:
     // Momo's own.
     static constexpr float glanceMin = 0.9f, glanceMax = 1.6f;  // s between glances while searching
     static constexpr float glanceAmount = 0.55f;        // as far as the eyes go to either side, past where darts mostly go
+    static constexpr float glanceToMonocle = 0.22f;     // and toward the monocle's side, so it stays between the ring and the other eye
     static constexpr float glanceEase = 6;              // a second: slower than a dart's 25
-    static constexpr float monocleRadius = 0.62f;       // round the eye on the viewer's left, clear of its ends
+    // The monocle frames the eye on the viewer's left with room round it, set a little outward so it clears the other
+    // eye, in fine lines: on the headset at 1.25 m its outline is about a pixel, the eye two.
+    static constexpr float monocleRadius = 0.74f;
+    static constexpr float monocleShift = 0.12f;
+    static constexpr float monocleLine = 0.06f, cordLine = 0.045f;
 
     struct Look {
         float shown = 0;            // 0 gone … 1
@@ -93,8 +98,8 @@ public:
         float openness = 1;         // the eyes: 1 open, 0 shut
         Vec2 gaze;                  // where the eyes have gone, cm
         float monocle = 0;          // 0 off … 1 on
-        float bubble = 0;           // the thought bubble: 0 gone … 1
-        float rising = 0;           // s since the bubble began to rise
+        float dots = 0;             // the thinking dots: 0 gone … 1
+        float rising = 0;           // s since they began to come
     };
 
     explicit Face(uint32_t seed = 7);

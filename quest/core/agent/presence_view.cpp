@@ -27,8 +27,6 @@ const Vec3 white{1, 1, 1};
 const Vec3 rings[3] = {Color(0, Face::colorIntensity, Face::colorIntensity, 1).linear(),
                        Color(Face::colorIntensity, 0, Face::colorIntensity, 1).linear(),
                        Color(Face::colorIntensity, Face::colorIntensity, 0, 1).linear()};
-/// The monocle and the thought bubble, a little softer than the eyes.
-const Vec3 pale = Color(0.9f, 0.9f, 0.9f, 1).linear();
 
 void ease(float& v, float target, float tau, float dt) { v += (target - v) * (1 - std::exp(-dt / tau)); }
 float smooth(float t) { return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t); }
@@ -121,24 +119,6 @@ void rimPoints(Vec2* out, float radius, float time, float noiseScale, float dist
     }
 }
 
-/// The thought bubble's cloud: overlapping round lobes, as a hand draws one, cm from its middle.
-struct Lobe {
-    Vec2 at;
-    float r;
-};
-constexpr Lobe lobes[] = {{{-0.62f, 0.1f}, 0.46f}, {{-0.22f, 0.36f}, 0.42f}, {{0.27f, 0.4f}, 0.44f}, {{0.66f, 0.06f}, 0.42f},
-                          {{0.36f, -0.3f}, 0.37f}, {{-0.13f, -0.34f}, 0.39f}, {{-0.55f, -0.24f}, 0.34f}, {{0, 0}, 0.55f}};
-
-/// How far from the cloud's middle its outline is along `d`, with each lobe `inset` smaller: the farthest any lobe reaches.
-float cloudReach(Vec2 d, float inset) {
-    float reach = 0;
-    for (const Lobe& l : lobes) {
-        float r = l.r - inset, along = dot(d, l.at), across = along * along - dot(l.at, l.at) + r * r;
-        if (across >= 0) reach = std::max(reach, along + std::sqrt(across));
-    }
-    return reach;
-}
-
 Vec2 outward(Vec2 v) {
     float l = length(v);
     return l > 1e-9f ? v * (1 / l) : Vec2{0, 1};
@@ -186,7 +166,7 @@ struct Pen {
 
     /// A thin ring round `c`.
     void circle(Vec2 c, float radius, float width, float z, Vec3 colour, float alpha) {
-        constexpr int n = 24;
+        constexpr int n = 40;
         Vec2 outer[n], inner[n];
         for (int i = 0; i < n; i++) {
             Vec2 d{std::cos(float(i) * 2 * pi / n), std::sin(float(i) * 2 * pi / n)};
@@ -475,51 +455,35 @@ void PresenceView::draw() {
             pen.rect(at(eyes[i]), at(Vec2{Face::eyeSize, Face::eyeSize * Face::eyeAspect * l.openness}), z, white, shown);
         }
 
-        // Searching: a monocle round the eye on the viewer's left, settling on as it comes, with a short cord curling down.
+        // Searching: a monocle round the eye on the viewer's left, settling on as it comes, with a short cord hanging
+        // from it.
         if (l.monocle > 0.003f) {
-            float on = smooth(l.monocle), radius = Face::monocleRadius * (1.25f - 0.25f * on);
+            float on = smooth(l.monocle), radius = Face::monocleRadius * (1.2f - 0.2f * on);
             float alpha = shown * on;
-            pen.circle(at(eyes[0]), radius * cm, 0.11f * cm, z, pale, alpha);
-            Vec2 from = eyes[0] + Vec2{std::cos(pi * 1.3f), std::sin(pi * 1.3f)} * radius;
-            const Vec2 c1 = from + Vec2{-0.3f, -0.25f}, c2 = from + Vec2{0.2f, -0.45f}, to = from + Vec2{-0.18f, -0.8f};
+            Vec2 centre = eyes[0] - Vec2{Face::monocleShift, 0};
+            pen.circle(at(centre), radius * cm, Face::monocleLine * cm, z, white, alpha);
+            Vec2 from = centre + Vec2{std::cos(pi * 1.39f), std::sin(pi * 1.39f)} * radius;
+            const Vec2 c1 = from + Vec2{-0.25f, -0.18f}, c2 = from + Vec2{0.15f, -0.35f}, to = from + Vec2{-0.1f, -0.6f};
             constexpr int n = 10;
             Vec2 cord[n];
             for (int i = 0; i < n; i++) {
                 float t = float(i) / float(n - 1), u = 1 - t;
                 cord[i] = at(from * (u * u * u) + c1 * (3 * u * u * t) + c2 * (3 * u * t * t) + to * (t * t * t));
             }
-            pen.stroke(cord, n, 0.07f * cm, z, pale, alpha);
+            pen.stroke(cord, n, Face::cordLine * cm, z, white, alpha);
         }
 
-        // Thinking: two small circles, then a cloud with three dots that brighten in turn, rising at the upper right
-        // and kept clear of the words.
-        if (l.bubble > 0.003f) {
-            float alpha = shown * l.bubble, rise = (1 - smooth(l.rising / 0.6f)) * -0.35f + 0.05f * std::sin(l.rising * 2 * pi / 2.4f);
-            auto pop = [&](float from, float over) {
-                float t = std::clamp((l.rising - from) / over, 0.f, 1.f);
-                return t >= 1 ? 1.f : 1 + 2.70158f * std::pow(t - 1, 3.f) + 1.70158f * std::pow(t - 1, 2.f);
-            };
-            const Vec2 c1{1.38f, 2.0f}, c2{1.78f, 2.42f}, cloud{1.38f, 3.28f};
-            float s1 = pop(0, 0.16f), s2 = pop(0.12f, 0.16f), s3 = pop(0.24f, 0.24f);
-            if (s1 > 0) pen.circle(at(c1 + Vec2{0, rise}), 0.17f * s1 * cm, 0.075f * cm, z, pale, alpha);
-            if (s2 > 0) pen.circle(at(c2 + Vec2{0, rise}), 0.25f * s2 * cm, 0.085f * cm, z, pale, alpha);
-            if (s3 > 0) {
-                constexpr int n = 64;
-                Vec2 out[n], in[n];
-                Vec2 middle = at(cloud + Vec2{0, rise});
-                for (int i = 0; i < n; i++) {
-                    Vec2 d{std::cos(float(i) * 2 * pi / n), std::sin(float(i) * 2 * pi / n)};
-                    out[i] = middle + d * (cloudReach(d, 0) * s3 * cm);
-                    in[i] = middle + d * (cloudReach(d, 0.12f) * s3 * cm);
-                }
-                pen.band(out, in, n, middle, z, pale, alpha);
-                for (int k = 0; k < 3; k++) {
-                    // Each dot brightens and swells in turn, for a third of the beat.
-                    float beat = std::fmod(l.rising / 1.2f - float(k) / 3 + 1, 1.f);
-                    float swell = beat < 1 / 3.f ? std::pow(std::sin(beat * 3 * pi), 2.f) : 0;
-                    pen.disc(middle + at(Vec2{(float(k) - 1) * 0.42f, -0.02f}) * s3, 0.1f * (1 + 0.3f * swell) * s3 * cm, z, pale,
-                             alpha * (0.35f + 0.65f * swell) * smooth((l.rising - 0.4f) / 0.2f));
-                }
+        // Thinking: three dots at the upper right, clear of the words, coming one after another, then each in turn
+        // brightening, swelling and lifting a little.
+        if (l.dots > 0.003f) {
+            float alpha = shown * l.dots;
+            for (int k = 0; k < 3; k++) {
+                float come = smooth((l.rising - 0.12f * float(k)) / 0.25f);
+                if (come <= 0) continue;
+                float beat = std::fmod(l.rising / 1.2f - float(k) / 3 + 1, 1.f);
+                float swell = beat < 1 / 3.f ? std::pow(std::sin(beat * 3 * pi), 2.f) : 0;
+                Vec2 dot{1.3f + 0.45f * float(k), 2.35f - 0.3f * (1 - come) + 0.1f * swell};
+                pen.disc(at(dot), 0.15f * (0.6f + 0.4f * come) * (1 + 0.25f * swell) * cm, z, white, alpha * come * (0.5f + 0.5f * swell));
             }
         }
     });
