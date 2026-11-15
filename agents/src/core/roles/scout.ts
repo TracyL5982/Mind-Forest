@@ -162,8 +162,11 @@ export const scout: Roles['scout'] = async (ctx, input) => {
   };
   // A gallery makes only the pictures it could keep: one, and more only when there are slots to spare.
   const spare = Math.max(0, room - made.length);
-  // The run is over once its slots are full, so what it says it brought does not wait on work that can no longer land.
+  // The run is over once its slots are full, so what it says it brought does not wait on work that can no longer land. With somewhere
+  // to deliver, it is also over when only pictures are still being made: they take 10 to 20 s, and each is delivered when it is ready.
+  const over = () => out.size === 0 || room <= 0 || (input.deliver !== undefined && [...out].every(pictured));
   await new Promise<void>((done) => {
+    if (over()) done();
     for (const d of made) {
       const budget = d.format === 'gallery' ? Math.min(GALLERY_SIZE, imagesLeft, 1 + spare) : d.format === 'image' ? Math.min(1, imagesLeft) : 0;
       imagesLeft -= budget;
@@ -174,7 +177,7 @@ export const scout: Roles['scout'] = async (ctx, input) => {
         })
         .then((items) => {
           land(d, items);
-          if (out.size === 0 || room <= 0) done();
+          if (over()) done();
         });
     }
   });

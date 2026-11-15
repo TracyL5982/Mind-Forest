@@ -734,10 +734,13 @@ test('a picture still being made keeps its slot from faster finds, and the find 
     return generate(prompt);
   };
 
-  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
-  await until(() => k.mind.picks(anchor).length === 2);
-  painting.open();
+  let ended = false;
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }).then((rest) => ((ended = true), rest));
+  await until(() => k.mind.picks(anchor).length === 2 && ended);
   apply(k, await run);
+  assert.equal(k.mind.picks(anchor).length, 2, 'the run is over while only the picture is still being made');
+  painting.open();
+  await until(() => k.mind.picks(anchor).length === 3);
 
   assert.deepEqual(picked(k, anchor).map((i) => i.title), ['books record 1', 'news record 1', 'The shot at night']);
 });

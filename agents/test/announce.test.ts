@@ -223,3 +223,38 @@ test('the line stays under about twenty words, drops a subtitle, cuts a long nam
   assert.match(line, /^One new thing under A very long card title: an idea "生成式界面/);
   assert.ok([...line.replace(/^.*idea "/, '')].length <= 16, line);
 });
+
+test('a pick is named by what it is, a film by its source even when it came as its poster', () => {
+  const k = kit();
+  const [root] = k.seedTree('Standoffs', ['Standoffs']).nodeIds as [Id];
+  const hang = (title: string, tool: string, kind: 'text' | 'video' | 'image', data: Record<string, unknown> = {}) => {
+    const item = makeItem(k.ctx, { kind, title, text: title, origin: AGENT('scout', tool), source: { from: 'web' }, data });
+    const node = makeNode(k.ctx, item, { treeId: k.mind.node(root).treeId, parent: root, status: 'pick', why: 'new', origin: AGENT('scout', tool) });
+    k.mind.apply({ origin: AGENT('scout'), label: 'pick', commands: [{ type: 'addItem', item }, { type: 'addNode', node }] });
+    return node.id;
+  };
+  assert.equal(announcement(k.mind, root, [hang('Her', 'films', 'image')]), 'One new thing under Standoffs: a film "Her".');
+  assert.equal(announcement(k.mind, root, [hang('Get Out', 'archive', 'video')]), 'One new thing under Standoffs: a video "Get Out".');
+  assert.equal(announcement(k.mind, root, [hang('Night stairs', 'image-gen', 'image')]), 'One new thing under Standoffs: a picture "Night stairs".');
+  assert.equal(announcement(k.mind, root, [hang('Shoot it yourself', 'idea', 'text', { steps: ['a', 'b'] })]), 'One new thing under Standoffs: a how-to "Shoot it yourself".');
+});
+
+test('a picture still being made does not hold the line back, and lands after it without a second line', async () => {
+  const { k, pipeline, heard } = harness({ picksPerRun: 2 });
+  const [root] = k.seedTree('Film', ['Dolly zoom']).nodeIds as [Id];
+  thinks(k, () => [note('An idea'), { ...note('The shot at night'), format: 'image', images: [{ title: 'Night', prompt: 'the staircase at night' }] }]);
+  let release!: () => void;
+  const painting = new Promise<void>((r) => (release = r));
+  const generate = k.ctx.tools.images.generate;
+  k.ctx.tools.images.generate = async (prompt) => {
+    await painting;
+    return generate(prompt);
+  };
+
+  await pipeline.ask(root, 'what would it look like at night');
+  assert.deepEqual(heard, [`navigate: ${root}`, 'say: One new thing under Dolly zoom: an idea "An idea".']);
+  release();
+  await until(() => k.mind.picks(root).length === 2);
+
+  assert.equal(heard.length, 2, 'no second line');
+});

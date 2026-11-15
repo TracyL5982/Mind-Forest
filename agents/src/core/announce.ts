@@ -9,6 +9,15 @@ const SPACELESS = /[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Thai}]
 /** Words a cut title must not end on. */
 const DANGLING = new Set(['a', 'an', 'the', 'of', 'for', 'about', 'and', 'or', 'to', 'in', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'vs']);
 
+/** A pick named aloud by the source it came from, when that says what it is. A film's poster or a book's cover is still a film or a book. */
+const FROM: Record<string, string> = {
+  films: 'a film',
+  books: 'a book',
+  papers: 'a paper',
+  podcasts: 'a podcast',
+  museums: 'an artwork',
+};
+
 /** A text pick named aloud by where it came from. */
 const TEXT_FROM: Record<string, string> = {
   idea: 'an idea',
@@ -25,7 +34,8 @@ function spokenKind(item: Item, tool: string): string {
   if (item.data.kind === 'paper') return 'a paper';
   if (item.data.kind === 'book') return 'a book';
   if (item.data.kind === 'artwork') return 'an artwork';
-  if (item.kind === 'video') return tool === 'podcasts' ? 'a podcast' : 'a video';
+  if (FROM[tool]) return FROM[tool];
+  if (item.kind === 'video') return 'a video';
   if (item.kind === 'image') return 'a picture';
   if (Array.isArray(item.data.steps)) return 'a how-to';
   return TEXT_FROM[tool] ?? 'a note';
@@ -57,7 +67,7 @@ function clipWords(text: string, most: number): string {
 /** A title as it is said: without its subtitle when it has one, and never longer than `most` words. */
 function said(title: string, most: number): string {
   const flat = title.replace(/\s+/g, ' ').trim().replace(/"/g, '');
-  const main = flat.split(/\s*(?::|\s[—–-]\s|\(|\|)\s*/)[0]!;
+  const main = flat.split(/\s*(?::|\(|\|)\s*/)[0]!;
   return clipWords(wordCount(main) >= 2 ? main : flat, most);
 }
 
