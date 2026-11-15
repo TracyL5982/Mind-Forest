@@ -229,12 +229,12 @@ constexpr double PASS = 1.6;
 /// A soft band of light as tall as a composing card, brightest down its middle and gone at its sides: thin strips of
 /// flat light, which need no picture, so nothing stands in for one while it is on its way to the GPU.
 EntityRef OceanModel::shimmerBand(Art& art, Vec2 body) {
-    constexpr int strips = 13;
+    constexpr int strips = 31;
     float wide = body.x * BAND, tall = std::max(body.y - 0.004f, 0.01f), each = wide / strips;
     EntityRef band = Entity::make();
     for (int i = 0; i < strips; i++) {
         float x = (float(i) + 0.5f) / strips - 0.5f;
-        EntityRef strip = art.swatch(Color::white(), {each, tall}, 0.12f * std::exp(-x * x / 0.05f));
+        EntityRef strip = art.swatch(Color::white(), {each * 1.02f, tall}, 0.1f * std::exp(-x * x / 0.045f));
         // Light only: it hides nothing drawn after it, as the face under it may be when the band stands nearer the eye.
         strip->model->materials[0].writesDepth = false;
         strip->position.x = x * wide;
