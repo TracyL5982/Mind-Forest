@@ -1,7 +1,8 @@
 /**
  * Runs the knowledge-base rules live against a copy of a mindstorm: drops a thought, then asks for a tree, and prints where the
  * thought went, the new root's round (what the user already had and what is new) and anything that repeats inside the tree.
- * Usage: MIND_PALACE_DATA=<a copy of a data folder> tsx scripts/mindstorm-check.ts "<a thought>" "<a subject>"
+ * Given a question, it then asks it about the new root and prints what joined the round and what made room.
+ * Usage: MIND_PALACE_DATA=<a copy of a data folder> tsx scripts/mindstorm-check.ts "<a thought>" "<a subject>" ["<a question>"]
  * It writes into that folder, so never point it at the folder a service runs on. Tokens come from each provider's own usage field.
  */
 import { randomUUID } from 'node:crypto';
@@ -22,7 +23,7 @@ const env = loadEnv();
 const dataDir = process.env.MIND_PALACE_DATA;
 if (!dataDir || !existsSync(join(dataDir, 'mindstorm.sqlite'))) throw new Error('Set MIND_PALACE_DATA to a copy of a data folder.');
 if (existsSync(join(dataDir, 'service.pid'))) throw new Error(`${dataDir} has a service.pid: a service may be running on it. Use a copy.`);
-const [thought, subject] = [process.argv[2], process.argv[3]];
+const [thought, subject, question] = [process.argv[2], process.argv[3], process.argv[4]];
 if (!thought || !subject) throw new Error('Usage: tsx scripts/mindstorm-check.ts "<a thought>" "<a subject>"');
 
 type Side = { calls: number; input: number; output: number; searches: number };
@@ -98,19 +99,32 @@ if (!tree) {
   console.log('   no tree was made');
   process.exit(1);
 }
-const picks = mind.picks(tree.rootId);
-const known = picks.filter(isKnown);
 console.log(`   tree "${tree.title}", root "${title(tree.rootId)}" (${mind.itemOf(tree.rootId).source.from})`);
-for (const n of picks) console.log(`   ${isKnown(n) ? 'HAD' : 'NEW'} [${n.origin.tool}] ${title(n.id)}  (${n.why})`);
-const seen = new Map<string, string>();
-const repeats: string[] = [];
-for (const n of mind.treeNodes(tree.id)) {
-  for (const key of sameness(mind.item(n.itemId))) {
-    if (seen.has(key) && seen.get(key) !== n.id) repeats.push(`${key}: "${title(seen.get(key)!)}" and "${title(n.id)}"`);
-    seen.set(key, n.id);
+const show = () => {
+  const picks = mind.picks(tree.rootId);
+  for (const n of picks) console.log(`   ${isKnown(n) ? 'HAD' : 'NEW'} [${n.origin.tool}] ${title(n.id)}  (${n.why}, importance ${n.importance})`);
+  const seen = new Map<string, string>();
+  const repeats: string[] = [];
+  for (const n of mind.treeNodes(tree.id)) {
+    for (const key of sameness(mind.item(n.itemId))) {
+      if (seen.has(key) && seen.get(key) !== n.id) repeats.push(`${key}: "${title(seen.get(key)!)}" and "${title(n.id)}"`);
+      seen.set(key, n.id);
+    }
   }
+  const known = picks.filter(isKnown).length;
+  console.log(`   Round: ${picks.length} picks, ${known} the user already had, ${picks.length - known} new. Repeats in the tree: ${repeats.length ? repeats.join('; ') : 'none'}.`);
+  return picks;
+};
+const first = show();
+if (question) {
+  console.log(`\n3. Ask about "${title(tree.rootId)}": "${question}"`);
+  const before = new Map(first.map((n) => [n.id, title(n.id)]));
+  await pipeline.ask(tree.rootId, question);
+  await pipeline.idle();
+  const after = show();
+  const gone = first.filter((n) => !mind.nodes.has(n.id)).map((n) => `"${before.get(n.id)}"`);
+  console.log(`   made room: ${gone.join(', ') || 'nothing'}; joined: ${after.filter((n) => !before.has(n.id)).length}`);
 }
-console.log(`\nRound: ${picks.length} picks, ${known.length} the user already had, ${picks.length - known.length} new. Repeats in the tree: ${repeats.length ? repeats.join('; ') : 'none'}.`);
 console.log(`Time: ${Math.round((Date.now() - started) / 1000)} s. Notes: ${notes.length}`);
 for (const note of notes) console.log(`   ${note}`);
 console.log(`Usage: ${JSON.stringify(tally)}`);

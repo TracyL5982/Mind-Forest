@@ -118,8 +118,9 @@ export interface Roles {
   filer(ctx: RoleContext, items: Item[], request?: TreeRequest): Promise<Command[]>;
   /**
    * Brings content to the anchor: what the user already has that is strongly tied to it, and new content.
-   * 'refresh' replaces the anchor's unkept picks. 'more' adds to them; the pipeline then lets the oldest give way to keep the round.
-   * Returns addItem + addNode for each new pick, addNode alone for what the user already has, and deleteNode for replaced picks.
+   * New picks join the anchor's round and none is taken away here. Near the cap, the picks already there come back rated against the
+   * question as `setWhy` importances, and the pipeline lets the least related give way.
+   * Returns addItem + addNode for each new pick, addNode alone for what the user already has, and setWhy for re-rated picks.
    * Picks that are ready early may be handed to `deliver` so the user sees them sooner; the rest are returned.
    */
   scout(
@@ -127,7 +128,6 @@ export interface Roles {
     input: {
       anchor: Id;
       need?: string;
-      mode: 'refresh' | 'more';
       count?: number;
       /** The recent conversation, so a need is read in context. */
       history?: Turn[];

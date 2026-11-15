@@ -79,8 +79,9 @@ export function treeKeys(mind: Mindstorm, treeId: Id, without: ReadonlySet<Id> =
  * Holds what an agent wants to add to the rules of the round, against the mindstorm as it is at the moment of applying:
  * - A node whose item repeats something already in its tree is left out, with the item it would have brought. A known pick
  *   that repeats only unkept new picks takes their place instead, since what the user already has wins.
- * - Around each card, the oldest unkept picks from before make room, so at most ROUND_MOST stay and at most KNOWN_MOST of them known.
- *   When the commands alone bring more than that, the last of them are left out, new ones before known ones.
+ * - Around each card, the unkept picks from before that are least related to what the user is asking make room, so at most ROUND_MOST
+ *   stay and at most KNOWN_MOST of them known. How related a pick is, is its importance, as the commands leave it; the oldest goes
+ *   first among equals. When the commands alone bring more than that, the last of them are left out, new ones before known ones.
  * Kept cards never count and are never taken away. Returns the commands to apply.
  */
 export function admit(mind: Mindstorm, commands: Command[]): Command[] {
@@ -127,9 +128,12 @@ export function admit(mind: Mindstorm, commands: Command[]): Command[] {
     for (const key of own) keys.set(key, node.id);
   }
 
+  const rated = new Map<Id, number>();
+  for (const c of commands) if (c.type === 'setWhy' && c.importance !== undefined) rated.set(c.id, c.importance);
+  const related = (n: Node) => rated.get(n.id) ?? n.importance;
   const anchors = new Set(incoming.filter((n) => n.status === 'pick' && n.parent !== null && !left.has(n.id)).map((n) => n.parent!));
   for (const anchor of anchors) {
-    const old = (mind.nodes.has(anchor) ? mind.picks(anchor) : []).filter((n) => !gone.has(n.id)).sort((a, b) => a.order - b.order);
+    const old = (mind.nodes.has(anchor) ? mind.picks(anchor) : []).filter((n) => !gone.has(n.id)).sort((a, b) => related(a) - related(b) || a.order - b.order);
     const fresh = incoming.filter((n) => n.parent === anchor && n.status === 'pick' && !left.has(n.id));
     const fit = (counts: (n: Node) => boolean, most: number) => {
       let over = old.filter((n) => !gone.has(n.id) && counts(n)).length + fresh.filter((n) => !left.has(n.id) && counts(n)).length - most;
@@ -158,6 +162,7 @@ export function admit(mind: Mindstorm, commands: Command[]): Command[] {
   const out: Command[] = displaced.map((id): Command => ({ type: 'deleteNode', id }));
   for (const c of commands) {
     if (c.type === 'addItem' && unshown.has(c.item.id) && c.item.origin.by === 'agent') continue;
+    if (c.type === 'setWhy' && gone.has(c.id)) continue;
     if (c.type === 'addNode' && left.has(c.node.id)) continue;
     if (c.type === 'createTree' && left.has(c.root.id)) continue;
     out.push(c);

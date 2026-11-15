@@ -209,7 +209,7 @@ After the first hands-on session the picks were judged dull: every pick was a we
 
 **Why.** The user asked for the mindstorm to be a knowledge base that trees draw on, not a pile that turns every drop into a tree.
 
-**Also changed.** The Filer no longer falls back to search when the model fails. A wrong placement is noise and a drop left in the knowledge base costs nothing, so the safe answer is no placement. Taking away a pick that holds what the user dropped, as a refresh does, leaves the item in the knowledge base. Deleting a kept card still archives its item. `Mindstorm.inbox()` is `unplaced()` now: those items are not waiting to be filed. Only the root of a tree the user asked for is scouted on arrival, so `EAGER_SCOUTS` is gone.
+**Also changed.** The Filer no longer falls back to search when the model fails. A wrong placement is noise and a drop left in the knowledge base costs nothing, so the safe answer is no placement. Taking away a pick that holds what the user dropped, as making room in a full round does, leaves the item in the knowledge base. Deleting a kept card still archives its item. `Mindstorm.inbox()` is `unplaced()` now: those items are not waiting to be filed. Only the root of a tree the user asked for is scouted on arrival, so `EAGER_SCOUTS` is gone.
 
 **Measured.** On a copy of the user's data (4 trees, 1,014 library items), a dropped line about the Reservoir Dogs standoff became a pick under "The standoff" in "Standoffs", and no tree was made. On an earlier run of the same drop it went under "The cut is the event" in the same tree.
 
@@ -237,7 +237,7 @@ After the first hands-on session the picks were judged dull: every pick was a we
 
 ## 32. Mindstorm: the round rules are held where changes are applied
 
-**Decision.** `admit` in `src/core/round.ts` runs on every Scout delivery and every Filer change, against the mindstorm as it is at that moment. Around each card it keeps at most 10 unkept picks, at most 8 of them things the user already had, by deleting the oldest unkept picks in the same change. Nothing inside a tree repeats: not the same item, not the same `source.url`, `data.mediaUrl` or `source.asset`, not the same title once case, punctuation and a leading article are set aside. Something the user already had takes the place of an unkept pick that brought the same thing new. An agent's item that is left out goes with its node; a dropped item stays in the knowledge base.
+**Decision.** `admit` in `src/core/round.ts` runs on every Scout delivery and every Filer change, against the mindstorm as it is at that moment. Around each card it keeps at most 10 unkept picks, at most 8 of them things the user already had, by deleting unkept picks in the same change: the least related to the conversation first, since entry 34, and the oldest among equals. Nothing inside a tree repeats: not the same item, not the same `source.url`, `data.mediaUrl` or `source.asset`, not the same title once case, punctuation and a leading article are set aside. Something the user already had takes the place of an unkept pick that brought the same thing new. An agent's item that is left out goes with its node; a dropped item stays in the knowledge base.
 
 **Why "a layer" is one card's round.** In the headset a layer holds several cards' rounds. A limit per layer would starve each card as the tree grows.
 
@@ -250,3 +250,17 @@ After the first hands-on session the picks were judged dull: every pick was a we
 **Finding.** In the first live run the Kubrick round brought nothing the user had, although search offered The Shining, Dr. Strangelove and 2001 and the model rated them 0.9 and 0.95. Shown `- item library:film:53 "The Shining"`, the model answered `"itemId": "item library:film:53"`, and every rating was dropped as naming nothing offered. The library's ids contain colons, unlike the service's own ids. The tie rating before this change had the same prompt line, so a library film was most likely never hung live.
 
 **Decision.** `idFrom` drops a leading "item", "node" or "tree" and surrounding quotes or brackets from an id a model wrote. The Scout and the Filer read ids through it. With it, the same run brought all three films.
+
+## 34. Mindstorm: opening a card shows it, and only conversation grows its round
+
+**Decision.** `focus` never starts a Scout run. Picks come from conversation about a card (`ask`, `more`, an utterance the Conductor routes to either) and from the first round of a tree the user asked for. A run never replaces the round: the Scout's `refresh` mode is gone, and new picks join what is there. When the round could pass 10, the same model call that rates candidates also rates the picks already around the card against the question and the recent conversation, and the run stores each rating as the pick's `importance` (`setWhy`). New picks of the run get importance 1, since they were made for the question. `admit` lets the lowest go first, the oldest first among equals, so what gives way is what is least related to what the user is talking about, not what came first. Kept cards never count and are never removed.
+
+**Why.** The user: a tap should expand a card to show its details, not start a new layer; a layer starts with conversation, and at the cutoff of 10 the nodes most distant from the user's questions go.
+
+**Why importance.** It already meant how much a node matters, and the Renderer already keeps the most important of a crowded set out of its "more" stack. Stored on the node, the rating survives to the next change: a drop the Filer hangs at a full card between conversations makes room by the last rating. A rating that came back for a pick the guard then removes is dropped with it; applied after the removal, it had failed the whole delivery.
+
+**Cost.** One rating call per conversational run once the round is near full, even when nothing the user has is a candidate. Measured in tests only.
+
+**Web client.** Opening a card already showed its details with Ask and More. It still sends `focus`, which now brings nothing. The empty page's text says a new tree gets a first round and asking brings more.
+
+**Alternative.** Let the Scout delete the least related picks itself before delivering. It would have to guess how many of its finds will arrive, and two runs at once would each guess against a stale round.

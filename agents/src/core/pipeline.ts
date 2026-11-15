@@ -66,7 +66,6 @@ export class Pipeline {
   readonly ctx: RoleContext;
   private readonly history: Turn[] = [];
   private readonly scoutRun = new Map<Id, number>();
-  private readonly scouted = new Set<Id>();
   private scoutQueue: (() => Promise<void>)[] = [];
   private scoutsRunning = 0;
   private voiceRun = 0;
@@ -88,9 +87,6 @@ export class Pipeline {
       now: deps.now,
       note: (role, message) => deps.emit({ t: 'note', role, message }),
     };
-    for (const node of deps.mind.nodes.values()) {
-      if (node.status === 'pick') this.scouted.add(node.parent ?? node.id);
-    }
   }
 
   /** Resolves when every piece of background work started so far has finished. For tests and scripts. */
@@ -166,20 +162,21 @@ export class Pipeline {
     }, this.deps.settleMs ?? 900);
   }
 
-  /** The user looked at a node. If nothing has been scouted for it yet, scout now. */
-  focus(nodeId: Id): void {
+  /**
+   * The user opened or looked at a card. A card opens to show what it holds and brings nothing: picks come from talking about it,
+   * and from the first round of a tree the user asked for. "This" stops meaning the latest drop.
+   */
+  focus(_nodeId: Id): void {
     this.dropped = [];
-    if (!this.deps.mind.nodes.has(nodeId) || this.scouted.has(nodeId)) return;
-    if (this.deps.mind.node(nodeId).status === 'pick') return;
-    this.queueScout(nodeId, undefined, 'refresh');
   }
 
+  /** A question about a card. What it brings joins the card's round, and the picks least related to the question make room. */
   ask(anchor: Id, need: string): Promise<void> {
-    return this.runScout(anchor, need, 'refresh');
+    return this.runScout(anchor, need);
   }
 
   more(anchor: Id, need?: string): Promise<void> {
-    return this.runScout(anchor, need, 'more');
+    return this.runScout(anchor, need);
   }
 
   keep(nodeIds: Id[]): void {
@@ -311,14 +308,13 @@ export class Pipeline {
       const nodeIds = newNodeIds(set);
       this.afterContent(set);
       const root = nodeIds.find((id) => mind.node(id).parent === null);
-      if (request && root && this.deps.settings.scoutOnDump) this.queueScout(root, undefined, 'refresh');
+      if (request && root && this.deps.settings.scoutOnDump) this.queueScout(root);
       return nodeIds;
     });
   }
 
-  private queueScout(anchor: Id, need: string | undefined, mode: 'refresh' | 'more'): void {
-    this.scouted.add(anchor);
-    this.scoutQueue.push(() => this.runScout(anchor, need, mode));
+  private queueScout(anchor: Id): void {
+    this.scoutQueue.push(() => this.runScout(anchor, undefined));
     this.drainScouts();
   }
 
@@ -334,9 +330,8 @@ export class Pipeline {
   }
 
   /** A newer request for the same anchor wins. The older one's results are dropped when they arrive. */
-  private async runScout(anchor: Id, need: string | undefined, mode: 'refresh' | 'more'): Promise<void> {
+  private async runScout(anchor: Id, need: string | undefined): Promise<void> {
     if (!this.deps.mind.nodes.has(anchor)) return;
-    this.scouted.add(anchor);
     const run = (this.scoutRun.get(anchor) ?? 0) + 1;
     this.scoutRun.set(anchor, run);
     const title = this.deps.mind.itemOf(anchor).title;
@@ -350,7 +345,7 @@ export class Pipeline {
           const set = this.apply(AGENT('scout'), need ? `Picks for: ${need}`.slice(0, 120) : `Picks for "${title}"`, admit(this.deps.mind, commands), part);
           if (set) this.afterContent(set);
         };
-        bring(await this.deps.roles.scout(this.ctx, { anchor, need, mode, history: this.history.slice(-6), deliver: bring }));
+        bring(await this.deps.roles.scout(this.ctx, { anchor, need, history: this.history.slice(-6), deliver: bring }));
       });
     } catch (err) {
       this.fail('scout', err);

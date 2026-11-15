@@ -159,7 +159,7 @@ test('the fake service files pasted structure as item data, and brings a museum 
     { by: 'Ilse Brandt', date: '1928', medium: 'Gelatin silver print', holder: 'The Example Museum of Art' },
   );
   assert.equal(work.kind, 'image');
-  assert.equal(run.mind.picks(root).length, 4, 'the work is one of the usual picks, not the only one');
+  assert.equal(run.mind.picks(root).length, 8, 'the work comes with the usual picks, and joins the four already there');
   assert.equal((await fetch(`${run.url}/assets/${work.source.asset}`, { headers: { Authorization: 'Bearer secret' } })).headers.get('content-type'), 'image/svg+xml');
 
   c.ws.send(JSON.stringify({ t: 'more', nodeId: root, need: 'a research paper on it' }));

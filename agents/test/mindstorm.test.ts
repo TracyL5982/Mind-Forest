@@ -24,7 +24,10 @@ function harness(settings: Partial<Settings> = {}) {
     settings: k.ctx.settings,
     newId: k.ctx.newId,
     now: k.ctx.now,
-    emit: (m) => void (m.t === 'say' && said.push(m.text)),
+    emit: (m) => {
+      if (m.t === 'say') said.push(m.text);
+      if (m.t === 'note') k.notes.push(`${m.role}: ${m.message}`);
+    },
     settleMs: 5,
     playback: () => k.playback,
   });
@@ -45,7 +48,7 @@ function ideas(k: Kit): void {
 }
 
 function rate(k: Kit, strengths: Record<Id, number>): void {
-  k.model.on('scout.known', () => ({ ratings: Object.entries(strengths).map(([itemId, strength]) => ({ itemId, strength, why: `tie to ${itemId}` })) }));
+  k.model.on('scout.rate', () => ({ ratings: Object.entries(strengths).map(([itemId, strength]) => ({ itemId, strength, why: `tie to ${itemId}` })) }));
 }
 
 function own(k: Kit, fields: Partial<Item> & { title: string }): Item {
@@ -94,23 +97,6 @@ test('a dump with a strong fit lands once as a pick under that card, a weak one 
   assert.equal(k.mind.nodesOfItem(jaws.id).length, 1);
   assert.deepEqual([hung!.parent, hung!.status, hung!.why], [film.nodeIds[1], 'pick', 'the same shot']);
   assert.deepEqual(k.mind.unplaced().map((i) => i.title), ['Zoom calls drain me']);
-});
-
-test('a dump placed as a pick that a refresh replaces goes back to the knowledge base, not away', async () => {
-  const { k, pipeline } = harness();
-  const film = k.seedTree('Film', ['Camera moves', 'Dolly zoom']);
-  k.model.on('filer', (req) => ({ placements: [{ itemId: /item (\S+)/.exec(req.user)![1]!, parentNodeId: film.nodeIds[1]!, strength: 0.9, why: 'same shot' }] }));
-  ideas(k);
-  await pipeline.dump([{ kind: 'text', text: 'The Jaws beach shot is a dolly zoom' }]);
-  await pipeline.idle();
-  const jaws = [...k.mind.items.values()].find((i) => i.title.includes('Jaws'))!;
-
-  await pipeline.ask(film.nodeIds[1]!, 'something else entirely');
-  await pipeline.idle();
-
-  assert.equal(k.mind.nodesOfItem(jaws.id).length, 0);
-  assert.equal(k.mind.item(jaws.id).archived, false);
-  assert.deepEqual(k.mind.unplaced().map((i) => i.id), [jaws.id]);
 });
 
 test('a dump whose words ask for a tree becomes the root of a new tree, without those words, and gets its first round', async () => {
@@ -167,7 +153,7 @@ test('"make a tree about X" draws the things the user has that are strongly tied
   assert.deepEqual(known.map((n) => n.origin.tool), ['library', 'mindstorm', 'mindstorm']);
   assert.equal(picks.length - known.length, 5, 'new content fills the rest');
   assert.ok(k.mind.nodes.has(other.nodeIds[1]!), 'the card stays in its own tree as well');
-  const offered = k.model.calls.find((c) => c.role === 'scout.known')!.detail;
+  const offered = k.model.calls.find((c) => c.role === 'scout.rate')!.detail;
   assert.ok(!offered.includes('Sourdough'), 'what shares nothing with the subject is not offered');
 });
 
@@ -191,34 +177,96 @@ test('a subject that names something the user has makes that thing the root, and
   assert.deepEqual(titles(k, round(k, tree!.rootId)), ['Rear Window'], 'the film source\'s "Vertigo" is the root again, so it is left out');
 });
 
-test('never more than 10 unkept picks round a card and at most 8 the user already had; "more" lets the oldest go; kept cards stay', async () => {
+test('a round holds at most 8 things the user already had, the strongest, and keeps room for new content', async () => {
   const { k, pipeline } = harness();
   ideas(k);
   const tree = k.seedTree('Machines', ['Machines that look back', 'HAL is polite']);
-  const [root, kept] = tree.nodeIds as [Id, Id];
+  const [root] = tree.nodeIds as [Id];
   const known = Array.from({ length: 11 }, (_, i) => own(k, { title: `Machines that look back, note ${i + 1}`, text: 'machines that look back' }));
   rate(k, Object.fromEntries(known.map((item, i) => [item.id, 0.8 + i * 0.01])));
 
   await pipeline.ask(root, 'more on the machines');
   await pipeline.idle();
-  const first = round(k, root);
-  assert.equal(first.length, 10);
-  assert.equal(first.filter((n) => n.origin.tool === 'mindstorm').length, 8);
 
-  rate(k, {});
-  await pipeline.more(root);
-  await pipeline.idle();
-  const second = round(k, root);
-  assert.equal(second.length, 10);
-  assert.equal(second.filter((n) => n.origin.tool === 'mindstorm').length, 3, 'the five new picks took the places of the five oldest');
-  assert.deepEqual(second.slice(0, 3).map((n) => n.id), first.slice(5, 8).map((n) => n.id));
-  assert.ok(k.mind.nodes.has(kept) && k.mind.node(kept).status === 'kept');
+  const picks = round(k, root);
+  assert.equal(picks.length, 10);
+  assert.deepEqual(picks.filter((n) => n.origin.tool === 'mindstorm').map((n) => n.itemId), known.slice(3).reverse().map((i) => i.id));
+});
 
-  k.mind.apply({ origin: USER, label: 'keep', commands: second.slice(0, 4).map((n) => ({ type: 'keepPick' as const, id: n.id })) });
-  await pipeline.more(root);
+/** Hangs agent picks under a card, oldest first, the way earlier runs left them. */
+function earlier(k: Kit, anchor: Id, titles: string[], origin = AGENT('scout', 'web')): Node[] {
+  return titles.map((title) => {
+    const item = k.item({ title, origin });
+    const node = makeNode(k.ctx, item, { treeId: k.mind.node(anchor).treeId, parent: anchor, status: 'pick', why: 'earlier', origin });
+    k.mind.apply({ origin, label: 'earlier', commands: [{ type: 'addItem', item }, { type: 'addNode', node }] });
+    return node;
+  });
+}
+
+test('opening a card brings nothing; talk about it does, and so does the first round of a tree the user asked for', async () => {
+  const { k, pipeline } = harness();
+  ideas(k);
+  const film = k.seedTree('Film', ['Dolly zoom', 'Vertigo staircase']);
+  const [root, stairs] = film.nodeIds as [Id, Id];
+
+  pipeline.focus(root);
+  pipeline.focus(stairs);
   await pipeline.idle();
-  assert.equal(round(k, root).length, 10);
-  for (const n of second.slice(0, 4)) assert.equal(k.mind.node(n.id).status, 'kept', 'a kept card is never what gives way');
+  assert.ok(!k.model.calls.some((c) => c.role.startsWith('scout')), 'no Scout run');
+  assert.equal(k.mind.picks(root).length + k.mind.picks(stairs).length, 0);
+
+  k.model.on('conductor', () => ({ anchorId: stairs, kind: 'ask', need: 'why the staircase feels like dread', nodeId: '', treeId: '', request: '', scopeNodeIds: [], scopeTreeIds: [], note: '', text: '', keepNodeIds: [], say: 'Looking into it.' }));
+  pipeline.utter('why does this feel like dread', { focus: stairs, selection: [] }, true);
+  await pipeline.idle();
+  assert.equal(k.mind.picks(stairs).length, 5);
+  assert.equal(k.mind.picks(root).length, 0);
+});
+
+test('a question about a card with 6 picks adds new ones made for it, and the 6 stay', async () => {
+  const { k, pipeline } = harness({ picksPerRun: 4 });
+  ideas(k);
+  const film = k.seedTree('Film', ['Dolly zoom']);
+  const [root] = film.nodeIds as [Id];
+  const six = earlier(k, root, ['One', 'Two', 'Three', 'Four', 'Five', 'Six']);
+
+  await pipeline.ask(root, 'examples from horror films');
+  await pipeline.idle();
+
+  const picks = round(k, root);
+  assert.equal(picks.length, 10);
+  assert.ok(six.every((n) => k.mind.nodes.has(n.id)), 'nothing was replaced');
+  assert.deepEqual(picks.filter((n) => !six.some((o) => o.id === n.id)).map((n) => n.why), ['new 1', 'new 1', 'new 1', 'new 1']);
+  assert.match(k.model.calls.find((c) => c.role === 'scout.ideate')!.detail, /asked for "examples from horror films"/);
+});
+
+test('a question at the cap lets go of the picks least related to it, not the oldest, and never a kept card', async () => {
+  const { k, pipeline } = harness({ picksPerRun: 3 });
+  ideas(k);
+  const film = k.seedTree('Film', ['Dolly zoom', 'Kept one', 'Kept two']);
+  const [root, ...kept] = film.nodeIds as [Id, Id, Id];
+  const picks = earlier(k, root, ['Pick 1', 'Pick 2', 'Pick 3', 'Pick 4', 'Pick 5', 'Pick 6', 'Pick 7', 'Pick 8', 'Pick 9']);
+  const dump = own(k, { title: 'A thought I dropped' });
+  const dumpPick = makeNode(k.ctx, dump, { treeId: film.treeId, parent: root, status: 'pick', why: 'fits', origin: AGENT('filer', 'mindstorm') });
+  k.mind.apply({ origin: AGENT('filer'), label: 'file', commands: [{ type: 'addNode', node: dumpPick }] });
+  const far: Record<string, number> = { 'Pick 5': 0.1, 'Pick 9': 0.15, 'A thought I dropped': 0.05 };
+  let shown = '';
+  k.model.on('scout.rate', (req) => {
+    shown = req.user.split('already shown')[1] ?? '';
+    return { ratings: [...shown.matchAll(/item (\S+) "([^"]+)"/g)].map(([, itemId, title]) => ({ itemId, strength: far[title!] ?? 0.7, why: '' })) };
+  });
+
+  await pipeline.ask(root, 'what horror films do with it');
+  await pipeline.idle();
+
+  assert.ok(shown.includes('Pick 1') && shown.includes('A thought I dropped'), 'the picks already there were rated against the question');
+  const left = round(k, root);
+  assert.equal(left.length, 10);
+  assert.deepEqual(titles(k, left.filter((n) => n.why === 'earlier')), ['Pick 1', 'Pick 2', 'Pick 3', 'Pick 4', 'Pick 6', 'Pick 7', 'Pick 8']);
+  assert.ok(!k.mind.nodes.has(picks[4]!.id) && !k.mind.nodes.has(picks[8]!.id) && !k.mind.nodes.has(dumpPick.id));
+  assert.ok(kept.every((id) => k.mind.node(id).status === 'kept'), 'kept cards are never what gives way');
+  assert.deepEqual(k.mind.unplaced().map((i) => i.id), [dump.id], 'the dropped thought went back to the knowledge base');
+  assert.equal(k.mind.node(picks[0]!.id).importance, 0.7, 'what the rating said is kept as the pick\'s importance');
+  assert.deepEqual(k.notes, []);
 });
 
 test('nothing repeats inside a tree, by item, by address or by title, and what the user has wins over the same thing from outside', async () => {
@@ -239,10 +287,11 @@ test('nothing repeats inside a tree, by item, by address or by title, and what t
   assert.ok(!k.mind.nodes.has(outsidePick.id), 'the outside "Vertigo" gave its place');
   assert.equal(round(k, root).filter((n) => n.itemId === vertigo.id).length, 1);
 
-  const rated = k.model.calls.filter((c) => c.role === 'scout.known').length;
+  const rated = k.model.calls.filter((c) => c.role === 'scout.rate').length;
   await pipeline.more(root);
   await pipeline.idle();
-  assert.ok(!k.model.calls.filter((c) => c.role === 'scout.known').slice(rated).some((c) => c.detail.includes(vertigo.id)), 'the film the tree holds is not offered again');
+  const offered = (prompt: string) => (prompt.split('These are things the user already has')[1] ?? '').split('already shown')[0]!;
+  assert.ok(!k.model.calls.filter((c) => c.role === 'scout.rate').slice(rated).some((c) => offered(c.detail).includes(vertigo.id)), 'the film the tree holds is not offered again');
   assert.ok(k.mind.treeNodes(film.treeId).filter((n) => n.itemId === vertigo.id).length <= 1);
 
   k.model.on('filer', (req) => ({ placements: [{ itemId: /item (\S+)/.exec(req.user)![1]!, parentNodeId: root, strength: 0.95, why: 'same page' }] }));

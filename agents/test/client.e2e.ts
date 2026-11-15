@@ -204,13 +204,14 @@ async function main(): Promise<void> {
       assert.deepEqual(await overlaps(page), []);
     });
 
-    await check('Ask about a card replaces its picks, with a thinking mark while it works', async () => {
+    await check('Ask about a card adds to its picks, with a thinking mark while it works, and at ten the least related make room', async () => {
       const panel = page.locator('#panel');
       await panel.getByLabel('Ask about this card').fill('who invented it');
       await panel.getByRole('button', { name: 'Ask' }).click();
       await page.locator(`.card[data-id="${rootId}"].is-thinking`).waitFor();
       await page.locator('.card', { hasText: 'An essay on who invented it' }).waitFor();
-      await until('the old picks to leave', async () => (await count(page, '.card.is-pick')) === 8);
+      await until('the card to hold ten picks', async () => (await count(page, '.card.is-pick')) === 14);
+      assert.equal(run.mind.picks(rootId).length, 10);
     });
 
     await check('dragging a card onto another moves it under that card', async () => {
@@ -500,6 +501,18 @@ async function main(): Promise<void> {
       const box = (await page.locator(`.card[data-id="${target}"]`).boundingBox())!;
       assert.ok(box.x > 0 && box.x + box.width < 1440 - 384 && box.y > 60 && box.y + box.height < 900, 'the card is in view beside the panel');
       await shot(page, 'desktop-9-navigated');
+      await page.keyboard.press('Escape');
+    });
+
+    await check('opening a card shows it and brings no picks', async () => {
+      const target = 'show-2';
+      assert.equal(run.mind.children(target).length, 0);
+      await page.locator(`.card[data-id="${target}"]`).click();
+      await page.locator('#panel').getByRole('button', { name: 'More' }).waitFor();
+      await new Promise((r) => setTimeout(r, 1500));
+      await run.pipeline.idle();
+      assert.equal(run.mind.children(target).length, 0);
+      assert.equal(await page.locator(`.card[data-id="${target}"].is-thinking`).count(), 0);
       await page.keyboard.press('Escape');
     });
 

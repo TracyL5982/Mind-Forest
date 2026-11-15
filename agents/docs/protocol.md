@@ -42,7 +42,8 @@ The unkept picks hanging off one card are its round. The service holds every rou
 
 - At most 10 unkept picks around one card. At most 8 of them hold something the user already had, so new content always has room.
 - A pick that holds something the user already had adds a node and no item. Its `origin.tool` is `library` for an item of the headset's library and `mindstorm` for anything else the user has: a dump, or a card of another tree. One item may appear in several trees.
-- When picks arrive at a card that is full, the oldest unkept picks are deleted in the same `change`. Kept nodes never count and are never deleted.
+- Picks come from conversation about a card (`ask`, `more`, or speech the agent takes to be about it) and from the first round of a tree the user asked for. Opening a card brings none. New picks join the round; none is replaced.
+- When picks arrive at a card that is full, the unkept picks least related to what the user is asking now are deleted in the same `change`. Each conversational run near the cap rates the picks already there against the question and the recent conversation, and stores that as their `importance` with `setWhy`. The lowest go first, the oldest first among equals. Kept nodes never count and are never deleted.
 - No two nodes of one tree hold the same content: the same item, the same `source.url`, `data.mediaUrl` or `source.asset`, or the same title once case, punctuation and a leading "the", "a" or "an" are set aside. Something the user already had takes the place of an unkept pick that brought the same thing new.
 
 ## Pictures and media
@@ -92,9 +93,9 @@ A client fetches only from the service. Every address in an item or a view that 
 |---|---|---|
 | `dump` | `dumps` | Things dropped into the mindstorm. Each is `{kind:'text', text, name?}`, `{kind:'link', url}`, or `{kind:'asset', asset, mime, name?}`. Upload files first (below). They join the knowledge base, and start a tree only when a text asks for one (see The knowledge base). |
 | `utter` | `text`, `final`, `scene` | Speech as text. Send partials with `final: false` as they arrive and the last one with `final: true`. |
-| `focus` | `nodeId` | The user opened or looked at a node. The agent brings picks for it if it has none. |
-| `ask` | `nodeId`, `need` | A typed question about a node. |
-| `more` | `nodeId`, `need?` | More picks for a node. |
+| `focus` | `nodeId` | The user opened or looked at a node, to see it whole. It brings no picks. "Start a tree on this" means this node from now on, rather than the latest drop. |
+| `ask` | `nodeId`, `need` | A typed question about a node. What it brings joins the node's round (see Rounds). |
+| `more` | `nodeId`, `need?` | More picks for a node, joining its round. |
 | `keep` | `nodeIds` | Keep picks. |
 | `undo` | `id?` | Undo the latest real change, or the named one. Format choices and digests that followed it are undone with it. |
 | `commands` | `label`, `commands` | Direct manipulation: any commands from `src/core/domain.ts`, such as `moveNode`, `editItem`, `deleteNode`. Applied as one undoable set. |

@@ -82,7 +82,7 @@ export const fakeRoles: Roles = {
     return commands;
   },
 
-  async scout(ctx, { anchor, need, mode }) {
+  async scout(ctx, { anchor, need }) {
     await new Promise((r) => setTimeout(r, 900));
     const node = ctx.mind.node(anchor);
     const topic = need ?? ctx.mind.itemOf(anchor).title;
@@ -97,7 +97,7 @@ export const fakeRoles: Roles = {
       makeItem(ctx, { kind: 'text', title: again('How to try it'), summary: 'Three steps.', tags: ['how-to'], data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/howto-${n}` } }),
       makeItem(ctx, { kind: 'text', title: again('Where it turns up'), summary: 'How often each genre uses it.', tags: ['history'], data: { chart: { labels: ['Horror', 'Thriller', 'Drama', 'Comedy'], values: [14, 11, 9, 3], unit: 'films' } }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/chart-${n}` } }),
     ];
-    const commands: Command[] = mode === 'refresh' ? ctx.mind.picks(anchor).map((p) => ({ type: 'deleteNode', id: p.id })) : [];
+    const commands: Command[] = [];
     drafts.slice(0, ctx.settings.picksPerRun).forEach((item, i) => {
       commands.push({ type: 'addItem', item });
       commands.push({ type: 'addNode', node: makeNode(ctx, item, { treeId: node.treeId, parent: anchor, status: pickStatus(ctx), why: ['Background', 'Evidence', 'Try it', 'History'][i]!, importance: 0.8 - i * 0.15, origin: item.origin, offset: i }) });

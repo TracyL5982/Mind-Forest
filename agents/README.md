@@ -1,6 +1,6 @@
 # Mind Palace agents
 
-The agent system behind the mindstorm. You drop things in, and they go into your knowledge base. Agents hang a dump under a card only when it plainly belongs there, start a tree when you ask ("make a tree about …"), bring picks around each card (what you already have that fits, and new content, at most ten), follow what you say, choose how each card is drawn, and package handoffs.
+The agent system behind the mindstorm. You drop things in, and they go into your knowledge base. Agents hang a dump under a card only when it plainly belongs there, start a tree when you ask ("make a tree about …"), bring picks around a card when you talk about it (what you already have that fits, and new content, at most ten, the least related making room), follow what you say, choose how each card is drawn, and package handoffs.
 
 It is a TypeScript service. Clients are thin. The web client in `client/` runs in any browser, including the Quest browser. The Ocean app on Vision Pro connects through `visionos/MindPalace/Ocean/Agent/`.
 
@@ -36,7 +36,7 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 ```bash
 npm test                 # tests on scripted models and the client's card sizes, no network
 npx tsc --noEmit
-node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 28 checks
+node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 29 checks
 npm run scenario         # everything against the live model, 28 checks, about 160,000 tokens
 MIND_PALACE_DATA=<a copy of a data folder> node --no-warnings --import tsx scripts/mindstorm-check.ts "<a thought>" "<a subject>"
                          # drops a thought and asks for a tree on a copy of a mindstorm, and prints the round, live
