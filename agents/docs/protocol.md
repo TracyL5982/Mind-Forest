@@ -104,7 +104,7 @@ A client fetches only from the service. Every address in an item or a view that 
 | `commands` | `label`, `commands` | Direct manipulation: any commands from `src/core/domain.ts`, such as `moveNode`, `editItem`, `deleteNode`. Applied as one undoable set. |
 | `organize` | `request`, `scope`, `focus?` | A typed organizing request. `scope` is `{treeIds, nodeIds}`. |
 | `handoff` | `scope`, `note?` | Package a handoff. An empty scope means everything. |
-| `settings` | `patch` | `picksMode` (`provisional` or `immediate`), `picksPerRun`, `scoutOnDump`, `agentName` (1 to 32 characters: a letter, then letters, digits, spaces, hyphens or apostrophes). |
+| `settings` | `patch` | `picksMode` (`provisional` or `immediate`), `picksPerRun`, `scoutOnDump`, `agentName` (1 to 32 characters: a letter, then letters, digits, spaces, hyphens or apostrophes), `voiceStyle` (`verbatim` or `own words`: how the live voice says the agent's lines). |
 | `client` | `media` | What this connection can play, sent right after connecting: `{embeds, files}`. `embeds` is false for a client that cannot show a player from another site, such as the headset. `files` lists the file extensions it plays, such as `["mp4", "mp3"]`. A connection that never sends it is taken to be a browser that shows embeds. While any connected client cannot show embeds, the Scout looks for each video as a file that plays from the service first, and leaves out recordings whose type a connected client did not list. |
 
 `scene` is `{focus?, selection, treeId?}`: the node the user has open, the nodes they have selected, and the tree they are in. The agent uses it to resolve "this" and "that".
