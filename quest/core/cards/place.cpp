@@ -170,13 +170,17 @@ float head(const Pen& pen, const Plan& p, float x, float top, float width, int l
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
     Text name = points(p.name);
-    bool large = figureNeed(name, MIDDLE) <= face::COL * 100;
+    bool large = figureLines(p.name, face::COL, MIDDLE) == 1;
     const Figure& size = large ? MIDDLE : SMALLEST;
-    int need = large ? 1 : wrap(name, face::COL, SMALLEST.letter, 3), lines = std::min(2, need);
-    // A name longer than two lines shows its first two, and the cue.
-    if (need > 2) c.more = true;
+    // The name is the face's title: whole up to three lines, or three and the cue right under them.
+    int need = large ? 1 : figureLines(p.name, face::COL, SMALLEST), lines = std::min(face::TITLE_LINES, need);
     if (c.pen) c.heldBack = figure(*c.pen, p.name, c.x, c.y, c.width, lines, size, palette::ink) || c.heldBack;
     c.gap(float(lines * size.lineHeight));
+    if (need > lines) {
+        c.more = true;
+        c.cue(cueMore(c.words));
+        return;
+    }
     if (p.at) {
         // The map runs to the foot of the face, or stops short of the cue.
         float tall = c.room() + face::BOTTOM - 1 - (c.more ? face::CUE + face::BOTTOM - 1 : 0);

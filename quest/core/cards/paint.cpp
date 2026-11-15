@@ -194,9 +194,11 @@ void paintMissing(const Pen& pen, CGRect frame, const Words& words) {
         ctx.closePath();
         ctx.fillPath();
     }
+    // Read on the small face too, where nothing is under 13.5 px.
+    constexpr Setting t{13.5f, 18, Font::Weight::medium};
     std::string said = words.noPicture();
-    float w = pen.width(said, setting::text);
-    pen.words(said, frame.midX() / pen.k - w / 2, frame.midY() / pen.k - setting::text.lead / 2, w + 1, 1, setting::text, palette::ink3);
+    float w = pen.width(said, t);
+    pen.words(said, frame.midX() / pen.k - w / 2, frame.midY() / pen.k - t.lead / 2, w + 1, 1, t, palette::ink3);
 }
 
 }  // namespace
@@ -308,6 +310,25 @@ void label(const Pen& pen, const std::string& label, float x, float y, Color col
     Set set = setOf(label, size);
     float k = pen.k;
     pen.ctx.drawText(set.shown, CGPoint{x * k, y * k - lift(set.setting, k)}, attributesOf(set, color, k), (labelWidth(label, k, size) + 1) * k, 1);
+}
+
+namespace {
+
+const std::string SUGGESTED = "SUGGESTED";
+Setting kickerSetting() {
+    constexpr float size = Art::Size::micro * 240 / Metrics::smallNoteWidth;
+    return {size, size + 1, Font::Weight::bold};
+}
+float kickerLeft(float radius) { return radius < 12 ? 1 : radius; }
+
+}  // namespace
+
+void kicker(const Pen& pen, const Look& look, float radius) {
+    Setting t = kickerSetting();
+    float wide = std::ceil(pen.width(SUGGESTED, t)), left = kickerLeft(radius);
+    pen.ctx.setFillColor(Art::ink);
+    pen.ctx.fill(pen.px(left, 0, wide + 12, 14.5f));
+    pen.words(SUGGESTED, left + 6, 1.5f, wide + 1, 1, t, look.accent);
 }
 
 }  // namespace cards

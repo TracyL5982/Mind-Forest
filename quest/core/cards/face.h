@@ -18,6 +18,10 @@ constexpr int W = 210, H = 146;
 /// The frame: 1 px border and 13 px padding above and below with 2 px to spare, and 15 px each side.
 constexpr int TOP = 14, BOTTOM = 16, LEFT = 16, COL = W - SIDES;
 constexpr int TITLE = 24, BODY = 22, META = 18, CUE = 18, GAP = 6;
+/// The pixels a px a face is laid out and drawn at (cards::ocean::smallScale): its lines are counted there.
+constexpr float K = 2;
+/// The most lines a title takes, whole.
+constexpr int TITLE_LINES = 3;
 }  // namespace face
 
 namespace setting {
@@ -30,10 +34,21 @@ constexpr Setting faceHead{16, 22, Font::Weight::semibold};
 constexpr Setting facePassage{16, 22, Font::Weight::regular, true};
 }  // namespace setting
 
-/// How lines are counted on the small face (derive.mjs `faces`): in the web's title face, which is never
-/// narrower than the medium the words are drawn in, the column scaled to the size; a passage in its serif.
+/// How a line is set on the small face: the title, the body, meta, a passage in the serif, or a heading
+/// over a structure. Lines are counted by the host's own layout of the words, as they are drawn, so a face
+/// reserves no line it then leaves blank.
 enum class Measure { title, body, meta, passage, head };
 int counted(const std::string& s, int column, Measure m, int max = 99);
+/// The lines of a title on a plate under a picture: whole up to three; a longer one keeps two and the cue,
+/// so the picture keeps 52 px at least. Its plate's height, with `lead` px a line.
+struct Plate {
+    int lines = 0;
+    bool cue = false;
+    float height(float lead) const { return float(lines) * lead + (cue ? face::CUE : 0); }
+};
+Plate plateOf(const std::string& title, float column, Measure m);
+/// How many lines a figure takes in `column` px on the face, as the host sets it.
+int figureLines(const std::string& value, float column, const Figure& size);
 /// How wide `s` is counted on one line, px, as `counted` counts it.
 float countedWidth(const std::string& s, Measure m);
 /// The size a measure draws at.
@@ -85,13 +100,20 @@ struct Col {
     /// Draws whole lines only, `n` of them at most, at (x, y) px.
     void say(const std::string& s, const Setting& t, int n, float x, float y, float width, Color color) const;
     void gap(float px) { y += px; }
+    /// The title first, whole, on as many lines as it needs up to three, at `atX` in `column` px (the face's
+    /// column if not given). A longer one shows its first three, or as many as the room holds, with the cue
+    /// right under them, and the face ends there: false then.
+    bool title(const std::string& s, float atX = -1, float column = -1);
     /// The item's lines over the structure, in order and whole, 6 px under what came before (or, first on the
     /// face, 6 px over what follows), each keeping the cue's row free under it. A line that does not fit ends
     /// the face: it is held back, and so is everything under it. False then.
-    bool above(const Json& props);
+    /// `keep` px are kept free under them for a title that comes after them (a question, a term, a fact's
+    /// foot), which comes first in the budget: a line that does not fit then is held back and the face goes on
+    /// to that title, and ends after it.
+    bool above(const Json& props, float keep = 0);
     /// The heads row in meta over a hairline, each head over its half of the column. False, and the face ends,
     /// when it does not fit over the cue's row.
-    bool heads(const Json& props);
+    bool heads(const Json& props, float keep = 0);
     /// The last row: the words in meta in the accent. (The spec's 12 px fade above it is left out: under whole
     /// lines it could only lie over letters, and on the bare face it shows nothing.)
     void cue(const std::string& said);

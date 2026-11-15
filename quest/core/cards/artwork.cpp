@@ -53,11 +53,10 @@ void lift(const Pen& pen, CGRect r) {
 
 /// The work whole on a mat a shade lighter, 101 px tall, then its title on a plate.
 void lay(Col& c, const Item& item, const Json& props) {
-    // The title on one line under the picture; a longer one shows its first line and the cue, whose row the
-    // picture gives up.
+    // The title whole on the plate under the picture, which gives way to it down to its floor.
     std::string title = item.titleOrUntitled(), src = text(props["src"]);
-    bool cue = counted(title, face::COL, Measure::title) > 1;
-    const float box = 101 - (cue ? face::CUE : 0);
+    Plate plate = plateOf(title, face::COL, Measure::title);
+    const float box = float(face::H) - 2 - 19 - plate.height(face::TITLE);
     if (c.pen) {
         const Pen& pen = *c.pen;
         CGRect mat = pen.px(1, 1, face::W - 2, box);
@@ -72,9 +71,9 @@ void lay(Col& c, const Item& item, const Json& props) {
     }
     // The plate: 9 px over its line and 10 under it.
     c.y = 1 + box + 1 + 9;
-    c.say(title, setting::faceTitle, 1, c.x, c.y, c.width, palette::ink);
-    c.y += face::TITLE;
-    if (cue) {
+    c.say(title, setting::faceTitle, plate.lines, c.x, c.y, c.width, palette::ink);
+    c.y += float(plate.lines * face::TITLE);
+    if (plate.cue) {
         c.more = true;
         c.cue(cueMore(c.words));
     }

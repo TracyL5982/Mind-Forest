@@ -27,7 +27,7 @@ int lines(const Item& item, const Json& props) { return fold(points(words(item, 
 void by(const Pen& pen, const std::string& who, float x, float y, float column, int lines, float ruleDrop) {
     pen.ctx.setFillColor(BY);
     pen.ctx.fill(pen.px(x, y + ruleDrop, 14, 1));
-    pen.words(who, x + 22, y, column - 22, lines, setting::text, BY);
+    pen.words(who, x + 22, y, column - 22, lines, setting::body, BY);
 }
 
 
@@ -77,7 +77,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     std::string said = words(item, props), who = text(props["by"]);
     float column = Sheet::width - 40;
     float wordsTall = heightOf(said, column, 0, big, sheet.k);
-    float byTall = who.empty() ? 0 : 8 + heightOf(who, column - 22, 0, setting::text, sheet.k);
+    float byTall = who.empty() ? 0 : 8 + heightOf(who, column - 22, 0, setting::body, sheet.k);
     float tall = 1 + 13 + MARK + wordsTall + byTall + 13 + 1;
     Look look = sheet.look;
     sheet.part(tall, [=](const Pen& pen, float y) {

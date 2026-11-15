@@ -1,5 +1,7 @@
 #include "media.h"
 
+#include "face.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -67,10 +69,12 @@ void hatch(const Pen& pen, CGRect frame, Color a, Color b, float stripe) {
 void unavailable(const Pen& pen, CGRect frame, const Words& words, float bottom) {
     hatch(pen, frame, Art::ink, Art::panel, 10);
     std::string said = words.noPicture();
-    const TextFrame& set = layoutText(said, attributes(setting::text, palette::ink3, pen.k), frame.width(), 0);
+    // Read on the small face too: in its meta, never under 13.5 px.
+    const Setting& t = setting::faceMeta;
+    const TextFrame& set = layoutText(said, attributes(t, palette::ink3, pen.k), frame.width(), 0);
     float w = set.width / pen.k, h = set.height / pen.k;
     float y = bottom > 0 ? frame.maxY() / pen.k - bottom - h : frame.midY() / pen.k - h / 2;
-    pen.words(said, frame.midX() / pen.k - w / 2, y, w + 1, 0, setting::text, palette::ink3);
+    pen.words(said, frame.midX() / pen.k - w / 2, y, w + 1, 0, t, palette::ink3);
 }
 
 void paragraph(Sheet& sheet, const std::string& s, const Setting& t, Color color, float gap) {

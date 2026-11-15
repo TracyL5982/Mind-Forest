@@ -46,15 +46,41 @@ Plan plan(const Item& item, const Json& props) {
     return p;
 }
 
+/// The title stands under the fact as a foot in meta. It is the face's title: whole up to three lines, and
+/// what is over it gives way. `room` is what it takes with the 8 px over it, and the cue when it is cut.
+struct Foot {
+    int lines = 0;
+    bool cut = false;
+    float room = 0;
+};
+Foot footOf(const std::string& foot) {
+    if (foot.empty()) return {};
+    int need = counted(foot, face::COL, Measure::meta), lines = std::min(face::TITLE_LINES, need);
+    return {lines, need > lines, 8 + float(lines * face::META) + (need > lines ? face::CUE : 0)};
+}
+/// Sets the foot at the face's current line, and the cue when it was cut or anything was.
+void putFoot(Col& c, const std::string& foot, const Foot& f) {
+    if (f.lines > 0) {
+        c.gap(8);
+        c.say(foot, setting::faceMeta, f.lines, c.x, c.y, c.width, palette::ink2);
+        c.y += float(f.lines * face::META);
+        c.inked = c.y;
+    }
+    if (f.cut) c.more = true;
+    if (c.more) c.cue(cueMore(c.words));
+}
+
 /// The value as a figure, whole, its label, and the title as a foot.
 void lay(Col& c, const Item& item, const Json& props) {
     std::string value = text(props["value"]), label = text(props["label"]);
     if (value.empty()) value = "\xE2\x80\x93";
     std::string foot = !item.title.empty() && item.title != value && item.title != label ? item.title : "";
     Text v = points(value);
-    // The item's lines over the figure, and its heads row, come first.
-    if (!(c.above(props) && c.heads(props))) {
-        c.cue(cueMore(c.words));
+    // The item's lines over the figure, and its heads row, come first, keeping the room of the title's foot.
+    Foot f = footOf(foot);
+    if (!(c.above(props, f.room) && c.heads(props, f.room))) {
+        c.ended = false;
+        putFoot(c, foot, f);
         return;
     }
     if (headsOf(props)) {
@@ -68,9 +94,9 @@ void lay(Col& c, const Item& item, const Json& props) {
         float labelWide = c.width - 12 - valueWide;
         int labelNeed = label.empty() ? 0 : counted(label, int(labelWide), Measure::body), labelLines = std::min(2, labelNeed);
         float tall = std::max(float(labelLines * face::BODY), float(valueLines * size.lineHeight));
-        if (8 + tall > c.room() - face::CUE) {
+        if (8 + tall > c.room() - f.room - face::CUE) {
             c.more = true;
-            c.cue(cueMore(c.words));
+            putFoot(c, foot, f);
             return;
         }
         if (valueNeed > 2 || labelNeed > 2) c.more = true;
@@ -81,32 +107,24 @@ void lay(Col& c, const Item& item, const Json& props) {
             c.heldBack = figure(*c.pen, value, c.x + c.width - w, c.y, w + 1, valueLines, size, palette::ink) || c.heldBack;
         }
         c.gap(tall);
-        if (!foot.empty() && c.room() >= 8 + face::META + (c.more ? face::CUE : 0)) {
-            c.gap(8);
-            c.lines(foot, Measure::meta, 1, palette::ink2);
-        }
-        if (c.more) c.cue(cueMore(c.words));
+        putFoot(c, foot, f);
         return;
     }
     const Figure& size = figureNeed(v, LARGEST) <= face::COL * 100 ? LARGEST : figureNeed(v, MIDDLE) <= face::COL * 100 ? MIDDLE : SMALLEST;
     int valueLines = &size == &SMALLEST ? std::min(2, wrap(v, face::COL, SMALLEST.letter, 3)) : 1;
     if (&size == &SMALLEST && wrap(v, face::COL, SMALLEST.letter, 3) > 2) c.more = true;
-    if (float(valueLines * size.lineHeight) > c.room() - face::CUE) {
+    if (float(valueLines * size.lineHeight) > c.room() - f.room - face::CUE) {
         c.more = true;
-        c.cue(cueMore(c.words));
+        putFoot(c, foot, f);
         return;
     }
     if (c.pen) c.heldBack = figure(*c.pen, value, c.x, c.y, c.width, valueLines, size, palette::ink) || c.heldBack;
     c.gap(float(valueLines * size.lineHeight));
     if (!label.empty()) {
         c.gap(4);
-        c.lines(label, Measure::body, valueLines == 2 ? 1 : 2, c.look.ink2, foot.empty() ? 0 : 8 + face::META);
+        c.lines(label, Measure::body, valueLines == 2 ? 1 : 2, c.look.ink2, f.room);
     }
-    if (!foot.empty() && c.room() >= 8 + face::META) {
-        c.gap(8);
-        c.lines(foot, Measure::meta, 1, palette::ink2);
-    }
-    if (c.more) c.cue(cueMore(c.words));
+    putFoot(c, foot, f);
 }
 
 Footprint size(const Item& item, const Json& props) {
@@ -125,14 +143,14 @@ void detail(Sheet& sheet, const Item&, const Json& props) {
     std::string value = text(props["value"]), label = text(props["label"]);
     float column = Sheet::width - 32;
     float valueTall = figureHeight(value, column, 0, LARGEST, sheet.k);
-    float tall = 1 + 13 + valueTall + RULE + heightOf(label, column, 0, setting::text, sheet.k) + 13 + 1;
+    float tall = 1 + 13 + valueTall + RULE + heightOf(label, column, 0, setting::body, sheet.k) + 13 + 1;
     Color accent = sheet.look.accent;
     sheet.part(tall, [=](const Pen& pen, float y) {
         box(pen, Sheet::left, y, Sheet::width, tall, palette::sunk, accent.withAlphaComponent(0.3f));
         float x = Sheet::left + 16, top = y + 14;
         figure(pen, value, x, top, column, 0, LARGEST, palette::ink);
         rule(pen, x, top + valueTall, accent);
-        pen.words(label, x, top + valueTall + RULE, column, 0, setting::text, palette::ink2);
+        pen.words(label, x, top + valueTall + RULE, column, 0, setting::body, palette::ink2);
     });
     for (const std::string& s : {value, label}) {
         if (!s.empty()) sheet.said.push_back(s);

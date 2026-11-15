@@ -72,15 +72,21 @@ void lay(Col& c, const Item& item, const Json& props) {
         c.cue(cueMore(c.words));
         return;
     }
+    // The source, often the title, is whole up to three lines, and the passage gives way to it.
+    int fromNeed = from.empty() ? 0 : counted(from, face::COL, Measure::meta), fromLines = std::min(face::TITLE_LINES, fromNeed);
+    float under = from.empty() ? 0 : 10 + float(fromLines * face::META) + (fromNeed > fromLines ? face::CUE : 0);
     float top = c.y;
-    int quoted = c.lines(p.words, Measure::passage, 99, palette::ink, from.empty() ? 0 : 10 + face::META, c.x + RULE, face::W - 46, c.width - RULE);
+    int quoted = c.lines(p.words, Measure::passage, 99, palette::ink, under, c.x + RULE, face::W - 46, c.width - RULE);
     if (c.pen) {
         c.pen->ctx.setFillColor(c.look.accent);
         c.pen->ctx.fill(c.pen->px(c.x, top, 2, c.y - top));
     }
-    if (quoted > 0 && !from.empty() && c.room() >= 10 + face::META + (c.more ? face::CUE : 0)) {
+    if (quoted > 0 && fromLines > 0) {
         c.gap(10);
-        c.lines(from, Measure::meta, 1, palette::ink2);
+        c.say(from, setting::faceMeta, fromLines, c.x, c.y, c.width, palette::ink2);
+        c.y += float(fromLines * face::META);
+        c.inked = c.y;
+        if (fromNeed > fromLines) c.more = true;
     }
     if (c.more) c.cue(cueMore(c.words));
 }
@@ -105,16 +111,16 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     if (where.find(by) != std::string::npos) by = "";
     float column = Sheet::width - RULE, k = sheet.k;
     float tall = heightOf(said, column, 0, whole, k);
-    float byTall = by.empty() ? 0 : std::max(float(TEXT), heightOf(by, Sheet::width, 0, setting::text, k));
-    float whereTall = where.empty() ? 0 : std::max(float(TEXT), heightOf(where, Sheet::width, 0, setting::text, k));
+    float byTall = by.empty() ? 0 : std::max(setting::body.lead, heightOf(by, Sheet::width, 0, setting::body, k));
+    float whereTall = where.empty() ? 0 : std::max(setting::body.lead, heightOf(where, Sheet::width, 0, setting::body, k));
     float from = by.empty() && where.empty() ? 0 : 10 + byTall + whereTall;
     Color accent = sheet.look.accent;
     sheet.part(tall + from, [=](const Pen& pen, float y) {
         pen.ctx.setFillColor(accent);
         pen.ctx.fill(pen.px(Sheet::left, y, 2, tall));
         pen.words(said, Sheet::left + RULE, y, column, 0, whole, palette::ink);
-        pen.words(by, Sheet::left, y + tall + 10, Sheet::width, 0, setting::text, palette::ink);
-        pen.words(where, Sheet::left, y + tall + 10 + byTall, Sheet::width, 0, setting::text, palette::ink3);
+        pen.words(by, Sheet::left, y + tall + 10, Sheet::width, 0, setting::body, palette::ink);
+        pen.words(where, Sheet::left, y + tall + 10 + byTall, Sheet::width, 0, setting::body, palette::ink3);
     });
     for (const std::string& s : {said, by, where}) {
         if (!s.empty()) sheet.said.push_back(s);

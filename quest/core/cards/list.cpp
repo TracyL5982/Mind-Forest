@@ -167,10 +167,9 @@ void entriesDetail(Sheet& sheet, const Item& item, const std::vector<std::string
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
     float tally = p.tally.empty() ? 0 : std::ceil(float(textWidth(points(p.tally)))) + 10;
-    c.width -= tally;
-    c.lines(p.title, Measure::title, 2, palette::ink, p.entries.empty() ? 0 : 10 + face::BODY);
-    c.width += tally;
+    bool whole = c.title(p.title, -1, c.width - tally);
     if (c.pen && !p.tally.empty()) c.say(p.tally, setting::faceMeta, 1, c.x + c.width - tally + 10, face::TOP + 3, tally, palette::ink2);
+    if (!whole) return;
     // The item's own lines over the entries come first, and the entries under them.
     bool open = c.above(props);
     c.gap(10);

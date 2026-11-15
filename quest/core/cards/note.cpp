@@ -29,7 +29,7 @@ Plan plan(const Item& item, const Json& props) {
 void lay(Col& c, const Item& item, const Json&) {
     const std::string& body = !item.summary.empty() ? item.summary : item.text;
     std::string shown = !body.empty() && body != item.title ? body : "";
-    c.lines(item.titleOrUntitled(), Measure::title, 4, palette::ink, shown.empty() ? 0 : face::CUE);
+    if (!c.title(item.titleOrUntitled())) return;
     if (!shown.empty() && c.room() >= face::GAP + face::BODY) {
         c.gap(face::GAP);
         c.lines(shown, Measure::body, 99, c.look.ink2);

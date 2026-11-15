@@ -261,14 +261,9 @@ void ruled(const Pen& pen, const Look& look, const Plan& p, float x, float y, fl
 
 // MARK: - The opened card
 
-/// `.detail-table`: 13 px words on 18 px lines, in cells padded 6 px by 12.
-constexpr Setting OPEN_CELL{13, 18};
+/// `.detail-table`: words read at 15 px on 21 px lines, in cells padded 6 px by 12.
+constexpr Setting OPEN_CELL{15, 21, Font::Weight::medium};
 constexpr float PAD_X = 12, PAD_Y = 6;
-/// The box is at most 46 % of a view tall, as image.cpp's picture is, and shows what fits of a longer table.
-constexpr float MOST_TALL = 420;
-/// A column is at least as wide as its widest early cell, up to this, so its words are not set one to a line.
-constexpr size_t EARLY_ROWS = 20;
-constexpr int EARLY_MOST = 220;
 
 /// The widest word of `s` drawn alone, px.
 float widestWord(const std::string& s, const Setting& t, float k) {
@@ -287,7 +282,7 @@ float widestWord(const std::string& s, const Setting& t, float k) {
 /// The title, the heads in meta joined by a middle dot while they are whole with what is left counted, and the rows.
 void lay(Col& c, const Item& item, const Json& props) {
     Grid g = grid(props);
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + face::META + 4 + face::CUE);
+    if (!c.title(item.titleOrUntitled())) return;
     c.above(props);
     c.gap(face::GAP);
     std::string heads;
@@ -316,7 +311,9 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
 
 
 /// Every row and column under heads that wrap on whole words, the columns shared out as a browser's
-/// automatic table layout shares them. The web's box scrolls both ways; here it shows its top left.
+/// automatic table layout shares them. The web's box scrolls both ways; here the whole table stands in the
+/// panel's width and the panel scrolls down it. A column is never narrower than its widest word or number;
+/// when the columns cannot all be that wide, each row is set as a record instead: every head beside its value.
 void detail(Sheet& sheet, const Item&, const Json& props) {
     Grid g = grid(props);
     size_t n = g.heads.size();
@@ -325,27 +322,67 @@ void detail(Sheet& sheet, const Item&, const Json& props) {
     std::vector<float> least(n), most(n);
     for (size_t i = 0; i < n; i++) {
         right[i] = numeric(g.rows, i);
-        int early = 0;
-        for (size_t r = 0; r < std::min(g.rows.size(), EARLY_ROWS); r++) early = std::max(early, (textWidth(cellOf(g.rows[r], i)) * 26 + 24) / 25);
         std::string head = utf8(g.heads[i]);
-        float narrow = std::max(float(std::min(early, EARLY_MOST)), widestWord(head, OPEN_CELL, k));
-        float widest = widthOf(head, OPEN_CELL, k);
+        float narrow = widestWord(head, OPEN_CELL, k), widest = widthOf(head, OPEN_CELL, k);
         for (const Row& row : g.rows) {
             const Text& said = cellOf(row, i);
             float whole = widthOf(utf8(said), OPEN_CELL, k);
             widest = std::max(widest, whole);
-            // A number is set on one line; other words may break anywhere (`overflow-wrap: anywhere`).
-            if (isNumber(said)) narrow = std::max(narrow, whole);
+            // A number is set on one line, and other words wrap between whole words.
+            narrow = std::max(narrow, isNumber(said) ? whole : widestWord(utf8(said), OPEN_CELL, k));
         }
         least[i] = std::ceil(narrow) + 2 * PAD_X;
         most[i] = std::max(least[i], std::ceil(widest) + 2 * PAD_X);
     }
     float room = Sheet::width - 2;
     float sumLeast = std::accumulate(least.begin(), least.end(), 0.f), sumMost = std::accumulate(most.begin(), most.end(), 0.f);
+    for (const Text& said : g.heads) {
+        if (!said.empty()) sheet.said.push_back(utf8(said));
+    }
+    for (const Row& row : g.rows) {
+        for (const Text& said : row) {
+            if (!said.empty()) sheet.said.push_back(utf8(said));
+        }
+    }
+    if (sumLeast > room) {
+        // Each row a record: its heads in a label column, each beside its value, the rows apart by a rule.
+        float labels = 0;
+        for (const Text& head : g.heads) labels = std::max(labels, std::ceil(widthOf(utf8(head), setting::fact, k)));
+        labels = std::min(labels, 0.4f * Sheet::width);
+        float values = Sheet::width - labels - 14;
+        std::vector<std::vector<float>> talls;
+        float tall = 0;
+        for (const Row& row : g.rows) {
+            std::vector<float> each;
+            for (size_t i = 0; i < n; i++) {
+                std::string head = utf8(g.heads[i]), said = utf8(cellOf(row, i));
+                each.push_back(std::max(heightOf(head, labels, 0, setting::fact, k), heightOf(said.empty() ? " " : said, values, 0, OPEN_CELL, k)));
+                tall += each.back() + 2;
+            }
+            talls.push_back(each);
+            tall += 12 + 1;
+        }
+        std::vector<Text> heads = g.heads;
+        std::vector<Row> rows = g.rows;
+        sheet.part(tall, [=](const Pen& pen, float y) {
+            for (size_t r = 0; r < rows.size(); r++) {
+                if (r > 0) {
+                    pen.ctx.setFillColor(palette::line);
+                    pen.ctx.fill(pen.px(Sheet::left, y - 7, Sheet::width, 1));
+                }
+                for (size_t i = 0; i < n; i++) {
+                    pen.words(utf8(heads[i]), Sheet::left, y + 2, labels + 1, 0, setting::fact, palette::ink3);
+                    pen.words(utf8(cellOf(rows[r], i)), Sheet::left + labels + 14, y, values, 0, OPEN_CELL, i == 0 ? palette::ink : palette::ink2);
+                    y += talls[r][i] + 2;
+                }
+                y += 12 + 1;
+            }
+        });
+        return;
+    }
     std::vector<float> widths(n);
     for (size_t i = 0; i < n; i++) {
         if (sumMost <= room) widths[i] = most[i] + (room - sumMost) * most[i] / std::max(1.f, sumMost);
-        else if (sumLeast >= room) widths[i] = least[i];
         else widths[i] = least[i] + (room - sumLeast) * (most[i] - least[i]) / (sumMost - sumLeast);
     }
     std::vector<Row> lines{g.heads};
@@ -361,12 +398,6 @@ void detail(Sheet& sheet, const Item&, const Json& props) {
         }
         talls.push_back(line + 2 * PAD_Y + (r + 1 < lines.size() ? 1 : 0));
         tall += talls.back();
-    }
-    tall = std::min(tall, MOST_TALL);
-    for (const Row& row : lines) {
-        for (const Text& said : row) {
-            if (!said.empty()) sheet.said.push_back(utf8(said));
-        }
     }
     sheet.part(tall, [=](const Pen& pen, float y) {
         CGRect box = pen.px(Sheet::left, y, Sheet::width, tall);

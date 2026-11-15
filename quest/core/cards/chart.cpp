@@ -276,7 +276,7 @@ void paint(const Pen& pen, const Plot& p, float x, float y, const Look& look) {
         ctx.strokeEllipse(disc);
     }
     for (Writing w : p.writings) {
-        Setting t = setting::text;
+        Setting t = setting::small;
         Color color = look.ink2;
         switch (w.role) {
         case Role::tick: color = look.ink3; break;
@@ -302,7 +302,7 @@ void paint(const Pen& pen, const Plot& p, float x, float y, const Look& look) {
 /// The title, the shape of the series with no words, and one meta line: how many and from what to what.
 void lay(Col& c, const Item& item, const Json& props) {
     Series s = series(props);
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + 38 + face::GAP + face::META);
+    if (!c.title(item.titleOrUntitled())) return;
     // The item's lines and the heads row over the shape come first; the shape takes what is left, or is left out.
     if (!(c.above(props) && c.heads(props)) || c.room() - 2 * face::GAP - face::META < 38) {
         c.more = true;
@@ -370,7 +370,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     std::string unit = text(props["unit"]);
     Plot p = plot(props, W, H, true, item.words);
     float inner = Sheet::width - 24, scale = inner / W, k = sheet.k;
-    float unitTall = heightOf(unit, inner, 0, setting::text, k);
+    float unitTall = heightOf(unit, inner, 0, setting::small, k);
 
     struct Line {
         std::string label, value;
@@ -381,17 +381,17 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     float valueWidth = 0, tableTall = 0;
     if (!p.whole) {
         Series s = series(props);
-        Setting bold = setting::text;
+        Setting bold = setting::body;
         bold.weight = Font::Weight::bold;
         for (size_t i = 0; i < s.values.size(); i++) {
             bool marked = int(i) == s.mark;
             Line row{s.labels[i].empty() ? std::to_string(i + 1) : s.labels[i], exact(s.values[i]), marked, 0};
-            valueWidth = std::max(valueWidth, std::ceil(widthOf(row.value, marked ? bold : setting::text, k)));
+            valueWidth = std::max(valueWidth, std::ceil(widthOf(row.value, marked ? bold : setting::body, k)));
             table.push_back(row);
         }
         for (Line& row : table) {
-            Setting t = row.marked ? bold : setting::text;
-            row.tall = std::max(float(TEXT), heightOf(row.label, inner - valueWidth - 14 - (row.marked ? 14 : 0), 0, t, k));
+            Setting t = row.marked ? bold : setting::body;
+            row.tall = std::max(setting::body.lead, heightOf(row.label, inner - valueWidth - 14 - (row.marked ? 14 : 0), 0, t, k));
             tableTall += 1 + 4 + row.tall + 4;
         }
     }
@@ -411,7 +411,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
         box(pen, Sheet::left, y, Sheet::width, tall, palette::sunk, std::nullopt);
         float x = Sheet::left + 12, top = y + 12;
         if (!unit.empty()) {
-            pen.words(unit, x, top, inner, 0, setting::text, palette::ink3);
+            pen.words(unit, x, top, inner, 0, setting::small, palette::ink3);
             top += unitTall + 6;
         }
         paint(Pen{pen.ctx, pen.k * scale}, p, x / scale, top / scale, look);
@@ -419,13 +419,13 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
         for (const Line& row : table) {
             pen.ctx.setFillColor(palette::line);
             pen.ctx.fill(pen.px(x, top, inner, 1));
-            Setting t = setting::text;
+            Setting t = setting::body;
             if (row.marked) t.weight = Font::Weight::bold;
             Color ink = row.marked ? palette::ink : palette::ink2;
             float indent = 0;
             if (row.marked) {
                 FontMetrics m = attributes(t, ink, pen.k).font.metrics();
-                float baseline = top + 5 + (TEXT - (m.ascent + m.descent) / pen.k) / 2 + m.ascent / pen.k;
+                float baseline = top + 5 + (t.lead - (m.ascent + m.descent) / pen.k) / 2 + m.ascent / pen.k;
                 pen.ctx.setFillColor(look.accent);
                 pen.rounded(pen.px(x, baseline - 7, 7, 7), 2 * pen.k);
                 pen.ctx.fillPath();

@@ -152,7 +152,7 @@ void listed(Sheet& sheet, const std::vector<Fact>& facts) {
 void lay(Col& c, const Item& item, const Json& props) {
     std::vector<Fact> facts = pairs(props);
     if (facts.empty()) {
-        c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink);
+        if (!c.title(item.titleOrUntitled())) return;
         c.above(props);
         if (c.more) c.cue(cueMore(c.words));
         return;
@@ -160,7 +160,7 @@ void lay(Col& c, const Item& item, const Json& props) {
     if (headsOf(props)) {
         // Under a heads row each fact is a row: its label under the first head, its value under the second at
         // the column's end. The title, the item's lines and the heads row come first, and the rows that fit whole.
-        c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + face::META + 5 + 8 + face::BODY);
+        if (!c.title(item.titleOrUntitled())) return;
         bool open = c.above(props) && c.heads(props);
         const float half = std::floor((c.width - 17) / 2);
         size_t i = 0;
@@ -199,7 +199,7 @@ void lay(Col& c, const Item& item, const Json& props) {
     bool left = facts.size() > shown;
     // What is left out is known before the title, which then keeps the cue's row free.
     if (left || need > 2) c.more = true;
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, over + row);
+    if (!c.title(item.titleOrUntitled())) return;
     // The item's lines over the figures come first; the row of figures follows when it still fits whole.
     if (!c.above(props) || over + row > c.room() - (c.more ? face::CUE : 0)) {
         c.more = true;

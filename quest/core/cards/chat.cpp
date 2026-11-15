@@ -71,7 +71,7 @@ float said(const Pen& pen, const Message& m, float x, float right, float y, floa
 /// The title, then speech bubbles: two of one line each, or the first in up to two lines, and the cue.
 void lay(Col& c, const Item& item, const Json& props) {
     std::vector<Message> all = messagesOf(props["messages"], 999);
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, all.empty() ? 0 : 2 + 6 + 12 + face::BODY);
+    if (!c.title(item.titleOrUntitled())) return;
     c.gap(2);
     const int column = int(std::floor(float(face::COL) * 0.86f)) - 20;
     size_t i = 0;

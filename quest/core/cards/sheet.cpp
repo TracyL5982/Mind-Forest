@@ -204,7 +204,7 @@ std::vector<std::string> shows(const Item& item, const Json& props) {
 void saidBy(const Pen& pen, const std::string& by, float x, float y, float column, int lines) {
     pen.ctx.setFillColor(palette::ink2);
     pen.ctx.fill(pen.px(x, y + 8.5f, 14, 1));
-    pen.words(by, x + 22, y, column - 22, lines, setting::text, palette::ink2);
+    pen.words(by, x + 22, y, column - 22, lines, setting::body, palette::ink2);
 }
 
 void drawPart(const Pen& pen, const Look& look, const Item& item, const Part& part, float x, float y, float column) {
@@ -234,7 +234,7 @@ void drawPart(const Pen& pen, const Look& look, const Item& item, const Part& pa
 /// The title and the first part as its own preview in at most 68 px, and the cue counting the other parts.
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
-    c.lines(p.title, Measure::title, 2, palette::ink, p.parts.empty() ? 0 : face::GAP + face::BODY);
+    if (!c.title(p.title)) return;
     if (!p.parts.empty() && c.above(props)) {
         const Part& part = p.parts.front();
         c.gap(face::GAP);
@@ -243,7 +243,7 @@ void lay(Col& c, const Item& item, const Json& props) {
         case Part::Kind::text: c.lines(part.words, Measure::body, int(most / face::BODY), c.look.ink2); break;
         case Part::Kind::excerpt: c.lines(part.words, Measure::passage, int(most / face::BODY), palette::ink); break;
         case Part::Kind::list: {
-            size_t n = std::min(part.entries.size(), size_t(std::max(1, int((most + 5) / (face::BODY + 5)))));
+            size_t n = std::min(part.entries.size(), size_t(std::max(0, int((most + 5) / (face::BODY + 5)))));
             for (size_t i = 0; i < n; i++) {
                 if (i) c.gap(5);
                 if (c.pen) entryMark(*c.pen, c.x, c.y + 5, c.look);
@@ -254,14 +254,14 @@ void lay(Col& c, const Item& item, const Json& props) {
         }
         case Part::Kind::figures: {
             std::vector<std::string> said = figureWords(part.section);
-            size_t n = std::min(said.size() / 2, size_t(2));
+            size_t n = most >= 28 + face::META ? std::min(said.size() / 2, size_t(2)) : 0;
             const float half = (face::COL - 17) / 2.f;
             for (size_t i = 0; i < n && c.pen; i++) {
                 float left = c.x + float(i) * (half + 17);
                 c.heldBack = figure(*c.pen, said[2 * i + 1], left, c.y, half, 1, MIDDLE, palette::ink) || c.heldBack;
                 c.say(said[2 * i], setting::faceMeta, 1, left, c.y + 28, half, palette::ink2);
             }
-            c.gap(28 + face::META);
+            if (n > 0) c.gap(28 + face::META);
             if (said.size() / 2 > n) c.more = true;
             break;
         }
@@ -325,7 +325,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
             std::string said = part.passage, by = part.by;
             float column = Sheet::width - 14, k = sheet.k;
             float passageTall = heightOf(said, column, 0, passage, k);
-            float byTall = by.empty() ? 0 : 4 + heightOf(by, Sheet::width - 22, 0, setting::text, k);
+            float byTall = by.empty() ? 0 : 4 + heightOf(by, Sheet::width - 22, 0, setting::body, k);
             Color accent = sheet.look.accent;
             sheet.part(passageTall + byTall, [=](const Pen& pen, float y) {
                 pen.ctx.setFillColor(accent);

@@ -1,9 +1,10 @@
 // Checks every card type this library draws, on the web client's own samples (agents/test/footprints.json),
-// against the sizing spec's numbers: derive.mjs in sizing/quest-card-sizing.md, section 6, gives the tallest
-// face each type can draw. Each sample must be 210 px wide, no taller than its type's tallest and 146 px
-// (146 px alone for one with the item's lines over its structure or a heads row), and carry no chip line,
-// since chips are listed on the opened card. The web keeps its own sizes until it adopts the spec, so its
-// golden sizes are not compared here; once it does, this goes back to matching them to the px.
+// against the sizing spec: each sample is 210 px wide, at most 146 px tall, and carries no chip line, since
+// chips are listed on the opened card. It prints each type's tallest beside the tallest face derive.mjs
+// works out for it (sizing/quest-card-sizing.md, section 6), which counted shorter titles than a face now
+// keeps whole (up to three lines, first in the height budget): a type may now stand taller than that,
+// never than 146 px. The web keeps its own sizes until it adopts the spec, so its golden sizes are not
+// compared here; once it does, this goes back to matching them to the px.
 //   quest/core/cards/test/run.sh <path to agents/test/footprints.json>
 #include <cstdio>
 #include <fstream>
@@ -15,11 +16,8 @@
 
 namespace {
 
-/// derive.mjs, section 6: the tallest face of each type, px. Its recipe for three types works out one of the
-/// two cases its own limit allows, and the other is taller; those three hold to the taller one here:
-/// quote 144 (3 lines and the speaker, no cue; derive 140), qa 132 (a 2-line question, 1 answer line and
-/// the cue; derive 130) and idea 142 (3 lines at 18 px and the cue; derive 136). And facts 146: a value too
-/// long for one line at 24 px takes two at 18 px, as the fact card's does, which derive leaves out (130).
+/// derive.mjs, section 6: the tallest face of each type, px, with the taller of the two cases its own limit
+/// allows for quote (144), qa (132) and idea (142), and facts' value on two lines (146).
 const std::map<std::string, int> TALLEST{
     {"note", 146},     {"quote", 144},      {"fact", 140},    {"image", 146},   {"video", 146},      {"audio", 146},     {"link", 146},
     {"chart", 146},    {"person", 140},     {"chat", 136},    {"code", 102},    {"steps", 134},      {"facts", 146},     {"table", 124},
@@ -59,11 +57,7 @@ int main(int argc, char** argv) {
         view.set("component", type);
         view.set("props", sample["props"]);
         cards::Footprint got = cards::footprint(view, sample["item"]);
-        auto most = TALLEST.find(type);
-        // The item's own lines over a structure, and a heads row, come before what derive.mjs counts, and the
-        // face then holds what fits under them: such a face is held to 146 px alone.
-        bool over = sample["props"].has("above") || (sample["props"].has("heads") && type != "table");
-        int cap = most == TALLEST.end() || over ? 146 : std::min(146, most->second);
+        const int cap = 146;
         bool chips = !cards::chipsOf(view, sample["item"]).empty();
         t.tallest = std::max(t.tallest, got.height);
         t.web = std::max(t.web, sample["size"][1].integer());
@@ -77,7 +71,7 @@ int main(int argc, char** argv) {
     }
     for (const auto& [type, t] : drawn) {
         auto most = TALLEST.find(type);
-        printf("%-12s %d/%d within the spec, tallest %3d px (the spec's %3d, the web's today %3d)\n", type.c_str(), t.held, t.samples, t.tallest,
+        printf("%-12s %d/%d within the spec, tallest %3d px (derive.mjs %3d, the web's today %3d)\n", type.c_str(), t.held, t.samples, t.tallest,
                most == TALLEST.end() ? 146 : most->second, t.web);
     }
     std::string rest;

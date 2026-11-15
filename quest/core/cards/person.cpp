@@ -63,7 +63,7 @@ void lay(Col& c, const Item& item, const Json& props) {
     if (c.pen) face(*c.pen, c.look, c.look.fill, name, text(props["image"]), item.words, c.x, top);
     c.x += 48 + 12;
     c.width -= 48 + 12;
-    c.lines(name, Measure::title, 2, palette::ink, role.empty() ? 0 : face::BODY);
+    if (!c.title(name)) return;
     c.lines(role, Measure::body, 2, c.look.ink2);
     c.y = std::max(c.y, top + 48);
     c.x = face::LEFT;
@@ -86,7 +86,7 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
 void detail(Sheet& sheet, const Item& item, const Json& props) {
     std::string name = nameOf(item, props), role = text(props["role"]), src = text(props["image"]);
     float column = Sheet::width - FACE - 12;
-    float nameTall = heightOf(name, column, 0, setting::title, sheet.k), roleTall = heightOf(role, column, 0, setting::text, sheet.k);
+    float nameTall = heightOf(name, column, 0, setting::title, sheet.k), roleTall = heightOf(role, column, 0, setting::body, sheet.k);
     float tall = std::max(FACE, nameTall + roleTall);
     // The opened card is no card: its face is the page's, on the panel's glass.
     Look look = sheet.look;
@@ -96,7 +96,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
         face(pen, look, palette::glass, name, src, words, Sheet::left, y + (tall - FACE) / 2);
         float x = Sheet::left + FACE + 12, top = y + (tall - nameTall - roleTall) / 2;
         pen.words(name, x, top, column, 0, setting::title, palette::ink);
-        pen.words(role, x, top + nameTall, column, 0, setting::text, palette::ink2);
+        pen.words(role, x, top + nameTall, column, 0, setting::body, palette::ink2);
     });
     if (drawsInitials(src)) sheet.said.push_back(initials(name));
     sheet.said.push_back(name);

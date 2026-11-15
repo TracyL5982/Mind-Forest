@@ -119,7 +119,13 @@ void player(const Pen& pen, const std::string& length, float x, float y, float w
 /// The title, the strip of play mark, waveform and length, the first words of the transcript, and the cue.
 void lay(Col& c, const Item& item, const Json& props) {
     std::string words = heard(item);
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + STRIP);
+    if (!c.title(item.titleOrUntitled())) return;
+    // Under a long title the strip gives way.
+    if (c.room() < face::GAP + STRIP + (words.empty() ? 0 : face::CUE)) {
+        c.more = true;
+        c.cue(cueMore(c.words));
+        return;
+    }
     c.gap(face::GAP);
     if (c.pen) strip(*c.pen, c.look, peaksOf(props), lengthOf(props), c.x, c.y, c.x + c.width, setting::faceMeta);
     c.gap(STRIP);

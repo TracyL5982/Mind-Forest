@@ -39,7 +39,7 @@ void number(const Pen& pen, Color accent, int i, float x, float y) {
 /// The title, then numbered steps down a rail, each whole: two of one line, or the first in two, and the cue.
 void lay(Col& c, const Item& item, const Json& props) {
     std::vector<std::string> steps = stepsOf(props);
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, steps.empty() ? 0 : 10 + face::BODY);
+    if (!c.title(item.titleOrUntitled())) return;
     bool open = c.above(props);
     c.gap(10);
     const int column = face::COL - 32;

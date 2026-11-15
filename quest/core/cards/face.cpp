@@ -3,34 +3,31 @@
 #include <algorithm>
 #include <cmath>
 
+#include "figures.h"
 #include "item.h"
 
 namespace cards {
 
 int counted(const std::string& s, int column, Measure m, int max) {
-    Text t = points(s);
-    switch (m) {
-    case Measure::title: return wrap(t, int(std::floor(float(column) * 16 / setting::faceTitle.size)), TITLE_LETTER, max);
-    case Measure::body: return wrap(t, column, TITLE_LETTER, max);
-    case Measure::meta: return wrap(t, int(std::floor(float(column) * 16 / setting::faceMeta.size)), TITLE_LETTER, max);
-    case Measure::passage: return wrap(t, column, PASSAGE_LETTER, max);
-    // A heading at the body size is counted in the title face, which is its own.
-    case Measure::head: return wrap(t, column, TITLE_LETTER, max);
-    }
-    return 1;
+    if (s.empty()) return 1;
+    // Measured: the host sets the words as the face is drawn, in its own font, two pixels a px.
+    const TextFrame& set = layoutText(s, attributes(settingOf(m), Color::white(), face::K), float(column) * face::K, 0);
+    return std::clamp(int(set.lines.size()), 1, std::max(1, max));
 }
 
-float countedWidth(const std::string& s, Measure m) {
-    Text t = points(s);
-    switch (m) {
-    case Measure::title: return float(cards::advance(t, TITLE_LETTER)) * setting::faceTitle.size / 16 / 100;
-    case Measure::meta: return float(cards::advance(t, TITLE_LETTER)) * setting::faceMeta.size / 16 / 100;
-    case Measure::passage: return float(cards::advance(t, PASSAGE_LETTER)) / 100;
-    case Measure::body:
-    case Measure::head: return float(cards::advance(t, TITLE_LETTER)) / 100;
-    }
-    return 0;
+Plate plateOf(const std::string& title, float column, Measure m) {
+    if (title.empty()) return {};
+    int need = counted(title, int(column), m);
+    if (need <= face::TITLE_LINES) return {need, false};
+    return {face::TITLE_LINES - 1, true};
 }
+
+int figureLines(const std::string& value, float column, const Figure& size) {
+    if (value.empty()) return 1;
+    return std::max(1, int(std::lround(figureHeight(value, column, 0, size, face::K) / float(size.lineHeight))));
+}
+
+float countedWidth(const std::string& s, Measure m) { return widthOf(s, settingOf(m), face::K); }
 
 const Setting& settingOf(Measure m) {
     switch (m) {
@@ -132,7 +129,8 @@ void Col::say(const std::string& s, const Setting& t, int n, float atX, float at
 int Col::lines(const std::string& s, Measure m, int max, Color color, float after, float at, float column, float drawn) {
     if (s.empty() || max <= 0 || ended) return 0;
     const Setting& t = settingOf(m);
-    float col = column < 0 ? width : column;
+    // Counted as it is drawn: in the width it is drawn in.
+    float col = drawn > 0 ? drawn : column < 0 ? width : column;
     int need = counted(s, int(col), m);
     // Once something is left out, the cue's row is kept free under whatever follows.
     int fit = std::min(max, int(std::floor((room() - after - (more ? face::CUE : 0)) / t.lead)));
@@ -148,7 +146,27 @@ int Col::lines(const std::string& s, Measure m, int max, Color color, float afte
     return shown;
 }
 
-bool Col::above(const Json& props) {
+bool Col::title(const std::string& s, float atX, float column) {
+    if (ended) return false;
+    if (s.empty()) return true;
+    float w = column > 0 ? column : width, at = atX < 0 ? x : atX;
+    int need = counted(s, int(w), Measure::title);
+    if (need <= face::TITLE_LINES && float(need * face::TITLE) <= room()) {
+        say(s, setting::faceTitle, need, at, y, w, palette::ink);
+        y += float(need * face::TITLE);
+        inked = y;
+        return true;
+    }
+    int shown = std::max(0, std::min(face::TITLE_LINES, int(std::floor((room() - face::CUE) / face::TITLE))));
+    say(s, setting::faceTitle, shown, at, y, w, palette::ink);
+    y += float(shown * face::TITLE);
+    inked = y;
+    more = ended = true;
+    cue(cueMore(words));
+    return false;
+}
+
+bool Col::above(const Json& props, float keep) {
     std::vector<Over> over = oversOf(props);
     if (ended) return false;
     if (over.empty()) return true;
@@ -158,13 +176,14 @@ bool Col::above(const Json& props) {
         Measure m = line.head ? Measure::head : Measure::body;
         const Setting& t = settingOf(m);
         int need = counted(line.words, int(width), m);
-        int fit = std::max(0, int(std::floor((room() - face::CUE) / t.lead)));
+        int fit = std::max(0, int(std::floor((room() - face::CUE - keep) / t.lead)));
         int shown = std::min(need, fit);
         say(line.words, t, shown, x, y, width, palette::ink);
         y += float(shown) * t.lead;
         if (shown > 0) inked = y;
         if (shown < need) {
-            more = ended = true;
+            more = true;
+            ended = keep <= 0;
             return false;
         }
     }
@@ -172,7 +191,7 @@ bool Col::above(const Json& props) {
     return true;
 }
 
-bool Col::heads(const Json& props) {
+bool Col::heads(const Json& props, float keep) {
     std::optional<std::array<std::string, 2>> h = headsOf(props);
     if (ended) return false;
     if (!h) return true;
@@ -181,8 +200,9 @@ bool Col::heads(const Json& props) {
     float second = std::min(half, std::ceil(countedWidth((*h)[1], Measure::meta))), first = width - 17 - second;
     int lines = std::max({1, counted((*h)[0], int(first), Measure::meta), counted((*h)[1], int(second), Measure::meta)});
     float tall = face::GAP + float(lines * face::META) + 4 + 1;
-    if (tall > room() - face::CUE) {
-        more = ended = true;
+    if (tall > room() - face::CUE - keep) {
+        more = true;
+        ended = keep <= 0;
         return false;
     }
     gap(face::GAP);

@@ -393,23 +393,6 @@ int revision(const std::string& noteID) {
     return it == store().end() ? 0 : it->second.revision;
 }
 
-namespace {
-
-/// A pick's kicker, as the ocean writes one over a note: capitals at Art::Size::micro on the small note,
-/// bold, in the card's tone. The card's height is the web's, with no line to spare above the title, so the
-/// kicker is a flat ink label over the top edge, left of the corner's curve; over a picture it is the same.
-void suggested(const Pen& pen, const Look& look, const Kind& kind) {
-    constexpr float size = Art::Size::micro * 240 / Metrics::smallNoteWidth;
-    Setting t{size, size + 1, Font::Weight::bold};
-    const std::string said = "SUGGESTED";
-    float wide = std::ceil(pen.width(said, t)), left = kind.radius < 12 ? 1 : kind.radius;
-    pen.ctx.setFillColor(Art::ink);
-    pen.ctx.fill(pen.px(left, 0, wide + 12, 14.5f));
-    pen.words(said, left + 6, 1.5f, wide + 1, 1, t, look.accent);
-}
-
-}  // namespace
-
 std::optional<Drawn> small(const std::string& noteID, float k) {
     auto it = store().find(noteID);
     if (it == store().end()) return std::nullopt;
@@ -430,7 +413,7 @@ std::optional<Drawn> small(const std::string& noteID, float k) {
         kind->draw(pen, look, item, props, w, body);
         pen.corners(w, h, look.radius);
         pen.edge(w, h, look);
-        if (pick) suggested(pen, look, *kind);
+        if (pick) kicker(pen, look, kind->radius);
     };
     return d;
 }

@@ -93,21 +93,24 @@ void row(const Pen& pen, const Colour& colour, float x, float y, float width, in
 /// A band of up to twelve colours across the top, the title, one named colour, and the cue counting the rest.
 void lay(Col& c, const Item& item, const Json& props) {
     std::vector<Colour> all = colours(props);
+    // The band is 43 px, and gives up what a title of three lines and the cue need under it.
+    int titled = std::min(face::TITLE_LINES, counted(item.titleOrUntitled(), face::COL, Measure::title));
+    float high = std::min(43.f, float(face::H - face::BOTTOM) - 14 - float(titled * face::TITLE) - (all.size() > 1 ? face::CUE : 0));
     if (c.pen) {
         const Pen& pen = *c.pen;
-        CGRect band = pen.px(1, 1, face::W - 2, 43);
+        CGRect band = pen.px(1, 1, face::W - 2, high);
         hatch(pen, band, Art::ink, Art::panel, 6);
         size_t n = std::min(all.size(), size_t(12));
         for (size_t i = 0; i < n; i++) {
             if (std::optional<Color> painted = paint(all[i].value)) {
                 pen.ctx.setFillColor(*painted);
                 float w = float(face::W - 2) / float(n);
-                pen.ctx.fill(pen.px(1 + w * float(i), 1, w + 0.5f, 43));
+                pen.ctx.fill(pen.px(1 + w * float(i), 1, w + 0.5f, high));
             }
         }
     }
-    c.y = 44 + 13;
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, all.empty() ? 0 : 8 + face::BODY);
+    c.y = 1 + high + 13;
+    if (!c.title(item.titleOrUntitled())) return;
     if (!all.empty() && c.room() >= 8 + face::BODY + (all.size() > 1 ? face::CUE : 0)) {
         c.gap(8);
         if (c.pen) dot(*c.pen, c.pen->px(c.x, c.y + 4, 14, 14), 4 * c.pen->k, all[0].value);

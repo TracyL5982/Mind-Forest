@@ -79,6 +79,8 @@ constexpr Setting body{15, 21, Font::Weight::medium};
 constexpr Setting bodyHead{15, 21, Font::Weight::semibold};
 constexpr Setting caption{15, 21, Font::Weight::medium};
 constexpr Setting tag{11.5f, 17.5f, Font::Weight::medium};
+/// A label on the opened card: a unit, a chart's axes and the values written on it, a slider's ends.
+constexpr Setting small{11.5f, 16, Font::Weight::medium};
 /// A fact's label in the list at the opened card's foot; its value is `body`.
 constexpr Setting fact{11.5f, 21, Font::Weight::medium};
 /// The size of a kind label (`label`) on the opened card, and on the small face, where nothing read is under 13.5 px.
@@ -113,6 +115,12 @@ struct Cuts {
     static inline bool on = false;
     static inline std::vector<std::string> seen;
 };
+
+struct Pen;
+/// A pick's kicker, as the ocean writes one over a note: SUGGESTED in capitals at Art::Size::micro on the
+/// small note, bold, in the card's tone, as a flat ink label over the top edge, left of the corner's curve
+/// of a card with corners of `radius` px.
+void kicker(const Pen& pen, const Look& look, float radius);
 
 /// A canvas and the scale it is drawn at.
 struct Pen {

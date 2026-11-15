@@ -64,7 +64,7 @@ void lay(Col& c, const Item& item, const Json& props) {
         std::string n = trimmed(a);
         if (!n.empty()) names.push_back(n);
     }
-    c.lines(p.title, Measure::title, 2, palette::ink, names.empty() ? 0 : face::GAP + face::META);
+    if (!c.title(p.title)) return;
     if (!names.empty() && c.room() >= face::GAP + face::META) {
         c.gap(face::GAP);
         std::string first = names[0];

@@ -39,7 +39,7 @@ Plan plan(const Item& item, const Json& props) {
 
 /// `.link-site`, `w` px wide with its top-left at (x, y): the site's first letter on a tile, the site, and
 /// an arrow out. On the card it has a rule under it; opened, it is a box of its own.
-void bar(const Pen& pen, float x, float y, float w, const std::string& site, bool boxed, const Setting& said = setting::body) {
+void bar(const Pen& pen, float x, float y, float w, const std::string& site, bool boxed, const Setting& said = setting::body, bool kicked = false) {
     CGRect r = pen.px(x, y, w, BAR);
     pen.ctx.setFillColor(Color::white(1, 0.025f));
     float inner = boxed ? BAR - 2 : BAR - 1, top = boxed ? y + 1 : y;
@@ -57,27 +57,28 @@ void bar(const Pen& pen, float x, float y, float w, const std::string& site, boo
         pen.ctx.fill(pen.px(x, y + BAR - 1, w, 1));
     }
     float left = x + (boxed ? 1 : 0) + 15, right = x + w - (boxed ? 1 : 0) - 12;
-    float dotTop = top + (inner - 17) / 2;
+    // Under a pick's kicker, which stands over the bar's top edge, the row sits low in the bar on a smaller tile.
+    float tile = kicked ? 13 : 17, dotTop = kicked ? top + 14.5f : top + (inner - tile) / 2;
     pen.ctx.setFillColor(palette::ink2);
-    pen.rounded(pen.px(left, dotTop, 17, 17), 4 * pen.k);
+    pen.rounded(pen.px(left, dotTop, tile, tile), 4 * pen.k);
     pen.ctx.fillPath();
     std::string letter = capital(site);
     float letterWidth = pen.width(letter, DOT);
-    pen.words(letter, left + (17 - letterWidth) / 2, dotTop + 3, letterWidth + 1, 1, DOT, Art::ink);
-    float lineTop = top + (inner - said.lead) / 2, outWidth = std::ceil(pen.width(OUT, said));
+    pen.words(letter, left + (tile - letterWidth) / 2, dotTop + (tile - DOT.lead) / 2, letterWidth + 1, 1, DOT, Art::ink);
+    float lineTop = kicked ? top + 12.5f : top + (inner - said.lead) / 2, outWidth = std::ceil(pen.width(OUT, said));
     pen.words(OUT, right - outWidth, lineTop, outWidth + 1, 1, said, palette::ink3);
-    float host = left + 17 + 8;
+    float host = left + tile + 8;
     pen.words(site, host, lineTop, right - outWidth - 8 - host, 1, said, palette::ink2);
 }
 
 
 /// The address bar across the top, the title, the description in whole lines, and the cue. No thumbnail.
 void lay(Col& c, const Item& item, const Json& props) {
-    if (c.pen) bar(*c.pen, 1, 1, face::W - 2, siteOf(item, props), false, setting::faceMeta);
+    if (c.pen) bar(*c.pen, 1, 1, face::W - 2, siteOf(item, props), false, setting::faceMeta, c.look.dashed);
     c.y = 30 + 13;
     std::string about = text(props["description"]);
     if (about.empty()) about = item.summary;
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, about.empty() ? 0 : 4 + face::BODY);
+    if (!c.title(item.titleOrUntitled())) return;
     if (!about.empty() && c.room() >= 4 + face::BODY) {
         c.gap(4);
         c.lines(about, Measure::body, 99, c.look.ink2);

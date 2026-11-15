@@ -45,7 +45,7 @@ std::string language(const Json& props) {
 
 /// The title, and one meta line in place of the source: how many lines, in what language.
 void lay(Col& c, const Item& item, const Json& props) {
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + face::META);
+    if (!c.title(item.titleOrUntitled())) return;
     c.gap(face::GAP);
     c.lines(cueCodeLines(c.words, int(linesOf(props).size()), language(props)), Measure::meta, 1, palette::ink2);
 }

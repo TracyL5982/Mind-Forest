@@ -59,19 +59,19 @@ float bars(const Pen& pen, const std::vector<Part>& rows, float x, float top, fl
            const Look& look) {
     float track = width - labels - shares - 2 * BESIDE;
     for (const Part& row : rows) {
-        pen.words(row.label, x, top, labels, labelLines, setting::text, look.ink2);
+        pen.words(row.label, x, top, labels, labelLines, setting::body, look.ink2);
         float left = x + labels + BESIDE;
         pen.ctx.setFillColor(Color::white(1, 0.06f));
-        pen.rounded(pen.px(left, top + 4.5f, track, 8), 4 * pen.k);
+        pen.rounded(pen.px(left, top + (setting::body.lead - 8) / 2, track, 8), 4 * pen.k);
         pen.ctx.fillPath();
         if (row.bar > 0) {
             pen.ctx.setFillColor(palette::bar);
-            pen.rounded(pen.px(left, top + 4.5f, std::max(2.f, float(row.bar) * track), 8), 4 * pen.k);
+            pen.rounded(pen.px(left, top + (setting::body.lead - 8) / 2, std::max(2.f, float(row.bar) * track), 8), 4 * pen.k);
             pen.ctx.fillPath();
         }
-        float wide = pen.width(row.written, setting::text);
-        pen.words(row.written, x + width - wide, top, wide + 1, 1, setting::text, palette::ink);
-        float tall = labelLines ? TEXT : std::max(float(TEXT), heightOf(row.label, labels, 0, setting::text, pen.k));
+        float wide = pen.width(row.written, setting::body);
+        pen.words(row.written, x + width - wide, top, wide + 1, 1, setting::body, palette::ink);
+        float tall = labelLines ? TEXT : std::max(setting::body.lead, heightOf(row.label, labels, 0, setting::body, pen.k));
         top += tall + GAP;
     }
     return top;
@@ -81,7 +81,7 @@ float bars(const Pen& pen, const std::vector<Part>& rows, float x, float top, fl
 /// The title, one bar split into the parts by share, the largest part in words, and the count of the parts.
 void lay(Col& c, const Item& item, const Json& props) {
     Parts p = parts(props);
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + 16 + 8 + face::BODY + 4 + face::CUE);
+    if (!c.title(item.titleOrUntitled())) return;
     if (!(c.above(props) && c.heads(props)) || c.room() < face::GAP + 16 + 8 + face::CUE) {
         c.more = true;
         c.cue(cueParts(c.words, int(props["labels"].array().size())));
@@ -138,13 +138,13 @@ void detail(Sheet& sheet, const Item&, const Json& props) {
     }
     float k = sheet.k, inner = Sheet::width - 24, labels = 0, shares = 0;
     for (const Part& row : p.rows) {
-        labels = std::max(labels, std::ceil(widthOf(row.label, setting::text, k)));
-        shares = std::max(shares, std::ceil(widthOf(row.written, setting::text, k)));
+        labels = std::max(labels, std::ceil(widthOf(row.label, setting::body, k)));
+        shares = std::max(shares, std::ceil(widthOf(row.written, setting::body, k)));
     }
     // `fit-content(45%) minmax(48px, 1fr) auto`, 8 px apart.
     labels = std::min({labels, 0.45f * inner, inner - 2 * BESIDE - shares - 48});
-    float unitTall = heightOf(p.unit, inner, 0, setting::text, k), rowsTall = 0;
-    for (const Part& row : p.rows) rowsTall += std::max(float(TEXT), heightOf(row.label, labels, 0, setting::text, k));
+    float unitTall = heightOf(p.unit, inner, 0, setting::small, k), rowsTall = 0;
+    for (const Part& row : p.rows) rowsTall += std::max(setting::body.lead, heightOf(row.label, labels, 0, setting::body, k));
     rowsTall += float(GAP * std::max(0, int(p.rows.size()) - 1));
     float tall = 12 + (p.unit.empty() ? 0 : unitTall + 6) + rowsTall + 12;
     Look look = sheet.look;
@@ -154,7 +154,7 @@ void detail(Sheet& sheet, const Item&, const Json& props) {
         box(pen, Sheet::left, y, Sheet::width, tall, palette::sunk, std::nullopt);
         float x = Sheet::left + 12, top = y + 12;
         if (!p.unit.empty()) {
-            pen.words(p.unit, x, top, inner, 0, setting::text, palette::ink3);
+            pen.words(p.unit, x, top, inner, 0, setting::small, palette::ink3);
             top += unitTall + 6;
         }
         bars(pen, p.rows, x, top, inner, labels, shares, 0, look);

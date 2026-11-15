@@ -258,9 +258,9 @@ void curve(const Pen& pen, const Look& look, const std::vector<Control>& sliders
     float nx = X(first.values[0]), ny = now ? Y(std::clamp(*now, lo, hi)) : Y(lo);
     pen.ctx.fillEllipse(pen.px(nx - 4.5f, ny - 4.5f, 9, 9));
     std::string from = reading(first, first.min), to = reading(first, first.max);
-    pen.words(from, left0 + left, top0 + height - 17, width / 2, 1, setting::text, look.ink3);
-    float w = pen.width(to, setting::text);
-    pen.words(to, left0 + width - right - w, top0 + height - 17, w + 1, 1, setting::text, look.ink3);
+    pen.words(from, left0 + left, top0 + height - 17, width / 2, 1, setting::small, look.ink3);
+    float w = pen.width(to, setting::small);
+    pen.words(to, left0 + width - right - w, top0 + height - 17, w + 1, 1, setting::small, look.ink3);
 }
 
 
@@ -280,15 +280,16 @@ void lay(Col& c, const Item& item, const Json& props) {
         label(pen, item.words.chinese ? "可探索" : "Explore", c.x + 20, c.y, palette::ink2, setting::faceLabelSize);
     }
     c.gap(22);
-    c.lines(item.titleOrUntitled(), Measure::title, 1, palette::ink);
+    if (!c.title(item.titleOrUntitled())) return;
     c.above(props);
     std::string out = p.output.kind == Output::Kind::text ? (p.texts.empty() ? "" : p.texts[0].first)
                                                           : (p.output.label.empty() ? p.shown : p.shown + " " + p.output.label);
+    // The cue that counts the controls always follows: its row is kept.
+    c.more = true;
     if (!out.empty()) {
         c.gap(10);
         c.lines(out, Measure::body, 1, c.look.ink2);
     }
-    c.more = true;
     c.cue(cueControls(c.words, int(p.controls.size())));
 }
 

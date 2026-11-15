@@ -35,20 +35,20 @@ Plan plan(const Json& props) {
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(props);
     const float gutter = 22;
-    if (!c.above(props)) {
-        c.cue(cueMore(c.words));
-        return;
-    }
+    // The question is the face's title: the lines over it keep its room.
+    int asked = std::min(face::TITLE_LINES, counted(p.question, int(c.width - gutter), Measure::title));
+    bool open = c.above(props, 8 + float(asked * face::TITLE));
     c.gap(8);
     // The question first; the answer only under it.
     float top = c.y;
-    int asked = c.lines(p.question, Measure::title, 2, palette::ink, p.answer.empty() ? 0 : face::GAP + face::BODY, c.x + gutter, face::W - 55, c.width - gutter);
-    if (asked == 0) {
-        c.more = true;
+    // The question is the face's title: whole, beside its letter.
+    bool whole = c.title(p.question, c.x + gutter, c.width - gutter);
+    if (c.pen && c.y > top) label(*c.pen, fixed::question.in(item.words), c.x, top + 3, c.look.accent, setting::faceLabelSize);
+    if (!whole) return;
+    if (!open) {
         c.cue(cueMore(c.words));
         return;
     }
-    if (c.pen) label(*c.pen, fixed::question.in(item.words), c.x, top + 3, c.look.accent, setting::faceLabelSize);
     if (!p.answer.empty() && c.room() >= face::GAP + face::BODY + (c.more ? face::CUE : 0)) {
         c.gap(face::GAP);
         float at = c.y;

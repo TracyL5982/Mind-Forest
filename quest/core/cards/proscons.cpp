@@ -77,7 +77,7 @@ void point(const Pen& pen, const Way& way, Color accent, Color ink2, const std::
 /// The title, the first point of each side when it is whole on one line, and the cue that counts them.
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
-    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, 10 + face::BODY + 5 + face::BODY + face::CUE);
+    if (!c.title(item.titleOrUntitled())) return;
     // The item's lines come first. Its heads name the sides: each stands in meta over its side's point.
     bool open = c.above(props);
     std::optional<std::array<std::string, 2>> named = headsOf(props);
