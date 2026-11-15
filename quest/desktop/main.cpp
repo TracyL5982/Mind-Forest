@@ -4,6 +4,7 @@
 //
 //   quest/desktop/build.sh && quest/desktop/preview -demo
 //   preview -walk 3 -shot /tmp/walk.png -shotAt 6      run 6 s of app time at once, save a picture, quit
+//   preview ... -shot /tmp/run.png -shotAt 30 -shotEvery 1   also save /tmp/run-<n>.png each second until then
 //
 // - Move the mouse: the hand ray goes through the pointer. Click: pinch. Drag: a pinch held and moved.
 // - Right-drag: turn the head. Scroll: both hands pinching, pulled apart or together.
@@ -13,9 +14,11 @@
 #define GLFW_INCLUDE_GLCOREARB
 #include <GLFW/glfw3.h>
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "app.h"
@@ -47,6 +50,8 @@ int main(int argc, char** argv) {
     }
     auto shot = Flags::string("shot");
     double shotAt = Flags::number("shotAt") > 0 ? Flags::number("shotAt") : 3;
+    double shotEvery = Flags::number("shotEvery");
+    int shots = 0;
 
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -100,10 +105,14 @@ int main(int argc, char** argv) {
             yaw = float(Flags::number("yaw")) * float(M_PI) / 180;
             pitch = float(Flags::number("pitch")) * float(M_PI) / 180;
         }
-        double wall = glfwGetTime();
         // For a picture, app time runs as fast as frames can be made.
-        // (`-realtime` keeps the wall clock even for a picture: for looking at what waiting looks like.)
+        // (`-realtime` keeps the wall clock even for a picture: for looking at what waiting looks like. A hidden
+        // window does not wait for the display, so its frames are held to 90 a second to keep app time with the clock.)
         static const bool realtime = Flags::has("realtime");
+        if (shot && realtime) {
+            while (glfwGetTime() < last + 1.0 / 90) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        double wall = glfwGetTime();
         float dt = shot && !realtime ? 1.f / 90 : float(std::min(0.1, std::max(1.0 / 240, wall - last)));
         last = wall;
         elapsed += dt;
@@ -210,15 +219,18 @@ int main(int argc, char** argv) {
         frame.triangles = renderer.stats.triangles;
         perf.add(frame, logFps);
 
-        if (shot && elapsed >= shotAt) {
+        bool closing = shot && elapsed >= shotAt;
+        if (closing || (shot && shotEvery > 0 && elapsed >= shotEvery * (shots + 1))) {
+            std::string path = *shot;
+            if (!closing) path = path.substr(0, path.rfind('.')) + fmt("-%d", ++shots) + path.substr(path.rfind('.'));
             glFinish();
             std::vector<uint8_t> pixels(size_t(fw) * fh * 4);
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             glReadPixels(0, 0, fw, fh, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-            bool ok = host::savePNG(*shot, fw, fh, pixels);
-            fprintf(stderr, "%s %s (%d draws, %d triangles)\n", ok ? "saved" : "could not save", shot->c_str(), renderer.stats.drawCalls,
+            bool ok = host::savePNG(path, fw, fh, pixels);
+            fprintf(stderr, "%s %s (%d draws, %d triangles)\n", ok ? "saved" : "could not save", path.c_str(), renderer.stats.drawCalls,
                     renderer.stats.triangles);
-            break;
+            if (closing) break;
         }
         glfwSwapBuffers(window);
     }
