@@ -8,6 +8,7 @@
 # The service must be running on this Mac: (cd agents && npm start). Its access key is read from agents/data/token
 # (or MIND_PALACE_DATA/token, or MIND_PALACE_TOKEN).
 # It works on the copy installed with QUEST_APP_SUFFIX=.agents unless QUEST_APP_SUFFIX says otherwise ("" for the first).
+# The app starts with -cards, so the service's trees and the library's films, works and notes are drawn as the agent's cards.
 set -e
 export QUEST_APP_SUFFIX="${QUEST_APP_SUFFIX-.agents}"
 source "$(dirname "$0")/env.sh"
@@ -29,7 +30,7 @@ carry() {
 }
 
 start() {
-  "$QUEST_ROOT/tools/run.sh" -- -agent "ws://127.0.0.1:$PORT" -agentToken "$TOKEN" $flags >/dev/null
+  "$QUEST_ROOT/tools/run.sh" -- -agent "ws://127.0.0.1:$PORT" -agentToken "$TOKEN" -cards $flags >/dev/null
   echo "started, joined to the service"
 }
 
