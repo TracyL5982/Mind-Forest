@@ -336,6 +336,29 @@ export interface CardNote {
   from?: string;
   why?: string;
   says?: string;
+  /** What a written card shows besides its words: its list, facts, quote, steps and the like, as the card draws them. */
+  shows?: string;
+}
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.trim() !== '') : []);
+const record = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+
+/** The shape a written card has, by the data its card draws, and what that shape states, in a line. */
+export function shapeOf(data: Record<string, unknown>): { kind: string; shows: string } | null {
+  const quote = record(data.quote);
+  if (typeof quote.text === 'string' && quote.text) return { kind: 'a quote', shows: `"${quote.text}"${typeof quote.by === 'string' && quote.by ? `, said by ${quote.by}` : ''}` };
+  const facts = Array.isArray(data.facts) ? data.facts.map(record).filter((f) => typeof f.label === 'string' && typeof f.value === 'string') : [];
+  if (facts.length) return { kind: 'some facts', shows: facts.map((f) => `${f.label}: ${f.value}`).join('; ') };
+  if (strings(data.items).length) return { kind: 'a list', shows: strings(data.items).join('; ') };
+  if (strings(data.steps).length) return { kind: 'a how-to', shows: strings(data.steps).map((s, n) => `${n + 1}. ${s}`).join(' ') };
+  const table = record(data.table);
+  if (strings(table.heads).length) return { kind: 'a table', shows: `columns ${strings(table.heads).join(', ')}; ${Array.isArray(table.rows) ? table.rows.length : 0} rows` };
+  if (typeof data.question === 'string' && typeof data.answer === 'string') return { kind: 'a question and its answer', shows: `${data.question} ${data.answer}` };
+  if (typeof data.term === 'string' && typeof data.definition === 'string') return { kind: 'a definition', shows: `${data.term}: ${data.definition}` };
+  if (strings(data.pros).length || strings(data.cons).length) return { kind: 'pros and cons', shows: `for: ${strings(data.pros).join('; ')}. Against: ${strings(data.cons).join('; ')}` };
+  const callout = record(data.callout);
+  if (typeof callout.text === 'string' && callout.text) return { kind: 'a caution', shows: callout.text };
+  return null;
 }
 
 /** The Scout's new cards in a change, each under the card it was found for. */
@@ -349,10 +372,12 @@ export function landedCards(mind: Mindstorm, set: ChangeSet): CardNote[] {
     const data = item.data as Record<string, unknown>;
     const word = (key: string) => (typeof data[key] === 'string' && (data[key] as string).trim() ? clip((data[key] as string).trim(), 80) : undefined);
     const says = clip((item.summary || '').replace(/\s+/g, ' ').trim(), 200);
+    const shape = item.kind === 'text' ? shapeOf(data) : null;
     return [{
       anchor: node.parent,
       under: nameOf(mind.itemOf(node.parent)),
-      kind: spokenKind(item, node.origin.tool ?? ''),
+      kind: shape?.kind ?? spokenKind(item, node.origin.tool ?? ''),
+      ...(shape ? { shows: clip(shape.shows, 300) } : {}),
       title: item.title || nameOf(item),
       ...(word('by') ? { by: word('by') } : {}),
       ...(word('date') ? { date: word('date') } : {}),

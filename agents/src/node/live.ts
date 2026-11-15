@@ -246,7 +246,7 @@ interface Run {
 
 const described = (c: CardNote) =>
   `${c.kind} "${c.title}"${c.by ? ` by ${c.by}` : ''}${c.date ? ` (${c.date})` : ''}${c.from ? `, from ${c.from}` : ''}` +
-  `${c.why ? `. Why it was picked: ${c.why}` : ''}${c.says ? `. The card says: ${c.says}` : ''}`;
+  `${c.why ? `. Why it was picked: ${c.why}` : ''}${c.says ? `. The card says: ${c.says}` : ''}${c.shows ? `. It shows: ${c.shows}` : ''}`;
 
 /**
  * When Momo hears of the cards a run brings. The first card of a run is told the moment it lands; later ones are gathered and told

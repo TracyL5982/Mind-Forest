@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
-import { landedCards, runTool, toolLabel, toolSpecs, whereNote } from '../src/core/voice-tools.ts';
+import { landedCards, runTool, shapeOf, toolLabel, toolSpecs, whereNote } from '../src/core/voice-tools.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer } from '../src/node/server.ts';
@@ -138,4 +138,13 @@ test('Momo is told where the user is and of each card that lands, in what the ca
   } finally {
     await w.close();
   }
+});
+
+test("a written card is told as what it shows: its quote, facts, list or steps, as its card draws them", () => {
+  assert.deepEqual(shapeOf({ quote: { text: 'Less is more.', by: 'Mies van der Rohe' } }), { kind: 'a quote', shows: '"Less is more.", said by Mies van der Rohe' });
+  assert.deepEqual(shapeOf({ facts: [{ label: 'Painted', value: 'about 1657' }, { label: 'Size', value: '87.6 x 76.5 cm' }] }), { kind: 'some facts', shows: 'Painted: about 1657; Size: 87.6 x 76.5 cm' });
+  assert.deepEqual(shapeOf({ items: ['The Milkmaid', 'The Little Street', 'View of Delft'] }), { kind: 'a list', shows: 'The Milkmaid; The Little Street; View of Delft' });
+  assert.deepEqual(shapeOf({ steps: ['Prime', 'Glaze'] }), { kind: 'a how-to', shows: '1. Prime 2. Glaze' });
+  assert.deepEqual(shapeOf({ term: 'Pentimento', definition: 'a painted-over change that shows through' }), { kind: 'a definition', shows: 'Pentimento: a painted-over change that shows through' });
+  assert.equal(shapeOf({ site: 'example.com' }), null, 'a card with no written shape is told by its words');
 });
