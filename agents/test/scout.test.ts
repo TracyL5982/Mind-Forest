@@ -980,3 +980,66 @@ test('with no picture written, the slot kept for one goes to the first find held
 
   assert.deepEqual(picked(k, anchor).map((i) => i.title), ['papers record 1', 'books record 1', NOTE.title, STEPS.title, 'papers record 2']);
 });
+
+const settle = (ms = 20) => new Promise((r) => setTimeout(r, ms));
+const MORE = ['papers', 'books', 'news'].map((source) => direction('find', `More from ${source}`, { source, lookups: ['zoom'] }));
+const INVENTIVE = [NOTE.title, STEPS.title, 'papers record 2', 'books record 2', 'news record 2'];
+
+test('a choice of where to look first that answers only after the inventive cards are ready holds none of them back, and its looks take no slot', async () => {
+  const { k, anchor, thinking, finishing } = twoLanes([...MORE, NOTE, STEPS], []);
+  const answering = gate();
+  k.model.on('scout.looks', async () => (await answering.wait, { looks: [looked('papers', 'quick'), looked('books', 'quick')] }));
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  thinking.open();
+  finishing.open();
+  await until(() => k.mind.picks(anchor).length >= 3);
+  await settle();
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), [...INVENTIVE].sort(), 'every inventive card lands while the quick model has not answered');
+  answering.open();
+  apply(k, await run);
+  await settle();
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), [...INVENTIVE].sort());
+});
+
+test('the line does not wait for a choice of where to look first that the inventive lane has beaten', async () => {
+  const { k, anchor, thinking, finishing } = twoLanes([NOTE, STEPS], []);
+  const answering = gate();
+  k.model.on('scout.looks', async () => (await answering.wait, { looks: [looked('papers', 'quick'), looked('books', 'quick')] }));
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  thinking.open();
+  finishing.open();
+  const ended = await Promise.race([run.then(() => 'ended'), settle(100).then(() => 'still waiting')]);
+  answering.open();
+  apply(k, await run);
+  await settle();
+
+  assert.equal(ended, 'ended');
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title, STEPS.title], 'its late looks bring nothing after the line');
+});
+
+test('a fast find whose choosing hangs holds none of the inventive cards back', async () => {
+  const { k, anchor, thinking, finishing } = twoLanes([...MORE, NOTE, STEPS], [looked('papers', 'quick'), looked('books', 'quick')]);
+  const answering = gate();
+  k.model.on('scout.curate', async (req) => {
+    if (req.user.includes('First look in books')) await answering.wait;
+    return { chosen: [...req.user.matchAll(/^(\d+)\. "/gm)].map(([, n]) => ({ number: Number(n), note: '', excerpt: '' })) };
+  });
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  await until(() => k.mind.picks(anchor).length === 1);
+  thinking.open();
+  finishing.open();
+  await until(() => k.mind.picks(anchor).length >= 4);
+  await settle();
+  const landed = picked(k, anchor).map((i) => i.title);
+  answering.open();
+  apply(k, await run);
+
+  assert.equal(landed.length, 5, `every slot fills while the fast find is out: ${landed.join(', ')}`);
+  assert.equal(landed[0], 'papers record 1');
+  assert.ok(!landed.includes('books record 1'));
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), landed, 'the hung find takes no slot when it answers');
+});
