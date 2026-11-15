@@ -22,9 +22,9 @@ export interface MetaModelOptions {
   rateWindowMs?: number;
   /**
    * Called after every request, for the run log and the cost tally, with the model and effort asked for, the tries it took and how
-   * long it was held for the rate window.
+   * long it was held for the rate window, and whether it was given up for want of room in time.
    */
-  onCall?: (call: { kind: string; role: string; ms: number; ok: boolean; tokens?: number; model?: string; effort?: string; tries?: number; heldMs?: number }) => void;
+  onCall?: (call: { kind: string; role: string; ms: number; ok: boolean; tokens?: number; model?: string; effort?: string; tries?: number; heldMs?: number; gaveUp?: boolean }) => void;
 }
 
 interface OutputItem {
@@ -189,7 +189,7 @@ export class MetaModel implements ModelClient {
     if (this.spent >= budget) throw new Error(`${role}: token budget of ${budget} is used up; restart the service to reset it`);
     const started = Date.now();
     const asked = askedFor(body);
-    const call = { tries: 0, heldMs: 0 };
+    const call = { tries: 0, heldMs: 0, gaveUp: false };
     let lastError = '';
     let handedOn = false;
     for (let attempt = 0; attempt < 3 && !handedOn; attempt++) {
@@ -226,6 +226,7 @@ export class MetaModel implements ModelClient {
         return got.text;
       } catch (err) {
         lastError = String(err);
+        if (call.gaveUp) break;
       }
     }
     this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: false, ...asked, ...call });
@@ -243,7 +244,7 @@ export class MetaModel implements ModelClient {
     if (this.spent >= budget) throw new Error(`${role}: token budget of ${budget} is used up; restart the service to reset it`);
     const started = Date.now();
     const asked = askedFor(body);
-    const call = { tries: 0, heldMs: 0 };
+    const call = { tries: 0, heldMs: 0, gaveUp: false };
     let lastError = '';
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
@@ -256,6 +257,7 @@ export class MetaModel implements ModelClient {
         }, waitMs, call, async (res) => ({ ok: res.ok, status: res.status, text: await res.text() }));
       } catch (err) {
         lastError = String(err);
+        if (call.gaveUp) break;
         continue;
       }
       if (got.ok) {
@@ -273,26 +275,32 @@ export class MetaModel implements ModelClient {
 
   /**
    * One request, sent once the rate window has room for it and its answer read by `use`, since the API counts a request from when its
-   * answer ends. Refused for the rate, it is sent again once the window has room, until it has been held a window and a half.
-   * Retried on a fixed backoff instead, it gave up after 5 s, long before the window had room.
+   * answer ends. Refused for the rate, it is sent again once the window has room. Retried on a fixed backoff instead, it gave up
+   * after 5 s, long before the window had room. It is held a window and a half in all at most, and given up at once when a refusal
+   * holds every request for longer, as one of a spent daily quota would.
    */
   private async limited<T>(
     priority: Priority,
     path: string,
     init: RequestInit,
     waitMs: number,
-    call: { tries: number; heldMs: number },
+    call: { tries: number; heldMs: number; gaveUp: boolean },
     use: (res: Response) => Promise<T>,
   ): Promise<T> {
+    let refusal = '';
     for (;;) {
-      const slot = await this.window.take(priority);
+      const slot = await this.window.take(priority, this.window.ms * 1.5 - call.heldMs);
       call.heldMs += slot.heldMs;
+      if (!slot.done) {
+        call.gaveUp = true;
+        throw new Error(`gave up after ${call.heldMs}ms held for the rate window${refusal ? `, last refused: 429 ${refusal}` : ''}`);
+      }
       call.tries++;
       try {
         const res = await this.send(`${this.base}${path}`, { ...init, signal: AbortSignal.timeout(waitMs) });
         this.window.read(res);
-        if (res.status !== 429 || call.heldMs >= this.window.ms * 1.5) return await use(res);
-        await res.body?.cancel();
+        if (res.status !== 429) return await use(res);
+        refusal = (await res.text()).slice(0, 300);
       } finally {
         slot.done();
       }

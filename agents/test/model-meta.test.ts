@@ -158,17 +158,31 @@ test('a burst past the rate limit is held until its first requests leave the win
   const model = new MetaModel({ apiKey: 'k', fetch: api.fetch, rateWindowMs: 300 });
   const started = Date.now();
 
-  const answers = await Promise.all(Array.from({ length: 12 }, (_, i) => model.json({ ...ask, role: `r${i}`, ...(i % 2 ? { onText: () => {} } : {}) })));
+  const answers = await Promise.all(Array.from({ length: 10 }, (_, i) => model.json({ ...ask, role: `r${i}`, ...(i % 2 ? { onText: () => {} } : {}) })));
 
-  assert.deepEqual(answers, Array.from({ length: 12 }, () => ({ answer: 'yes' })));
+  assert.deepEqual(answers, Array.from({ length: 10 }, () => ({ answer: 'yes' })));
   // Before any answer said what the limit is, the burst ran into it. After that nothing was sent into a full window.
   const refused = api.seen.filter((s) => s.status === 429);
-  assert.equal(refused.length, 7);
+  assert.equal(refused.length, 5);
   assert.ok(refused.every((s) => s.at - started < 100));
   const answered = api.seen.filter((s) => s.status === 200).map((s) => s.at - started);
   assert.equal(answered.filter((ms) => ms < 300).length, 5);
-  assert.equal(answered.filter((ms) => ms >= 300 && ms < 600).length, 5);
-  assert.equal(answered.filter((ms) => ms >= 600).length, 2);
+  assert.equal(answered.filter((ms) => ms >= 300).length, 5);
+});
+
+test('a request held a window and a half in all is given up then, and says so', { timeout: 10_000 }, async () => {
+  const api = limitedApi(2, 200);
+  const calls: { role: string; heldMs?: number; gaveUp?: boolean }[] = [];
+  const model = new MetaModel({ apiKey: 'k', fetch: api.fetch, rateWindowMs: 200, onCall: ({ role, heldMs, gaveUp }) => calls.push({ role, heldMs, gaveUp }) });
+  await Promise.all([0, 1].map((i) => model.json({ ...ask, role: `early${i}` })));
+
+  const later = await Promise.allSettled([0, 1, 2, 3].map((i) => model.json({ ...ask, role: `later${i}` })));
+
+  assert.deepEqual(later.map((r) => r.status), ['fulfilled', 'fulfilled', 'rejected', 'rejected']);
+  const given = calls.filter((c) => c.gaveUp);
+  assert.deepEqual(given.map((c) => c.role), ['later2', 'later3']);
+  assert.ok(given.every((c) => c.heldMs! >= 300 && c.heldMs! < 400), JSON.stringify(given));
+  assert.ok(api.seen.every((s) => s.status === 200), 'never refused');
 });
 
 test('requests held for the rate window let the user\'s out first, and background work leaves the last of the limit to the user', { timeout: 10_000 }, async () => {
@@ -213,21 +227,24 @@ test('nothing is held while the window has room', { timeout: 10_000 }, async () 
   assert.deepEqual(held, Array(16).fill(0));
 });
 
-test('a refusal that says nothing of the window holds the request for a window, and one still refused after a window and a half fails', { timeout: 10_000 }, async () => {
+test('a refusal that says nothing of the window holds the request for a window, and one that cannot go within a window and a half in all is given up', { timeout: 10_000 }, async () => {
   let sent = 0;
   const fetch = (async () => {
     sent++;
     return new Response('{"error":{"code":"rate_limit_exceeded"}}', { status: 429 });
   }) as typeof globalThis.fetch;
+  const calls: { ok: boolean; tries?: number; gaveUp?: boolean }[] = [];
   const started = Date.now();
 
-  await assert.rejects(new MetaModel({ apiKey: 'k', fetch, rateWindowMs: 100 }).json(ask), /429/);
+  const model = new MetaModel({ apiKey: 'k', fetch, rateWindowMs: 100, onCall: ({ ok, tries, gaveUp }) => calls.push({ ok, tries, gaveUp }) });
+  await assert.rejects(model.json(ask), /gave up after \d+ms held for the rate window, last refused: 429 .*rate_limit_exceeded/);
 
-  assert.ok(Date.now() - started >= 150 && Date.now() - started < 1000);
-  assert.equal(sent, 3);
+  assert.ok(Date.now() - started >= 100 && Date.now() - started < 1000);
+  assert.equal(sent, 2);
+  assert.deepEqual(calls, [{ ok: false, tries: 2, gaveUp: true }]);
 });
 
-test('a refusal its counts do not explain holds the request for as long as the refusal asks', { timeout: 10_000 }, async () => {
+test('a refusal its counts do not explain holds the request for as long as the refusal asks, and a second at least', { timeout: 10_000 }, async () => {
   const at: number[] = [];
   const reply = { output: [{ type: 'message', content: [{ type: 'output_text', text: '{"answer":"yes"}' }] }], usage: { total_tokens: 12 } };
   const fetch = (async () => {
@@ -241,7 +258,26 @@ test('a refusal its counts do not explain holds the request for as long as the r
   assert.deepEqual(await new MetaModel({ apiKey: 'k', fetch }).json(ask), { answer: 'yes' });
 
   assert.equal(at.length, 2);
-  assert.ok(at[1]! - at[0]! >= 200 && at[1]! - at[0]! < 1000, `sent again after ${at[1]! - at[0]!} ms`);
+  assert.ok(at[1]! - at[0]! >= 1000 && at[1]! - at[0]! < 2000, `sent again after ${at[1]! - at[0]!} ms`);
+});
+
+test('a refusal that asks for a longer wait than a request may be held gives up that request, and every one after it, at once', { timeout: 10_000 }, async () => {
+  let sent = 0;
+  const fetch = (async () => {
+    sent++;
+    const headers = { 'x-ratelimit-limit-requests': '60', 'x-ratelimit-remaining-requests': '50', 'retry-after': '3600' };
+    return new Response('{"error":{"code":"insufficient_quota"}}', { status: 429, headers });
+  }) as typeof globalThis.fetch;
+  const calls: { ok: boolean; gaveUp?: boolean }[] = [];
+  const model = new MetaModel({ apiKey: 'k', fetch, onCall: ({ ok, gaveUp }) => calls.push({ ok, gaveUp }) });
+  const started = Date.now();
+
+  await assert.rejects(model.json(ask), /gave up after \d+ms held for the rate window, last refused: 429 .*insufficient_quota/);
+  await assert.rejects(model.json({ ...ask, priority: 'background' }), /gave up/);
+
+  assert.ok(Date.now() - started < 1000);
+  assert.equal(sent, 1);
+  assert.deepEqual(calls, [{ ok: false, gaveUp: true }, { ok: false, gaveUp: true }]);
 });
 
 test('a request counts against the limit until a whole window after its answer ended', { timeout: 10_000 }, async () => {
