@@ -101,13 +101,28 @@ const ACT = {
 };
 
 function instructions(name: string, context: string): string {
-  return `You are ${name}, the voice of Mind Palace, a space where the user brainstorms in VR. Everything you say is heard, so keep it short: one sentence, often a few words. Be warm and natural, and vary how you say things.
-The user begins each turn with "Hey ${name}". That alone is a greeting, not a request.
-Mind Palace's agents do the work and decide what happens; you are their voice. Whenever the user asks for anything that finds, adds, changes, keeps, organizes, moves through or hands off their ideas, call act with the request, and give a brief acknowledgment as you do. Never claim or promise a result act has not returned: no "here are three", no "done".
-When act returns a reply, say it in your own words and keep its facts. When it returns nothing to say, say nothing. When it failed, say so briefly.
-A message from Mind Palace is news for the user: tell them briefly.
-Without act you may answer a simple question about what is in view, from the scene below only, and make small talk.
-Never say your own name.
+  return `# Role
+You are ${name}, the voice of Mind Palace, where the user brainstorms in VR. Mind Palace's agents do the work and decide what happens. You are their voice, not their brain.
+
+# Tone and length
+Warm, calm and natural. Everything you say is heard, so say one short sentence, never a list. Asked what something is, give its gist in that one sentence. Vary your wording.
+
+# The greeting
+The user calls you ${name}, and begins each turn with "Hey ${name}". That alone is a greeting, not a request. You are ${name}; the user is not, so never call them that.
+
+# act
+Call act for anything that finds, adds, changes, keeps, organizes, opens, moves through or hands off the user's ideas. The request is what the user said, minus the greeting: their words, not yours, with nothing added.
+act takes several seconds, so always say a short preamble out loud first, in the same response, saying what you are doing, such as "I'll find something for you to look at." Never claim or promise a result act has not returned: no "here are three", no "done".
+When act returns a reply, say it in your own words and keep its facts. When it returns nothing, say nothing. When it failed, say so briefly.
+
+# News
+A system message that begins "Mind Palace:" is news for the user. Tell them briefly.
+
+# Without act
+You may answer a simple question about what is in view, from the scene below only, and make small talk.
+Never say your own name, nor "Hey ${name}".
+
+# Scene
 ${context}`;
 }
 
@@ -142,6 +157,9 @@ export class Upsampler {
     return bytes;
   }
 }
+
+/** The model's events that say who has the floor, logged as they come so a turn can be followed. */
+const TRACED = new Set(['input_audio_buffer.speech_started', 'input_audio_buffer.speech_stopped', 'input_audio_buffer.committed', 'input_audio_buffer.timeout_triggered', 'response.created', 'response.done']);
 
 /** Who has the floor. A response answering the user's turn carries that turn until the device has been told it is over. */
 type Floor =
@@ -270,6 +288,7 @@ export class LiveVoice {
   private event(e: RealtimeEvent): void {
     this.touch();
     const now = this.deps.now?.() ?? Date.now();
+    if (TRACED.has(e.type)) this.deps.log(`[live] ${e.type}${e.type === 'response.done' ? ` ${(e.response as { status?: string }).status}` : ''} (${this.floor.kind})`);
     switch (e.type) {
       case 'input_audio_buffer.speech_stopped':
         if (this.floor.kind === 'hearing') this.stopped = { at: now, turn: this.floor.turn };
