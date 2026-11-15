@@ -142,7 +142,13 @@ void Bridge::frame(double t) {
                        },
                        [&](Heard&) {},
                        [&](Navigate& n) {
-                           logLine("[agent] navigate to " + (n.nodeId ? "card " + n.nodeId->value : n.treeId ? "tree " + n.treeId->value : "nowhere"));
+                           std::string to = n.nodeId ? "card " + n.nodeId->value : n.treeId ? "tree " + n.treeId->value : "nowhere";
+                           // Another client's request moves its own view; the headset's stays where the user is.
+                           if (!n.yours) {
+                               logLine("[agent] navigate to " + to + " was asked for elsewhere, so the view stays");
+                               return;
+                           }
+                           logLine("[agent] navigate to " + to);
                            going = Going{n, now, std::nullopt};
                        },
                        [&](Handoff& h) { logLine("[agent] handoff ready: " + h.name); },

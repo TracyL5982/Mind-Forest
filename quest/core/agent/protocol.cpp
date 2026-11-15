@@ -443,7 +443,7 @@ std::optional<Inbound> readHeard(const Json& j, Why& why) {
 
 std::optional<Inbound> readNavigate(const Json& j, Why& why) {
     Fields f(j, why);
-    return message(f, Navigate{.nodeId = f.optionalId<NodeId>("nodeId"), .treeId = f.optionalId<TreeId>("treeId")});
+    return message(f, Navigate{.nodeId = f.optionalId<NodeId>("nodeId"), .treeId = f.optionalId<TreeId>("treeId"), .yours = f.optionalBoolean("yours").value_or(false)});
 }
 
 std::optional<Inbound> readHandoff(const Json& j, Why& why) {

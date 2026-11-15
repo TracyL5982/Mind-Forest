@@ -239,6 +239,8 @@ struct Heard {
 struct Navigate {
     std::optional<NodeId> nodeId;
     std::optional<TreeId> treeId;
+    /// This connection asked to go there, or asked for the run whose card it is (`Change::yours`).
+    bool yours = false;
 };
 /// A handoff bundle is ready; `url` is a zip on the service.
 struct Handoff {

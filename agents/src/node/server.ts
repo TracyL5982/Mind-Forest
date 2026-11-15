@@ -108,6 +108,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     if (message.t === 'note') log(`[${message.role}] ${message.message}`);
     if (message.t === 'activity') log(`[${message.activity.role}] ${message.activity.state}: ${message.activity.message}`);
     if (message.t === 'change') broadcast({ ...message, undo: pipeline.undoLabel() }, asking.getStore());
+    else if (message.t === 'navigate') broadcast(message, asking.getStore());
     else broadcast(message);
   };
 

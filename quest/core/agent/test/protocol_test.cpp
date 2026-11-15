@@ -265,7 +265,10 @@ TEST(optionalFieldsMayBeMissing) {
     CHECK(navigate && !navigate->nodeId && !navigate->treeId, "navigate with neither");
     Inbound somewhere = parseInbound(R"({"t":"navigate","nodeId":"n1"})");
     auto* toNode = std::get_if<Navigate>(&somewhere);
-    CHECK(toNode && toNode->nodeId && toNode->nodeId->value == "n1" && !toNode->treeId, "navigate to a node");
+    CHECK(toNode && toNode->nodeId && toNode->nodeId->value == "n1" && !toNode->treeId && !toNode->yours, "navigate to a node, asked elsewhere");
+    Inbound asked = parseInbound(R"({"t":"navigate","nodeId":"n1","yours":true})");
+    auto* mine = std::get_if<Navigate>(&asked);
+    CHECK(mine && mine->yours, "a navigate this connection asked for says so");
 
     Inbound nullUndo = parseInbound(edited(recordedText("Keep a pick"), [](Json j) { return j.set("undo", nullptr); }));
     auto* change = std::get_if<Change>(&nullUndo);

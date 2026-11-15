@@ -430,3 +430,21 @@ test('a change is marked yours only on the connection whose request made it, so 
   page.ws.close();
   await run.close();
 });
+
+test('the navigate that ends a run is marked yours only on the connection that asked for the run, so the headset is not moved by a run asked for on the web page', { timeout: 20000 }, async () => {
+  const { run } = await boot();
+  const headset = await connect(run);
+  const page = await connect(run);
+  try {
+    const navigates = (c: { seen: Msg[] }) => c.seen.filter((m) => m.t === 'navigate');
+    page.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this: the long take in Children of Men' }] }));
+    for (let i = 0; i < 500 && (navigates(page).length < 1 || navigates(headset).length < 1); i++) await new Promise((r) => setTimeout(r, 20));
+    await run.pipeline.idle();
+    assert.deepEqual(navigates(page).map((m) => m.yours), [true], 'the page asked for the tree whose first round brought the card into view');
+    assert.deepEqual(navigates(headset).map((m) => m.yours), [undefined], 'the headset hears it unmarked');
+  } finally {
+    headset.ws.close();
+    page.ws.close();
+    await run.close();
+  }
+});

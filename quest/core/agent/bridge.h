@@ -152,7 +152,7 @@ private:
     /// Tells the service which card is open when that changes: standing a tree, unfolding a cover, a pinch, a step.
     void reportFocus();
 
-    /// A `navigate` from the service, carried out once neither the user nor Momo is speaking, so the view does not move
+    /// A `navigate` this headset asked for (`Navigate::yours`), carried out once neither the user nor Momo is speaking, so the view does not move
     /// mid-sentence, and once its tree stands: taken off the shelf as a pinch on its cover takes it. A later one replaces it.
     struct Going {
         Navigate to;

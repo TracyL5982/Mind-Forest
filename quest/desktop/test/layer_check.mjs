@@ -39,7 +39,7 @@ const run = stand.launch(shots, 'layers', end, [
 ]);
 try {
   await until(run.log, /^\[agent\] connected/);
-  stand.inject({ t: 'navigate', treeId: tree.id });
+  stand.inject({ t: 'navigate', treeId: tree.id, yours: true });
   await run.done;
 
   // `[ocean] layers: root > [asked] | in focus: … | n on this layer in g groups, …`: the layers in line, the one stood on in brackets.

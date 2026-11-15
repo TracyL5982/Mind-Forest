@@ -1,6 +1,6 @@
 // What the preview checks share: the fake service on a fresh copy of a data folder, a proxy between it and the preview
-// that records what the preview sends and can speak to the preview as the service (a navigate, which the fake service
-// never sends), and launching the preview against it with the voice off and muted, so nothing is heard. The fake
+// that records what the preview sends and can speak to the preview as the service (a navigate of the preview's own,
+// marked yours, which the fake service never sends), and launching the preview against it with the voice off and muted, so nothing is heard. The fake
 // service reads no keys file (MIND_PALACE_ENV is empty). Everything started is stopped, and the copy deleted, however
 // the check ends.
 import { spawn } from 'node:child_process';

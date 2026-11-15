@@ -53,7 +53,7 @@ try {
   const joined2 = await until(second.log, /^\[agent\] connected/);
   await later(4);
   const navigated = second.at();
-  inject({ t: 'navigate', treeId: goTo.id });
+  inject({ t: 'navigate', treeId: goTo.id, yours: true });
   const wentTo = await until(second.log, new RegExp(`^\\[agent\\] went to .* in "${escape(goTo.title)}"`), navigated);
   await later(2);
   const elsewhere = new WebSocket(`ws://127.0.0.1:${servicePort}/ws?token=${token}`);
@@ -73,6 +73,8 @@ try {
   const meanwhile = second.log.filter((l) => l.at >= dumped && l.at < (asked?.at ?? 999));
   check(find(meanwhile, /^\[agent\] tree ".*long take.*": \d+ cards/i), 'the tree asked for by another client reaches the preview');
   check(!find(meanwhile, /was asked for here|^\[ocean\] put away/), `and only hangs: "${goTo.title}" stays up, nothing is pressed for it`);
+  const leftBe = find(meanwhile, /^\[agent\] navigate to .* was asked for elsewhere, so the view stays$/);
+  check(leftBe, `the navigate that ends the other client's first round leaves the headset where it is (${leftBe?.line ?? 'none came'})`);
   check(asked && /dolly zoom/i.test(asked.line), `the tree typed for on the preview stands (${asked?.line})`);
   const putAway = find(second.log, new RegExp(`^\\[ocean\\] put away: ${escape(goTo.title)}$`), asked?.at ?? 999);
   check(putAway && putAway.at - asked.at < 1, `and "${goTo.title}" pressed itself onto the shelf first (${putAway ? (putAway.at - asked.at).toFixed(2) + ' s after' : 'never'})`);
