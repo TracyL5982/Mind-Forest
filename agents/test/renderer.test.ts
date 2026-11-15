@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { Command, Group, Id, Item, Node, View } from '../src/core/domain.ts';
+import type { ChangeSet, Command, Group, Id, Item, Node, View } from '../src/core/domain.ts';
 import { byModel, byRule, CHOSEN, grounded, renderer, type Chosen, type ComponentsReply, type CompositesReply } from '../src/core/roles/renderer.ts';
 import { EXPLORABLES, SAMPLES, SHEETS, STRUCTURED_IDS, sampleAssetUrl, type StructuredId } from '../src/core/samples.ts';
 import { Pipeline } from '../src/core/pipeline.ts';
@@ -98,7 +98,7 @@ function proposal(fields: Partial<CompositesReply['groups'][number]> & { parent:
   return { composite: 'cluster', title: '', labels: [], criteria: [], cells: [], theme: '', reasons: [], changes: [], axes: [], parts: [], ...fields };
 }
 
-test('structured data picks the component without asking the model', async () => {
+test('structured data picks the component as the card is made, without asking the model, and the Renderer then changes nothing', async () => {
   const k = kit();
   const { ids } = grow(k, [
     { title: 'Sales', data: { chart: { labels: ['North', 'South'], values: [4, 9], unit: 'units' } } },
@@ -115,16 +115,16 @@ test('structured data picks the component without asking the model', async () =>
   ]);
   const [bar, line, steps, quote, person, code, script, fact, valueFirst, labelFirst, phrase] = ids as [Id, Id, Id, Id, Id, Id, Id, Id, Id, Id, Id];
   k.model.on('renderer.composites', () => ({ groups: [] }));
-  await render(k, ids);
+  assert.deepEqual((await render(k, ids)).filter((c) => c.type === 'setView'), [], 'every card was made in its final look');
 
   assert.deepEqual(view(k, bar).props, { chart: 'bar', labels: ['North', 'South'], values: [4, 9], unit: 'units' });
   assert.equal(view(k, line).props.chart, 'line', 'years in order read as a line');
-  assert.deepEqual(view(k, steps), { component: 'steps', props: { steps: ['Boil water', 'Add pasta'] }, by: 'renderer' });
+  assert.deepEqual(view(k, steps), { component: 'steps', props: { steps: ['Boil water', 'Add pasta'] }, by: 'default' });
   assert.deepEqual(view(k, quote).props, { text: 'Invent the future.' }, 'the item does not write who said it, so the card does not name him');
-  assert.deepEqual(view(k, person), { component: 'person', props: { name: 'Agnès Varda', role: 'Director' }, by: 'renderer' });
+  assert.deepEqual(view(k, person), { component: 'person', props: { name: 'Agnès Varda', role: 'Director' }, by: 'default' });
   assert.deepEqual(view(k, code).props, { language: 'ts', source: 'const a = 1;' });
   assert.equal(view(k, script).component, 'code');
-  assert.deepEqual(view(k, fact), { component: 'fact', props: { value: '4.2', label: 'Monthly churn' }, by: 'renderer' });
+  assert.deepEqual(view(k, fact), { component: 'fact', props: { value: '4.2', label: 'Monthly churn' }, by: 'default' });
   assert.deepEqual(view(k, valueFirst).props, { value: '42%', label: 'churn in month one' }, 'the label is the rest of the line as it is written');
   assert.deepEqual(view(k, labelFirst).props, { value: '$1.2M', label: 'Budget' }, 'the label is the words before the colon');
   assert.deepEqual(view(k, phrase).props, { value: '42%', label: 'of users leave in month one' }, 'the label keeps the "of" that joins it to its value, as the line writes it');
@@ -424,7 +424,7 @@ test('beyond nine alike siblings, the least important go into a stack', async ()
   assert.deepEqual(await render(k, ids), []);
 });
 
-test('when the model fails, the rule-based views and groups still come back', async () => {
+test('when the model fails, a composing card lands as the rules drew it and the rule-based groups still come back', async () => {
   const k = kit();
   const image = (title: string): Fields => ({ title, kind: 'image', source: { from: 'drop', asset: title, capturedAt: '' } });
   const { ids } = grow(k, [
@@ -436,9 +436,10 @@ test('when the model fails, the rule-based views and groups still come back', as
     { title: 'x', text: PLAIN, why: 'option one' },
     { title: 'y', text: PLAIN, why: 'option two' },
   ]);
+  assert.equal(view(k, ids[1]!).composing, true, 'the long note is made composing');
   const commands = await render(k, ids);
   assert.equal(view(k, ids[0]!).component, 'steps');
-  assert.deepEqual(view(k, ids[1]!), { component: 'note', props: {}, by: 'default' });
+  assert.deepEqual(view(k, ids[1]!), { component: 'note', props: {}, by: 'renderer' }, 'and lands as a note, for good');
   assert.deepEqual(
     commands.map((c) => c.type),
     ['setView', 'setGroup'],
@@ -487,7 +488,7 @@ test('two pictures, a swatch and an idea are a moodboard, three pictures alone s
   await render(pictures, three);
   assert.deepEqual(arranged(pictures), [['gallery', three]]);
   const idea = hang(pictures, treeId, root, IDEA);
-  assert.deepEqual((await render(pictures, [idea])).map((c) => c.type), ['setView', 'removeGroup', 'setGroup']);
+  assert.deepEqual((await render(pictures, [idea])).map((c) => c.type), ['removeGroup', 'setGroup'], 'the idea was made an idea, and only the group changes');
   assert.deepEqual(arranged(pictures), [['moodboard', [...three, idea]]]);
 
   for (const pool of [[picture('a'), SWATCH, IDEA, IDEA], [picture('a'), picture('b'), SWATCH]]) {
@@ -505,7 +506,7 @@ test('an overview or a moodboard whose rule no longer holds is removed', async (
   await render(k, ids);
   assert.equal(groups(k)[0]?.composite, 'overview');
   const second = hang(k, treeId, root, chart('Tickets'));
-  assert.deepEqual((await render(k, [second])).map((c) => c.type), ['setView', 'removeGroup']);
+  assert.deepEqual((await render(k, [second])).map((c) => c.type), ['removeGroup'], 'the chart was made a chart, and only the group goes');
   assert.deepEqual(arranged(k), []);
 });
 
@@ -920,6 +921,53 @@ test('a page the Scout picked draws as the passage it chose, with the site it is
   assert.equal(chosen({ ...pick, data: { ...data, chart: { labels: ['2019', '2020'], values: [12, 15] } } }), 'chart');
 });
 
+test('a book the Scout found with its cover draws as a reference card with the cover beside its details, and a paper with none as before', () => {
+  const book = { ...PHOTO, title: 'A History of Horror', text: 'The genre told through its films.\n\nWheeler Winston Dixon, 2010, Books', origin: SCOUT, data: { kind: 'book', by: 'Wheeler Winston Dixon', date: '2010', from: 'Books' }, source: { ...PHOTO.source, url: 'https://books.apple.com/book/1' } };
+  const drawn = ruled(book);
+  assert.equal(drawn.component, 'reference', 'what the catalogue says it is');
+  assert.equal((drawn.props as { cover?: string }).cover, url(PHOTO.source!.asset!), 'with its own stored picture as the cover');
+  assert.ok(grounded(drawn, kit().item(book), url), 'the cover is the item\'s own picture');
+  const paper = ruled({ title: 'Predictability and accuracy', origin: SCOUT, data: { kind: 'paper', by: 'K. Gajos' } });
+  assert.equal((paper.props as { cover?: string }).cover, undefined, 'a paper with no picture has no cover');
+});
+
+test('a code repository the Scout found draws as a link card with its own short description, and a page\'s passage stays an excerpt', () => {
+  const blurb = 'The Generative UI framework 19638 stars. Written in TypeScript.';
+  const repo = { title: 'vercel-labs/json-render', text: `${blurb}\n\nvercel-labs, updated 2026-11-14, GitHub`, origin: { by: 'agent' as const, role: 'scout', tool: 'code' }, data: { kind: 'repository', site: 'github.com', by: 'vercel-labs', date: 'updated 2026-11-14', from: 'GitHub' }, source: { ...WEB, url: 'https://github.com/vercel-labs/json-render' } };
+  assert.deepEqual(ruled(repo), { component: 'link', props: { url: 'https://github.com/vercel-labs/json-render', site: 'github.com', description: blurb } });
+  const passage = 'Lime raises the pH slowly, over a season, and works faster when it is dug in than when it is left on the surface.';
+  const page = { title: 'Soil pH', text: `${passage}\n\nRoyal Horticultural Society, 2024, Web`, origin: SCOUT, data: { site: 'www.rhs.example', by: 'Royal Horticultural Society', date: '2024', from: 'Web' }, source: { ...WEB, url: 'https://www.rhs.example/soil-ph' } };
+  assert.equal(chosen(page), 'excerpt', 'a real passage of a page');
+});
+
+test('each kind of record a source catalogues draws as the card two blind readers chose for it', () => {
+  const find = (kind: string | undefined, text: string, by: string, more: Partial<Item> = {}) => ({
+    title: 'A find',
+    text: `${text}\n\n${by}, 2024, Source`,
+    origin: SCOUT,
+    data: { ...(kind ? { kind } : {}), site: 'example.com', by, date: '2024', from: 'Source' },
+    source: { ...WEB, url: 'https://example.com/a' },
+    ...more,
+  });
+  const passage = 'The council met on Tuesday and costed the repair of the roof, which will close the pool for six weeks from March.';
+  for (const kind of ['page', 'article', 'question']) {
+    assert.deepEqual(ruled(find(kind, passage, 'Writer')), { component: 'link', props: { url: 'https://example.com/a', site: 'example.com', description: passage } }, `a ${kind} is a link with its own words`);
+  }
+  assert.equal(chosen(find('thread', `ann wrote: ${passage}`, 'Writer')), 'note', 'a thread is a note: a chat card would leave out who wrote what');
+  assert.equal(chosen(find(undefined, passage, 'Writer')), 'excerpt', 'a find a source did not catalogue stays as it was drawn');
+  assert.deepEqual(ruled({ ...find('answer', passage, 'answer, score 12'), title: 'Why does the pool close?' }), { component: 'qa', props: { question: 'Why does the pool close?', answer: passage } });
+
+  const film = find('film', 'A soldier investigates stolen art after the war.', 'Film', { ...PHOTO, source: { ...PHOTO.source, url: 'https://www.themoviedb.org/movie/1' } });
+  assert.deepEqual(ruled(film), { component: 'link', props: { url: 'https://www.themoviedb.org/movie/1', site: 'example.com', description: 'A soldier investigates stolen art after the war.', image: url('a1') } }, 'a film with its still');
+
+  const recipe = (ingredients: string) => find('recipe', `Ingredients: ${ingredients}.\n1. Boil the water.\n2. Add the pasta.`, 'Italian', PHOTO);
+  assert.deepEqual(ruled(recipe('pasta, salt')), {
+    component: 'sheet',
+    props: { sections: [{ kind: 'picture', src: url('a1') }, { kind: 'text', text: 'Ingredients: pasta, salt.' }, { kind: 'list', items: ['1. Boil the water.', '2. Add the pasta.'] }] },
+  });
+  assert.equal(chosen(recipe('x'.repeat(300))), 'image', 'ingredients a sheet cannot hold whole leave the recipe its picture');
+});
+
 test('a structure with more entries than its card shows is no card of its item, however much of the item they are', () => {
   const eight = Array.from({ length: 8 }, (_v, n) => ({ label: 'L', value: `${n}` }));
   const written = (count: number) => `${'x'.repeat(20)}\n${saying({ facts: eight.slice(0, count) })}`;
@@ -1041,7 +1089,7 @@ test('a recording is drawn as one with what is known of its sound, whatever its 
     data: { mediaUrl: 'https://cdn.example/41.mp3', thumbnailUrl: 'https://cdn.example/41.jpg', sound: { seconds: 2520 }, site: 'podcasts.example' },
     source: { from: 'web', url: 'https://podcasts.example/41', capturedAt: '' },
   });
-  assert.deepEqual(byRule(episode, url), { component: 'audio', props: { src: 'https://cdn.example/41.mp3', seconds: 2520 } }, 'a pick plays from the address its source gave');
+  assert.deepEqual(byRule(episode, url), { component: 'audio', props: { src: 'https://cdn.example/41.mp3', seconds: 2520, image: 'https://cdn.example/41.jpg' } }, 'a pick plays from the address its source gave, beside its cover art');
   assert.ok(grounded(byRule(episode, url), episode, url) && grounded(dropped, kit().item({ title: 'Memo', ...transcript, source: { from: 'drop', asset: 'm1', capturedAt: '' } }), url));
   assert.equal(grounded({ component: 'audio', props: { src: 'https://cdn.example/41.mp3', seconds: 60 } }, episode, url), false, 'a length the item does not hold');
   assert.equal(chosen({ title: 'Memo', kind: 'audio', data: { mediaUrl: '   ' } }), 'note');
@@ -1507,8 +1555,14 @@ test('the model is asked only about text the rules left as a note or an idea: no
     { title: '把书房搬到阁楼去，客厅留给孩子们玩', text: '把书房搬到阁楼去，客厅留给孩子们玩' },
     { title: '把书房搬到阁楼去，再刷墙', text: '把书房搬到阁楼去，再刷墙' },
     { title: '', text: '', kind: 'file' },
+    { title: 'An idea the Scout wrote', text: LONG, origin: { by: 'agent', role: 'scout', tool: 'idea' } },
   ]);
   assert.deepEqual([8, 9, 11, 12].map((n) => ruled(k.mind.itemOf(ids[n]!)).component), ['idea', 'idea', 'idea', 'idea']);
+  assert.deepEqual(
+    ids.flatMap((id, n) => (view(k, id).composing ? [n] : [])),
+    [0, 1, 8, 10, 11],
+    'what the model will be asked about is made composing, and nothing else: an idea the Scout wrote lands as it is',
+  );
   k.model.on('renderer.components', () => ({ items: [] }));
   await render(k, ids);
   const asked = k.model.calls.filter((call) => call.role === 'renderer.components').map((call) => call.detail).join('\n\n');
@@ -1532,8 +1586,12 @@ test('the model may keep an idea, or make a note, a callout or a definition of i
     '周五下午3点前把报销单交给财务，别忘了附上发票原件',
   ];
   const { ids } = grow(k, lines.map((text) => ({ title: text, text })));
-  assert.deepEqual(ids.map((id) => view(k, id).component), Array(7).fill('note'), 'each starts as the default note');
   assert.deepEqual(ids.map((id) => ruled(k.mind.itemOf(id)).component), ['idea', 'idea', 'idea', 'idea', 'note', 'idea', 'note']);
+  assert.deepEqual(
+    ids.map((id) => [view(k, id).component, view(k, id).composing]),
+    ['idea', 'idea', 'idea', 'idea', 'note', 'idea', 'note'].map((component) => [component, true]),
+    'each is made as the rules draw it, marked composing',
+  );
   k.model.on('renderer.components', () => ({
     items: [
       entry({ id: ids[0]!, component: 'idea' }),
@@ -1619,7 +1677,7 @@ test('the pipeline tells the Renderer which items changed in what a card is draw
   assert.equal(await edit({ data: { where: 'Lisbon' } }), 4, 'the same data again is not');
 });
 
-test('one pass asks about 24 items at most in calls of eight, a call answered unreadably is asked again in two halves one after the other, and a call that got no answer is not', async () => {
+test('one pass asks about 24 items at most in calls of eight, a call answered unreadably is asked again in two halves one after the other, and a call that got no answer is not; every card lands once', async () => {
   const k = kit();
   const { ids } = grow(k, Array.from({ length: 30 }, (_v, n) => ({ title: `Note ${n}`, text: `${LONG} We paid 12 euros for the ferry.` })));
   const running = { now: 0, most: 0 };
@@ -1640,8 +1698,9 @@ test('one pass asks about 24 items at most in calls of eight, a call answered un
   assert.equal(running.most, 3, 'never more calls at once than the three of the pass');
   const answered = (n: number) => n < 12;
   assert.deepEqual(ids.map((id) => 'emphasis' in view(k, id).props), ids.map((_id, n) => answered(n)));
-  assert.deepEqual(ids.map((id) => view(k, id).by), ids.map((_id, n) => (answered(n) ? 'renderer' : 'default')), 'an item with no answer keeps its rule card as a default');
+  assert.deepEqual(ids.map((id) => [view(k, id).by, view(k, id).composing]), ids.map(() => ['renderer', undefined]), 'an item with no answer lands as the rules drew it, for good');
   assert.deepEqual(k.notes.map((note) => note.replace(/\(.*\)/, '()')).sort(), [
+    'renderer: 6 more cards than one pass asks about landed as the rules drew them.',
     'renderer: A call to choose components for 4 items failed (). Kept the rule-based views of them.',
     'renderer: A call to choose components for 8 items failed (). Asking once more, in two halves.',
     'renderer: A call to choose components for 8 items failed (). Kept the rule-based views of them.',
@@ -1649,15 +1708,16 @@ test('one pass asks about 24 items at most in calls of eight, a call answered un
 
   const before = components(k).length;
   k.model.on('renderer.components', (req) => ({ items: idsIn(req.user).map((id) => entry({ id })) }));
-  await render(k, ids);
-  assert.deepEqual(components(k).slice(before).flatMap((made) => idsIn(made.detail)), ids.slice(12), 'the next pass asks about the eighteen that got no answer, and no other');
+  assert.deepEqual(await render(k, ids), [], 'a card that landed does not turn into another');
+  assert.equal(components(k).length, before, 'and the next pass asks about none of them');
 });
 
-test('the pipeline runs the Renderer again over the items a pass left unanswered, one pass after another, and stops after four', async () => {
+test('through the pipeline a card the model is asked about is made composing and lands in one change, and a pass that got no answer leaves nothing to ask', async () => {
   const dropped = (count: number) => {
     const k = kit();
+    const sets: ChangeSet[] = [];
     const pipeline = new Pipeline({
-      mind: k.mind, roles: { ...fakeRoles, renderer }, model: k.model, tools: k.ctx.tools, assets: k.assets, store: { append: () => {}, all: () => [] },
+      mind: k.mind, roles: { ...fakeRoles, renderer }, model: k.model, tools: k.ctx.tools, assets: k.assets, store: { append: (set) => sets.push(set), all: () => [] },
       settings: k.ctx.settings, newId: k.ctx.newId, now: k.ctx.now, emit: () => {},
     });
     const { treeId, nodeIds } = k.seedTree('Tree', ['Root']);
@@ -1666,62 +1726,157 @@ test('the pipeline runs the Renderer again over the items a pass left unanswered
       return { item, node: makeNode(k.ctx, item, { treeId, parent: nodeIds[0]!, status: 'kept', why: '', origin: USER }) };
     });
     const drop = () => pipeline.userCommands('Drop', made.flatMap(({ item, node }): Command[] => [{ type: 'addItem', item }, { type: 'addNode', node }]));
-    return { k, pipeline, ids: made.map(({ node }) => node.id), drop };
+    /** Each node's views in the order the store holds them, as a client sees them arrive. */
+    const faces = (id: Id) => sets.flatMap((set) => set.patches.flatMap((p) => (p.entity === 'node' && p.id === id && p.after ? [(p.after as Node).view] : []))).map((v) => `${v.component}${v.composing ? ' composing' : ''}`);
+    return { k, pipeline, ids: made.map(({ node }) => node.id), drop, faces };
   };
-  const answering = (k: Kit, running: { now: number; most: number }, fails: (asked: Id[]) => boolean = () => false) =>
+  const answering = (k: Kit, fails: (asked: Id[]) => boolean = () => false) =>
     k.model
       .on('renderer.components', async (req) => {
-        running.most = Math.max(running.most, ++running.now);
         await new Promise((done) => setTimeout(done, 1));
-        running.now--;
         if (fails(idsIn(req.user))) throw new Error('timed out');
         return { items: idsIn(req.user).map((id) => entry({ id, emphasis: 'We paid 12 euros for the ferry' })) };
       })
       .on('renderer.composites', () => ({ groups: [] }));
+  const landed = (k: Kit, id: Id) => [k.mind.node(id).view.by, k.mind.node(id).view.composing];
 
   const thirty = dropped(30);
-  const running = { now: 0, most: 0 };
-  answering(thirty.k, running);
+  answering(thirty.k);
   thirty.drop();
   await thirty.pipeline.idle();
-  assert.deepEqual(thirty.ids.map((id) => view(thirty.k, id)), thirty.ids.map(() => ({ component: 'note', props: { emphasis: 'We paid 12 euros for the ferry' }, by: 'renderer' })), 'all thirty are answered for');
-  assert.deepEqual(components(thirty.k).map((made) => idsIn(made.detail).length), [8, 8, 8, 6], 'three calls for twenty-four, then one for the six left');
-  assert.equal(thirty.k.model.calls.filter((made) => made.role === 'renderer.composites').length, 1, 'the siblings are looked at for an arrangement once');
-
-  const sixty = dropped(60);
-  const busy = { now: 0, most: 0 };
-  answering(sixty.k, busy);
-  sixty.drop();
-  await sixty.pipeline.idle();
-  assert.ok(sixty.ids.every((id) => view(sixty.k, id).by === 'renderer'), 'sixty are answered for in three passes');
-  assert.deepEqual([components(sixty.k).length, busy.most], [8, 3], 'eight calls in all, and never more than the three of one pass at a time');
+  assert.deepEqual(thirty.faces(thirty.ids[0]!), ['note composing', 'note'], 'made composing, then its look, and nothing between');
+  assert.deepEqual(thirty.ids.map((id) => 'emphasis' in thirty.k.mind.node(id).view.props), thirty.ids.map((_id, n) => n < 24), 'twenty-four are answered for');
+  assert.ok(thirty.ids.every((id) => landed(thirty.k, id).join() === 'renderer,'), 'and all thirty land');
+  assert.deepEqual(components(thirty.k).map((made) => idsIn(made.detail).length), [8, 8, 8], 'in three calls of one pass');
 
   const failing = dropped(12);
-  answering(failing.k, { now: 0, most: 0 }, (asked) => asked.includes(failing.ids[11]!));
+  answering(failing.k, (asked) => asked.includes(failing.ids[11]!));
   failing.drop();
   await failing.pipeline.idle();
-  assert.deepEqual(failing.ids.map((id) => view(failing.k, id).by), failing.ids.map((_id, n) => (n < 6 ? 'renderer' : 'default')), 'the items of a call that keeps failing stay plain cards');
-  assert.deepEqual(components(failing.k).map((made) => idsIn(made.detail).length), [6, 6, 6], 'they are asked about once more, and a pass in which every call failed is the last');
-
-  const down = dropped(30);
-  const waiting = { now: 0, most: 0 };
-  answering(down.k, waiting, () => true);
-  down.drop();
-  await down.pipeline.idle();
-  assert.deepEqual([components(down.k).map((made) => idsIn(made.detail).length), waiting.most], [[8, 8, 8], 3], 'a model that is down costs one pass of three calls');
-  assert.ok(down.ids.every((id) => view(down.k, id).by === 'default'));
-  down.pipeline.userCommands('Why', [{ type: 'setWhy', id: down.ids[0]!, why: 'touched' }]);
-  await down.pipeline.idle();
-  assert.equal(components(down.k).length, 4, 'an item is asked about again when it is next touched');
-
-  const hundred = dropped(100);
-  answering(hundred.k, { now: 0, most: 0 });
-  hundred.drop();
-  await hundred.pipeline.idle();
-  assert.equal(hundred.ids.filter((id) => view(hundred.k, id).by === 'renderer').length, 96, 'four passes of twenty-four');
+  assert.deepEqual(failing.ids.map((id) => 'emphasis' in failing.k.mind.node(id).view.props), failing.ids.map((_id, n) => n < 6), 'the items of a failed call land as plain notes');
+  assert.ok(failing.ids.every((id) => landed(failing.k, id).join() === 'renderer,'));
+  failing.pipeline.userCommands('Why', [{ type: 'setWhy', id: failing.ids[11]!, why: 'touched' }]);
+  await failing.pipeline.idle();
+  assert.equal(components(failing.k).length, 2, 'a landed card is not asked about again when it is next touched');
+  assert.deepEqual(failing.faces(failing.ids[11]!), ['note composing', 'note', 'note']);
 });
 
-test('a card the model chose that an edit left unstated falls back to a default note when the call about it fails, so the next pass asks again', async () => {
+test('a card left composing when the service stopped is composed again when it starts, and lands', async () => {
+  const k = kit();
+  const { ids } = grow(k, [{ title: 'Ferry', text: `${LONG} We paid 12 euros for the ferry.` }]);
+  assert.equal(view(k, ids[0]!).composing, true);
+  k.model.on('renderer.components', (req) => ({ items: idsIn(req.user).map((id) => entry({ id })) })).on('renderer.composites', () => ({ groups: [] }));
+  const pipeline = new Pipeline({
+    mind: k.mind, roles: { ...fakeRoles, renderer }, model: k.model, tools: k.ctx.tools, assets: k.assets, store: { append: () => {}, all: () => [] },
+    settings: k.ctx.settings, newId: k.ctx.newId, now: k.ctx.now, emit: () => {},
+  });
+  pipeline.resume();
+  await pipeline.idle();
+  assert.deepEqual(view(k, ids[0]!), { component: 'note', props: {}, by: 'renderer' });
+});
+
+test('a composing card waits for its look at most as long as the pass allows, then lands as the rules drew it, and an answer that comes later is not drawn', async () => {
+  const k = kit();
+  const { ids } = grow(k, [{ title: 'Ferry', text: `${LONG} We paid 12 euros for the ferry.` }]);
+  let answer!: () => void;
+  const late = new Promise<void>((done) => (answer = done));
+  let replied!: () => void;
+  const done = new Promise<void>((r) => (replied = r));
+  k.model
+    .on('renderer.components', async (req) => {
+      await late;
+      setTimeout(replied, 0);
+      return { items: idsIn(req.user).map((id) => entry({ id, emphasis: 'We paid 12 euros for the ferry' })) };
+    })
+    .on('renderer.composites', () => ({ groups: [] }));
+  const started = Date.now();
+  const commands = await renderer(k.ctx, { nodeIds: ids, waitMs: 40 });
+  assert.ok(Date.now() - started < 1000, 'the pass did not wait for the model');
+  k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands });
+  assert.deepEqual(view(k, ids[0]!), { component: 'note', props: {}, by: 'renderer' }, 'it lands as the rules drew it');
+  answer();
+  await done;
+  assert.deepEqual(view(k, ids[0]!), { component: 'note', props: {}, by: 'renderer' }, 'and the late answer changes nothing');
+  assert.deepEqual(k.notes, ['renderer: The model chose components for 1 item after their cards had landed, so they stay as the rules drew them.']);
+});
+
+test('an idea the Scout wrote keeps the look the model gave it before, when the card is next touched', async () => {
+  const k = kit();
+  const text = 'Treat the generative card like theatre staging. Give the model a cast, a lighting palette and stage directions.';
+  const { ids } = grow(k, [{ title: 'Direct UI like a stage play', text, origin: { by: 'agent', role: 'scout', tool: 'idea' } }]);
+  const earlier: View = { component: 'note', props: { emphasis: 'Treat the generative card like theatre staging.' }, by: 'renderer' };
+  k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'an earlier look', commands: [{ type: 'setView', id: ids[0]!, view: earlier }] });
+  assert.ok(grounded(earlier, k.mind.itemOf(ids[0]!), url), 'the earlier look still stands in the text');
+  assert.deepEqual(await render(k, ids), [], 'a pass over it, as after a drag, changes nothing');
+  assert.deepEqual(view(k, ids[0]!), earlier);
+});
+
+test('an edit made while a card composes is composed again, and the answer for the old text is not landed', async () => {
+  const k = kit();
+  const { ids } = grow(k, [{ title: 'Ferry', text: `${LONG} We paid 12 euros for the ferry.` }]);
+  let answer!: () => void;
+  const gate = new Promise<void>((r) => (answer = r));
+  const asked: string[] = [];
+  k.model
+    .on('renderer.components', async (req) => {
+      asked.push(req.user);
+      if (asked.length === 1) await gate;
+      return { items: idsIn(req.user).map((id) => entry({ id, emphasis: asked.length === 1 ? 'We paid 12 euros for the ferry' : 'The return was free' })) };
+    })
+    .on('renderer.composites', () => ({ groups: [] }));
+  const delivered: Command[] = [];
+  const deliver = (some: Command[]) => (delivered.push(...some), k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands: some }));
+  const first = renderer(k.ctx, { nodeIds: ids, deliver });
+  await new Promise((r) => setTimeout(r, 0));
+  k.mind.apply({ origin: USER, label: 'edit', commands: [{ type: 'editItem', id: k.mind.node(ids[0]!).itemId, patch: { text: `${LONG} The return was free.` } }] });
+  assert.deepEqual(await renderer(k.ctx, { nodeIds: ids, edited: ids, deliver }), [], 'the edit\'s pass leaves the composing card to the pass that asked');
+  answer();
+  await first;
+  assert.equal(asked.length, 2, 'the card is asked about again, for its new text');
+  assert.match(asked[1]!, /The return was free/);
+  assert.deepEqual(view(k, ids[0]!), { component: 'note', props: { emphasis: 'The return was free' }, by: 'renderer' }, 'and lands once, for the text it has');
+  assert.ok(!delivered.some((c) => c.type === 'setView' && 'emphasis' in c.view.props && c.view.props.emphasis === 'We paid 12 euros for the ferry'), 'the answer for the old text never lands');
+});
+
+test('a card past the 24 one pass asks about is left to that pass by another, so it lands once', async () => {
+  const k = kit();
+  const { ids } = grow(k, Array.from({ length: 25 }, (_v, n) => ({ title: `Note ${n}`, text: `${LONG} We paid 12 euros for the ferry.` })));
+  let answer!: () => void;
+  const gate = new Promise<void>((r) => (answer = r));
+  k.model
+    .on('renderer.components', async (req) => {
+      await gate;
+      return { items: idsIn(req.user).map((id) => entry({ id })) };
+    })
+    .on('renderer.composites', () => ({ groups: [] }));
+  const first = renderer(k.ctx, { nodeIds: ids });
+  await new Promise((r) => setTimeout(r, 0));
+  const second = await renderer(k.ctx, { nodeIds: [ids[24]!] });
+  answer();
+  assert.deepEqual(second.filter((c) => c.type === 'setView'), [], 'the 25th, touched meanwhile, is left to the first pass');
+  assert.equal((await first).filter((c) => c.type === 'setView' && c.id === ids[24]).length, 1, 'which lands it once');
+});
+
+test('a card one pass is composing is left to it by a second pass over it, so it is asked about once and lands once', async () => {
+  const k = kit();
+  const { ids } = grow(k, [{ title: 'Ferry', text: `${LONG} We paid 12 euros for the ferry.` }]);
+  let answer!: () => void;
+  const gate = new Promise<void>((r) => (answer = r));
+  k.model
+    .on('renderer.components', async (req) => {
+      await gate;
+      return { items: idsIn(req.user).map((id) => entry({ id, emphasis: 'We paid 12 euros for the ferry' })) };
+    })
+    .on('renderer.composites', () => ({ groups: [] }));
+  const first = renderer(k.ctx, { nodeIds: ids });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(await renderer(k.ctx, { nodeIds: ids }), [], 'the second pass, as when the user keeps the card, leaves it alone');
+  answer();
+  assert.equal((await first).filter((c) => c.type === 'setView').length, 1);
+  assert.equal(components(k).length, 1, 'one question');
+});
+
+test('a card the model chose that an edit left unstated composes again, and lands as the rules drew it for good when the call about it fails', async () => {
   const k = kit();
   const { ids } = grow(k, [{ title: 'House', text: 'Caution: the stairs are steep and the rail is loose, so hold on to the wall.' }]);
   k.model.on('renderer.components', () => ({ items: [entry({ id: ids[0]!, component: 'callout', passage: 'Caution: the stairs are steep and the rail is loose, so hold on to the wall.', tone: 'caution' })] }));
@@ -1732,8 +1887,12 @@ test('a card the model chose that an edit left unstated falls back to a default 
   k.model.on('renderer.components', () => {
     throw new Error('timed out');
   });
-  await render(k, ids, ids);
-  assert.deepEqual(view(k, ids[0]!), { component: 'note', props: {}, by: 'default' });
+  const early: Command[] = [];
+  const commands = await renderer(k.ctx, { nodeIds: ids, edited: ids, deliver: (some) => (early.push(...some), k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands: some })) });
+  assert.deepEqual(early.map((c) => (c.type === 'setView' ? c.view : null)), [{ component: 'note', props: {}, by: 'default', composing: true }, { component: 'note', props: {}, by: 'renderer' }], 'it composes, then lands');
+  assert.deepEqual(commands, []);
+  assert.deepEqual(view(k, ids[0]!), { component: 'note', props: {}, by: 'renderer' });
+  assert.deepEqual(await render(k, ids), [], 'and is not asked about again');
 });
 
 test('a figure label of over forty characters is refused in a fact, in facts and in a sheet, none of which stands without it', async () => {
@@ -2348,11 +2507,12 @@ function slowComposites(k: Kit, reply: () => CompositesReply): { asked: Promise<
 test('a card takes its look before the model has said how its siblings group', async () => {
   const k = kit();
   const { ids } = grow(k, [
-    { title: 'Recipe', data: { steps: ['Boil water', 'Add pasta'] }, status: 'pick' },
+    { title: 'Ferry', text: `${LONG} We paid 12 euros for the ferry.`, status: 'pick' },
     { title: 'One', text: PLAIN, status: 'pick' },
     { title: 'Two', text: PLAIN, status: 'pick' },
     { title: 'Three', text: PLAIN, status: 'pick' },
   ]);
+  k.model.on('renderer.components', (req) => ({ items: idsIn(req.user).map((id) => entry({ id, emphasis: 'We paid 12 euros for the ferry' })) }));
   const composites = slowComposites(k, () => ({ groups: [] }));
   const early: Command[][] = [];
 
@@ -2360,7 +2520,7 @@ test('a card takes its look before the model has said how its siblings group', a
   await composites.asked;
   await new Promise((r) => setTimeout(r, 0));
 
-  assert.deepEqual(early.flat().map((c) => (c.type === 'setView' ? [c.id, c.view.component] : [c.type])), [[ids[0], 'steps']]);
+  assert.deepEqual(early.flat().map((c) => (c.type === 'setView' ? [c.id, c.view.component, 'emphasis' in c.view.props] : [c.type])), [[ids[0], 'note', true]]);
   composites.open();
   assert.deepEqual(await run, []);
 });

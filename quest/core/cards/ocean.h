@@ -40,10 +40,14 @@ std::optional<std::string> cardOf(const Ref& ref);
 /// draws changed. Its sizes stay: they never depend on the node.
 bool seat(const std::string& noteID, const Node& node);
 
+/// Whether a note's card is the in-progress card of one whose look the agents are still choosing (`view.composing`).
+bool composing(const std::string& noteID);
 /// A note's card small, m.
 std::optional<Vec2> smallSize(const std::string& noteID);
 /// Its picture.
 std::optional<Piece> small(Art& art, const std::string& noteID);
+/// The picture of its frame alone, with none of its words.
+std::optional<Piece> frame(Art& art, const std::string& noteID);
 /// A note's card opened, m: its frame.
 std::optional<Vec2> openSize(const std::string& noteID);
 /// Where the parts of the panel in view sit, at the scroll it stands at: the words a hand can mark and its picture.

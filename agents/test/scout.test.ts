@@ -305,7 +305,7 @@ test('a chart, steps and a recording a source returns reach the card', async () 
   assert.equal(k.assets.links.get(served(k, episode!.data.mediaUrl)), 'https://cdn.example/episode.mp3', 'the recording streams through the service');
   assert.ok(k.assets.files.has(served(k, episode!.data.thumbnailUrl)), 'its cover was brought in');
   assert.deepEqual(episode!.data.sound, { seconds: 2520 });
-  assert.deepEqual(byRule(episode!, (id) => `/assets/${id}`), { component: 'audio', props: { src: episode!.data.mediaUrl, seconds: 2520 } });
+  assert.deepEqual(byRule(episode!, (id) => `/assets/${id}`), { component: 'audio', props: { src: episode!.data.mediaUrl, seconds: 2520, image: episode!.data.thumbnailUrl } });
 });
 
 test('a search that finds little is tried in other words, and the records are pooled without repeats', async () => {

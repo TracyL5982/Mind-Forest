@@ -12,6 +12,10 @@ namespace {
 
 constexpr int BAR = 30;
 constexpr int THUMB = 64;
+/// A film's poster beside the words under the bar, two by three as a poster stands.
+constexpr int POSTER_WIDE = 60, POSTER_TALL = 90;
+/// A wide picture in a band across the face under the bar, as tall as leaves room for a line of the title and the cue.
+constexpr int BAND = 48;
 constexpr const char* OUT = "\xE2\x86\x97";
 constexpr Setting DOT{11, 11, Font::Weight::bold};
 
@@ -72,13 +76,38 @@ void bar(const Pen& pen, float x, float y, float w, const std::string& site, boo
 }
 
 
-/// The address bar across the top, the title, the description in whole lines, and the cue. No thumbnail.
+/// Where the picture stands on the small face. One taller than it is wide, a film's poster, stands at the right of the words. Any
+/// other, such as a page's own picture at 1.91 to 1, lies in a band under the bar, where the poster's box would show a sliver of its
+/// middle. Until the picture is had, a film's is drawn as a poster and any other in the band, so the face keeps its shape when it lands.
+enum class Placed { none, poster, band };
+
+Placed placed(const Item& item, const std::string& src) {
+    if (src.empty()) return Placed::none;
+    std::optional<float> aspect = aspectOf(src);
+    bool tall = aspect ? *aspect < 1 : item.data["kind"].string("") == "film";
+    return tall ? Placed::poster : Placed::band;
+}
+
+/// The address bar across the top, then the title and the description in whole lines, and the cue, beside a portrait picture at the
+/// right or under a wide one in a band, when the record has one.
 void lay(Col& c, const Item& item, const Json& props) {
     if (c.pen) bar(*c.pen, 1, 1, face::W - 2, siteOf(item, props), false, setting::faceMeta, c.look.dashed);
     c.y = 30 + 13;
+    std::string picture = text(props["image"]);
+    Placed at = placed(item, picture);
+    float foot = at == Placed::poster ? sidePictureRight(c, picture, POSTER_WIDE, POSTER_TALL) : 0;
+    if (at == Placed::band) {
+        if (c.pen) {
+            CGRect box = c.pen->px(1, 31, face::W - 2, BAND);
+            c.pen->ctx.setFillColor(palette::media);
+            c.pen->ctx.fill(box);
+            c.pen->picture(picture, box, true, c.words);
+        }
+        c.y += BAND;
+    }
     std::string about = text(props["description"]);
     if (about.empty()) about = item.summary;
-    if (!c.title(item.titleOrUntitled())) return;
+    if (!c.title(item.titleOrUntitled(), -1, -1, at == Placed::band ? 1 : face::TITLE_LINES)) return;
     if (!about.empty() && c.room() >= 4 + face::BODY) {
         c.gap(4);
         c.lines(about, Measure::body, 99, c.look.ink2);
@@ -86,6 +115,7 @@ void lay(Col& c, const Item& item, const Json& props) {
         c.more = true;
     }
     if (c.more) c.cue(cueMore(c.words));
+    c.y = std::max(c.y, foot);
     c.y += 13 - face::BOTTOM;
 }
 

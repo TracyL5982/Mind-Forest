@@ -125,6 +125,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     emit,
     playback,
   });
+  pipeline.resume();
 
   const desk: Desk = {
     dump: async (dumps) => whereItWent(mind, await pipeline.dump(dumps)),

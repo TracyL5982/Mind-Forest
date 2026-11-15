@@ -77,7 +77,7 @@ std::optional<Json> readSamples() {
     std::optional<Json> samples = Json::parse(samplesJson);
     if (!samples) return std::nullopt;
     // Each sample with lines over its structure, or with a short title, joins its type's samples, after the page's own.
-    for (const char* more : {linesSamplesJson, titlesSamplesJson}) {
+    for (const char* more : {linesSamplesJson, titlesSamplesJson, looksSamplesJson}) {
         std::optional<Json> extras = Json::parse(more);
         if (!extras) continue;
         Json types = Json::list();

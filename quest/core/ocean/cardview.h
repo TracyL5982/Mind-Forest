@@ -86,6 +86,24 @@ public:
     EntityRef openPanel;
     EntityRef scrollBar;
     EntityRef armHolder;
+    // NOTE(port): added for Quest (core/cards). A card whose look the agents are still choosing: the holder its small
+    // face is drawn in, the soft light that runs across it, and, once its finished card has come, how it eases to
+    // that card's size under it (OceanModel::settleCard).
+    EntityRef shape;
+    EntityRef shimmer;
+    struct Settle {
+        Vec2 from, to;
+        double start;
+    };
+    std::optional<Settle> settle;
+    /// The finished card a composing one gives way to, while its faces are still on their way to the GPU: until they are there
+    /// the composing card stays as it was, so nothing is ever shown empty.
+    std::weak_ptr<CardView> givingWay;
+    double givingWaySince = 0;
+    /// How much of its faces show, 0…1, as a finished card comes up inside the composing one; its card, its glow and
+    /// what it leads stay as they are, so the glass of its group never thins.
+    float appear = 1;
+    std::optional<double> appearAt;
     bool pictureFull = false;           // … shown from its own file (asked for, or there), not from the atlas
     bool step = false;                  // it is a layer's first card, standing on the path
     bool lit = true;                    // it glows while it is on the layer you work on
@@ -115,6 +133,7 @@ private:
     float shownAlpha = -1;
     float shownMix = -1;
     float shownStep = 0;
+    float shownAppear = 1;
 
 public:
     CardView(const TreeNode& node, Vec2 smallBody, Vec2 openBody);
