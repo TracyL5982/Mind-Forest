@@ -48,6 +48,26 @@ test('a quick request that goes unanswered is tried again after its own short wa
   assert.ok(Date.now() - started < 5000);
 });
 
+test('the run log is told which model and effort answered each request and how many tries it took', async () => {
+  const reply = { output: [{ type: 'message', content: [{ type: 'output_text', text: '{"answer":"yes"}' }] }], usage: { total_tokens: 12 } };
+  let asked = 0;
+  const fetch = (async (_url: string, init: RequestInit) => {
+    asked++;
+    if (JSON.parse(String(init.body)).stream) return streamed(['{"answer":"yes"}']);
+    return asked === 1 ? new Response('{"error":{"code":"rate_limit_exceeded"}}', { status: 429 }) : new Response(JSON.stringify(reply), { status: 200 });
+  }) as typeof globalThis.fetch;
+  const calls: { model?: string; effort?: string; tries?: number; ok: boolean }[] = [];
+  const model = new MetaModel({ apiKey: 'k', fetch, onCall: ({ model, effort, tries, ok }) => calls.push({ model, effort, tries, ok }) });
+
+  await model.json({ ...ask, quick: true });
+  await model.json({ ...ask, onText: () => {} });
+
+  assert.deepEqual(calls, [
+    { model: 'muse-ember-1.0', effort: 'minimal', tries: 2, ok: true },
+    { model: 'muse-spark-1.3', effort: 'low', tries: 1, ok: true },
+  ]);
+});
+
 /** A reply as the Responses API streams it: server-sent events, the text in pieces, split across reads wherever the network splits it. */
 function streamed(pieces: string[], cutEvery = 7): Response {
   const events = [
