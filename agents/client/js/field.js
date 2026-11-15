@@ -185,7 +185,7 @@ export class Field {
               this.render();
             },
           })),
-        arr.marks);
+        h('div', { class: 'pane-marks' }, arr.marks));
     }
     for (const [id, pane] of this.panes) {
       if (seen.has(id)) continue;
@@ -348,17 +348,22 @@ export class Field {
     return { x: (clientX - rect.left - this.view.x) / this.view.k, y: (clientY - rect.top - this.view.y) / this.view.k };
   }
 
+  /** The box round these cards and the frames of the groups they are in, since a frame can hold a mark where no card is, as a map does. */
   boundsOf(ids) {
     let box = null;
+    const take = (x0, y0, x1, y1) => {
+      box = box ? { x0: Math.min(box.x0, x0), x1: Math.max(box.x1, x1), y0: Math.min(box.y0, y0), y1: Math.max(box.y1, y1) } : { x0, x1, y0, y1 };
+    };
     for (const id of ids) {
       const card = this.cards.get(id);
       if (!card?.target) continue;
       const w = (card.w * card.scale) / 2;
       const hgt = (card.h * card.scale) / 2;
       const { x, y } = card.target;
-      box = box
-        ? { x0: Math.min(box.x0, x - w), x1: Math.max(box.x1, x + w), y0: Math.min(box.y0, y - hgt), y1: Math.max(box.y1, y + hgt) }
-        : { x0: x - w, x1: x + w, y0: y - hgt, y1: y + hgt };
+      take(x - w, y - hgt, x + w, y + hgt);
+      const group = this.store.view.groupOf.get(id);
+      const block = group && this.layout.blocks.get(group.id);
+      if (block) take(block.x, block.y, block.x + block.w, block.y + block.h);
     }
     return box;
   }

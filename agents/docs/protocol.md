@@ -30,7 +30,7 @@ Drawing rules:
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `hello` | `protocol`, `snapshot`, `settings`, `undo`, `voice` | Sent once on connect. `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
+| `hello` | `protocol`, `snapshot`, `settings`, `maps`, `undo`, `voice`, `hearing` | Sent once on connect. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `maps` is the map tile provider, `{ tiles, credit, link? }`, or null when maps are off, in which case a client asks no tile server for anything. See Maps in `docs/libraries.md`. `undo` is the label of what an undo would take back now, or null. `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. |
 | `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
 | `activity` | `activity` | Work state: `id`, `role`, `state` (`start`, `done`, `error`), `message`, optional `nodeId`. Show a thinking mark on `nodeId` between `start` and `done`. |
 | `say` | `text` | One short line for the agent to speak. |
@@ -47,7 +47,7 @@ Drawing rules:
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `dump` | `dumps` | Things dropped into the mindstorm. Each is `{kind:'text', text, name?}`, `{kind:'link', url}`, or `{kind:'asset', asset, mime, name?}`. Upload files first (below). |
+| `dump` | `dumps` | Things dropped into the mindstorm. Each is `{kind:'text', text, name?}`, `{kind:'link', url}`, or `{kind:'asset', asset, mime, name?, sound?}`. Upload files first (below). A recording (a `mime` that starts `audio/`) carries `sound: {seconds, peaks}`, which the client measured when it decoded the file, because the service never decodes sound: see the audio card in `docs/libraries.md`. A recording sent with no `sound` is filed by name. |
 | `utter` | `text`, `final`, `scene` | Speech as text. Send partials with `final: false` as they arrive and the last one with `final: true`. |
 | `focus` | `nodeId` | The user opened or looked at a node. The agent brings picks for it if it has none. |
 | `ask` | `nodeId`, `need` | A typed question about a node. |

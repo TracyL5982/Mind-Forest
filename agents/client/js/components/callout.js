@@ -1,5 +1,5 @@
 import { h, s } from '../dom.js';
-import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, kind, say, text, wrap } from './shared.js';
+import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, aboveOf, drawAbove, kind, say, text, wrap } from './shared.js';
 import { wordsOf } from '../words.js';
 
 const WIDTH = 256;
@@ -16,6 +16,7 @@ function plan(item, props) {
   return {
     words,
     tone: Object.hasOwn(TONE, props.tone) ? props.tone : 'note',
+    above: aboveOf(props, COLUMN),
     lines: wrap(words, COLUMN, TITLE_LETTER, 5),
     foot: item.title && item.title !== words ? item.title : '',
   };
@@ -24,8 +25,8 @@ function plan(item, props) {
 export const shows = [];
 
 export function size(item, props) {
-  const { lines, foot } = plan(item, props);
-  return [WIDTH, FRAME + TEXT + 6 + lines * TITLE + (foot ? 8 + TEXT : 0)];
+  const { above, lines, foot } = plan(item, props);
+  return [WIDTH, FRAME + above.height + TEXT + 6 + lines * TITLE + (foot ? 8 + TEXT : 0)];
 }
 
 const head = (tone, item) => h('div', { class: 'callout-head' },
@@ -33,8 +34,9 @@ const head = (tone, item) => h('div', { class: 'callout-head' },
   kind(wordsOf(item)[tone]));
 
 export function draw(item, props) {
-  const { words, tone, lines, foot } = plan(item, props);
+  const { words, tone, above, lines, foot } = plan(item, props);
   return [
+    drawAbove(above),
     h('div', { class: `callout is-${tone}` }, head(tone, item), say('div', `callout-text clamp-${lines}`, words)),
     foot && say('div', 'card-foot clamp-1', foot),
   ];

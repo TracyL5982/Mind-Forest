@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ItemData } from '../../domain.ts';
 import { grounding, type Grounding } from '../../grounding.ts';
+import { CHECKS, type ComponentId, type PropsOf } from '../../views.ts';
 import { asColour } from './colours.ts';
 import { clip, squash, tidyTags, TITLE_MAX, type Described } from './plain.ts';
 
@@ -22,68 +23,70 @@ function distinct(entries: string[]): string[] {
   return entries.map(squash).filter((entry) => entry && !seen.has(entry.toLowerCase()) && seen.add(entry.toLowerCase()));
 }
 
-/** A list the content states entry by entry. An entry the text does not hold is dropped. */
-const listed = <K extends string>(key: K, max: number) =>
-  field({
-    reply: { [key]: z.array(z.string()) } as Record<K, z.ZodArray<z.ZodString>>,
-    keep(r, text) {
-      const entries = distinct(r[key] as string[]).filter((entry) => text.says(entry)).slice(0, max);
-      return entries.length > 0 ? { [key]: entries } : undefined;
-    },
-  });
+/** The props a card is drawn with from these, when they show the whole text as `CHECKS` frames them, or nothing. */
+const framed = <C extends ComponentId>(component: C, props: PropsOf<C>, text: Grounding): PropsOf<C> | undefined =>
+  (CHECKS[component].frame as unknown as (props: PropsOf<C>, text: Grounding) => PropsOf<C> | undefined)(props, text);
 
-/** Two strings that mean something only together, such as a question and its answer. */
-const pair = <A extends string, B extends string>(first: A, second: B) =>
+/** Two strings that mean something only together, such as a question and its answer, kept when the card they make shows the whole text. */
+const pair = <A extends string, B extends string>(first: A, second: B, stands: (a: string, b: string, text: Grounding) => boolean) =>
   field({
     reply: { [first]: z.string(), [second]: z.string() } as Record<A | B, z.ZodString>,
     keep(r, text) {
       const [a, b] = [squash(r[first]), (r[second] as string).trim()];
-      return a && b && text.says(a) && text.says(b) ? { [first]: a, [second]: b } : undefined;
+      return a && b && stands(a, b, text) ? { [first]: a, [second]: b } : undefined;
     },
   });
 
 const MAX_COLUMNS = 8;
 const MAX_ROWS = 40;
 const MAX_ITEMS = 30;
+/** The most figures a facts card shows, and so the most a text may have to be one. */
+const MAX_FACTS = 6;
 
-/** Every piece of structure Intake extracts. The reply schema and `structure()` are both built from this table. */
+/**
+ * Every piece of structure Intake extracts. The reply schema and `structure()` are both built from this table. A piece that a card
+ * draws is kept only when that card shows the whole text, every line in order and every mark as written, as the Renderer will hold it.
+ */
 const EXTRACTED = [
   field({
     reply: { steps: z.array(z.string()) },
-    keep(r) {
+    keep(r, text) {
       const steps = r.steps.map(squash).filter(Boolean).slice(0, 12);
-      return steps.length >= 2 ? { steps } : undefined;
+      return steps.length >= 2 && framed('steps', { steps }, text) ? { steps } : undefined;
     },
   }),
   field({
     reply: { facts: z.array(z.object({ label: z.string(), value: z.string() })) },
     keep(r, text) {
       const facts = r.facts.map((f) => ({ label: squash(f.label), value: squash(f.value) })).filter((f) => f.label && f.value && text.says(f.value));
-      return facts.length > 0 ? { facts: facts.slice(0, 12) } : undefined;
+      if (facts.length === 0 || facts.length > MAX_FACTS) return undefined;
+      const card = facts.length === 1 ? framed('fact', facts[0]!, text) : framed('facts', { facts }, text);
+      return card ? { facts } : undefined;
     },
   }),
   field({
     reply: { quoteText: z.string(), quoteBy: z.string() },
     keep(r, text) {
-      const quote = r.quoteText.trim();
-      return quote && text.quotes(quote) ? { quote: { text: quote, ...(r.quoteBy.trim() ? { by: r.quoteBy.trim() } : {}) } } : undefined;
+      const [quote, by] = [r.quoteText.trim(), r.quoteBy.trim()];
+      // A speaker the text does not write where the card would show it is left out, and the words must then be the whole text.
+      const card = quote ? framed('quote', { text: quote, ...(by && { by }) }, text) : undefined;
+      return card ? { quote: { text: card.text, ...(card.by && { by: card.by }) } } : undefined;
     },
   }),
   field({
     reply: { chartLabels: z.array(z.string()), chartValues: z.array(z.number()), chartUnit: z.string() },
     keep(r, text) {
-      const unit = r.chartUnit.trim();
-      // "2189万" writes 2189 in 万, and not the bare number 2189.
-      const stated = r.chartValues.every((v) => text.writes(v, unit));
-      if (r.chartLabels.length < 2 || r.chartLabels.length !== r.chartValues.length || !stated) return undefined;
-      return { chart: { labels: r.chartLabels.map(squash), values: r.chartValues, ...(unit ? { unit } : {}) } };
+      const [labels, values, unit] = [r.chartLabels.map(squash), r.chartValues, r.chartUnit.trim()];
+      if (labels.length < 2 || labels.length !== values.length || !framed('chart', { chart: 'bar', labels, values, ...(unit && { unit }) }, text)) return undefined;
+      return { chart: { labels, values, ...(unit ? { unit } : {}) } };
     },
   }),
   field({
     reply: { personName: z.string(), personRole: z.string() },
     keep(r, text) {
-      const name = r.personName.trim();
-      return name && text.says(name) ? { person: { name, ...(r.personRole.trim() ? { role: r.personRole.trim() } : {}) } } : undefined;
+      const [name, role] = [r.personName.trim(), r.personRole.trim()];
+      // A role is whole words of the text, a line or a sentence of it, and never a name for it the model gave.
+      return name && text.says(name) ? { person: { name, ...(role && text.units(role) !== undefined ? { role } : {}) } } : undefined;
     },
   }),
   field({
@@ -100,17 +103,27 @@ const EXTRACTED = [
       return where && text.says(where) ? { where } : undefined;
     },
   }),
-  listed('people', 12),
-  listed('pros', 12),
-  listed('cons', 12),
+  field({
+    reply: { people: z.array(z.string()) },
+    keep(r, text) {
+      const people = distinct(r.people).filter((name) => text.says(name)).slice(0, 12);
+      return people.length > 0 ? { people } : undefined;
+    },
+  }),
+  field({
+    reply: { pros: z.array(z.string()), cons: z.array(z.string()) },
+    keep(r, text) {
+      const [pros, cons] = [distinct(r.pros).slice(0, 12), distinct(r.cons).slice(0, 12)];
+      // Each side stands under the item's own heading or label for it, which the card draws over it.
+      return pros.length > 0 && cons.length > 0 && framed('proscons', { pros, cons } as PropsOf<'proscons'>, text) ? { pros, cons } : undefined;
+    },
+  }),
   field({
     // A row is one string with its cells separated by "|", so the schema nests no deeper than a list of strings.
     reply: { tableHeads: z.array(z.string()), tableRows: z.array(z.string()) },
     keep(r, text) {
       const heads = r.tableHeads.map(squash);
-      // The corner of a table with a head for each row and each column is empty, so the first head may be.
-      if (heads.length < 2 || heads.length > MAX_COLUMNS || heads.some((head, n) => (head || n > 0) && !text.says(head))) return undefined;
-      const same = (cells: string[]) => cells.every((cell, n) => cell.toLowerCase() === heads[n]!.toLowerCase());
+      if (heads.length < 2 || heads.length > MAX_COLUMNS) return undefined;
       const rows = r.tableRows
         .map((row) => {
           // A leading "|" with no trailing one, or the reverse, may be an empty cell, so the two are only taken off together.
@@ -118,21 +131,24 @@ const EXTRACTED = [
           // A dash the text does not write is the model's way of showing an empty cell.
           return fenced.split('|').map((cell) => (/^\s*[-–—]\s*$/.test(cell) && !text.says(cell) ? '' : squash(cell)));
         })
-        .filter((cells) => cells.length === heads.length && !cells.every((cell) => /^[-:\s]*$/.test(cell)) && !same(cells) && cells.every((cell) => !cell || text.says(cell)))
+        // A divider and a row that repeats the heads are no rows.
+        .filter((cells) => !cells.every((cell) => /^[-:\s]*$/.test(cell)) && !cells.every((cell, n) => cell.toLowerCase() === heads[n]?.toLowerCase()))
         .slice(0, MAX_ROWS);
-      return rows.length > 0 ? { table: { heads, rows } } : undefined;
+      return rows.length > 0 && rows.every((cells) => cells.length === heads.length) && framed('table', { heads, rows }, text) ? { table: { heads, rows } } : undefined;
     },
   }),
-  pair('question', 'answer'),
-  pair('term', 'definition'),
+  pair('question', 'answer', (question, answer, text) => framed('qa', { question, answer }, text) !== undefined),
+  pair('term', 'definition', (term, definition, text) => text.says(term) && framed('definition', { term, definition }, text) !== undefined),
   field({
     reply: { items: z.array(z.string()), checklist: z.array(z.boolean()) },
     keep(r, text) {
-      const items = distinct(r.items).filter((item) => text.says(item)).slice(0, MAX_ITEMS);
+      const items = distinct(r.items).slice(0, MAX_ITEMS);
       if (items.length < 2) return undefined;
-      // The model only says the list is a checklist. Each mark is read off the text, so a mark the text does not carry is never shown.
-      const marks = r.checklist.length > 0 ? items.map((item) => text.ticks(item)) : [];
-      return { items, ...(marks.length > 0 && marks.every((mark) => mark !== undefined) ? { checklist: marks } : {}) };
+      // A mark is the check box on the item's own line, whatever the model says of it. A tick or a cross the line writes is a word of the item.
+      const shown = text.shows([{ pieces: items.map((item) => ({ text: item, entry: true })) }]);
+      if (!shown) return undefined;
+      if (shown.boxes.every((box) => box === undefined)) return { items };
+      return shown.boxes.every((box) => box !== undefined) ? { items, checklist: shown.boxes as boolean[] } : undefined;
     },
   }),
   field({
@@ -153,7 +169,8 @@ const EXTRACTED = [
     keep(r, text) {
       const passage = r.excerptText.trim();
       const at = squash(r.excerptAt);
-      return passage && text.quotes(passage) ? { excerpt: { text: passage, ...(at && text.says(at) ? { at } : {}) } } : undefined;
+      const where = at && text.says(at) ? { at } : {};
+      return passage && framed('excerpt', { text: passage, ...where }, text) ? { excerpt: { text: passage, ...where } } : undefined;
     },
   }),
 ];
@@ -188,23 +205,23 @@ const FIELDS = `For each thing you describe, return:
 Write in the language of the content.
 
 The remaining fields hold structure a card can draw. Fill one only when the content itself states it, and leave it empty (an empty string or an empty list) otherwise. Never invent structure.
-- steps: the ordered steps, when the content is a procedure or a sequence.
 
-The fields below are checked against the content. Copy its own words and numbers into them: a value that is not written in the content is thrown away.
-- facts: label and value pairs, when the content lists figures or attributes. Each value as the content writes it.
-- quoteText and quoteBy: a quotation the content contains, word for word with its punctuation, and who said it.
-- chartLabels, chartValues, chartUnit: a numeric series the content states, one value per label. Each value is a number the content writes.
-- personName and personRole: when the content is about one named person, the name as written.
+They are checked against the content. Copy its own words and numbers into them: a value that is not written in the content is thrown away. A card that draws one of these shows the whole content, so a structure is kept only when it is all of it: every step, entry, point, figure or row the content holds, in the content's order, each a whole sentence or line copied word for word with every mark it writes, such as ✗, ✓, ▼, a minus sign or brackets. Never leave a line out and never cut one. The content's headings and labels, and a sentence or two that open it before its structure, are drawn above the structure and need not be copied into a field.
+- steps: the ordered steps, when the content is a procedure or a sequence.
+- facts: label and value pairs, when the content is two to six figures or attributes and nothing more, one to a line or a row. Each label is what its line or row writes before the value, and each value what it writes after: add no word of your own.
+- quoteText and quoteBy: when the content is a quotation, its words word for word with their punctuation, and in quoteBy the content's own words that say who said it, as they are written, or nothing. Never name a speaker the content does not write.
+- chartLabels, chartValues, chartUnit: a numeric series the content states, one value per label. Each value is a number the content writes, and each label the words the content writes beside it.
+- personName and personRole: when the content is about one named person, the name as written, and in personRole a whole line or sentence of the content that says who they are, or nothing.
 - when: a date or time the content is about, as written.
 - where: the place the content is about, as written.
 - people: every person the content names.
-- pros and cons: the points for and the points against, when the content weighs a choice.
+- pros and cons: the points for and the points against, when the content weighs a choice and gives each side its own heading or label, such as "Pros:" and "Cons:".
 - tableHeads and tableRows: a table the content holds. tableHeads has the column heads. Each entry of tableRows is one row, with its cells in column order separated by " | ". Leave out the heads row and any divider line of dashes.
-- question and answer: when the content asks one question and answers it.
-- term and definition: when the content defines one term.
-- items and checklist: a list in no particular order. Leave checklist empty unless the content puts a check mark or a tick box beside each item. Then give true or false for each item, in the same order.
+- question and answer: when the content asks one question and answers it. The answer is everything the content says after the question.
+- term and definition: when the content defines one term. The definition is the whole content, the term included.
+- items and checklist: a list in no particular order, every line of it, with any tick or cross the line writes. Leave checklist empty unless each line opens with a check box, as "[ ]" or "[x]". Then give true or false for each item, in the same order. A tick or a cross written on a line is a word of it, and no check box.
 - colours: each colour the content presents as a colour (a palette entry, a swatch, the colour of something), as a hex value or a plain colour name, with the name the content calls it, or an empty name. A colour word used for something else, such as the fruit in "an orange", is not a colour.
-- excerptText and excerptAt: one passage of a longer source that is worth quoting, word for word with its punctuation, and where it sits as the source itself says (a heading, a chapter, a page).`;
+- excerptText and excerptAt: when the content is one passage of a longer source, the passage word for word with its punctuation, and where it sits as the source itself says (a heading, a chapter, a page).`;
 
 export const TEXT_SYSTEM = `You are the intake clerk of a brainstorming app. You label what the user drops in so it can be filed and found later.
 
@@ -243,7 +260,8 @@ Write in the language of the conversation.`;
 
 /** The parts of the model's description worth keeping as drawable data: those that `source`, the text the model described, states. */
 export function structure(d: Description, source: string): ItemData {
-  const text = grounding(source);
+  // The card that draws a piece draws the item's title too, which the model gave, so a line that is the title is no part of the text it shows.
+  const text = grounding(source, { title: clip(squash(d.title), TITLE_MAX) });
   const data: ItemData = {};
   for (const extracted of EXTRACTED) Object.assign(data, (extracted as Field<Shape>).keep(d, text));
   return data;

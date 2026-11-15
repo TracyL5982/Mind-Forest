@@ -22,6 +22,7 @@ const WORDS = {
     link: 'link',
     noPicture: 'Picture unavailable',
     noClip: 'This clip has no file to play.',
+    noSound: 'This recording has no file to play.',
     noData: 'No data',
     chart: 'Chart',
     done: 'Done',
@@ -31,6 +32,8 @@ const WORDS = {
     where: 'Where',
     people: 'People',
     origin: 'Origin',
+    explore: 'Explore',
+    computed: 'computed',
   },
   zh: {
     untitled: '未命名',
@@ -48,6 +51,7 @@ const WORDS = {
     link: '链接',
     noPicture: '图片无法显示',
     noClip: '这段视频没有可播放的文件。',
+    noSound: '这段录音没有可播放的文件。',
     noData: '暂无数据',
     chart: '图表',
     done: '已完成',
@@ -57,6 +61,8 @@ const WORDS = {
     where: '地点',
     people: '人物',
     origin: '来源',
+    explore: '可探索',
+    computed: '计算值',
   },
 };
 

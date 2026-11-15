@@ -1,4 +1,4 @@
-import type { Command, Id, Item, Node, Origin } from '../domain.ts';
+import type { Command, Id, Item, Node, Origin, Sound } from '../domain.ts';
 import type { Assets, ModelClient, Tools } from '../ports.ts';
 import type { Mindstorm } from '../state.ts';
 import { defaultView } from '../views.ts';
@@ -41,7 +41,8 @@ export interface RoleContext {
 export type RawDump =
   | { kind: 'text'; text: string; name?: string }
   | { kind: 'link'; url: string }
-  | { kind: 'asset'; asset: string; mime: string; name?: string };
+  /** `sound` is what the client measured of a recording it could decode. A recording without it is filed by name only. */
+  | { kind: 'asset'; asset: string; mime: string; name?: string; sound?: Sound };
 
 export interface Scene {
   /** The node the user is looking at or has open. */
@@ -116,8 +117,15 @@ export interface Roles {
     },
   ): Promise<Command[]>;
   organizer(ctx: RoleContext, input: { request: string; scope: Scope; focus?: Id }): Promise<{ commands: Command[]; summary: string }>;
-  /** Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup. */
-  renderer(ctx: RoleContext, input: { nodeIds: Id[] }): Promise<Command[]>;
+  /**
+   * Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup.
+   * `edited` names the nodes whose item's title, text or data changed since it was last drawn.
+   * One pass asks the model about a bounded number of items. `later` is told the nodes it still owes an answer, because the pass was
+   * full or a call failed, so the caller can run another pass over them. It is told nothing after a pass in which every call failed:
+   * the model is then down, and another pass would only wait on it again. `again` marks such a pass: it looks at cards alone, since
+   * the first pass already looked for arrangements among the siblings.
+   */
+  renderer(ctx: RoleContext, input: { nodeIds: Id[]; edited?: Id[]; again?: boolean; later?: (nodeIds: Id[]) => void }): Promise<Command[]>;
   packager(ctx: RoleContext, input: { scope: Scope; note?: string }): Promise<Handoff>;
 }
 

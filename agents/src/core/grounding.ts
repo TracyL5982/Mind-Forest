@@ -1,22 +1,20 @@
 /**
- * A source text, asked whether it states a claim. Built once per text; each question reads the same token list.
+ * A source text, asked whether it states a value, and whether a card's words are the whole of it. Built once per text.
  *
- * The text and every claim are first brought to one written form (Unicode NFKC, invisible characters removed), so a
- * full-width digit or a decomposed accent is the character it looks like.
+ * A value, such as a number, a date, a name or a label of an arrangement, is stated when its tokens are a run of whole tokens of the text.
+ * Case, spacing, quote marks and other punctuation between tokens do not count. A token is a word, a number, or one character of a
+ * script written without spaces. A number is one token with its sign and its magnitude: "-3%", "负3%", "(£1.3m)" and "800 thousand"
+ * are each one number, and "3%", "£1.3m" and "800" are other numbers. An arrangement sets such values beside its members, so a gain
+ * read off a loss would stand beside them: a comparison cell "3%" of "Margin: -3%" is refused for that.
  *
- * A claim is stated when its tokens are a run of whole tokens of the text. Case, spacing, quote marks and other
- * punctuation between tokens do not count. A token is a word, a number, or one character of a script written
- * without spaces, which makes a claim in such a script match as a substring. A number is one token that knows every
- * value its written form may be read as, and a claim number is stated by a token that holds its value.
- *
- * Between two tokens the text may break off: at a sentence end, an empty line, a table cell, a list item. Each kind
- * of claim names the breaks it may not run across. A claim that itself carries the break at that place may.
+ * A card that shows the item's own words in a structure shows the whole item, in its order, with every mark it writes. Its structure
+ * changes how the item is laid out, and never what of it is shown: no part of an item can be shown apart from the rest, because what
+ * gives a part its meaning may stand anywhere in it, a heading over it, a sentence after it, a cross before it, or the row it sits in.
+ * The card may draw the item's headings, labels and opening prose over its structure, as the item does.
  */
 export interface Grounding {
   /** The text holds these words or this number, inside one table cell, one list item and one CJK sentence. A claim with no letter or digit must stand in the text as written. */
   says(claim: string): boolean;
-  /** As `says`, and the words are one stretch of the text: a sentence end or an empty line breaks the passage too. A line break inside a sentence does not. */
-  quotes(passage: string): boolean;
   /** The text writes this number, in any grouping. Counted in a unit that scales it, as 万, 亿, 千, k, M and bn do, it is written with that unit against it: 2189 in 万 is "2189万". */
   writes(value: number, unit?: string): boolean;
   /** The text writes this number with this unit set against it, before or after: "45%", "$120", "12 films", and "2189万" for 2189 in 万. */
@@ -25,29 +23,65 @@ export interface Grounding {
   tallies(words: string): boolean;
   /** The text writes this hex colour, with its "#", as a whole value. */
   paints(hex: string): boolean;
-  /** The check mark on the line whose own text is these words: done, not done, or none. */
-  ticks(words: string): boolean | undefined;
+  /**
+   * How a card's words read as the whole item: the first of the ways whose pieces, one after another and in the item's order, are every
+   * word and mark of its text after the lines the card draws above them. `above` are those lines when the card carries them already.
+   */
+  shows(ways: readonly Way[], above?: readonly string[]): Shown | undefined;
+  /** How many characters of the item's text stand up to the end of these words, when they are whole sentences, lines or cells of it. */
+  units(words: string): number | undefined;
 }
 
+/**
+ * One piece of what a card shows. An entry, such as a step or a list line, begins and ends where a sentence, a line or a cell of the
+ * item does; a loose piece, such as a figure's label, need not. A slot is one heading or label of the item: any heading or label, or
+ * only a label that opens a line, and with `says` only one that says those words.
+ */
+export type Piece = { text: string; entry: boolean } | { slot: 'heading' | 'label'; says?: string };
+
+/**
+ * One way a card's pieces may read. `drops` are the props this reading leaves out, as a speaker the item does not write where the
+ * card would show it. `headless` lets the card stand on a table of two columns without its heads row, which it then draws over itself.
+ */
+export interface Way {
+  pieces: readonly Piece[];
+  drops?: readonly string[];
+  headless?: boolean;
+}
+
+/** The whole item, as a card's way reads it. */
+export interface Shown {
+  /** Which of the ways it is. */
+  way: number;
+  /** The item's headings, labels and opening prose that stand over the card's pieces, each as its line writes it. */
+  above: string[];
+  /** The heads row of the table of two columns the card stands on, when the way is headless and the card leaves it out. */
+  heads?: [string, string];
+  /** What each slot stands on, as the item writes it. */
+  slots: string[];
+  /** The check box on the line where each text piece starts: ticked, empty, or none. */
+  boxes: (boolean | undefined)[];
+  /** How many cells stand in each row of the item, when the card's pieces are a table and nothing else. */
+  rows?: number[];
+}
+
+/** The most lines a card draws over its structure, and the most characters of opening prose among them. */
+export const ABOVE = { lines: 6, lead: { spaced: 280, spaceless: 140 } } as const;
+
 const enum Break {
-  /** ".", "!" or "?" before white space, unless the period closes an abbreviation. */
-  Sentence = 1,
   /** "。", or "!" or "?" set straight against a character of a script written without spaces. */
   FullStop = 2,
-  /** An empty line. */
-  Blank = 4,
   /** A "|" between two cells of a table row. */
   Cell = 8,
   /** The start of a line that opens with a bullet, a number and a dot, a check box or "|". */
   Item = 16,
   /** The line break before or after a line that holds table cells. */
   Row = 32,
-  /** A tab inside a line: a cell break to a short claim. Prose holds tabs too, so a passage reads one as white space. */
+  /** A tab inside a line: a cell break to a short claim. */
   Tab = 64,
 }
 
 const SHORT = Break.FullStop | Break.Cell | Break.Item | Break.Row | Break.Tab;
-const PASSAGE = Break.FullStop | Break.Cell | Break.Item | Break.Row | Break.Sentence | Break.Blank;
 
 /** A number as a text writes it. */
 interface Num {
@@ -78,10 +112,6 @@ const SPACED_AFTER = new RegExp(`^(?:(?!${SPACELESS})[\\p{L}\\p{N}])`, 'u');
 const HEX = /(?<![\p{L}\p{N}#])#[0-9a-f]+(?![\p{L}\p{N}])/giu;
 
 const MARK = String.raw`\[[ xX✓✔]?\]|[☑☐✓✔✅✗✘☒❌]`;
-const NOT_DONE = new Set(['[ ]', '[]', '☐', '✗', '✘', '☒', '❌']);
-const ONLY_MARK = new RegExp(`^(?:${MARK})$`, 'u');
-const MARK_FIRST = new RegExp(`^(?:\\s*\\d+[.)])?[^\\p{L}\\p{N}]*?(${MARK})(.*)$`, 'u');
-const MARK_LAST = new RegExp(`^(.*?)(${MARK})\\s*$`, 'u');
 const OPENS_ITEM = new RegExp(`[-*•|]|\\d+[.)]\\s|${MARK}`, 'uy');
 
 const ASCII_ONLY = /^[\x00-\x7f]*$/;
@@ -138,10 +168,12 @@ function kindAt(text: string, at: number): Char {
   return code < 128 ? ASCII[code]! : beyondAscii(String.fromCodePoint(text.codePointAt(at)!));
 }
 
-/** Words whose period is part of the word and ends no sentence. A single letter and a run of initials are read the same way. */
-const ABBREVIATIONS = new Set('dr mr mrs ms mx prof sr jr st mt ft vs approx est fig vol inc ltd corp dept ca cf pp'.split(' '));
-
 const MAGNITUDES = new Map([['千', 1e3], ['万', 1e4], ['萬', 1e4], ['亿', 1e8], ['億', 1e8]]);
+/** A magnitude written as a word after the number, which is part of it: "800 thousand" is 800000. */
+const MAGNITUDE_WORD = /\s?(thousand|million|billion|trillion)(?![\p{L}\p{N}])/iuy;
+const MAGNITUDE_WORDS: Record<string, number> = { thousand: 1e3, million: 1e6, billion: 1e9, trillion: 1e12 };
+/** A word or words before a number that are its minus sign: "负3%", "零下5度", "minus 3". */
+const SIGN_WORDS: Token[][] = [['负'], ['零', '下'], ['minus']];
 
 const DIGIT_GROUPS = /\d+(?:(?:\/\d+)+|(?:[.,]\d+)*)/y;
 const DIGITS_AND_DOTS = /\d+(?:\.\d+)*/y;
@@ -192,6 +224,8 @@ const times = (value: number, magnitude: number) => Number((value * magnitude).t
 class Reader implements Tokens {
   readonly list: Token[] = [];
   readonly breaks: number[] = [];
+  /** Where each token starts in the text. */
+  readonly starts: number[] = [];
   private readonly size: number;
   private at = 0;
   /** The breaks met since the last token. */
@@ -206,9 +240,13 @@ class Reader implements Tokens {
   private cells = false;
   /** Numbers that start before here are entries of a comma list, so a comma groups nothing. */
   private listEnd = 0;
+  /** How many tokens stand before the character at `mark`. */
+  readonly marked: number;
 
-  constructor(private readonly text: string) {
+  constructor(private readonly text: string, mark = text.length) {
     this.size = text.length;
+    while (this.at < mark) this.step();
+    this.marked = this.list.length;
     while (this.at < this.size) this.step();
     this.closeRow();
   }
@@ -218,14 +256,11 @@ class Reader implements Tokens {
     const kind = kindAt(text, at);
     // A tab that indents a line separates no cells.
     if (kind === Char.Space || (kind === Char.Cell && this.lineFrom < 0 && text[at] === '\t')) {
-      if (this.stopped) this.pending |= Break.Sentence;
       this.stopped = false;
       this.at++;
       return;
     }
     if (kind === Char.Newline) {
-      if (this.stopped) this.pending |= Break.Sentence;
-      if (this.lineFrom < 0) this.pending |= Break.Blank;
       this.closeRow();
       this.stopped = this.cells = false;
       this.lineFrom = -1;
@@ -244,7 +279,7 @@ class Reader implements Tokens {
     else if (kind === Char.Lone) {
       if (this.stopped) this.pending |= Break.FullStop;
       const to = at + width(text, at);
-      this.push(text.slice(at, to), to);
+      this.push(text.slice(at, to), at, to);
     } else if (kind === Char.Digit) this.number();
     else {
       if (kind === Char.FullStop) this.pending |= Break.FullStop;
@@ -257,12 +292,24 @@ class Reader implements Tokens {
     }
   }
 
-  private push(token: Token, to: number): void {
+  private push(token: Token, from: number, to: number): void {
     this.list.push(token);
     this.breaks.push(this.pending);
+    this.starts.push(from);
     this.pending = 0;
     this.stopped = false;
     this.at = this.end = to;
+  }
+
+  /** Takes back the last `count` tokens, which a number reads as its sign, and gives where the first of them started. */
+  private unpush(count: number): number {
+    let from = this.at;
+    for (let n = 0; n < count; n++) {
+      this.list.pop();
+      this.pending |= this.breaks.pop()!;
+      from = this.starts.pop()!;
+    }
+    return from;
   }
 
   private closeRow(): void {
@@ -304,12 +351,11 @@ class Reader implements Tokens {
     while (code >= 97 && code <= 122) code = text.charCodeAt(++to);
     const lower = !(code < 128 ? ASCII[code] === Char.Letter : to < size && kindAt(text, to) === Char.Letter);
     if (!lower) to = this.lettersEnd(to);
-    const single = to - at === 1;
     let initials = false;
     let apostrophe = false;
     let next = text.charCodeAt(to);
-    // "U.S." is the word "us": single letters joined by periods, with the period that closes them.
-    if (single) {
+    // "U.S." is the word "us": single letters joined by periods.
+    if (to - at === 1) {
       while (next === 46 && to + 1 < size && kindAt(text, to + 1) === Char.Letter && !this.inWord(to + 2)) {
         to += 2;
         initials = true;
@@ -333,20 +379,26 @@ class Reader implements Tokens {
       if (!this.inWord(after) && text[after] !== '+' && text[after] !== '#') {
         written += text.slice(to, after);
         to = after;
-        next = text.charCodeAt(to);
       }
     }
-    if (next === 46 && (initials || single || ABBREVIATIONS.has(written))) to++;
-    this.push(written, to);
+    this.push(written, at, to);
   }
 
-  /** How a dash set against the number after it reads: 0 for no sign, 1 for a minus, 2 for a minus or no sign. */
-  private sign(index: number): 0 | 1 | 2 {
+  /** A dash set against the number after it is its minus sign, unless it follows a token straight: "GPT-4", "10-12". */
+  private sign(index: number): boolean {
     const char = this.text[index];
-    // Straight after a token it is a hyphen or a range: "GPT-4", "10-12".
-    if ((char !== '-' && char !== '−' && char !== '–') || index === this.end) return 0;
-    // At the start of a line it may be a bullet, and after a number and a space it may be a range.
-    return index === this.lineFrom || this.afterNumber(index) ? 2 : 1;
+    return (char === '-' || char === '−' || char === '–') && index !== this.end;
+  }
+
+  /** How many tokens before here are words that make the number after them negative: "负", "零下", "minus". */
+  private signWords(first: number): number {
+    const { list } = this;
+    for (const words of SIGN_WORDS) {
+      const at = list.length - words.length;
+      if (at < 0 || !words.every((word, n) => list[at + n] === word)) continue;
+      if (this.end === first || (words[0] === 'minus' && this.spaces(this.end, first))) return words.length;
+    }
+    return 0;
   }
 
   /** Only spaces stand between the last token, a number, and here. */
@@ -373,8 +425,13 @@ class Reader implements Tokens {
       glued = text[before--]!;
       if (!minus && (minus = this.sign(before))) before--;
     }
-    const first = before + 1;
+    let first = before + 1;
     glued += this.comparator(before);
+    const signWords = minus ? 0 : this.signWords(first);
+    if (signWords > 0) {
+      minus = true;
+      first = this.unpush(signWords);
+    }
 
     // After a letter the digits are part of a name, as in "Q1,120", and group nothing.
     const free = start >= this.listEnd && !(start === this.end && kindAt(text, start - 1) === Char.Letter);
@@ -397,14 +454,21 @@ class Reader implements Tokens {
       }
     }
 
+    let magnitude: number | undefined;
     if (!Number.isNaN(value)) {
-      // "5k" and "3万" state five thousand and thirty thousand, not five and three. "5km" is still five.
+      // "5k", "3万" and "800 thousand" state five thousand, thirty thousand and eight hundred thousand, not five, three and eight hundred.
+      // "5km" is still five, and so is "5m" unless money is counted: "£1.3m" is 1.3 million.
       const char = text[to];
       const han = char === ' ' ? to + 1 : to;
-      let magnitude = MAGNITUDES.get(text[han]!);
+      MAGNITUDE_WORD.lastIndex = to;
+      const word = MAGNITUDE_WORD.exec(text);
+      magnitude = MAGNITUDES.get(text[han]!);
       if (magnitude) to = han + 1;
-      else if ((char === 'k' || char === 'K' || char === 'M') && !this.inWord(to + 1)) {
-        magnitude = char === 'M' ? 1e6 : 1e3;
+      else if (word) {
+        magnitude = MAGNITUDE_WORDS[word[1]!.toLowerCase()];
+        to += word[0].length;
+      } else if ((char === 'k' || char === 'K' || char === 'M' || (char === 'm' && isCurrency(glued[0]))) && !this.inWord(to + 1)) {
+        magnitude = char === 'k' || char === 'K' ? 1e3 : 1e6;
         to += 1;
       } else if ((char === 'b' || char === 'B') && (text[to + 1] === 'n' || text[to + 1] === 'N') && !this.inWord(to + 2)) {
         magnitude = 1e9;
@@ -415,11 +479,6 @@ class Reader implements Tokens {
         value = times(value, by);
         readings = readings.map((reading) => times(reading, by));
       }
-      if (minus) {
-        const below = readings.map((reading) => -reading);
-        value = -value;
-        readings = minus === 2 ? [...below, ...readings] : below;
-      }
     }
 
     const after = text[to] === ' ' ? to + 1 : to;
@@ -427,7 +486,13 @@ class Reader implements Tokens {
       glued += text[after];
       to = after + 1;
     }
-    this.push({ value, readings, literal, glued }, to);
+    // An amount of money in brackets is a loss, as accounts write one: "(£1.3m)".
+    if (!minus && (isCurrency(glued[0]) || magnitude) && /\(\s*$/.test(text.slice(Math.max(0, first - 3), first)) && /^[a-z]{0,3}\s*\)/i.test(text.slice(to, to + 6))) minus = true;
+    if (minus && !Number.isNaN(value)) {
+      value = -value;
+      readings = readings.map((reading) => -reading);
+    }
+    this.push({ value, readings, literal, glued }, first, to);
   }
 }
 
@@ -477,62 +542,430 @@ function runs(text: Tokens, start: number, asked: Tokens, barred: number): boole
   return true;
 }
 
-/** Each line that carries one check mark, as the mark and the line's own text without it. A table row gives its other cells. */
-function marked(text: string): { item: Tokens; done: boolean }[] {
-  const lines: { item: Tokens; done: boolean }[] = [];
-  for (const line of text.split('\n')) {
-    const cells = /[|\t]/.test(line) ? line.split(/[|\t]/).map((cell) => cell.trim()) : [];
-    const marks = cells.filter((cell) => ONLY_MARK.test(cell));
-    if (marks.length === 1) {
-      for (const cell of cells) if (cell && cell !== marks[0]) lines.push({ item: tokenize(cell), done: !NOT_DONE.has(marks[0]!) });
+// ---- the whole item
+
+const CJK = /[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Thai}]/u;
+const CJK_ALL = /[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Thai}]/gu;
+
+/** The text in the form its marks are compared in: one dash, one apostrophe, one double quote. */
+const plain = (text: string): string =>
+  text.normalize('NFKC').replace(UNSEEN, '').replace(/[‘’`´]/g, "'").replace(/[“”«»「」『』]/g, '"').replace(/[‐‑‒–—―−]/g, '-');
+
+const MARKS = /(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?::\d+)+|\d+(?:\.\d+)?)|([\p{L}\p{M}\p{N}]+(?:'[\p{L}\p{M}\p{N}]+)*)|((?!=)\p{S}|[%‰()[\]?"'])|(-(?=\d))/gu;
+/** A quotation mark, which a piece may stand inside or outside of: only one inside it must be as the item writes it. */
+const QUOTE = new Set(['"', "'"]);
+/** The word that joins the last figure of a series to the one before it, which a card of figures lays out as a list. */
+const JOINS = new Set(['and', '和', '与', '及']);
+
+/**
+ * Every word, number and mark that may carry meaning, in order: signs, brackets, arrows, ticks, crosses, a percent sign, a question
+ * mark and quotation marks are kept, and the rest of the punctuation is not, nor "=" between a label and its value, which says what a colon does. A character of a script written without spaces is a word of
+ * its own. Quotation marks around a piece are its card's to draw; those inside it, as in a "safe" dose, are its words'.
+ */
+function marksOf(text: string): string[] {
+  const out: string[] = [];
+  for (const m of plain(text).toLowerCase().matchAll(MARKS)) {
+    if (m[1]) out.push(/^\d{1,3}(?:,\d{3})+/.test(m[1]) ? m[1].replaceAll(',', '') : m[1]);
+    else if (m[2] && !CJK.test(m[2])) out.push(m[2]);
+    else if (m[2]) {
+      let run = '';
+      for (const char of m[2]) {
+        if (!CJK.test(char)) run += char;
+        else {
+          if (run) out.push(run);
+          run = '';
+          out.push(char);
+        }
+      }
+      if (run) out.push(run);
+    } else out.push(m[0]);
+  }
+  return out;
+}
+
+const alike = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((word, n) => word === b[n]);
+
+const RUNS = /[\p{L}\p{N}]+(?:'[\p{L}\p{N}]+)*/gu;
+/** How many words or characters a line says: characters in a script written without spaces, words otherwise. */
+const sizeOf = (text: string): number => (CJK.test(text) ? (text.match(CJK_ALL)?.length ?? 0) + (text.replace(CJK_ALL, ' ').match(RUNS)?.length ?? 0) : (text.match(RUNS)?.length ?? 0));
+
+/** A line a heading may be: six words at most, or twelve characters in a script written without spaces. */
+const short = (text: string): boolean => text.length <= 80 && sizeOf(text) > 0 && sizeOf(text) <= (CJK.test(text) ? 12 : 6);
+/** A label before a colon may run longer, as it is always shown over what it labels. */
+const labelled = (text: string): boolean => text.length <= 80 && sizeOf(text) > 0 && sizeOf(text) <= (CJK.test(text) ? 20 : 12) && !/[.!?。]/.test(text) && !/\d$/.test(text);
+
+/** A line that ends a sentence or goes on. */
+const ENDED = /[.!?。;,:、！？；，：-]["')\]」』”’]*\s*$/u;
+/** A bullet, a number, a check box or a step's number, which a list or a steps card draws itself. A ">" or a speaker's "A:" is no layout. */
+const LAYOUT = /^\s*(?:(?:[-*•·]\s+|\d+[.)、]\s*|\(\d+\)\s*)(?:\[[ xX✓✔]?\]\s*|[☐☑]\s*)?|\[[ xX✓✔]?\]\s*|[☐☑]\s*|第[一二三四五六七八九十\d]+步[,，:：、.]?\s*|step\s*\d+[:.)]\s*)/iu;
+/** A tick or a cross that opens a line, which is a word of the line and never a check box. */
+const TICKED = /^\s*[✓✔✅✗✘❌☒]/u;
+const ASKS = /^\s*(q|问)\s*[:：]/iu;
+const ANSWERS = /^\s*(a|答)\s*[:：]/iu;
+const SPEAKS = /^\s*([^\s:：]{1,12})\s*[:：]/u;
+
+type LineKind = 'blank' | 'divider' | 'row' | 'heading' | 'item' | 'prose';
+
+/** One line of the item. */
+interface Line {
+  n: number;
+  kind: LineKind;
+  /** A title line is the item's title, which every card draws. */
+  title?: boolean;
+  /** What the line says without its bullet, number or check box. A tick, a cross and a speaker's mark are kept. */
+  text: string;
+  cells?: string[];
+  box?: boolean;
+  /** A label that opens the line, "Myth:", and where the rest of the line starts. */
+  label?: { text: string; rest: number };
+}
+
+/** A conversation: three lines or more open with a name and a colon, of two people at least, one of whom speaks twice. Its speakers label nothing. */
+function converses(lines: readonly string[]): boolean {
+  const speakers = new Map<string, number>();
+  for (const line of lines) {
+    const speaker = SPEAKS.exec(line)?.[1]?.toLowerCase();
+    if (speaker) speakers.set(speaker, (speakers.get(speaker) ?? 0) + 1);
+  }
+  const counts = [...speakers.values()];
+  return counts.length >= 2 && counts.reduce((sum, n) => sum + n, 0) >= 3 && counts.some((n) => n >= 2);
+}
+
+/** The sentences of a line, as character ranges: one ends at ".", "!", "?" or "。" before white space, a CJK character or the end. */
+const STOPS = /[.!?。！？]/g;
+const CLOSING = new Set([...'.!?。！？"\')]」』”’']);
+/** A stop that ends a sentence wherever it stands, as a script written without spaces sets it. */
+const FULL_STOP = new Set([...'。！？']);
+
+function sentences(text: string): [number, number][] {
+  const out: [number, number][] = [];
+  let start = 0;
+  STOPS.lastIndex = 0;
+  for (let found = STOPS.exec(text); found; found = STOPS.exec(text)) {
+    const at = found.index;
+    let end = at + 1;
+    while (end < text.length && CLOSING.has(text[end]!)) end++;
+    const next = text[end];
+    if (text[at] === '.' && /\d/.test(text[at - 1] ?? '') && /\d/.test(next ?? '')) continue;
+    if (next === undefined || /\s/.test(next) || CJK.test(next) || FULL_STOP.has(text[at]!)) {
+      out.push([start, end]);
+      start = end;
+      STOPS.lastIndex = end;
+    }
+  }
+  if (text.slice(start).trim()) out.push([start, text.length]);
+  return out;
+}
+
+/** The item's lines as it writes them, which a card draws over itself as they are. Words and marks are compared in their plain form. */
+function linesOf(source: string, title: string): Line[] {
+  const raws = source.split('\n');
+  const lines: Line[] = raws.map((raw, n) => ({ n, kind: 'prose', text: raw.trim() }));
+  const tabbed = (n: number) => raws[n]?.includes('\t') ?? false;
+  // Comma-separated rows: three lines or more in a row with the same count of commas and no space after any. A full-width comma of
+  // Chinese prose is no column, so the commas are counted as written, before they are made one form.
+  const commas = raws.map((raw) => (/,\s/.test(raw) || !raw.includes(',') ? -1 : raw.split(',').length));
+  const csv = (n: number) => commas[n]! > 1 && [n - 2, n - 1, n].some((from) => [from, from + 1, from + 2].every((at) => commas[at] === commas[n]));
+  for (const line of lines) {
+    const t = line.text;
+    if (t === '') line.kind = 'blank';
+    else if ((t.includes('|') || (t.includes('\t') && (tabbed(line.n - 1) || tabbed(line.n + 1)))) && !t.startsWith('#')) {
+      if (/^[\s|:+-]*$/.test(t)) line.kind = 'divider';
+      else {
+        line.kind = 'row';
+        // A tab that opens a pasted row is its first cell, left empty, so only spaces are taken off its ends.
+        const row = t.includes('|') ? t : raws[line.n]!.replace(/^ +| +$/g, '');
+        const inner = /^\|.*\|$/s.test(row) ? row.slice(1, -1) : row;
+        line.cells = inner.split(t.includes('|') ? '|' : '\t').map((cell) => cell.trim());
+      }
+    } else if (csv(line.n)) Object.assign(line, { kind: 'row', cells: t.split(',').map((cell) => cell.trim()) });
+    else if (/^#{1,6}\s+/.test(t)) Object.assign(line, { kind: 'heading', text: t.replace(/^#{1,6}\s+/, '') });
+    else if (/^(\*\*|__)[^*_]+(\*\*|__)[:：]?$/.test(t) && short(t)) line.kind = 'heading';
+    else if (ASKS.test(t)) line.kind = 'heading';
+    else if (ANSWERS.test(t)) line.kind = 'item';
+    else if (LAYOUT.test(t) && t.replace(LAYOUT, '').trim() && t.replace(LAYOUT, '') !== t) {
+      const marker = LAYOUT.exec(t)![0];
+      line.kind = 'item';
+      line.text = t.slice(marker.length).trim();
+      if (/\[[xX✓✔]\]|☑/.test(marker)) line.box = true;
+      else if (/\[ ?\]|☐/.test(marker)) line.box = false;
+    } else if (TICKED.test(t)) line.kind = 'item';
+    else if (/[:：]$/.test(t)) line.kind = 'heading';
+  }
+  const first = lines.find((line) => line.kind !== 'blank');
+  const more = first !== undefined && lines.some((line) => line.n > first.n && line.kind !== 'blank');
+  if (first && more && first.kind !== 'row' && title.trim() && alike(marksOf(first.text), marksOf(title))) Object.assign(first, { kind: 'heading', title: true });
+  else if (first?.kind === 'prose' && title.trim()) {
+    // A first sentence that is the title, as in "Hallway plan for the autumn. Take the old shelf out…", is drawn as the title.
+    const [opening, ...rest] = sentences(first.text);
+    if (opening && rest.length > 0 && alike(marksOf(first.text.slice(...opening)), marksOf(title))) first.text = first.text.slice(rest[0]![0]).trim();
+  }
+  // Short lines with no end punctuation are headings, each of a run of them, unless they stand under a heading, end the item, or are all figures.
+  const bare = (line: Line) => line.kind === 'prose' && !ENDED.test(line.text) && !/[:：]./u.test(line.text) && short(line.text);
+  for (let at = 0; at < lines.length; ) {
+    if (!bare(lines[at]!)) {
+      at++;
       continue;
     }
-    const first = MARK_FIRST.exec(line);
-    const last = first ? null : MARK_LAST.exec(line);
-    const mark = first?.[1] ?? last?.[2];
-    if (mark) lines.push({ item: tokenize(first?.[2] ?? last![1]!), done: !NOT_DONE.has(mark) });
+    let to = at;
+    while (to + 1 < lines.length && bare(lines[to + 1]!)) to++;
+    const run = lines.slice(at, to + 1);
+    const before = lines.slice(0, at).reverse().find((line) => line.kind !== 'blank');
+    const after = lines.slice(to + 1).some((line) => line.kind !== 'blank');
+    const figures = run.length >= 2 && run.every((line) => /\d/.test(line.text));
+    if (before?.kind !== 'heading' && after && !figures) for (const line of run) line.kind = 'heading';
+    at = to + 1;
+  }
+  // A line that asks a question and has its answer after it heads that answer.
+  for (const [n, line] of lines.entries()) {
+    if (line.kind !== 'prose' || !/[?？]["')\]」』”’]*$/u.test(line.text)) continue;
+    const next = lines.slice(n + 1).find((other) => other.kind !== 'blank');
+    if (next && next.kind !== 'heading') line.kind = 'heading';
+  }
+  if (!converses(raws)) {
+    for (const line of lines) {
+      if (line.kind !== 'prose' && line.kind !== 'item') continue;
+      const m = /^([^:：]{1,80})[:：]\s*(?=\S)/u.exec(line.text);
+      if (m && labelled(m[1]!.trim())) line.label = { text: m[0].trim(), rest: m[0].length };
+    }
   }
   return lines;
 }
 
 /**
- * The ways a text may set a unit against a number, each as a claim: the unit after the number, before it,
- * and around it when a currency sign leads the unit, as "$120k" writes 120 in "$k".
+ * One whole unit of the item: a heading, a label that opens a line, a sentence of prose or of a list line, or a table cell. The title
+ * line is a heading every card draws as the title: a card may leave it out or stand a piece on it, and never draws it over itself.
  */
-function against(value: number, unit: string): Tokens[] {
-  const sign = uniform(unit).trim();
-  if (sign === '') return [];
-  const written = [`${value}${sign}`, `${sign}${value}`];
-  if (sign.length > 1 && isCurrency(sign[0])) written.push(`${sign[0]}${value}${sign.slice(1)}`);
-  return written.map(tokenize).filter((asked) => asked.list.length > 0);
+interface Unit {
+  kind: 'heading' | 'label' | 'prose' | 'item' | 'cell';
+  title?: boolean;
+  line: number;
+  /** As the item writes it. */
+  text: string;
+  /** Where it stands in its line's text, for drawing it over a card. */
+  start: number;
+  end: number;
+  words: string[];
+}
+
+class Whole {
+  private readonly lines: Line[];
+  private readonly parts: Unit[] = [];
+  /** How many units at the start may stand over a card, at most. */
+  private readonly over: number;
+
+  constructor(source: string, title: string) {
+    this.lines = linesOf(source, title);
+    const add = (kind: Unit['kind'], line: Line, start: number, end: number) => {
+      const text = line.text.slice(start, end).trim();
+      const words = marksOf(text);
+      if (words.length > 0) this.parts.push({ kind, line: line.n, text, start, end, words });
+    };
+    for (const line of this.lines) {
+      if (line.kind === 'blank' || line.kind === 'divider') continue;
+      if (line.title) {
+        add('heading', line, 0, line.text.length);
+        this.parts.at(-1)!.title = true;
+        continue;
+      }
+      if (line.kind === 'row') for (const cell of line.cells!) add('cell', { ...line, text: cell }, 0, cell.length);
+      else if (line.kind === 'heading') add('heading', line, 0, line.text.length);
+      else {
+        const from = line.label?.rest ?? 0;
+        if (line.label) add('label', line, 0, from);
+        for (const [start, end] of sentences(line.text.slice(from))) add(line.kind === 'item' ? 'item' : 'prose', line, from + start, from + end);
+      }
+    }
+    let over = 0;
+    let lead = 0;
+    while (over < this.parts.length) {
+      const unit = this.parts[over]!;
+      if (unit.kind === 'prose') lead += unit.text.length;
+      if (!['heading', 'label', 'prose'].includes(unit.kind) || lead > (CJK.test(unit.text) ? ABOVE.lead.spaceless : ABOVE.lead.spaced)) break;
+      if (new Set(this.parts.slice(0, over + 1).map((u) => u.line)).size > ABOVE.lines) break;
+      over++;
+    }
+    this.over = over;
+  }
+
+  /** The lines the first `count` units make, each as its line writes it, without the title, which the card draws as its title. */
+  private aboveOf(count: number): string[] {
+    const out: string[] = [];
+    for (let at = this.parts[0]?.title ? 1 : 0; at < count; ) {
+      let to = at;
+      while (to + 1 < count && this.parts[to + 1]!.line === this.parts[at]!.line) to++;
+      const line = this.lines[this.parts[at]!.line]!;
+      out.push(line.text.slice(this.parts[at]!.start, this.parts[to]!.end).trim());
+      at = to + 1;
+    }
+    return out;
+  }
+
+  shows(ways: readonly Way[], above?: readonly string[]): Shown | undefined {
+    const counts = Array.from({ length: this.over + 1 }, (_v, n) => n);
+    const given = above?.map((line) => line.trim());
+    for (const count of given ? counts.filter((n) => alike(this.aboveOf(n), given)) : counts) {
+      for (const [way, reading] of ways.entries()) {
+        const fit = this.fits(this.parts.slice(count), reading);
+        if (fit) return { way, above: this.aboveOf(count), ...fit };
+      }
+    }
+    return undefined;
+  }
+
+  /** How the way's pieces stand on these units, one after another to the last, or nothing. An empty cell is no unit, and still a cell of its row. */
+  private fits(tail: Unit[], way: Way): Omit<Shown, 'way' | 'above'> | undefined {
+    const cells = tail.length > 0 && tail.every((unit) => unit.kind === 'cell');
+    const rows = cells ? [...new Set(tail.map((unit) => unit.line))].map((line) => this.lines[line]!) : [];
+    const tries: { units: Unit[]; heads?: [string, string]; rows: Line[] }[] = [{ units: tail, rows }];
+    if (way.headless && rows.length >= 2 && rows.every((row) => row.cells!.length === 2)) {
+      const [first, ...rest] = rows;
+      tries.unshift({ units: tail.filter((unit) => unit.line !== first!.n), heads: [first!.cells![0]!, first!.cells![1]!], rows: rest });
+    }
+    for (const { units, heads, rows: left } of tries) {
+      const read = this.read(units, way, cells);
+      if (read) return { ...read, ...(heads && { heads }), ...(cells && { rows: left.map((row) => row.cells!.length) }) };
+    }
+    return undefined;
+  }
+
+  private read(units: Unit[], way: Way, cells: boolean): Pick<Shown, 'slots' | 'boxes'> | undefined {
+    if (units.length === 0) return undefined;
+    const words: string[] = [];
+    /** The unit each word stands in, and the units by the word they start at. */
+    const owner: number[] = [];
+    const starts = new Map<number, number>();
+    for (const [n, unit] of units.entries()) {
+      starts.set(words.length, n);
+      words.push(...unit.words);
+      owner.push(...unit.words.map(() => n));
+    }
+    starts.set(words.length, units.length);
+    const slots: string[] = [];
+    const boxes: (boolean | undefined)[] = [];
+    let at = 0;
+    for (const piece of way.pieces) {
+      if ('slot' in piece) {
+        const unit = units[starts.get(at) ?? -1];
+        if (!unit || (unit.kind !== 'label' && (piece.slot === 'label' || unit.kind !== 'heading'))) return undefined;
+        if (piece.says !== undefined && !alike(unit.words, marksOf(piece.says))) return undefined;
+        slots.push(unit.text);
+        at += unit.words.length;
+        continue;
+      }
+      const asked = marksOf(piece.text);
+      while (QUOTE.has(asked[0]!)) asked.shift();
+      while (QUOTE.has(asked.at(-1)!)) asked.pop();
+      const aligned = piece.entry || cells;
+      // A quotation mark before the piece opens it and one after it closes it: a unit may start or end on either side of them.
+      const edge = (from: number, step: 1 | -1): boolean => starts.has(from) || (QUOTE.has(words[step < 0 ? from - 1 : from] ?? '') && edge(from + step, step));
+      if (aligned && !edge(at, -1) && !edge(at, 1)) return undefined;
+      // An empty cell of a card stands on an empty cell of the item, which holds no words.
+      if (asked.length === 0) {
+        if (!cells) return undefined;
+        boxes.push(undefined);
+        continue;
+      }
+      while (QUOTE.has(words[at] ?? '') && words[at] !== asked[0]) at++;
+      // "and" between the last two figures of a series in one sentence is the series' layout: "rent 45%, food 25% and savings 30%".
+      if (!aligned && at > 0 && JOINS.has(words[at] ?? '') && words[at] !== asked[0]) at++;
+      if (!alike(words.slice(at, at + asked.length), asked)) return undefined;
+      const first = units[owner[at] ?? -1];
+      boxes.push(first ? this.lines[first.line]!.box : undefined);
+      at += asked.length;
+      while (QUOTE.has(words[at] ?? '') && !(starts.has(at) && piece.entry)) at++;
+      if (aligned && !edge(at, -1) && !edge(at, 1)) return undefined;
+    }
+    while (QUOTE.has(words[at] ?? '')) at++;
+    return at === words.length ? { slots, boxes } : undefined;
+  }
+
+  units(asked: string): number | undefined {
+    // Words set apart are found by their words: the note draws them as its item writes them, quotation marks and all.
+    const bare = (words: string[]) => words.filter((word) => !QUOTE.has(word));
+    const wanted = bare(marksOf(asked));
+    if (wanted.length === 0) return undefined;
+    let size = 0;
+    for (let first = 0; first < this.parts.length; first++) {
+      let words: string[] = [];
+      let length = size;
+      for (let last = first; last < this.parts.length && words.length < wanted.length; last++) {
+        words = [...words, ...bare(this.parts[last]!.words)];
+        length += this.parts[last]!.text.length + 1;
+        if (alike(words, wanted)) return length;
+      }
+      size += this.parts[first]!.text.length + 1;
+    }
+    return undefined;
+  }
 }
 
 class Source implements Grounding {
   private readonly text: string;
-  private read: Tokens | undefined;
+  /** Where the words end and the held values begin. */
+  private readonly mark: number;
+  private read: Reader | undefined;
   private numbers: Set<number> | undefined;
   private hexes: Set<string> | undefined;
-  private lines: ReturnType<typeof marked> | undefined;
+  private whole: Whole | undefined;
+  /** Each claim read so far. A card asks about the same value more than once. */
+  private readonly claims = new Map<string, Tokens>();
 
-  constructor(source: string) {
-    this.text = uniform(source);
+  constructor(
+    private readonly item: { text: string; title: string },
+    held: readonly string[],
+  ) {
+    const words = uniform(item.title.trim() ? `${item.title}\n\n${item.text}` : item.text);
+    this.mark = words.length;
+    this.text = held.length === 0 ? words : `${words}\n${held.map((value) => `• ${uniform(value)}`).join('\n')}`;
   }
 
-  private get tokens(): Tokens {
-    return (this.read ??= tokenize(this.text));
+  private get tokens(): Reader {
+    return (this.read ??= new Reader(this.text, this.mark));
+  }
+
+  /** The item read as lines and units. An item with no text is its title. */
+  private get lines(): Whole {
+    const { text, title } = this.item;
+    return (this.whole ??= text.trim() ? new Whole(text, title) : new Whole(title, ''));
+  }
+
+  shows(ways: readonly Way[], above?: readonly string[]): Shown | undefined {
+    return this.lines.shows(ways, above);
+  }
+
+  units(words: string): number | undefined {
+    return this.lines.units(words);
+  }
+
+  /**
+   * The ways a text may set a unit against a number, each as a claim: the unit after the number, before it,
+   * and around it when a currency sign leads the unit, as "$120k" writes 120 in "$k".
+   */
+  private against(value: number, unit: string): Tokens[] {
+    const sign = uniform(unit).trim();
+    if (sign === '') return [];
+    const written = [`${value}${sign}`, `${sign}${value}`];
+    if (sign.length > 1 && isCurrency(sign[0])) written.push(`${sign[0]}${value}${sign.slice(1)}`);
+    return written.map((form) => this.claim(form)).filter((asked) => asked.list.length > 0);
+  }
+
+  private claim(words: string): Tokens {
+    let asked = this.claims.get(words);
+    if (!asked) this.claims.set(words, (asked = tokenize(uniform(words))));
+    return asked;
   }
 
   says(claim: string): boolean {
-    return this.stated(claim, SHORT);
-  }
-
-  quotes(passage: string): boolean {
-    return this.stated(passage, PASSAGE);
+    const asked = this.claim(claim);
+    if (asked.list.length > 0) return this.holds(asked, SHORT);
+    const symbols = uniform(claim).trim();
+    return symbols.length > 0 && this.standsAlone(symbols);
   }
 
   writes(value: number, unit?: string): boolean {
     if (!Number.isFinite(value)) return false;
-    const scaled = unit === undefined ? [] : against(value, unit).filter(({ list: [first] }) => typeof first === 'object' && !Number.isNaN(first.value) && first.value !== value);
+    const scaled = this.scaled(value, unit);
     if (scaled.length > 0) return scaled.some((asked) => this.holds(asked, SHORT));
     this.numbers ??= new Set(this.tokens.list.flatMap((token) => (typeof token === 'object' ? token.readings : [])));
     return this.numbers.has(value);
@@ -540,7 +973,7 @@ class Source implements Grounding {
 
   measures(value: number, unit: string): boolean {
     if (!Number.isFinite(value)) return false;
-    return against(value, unit).some((asked) => {
+    return this.against(value, unit).some((asked) => {
       const [only] = asked.list;
       // A sign the reading drops, as "%" before a number, leaves the bare number, which is measured in nothing.
       const bare = asked.list.length === 1 && typeof only === 'object' && only.glued === '' && only.value === value;
@@ -550,7 +983,7 @@ class Source implements Grounding {
 
   tallies(words: string): boolean {
     // A form with no one value, such as a date, tallies when each of its groups is written.
-    return tokenize(uniform(words)).list.every((token) => typeof token !== 'object' || (Number.isNaN(token.value) ? token.readings : [token.value]).every((value) => this.writes(value)));
+    return this.claim(words).list.every((token) => typeof token !== 'object' || (Number.isNaN(token.value) ? token.readings : [token.value]).every((value) => this.writes(value)));
   }
 
   paints(hex: string): boolean {
@@ -558,19 +991,9 @@ class Source implements Grounding {
     return this.hexes.has(hex.trim().toLowerCase());
   }
 
-  ticks(words: string): boolean | undefined {
-    const asked = tokenize(uniform(words));
-    if (asked.list.length === 0) return undefined;
-    this.lines ??= marked(this.text);
-    return this.lines.find(({ item }) => item.list.length === asked.list.length && asked.list.every((token, n) => same(item, n, token)))?.done;
-  }
-
-  private stated(claim: string, barred: number): boolean {
-    const written = uniform(claim);
-    const asked = tokenize(written);
-    if (asked.list.length > 0) return this.holds(asked, barred);
-    const symbols = written.trim();
-    return symbols.length > 0 && this.standsAlone(symbols);
+  /** The values a text may write for this number in a unit that scales it, each as a claim. None when the unit does not scale it. */
+  private scaled(value: number, unit: string | undefined): Tokens[] {
+    return unit === undefined ? [] : this.against(value, unit).filter(({ list: [first] }) => typeof first === 'object' && !Number.isNaN(first.value) && first.value !== value);
   }
 
   /** The asked tokens are a run of the text's tokens that crosses none of the barred breaks. */
@@ -578,11 +1001,12 @@ class Source implements Grounding {
     const written = this.tokens;
     const { list } = written;
     const first = asked.list[0]!;
+    const until = list.length - asked.list.length + 1;
     if (typeof first === 'string') {
-      for (let start = list.indexOf(first); start >= 0; start = list.indexOf(first, start + 1)) if (runs(written, start, asked, barred)) return true;
+      for (let start = list.indexOf(first); start >= 0 && start < until; start = list.indexOf(first, start + 1)) if (runs(written, start, asked, barred)) return true;
       return false;
     }
-    for (let start = 0; start < list.length; start++) if (states(written, start, first) && runs(written, start, asked, barred)) return true;
+    for (let start = 0; start < until; start++) if (states(written, start, first) && runs(written, start, asked, barred)) return true;
     return false;
   }
 
@@ -597,4 +1021,9 @@ class Source implements Grounding {
   }
 }
 
-export const grounding = (source: string): Grounding => new Source(source);
+/**
+ * The item's text, with its title and the values it holds beside its words, each read as a list item of its own. A value is stated
+ * by any of them; the whole item, which `shows` and `units` read, is the text alone under its title.
+ */
+export const grounding = (text: string, { title = '', held = [] }: { title?: string; held?: readonly string[] } = {}): Grounding =>
+  new Source({ text, title }, held);

@@ -11,6 +11,8 @@ type Given = { item?: Record<string, unknown>; props: Record<string, unknown> };
 const load = (path: string) => import(new URL(`../client/js/${path}`, import.meta.url).href);
 const blank = { title: 'A title', text: '', summary: '', data: {} };
 const words = (count: number) => Array.from({ length: count }, (_, i) => `word${i}`).join(' ');
+const switching = (count: number, said: string) => ({ kind: 'segmented', label: 'Light', states: Array.from({ length: count }, (_, i) => ({ name: `State ${i}`, text: said })) });
+const contrasted = (...controls: unknown[]) => ({ controls, output: { kind: 'text' } });
 
 /**
  * For each type, cards that each hold more than the one before: more rows, or longer text. The
@@ -100,6 +102,21 @@ const GROWING: Record<string, Given[]> = {
     { props: { colours: [{ name: 'Night', value: 'black' }, { name: 'Day', value: 'white' }, { name: 'Dusk', value: '#334' }] } },
     { item: { title: words(10) }, props: { colours: Array.from({ length: 9 }, (_, i) => ({ name: `Colour ${i}`, value: `#${i}${i}${i}` })) } },
   ],
+  sheet: [
+    { props: { sections: [{ kind: 'text', text: 'Pack the night before.' }, { kind: 'list', items: ['Tent', 'Stove'] }] } },
+    { props: { sections: [{ kind: 'heading', text: 'Camp' }, { kind: 'text', text: 'Pack the night before.' }, { kind: 'list', items: ['Tent', 'Stove'] }] } },
+    { props: { sections: [{ kind: 'heading', text: 'Camp' }, { kind: 'text', text: words(30) }, { kind: 'list', items: ['Tent', 'Stove', 'Lamp'] }] } },
+    { props: { sections: [{ kind: 'heading', text: 'Camp' }, { kind: 'text', text: words(30) }, { kind: 'figures', facts: [{ label: 'Nights', value: '2' }] }, { kind: 'list', items: ['Tent', 'Stove', 'Lamp'] }] } },
+    { props: { sections: [{ kind: 'picture', src: 'a.png' }, { kind: 'text', text: words(30) }, { kind: 'figures', facts: [{ label: 'Nights', value: '2' }, { label: 'Cost', value: '€240' }, { label: 'Walked', value: '31 km' }] }, { kind: 'list', items: ['Tent', 'Stove', 'Lamp', words(12), 'Map', 'Rope', 'Axe', 'Tea'] }] } },
+    { item: { title: words(12) }, props: { sections: [{ kind: 'picture', src: 'a.png' }, { kind: 'text', text: words(30) }, { kind: 'figures', facts: [{ label: 'Nights', value: '2' }, { label: 'Cost', value: '€240' }, { label: 'Walked', value: '31 km' }] }, { kind: 'list', items: ['Tent', 'Stove', 'Lamp', words(12), 'Map', 'Rope', 'Axe', 'Tea'] }] } },
+  ],
+  explorable: [
+    { props: contrasted(switching(2, 'Short.')) },
+    { props: contrasted(switching(2, words(12))) },
+    { props: contrasted(switching(3, words(30))) },
+    { props: contrasted(switching(3, words(30)), switching(2, words(12))) },
+    { item: { title: words(12) }, props: contrasted(switching(3, words(30)), switching(2, words(12))) },
+  ],
   place: [
     { item: { title: 'Lisbon' }, props: { name: 'Lisbon' } },
     { item: { title: 'Lisbon', summary: 'Three days.' }, props: { name: 'Lisbon' } },
@@ -139,7 +156,7 @@ test('every component the service can choose has a client module, a content chec
   assert.deepEqual(Object.keys(COMPONENTS), COMPONENT_IDS, 'the client registry holds the service\'s components, in its order');
   for (const id of COMPONENT_IDS) {
     for (const part of ['size', 'draw', 'detail']) assert.equal(typeof COMPONENTS[id]![part], 'function', `${id}.${part}`);
-    assert.ok(Array.isArray(COMPONENTS[id]!.shows), `${id}.shows`);
+    assert.ok(Array.isArray(COMPONENTS[id]!.shows) || typeof COMPONENTS[id]!.shows === 'function', `${id}.shows`);
     assert.ok(Object.hasOwn(CHECKS, id) && typeof CHECKS[id].props === 'object', `${id} has a content check`);
     assert.ok(page.includes(`\n### ${id}\n`), `docs/libraries.md has a section for ${id}`);
     assert.ok(page.includes(`\n- **${id}.** `), `docs/libraries.md gives the footprint of ${id}`);
@@ -257,9 +274,96 @@ test('a facts card sets every figure in one size, trims what it is given, and ma
   assert.deepEqual(facts(passage, '1889'), [320, 30 + 21 + 12 + (8 * 21 + 17) + 12 + (21 + 17)], 'a passage is given eight lines and no more');
 });
 
+test('a structured card grows by exactly the lines its item sets over its structure, and a chart or a breakdown by the heads row of its table', async () => {
+  const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Kind> };
+  const OVER: Record<string, Record<string, unknown>> = {
+    quote: { text: 'A map is not the territory.' },
+    fact: { value: '12%', label: 'conversion' },
+    facts: { facts: [{ label: 'Height', value: '330 m' }, { label: 'Built', value: '1889' }] },
+    chart: { chart: 'bar', labels: ['Mar', 'Apr'], values: [4, 9] },
+    breakdown: { labels: ['Yes', 'No'], values: [75, 25], unit: '%' },
+    steps: { steps: ['Zoom in', 'Pull back'] },
+    list: { items: ['Tent', 'Stove'] },
+    table: { heads: ['Wall', 'Length'], rows: [['North', '4.2 m']] },
+    qa: { question: 'Why?', answer: 'Because.' },
+    callout: { text: 'Mind the step.', tone: 'caution' },
+    excerpt: { text: 'A short passage.' },
+    definition: { term: 'Bokeh', definition: 'Bokeh is the blur.' },
+    proscons: { heads: ['For:', 'Against:'], pros: ['cheap'], cons: ['slow'] },
+    sheet: { sections: [{ kind: 'text', text: 'Pack the night before.' }, { kind: 'list', items: ['Tent', 'Stove'] }] },
+    explorable: contrasted(switching(2, 'Short.')),
+  };
+  const size = (type: string, props: Record<string, unknown>) => COMPONENTS[type]!.size(blank, props) as [number, number];
+  for (const [type, props] of Object.entries(OVER)) {
+    const [wide, tall] = size(type, props);
+    assert.deepEqual(size(type, { ...props, above: ['Results:'] }), [wide, tall + 6 + 17], `${type} draws a heading over its structure`);
+    assert.deepEqual(size(type, { ...props, above: ['Results:', '  ', 'The trial ran for six weeks.'] }), [wide, tall + 6 + 2 * 17], `${type} draws each line on lines of its own and passes over a blank one`);
+  }
+  for (const type of ['chart', 'breakdown']) {
+    const [wide, tall] = size(type, OVER[type]!);
+    assert.deepEqual(size(type, { ...OVER[type], heads: ['Month', 'Weeks'] }), [wide, tall + 6 + 17 + 5], `${type} draws its heads row over its figures`);
+  }
+  const note = (emphasis: string, text: string) => (COMPONENTS.note!.size({ ...blank, text }, { emphasis }) as [number, number])[1];
+  const said = 'Barges carry the grain out and the news in. The road is for locals, and every hamlet faces the water, except the red house. The river is the highway.';
+  assert.ok(note('The river is the highway.', said) > note('', said), 'a note shows its text far enough to reach the words it sets apart');
+  assert.equal(note('“The river is the highway”', said), note('The river is the highway.', said.replace('The river', '"The river')), 'and finds them whatever quotation marks either writes');
+});
+
+test('a sheet is one card: its heading is its title, a picture leads it, each part is as tall as on its own card, and no chip says what it draws', async () => {
+  const { COMPONENTS, sizeOf, chipsOf } = (await load('components/index.js')) as {
+    COMPONENTS: Record<string, Kind>;
+    sizeOf: (node: unknown, item: unknown) => number[];
+    chipsOf: (node: unknown, item: unknown) => { kind: string; text: string }[];
+  };
+  const sheet = (sections: unknown[], item: Record<string, unknown> = {}) => COMPONENTS.sheet!.size({ ...blank, ...item }, { sections });
+  const text = { kind: 'text', text: 'Pack the night before.' };
+  const list = { kind: 'list', items: ['Tent', 'Stove'] };
+  assert.deepEqual(sheet([text, list]), [320, 30 + 21 + 6 + 17 + 21 + (17 + 5 + 17)], 'the opening sits under the title as a note\'s text does, and the list under a hairline');
+  assert.deepEqual(sheet([list, text]), [320, 30 + 21 + 10 + (17 + 5 + 17) + 21 + 17], 'a list that comes first sits under the title as on a list card');
+  assert.deepEqual(sheet([{ kind: 'heading', text: 'Camp' }, text, list], { title: 'A title that is long enough to take two lines of a card this wide' }), sheet([text, list]), 'the heading stands in for the item\'s title');
+  assert.deepEqual(sheet([{ kind: 'picture', src: 'a.png' }, text, list]), [320, sheet([text, list])[1]! + 140], 'a picture leads the card in a band across it');
+  const { size: facts } = COMPONENTS.facts!;
+  const figures = [{ label: 'Nights', value: '2' }, { label: 'Cost', value: '€240' }, { label: 'Walked', value: 'thirty-one kilometres in the rain' }];
+  assert.equal(sheet([{ kind: 'figures', facts: figures }, text])[1]! - (21 + 17), facts(blank, { facts: figures })[1], 'figures are laid out as on a facts card');
+
+  const item = { ...blank, title: 'Weekend in Porto', data: { when: 'Last May', where: 'Porto', people: ['Ines'] } };
+  const node = { view: { component: 'sheet', props: { sections: [text, { kind: 'excerpt', text: 'I would come back just for the sardines.', by: 'Ines' }] } } };
+  assert.deepEqual(chipsOf(node, item).map((chip) => chip.kind), ['when', 'where'], 'the people chip would say Ines again');
+  const named = { view: { component: 'sheet', props: { sections: [{ kind: 'heading', text: 'Porto' }, text, list] } } };
+  assert.deepEqual(chipsOf(named, item).map((chip) => chip.kind), ['when', 'people'], 'the place chip would say the heading again');
+  assert.equal(sizeOf(node, item)[1], COMPONENTS.sheet!.size(item, node.view.props)[1]! + 28);
+});
+
 test('an excerpt whose source is its title writes it once', async () => {
   const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Kind> };
   const excerpt = (source: string) => COMPONENTS.excerpt!.size({ ...blank, title: '鲁迅《故乡》' }, { text: '世界上本没有路，走的人多了，也便成了路。', source });
   assert.deepEqual(excerpt(' 鲁迅《故乡》 '), excerpt(''));
   assert.equal(excerpt('example.org')[1], excerpt('')[1]! + 17);
+});
+
+test('an explorable shows the value its item states where the sliders stand on one, the formula\'s value marked computed anywhere else, and steps through a formula as the service does', async () => {
+  type Result = { value: number | undefined; shown: string; computed: boolean };
+  const client = (await load('components/explorable.js')) as {
+    evaluate: (program: unknown[], values: Record<string, number>) => number | undefined;
+    resultAt: (sliders: unknown[], output: unknown, at: Record<string, number>) => Result;
+    written: (value: number, decimals: number, unit: string) => string;
+  };
+  const { evaluate, parse } = await import('../src/core/formula.ts');
+  const slider = { kind: 'slider', name: 'f', label: 'focal length', unit: 'mm', min: 12, max: 300, step: 2, values: [24, 50, 200] };
+  const output = { kind: 'chart', label: 'field of view', unit: '°', formula: [2, 18, 'f', '/', 'atan', '*', 57.2958, '*'], values: [73.7, 39.6, 10.3] };
+  assert.deepEqual(client.resultAt([slider], output, { f: 50 }), { value: 39.6, shown: '39.6°', computed: false });
+  assert.deepEqual(client.resultAt([slider], output, { f: 300 }), { value: client.evaluate(output.formula, { f: 300 }), shown: '6.9°', computed: true });
+  assert.equal(client.resultAt([slider], { ...output, formula: [1, 'f', '/'] }, { f: 0 }).shown, '–', 'no value where the formula has none');
+  assert.equal(client.written(12500.5, 1, 'mm'), '12,500.5 mm');
+  assert.equal(client.written(45, 0, '%'), '45%');
+  assert.equal(client.written(50, 0, '毫米'), '50毫米');
+
+  const sources = ['2 * atan(18 / f) * 57.2958', '-f ^ 2 + min(f, 3, 1) - max(f, 2)', 'round(f / 3) + sqrt(f) - ln(f) * exp(1 / f)', '1 / (f - 4)', 'sqrt(4 - f)', '2 ^ 3 ^ f'];
+  for (const source of sources) {
+    const read = parse(source, ['f']);
+    assert.ok('program' in read, source);
+    for (const f of [-2, 0, 0.5, 1, 4, 7.25, 50]) assert.equal(client.evaluate(read.program, { f }), evaluate(read.program, { f }), `${source} at f = ${f}`);
+  }
+  assert.equal(client.evaluate([1, '+'], {}), undefined, 'a step short of its arguments has no value');
+  assert.equal(client.evaluate([1, 'toString'], {}), undefined, 'a name that is no quantity has no value');
 });

@@ -45,7 +45,7 @@ h1, h2, p, ol, dl, dd, blockquote, pre, fieldset { margin: 0; padding: 0; border
 button, input, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
-.clamp-1, .clamp-2, .clamp-3, .clamp-4, .clamp-5, .clamp-6, .clamp-7, .clamp-8 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.clamp-1, .clamp-2, .clamp-3, .clamp-4, .clamp-5, .clamp-6, .clamp-7, .clamp-8, .clamp-9, .clamp-10, .clamp-11, .clamp-12 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .clamp-1 { -webkit-line-clamp: 1; }
 .clamp-2 { -webkit-line-clamp: 2; }
 .clamp-3 { -webkit-line-clamp: 3; }
@@ -54,6 +54,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .clamp-6 { -webkit-line-clamp: 6; }
 .clamp-7 { -webkit-line-clamp: 7; }
 .clamp-8 { -webkit-line-clamp: 8; }
+.clamp-9 { -webkit-line-clamp: 9; }
+.clamp-10 { -webkit-line-clamp: 10; }
+.clamp-11 { -webkit-line-clamp: 11; }
+.clamp-12 { -webkit-line-clamp: 12; }
 
 /* ---- the field */
 
@@ -103,6 +107,18 @@ button, input, textarea { font: inherit; color: inherit; }
 .card-foot { margin-top: auto; color: var(--ink-3); font-size: var(--type-text); line-height: var(--lead-text); }
 .card-head { display: flex; align-items: center; gap: 10px; }
 .card-head .card-title { flex: 1; }
+/* The item's own headings, labels and opening prose over a card's structure, as large and as dark as the structure, so a heading
+   reads before what it heads. A heading is set in the title's weight. components/shared.js counts their lines unkerned and sets
+   6 px between them and the structure, which the rules below keep in a card whose parts stand closer or further apart. */
+.card-above { flex: none; color: var(--ink); font-size: var(--type-text); line-height: var(--lead-text); font-kerning: none; }
+.card-above .is-head { font-weight: 620; letter-spacing: -0.006em; }
+:is(.c-quote, .c-fact, .c-qa, .c-excerpt, .c-definition) > .card-above { margin-bottom: 6px; }
+:is(.c-explorable, .sheet-under) > .card-above { margin-top: 6px; }
+.sheet-part > .card-above { margin-bottom: 6px; }
+.c-chart > :is(.card-above, .card-heads) { margin-top: -2px; }
+/* The heads row of the two columns a card's figures or bars come from, each head over what it heads. */
+.card-heads { flex: none; display: grid; grid-template-columns: 1fr 1fr; column-gap: 17px; padding-bottom: 4px; border-bottom: 1px solid var(--line); color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); font-kerning: none; }
+.card-heads > :last-child { text-align: end; }
 /* Names what the look alone cannot: a code card's language, where a chat came from, a kind of group. */
 .kind { flex: none; color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); font-variant-caps: all-small-caps; letter-spacing: 0.07em; white-space: nowrap; }
 /* Small capitals shrink a Han character, which has no capital, so a Chinese label is set plain. */
@@ -143,8 +159,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .chip-count { flex: none; font-variant-numeric: tabular-nums; }
 [data-component='image'] .chip-line, [data-component='video'] .chip-line { bottom: 10px; }
 
-/* note: plain paper. The one line the model sets apart hangs from a rule. */
-.note-emphasis { padding-left: 9px; border-left: 2px solid var(--accent); color: var(--ink); font-style: italic; font-size: var(--type-text); line-height: var(--lead-text); }
+/* note: plain paper. The words the model sets apart are marked where they stand, in colour alone, so they take the room they take unmarked. */
+.note-mark { color: var(--ink); background: color-mix(in srgb, var(--accent) 24%, transparent); border-radius: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 
 /* quote: a serif on a face washed with the tree's colour. */
 [data-component='quote'] .card-face, .detail-quote { --ink-2: #bdbdb6; background: color-mix(in srgb, var(--accent) 14%, var(--face)); border-color: color-mix(in srgb, var(--accent) 44%, transparent); }
@@ -175,6 +191,23 @@ button, input, textarea { font: inherit; color: inherit; }
 .c-video .media-missing { place-items: end center; padding-bottom: 14px; }
 .media-play { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px; border-radius: 50%; background: rgba(11, 13, 17, 0.7); border: 1px solid var(--line-2); }
 .media-play::after { content: ''; position: absolute; left: 18px; top: 13px; border: 9px solid transparent; border-left: 14px solid var(--ink); border-right: 0; }
+
+/* audio: a recording. A round play mark beside its waveform and its length, over the first words of its transcript.
+   components/audio.js counts the strip as 40 px. The opened card's waveform fills with the accent as it plays. */
+/* Its lines are counted word by word, as the structured types' are, from widths measured without kerning. */
+.c-audio { font-kerning: none; }
+.audio-strip { flex: none; height: 40px; display: flex; align-items: center; gap: 10px; }
+.audio-play { position: relative; flex: none; width: 32px; height: 32px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 18%, var(--face)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+.audio-play::after { content: ''; position: absolute; left: 12px; top: 9px; border: 7px solid transparent; border-left: 11px solid var(--accent); border-right: 0; }
+.audio-wave { flex: 1; min-width: 0; height: 24px; display: block; fill: color-mix(in srgb, var(--accent) 58%, var(--face)); }
+.audio-length { flex: none; color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.detail-audio { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: var(--sunk); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+.detail-audio audio { display: block; width: 100%; height: 40px; }
+.detail-wave { position: relative; height: 56px; cursor: pointer; }
+.detail-wave .audio-wave { position: absolute; inset: 0; width: 100%; height: 100%; }
+.detail-wave .audio-wave.is-played { fill: var(--accent); clip-path: inset(0 calc((1 - var(--played, 0)) * 100%) 0 0); }
+.detail-audio .detail-note { padding: 0; }
+.detail-transcript { color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* link: a page under its address bar. */
 .c-link { padding: 0; gap: 0; }
@@ -241,8 +274,8 @@ button, input, textarea { font: inherit; color: inherit; }
    Kerning is off in them, so a word is exactly as wide as its characters add up to and a line ends where it was counted to end.
    A figure set at 24 px and up is kerned, because Ta and Wa gape there unkerned. Kerning only draws a line narrower than its
    characters add up to, so the count still holds. */
-.c-facts, .c-table, .c-list, .c-breakdown, .c-qa, .c-callout, .c-excerpt, .c-definition, .c-idea, .c-proscons, .c-swatch, .c-artwork, .c-reference, .c-place { font-kerning: none; }
-:is(.c-facts, .c-idea, .c-definition, .c-place) .fact-value:not(.is-small) { font-kerning: normal; }
+.c-facts, .c-table, .c-list, .c-breakdown, .c-qa, .c-callout, .c-excerpt, .c-definition, .c-idea, .c-proscons, .c-swatch, .c-artwork, .c-reference, .c-place, .c-sheet, .c-explorable { font-kerning: none; }
+:is(.c-facts, .c-idea, .c-definition, .c-place, .c-sheet, .c-explorable) .fact-value:not(.is-small) { font-kerning: normal; }
 
 /* list: a dot before each entry, or a tick box when the list is a checklist. A tick box shows a mark and takes no click. */
 .list-head { display: flex; align-items: baseline; gap: 10px; }
@@ -265,7 +298,12 @@ button, input, textarea { font: inherit; color: inherit; }
 .figures { margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 17px; }
 .figure { min-width: 0; }
 .figure.is-alone { grid-column: 1 / -1; }
-.detail-figures { padding: 13px 15px; border-radius: 12px; background: var(--sunk); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 8px 16px; font-size: 14px; line-height: 20px; }
+/* Under a heads row each figure stands beside its label, the label under the first head and the value under the second. */
+.figures.is-headed .figure { display: grid; grid-template-columns: 1fr 1fr; column-gap: 17px; align-items: end; }
+.figures.is-headed .fact-label { font-kerning: none; }
+.figures.is-headed .fact-value { text-align: end; }
+/* A long label wraps in its column rather than squeeze the value beside it to a letter a line. */
+.detail-figures { padding: 13px 15px; border-radius: 12px; background: var(--sunk); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); display: grid; grid-template-columns: minmax(0, max-content) minmax(40%, 1fr); gap: 8px 16px; font-size: 14px; line-height: 20px; }
 .detail-figures dt { color: var(--ink-2); overflow-wrap: anywhere; }
 .detail-figures dd { font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
@@ -360,19 +398,18 @@ button, input, textarea { font: inherit; color: inherit; }
 .detail-definition .definition-text { font-size: 17px; line-height: 1.45; overflow-wrap: anywhere; }
 .detail-definition .fact-value, .detail-definition .card-title { overflow-wrap: anywhere; }
 
-/* proscons: the points for and against, side by side under their names. A plus or a minus marks each point, so the sides are told apart without colour. */
+/* proscons: the points for and against, side by side, each side under the heading its item gives it, so the sides are told apart by the item's own words and the card adds no sign of its own. */
 .proscons { margin-top: 4px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 17px; font-size: var(--type-text); line-height: var(--lead-text); }
 .proscons-side { position: relative; min-width: 0; display: flex; flex-direction: column; }
 .proscons-side + .proscons-side::before { content: ''; position: absolute; left: -9px; top: 2px; bottom: 0; width: 1px; background: var(--line); }
-.proscons-side .kind { margin-bottom: 4px; }
+.proscons-head { margin-bottom: 4px; font-weight: 620; letter-spacing: -0.006em; }
 .proscons-side ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
 .proscons-side li { display: flex; align-items: flex-start; gap: 6px; }
 .proscons-side .card-foot { margin-top: 5px; }
-.proscons-mark { flex: none; margin-top: 3.5px; fill: none; stroke: var(--ink-2); stroke-width: 1.6; stroke-linecap: round; }
-.proscons-mark.is-pros { stroke: var(--accent); }
+.proscons-mark { flex: none; margin-top: 3.5px; fill: var(--accent); }
 .detail-proscons { display: flex; flex-direction: column; gap: 14px; font-size: 14px; line-height: 20px; }
 .detail-proscons ul { gap: 7px; }
-.detail-proscons li { overflow-wrap: anywhere; }
+.detail-proscons li, .detail-proscons .proscons-head { overflow-wrap: anywhere; }
 .detail-proscons .proscons-mark { margin-top: 5px; }
 .detail-proscons .proscons-side + .proscons-side::before { content: none; }
 
@@ -402,6 +439,71 @@ button, input, textarea { font: inherit; color: inherit; }
 .place-head .fact-value, .place-head .card-title { min-width: 0; }
 .detail-place .place-head .fact-value, .detail-place .place-head .card-title { overflow-wrap: anywhere; }
 
+/* A map: its tiles in a layer at the middle of a plain ground, a pin at each point, and the provider's credit in a corner. */
+.map { position: relative; flex: none; overflow: hidden; background: #20262c; }
+.map-layer { position: absolute; left: 50%; top: 50%; }
+.map-tiles { position: absolute; inset: 0; background-repeat: no-repeat; background-size: 256px 256px; filter: saturate(0.7) brightness(0.86); }
+.map-pin { position: absolute; overflow: visible; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); }
+.map-pin path { fill: var(--accent); stroke: rgba(0, 0, 0, 0.6); stroke-width: 1.2; }
+.map-pin circle { fill: var(--face); }
+.map-credit { position: absolute; right: 0; bottom: 0; padding: 0 5px; border-top-left-radius: 5px; color: #24272b; background: rgba(255, 255, 255, 0.78); font-size: 10px; line-height: 14px; white-space: nowrap; }
+a.map-credit { text-decoration: none; }
+a.map-credit:hover { text-decoration: underline; }
+.place-map { box-shadow: inset 0 -1px 0 var(--line); }
+.detail-map { border-radius: 14px; }
+
+/* sheet: one card assembled from parts under one title, each part drawn as the card of its own kind draws it, and each after
+   the first under a hairline. components/sheet.js sets the room around each part, so the footprint and the page agree. */
+.c-sheet { padding: 0; gap: 0; }
+.sheet-under { padding: 13px 15px; display: flex; flex-direction: column; min-height: 0; }
+.sheet-part { flex: none; }
+.sheet-part.is-ruled { border-top: 1px solid var(--line); }
+.c-sheet .figures, .c-sheet .list, .c-sheet .table { margin-top: 0; }
+.sheet-part .card-foot { margin-top: 8px; }
+.sheet-by { margin-top: 4px; display: flex; align-items: flex-start; gap: 8px; color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); }
+.sheet-by::before { content: ''; flex: none; width: 14px; height: 1px; margin-top: 8.5px; background: currentColor; }
+.sheet-by span { min-width: 0; overflow-wrap: anywhere; }
+.detail-sheet-heading { overflow-wrap: anywhere; }
+.detail-sheet-text { color: var(--ink); overflow-wrap: anywhere; }
+
+/* explorable: under a mark that says it can be explored, the title, what the controls change, and a row for each control as it
+   stands by default. Nothing on the card responds, because a drag on the field moves the card; the opened card has the controls.
+   components/explorable.js sets the room between the parts, so the footprint and the page agree. */
+.c-explorable { gap: 0; }
+.explore-mark { flex: none; height: var(--lead-text); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.explore-glyph { flex: none; fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; }
+.explore-out { flex: none; margin-top: 10px; display: flex; flex-direction: column; }
+.explore-text { color: var(--ink); font-size: var(--type-text); line-height: var(--lead-text); }
+.explore-text + .explore-text { margin-top: 6px; }
+.explore-figure .fact-label { margin-top: 2px; }
+.explore-plot { display: block; flex: none; margin-top: 8px; }
+.explore-row { flex: none; height: 28px; margin-top: 8px; display: flex; align-items: center; gap: 4px; }
+.explore-pill { flex: 1 1 0; min-width: 0; height: 28px; padding: 0 5px; border-radius: 14px; border: 1px solid var(--line-2); color: var(--ink-2); font-size: var(--type-text); line-height: 26px; text-align: center; white-space: nowrap; overflow: hidden; }
+.explore-pill.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--ink); }
+.explore-row .explore-reading { flex: 1; min-width: 0; color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); white-space: nowrap; overflow: hidden; }
+.explore-track { flex: none; position: relative; height: 4px; margin-left: 4px; border-radius: 2px; background: var(--line-2); }
+.explore-knob { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--accent); }
+.detail-explorable { padding: 13px 15px; border-radius: 12px; background: var(--face); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); display: flex; flex-direction: column; gap: 14px; }
+.detail-explorable .explore-out { margin-top: 0; gap: 8px; }
+.explore-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+.explore-value .fact-value { overflow-wrap: anywhere; }
+.explore-computed { color: var(--ink-3); font-size: var(--type-text); font-variant-caps: all-small-caps; letter-spacing: 0.07em; }
+.detail-explorable .explore-plot { width: 100%; height: auto; margin-top: 0; }
+.explore-state-text { font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.explore-control { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.explore-name { color: var(--ink-2); font-size: 12.5px; line-height: 17px; overflow-wrap: anywhere; }
+.explore-segmented { display: flex; flex-wrap: wrap; gap: 6px; }
+.explore-option { flex: 1 1 auto; min-width: 0; min-height: var(--hit); padding: 6px 12px; border-radius: 12px; border: 1px solid var(--line-2); background: transparent; color: var(--ink-2); font-size: 14px; line-height: 18px; overflow-wrap: break-word; cursor: pointer; }
+.explore-option[aria-checked='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--ink); }
+.explore-switch { min-height: var(--hit); align-self: flex-start; max-width: 100%; display: inline-flex; align-items: center; gap: 10px; padding: 0 4px 0 0; border: 0; background: none; text-align: start; font-size: 14px; line-height: 18px; overflow-wrap: anywhere; cursor: pointer; }
+.explore-switch-track { flex: none; position: relative; width: 40px; height: 24px; border-radius: 12px; background: var(--line-2); transition: background 0.15s; }
+.explore-switch-thumb { position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink); transition: transform 0.15s; }
+.explore-switch[aria-checked='true'] .explore-switch-track { background: var(--accent); }
+.explore-switch[aria-checked='true'] .explore-switch-thumb { transform: translateX(16px); background: var(--bg); }
+.explore-slider { display: flex; align-items: center; gap: 12px; }
+.explore-range { flex: 1; min-width: 0; height: var(--hit); margin: 0; accent-color: var(--accent); cursor: pointer; }
+.explore-slider .explore-reading { flex: none; min-width: 64px; text-align: end; font-size: 14px; font-variant-numeric: tabular-nums; }
+
 /* ---- groups */
 
 /* A frame is a faint wash and a hairline, so the cards inside it carry the weight. */
@@ -413,6 +515,8 @@ button, input, textarea { font: inherit; color: inherit; }
   animation: arrive 0.4s both;
 }
 .pane.is-pick { border-style: dashed; border-color: color-mix(in srgb, var(--pick) 30%, transparent); background: color-mix(in srgb, var(--pick) 2.5%, transparent); }
+/* Cards are placed from the frame's outer edge and an absolute child from inside its 1 px border, so the marks get a layer that starts at the outer edge too. */
+.pane-marks { position: absolute; inset: -1px; pointer-events: none; }
 .pane-head { position: absolute; left: 18px; right: 12px; top: 6px; height: 30px; display: flex; align-items: center; gap: 9px; }
 .pane-head .kind { color: var(--tint); }
 .pane.is-pick .kind { color: var(--pick); }
@@ -426,6 +530,40 @@ button, input, textarea { font: inherit; color: inherit; }
 .cmp-label { position: absolute; left: 0; top: 5px; font-size: var(--type-text); line-height: var(--lead-text); color: var(--ink-2); }
 .cmp-cell { position: absolute; top: 5px; padding: 0 8px; font-size: var(--type-text); line-height: var(--lead-text); text-align: center; }
 .seq-arrow { position: absolute; text-align: center; font-size: var(--type-title); line-height: 1; transform: translateY(-50%); color: var(--tint); }
+.arr-words { position: absolute; font-size: var(--type-text); line-height: var(--lead-text); font-kerning: none; overflow-wrap: anywhere; }
+.rank-n { position: absolute; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: var(--type-text); line-height: 1; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--tint); background: color-mix(in srgb, var(--tint) 16%, transparent); }
+.rank-n.is-first { color: var(--bg); background: var(--tint); }
+.pane.is-pick .rank-n { color: var(--pick); background: color-mix(in srgb, var(--pick) 16%, transparent); }
+.pane.is-pick .rank-n.is-first { color: var(--bg); background: var(--pick); }
+.rank-why, .mx-why { color: var(--ink-2); }
+/* A map arrangement: the map in the tree's colour, a number in each pin's head, and the same number filled above each member. */
+.arr-map { position: absolute; --accent: var(--tint); }
+.pane.is-pick .arr-map { --accent: var(--pick); }
+.arr-map .map { border-radius: 12px; box-shadow: 0 0 0 1px var(--line); }
+.map-pin text { fill: var(--face); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.map-n { position: absolute; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: var(--type-text); line-height: 1; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--bg); background: var(--tint); }
+.pane.is-pick .map-n { background: var(--pick); }
+.ba-step { position: absolute; padding: 0 12px; display: flex; flex-direction: column; align-items: center; }
+.ba-arrow { height: 24px; font-size: var(--type-title); line-height: 24px; color: var(--tint); }
+.ba-change { position: static; width: 100%; text-align: center; color: var(--ink); }
+.lead-rule { position: absolute; height: 1px; background: var(--line); }
+.mx-split { position: absolute; background: var(--line); }
+.mx-split.is-across { height: 1px; }
+.mx-split.is-down { width: 1px; }
+.mx-axis { position: absolute; background: color-mix(in srgb, var(--tint) 55%, transparent); }
+.mx-axis.is-up { width: 1px; }
+.mx-axis.is-right { height: 1px; }
+.mx-axis::after { content: ''; position: absolute; border: 4px solid transparent; }
+.mx-axis.is-up::after { left: -4px; top: -6px; border-top: 0; border-bottom: 7px solid color-mix(in srgb, var(--tint) 55%, transparent); }
+.mx-axis.is-right::after { right: -6px; top: -4px; border-right: 0; border-left: 7px solid color-mix(in srgb, var(--tint) 55%, transparent); }
+.mx-name { white-space: nowrap; color: var(--ink); }
+.lay-label { position: absolute; font-size: var(--type-text); line-height: var(--lead-text); color: var(--tint); white-space: nowrap; }
+.pane.is-pick .lay-label { color: var(--pick); }
+.lay-frame { position: absolute; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--tint) 13%, transparent); }
+.lay-join { position: absolute; display: flex; align-items: center; justify-content: center; font-size: var(--type-title); line-height: 1; color: var(--tint); }
+.pane.is-pick .lay-join { color: var(--pick); }
+.lay-join.is-line::before { content: ''; width: 1px; height: calc(100% - 8px); background: currentColor; opacity: 0.55; }
+.lay-join.is-line.is-across::before { width: calc(100% - 12px); height: 1px; }
 
 /* ---- controls */
 

@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, say, text, wrap } from './shared.js';
+import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, aboveOf, drawAbove, say, text, wrap } from './shared.js';
 import { wordsOf } from '../words.js';
 
 const WIDTH = 272;
@@ -12,21 +12,22 @@ const RULE = 17;
 function plan(props) {
   const question = text(props.question).trim();
   const answer = text(props.answer).trim();
-  return { question, answer, questionLines: wrap(question, COLUMN, TITLE_LETTER, 4), answerLines: wrap(answer, COLUMN, TEXT_LETTER, 6) };
+  return { question, answer, above: aboveOf(props, WIDTH - SIDES), questionLines: wrap(question, COLUMN, TITLE_LETTER, 4), answerLines: wrap(answer, COLUMN, TEXT_LETTER, 6) };
 }
 
 export const shows = [];
 
 export function size(item, props) {
-  const { questionLines, answerLines } = plan(props);
-  return [WIDTH, FRAME + questionLines * TITLE + RULE + answerLines * TEXT];
+  const { above, questionLines, answerLines } = plan(props);
+  return [WIDTH, FRAME + above.height + questionLines * TITLE + RULE + answerLines * TEXT];
 }
 
 const voice = (mark, cls, words) => h('div', { class: `qa-voice ${cls}` }, h('span', { class: 'qa-mark', 'aria-hidden': 'true', text: mark }), words);
 
 export function draw(item, props) {
-  const { question, answer, questionLines, answerLines } = plan(props);
+  const { question, answer, above, questionLines, answerLines } = plan(props);
   return [
+    drawAbove(above),
     voice(wordsOf(item).question, 'is-question', say('div', `card-title clamp-${questionLines}`, question)),
     voice(wordsOf(item).answer, 'is-answer', say('div', `qa-answer clamp-${answerLines}`, answer)),
   ];

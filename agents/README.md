@@ -26,6 +26,7 @@ To try the client with no model and no cost: `npm run dev:fake`.
 | `MUSE_LLM_MODEL` | `muse-spark-1.3` | The model for every role. |
 | `MIND_PALACE_TOKEN_BUDGET` | 5,000,000 | Tokens the service may spend before it refuses model calls. Restart to reset. |
 | `MIND_PALACE_ENV` | `~/.muse-garden.env` | The file keys are read from. |
+| `MIND_PALACE_MAPS` | unset, maps off | A map provider: `openstreetmap`. With it set, a place a note names is looked up on that provider's server, which sends the place's name off this machine, and place cards draw a map from its tiles. Unset, nothing about a place leaves the machine. Lookups are kept in `data/places.json`. |
 
 ## Check it
 

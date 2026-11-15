@@ -12,7 +12,7 @@ The Packager returns a `name`, such as `dolly-zoom-handoff-2026-11-13`. The host
 | --- | --- |
 | `<name>/handoff.md` | The handoff as Markdown. Paste this file into the receiving agent. |
 | `<name>/handoff.json` | The same content as data, for an agent or a script that parses the handoff. |
-| `<name>/assets/<id>` | One file for each image, video, or document in the handoff. |
+| `<name>/assets/<id>` | One file for each image, video, recording, or document in the handoff. |
 
 The host also writes a copy of the Markdown file as `<name>.md` beside the zip file.
 
