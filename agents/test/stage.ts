@@ -11,7 +11,7 @@ import { COMPONENT_IDS, SAMPLES, STRUCTURED_IDS } from '../src/core/samples.ts';
 import { COMPOSITE_IDS } from '../src/core/views.ts';
 import { fit } from '../src/core/map.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { startServer, type Running } from '../src/node/server.ts';
+import { startServer, type Running, type ServerOptions } from '../src/node/server.ts';
 
 export const TOKEN = 'secret';
 
@@ -36,12 +36,12 @@ export function browserPath(): string {
  * The service with stand-in agents. Port 0 takes any free port. The stand-in Renderer redraws every card by the rules, as the real one
  * does, so a script that wants to look at a view the rules would not give its item names the trees whose cards stay as they were placed.
  */
-export function bootFake({ port = 0, dataDir = mkdtempSync(join(tmpdir(), 'mp-stage-')), clientDir = join(import.meta.dirname, '../client'), asPlaced = (_treeId: string): boolean => false } = {}): Promise<Running> {
+export function bootFake({ port = 0, dataDir = mkdtempSync(join(tmpdir(), 'mp-stage-')), clientDir = join(import.meta.dirname, '../client'), asPlaced = (_treeId: string): boolean => false, telegram = undefined as ServerOptions['telegram'] } = {}): Promise<Running> {
   const roles: Roles = {
     ...fakeRoles,
     renderer: (ctx, { nodeIds }) => fakeRoles.renderer(ctx, { nodeIds: nodeIds.filter((id) => !asPlaced(ctx.mind.nodes.get(id)?.treeId ?? '')) }),
   };
-  return startServer({ port, host: '127.0.0.1', dataDir, clientDir, model: new FakeModel(), roles, token: TOKEN });
+  return startServer({ port, host: '127.0.0.1', dataDir, clientDir, model: new FakeModel(), roles, token: TOKEN, telegram });
 }
 
 export const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAHUlEQVQI12NkYPjPgA0wYRWlqgTj////cRhFJzsAGGgEB+4vOSMAAAAASUVORK5CYII='), (c) => c.charCodeAt(0));

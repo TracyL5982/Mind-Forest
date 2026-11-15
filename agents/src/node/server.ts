@@ -1,17 +1,21 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
+import { Readable } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { ModelClient } from '../core/ports.ts';
 import { Pipeline, type Outbound } from '../core/pipeline.ts';
-import { DEFAULT_SETTINGS, type Handoff, type Roles, type Settings } from '../core/roles/types.ts';
+import { DEFAULT_SETTINGS, type Handoff, type Playback, type Roles, type Settings } from '../core/roles/types.ts';
 import { Mindstorm } from '../core/state.ts';
+import { spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
+import { whereItWent, type Delivery, type Desk } from './contact.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, PROTOCOL_VERSION } from './protocol.ts';
 import type { Speak, Transcribe } from './speech-openai.ts';
 import { SqliteStore } from './store.ts';
+import { Telegram, type TelegramOptions } from './telegram.ts';
 import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
 
@@ -33,6 +37,10 @@ export interface ServerOptions {
   settings?: Partial<Settings>;
   /** Maps switched on. Without it no place is looked up and clients are told to load no tiles. */
   maps?: Maps;
+  /** The only folder a linked file may be served from. Defaults to the repository's `public/clips/full`. */
+  films?: string;
+  /** Mind Palace as a Telegram contact, reached with this bot's token. */
+  telegram?: Omit<TelegramOptions, 'desk' | 'file' | 'log'>;
   log?: (line: string) => void;
 }
 
@@ -54,6 +62,7 @@ const TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.woff2': 'font/woff2',
+  '.wasm': 'application/wasm',
 };
 
 export async function startServer(opts: ServerOptions): Promise<Running> {
@@ -61,7 +70,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   mkdirSync(opts.dataDir, { recursive: true });
   const token = opts.token ?? savedToken(join(opts.dataDir, 'token'));
   const store = new SqliteStore(join(opts.dataDir, 'mindstorm.sqlite'));
-  const assets = new DiskAssets(join(opts.dataDir, 'assets'));
+  const assets = new DiskAssets(join(opts.dataDir, 'assets'), '', opts.films);
   const handoffDir = join(opts.dataDir, 'handoffs');
   mkdirSync(handoffDir, { recursive: true });
 
@@ -70,6 +79,13 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   const settings: Settings = { ...DEFAULT_SETTINGS, ...opts.settings };
   const maps = opts.maps ? { tiles: opts.maps.tiles, credit: opts.maps.credit, link: opts.maps.link } : null;
   const sockets = new Set<WebSocket>();
+  /** What each connection said it can play. A connection that has not said is taken to be a browser. */
+  const plays = new Map<WebSocket, Playback>();
+  const playback = (): Playback => {
+    const said = [...plays.values()];
+    const files = said.length === 0 ? [] : said.map((p) => p.files).reduce((both, next) => both.filter((ext) => next.includes(ext)));
+    return { embeds: said.every((p) => p.embeds), files };
+  };
   const broadcast = (message: unknown) => {
     const text = JSON.stringify(message);
     for (const ws of sockets) if (ws.readyState === ws.OPEN) ws.send(text);
@@ -78,7 +94,10 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   const emit = (message: Outbound) => {
     if (message.t === 'handoff') {
       void bundle(message.handoff).then(
-        (made) => broadcast({ t: 'handoff', ...made }),
+        (made) => {
+          broadcast({ t: 'handoff', ...made });
+          void telegram?.deliver({ title: message.handoff.title, file: `${made.name}.md`, markdown: message.handoff.markdown });
+        },
         (err) => broadcast({ t: 'note', role: 'packager', message: `failed: ${String(err)}` }),
       );
       return;
@@ -99,12 +118,23 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     newId: () => randomUUID(),
     now: () => new Date().toISOString(),
     emit,
+    playback,
   });
+
+  const desk: Desk = {
+    dump: async (dumps) => whereItWent(mind, await pipeline.dump(dumps)),
+    keep: async (bytes, mime, name) => (await assets.put(bytes, mime, name)).id,
+    transcribe: opts.transcribe && (async (audio, mime) =>
+      withoutWakePhrase(await opts.transcribe!(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, null) }), settings.agentName).trim()),
+    latest: () => latestHandoff(handoffDir),
+  };
+  const telegram = opts.telegram ? new Telegram({ ...opts.telegram, desk, file: join(opts.dataDir, 'telegram.json'), log }) : null;
+  const contact = () => ({ available: telegram !== null, ...(telegram?.status() ?? { ready: false, paired: null }) });
 
   async function bundle(handoff: Handoff): Promise<{ name: string; url: string; markdown: string; files: string[] }> {
     const name = handoff.name.replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'handoff';
     const files: { name: string; bytes: Uint8Array }[] = [
-      { name: `${name}/handoff.md`, bytes: new TextEncoder().encode(handoff.markdown) },
+      { name: `${name}/handoff.md`, bytes: new TextEncoder().encode(handoff.bundled) },
       { name: `${name}/handoff.json`, bytes: new TextEncoder().encode(JSON.stringify(handoff.json, null, 2)) },
     ];
     for (const id of handoff.assets) {
@@ -147,10 +177,10 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     if (req.method === 'POST' && path === '/api/transcribe') {
       const audio = await body(req, 25 * 1024 * 1024);
       const mime = req.headers['content-type'] ?? 'audio/wav';
-      const text = opts.transcribe
-        ? await opts.transcribe(audio, mime, likelyWords(mind, url.searchParams.get('tree')))
+      const heard = opts.transcribe
+        ? await opts.transcribe(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, url.searchParams.get('tree')) })
         : await opts.model.transcribe({ audio, mime });
-      return json(res, 200, { text });
+      return json(res, 200, { text: withoutWakePhrase(heard, settings.agentName).trim() });
     }
     if (req.method === 'GET' && path === '/api/speak') {
       const text = (url.searchParams.get('text') ?? '').slice(0, MAX_SPOKEN).trim();
@@ -169,11 +199,22 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       return;
     }
     if (req.method === 'GET' && path === '/api/state') return json(res, 200, { snapshot: mind.snapshot(), settings, maps });
+    if (req.method === 'GET' && path === '/api/telegram') return json(res, 200, contact());
+    if (req.method === 'POST' && path === '/api/telegram/pair') {
+      if (!telegram) return json(res, 404, { error: 'TELEGRAM_BOT_TOKEN is not set' });
+      const link = telegram.pair();
+      return link ? json(res, 200, { link }) : json(res, 503, { error: 'Telegram has not answered yet' });
+    }
+    if (req.method === 'POST' && path === '/api/telegram/unpair') {
+      telegram?.unpair();
+      return json(res, 200, contact());
+    }
     if (req.method === 'GET' && path.startsWith('/assets/')) {
-      const id = path.slice('/assets/'.length);
-      const asset = await assets.get(id);
-      if (!asset) return json(res, 404, { error: 'no such asset' });
-      return ranged(req, res, asset.bytes, asset.mime);
+      const stored = assets.open(path.slice('/assets/'.length));
+      if (!stored) return json(res, 404, { error: 'no such asset' });
+      if ('url' in stored) return relay(req, res, stored.url, stored.mime);
+      if ('bytes' in stored) return ranged(req, res, stored.mime, stored.bytes.length, (start, end) => res.end(stored.bytes.subarray(start, end + 1)));
+      return ranged(req, res, stored.mime, stored.size, (start, end) => void createReadStream(stored.file, { start, end }).on('error', () => res.destroy()).pipe(res));
     }
     if (req.method === 'GET' && path.startsWith('/handoffs/')) {
       const file = join(handoffDir, normalize(path.slice('/handoffs/'.length)).replace(/^(\.\.[/\\])+/, ''));
@@ -203,7 +244,10 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   wss.on('connection', (ws: WebSocket) => {
     sockets.add(ws);
     ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, maps, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser' }));
-    ws.on('close', () => sockets.delete(ws));
+    ws.on('close', () => {
+      sockets.delete(ws);
+      plays.delete(ws);
+    });
     ws.on('message', (raw) => {
       let message: ClientMessage;
       try {
@@ -212,12 +256,15 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         ws.send(JSON.stringify({ t: 'error', message: `bad message: ${String(err instanceof Error ? err.message : err).slice(0, 300)}` }));
         return;
       }
-      void handle(message).catch((err) => ws.send(JSON.stringify({ t: 'error', message: String(err instanceof Error ? err.message : err) })));
+      void handle(message, ws).catch((err) => ws.send(JSON.stringify({ t: 'error', message: String(err instanceof Error ? err.message : err) })));
     });
   });
 
-  async function handle(m: ClientMessage): Promise<void> {
+  async function handle(m: ClientMessage, ws: WebSocket): Promise<void> {
     switch (m.t) {
+      case 'client':
+        plays.set(ws, m.media);
+        return;
       case 'dump':
         await pipeline.dump(m.dumps);
         return;
@@ -226,6 +273,9 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         return;
       case 'focus':
         pipeline.focus(m.nodeId);
+        return;
+      case 'questions':
+        ws.send(JSON.stringify({ t: 'questions', nodeId: m.nodeId, questions: await pipeline.questions(m.nodeId) }));
         return;
       case 'ask':
         await pipeline.ask(m.nodeId, m.need);
@@ -255,6 +305,10 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   }
 
   await new Promise<void>((ready) => http.listen(opts.port, opts.host, ready));
+  // Another process writing this data folder while the service runs would corrupt it. `npm run import-library` checks for this file.
+  const lock = join(opts.dataDir, 'service.pid');
+  writeFileSync(lock, String(process.pid));
+  telegram?.start();
   const address = http.address();
   const port = typeof address === 'object' && address ? address.port : opts.port;
   return {
@@ -263,12 +317,26 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     pipeline,
     mind,
     async close() {
+      await telegram?.close();
       for (const ws of sockets) ws.terminate();
       wss.close();
       await new Promise<void>((done) => http.close(() => done()));
       store.close();
+      rmSync(lock, { force: true });
     },
   };
+}
+
+/** The newest handoff file, as it was written beside its zip. */
+function latestHandoff(dir: string): Delivery | null {
+  const newest = readdirSync(dir)
+    .filter((file) => file.endsWith('.md'))
+    .map((file) => ({ file, at: statSync(join(dir, file)).mtimeMs }))
+    .sort((a, b) => b.at - a.at)[0];
+  if (!newest) return null;
+  const markdown = readFileSync(join(dir, newest.file), 'utf8');
+  const title = /^# Handoff: (.+)$/.exec(markdown.split('\n', 1)[0]!)?.[1]?.trim() || newest.file.replace(/\.md$/, '');
+  return { title, file: newest.file, markdown };
 }
 
 function savedToken(path: string): string {
@@ -300,24 +368,49 @@ async function body(req: IncomingMessage, limit: number): Promise<Uint8Array> {
   return new Uint8Array(Buffer.concat(chunks));
 }
 
-/** Video elements ask for byte ranges, and some browsers refuse to play without them. */
-function ranged(req: IncomingMessage, res: ServerResponse, bytes: Uint8Array, mime: string): void {
+/** Video elements ask for byte ranges, and some browsers refuse to play without them. `send` writes bytes start to end, both included. */
+function ranged(req: IncomingMessage, res: ServerResponse, mime: string, size: number, send: (start: number, end: number) => void): void {
   const match = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? '');
   const base = { 'Content-Type': mime, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=31536000, immutable' };
   if (!match) {
-    res.writeHead(200, { ...base, 'Content-Length': bytes.length });
-    res.end(bytes);
-    return;
+    res.writeHead(200, { ...base, 'Content-Length': size });
+    if (size === 0) return void res.end();
+    return send(0, size - 1);
   }
-  const start = match[1] ? Number(match[1]) : Math.max(0, bytes.length - Number(match[2]));
-  const end = match[1] && match[2] ? Math.min(Number(match[2]), bytes.length - 1) : bytes.length - 1;
-  if (start > end || start >= bytes.length) {
-    res.writeHead(416, { 'Content-Range': `bytes */${bytes.length}` });
+  const start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]));
+  const end = match[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+  if (start > end || start >= size) {
+    res.writeHead(416, { 'Content-Range': `bytes */${size}` });
     res.end();
     return;
   }
-  res.writeHead(206, { ...base, 'Content-Range': `bytes ${start}-${end}/${bytes.length}`, 'Content-Length': end - start + 1 });
-  res.end(bytes.subarray(start, end + 1));
+  res.writeHead(206, { ...base, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': end - start + 1 });
+  send(start, end);
+}
+
+/** A linked remote file, streamed through the service so a client only ever fetches from it. The client's byte range goes to the source. */
+async function relay(req: IncomingMessage, res: ServerResponse, url: string, mime: string): Promise<void> {
+  const stop = new AbortController();
+  res.on('close', () => stop.abort());
+  let upstream: Response;
+  try {
+    upstream = await fetch(url, {
+      headers: { 'User-Agent': 'MindPalace/0.1 (local prototype)', ...(req.headers.range ? { Range: req.headers.range } : {}) },
+      redirect: 'follow',
+      signal: stop.signal,
+    });
+  } catch {
+    if (!stop.signal.aborted) json(res, 502, { error: 'the source of this file could not be reached' });
+    return;
+  }
+  const headers: Record<string, string> = { 'Content-Type': upstream.headers.get('content-type') ?? mime, 'Cache-Control': 'private, max-age=86400' };
+  for (const name of ['content-length', 'content-range', 'accept-ranges']) {
+    const value = upstream.headers.get(name);
+    if (value) headers[name] = value;
+  }
+  res.writeHead(upstream.status, headers);
+  if (!upstream.body) return void res.end();
+  Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream).on('error', () => res.destroy()).pipe(res);
 }
 
 function serveStatic(res: ServerResponse, dir: string, path: string): void {
@@ -334,7 +427,7 @@ const LIKELY_WORDS = 900;
 export function likelyWords(mind: Mindstorm, treeId: string | null): string {
   const inView = treeId && mind.trees.has(treeId) ? mind.treeNodes(treeId).map((n) => mind.item(n.itemId).title) : [];
   const trees = [...mind.trees.values()].map((t) => t.title);
-  const newest = [...mind.items.values()].slice(-40).reverse().map((i) => i.title);
+  const newest = [...mind.items.values()].filter((i) => mind.nodesOfItem(i.id).length > 0).slice(-40).reverse().map((i) => i.title);
   const titles: string[] = [];
   let length = 0;
   for (const title of new Set([...inView, ...trees, ...newest].map((t) => t.trim()).filter(Boolean))) {

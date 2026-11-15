@@ -107,9 +107,30 @@ export class WorkLog {
 }
 
 export function showTrees(trees, current, onPick) {
-  $('trees').replaceChildren(...trees.map((tree) =>
-    h('button', { class: `tree-chip ${tree.id === current ? 'is-current' : ''}`, type: 'button', title: tree.digest || tree.title, text: tree.title || 'Untitled', onclick: () => onPick(tree.id) })));
+  const known = $('kb-list').childElementCount;
+  const chip = known > 0 && h('button', {
+    class: 'kb-chip', type: 'button', 'aria-controls': 'kb', 'aria-expanded': String(!$('kb').hidden),
+    title: 'What you dropped that no tree holds yet', text: `Knowledge base ${known}`, onclick: () => toggleKnowledge($('kb').hidden),
+  });
+  $('trees').replaceChildren(...[chip, ...trees.map((tree) =>
+    h('button', { class: `tree-chip ${tree.id === current ? 'is-current' : ''}`, type: 'button', title: tree.digest || tree.title, text: tree.title || 'Untitled', onclick: () => onPick(tree.id) }))].filter(Boolean));
 }
+
+/** The list of what no tree holds. Call before showTrees, whose first chip opens it and counts it. */
+export function showKnowledge(items) {
+  $('kb-list').replaceChildren(...items.map((item) =>
+    h('li', null, h('b', { text: item.title || item.summary || 'Untitled' }), h('span', { text: [item.kind, item.summary].filter(Boolean).join(' · ') }))));
+  if (items.length === 0) toggleKnowledge(false);
+}
+
+function toggleKnowledge(open) {
+  $('kb').hidden = !open;
+  document.querySelector('.kb-chip')?.setAttribute('aria-expanded', String(open));
+}
+
+document.addEventListener('pointerdown', (e) => {
+  if (!$('kb').hidden && !e.target.closest('#kb, .kb-chip')) toggleKnowledge(false);
+});
 
 export function showUndo(label) {
   $('undo-label').textContent = label ? `Undo: ${label}` : 'Undo';
@@ -134,6 +155,71 @@ export function bindSettings(send) {
   };
   $('picks-less').addEventListener('click', () => step(-1));
   $('picks-more').addEventListener('click', () => step(1));
+  $('name-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const agentName = $('agent-name').value.trim();
+    if (agentName) send({ t: 'settings', patch: { agentName } });
+  });
+}
+
+const PAIR_WATCH_MS = 2000;
+const PAIR_LIFE_MS = 10 * 60 * 1000;
+
+/**
+ * The Telegram row of Settings: pair once with a link, see who is paired, unpair. Telegram brings the chat to every device of the
+ * account, so one device is enough. While a link is out, the row asks every two seconds whether it was used.
+ */
+export function bindTelegram(api) {
+  let watching = null;
+  const show = (contact, link = null) => {
+    $('telegram-state').textContent = !contact.available
+      ? 'Add TELEGRAM_BOT_TOKEN to ~/.muse-garden.env and restart the service to reach Mind Palace from Telegram on any phone or computer.'
+      : contact.paired
+        ? `Paired with ${contact.paired}. What you send the bot goes into your mindstorm, and each handoff comes back there as a file.`
+        : link
+          ? 'Open the link on any device signed in to Telegram and press Start. It works once, for 10 minutes.'
+          : contact.ready ? 'Not paired.' : 'Telegram has not answered the service yet.';
+    $('telegram-link').hidden = !link || Boolean(contact.paired);
+    if (link) $('telegram-link').href = link;
+    $('telegram-pair').hidden = !contact.available || Boolean(contact.paired) || Boolean(link);
+    $('telegram-pair').disabled = !contact.ready;
+    $('telegram-unpair').hidden = !contact.paired;
+  };
+  const stop = () => {
+    clearInterval(watching);
+    watching = null;
+  };
+  const refresh = async () => {
+    try {
+      show(await api('GET', '/api/telegram'));
+    } catch {
+      $('telegram-state').textContent = 'The service did not say whether Telegram is set up.';
+    }
+  };
+  $('settings-open').addEventListener('click', () => {
+    if (!$('settings').hidden && !watching) void refresh();
+  });
+  $('telegram-pair').addEventListener('click', async () => {
+    try {
+      const { link } = await api('POST', '/api/telegram/pair');
+      show({ available: true, ready: true, paired: null }, link);
+      const until = Date.now() + PAIR_LIFE_MS;
+      stop();
+      watching = setInterval(async () => {
+        const contact = await api('GET', '/api/telegram').catch(() => null);
+        if (contact?.paired || Date.now() > until) {
+          stop();
+          if (contact) show(contact);
+        }
+      }, PAIR_WATCH_MS);
+    } catch {
+      $('telegram-state').textContent = 'No link could be made. Try again in a moment.';
+    }
+  });
+  $('telegram-unpair').addEventListener('click', async () => {
+    stop();
+    await api('POST', '/api/telegram/unpair').then(show, refresh);
+  });
 }
 
 export function showSettings(settings) {
@@ -141,6 +227,7 @@ export function showSettings(settings) {
     button.setAttribute('aria-checked', String(button.dataset.mode === settings.picksMode));
   }
   $('picks-count').value = settings.picksPerRun;
+  if (settings.agentName && document.activeElement !== $('agent-name')) $('agent-name').value = settings.agentName;
 }
 
 /** The handoff sheet: choose what to package, then the download and a preview of what was written. */

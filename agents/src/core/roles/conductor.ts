@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import type { Id, Node } from '../domain.ts';
+import { spokenName } from '../wake.ts';
+import { treeRequest } from '../tree-request.ts';
 import type { Conducted, Intent, RoleContext, Roles, Scene, Scope, Turn } from './types.ts';
 
 const ROLE = 'conductor';
@@ -11,6 +13,7 @@ const MAX_CHILDREN = 12;
 const MAX_SAY_WORDS = 15;
 
 const SAY_POINT = 'What should I look at? Point at a note or a tree.';
+const SAY_TREE_ABOUT = 'What should the tree be about?';
 
 const DEFAULT_SAY: Record<Intent['kind'], string> = {
   ask: 'Looking into that.',
@@ -19,6 +22,7 @@ const DEFAULT_SAY: Record<Intent['kind'], string> = {
   organize: 'On it.',
   handoff: 'Packaging that up.',
   capture: 'Got it, noted.',
+  tree: 'Starting a tree on that.',
   keep: 'Kept.',
   undo: 'Undone.',
   reply: "I'm here. What should we look at?",
@@ -100,6 +104,25 @@ function defaultScope(seen: Seen): Scope | null {
 
 const point = (): Conducted => ({ intent: { kind: 'reply' }, say: SAY_POINT });
 
+/**
+ * A new tree about `subject`. With no subject the user means "this": what they just dropped, or else the card they have open.
+ * Null when there is nothing it could mean.
+ */
+function treeOf(ctx: RoleContext, subject: string, seen: Seen, dropped: Id[]): Intent | null {
+  if (subject) return { kind: 'tree', subject, itemIds: [] };
+  const items = dropped.filter((id) => ctx.mind.items.has(id));
+  if (items.length > 0) return { kind: 'tree', subject: '', itemIds: items };
+  return seen.focus ? { kind: 'tree', subject: '', itemIds: [seen.focus.itemId] } : null;
+}
+
+/** "Make a tree about …" and "start a tree on this", heard by plain rules. Null when the utterance asks for no tree. */
+export function treeIntent(ctx: RoleContext, utterance: string, scene: Scene, dropped: Id[] = []): Conducted | null {
+  const asked = treeRequest(utterance);
+  if (!asked) return null;
+  const intent = treeOf(ctx, asked.subject || asked.rest, see(ctx, scene), dropped);
+  return intent ? { intent, say: DEFAULT_SAY.tree } : { intent: { kind: 'reply' }, say: SAY_TREE_ABOUT };
+}
+
 function runFast(ctx: RoleContext, fast: Fast, seen: Seen): Conducted {
   const { mind } = ctx;
   switch (fast.kind) {
@@ -135,7 +158,7 @@ function runFast(ctx: RoleContext, fast: Fast, seen: Seen): Conducted {
 // ---- model
 
 const Reply = z.object({
-  kind: z.enum(['ask', 'more', 'navigate', 'organize', 'handoff', 'capture', 'keep', 'undo', 'reply']),
+  kind: z.enum(['ask', 'more', 'navigate', 'organize', 'handoff', 'capture', 'tree', 'keep', 'undo', 'reply']),
   anchorId: z.string(),
   need: z.string(),
   nodeId: z.string(),
@@ -150,7 +173,7 @@ const Reply = z.object({
 });
 type Reply = z.infer<typeof Reply>;
 
-const SYSTEM = `You are the Conductor of Mind Palace, a spatial brainstorming app. You are the one voice the user talks to.
+const system = (name: string) => `You are the Conductor of Mind Palace, a spatial brainstorming app. You are the one voice the user talks to, and the user calls you ${name}.
 
 You are given what the user just said, the recent conversation, the scene (what the user is looking at), the titles of their trees, and a shortlist of nodes whose content matches words in the utterance. Decide what the utterance means and return one intent and one short line to say back. You do not do the work yourself. Other roles act on the intent.
 
@@ -161,6 +184,7 @@ Choose "kind":
 - "organize": any request to move, group, rename, merge, split, delete, tidy or add a note. Set request to the instruction made self-contained. Set scopeNodeIds or scopeTreeIds to what it is about. Leave both empty when it is about the selection or the focus.
 - "handoff": the user wants this packaged or exported for another agent or app. Set scopeTreeIds to the focus tree for "this tree" or "everything here". Leave both scope lists empty for "everything" or for the selection or focus. Set note to what the next agent should do, or leave it empty.
 - "capture": the user is dictating a thought to keep ("note to self", "remember that", or an idea stated with no question or command). Set text to the thought without the trigger words.
+- "tree": the user wants a new tree started, about a subject ("build me a tree around Hitchcock's films") or from what they just dropped or are looking at ("grow a tree out of this"). Set text to the subject in their words, or leave it empty when they mean this. Only when they ask for a tree; a topic alone is not a tree.
 - "keep": the user wants to keep picks ("keep the second one"). Set keepNodeIds to ids from the unkept picks listed in the scene.
 - "undo": the user wants the last change reverted.
 - "reply": a greeting, thanks, or something that cannot be acted on.
@@ -216,7 +240,7 @@ function describe(ctx: RoleContext, input: { utterance: string; history: Turn[] 
   out.push(`Trees:\n${list([...mind.trees.values()].slice(0, MAX_TREES).map((t) => `- ${t.id}: ${t.title}`))}`);
 
   const matches = mind
-    .search(input.utterance, { limit: SHORTLIST * 2 })
+    .search(input.utterance, { limit: SHORTLIST * 2, placed: true })
     .flatMap((hit) => mind.nodesOfItem(hit.id))
     .sort((a, b) => Number(b.treeId === seen.treeId) - Number(a.treeId === seen.treeId))
     .slice(0, SHORTLIST);
@@ -235,7 +259,7 @@ function treeNamed(ctx: RoleContext, utterance: string): Id | undefined {
     .sort((a, b) => b.title.length - a.title.length)[0]?.id;
 }
 
-function toIntent(ctx: RoleContext, reply: Reply, utterance: string, seen: Seen): Intent {
+function toIntent(ctx: RoleContext, reply: Reply, utterance: string, seen: Seen, dropped: Id[]): Intent {
   const { mind } = ctx;
   const nodes = (ids: string[]) => [...new Set(ids)].filter((id) => mind.nodes.has(id));
   const trees = (ids: string[]) => [...new Set(ids)].filter((id) => mind.trees.has(id));
@@ -269,6 +293,8 @@ function toIntent(ctx: RoleContext, reply: Reply, utterance: string, seen: Seen)
     }
     case 'capture':
       return { kind: 'capture', text: reply.text.trim() || utterance.trim() };
+    case 'tree':
+      return treeOf(ctx, reply.text.trim(), seen, dropped) ?? none;
     case 'keep': {
       const wanted = new Set(reply.keepNodeIds);
       const ofFocus = (seen.picksOf ? mind.picks(seen.picksOf) : []).filter((n) => wanted.has(n.id)).map((n) => n.id);
@@ -286,6 +312,7 @@ function sayFor(reply: Reply, intent: Intent, seen: Seen): string {
   if (intent.kind !== reply.kind) {
     if (reply.kind === 'navigate') return "I couldn't find that one. Which do you mean?";
     if (reply.kind === 'keep') return 'Which one should I keep?';
+    if (reply.kind === 'tree') return SAY_TREE_ABOUT;
     return seen.anchor ? DEFAULT_SAY.reply : SAY_POINT;
   }
   const say = reply.say.trim();
@@ -303,18 +330,20 @@ function withoutModel(utterance: string, seen: Seen): Conducted {
   return question ? point() : { intent: { kind: 'capture', text }, say: DEFAULT_SAY.capture };
 }
 
-export const conductor: Roles['conductor'] = async (ctx, { utterance, scene, history }) => {
+export const conductor: Roles['conductor'] = async (ctx, { utterance, scene, history, dropped = [] }) => {
   if (!utterance.trim()) return { intent: { kind: 'reply' }, say: "I didn't catch that." };
   const seen = see(ctx, scene);
 
   const fast = matchFast(utterance);
   if (fast) return runFast(ctx, fast, seen);
+  const tree = treeIntent(ctx, utterance, scene, dropped);
+  if (tree) return tree;
 
   let reply: Reply;
   try {
     reply = await ctx.model.json({
       role: ROLE,
-      system: SYSTEM,
+      system: system(spokenName(ctx.settings.agentName)),
       user: describe(ctx, { utterance, history }, seen),
       schema: Reply,
       effort: 'low',
@@ -324,6 +353,6 @@ export const conductor: Roles['conductor'] = async (ctx, { utterance, scene, his
     return withoutModel(utterance, seen);
   }
 
-  const intent = toIntent(ctx, reply, utterance, seen);
+  const intent = toIntent(ctx, reply, utterance, seen, dropped);
   return { intent, say: sayFor(reply, intent, seen) };
 };

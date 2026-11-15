@@ -81,7 +81,7 @@ test('the fake clerk reads facts and a series, and the fake Renderer draws every
     return (await drawn([node.id]))[0];
   };
   const ask = async (need: string) => {
-    const commands = await fakeRoles.scout(k.ctx, { anchor: root, need, mode: 'more' });
+    const commands = await fakeRoles.scout(k.ctx, { anchor: root, need });
     k.mind.apply({ origin: { by: 'agent', role: 'scout' }, label: 'scout', commands });
     return (await drawn(commands.flatMap((c) => (c.type === 'addNode' ? [c.node.id] : []))))[0];
   };

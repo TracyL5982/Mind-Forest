@@ -6,20 +6,27 @@
  * Set MIND_PALACE_CHROMIUM to use another browser.
  */
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
-import type { Running } from '../src/node/server.ts';
+import { FakeModel } from '../src/fake/model.ts';
+import { fakeRoles } from '../src/fake/roles.ts';
+import { startServer, type Running } from '../src/node/server.ts';
 import { COMPONENT_IDS, STRUCTURED_IDS } from '../src/core/samples.ts';
 import { COMPOSITE_IDS } from '../src/core/views.ts';
 import { DEMO_MEMO, tones } from '../src/fake/model.ts';
 import { ASSEMBLED, CHIPPED, LONG_PLACE, PLACED, PNG, STRUCTURED, assembled, bootFake, browserPath, chipped, crowd, showcase, spills, stored, unknownShape } from './stage.ts';
+import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 
+const here = import.meta.dirname;
 const shots = process.env.MIND_PALACE_SHOTS ? resolve(process.env.MIND_PALACE_SHOTS) : mkdtempSync(join(tmpdir(), 'mp-shots-'));
 mkdirSync(shots, { recursive: true });
 
 let passed = 0;
+/** With E2E_KEEP_GOING=1 a failed check is reported and the rest still run, to see every check that fails on older code. */
+const failed: string[] = [];
 async function check(name: string, run: () => Promise<void>): Promise<void> {
   try {
     await run();
@@ -27,7 +34,9 @@ async function check(name: string, run: () => Promise<void>): Promise<void> {
     console.log(`ok   ${name}`);
   } catch (err) {
     console.log(`FAIL ${name}`);
-    throw err;
+    if (!process.env.E2E_KEEP_GOING) throw err;
+    console.log(`     ${String(err instanceof Error ? err.message : err).split('\n')[0]}`);
+    failed.push(name);
   }
 }
 
@@ -108,9 +117,23 @@ async function main(): Promise<void> {
       await shot(page, 'desktop-1-empty');
     });
 
+    await check('a plain thought goes into the knowledge base, is listed there, and starts no tree', async () => {
+      await page.getByLabel('A thought for the mindstorm').fill('Remember the lens cap');
+      await page.getByRole('button', { name: 'Add', exact: true }).click();
+      await page.locator('.kb-chip', { hasText: 'Knowledge base 1' }).waitFor();
+      await page.locator('#toast', { hasText: 'is in your knowledge base' }).waitFor();
+      assert.equal(await count(page, '.card'), 0);
+      assert.equal(await count(page, '.tree-chip'), 0);
+      assert.equal(await page.locator('#empty').isVisible(), false);
+      await page.locator('.kb-chip').click();
+      await page.locator('#kb-list li', { hasText: 'Remember the lens cap' }).waitFor();
+      await page.mouse.click(700, 450);
+      await until('the list to close', async () => !(await page.locator('#kb').isVisible()));
+    });
+
     let rootId = '';
-    await check('a typed thought becomes a tree with one solid card and four dashed picks', async () => {
-      await page.getByLabel('A thought for the mindstorm').fill('The dolly zoom makes dread out of geometry');
+    await check('a thought that asks for a tree becomes one, with one solid card and four dashed picks', async () => {
+      await page.getByLabel('A thought for the mindstorm').fill('Start a tree on this: The dolly zoom makes dread out of geometry');
       await page.getByRole('button', { name: 'Add', exact: true }).click();
       await page.locator('.card.is-kept').first().waitFor();
       await page.locator('.card.is-thinking .think').first().waitFor();
@@ -177,7 +200,7 @@ async function main(): Promise<void> {
       const before = await places(page, firstTree);
       await page.evaluate(() => {
         const data = new DataTransfer();
-        data.setData('text/plain', 'Sourdough starters need feeding on a schedule');
+        data.setData('text/plain', 'Sourdough starters need feeding on a schedule. Start a tree on this.');
         document.body.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true }));
       });
       await until('two trees', async () => (await count(page, '.tree-chip')) === 2);
@@ -187,6 +210,20 @@ async function main(): Promise<void> {
       assert.deepEqual(await places(page, firstTree), before);
       assert.deepEqual(await overlaps(page), []);
       await shot(page, 'desktop-4-second-tree');
+    });
+
+    await check("an opened card offers the librarian's questions about it, and picking one asks it", async () => {
+      await page.locator('.card.is-root', { hasText: 'Sourdough' }).click();
+      const offered = page.locator('#panel').getByRole('group', { name: 'Suggested questions' });
+      assert.equal(await offered.isVisible(), false, 'until the reply comes the card shows what it showed before, and none of the last card');
+      await offered.getByRole('button', { name: /^Where does Sourdough/ }).waitFor();
+      const before = await offered.getByRole('button').allTextContents();
+      assert.equal(before.length, 3);
+      await shot(page, 'desktop-4b-questions');
+      await offered.getByRole('button', { name: before[0] }).click();
+      await page.locator('.card', { hasText: `An essay on ${before[0]}` }).waitFor();
+      await until('the new picks to join the old', async () => (await count(page, '.card.is-pick')) === 12);
+      assert.deepEqual(await offered.getByRole('button').allTextContents(), before.slice(1), 'the asked question leaves the list');
     });
 
     await check('the tree list glides between trees', async () => {
@@ -202,18 +239,19 @@ async function main(): Promise<void> {
       await page.getByRole('button', { name: 'Send' }).click();
       await page.locator('#caption').getByText('show me more').waitFor();
       await page.locator('#caption').getByText('Here is more.').waitFor();
-      await until('twelve picks', async () => (await count(page, '.card.is-pick')) === 12);
+      await until('sixteen picks', async () => (await count(page, '.card.is-pick')) === 16);
       await settle(page);
       assert.deepEqual(await overlaps(page), []);
     });
 
-    await check('Ask about a card replaces its picks, with a thinking mark while it works', async () => {
+    await check('Ask about a card adds to its picks, with a thinking mark while it works, and at ten the least related make room', async () => {
       const panel = page.locator('#panel');
       await panel.getByLabel('Ask about this card').fill('who invented it');
       await panel.getByRole('button', { name: 'Ask' }).click();
       await page.locator(`.card[data-id="${rootId}"].is-thinking`).waitFor();
       await page.locator('.card', { hasText: 'An essay on who invented it' }).waitFor();
-      await until('the old picks to leave', async () => (await count(page, '.card.is-pick')) === 8);
+      await until('the card to hold ten picks', async () => (await count(page, '.card.is-pick')) === 18);
+      assert.equal(run.mind.picks(rootId).length, 10);
     });
 
     await check('dragging a card onto another moves it under that card', async () => {
@@ -247,20 +285,28 @@ async function main(): Promise<void> {
       assert.equal(await panel.isVisible(), false);
     });
 
-    await check('a chosen file and a typed address land as a picture card and a link card', async () => {
+    await check('a chosen file goes into the knowledge base, "start a tree on this" makes it a picture card, and a typed address is kept as a link', async () => {
       await page.locator('#file-pick').setInputFiles({ name: 'still.png', mimeType: 'image/png', buffer: Buffer.from(PNG) });
-      const picture = page.locator('.card[data-component="image"]', { hasText: 'still.png' });
+      await page.locator('#toast', { hasText: '“still.png” is in your knowledge base' }).waitFor();
+      await page.getByLabel('Talk to the librarian').fill('start a tree on this');
+      await page.getByRole('button', { name: 'Send' }).click();
+      const picture = page.locator('.card.is-root[data-component="image"]', { hasText: 'still.png' });
       await picture.waitFor();
       await until('the picture to load', () => picture.locator('img').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0));
       await page.getByLabel('A thought for the mindstorm').fill('https://example.org/lenses');
       await page.getByLabel('A thought for the mindstorm').press('Enter');
-      await page.locator('.card[data-component="link"]', { hasText: 'example.org' }).first().waitFor();
+      await page.locator('.kb-chip').click();
+      await page.locator('#kb-list li', { hasText: 'example.org' }).waitFor();
+      await page.locator('.kb-chip').click();
       await run.pipeline.idle();
     });
 
-    await check('a dropped recording is a card with its waveform, its length and its first words, plays when opened, and is found by a word spoken in it', async () => {
+    await check('a dropped recording goes into the knowledge base, and "start a tree on this" makes it a card with its waveform, its length and its first words, that plays when opened and is found by a word spoken in it', async () => {
       await page.locator('#file-pick').setInputFiles({ name: 'garden-memo.wav', mimeType: 'audio/wav', buffer: Buffer.from(tones(20)) });
-      const memo = page.locator('.card.is-kept[data-component="audio"]', { hasText: 'Garden notes for Thursday.' });
+      await page.locator('#toast', { hasText: 'Garden notes for Thursday.' }).waitFor();
+      await page.getByLabel('Talk to the librarian').fill('start a tree on this');
+      await page.getByRole('button', { name: 'Send' }).click();
+      const memo = page.locator('.card.is-root[data-component="audio"]', { hasText: 'Garden notes for Thursday.' });
       await memo.waitFor();
       assert.equal(await memo.locator('.audio-length').textContent(), '0:20', 'the length the browser measured');
       assert.equal(await memo.locator('.audio-wave rect').count(), 48, 'one bar for each slice the browser measured');
@@ -293,16 +339,50 @@ async function main(): Promise<void> {
       await panel.getByRole('button', { name: 'Close' }).click();
     });
 
-    await check('the settings switch reaches the service and comes back', async () => {
+    await check("the settings switch and the agent's name reach the service and come back", async () => {
       await page.getByRole('button', { name: 'Settings' }).click();
       await page.getByRole('radio', { name: 'Keep everything at once' }).click();
       await page.locator('[data-mode="immediate"][aria-checked="true"]').waitFor();
       await page.getByRole('button', { name: 'Fewer picks' }).click();
       await until('four picks each time', async () => (await page.locator('#picks-count').textContent()) === '4');
+      assert.equal(await page.getByLabel('What you call the librarian').inputValue(), 'momo');
+      await page.getByLabel('What you call the librarian').fill('Juno');
+      await page.getByRole('button', { name: 'Rename' }).click();
+      await until('the microphone offering the new name', async () => (await page.getAttribute('#mic', 'title')) === 'Listen for "Hey Juno"');
       await shot(page, 'desktop-5-settings');
       await page.getByRole('radio', { name: 'Dashed until kept' }).click();
       await page.locator('[data-mode="provisional"][aria-checked="true"]').waitFor();
       await page.keyboard.press('Escape');
+    });
+
+    await check('the Telegram row says how to turn it on, pairs with a one-time link, shows who is paired, and unpairs', async () => {
+      await page.getByRole('button', { name: 'Settings' }).click();
+      await page.locator('#telegram-state', { hasText: 'Add TELEGRAM_BOT_TOKEN' }).waitFor();
+      await page.getByRole('button', { name: 'Settings' }).click();
+
+      const bot = await new FakeBot().start();
+      const contact = await bootFake({ telegram: { token: BOT_TOKEN, api: bot.url, pollSeconds: 0 } });
+      const view = await desktop.newPage();
+      watch(view);
+      try {
+        await view.goto(`${contact.url}/#token=secret`);
+        await view.locator('#status[data-state="live"]').waitFor();
+        await view.getByRole('button', { name: 'Settings' }).click();
+        await view.locator('#telegram-state', { hasText: 'Not paired.' }).waitFor();
+        await view.getByRole('button', { name: 'Pair' }).click();
+        const link = (await view.getByRole('link', { name: 'Open in Telegram' }).getAttribute('href'))!;
+        assert.match(link, /^https:\/\/t\.me\/mind_palace_test_bot\?start=[A-Za-z0-9_-]+$/);
+        bot.push(ADA, { text: `/start ${new URL(link).searchParams.get('start')}` });
+        await view.locator('#telegram-state', { hasText: 'Paired with Ada Lovelace.' }).waitFor({ timeout: 8000 });
+        assert.equal(await view.getByRole('link', { name: 'Open in Telegram' }).isVisible(), false);
+        await shot(view, 'desktop-11-telegram');
+        await view.getByRole('button', { name: 'Unpair' }).click();
+        await view.locator('#telegram-state', { hasText: 'Not paired.' }).waitFor();
+      } finally {
+        await view.close();
+        await contact.close();
+        await bot.close();
+      }
     });
 
     await check('the work log lists what each role did', async () => {
@@ -488,11 +568,11 @@ async function main(): Promise<void> {
       ];
       await page.keyboard.press('Escape');
       for (const [type, text, shown, part, parts] of pasted) {
-        await paste(text);
+        await paste(`Start a tree on this:\n${text}`);
         const made = page.locator(`.card.is-kept[data-component="${type}"]`, { hasText: shown }).last();
         await made.waitFor();
         assert.equal(await made.locator(part).count(), parts, `${type} draws ${parts} of ${part}`);
-        // A paste the filer puts under an earlier card makes no tree to glide to, so each tree is visited until the card is on screen.
+        // Each paste starts a tree the view follows, but one can sit off the screen while the field settles, so each tree is visited until the card is on screen.
         for (const chip of [null, ...(await page.locator('.tree-chip').all())]) {
           if (chip) await chip.click();
           await settle(page);
@@ -512,10 +592,11 @@ async function main(): Promise<void> {
         if (type === 'table') assert.equal(await page.locator('#panel .panel-text').count(), 0, 'an opened table does not print the pasted rows again under its cells');
         if (type === 'table') {
           const drawn = await page.locator('#panel .detail-table').elementHandle();
+          const known = Number((await page.locator('.kb-chip').textContent())!.replace(/\D+/g, ''));
           await paste('Remember to water the fig tree on Sunday morning');
-          await page.locator('.card.is-kept', { hasText: 'water the fig tree' }).last().waitFor();
+          await page.locator('.kb-chip', { hasText: `Knowledge base ${known + 1}` }).waitFor();
           await run.pipeline.idle();
-          assert.ok(await drawn!.evaluate((el) => el.isConnected), 'an opened table is not drawn again when another card arrives, so it keeps its scroll place');
+          assert.ok(await drawn!.evaluate((el) => el.isConnected), 'an opened table is not drawn again when something else arrives, so it keeps its scroll place');
         }
         await page.keyboard.press('Escape');
       }
@@ -563,7 +644,7 @@ async function main(): Promise<void> {
       const panel = page.locator('#panel');
       await page.keyboard.press('Escape');
 
-      await paste('Field of view against focal length\nOn a full-frame camera the field of view is `2 * atan(18 / f) * 57.2958` degrees, for a focal length f in mm.\nAt 24 mm the field of view is 73.7°. At 50 mm it is 39.6°. At 200 mm it is 10.3°.');
+      await paste('Start a tree on this:\nField of view against focal length\nOn a full-frame camera the field of view is `2 * atan(18 / f) * 57.2958` degrees, for a focal length f in mm.\nAt 24 mm the field of view is 73.7°. At 50 mm it is 39.6°. At 200 mm it is 10.3°.');
       const field = await open('focal length 24 mm');
       assert.equal(await field.locator('.fact-value').innerText(), '73.7°', 'the card stands on the first value the item states');
       const figure = panel.locator('.explore-value .fact-value');
@@ -581,7 +662,7 @@ async function main(): Promise<void> {
       assert.equal(await panel.locator('.explore-reading').innerText(), '298 mm', 'an arrow key moves one step');
       await page.keyboard.press('Escape');
 
-      await paste('Three ways to shoot a dolly zoom\nZoom only: the lens zooms in while the camera stays put, so the background grows with the subject.\nDolly only: the camera moves in on a fixed lens, so the subject grows and the background barely changes.\nBoth: the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it.');
+      await paste('Start a tree on this:\nThree ways to shoot a dolly zoom\nZoom only: the lens zooms in while the camera stays put, so the background grows with the subject.\nDolly only: the camera moves in on a fixed lens, so the subject grows and the background barely changes.\nBoth: the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it.');
       const dolly = await open('Dolly only');
       assert.deepEqual(await dolly.locator('.explore-pill').allInnerTexts(), ['Zoom only', 'Dolly only', 'Both']);
       const states = panel.getByRole('radio');
@@ -616,6 +697,18 @@ async function main(): Promise<void> {
       const box = (await page.locator(`.card[data-id="${target}"]`).boundingBox())!;
       assert.ok(box.x > 0 && box.x + box.width < 1440 - 384 && box.y > 60 && box.y + box.height < 900, 'the card is in view beside the panel');
       await shot(page, 'desktop-9-navigated');
+      await page.keyboard.press('Escape');
+    });
+
+    await check('opening a card shows it and brings no picks', async () => {
+      const target = 'show-2';
+      const before = run.mind.children(target).map((n) => n.id);
+      await page.locator(`.card[data-id="${target}"]`).click();
+      await page.locator('#panel').getByRole('button', { name: 'More' }).waitFor();
+      await new Promise((r) => setTimeout(r, 1500));
+      await run.pipeline.idle();
+      assert.deepEqual(run.mind.children(target).map((n) => n.id), before, 'nothing joined the card');
+      assert.equal(await page.locator(`.card[data-id="${target}"].is-thinking`).count(), 0);
       await page.keyboard.press('Escape');
     });
 
@@ -702,12 +795,392 @@ async function main(): Promise<void> {
   }
 }
 
+/**
+ * A spoken clip for the fake microphone, made with a macOS voice: quiet, the words, then quiet for the page to notice the pause.
+ * The quiet is a faint hiss, 60 dB below full scale, as a real room is never silent.
+ */
+function spoken(text: string, dir: string, quietFirst = 1, wordsPerMinute?: number): string {
+  const aiff = join(dir, 'clip.aiff');
+  const wav = join(dir, `${text.replace(/\W+/g, '-').slice(0, 30)}-${quietFirst}-${wordsPerMinute ?? 'usual'}.wav`);
+  execFileSync('say', ['-v', 'Samantha', ...(wordsPerMinute ? ['-r', String(wordsPerMinute)] : []), '-o', aiff, text]);
+  execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1', aiff, join(dir, 'speech.wav')]);
+  const speech = readFileSync(join(dir, 'speech.wav'));
+  const pcm = speech.subarray(speech.indexOf('data') + 8);
+  let seed = 1;
+  const quiet = (seconds: number) => {
+    const hiss = Buffer.alloc(16000 * 2 * seconds);
+    for (let at = 0; at < hiss.length; at += 2) {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31;
+      hiss.writeInt16LE(Math.round((seed / 2 ** 31 - 0.5) * 114), at);
+    }
+    return hiss;
+  };
+  const body = Buffer.concat([quiet(quietFirst), pcm, quiet(4)]);
+  const head = Buffer.alloc(44);
+  head.write('RIFF', 0);
+  head.writeUInt32LE(36 + body.length, 4);
+  head.write('WAVEfmt ', 8);
+  head.writeUInt32LE(16, 16);
+  head.writeUInt16LE(1, 20);
+  head.writeUInt16LE(1, 22);
+  head.writeUInt32LE(16000, 24);
+  head.writeUInt32LE(32000, 28);
+  head.writeUInt16LE(2, 32);
+  head.writeUInt16LE(16, 34);
+  head.write('data', 36);
+  head.writeUInt32LE(body.length, 40);
+  writeFileSync(wav, Buffer.concat([head, body]));
+  rmSync(aiff);
+  return wav;
+}
+
+/** The real model's scores for the pieces "hey", "hi", "high" and "Momo" are made of, and the letters they could fall back on. */
+const STAND_IN_PIECES: [string, number][] = [
+  ['▁HE', -5.315], ['Y', -4.518], ['▁HI', -7.776], ['▁HIGH', -7.966], ['▁MO', -6.187], ['MO', -7.022], ['OM', -6.61],
+  ['▁', -4.624], ['H', -6.175], ['E', -4.197], ['I', -5.195], ['G', -5.024], ['M', -4.591], ['O', -4.663],
+];
+
+/**
+ * A stand-in for sherpa-onnx's spotter, in a copy of the client, for when the listener files are not here.
+ * It cannot tell words apart: it "hears the phrase" at the first sound that lasts 0.6 seconds, and places the phrase where that sound began.
+ * It keeps the keywords the page gave it, so the check can read them.
+ */
+function clientWithout(dir: string, name: string): string {
+  const client = join(dir, name);
+  cpSync(join(here, '../client'), client, { recursive: true, filter: (from) => !from.includes('/vendor') });
+  return client;
+}
+
+function standInClient(dir: string): string {
+  const client = clientWithout(dir, 'stand-in');
+  const vendor = join(client, 'vendor/sherpa-onnx');
+  mkdirSync(vendor, { recursive: true });
+  const varint = (n: number) => {
+    const out: number[] = [];
+    for (; n > 127; n >>>= 7) out.push((n & 127) | 128);
+    return Buffer.from([...out, n]);
+  };
+  const field = (key: number, body: Buffer) => Buffer.concat([Buffer.from([key]), varint(body.length), body]);
+  writeFileSync(join(vendor, 'bpe.model'), Buffer.concat(STAND_IN_PIECES.map(([text, score]) => {
+    const value = Buffer.alloc(4);
+    value.writeFloatLE(score);
+    return field(0x0a, Buffer.concat([field(0x0a, Buffer.from(text)), Buffer.from([0x15]), value]));
+  })));
+  writeFileSync(join(vendor, 'versions.json'), JSON.stringify({ standIn: true }));
+  writeFileSync(join(vendor, 'sherpa-onnx-wasm-kws-main.js'), 'self.Module.onRuntimeInitialized();\n');
+  writeFileSync(join(vendor, 'sherpa-onnx-kws.js'), `function createKws(Module, config) {
+  self.standInKeywords = config.keywords;
+  return {
+    createStream: () => ({
+      seconds: 0, loudSince: null, heard: null, ready: false,
+      acceptWaveform(rate, piece) {
+        const level = Math.sqrt(piece.reduce((sum, s) => sum + s * s, 0) / piece.length);
+        if (level < 0.02) this.loudSince = null;
+        else if (this.loudSince === null) this.loudSince = this.seconds;
+        this.seconds += piece.length / rate;
+        if (this.loudSince !== null && this.seconds - this.loudSince >= 0.6 && !this.fired) this.heard = this.loudSince;
+        this.ready = true;
+      },
+      free() {},
+    }),
+    isReady: (s) => s.ready,
+    decode: (s) => { s.ready = false; },
+    getResult: (s) => (s.heard === null || s.fired ? { keyword: '' } : (s.fired = true, { keyword: 'HEY_MOMO', start_time: 0, timestamps: [s.heard] })),
+    reset() {},
+    free() {},
+  };
+}
+`);
+  return client;
+}
+
+/** What the service was sent, judged by its loudness in tenths of a second. */
+interface Upload {
+  mime: string;
+  seconds: number;
+  /** Seconds of quiet before the first sound. */
+  quietFirst: number;
+  /** Stretches of sound with at least 0.2 seconds of quiet between them. */
+  sounds: number;
+  loudest: number;
+}
+
+function upload(audio: Uint8Array, mime: string): Upload {
+  const samples = new Int16Array(audio.slice(44).buffer);
+  const level = (from: number, to: number) => Math.sqrt(samples.slice(from, to).reduce((sum, s) => sum + (s / 32768) ** 2, 0) / Math.max(1, to - from));
+  const loud = Array.from({ length: Math.floor(samples.length / 1600) }, (_, i) => level(i * 1600, (i + 1) * 1600) >= 0.01);
+  const sounds = loud.filter((on, i) => on && !loud[i - 1] && !loud[i - 2]).length;
+  return { mime, seconds: samples.length / 16000, quietFirst: loud.indexOf(true) / 10, sounds, loudest: Math.max(...loud.map((_, i) => level(i * 1600, (i + 1) * 1600))) };
+}
+
+/** A service whose transcriber hears "Hey Momo, show me more like this." in anything, and keeps what it was sent and what the Conductor acted on. */
+async function listeningService(dir: string, clientDir: string) {
+  const acted: string[] = [];
+  const posted: Upload[] = [];
+  const server = await startServer({
+    port: 0, host: '127.0.0.1', dataDir: mkdtempSync(join(dir, 'data-')), clientDir, model: new FakeModel(), token: 'secret',
+    roles: { ...fakeRoles, conductor: async (ctx, input) => (acted.push(input.utterance), fakeRoles.conductor(ctx, input)) },
+    transcribe: async (audio, mime) => {
+      posted.push(upload(audio, mime));
+      return 'Hey Momo, show me more like this.';
+    },
+  });
+  await server.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: Sourdough rises slowly in winter' }]);
+  await server.pipeline.idle();
+  return { server, acted, posted };
+}
+
+/**
+ * A page of `server` in a browser whose microphone plays `clip`. `micStates()` lists the mic's states since it was first pressed.
+ * With `holdMicMs`, the page's microphone requests are counted (`asked`), held that long like a permission prompt, and their streams kept (`opened`).
+ */
+async function openWithMicrophone(server: Running, clip: string, holdMicMs?: number) {
+  const browser = await chromium.launch({
+    executablePath: browserPath(), headless: true,
+    args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${clip}%noloop`, '--autoplay-policy=no-user-gesture-required'],
+  });
+  const page = await browser.newPage();
+  const problems: string[] = [];
+  page.on('console', (m) => { if (m.type() === 'error') problems.push(m.text()); });
+  page.on('pageerror', (err) => problems.push(String(err)));
+  if (holdMicMs !== undefined) await page.addInitScript(watchMicrophone, holdMicMs);
+  await page.goto(`${server.url}/#token=secret`);
+  await page.locator('#status[data-state="live"]').waitFor();
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { micStates: string[] }).micStates = seen;
+    new MutationObserver(() => seen.push(document.querySelector('#mic')!.getAttribute('data-state')!)).observe(document.querySelector('#mic')!, { attributes: true, attributeFilter: ['data-state'] });
+  });
+  const micStates = async () => {
+    const seen = await page.evaluate(() => (window as unknown as { micStates: string[] }).micStates);
+    return seen.slice(seen.indexOf('starting')).filter((state, i, all) => state !== all[i - 1]);
+  };
+  const mic = () => page.getAttribute('#mic', 'data-state');
+  return { browser, page, problems, micStates, mic };
+}
+
+/** Runs in the page before its scripts: see `holdMicMs` in openWithMicrophone. */
+function watchMicrophone(holdMs: number): void {
+  const w = window as unknown as { asked: number; opened: MediaStream[] };
+  w.asked = 0;
+  w.opened = [];
+  const ask = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  navigator.mediaDevices.getUserMedia = async (constraints) => {
+    w.asked += 1;
+    await new Promise((later) => setTimeout(later, holdMs));
+    const stream = await ask(constraints);
+    w.opened.push(stream);
+    return stream;
+  };
+}
+
+/**
+ * The page listening for its name, with a clip played into a fake microphone. Needs macOS's `say`.
+ * With the listener files (npm run fetch-wake), the real spotter hears the clips. Without them a stand-in does, which tests the page's half only,
+ * and the checks that need the real spotter to tell words apart are skipped and say so.
+ */
+async function wakeChecks(): Promise<void> {
+  const real = existsSync(join(here, '../client/vendor/sherpa-onnx/versions.json'));
+  const needsReal = (name: string) => console.log(`skip ${name}: it needs the real spotter (npm run fetch-wake)`);
+  const dir = mkdtempSync(join(tmpdir(), 'mp-wake-'));
+  const main = await listeningService(dir, real ? join(here, '../client') : standInClient(dir));
+  const { server, acted, posted } = main;
+  try {
+    const woke = real
+      ? 'the page wakes on "hey Momo", records what follows, and the service acts on it without the name'
+      : 'with a stand-in spotter, the page records from just before the phrase to the pause, the service acts without the name, and the page does not listen while the reply plays';
+    await check(woke, async () => {
+      // Three seconds of quiet first: the spotter clears itself after 1.5 seconds of it, which must neither lose the phrase nor move where the recording starts.
+      const { browser, page, problems, micStates, mic } = await openWithMicrophone(server, spoken('Hey Momo, show me more like this.', dir, 3));
+      try {
+        await page.locator('.card').first().click();
+        await page.locator('#mic').click();
+        await until('the page waiting for its name', async () => (await mic()) === 'waiting', 15000);
+        assert.equal(await page.getAttribute('#talk-text', 'placeholder'), 'Say "Hey Momo", or type');
+        if (!real) assert.equal(await page.workers()[0]!.evaluate(() => (self as unknown as { standInKeywords: string }).standInKeywords), '▁HE Y ▁MO MO @HEY_MOMO\n▁HI ▁MO MO @HI_MOMO\n▁HIGH ▁MO MO @HI_MOMO');
+        await until('the page hearing the speaker', async () => (await micStates()).includes('hearing'), 15000);
+        await until('the recording posted', async () => posted.length === 1, 15000);
+        await page.locator('#caption').getByText('Show me more like this.').waitFor();
+        await until('the reply heard and the page waiting again', async () => (await micStates()).join() === 'starting,waiting,hearing,working,waiting,speaking,waiting', 10000);
+        assert.deepEqual(acted, ['Show me more like this.']);
+        assert.equal(posted[0]!.mime, 'audio/wav');
+        assert.ok(posted[0]!.seconds > 2.4 && posted[0]!.seconds < 4.6, `the recording holds the phrase, the command and the pause: ${posted[0]!.seconds} s`);
+        assert.ok(posted[0]!.quietFirst > 0 && posted[0]!.quietFirst <= 0.6 && posted[0]!.loudest > 0.05, `the recording starts a moment before the phrase: ${JSON.stringify(posted[0])}`);
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+
+    const quietThenTalk = 'after quiet and other talk, nothing said before "hey Momo" is sent';
+    if (!real) needsReal(quietThenTalk);
+    else await check(quietThenTalk, async () => {
+      const before = posted.length;
+      const { browser, page, problems, mic } = await openWithMicrophone(server, spoken('I was reading about winter bread all morning. Hey Momo, show me more like this.', dir, 4));
+      try {
+        await page.locator('.card').first().click();
+        await page.locator('#mic').click();
+        await until('the recording posted', async () => posted.length === before + 1, 20000);
+        const sent = posted.at(-1)!;
+        assert.ok(sent.quietFirst > 0 && sent.sounds <= 2, `the recording holds "Hey Momo" and what follows, not the talk before: ${JSON.stringify(sent)}`);
+        assert.equal(acted.at(-1), 'Show me more like this.');
+        await until('the page waiting again', async () => (await mic()) === 'waiting', 10000);
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+
+    const quick = 'a quick "hey Momo, more" is sent as soon as the speaker stops';
+    if (!real) needsReal(quick);
+    else await check(quick, async () => {
+      const before = posted.length;
+      const { browser, page, problems, micStates } = await openWithMicrophone(server, spoken('Hey Momo, more.', dir, 1, 210));
+      try {
+        await page.locator('.card').first().click();
+        await page.locator('#mic').click();
+        await until('the page hearing the speaker', async () => (await micStates()).includes('hearing'), 15000);
+        await until('the recording posted within 4 seconds of the name', async () => posted.length === before + 1, 4000);
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+
+    const without = 'without "hey Momo" nothing is recorded or sent';
+    if (!real) needsReal(without);
+    else await check(without, async () => {
+      const before = posted.length;
+      const actedBefore = acted.length;
+      const { browser, page, problems, micStates, mic } = await openWithMicrophone(server, spoken('Show me more like this, and keep the first two.', dir));
+      try {
+        await page.locator('#mic').click();
+        await until('the page waiting for its name', async () => (await mic()) === 'waiting', 15000);
+        await page.waitForTimeout(8000);
+        assert.equal(posted.length, before);
+        assert.equal(acted.length, actedBefore);
+        assert.deepEqual(await micStates(), ['starting', 'waiting']);
+        await page.locator('#mic').click();
+        assert.equal(await mic(), 'off');
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+
+    await check('turning listening off while the browser asks for the microphone closes the microphone', async () => {
+      const { browser, page, problems, mic } = await openWithMicrophone(server, spoken('Show me more like this.', dir), 1500);
+      try {
+        await page.locator('#mic').click();
+        await until('the microphone asked for', () => page.evaluate(() => (window as unknown as { asked: number }).asked === 1), 15000);
+        await page.locator('#mic').click();
+        await page.waitForTimeout(2500);
+        assert.equal(await mic(), 'off');
+        const live = await page.evaluate(() => (window as unknown as { opened: MediaStream[] }).opened.flatMap((s) => s.getTracks()).filter((t) => t.readyState === 'live').length);
+        assert.equal(live, 0);
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+
+    await check('turning listening off and on just after a reply ends does not leave the page deaf', async () => {
+      const { browser, page, problems, mic } = await openWithMicrophone(server, spoken('Show me more like this.', dir));
+      try {
+        await page.locator('#mic').click();
+        await until('the page waiting for its name', async () => (await mic()) === 'waiting', 15000);
+        await page.getByLabel('Talk to the librarian').fill('note to self, buy flour');
+        await page.getByRole('button', { name: 'Send' }).click();
+        await until('the reply playing', async () => (await mic()) === 'speaking', 10000);
+        await page.locator('#mute').click();
+        await page.locator('#mic').click();
+        await page.locator('#mic').click();
+        await until('the page started again', async () => (await mic()) !== 'starting', 15000);
+        await page.waitForTimeout(1000);
+        assert.equal(await mic(), 'waiting');
+        assert.deepEqual(problems, []);
+      } finally {
+        await browser.close();
+      }
+    });
+
+    await check('a hold that arrives while the listener records does not lose the recording', async () => {
+      const standIn = await listeningService(dir, standInClient(mkdtempSync(join(dir, 'worker-'))));
+      const browser = await chromium.launch({ executablePath: browserPath(), headless: true });
+      try {
+        const page = await browser.newPage();
+        await page.goto(`${standIn.server.url}/#token=secret`);
+        // A string, because the TypeScript runner names inner functions with a helper the page does not have.
+        const outcome = (await page.evaluate(`(async () => {
+          const worker = new Worker('js/wake-worker.js');
+          const audio = new MessageChannel();
+          const said = [];
+          worker.addEventListener('message', (e) => said.push(e.data.t));
+          const next = (kind) => new Promise((done) => {
+            const heard = (e) => { if (e.data.t === kind) { worker.removeEventListener('message', heard); done(); } };
+            worker.addEventListener('message', heard);
+          });
+          const piece = (loud) => Float32Array.from({ length: 1600 }, (_, i) => (loud ? loud * Math.sin(i / 3) : (Math.random() - 0.5) * 0.002));
+          const feed = (count, loud) => { for (let i = 0; i < count; i++) audio.port1.postMessage(piece(loud)); };
+          const ready = next('ready');
+          worker.postMessage({ t: 'start', name: 'Momo', tuning: { threshold: 0.05, boost: 1.5, highForHi: true }, audio: audio.port2 }, [audio.port2]);
+          await ready;
+          worker.postMessage({ t: 'listen' });
+          const woke = next('wake');
+          feed(10, 0);
+          feed(12, 0.2);
+          await woke;
+          worker.postMessage({ t: 'hold' });
+          const recorded = next('recorded');
+          feed(5, 0.2);
+          feed(20, 0);
+          return Promise.race([recorded.then(() => said), new Promise((done) => setTimeout(() => done(said), 3000))]);
+        })()`)) as string[];
+        assert.ok(outcome.includes('recorded'), `the listener said ${outcome.join(', ')}`);
+      } finally {
+        await browser.close();
+        await standIn.server.close();
+      }
+    });
+
+    await check('on a page that cannot listen for its name, the first press says why and records nothing, and the next press records once', async () => {
+      const plain = await listeningService(dir, clientWithout(dir, 'plain'));
+      const { browser, page, problems, mic } = await openWithMicrophone(plain.server, spoken('Show me more like this.', dir), 0);
+      try {
+        await page.locator('#mic').click();
+        await page.locator('#toast').getByText('Tap the microphone again to talk once.').waitFor();
+        assert.equal(await mic(), 'idle');
+        assert.match((await page.getAttribute('#mic', 'title'))!, /Hands-free listening is off because the listener files are not on this service/);
+        await page.waitForTimeout(1000);
+        assert.equal(await page.evaluate(() => (window as unknown as { asked: number }).asked), 0);
+        assert.equal(plain.posted.length, 0);
+        await page.locator('#mic').click();
+        await until('one recording sent', async () => plain.posted.length === 1, 15000);
+        assert.equal(await page.evaluate(() => (window as unknown as { asked: number }).asked), 1);
+        assert.deepEqual(problems.filter((p) => !p.includes('404')), []);
+      } finally {
+        await browser.close();
+        await plain.server.close();
+      }
+    });
+  } finally {
+    await server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 const dataDir = mkdtempSync(join(tmpdir(), 'mp-e2e-'));
 const boot = (port: number) => bootFake({ port, dataDir, asPlaced: (treeId) => treeId === PLACED });
 let run: Running = await boot(0);
 try {
-  await main();
+  // E2E_WAKE_ONLY=1 runs only the listening checks.
+  if (!process.env.E2E_WAKE_ONLY) await main();
+  await wakeChecks();
   console.log(`\n${passed} checks passed. Screenshots are in ${shots}.`);
+  if (failed.length > 0) {
+    console.log(`${failed.length} failed:\n${failed.map((name) => `  ${name}`).join('\n')}`);
+    process.exitCode = 1;
+  }
 } finally {
   await run.close();
 }

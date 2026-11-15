@@ -18,6 +18,8 @@ interface Adapter extends Source {
 
 const AGENT_NAME = 'MindPalace/0.1 (local prototype)';
 const PER_SEARCH = 6;
+/** The Internet Archive's MP4 copies, the ones every browser and the headset play first. "MPEG4" may be an original in an older codec. */
+const ARCHIVE_FORMATS = ['h.264', '512Kb MPEG4', 'h.264 IA', 'MPEG4'];
 const WEB_PREFERENCE =
   'Prefer pages with substance: original reporting, studies, official and first-hand sources, case studies, and long pieces by people who know the subject. ' +
   'Leave out listicles, "best of" roundups, affiliate reviews, pages written to rank in search, shops, and encyclopedia entries.';
@@ -365,6 +367,45 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     },
   };
 
+  // ---- films that play as a file, for a client that cannot show a player from another site
+
+  const archive: Adapter = {
+    id: 'archive',
+    name: 'Internet Archive',
+    goodFor: 'Old films, newsreels, industrial and teaching films, lectures and home movies, played in the card. Strong on the twentieth century and on how things were made or done. Weak on anything recent.',
+    query: 'Two or three plain words such a film would have in its title or subjects ("bread baking", "steam locomotive", "Hitchcock").',
+    show: 1,
+    async search(query) {
+      // The catalogue requires every word, so a search that finds nothing is tried again with its last word dropped.
+      let docs: Json[] = [];
+      for (let words = query.replace(/[^\p{L}\p{N}\s'-]/gu, ' ').split(/\s+/).filter(Boolean); words.length > 0 && docs.length === 0; words = words.slice(0, -1)) {
+        const terms = words.join(' ');
+        const params = new URLSearchParams({ q: `(title:(${terms}) OR subject:(${terms})) AND mediatype:movies AND NOT collection:(tvnews OR deemphasize OR stream_only)`, rows: '6', output: 'json' });
+        params.append('fl[]', 'identifier');
+        params.append('sort[]', 'downloads desc');
+        docs = list((await ask(`https://archive.org/advancedsearch.php?${params}`)).response?.docs);
+      }
+      const found = await Promise.all(docs.map(async (doc): Promise<Found | null> => {
+        const id = str(doc.identifier);
+        const item = await ask(`https://archive.org/metadata/${q(id)}`).catch(() => null);
+        const file = list(item?.files)
+          .filter((f) => /\.mp4$/i.test(str(f.name)) && ARCHIVE_FORMATS.includes(str(f.format)))
+          .sort((a, b) => ARCHIVE_FORMATS.indexOf(str(a.format)) - ARCHIVE_FORMATS.indexOf(str(b.format)))[0];
+        if (!item || !file) return null;
+        const about = item.metadata ?? {};
+        const one = (value: unknown) => str(Array.isArray(value) ? value[0] : value);
+        return {
+          title: plain(one(about.title)) || id, by: plain(one(about.creator)), date: (one(about.date) || one(about.year)).slice(0, 4),
+          text: plain(one(about.description)).slice(0, 1500) || plain(one(about.title)),
+          from: 'Internet Archive', url: `https://archive.org/details/${id}`,
+          media: `https://archive.org/download/${q(id)}/${str(file.name).split('/').map(q).join('/')}`,
+          image: `https://archive.org/services/img/${q(id)}`,
+        };
+      }));
+      return found.flatMap((f) => f ?? []);
+    },
+  };
+
   // ---- sources that need a key. The key travels in the address, so a failure reports its status and nothing else.
 
   const tmdbKey = opts.keys?.TMDB_API_KEY;
@@ -431,7 +472,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     },
   };
 
-  const adapters: Adapter[] = [web, papers, books, data, discussions, code, answers, museums, boards, podcasts, recipes, ...(guardianKey ? [news] : []), ...(tmdbKey ? [films] : []), ...(europeanaKey ? [heritage] : [])];
+  const adapters: Adapter[] = [web, papers, books, data, discussions, code, answers, museums, boards, podcasts, recipes, archive, ...(guardianKey ? [news] : []), ...(tmdbKey ? [films] : []), ...(europeanaKey ? [heritage] : [])];
   const byId = new Map(adapters.map((a) => [a.id, a]));
 
   return {

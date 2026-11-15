@@ -168,14 +168,37 @@ function quote(text: string, indent: string): string[] {
   return text.split('\n').map((line) => `${indent}> ${line}`.trimEnd());
 }
 
-function nodeMarkdown(node: HandoffNode, depth: number): string[] {
+/**
+ * How the Markdown treats a node's file. `attached`: the bundle carries it at `assets/<id>`, and the file says where.
+ * `described`: the file travels alone, so it names no file and says the node's words describe it.
+ */
+type Files = 'attached' | 'described';
+
+const FILE_NOUN: Partial<Record<Item['kind'], string>> = { image: 'picture', video: 'video' };
+
+function fileLine(node: HandoffNode, files: Files): string {
+  if (files === 'attached') return `file: ${node.asset}`;
+  const noun = FILE_NOUN[node.kind] ?? 'file';
+  const made = node.from === 'image-gen' ? ', made by an image generator' : '';
+  return `${noun}: not attached${made}. The summary and text here describe it.`;
+}
+
+/** The address of the picture or recording itself, when it is on the web and is not the node's url already. */
+function mediaAddress(node: HandoffNode): string | null {
+  const media = node.data.mediaUrl;
+  return typeof media === 'string' && /^https?:\/\//i.test(media) && media !== node.url ? media : null;
+}
+
+function nodeMarkdown(node: HandoffNode, depth: number, files: Files): string[] {
   const pad = '  '.repeat(depth);
   const sub = `${pad}  `;
   const lines = [`${pad}- **${oneLine(node.title, 200) || '(untitled)'}** (${LABEL_TEXT[node.label]}, ${node.kind}, id \`${node.id}\`)`];
   if (node.why) lines.push(`${sub}- why it is here: ${oneLine(node.why, 400)}`);
   if (node.summary) lines.push(`${sub}- summary: ${oneLine(node.summary, 600)}`);
   if (node.url) lines.push(`${sub}- url: ${node.url}`);
-  if (node.asset) lines.push(`${sub}- file: ${node.asset}`);
+  const media = mediaAddress(node);
+  if (media) lines.push(`${sub}- media: ${media}`);
+  if (node.asset) lines.push(`${sub}- ${fileLine(node, files)}`);
   if (node.text && node.text !== node.summary && node.text !== node.title) {
     lines.push(`${sub}- text${node.textTrimmed ? ' (trimmed, the original is longer)' : ''}:`, '', ...quote(node.text, `${sub}  `), '');
   }
@@ -189,11 +212,11 @@ function nodeMarkdown(node: HandoffNode, depth: number): string[] {
       lines.push(`${sub}  - (${messages.data.length - MAX_MESSAGES} more messages are not shown)`);
     }
   }
-  for (const child of node.children) lines.push(...nodeMarkdown(child, depth + 1));
+  for (const child of node.children) lines.push(...nodeMarkdown(child, depth + 1, files));
   return lines;
 }
 
-function markdown(doc: HandoffJson, title: string): string {
+function markdown(doc: HandoffJson, title: string, files: Files): string {
   const byId = new Map(doc.trees.flatMap((t) => flatten(t.root)).map((n) => [n.id, n]));
   const name = (id: Id) => `**${oneLine(byId.get(id)!.title, 80)}** (\`${id}\`)`;
   const out: string[] = [
@@ -215,7 +238,7 @@ function markdown(doc: HandoffJson, title: string): string {
   for (const tree of doc.trees) {
     out.push(`### ${tree.title}`, '');
     if (!tree.whole) out.push(`This is one branch of the tree "${tree.title}", found under ${tree.path.map((t) => `"${t}"`).join(', then ')}.`, '');
-    out.push(...nodeMarkdown(tree.root, 0), '');
+    out.push(...nodeMarkdown(tree.root, 0, files), '');
   }
 
   out.push('## Connections', '');
@@ -230,9 +253,15 @@ function markdown(doc: HandoffJson, title: string): string {
   if (doc.sources.length === 0) out.push('Nothing in this handoff has a URL.', '');
   else out.push(...doc.sources.map((s) => `- [${oneLine(s.title, 120) || s.url}](${s.url})`), '');
 
-  out.push('## Attached files', '');
-  if (doc.assets.length === 0) out.push('No files are attached.', '');
-  else out.push(...doc.assets.map((a) => `- \`${a.file}\`: ${a.name} (${a.mime})`), '');
+  if (files === 'attached') {
+    out.push('## Attached files', '');
+    if (doc.assets.length === 0) out.push('No files are attached.', '');
+    else out.push(...doc.assets.map((a) => `- \`${a.file}\`: ${a.name} (${a.mime})`), '');
+  } else {
+    out.push('## Pictures and files', '');
+    if (doc.assets.length === 0) out.push('No pictures, videos or files are in this handoff.', '');
+    else out.push(`No file comes with this one. The ${doc.assets.length === 1 ? 'picture, video or file' : `${doc.assets.length} pictures, videos and files`} in the outline ${doc.assets.length === 1 ? 'is' : 'are'} described in words, with the web address ${doc.assets.length === 1 ? 'it' : 'each'} came from where there is one.`, '');
+  }
 
   return out.join('\n').replace(/\n{3,}/g, '\n\n');
 }
@@ -337,11 +366,14 @@ export const packager: Roles['packager'] = async (ctx, { scope, note }): Promise
 
   const subject = everything || subjects.length === 0 ? 'mindstorm' : slug(subjects[0]!) || 'mindstorm';
   const more = !everything && subjects.length > 1 ? `-and-${subjects.length - 1}-more` : '';
-  const title = `Handoff: ${everything || subjects.length === 0 ? 'the whole mindstorm' : subjects.join(', ')}`;
+  const about = everything || subjects.length === 0 ? 'the whole mindstorm' : subjects.join(', ');
+  const title = `Handoff: ${about}`;
 
   return {
     name: `${subject}${more}-handoff-${createdAt.slice(0, 10)}`,
-    markdown: markdown(json, title),
+    title: about,
+    markdown: markdown(json, title, 'described'),
+    bundled: markdown(json, title, 'attached'),
     json,
     assets: assets.map((a) => a.id),
   };

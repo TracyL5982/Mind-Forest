@@ -11,6 +11,8 @@ export interface JsonRequest<T> {
   /** Public URLs or data: URLs of video the model should watch. */
   videos?: string[];
   effort?: 'low' | 'medium' | 'high';
+  /** A short answer the user is waiting on. The host answers it with a smaller, faster model and as little reasoning as it allows. */
+  quick?: boolean;
 }
 
 export interface WebResult {
@@ -75,7 +77,7 @@ export interface Found {
   /** The collection or channel it came from, when that is narrower than the source. */
   from?: string;
   image?: string;
-  /** Sound that plays in place, such as a podcast episode. */
+  /** A recording that plays in place, such as a podcast episode or a film. */
   media?: string;
   /** How long `media` plays, in seconds, when the source says. */
   seconds?: number;
@@ -157,6 +159,12 @@ export interface Geocoder {
 
 export interface Assets {
   put(bytes: Uint8Array, mime: string, name?: string): Promise<{ id: string }>;
+  /**
+   * An asset whose bytes stay where they are, a remote address or a file on the host, streamed through the service when asked for.
+   * For playable media too large to copy. Never called with an address a client supplied.
+   */
+  link(from: string, mime: string, name?: string): Promise<{ id: string }>;
+  /** The bytes, when the host holds them. Null for an asset linked to a remote address. */
   get(id: string): Promise<{ bytes: Uint8Array; mime: string; name?: string } | null>;
   /** The address a client loads the asset from. */
   url(id: string): string;

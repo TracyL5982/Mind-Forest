@@ -5,6 +5,8 @@ export interface MetaModelOptions {
   apiKey: string;
   baseUrl?: string;
   model?: string;
+  /** The model for a request marked quick. */
+  quickModel?: string;
   imageModel?: string;
   voiceModel?: string;
   fetch?: typeof fetch;
@@ -39,13 +41,15 @@ export class MetaModel implements ModelClient {
     const content: unknown[] = [{ type: 'input_text', text: req.user }];
     for (const url of req.images ?? []) content.push({ type: 'input_image', image_url: url });
     for (const url of req.videos ?? []) content.push({ type: 'input_video', video_url: url });
+    // Measured on the suggested questions: muse-spark-1.3 reasons for 700 to 1,500 tokens at any effort and answers in 7 to 15 s;
+    // muse-ember-1.0 at minimal effort reasons for about 40 and answers in about a second.
     const body = {
-      model: this.model,
+      model: req.quick ? (this.opts.quickModel ?? 'muse-ember-1.0') : this.model,
       input: [
         { role: 'system', content: req.system },
         { role: 'user', content },
       ],
-      reasoning: { effort: req.effort ?? 'low' },
+      reasoning: { effort: req.quick ? 'minimal' : (req.effort ?? 'low') },
       text: {
         format: {
           type: 'json_schema',

@@ -15,7 +15,8 @@ import { makeTools } from '../src/node/tools.ts';
 
 /**
  * The whole system against the live model, end to end, with no client:
- * dump mixed things, ask, ask for more, keep, organize, delete and undo, package a handoff.
+ * dump a thought into the knowledge base, ask for a tree that draws on it, dump mixed things, ask, ask for more, keep,
+ * organize, delete and undo, package a handoff.
  * Prints what a user would see and a list of checks. Exits non-zero if a check fails.
  */
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -98,22 +99,28 @@ const treeOf = (word: string) =>
 
 // ---------------------------------------------------------------------------
 
-step('1. Dump a thought');
+step('1. Dump a thought, then ask for a tree');
 await pipeline.dump([{ kind: 'text', text: 'The dolly zoom in Vertigo makes dread out of pure geometry: the subject stays the same size while the room stretches away.' }]);
+await pipeline.idle();
+check(mind.trees.size === 0 && mind.unplaced().length === 1, 'the thought went into the knowledge base and started no tree');
+const thought = mind.unplaced()[0]!;
+pipeline.utter('make a tree about the dolly zoom', { selection: [] }, true);
 await pipeline.idle();
 outline();
 const film = treeOf('dolly|vertigo');
-check(film !== undefined, 'the thought became a tree');
+check(film !== undefined, 'asking made a tree');
 const filmRoot = film!.rootId;
 const firstPicks = mind.picks(filmRoot);
-check(firstPicks.length >= 3, `the agent hung new picks off it (${firstPicks.length})`);
-check(firstPicks.every((p) => mind.item(p.itemId).origin.by === 'agent' && mind.item(p.itemId).kind !== 'link'), 'every pick is new content from the agent, and none is a bare link');
+check(firstPicks.length >= 3 && firstPicks.length <= 10, `the agent hung picks off it, at most ten (${firstPicks.length})`);
+check(firstPicks.some((p) => p.itemId === thought.id), 'the thought dropped earlier came into the first round, as itself');
+check(firstPicks.some((p) => mind.item(p.itemId).origin.by === 'agent'), 'new content came too');
+check(firstPicks.every((p) => mind.item(p.itemId).kind !== 'link'), 'no pick is a bare link');
 check(mind.picks(filmRoot).every((p) => p.status === 'pick'), 'picks are provisional (dashed) until kept');
 
-step('2. Dump an unrelated thought, a link, a picture and a chat transcript');
+step('2. Dump an unrelated thought that asks for a tree, a link, a picture and a chat transcript');
 const picture = await assets.put(new Uint8Array(readFileSync(resolve(root, '../visionos/MindPalace/Resources/Ocean/vertigo-mirror.jpg'))), 'image/jpeg', 'vertigo-mirror.jpg');
 await pipeline.dump([
-  { kind: 'text', text: 'Sourdough starter: feed it 1:5:5 at night when the kitchen is cold, 1:2:2 when it is warm. Hydration around 75% for an open crumb.' },
+  { kind: 'text', text: 'Sourdough starter: feed it 1:5:5 at night when the kitchen is cold, 1:2:2 when it is warm. Hydration around 75% for an open crumb. Start a tree on this.' },
   { kind: 'link', url: 'https://en.wikipedia.org/wiki/Jaws_(film)' },
   { kind: 'asset', asset: picture.id, mime: 'image/jpeg', name: 'vertigo-mirror.jpg' },
   {
@@ -129,8 +136,8 @@ await pipeline.dump([
 await pipeline.idle();
 outline();
 const bread = treeOf('sourdough');
-check(bread !== undefined && bread.id !== film!.id, 'the unrelated thought started its own tree');
-check(mind.inbox().length === 0, 'nothing was left unfiled');
+check(bread !== undefined && bread.id !== film!.id, 'the thought that asked for a tree started its own');
+check(mind.trees.size === 2, 'nothing else started a tree');
 const chat = [...mind.items.values()].find((i) => i.kind === 'chat');
 check(chat !== undefined && Array.isArray(chat.data.messages) && (chat.data.messages as unknown[]).length === 4, 'the pasted chat was read as a 4-message conversation');
 const image = [...mind.items.values()].find((i) => i.kind === 'image' && i.origin.by === 'user');

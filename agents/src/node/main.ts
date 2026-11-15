@@ -29,6 +29,7 @@ if (fake) {
     apiKey: env.MODEL_API_KEY,
     baseUrl: env.MUSE_LLM_BASE_URL || undefined,
     model: env.MUSE_LLM_MODEL || undefined,
+    quickModel: env.MIND_PALACE_QUICK_MODEL || undefined,
     tokenBudget: env.MIND_PALACE_TOKEN_BUDGET ? Number(env.MIND_PALACE_TOKEN_BUDGET) : undefined,
     onCall: (c) => console.log(`  model ${c.kind} ${c.role} ${c.ok ? 'ok' : 'FAILED'} ${c.ms}ms${c.tokens ? ` ${c.tokens} tokens` : ''}`),
   });
@@ -60,6 +61,8 @@ const running = await startServer({
   transcribe: !fake && env.OPENAI_API_KEY ? openaiTranscribe(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_HEARING_MODEL }) : undefined,
   instagram: env.META_IG_TOKEN && env.META_IG_USER_ID ? { token: env.META_IG_TOKEN, userId: env.META_IG_USER_ID } : undefined,
   maps,
+  // One program at a time may read a bot's messages, so the offline stand-in leaves the bot to the real service.
+  telegram: !fake && env.TELEGRAM_BOT_TOKEN ? { token: env.TELEGRAM_BOT_TOKEN } : undefined,
   log: (line) => console.log(line),
 });
 

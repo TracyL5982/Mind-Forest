@@ -258,7 +258,7 @@ async function mediaItem(run: Run, job: Extract<Job, { type: 'media' }>): Promis
     ...(reply ? labels(reply, plain) : plain),
     text: reply ? reply.description.trim() : '',
     // A picture has no text of its own, so its structure is held to what the model's description and the file name say.
-    data: reply ? structure(reply, `${reply.description}\n${job.name}`) : {},
+    data: { ...(reply ? structure(reply, `${reply.description}\n${job.name}`) : {}), ...(job.kind === 'video' ? { mediaUrl: run.ctx.assets.url(job.asset) } : {}) },
     origin: USER,
     source: { from: 'drop', asset: job.asset },
   });

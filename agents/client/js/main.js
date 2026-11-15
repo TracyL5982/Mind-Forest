@@ -4,8 +4,9 @@ import { Field } from './field.js';
 import { Panel } from './panel.js';
 import { useMaps } from './map.js';
 import { bindField, bindDump, isSound, measure, textDump } from './input.js';
-import { Voice, speak, hush } from './voice.js';
-import { HandoffSheet, WorkLog, bindGate, bindSettings, caption, showGate, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
+import { Voice, speak, hush, watchReplies } from './voice.js';
+import { HandsFree, wakeProblem } from './wake.js';
+import { HandoffSheet, WorkLog, bindGate, bindSettings, bindTelegram, caption, showGate, showKnowledge, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
 
 const $ = (id) => document.getElementById(id);
 const MUTED = 'mind-palace-muted';
@@ -64,9 +65,10 @@ function draw({ instant = false } = {}) {
   panel.selection = new Set(selection);
   panel.refresh();
   const current = currentTree();
+  showKnowledge(store.view.unplaced);
   showTrees(store.view.trees, current, goToTree);
   showUndo(store.undoLabel);
-  $('empty').hidden = store.view.trees.length > 0;
+  $('empty').hidden = store.view.trees.length + store.view.unplaced.length > 0;
   if (refit && following && store.tree.has(following)) {
     field.insets = insets();
     field.show(field.treeCards(following), { instant });
@@ -99,6 +101,8 @@ function receive(message) {
       useMaps(message.maps ?? null);
       store.replace(message.snapshot, message.undo ?? null);
       store.settings = message.settings;
+      handsFree.rename(agentName());
+      showMic();
       voiced = message.voice === true;
       voice.serviceHears = message.hearing === 'service';
       showSettings(store.settings);
@@ -117,6 +121,10 @@ function receive(message) {
       store.apply(message.set, message.undo ?? null);
       const made = [...store.tree.keys()].find((id) => !before.has(id));
       if (made) following = made;
+      // A drop that no tree takes would otherwise seem to vanish, so the user is told where it went.
+      const added = new Set((message.set.patches ?? []).filter((p) => p.entity === 'item' && p.before === null && p.after).map((p) => p.id));
+      const loose = store.view.unplaced.filter((item) => added.has(item.id));
+      if (loose.length > 0 && !message.set.undoes) toast(loose.length === 1 ? `“${loose[0].title}” is in your knowledge base` : `${loose.length} things are in your knowledge base`);
       refit = true;
       queueDraw();
       return;
@@ -135,7 +143,7 @@ function receive(message) {
     }
     case 'say':
       caption('librarian', message.text);
-      if (!muted) speak(message.text, voiced ? conn.speechUrl(message.text) : null);
+      if (!muted) reply(message.text);
       return;
     case 'heard':
       caption('you', message.text, { faint: !message.final });
@@ -149,6 +157,8 @@ function receive(message) {
       return;
     case 'settings':
       store.settings = message.settings;
+      handsFree.rename(agentName());
+      showMic();
       showSettings(store.settings);
       return;
     case 'note':
@@ -156,6 +166,9 @@ function receive(message) {
       return;
     case 'error':
       toast(message.message);
+      return;
+    case 'questions':
+      panel.offer(message.nodeId, message.questions);
       return;
   }
 }
@@ -272,16 +285,84 @@ $('talk').addEventListener('submit', (e) => {
   if (text && utter(text, true)) $('talk-text').value = '';
 });
 
+// ---- the microphone: hands-free when the page can listen for the agent's name, a tap per recording when it cannot
+
+const agentName = () => (store.settings?.agentName ?? 'momo').trim().replace(/(^|\s)(\p{L})/gu, (_, gap, letter) => gap + letter.toUpperCase());
+/** null when the page can listen for the name, otherwise why not. Undefined until the microphone is first pressed. */
+let cannotListen;
+let micState = 'off';
+
+const MIC = {
+  off: () => [`Listen for "Hey ${agentName()}"`, 'Ask or tell the librarian'],
+  starting: () => ['Starting to listen', 'Starting to listen…'],
+  waiting: () => [`Listening for "Hey ${agentName()}". Tap to stop.`, `Say "Hey ${agentName()}", or type`],
+  hearing: () => ['Hearing you. Tap to stop.', 'Hearing you…'],
+  working: () => ['Working on what you said', 'Working on what you said…'],
+  speaking: () => [`${agentName()} is speaking`, `${agentName()} is speaking…`],
+  idle: () => [cannotListen ? `Tap to talk. Hands-free listening is off because ${cannotListen}.` : 'Talk', 'Ask or tell the librarian'],
+  listening: () => ['Listening. Tap to stop.', 'Listening…'],
+};
+
+function showMic(state = micState) {
+  micState = state;
+  const [label, prompt] = MIC[state]();
+  $('mic').dataset.state = state;
+  $('mic').setAttribute('aria-pressed', String(!['off', 'idle'].includes(state)));
+  $('mic').setAttribute('aria-label', label);
+  $('mic').title = label;
+  $('talk-text').placeholder = prompt;
+}
+
 const voice = new Voice({
   onWords: utter,
   onProblem: toast,
-  onState: (state) => {
-    $('mic').dataset.state = state;
-    $('mic').setAttribute('aria-pressed', String(state === 'listening'));
-  },
+  onState: showMic,
   transcribe: (blob) => conn.transcribe(blob, currentTree()),
 });
-$('mic').addEventListener('click', () => voice.toggle());
+
+/** A reply that arrives while the user is being recorded waits until the recording ends, so it is not recorded into what they say. */
+let waitingReply = null;
+function reply(text) {
+  if (handsFree.state === 'hearing') waitingReply = text;
+  else speak(text, voiced ? conn.speechUrl(text) : null);
+}
+
+const handsFree = new HandsFree({
+  onState: (state) => {
+    showMic(state);
+    if (state === 'hearing' || waitingReply === null) return;
+    const text = waitingReply;
+    waitingReply = null;
+    if (!muted) reply(text);
+  },
+  onProblem: toast,
+  onRecorded: async (blob) => {
+    try {
+      const text = (await conn.transcribe(blob, currentTree())).trim();
+      if (text) utter(text, true);
+      else toast('Nothing was heard after the name.');
+    } catch {
+      toast('That recording could not be turned into text.');
+    }
+    handsFree.done();
+  },
+});
+watchReplies((playing) => handsFree.replyPlaying(playing));
+/** For scripts/wake-check.ts, which measures how hard the listener works. */
+window.handsFreeBusy = () => handsFree.busy();
+
+$('mic').addEventListener('click', async () => {
+  if (cannotListen === undefined) {
+    cannotListen = await wakeProblem();
+    // The press asked for hands-free listening, not a recording, so it only says why that is off.
+    if (cannotListen) {
+      showMic('idle');
+      return toast(`This page cannot listen for "Hey ${agentName()}": ${cannotListen}. Tap the microphone again to talk once.`);
+    }
+  }
+  if (cannotListen === null) return handsFree.on ? handsFree.stop() : handsFree.start(agentName());
+  voice.toggle();
+});
 
 function showMute() {
   $('mute').setAttribute('aria-pressed', String(!muted));
@@ -309,6 +390,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 bindSettings(send);
+bindTelegram((method, path) => conn.api(method, path));
 showSettings(store.settings);
 bindGate((token) => {
   saveToken(token);

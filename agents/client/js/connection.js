@@ -14,6 +14,13 @@ export function saveToken(token) {
   try { localStorage.setItem(KEY, token); } catch { /* private window: the address still carries it */ }
 }
 
+/** What this browser plays: embedded players from other sites, and the file types its video element takes. */
+function playback() {
+  const probe = document.createElement('video');
+  const types = { mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', m4a: 'audio/mp4', ogg: 'audio/ogg' };
+  return { embeds: true, files: Object.keys(types).filter((ext) => probe.canPlayType(types[ext]) !== '') };
+}
+
 /**
  * One socket to the service, reopened with backoff when it drops.
  * status: 'no-token' | 'connecting' | 'live' | 'offline' | 'denied'
@@ -46,6 +53,7 @@ export class Connection {
     socket.onopen = () => {
       opened = true;
       this.retry = 0;
+      this.send({ t: 'client', media: playback() });
       this.onStatus('live');
     };
     socket.onmessage = (event) => {
@@ -80,6 +88,13 @@ export class Connection {
     if (this.socket?.readyState !== WebSocket.OPEN) return false;
     this.socket.send(JSON.stringify(message));
     return true;
+  }
+
+  /** A JSON request to the service's own API. */
+  async api(method, path) {
+    const reply = await fetch(path, { method, headers: this.auth() });
+    if (!reply.ok) throw new Error(`${path} answered ${reply.status}`);
+    return reply.json();
   }
 
   /** Assets and handoffs are fetched by the browser itself, which sends no header. */

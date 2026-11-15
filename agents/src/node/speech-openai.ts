@@ -4,15 +4,20 @@ const MANNER = 'Warm, calm and unhurried, like a friend who knows a lot and is g
 
 export type Speak = (text: string, signal: AbortSignal) => Promise<ReadableStream<Uint8Array>>;
 
+/** How long OpenAI may take to start answering before a reply is given up, so a stalled reply does not keep a client's microphone waiting. */
+const FIRST_BYTE_MS = 15000;
+
 /** Spoken replies from OpenAI's speech model, as MP3 that arrives while it is made, so playback starts early. */
-export function openaiSpeech(send: typeof fetch, opts: { apiKey: string; model?: string; voice?: string }): Speak {
+export function openaiSpeech(send: typeof fetch, opts: { apiKey: string; model?: string; voice?: string; firstByteMs?: number }): Speak {
   return async (text, signal) => {
+    const late = new AbortController();
+    const timer = setTimeout(() => late.abort(new Error('OpenAI speech did not answer in time')), opts.firstByteMs ?? FIRST_BYTE_MS);
     const res = await send('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: opts.model || SPEECH_MODEL, voice: opts.voice || SPEECH_VOICE, input: text, instructions: MANNER, response_format: 'mp3' }),
-      signal,
-    });
+      signal: AbortSignal.any([signal, late.signal]),
+    }).finally(() => clearTimeout(timer));
     if (!res.ok || !res.body) throw new Error(`OpenAI speech answered ${res.status}`);
     return res.body;
   };
@@ -21,20 +26,27 @@ export function openaiSpeech(send: typeof fetch, opts: { apiKey: string; model?:
 const HEARING_MODEL = 'gpt-4o-transcribe';
 const EXTENSION: Record<string, string> = { 'audio/webm': 'webm', 'audio/mp4': 'mp4', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/mpeg': 'mp3' };
 
-/** Turns recorded speech into text. `context` is words the user is likely to say, such as the titles of their cards. */
-export type Transcribe = (audio: Uint8Array, mime: string, context: string) => Promise<string>;
+/** Words the user is likely to say: what they call the agent, and the titles of their cards. */
+export interface Hints {
+  name: string;
+  words: string;
+}
+
+/** Turns recorded speech into text, told the words the user is likely to say. */
+export type Transcribe = (audio: Uint8Array, mime: string, hints: Hints) => Promise<string>;
 
 /**
- * Speech to text with OpenAI's transcription model, told what the user's cards are called.
+ * Speech to text with OpenAI's transcription model, told what the user calls it and what their cards are called.
  * Measured on 24 spoken commands: names and topic words were the only errors, and the card titles removed nearly all of them.
  */
 export function openaiTranscribe(send: typeof fetch, opts: { apiKey: string; model?: string }): Transcribe {
-  return async (audio, mime, context) => {
+  return async (audio, mime, hints) => {
     const type = mime.split(';')[0]!.trim();
     const form = new FormData();
     form.append('model', opts.model || HEARING_MODEL);
     form.append('file', new Blob([audio as BlobPart], { type }), `speech.${EXTENSION[type] ?? 'webm'}`);
-    if (context) form.append('prompt', `Someone is talking to their brainstorming app. Their cards include: ${context}.`);
+    const cards = hints.words ? ` Their cards include: ${hints.words}.` : '';
+    form.append('prompt', `Someone is talking to their brainstorming app, which they call ${hints.name}, and may begin with "Hey ${hints.name}".${cards}`);
     const res = await send('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${opts.apiKey}` },
