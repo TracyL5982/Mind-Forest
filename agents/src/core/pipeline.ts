@@ -40,6 +40,14 @@ export type Outbound =
   | { t: 'handoff'; handoff: Handoff }
   | { t: 'settings'; settings: Settings };
 
+/** What a drop became: the items it made or named, and the new nodes that hold them. An item no node holds is in the knowledge base alone. */
+export interface Filed {
+  items: Item[];
+  nodeIds: Id[];
+}
+
+const NOTHING: Filed = { items: [], nodeIds: [] };
+
 export interface PipelineDeps {
   mind: Mindstorm;
   roles: Roles;
@@ -107,12 +115,12 @@ export class Pipeline {
    * Anything dropped into the mindstorm joins the knowledge base: Intake reads it, and the Filer hangs it under a card only when it
    * plainly belongs there. A drop whose words ask for a tree ("start a tree on this", "make a tree about …") becomes one instead.
    */
-  async dump(dumps: RawDump[]): Promise<Id[]> {
+  async dump(dumps: RawDump[]): Promise<Filed> {
     const asked = askedForTree(dumps);
     if (asked.request && asked.dumps.length === 0) return this.makeTree(asked.request.title, asked.request.title ? [] : this.dropped);
     return this.work('intake', `Reading ${dumps.length === 1 ? 'what you dropped' : `${dumps.length} things`}`, undefined, async () => {
       const items = await this.deps.roles.intake(this.ctx, asked.dumps);
-      if (items.length === 0) return [];
+      if (items.length === 0) return NOTHING;
       this.dropped = asked.request ? [] : items.map((i) => i.id);
       return this.file(items, asked.request);
     });
@@ -122,7 +130,7 @@ export class Pipeline {
    * A new tree the user asked for: grown from items they already have, or about a subject. A subject that names something the user
    * already has, such as a film of the library, makes that thing the root. The root's first round draws on everything the user has.
    */
-  async makeTree(subject: string, itemIds: Id[] = []): Promise<Id[]> {
+  async makeTree(subject: string, itemIds: Id[] = []): Promise<Filed> {
     const { mind } = this.deps;
     const request: TreeRequest = { title: subject.trim() };
     const have = itemIds.flatMap((id) => mind.items.get(id) ?? []);
@@ -132,7 +140,7 @@ export class Pipeline {
     }
     if (!request.title) {
       this.say('What should the tree be about?');
-      return [];
+      return NOTHING;
     }
     const named = mind
       .search(request.title, { limit: 10 })
@@ -140,7 +148,7 @@ export class Pipeline {
     if (named) return this.file([named.item], request);
     return this.work('intake', `Starting a tree on "${request.title}"`, undefined, async () => {
       const items = await this.deps.roles.intake(this.ctx, [{ kind: 'text', text: request.title }]);
-      return items.length === 0 ? [] : this.file(items, request);
+      return items.length === 0 ? NOTHING : this.file(items, request);
     });
   }
 
@@ -323,19 +331,19 @@ export class Pipeline {
   // ---- content flow
 
   /** Adds what is new of `items` to the knowledge base and places them as the Filer says. A tree the user asked for gets its first round. */
-  private file(items: Item[], request?: TreeRequest): Promise<Id[]> {
+  private file(items: Item[], request?: TreeRequest): Promise<Filed> {
     const { mind } = this.deps;
     const named = items.length === 1 ? `"${items[0]!.title}"` : `${items.length} items`;
     return this.work('filer', request ? `Starting a tree with ${named}` : `Finding a place for ${named}`, undefined, async () => {
       const placing = await this.deps.roles.filer(this.ctx, items, request);
       const fresh = items.filter((item) => !mind.items.has(item.id)).map((item): Command => ({ type: 'addItem', item }));
       const set = this.apply(AGENT('filer'), request ? `Start a tree with ${named}` : `Add ${named}`, admit(mind, [...fresh, ...placing]));
-      if (!set) return [];
+      if (!set) return NOTHING;
       const nodeIds = newNodeIds(set);
       this.afterContent(set);
       const root = nodeIds.find((id) => mind.node(id).parent === null);
       if (request && root && this.deps.settings.scoutOnDump) this.queueScout(root);
-      return nodeIds;
+      return { items, nodeIds };
     });
   }
 

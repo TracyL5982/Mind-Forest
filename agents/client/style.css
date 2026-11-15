@@ -537,6 +537,8 @@ input[type='text']:focus, textarea:focus { outline: none; border-color: rgba(255
 .stepper output { min-width: 28px; text-align: center; font-size: 17px; font-variant-numeric: tabular-nums; }
 .name-row { display: flex; gap: 8px; }
 .name-row input { flex: 1; min-width: 0; }
+.contact { display: flex; flex-direction: column; gap: 8px; }
+.contact-state { font-size: 12.5px; color: var(--ink-2); }
 
 /* The opened card takes its card's colour, so a chart or a quote reads the same in both places. */
 .panel { --accent: var(--tint); }

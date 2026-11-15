@@ -114,7 +114,12 @@ export interface CardBrief {
 export interface Handoff {
   /** File name without extension. */
   name: string;
+  /** What the handoff holds, in words: the trees' names, or "the whole mindstorm". */
+  title: string;
+  /** The handoff as one Markdown file that travels alone. It names no attached file: each picture and video is described in words, with the web address it came from where it has one. */
   markdown: string;
+  /** The same handoff for the bundle, where each file sits beside it at `assets/<id>`. */
+  bundled: string;
   json: unknown;
   /** Asset ids to copy beside the files. */
   assets: string[];

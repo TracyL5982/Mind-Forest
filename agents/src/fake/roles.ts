@@ -129,7 +129,8 @@ export const fakeRoles: Roles = {
   async packager(ctx, { scope, note }) {
     const trees = (scope.treeIds.length ? scope.treeIds : [...ctx.mind.trees.keys()]).map((id) => ctx.mind.tree(id));
     const lines = trees.flatMap((t) => [`## ${t.title}`, ...ctx.mind.treeNodes(t.id).map((n) => `${'  '.repeat(ctx.mind.depth(n.id))}- ${ctx.mind.item(n.itemId).title}`)]);
-    return { name: `handoff-${ctx.now().slice(0, 10)}`, markdown: `# Handoff\n\n${note ?? ''}\n\n${lines.join('\n')}\n`, json: { format: 'mind-palace-handoff', version: 1, trees: trees.map((t) => t.title) }, assets: [] };
+    const markdown = `# Handoff\n\n${note ?? ''}\n\n${lines.join('\n')}\n`;
+    return { name: `handoff-${ctx.now().slice(0, 10)}`, title: trees.map((t) => t.title).join(', ') || 'the whole mindstorm', markdown, bundled: markdown, json: { format: 'mind-palace-handoff', version: 1, trees: trees.map((t) => t.title) }, assets: [] };
   },
 
   async questions(_ctx, { card }) {

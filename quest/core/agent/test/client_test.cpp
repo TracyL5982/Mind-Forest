@@ -50,6 +50,7 @@ std::string kindOf(const Event& event) {
                           [](const Handoff&) { return std::string("handoff"); },
                           [](const SettingsChanged&) { return std::string("settings"); },
                           [](const Note&) { return std::string("note"); },
+                          [](const Questions&) { return std::string("questions"); },
                           [](const Rejected&) { return std::string("error"); },
                       },
                       event);

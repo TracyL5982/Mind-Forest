@@ -20,6 +20,28 @@ Keys are read from `~/.muse-garden.env`. `MODEL_API_KEY` is required. Optional k
 
 To try the client with no model and no cost: `npm run dev:fake`.
 
+## Reach it from Telegram
+
+Mind Palace can be a Telegram contact. Anything you send or share to it goes into your mindstorm, from any phone or computer with Telegram. Every handoff comes back to the chat as one Markdown file you can share into any agent app.
+
+1. **Make the bot, once.** In Telegram, open @BotFather and send `/newbot`. Give it a name and a username that ends in `bot`. BotFather answers with the bot's token.
+2. **Give the service the token.** Add `TELEGRAM_BOT_TOKEN=<the token>` to `~/.muse-garden.env` and restart the service. Its log says `[telegram] reading messages for @<your bot>`.
+3. **Pair, once.** On the web page open Settings, press Pair under Telegram, then Open in Telegram, and press Start. The link works once, for 10 minutes. Telegram brings the chat to every device signed in to that account, so one device is enough. Unpair is in the same place.
+
+Then:
+
+- Send a thought, a link, a photo, a video, a file or a voice note. What you write with it is the instruction: "start a tree on this" grows a tree from it. Mind Palace answers with what it added and where it went, a tree or your knowledge base.
+- A voice note is written out by `OPENAI_API_KEY`'s transcription model, and its words are added. Without that key the recording itself is added.
+- Every handoff the service makes (Handoff on the web page, a clap on the headset, or asking for one) comes to the chat as a message and one file, `<tree>-handoff-<date>.md`. It names no other file: each picture is described in words, with the address it came from. Share it into Claude, ChatGPT, Muse or any agent that takes a file. `/handoff` or "send me the handoff" sends the latest again.
+
+Limits:
+
+- A bot can take files up to 20 MB. Drop larger ones on the web page.
+- Only the paired Telegram account is heard. Anyone else who finds the bot gets no reply.
+- Only one program may read a bot's messages at a time. A second one is told so by Telegram and waits, and its log says so once. `npm run dev:fake` leaves the bot alone.
+- Telegram's chats with bots are not end-to-end encrypted.
+- The service reads the bot by asking Telegram for new messages, so your Mac needs no public address.
+
 To add the headset's library (its films, works, notes, tags and saved trees), stop the service and run `npm run import-library`. It reads `visionos/MindPalace/Resources/ocean.json`, `public/clips` and `public/works`, works offline, and took 19 s on this Mac. It refuses while the service runs on the same data folder, because the service would write over it. A second run adds nothing. Set `MIND_PALACE_DATA` to import into another data folder. The works' pictures are turned into JPEGs with `sips`, so on a machine that is not a Mac they come in as text cards. The films play from `public/clips/full`, so keep the repository where it was when you imported.
 
 If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing. It builds a small program against `quest/core` with `clang++` and records how the Quest app hangs each saved tree's steps in `src/node/library-saved.json`.
@@ -33,13 +55,14 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 | `MIND_PALACE_QUICK_MODEL` | `muse-ember-1.0` | The model for the suggested questions under an open card, which the user waits on. |
 | `MIND_PALACE_TOKEN_BUDGET` | 5,000,000 | Tokens the service may spend before it refuses model calls. Restart to reset. |
 | `MIND_PALACE_ENV` | `~/.muse-garden.env` | The file keys are read from. |
+| `TELEGRAM_BOT_TOKEN` | unset | The bot that makes Mind Palace a Telegram contact. See Reach it from Telegram. |
 
 ## Check it
 
 ```bash
 npm test                 # tests on scripted models and the client's card sizes, no network
 npx tsc --noEmit
-node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 38 checks
+node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 39 checks
 npm run scenario         # everything against the live model, 28 checks, about 160,000 tokens
 MIND_PALACE_DATA=<a copy of a data folder> node --no-warnings --import tsx scripts/mindstorm-check.ts "<a thought>" "<a subject>"
                          # drops a thought and asks for a tree on a copy of a mindstorm, and prints the round, live
@@ -68,6 +91,7 @@ You talk to one voice. Content roles decide what exists. The Renderer decides ho
 - **`src/core/`** is the agent core: the data shape (`domain.ts`), the mindstorm with undo (`state.ts`), search (`search.ts`), the component and composite libraries (`views.ts`), the roles and the pipeline. It uses nothing that only Node has, and a test enforces that, so it can later move onto a headset.
 - **`src/node/`** is the host for a Mac or a server: the model client, tools, files on disk, SQLite, and the HTTP and WebSocket server.
 - **`client/`** is the web client. No build step.
+- **`src/node/contact.ts`** is where a contact plugs in: what it hands the service and how a handoff is delivered. `src/node/telegram.ts` is the Telegram contact.
 - **`docs/protocol.md`** is the contract every client follows. `docs/libraries.md` documents the components and composites. `docs/handoff-format.md` documents the handoff bundle. `docs/ocean-adapter.md` covers the Vision Pro adapter.
 - **`DECISIONS.md`** records each call made while building this, with the reason and the alternative.
 
@@ -82,9 +106,10 @@ Over plain `http://` on a local network address, browsers refuse the microphone.
 
 ## Not verified
 
+- The Telegram contact has not reached Telegram itself. It was checked against a stand-in for the Bot API (`test/fake-bot.ts`).
 - Nothing has run on a Quest or a Vision Pro.
 - The microphone, live speech recognition and spoken replies in the web client have not been exercised. Speech-to-text through the service was checked once with a synthesized recording.
-- The wake phrase was measured on synthetic voices and a fake microphone only (DECISIONS.md 36).
+- The wake phrase was measured on synthetic voices and a fake microphone only (DECISIONS.md 38).
 - The Ocean adapter was typechecked against an older visionOS SDK and exercised on macOS. It has not been built for visionOS 26.
 - No headset has sent the `client` message. The Scout's choice for a headset was seen live once, through `scripts/scout-probe.ts` with `NO_EMBEDS=1`: one of two Internet Archive finds fit and came as a film that plays from the service. Streaming through the service was checked live on another archive film and a podcast episode, not on that pick.
 - The library import ran into a temporary data folder, never into `agents/data`.

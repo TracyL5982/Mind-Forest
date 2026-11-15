@@ -103,7 +103,7 @@ Each one ends in a check. Labels: **Now** starts at once, in parallel. **After t
 
 #### The wake phrase on the headset: a recipe
 
-"Hey Momo" or "hi Momo" starts talking, as in the web client (`agents/client/js/wake-worker.js` is the reference). Measured on the Mac only: `agents/DECISIONS.md` 36. Nothing here has run on a Quest.
+"Hey Momo" or "hi Momo" starts talking, as in the web client (`agents/client/js/wake-worker.js` is the reference). Measured on the Mac only: `agents/DECISIONS.md` 38. Nothing here has run on a Quest.
 
 - **Library.** sherpa-onnx v1.13.8, `sherpa-onnx-v1.13.8-android.tar.bz2` (46 MB, sha256 `2ff63469a71cb6009aa2e3ed5f4a670f8abdcbe4bb9ffd23776afc792a6b4f44`): `jniLibs/arm64-v8a/libsherpa-onnx-c-api.so` and `libonnxruntime.so`. Or `sherpa-onnx-v1.13.8-android-static-link-onnxruntime.tar.bz2` (35 MB, sha256 `7583ca385ae7d981e65468455c2ea2c9f2da383921dccfc5658d0dc19d309e6f`) for one library. The header is `sherpa-onnx/c-api/c-api.h` at tag `v1.13.8`. Call the C API from `core/`; no JNI is needed for the spotter.
 - **Model files on the headset.** From `sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2` (17.6 MB, sha256 `f170013b4716e41b62b9bfd809687c207cef798ef9bc6534d524e17af9b6561a`), not its `-mobile` variant, which fails on every decode in 1.13.8: `encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx` (4.8 MB), `decoder-epoch-12-avg-2-chunk-16-left-64.onnx` (1.1 MB), `joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx` (0.16 MB), `tokens.txt`. Add `bpe.model` (0.24 MB) only to spell a new name on the headset.

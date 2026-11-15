@@ -283,7 +283,41 @@ After the first hands-on session the picks were judged dull: every pick was a we
 
 **Alternatives.** Send the questions in answer to `focus`: the Quest sends no `focus` for a card opened where it stands, and every client would hear the questions for a card only one of them opened. Fixed rows: the request this answers. Write them ahead for every card: a call per card that may never be opened.
 
-## 36. Wake word: "hey Momo" is heard on the device by sherpa-onnx's keyword spotter
+## 36. Contact: Mind Palace is a Telegram contact
+
+**Decision.** `src/node/contact.ts` names the one place a contact plugs in. A `Channel` pairs and delivers handoffs, and hands what arrives to a `Desk`: `dump(dumps)`, which answers in words where the drop went, `keep(bytes)` for a file, `transcribe` when the service can hear, and `latest()` for a resend. Telegram (`src/node/telegram.ts`) is the only Channel. It reads the bot with long polling (`getUpdates`), so the Mac needs no public address. The service starts it when `TELEGRAM_BOT_TOKEN` is set, and `npm run dev:fake` never does, so the stand-in never competes with the real service for the bot.
+
+**Pairing.** Settings asks for a link, `https://t.me/<bot>?start=<code>`. The code works once, for 10 minutes, and a new Pair replaces it. Pressing Start in Telegram with it pairs that account, in its private chat with the bot. `data/telegram.json` keeps the pairing (Telegram user id, chat id, name), the read position, and the bot's numeric id, so a token for another bot starts both afresh. Only that user in that chat is heard. Anyone else gets no reply at all, even to a used or expired code. Pair and unpair sit behind the access token.
+
+**What arrives.** A message becomes the dumps the web page sends for the same thing: a text, a link when the text is one web address (Intake's own rule), a file as an asset (a photo at its largest size), and the caption as a text beside the file in the same drop. The caption is the instruction because the pipeline already reads "start a tree on this" from any text of a drop and takes the words off (`askedForTree`), so a photo captioned that way roots a new tree with no new rule. A voice note is transcribed with the card titles as likely words, and its words are dumped. With no transcriber, or a failed one, the recording itself is kept and the reply says why. "/handoff" and "send me the handoff", typed or in a voice note, resend the latest and add nothing. A file over 20 MB, by its stated size or by Telegram's "file is too big", gets a reply that points to the web page.
+
+**Where it went.** `Pipeline.dump` and `makeTree` now answer with what a drop became, `Filed` (its items and the new nodes that hold them), where they answered with node ids that left an unplaced item out. `whereItWent` turns it into the reply: "Added “X”. It is in your knowledge base.", "… It went under “P” in “T”.", "… It started the tree “T”." Any later contact gets the same words.
+
+**Out.** The server delivers on every handoff the pipeline announces, so Handoff on the web page, the headset's clap and the Conductor's handoff intent all reach the chat: a message, "Handoff ready: <title>" and a line for the agent, then the file by `sendDocument`. A resend reads the newest `.md` in `data/handoffs`, so it works after a restart.
+
+**At most once.** The read position is saved before a message is acted on. A message lost to a crash is one the user sees no "Added" for and sends again. One taken twice would be a card made twice.
+
+**The token.** Every Bot API address holds the bot token. `request` in `telegram.ts` is the one place a request is made, and every error that leaves it has the token replaced by `<bot token>`. This is not hypothetical: Node's fetch puts the whole address in its error for an address it cannot parse ("Failed to parse URL from …/bot<token>/getMe"). The token is never saved.
+
+**Failures.** Telegram answers 409 while another program reads the same bot. The service logs that once and tries again every 30 s. Other failures are logged once per run of failures, with a hint for a refused token, and the wait doubles from 1 s to a minute.
+
+**Tested** against a stand-in for the Bot API, `test/fake-bot.ts`, with no network: 9 tests, and one browser check of the Settings row.
+
+**Alternatives.** A webhook needs a public HTTPS address on the Mac. A caption given to Intake as context for the picture's description would make one card of a captioned photo instead of two, but changes Intake's prompt and the dump shape every client sends. A caption that asks for nothing becomes its own card, as a text and a file dropped together on the web page do. A QR code on the page needs a library or a hand-written encoder. The link opens Telegram on the device that shows the page, and the chat then reaches every device of the account.
+
+## 37. Handoff: the Markdown file travels alone
+
+**Decision.** The Packager writes the handoff twice. `markdown` names no file. A node with a picture says "picture: not attached. The summary and text here describe it.", and a video or another file says the same with its own noun. The address a picture came from is its `url`, or its `media` address when that is on the web. A picture an agent generated is described only. "Attached files" becomes "Pictures and files". `bundled` is the zip's `handoff.md`, with its `assets/<id>` paths beside the files. The `<name>.md` written beside the zip is the travelling file, and it is the file a paired chat receives.
+
+**Why.** The user shares one file into any agent app. `assets/<id>` means nothing to an agent that gets the file alone. A picture's description is already in the item's summary and text, written by Intake when it looked at the picture.
+
+**Name.** The file keeps the name the zip and the web page already use, `<tree>-handoff-<date>.md`, rather than the plan's `<tree>.md`. It is still named after the tree, and the date tells two handoffs of one tree apart in an agent's file list.
+
+**Also.** Both files give a `media` field for a node whose picture or recording has its own web address. A service address such as `/assets/<id>` is never printed. `Handoff.title` carries what the handoff is about, for the chat message.
+
+**Tested.** The Packager test checks that the travelling file has no `assets/`, each kind of line, and that the bundle keeps every path. The Telegram test checks that the delivered file has no `assets/` and is the same as `<name>.md`.
+
+## 38. Wake word: "hey Momo" is heard on the device by sherpa-onnx's keyword spotter
 
 **Decision.** The agent is called Momo unless renamed (`settings.agentName`, also in the web client's Settings). A client listens for "hey Momo" or "hi Momo" on the device with sherpa-onnx's keyword spotter (v1.13.8) and its English model `sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01`. No sound leaves the device before the phrase. After it, the client records until the speaker pauses for 1.2 seconds and posts that recording to `/api/transcribe`. The service drops a leading "hey Momo" from what it acts on, tells the Conductor its name, and tells the transcriber to expect it.
 

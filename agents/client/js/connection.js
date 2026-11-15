@@ -90,6 +90,13 @@ export class Connection {
     return true;
   }
 
+  /** A JSON request to the service's own API. */
+  async api(method, path) {
+    const reply = await fetch(path, { method, headers: this.auth() });
+    if (!reply.ok) throw new Error(`${path} answered ${reply.status}`);
+    return reply.json();
+  }
+
   /** Assets and handoffs are fetched by the browser itself, which sends no header. */
   withToken(url) {
     if (!/^\/(assets|handoffs)\//.test(url)) return url;
