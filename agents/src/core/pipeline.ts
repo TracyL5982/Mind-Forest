@@ -94,7 +94,8 @@ export class Pipeline {
   readonly ctx: RoleContext;
   private readonly history: Turn[] = [];
   private readonly scoutRun = new Map<Id, number>();
-  private scoutQueue: (() => Promise<void>)[] = [];
+  /** Runs waiting for a slot. A run that ends hands its slot to the first of them. */
+  private scoutQueue: (() => void)[] = [];
   private scoutsRunning = 0;
   private voiceRun = 0;
   private settle: ReturnType<typeof setTimeout> | null = null;
@@ -380,24 +381,24 @@ export class Pipeline {
       const nodeIds = newNodeIds(set);
       this.afterContent(set);
       const root = nodeIds.find((id) => mind.node(id).parent === null);
-      if (request && root && this.deps.settings.scoutOnDump) this.queueScout(root);
+      if (request && root && this.deps.settings.scoutOnDump) void this.queueScout(root);
       return { items, nodeIds };
     });
   }
 
-  private queueScout(anchor: Id): void {
-    this.scoutQueue.push(() => this.runScout(anchor, undefined));
-    this.drainScouts();
-  }
-
-  private drainScouts(): void {
-    while (this.scoutsRunning < MAX_PARALLEL_SCOUTS && this.scoutQueue.length > 0) {
-      const next = this.scoutQueue.shift()!;
-      this.scoutsRunning++;
-      void next().finally(() => {
-        this.scoutsRunning--;
-        this.drainScouts();
-      });
+  /**
+   * A run awaits its slot here instead of being started by the run that frees it, so it keeps the async context of whoever asked
+   * for it. The host reads that context to mark a change or navigate yours.
+   */
+  private async queueScout(anchor: Id): Promise<void> {
+    if (this.scoutsRunning < MAX_PARALLEL_SCOUTS) this.scoutsRunning++;
+    else await new Promise<void>((go) => this.scoutQueue.push(go));
+    try {
+      await this.runScout(anchor, undefined);
+    } finally {
+      const next = this.scoutQueue.shift();
+      if (next) next();
+      else this.scoutsRunning--;
     }
   }
 
