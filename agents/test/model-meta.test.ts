@@ -254,3 +254,21 @@ test('a request counts against the limit until a whole window after its answer e
   assert.ok(api.seen.every((s) => s.status === 200), 'never refused');
   assert.ok(api.seen.at(-1)!.at - api.seen[0]!.at >= 600);
 });
+
+test('a quick request held for the rate window longer than its quick wait is timed from when it is sent, and answered on its first try', { timeout: 10_000 }, async () => {
+  const api = limitedApi(2, 400);
+  const fetch = (async (url: string, init: RequestInit) => {
+    init.signal?.throwIfAborted();
+    return api.fetch(url, init);
+  }) as typeof globalThis.fetch;
+  const calls = new Map<string, { ok: boolean; tries?: number; heldMs?: number }>();
+  const model = new MetaModel({ apiKey: 'k', fetch, rateWindowMs: 400, quickWaitMs: 100, onCall: ({ role, ok, tries, heldMs }) => calls.set(role, { ok, tries, heldMs }) });
+
+  await Promise.all([model.json({ ...ask, role: 'first' }), model.json({ ...ask, role: 'second' })]);
+  assert.deepEqual(await model.json({ ...ask, role: 'held', quick: true }), { answer: 'yes' });
+
+  const held = calls.get('held')!;
+  assert.ok(held.heldMs! > 100, `held ${held.heldMs} ms, longer than its quick wait`);
+  assert.equal(held.tries, 1, 'sent once: its wait did not run out while it was held');
+  assert.ok(api.seen.every((s) => s.status === 200));
+});
