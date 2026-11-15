@@ -321,7 +321,7 @@ TEST(voiceSendsWhatFollowsTheNameAsAnUtter) {
     if (posts.empty()) return;
     const platform::Request& r = posts[0].request;
     CHECK_EQ(r.method, "POST");
-    CHECK_EQ(r.url, "http://127.0.0.1:8790/api/transcribe?tree=t1");
+    CHECK_EQ(r.url, "http://127.0.0.1:8790/api/transcribe?tree=t1&token=tok");
     CHECK(hasHeader(r, "Authorization", "Bearer tok") && hasHeader(r, "Content-Type", "audio/wav"), "the token in a header, the body a WAV");
     CHECK(readWav(r.body).has_value(), "a 16 kHz mono WAV");
     CHECK(t.voice.state() == Listener::State::working, "working while it is transcribed");
@@ -369,7 +369,7 @@ TEST(voiceHoldsAReplyThatArrivesWhileItRecords) {
     auto posts = t.fetchesTo("/api/transcribe");
     if (!posts.empty()) CHECK(readWav(posts[0].request.body).value_or(std::vector<float>{}).size() < 5 * second, "the reply was not recorded into the command");
     if (speaks.empty()) return;
-    CHECK_EQ(speaks[0].request.url, "http://127.0.0.1:8790/api/speak?text=Looking%20into%20that.");
+    CHECK_EQ(speaks[0].request.url, "http://127.0.0.1:8790/api/speak?text=Looking%20into%20that.&token=tok");
     CHECK(hasHeader(speaks[0].request, "Authorization", "Bearer tok"), "the token in a header, not the address");
 }
 
@@ -472,6 +472,49 @@ TEST(voiceStopsListeningWhenTheMicrophoneIsRefused) {
     t.voice.say("Bringing more.");
     t.frame();
     CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(1));
+}
+
+TEST(theMicrophonesReasonShowsWhileTheUserIsAsked) {
+    Talking t(true);
+    CHECK(t.voice.presence().notice.empty(), "nothing to say before the headset asks");
+    host.microphone.asking();
+    t.frame();
+    CHECK_EQ(t.voice.presence().notice, std::string("Allow the microphone to talk to Momo"));
+    t.hear(Sound().quiet(0.3));
+    CHECK(t.voice.presence().notice.empty(), "allowed, sound comes and the line goes");
+}
+
+TEST(aRefusedMicrophoneSaysHowToAskMomoWithoutIt) {
+    Talking t(true);
+    host.microphone.asking();
+    t.frame();
+    host.microphone.denied();
+    t.frame();
+    CHECK_EQ(t.voice.presence().notice, std::string("No microphone, so type or pick to ask Momo"));
+    t.frame(Voice::refusalShown + 0.1);
+    CHECK(t.voice.presence().notice.empty(), "it goes after %g s", Voice::refusalShown);
+    t.voice.asked("What else did Vermeer paint?");
+    t.frame();
+    CHECK(t.shows() == Presence::State::sent, "a question picked or typed is still sent and thought about");
+    t.voice.say("He painted few.");
+    t.frame();
+    CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(1));
+}
+
+TEST(momoSaysWhileTheServiceCantBeReached) {
+    Talking t(true);
+    t.frame();
+    CHECK(t.voice.presence().notice.empty(), "joined, nothing to say");
+    t.transport->socket->events.closed("the service restarted");
+    t.client.drain();
+    t.frame();
+    CHECK_EQ(t.voice.presence().notice, std::string("Can’t reach Momo, retrying"));
+    t.client.tick(100 + Client::retryDelays[0]);
+    t.transport->socket->events.opened();
+    t.transport->socket->events.text(sessionTexts().front());
+    t.client.drain();
+    t.frame();
+    CHECK(t.voice.presence().notice.empty(), "back, the line goes");
 }
 
 TEST(base64IsRfc4648) {

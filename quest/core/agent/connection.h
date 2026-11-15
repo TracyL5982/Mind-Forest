@@ -19,8 +19,20 @@ struct Launch {
     std::string said;
 };
 
+/// The service a build joins by itself, and its key: the judging build's, from ~/.mind-palace/judging.properties.
+struct BuiltIn {
+    std::string agent;
+    std::string token;
+};
+
 /// A launch with `-agent` remembers it, with its `-agentToken` and whether it had `-cards`. A launch with no `-agent` joins
 /// the remembered connection. `-agentForget` forgets it, and that launch joins only if it was given `-agent` itself.
-Launch launch(const std::vector<std::string>& given, const std::optional<std::string>& saved);
+/// A build with a service of its own (`builtIn`) joins it, with the cards, unless the launch gives `-agent`, which it then
+/// joins that once. It neither reads nor saves the file.
+Launch launch(const std::vector<std::string>& given, const std::optional<std::string>& saved, const std::optional<BuiltIn>& builtIn = std::nullopt);
+
+/// This headset's id for the service, 32 hex digits: made on its first launch and kept in `file`, in the app's own
+/// storage, so every launch after gives the same one until the app is removed.
+std::string deviceId(const std::string& file);
 
 }  // namespace agent

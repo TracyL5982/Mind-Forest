@@ -26,6 +26,9 @@ struct Presence {
     float level = 0;
     /// One per agent at work or just finished, in the order they began.
     std::vector<AgentLine> agents;
+    /// A line about the app itself, which Momo's caption shows in place of the conversation while there is one, Momo
+    /// showing too: the service can't be reached, or why the headset asks for the microphone.
+    std::string notice;
 
     /// Some agent is at work: Momo wears its monocle.
     bool searching() const {

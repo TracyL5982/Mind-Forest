@@ -1,6 +1,7 @@
 #include "support.h"
 
 #include "agent/connection.h"
+#include "platform.h"
 
 using namespace agent;
 
@@ -62,4 +63,48 @@ TEST(aTokenThatStartsWithADashIsStillTheToken) {
     CHECK(holds(library.arguments, {"-agentToken", "-Kq3xZ_token"}), "it is remembered and given back as the token");
     CHECK(Flags::parse(library.arguments)["agentToken"] == "-Kq3xZ_token", "and read back as the token");
     CHECK(Flags::parse({"-walk", "-demo"})["walk"].empty() && Flags::parse({"-walk", "-demo"}).count("demo"), "a flag that takes no word is followed by the next flag, as before");
+}
+
+TEST(aBuildWithItsOwnServiceJoinsItWithNoFlags) {
+    BuiltIn judging{"https://mind-palace-judging.fly.dev", "app-key-1"};
+    Launch library = launch({}, std::nullopt, judging);
+    CHECK(holds(library.arguments, {"-agent", "https://mind-palace-judging.fly.dev"}) && holds(library.arguments, {"-agentToken", "app-key-1"}) &&
+              holds(library.arguments, {"-cards"}),
+          "opened from the app library it joins its own service, with the cards");
+    CHECK(library.file == Launch::File::keep && library.said.find("app-key") == std::string::npos, "nothing is written, and the key is not logged");
+    std::optional<Address> address = Address::parse(Flags::parse(library.arguments)["agent"], Flags::parse(library.arguments)["agentToken"], "0123456789abcdef0123456789abcdef");
+    CHECK(address, "the built-in address reads");
+    if (address) {
+        CHECK_EQ(address->socket, "wss://mind-palace-judging.fly.dev/ws?token=app-key-1&device=0123456789abcdef0123456789abcdef");
+        CHECK_EQ(address->http, "https://mind-palace-judging.fly.dev");
+    }
+    Launch remembered = launch({}, R"({"agent":"ws://127.0.0.1:8787","token":"dev","cards":true})", judging);
+    CHECK(holds(remembered.arguments, {"-agent", "https://mind-palace-judging.fly.dev"}) && !holds(remembered.arguments, {"-agent", "ws://127.0.0.1:8787"}),
+          "a connection left by a developer launch is not used");
+}
+
+TEST(aBuildWithItsOwnServiceJoinsAGivenOneOnlyThatOnce) {
+    BuiltIn judging{"https://mind-palace-judging.fly.dev", "app-key-1"};
+    Launch once = launch({"-agent", "ws://127.0.0.1:8787", "-agentToken", "local"}, std::nullopt, judging);
+    CHECK(holds(once.arguments, {"-agent", "ws://127.0.0.1:8787"}) && !holds(once.arguments, {"-agent", "https://mind-palace-judging.fly.dev"}), "the given one");
+    CHECK(once.file == Launch::File::keep, "and it is not remembered");
+    CHECK(holds(launch({}, std::nullopt, judging).arguments, {"-agent", "https://mind-palace-judging.fly.dev"}), "the next launch joins its own again");
+}
+
+TEST(theDeviceIdIsMadeOnceAndKept) {
+    std::filesystem::path dir = std::filesystem::temp_directory_path() / "mind-palace-device-test";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    std::string file = (dir / "device-id").string();
+    std::string first = deviceId(file);
+    CHECK(first.size() == 32 && first.find_first_not_of("0123456789abcdef") == std::string::npos, "32 hex digits: %s", first.c_str());
+    CHECK_EQ(platform::readFile(file).value_or(""), first);
+    CHECK_EQ(deviceId(file), first);
+    CHECK_EQ(deviceId(file), first);
+    std::string other = (dir / "another-headset").string();
+    CHECK(deviceId(other) != first, "another headset makes its own");
+    std::ofstream(file, std::ios::binary) << "not an id\n";
+    std::string remade = deviceId(file);
+    CHECK(remade != first && remade.size() == 32 && deviceId(file) == remade, "a file that holds no id gets a new one, kept from then on");
+    std::filesystem::remove_all(dir);
 }

@@ -305,3 +305,32 @@ TEST(aClientCanGoWhileTheHostStillTalks) {
     host.join();
     CHECK(transport->sockets[0]->closed, "the client closed its socket as it went");
 }
+
+TEST(everyUrlCarriesTheKeyAndTheDevice) {
+    Address a = *Address::parse("https://mind-palace-judging.fly.dev", "app-key", "0123456789abcdef0123456789abcdef");
+    CHECK_EQ(a.socket, "wss://mind-palace-judging.fly.dev/ws?token=app-key&device=0123456789abcdef0123456789abcdef");
+    CHECK_EQ(a.resolve("/assets/a1"), "https://mind-palace-judging.fly.dev/assets/a1?token=app-key&device=0123456789abcdef0123456789abcdef");
+    CHECK_EQ(a.resolve("/api/speak?text=hi"), "https://mind-palace-judging.fly.dev/api/speak?text=hi&token=app-key&device=0123456789abcdef0123456789abcdef");
+    CHECK_EQ(address().socket, "ws://127.0.0.1:8790/ws?token=tok");
+}
+
+TEST(aServiceThatCantBeReachedIsSaidSoUntilItIsJoined) {
+    auto transport = std::make_shared<FakeTransport>();
+    Client client(address(), transport);
+    client.tick(0);
+    CHECK(!client.unreachable(), "the first try is still going");
+    transport->sockets.back()->events.closed("connection refused");
+    client.drain();
+    CHECK(client.unreachable() && client.state() == Client::State::waiting, "it failed, and waits to try again");
+    client.tick(Client::retryDelays[0]);
+    CHECK(client.unreachable() && client.state() == Client::State::connecting, "trying again, still unreachable");
+    transport->sockets.back()->events.opened();
+    client.drain();
+    CHECK(client.unreachable(), "open but no hello yet");
+    transport->sockets.back()->events.text(sessionTexts().front());
+    client.drain();
+    CHECK(!client.unreachable() && client.state() == Client::State::live, "joined");
+    transport->sockets.back()->events.closed("the service restarted");
+    client.drain();
+    CHECK(client.unreachable(), "a live connection that drops is unreachable again until it comes back");
+}

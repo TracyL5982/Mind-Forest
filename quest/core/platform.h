@@ -216,6 +216,8 @@ struct MicrophoneEvents {
     std::function<void(const std::string& why)> failed;
     /// Once, when the user did not allow it. Opened again, it would ask them again.
     std::function<void()> denied;
+    /// Once, when the host is about to ask the user to allow it (the Quest, the first time); `heard` or `denied` follows.
+    std::function<void()> asking;
 };
 /// Opens the microphone. Where the user must allow it first (the Quest), sound starts once they have.
 MicrophoneRef openMicrophone(MicrophoneEvents events);

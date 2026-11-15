@@ -164,7 +164,7 @@ public:
     static constexpr double hintFor = 10;       // s the hint stays
     static constexpr float upper = 0.6f;        // how much of itself the upper line shows
 
-    enum class Part { hint, listening, user, thinking, momo };
+    enum class Part { hint, listening, user, thinking, momo, notice };
 
     struct Line {
         int key;            // a line of a turn keeps its key while its words change
