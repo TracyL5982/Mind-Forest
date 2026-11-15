@@ -27,6 +27,8 @@ void logLine(const std::string& line);
 ///   UserDefaults.standard.object(forKey: "x") != nil -> Flags::has("x")
 /// Keys are given without the leading dash.
 namespace Flags {
+/// The flags a list of launch arguments holds, as `set` reads them: "-walk 3" is walk: "3", "-demo" is demo: "".
+std::map<std::string, std::string> parse(const std::vector<std::string>& arguments);
 void set(const std::vector<std::string>& arguments);
 bool has(const std::string& key);
 double number(const std::string& key);

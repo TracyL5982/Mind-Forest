@@ -191,7 +191,7 @@ void Client::receive(Inbound message, std::vector<Event>& events) {
                    [&](Change& change) {
                        Applied applied = mirror_.apply(change.set);
                        if (auto* delta = std::get_if<Delta>(&applied)) {
-                           events.push_back(Changed{.set = std::move(change.set), .undo = std::move(change.undo), .delta = std::move(*delta)});
+                           events.push_back(Changed{.set = std::move(change.set), .undo = std::move(change.undo), .delta = std::move(*delta), .yours = change.yours});
                        } else if (auto* gap = std::get_if<Gap>(&applied)) {
                            drop("missed a change (" + gap->why + "), reconnecting for a fresh snapshot");
                        }
