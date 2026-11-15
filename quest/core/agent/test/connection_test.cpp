@@ -66,17 +66,18 @@ TEST(aTokenThatStartsWithADashIsStillTheToken) {
 }
 
 TEST(aBuildWithItsOwnServiceJoinsItWithNoFlags) {
-    BuiltIn judging{"https://mind-palace-judging.fly.dev", "app-key-1"};
+    BuiltIn judging{"https://mind-palace-judging.fly.dev", "app-key-1", "0123456789abcdef0123456789abcdef"};
     Launch library = launch({}, std::nullopt, judging);
-    CHECK(holds(library.arguments, {"-agent", "https://mind-palace-judging.fly.dev"}) && holds(library.arguments, {"-agentToken", "app-key-1"}) &&
-              holds(library.arguments, {"-cards"}),
-          "opened from the app library it joins its own service, with the cards");
+    CHECK(holds(library.arguments, {"-agent", "https://mind-palace-judging.fly.dev"}) &&
+              holds(library.arguments, {"-agentToken", "app-key-1.0123456789abcdef0123456789abcdef"}) && holds(library.arguments, {"-cards"}),
+          "opened from the app library it joins its own service as this headset, with the cards");
     CHECK(library.file == Launch::File::keep && library.said.find("app-key") == std::string::npos, "nothing is written, and the key is not logged");
-    std::optional<Address> address = Address::parse(Flags::parse(library.arguments)["agent"], Flags::parse(library.arguments)["agentToken"], "0123456789abcdef0123456789abcdef");
+    std::map<std::string, std::string> flags = Flags::parse(library.arguments);
+    std::optional<Address> address = Address::parse(flags["agent"], flags["agentToken"]);
     CHECK(address, "the built-in address reads");
     if (address) {
-        CHECK_EQ(address->socket, "wss://mind-palace-judging.fly.dev/ws?token=app-key-1&device=0123456789abcdef0123456789abcdef");
-        CHECK_EQ(address->http, "https://mind-palace-judging.fly.dev");
+        CHECK_EQ(address->socket, "wss://mind-palace-judging.fly.dev/ws?token=app-key-1.0123456789abcdef0123456789abcdef");
+        CHECK_EQ(address->resolve("/assets/a1"), "https://mind-palace-judging.fly.dev/assets/a1?token=app-key-1.0123456789abcdef0123456789abcdef");
     }
     Launch remembered = launch({}, R"({"agent":"ws://127.0.0.1:8787","token":"dev","cards":true})", judging);
     CHECK(holds(remembered.arguments, {"-agent", "https://mind-palace-judging.fly.dev"}) && !holds(remembered.arguments, {"-agent", "ws://127.0.0.1:8787"}),
@@ -84,9 +85,11 @@ TEST(aBuildWithItsOwnServiceJoinsItWithNoFlags) {
 }
 
 TEST(aBuildWithItsOwnServiceJoinsAGivenOneOnlyThatOnce) {
-    BuiltIn judging{"https://mind-palace-judging.fly.dev", "app-key-1"};
+    BuiltIn judging{"https://mind-palace-judging.fly.dev", "app-key-1", "0123456789abcdef0123456789abcdef"};
     Launch once = launch({"-agent", "ws://127.0.0.1:8787", "-agentToken", "local"}, std::nullopt, judging);
-    CHECK(holds(once.arguments, {"-agent", "ws://127.0.0.1:8787"}) && !holds(once.arguments, {"-agent", "https://mind-palace-judging.fly.dev"}), "the given one");
+    CHECK(holds(once.arguments, {"-agent", "ws://127.0.0.1:8787"}) && holds(once.arguments, {"-agentToken", "local"}) &&
+              !holds(once.arguments, {"-agent", "https://mind-palace-judging.fly.dev"}),
+          "the given one, as given");
     CHECK(once.file == Launch::File::keep, "and it is not remembered");
     CHECK(holds(launch({}, std::nullopt, judging).arguments, {"-agent", "https://mind-palace-judging.fly.dev"}), "the next launch joins its own again");
 }

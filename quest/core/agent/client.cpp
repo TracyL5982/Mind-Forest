@@ -61,7 +61,7 @@ std::string queryEscape(const std::string& value) {
     return out;
 }
 
-std::optional<Address> Address::parse(const std::string& flag, const std::string& token, const std::string& device) {
+std::optional<Address> Address::parse(const std::string& flag, const std::string& token) {
     std::string s = trimmed(flag);
     bool secure = false;
     size_t start = 0;
@@ -74,17 +74,17 @@ std::optional<Address> Address::parse(const std::string& flag, const std::string
     size_t end = s.find_first_of("/?#", start);
     std::string authority = s.substr(start, end == std::string::npos ? std::string::npos : end - start);
     if (!validAuthority(authority)) return std::nullopt;
-    Address out{.http = std::string(secure ? "https://" : "http://") + authority, .token = token, .device = device};
-    out.socket = std::string(secure ? "wss://" : "ws://") + authority + "/ws?" + out.credentials();
-    return out;
+    return Address{
+        .socket = std::string(secure ? "wss://" : "ws://") + authority + "/ws?token=" + queryEscape(token),
+        .http = std::string(secure ? "https://" : "http://") + authority,
+        .token = token,
+    };
 }
-
-std::string Address::credentials() const { return "token=" + queryEscape(token) + (device.empty() ? "" : "&device=" + queryEscape(device)); }
 
 std::string Address::resolve(const std::string& path) const {
     if (path.find("://") != std::string::npos) return path;
     std::string p = path.empty() || path[0] != '/' ? "/" + path : path;
-    return http + p + (p.find('?') == std::string::npos ? "?" : "&") + credentials();
+    return http + p + (p.find('?') == std::string::npos ? "?" : "&") + "token=" + queryEscape(token);
 }
 
 // MARK: - Client

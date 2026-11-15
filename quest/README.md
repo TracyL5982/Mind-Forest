@@ -165,10 +165,10 @@ quest/tools/judge.sh --install   # and install it on the headset on the cable
 ```
 
 - **Its service.** It joins the service named in `~/.mind-palace/judging.properties` (`server=https://…`, `appKey=…`) by
-  itself, with the cards, and never reads or keeps `agent-connection.json`. Started with `-agent`, it joins that one for
-  that launch only. Every URL it opens carries the app key and the headset's own id (`token=…&device=…`): 32 hex digits
-  made on its first launch and kept in its own files (`device-id`), so the hosted service keeps each headset's
-  mindstorm apart. Developer builds send the id too, and the service on the Mac ignores it.
+  itself, with the cards, and never reads or keeps `agent-connection.json`. Started with `-agent`, it joins that one, as
+  given, for that launch only. Its token is `<appKey>.<device id>`, sent wherever a token goes (`?token=` and the
+  Bearer header): the id is 32 hex digits made on its first launch and kept in its own files (`device-id`), so the
+  hosted service keeps each headset's mindstorm apart. Developer builds send their token as before.
 - **When it can't reach the service**, Momo shows with "Can’t reach Momo, retrying" in its caption, and the app tries
   again after 1, 2, 4 and 8 s, then every 15 s.
 - **The microphone.** The first time, Momo's caption says "Allow the microphone to talk to Momo", and the system asks

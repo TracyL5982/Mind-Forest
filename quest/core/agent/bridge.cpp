@@ -6,7 +6,6 @@
 
 #include "base.h"
 #include "platform.h"
-#include "agent/connection.h"
 #include "cards/cards.h"
 #include "ocean/oceanmodel.h"
 
@@ -97,12 +96,12 @@ void standGroup(Tree& t, int parent) {
 std::shared_ptr<Bridge> Bridge::fromFlags(OceanModel& model) {
     std::optional<std::string> flag = Flags::string("agent");
     if (!flag) return nullptr;
-    std::optional<Address> address = Address::parse(*flag, Flags::string("agentToken").value_or(""), deviceId(platform::dataDirectory() + "/device-id"));
+    std::optional<Address> address = Address::parse(*flag, Flags::string("agentToken").value_or(""));
     if (!address) {
         logLine("[agent] -agent " + *flag + " is not an address the service can be at");
         return nullptr;
     }
-    logLine("[agent] joining " + address->http + " as device " + address->device);
+    logLine("[agent] joining " + address->http);
     std::optional<std::string> dump = Flags::string("agentDump");
     if (dump) dump = percentDecoded(*dump);
     return std::make_shared<Bridge>(model, *address, std::make_shared<PlatformTransport>(), dump);

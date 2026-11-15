@@ -306,14 +306,6 @@ TEST(aClientCanGoWhileTheHostStillTalks) {
     CHECK(transport->sockets[0]->closed, "the client closed its socket as it went");
 }
 
-TEST(everyUrlCarriesTheKeyAndTheDevice) {
-    Address a = *Address::parse("https://mind-palace-judging.fly.dev", "app-key", "0123456789abcdef0123456789abcdef");
-    CHECK_EQ(a.socket, "wss://mind-palace-judging.fly.dev/ws?token=app-key&device=0123456789abcdef0123456789abcdef");
-    CHECK_EQ(a.resolve("/assets/a1"), "https://mind-palace-judging.fly.dev/assets/a1?token=app-key&device=0123456789abcdef0123456789abcdef");
-    CHECK_EQ(a.resolve("/api/speak?text=hi"), "https://mind-palace-judging.fly.dev/api/speak?text=hi&token=app-key&device=0123456789abcdef0123456789abcdef");
-    CHECK_EQ(address().socket, "ws://127.0.0.1:8790/ws?token=tok");
-}
-
 TEST(aServiceThatCantBeReachedIsSaidSoUntilItIsJoined) {
     auto transport = std::make_shared<FakeTransport>();
     Client client(address(), transport);

@@ -18,20 +18,15 @@ namespace agent {
 /// Where the service is, from the `-agent` flag: ws://host:port, wss://host, http://host:port,
 /// https://host or host:port. A path or query in the flag is ignored.
 struct Address {
-    /// The WebSocket, carrying the credentials: ws://host:port/ws?token=…&device=…
+    /// The WebSocket, carrying the token: ws://host:port/ws?token=…
     std::string socket;
     /// The service for HTTP, with no trailing slash: http://host:port
     std::string http;
     std::string token;
-    /// This headset's id (connection.h's deviceId): a hosted service keeps each headset's mindstorm apart by it, and
-    /// the service on the Mac ignores it. Empty, none is sent.
-    std::string device;
 
-    static std::optional<Address> parse(const std::string& flag, const std::string& token, const std::string& device = "");
-    /// What every URL on the service carries: token=…, then &device=… when there is one.
-    std::string credentials() const;
+    static std::optional<Address> parse(const std::string& flag, const std::string& token);
     /// A path on the service (/assets/<id>, /api/transcribe?tree=<id>) as a whole URL carrying the
-    /// credentials. A URL that is already whole is returned as it is.
+    /// token. A URL that is already whole is returned as it is.
     std::string resolve(const std::string& path) const;
 };
 

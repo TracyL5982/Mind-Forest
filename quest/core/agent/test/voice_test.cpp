@@ -321,7 +321,7 @@ TEST(voiceSendsWhatFollowsTheNameAsAnUtter) {
     if (posts.empty()) return;
     const platform::Request& r = posts[0].request;
     CHECK_EQ(r.method, "POST");
-    CHECK_EQ(r.url, "http://127.0.0.1:8790/api/transcribe?tree=t1&token=tok");
+    CHECK_EQ(r.url, "http://127.0.0.1:8790/api/transcribe?tree=t1");
     CHECK(hasHeader(r, "Authorization", "Bearer tok") && hasHeader(r, "Content-Type", "audio/wav"), "the token in a header, the body a WAV");
     CHECK(readWav(r.body).has_value(), "a 16 kHz mono WAV");
     CHECK(t.voice.state() == Listener::State::working, "working while it is transcribed");
@@ -369,7 +369,7 @@ TEST(voiceHoldsAReplyThatArrivesWhileItRecords) {
     auto posts = t.fetchesTo("/api/transcribe");
     if (!posts.empty()) CHECK(readWav(posts[0].request.body).value_or(std::vector<float>{}).size() < 5 * second, "the reply was not recorded into the command");
     if (speaks.empty()) return;
-    CHECK_EQ(speaks[0].request.url, "http://127.0.0.1:8790/api/speak?text=Looking%20into%20that.&token=tok");
+    CHECK_EQ(speaks[0].request.url, "http://127.0.0.1:8790/api/speak?text=Looking%20into%20that.");
     CHECK(hasHeader(speaks[0].request, "Authorization", "Bearer tok"), "the token in a header, not the address");
 }
 

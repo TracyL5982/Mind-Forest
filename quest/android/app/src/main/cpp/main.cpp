@@ -882,7 +882,7 @@ JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_MainActivity_nativeStart(JN
     // judging build its own.
     std::string remembered = host::dataDir + "/agent-connection.json";
     std::optional<agent::BuiltIn> builtIn;
-    if (std::string address = text(server); !address.empty()) builtIn = agent::BuiltIn{address, text(appKey)};
+    if (std::string address = text(server); !address.empty()) builtIn = agent::BuiltIn{address, text(appKey), agent::deviceId(host::dataDir + "/device-id")};
     agent::Launch launch = agent::launch(arguments, platform::readFile(remembered), builtIn);
     if (launch.file == agent::Launch::File::save) platform::writeFile(remembered, launch.text);
     if (launch.file == agent::Launch::File::forget) std::remove(remembered.c_str());

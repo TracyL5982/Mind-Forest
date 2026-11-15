@@ -17,7 +17,7 @@ Launch launch(const std::vector<std::string>& given, const std::optional<std::st
             out.said = "[agent] joining " + agent->second + " this launch, in place of the build's own " + builtIn->agent;
             return out;
         }
-        out.arguments.insert(out.arguments.end(), {"-agent", builtIn->agent, "-agentToken", builtIn->token});
+        out.arguments.insert(out.arguments.end(), {"-agent", builtIn->agent, "-agentToken", builtIn->appKey + "." + builtIn->device});
         if (!flags.count("cards")) out.arguments.push_back("-cards");
         out.said = "[agent] joining the build's own service, " + builtIn->agent;
         return out;

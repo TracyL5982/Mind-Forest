@@ -129,12 +129,12 @@ std::string lower(std::string s) {
     return s;
 }
 
-/// The service's /live socket, beside its /ws: ws://host:port/live?token=…&device=…&connection=…
+/// The service's /live socket, beside its /ws: ws://host:port/live?token=…&connection=…
 std::string liveUrl(const Address& address, const std::string& connection) {
     std::string base = address.http;
     if (base.rfind("https:", 0) == 0) base = "wss:" + base.substr(6);
     else if (base.rfind("http:", 0) == 0) base = "ws:" + base.substr(5);
-    return base + "/live?" + address.credentials() + (connection.empty() ? "" : "&connection=" + queryEscape(connection));
+    return base + "/live?token=" + queryEscape(address.token) + (connection.empty() ? "" : "&connection=" + queryEscape(connection));
 }
 
 /// 16-bit little-endian PCM, as /live carries the microphone.
@@ -424,7 +424,7 @@ void Voice::speak(const std::string& text) {
     int number = ++reply;
     spoken = text;
     platform::Request request;
-    request.url = client.address().resolve("/api/speak?text=" + queryEscape(text));
+    request.url = client.address().http + "/api/speak?text=" + queryEscape(text);
     request.headers = {{"Authorization", "Bearer " + client.address().token}};
     request.saveTo = platform::dataDirectory() + "/agent-reply-" + std::to_string(number % 4) + ".mp3";
     std::weak_ptr<Inbox> box = inbox;
@@ -442,7 +442,7 @@ void Voice::transcribe(const std::string& wav) {
     platform::Request request;
     request.method = "POST";
     std::optional<TreeId> tree = scene().treeId;
-    request.url = client.address().resolve("/api/transcribe" + (tree ? "?tree=" + queryEscape(tree->value) : ""));
+    request.url = client.address().http + "/api/transcribe" + (tree ? "?tree=" + queryEscape(tree->value) : "");
     request.headers = {{"Authorization", "Bearer " + client.address().token}, {"Content-Type", "audio/wav"}};
     request.body = wav;
     request.timeout = 60;

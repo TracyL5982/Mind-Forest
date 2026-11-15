@@ -19,16 +19,19 @@ struct Launch {
     std::string said;
 };
 
-/// The service a build joins by itself, and its key: the judging build's, from ~/.mind-palace/judging.properties.
+/// The service a build joins by itself: the judging build's, from ~/.mind-palace/judging.properties, with its app key and
+/// this headset's id (deviceId).
 struct BuiltIn {
     std::string agent;
-    std::string token;
+    std::string appKey;
+    std::string device;
 };
 
 /// A launch with `-agent` remembers it, with its `-agentToken` and whether it had `-cards`. A launch with no `-agent` joins
 /// the remembered connection. `-agentForget` forgets it, and that launch joins only if it was given `-agent` itself.
 /// A build with a service of its own (`builtIn`) joins it, with the cards, unless the launch gives `-agent`, which it then
-/// joins that once. It neither reads nor saves the file.
+/// joins that once as given. It neither reads nor saves the file. Its token is `<appKey>.<device>`: the hosted service
+/// knows the app by the key and keeps each headset's mindstorm apart by the id.
 Launch launch(const std::vector<std::string>& given, const std::optional<std::string>& saved, const std::optional<BuiltIn>& builtIn = std::nullopt);
 
 /// This headset's id for the service, 32 hex digits: made on its first launch and kept in `file`, in the app's own
