@@ -220,7 +220,7 @@ void OceanModel::buildSmall(CardView& c) {
 
 namespace {
 /// How long an in-progress card takes to ease to its finished card's size, and the finished card to come up inside it, s.
-constexpr float SETTLE = 0.32f, APPEAR = 0.22f;
+constexpr float SETTLE = 0.32f, APPEAR = 0.3f;
 /// The light that runs across a composing card: a third of its width, and once across every 1.6 s.
 constexpr float BAND = 0.32f;
 constexpr double PASS = 1.6;
@@ -269,24 +269,51 @@ void OceanModel::settleCard(int id) {
     made->bornAt = old->bornAt;
     buildSmall(*made);
     buildQueue.erase(std::remove(buildQueue.begin(), buildQueue.end(), id), buildQueue.end());
-    // The in-progress card eases to the finished card's size and place, a hair behind it, and goes once the
-    // finished card has come up inside it.
-    old->settle = CardView::Settle{old->smallBody, made->smallBody, time};
-    if (old->smallQuad) old->smallQuad->entity->isEnabled = false;
-    if (old->shimmer) old->shimmer->isEnabled = false;
-    // Opened, it keeps its frame, which is the finished card's, and the words of its panel go.
-    if (old->openPanel) old->openPanel->isEnabled = false;
-    old->openHolder->position.z = -0.002f;
-    old->xy.go(made->xy.target(), time, SETTLE);
+    // The composing card stays as it is until the finished card's faces are on the GPU (startSettle). Meanwhile the finished
+    // card is drawn all but clear, which is what brings its faces there.
+    made->appear = 0.003f;
+    old->givingWay = made;
+    old->givingWaySince = time;
+    old->goneAt = std::numeric_limits<double>::infinity();
     if (old->shape) old->shape->position.z = -0.002f;
-    old->goneAt = time + SETTLE + APPEAR + 0.05;
-    made->appear = 0;
-    made->appearAt = time + SETTLE * 0.55f;
-    touch(old->goneAt + 0.1);
+    old->openHolder->position.z = -0.002f;
+    touch(time + 0.6);
+}
+
+namespace {
+/// Whether every face of a card that shows is on the GPU: drawn first, before it, the renderer would show nothing in its place.
+bool facesReady(const CardView& c) {
+    auto ready = [](const EntityRef& e) {
+        if (!e || !e->model || e->model->materials.empty()) return true;
+        const TextureRef& t = e->model->materials[0].texture;
+        return !t || t->gl != 0;
+    };
+    bool open = c.openMix.target() > 0.5f;
+    return open ? ready(c.openFace) && ready(c.openPanel) : !c.smallQuad || ready(c.smallQuad->entity);
+}
+}  // namespace
+
+/// The in-progress card eases to the finished card's size and place, a hair behind it, and goes once the finished card has
+/// come up inside it. Its words leave as the finished card starts to come up, so the frame is never empty.
+void OceanModel::startSettle(CardView& old, CardView& made, double now) {
+    old.givingWay.reset();
+    old.settle = CardView::Settle{old.smallBody, made.smallBody, now};
+    if (old.smallQuad) old.smallQuad->entity->isEnabled = false;
+    if (old.shimmer) old.shimmer->isEnabled = false;
+    // Opened, it keeps its frame, which is the finished card's, and the words of its panel go.
+    if (old.openPanel) old.openPanel->isEnabled = false;
+    old.xy.go(made.xy.target(), now, SETTLE);
+    old.goneAt = now + std::max(SETTLE, APPEAR) + 0.05;
+    made.appear = 0.25f;
+    made.appearAt = now;
+    touch(old.goneAt + 0.1);
 }
 
 void OceanModel::composeFrame(double now) {
     auto run = [&](CardView& c) {
+        // A finished card whose faces have not reached the GPU in half a second comes up all the same.
+        if (CardRef into = c.givingWay.lock(); into && (facesReady(*into) || now - c.givingWaySince > 0.5)) startSettle(c, *into, now);
+        else if (c.givingWay.expired() && !c.settle && c.goneAt == std::numeric_limits<double>::infinity() && c.givingWaySince > 0) c.goneAt = now;
         if (c.shimmer) {
             // It comes in at the left, brightest across the middle, and goes at the right.
             float t = float(std::fmod(std::max(0.0, now - c.bornAt), PASS) / PASS);
@@ -296,7 +323,8 @@ void OceanModel::composeFrame(double now) {
         }
         if (c.appearAt) {
             float t = std::clamp(float((now - *c.appearAt) / APPEAR), 0.f, 1.f);
-            c.appear = 1 - (1 - t) * (1 - t);
+            // From a quarter at once, so the frame the composing words left is never shown empty.
+            c.appear = 0.25f + 0.75f * (1 - (1 - t) * (1 - t));
             if (t >= 1) c.appearAt.reset();
         }
         if (c.settle && c.shape) {

@@ -1800,6 +1800,63 @@ test('a composing card waits for its look at most as long as the pass allows, th
   assert.deepEqual(k.notes, ['renderer: The model chose components for 1 item after their cards had landed, so they stay as the rules drew them.']);
 });
 
+test('an idea the Scout wrote keeps the look the model gave it before, when the card is next touched', async () => {
+  const k = kit();
+  const text = 'Treat the generative card like theatre staging. Give the model a cast, a lighting palette and stage directions.';
+  const { ids } = grow(k, [{ title: 'Direct UI like a stage play', text, origin: { by: 'agent', role: 'scout', tool: 'idea' } }]);
+  const earlier: View = { component: 'note', props: { emphasis: 'Treat the generative card like theatre staging.' }, by: 'renderer' };
+  k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'an earlier look', commands: [{ type: 'setView', id: ids[0]!, view: earlier }] });
+  assert.ok(grounded(earlier, k.mind.itemOf(ids[0]!), url), 'the earlier look still stands in the text');
+  assert.deepEqual(await render(k, ids), [], 'a pass over it, as after a drag, changes nothing');
+  assert.deepEqual(view(k, ids[0]!), earlier);
+});
+
+test('an edit made while a card composes is composed again, and the answer for the old text is not landed', async () => {
+  const k = kit();
+  const { ids } = grow(k, [{ title: 'Ferry', text: `${LONG} We paid 12 euros for the ferry.` }]);
+  let answer!: () => void;
+  const gate = new Promise<void>((r) => (answer = r));
+  const asked: string[] = [];
+  k.model
+    .on('renderer.components', async (req) => {
+      asked.push(req.user);
+      if (asked.length === 1) await gate;
+      return { items: idsIn(req.user).map((id) => entry({ id, emphasis: asked.length === 1 ? 'We paid 12 euros for the ferry' : 'The return was free' })) };
+    })
+    .on('renderer.composites', () => ({ groups: [] }));
+  const delivered: Command[] = [];
+  const deliver = (some: Command[]) => (delivered.push(...some), k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands: some }));
+  const first = renderer(k.ctx, { nodeIds: ids, deliver });
+  await new Promise((r) => setTimeout(r, 0));
+  k.mind.apply({ origin: USER, label: 'edit', commands: [{ type: 'editItem', id: k.mind.node(ids[0]!).itemId, patch: { text: `${LONG} The return was free.` } }] });
+  assert.deepEqual(await renderer(k.ctx, { nodeIds: ids, edited: ids, deliver }), [], 'the edit\'s pass leaves the composing card to the pass that asked');
+  answer();
+  await first;
+  assert.equal(asked.length, 2, 'the card is asked about again, for its new text');
+  assert.match(asked[1]!, /The return was free/);
+  assert.deepEqual(view(k, ids[0]!), { component: 'note', props: { emphasis: 'The return was free' }, by: 'renderer' }, 'and lands once, for the text it has');
+  assert.ok(!delivered.some((c) => c.type === 'setView' && 'emphasis' in c.view.props && c.view.props.emphasis === 'We paid 12 euros for the ferry'), 'the answer for the old text never lands');
+});
+
+test('a card past the 24 one pass asks about is left to that pass by another, so it lands once', async () => {
+  const k = kit();
+  const { ids } = grow(k, Array.from({ length: 25 }, (_v, n) => ({ title: `Note ${n}`, text: `${LONG} We paid 12 euros for the ferry.` })));
+  let answer!: () => void;
+  const gate = new Promise<void>((r) => (answer = r));
+  k.model
+    .on('renderer.components', async (req) => {
+      await gate;
+      return { items: idsIn(req.user).map((id) => entry({ id })) };
+    })
+    .on('renderer.composites', () => ({ groups: [] }));
+  const first = renderer(k.ctx, { nodeIds: ids });
+  await new Promise((r) => setTimeout(r, 0));
+  const second = await renderer(k.ctx, { nodeIds: [ids[24]!] });
+  answer();
+  assert.deepEqual(second.filter((c) => c.type === 'setView'), [], 'the 25th, touched meanwhile, is left to the first pass');
+  assert.equal((await first).filter((c) => c.type === 'setView' && c.id === ids[24]).length, 1, 'which lands it once');
+});
+
 test('a card one pass is composing is left to it by a second pass over it, so it is asked about once and lands once', async () => {
   const k = kit();
   const { ids } = grow(k, [{ title: 'Ferry', text: `${LONG} We paid 12 euros for the ferry.` }]);

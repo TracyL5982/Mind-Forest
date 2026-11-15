@@ -96,6 +96,10 @@ public:
         double start;
     };
     std::optional<Settle> settle;
+    /// The finished card a composing one gives way to, while its faces are still on their way to the GPU: until they are there
+    /// the composing card stays as it was, so nothing is ever shown empty.
+    std::weak_ptr<CardView> givingWay;
+    double givingWaySince = 0;
     /// How much of its faces show, 0…1, as a finished card comes up inside the composing one; its card, its glow and
     /// what it leads stay as they are, so the glass of its group never thins.
     float appear = 1;

@@ -1567,9 +1567,10 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], d
     if (!item || busy.has(node.id)) continue;
     const draw = byRule(item, assetUrl);
     const ambiguous = unsure(item, draw);
-    // An earlier answer that still stands in the text is kept, so a second pass costs no model call and cannot lose it.
+    // An earlier answer that still stands in the text is kept, so a second pass costs no model call and cannot lose it: an idea the
+    // Scout wrote too, which is no longer asked about but may carry the look the model gave it before.
     // A note or an idea shows nothing an edit could contradict, so after an edit the model is asked about it again.
-    if (ambiguous && node.view.by === 'renderer' && grounded(node.view, item, assetUrl) && !(WHOLE.has(node.view.component) && changed.has(node.id))) continue;
+    if ((ambiguous || item.origin.tool === 'idea') && node.view.by === 'renderer' && grounded(node.view, item, assetUrl) && !(WHOLE.has(node.view.component) && changed.has(node.id))) continue;
     draws.set(node.id, draw);
     if (ambiguous) open.push({ node, item, now: draw.component });
   }
@@ -1590,17 +1591,19 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], d
   const asked = open.slice(0, MAX_ASKED_ITEMS);
   if (open.length > asked.length) ctx.note(ROLE, `${open.length - asked.length} more cards than one pass asks about landed as the rules drew them.`);
   const composites = askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups);
-  for (const { node } of asked) busy.add(node.id);
-  const answers = await composed(ctx, asked, waitMs).finally(() => asked.forEach(({ node }) => busy.delete(node.id)));
+  for (const { node } of open) busy.add(node.id);
+  const answers = await composed(ctx, asked, waitMs).finally(() => open.forEach(({ node }) => busy.delete(node.id)));
   for (const [id, draw] of answers) if (draw) draws.set(id, draw);
-  // The mind may have changed while the model was asked: a card that gave way to a fuller round is not drawn.
+  // The mind may have changed while the model was asked: a card that gave way to a fuller round is not drawn, and one whose item was
+  // edited meanwhile, which another pass left to this one, is composed again for the text it has now.
   const there = (id: Id) => ctx.mind.nodes.has(id);
+  const edits = new Set(open.flatMap(({ node, item }) => (ctx.mind.items.get(node.itemId)?.revision !== item.revision ? [node.id] : [])));
 
   const landing = new Set(open.map(({ node }) => node.id));
   let views: Command[] = [];
   for (const node of nodes) {
     const draw = draws.get(node.id);
-    if (!draw || !there(node.id)) continue;
+    if (!draw || !there(node.id) || edits.has(node.id)) continue;
     const now = ctx.mind.node(node.id).view;
     if (sameView(draw, now) && (!landing.has(node.id) || now.by === 'renderer')) continue;
     const view: View = { ...draw, by: 'renderer' };
@@ -1610,6 +1613,8 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], d
     deliver(views);
     views = [];
   }
+  const again = [...edits].filter(there);
+  if (again.length > 0) views.push(...(await renderer(ctx, { nodeIds: again, edited: again, deliver, waitMs })));
   await composites;
   for (const pool of pools) ARRANGED.forEach((rule, row) => rule.late && settle(ctx, pool, groups, row, look));
   // Another pass may have grouped a card, or the user kept one, while the model was asked: such a group no longer holds.

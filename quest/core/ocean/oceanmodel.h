@@ -619,6 +619,7 @@ private:
     /// The light running across each composing card, and the in-progress cards easing to their finished size. Each frame.
     void composeFrame(double now);
     EntityRef shimmerBand(Art& art, Vec2 body);
+    void startSettle(CardView& old, CardView& made, double now);
     struct Repaint {
         int id;
         EntityRef quad;
