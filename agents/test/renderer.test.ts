@@ -940,6 +940,34 @@ test('a code repository the Scout found draws as a link card with its own short 
   assert.equal(chosen(page), 'excerpt', 'a real passage of a page');
 });
 
+test('each kind of record a source catalogues draws as the card two blind readers chose for it', () => {
+  const find = (kind: string | undefined, text: string, by: string, more: Partial<Item> = {}) => ({
+    title: 'A find',
+    text: `${text}\n\n${by}, 2024, Source`,
+    origin: SCOUT,
+    data: { ...(kind ? { kind } : {}), site: 'example.com', by, date: '2024', from: 'Source' },
+    source: { ...WEB, url: 'https://example.com/a' },
+    ...more,
+  });
+  const passage = 'The council met on Tuesday and costed the repair of the roof, which will close the pool for six weeks from March.';
+  for (const kind of ['page', 'article', 'question']) {
+    assert.deepEqual(ruled(find(kind, passage, 'Writer')), { component: 'link', props: { url: 'https://example.com/a', site: 'example.com', description: passage } }, `a ${kind} is a link with its own words`);
+  }
+  assert.equal(chosen(find('thread', `ann wrote: ${passage}`, 'Writer')), 'note', 'a thread is a note: a chat card would leave out who wrote what');
+  assert.equal(chosen(find(undefined, passage, 'Writer')), 'excerpt', 'a find a source did not catalogue stays as it was drawn');
+  assert.deepEqual(ruled({ ...find('answer', passage, 'answer, score 12'), title: 'Why does the pool close?' }), { component: 'qa', props: { question: 'Why does the pool close?', answer: passage } });
+
+  const film = find('film', 'A soldier investigates stolen art after the war.', 'Film', { ...PHOTO, source: { ...PHOTO.source, url: 'https://www.themoviedb.org/movie/1' } });
+  assert.deepEqual(ruled(film), { component: 'link', props: { url: 'https://www.themoviedb.org/movie/1', site: 'example.com', description: 'A soldier investigates stolen art after the war.', image: url('a1') } }, 'a film with its still');
+
+  const recipe = (ingredients: string) => find('recipe', `Ingredients: ${ingredients}.\n1. Boil the water.\n2. Add the pasta.`, 'Italian', PHOTO);
+  assert.deepEqual(ruled(recipe('pasta, salt')), {
+    component: 'sheet',
+    props: { sections: [{ kind: 'picture', src: url('a1') }, { kind: 'text', text: 'Ingredients: pasta, salt.' }, { kind: 'list', items: ['1. Boil the water.', '2. Add the pasta.'] }] },
+  });
+  assert.equal(chosen(recipe('x'.repeat(300))), 'image', 'ingredients a sheet cannot hold whole leave the recipe its picture');
+});
+
 test('a structure with more entries than its card shows is no card of its item, however much of the item they are', () => {
   const eight = Array.from({ length: 8 }, (_v, n) => ({ label: 'L', value: `${n}` }));
   const written = (count: number) => `${'x'.repeat(20)}\n${saying({ facts: eight.slice(0, count) })}`;
@@ -1061,7 +1089,7 @@ test('a recording is drawn as one with what is known of its sound, whatever its 
     data: { mediaUrl: 'https://cdn.example/41.mp3', thumbnailUrl: 'https://cdn.example/41.jpg', sound: { seconds: 2520 }, site: 'podcasts.example' },
     source: { from: 'web', url: 'https://podcasts.example/41', capturedAt: '' },
   });
-  assert.deepEqual(byRule(episode, url), { component: 'audio', props: { src: 'https://cdn.example/41.mp3', seconds: 2520 } }, 'a pick plays from the address its source gave');
+  assert.deepEqual(byRule(episode, url), { component: 'audio', props: { src: 'https://cdn.example/41.mp3', seconds: 2520, image: 'https://cdn.example/41.jpg' } }, 'a pick plays from the address its source gave, beside its cover art');
   assert.ok(grounded(byRule(episode, url), episode, url) && grounded(dropped, kit().item({ title: 'Memo', ...transcript, source: { from: 'drop', asset: 'm1', capturedAt: '' } }), url));
   assert.equal(grounded({ component: 'audio', props: { src: 'https://cdn.example/41.mp3', seconds: 60 } }, episode, url), false, 'a length the item does not hold');
   assert.equal(chosen({ title: 'Memo', kind: 'audio', data: { mediaUrl: '   ' } }), 'note');

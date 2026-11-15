@@ -81,7 +81,9 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
           const page = await opts.read(hit.url).catch(() => null);
           const title = [page?.title, hit.title].map((t) => str(t)).find((t) => t && !/^https?:\/\//i.test(t));
           if (!page || !title || page.text.length < 400) return null;
-          return { title, by: page.site, date: '', text: page.text.slice(0, 5000), url: hit.url };
+          // A page a DOI names is a paper, published where the page is.
+          if (/^https?:\/\/(dx\.)?doi\.org\//i.test(hit.url)) return { kind: 'paper', title, by: '', date: '', venue: page.site, text: page.text.slice(0, 5000), url: hit.url };
+          return { kind: 'page', title, by: page.site, date: '', text: page.text.slice(0, 5000), url: hit.url };
         }),
       );
       return pages.flatMap((p) => p ?? []).slice(0, 5);
@@ -220,6 +222,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
         if (comments.length === 0) return null;
         return {
           title: str(story.title), by: `${story.points} points, ${story.num_comments} comments`, date: str(story.created_at).slice(0, 10),
+          kind: 'thread',
           text: comments.map((c) => `${c.by} wrote: ${c.text.slice(0, 700)}`).join('\n\n'),
           url: `https://news.ycombinator.com/item?id=${story.objectID}`,
         };
@@ -254,6 +257,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     async search(query) {
       const json = await ask(`https://api.stackexchange.com/2.3/search/excerpts?order=desc&sort=relevance&q=${q(query)}&site=stackoverflow&pagesize=${PER_SEARCH}`);
       return list(json.items).map((a): Found => ({
+        kind: a.item_type === 'answer' ? 'answer' : 'question',
         title: plain(str(a.title)), by: `${a.item_type}, score ${a.score}`, date: a.creation_date ? new Date(Number(a.creation_date) * 1000).toISOString().slice(0, 10) : '',
         text: plain(str(a.excerpt)), url: `https://stackoverflow.com/q/${a.question_id}`,
       })).filter((f) => f.text.length > 80);
@@ -361,6 +365,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
         const steps = str(m.strInstructions).split(/\r?\n+/).map((s) => s.replace(/^\s*(step\s*)?\d+[.):]?\s*/i, '').trim()).filter((s) => s.length > 8);
         return {
           title: str(m.strMeal), by: [str(m.strArea), str(m.strCategory)].filter(Boolean).join(', '), date: '',
+          kind: 'recipe',
           text: [`Ingredients: ${ingredients.join(', ')}.`, ...steps.map((s, n) => `${n + 1}. ${s}`)].join('\n'),
           url: str(m.strSource) || `https://www.themealdb.com/meal/${m.idMeal}`,
           ...(str(m.strMealThumb) ? { image: str(m.strMealThumb) } : {}),
@@ -433,6 +438,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
         return true;
       }).slice(0, 8).map((m): Found => ({
         title: str(m.title) || str(m.name), by: m.media_type === 'tv' ? 'Television series' : 'Film', date: (str(m.release_date) || str(m.first_air_date)).slice(0, 4),
+        kind: 'film',
         text: str(m.overview), from: 'The Movie Database',
         url: `https://www.themoviedb.org/${m.media_type}/${m.id}`,
         image: `https://image.tmdb.org/t/p/w780${str(m.backdrop_path) || str(m.poster_path)}`,
@@ -449,9 +455,12 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     show: 3,
     visual: true,
     async search(query) {
-      const json = await ask(`https://api.europeana.eu/record/v2/search.json?wskey=${q(europeanaKey ?? '')}&query=${q(query)}&rows=10&media=true&thumbnail=true&qf=TYPE:IMAGE&reusability=open&profile=standard`);
+      const json = await ask(`https://api.europeana.eu/record/v2/search.json?wskey=${q(europeanaKey ?? '')}&query=${q(query)}&rows=10&media=true&thumbnail=true&qf=TYPE:IMAGE&reusability=open&profile=rich`);
       const one = (value: unknown) => str(list(value)[0]);
+      // A work a collection holds is drawn as one, but a photograph of something is a picture: its concepts say which.
+      const photograph = (r: Json) => Object.values((r.edmConceptPrefLabelLangAware ?? {}) as Record<string, unknown>).flatMap((labels) => list(labels)).some((label) => /photograph/i.test(str(label)));
       return list(json.items).filter((r) => one(r.edmIsShownBy) || one(r.edmPreview)).map((r): Found => ({
+        ...(photograph(r) ? {} : { kind: 'artwork' as const }),
         title: plain(one(r.title)), by: /^https?:/.test(one(r.dcCreator)) ? '' : one(r.dcCreator), date: one(r.year),
         text: plain(one(r.dcDescription)).slice(0, 600), from: one(r.dataProvider) || 'Europeana', ...(one(r.dataProvider) ? { holder: one(r.dataProvider) } : {}),
         url: str(r.guid).split('?')[0]!, image: one(r.edmIsShownBy) || one(r.edmPreview),
@@ -470,7 +479,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
       const json = await ask(`https://content.guardianapis.com/search?q=${q(query)}&order-by=relevance&page-size=${PER_SEARCH}&show-fields=headline,byline,bodyText&api-key=${q(guardianKey ?? '')}`);
       return list(json.response?.results).filter((a) => str(a.fields?.bodyText).length > 600).map((a): Found => ({
         title: plain(str(a.fields?.headline) || str(a.webTitle)), by: str(a.fields?.byline), date: str(a.webPublicationDate).slice(0, 10),
-        text: str(a.fields.bodyText).slice(0, 5000), url: str(a.webUrl),
+        kind: 'article', text: str(a.fields.bodyText).slice(0, 5000), url: str(a.webUrl),
       }));
     },
   };

@@ -171,7 +171,8 @@ export const COMPONENTS = {
   image: z.object({ src: z.string(), caption: z.string().optional(), aspect: z.number().optional() }),
   video: z.object({ src: z.string(), poster: z.string().optional(), caption: z.string().optional() }),
   /** A recording: where it plays from, and its length and loudness when they are known. The item's text is its transcript. */
-  audio: z.strictObject({ src: z.string().min(1), seconds: Sound.shape.seconds.optional(), peaks: Sound.shape.peaks }),
+  /** A recording that plays. `image` is its cover art, when its source gives one. */
+  audio: z.strictObject({ src: z.string().min(1), seconds: Sound.shape.seconds.optional(), peaks: Sound.shape.peaks, image: z.string().optional() }),
   /** A web page: site, title, description, optional picture. */
   link: z.object({ url: z.string(), site: z.string(), description: z.string().optional(), image: z.string().optional() }),
   chart: z.object({
@@ -521,7 +522,7 @@ export const CHECKS: ContentChecks = {
   },
   image: { props: { src: 'own', caption: 'own', aspect: 'choice' } },
   video: { props: { src: 'own', poster: 'own', caption: 'own' } },
-  audio: { props: { src: 'own', seconds: 'own', peaks: 'own' } },
+  audio: { props: { src: 'own', seconds: 'own', peaks: 'own', image: 'own' } },
   link: { props: { url: 'own', site: 'own', description: 'own', image: 'own' } },
   chart: {
     props: { chart: 'choice', labels: 'shown', values: 'shown', unit: 'unit', mark: 'choice', above: 'shown', heads: 'shown' },

@@ -461,11 +461,19 @@ const byAgent = (item: Item) => item.origin.by === 'agent';
  * the line that says who made the page and when.
  */
 function passageOf(item: Item): string | undefined {
-  if (item.kind !== 'text' || !byAgent(item) || !item.source.url || item.data.kind === 'repository') return undefined;
+  if (item.kind !== 'text' || !byAgent(item) || !item.source.url || OWN_CARD.has(String(item.data.kind))) return undefined;
   const label = [...new Set([item.data.by, item.data.date, item.data.from].flatMap((part) => str(part) ?? []))].join(', ');
   const text = item.text.trim();
   return text && uniform(text) !== uniform(label) ? text : undefined;
 }
+
+/**
+ * The kinds of record drawn as a link card: something that lives at an address, with what its source says of it beside its title. Two
+ * blind readers chose it for each of these in the source audit (DECISIONS 53), over the excerpt or the picture they were drawn as.
+ */
+const LINKED = new Set(['repository', 'page', 'article', 'question', 'film']);
+/** The kinds whose record is never a passage: a link's, an answer's, a recipe's, and a thread's, which is what several people wrote. */
+const OWN_CARD = new Set([...LINKED, 'answer', 'recipe', 'thread']);
 
 /**
  * What a source says of a record in its own words, as a repository's short description: the item's text without the line under it
@@ -527,10 +535,27 @@ const RULES: Rule[] = [
   {
     component: 'link',
     reads: 'catalogue',
-    when: (item) => item.data.kind === 'repository' && Boolean(item.source.url),
-    props: (item) => {
+    when: (item) => LINKED.has(String(item.data.kind)) && Boolean(item.source.url),
+    props: (item, asked) => {
       const url = item.source.url!;
-      return compact({ url, site: str(item.data.site) ?? siteOf(url), description: blurbOf(item), image: str(item.data.image) });
+      return compact({ url, site: str(item.data.site) ?? siteOf(url), description: blurbOf(item), image: pictureOf(item, asked) });
+    },
+  },
+  {
+    component: 'qa',
+    reads: 'catalogue',
+    when: (item) => item.data.kind === 'answer' && item.title.trim() !== '' && blurbOf(item) !== undefined,
+    props: (item) => ({ question: item.title.trim(), answer: blurbOf(item)! }),
+  },
+  {
+    component: 'sheet',
+    reads: 'catalogue',
+    when: (item) => item.data.kind === 'recipe',
+    props: (item, asked) => {
+      // Its picture, the line of its ingredients and its numbered steps, each as the record writes it. One too long for a sheet is drawn as its picture.
+      const [ingredients, ...steps] = (blurbOf(item) ?? '').split('\n').map((line) => line.trim()).filter(Boolean);
+      const src = pictureOf(item, asked);
+      return { sections: [...(src ? [{ kind: 'picture', src }] : []), { kind: 'text', text: ingredients ?? '' }, { kind: 'list', items: steps }] };
     },
   },
   {
@@ -545,7 +570,13 @@ const RULES: Rule[] = [
     when: (item, asked) => mediaOf(item, 'video', asked) !== undefined,
     props: (item, asked) => compact({ src: mediaOf(item, 'video', asked), poster: str(item.data.thumbnailUrl), caption: captionOf(item) }),
   },
-  { component: 'audio', reads: 'kind', when: (item, { assetUrl }) => recording(item, assetUrl) !== undefined, props: (item, { assetUrl }) => recording(item, assetUrl)! },
+  {
+    component: 'audio',
+    reads: 'kind',
+    when: (item, { assetUrl }) => recording(item, assetUrl) !== undefined,
+    // An episode a source found is known by its cover art, which plays beside it.
+    props: (item, { assetUrl }) => compact({ ...recording(item, assetUrl)!, image: str(item.data.thumbnailUrl) }),
+  },
   { component: 'code', reads: 'kind', when: (item) => codeOf(item) !== undefined, props: (item) => codeOf(item)! },
   ...[
     extracted('breakdown', breakdownOf, ({ labels, values, unit }) => ({ labels, values, unit })),
