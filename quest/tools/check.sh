@@ -13,7 +13,7 @@ for f in "${files[@]}"; do
     core/render.cpp) continue ;;   # needs OpenGL headers: checked by the real builds
   esac
   if ! xcrun clang++ -std=c++20 -fsyntax-only -Wall -Wno-unused-variable -Wno-unused-function -Wno-missing-braces \
-       -ferror-limit=40 -Icore -Icore/ocean "$f"; then
+       -ferror-limit=40 -Icore -Icore/ocean -Ivendor/sherpa-onnx/include "$f"; then
     status=1
   fi
 done
