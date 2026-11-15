@@ -264,8 +264,8 @@ async function pictureFor(ctx: RoleContext, anchor: Node): Promise<string | unde
 
 /**
  * Thinks of `count` directions and hands each to `arrive` as soon as the model has written it, in the order written, each once.
- * The main model writes them at minimal effort: measured on three cards, as concrete and as varied as at low effort, in 12 to 15 s
- * instead of 20 to 25, and read as they are written, the first is ready in about 4.
+ * The main model writes them at minimal effort: measured on three cards, as concrete and as varied as at low effort, in 11 to 15 s
+ * instead of 20 to 25, and read as they are written, the first is ready 5 to 8 s in. The quick models were faster and more generic.
  */
 async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Direction) => void): Promise<void> {
   const asked = run.need
@@ -674,8 +674,8 @@ async function rate(ctx: RoleContext, run: Run, seen: ReadonlySet<string>, wante
       'why: a short phrase naming the connection.',
     ].join('\n'),
     schema: Ratings,
-    // Measured on three cards, the quick model rated as the main one did, no tie on either side of 0.8 apart, in 1.3 to 3.7 s
-    // instead of 9.7 to 15.7. A slower rating would hold back the first picks, which wait for it.
+    // Measured on three cards, neither model brought a tie in any run and the picks already there were rated alike, the quick model
+    // more steadily, in 1.3 to 3.7 s instead of 9.7 to 15.7. A slower rating would hold back the first picks, which wait for it.
     quick: true,
   }));
   const offered = new Set(candidates.map((c) => c.id));
