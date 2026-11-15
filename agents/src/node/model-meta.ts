@@ -8,8 +8,8 @@ export interface MetaModelOptions {
   /** The model for a request marked quick. */
   quickModel?: string;
   /**
-   * How long a quick request may go unanswered before it is tried again. The quick model answers in 0.5 to 4 s, and on one evening
-   * one of its requests in about twenty went unanswered until the 120 s limit, after which the same request answered in 1 to 2 s.
+   * How long a quick request may go unanswered before it is tried again. The quick model answers in 0.5 to 4 s. In three runs in a row
+   * one of its requests went unanswered until the 120 s limit, and the same request tried again answered in 1 to 2 s.
    */
   quickWaitMs?: number;
   imageModel?: string;
