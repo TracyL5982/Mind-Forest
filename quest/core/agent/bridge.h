@@ -134,6 +134,21 @@ private:
     bool standing(const Planted& p) const;
     /// Tells the service which card is open when that changes: standing a tree, unfolding a cover, a pinch, a step.
     void reportFocus();
+
+    /// A `navigate` from the service, carried out once neither the user nor Momo is speaking, so the view does not move
+    /// mid-sentence, and once its tree stands: taken off the shelf as a pinch on its cover takes it. A later one replaces it.
+    struct Going {
+        Navigate to;
+        double came = 0;                        // when it came
+        std::optional<double> waitingSince;     // since its tree was asked to stand
+    };
+    std::optional<Going> going;
+    void goOn();
+    /// Whether the user or Momo is speaking: the only thing the bridge asks of the voice.
+    bool speaking() const;
+    /// Brings a card of the standing tree into view the way hands go to one: a card that leads a layer stands on it, any
+    /// other opens on its group's layer, which stands first, each card on the way leading its own layer.
+    void bring(Planted& p, int id);
 };
 
 }  // namespace agent

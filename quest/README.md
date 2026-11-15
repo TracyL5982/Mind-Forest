@@ -77,6 +77,13 @@ communication` reads Android's echo-cancelled source instead of the recognizer's
 keyword spotter, which `tools/fetch-voice.sh` fetches into `quest/vendor/` (the builds run it); `core/agent/test/run.sh`
 tests it on spoken clips.
 
+When the service moves the view (`navigate`, as for "go back to the start"), the headset brings the card into view
+as hands would: it stands the card's tree, taking it off the shelf and putting away the one that stood, then opens
+the card on its layer, standing that layer first if it is not the one in view. A navigate to a tree stands it at its
+root. It waits while you are recorded or Momo's reply is on its way or playing (at most 30 s), so the view moves after
+the sentence, not during it. `node quest/desktop/test/navigate_check.mjs` runs the preview against a stand-in service
+and checks this from its log.
+
 ## Build and run
 
 Needs the Android SDK (platform 34, build-tools 34, NDK 27.2, CMake 3.22) in `~/Library/Android/sdk`,
