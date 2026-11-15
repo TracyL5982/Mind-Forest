@@ -77,9 +77,9 @@ A client fetches only from the service. Every address in an item or a view that 
 | `hello` | `protocol`, `snapshot`, `settings`, `undo`, `voice`, `hearing` | Sent once on connect. `settings.agentName` is what the user calls the agent, `momo` unless renamed (see Voice). `voice` is true when the service can read replies aloud through `GET /api/speak`. `hearing` is `service` when the service transcribes better than a browser can, so the client should record and post to `/api/transcribe`, and `browser` when the client should use its own recognition if it has one. `snapshot` has `seq` and the arrays `items`, `nodes`, `trees`, `links`, `groups`. Replace all local state with it. `undo` is the label of what an undo would take back now, or null. |
 | `change` | `set`, `undo` | One change set: `id`, `seq`, `label`, `origin`, `patches`, optional `undoes`. `set.seq` is exactly one more than the last `seq` the client holds, from `hello.snapshot.seq` or the previous `change`. Any other value means the client missed a change: reconnect for a fresh `hello`. Apply each patch in order: `{entity, id, before, after}`. `after: null` removes the entity. Otherwise store `after` under `id`. `undo` is the new undo label, or null. |
 | `activity` | `activity` | Work state: `id`, `role`, `state` (`start`, `done`, `error`), `message`, optional `nodeId`. Show a thinking mark on `nodeId` between `start` and `done`. |
-| `say` | `text` | One short line for the agent to speak. |
+| `say` | `text` | One short line for the agent to speak. See When the agent speaks below. |
 | `heard` | `text`, `final` | The transcript the service is acting on. |
-| `navigate` | `nodeId?`, `treeId?` | Move the user's view to that node or tree. |
+| `navigate` | `nodeId?`, `treeId?` | Move the user's view to that node or tree: where the user asked to go, or the card a run they asked for has just brought picks to (see When the agent speaks). |
 | `handoff` | `name`, `url`, `markdown`, `files` | A handoff bundle is ready. `url` is a zip to download. `markdown` is the handoff as one file that names no attached file, the file a paired Telegram chat receives. |
 | `settings` | `settings` | Settings changed. |
 | `note` | `role`, `message` | A log line. Optional to show. |
@@ -87,6 +87,15 @@ A client fetches only from the service. Every address in an item or a view that 
 | `questions` | `nodeId`, `questions` | The reply to this connection's own `questions` message, sent to it alone. See Suggested questions below. |
 
 `origin` on a change set is `{by: 'user' | 'agent', role?, tool?}`. Use it to animate agent changes differently from the user's own.
+
+## When the agent speaks
+
+- **Right after an utterance.** The Conductor's reply ("Looking for horror examples.") comes about a second after the final `utter` (0.5 to 3.8 s in 44 live calls, 0.9 s typically), before any work it starts. An instant command ("more", "undo", "keep that") answers at once.
+- **When a run the user asked for ends.** A run is what an `ask`, a `more`, an utterance the Conductor took for either, or a tree the user asked for (its first round) starts. When it ends the service sends one `say` of at most about 20 words: how many picks came, under which card, and one or two of them by kind and title, real material before written ideas, such as `Four new things under generative UI: a paper "Adaptive User Interfaces" and a video "Inventing on Principle".`, or with one of them when two would not fit, `Five new things under generative UI, including a paper "Predictability and accuracy in adaptive user interfaces".` With nothing new it says so: `I found nothing new for generative UI.` Just before that `say` comes a `navigate` with the card's `nodeId`, unless the user has turned to something else since asking: opened another card (`focus`), been taken somewhere, or asked about another card. Nothing is announced for a drop the Filer places.
+- **A newer run on the same card.** Asking again about a card while its run still works starts a new run. The older run's picks that already arrived stay, the rest of it is dropped, and only the newer run is announced, counting only its own picks.
+- **After organizing and a handoff.** What the Organizer did, and "Your handoff is ready: …".
+
+The picks of a run arrive in several `change` sets before its `say`: written ideas and what the user already has first, then each find as it is ready. A run ends once its places are full, so the `say` does not wait on work that can no longer land.
 
 ## Client to service
 
