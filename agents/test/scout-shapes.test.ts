@@ -83,7 +83,7 @@ for (const { direction, card, props } of SHAPES) {
     assert.equal(drawn.component, card);
     assert.deepEqual(drawn.props, props);
     assert.equal(items[0]!.title, direction.title);
-    assert.deepEqual(k.notes.filter((n) => n.includes('lands as plain text')), []);
+    assert.deepEqual(k.notes.filter((n) => / lands as .*, not /.test(n)), []);
   });
 
   test(`${card} "${direction.title}" lands in its final look, which a Renderer pass leaves as it is`, async () => {
@@ -120,25 +120,26 @@ const SHORT: { direction: ReturnType<typeof written>; says: RegExp; words: strin
 ];
 
 for (const { direction, says, words } of SHORT) {
-  test(`${direction.format} "${direction.title}" that lacks part of its form lands as plain text in its own words, and the log says why`, async () => {
+  test(`${direction.format} "${direction.title}" that lacks part of its form lands in its own words, and the log says what it lands as and why`, async () => {
     const { k, items } = await landed(direction);
 
     assert.equal(items.length, 1);
     assert.notEqual(cardOf(k, items[0]!).component, direction.format);
     for (const word of words) assert.ok(items[0]!.text.includes(word), `the text keeps "${word}"`);
     assert.deepEqual(Object.keys(items[0]!.data).filter((key) => key !== 'shortTitle'), [], 'no half-filled structure is kept');
-    assert.ok(k.notes.some((n) => n.includes(`"${direction.title}" lands as plain text`) && says.test(n)), k.notes.join('\n'));
+    const drawnAs = cardOf(k, items[0]!).component;
+    assert.ok(k.notes.some((n) => n.includes(`"${direction.title}" lands as ${drawnAs === 'note' ? 'a note' : `a ${drawnAs}`}, not`) && says.test(n)), k.notes.join('\n'));
   });
 }
 
-test('a shape that fills its form but fails its card\'s check lands as plain text, and the log names the card the text gets', async () => {
+test('a shape that fills its form but fails its card\'s check lands in its own words, and the log says what it lands as', async () => {
   const long = 'the year the film opened to poor reviews and a box office that barely covered its budget';
   const { k, items } = await landed(written('facts', 'A figure too long', { lines: ['Released | 1982', `Reception | ${long}`] }));
 
   assert.equal(cardOf(k, items[0]!).component, 'note');
   assert.ok(items[0]!.text.includes(long));
   assert.deepEqual(Object.keys(items[0]!.data).filter((key) => key !== 'shortTitle'), []);
-  assert.ok(k.notes.some((n) => /"A figure too long" lands as plain text, not facts: the card's check draws it as a note/.test(n)), k.notes.join('\n'));
+  assert.ok(k.notes.some((n) => /"A figure too long" lands as a note, not facts: its card's check refused it/.test(n)), k.notes.join('\n'));
 });
 
 test('a written idea with no words at all lands nothing', async () => {
@@ -158,3 +159,30 @@ test('a bullet or a number the model puts in front of an entry is the card\'s to
   assert.deepEqual(cardOf(figured.k, figured.items[0]!).props, { facts: [{ label: 'Released', value: '1982' }, { label: 'Director', value: 'John Carpenter' }] });
 });
 
+
+test('a definition whose meaning opens with its term is written as the meaning alone, so the card names the term once', async () => {
+  const passage = 'Parallax is the shift of a near thing against a far one as you move.';
+  const { k, items } = await landed(written('definition', 'Parallax', { subject: 'Parallax', passage }));
+  const article = await landed(written('definition', 'Dolly zoom', { subject: 'Dolly zoom', passage: 'A dolly zoom is a shot that tracks back while zooming in.' }));
+
+  assert.equal(items[0]!.text, passage);
+  assert.deepEqual(cardOf(k, items[0]!), { component: 'definition', props: { term: 'Parallax', definition: passage } });
+  assert.equal(article.items[0]!.text, 'A dolly zoom is a shot that tracks back while zooming in.');
+  assert.equal(cardOf(article.k, article.items[0]!).component, 'definition');
+});
+
+test('figures and cells written with full-width marks, as Chinese writes them, are read as the card\'s own', async () => {
+  const figured = await landed(written('facts', '怪形', { lines: ['上映：1982', '导演：约翰·卡朋特'] }));
+  const tabled = await landed(written('table', '三场对峙', { lines: ['电影｜威胁', '怪形｜伪装者', '异形｜怪物'] }));
+
+  assert.deepEqual(cardOf(figured.k, figured.items[0]!).props, { facts: [{ label: '上映', value: '1982' }, { label: '导演', value: '约翰·卡朋特' }] });
+  assert.deepEqual(cardOf(tabled.k, tabled.items[0]!).props, { heads: ['电影', '威胁'], rows: [['怪形', '伪装者'], ['异形', '怪物']] });
+});
+
+test('pros and cons are headed in the language the idea is written in', async () => {
+  const chinese = await landed(written('proscons', '露不露怪物', { pros: ['威胁具体', '高潮有力'], cons: ['神秘感消失', '特效会过时'] }));
+  const english = await landed(written('proscons', 'Show the monster', { pros: ['Concrete', 'Earned'], cons: ['Dated', 'Less dread'] }));
+
+  assert.deepEqual(cardOf(chinese.k, chinese.items[0]!).props.heads, ['优点', '缺点']);
+  assert.deepEqual(cardOf(english.k, english.items[0]!).props.heads, ['For', 'Against']);
+});
