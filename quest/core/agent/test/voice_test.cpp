@@ -276,10 +276,17 @@ MicrophoneRef openMicrophone(MicrophoneEvents events) {
 
 }  // namespace platform
 
+/// When set, work handed to Async waits here until the test runs it, as when the listener's model is slow to load.
+std::vector<std::function<void()>>* asyncHeld = nullptr;
+
 namespace Async {
 void run(std::function<void()> work, std::function<void()> then) {
-    work();
-    if (then) then();
+    auto both = [work = std::move(work), then = std::move(then)] {
+        work();
+        if (then) then();
+    };
+    if (asyncHeld) asyncHeld->push_back(both);
+    else both();
 }
 }  // namespace Async
 
@@ -667,4 +674,16 @@ TEST(liveSaysTwoRepliesOneAfterTheOther) {
     CHECK(host.players[1]->written == std::vector<int16_t>({4, 5, 6}), "then it plays, all of it");
     CHECK(host.players[1]->finished, "and ends, as all of it had come");
     CHECK(t.voice.state() == Listener::State::speaking, "Momo is still speaking between the two");
+}
+
+TEST(liveStreamsWhenReadyBeforeTheListenerHasLoaded) {
+    std::vector<std::function<void()>> held;
+    asyncHeld = &held;
+    Talking t(true);
+    asyncHeld = nullptr;
+    t.goLive();
+    for (auto& run : held) run();
+    t.hear(whole(Sound().quiet(1).say("command").quiet(1.5)));
+    CHECK_EQ(t.liveSent("start").size(), size_t(1));
+    CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(0));
 }

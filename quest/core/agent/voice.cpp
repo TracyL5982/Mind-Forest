@@ -244,6 +244,8 @@ void Voice::start() {
             vocabulary = made->vocabulary;
             spelled = keywordLines(name, *vocabulary) ? name : "momo";
             ears = std::make_shared<Ears>(std::move(made->spotter));
+            // /live can be ready before the listener's model has loaded, and what was sent then had no ears to reach.
+            if (std::holds_alternative<Ready>(link)) send(SetMode{Listener::Mode::stream});
             if (made->clip) {
                 std::weak_ptr<Ears> weak = ears;
                 platform::MicrophoneEvents events;
