@@ -26,12 +26,12 @@ test('the fake clerk reads each kind of structure from its plain written form, a
   assert.deepEqual(await pasted('| Plan | Price |\n| --- | --- |\n| Solo | $8 |\n| Team | $20 |'), {
     table: { heads: ['Plan', 'Price'], rows: [['Solo', '$8'], ['Team', '$20']] },
   });
-  assert.deepEqual(await pasted('Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.\nParallax means the apparent shift of an object when the viewer moves'), {
-    question: 'Why is the sky blue?',
-    answer: 'Air scatters short wavelengths the most.',
+  assert.deepEqual(await pasted('Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.'), { question: 'Why is the sky blue?', answer: 'Air scatters short wavelengths the most.' });
+  assert.deepEqual(await pasted('Parallax means the apparent shift of an object when the viewer moves'), {
     term: 'Parallax',
     definition: 'Parallax means the apparent shift of an object when the viewer moves',
   });
+  assert.deepEqual(await pasted('Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.\nParallax means the apparent shift of an object when the viewer moves'), {}, 'two structures, each a part of the text');
   assert.deepEqual(await pasted('Moving to Rust\nPros: no data races, one binary'), {}, 'a point written inline among others is a piece of a sentence');
   assert.deepEqual(await pasted('Packing\n[x] passport\n[ ] charger'), { items: ['passport', 'charger'], checklist: [true, false] });
   assert.deepEqual(await pasted('Bring\n- tent\n- stove'), { items: ['tent', 'stove'] });
@@ -152,7 +152,7 @@ const PORTO_SHEET = {
     { kind: 'heading', text: 'Weekend in Porto' },
     { kind: 'text', text: 'We took the early train on Friday and walked the river both days, and when it rained on Saturday we sat in the bookshop until it closed and nobody minded. Next time we go in May, before the crowds, and stay an extra night.' },
     { kind: 'figures', facts: [{ label: 'Cost', value: '€240' }, { label: 'Nights', value: '2' }] },
-    { kind: 'list', items: ['the bridge at dusk', 'the tiled station', 'grilled sardines'] },
+    { kind: 'list', label: 'Best:', items: ['the bridge at dusk', 'the tiled station', 'grilled sardines'] },
   ],
 };
 
@@ -167,13 +167,15 @@ test('the fake chooses a callout, a sheet or a note for a text the rules left as
     return k.mind.node(node.id).view;
   };
 
-  assert.deepEqual(await paste(PORTO), { component: 'sheet', props: PORTO_SHEET, by: 'renderer' });
+  // Intake reads the list off the text, and its card shows the whole item with the lines over the list: the rules need no model.
+  const porto = await paste(PORTO);
+  assert.deepEqual([porto.component, porto.props.items, porto.props.above], ['list', PORTO_SHEET.sections[3]!.items, [PORTO_SHEET.sections[1]!.text, 'Cost: €240', 'Nights: 2', 'Best:']]);
   assert.deepEqual(await paste('Sourdough\nNote: the starter doubles in about six hours.'), { component: 'callout', props: { text: 'Note: the starter doubles in about six hours.', tone: 'note' }, by: 'renderer' });
   assert.equal((await paste('The tower, 2019\nBest:\n- the view at night\n- the lift\n- the gardens below it')).component, 'list', 'a list with no sentence beside it is no sheet, and the rules draw the list');
   assert.deepEqual(k.notes, []);
 
   assert.equal((await paste('Survey of 40 viewers\nWhat they noticed in the scene, in their own words. fake:invent')).component, 'note');
-  assert.deepEqual(k.notes, ['renderer: Kept "Survey of 40 viewers" as the rules drew it: the model\'s fact shows value, which the content does not state.']);
+  assert.deepEqual(k.notes, ['renderer: Kept "Survey of 40 viewers" as the rules drew it: the model\'s fact is not the whole content, every line in order and every mark as it is written.']);
 });
 
 test('the fake makes an explorable of a text that contrasts states or gives a formula, and the real checks refuse a formula that cannot be read or misses', async () => {

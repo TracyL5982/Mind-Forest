@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { FRAME, PADDING, PASSAGE_LETTER, TEXT, TITLE, say, text, wrap } from './shared.js';
+import { FRAME, PADDING, PASSAGE_LETTER, SIDES, TEXT, TITLE, aboveOf, drawAbove, say, text, wrap } from './shared.js';
 
 const WIDTH = 288;
 /** The rule down the passage's left side and the gap after it. */
@@ -27,6 +27,7 @@ function plan(item, props) {
   const title = item.title || '';
   return {
     words,
+    above: aboveOf(props, WIDTH - SIDES),
     lines: wrap(words, LINE, PASSAGE_LETTER, MOST_LINES),
     title,
     where: [text(props.at).trim(), text(props.source).trim()].filter((part) => part && part !== title.trim()).join(' · '),
@@ -36,8 +37,8 @@ function plan(item, props) {
 export const shows = ['site', 'from'];
 
 export function size(item, props) {
-  const { lines, title, where } = plan(item, props);
-  return [WIDTH, FRAME + lines * TITLE + (title || where ? 10 + (title ? TEXT : 0) + (where ? TEXT : 0) : 0)];
+  const { above, lines, title, where } = plan(item, props);
+  return [WIDTH, FRAME + above.height + lines * TITLE + (title || where ? 10 + (title ? TEXT : 0) + (where ? TEXT : 0) : 0)];
 }
 
 const from = (title, where, clamped) => (title || where) && h('div', { class: 'excerpt-from' },
@@ -45,8 +46,8 @@ const from = (title, where, clamped) => (title || where) && h('div', { class: 'e
   where && say('div', `excerpt-where ${clamped}`, where));
 
 export function draw(item, props) {
-  const { words, lines, title, where } = plan(item, props);
-  return [say('blockquote', `excerpt-text clamp-${lines}`, words), from(title, where, 'clamp-1')];
+  const { words, above, lines, title, where } = plan(item, props);
+  return [drawAbove(above), say('blockquote', `excerpt-text clamp-${lines}`, words), from(title, where, 'clamp-1')];
 }
 
 /** The passage whole. The maker the Scout's closing line named has a line of its own, because nothing else on the opened card says it. */

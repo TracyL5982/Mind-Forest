@@ -274,6 +274,41 @@ test('a facts card sets every figure in one size, trims what it is given, and ma
   assert.deepEqual(facts(passage, '1889'), [320, 30 + 21 + 12 + (8 * 21 + 17) + 12 + (21 + 17)], 'a passage is given eight lines and no more');
 });
 
+test('a structured card grows by exactly the lines its item sets over its structure, and a chart or a breakdown by the heads row of its table', async () => {
+  const { COMPONENTS } = (await load('components/index.js')) as { COMPONENTS: Record<string, Kind> };
+  const OVER: Record<string, Record<string, unknown>> = {
+    quote: { text: 'A map is not the territory.' },
+    fact: { value: '12%', label: 'conversion' },
+    facts: { facts: [{ label: 'Height', value: '330 m' }, { label: 'Built', value: '1889' }] },
+    chart: { chart: 'bar', labels: ['Mar', 'Apr'], values: [4, 9] },
+    breakdown: { labels: ['Yes', 'No'], values: [75, 25], unit: '%' },
+    steps: { steps: ['Zoom in', 'Pull back'] },
+    list: { items: ['Tent', 'Stove'] },
+    table: { heads: ['Wall', 'Length'], rows: [['North', '4.2 m']] },
+    qa: { question: 'Why?', answer: 'Because.' },
+    callout: { text: 'Mind the step.', tone: 'caution' },
+    excerpt: { text: 'A short passage.' },
+    definition: { term: 'Bokeh', definition: 'Bokeh is the blur.' },
+    proscons: { heads: ['For:', 'Against:'], pros: ['cheap'], cons: ['slow'] },
+    sheet: { sections: [{ kind: 'text', text: 'Pack the night before.' }, { kind: 'list', items: ['Tent', 'Stove'] }] },
+    explorable: contrasted(switching(2, 'Short.')),
+  };
+  const size = (type: string, props: Record<string, unknown>) => COMPONENTS[type]!.size(blank, props) as [number, number];
+  for (const [type, props] of Object.entries(OVER)) {
+    const [wide, tall] = size(type, props);
+    assert.deepEqual(size(type, { ...props, above: ['Results:'] }), [wide, tall + 6 + 17], `${type} draws a heading over its structure`);
+    assert.deepEqual(size(type, { ...props, above: ['Results:', '  ', 'The trial ran for six weeks.'] }), [wide, tall + 6 + 2 * 17], `${type} draws each line on lines of its own and passes over a blank one`);
+  }
+  for (const type of ['chart', 'breakdown']) {
+    const [wide, tall] = size(type, OVER[type]!);
+    assert.deepEqual(size(type, { ...OVER[type], heads: ['Month', 'Weeks'] }), [wide, tall + 6 + 17 + 5], `${type} draws its heads row over its figures`);
+  }
+  const note = (emphasis: string, text: string) => (COMPONENTS.note!.size({ ...blank, text }, { emphasis }) as [number, number])[1];
+  const said = 'Barges carry the grain out and the news in. The road is for locals, and every hamlet faces the water, except the red house. The river is the highway.';
+  assert.ok(note('The river is the highway.', said) > note('', said), 'a note shows its text far enough to reach the words it sets apart');
+  assert.equal(note('“The river is the highway”', said), note('The river is the highway.', said.replace('The river', '"The river')), 'and finds them whatever quotation marks either writes');
+});
+
 test('a sheet is one card: its heading is its title, a picture leads it, each part is as tall as on its own card, and no chip says what it draws', async () => {
   const { COMPONENTS, sizeOf, chipsOf } = (await load('components/index.js')) as {
     COMPONENTS: Record<string, Kind>;

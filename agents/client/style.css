@@ -45,7 +45,7 @@ h1, h2, p, ol, dl, dd, blockquote, pre, fieldset { margin: 0; padding: 0; border
 button, input, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
-.clamp-1, .clamp-2, .clamp-3, .clamp-4, .clamp-5, .clamp-6, .clamp-7, .clamp-8 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.clamp-1, .clamp-2, .clamp-3, .clamp-4, .clamp-5, .clamp-6, .clamp-7, .clamp-8, .clamp-9, .clamp-10, .clamp-11, .clamp-12 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .clamp-1 { -webkit-line-clamp: 1; }
 .clamp-2 { -webkit-line-clamp: 2; }
 .clamp-3 { -webkit-line-clamp: 3; }
@@ -54,6 +54,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .clamp-6 { -webkit-line-clamp: 6; }
 .clamp-7 { -webkit-line-clamp: 7; }
 .clamp-8 { -webkit-line-clamp: 8; }
+.clamp-9 { -webkit-line-clamp: 9; }
+.clamp-10 { -webkit-line-clamp: 10; }
+.clamp-11 { -webkit-line-clamp: 11; }
+.clamp-12 { -webkit-line-clamp: 12; }
 
 /* ---- the field */
 
@@ -103,6 +107,18 @@ button, input, textarea { font: inherit; color: inherit; }
 .card-foot { margin-top: auto; color: var(--ink-3); font-size: var(--type-text); line-height: var(--lead-text); }
 .card-head { display: flex; align-items: center; gap: 10px; }
 .card-head .card-title { flex: 1; }
+/* The item's own headings, labels and opening prose over a card's structure, as large and as dark as the structure, so a heading
+   reads before what it heads. A heading is set in the title's weight. components/shared.js counts their lines unkerned and sets
+   6 px between them and the structure, which the rules below keep in a card whose parts stand closer or further apart. */
+.card-above { flex: none; color: var(--ink); font-size: var(--type-text); line-height: var(--lead-text); font-kerning: none; }
+.card-above .is-head { font-weight: 620; letter-spacing: -0.006em; }
+:is(.c-quote, .c-fact, .c-qa, .c-excerpt, .c-definition) > .card-above { margin-bottom: 6px; }
+:is(.c-explorable, .sheet-under) > .card-above { margin-top: 6px; }
+.sheet-part > .card-above { margin-bottom: 6px; }
+.c-chart > :is(.card-above, .card-heads) { margin-top: -2px; }
+/* The heads row of the two columns a card's figures or bars come from, each head over what it heads. */
+.card-heads { flex: none; display: grid; grid-template-columns: 1fr 1fr; column-gap: 17px; padding-bottom: 4px; border-bottom: 1px solid var(--line); color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); font-kerning: none; }
+.card-heads > :last-child { text-align: end; }
 /* Names what the look alone cannot: a code card's language, where a chat came from, a kind of group. */
 .kind { flex: none; color: var(--ink-2); font-size: var(--type-text); line-height: var(--lead-text); font-variant-caps: all-small-caps; letter-spacing: 0.07em; white-space: nowrap; }
 /* Small capitals shrink a Han character, which has no capital, so a Chinese label is set plain. */
@@ -143,8 +159,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .chip-count { flex: none; font-variant-numeric: tabular-nums; }
 [data-component='image'] .chip-line, [data-component='video'] .chip-line { bottom: 10px; }
 
-/* note: plain paper. The one line the model sets apart hangs from a rule. */
-.note-emphasis { padding-left: 9px; border-left: 2px solid var(--accent); color: var(--ink); font-style: italic; font-size: var(--type-text); line-height: var(--lead-text); }
+/* note: plain paper. The words the model sets apart are marked where they stand, in colour alone, so they take the room they take unmarked. */
+.note-mark { color: var(--ink); background: color-mix(in srgb, var(--accent) 24%, transparent); border-radius: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 
 /* quote: a serif on a face washed with the tree's colour. */
 [data-component='quote'] .card-face, .detail-quote { --ink-2: #bdbdb6; background: color-mix(in srgb, var(--accent) 14%, var(--face)); border-color: color-mix(in srgb, var(--accent) 44%, transparent); }
@@ -282,6 +298,10 @@ button, input, textarea { font: inherit; color: inherit; }
 .figures { margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 17px; }
 .figure { min-width: 0; }
 .figure.is-alone { grid-column: 1 / -1; }
+/* Under a heads row each figure stands beside its label, the label under the first head and the value under the second. */
+.figures.is-headed .figure { display: grid; grid-template-columns: 1fr 1fr; column-gap: 17px; align-items: end; }
+.figures.is-headed .fact-label { font-kerning: none; }
+.figures.is-headed .fact-value { text-align: end; }
 /* A long label wraps in its column rather than squeeze the value beside it to a letter a line. */
 .detail-figures { padding: 13px 15px; border-radius: 12px; background: var(--sunk); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); display: grid; grid-template-columns: minmax(0, max-content) minmax(40%, 1fr); gap: 8px 16px; font-size: 14px; line-height: 20px; }
 .detail-figures dt { color: var(--ink-2); overflow-wrap: anywhere; }
@@ -378,19 +398,18 @@ button, input, textarea { font: inherit; color: inherit; }
 .detail-definition .definition-text { font-size: 17px; line-height: 1.45; overflow-wrap: anywhere; }
 .detail-definition .fact-value, .detail-definition .card-title { overflow-wrap: anywhere; }
 
-/* proscons: the points for and against, side by side under their names. A plus or a minus marks each point, so the sides are told apart without colour. */
+/* proscons: the points for and against, side by side, each side under the heading its item gives it, so the sides are told apart by the item's own words and the card adds no sign of its own. */
 .proscons { margin-top: 4px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 17px; font-size: var(--type-text); line-height: var(--lead-text); }
 .proscons-side { position: relative; min-width: 0; display: flex; flex-direction: column; }
 .proscons-side + .proscons-side::before { content: ''; position: absolute; left: -9px; top: 2px; bottom: 0; width: 1px; background: var(--line); }
-.proscons-side .kind { margin-bottom: 4px; }
+.proscons-head { margin-bottom: 4px; font-weight: 620; letter-spacing: -0.006em; }
 .proscons-side ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
 .proscons-side li { display: flex; align-items: flex-start; gap: 6px; }
 .proscons-side .card-foot { margin-top: 5px; }
-.proscons-mark { flex: none; margin-top: 3.5px; fill: none; stroke: var(--ink-2); stroke-width: 1.6; stroke-linecap: round; }
-.proscons-mark.is-pros { stroke: var(--accent); }
+.proscons-mark { flex: none; margin-top: 3.5px; fill: var(--accent); }
 .detail-proscons { display: flex; flex-direction: column; gap: 14px; font-size: 14px; line-height: 20px; }
 .detail-proscons ul { gap: 7px; }
-.detail-proscons li { overflow-wrap: anywhere; }
+.detail-proscons li, .detail-proscons .proscons-head { overflow-wrap: anywhere; }
 .detail-proscons .proscons-mark { margin-top: 5px; }
 .detail-proscons .proscons-side + .proscons-side::before { content: none; }
 

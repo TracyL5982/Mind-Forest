@@ -351,6 +351,56 @@ export function spread(needs, room) {
   return widths;
 }
 
+/** The most lines one line over a structure is given, so a line sent straight to a client cannot make a tower. */
+const ABOVE_LINES = 12;
+/** A line set in bold as the item writes it, with `**` or `__`, which the card draws bold without them. */
+const STRONG = /^(\*\*|__)([^*_]+)\1([:：]?)$/u;
+/** A line that heads what is under it: one that ends with a colon, or with a letter or a digit and no stop. */
+const HEADING = /[:：\p{L}\p{N}]$/u;
+
+/** The lines over a card's structure, each with whether it heads what is under it. */
+function overOf(props) {
+  return list(props.above).map((line) => text(line).trim()).filter(Boolean).map((line) => {
+    const strong = STRONG.exec(line);
+    const words = strong ? `${strong[2]}${strong[3]}` : line;
+    return { words, head: strong !== null || HEADING.test(words) };
+  });
+}
+
+/**
+ * The item's own headings, labels and opening prose that a structured card draws over its structure, each on lines of its own in
+ * the text face and the full colour of the structure, in a column `column` px wide. A heading or a label is set in the title's weight
+ * at the text size, which draws the title face smaller by 25 to 32, so its lines are counted in the title face on a column as much
+ * wider. `height` takes in the 6 px between them and what comes before or after them.
+ */
+export function aboveOf(props, column) {
+  const lines = overOf(props).map((line) => ({
+    ...line,
+    lines: line.head ? wrap(line.words, Math.floor((column * 32) / 25), TITLE_LETTER, ABOVE_LINES) : wrap(line.words, column, TEXT_LETTER, ABOVE_LINES),
+  }));
+  return { lines, height: lines.length > 0 ? 6 + lines.reduce((sum, line) => sum + line.lines * TEXT, 0) : 0 };
+}
+
+/** The px the widest of those lines needs to stand on one line, for a card as wide as its words. */
+export const aboveWidth = (props) => Math.max(0, ...overOf(props).map(({ words, head }) => (head ? up(advance(words, TITLE_LETTER) * 25, 3200) + 1 : up(advance(words, TEXT_LETTER), 100))));
+
+export const drawAbove = ({ lines }) => lines.length > 0 && h('div', { class: 'card-above' },
+  lines.map((line) => say('div', `${line.head ? 'is-head ' : ''}clamp-${line.lines}`, line.words)));
+
+/**
+ * The heads row of the two columns a card's figures or bars come from, `props.heads`, drawn over them: each head in half the
+ * column less 17 px between them, the first at the start and the second at the end, over a hairline. `height` takes in the 6 px
+ * before the row, its lines, and the 4 px and the hairline under them.
+ */
+export function headsOf(props, column) {
+  const heads = list(props.heads).map((head) => text(head).trim());
+  if (heads.length !== 2 || heads.every((head) => !head)) return { heads: [], lines: 0, height: 0 };
+  const lines = Math.max(...heads.map((head) => wrap(head, Math.floor((column - 17) / 2), TEXT_LETTER, 3)));
+  return { heads, lines, height: 6 + lines * TEXT + 5 };
+}
+
+export const drawHeads = ({ heads, lines }) => heads.length > 0 && h('div', { class: 'card-heads' }, heads.map((head) => say('div', `clamp-${lines}`, head)));
+
 /** The item's title, or the word for one that is missing. */
 export const titleOf = (item) => item.title || wordsOf(item).untitled;
 

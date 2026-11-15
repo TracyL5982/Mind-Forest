@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, list, say, text, textWidth, wrap, titleOf } from './shared.js';
+import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, aboveOf, drawAbove, drawHeads, headsOf, list, say, text, textWidth, wrap, titleOf } from './shared.js';
 
 const WIDTH = 300;
 const COLUMN = WIDTH - SIDES;
@@ -39,7 +39,8 @@ export const shows = [];
 
 export function size(item, props) {
   const rows = Math.min(list(props.labels).length, MOST);
-  return [WIDTH, FRAME + wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) * TITLE + (named(props) ? TEXT : 0) + (rows ? 10 + rows * TEXT + (rows - 1) * GAP : 0)];
+  const over = aboveOf(props, COLUMN).height + headsOf(props, COLUMN).height;
+  return [WIDTH, FRAME + wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) * TITLE + (named(props) ? TEXT : 0) + over + (rows ? 10 + rows * TEXT + (rows - 1) * GAP : 0)];
 }
 
 const bars = (rows, columns, clamped) => h('div', { class: 'breakdown', style: { gridTemplateColumns: columns } }, rows.map((row) => [
@@ -57,6 +58,8 @@ export function draw(item, props) {
     h('div', { class: 'chart-head' },
       say('div', `card-title clamp-${wrap(titleOf(item), COLUMN, TITLE_LETTER, 2)}`, titleOf(item)),
       unit && say('div', 'card-tag clamp-1', unit)),
+    drawAbove(aboveOf(props, COLUMN)),
+    drawHeads(headsOf(props, COLUMN)),
     rows.length > 0 && bars(rows, `${labels}px minmax(0, 1fr) ${shares}px`, 'clamp-1'),
   ];
 }

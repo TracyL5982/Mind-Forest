@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { FRAME, PADDING, PASSAGE_LETTER, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, andMore, list, picture, say, text, titleOf, wrap } from './shared.js';
+import { FRAME, PADDING, PASSAGE_LETTER, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, aboveOf, andMore, drawAbove, list, picture, say, text, titleOf, wrap } from './shared.js';
 import { figures, grid, listed, pairs } from './facts.js';
 import { entry, entryLines, stacked, written } from './list.js';
 import { detail as opened, plan as tableOf, ruled, ruledHeight } from './table.js';
@@ -124,17 +124,20 @@ function plan(item, props) {
   const parts = sections.flatMap((section) => {
     const kind = Object.hasOwn(PARTS, section.kind) ? PARTS[section.kind] : undefined;
     const part = kind?.plan(section, item);
-    return part ? [{ ...part, kind }] : [];
+    if (!part) return [];
+    // The item's own label of the figures, list or table, "Best:", stands over the part as the lines over a card stand over its structure.
+    const label = aboveOf({ above: section.label ? [section.label] : [] }, COLUMN);
+    return [{ ...part, kind, label, height: part.height + label.height }];
   });
-  return { heading, title, src: first('picture', 'src'), titleLines: wrap(title, COLUMN, TITLE_LETTER, TITLE_LINES), parts };
+  return { heading, title, src: first('picture', 'src'), titleLines: wrap(title, COLUMN, TITLE_LETTER, TITLE_LINES), above: aboveOf(props, COLUMN), parts };
 }
 
-const aboveOf = (part, i) => (i === 0 ? part.kind.lead : RULED);
+const before = (part, i) => (i === 0 ? part.kind.lead : RULED);
 
 /** The `item.data` keys whose value the card draws as one of its strings, a list of names when it draws each name, so no chip says it again. */
 export function shows(item, props) {
-  const { title, parts } = plan(item, props);
-  const drawn = new Set([title, ...parts.flatMap((part) => part.kind.says(part))].map((words) => words.trim()).filter(Boolean));
+  const { title, above, parts } = plan(item, props);
+  const drawn = new Set([title, ...above.lines.map((line) => line.words), ...parts.flatMap((part) => [...part.label.lines.map((line) => line.words), ...part.kind.says(part)])].map((words) => words.trim()).filter(Boolean));
   const isDrawn = (value) => typeof value === 'string' && drawn.has(value.trim());
   return Object.entries(item?.data ?? {}).flatMap(([key, value]) => {
     const names = Array.isArray(value) ? value.filter((name) => typeof name === 'string' && name.trim()) : [];
@@ -143,18 +146,19 @@ export function shows(item, props) {
 }
 
 export function size(item, props) {
-  const { src, titleLines, parts } = plan(item, props);
-  return [WIDTH, (src ? PICTURE : 0) + FRAME + titleLines * TITLE + parts.reduce((sum, part, i) => sum + aboveOf(part, i) + part.height, 0)];
+  const { src, titleLines, above, parts } = plan(item, props);
+  return [WIDTH, (src ? PICTURE : 0) + FRAME + titleLines * TITLE + above.height + parts.reduce((sum, part, i) => sum + before(part, i) + part.height, 0)];
 }
 
 export function draw(item, props, ctx) {
-  const { title, src, titleLines, parts } = plan(item, props);
+  const { title, src, titleLines, above, parts } = plan(item, props);
   return [
     src && h('div', { class: 'media-frame', style: { height: `${PICTURE}px` } }, picture(src, title, ctx)),
     h('div', { class: 'sheet-under' },
       say('div', `card-title clamp-${titleLines}`, title),
+      drawAbove(above),
       parts.map((part, i) => h('div', { class: i === 0 ? 'sheet-part' : 'sheet-part is-ruled', style: i === 0 ? { marginTop: `${part.kind.lead}px` } : { marginTop: `${ABOVE}px`, paddingTop: `${BELOW}px` } },
-        part.kind.draw(part, item, ctx.words)))),
+        drawAbove(part.label), part.kind.draw(part, item, ctx.words)))),
   ];
 }
 
@@ -164,6 +168,6 @@ export function detail(item, props, ctx) {
   return [
     src && h('div', { class: 'detail-media' }, picture(src, title, ctx)),
     heading && said(heading) !== said(text(item.title)) && say('div', 'card-title detail-sheet-heading', heading),
-    parts.map((part) => part.kind.detail(part, item, ctx.words)),
+    parts.map((part) => [drawAbove(part.label), part.kind.detail(part, item, ctx.words)]),
   ];
 }

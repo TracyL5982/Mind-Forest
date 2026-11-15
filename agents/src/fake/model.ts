@@ -405,7 +405,17 @@ export function choose(text: string, now: 'note' | 'idea' = 'note'): Omit<Entry,
   return {
     ...NOTE,
     component: 'sheet',
-    sections: [part('heading', lines[0]!), part('text', prose), ...(figures.length > 0 ? [part('figures', '', figures)] : []), ...(listed.length > 1 ? [part('list', '', listed)] : [])],
+    // A sheet's sections stand in the order the text gives them, as every card's parts do.
+    sections: [
+      part('heading', lines[0]!),
+      part('text', prose),
+      ...[
+        ...(figures.length > 0 ? [{ at: lines.findIndex((line) => LABELLED.test(line) && NUMBER_FIRST.test(LABELLED.exec(line)![2]!)), section: part('figures', '', figures) }] : []),
+        ...(listed.length > 1 ? [{ at: label, section: part('list', lines[label]!, listed) }] : []),
+      ]
+        .sort((a, b) => a.at - b.at)
+        .map(({ section }) => section),
+    ],
   };
 }
 

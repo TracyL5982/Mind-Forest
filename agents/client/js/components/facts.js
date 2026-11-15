@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, andMore, figureNeed, list, say, text, wrap, titleOf } from './shared.js';
+import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, aboveOf, andMore, drawAbove, drawHeads, figureNeed, headsOf, list, say, text, wrap, titleOf } from './shared.js';
 
 const WIDTH = 320;
 const COLUMN = WIDTH - SIDES;
@@ -26,13 +26,15 @@ const fitsMiddle = (fact, room) => figureNeed(fact.value, MIDDLE) <= room * 100;
  * needs more. At the smallest size a value wraps and its row grows with it, up to `MOST_LINES`. A
  * value that needs more lines still is a passage, not a figure: it is cut there with an ellipsis,
  * and the opened card has it whole. A sheet sets its figures the same way, in a column as wide
- * as this card's.
+ * as this card's. Figures from a table under a heads row are `headed`: one to a row, the label in
+ * the half under the first head and the value in the half under the second, so a value reads under
+ * its head, and a row is as tall as the taller of the two.
  */
-export function grid(facts) {
+export function grid(facts, headed = false) {
   const rows = [];
   for (let i = 0; i < facts.length; i += rows.at(-1).cells.length) {
-    const paired = i + 1 < facts.length && fitsMiddle(facts[i], HALF) && fitsMiddle(facts[i + 1], HALF);
-    rows.push({ room: paired ? HALF : COLUMN, cells: facts.slice(i, i + (paired ? 2 : 1)) });
+    const paired = !headed && i + 1 < facts.length && fitsMiddle(facts[i], HALF) && fitsMiddle(facts[i + 1], HALF);
+    rows.push({ room: paired || headed ? HALF : COLUMN, cells: facts.slice(i, i + (paired ? 2 : 1)) });
   }
   const fits = (step, row, cell) => figureNeed(cell.value, step) <= row.room * 100;
   const middle = (row, cell) => fits(MIDDLE, row, cell) || wrap(cell.value, row.room, MIDDLE[2], MIDDLE_LINES + 1) <= MIDDLE_LINES;
@@ -43,23 +45,26 @@ export function grid(facts) {
       const needs = fits(size, row, cell) ? 1 : wrap(cell.value, row.room, letter, MOST_LINES + 1);
       const lines = Math.min(needs, MOST_LINES);
       const labelLines = wrap(cell.label, row.room, TEXT_LETTER, 2);
-      return { ...cell, cut: needs > MOST_LINES, labelLines, height: lines * lead + labelLines * TEXT };
+      return { ...cell, cut: needs > MOST_LINES, labelLines, height: headed ? Math.max(lines * lead, labelLines * TEXT) : lines * lead + labelLines * TEXT };
     });
     return { cells, height: Math.max(...cells.map((cell) => cell.height)) };
   });
-  return { cls, rows: drawn, height: drawn.reduce((sum, row) => sum + row.height, 0) + Math.max(0, drawn.length - 1) * ROW_GAP };
+  return { cls, headed, rows: drawn, height: drawn.reduce((sum, row) => sum + row.height, 0) + Math.max(0, drawn.length - 1) * ROW_GAP };
 }
 
 function plan(item, props) {
   const more = Number.isInteger(props.more) && props.more > 0 ? props.more : 0;
-  return { ...grid(pairs(props)), more, titleLines: wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) };
+  const heads = headsOf(props, COLUMN);
+  return { ...grid(pairs(props), heads.heads.length > 0), heads, more, above: aboveOf(props, COLUMN), titleLines: wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) };
 }
 
-/** The rows of figures, each over its label. */
-export const figures = ({ cls, rows }) => h('div', { class: 'figures' }, rows.map((row) => row.cells.map((cell) =>
-  h('div', { class: row.cells.length === 1 ? 'figure is-alone' : 'figure', dir: 'auto' },
-    h('div', { class: `fact-value ${cls}${cell.cut ? ` clamp-${MOST_LINES}` : ''}`, text: cell.value }),
-    h('div', { class: `fact-label clamp-${cell.labelLines}`, text: cell.label })))));
+const value = (cls, cell) => h('div', { class: `fact-value ${cls}${cell.cut ? ` clamp-${MOST_LINES}` : ''}`, text: cell.value });
+const label = (cell) => h('div', { class: `fact-label clamp-${cell.labelLines}`, text: cell.label });
+
+/** The rows of figures, each over its label, or each beside its label under a heads row. */
+export const figures = ({ cls, headed, rows }) => h('div', { class: headed ? 'figures is-headed' : 'figures' }, rows.map((row) => row.cells.map((cell) =>
+  headed ? h('div', { class: 'figure is-alone', dir: 'auto' }, label(cell), value(cls, cell))
+    : h('div', { class: row.cells.length === 1 ? 'figure is-alone' : 'figure', dir: 'auto' }, value(cls, cell), label(cell)))));
 
 /** Every figure with its label, whole, as the opened card lists them. */
 export const listed = (facts) => h('dl', { class: 'detail-figures' }, facts.map((fact) => [say('dt', '', fact.label.trim()), say('dd', '', fact.value.trim())]));
@@ -67,15 +72,17 @@ export const listed = (facts) => h('dl', { class: 'detail-figures' }, facts.map(
 export const shows = [];
 
 export function size(item, props) {
-  const { rows, height, more, titleLines } = plan(item, props);
-  return [WIDTH, FRAME + titleLines * TITLE + (rows.length ? 12 + height : 0) + (more ? 8 + TEXT : 0)];
+  const { rows, height, heads, more, above, titleLines } = plan(item, props);
+  return [WIDTH, FRAME + titleLines * TITLE + above.height + heads.height + (rows.length ? 12 + height : 0) + (more ? 8 + TEXT : 0)];
 }
 
 export function draw(item, props) {
-  const { cls, rows, more, titleLines } = plan(item, props);
+  const { cls, headed, rows, heads, more, above, titleLines } = plan(item, props);
   return [
     say('div', `card-title clamp-${titleLines}`, titleOf(item)),
-    rows.length > 0 && figures({ cls, rows }),
+    drawAbove(above),
+    drawHeads(heads),
+    rows.length > 0 && figures({ cls, headed, rows }),
     more > 0 && andMore(more, item),
   ];
 }

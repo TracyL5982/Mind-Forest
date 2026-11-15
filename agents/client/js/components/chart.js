@@ -1,19 +1,22 @@
 import { h } from '../dom.js';
-import { FRAME, SIDES, TEXT, TITLE, plot, say, series, text, title } from './shared.js';
+import { FRAME, SIDES, TEXT, TITLE, aboveOf, drawAbove, drawHeads, headsOf, plot, say, series, text, title } from './shared.js';
 import { wordsOf } from '../words.js';
 
 const WIDTH = 300;
+const COLUMN = WIDTH - SIDES;
 const PLOT = 136;
 
 export const shows = [];
 
-export const size = (item, props) => [WIDTH, FRAME + TITLE + (text(props.unit) ? TEXT : 0) + 8 + PLOT];
+export const size = (item, props) => [WIDTH, FRAME + TITLE + (text(props.unit) ? TEXT : 0) + aboveOf(props, COLUMN).height + headsOf(props, COLUMN).height + 8 + PLOT];
 
 export const draw = (item, props) => [
   h('div', { class: 'chart-head' },
     title(item, 1),
     text(props.unit) && say('div', 'card-tag clamp-1', props.unit)),
-  plot(props, WIDTH - SIDES, PLOT, { words: wordsOf(item) }).el,
+  drawAbove(aboveOf(props, COLUMN)),
+  drawHeads(headsOf(props, COLUMN)),
+  plot(props, COLUMN, PLOT, { words: wordsOf(item) }).el,
 ];
 
 const exact = (value) => value.toLocaleString('en', { maximumFractionDigits: 6 });

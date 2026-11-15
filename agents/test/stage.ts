@@ -91,12 +91,12 @@ export function showcase(image: string, other?: string, { structured = true, sou
   const counted = `${COMPONENT_IDS.length} components and ${COMPOSITE_IDS.length} ways to arrange them.`;
   const root = add(null, 'note', 'Every way a card can be drawn', { summary: counted, text: counted });
   const quote = add(root, 'quote', 'Lange on seeing', { text: '"The camera is a tool for learning how to see without a camera." Dorothea Lange', data: { quote: { text: 'The camera is a tool for learning how to see without a camera.', by: 'Dorothea Lange' } } });
-  const factCard = add(root, 'fact', 'Drop-off in minute one', { data: { facts: [{ label: 'of viewers leave in the first minute', value: '42%' }] } });
+  const factCard = add(root, 'fact', 'Drop-off in minute one', { text: '42% of viewers leave in the first minute', data: { facts: [{ label: 'of viewers leave in the first minute', value: '42%' }] } });
   const imageCard = add(root, 'image', 'Beach still', { ...picture(image), summary: 'A still from the beach scene' });
   const videoCard = add(root, 'video', 'Dolly zoom clip', { kind: 'video', data: { mediaUrl: image, thumbnailUrl: image }, summary: 'The dolly zoom, slowed down' });
   const linkCard = add(root, 'link', 'The Vertigo effect, explained', { kind: 'link', summary: 'How one shot changed the grammar of suspense.', source: { from: 'link', url: 'https://example.com/vertigo', capturedAt: new Date().toISOString() } });
-  const chartCard = add(root, 'chart', 'Use by decade', { data: { chart: { labels: ['1960', '1980', '2000', '2020'], values: [3, 9, 14, 11], unit: 'films' } } });
-  const personCard = add(root, 'person', 'Who built it', { data: { person: { name: 'Irmin Roberts', role: 'Second-unit cameraman' } } });
+  const chartCard = add(root, 'chart', 'Use by decade', { text: '1960: 3 films\n1980: 9 films\n2000: 14 films\n2020: 11 films', data: { chart: { labels: ['1960', '1980', '2000', '2020'], values: [3, 9, 14, 11], unit: 'films' } } });
+  const personCard = add(root, 'person', 'Who built it', { text: 'Irmin Roberts\nSecond-unit cameraman', data: { person: { name: 'Irmin Roberts', role: 'Second-unit cameraman' } } });
   const chatCard = add(root, 'chat', 'Asking about the stretch', {
     kind: 'chat',
     data: { messages: [{ role: 'user', text: 'Why does the room seem to stretch?' }, { role: 'assistant', text: 'The lens zooms in while the camera pulls back, so the subject holds still and the background rushes away.' }] },
@@ -129,15 +129,17 @@ export function showcase(image: string, other?: string, { structured = true, sou
     if (id === 'place') seed.data = { ...data, image };
     if (id === 'callout') {
       seed.text = 'Feed it once a day with equal parts flour and water.\nCaution: anything above 40 °C kills the yeast.';
-      seed.view = { component: 'callout', props: { text: 'Caution: anything above 40 °C kills the yeast.', tone: 'caution' } };
+      seed.view = { component: 'callout', props: { text: 'Caution: anything above 40 °C kills the yeast.', tone: 'caution', above: ['Feed it once a day with equal parts flour and water.'] } };
     }
-    // The stand-in assembles a sheet from a sentence and lines that each set a figure beside its label.
+    // The stand-in assembles a sheet from a sentence, lines that each set a figure beside its label, and a list under its own label. With the
+    // figures alone it would draw the facts card, with the sentence over it: a dedicated type wins.
     if (id === 'sheet') {
       const opening = 'Children aged six months to five years with pneumonia that did not need hospital care were given amoxicillin for five days or for ten.';
       const figures = [{ label: 'Children randomised', value: '824' }, { label: 'Failed in five days', value: '12.6%' }, { label: 'Failed in ten days', value: '12.4%' }];
+      const told = ['Five days is enough at home', 'Come back if the fever returns'];
       // A heading line ends no sentence, so an empty line sets it apart from the opening.
-      seed.text = [`${title}\n`, opening, ...figures.map(({ label, value }) => `${label}: ${value}`)].join('\n');
-      seed.view = { component: 'sheet', props: { sections: [{ kind: 'heading', text: title }, { kind: 'text', text: opening }, { kind: 'figures', facts: figures }] } };
+      seed.text = [`${title}\n`, opening, ...figures.map(({ label, value }) => `${label}: ${value}`), 'What parents are told:', ...told.map((line) => `- ${line}`)].join('\n');
+      seed.view = { component: 'sheet', props: { sections: [{ kind: 'heading', text: title }, { kind: 'text', text: opening }, { kind: 'figures', facts: figures }, { kind: 'list', label: 'What parents are told:', items: told }] } };
     }
     // The stand-in reads a slider from a formula in backticks that names its quantity, and sentences that each write a value and its result.
     if (id === 'explorable') {
@@ -179,7 +181,7 @@ export function showcase(image: string, other?: string, { structured = true, sou
     ['Days on set', 'Days on set: 3', [{ label: 'Days on set', value: '3' }]],
     ['Crew', 'Crew: 11', [{ label: 'Crew', value: '11' }]],
   ].map(([title, text, facts]) => add(linkCard, 'fact', title as string, { text: text as string, data: { facts } }));
-  const perDay = add(linkCard, 'chart', 'Takes by day', { data: { chart: { labels: ['Day 1', 'Day 2', 'Day 3'], values: [9, 21, 12], unit: 'takes' } } });
+  const perDay = add(linkCard, 'chart', 'Takes by day', { text: 'Day 1: 9 takes\nDay 2: 21 takes\nDay 3: 12 takes', data: { chart: { labels: ['Day 1', 'Day 2', 'Day 3'], values: [9, 21, 12], unit: 'takes' } } });
   group(linkCard, 'overview', 'The shoot', [...shoot, perDay], {});
   const board = [
     add(videoCard, 'image', 'Low light on the stairs', picture(image)),
@@ -267,7 +269,7 @@ export function chipped(image: string): Command[] {
   add(root, 'note', 'Where the notes were found', note('A box of index cards under the stairs.', { where: LONG_PLACE }));
   add(root, 'artwork', 'Sudden Shower over Shin-Ohashi Bridge', { ...picture(image, { site: 'metmuseum.org', by: 'Utagawa Hiroshige', date: '1857', from: 'The Metropolitan Museum of Art', kind: 'artwork', medium: 'Woodblock print; ink and color on paper', holder: 'The Metropolitan Museum of Art' }), summary: 'Sudden shower over a bridge', origin: { by: 'agent', role: 'scout', tool: 'met' }, source: found('https://www.metmuseum.org/art/collection/search/36461') }, 'pick');
   add(root, 'link', 'Reading the fog', { kind: 'link', summary: 'Why coastal fog comes in at dusk.', data: { site: 'example.com', by: 'example.com', date: '2019', from: 'The web' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/fog') }, 'pick');
-  add(root, 'quote', 'From the diary', { text: 'We looked at the water until the water looked back.\n\nA diary, Summer 1958, The web', data: { quote: { text: 'We looked at the water until the water looked back.', by: 'A diary' }, site: 'example.com', by: 'A diary', date: 'Summer 1958', from: 'The web', where: 'Bodega Bay', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'], holder: 'Bancroft Library' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/diary') }, 'pick');
+  add(root, 'quote', 'From the diary', { text: 'We looked at the water until the water looked back.\n\nA diary, Summer 1958, The web', data: { quote: { text: 'We looked at the water until the water looked back.', by: 'A diary, Summer 1958, The web' }, site: 'example.com', by: 'A diary', date: 'Summer 1958', from: 'The web', where: 'Bodega Bay', people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'], holder: 'Bancroft Library' }, origin: { by: 'agent', role: 'scout', tool: 'web' }, source: found('https://example.com/diary') }, 'pick');
   const plain = add(root, 'note', 'A plain note', note('No date, no place, nobody named.'));
   const years = ['1958', '1963', '1975'];
   const timeline = years.map((year, i) => add(plain, 'note', `The shoot in ${year}`, { summary: 'One visit to the bay.', data: { when: year, where: ['Bodega Bay', 'Point Reyes', 'Tomales'][i], ...(i === 1 ? { people: ['Ada Lovelace', 'Grace Hopper', 'Edsger Dijkstra'] } : {}) } }));
@@ -316,7 +318,7 @@ export function spills(page: Page): Promise<string[]> {
         if (r.width === 0 || r.height === 0) continue;
         const label = el.getAttribute('class') ?? el.tagName.toLowerCase();
         if (r.left < face.left - 1 || r.right > face.right + 1 || r.top < face.top - 1 || r.bottom > face.bottom + 1) found.push(`${name}: ${label} leaves the card`);
-        const lines = Number(/clamp-(\d)/.exec(label)?.[1] ?? 0);
+        const lines = Number(/clamp-(\d+)/.exec(label)?.[1] ?? 0);
         if (lines > 0 && el.clientHeight < Math.min(el.scrollHeight, lines * parseFloat(getComputedStyle(el).lineHeight)) - 1) found.push(`${name}: ${label} is squeezed below its ${lines} lines`);
         else if (el instanceof HTMLElement && el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX === 'visible') found.push(`${name}: ${label} is wider than its box`);
       }

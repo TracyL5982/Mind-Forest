@@ -1,5 +1,5 @@
 import { h, s, clamp } from '../dom.js';
-import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, cut, figureNeed, kind, list, say, text, title, titleOf, wrap } from './shared.js';
+import { FIGURES, FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, aboveOf, cut, drawAbove, figureNeed, kind, list, say, text, title, titleOf, wrap } from './shared.js';
 import { wordsOf } from '../words.js';
 
 const WIDTH = 288;
@@ -139,7 +139,7 @@ export const shows = [];
 
 export function size(item, props) {
   const { controls, titleLines, height } = plan(item, props);
-  return [WIDTH, FRAME + MARK + titleLines * TITLE + OUT_GAP + height + controls.length * (ROW_GAP + ROW)];
+  return [WIDTH, FRAME + MARK + titleLines * TITLE + aboveOf(props, COLUMN).height + OUT_GAP + height + controls.length * (ROW_GAP + ROW)];
 }
 
 const GLYPH = 'M1.5 4h11M1.5 10h11M4.5 2.2v3.6M9.5 8.2v3.6';
@@ -206,6 +206,7 @@ export function draw(item, props) {
   return [
     mark(words),
     title(item, layout.titleLines),
+    drawAbove(aboveOf(props, COLUMN)),
     h('div', { class: 'explore-out' },
       layout.output.kind === 'text'
         ? layout.texts.map(({ words: said, lines }) => say('div', `explore-text clamp-${lines}`, said))

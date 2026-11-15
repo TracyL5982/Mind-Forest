@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { Sound, type Item, type View } from './domain.ts';
 import { evaluate, reserved, wellFormed } from './formula.ts';
-import type { Grounding } from './grounding.ts';
+import { ABOVE, type Grounding, type Piece, type Shown, type Way } from './grounding.ts';
 import { JOINS, KINDS, LIMITS, ROLES, withinLimits, type Box, type Part } from './layout.ts';
 import { MAP } from './map.ts';
 
@@ -15,16 +15,14 @@ const SPACELESS = /[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Thai}]
  * written with spaces and one for a script written without, which says as much in half the room.
  */
 export const ROOM = {
-  /** A sheet's heading. Whoever builds the sheet cuts a longer one to this, with an ellipsis. */
+  /** A sheet's heading. A longer one is no sheet's. */
   heading: 80,
-  /** A sheet's passage of text, cut the same way. */
+  /** A sheet's passage of text. A longer one is no sheet's. */
   text: 280,
   /** The label of a figure. A longer one does not read at a glance beside its value. */
   label: 40,
   /** A quote, an excerpt or a callout. A longer passage is the item itself, which a note shows better. */
   passage: { spaced: 400, spaceless: 200 },
-  /** The least opening text with which a sheet may show under a fifth of its item. */
-  opening: { spaced: 120, spaceless: 60 },
   /** The most figures, list entries, table rows and table columns in one section of a sheet, and the most sections, a heading counted. */
   figures: 4,
   list: 8,
@@ -35,6 +33,8 @@ export const ROOM = {
   reason: { spaced: 140, spaceless: 70 },
   /** The name of a matrix's axis. */
   axis: 32,
+  /** How far into its item's text the words a note sets apart may end, so the note draws them where they stand among its first lines. */
+  emphasis: { spaced: 180, spaceless: 90 },
   /** The most values an item may state for a slider, and the most stops a slider has between its ends. */
   stated: 8,
   stops: 1000,
@@ -43,15 +43,24 @@ export const ROOM = {
 /** The bound of a pair that holds for this text. */
 export const roomOf = (bound: { spaced: number; spaceless: number }, text: string): number => (SPACELESS.test(text) ? bound.spaceless : bound.spaced);
 
-/** One section of a `sheet`. A list or a table past its size is cut by whoever builds the sheet; the opened card shows the item whole. */
+/**
+ * The item's own headings, labels and opening prose that a structured card draws over its structure, each as its line writes it,
+ * so the card shows its whole item. The Renderer sets them; no model writes them.
+ */
+const above = z.array(words).min(1).max(ABOVE.lines).optional();
+/** The heads row of a table of two columns that a facts grid or a chart stands on, drawn over it. */
+const heads = z.tuple([z.string(), z.string()]).optional();
+
+/** One section of a `sheet`. A section past its size is no sheet's, since a sheet shows its item whole. */
 export const SECTION = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('heading'), text: words.max(ROOM.heading) }),
-  /** A passage of the item, whole, or its opening words cut short with an ellipsis. */
+  /** Whole sentences of the item. */
   z.strictObject({ kind: z.literal('text'), text: words.max(ROOM.text) }),
-  z.strictObject({ kind: z.literal('figures'), facts: z.array(z.strictObject({ label: words.max(ROOM.label), value: words })).min(1).max(ROOM.figures) }),
-  z.strictObject({ kind: z.literal('list'), items: z.array(words).min(2).max(ROOM.list) }),
+  /** Figures, a list or a table may stand under the item's own label for them, as a list does under "Best:", which the section draws over itself. */
+  z.strictObject({ kind: z.literal('figures'), label: words.max(ROOM.heading).optional(), facts: z.array(z.strictObject({ label: words.max(ROOM.label), value: words })).min(1).max(ROOM.figures) }),
+  z.strictObject({ kind: z.literal('list'), label: words.max(ROOM.heading).optional(), items: z.array(words).min(2).max(ROOM.list) }),
   z
-    .strictObject({ kind: z.literal('table'), heads: z.array(z.string()).min(2).max(ROOM.columns), rows: z.array(z.array(z.string())).min(1).max(ROOM.rows) })
+    .strictObject({ kind: z.literal('table'), label: words.max(ROOM.heading).optional(), heads: z.array(z.string()).min(2).max(ROOM.columns), rows: z.array(z.array(z.string())).min(1).max(ROOM.rows) })
     .refine((table) => table.rows.every((row) => row.length === table.heads.length)),
   /** The item's own picture. */
   z.strictObject({ kind: z.literal('picture'), src: z.string().min(1) }),
@@ -156,9 +165,9 @@ export const COMPONENTS = {
   /** Title and a few lines of text. The fallback for anything. */
   note: z.object({ emphasis: z.string().optional() }),
   /** Someone's words, set large. */
-  quote: z.object({ text: z.string(), by: z.string().optional() }),
+  quote: z.object({ text: z.string(), by: z.string().optional(), above }),
   /** One number or short value with its label. */
-  fact: z.object({ value: z.string(), label: z.string() }),
+  fact: z.object({ value: z.string(), label: z.string(), above, heads }),
   image: z.object({ src: z.string(), caption: z.string().optional(), aspect: z.number().optional() }),
   video: z.object({ src: z.string(), poster: z.string().optional(), caption: z.string().optional() }),
   /** A recording: where it plays from, and its length and loudness when they are known. The item's text is its transcript. */
@@ -172,6 +181,8 @@ export const COMPONENTS = {
     unit: z.string().optional(),
     /** Index of the bar or point to call out. */
     mark: z.number().int().optional(),
+    above,
+    heads,
   }),
   person: z.object({ name: z.string(), role: z.string().optional(), image: z.string().optional() }),
   /** A short excerpt of a conversation. */
@@ -181,36 +192,41 @@ export const COMPONENTS = {
   }),
   code: z.object({ language: z.string(), source: z.string() }),
   /** An ordered list of short steps. */
-  steps: z.object({ steps: z.array(z.string()) }),
+  steps: z.object({ steps: z.array(z.string()), above }),
   /** Two to six figures with their labels. `more` counts the further facts the item holds. */
   facts: z.strictObject({
     facts: z.array(z.strictObject({ label: words, value: words })).min(2).max(6),
     more: z.number().int().positive().optional(),
+    above,
+    heads,
   }),
   /** A table: every row has one cell for each head, and a cell may be empty. All rows are here; a client shows what fits. */
   table: z
-    .strictObject({ heads: z.array(z.string()).min(2), rows: z.array(z.array(z.string())).min(1) })
+    .strictObject({ heads: z.array(z.string()).min(2), rows: z.array(z.array(z.string())).min(1), above })
     .refine((p) => p.rows.every((row) => row.length === p.heads.length)),
-  /** A list in no particular order. With `checked`, a checklist: one mark for each item. */
+  /** A list in no particular order. With `checked`, a checklist: one mark for each item, read off the check box on its line. */
   list: z
-    .strictObject({ items: z.array(words).min(2), checked: z.array(z.boolean()).optional() })
+    .strictObject({ items: z.array(words).min(2), checked: z.array(z.boolean()).optional(), above })
     .refine((p) => p.checked === undefined || p.checked.length === p.items.length),
   /** Parts of a whole: two to eight shares, one value for each label. */
   breakdown: z
-    .strictObject({ labels: z.array(z.string()).min(2).max(8), values: z.array(z.number().nonnegative()), unit: z.string().optional() })
+    .strictObject({ labels: z.array(z.string()).min(2).max(8), values: z.array(z.number().nonnegative()), unit: z.string().optional(), above, heads })
     .refine((p) => p.labels.length === p.values.length),
   /** One question and its answer. */
-  qa: z.strictObject({ question: z.string().min(1), answer: z.string().min(1) }),
+  qa: z.strictObject({ question: z.string().min(1), answer: z.string().min(1), above }),
   /** A caveat or a remark set apart from the rest. */
-  callout: z.strictObject({ text: z.string().min(1), tone: z.enum(['caution', 'note']) }),
+  callout: z.strictObject({ text: z.string().min(1), tone: z.enum(['caution', 'note']), above }),
   /** A passage of a longer source, where it sits there, and the source's name. */
-  excerpt: z.strictObject({ text: z.string().min(1), at: z.string().optional(), source: z.string().optional() }),
+  excerpt: z.strictObject({ text: z.string().min(1), at: z.string().optional(), source: z.string().optional(), above }),
   /** One term and what it means. */
-  definition: z.strictObject({ term: z.string().min(1), definition: z.string().min(1) }),
+  definition: z.strictObject({ term: z.string().min(1), definition: z.string().min(1), above }),
   /** A short thought. The client draws the item's title large. */
   idea: z.strictObject({}),
-  /** The points for and the points against, side by side. */
-  proscons: z.strictObject({ pros: z.array(words).min(1), cons: z.array(words).min(1) }),
+  /**
+   * The points for and the points against, side by side, each side under the heading or label the item gives it. A model's reply gives
+   * the points and the frame finds the heads, so a card that is drawn always has them.
+   */
+  proscons: z.strictObject({ pros: z.array(words).min(1), cons: z.array(words).min(1), heads: z.tuple([words, words]).optional(), above }),
   /** Colours with their names. `value` is a hex colour of 3, 4, 6 or 8 digits or a CSS colour name, so nothing else can reach a style. */
   swatch: z.strictObject({ colours: z.array(z.strictObject({ name: words, value: z.string().regex(/^(?:#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})|[a-z]{1,30})$/i) })).min(2) }),
   /** A work to look at, with what its collection records. `src` is its picture. */
@@ -236,7 +252,7 @@ export const COMPONENTS = {
    * A card assembled from sections, for content no single type covers: four at most, a heading counted. A heading, when there is one,
    * comes first. Two sections at least are no heading, and a sheet of nothing but passages of text is a note, so one of them is of another kind.
    */
-  sheet: z.strictObject({ sections: z.array(SECTION).min(1).max(ROOM.sections) }).refine(({ sections }) => {
+  sheet: z.strictObject({ sections: z.array(SECTION).min(1).max(ROOM.sections), above }).refine(({ sections }) => {
     const parts = sections.filter((section) => section.kind !== 'heading');
     return sections.length - parts.length <= 1 && sections.slice(1).every((section) => section.kind !== 'heading') && parts.length >= 2 && parts.some((section) => section.kind !== 'text');
   }),
@@ -244,7 +260,7 @@ export const COMPONENTS = {
    * A card a reader changes to see how a concept works: one to three controls and what they change. A toggle or a segmented control
    * shows the text of its state. Sliders set the quantities of a formula, whose result is shown as a figure or as a curve.
    */
-  explorable: z.strictObject({ controls: z.array(CONTROL).min(1).max(3), output: OUTPUT }).refine(explores),
+  explorable: z.strictObject({ controls: z.array(CONTROL).min(1).max(3), output: OUTPUT, above }).refine(explores),
 } as const;
 export type ComponentId = keyof typeof COMPONENTS;
 export const COMPONENT_IDS = Object.keys(COMPONENTS) as ComponentId[];
@@ -253,26 +269,19 @@ export type PropsOf<C extends ComponentId> = z.infer<(typeof COMPONENTS)[C]>;
 /**
  * How one value in a view's props must stand in its item before a card may show it.
  * The content is the item's title and text and the values of its `data`, without the addresses `data` holds.
- * - `says`: the content states these words. `cell` is the same, may be empty, and holds no "|" or tab, which would make it two cells.
- * - `whole`: one or more whole units of the content, one after another, as `Grounding.passage` reads them: whole sentences, list lines,
- *   table cells or lines that stand by themselves, nothing cut off any of them, and no reversing word in the unit before them, the unit
- *   after them, or the heading or label they sit under. "take ibuprofen with warfarin" is no whole unit of "Do not take ibuprofen with warfarin."
- * - `units`: whole units, whatever stands beside them: a point for or against, or the words a note sets large above the whole item.
- * - `said`: someone's words: `whole`, or the whole of a quotation inside one sentence that says who said it.
- * - `lead`: `whole`, or the opening of whole units cut short with an ellipsis.
- * - `meaning`: `whole`, the first unit opening with the `term` beside it in the props: "Parallax is the shift…", "Parallax: the shift…".
+ * - `says`: the content states these words: a name, a date, a value an arrangement or a control sets beside its words.
+ * - `shown`: words the card's frame holds to the whole item, as `Grounding.shows` reads it: a structured card's text, every piece in the
+ *   item's order and every mark as written, with the lines it draws over them.
+ * - `line`: one or more whole sentences, lines or cells of the item, which a note sets apart where they stand or a person card names as a role.
  * - `writes`: the content writes this number. When the `unit` beside it in the props scales it, as 万 and k do, the content writes it with that unit: "2189万" for 2189 in 万.
  * - `unit`: the content states these words, or writes them against one of the `values` beside them in the props, as "45%" writes "%".
  * - `paints`: the content writes this colour, a hex value as a whole or a colour name as words.
  * - `own`: one of the item's own values, whole or cut short with an ellipsis: an address, its site, its source, its summary, its text, a value in its `data`,
  *   which may be a number, as a recording's length is.
- * - `label`: words of the content that name the `value` beside them in the props, as `Grounding.names` reads them: in the unit that holds
- *   the value, or in its table row and the head of its column.
- * - `point`: the same for the number at the same place in the `values` beside them, as a chart's labels are.
  * - `choice`: how to draw, not what to show.
  * - `computes`: a token of a formula, which is held to the item by what it gives, in its component's `also`.
  */
-export type Stated = 'says' | 'cell' | 'whole' | 'units' | 'said' | 'lead' | 'meaning' | 'writes' | 'unit' | 'paints' | 'own' | 'label' | 'point' | 'choice' | 'computes';
+export type Stated = 'says' | 'shown' | 'line' | 'writes' | 'unit' | 'paints' | 'own' | 'choice' | 'computes';
 
 type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never;
 type Fields<T> = { readonly [K in keyof T]-?: Check<NonNullable<T[K]>> };
@@ -298,49 +307,183 @@ type ContentChecks = {
     readonly props: Check<PropsOf<C>>;
     /** What the props must also satisfy as a whole, where one value's check cannot say it. */
     readonly also?: (props: PropsOf<C>, item: Item, text: Grounding) => boolean;
+    /**
+     * The props the card is drawn with when its words are its whole item, with the lines it draws over them and without a part no way
+     * reads, or nothing when they are not. A card is grounded when its frame is its props as they are.
+     */
+    readonly frame?: (props: PropsOf<C>, text: Grounding) => PropsOf<C> | undefined;
   };
 };
 
+const entry = (text: string): Piece => ({ text, entry: true });
+const loose = (text: string): Piece => ({ text, entry: false });
+const SIDE: Piece = { slot: 'heading' };
+/** The words, folded for a comparison of how one passage opens another. */
+const fold = (text: string) => text.normalize('NFKC').replace(/\s+/g, ' ').trim().toLowerCase();
+const alike = (a: readonly string[] | undefined, b: readonly string[] | undefined) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/**
+ * The props drawn as the whole item when one of the ways reads so: without what that way drops, with the lines the item sets over the
+ * card, and as `fit` leaves them once it has read what the item shows.
+ */
+function framed<P extends { above?: string[] }>(props: P, text: Grounding, ways: Way[], fit: (props: P, shown: Shown) => P | undefined = (same) => same): P | undefined {
+  const shown = text.shows(ways, props.above);
+  if (!shown) return undefined;
+  const drops = new Set(['above', ...(ways[shown.way]!.drops ?? [])]);
+  const kept = Object.fromEntries(Object.entries(props).filter(([key]) => !drops.has(key))) as P;
+  return fit(shown.above.length > 0 ? { ...kept, above: shown.above } : kept, shown);
+}
+
+/** A facts grid or a chart drawn from a table of two columns carries that table's heads row, and one drawn from other lines none. */
+const headed = <P extends { heads?: [string, string] }>(props: P, shown: Shown): P => {
+  const { heads: _drawn, ...rest } = props;
+  return (shown.heads ? { ...rest, heads: shown.heads } : rest) as P;
+};
+
+/** A chart's points as pieces: each label beside its value, the unit after the value, before it, or not written there. */
+function points(labels: string[], values: number[], unit: string | undefined): Way[] {
+  const sign = unit?.trim() ?? '';
+  // A unit led by a currency sign stands around its number: "$120k" writes 120 in "$k".
+  const around = /^\p{Sc}./u.test(sign) ? [(v: number) => `${sign[0]}${v}${sign.slice(1)}`] : [];
+  const forms = sign ? [(v: number) => `${v}${sign}`, (v: number) => `${sign}${v}`, ...around, String] : [String];
+  return forms.flatMap((form) => [
+    { pieces: labels.flatMap((label, n) => [loose(label), loose(form(values[n]!))]), headless: true },
+    { pieces: labels.flatMap((label, n) => [loose(form(values[n]!)), loose(label)]), headless: true },
+  ]);
+}
+
+/** A sheet's sections as pieces, in order. An excerpt's speaker may stand before its words or after them. */
+function sheetWays(sections: Section[]): Way[] {
+  let ways: Piece[][] = [[]];
+  for (const section of sections) {
+    const label = 'label' in section && section.label ? [entry(section.label)] : [];
+    const next: Piece[][] =
+      section.kind === 'heading' || section.kind === 'text' ? [[entry(section.text)]]
+      : section.kind === 'figures' ? [[...label, ...section.facts.flatMap((fact) => [loose(fact.label), loose(fact.value)])]]
+      : section.kind === 'list' ? [[...label, ...section.items.map(entry)]]
+      : section.kind === 'table' ? [[...label, ...[...section.heads, ...section.rows.flat()].map(entry)]]
+      : section.kind === 'excerpt' ? (section.by ? [[loose(section.text), loose(section.by)], [loose(section.by), loose(section.text)]] : [[loose(section.text)]])
+      : [[]];
+    ways = ways.flatMap((way) => next.map((more) => [...way, ...more]));
+  }
+  return ways.map((pieces) => ({ pieces }));
+}
+
 /** The content check of every component. The type refuses a component, or a prop of one, that has no entry here. */
 export const CHECKS: ContentChecks = {
-  note: { props: { emphasis: 'units' } },
-  quote: { props: { text: 'said', by: 'says' } },
-  fact: { props: { value: 'says', label: 'label' }, also: (p) => p.value.length <= 32 },
+  note: {
+    props: { emphasis: 'line' },
+    // Words set apart are drawn where they stand, so they must stand among the note's first lines.
+    frame: (p, text) => {
+      if (!p.emphasis) return p;
+      const end = text.units(p.emphasis);
+      const { emphasis: _apart, ...rest } = p;
+      return end !== undefined && end <= roomOf(ROOM.emphasis, p.emphasis) ? p : rest;
+    },
+  },
+  quote: {
+    props: { text: 'shown', by: 'shown', above: 'shown' },
+    // Who said the words is shown as the item writes it, or not at all.
+    frame: (p, text) =>
+      framed(p, text, p.by ? [{ pieces: [loose(p.text), loose(p.by)] }, { pieces: [loose(p.by), loose(p.text)] }, { pieces: [loose(p.text)], drops: ['by'] }] : [{ pieces: [loose(p.text)] }]),
+  },
+  fact: {
+    props: { value: 'shown', label: 'shown', above: 'shown', heads: 'shown' },
+    also: (p) => p.value.length <= 32,
+    frame: (p, text) => framed(p, text, [{ pieces: [loose(p.label), loose(p.value)], headless: true }, { pieces: [loose(p.value), loose(p.label)], headless: true }], headed),
+  },
   image: { props: { src: 'own', caption: 'own', aspect: 'choice' } },
   video: { props: { src: 'own', poster: 'own', caption: 'own' } },
   audio: { props: { src: 'own', seconds: 'own', peaks: 'own' } },
   link: { props: { url: 'own', site: 'own', description: 'own', image: 'own' } },
   chart: {
-    props: { chart: 'choice', labels: 'point', values: 'writes', unit: 'unit', mark: 'choice' },
+    props: { chart: 'choice', labels: 'shown', values: 'shown', unit: 'unit', mark: 'choice', above: 'shown', heads: 'shown' },
     also: (p) => p.labels.length >= 2 && p.labels.length === p.values.length,
+    frame: (p, text) => framed(p, text, points(p.labels, p.values, p.unit), headed),
   },
-  person: { props: { name: 'says', role: 'says', image: 'own' } },
-  chat: { props: { messages: { role: 'own', text: 'own' }, source: 'own' } },
-  code: { props: { language: 'choice', source: 'own' } },
-  steps: { props: { steps: 'whole' }, also: (p, _item, text) => p.steps.length >= 2 && !text.converses() },
-  facts: {
-    props: { facts: { label: 'label', value: 'says' }, more: 'choice' },
-    also: (p, item) => p.more === undefined || (Array.isArray(item.data.facts) && p.more === item.data.facts.length - p.facts.length),
-  },
-  table: { props: { heads: 'cell', rows: 'cell' } },
-  list: {
-    props: { items: 'whole', checked: 'choice' },
-    // A mark stands when the text carries it on the item's own line, or the data holds it for that item.
-    also: (p, item, text) => {
-      if (text.converses()) return false;
-      const [items, marks] = [item.data.items, item.data.checklist];
-      const kept = (entry: string) => (Array.isArray(items) && Array.isArray(marks) && items.includes(entry) ? marks[items.indexOf(entry)] : undefined);
-      return p.checked === undefined || p.checked.every((mark, n) => text.ticks(p.items[n]!) === mark || kept(p.items[n]!) === mark);
+  person: {
+    props: { name: 'says', role: 'line', image: 'own' },
+    frame: (p, text) => {
+      const { role: _named, ...rest } = p;
+      return !p.role || text.units(p.role) !== undefined ? p : rest;
     },
   },
+  chat: { props: { messages: { role: 'own', text: 'own' }, source: 'own' } },
+  code: { props: { language: 'choice', source: 'own' } },
+  steps: {
+    props: { steps: 'shown', above: 'shown' },
+    also: (p) => p.steps.length >= 2,
+    frame: (p, text) => framed(p, text, [{ pieces: p.steps.map(entry) }]),
+  },
+  facts: {
+    props: { facts: { label: 'shown', value: 'shown' }, more: 'choice', above: 'shown', heads: 'shown' },
+    // A grid that leaves figures out is a part of its item.
+    frame: (p, text) =>
+      p.more !== undefined
+        ? undefined
+        : framed(p, text, [{ pieces: p.facts.flatMap((f) => [loose(f.label), loose(f.value)]), headless: true }, { pieces: p.facts.flatMap((f) => [loose(f.value), loose(f.label)]), headless: true }], headed),
+  },
+  table: {
+    props: { heads: 'shown', rows: 'shown', above: 'shown' },
+    // Every row and every cell of one table, each row as the item writes it.
+    frame: (p, text) =>
+      framed(p, text, [{ pieces: [...p.heads, ...p.rows.flat()].map(entry) }], (q, shown) =>
+        shown.rows?.length === q.rows.length + 1 && shown.rows.every((cells) => cells === q.heads.length) ? q : undefined,
+      ),
+  },
+  list: {
+    props: { items: 'shown', checked: 'shown', above: 'shown' },
+    // A mark is the check box on the entry's own line. A tick or a cross the line writes is a word of the entry, and no check box.
+    frame: (p, text) =>
+      framed(p, text, [{ pieces: p.items.map(entry) }], (q, shown) =>
+        (q.checked ? q.checked.every((mark, n) => shown.boxes[n] === mark) : shown.boxes.every((box) => box === undefined)) ? q : undefined,
+      ),
+  },
   // Shares of one whole add up to it. A percent that the text rounded may leave the sum one off.
-  breakdown: { props: { labels: 'point', values: 'writes', unit: 'unit' }, also: (p) => Math.abs(p.values.reduce((sum, value) => sum + value, 0) - 100) <= 1 },
-  qa: { props: { question: 'says', answer: 'whole' }, also: (_p, _item, text) => !text.converses() },
-  callout: { props: { text: 'whole', tone: 'choice' } },
-  excerpt: { props: { text: 'whole', at: 'says', source: 'own' } },
-  definition: { props: { term: 'says', definition: 'meaning' } },
+  breakdown: {
+    props: { labels: 'shown', values: 'shown', unit: 'unit', above: 'shown', heads: 'shown' },
+    also: (p) => Math.abs(p.values.reduce((sum, value) => sum + value, 0) - 100) <= 1,
+    frame: (p, text) => framed(p, text, points(p.labels, p.values, p.unit), headed),
+  },
+  qa: {
+    props: { question: 'shown', answer: 'shown', above: 'shown' },
+    // The card's two slots say what "Q:" and "A:" say, so it may draw them in place of the marks.
+    frame: (p, text) =>
+      framed(p, text, [
+        { pieces: [entry(p.question), entry(p.answer)] },
+        { pieces: [entry(`Q: ${p.question}`), entry(`A: ${p.answer}`)] },
+        { pieces: [entry(`问：${p.question}`), entry(`答：${p.answer}`)] },
+      ]),
+  },
+  callout: { props: { text: 'shown', tone: 'choice', above: 'shown' }, frame: (p, text) => framed(p, text, [{ pieces: [entry(p.text)] }]) },
+  excerpt: {
+    props: { text: 'shown', at: 'says', source: 'own', above: 'shown' },
+    // The card draws a passage as quoted and where it sits, so it may stand for a ">" that marks the passage and a line that says "At:".
+    frame: (p, text) => {
+      const quoted = [p.text, `> ${p.text}`];
+      const where = p.at ? [`At: ${p.at}`] : [];
+      return framed(p, text, quoted.flatMap((passage) => [{ pieces: [entry(passage)] }, ...where.map((at) => ({ pieces: [entry(passage), entry(at)] }))]));
+    },
+  },
+  definition: {
+    props: { term: 'says', definition: 'shown', above: 'shown' },
+    // The item says what the term means only where its meaning opens with the term, "Parallax is the shift…", or the term labels the
+    // line it opens, "Parallax: the shift…". A term on a line of its own may head the meaning of another: "Weather⏎Climate is…".
+    frame: (p, text) =>
+      fold(p.definition).startsWith(fold(p.term))
+        ? framed(p, text, [{ pieces: [entry(p.definition)] }])
+        : framed(p, text, [{ pieces: [{ slot: 'label', says: p.term }, entry(p.definition)] }]),
+  },
   idea: { props: {} },
-  proscons: { props: { pros: 'units', cons: 'units' }, also: (_p, _item, text) => !text.converses() },
+  proscons: {
+    props: { pros: 'shown', cons: 'shown', heads: 'shown', above: 'shown' },
+    // Each side stands under the heading or label the item gives it, which the card draws over it in place of a label of its own.
+    frame: (p, text) =>
+      framed({ ...p }, text, [{ pieces: [SIDE, ...p.pros.map(entry), SIDE, ...p.cons.map(entry)] }], (q, shown) => {
+        const sides: [string, string] = [shown.slots[0]!, shown.slots[1]!];
+        return q.heads === undefined || alike(q.heads, sides) ? { ...q, heads: sides } : undefined;
+      }),
+  },
   swatch: { props: { colours: { name: 'says', value: 'paints' } } },
   artwork: { props: { src: 'own', maker: 'says', date: 'says', medium: 'says', holder: 'says' } },
   reference: {
@@ -352,24 +495,25 @@ export const CHECKS: ContentChecks = {
     props: {
       sections: {
         byKind: {
-          heading: { text: 'says' },
-          text: { text: 'lead' },
-          figures: { facts: { label: 'label', value: 'says' } },
-          list: { items: 'whole' },
-          table: { heads: 'cell', rows: 'cell' },
+          heading: { text: 'shown' },
+          text: { text: 'shown' },
+          figures: { label: 'shown', facts: { label: 'shown', value: 'shown' } },
+          list: { label: 'shown', items: 'shown' },
+          table: { label: 'shown', heads: 'shown', rows: 'shown' },
           picture: { src: 'own' },
-          excerpt: { text: 'said', by: 'says' },
+          excerpt: { text: 'shown', by: 'shown' },
         },
       },
+      above: 'shown',
     },
-    also: (_p, _item, text) => !text.converses(),
+    frame: (p, text) => framed(p, text, sheetWays(p.sections)),
   },
   explorable: {
     props: {
       controls: {
         byKind: {
-          toggle: { label: 'says', states: { name: 'says', text: 'whole' } },
-          segmented: { label: 'says', states: { name: 'says', text: 'whole' } },
+          toggle: { label: 'says', states: { name: 'says', text: 'shown' } },
+          segmented: { label: 'says', states: { name: 'says', text: 'shown' } },
           slider: { name: 'choice', label: 'says', unit: 'unit', min: 'choice', max: 'choice', step: 'choice', values: 'writes' },
         },
       },
@@ -380,8 +524,11 @@ export const CHECKS: ContentChecks = {
           chart: { label: 'says', unit: 'unit', formula: 'computes', values: 'writes' },
         },
       },
+      above: 'shown',
     },
     also: (p) => misses(p) === undefined,
+    // What the states say, every one in the item's order, is the whole item. A formula's result is held to it by `also`.
+    frame: (p, text) => (p.output.kind !== 'text' ? p : framed(p, text, [{ pieces: p.controls.flatMap((control) => ('states' in control ? control.states.map((state) => entry(state.text)) : [])) }])),
   },
 };
 

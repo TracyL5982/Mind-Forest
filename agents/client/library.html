@@ -138,8 +138,8 @@ const who = (by) => h('span', { class: `lib-who ${by === 'model' ? 'is-model' : 
 const props = (label, value) => h('details', { class: 'lib-props' }, h('summary', { text: label }), h('pre', { text: JSON.stringify(value, null, 2) }));
 
 const COMPONENT_SAMPLES = [
-  ['note', 'rules', 'The fallback for any card. The model may add one emphasis line taken from the text.',
-    make('note', { emphasis: 'The river is the highway' }, { title: 'If the river is the highway', summary: 'Barges carry the grain out and the news in. The road is for locals. Every hamlet faces the water, and the red house is the only one that turned its back.' })],
+  ['note', 'rules', 'The fallback for any card. The model may set apart a sentence of the text, which the note then marks where it stands, showing the text far enough to reach it.',
+    make('note', { emphasis: 'The river is the highway.' }, { title: 'If the river is the highway', text: 'Barges carry the grain out and the news in. The river is the highway. The road is for locals. Every hamlet faces the water, and the red house is the only one that turned its back.' })],
   ['quote', 'model', 'When the card is someone\'s words. The quote must appear in the card\'s own text.',
     make('quote', { text: 'A map is not the territory it represents, but it has a similar structure.', by: 'Alfred Korzybski' }, { title: 'Korzybski on maps' })],
   ['fact', 'model', 'When one number or short value carries the card. The number must appear in the card\'s own text.',
@@ -180,7 +180,7 @@ const STRUCTURED_SAMPLES = [
   ['qa', 'rules', 'One question and its answer.', drawn('qa')],
   ['callout', 'model', 'A caveat or a remark set apart from the rest of a note. The words must be a whole passage of the card\'s own text.', drawn('callout')],
   ['definition', 'rules', 'A term and what it means, set like a dictionary entry.', drawn('definition')],
-  ['proscons', 'rules', 'The points for and the points against, side by side.', drawn('proscons')],
+  ['proscons', 'rules', 'The points for and the points against, side by side, each side under the heading its item gives it.', drawn('proscons')],
   ['swatch', 'rules', 'Colours with their names and values.', drawn('swatch')],
   ['place', 'rules', 'A short note whose title is the name of a place, with its picture when it has one, and a map when the item knows where the place is.', drawn('place')],
   ['sheet', 'model', 'A card assembled from two to four parts, for an item with more than one kind of thing worth seeing that no card of its own covers: its opening beside a few figures, a list, a small table or words someone said. Each part is drawn as the card of its kind draws it, under one title, each after the first under a hairline.', drawn('sheet')],
@@ -210,18 +210,22 @@ const VARIANTS = {
     ['Bullets', make('list', { items: ['Tent', 'Stove and two gas canisters', 'Two head torches and spare batteries for the walk back after dark', 'Water filter'] }, { title: 'Bring to the lake' })],
     ['Twelve entries', make('list', { items: ['Passport', 'Visa printout', 'Travel insurance', 'Chargers', 'Adapter', 'Camera', 'Film', 'Notebook', 'Rain jacket', 'Walking boots', 'First aid kit', 'House keys to the neighbour'], checked: [true, true, true, true, false, true, false, false, false, false, false, false] }, { title: 'Before the flight to Lisbon' }), 'kept', true],
     ['Two short entries', make('list', { items: ['牛奶', '鸡蛋'] }, { title: '要买' })],
+    ['Under the heading its item gives it', make('list', { above: ['Don\'ts:'], items: ['Don\'t water at noon', 'Don\'t wet the leaves', 'Don\'t let the pots stand in water'] }, { title: 'Watering the tomatoes', text: 'Don\'ts:\n- Don\'t water at noon\n- Don\'t wet the leaves\n- Don\'t let the pots stand in water' })],
+    ['Ticks and crosses as the item writes them, no check box', make('list', { above: ['Greenhouse rules', 'Pinned by the door since the spring.'], items: ['✓ Water at dawn', '✓ Mulch the beds in May', '✗ Water at noon', '✗ Wet the leaves'] }, { title: 'In the greenhouse', text: '## Greenhouse rules\nPinned by the door since the spring.\n✓ Water at dawn\n✓ Mulch the beds in May\n✗ Water at noon\n✗ Wet the leaves' }), 'kept', true],
   ],
   facts: [
     ['Two facts', make('facts', { facts: [{ label: 'Height', value: '330 m' }, { label: 'Built', value: '1889' }] }, { title: 'Eiffel Tower' })],
     ['Three, the last alone on its row', make('facts', { facts: [{ label: 'Orbit', value: '687 days' }, { label: 'Moons', value: '2' }, { label: 'Tallest mountain', value: 'Olympus Mons, 21.9 km' }] }, { title: 'Mars' })],
     ['Six long values', make('facts', { facts: [{ label: 'Engineers', value: 'Maurice Koechlin and Émile Nouguier' }, { label: 'Built in', value: '2 years, 2 months and 5 days' }, { label: 'Iron', value: '7,300 tonnes of puddled iron' }, { label: 'Rivets', value: '2,500,000' }, { label: 'Cost', value: '7,799,401.31 gold francs' }, { label: 'Repainted', value: 'every seven years, by hand' }], more: 3 }, { title: 'How the tower was built' }), 'kept', true],
     ['Chinese', make('facts', { facts: [{ label: '建成', value: '1420年' }, { label: '占地', value: '72万平方米' }, { label: '房间', value: '9,371间' }, { label: '年参观人数', value: '1,700万人次' }] }, { title: '故宫' })],
+    ['From a table under its heads row and its heading', make('facts', { above: ['Results', 'The trial ran for six weeks across three stores.'], heads: ['Metric', 'Change'], facts: [{ label: 'Conversion', value: '▲ 12%' }, { label: 'Basket size', value: '▲ 4%' }, { label: 'Returns', value: '▼ 3%' }] }, { title: 'The new checkout', text: '## Results\nThe trial ran for six weeks across three stores.\n| Metric | Change |\n|---|---|\n| Conversion | ▲ 12% |\n| Basket size | ▲ 4% |\n| Returns | ▼ 3% |' }), 'kept', true],
   ],
   table: [
     ['Forty rows', make('table', { heads: ['Year', 'Film', 'Director', 'Gross'], rows: films }, { title: 'Forty years of the shot' }), 'kept', true],
     ['Seven columns', make('table', { heads: ['Lens', 'Mount', 'Focal', 'Stop', 'Weight', 'Filter', 'Price'], rows: [['Summicron', 'M', '35 mm', 'f/2', '255 g', '39 mm', '$3,895'], ['Nokton', 'M', '40 mm', 'f/1.2', '315 g', '52 mm', '$999'], ['Planar', 'ZM', '50 mm', 'f/2', '230 g', '43 mm', '$930']] }, { title: 'Lenses for the trip' })],
     ['Chinese', make('table', { heads: ['城市', '人口', '面积', '地铁里程'], rows: [['上海', '2,487万', '6,341 km²', '831 km'], ['北京', '2,185万', '16,410 km²', '836 km'], ['成都', '2,140万', '14,335 km²', '601 km'], ['杭州', '1,252万', '16,850 km²', '516 km']] }, { title: '四座城市' })],
-    ['Long cells', make('table', { heads: ['Shot', 'What it does to the room', 'First seen'], rows: [['Dolly zoom', 'The subject holds still while the background rushes away or closes in', '1958'], ['Whip pan', 'The room smears into streaks between two framings', '1927'], ['Split diopter', 'Near and far are both sharp, with a soft seam between them', '1941']] }, { title: 'Three shots that bend a room' })],
+    ['Narrow, under a sentence of its item', make('table', { above: ['The two of us measured the room on Sunday, before the carpet went in.'], heads: ['Wall', 'Length'], rows: [['North', '4.2 m'], ['East', '3.1 m']] }, { title: 'The spare room', text: 'The two of us measured the room on Sunday, before the carpet went in.\n| Wall | Length |\n|---|---|\n| North | 4.2 m |\n| East | 3.1 m |' })],
+    ['Long cells', make('table',{ heads: ['Shot', 'What it does to the room', 'First seen'], rows: [['Dolly zoom', 'The subject holds still while the background rushes away or closes in', '1958'], ['Whip pan', 'The room smears into streaks between two framings', '1927'], ['Split diopter', 'Near and far are both sharp, with a soft seam between them', '1941']] }, { title: 'Three shots that bend a room' })],
   ],
   excerpt: [
     ['A page the Scout picked, as a pick', make('excerpt', { text: 'Fog forms when warm, moist air moves over the cold water of the bay and cools to its dew point. By late afternoon the land has warmed, the pressure inland drops, and the fog is drawn through the gap.\n\nexample.com, 2019, The web', source: 'example.com' }, { title: 'Why coastal fog comes in at dusk', data: { site: 'example.com', by: 'example.com', date: '2019', from: 'The web' }, origin: { by: 'agent' } }), 'pick'],
@@ -249,14 +253,17 @@ const VARIANTS = {
     ['Eight parts', make('breakdown', { labels: ['Sleep', 'Work', 'Commute', 'Cooking and eating', 'Children', 'Reading', 'Exercise', 'Everything else'], values: [33, 31.5, 6, 8, 9.5, 4, 3, 5], unit: '%' }, { title: 'A weekday, by the hour' })],
     ['Chinese', make('breakdown', { labels: ['房租', '吃饭', '交通', '储蓄'], values: [45, 25, 10, 20], unit: '%' }, { title: '每月的钱花在哪' })],
     ['Counts with their own unit', make('breakdown', { labels: ['Kept', 'Picks not yet kept', 'Deleted'], values: [1280, 342, 96], unit: 'cards' }, { title: 'What became of the cards' })],
+    ['With the heads row of its table', make('breakdown', { heads: ['Where it goes', 'Share'], labels: ['Rent', 'Food', 'Travel', 'Savings'], values: [45, 25, 10, 20], unit: '%' }, { title: 'The monthly budget', text: '| Where it goes | Share |\n|---|---|\n| Rent | 45% |\n| Food | 25% |\n| Travel | 10% |\n| Savings | 20% |' })],
   ],
   qa: [
-    ['English', make('qa', { question: 'Why does the room seem to stretch?', answer: 'The lens zooms in while the camera pulls back, so the subject holds its size and the background rushes away.' }, { title: 'Asking about the stretch' })],
+    ['Under its item\'s heading', make('qa', { above: ['From the Q&A after the talk:'], question: 'Why does the room seem to stretch?', answer: 'The lens zooms in while the camera pulls back.' }, { title: 'The dolly zoom', text: 'From the Q&A after the talk:\nQ: Why does the room seem to stretch?\nA: The lens zooms in while the camera pulls back.' })],
+    ['English',make('qa', { question: 'Why does the room seem to stretch?', answer: 'The lens zooms in while the camera pulls back, so the subject holds its size and the background rushes away.' }, { title: 'Asking about the stretch' })],
     ['Long', make('qa', { question: 'If the camera pulls back at the same rate as the lens zooms in, why does anything in the frame change at all?', answer: 'Because zooming magnifies everything by the same amount, while moving the camera changes the size of near things far more than far ones. The two cancel only at the distance of the subject. Everything behind it grows, everything in front of it shrinks, and the eye reads that as the room itself changing shape, which no real room does, and that is where the dread comes from.' }, { title: 'The geometry of it' }), 'kept', true],
   ],
   callout: [
     ['A remark', make('callout', { text: 'The second unit shot this on a miniature of the stairwell laid on its side.', tone: 'note' }, { title: 'How the tower shot was made' })],
     ['Chinese', make('callout', { text: '水温超过40℃会杀死酵母。', tone: 'caution' }, { title: '喂养酵种' })],
+    ['Under its item\'s heading, in Chinese', make('callout', { above: ['注意事项：'], text: '水温超过40℃会杀死酵母。', tone: 'caution' }, { title: '喂养酵种', text: '注意事项：\n水温超过40℃会杀死酵母。' })],
     ['Long, no title', make('callout', { text: 'Never leave the gimbal powered on inside the case. The motors fight the foam, the battery runs flat in an hour, and on a warm day the pack can swell enough to crack the latch plate.', tone: 'caution' }, { title: '' })],
   ],
   definition: [
@@ -265,8 +272,9 @@ const VARIANTS = {
     ['A long meaning', make('definition', { term: 'Bokeh', definition: 'the way a lens draws the parts of a picture that are out of focus, most of all small points of light, which it turns into soft discs whose shape and edge depend on the blades of the aperture and on how well the lens is corrected, so that two lenses of the same focal length and stop can give one scene two quite different moods.' }, { title: 'Bokeh' })],
   ],
   proscons: [
-    ['Chinese', make('proscons', { pros: ['房价低', '美食多', '生活节奏慢'], cons: ['夏天潮湿', '离家人远'] }, { title: '要不要搬去成都' })],
-    ['Many long points', make('proscons', { pros: ['One binary to ship, with no runtime to install on the render nodes', 'No data races', 'The compiler finds what review misses', 'Fast at run time', 'Good tooling', 'Friendly community'], cons: ['Slow builds on the old laptops', 'A steep start for the two juniors who joined in spring', 'Fewer libraries for colour science', 'Hiring is harder', 'The rewrite stalls features'] }, { title: 'Moving the render queue to Rust before the autumn release' }), 'kept', true],
+    ['Chinese', make('proscons', { heads: ['好处：', '坏处：'], pros: ['房价低', '美食多', '生活节奏慢'], cons: ['夏天潮湿', '离家人远'] }, { title: '要不要搬去成都' })],
+    ['Many long points', make('proscons', { heads: ['Pros:', 'Cons:'], pros: ['One binary to ship, with no runtime to install on the render nodes', 'No data races', 'The compiler finds what review misses', 'Fast at run time', 'Good tooling', 'Friendly community'], cons: ['Slow builds on the old laptops', 'A steep start for the two juniors who joined in spring', 'Fewer libraries for colour science', 'Hiring is harder', 'The rewrite stalls features'] }, { title: 'Moving the render queue to Rust before the autumn release' }), 'kept', true],
+    ['Each side under its item\'s own heading', make('proscons', { above: ['We have to decide by Friday.'], heads: ['For going now, while the fares hold:', 'Against:'], pros: ['The flights are cheap in March', 'The flat is free until the 20th'], cons: ['The thesis draft is due', 'It rains most of the month'] }, { title: 'A week in Lisbon in March', text: 'We have to decide by Friday.\nFor going now, while the fares hold:\n- The flights are cheap in March\n- The flat is free until the 20th\nAgainst:\n- The thesis draft is due\n- It rains most of the month' }), 'kept', true],
   ],
   swatch: [
     ['Eight colours', make('swatch', { colours: [{ name: 'Ink', value: '#0B0D11' }, { name: 'Slate', value: '#1B1D23' }, { name: 'Fog', value: '#A3A39C' }, { name: 'Paper', value: '#ECEBE6' }, { name: 'Amber', value: '#F2C27A' }, { name: 'Teal', value: '#62D6C3' }, { name: 'Coral', value: '#FF9A92' }, { name: 'Light goldenrod', value: 'lightgoldenrodyellow' }] }, { title: 'Mind Palace, as drawn' }), 'kept', true],
@@ -323,6 +331,7 @@ const VARIANTS = {
     ['A name and nothing else', make('place', { name: '莫干山' }, { title: '莫干山' })],
   ],
   note: [
+    ['Words set apart on the fifth line, in Chinese', make('note', { emphasis: '只有红房子背对着河。' }, { title: '河就是路', text: '驳船把粮食运出去，把消息带进来。村里的路只有本地人走，每一户人家都面朝河水。到了冬天，河面结冰，大家才走那条路。只有红房子背对着河。没有人知道为什么。' })],
     ['Title only', make('note', {}, { title: 'Pick the hamlet' })],
     ['Long text', make('note', {}, { title: 'What the river carries past the red house every morning', summary: 'Grain barges, the post, a doctor on Thursdays and, twice a year, the surveyors who redraw the parish map and argue about where the yellow ends.' })],
   ],
@@ -330,6 +339,8 @@ const VARIANTS = {
     ['Long, no speaker', make('quote', { text: 'We shape our buildings, and afterwards our buildings shape us, and then the streets between them, and at last the map of the whole town, until nobody remembers which came first.' }, { title: 'On buildings' })],
   ],
   fact: [
+    ['From a table under its heads row', make('fact', { heads: ['Metric', 'Change'], value: '▲ 12%', label: 'Conversion' }, { title: 'The new checkout', text: '| Metric | Change |\n|---|---|\n| Conversion | ▲ 12% |' })],
+    ['Under its item\'s label', make('fact', { above: ['Results:'], value: '▲ 12%', label: 'conversion after the trial' }, { title: 'The new checkout', text: 'Results:\n▲ 12% conversion after the trial' })],
     ['A word as the value', make('fact', { value: 'Vertigo', label: 'what it evokes' }, { title: 'Vertigo' })],
     ['A long value', make('fact', { value: '$1.2 million', label: 'spent on the second unit' }, { title: 'Budget' })],
     ['A value too long for the large size', make('fact', { value: '1,234,567,890 km', label: 'travelled by the probe so far' }, { title: 'Distance' })],
@@ -348,7 +359,8 @@ const VARIANTS = {
     ['No picture', make('link', { url: 'https://example.org/lenses', site: 'example.org' }, { title: 'A field guide to long lenses and what they flatten', summary: 'Why distant hills stack up behind the subject.' })],
   ],
   chart: [
-    ['Line, one value marked', make('chart', { chart: 'line', labels: ['1960', '1980', '2000', '2020'], values: [3, 9, 14, 11], unit: 'films', mark: 2 }, { title: 'Use by decade' })],
+    ['Under its heading, with the heads row of its table', make('chart', { chart: 'bar', above: ['Weeks in bloom:'], heads: ['Month', 'Weeks'], labels: ['Mar', 'Apr', 'May', 'Jun'], values: [4, 9, 14, 6] }, { title: 'Rapeseed bloom', text: 'Weeks in bloom:\n| Month | Weeks |\n|---|---|\n| Mar | 4 |\n| Apr | 9 |\n| May | 14 |\n| Jun | 6 |' })],
+    ['Line, one value marked',make('chart', { chart: 'line', labels: ['1960', '1980', '2000', '2020'], values: [3, 9, 14, 11], unit: 'films', mark: 2 }, { title: 'Use by decade' })],
     ['No values', make('chart', { chart: 'bar', labels: [], values: [] }, { title: 'Nothing counted yet' })],
     ['Many values, no unit', make('chart', { chart: 'bar', labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], values: [120, 180, 420, 900, 1400, 1150, 800, 760, 520, 300, 160, 110], mark: 4 }, { title: 'Visitors by month' })],
   ],

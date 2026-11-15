@@ -480,7 +480,9 @@ async function main(): Promise<void> {
         ['idea', 'Build a treehouse', 'Build a treehouse', '.idea-spark', 1],
         ['proscons', 'Buying the van\nPros:\n- room for the dog\n- cheap to insure\nCons:\n- slow uphill', 'slow uphill', '.proscons-mark', 3],
         ['swatch', 'Palette: Rust #B7410E, Moss #8A9A5B', '#8A9A5B', '.swatch-block', 2],
-        ['sheet', 'Weekend in Porto\n\nWe took the early train on Friday and walked the river both days, and when it rained on Saturday we sat in the bookshop until it closed and nobody minded. Next time we go in May, before the crowds, and stay an extra night.\nCost: €240\nNights: 2\nBest:\n- the bridge at dusk\n- the tiled station\n- grilled sardines', 'grilled sardines', '.sheet-part', 3],
+        // With its list last, the rules would draw the list with the rest of the item over it; with its figures after the list, neither card of
+        // its own shows the whole item, and the stand-in assembles a sheet.
+        ['sheet', 'Weekend in Porto\n\nWe took the early train on Friday and walked the river both days, and when it rained on Saturday we sat in the bookshop until it closed and nobody minded. Next time we go in May, before the crowds, and stay an extra night.\nBest:\n- the bridge at dusk\n- the tiled station\n- grilled sardines\nCost: €240\nNights: 2', 'grilled sardines', '.sheet-part', 3],
         // The place comes last, because a request is then asked about it.
         ['place', 'Lisbon\nWhere: Lisbon', 'Lisbon', '.place-pin', 1],
       ];

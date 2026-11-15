@@ -1,5 +1,5 @@
 import { h, s } from '../dom.js';
-import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, andMore, list, say, text, textWidth, wrap, titleOf } from './shared.js';
+import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, aboveOf, andMore, drawAbove, list, say, text, textWidth, wrap, titleOf } from './shared.js';
 import { wordsOf } from '../words.js';
 
 const WIDTH = 256;
@@ -21,6 +21,7 @@ function plan(item, props) {
   const tally = checked ? `${checked.filter(Boolean).length}/${entries.length}` : '';
   return {
     entries, checked, tally,
+    above: aboveOf(props, COLUMN),
     titleLines: wrap(titleOf(item), COLUMN - (tally ? 10 + textWidth(tally) : 0), TITLE_LETTER, 2),
     rows: entries.slice(0, SHOWN).map((entry) => entryLines(entry, COLUMN)),
   };
@@ -38,16 +39,17 @@ export const entry = (label, done, lines, words) => h('li', { class: done ? 'is-
 export const shows = [];
 
 export function size(item, props) {
-  const { entries, titleLines, rows } = plan(item, props);
-  return [WIDTH, FRAME + titleLines * TITLE + (rows.length ? 10 + stacked(rows) : 0) + (entries.length > SHOWN ? 8 + TEXT : 0)];
+  const { entries, above, titleLines, rows } = plan(item, props);
+  return [WIDTH, FRAME + titleLines * TITLE + above.height + (rows.length ? 10 + stacked(rows) : 0) + (entries.length > SHOWN ? 8 + TEXT : 0)];
 }
 
 export function draw(item, props) {
-  const { entries, checked, tally, titleLines, rows } = plan(item, props);
+  const { entries, checked, tally, above, titleLines, rows } = plan(item, props);
   return [
     h('div', { class: 'list-head' },
       say('div', `card-title clamp-${titleLines}`, titleOf(item)),
       tally && h('span', { class: 'card-tag list-tally', title: wordsOf(item).tally(...tally.split('/')), text: tally })),
+    drawAbove(above),
     rows.length > 0 && h('ul', { class: 'list' }, rows.map((lines, i) => entry(entries[i], checked?.[i], `clamp-${lines}`, wordsOf(item)))),
     entries.length > SHOWN && andMore(entries.length - SHOWN, item),
   ];

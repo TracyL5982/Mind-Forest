@@ -80,7 +80,7 @@ export function replaying(saved: { key: string; reply?: Entry }[], keyOf: (nodeI
       const items = [...req.user.matchAll(/^id: (.+)$/gm)].flatMap(([, id]) => {
         const reply = said.get(keyOf(id!) ?? '');
         // A run saved before the explorable's slots existed answers with them empty.
-        return reply ? [{ controls: [], formula: '', ...reply, id: id! }] : [];
+        return reply ? [Object.assign({ controls: [], formula: '' }, reply, { id: id! })] : [];
       });
       return req.schema.parse({ items });
     },

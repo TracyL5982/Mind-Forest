@@ -4,7 +4,7 @@ export const SAMPLES = {
     "item": {
       "id": "sample-facts",
       "kind": "text",
-      "text": "Height: 330 m. Built: 1889. Floors: 3. Steps: 1,665. Weight: 10,100 tonnes. Architect: Stephen Sauvestre. Visitors a year: 6 million.",
+      "text": "Height: 330 m. Built: 1889. Floors: 3. Steps: 1,665. Weight: 10,100 tonnes. Architect: Stephen Sauvestre.",
       "summary": "",
       "tags": [],
       "data": {
@@ -32,10 +32,6 @@ export const SAMPLES = {
           {
             "label": "Architect",
             "value": "Stephen Sauvestre"
-          },
-          {
-            "label": "Visitors a year",
-            "value": "6 million"
           }
         ]
       },
@@ -76,8 +72,7 @@ export const SAMPLES = {
           "label": "Architect",
           "value": "Stephen Sauvestre"
         }
-      ],
-      "more": 1
+      ]
     }
   },
   "table": {
@@ -303,7 +298,10 @@ export const SAMPLES = {
     },
     "props": {
       "text": "Anything above 40 °C kills the yeast.",
-      "tone": "caution"
+      "tone": "caution",
+      "above": [
+        "Feed it once a day with equal parts flour and water. Rinse the jar with cold water only."
+      ]
     }
   },
   "excerpt": {
@@ -334,7 +332,10 @@ export const SAMPLES = {
     "props": {
       "text": "The house shelters day-dreaming, the house protects the dreamer.",
       "at": "Chapter 1",
-      "source": "example.org"
+      "source": "example.org",
+      "above": [
+        "Copied out of Chapter 1, on the house as the first universe of a child."
+      ]
     }
   },
   "definition": {
@@ -423,6 +424,10 @@ export const SAMPLES = {
       "cons": [
         "slow builds",
         "a steep start"
+      ],
+      "heads": [
+        "Pros:",
+        "Cons:"
       ]
     }
   },
@@ -593,7 +598,7 @@ export const SAMPLES = {
     "item": {
       "id": "sample-sheet-report",
       "kind": "text",
-      "text": "Children aged six months to five years with pneumonia that did not need hospital care were given amoxicillin for five days or for ten. In all, 824 children were randomised across nine clinics. Treatment had failed by day 30 in 12.6% of the five-day group and 12.4% of the ten-day group, a difference well inside the margin set in advance. Side effects were mild and no more common in either group, and parents in the shorter arm missed fewer days of work. The authors conclude that five days is enough for a child treated at home, and that guidelines asking for longer should be revisited.",
+      "text": "Five days of amoxicillin against ten\n\nChildren with pneumonia treated at home were given amoxicillin for five days or for ten, and treatment failed about as often in both groups.\nChildren randomised: 824\nFailed, five-day group: 12.6%\nFailed, ten-day group: 12.4%",
       "summary": "",
       "tags": [],
       "data": {},
@@ -616,7 +621,7 @@ export const SAMPLES = {
         },
         {
           "kind": "text",
-          "text": "The authors conclude that five days is enough for a child treated at home, and that guidelines asking for longer should be revisited."
+          "text": "Children with pneumonia treated at home were given amoxicillin for five days or for ten, and treatment failed about as often in both groups."
         },
         {
           "kind": "figures",
@@ -703,7 +708,7 @@ export const SHEETS = [
     "item": {
       "id": "sample-sheet-report",
       "kind": "text",
-      "text": "Children aged six months to five years with pneumonia that did not need hospital care were given amoxicillin for five days or for ten. In all, 824 children were randomised across nine clinics. Treatment had failed by day 30 in 12.6% of the five-day group and 12.4% of the ten-day group, a difference well inside the margin set in advance. Side effects were mild and no more common in either group, and parents in the shorter arm missed fewer days of work. The authors conclude that five days is enough for a child treated at home, and that guidelines asking for longer should be revisited.",
+      "text": "Five days of amoxicillin against ten\n\nChildren with pneumonia treated at home were given amoxicillin for five days or for ten, and treatment failed about as often in both groups.\nChildren randomised: 824\nFailed, five-day group: 12.6%\nFailed, ten-day group: 12.4%",
       "summary": "",
       "tags": [],
       "data": {},
@@ -726,7 +731,7 @@ export const SHEETS = [
         },
         {
           "kind": "text",
-          "text": "The authors conclude that five days is enough for a child treated at home, and that guidelines asking for longer should be revisited."
+          "text": "Children with pneumonia treated at home were given amoxicillin for five days or for ten, and treatment failed about as often in both groups."
         },
         {
           "kind": "figures",
@@ -752,7 +757,7 @@ export const SHEETS = [
     "item": {
       "id": "sample-sheet-trip",
       "kind": "text",
-      "text": "We took the early train on Friday and walked the river both days. It rained on Saturday afternoon, so we sat in the bookshop until it closed and nobody minded. Two nights at the guesthouse came to €240 with breakfast, and the train was €38 each. Ines said, \"I would come back just for the sardines.\" We agreed on what was best:\n- the bridge at dusk\n- the tiled station\n- grilled sardines by the water\n\nNext time we go in May, before the crowds, and stay an extra night.",
+      "text": "We took the early train on Friday and walked the river both days.\nTwo nights: €240\nTrain, each: €38\nBest:\n- the bridge at dusk\n- the tiled station\n- grilled sardines by the water\nInes said, \"I would come back just for the sardines.\"",
       "summary": "",
       "tags": [],
       "data": {},
@@ -788,6 +793,7 @@ export const SHEETS = [
         },
         {
           "kind": "list",
+          "label": "Best:",
           "items": [
             "the bridge at dusk",
             "the tiled station",
@@ -797,7 +803,7 @@ export const SHEETS = [
         {
           "kind": "excerpt",
           "text": "I would come back just for the sardines.",
-          "by": "Ines"
+          "by": "Ines said"
         }
       ]
     }
@@ -806,7 +812,7 @@ export const SHEETS = [
     "item": {
       "id": "sample-sheet-outing",
       "kind": "text",
-      "text": "下个月的团建要在周五前定下来，预算是每人三百元以内，一共二十二个人。行政部先给了三个方案，大家可以在群里投票。\n\n方案 | 人均 | 时长\n爬山加农家菜 | 180元 | 一整天\n陶艺体验 | 260元 | 半天\n剧本杀 | 150元 | 四小时\n\n还没有落实的事：\n- 包车\n- 忌口统计\n- 下雨的备选\n\n去年有人说活动太赶，今年尽量不要安排在周末，结束后也不强制聚餐。",
+      "text": "下个月的团建要在周五前定下来，预算是每人三百元以内，一共二十二个人。\n\n方案 | 人均 | 时长\n爬山加农家菜 | 180元 | 一整天\n陶艺体验 | 260元 | 半天\n剧本杀 | 150元 | 四小时\n\n还没有落实的事：\n- 包车\n- 忌口统计\n- 下雨的备选",
       "summary": "",
       "tags": [],
       "data": {},
@@ -823,10 +829,6 @@ export const SHEETS = [
     },
     "props": {
       "sections": [
-        {
-          "kind": "heading",
-          "text": "下个月的团建"
-        },
         {
           "kind": "text",
           "text": "下个月的团建要在周五前定下来，预算是每人三百元以内，一共二十二个人。"
@@ -858,6 +860,7 @@ export const SHEETS = [
         },
         {
           "kind": "list",
+          "label": "还没有落实的事：",
           "items": [
             "包车",
             "忌口统计",
@@ -1011,7 +1014,10 @@ export const EXPLORABLES = [
       ],
       "output": {
         "kind": "text"
-      }
+      },
+      "above": [
+        "光圈开大还是收小，决定了照片里有多少是清楚的。"
+      ]
     }
   }
 ];

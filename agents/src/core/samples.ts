@@ -28,31 +28,29 @@ function item(id: string, fields: Partial<Item> & { title: string }): Item {
 const pick = { origin: { by: 'agent', role: 'scout' } } as const;
 
 const TRIAL =
-  'Children aged six months to five years with pneumonia that did not need hospital care were given amoxicillin for five days or for ten. ' +
-  'In all, 824 children were randomised across nine clinics. Treatment had failed by day 30 in 12.6% of the five-day group and 12.4% of the ten-day group, ' +
-  'a difference well inside the margin set in advance. Side effects were mild and no more common in either group, and parents in the shorter arm missed fewer days of work. ' +
-  'The authors conclude that five days is enough for a child treated at home, and that guidelines asking for longer should be revisited.';
+  'Five days of amoxicillin against ten\n\n' +
+  'Children with pneumonia treated at home were given amoxicillin for five days or for ten, and treatment failed about as often in both groups.\n' +
+  'Children randomised: 824\nFailed, five-day group: 12.6%\nFailed, ten-day group: 12.4%';
 
 const PORTO =
-  'We took the early train on Friday and walked the river both days. It rained on Saturday afternoon, so we sat in the bookshop until it closed ' +
-  'and nobody minded. Two nights at the guesthouse came to €240 with breakfast, and the train was €38 each. ' +
-  'Ines said, "I would come back just for the sardines." We agreed on what was best:\n' +
-  '- the bridge at dusk\n- the tiled station\n- grilled sardines by the water\n\n' +
-  'Next time we go in May, before the crowds, and stay an extra night.';
+  'We took the early train on Friday and walked the river both days.\n' +
+  'Two nights: €240\nTrain, each: €38\n' +
+  'Best:\n- the bridge at dusk\n- the tiled station\n- grilled sardines by the water\n' +
+  'Ines said, "I would come back just for the sardines."';
 
 const OUTING =
-  '下个月的团建要在周五前定下来，预算是每人三百元以内，一共二十二个人。行政部先给了三个方案，大家可以在群里投票。\n\n' +
+  '下个月的团建要在周五前定下来，预算是每人三百元以内，一共二十二个人。\n\n' +
   '方案 | 人均 | 时长\n爬山加农家菜 | 180元 | 一整天\n陶艺体验 | 260元 | 半天\n剧本杀 | 150元 | 四小时\n\n' +
-  '还没有落实的事：\n- 包车\n- 忌口统计\n- 下雨的备选\n\n去年有人说活动太赶，今年尽量不要安排在周末，结束后也不强制聚餐。';
+  '还没有落实的事：\n- 包车\n- 忌口统计\n- 下雨的备选';
 
-/** Three items no single card covers, each with the sheet assembled for it. */
+/** Three items no single card covers, each with the sheet assembled for it: every section a part of the item, and together all of it. */
 export const SHEETS: { item: Item; props: PropsOf<'sheet'> }[] = [
   {
     item: item('sheet-report', { title: 'Five days of amoxicillin against ten', text: TRIAL }),
     props: {
       sections: [
         { kind: 'heading', text: 'Five days of amoxicillin against ten' },
-        { kind: 'text', text: 'The authors conclude that five days is enough for a child treated at home, and that guidelines asking for longer should be revisited.' },
+        { kind: 'text', text: 'Children with pneumonia treated at home were given amoxicillin for five days or for ten, and treatment failed about as often in both groups.' },
         { kind: 'figures', facts: [{ label: 'Children randomised', value: '824' }, { label: 'Failed, five-day group', value: '12.6%' }, { label: 'Failed, ten-day group', value: '12.4%' }] },
       ],
     },
@@ -63,8 +61,8 @@ export const SHEETS: { item: Item; props: PropsOf<'sheet'> }[] = [
       sections: [
         { kind: 'text', text: 'We took the early train on Friday and walked the river both days.' },
         { kind: 'figures', facts: [{ label: 'Two nights', value: '€240' }, { label: 'Train, each', value: '€38' }] },
-        { kind: 'list', items: ['the bridge at dusk', 'the tiled station', 'grilled sardines by the water'] },
-        { kind: 'excerpt', text: 'I would come back just for the sardines.', by: 'Ines' },
+        { kind: 'list', label: 'Best:', items: ['the bridge at dusk', 'the tiled station', 'grilled sardines by the water'] },
+        { kind: 'excerpt', text: 'I would come back just for the sardines.', by: 'Ines said' },
       ],
     },
   },
@@ -72,10 +70,9 @@ export const SHEETS: { item: Item; props: PropsOf<'sheet'> }[] = [
     item: item('sheet-outing', { title: '下个月的团建', text: OUTING }),
     props: {
       sections: [
-        { kind: 'heading', text: '下个月的团建' },
         { kind: 'text', text: '下个月的团建要在周五前定下来，预算是每人三百元以内，一共二十二个人。' },
         { kind: 'table', heads: ['方案', '人均', '时长'], rows: [['爬山加农家菜', '180元', '一整天'], ['陶艺体验', '260元', '半天'], ['剧本杀', '150元', '四小时']] },
-        { kind: 'list', items: ['包车', '忌口统计', '下雨的备选'] },
+        { kind: 'list', label: '还没有落实的事：', items: ['包车', '忌口统计', '下雨的备选'] },
       ],
     },
   },
@@ -133,11 +130,11 @@ export const EXPLORABLES: { item: Item; props: PropsOf<'explorable'> }[] = ([
 const ITEMS: Record<StructuredId, Item> = {
   facts: item('facts', {
     title: 'Eiffel Tower',
-    text: 'Height: 330 m. Built: 1889. Floors: 3. Steps: 1,665. Weight: 10,100 tonnes. Architect: Stephen Sauvestre. Visitors a year: 6 million.',
+    text: 'Height: 330 m. Built: 1889. Floors: 3. Steps: 1,665. Weight: 10,100 tonnes. Architect: Stephen Sauvestre.',
     data: {
       facts: [
         { label: 'Height', value: '330 m' }, { label: 'Built', value: '1889' }, { label: 'Floors', value: '3' }, { label: 'Steps', value: '1,665' },
-        { label: 'Weight', value: '10,100 tonnes' }, { label: 'Architect', value: 'Stephen Sauvestre' }, { label: 'Visitors a year', value: '6 million' },
+        { label: 'Weight', value: '10,100 tonnes' }, { label: 'Architect', value: 'Stephen Sauvestre' },
       ],
     },
   }),
@@ -219,7 +216,7 @@ const ITEMS: Record<StructuredId, Item> = {
 
 /** The props of the types no rule chooses. */
 const CHOSEN: Partial<Record<StructuredId, Record<string, unknown>>> = {
-  callout: { text: 'Anything above 40 °C kills the yeast.', tone: 'caution' } satisfies PropsOf<'callout'>,
+  callout: { text: 'Anything above 40 °C kills the yeast.', tone: 'caution', above: ['Feed it once a day with equal parts flour and water. Rinse the jar with cold water only.'] } satisfies PropsOf<'callout'>,
   sheet: SHEETS[0]!.props,
   explorable: EXPLORABLES[0]!.props,
 };

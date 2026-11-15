@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { FRAME, QUOTE_LETTER, TEXT, TITLE, fold, say, text } from './shared.js';
+import { FRAME, QUOTE_LETTER, TEXT, TITLE, aboveOf, drawAbove, fold, say, text } from './shared.js';
 
 const WIDTH = 288;
 /** The quote's wider side padding and the border, and 1 px to spare. */
@@ -13,9 +13,10 @@ const by = (props, clamped) => text(props.by) && h('div', { class: 'quote-by' },
 
 export const shows = [];
 
-export const size = (item, props) => [WIDTH, FRAME + MARK + lines(item, props) * TITLE + (text(props.by) ? 8 + TEXT : 0)];
+export const size = (item, props) => [WIDTH, FRAME + aboveOf(props, COLUMN).height + MARK + lines(item, props) * TITLE + (text(props.by) ? 8 + TEXT : 0)];
 
 export const draw = (item, props) => [
+  drawAbove(aboveOf(props, COLUMN)),
   mark(),
   say('blockquote', `quote-text clamp-${lines(item, props)}`, words(item, props)),
   by(props, 'clamp-1'),

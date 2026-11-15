@@ -1,5 +1,5 @@
 import { h, clamp } from '../dom.js';
-import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, list, say, spread, text, textWidth, titleOf, wrap } from './shared.js';
+import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, aboveOf, aboveWidth, drawAbove, list, say, spread, text, textWidth, titleOf, wrap } from './shared.js';
 import { wordsOf } from '../words.js';
 
 const NARROW = 200;
@@ -47,7 +47,8 @@ const grid = (props) => ({
  * left. The first column, which names each row, is at least `FIRST_FLOOR` px wide or as wide as it
  * needs, unless a number in the second column needs the room. Columns are dropped from the end until each one that holds words can have `WORDS_FLOOR`
  * px or all it needs, and the card counts the columns it drops as it does the rows. `room` is the
- * column the cells share: a table card's, or a sheet's.
+ * column the cells share: a table card's, or a sheet's. The card is as wide as its columns and the
+ * lines over them need.
  */
 export function plan(item, props, room = ROOM) {
   const { heads, rows } = grid(props);
@@ -69,13 +70,14 @@ export function plan(item, props, room = ROOM) {
   const floors = kept.reduce((sum, column) => sum + column.floor, 0);
   const extra = spread(kept.map((column) => column.want - column.floor), room - BETWEEN * (count - 1) - floors);
   const widths = kept.map((column, i) => column.floor + extra[i]);
-  const width = clamp(SIDES + widths.reduce((sum, wide) => sum + wide, BETWEEN * (count - 1)), NARROW, WIDE);
+  const width = clamp(SIDES + Math.max(widths.reduce((sum, wide) => sum + wide, BETWEEN * (count - 1)), aboveWidth(props)), NARROW, WIDE);
   const [moreRows, moreColumns] = [rows.length - shown.length, heads.length - count];
   return {
     heads: heads.slice(0, count),
     rows: shown.map((row) => kept.map((_, i) => row[i] ?? '')),
     numbers: kept.map((column) => column.number),
     widths, width,
+    above: aboveOf(props, width - SIDES),
     titleLines: wrap(titleOf(item), width - SIDES, TITLE_LETTER, 2),
     foot: moreRows > 0 || moreColumns > 0 ? wordsOf(item).moreOf(moreRows, moreColumns) : '',
   };
@@ -88,7 +90,7 @@ export const shows = [];
 
 export function size(item, props) {
   const planned = plan(item, props);
-  return [planned.width, FRAME + planned.titleLines * TITLE + 8 + ruledHeight(planned)];
+  return [planned.width, FRAME + planned.titleLines * TITLE + planned.above.height + 8 + ruledHeight(planned)];
 }
 
 /** A cell. A number is drawn whole wherever it stands, and to the right in a column of numbers. */
@@ -103,6 +105,7 @@ export function draw(item, props) {
   const planned = plan(item, props);
   return [
     say('div', `card-title clamp-${planned.titleLines}`, titleOf(item)),
+    drawAbove(planned.above),
     ruled(planned),
     planned.foot && h('div', { class: 'card-foot', text: planned.foot }),
   ];
