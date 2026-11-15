@@ -15,10 +15,10 @@ export interface MetaModelOptions {
   imageModel?: string;
   voiceModel?: string;
   fetch?: typeof fetch;
-  /** Called after every request, for the run log and the cost tally. */
   /** Total tokens this client may spend before it refuses further requests. Guards against a runaway loop. */
   tokenBudget?: number;
-  onCall?: (call: { kind: string; role: string; ms: number; ok: boolean; tokens?: number }) => void;
+  /** Called after every request, for the run log and the cost tally, with the model and effort asked for and the tries it took. */
+  onCall?: (call: { kind: string; role: string; ms: number; ok: boolean; tokens?: number; model?: string; effort?: string; tries?: number }) => void;
 }
 
 interface OutputItem {
@@ -177,9 +177,12 @@ export class MetaModel implements ModelClient {
     const budget = this.opts.tokenBudget ?? 5_000_000;
     if (this.spent >= budget) throw new Error(`${role}: token budget of ${budget} is used up; restart the service to reset it`);
     const started = Date.now();
+    const asked = askedFor(body);
     let lastError = '';
     let handedOn = false;
+    let tries = 0;
     for (let attempt = 0; attempt < 3 && !handedOn; attempt++) {
+      tries = attempt + 1;
       if (attempt > 0) await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
       try {
         const res = await this.send(`${this.base}/responses`, {
@@ -207,13 +210,13 @@ export class MetaModel implements ModelClient {
           if (event.type === 'response.failed' || event.type === 'error') throw new Error(`${role}: the reply failed: ${JSON.stringify(event).slice(0, 300)}`);
         }
         this.spent += tokens ?? 0;
-        this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: true, tokens });
+        this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: true, tokens, ...asked, tries });
         return text;
       } catch (err) {
         lastError = String(err);
       }
     }
-    this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: false });
+    this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: false, ...asked, tries });
     throw new Error(`${role}: model request failed: ${lastError}`);
   }
 
@@ -227,9 +230,12 @@ export class MetaModel implements ModelClient {
     const budget = this.opts.tokenBudget ?? 5_000_000;
     if (this.spent >= budget) throw new Error(`${role}: token budget of ${budget} is used up; restart the service to reset it`);
     const started = Date.now();
+    const asked = askedFor(body);
     let lastError = '';
+    let tries = 0;
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
+      tries = attempt + 1;
       let res: Response;
       try {
         res = await this.send(`${this.base}${path}`, {
@@ -245,15 +251,20 @@ export class MetaModel implements ModelClient {
       if (res.ok) {
         const json = (await res.json()) as { usage?: { total_tokens?: number } };
         this.spent += json.usage?.total_tokens ?? 0;
-        this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: true, tokens: json.usage?.total_tokens });
+        this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: true, tokens: json.usage?.total_tokens, ...asked, tries });
         return json;
       }
       lastError = `${res.status} ${(await res.text()).slice(0, 400)}`;
       if (res.status !== 429 && res.status < 500) break;
     }
-    this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: false });
+    this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: false, ...asked, tries });
     throw new Error(`${role}: model request failed: ${lastError}`);
   }
+}
+
+function askedFor(body: unknown): { model?: string; effort?: string } {
+  const { model, reasoning } = body as { model?: string; reasoning?: { effort?: string } };
+  return { model, effort: reasoning?.effort };
 }
 
 type Json = Record<string, unknown>;
