@@ -2328,3 +2328,98 @@ test('a number that opens a line is an entry\'s only when white space follows it
   assert.deepEqual(verdict('Steps:\n1. Stop the writer.\n2. Copy the file.', 'steps', { lines: ['Stop the writer.', 'Copy the file.'] }), { draw: { component: 'steps', props: { steps: ['Stop the writer.', 'Copy the file.'], above: ['Steps:'] } } }, 'a step number with a space after its stop');
   assert.deepEqual(verdict('步骤：\n1、关掉电源\n2、拆下灯罩', 'steps', { lines: ['关掉电源', '拆下灯罩'] }), { draw: { component: 'steps', props: { steps: ['关掉电源', '拆下灯罩'], above: ['步骤：'] } } }, 'a number before 、');
 });
+
+/** Holds the question of how siblings group until the test lets go, so the test can act while the model is still being asked. */
+function slowComposites(k: Kit, reply: () => CompositesReply): { asked: Promise<void>; open: () => void } {
+  let open!: () => void;
+  let wasAsked!: () => void;
+  const gate = new Promise<void>((r) => (open = r));
+  const asked = new Promise<void>((r) => (wasAsked = r));
+  const json = k.model.json.bind(k.model);
+  k.model.json = (async (req: Parameters<typeof json>[0]) => {
+    if (req.role !== 'renderer.composites') return json(req);
+    wasAsked();
+    await gate;
+    return req.schema.parse(reply());
+  }) as typeof k.model.json;
+  return { asked, open };
+}
+
+test('a card takes its look before the model has said how its siblings group', async () => {
+  const k = kit();
+  const { ids } = grow(k, [
+    { title: 'Recipe', data: { steps: ['Boil water', 'Add pasta'] }, status: 'pick' },
+    { title: 'One', text: PLAIN, status: 'pick' },
+    { title: 'Two', text: PLAIN, status: 'pick' },
+    { title: 'Three', text: PLAIN, status: 'pick' },
+  ]);
+  const composites = slowComposites(k, () => ({ groups: [] }));
+  const early: Command[][] = [];
+
+  const run = renderer(k.ctx, { nodeIds: ids, deliver: (commands) => early.push(commands) });
+  await composites.asked;
+  await new Promise((r) => setTimeout(r, 0));
+
+  assert.deepEqual(early.flat().map((c) => (c.type === 'setView' ? [c.id, c.view.component] : [c.type])), [[ids[0], 'steps']]);
+  composites.open();
+  assert.deepEqual(await run, []);
+});
+
+test('a group the model proposed for a card that gave way while it was asked is not applied', async () => {
+  const k = kit();
+  const { root, ids } = grow(k, ['One', 'Two', 'Three', 'Four'].map((title) => ({ title, text: PLAIN, status: 'pick' as const })));
+  const composites = slowComposites(k, () => ({ groups: [proposal({ parent: root, composite: 'cluster', theme: 'Moves', members: ids.slice(0, 3) })] }));
+
+  const run = renderer(k.ctx, { nodeIds: ids });
+  await composites.asked;
+  k.mind.apply({ origin: { by: 'agent', role: 'scout' }, label: 'make room', commands: [{ type: 'deleteNode', id: ids[0]! }] });
+  composites.open();
+  const commands = await run;
+
+  assert.ok(!commands.some((c) => c.type === 'setGroup'), 'the group named a card that is gone');
+  if (commands.length > 0) k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands });
+});
+
+test('a timeline the model proposed is still drawn from the siblings that stayed when one gave way while it was asked', async () => {
+  const k = kit();
+  const dated = (title: string, when: string) => ({ title, text: `${title}, ${when}.`, summary: `Made in ${when}`, status: 'pick' as const, why: 'a step in the timeline' });
+  const { root, ids } = grow(k, [dated('Sketchpad', '1963'), dated('Mother of All Demos', '1968'), dated('Alto', '1973'), dated('Macintosh', '1984'), dated('Web', '1991')]);
+  const composites = slowComposites(k, () => ({ groups: [proposal({ parent: root, composite: 'timeline', members: ids, labels: ['1963', '1968', '1973', '1984', '1991'] })] }));
+
+  const run = renderer(k.ctx, { nodeIds: ids });
+  await composites.asked;
+  k.mind.apply({ origin: { by: 'agent', role: 'scout' }, label: 'make room', commands: [{ type: 'deleteNode', id: ids[0]! }] });
+  composites.open();
+  const commands = await run;
+
+  const timeline = commands.find((c) => c.type === 'setGroup');
+  assert.ok(timeline && timeline.type === 'setGroup', 'the timeline is kept');
+  assert.deepEqual(timeline.group.members, ids.slice(1));
+  k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands });
+});
+
+test('two passes asked about the same siblings at once group a card once: the later group naming a card already grouped is left out', async () => {
+  const k = kit();
+  const { root, ids } = grow(k, ['One', 'Two', 'Three', 'Four'].map((title) => ({ title, text: PLAIN, status: 'pick' as const })));
+  const gates: (() => void)[] = [];
+  const json = k.model.json.bind(k.model);
+  k.model.json = (async (req: Parameters<typeof json>[0]) => {
+    if (req.role !== 'renderer.composites') return json(req);
+    await new Promise<void>((r) => gates.push(r));
+    return req.schema.parse({ groups: [proposal({ parent: root, composite: 'cluster', theme: 'Moves', members: ids.slice(0, 3) })] });
+  }) as typeof k.model.json;
+
+  const first = renderer(k.ctx, { nodeIds: ids });
+  const second = renderer(k.ctx, { nodeIds: ids });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(gates.length, 2, 'both passes are asking');
+  gates[0]!();
+  const a = await first;
+  k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands: a });
+  gates[1]!();
+  const b = await second;
+
+  assert.equal(a.filter((c) => c.type === 'setGroup').length, 1);
+  assert.equal(b.filter((c) => c.type === 'setGroup').length, 0, "the cards are already in the first pass's group");
+  if (b.length > 0) k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands: b });
+});

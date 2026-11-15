@@ -124,13 +124,16 @@ test('speech that settles is acted on once, and the final transcript does not re
   await run.pipeline.idle();
   const root = [...run.mind.trees.values()][0]!.rootId;
   const scene = { focus: root, selection: [] };
+  await c.until((m) => m.t === 'say' && /under Jaws beach scene/.test(String(m.text)));
   const before = c.seen.filter((m) => m.t === 'say').length;
   run.pipeline.utter('why does this scene feel so wrong', scene, false);
   await new Promise((r) => setTimeout(r, 1000));
   run.pipeline.utter('why does this scene feel so wrong', scene, true);
   await run.pipeline.idle();
   await new Promise((r) => setTimeout(r, 50));
-  assert.equal(c.seen.filter((m) => m.t === 'say').length - before, 1);
+  const said = c.seen.filter((m) => m.t === 'say').slice(before).map((m) => String(m.text));
+  assert.equal(said.length, 2, `one reply, then one line on what the run brought: ${JSON.stringify(said)}`);
+  assert.match(said[1]!, /new things? under|found nothing new/);
   c.ws.close();
   await run.close();
 });
