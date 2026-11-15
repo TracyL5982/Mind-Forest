@@ -1,6 +1,7 @@
 // components/person.js: a name tag with a round face.
 #include <algorithm>
 
+#include "face.h"
 #include "kind.h"
 #include "media.h"
 
@@ -9,7 +10,7 @@ namespace cards {
 namespace {
 
 constexpr int WIDTH = 252;
-constexpr float FACE = 58;
+constexpr float FACE = 48;
 constexpr Setting INITIALS{16, 21, Font::Weight::semibold};
 
 std::string nameOf(const Item& item, const Json& props) {
@@ -55,24 +56,31 @@ void face(const Pen& pen, const Look& look, Color ground, const std::string& nam
     ring(pen, look, box);
 }
 
-Footprint size(const Item&, const Json&) { return {WIDTH, 88}; }
-
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    std::string name = nameOf(item, props), role = text(props["role"]), foot = item.title != name ? item.title : "";
-    float top = 14, tall = body - 2 - 26;
-    face(pen, look, look.fill, name, text(props["image"]), item.words, 16, top + (tall - FACE) / 2);
-    float x = 16 + FACE + 13, column = width - 16 - x;
-    float main = (name.empty() ? 0 : TITLE) + (role.empty() ? 0 : TEXT) + (foot.empty() ? 0 : TEXT);
-    float y = top + (tall - main) / 2;
-    auto line = [&](const std::string& s, const Setting& t, Color color) {
-        if (s.empty()) return;
-        pen.words(s, x, y, column, 1, t, color);
-        y += t.lead;
-    };
-    line(name, setting::title, palette::ink);
-    line(role, setting::text, look.ink2);
-    line(foot, setting::text, look.ink3);
+/// A round face of 48 px beside the name and the role, each in whole lines.
+void lay(Col& c, const Item& item, const Json& props) {
+    std::string name = nameOf(item, props), role = text(props["role"]);
+    float top = c.y;
+    if (c.pen) face(*c.pen, c.look, c.look.fill, name, text(props["image"]), item.words, c.x, top);
+    c.x += 48 + 12;
+    c.width -= 48 + 12;
+    c.lines(name, Measure::title, 2, palette::ink, role.empty() ? 0 : face::BODY);
+    c.lines(role, Measure::body, 2, c.look.ink2);
+    c.y = std::max(c.y, top + 48);
+    c.x = face::LEFT;
+    c.width = face::COL;
+    if (c.more) c.cue(cueMore(c.words));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
+
 
 /// `.detail-person`: the face beside the name and the role, whole.
 void detail(Sheet& sheet, const Item& item, const Json& props) {

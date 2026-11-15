@@ -2,6 +2,7 @@
 // like a museum label.
 #include <algorithm>
 
+#include "face.h"
 #include "kind.h"
 #include "media.h"
 
@@ -35,12 +36,6 @@ Plan plan(const Item& item, const Json& props) {
     return p;
 }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    return {WIDTH, MAT + PLATE + p.titleLines * TITLE + (p.byLines ? 2 + p.byLines * TEXT : 0) + p.mediumLines * TEXT +
-                       (p.holder.empty() ? 0 : TEXT)};
-}
-
 /// The work's two shadows: a soft dark one cast 6 px down, and a faint light edge.
 void lift(const Pen& pen, CGRect r) {
     const int layers = 8;
@@ -55,34 +50,46 @@ void lift(const Pen& pen, CGRect r) {
     pen.ctx.stroke(r.insetBy(-pen.k / 2, -pen.k / 2));
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
-    Plan p = plan(item, props);
-    pen.ctx.setFillColor(palette::raised);
-    pen.ctx.fill(pen.px(1, 1, width - 2, MAT));
-    pen.ctx.setFillColor(palette::line);
-    pen.ctx.fill(pen.px(1, MAT, width - 2, 1));
-    std::string src = text(props["src"]);
-    CGRect box = pen.px(15, 15, width - 30, MAT - 28);
-    std::optional<Picture> known = pictureAt(src);
-    std::optional<float> aspect = aspectOf(src);
-    if (src.empty() || (known && known->missing)) {
-        pen.picture(src, box, false, item.words);
-    } else if (aspect) {
-        CGRect work = contained(box, *aspect);
-        lift(pen, work);
-        pen.picture(src, work, false, item.words);
+
+/// The work whole on a mat a shade lighter, 101 px tall, then its title on a plate.
+void lay(Col& c, const Item& item, const Json& props) {
+    // The title on one line under the picture; a longer one shows its first line and the cue, whose row the
+    // picture gives up.
+    std::string title = item.titleOrUntitled(), src = text(props["src"]);
+    bool cue = counted(title, face::COL, Measure::title) > 1;
+    const float box = 101 - (cue ? face::CUE : 0);
+    if (c.pen) {
+        const Pen& pen = *c.pen;
+        CGRect mat = pen.px(1, 1, face::W - 2, box);
+        pen.ctx.setFillColor(palette::raised);
+        pen.ctx.fill(mat);
+        CGRect inside = pen.px(7, 7, face::W - 14, box - 12);
+        std::optional<Picture> known = pictureAt(src);
+        bool missing = src.empty() || (known && known->missing);
+        std::optional<float> aspect = aspectOf(src);
+        if (missing) unavailable(pen, inside, item.words);
+        else pen.picture(src, aspect ? contained(inside, *aspect) : inside, false, item.words);
     }
-    float x = 16, y = 1 + MAT + 10, column = width - 32;
-    auto line = [&](const std::string& s, int lines, const Setting& t, Color color) {
-        pen.words(s, x, y, column, lines, t, color);
-        y += heightOf(s, column, lines, t, pen.k);
-    };
-    line(item.titleOrUntitled(), p.titleLines, setting::title, palette::ink);
-    y += p.byLines ? 2 : 0;
-    if (p.byLines) line(p.by, p.byLines, setting::text, palette::ink);
-    if (p.mediumLines) line(p.medium, p.mediumLines, setting::text, look.ink2);
-    if (!p.holder.empty()) line(p.holder, 1, setting::text, look.ink3);
+    // The plate: 9 px over its line and 10 under it.
+    c.y = 1 + box + 1 + 9;
+    c.say(title, setting::faceTitle, 1, c.x, c.y, c.width, palette::ink);
+    c.y += face::TITLE;
+    if (cue) {
+        c.more = true;
+        c.cue(cueMore(c.words));
+    }
+    c.y += 10 - face::BOTTOM;
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// The picture whole and the label's lines whole, without the holder when the opened card's list of
 /// sources names it.

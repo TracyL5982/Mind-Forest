@@ -2,6 +2,7 @@
 // beside an `A`.
 #include <algorithm>
 
+#include "face.h"
 #include "kind.h"
 #include "text.h"
 
@@ -30,24 +31,33 @@ Plan plan(const Json& props) {
     return {utf8(question), utf8(answer), wrap(question, COLUMN, TITLE_LETTER, 4), wrap(answer, COLUMN, TEXT_LETTER, 6)};
 }
 
-Footprint size(const Item&, const Json& props) {
+/// The question beside its letter, the answer beside its own in whole lines, and the cue.
+void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(props);
-    return {WIDTH, FRAME + p.questionLines * TITLE + RULE + p.answerLines * TEXT};
+    const float gutter = 22;
+    c.gap(8);
+    if (c.pen) label(*c.pen, fixed::question.in(item.words), c.x, c.y + 3, c.look.accent);
+    c.lines(p.question, Measure::title, 2, palette::ink, p.answer.empty() ? 0 : face::GAP + face::BODY, c.x + gutter, face::W - 55, c.width - gutter);
+    if (!p.answer.empty() && c.room() >= face::GAP + face::BODY) {
+        c.gap(face::GAP);
+        if (c.pen) label(*c.pen, fixed::answer.in(item.words), c.x, c.y + 2, palette::ink2);
+        c.lines(p.answer, Measure::body, 99, c.look.ink2, 0, c.x + gutter, face::W - 55, c.width - gutter);
+    } else if (!p.answer.empty()) {
+        c.more = true;
+    }
+    if (c.more) c.cue(cueMore(c.words));
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
-    Plan p = plan(props);
-    float x = 16, column = width - 32, y = 14;
-    pen.words(fixed::question.in(item.words), x, y, MARK, 1, ASKS, look.accent);
-    pen.words(p.question, x + MARK, y, column - MARK, p.questionLines, setting::title, palette::ink);
-    // `.c-qa` has no gap: `.qa-voice.is-answer`'s margin, then its rule and its padding.
-    y += float(p.questionLines * TITLE + 8);
-    pen.ctx.setFillColor(palette::line);
-    pen.ctx.fill(pen.px(x, y, column, 1));
-    y += 1 + 8;
-    pen.words(fixed::answer.in(item.words), x, y, MARK, 1, ANSWERS, look.ink3);
-    pen.words(p.answer, x + MARK, y, column - MARK, p.answerLines, setting::text, palette::ink);
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
 }
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
+
 
 /// `.detail-qa`: both whole. A question that is the opened card's own title is not asked again.
 void detail(Sheet& sheet, const Item& item, const Json& props) {

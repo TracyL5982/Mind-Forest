@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "face.h"
 #include "figures.h"
 #include "parts.h"
 
@@ -96,11 +97,6 @@ Plan plan(const Item& item, const Json& props) {
     return p;
 }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    return {WIDTH, FRAME + p.titleLines * TITLE + (p.grid.rows.empty() ? 0 : 12 + p.grid.height) + (p.more ? 8 + TEXT : 0)};
-}
-
 /// The rows of figures with their top-left at (x, y) px. Each row is as tall as its taller figure and
 /// label as drawn, as a grid row is.
 void figuresAt(const Pen& pen, const Look& look, const Grid& grid, float x, float y, float column) {
@@ -120,13 +116,6 @@ void figuresAt(const Pen& pen, const Look& look, const Grid& grid, float x, floa
     }
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    Plan p = plan(item, props);
-    float x = 16, column = width - 32, y = 14;
-    pen.words(p.title, x, y, column, p.titleLines, setting::title, palette::ink);
-    figuresAt(pen, look, p.grid, x, y + float(p.titleLines * TITLE + 12), column);
-    if (p.more) pen.words(item.words.more(p.more), x, body - 14 - TEXT, column, 1, setting::text, look.ink3);
-}
 
 /// `.detail-figures`: each label beside its value, whole.
 void listed(Sheet& sheet, const std::vector<Fact>& facts) {
@@ -158,6 +147,50 @@ void listed(Sheet& sheet, const std::vector<Fact>& facts) {
         sheet.said.push_back(f.value);
     }
 }
+
+/// The title, one row of figures: two when both fit half the row at the middle size, else one, and the cue.
+void lay(Col& c, const Item& item, const Json& props) {
+    std::vector<Fact> facts = pairs(props);
+    if (facts.empty()) {
+        c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink);
+        if (c.more) c.cue(cueMore(c.words));
+        return;
+    }
+    // Two figures side by side when both fit half the column at the middle size; else the first alone, at the
+    // middle size or on as many lines at the smallest as it needs. The title gives way to them.
+    const int half = (face::COL - 17) / 2;
+    auto fits = [](const std::string& value, int room) { return figureNeed(points(value), MIDDLE) <= room * 100; };
+    size_t shown = facts.size() > 1 && fits(facts[0].value, half) && fits(facts[1].value, half) ? 2 : 1;
+    const Figure& size = shown == 2 || fits(facts[0].value, face::COL) ? MIDDLE : SMALLEST;
+    int need = &size == &SMALLEST ? wrap(points(facts[0].value), face::COL, SMALLEST.letter, 3) : 1, valueLines = std::min(2, need);
+    // A value on two lines stands 8 px under the title, so a title line, the value and the cue all fit.
+    float row = float(valueLines * size.lineHeight + face::META), over = valueLines == 2 ? 8 : 12;
+    bool left = facts.size() > shown;
+    if (need > 2) c.more = true;
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, over + row + (left || c.more ? face::CUE : 0));
+    c.gap(over);
+    float room = shown == 2 ? float(half) : float(face::COL);
+    if (c.pen) {
+        for (size_t i = 0; i < shown; i++) {
+            float x = c.x + float(i) * (float(half) + 17);
+            c.heldBack = figure(*c.pen, facts[i].value, x, c.y, room, valueLines, size, palette::ink) || c.heldBack;
+            c.say(facts[i].label, setting::faceMeta, 1, x, c.y + float(valueLines * size.lineHeight), room, palette::ink2);
+        }
+    }
+    c.gap(row);
+    if (left) c.more = true;
+    if (c.more) c.cue(left ? cueCount(c.words, int(facts.size() - shown)) : cueMore(c.words));
+}
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// Every fact the item holds, when the card shows only the first of them.
 void detail(Sheet& sheet, const Item& item, const Json& props) {

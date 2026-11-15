@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "face.h"
 #include "kind.h"
 #include "media.h"
 
@@ -67,11 +68,6 @@ Plan plan(const Item& item, const Json& props) {
     return p;
 }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    return {WIDTH, FRAME + p.titleLines * TITLE + GAP + STRIP + (p.bodyLines ? GAP + p.bodyLines * TEXT : 0)};
-}
-
 /// The loudness of each slice as a bar about the middle line, stretched across `box` (pixels), or a flat
 /// line when nobody measured it.
 void wave(const Pen& pen, const std::vector<float>& peaks, CGRect box, Color color) {
@@ -118,15 +114,32 @@ void player(const Pen& pen, const std::string& length, float x, float y, float w
     pen.ctx.fillPath();
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
-    Plan p = plan(item, props);
-    float x = 16, y = 14, column = width - 32;
-    std::string title = item.titleOrUntitled();
-    pen.words(title, x, y, column, p.titleLines, setting::title, palette::ink);
-    y += heightOf(title, column, p.titleLines, setting::title, pen.k) + GAP;
-    strip(pen, look, peaksOf(props), p.length, x, y, x + column);
-    if (p.bodyLines) pen.words(p.body, x, y + STRIP + GAP, column, p.bodyLines, setting::text, look.ink2);
+
+/// The title, the strip of play mark, waveform and length, the first words of the transcript, and the cue.
+void lay(Col& c, const Item& item, const Json& props) {
+    std::string words = heard(item);
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + STRIP);
+    c.gap(face::GAP);
+    if (c.pen) strip(*c.pen, c.look, peaksOf(props), lengthOf(props), c.x, c.y, c.x + c.width);
+    c.gap(STRIP);
+    if (!words.empty() && c.room() >= face::GAP + face::BODY) {
+        c.gap(face::GAP);
+        c.lines(words, Measure::body, 99, c.look.ink2);
+    } else if (!words.empty()) {
+        c.more = true;
+    }
+    if (c.more) c.cue(cueMore(c.words));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// `.detail-audio`, and every word of the transcript as it was heard.
 void detail(Sheet& sheet, const Item& item, const Json& props) {

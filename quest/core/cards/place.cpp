@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "face.h"
 #include "figures.h"
 
 namespace cards {
@@ -69,11 +70,6 @@ Plan plan(const Item& item, const Json& props) {
     p.headHeight = std::max(PIN, p.large ? MIDDLE.lineHeight : p.nameLines * TITLE);
     p.aboutLines = p.about.empty() ? 0 : wrap(points(p.about), COLUMN, TEXT_LETTER, 3);
     return p;
-}
-
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    return {WIDTH, (p.src.empty() ? 0 : PICTURE) + (p.at ? MAP.height : 0) + FRAME + p.headHeight + (p.aboutLines ? 8 + p.aboutLines * TEXT : 0)};
 }
 
 /// A pin's outline, as map.js's PIN and the where glyph draw it in their own units: a drop pointing
@@ -169,26 +165,47 @@ float head(const Pen& pen, const Plan& p, float x, float top, float width, int l
     return tall;
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
+
+/// The name as a figure, then a map to the edges when the item knows where it is, or its words and the cue.
+void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
-    float y = 1;
-    if (!p.src.empty()) {
-        CGRect frame = pen.px(1, 1, width - 2, PICTURE);
-        pen.ctx.setFillColor(palette::media);
-        pen.ctx.fill(frame);
-        pen.picture(p.src, frame, true, item.words);
-        y += PICTURE;
-    }
+    Text name = points(p.name);
+    bool large = figureNeed(name, MIDDLE) <= face::COL * 100;
+    const Figure& size = large ? MIDDLE : SMALLEST;
+    int need = large ? 1 : wrap(name, face::COL, SMALLEST.letter, 3), lines = std::min(2, need);
+    // A name longer than two lines shows its first two, and the cue.
+    if (need > 2) c.more = true;
+    if (c.pen) c.heldBack = figure(*c.pen, p.name, c.x, c.y, c.width, lines, size, palette::ink) || c.heldBack;
+    c.gap(float(lines * size.lineHeight));
     if (p.at) {
-        map(pen, 1, y, width - 2, MAP, *p.at, look.accent, look.fill);
-        // `.place-map`'s inset rule along its foot.
-        pen.ctx.setFillColor(palette::line);
-        pen.ctx.fill(pen.px(1, y + float(MAP.height) - 1, width - 2, 1));
-        y += float(MAP.height);
+        // The map runs to the foot of the face, or stops short of the cue.
+        float tall = c.room() + face::BOTTOM - 1 - (c.more ? face::CUE + face::BOTTOM - 1 : 0);
+        if (c.pen) map(*c.pen, 1, c.y + 0, face::W - 2, Map{face::W - 2, int(tall), 12}, *p.at, c.look.accent, c.look.fill);
+        c.y += tall + 1 - face::BOTTOM;
+        if (c.more) {
+            c.y += face::BOTTOM - 1;
+            c.cue(cueMore(c.words));
+        }
+        return;
     }
-    y += 13 + head(pen, p, 16, y + 13, width - 32, p.nameLines, look.accent, look.fill);
-    if (p.aboutLines) pen.words(p.about, 16, y + 8, width - 32, p.aboutLines, setting::text, look.ink2);
+    if (!p.about.empty() && c.room() >= 8 + face::BODY) {
+        c.gap(8);
+        c.lines(p.about, Measure::body, 99, c.look.ink2);
+    } else if (!p.about.empty()) {
+        c.more = true;
+    }
+    if (c.more) c.cue(cueMore(c.words));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// The picture whole, a larger map, and the name when neither the opened card's own title nor its
 /// `Where` source is already the name.

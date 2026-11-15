@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "face.h"
 #include "rows.h"
 
 namespace cards {
@@ -42,43 +43,23 @@ std::string language(const Json& props) {
     return given == "text" ? "" : given;
 }
 
-Footprint size(const Item&, const Json& props) {
-    return {WIDTH, FRAME + TITLE + 8 + int(clamp(int64_t(linesOf(props).size()), 1, SHOWN)) * TEXT};
+/// The title, and one meta line in place of the source: how many lines, in what language.
+void lay(Col& c, const Item& item, const Json& props) {
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + face::META);
+    c.gap(face::GAP);
+    c.lines(cueCodeLines(c.words, int(linesOf(props).size()), language(props)), Measure::meta, 1, palette::ink2);
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    float x = 16, column = width - 32, y = 14;
-    std::string named = language(props);
-    float labelled = named.empty() ? 0 : labelWidth(named, pen.k);
-    pen.words(item.titleOrUntitled(), x, y, column - (named.empty() ? 0 : 10 + labelled), 1, setting::title, palette::ink);
-    if (!named.empty()) label(pen, named, x + column - labelled, y + (TITLE - TEXT) / 2.f, look.ink2);
-    y += TITLE + 8;
-
-    // `.code-lines`: the numbers set right, 10 px, then a rule, all of it at least two figures wide (`border-box`).
-    std::vector<std::string> lines = linesOf(props);
-    lines.resize(std::min(lines.size(), size_t(SHOWN)));
-    float figures = std::max(2 * pen.width("0", CODE) - 11, pen.width(std::to_string(lines.size()), CODE));
-    float tall = body - 14 - y;
-    for (size_t i = 0; i < lines.size(); i++) {
-        std::string n = std::to_string(i + 1);
-        float w = pen.width(n, CODE);
-        pen.words(n, x + figures - w, y + float(i) * TEXT, w + 1, 1, CODE, look.ink3);
-    }
-    pen.ctx.setFillColor(palette::line);
-    pen.ctx.fill(pen.px(x + figures + 10, y, 1, tall));
-
-    // `.code-source`: cut at the card's edge, and faded over its last 28 px.
-    float left = x + figures + 10 + 1 + 11, room = x + column - left;
-    pen.ctx.saveGState();
-    pen.ctx.clip(pen.px(left, y, room, tall));
-    for (size_t i = 0; i < lines.size(); i++) pen.words(lines[i], left, y + float(i) * TEXT, INFINITY, 1, CODE, SOURCE);
-    pen.ctx.restoreGState();
-    const int bands = 14;
-    for (int i = 0; i < bands; i++) {
-        pen.ctx.setFillColor(look.fill.withAlphaComponent((float(i) + 0.5f) / bands));
-        pen.ctx.fill(pen.px(left + room - FADE + FADE * float(i) / bands, y, FADE / bands, tall));
-    }
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
 }
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
+
 
 /// `.code-source.is-full`: the whole source in a dark box, at most 420 px tall, cut where it runs past the box.
 void detail(Sheet& sheet, const Item&, const Json& props) {

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 
+#include "face.h"
+#include "figures.h"
 #include "parts.h"
 
 namespace cards {
@@ -198,13 +200,6 @@ std::vector<std::string> shows(const Item& item, const Json& props) {
     return out;
 }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    int parts = 0;
-    for (size_t i = 0; i < p.parts.size(); i++) parts += aboveOf(p.parts[i], i) + p.parts[i].height;
-    return {WIDTH, (p.src.empty() ? 0 : PICTURE) + FRAME + p.titleLines * TITLE + parts};
-}
-
 /// `.sheet-by`: a short rule, then who said it.
 void saidBy(const Pen& pen, const std::string& by, float x, float y, float column, int lines) {
     pen.ctx.setFillColor(palette::ink2);
@@ -235,34 +230,67 @@ void drawPart(const Pen& pen, const Look& look, const Item& item, const Part& pa
     }
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
+
+/// The title and the first part as its own preview in at most 68 px, and the cue counting the other parts.
+void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
-    float y = 1;
-    if (!p.src.empty()) {
-        CGRect frame = pen.px(1, 1, width - 2, PICTURE);
-        pen.ctx.setFillColor(palette::media);
-        pen.ctx.fill(frame);
-        pen.picture(p.src, frame, true, item.words);
-        y += PICTURE;
-    }
-    float x = 16, column = width - 32;
-    y += 13;
-    pen.words(p.title, x, y, column, p.titleLines, setting::title, palette::ink);
-    y += float(p.titleLines * TITLE);
-    for (size_t i = 0; i < p.parts.size(); i++) {
-        const Part& part = p.parts[i];
-        if (i == 0) {
-            y += float(part.lead);
-        } else {
-            y += ABOVE;
-            pen.ctx.setFillColor(palette::line);
-            pen.ctx.fill(pen.px(x, y, column, 1));
-            y += 1 + BELOW;
+    c.lines(p.title, Measure::title, 2, palette::ink, p.parts.empty() ? 0 : face::GAP + face::BODY);
+    if (!p.parts.empty()) {
+        const Part& part = p.parts.front();
+        c.gap(face::GAP);
+        float top = c.y, most = std::min(68.f, c.room() - (p.parts.size() > 1 ? face::CUE : 0));
+        switch (part.kind) {
+        case Part::Kind::text: c.lines(part.words, Measure::body, int(most / face::BODY), c.look.ink2); break;
+        case Part::Kind::excerpt: c.lines(part.words, Measure::passage, int(most / face::BODY), palette::ink); break;
+        case Part::Kind::list: {
+            size_t n = std::min(part.entries.size(), size_t(std::max(1, int((most + 5) / (face::BODY + 5)))));
+            for (size_t i = 0; i < n; i++) {
+                if (i) c.gap(5);
+                if (c.pen) entryMark(*c.pen, c.x, c.y + 5, c.look);
+                c.lines(part.entries[i], Measure::body, 1, palette::ink, 0, c.x + MARK, face::COL - MARK);
+            }
+            if (part.entries.size() > n) c.more = true;
+            break;
         }
-        drawPart(pen, look, item, part, x, y, column);
-        y += float(part.height);
+        case Part::Kind::figures: {
+            std::vector<std::string> said = figureWords(part.section);
+            size_t n = std::min(said.size() / 2, size_t(2));
+            const float half = (face::COL - 17) / 2.f;
+            for (size_t i = 0; i < n && c.pen; i++) {
+                float left = c.x + float(i) * (half + 17);
+                c.heldBack = figure(*c.pen, said[2 * i + 1], left, c.y, half, 1, MIDDLE, palette::ink) || c.heldBack;
+                c.say(said[2 * i], setting::faceMeta, 1, left, c.y + 28, half, palette::ink2);
+            }
+            c.gap(28 + face::META);
+            if (said.size() / 2 > n) c.more = true;
+            break;
+        }
+        case Part::Kind::table: {
+            std::vector<std::string> said = tableWords(item, part.section, face::COL);
+            c.lines(said.empty() ? "" : said[0], Measure::meta, 1, palette::ink2);
+            c.more = true;
+            break;
+        }
+        }
+        c.y = std::min(c.y, top + most);
+    }
+    if (p.parts.size() > 1) {
+        c.more = true;
+        c.cue(cueParts(c.words, int(p.parts.size() - 1)));
+    } else if (c.more) {
+        c.cue(cueMore(c.words));
     }
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// The picture whole, the heading when the opened card's title is not already it, and each part whole, in order.
 void detail(Sheet& sheet, const Item& item, const Json& props) {

@@ -1,4 +1,5 @@
 // components/quote.js: a serif on a face washed with the tree's colour.
+#include "face.h"
 #include "kind.h"
 
 namespace cards {
@@ -22,10 +23,6 @@ std::string words(const Item& item, const Json& props) {
 
 int lines(const Item& item, const Json& props) { return fold(points(words(item, props)), COLUMN, QUOTE_LETTER, 5); }
 
-Footprint size(const Item& item, const Json& props) {
-    return {WIDTH, FRAME + MARK + lines(item, props) * TITLE + (text(props["by"]).empty() ? 0 : 8 + TEXT)};
-}
-
 /// `.quote-by`: a short rule, then who said it.
 void by(const Pen& pen, const std::string& who, float x, float y, float column, int lines, float ruleDrop) {
     pen.ctx.setFillColor(BY);
@@ -33,14 +30,35 @@ void by(const Pen& pen, const std::string& who, float x, float y, float column, 
     pen.words(who, x + 22, y, column - 22, lines, setting::text, BY);
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    float x = 20, column = width - 40, y = 14;
-    pen.words(OPEN_QUOTE, x, y + MARK_DROP, column, 1, setting::mark, look.accent);
-    pen.words(words(item, props), x, y + MARK, column, lines(item, props), setting::quote, palette::ink);
-    std::string who = text(props["by"]);
-    // Spare room sits between the words and the speaker.
-    if (!who.empty()) by(pen, who, x, body - 14 - TEXT, column, 1, 8);
+
+/// The mark, the quotation upright in the serif, the speaker under a short rule, and the cue.
+void lay(Col& c, const Item& item, const Json& props) {
+    c.x = 20;
+    c.width = face::W - 40;
+    std::string said = words(item, props), who = text(props["by"]);
+    if (c.pen) c.say(OPEN_QUOTE, setting::mark, 1, c.x, c.y + MARK_DROP, c.width, c.look.accent);
+    c.gap(MARK);
+    c.lines(said, Measure::passage, 99, palette::ink, who.empty() ? 0 : 8 + face::META, -1, face::W - 41, c.width);
+    if (!who.empty() && c.room() >= 8 + face::META) {
+        c.gap(8);
+        if (c.pen) {
+            c.pen->ctx.setFillColor(BY);
+            c.pen->ctx.fill(c.pen->px(c.x, c.y + 9, 14, 1));
+        }
+        c.lines(who, Measure::meta, 1, BY, 0, c.x + 22, c.width - 22);
+    }
+    if (c.more) c.cue(cueMore(c.words));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// `.detail-quote`: the same face in a box, the words larger and whole.
 void detail(Sheet& sheet, const Item& item, const Json& props) {

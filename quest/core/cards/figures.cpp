@@ -76,14 +76,23 @@ Setting figureSetting(const Figure& size) {
     switch (size.letter) {
     case LARGEST.letter: return {34, 36, Font::Weight::bold};
     case MIDDLE.letter: return {24, 28, Font::Weight::bold};
-    default: return {16, 21, Font::Weight::bold};
+    default: return {18, 24, Font::Weight::bold};
     }
 }
 
-void figure(const Pen& pen, const std::string& value, float x, float y, float width, int lines, const Figure& size, Color color) {
-    if (value.empty()) return;
+bool figure(const Pen& pen, const std::string& value, float x, float y, float width, int lines, const Figure& size, Color color) {
+    if (value.empty()) return false;
     CGPoint at{x * pen.k, y * pen.k - raised(figureSetting(size), pen.k)};
-    pen.ctx.drawText(value, at, figureAttributes(size, color, pen.k), width * pen.k, lines);
+    TextAttributes a = figureAttributes(size, color, pen.k);
+    std::string shown = value;
+    const TextFrame& all = layoutText(value, a, width * pen.k, 0);
+    bool held = lines > 0 && int(all.lines.size()) > lines;
+    if (held) {
+        std::u16string units = utf16(value);
+        shown = ::utf8(units.substr(0, size_t(std::clamp(all.lines[size_t(lines - 1)].end, 0, int(units.size())))));
+    }
+    pen.ctx.drawText(shown, at, a, width * pen.k, 0);
+    return held;
 }
 
 float figureHeight(const std::string& value, float width, int lines, const Figure& size, float k) {

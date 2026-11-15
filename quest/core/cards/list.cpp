@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <optional>
 
+#include "face.h"
 #include "parts.h"
 #include "rows.h"
 
@@ -51,14 +52,6 @@ Plan plan(const Item& item, const Json& props) {
     return p;
 }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    int stacked = 0;
-    for (int lines : p.rows) stacked += lines * TEXT;
-    stacked += std::max(0, int(p.rows.size()) - 1) * GAP;
-    return {WIDTH, FRAME + p.titleLines * TITLE + (p.rows.empty() ? 0 : 10 + stacked) + (int(p.entries.size()) > SHOWN ? 8 + TEXT : 0)};
-}
-
 /// `.list-dot`, or `.list-box` filled and ticked for a done entry, 12 px square at (x, y).
 void mark(const Pen& pen, std::optional<bool> done, float x, float y, Color accent, Color ink3, Color face) {
     float k = pen.k;
@@ -89,24 +82,6 @@ void mark(const Pen& pen, std::optional<bool> done, float x, float y, Color acce
 
 std::optional<bool> doneAt(const Plan& p, size_t i) { return p.checked ? std::optional((*p.checked)[i]) : std::nullopt; }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    Plan p = plan(item, props);
-    float x = 16, column = width - 32, y = 14;
-    float tallyWidth = p.tally.empty() ? 0 : pen.width(p.tally, setting::text);
-    pen.words(p.title, x, y, column - (p.tally.empty() ? 0 : 10 + tallyWidth), p.titleLines, setting::title, palette::ink);
-    if (!p.tally.empty()) {
-        float drop = baseline(setting::title, pen.k) - baseline(setting::text, pen.k);
-        pen.words(p.tally, x + column - tallyWidth, y + drop, tallyWidth + 1, 1, setting::text, look.ink3);
-    }
-    y += float(p.titleLines * TITLE) + 10;
-    for (size_t i = 0; i < p.rows.size(); i++) {
-        std::optional<bool> done = doneAt(p, i);
-        mark(pen, done, x, y + 2.5f, look.accent, look.ink3, look.fill);
-        pen.words(p.entries[i], x + MARK, y, column - MARK, p.rows[i], setting::text, done.value_or(false) ? look.ink2 : palette::ink);
-        y += float(p.rows[i] * TEXT + GAP);
-    }
-    if (int(p.entries.size()) > SHOWN) foot(pen, item.words, int(p.entries.size()) - SHOWN, body, column, look.ink3);
-}
 
 /// `[\p{L}\p{N}]`, near enough: what is not white space, a mark, punctuation or a symbol.
 bool wordy(char32_t c) {
@@ -187,6 +162,45 @@ void entriesDetail(Sheet& sheet, const Item& item, const std::vector<std::string
     });
     for (const std::string& label : labels) sheet.said.push_back(label);
 }
+
+/// The title with a checklist's tally, then entries after their marks, each whole, and the cue.
+void lay(Col& c, const Item& item, const Json& props) {
+    Plan p = plan(item, props);
+    float tally = p.tally.empty() ? 0 : std::ceil(float(textWidth(points(p.tally)))) + 10;
+    c.width -= tally;
+    c.lines(p.title, Measure::title, 2, palette::ink, p.entries.empty() ? 0 : 10 + face::BODY);
+    c.width += tally;
+    if (c.pen && !p.tally.empty()) c.say(p.tally, setting::faceMeta, 1, c.x + c.width - tally + 10, face::TOP + 3, tally, palette::ink2);
+    c.gap(10);
+    const int column = face::COL - MARK;
+    size_t i = 0;
+    for (; i < p.entries.size(); i++) {
+        int need = counted(p.entries[i], column, Measure::body);
+        int shown = std::min(need, 2);
+        bool after = i + 1 < p.entries.size() || need > shown;
+        float tall = (i > 0 ? float(GAP) : 0.f) + float(shown * face::BODY);
+        if (tall + (after ? face::CUE : 0) > c.room()) break;
+        if (need > shown) c.more = true;
+        if (i > 0) c.gap(GAP);
+        if (c.pen) {
+            mark(*c.pen, doneAt(p, i), c.x, c.y + 5, c.look.accent, palette::ink2, c.look.fill);
+            c.say(p.entries[i], setting::faceBody, shown, c.x + MARK, c.y, float(column), palette::ink);
+        }
+        c.gap(float(shown * face::BODY));
+    }
+    if (i < p.entries.size()) c.more = true;
+    if (c.more) c.cue(i < p.entries.size() ? cueCount(c.words, int(p.entries.size() - i)) : cueMore(c.words));
+}
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 void detail(Sheet& sheet, const Item& item, const Json& props) {
     Plan p = plan(item, props);

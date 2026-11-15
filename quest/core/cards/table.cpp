@@ -5,6 +5,7 @@
 #include <numeric>
 #include <string_view>
 
+#include "face.h"
 #include "kind.h"
 #include "parts.h"
 #include "text.h"
@@ -221,11 +222,6 @@ Plan plan(const Item& item, const Json& props, int room = ROOM) {
 /// How tall the rows a plan shows stand under their heads, with the line that counts what is left out.
 int ruledHeight(const Plan& p) { return ROW * (1 + int(p.rows.size())) + (p.foot.empty() ? 0 : 8 + TEXT); }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    return {p.width, FRAME + p.titleLines * TITLE + 8 + ruledHeight(p)};
-}
-
 // MARK: - The small face
 
 /// `.table`: 12.5 px words on a line of 23 px, over the rule that ends each 24 px row.
@@ -262,13 +258,6 @@ void ruled(const Pen& pen, const Look& look, const Plan& p, float x, float y, fl
     }
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    Plan p = plan(item, props);
-    float x = 16, column = width - 32, y = 14;
-    pen.words(item.titleOrUntitled(), x, y, column, p.titleLines, setting::title, palette::ink);
-    ruled(pen, look, p, x, y + float(p.titleLines * TITLE + 8), column);
-    if (!p.foot.empty()) pen.words(p.foot, x, body - 14 - TEXT, column, 1, setting::text, look.ink3);
-}
 
 // MARK: - The opened card
 
@@ -294,6 +283,36 @@ float widestWord(const std::string& s, const Setting& t, float k) {
     }
     return widest;
 }
+
+/// The title, the heads in meta joined by a middle dot while they are whole with what is left counted, and the rows.
+void lay(Col& c, const Item& item, const Json& props) {
+    Grid g = grid(props);
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + face::META + 4 + face::CUE);
+    c.gap(face::GAP);
+    std::string heads;
+    size_t i = 0;
+    for (; i < g.heads.size(); i++) {
+        std::string next = heads.empty() ? utf8(g.heads[i]) : heads + " \xC2\xB7 " + utf8(g.heads[i]);
+        size_t rest = g.heads.size() - i - 1;
+        if (counted(next + (rest ? " +" + std::to_string(rest) : ""), face::COL, Measure::meta) > 1 && !heads.empty()) break;
+        heads = next;
+    }
+    if (i < g.heads.size()) heads += " +" + std::to_string(g.heads.size() - i);
+    c.lines(heads, Measure::meta, 1, palette::ink2);
+    c.gap(4);
+    c.more = true;
+    c.cue(cueRows(c.words, int(g.rows.size())));
+}
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// Every row and column under heads that wrap on whole words, the columns shared out as a browser's
 /// automatic table layout shares them. The web's box scrolls both ways; here it shows its top left.

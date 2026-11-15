@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "face.h"
 #include "rows.h"
 
 namespace cards {
@@ -28,13 +29,6 @@ std::vector<Message> messagesOf(const Json& list, size_t most) {
 }
 
 int linesOf(const Message& m) { return fold(points(m.text), COLUMN, TEXT_LETTER, 2); }
-
-Footprint size(const Item&, const Json& props) {
-    std::vector<Message> shown = messagesOf(props["messages"], SHOWN);
-    int bubbles = shown.empty() ? 0 : 2;
-    for (const Message& m : shown) bubbles += 6 + 12 + linesOf(m) * TEXT;
-    return {WIDTH, FRAME + TITLE + bubbles + (text(props["source"]).empty() ? 0 : 6 + TEXT)};
-}
 
 /// `.bubble`: 10 px corners but the one under the speaker, which is 3, on the white or, for yours, the accent.
 void bubble(const Pen& pen, CGRect r, bool user, Color accent) {
@@ -73,15 +67,44 @@ float said(const Pen& pen, const Message& m, float x, float right, float y, floa
     return tall;
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    float x = 16, column = width - 32, y = 14;
-    pen.words(item.titleOrUntitled(), x, y, column, 1, setting::title, palette::ink);
-    y += TITLE + 2;
-    for (const Message& m : messagesOf(props["messages"], SHOWN)) {
-        y += 6 + said(pen, m, x, x + column, y + 6, column * 0.86f, linesOf(m), setting::text, look.accent);
+
+/// The title, then speech bubbles: two of one line each, or the first in up to two lines, and the cue.
+void lay(Col& c, const Item& item, const Json& props) {
+    std::vector<Message> all = messagesOf(props["messages"], 999);
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, all.empty() ? 0 : 2 + 6 + 12 + face::BODY);
+    c.gap(2);
+    const int column = int(std::floor(float(face::COL) * 0.86f)) - 20;
+    size_t i = 0;
+    for (; i < all.size(); i++) {
+        int need = counted(all[i].text, column, Measure::body);
+        int shown = std::min(need, i == 0 ? 2 : 1);
+        if (i > 0 && need > 1) break;
+        bool after = i + 1 < all.size() || need > shown;
+        float tall = 6 + 12 + float(shown * face::BODY);
+        if (tall + (after ? face::CUE : 0) > c.room()) break;
+        if (need > shown) c.more = true;
+        if (c.pen) {
+            const Pen& pen = *c.pen;
+            float drawn = std::min(float(column), widthOf(all[i].text, setting::faceBody, pen.k) + 1);
+            float wide = drawn + 20, left = all[i].user ? c.x + c.width - wide : c.x;
+            bubble(pen, pen.px(left, c.y + 6, wide, tall - 6), all[i].user, c.look.accent);
+            c.say(all[i].text, setting::faceBody, shown, left + 10, c.y + 12, float(column), palette::ink);
+        }
+        c.gap(tall);
     }
-    if (std::string source = text(props["source"]); !source.empty()) label(pen, source, x, body - 14 - TEXT, look.ink2);
+    if (i < all.size()) c.more = true;
+    if (c.more) c.cue(i < all.size() ? cueCount(c.words, int(all.size() - i)) : cueMore(c.words));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// `.detail-chat`: up to 40 messages whole, at 13.5 px, 7 px apart, then the source.
 void detail(Sheet& sheet, const Item& item, const Json& props) {

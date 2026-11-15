@@ -101,6 +101,13 @@ struct Look {
     float radius = 12;
 };
 
+/// For the checks (test/sizes.cpp): while `on`, each text a card draws cut short, with an ellipsis or by
+/// lines left out with no cue after them, is written down in `seen`.
+struct Cuts {
+    static inline bool on = false;
+    static inline std::vector<std::string> seen;
+};
+
 /// A canvas and the scale it is drawn at.
 struct Pen {
     Canvas& ctx;

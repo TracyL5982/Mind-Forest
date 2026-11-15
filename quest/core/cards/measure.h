@@ -35,7 +35,9 @@ struct Figure {
 };
 constexpr Figure LARGEST{36, 210, 2148};
 constexpr Figure MIDDLE{28, 149, 1506};
-constexpr Figure SMALLEST{21, 105, 1001};
+/// The smallest is 18 px on 24 on the Quest (the sizing spec), where the web sets 16 on 21: its letter and
+/// digit are the web's 16 px ones scaled by 18 / 16 and rounded up, so a count is never short.
+constexpr Figure SMALLEST{24, 119, 1127};
 
 /// A string's width in tenths of an average lowercase letter, in the face `letter` names.
 int64_t span(const Text& str, int letter = TEXT_LETTER);

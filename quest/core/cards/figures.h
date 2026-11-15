@@ -12,8 +12,9 @@ namespace cards {
 /// `.fact-value` in one of the figure sizes: 34 px on 36, 24 on 28, or 16 on 21, weight 650.
 Setting figureSetting(const Figure& size);
 /// A figure with its top-left at (x, y) px, its letters 0.02 em closer as style.css sets them, wrapped
-/// to `width` px. `lines` 0 draws it whole, with no clamp and no ellipsis, as a figure always is.
-void figure(const Pen& pen, const std::string& value, float x, float y, float width, int lines, const Figure& size, Color color);
+/// to `width` px. `lines` 0 draws it whole; otherwise it draws that many whole lines at most, never an
+/// ellipsis, and says whether it held any back.
+bool figure(const Pen& pen, const std::string& value, float x, float y, float width, int lines, const Figure& size, Color color);
 /// How tall `figure` draws it, px.
 float figureHeight(const std::string& value, float width, int lines, const Figure& size, float k);
 

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <map>
 
+#include "face.h"
 #include "figures.h"
 
 namespace cards {
@@ -219,11 +220,6 @@ Plan plan(const Item& item, const Json& props) {
     return p;
 }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    return {WIDTH, FRAME + MARK + p.titleLines * TITLE + OUT_GAP + p.height + int(p.controls.size()) * (ROW_GAP + ROW)};
-}
-
 /// The curve of the result across the first slider, with a dot at each stated value and a ring where it stands now.
 void curve(const Pen& pen, const Look& look, const std::vector<Control>& sliders, const Output& output, float left0, float top0, float width, float height) {
     const Control& first = sliders.front();
@@ -267,77 +263,43 @@ void curve(const Pen& pen, const Look& look, const std::vector<Control>& sliders
     pen.words(to, left0 + width - right - w, top0 + height - 17, w + 1, 1, setting::text, look.ink3);
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
+
+/// The mark, the title in one line, what the controls change in one line, and the cue counting the controls.
+void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
-    float x = 16, column = width - 32, y = 14;
-    // `.explore-mark`: the glyph, then the word, in the text's line.
-    pen.ctx.setStrokeColor(look.accent);
-    pen.ctx.setLineWidth(1.4f * pen.k);
-    pen.ctx.setLineCap(Canvas::LineCap::round);
-    float gy = y + 1.5f;
-    for (auto [x0, y0, x1, y1] : {std::array<float, 4>{1.5f, 4, 12.5f, 4}, {1.5f, 10, 12.5f, 10}, {4.5f, 2.2f, 4.5f, 5.8f}, {9.5f, 8.2f, 9.5f, 11.8f}}) {
-        pen.ctx.move(CGPoint{(x + x0) * pen.k, (gy + y0) * pen.k});
-        pen.ctx.addLine(CGPoint{(x + x1) * pen.k, (gy + y1) * pen.k});
-        pen.ctx.strokePath();
-    }
-    label(pen, item.words.chinese ? "可探索" : "Explore", x + 20, y, look.ink2);
-    y += MARK;
-    pen.words(item.titleOrUntitled(), x, y, column, p.titleLines, setting::title, palette::ink);
-    y += float(p.titleLines * TITLE + OUT_GAP);
-    if (p.output.kind == Output::Kind::text) {
-        for (const auto& [words, lines] : p.texts) {
-            pen.words(words, x, y, column, lines, setting::text, palette::ink);
-            y += float(lines * TEXT + TEXT_GAP);
+    if (c.pen) {
+        const Pen& pen = *c.pen;
+        pen.ctx.setStrokeColor(c.look.accent);
+        pen.ctx.setLineWidth(1.4f * pen.k);
+        pen.ctx.setLineCap(Canvas::LineCap::round);
+        for (auto [x0, y0, x1, y1] : {std::array<float, 4>{1.5f, 4, 12.5f, 4}, {1.5f, 10, 12.5f, 10}, {4.5f, 2.2f, 4.5f, 5.8f}, {9.5f, 8.2f, 9.5f, 11.8f}}) {
+            pen.ctx.move(CGPoint{(c.x + x0) * pen.k, (c.y + 2 + y0) * pen.k});
+            pen.ctx.addLine(CGPoint{(c.x + x1) * pen.k, (c.y + 2 + y1) * pen.k});
+            pen.ctx.strokePath();
         }
-        y += p.texts.empty() ? 0 : -TEXT_GAP;
-    } else {
-        const Figure& size = p.mid ? MIDDLE : SMALLEST;
-        figure(pen, p.shown, x, y, column, 0, size, palette::ink);
-        y += float(p.valueLines * size.lineHeight + FIGURE_GAP);
-        pen.words(p.output.label, x, y, column, p.labelLines, setting::text, look.ink2);
-        y += float(p.labelLines * TEXT);
-        if (p.output.kind == Output::Kind::chart) {
-            curve(pen, look, p.controls, p.output, x, y + PLOT_GAP, column, PLOT);
-            y += PLOT_GAP + PLOT;
-        }
+        label(pen, item.words.chinese ? "可探索" : "Explore", c.x + 20, c.y, palette::ink2);
     }
-    for (const Control& c : p.controls) {
-        y += ROW_GAP;
-        if (c.kind == Control::Kind::slider) {
-            double share = (c.values[0] - c.min) / (c.max - c.min);
-            std::string words = utf8(trim(points(c.label + " " + reading(c, c.values[0]))));
-            pen.words(cut(words, COLUMN - TRACK - 8), x, y + (ROW - TEXT) / 2.f, column - TRACK - 8, 1, setting::text, look.ink2);
-            float tx = x + column - TRACK;
-            pen.ctx.setFillColor(palette::line2);
-            pen.rounded(pen.px(tx, y + ROW / 2.f - 2, TRACK, 4), 2 * pen.k);
-            pen.ctx.fillPath();
-            pen.ctx.setFillColor(look.accent);
-            float kx = tx + float(share) * TRACK;
-            pen.ctx.fillEllipse(pen.px(kx - 6, y + ROW / 2.f - 6, 12, 12));
-        } else {
-            int n = int(c.states.size());
-            float pill = std::floor((float(COLUMN) - PILL_GAP * float(n - 1)) / float(n));
-            for (int i = 0; i < n; i++) {
-                float left = x + float(i) * (pill + PILL_GAP);
-                bool on = i == 0;
-                CGRect r = pen.px(left + 0.5f, y + 0.5f, pill - 1, ROW - 1);
-                if (on) {
-                    pen.ctx.setFillColor(mix(look.accent, 0.2f, look.fill));
-                    pen.rounded(r, 13.5f * pen.k);
-                    pen.ctx.fillPath();
-                }
-                pen.ctx.setStrokeColor(on ? look.accent : palette::line2);
-                pen.ctx.setLineWidth(pen.k);
-                pen.rounded(r, 13.5f * pen.k);
-                pen.ctx.strokePath();
-                std::string name = cut(c.states[size_t(i)].name, pill - PILL_PAD);
-                float w = pen.width(name, setting::text);
-                pen.words(name, left + (pill - w) / 2, y + (ROW - TEXT) / 2.f, w + 1, 1, setting::text, on ? palette::ink : look.ink2);
-            }
-        }
-        y += ROW;
+    c.gap(22);
+    c.lines(item.titleOrUntitled(), Measure::title, 1, palette::ink);
+    std::string out = p.output.kind == Output::Kind::text ? (p.texts.empty() ? "" : p.texts[0].first)
+                                                          : (p.output.label.empty() ? p.shown : p.shown + " " + p.output.label);
+    if (!out.empty()) {
+        c.gap(10);
+        c.lines(out, Measure::body, 1, c.look.ink2);
     }
+    c.more = true;
+    c.cue(cueControls(c.words, int(p.controls.size())));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// The opened card writes out what the controls change: each control's states with their words, or the
 /// result where the sliders stand first, with each slider's reading.

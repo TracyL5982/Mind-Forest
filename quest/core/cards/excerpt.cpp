@@ -1,6 +1,7 @@
 // components/excerpt.js: a passage in an upright serif beside a rule, over the name of what it is from.
 #include <algorithm>
 
+#include "face.h"
 #include "kind.h"
 
 namespace cards {
@@ -63,26 +64,33 @@ Plan plan(const Item& item, const Json& props) {
     return {utf8(words), whereOf(item, props), wrap(words, LINE, PASSAGE_LETTER, MOST_LINES)};
 }
 
-Footprint size(const Item& item, const Json& props) {
+/// The passage upright in the serif beside a rule, then where it is from in meta, and the cue.
+void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
-    bool titled = !item.title.empty(), placed = !p.where.empty();
-    return {WIDTH, FRAME + p.lines * TITLE + (titled || placed ? 10 + (titled ? TEXT : 0) + (placed ? TEXT : 0) : 0)};
+    std::string from = !p.where.empty() ? p.where : item.title;
+    float top = c.y;
+    c.lines(p.words, Measure::passage, 99, palette::ink, from.empty() ? 0 : 10 + face::META, c.x + RULE, face::W - 46, c.width - RULE);
+    if (c.pen) {
+        c.pen->ctx.setFillColor(c.look.accent);
+        c.pen->ctx.fill(c.pen->px(c.x, top, 2, c.y - top));
+    }
+    if (!from.empty() && c.room() >= 10 + face::META) {
+        c.gap(10);
+        c.lines(from, Measure::meta, 1, palette::ink2);
+    }
+    if (c.more) c.cue(cueMore(c.words));
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    Plan p = plan(item, props);
-    float x = 16, column = width - 32, y = 14;
-    pen.ctx.setFillColor(look.accent);
-    pen.ctx.fill(pen.px(x, y, 2, float(p.lines * TITLE)));
-    pen.words(p.words, x + RULE, y, column - RULE, p.lines, PASSAGE, palette::ink);
-    // `.excerpt-from` stands at the foot of the card: the title, then where in the source.
-    float bottom = body - 14;
-    if (!p.where.empty()) {
-        bottom -= TEXT;
-        pen.words(p.where, x, bottom, column, 1, setting::text, look.ink3);
-    }
-    if (!item.title.empty()) pen.words(item.title, x, bottom - TEXT, column, 1, setting::text, palette::ink);
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
 }
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
+
 
 /// `.detail-excerpt`: the passage whole, with its line breaks, and under it the maker the Scout's
 /// closing line named, on a line of its own when the line of `at` and `source` does not hold it.

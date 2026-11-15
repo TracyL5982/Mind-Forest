@@ -1,6 +1,7 @@
 // components/reference.js: a library card. Its kind and year over a rule, then the title, who wrote it and where it appeared.
 #include <algorithm>
 
+#include "face.h"
 #include "rows.h"
 
 namespace cards {
@@ -39,12 +40,6 @@ Plan plan(const Item& item, const Json& props) {
     return p;
 }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    return {WIDTH, FRAME + HEAD + 8 + p.titleLines * TITLE + (p.authorLines ? 6 + p.authorLines * TEXT : 0) +
-                       (p.venueLines ? 2 + p.venueLines * TEXT : 0)};
-}
-
 /// `.reference-head`: the kind, the year at the far end on the same baseline and cut to the room left, and the rule.
 void head(const Pen& pen, const std::string& kind, const std::string& year, float x, float y, float column) {
     label(pen, kind, x, y, palette::ink2);
@@ -55,19 +50,37 @@ void head(const Pen& pen, const std::string& kind, const std::string& year, floa
     pen.ctx.fill(pen.px(x, y + TEXT + 6, column, 1));
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
+
+/// Its kind and year over a rule, the title in two lines, and the first author.
+void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
-    float x = 16, column = width - 32, y = 14;
-    head(pen, p.label, p.year, x, y, column);
-    y += HEAD + 8;
-    pen.words(p.title, x, y, column, p.titleLines, setting::title, palette::ink);
-    y += float(p.titleLines * TITLE);
-    if (p.authorLines) {
-        pen.words(p.authors, x, y + 6, column, p.authorLines, setting::text, look.ink2);
-        y += 6 + float(p.authorLines * TEXT);
+    if (c.pen) head(*c.pen, p.label, p.year, c.x, c.y, c.width);
+    c.gap(face::META + 14);
+    std::vector<std::string> names;
+    for (const Json& a : props["authors"].array()) {
+        std::string n = trimmed(a);
+        if (!n.empty()) names.push_back(n);
     }
-    if (p.venueLines) pen.words(p.venue, x, y + 2, column, p.venueLines, setting::text, look.ink3);
+    c.lines(p.title, Measure::title, 2, palette::ink, names.empty() ? 0 : face::GAP + face::META);
+    if (!names.empty() && c.room() >= face::GAP + face::META) {
+        c.gap(face::GAP);
+        std::string first = names[0];
+        int rest = int(names.size()) - 1 + (props["more"].boolean() ? 1 : 0);
+        if (rest > 0) first += c.words.chinese ? " 等 " + std::to_string(rest + 1) + " 人" : " and " + std::to_string(rest) + (rest == 1 ? " other" : " others");
+        c.lines(first, Measure::meta, 1, palette::ink2);
+    }
+    if (c.more) c.cue(cueMore(c.words));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// `.detail-reference`: the head again in a box, then the authors and the venue whole, each left out when
 /// the opened card's list of sources says it in the same words. A cut list of authors says so, so it stays.

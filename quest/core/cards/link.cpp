@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "face.h"
 #include "kind.h"
 #include "media.h"
 
@@ -34,12 +35,6 @@ Plan plan(const Item& item, const Json& props) {
     p.titleLines = fold(points(item.titleOrUntitled()), column, TITLE_LETTER, 2);
     p.aboutLines = p.about.empty() ? 0 : fold(points(p.about), column, TEXT_LETTER, 2);
     return p;
-}
-
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    int main = p.titleLines * TITLE + (p.aboutLines ? 4 + p.aboutLines * TEXT : 0);
-    return {p.width, 3 + BAR + 10 + std::max(main, p.thumb.empty() ? 0 : THUMB) + 13};
 }
 
 /// `.link-site`, `w` px wide with its top-left at (x, y): the site's first letter on a tile, the site, and
@@ -75,21 +70,33 @@ void bar(const Pen& pen, float x, float y, float w, const std::string& site, boo
     pen.words(site, host, lineTop, right - outWidth - 8 - host, 1, setting::text, palette::ink2);
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    Plan p = plan(item, props);
-    bar(pen, 1, 1, width - 2, siteOf(item, props), false);
-    float x = 16, y = 1 + BAR + 10, column = width - 32 - (p.thumb.empty() ? 0 : 84 + 12);
-    std::string title = item.titleOrUntitled();
-    pen.words(title, x, y, column, p.titleLines, setting::title, palette::ink);
-    float titleTall = heightOf(title, column, p.titleLines, setting::title, pen.k);
-    if (p.aboutLines) pen.words(p.about, x, y + titleTall + 4, column, p.aboutLines, setting::text, look.ink2);
-    if (p.thumb.empty()) return;
-    CGRect thumb = pen.px(width - 16 - 84, y, 84, body - 1 - BAR - 10 - 13 - 1);
-    std::optional<Picture> known = pictureAt(p.thumb);
-    if (known && known->missing) unavailable(pen, thumb, item.words);
-    else pen.picture(p.thumb, thumb, true, item.words);
-    pen.mask(thumb, 6 * pen.k, look.fill);
+
+/// The address bar across the top, the title, the description in whole lines, and the cue. No thumbnail.
+void lay(Col& c, const Item& item, const Json& props) {
+    if (c.pen) bar(*c.pen, 1, 1, face::W - 2, siteOf(item, props), false);
+    c.y = 30 + 13;
+    std::string about = text(props["description"]);
+    if (about.empty()) about = item.summary;
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, about.empty() ? 0 : 4 + face::BODY);
+    if (!about.empty() && c.room() >= 4 + face::BODY) {
+        c.gap(4);
+        c.lines(about, Measure::body, 99, c.look.ink2);
+    } else if (!about.empty()) {
+        c.more = true;
+    }
+    if (c.more) c.cue(cueMore(c.words));
+    c.y += 13 - face::BOTTOM;
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// `.detail-link`: the address bar in a box, the picture whole when the page has an address, and the description.
 void detail(Sheet& sheet, const Item& item, const Json& props) {

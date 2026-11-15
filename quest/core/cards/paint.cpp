@@ -34,6 +34,7 @@ float widthOf(const std::string& s, const Setting& t, float k) { return stringSi
 
 void Pen::words(const std::string& s, float x, float y, float width, int lines, const Setting& t, Color color) const {
     if (s.empty()) return;
+    if (Cuts::on && lines > 0 && int(layoutText(s, attributes(t, color, k), width * k, 0).lines.size()) > lines) Cuts::seen.push_back("ellipsis: " + s);
     ctx.drawText(s, CGPoint{x * k, y * k - lift(t, k)}, attributes(t, color, k), width * k, lines);
 }
 

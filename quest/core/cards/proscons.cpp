@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 
+#include "face.h"
 #include "kind.h"
 #include "text.h"
 
@@ -65,11 +66,6 @@ Plan plan(const Item& item, const Json& props) {
     return {{sideOf(props[ways()[0].key]), sideOf(props[ways()[1].key])}, wrap(points(item.titleOrUntitled()), COLUMN, TITLE_LETTER, 2)};
 }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    return {WIDTH, FRAME + p.titleLines * TITLE + 10 + std::max(p.sides[0].height, p.sides[1].height)};
-}
-
 /// A point: its mark, then its words beside it.
 void point(const Pen& pen, const Way& way, Color accent, Color ink2, const std::string& said, float x, float y, float markDrop, float width,
            int lines, const Setting& t) {
@@ -77,27 +73,38 @@ void point(const Pen& pen, const Way& way, Color accent, Color ink2, const std::
     pen.words(said, x + MARK, y, width - MARK, lines, t, palette::ink);
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
+
+/// The title, the first point of each side when it is whole on one line, and the cue that counts them.
+void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
-    float x = 16, column = width - 32, y = 14;
-    pen.words(item.titleOrUntitled(), x, y, column, p.titleLines, setting::title, palette::ink);
-    y += float(p.titleLines * TITLE + 10);
-    float half = (column - BETWEEN) / 2, tall = float(std::max(p.sides[0].height, p.sides[1].height));
-    pen.ctx.setFillColor(palette::line);
-    pen.ctx.fill(pen.px(x + half + BETWEEN - 9, y + 2, 1, tall - 2));
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, 10 + face::BODY + 5 + face::BODY + face::CUE);
+    c.gap(10);
+    const int column = face::COL - 20;
+    bool first = true;
     for (size_t s = 0; s < 2; s++) {
-        const Way& way = ways()[s];
         const Side& side = p.sides[s];
-        float left = x + float(s) * (half + BETWEEN), top = y;
-        label(pen, way.name.in(item.words), left, top, look.ink2);
-        top += HEAD;
-        for (size_t i = 0; i < side.lines.size(); i++) {
-            point(pen, way, look.accent, look.ink2, side.points[i], left, top, 3.5f, half, side.lines[i], setting::text);
-            top += float(side.lines[i] * TEXT + GAP);
+        if (side.points.empty() || counted(side.points[0], column, Measure::body) > 1) continue;
+        if (!first) c.gap(5);
+        first = false;
+        if (c.pen) {
+            strokes(*c.pen, c.x, c.y + 6, ways()[s].mark, 1.6f, ways()[s].accent ? c.look.accent : palette::ink2);
+            c.say(side.points[0], setting::faceBody, 1, c.x + 20, c.y, float(column), palette::ink);
         }
-        if (side.rest) pen.words(item.words.more(side.rest), left, top, half, 1, setting::text, look.ink3);
+        c.gap(face::BODY);
     }
+    c.more = true;
+    c.cue(cueForAgainst(c.words, int(p.sides[0].points.size()), int(p.sides[1].points.size())));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// `.detail-proscons`: every point whole, one side under the other.
 void detail(Sheet& sheet, const Item& item, const Json& props) {

@@ -1,5 +1,6 @@
 // components/callout.js: a band down the left edge in the colour of its tone, the tone named in words
 // beside its glyph, the words set as a title, and the item's title as a foot.
+#include "face.h"
 #include "kind.h"
 #include "text.h"
 
@@ -38,29 +39,38 @@ Plan plan(const Item& item, const Json& props) {
     return {said, !item.title.empty() && item.title != said ? item.title : "", wrap(words, COLUMN, TITLE_LETTER, 5)};
 }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    return {WIDTH, FRAME + TEXT + 6 + p.lines * TITLE + (p.foot.empty() ? 0 : 8 + TEXT)};
-}
-
 /// `.callout-head`: the glyph, then the tone's name, on a line of text.
 void head(const Pen& pen, const Tone& tone, const std::string& name, float x, float y) {
     strokes(pen, x, y + (TEXT - 14) / 2.f, tone.glyph, 1.2f, tone.colour);
     label(pen, name, x + 14 + 6, y, tone.colour);
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
+
+/// A band down the left edge, the tone named on its row, the words at the title's size, and the cue.
+void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
     const Tone& tone = toneOf(props);
-    // The band runs the card's whole height, its chips too. The frame's round corners are cleared after.
-    float tall = body + (chips(item, {}).empty() ? 0 : CHIP_LINE);
-    pen.ctx.setFillColor(tone.colour);
-    pen.ctx.fill(pen.px(1, 1, STRIPE, tall - 2));
-    float x = INSET, column = width - INSET - 16, y = 14;
-    head(pen, tone, tone.name.in(item.words), x, y);
-    pen.words(p.words, x, y + TEXT + 6, column, p.lines, setting::title, palette::ink);
-    if (!p.foot.empty()) pen.words(p.foot, x, body - 14 - TEXT, column, 1, setting::text, look.ink3);
+    if (c.pen) {
+        c.pen->ctx.setFillColor(tone.colour);
+        c.pen->ctx.fill(c.pen->px(1, 1, STRIPE, face::H));
+        head(*c.pen, tone, tone.name.in(item.words), INSET, c.y + 3);
+    }
+    c.x = INSET;
+    c.width = face::W - INSET - 16;
+    c.gap(24);
+    c.lines(p.words, Measure::title, 3, palette::ink, 0, -1, face::W - 39);
+    if (c.more) c.cue(cueMore(c.words));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// `.detail-callout`: the same in a box whose left edge is the band, the words whole.
 void detail(Sheet& sheet, const Item& item, const Json& props) {

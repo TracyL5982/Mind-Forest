@@ -1,5 +1,6 @@
 // components/definition.js: a headword over a short rule, and its meaning in an upright serif, as a
 // dictionary sets them.
+#include "face.h"
 #include "figures.h"
 
 namespace cards {
@@ -32,11 +33,6 @@ Plan plan(const Json& props) {
     return p;
 }
 
-Footprint size(const Item&, const Json& props) {
-    Plan p = plan(props);
-    return {WIDTH, FRAME + p.termHeight + RULE + p.lines * TITLE};
-}
-
 /// The headword at (x, y) px, `lines` 0 for all of it; returns how tall it draws.
 float headword(const Pen& pen, const Plan& p, float x, float y, float width, int lines) {
     if (p.large) {
@@ -47,13 +43,32 @@ float headword(const Pen& pen, const Plan& p, float x, float y, float width, int
     return heightOf(p.term, width, lines, setting::title, pen.k);
 }
 
-void draw(const Pen& pen, const Look& look, const Item&, const Json& props, float width, float) {
+
+/// The term as a figure, the meaning upright in the serif in whole lines, and the cue.
+void lay(Col& c, const Item&, const Json& props) {
     Plan p = plan(props);
-    float x = 16, column = width - 32;
-    float y = 14 + headword(pen, p, x, 14, column, p.termLines);
-    rule(pen, x, y, look.accent);
-    pen.words(p.meaning, x, y + RULE, column, p.lines, MEANING, palette::ink);
+    c.gap(10);
+    Text term = points(p.term);
+    bool large = figureNeed(term, MIDDLE) <= face::COL * 100;
+    int termNeed = large ? 1 : wrap(term, face::COL, SMALLEST.letter, 3), termLines = std::min(2, termNeed);
+    const Figure& size = large ? MIDDLE : SMALLEST;
+    // A term longer than two lines shows its first two, and the cue.
+    if (termNeed > 2) c.more = true;
+    if (c.pen) c.heldBack = figure(*c.pen, p.term, c.x, c.y, c.width, termLines, size, palette::ink) || c.heldBack;
+    c.gap(float(termLines * size.lineHeight));
+    c.lines(p.meaning, Measure::passage, 99, c.look.ink2, 0, -1, face::W - 32);
+    if (c.more) c.cue(cueMore(c.words));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// `.detail-definition`: the meaning whole, under the term when the opened card's own title is not
 /// already the term.

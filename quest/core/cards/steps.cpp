@@ -1,6 +1,7 @@
 // components/steps.js: numbers down a rail.
 #include <algorithm>
 
+#include "face.h"
 #include "rows.h"
 
 namespace cards {
@@ -21,11 +22,6 @@ std::vector<std::string> stepsOf(const Json& props) {
     return out;
 }
 
-Footprint size(const Item&, const Json& props) {
-    int n = int(props["steps"].array().size()), rows = std::min(n, SHOWN);
-    return {WIDTH, FRAME + TITLE + (rows ? 10 + rows * ROW + (rows - 1) * GAP : 0) + (n > SHOWN ? 8 + TEXT : 0)};
-}
-
 /// `.step-n` at (x, y), and the rail up to the step before it.
 void number(const Pen& pen, Color accent, int i, float x, float y) {
     if (i > 0) {
@@ -39,18 +35,42 @@ void number(const Pen& pen, Color accent, int i, float x, float y) {
     pen.words(n, x + (ROW - w) / 2, y, w + 1, 1, NUMBER, accent);
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
+
+/// The title, then numbered steps down a rail, each whole: two of one line, or the first in two, and the cue.
+void lay(Col& c, const Item& item, const Json& props) {
     std::vector<std::string> steps = stepsOf(props);
-    float x = 16, column = width - 32, y = 14;
-    pen.words(item.titleOrUntitled(), x, y, column, 1, setting::title, palette::ink);
-    y += TITLE + 10;
-    for (int i = 0; i < std::min(int(steps.size()), SHOWN); i++) {
-        number(pen, look.accent, i, x, y);
-        pen.words(steps[size_t(i)], x + ROW + 10, y + (ROW - TEXT) / 2.f, column - ROW - 10, 1, setting::text, palette::ink);
-        y += ROW + GAP;
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, steps.empty() ? 0 : 10 + face::BODY);
+    c.gap(10);
+    const int column = face::COL - 32;
+    size_t i = 0;
+    for (; i < steps.size(); i++) {
+        int need = counted(steps[i], column, Measure::body);
+        int shown = std::min(need, i == 0 ? 2 : 1);
+        if (i > 0 && need > 1) break;
+        bool after = i + 1 < steps.size() || need > shown;
+        float tall = (i > 0 ? 8.f : 0.f) + float(shown * face::BODY);
+        if (tall + (after ? face::CUE : 0) > c.room()) break;
+        if (need > shown) c.more = true;
+        if (i > 0) c.gap(8);
+        if (c.pen) {
+            number(*c.pen, c.look.accent, int(i), c.x, c.y);
+            c.say(steps[i], setting::faceBody, shown, c.x + 32, c.y, float(column), palette::ink);
+        }
+        c.gap(float(shown * face::BODY));
     }
-    if (int(steps.size()) > SHOWN) foot(pen, item.words, int(steps.size()) - SHOWN, body, column, look.ink3);
+    if (i < steps.size()) c.more = true;
+    if (c.more) c.cue(i < steps.size() ? cueCount(c.words, int(steps.size() - i)) : cueMore(c.words));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// `.steps.is-full`: every step whole, at 14 px on 20 px lines, its number at its first line.
 void detail(Sheet& sheet, const Item&, const Json& props) {

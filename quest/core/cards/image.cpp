@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "face.h"
 #include "kind.h"
 
 namespace cards {
@@ -26,19 +27,47 @@ int captionLines(const Item& item, const Json& props) {
     return c.empty() ? 0 : fold(points(c), WIDTH - SIDES, TEXT_LETTER, 2);
 }
 
-Footprint size(const Item& item, const Json& props) {
-    int lines = captionLines(item, props);
-    return {WIDTH, pictureHeight(props) + 2 + (lines ? 19 + lines * TEXT : 0)};
+/// The picture to the edges, then its caption on a plate in whole lines, and the cue under one line.
+void lay(Col& c, const Item& item, const Json& props) {
+    std::string said = caption(item, props), src = text(props["src"]);
+    int need = said.empty() ? 0 : counted(said, face::COL, Measure::body);
+    int shown = std::min(need, 2);
+    bool cue = need > 2;
+    if (cue) shown = 1;
+    float plate = said.empty() ? 0 : 19 + float(shown * face::BODY) + (cue ? face::CUE : 0);
+    double given = number(props["aspect"]);
+    float aspect = aspectOf(src).value_or(given > 0 ? float(given) : 1.35f);
+    float tall = std::min(float(face::H) - 2 - plate, std::max(81.f, std::round(float(face::W) / aspect)));
+    if (c.pen) {
+        CGRect frame = c.pen->px(1, 1, face::W - 2, tall);
+        c.pen->ctx.setFillColor(palette::media);
+        c.pen->ctx.fill(frame);
+        c.pen->picture(src, frame, true, item.words);
+    }
+    c.y = 1 + tall + 1;
+    if (!said.empty()) {
+        c.y += 9;
+        c.say(said, setting::faceBody, shown, c.x, c.y, c.width, palette::ink);
+        c.y += float(shown * face::BODY);
+        if (cue) {
+            c.more = true;
+            c.cue(cueMore(c.words));
+        }
+        c.y += 10;
+    }
+    c.y -= face::BOTTOM;
 }
 
-void draw(const Pen& pen, const Look&, const Item& item, const Json& props, float width, float) {
-    float tall = float(pictureHeight(props));
-    CGRect frame = pen.px(1, 1, width - 2, tall);
-    pen.ctx.setFillColor(palette::media);
-    pen.ctx.fill(frame);
-    pen.picture(text(props["src"]), frame, true, item.words);
-    if (int lines = captionLines(item, props)) pen.words(caption(item, props), 16, 1 + tall + 9, width - 32, lines, setting::text, palette::ink);
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
 }
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
+
 
 /// `.detail-media`: the picture whole, as wide as the sheet and at most 46 % of a view tall.
 void detail(Sheet& sheet, const Item& item, const Json& props) {

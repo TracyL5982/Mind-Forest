@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "face.h"
 #include "figures.h"
 
 namespace cards {
@@ -52,11 +53,6 @@ Parts parts(const Json& props) {
 
 int titleLines(const Item& item) { return wrap(points(item.titleOrUntitled()), COLUMN, TITLE_LETTER, 2); }
 
-Footprint size(const Item& item, const Json& props) {
-    int rows = int(std::min(props["labels"].array().size(), size_t(MOST)));
-    return {WIDTH, FRAME + titleLines(item) * TITLE + (parts(props).unit.empty() ? 0 : TEXT) + (rows ? 10 + rows * TEXT + (rows - 1) * GAP : 0)};
-}
-
 /// One line for each part from `top`: its label in `labels` px, its bar, its share at the right edge.
 /// `labelLines` 1 cuts a label with an ellipsis; 0 wraps it, and a row is then as tall as its label.
 float bars(const Pen& pen, const std::vector<Part>& rows, float x, float top, float width, float labels, float shares, int labelLines,
@@ -81,25 +77,49 @@ float bars(const Pen& pen, const std::vector<Part>& rows, float x, float top, fl
     return top;
 }
 
-/// Every share is written whole, so the labels give way first and then the bars.
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
+
+/// The title, one bar split into the parts by share, the largest part in words, and the count of the parts.
+void lay(Col& c, const Item& item, const Json& props) {
     Parts p = parts(props);
-    int lines = titleLines(item);
-    float x = 16, column = width - 32, y = 14;
-    pen.words(item.titleOrUntitled(), x, y, column, lines, setting::title, palette::ink);
-    y += float(lines * TITLE);
-    if (!p.unit.empty()) {
-        pen.words(p.unit, x, y, column, 1, setting::text, look.ink3);
-        y += TEXT;
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + 16 + 8 + face::BODY + 4 + face::CUE);
+    c.gap(face::GAP);
+    if (c.pen) {
+        const Pen& pen = *c.pen;
+        pen.ctx.setFillColor(Color::white(1, 0.06f));
+        pen.rounded(pen.px(c.x, c.y, c.width, 16), 3 * pen.k);
+        pen.ctx.fillPath();
+        float left = c.x;
+        for (size_t i = 0; i < p.rows.size(); i++) {
+            float wide = float(p.rows[i].bar) * c.width;
+            if (wide <= 0) continue;
+            pen.ctx.setFillColor(i == 0 ? c.look.accent : i % 2 ? palette::bar : Color::white(1, 0.55f));
+            pen.ctx.fill(pen.px(left, c.y, std::max(1.f, wide - 2), 16));
+            left += wide;
+        }
     }
-    int shares = 0, labels = 0;
-    for (const Part& row : p.rows) {
-        shares = std::max(shares, textWidth(points(row.written)));
-        labels = std::max(labels, textWidth(points(row.label)));
+    c.gap(16 + 8);
+    if (!p.rows.empty()) {
+        const Part* largest = &p.rows.front();
+        for (const Part& row : p.rows) {
+            if (row.value > largest->value) largest = &row;
+        }
+        std::string share = p.total > 0 ? std::to_string(int(std::lround(largest->value / p.total * 100))) + "%" : largest->written;
+        c.lines(largest->label + " " + share, Measure::body, 1, c.look.ink2);
     }
-    labels = std::min({labels, LABEL_MOST, std::max(LABEL_LEAST, COLUMN - 2 * BESIDE - shares - BAR)});
-    bars(pen, p.rows, x, y + 10, column, float(labels), float(shares), 1, look);
+    c.gap(4);
+    c.more = true;
+    c.cue(cueParts(c.words, int(props["labels"].array().size())));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// `.detail-breakdown`: the same bars with every label whole, and each share of the whole beside a value
 /// that is no percentage.

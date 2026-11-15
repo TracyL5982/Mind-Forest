@@ -1,6 +1,7 @@
 // components/idea.js: a thought set large under a spark, and nothing else.
 #include <algorithm>
 
+#include "face.h"
 #include "figures.h"
 
 namespace cards {
@@ -40,31 +41,48 @@ Plan plan(const Item& item) {
     return p;
 }
 
-Footprint size(const Item& item, const Json&) {
-    Plan p = plan(item);
-    return {WIDTH, FRAME + MARK + p.lines * p.size.lineHeight};
+/// A spark, then the thought as a figure: two lines at the largest size, three at the middle or the smallest, else the cue.
+void lay(Col& c, const Item& item, const Json&) {
+    std::string thought = item.titleOrUntitled();
+    Text t = points(thought);
+    if (c.pen) {
+        const Pen& pen = *c.pen;
+        const CGPoint spark[] = {{7, .6f}, {8.5f, 5.5f}, {13.4f, 7}, {8.5f, 8.5f}, {7, 13.4f}, {5.5f, 8.5f}, {.6f, 7}, {5.5f, 5.5f}};
+        pen.ctx.setFillColor(c.look.accent);
+        for (const CGPoint& s : spark) {
+            CGPoint at{(c.x + s.x) * pen.k, (c.y + s.y) * pen.k};
+            if (&s == spark) pen.ctx.move(at); else pen.ctx.addLine(at);
+        }
+        pen.ctx.closePath();
+        pen.ctx.fillPath();
+    }
+    c.gap(MARK);
+    const Figure* size = &SMALLEST;
+    int lines = wrap(t, face::COL, LARGEST.letter, 3);
+    if (lines <= 2) size = &LARGEST;
+    else if ((lines = wrap(t, face::COL, MIDDLE.letter, 4)) <= 3) size = &MIDDLE;
+    else lines = wrap(t, face::COL, SMALLEST.letter, 4);
+    if (lines > 3) {
+        lines = std::min(3, int(std::floor((c.room() - face::CUE) / float(size->lineHeight))));
+        c.more = true;
+    }
+    if (c.pen) {
+        c.say(thought, figureSetting(*size), lines, c.x, c.y, c.width, palette::ink);
+    }
+    c.gap(float(lines * size->lineHeight));
+    if (c.more) c.cue(cueMore(c.words));
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json&, float width, float) {
-    Plan p = plan(item);
-    float x = 16, y = 14, column = width - 32;
-    // M7 .6 8.5 5.5 13.4 7 8.5 8.5 7 13.4 5.5 8.5 .6 7 5.5 5.5Z
-    const CGPoint spark[] = {{7, .6f}, {8.5f, 5.5f}, {13.4f, 7}, {8.5f, 8.5f}, {7, 13.4f}, {5.5f, 8.5f}, {.6f, 7}, {5.5f, 5.5f}};
-    pen.ctx.setFillColor(look.accent);
-    for (const CGPoint& c : spark) {
-        CGPoint at{(x + c.x) * pen.k, (y + c.y) * pen.k};
-        if (&c == spark) pen.ctx.move(at); else pen.ctx.addLine(at);
-    }
-    pen.ctx.closePath();
-    pen.ctx.fillPath();
-    // `text-wrap: balance`: the narrowest column that keeps the thought on as many lines.
-    float tall = figureHeight(p.thought, column, 0, p.size, pen.k), lo = column / 4, hi = column;
-    for (int i = 0; i < 10 && !p.cut; i++) {
-        float mid = (lo + hi) / 2;
-        (figureHeight(p.thought, mid, 0, p.size, pen.k) > tall ? lo : hi) = mid;
-    }
-    figure(pen, p.thought, x, y + MARK, p.cut ? column : hi + 0.5f, p.cut ? p.lines : 0, p.size, palette::ink);
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
 }
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
+
 
 void detail(Sheet&, const Item&, const Json&) {}
 

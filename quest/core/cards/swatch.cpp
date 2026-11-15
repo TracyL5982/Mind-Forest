@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <map>
 
+#include "face.h"
 #include "kind.h"
 #include "media.h"
 
@@ -59,11 +60,6 @@ std::optional<Color> paint(const std::string& value) {
 
 int titleLines(const Item& item) { return wrap(points(item.titleOrUntitled()), COLUMN, TITLE_LETTER, 2); }
 
-Footprint size(const Item& item, const Json& props) {
-    int all = int(colours(props).size()), rows = std::min(all, SHOWN);
-    return {WIDTH, STRIP + FRAME_UNDER + titleLines(item) * TITLE + (rows ? 8 + rows * TEXT + (rows - 1) * GAP : 0) + (all > SHOWN ? 8 + TEXT : 0)};
-}
-
 /// `.swatch-dot`: the colour, edged by a black hairline inside and a light grey one outside. `box` is in pixels.
 void dot(const Pen& pen, CGRect box, float radius, const std::string& value) {
     float line = pen.k;
@@ -93,33 +89,48 @@ void row(const Pen& pen, const Colour& colour, float x, float y, float width, in
     if (both) pen.words(colour.value, x + width - valueWidth, y, valueWidth + 1, 1, t, palette::ink2);
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
+
+/// A band of up to twelve colours across the top, the title, one named colour, and the cue counting the rest.
+void lay(Col& c, const Item& item, const Json& props) {
     std::vector<Colour> all = colours(props);
-    CGRect strip = pen.px(1, 1, width - 2, STRIP);
-    hatch(pen, strip, Art::ink, Art::panel, 6);
-    pen.ctx.setFillColor(palette::line);
-    pen.ctx.fill(pen.px(1, STRIP, width - 2, 1));
-    size_t blocks = std::min(all.size(), STRIP_MOST);
-    for (size_t i = 0; i < blocks; i++) {
-        std::optional<Color> colour = paint(all[i].value);
-        if (!colour) continue;
-        float w = strip.width() / float(blocks);
-        pen.ctx.setFillColor(*colour);
-        pen.ctx.fill(CGRect{strip.minX() + float(i) * w, strip.minY(), w, strip.height()});
+    if (c.pen) {
+        const Pen& pen = *c.pen;
+        CGRect band = pen.px(1, 1, face::W - 2, 43);
+        hatch(pen, band, Art::ink, Art::panel, 6);
+        size_t n = std::min(all.size(), size_t(12));
+        for (size_t i = 0; i < n; i++) {
+            if (std::optional<Color> painted = paint(all[i].value)) {
+                pen.ctx.setFillColor(*painted);
+                float w = float(face::W - 2) / float(n);
+                pen.ctx.fill(pen.px(1 + w * float(i), 1, w + 0.5f, 43));
+            }
+        }
     }
-    float x = 16, y = 1 + STRIP + 12, column = width - 32;
-    std::string title = item.titleOrUntitled();
-    int lines = titleLines(item);
-    pen.words(title, x, y, column, lines, setting::title, palette::ink);
-    y += heightOf(title, column, lines, setting::title, pen.k);
-    if (all.empty()) return;
-    y += 8;
-    for (size_t i = 0; i < all.size() && int(i) < SHOWN; i++) {
-        row(pen, all[i], x, y, column, 1, setting::text, 10, 5, 8, 3.5f);
-        y += TEXT + GAP;
+    c.y = 44 + 13;
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, all.empty() ? 0 : 8 + face::BODY);
+    if (!all.empty() && c.room() >= 8 + face::BODY + (all.size() > 1 ? face::CUE : 0)) {
+        c.gap(8);
+        if (c.pen) dot(*c.pen, c.pen->px(c.x, c.y + 4, 14, 14), 4 * c.pen->k, all[0].value);
+        std::string said = all[0].name == all[0].value || all[0].name.empty() ? all[0].value : all[0].name + "  " + all[0].value;
+        c.lines(said, Measure::body, 1, palette::ink, 0, c.x + 22, c.width - 22);
     }
-    if (int(all.size()) > SHOWN) pen.words(item.words.more(int(all.size()) - SHOWN), x, y - GAP + 8, column, 1, setting::text, look.ink3);
+    if (all.size() > 1) {
+        c.more = true;
+        c.cue(cueCount(c.words, int(all.size() - 1)));
+    } else if (c.more) {
+        c.cue(cueMore(c.words));
+    }
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// Every colour, its dot larger and its name whole.
 void detail(Sheet& sheet, const Item&, const Json& props) {

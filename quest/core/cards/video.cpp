@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <regex>
 
+#include "face.h"
 #include "kind.h"
 #include "media.h"
 
@@ -24,11 +25,6 @@ int captionLines(const Item& item, const Json& props) {
     return c.empty() ? 0 : fold(points(c), WIDTH - SIDES, TEXT_LETTER, 2);
 }
 
-Footprint size(const Item& item, const Json& props) {
-    int lines = captionLines(item, props);
-    return {WIDTH, POSTER + 2 + (lines ? 19 + lines * TEXT : 0)};
-}
-
 /// `.media-play`: a dark disc with a hairline edge and a light triangle, centred on (cx, cy) px.
 void playMark(const Pen& pen, float cx, float cy) {
     CGRect disc = pen.px(cx - 23, cy - 23, 46, 46);
@@ -40,21 +36,46 @@ void playMark(const Pen& pen, float cx, float cy) {
     play(pen, cx - 23 + 1 + 18, cy - 23 + 1 + 13, 14, 18, palette::ink);
 }
 
-void draw(const Pen& pen, const Look&, const Item& item, const Json& props, float width, float) {
-    CGRect frame = pen.px(1, 1, width - 2, POSTER);
-    pen.ctx.setFillColor(palette::media);
-    pen.ctx.fill(frame);
-    std::string poster = text(props["poster"]);
-    std::optional<Picture> known = pictureAt(poster);
-    if (known && known->missing) {
-        // A clip whose poster is missing keeps its play mark, with the words below it.
-        unavailable(pen, frame, item.words, 14);
-    } else if (!poster.empty()) {
-        pen.picture(poster, frame, true, item.words);
+
+/// The poster at 16:9 to the edges with its play mark, then the caption on a plate.
+void lay(Col& c, const Item& item, const Json& props) {
+    std::string said = caption(item, props), poster = text(props["poster"]);
+    int need = said.empty() ? 0 : counted(said, face::COL, Measure::body);
+    int shown = std::min(need, 2);
+    bool cue = need > 2;
+    if (cue) shown = 1;
+    float tall = said.empty() ? std::round(float(face::W - 2) * 9 / 16) : shown == 1 ? 103 : 81;
+    if (cue) tall = float(face::H) - 2 - 19 - face::BODY - face::CUE;
+    if (c.pen) {
+        CGRect frame = c.pen->px(1, 1, face::W - 2, tall);
+        c.pen->ctx.setFillColor(palette::media);
+        c.pen->ctx.fill(frame);
+        c.pen->picture(poster, frame, true, item.words);
+        playMark(*c.pen, face::W / 2.f, 1 + tall / 2);
     }
-    playMark(pen, width / 2, 1 + POSTER / 2.f);
-    if (int lines = captionLines(item, props)) pen.words(caption(item, props), 16, 1 + POSTER + 9, width - 32, lines, setting::text, palette::ink);
+    c.y = 1 + tall + 1;
+    if (!said.empty()) {
+        c.y += 9;
+        c.say(said, setting::faceBody, shown, c.x, c.y, c.width, palette::ink);
+        c.y += float(shown * face::BODY);
+        if (cue) {
+            c.more = true;
+            c.cue(cueMore(c.words));
+        }
+        c.y += 10;
+    }
+    c.y -= face::BOTTOM;
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// The opened card's player. The headset plays no clip, so a clip it could play shows its poster under
 /// the play mark, and one with no file shows its poster and says so, as the web does.

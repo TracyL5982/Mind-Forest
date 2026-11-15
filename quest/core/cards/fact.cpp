@@ -2,6 +2,7 @@
 // cut number misleads, so it wraps instead.
 #include <algorithm>
 
+#include "face.h"
 #include "figures.h"
 
 namespace cards {
@@ -45,20 +46,38 @@ Plan plan(const Item& item, const Json& props) {
     return p;
 }
 
-Footprint size(const Item& item, const Json& props) {
-    Plan p = plan(item, props);
-    return {p.width, FRAME + p.lines * p.size.lineHeight + RULE + p.labelLines * TEXT + (p.foot.empty() ? 0 : 8 + TEXT)};
+/// The value as a figure, whole, its label, and the title as a foot.
+void lay(Col& c, const Item& item, const Json& props) {
+    std::string value = text(props["value"]), label = text(props["label"]);
+    if (value.empty()) value = "\xE2\x80\x93";
+    std::string foot = !item.title.empty() && item.title != value && item.title != label ? item.title : "";
+    Text v = points(value);
+    const Figure& size = figureNeed(v, LARGEST) <= face::COL * 100 ? LARGEST : figureNeed(v, MIDDLE) <= face::COL * 100 ? MIDDLE : SMALLEST;
+    int valueLines = &size == &SMALLEST ? std::min(2, wrap(v, face::COL, SMALLEST.letter, 3)) : 1;
+    if (&size == &SMALLEST && wrap(v, face::COL, SMALLEST.letter, 3) > 2) c.more = true;
+    if (c.pen) c.heldBack = figure(*c.pen, value, c.x, c.y, c.width, valueLines, size, palette::ink) || c.heldBack;
+    c.gap(float(valueLines * size.lineHeight));
+    if (!label.empty()) {
+        c.gap(4);
+        c.lines(label, Measure::body, valueLines == 2 ? 1 : 2, c.look.ink2, foot.empty() ? 0 : 8 + face::META);
+    }
+    if (!foot.empty() && c.room() >= 8 + face::META) {
+        c.gap(8);
+        c.lines(foot, Measure::meta, 1, palette::ink2);
+    }
+    if (c.more) c.cue(cueMore(c.words));
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    Plan p = plan(item, props);
-    float x = 16, column = width - 32, y = 14;
-    figure(pen, p.value, x, y, column, 0, p.size, palette::ink);
-    y += figureHeight(p.value, column, 0, p.size, pen.k);
-    rule(pen, x, y, look.accent);
-    if (p.labelLines) pen.words(p.label, x, y + RULE, column, p.labelLines, setting::text, look.ink2);
-    if (!p.foot.empty()) pen.words(p.foot, x, body - 14 - TEXT, column, 1, setting::text, look.ink3);
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
 }
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
+
 
 /// `.detail-fact`: the card's sunk face in a box, the value whole at the largest size.
 void detail(Sheet& sheet, const Item&, const Json& props) {

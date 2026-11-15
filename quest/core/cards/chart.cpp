@@ -5,6 +5,7 @@
 #include <cmath>
 #include <set>
 
+#include "face.h"
 #include "figures.h"
 
 namespace cards {
@@ -298,18 +299,63 @@ void paint(const Pen& pen, const Plot& p, float x, float y, const Look& look) {
     }
 }
 
-Footprint size(const Item&, const Json& props) { return {WIDTH, FRAME + TITLE + (text(props["unit"]).empty() ? 0 : TEXT) + 8 + PLOT}; }
-
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
-    float x = 16, column = width - 32, y = 14;
-    pen.words(item.titleOrUntitled(), x, y, column, 1, setting::title, palette::ink);
-    y += TITLE;
-    if (std::string unit = text(props["unit"]); !unit.empty()) {
-        pen.words(unit, x, y, column, 1, setting::text, look.ink3);
-        y += TEXT;
+/// The title, the shape of the series with no words, and one meta line: how many and from what to what.
+void lay(Col& c, const Item& item, const Json& props) {
+    Series s = series(props);
+    c.lines(item.titleOrUntitled(), Measure::title, 2, palette::ink, face::GAP + 38 + face::GAP + face::META);
+    c.gap(face::GAP);
+    float shape = c.room() - face::GAP - face::META;
+    if (c.pen && !s.values.empty()) {
+        const Pen& pen = *c.pen;
+        double lo = std::min(0.0, *std::min_element(s.values.begin(), s.values.end()));
+        double hi = std::max(0.0, *std::max_element(s.values.begin(), s.values.end()));
+        if (hi == lo) hi = lo + 1;
+        auto Y = [&](double v) { return c.y + float((hi - v) / (hi - lo)) * shape; };
+        float step = c.width / float(s.values.size());
+        pen.ctx.setFillColor(palette::line2);
+        pen.ctx.fill(pen.px(c.x, Y(0), c.width, 1));
+        if (text(props["chart"]) == "line") {
+            pen.ctx.setStrokeColor(palette::bar);
+            pen.ctx.setLineWidth(2 * pen.k);
+            for (size_t i = 0; i < s.values.size(); i++) {
+                CGPoint at{(c.x + step * (float(i) + 0.5f)) * pen.k, Y(s.values[i]) * pen.k};
+                if (i == 0) pen.ctx.move(at); else pen.ctx.addLine(at);
+            }
+            if (s.values.size() > 1) pen.ctx.strokePath();
+            if (s.mark >= 0) {
+                pen.ctx.setFillColor(c.look.accent);
+                float cx = c.x + step * (float(s.mark) + 0.5f), cy = Y(s.values[size_t(s.mark)]);
+                pen.ctx.fillEllipse(pen.px(cx - 4, cy - 4, 8, 8));
+            }
+        } else {
+            float wide = std::clamp(step * 0.62f, 3.f, 44.f);
+            for (size_t i = 0; i < s.values.size(); i++) {
+                float top = std::min(Y(s.values[i]), Y(0)), tall = std::max(2.f, std::fabs(Y(s.values[i]) - Y(0)));
+                pen.ctx.setFillColor(int(i) == s.mark ? c.look.accent : palette::bar);
+                pen.ctx.fill(pen.px(c.x + step * (float(i) + 0.5f) - wide / 2, top, wide, tall));
+            }
+        }
     }
-    paint(pen, plot(props, WIDTH - SIDES, PLOT, false, item.words), x, y + 8, look);
+    c.gap(shape + face::GAP);
+    std::string said;
+    size_t n = s.values.size();
+    std::string first = n ? s.labels.front() : "", last = n ? s.labels.back() : "";
+    if (n == 0) said = c.words.chinese ? "暂无数据" : "No data";
+    else if (c.words.chinese) said = std::to_string(n) + " 个数据" + (first.empty() ? "" : "，" + first + " 至 " + last);
+    else said = std::to_string(n) + (n == 1 ? " point" : " points") + (first.empty() || n == 1 ? "" : ", " + first + " to " + last);
+    c.lines(said, Measure::meta, 1, palette::ink2);
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
+
 
 /// `.detail-chart`: the plot larger, every value that fits written, and when the plot had to thin, cut
 /// or round anything, a table of every label with its full value.
