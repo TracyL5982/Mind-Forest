@@ -223,6 +223,8 @@ struct Hello {
 struct Change {
     ChangeSet set;
     std::optional<std::string> undo;
+    /// This connection's own message started the work that made it ("make a tree about …"), not another client's.
+    bool yours = false;
 };
 /// One short line for the agent to speak.
 struct Say {

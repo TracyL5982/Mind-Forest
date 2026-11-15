@@ -423,7 +423,7 @@ std::optional<Inbound> readHello(const Json& j, Why& why) {
 
 std::optional<Inbound> readChange(const Json& j, Why& why) {
     Fields f(j, why);
-    return message(f, Change{.set = f.nested("set", readChangeSet), .undo = f.optionalString("undo")});
+    return message(f, Change{.set = f.nested("set", readChangeSet), .undo = f.optionalString("undo"), .yours = f.optionalBoolean("yours").value_or(false)});
 }
 
 std::optional<Inbound> readActivityMessage(const Json& j, Why& why) {

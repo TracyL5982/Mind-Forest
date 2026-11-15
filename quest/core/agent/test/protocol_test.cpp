@@ -148,6 +148,15 @@ TEST(aMessageOfAnUnknownKindIsKeptAsUnknown) {
     CHECK(unknown && unknown->t == "wave", "read as %s", kindOf(message).c_str());
 }
 
+TEST(aChangeThisConnectionAskedForIsMarkedYours) {
+    Inbound asked = parseInbound(edited(recordedText("Keep a pick"), [](Json j) { return j.set("yours", true); }));
+    Inbound elsewhere = parseInbound(recordedText("Keep a pick"));
+    auto* mine = std::get_if<Change>(&asked);
+    auto* theirs = std::get_if<Change>(&elsewhere);
+    CHECK(mine && mine->yours, "a change sent with yours is this connection's");
+    CHECK(theirs && !theirs->yours, "a change sent without it is another's");
+}
+
 TEST(aPatchToAnUnknownEntityIsKeptAndTheRestRead) {
     std::string text = edited(recordedText("Keep a pick"), [](Json j) {
         Json set = j["set"];
