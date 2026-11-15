@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdio>
 #include <cstring>
 #include <thread>
 #include <vector>
@@ -38,6 +39,9 @@
 #include <openxr/openxr_platform.h>
 
 #include "app.h"
+#ifndef OCEAN_NO_SCENE
+#include "agent/connection.h"
+#endif
 #include "async.h"
 #include "base.h"
 #include "canvas.h"
@@ -45,6 +49,7 @@
 #include "input.h"
 #include "jni_bridge.h"
 #include "perf.h"
+#include "platform.h"
 #include "render.h"
 
 namespace {
@@ -867,12 +872,21 @@ JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_MainActivity_nativeStart(JN
         arguments.push_back(text(s));
         env->DeleteLocalRef(s);
     }
-    Flags::set(arguments);
     host::mediaDir = text(mediaDir);
     host::dataDir = text(dataDir);
     host::outDir = text(outDir);
+#ifndef OCEAN_NO_SCENE
+    // Started from the app library there are no flags: the app joins the agent service it was last started with.
+    std::string remembered = host::dataDir + "/agent-connection.json";
+    agent::Launch launch = agent::launch(arguments, platform::readFile(remembered));
+    if (launch.file == agent::Launch::File::save) platform::writeFile(remembered, launch.text);
+    if (launch.file == agent::Launch::File::forget) std::remove(remembered.c_str());
+    arguments = launch.arguments;
+    if (!launch.said.empty()) logLine(launch.said);
+#endif
+    Flags::set(arguments);
     std::string line = "[host] starting with:";
-    for (const auto& a : arguments) line += " " + a;
+    for (size_t i = 0; i < arguments.size(); i++) line += " " + (i > 0 && arguments[i - 1] == "-agentToken" ? std::string("(the token)") : arguments[i]);
     logLine(line);
     quitting = false;
     frameThread = std::thread(run);

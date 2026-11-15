@@ -44,15 +44,20 @@ static bool isKey(const std::string& s) {
     return s.size() >= 2 && s[0] == '-' && !(s[1] >= '0' && s[1] <= '9') && s[1] != '.';
 }
 
+std::map<std::string, std::string> parse(const std::vector<std::string>& arguments) {
+    std::map<std::string, std::string> found;
+    for (size_t i = 0; i < arguments.size(); i++) {
+        if (!isKey(arguments[i])) continue;
+        std::string key = arguments[i].substr(1);
+        bool hasValue = i + 1 < arguments.size() && !isKey(arguments[i + 1]);
+        found[key] = hasValue ? arguments[i + 1] : "";
+    }
+    return found;
+}
+
 void set(const std::vector<std::string>& arguments) {
     args = arguments;
-    values.clear();
-    for (size_t i = 0; i < args.size(); i++) {
-        if (!isKey(args[i])) continue;
-        std::string key = args[i].substr(1);
-        bool hasValue = i + 1 < args.size() && !isKey(args[i + 1]);
-        values[key] = hasValue ? args[i + 1] : "";
-    }
+    values = parse(arguments);
 }
 
 bool has(const std::string& key) { return values.count(key) > 0; }

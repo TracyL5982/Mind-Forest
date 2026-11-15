@@ -65,7 +65,14 @@ quest/tools/agent.sh usb                     # over the cable; `wifi` moves adb 
 Launch flags: `-agent <address>` and `-agentToken <token>` join (agent.sh passes both); `-agentDump The%20words`
 drops words in once connected (`%20` for spaces: the launcher splits flags at spaces); `-agentWalk <n>`
 pinches the first new pick n times, for runs with no hands; `-agentLog` logs every change set.
-Without `-agent` nothing changes. With the scripted service (`npm run dev:fake`) nothing costs money.
+A launch with `-agent` is remembered, with its token and `-cards`, in the app's own storage
+(`agent-connection.json`), and a launch with no `-agent`, such as one from the app library, joins with them;
+`-agentForget` (or `quest/tools/agent.sh forget`) forgets them, and the app starts as it was. The Mac preview joins
+only with flags. Joined, the service's trees keep the shelf's rules: at launch nothing stands and every tree hangs as
+a cover where it hung last time (`agent-shelf.json`); a tree asked for on the headset stands, the standing one
+pressed onto the shelf first; one asked for on the web page or Telegram only hangs. The headset's own covers stay in
+their file, out of view, until it is started without the service. With the scripted service (`npm run dev:fake`)
+nothing costs money.
 
 Talking to it works as in the web client. The headset listens on the device for "hey Momo" or "hi Momo" (the
 service's agent name), and nothing it hears leaves the headset unless it began with the name. After the name it
