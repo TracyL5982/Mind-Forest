@@ -20,6 +20,7 @@ Branch: `tracy/quest-agents`, made from `quest-port` with `tracy/agents` merged 
 - **WS4 done.** `platform::openSocket` and `platform::fetch`: Mac (10 checks against the scripted service, `desktop/test/net_check.sh`) and Quest (OkHttp; plain traffic only to the headset itself).
 - **WS5, M1 reached against the scripted service.** On the headset over USB: a dropped thought's tree stands, its card opens, four picks arrive dashed, a pinch keeps one, it rises a layer and four new picks arrive round it. With three rounds of that in 45 s: 90 fps, no late frame, CPU 2.43 ms at the 95th percentile (`perf/agents-live-scripted.json`). Written but not yet seen working: the questions under an open card, asking about a mark, the knife, the clap, the "Thinking…" word, trees removed at the service, a card whose item changes after it is drawn.
 - **WS3 and WS7 running** on their own branches.
+- **WS13, voice on the headset, built and checked on the Mac (2026-11-14).** `core/agent/listener.*` is the web client's wake rules as a state machine over sherpa-onnx's C API (`core/agent/spotter.*`), with 11 tests on spoken clips; `core/agent/voice.*` transcribes, sends the `utter` and speaks `say` replies (6 tests with the host faked); `platform::openMicrophone` and `platform::playSound` on both hosts. The Mac preview with `-wakeClip` was heard, transcribed and answered aloud by a real service. Not yet run on the headset.
 
 ## Data shapes
 

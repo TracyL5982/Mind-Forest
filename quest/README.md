@@ -67,6 +67,16 @@ drops words in once connected (`%20` for spaces: the launcher splits flags at sp
 pinches the first new pick n times, for runs with no hands; `-agentLog` logs every change set.
 Without `-agent` nothing changes. With the scripted service (`npm run dev:fake`) nothing costs money.
 
+Talking to it works as in the web client. The headset listens on the device for "hey Momo" or "hi Momo" (the
+service's agent name), and nothing it hears leaves the headset unless it began with the name. After the name it
+chimes and records until you pause for 1.2 s; the service transcribes that and acts on it, and its reply is spoken
+when the service has a voice. A line of words low in front of you says what it is doing: `Say "Hey Momo"`,
+`Listening…`, `Thinking…`, then the reply. The first time, the headset asks to use the microphone. `-agentVoice off`
+turns it off; `-wakeClip <file.wav>` (16 kHz mono 16-bit) is heard in place of the microphone; `-micSource
+communication` reads Android's echo-cancelled source instead of the recognizer's. The listener is sherpa-onnx's
+keyword spotter, which `tools/fetch-voice.sh` fetches into `quest/vendor/` (the builds run it); `core/agent/test/run.sh`
+tests it on spoken clips.
+
 ## Build and run
 
 Needs the Android SDK (platform 34, build-tools 34, NDK 27.2, CMake 3.22) in `~/Library/Android/sdk`,
