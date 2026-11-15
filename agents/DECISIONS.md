@@ -545,21 +545,21 @@ So the kept setting brings the first card 13 s sooner and the line 25 s after th
 
 **Why a repository is a link.** Its text is what the project says of itself and its star count, a blurb and no passage, and the card that leads with where it lives fits it. A real passage of a page, an answer or an article stays an excerpt.
 
-## 52. Looks: the look call stays on the main model
+## 52. Looks: the look call moves to the quick model
 
-**Decision.** The Renderer's look call for a dropped card stays on the main model, `muse-spark-1.3` at low effort. `npm run formats -- --quick` asks it on the quick model, as the service answers a request marked quick, to measure it again.
+**Decision.** The Renderer's look call for a dropped card is marked quick, so the service answers it on `muse-ember-1.0`, at low effort as before. `npm run formats` measures it so, and `npm run formats -- --main` on the main model.
 
-**The bar, set before the runs.** Switch only if the quick model's score on the authors' samples falls within the main model's run-to-run spread, and its score on the reviewers' samples does not drop.
+**The bar, set before the runs.** Switch only if the quick model's score on the authors' samples falls within the main model's run-to-run spread, and its score on the reviewers' samples does not drop. Then two blind readers judge the cards the two models disagree on, and the quick model must not be worse there.
 
-**Measured.** Three runs on each model, in turns, on the code of 49 to 51 (`scratchpad/ws24/quick`). The authors' set has 53 samples now, the six explorable `E` items with them, so the spread of 39 to 41 measured on 47 no longer applies.
+**Measured.** Three runs on each model, in turns, on the code of 49 to 51 (`scratchpad/ws24/quick`). The authors' set has 53 samples now, the six explorable `E` items with them, so the spread of 39 to 41 measured on 47 is of another set.
 
 | | Authors' 53 | Reviewers' 120 | Slowest call of a run | Tokens of a run |
 |---|---|---|---|---|
 | `muse-spark-1.3` | 46, 46, 46 | 108, 111, 109 | 39.8 to 49.2 s | 62,600 to 64,400 |
 | `muse-ember-1.0`, quick | 45, 46, 46 | 110, 108, 109 | 4.3 to 6.0 s | 49,300 to 53,100 |
 
-One quick run fell one sample under the main model's spread, which was a single score, so the bar is not met. The two disagreed on 9 samples across the six runs, sent to two blind readers.
+Read strictly, one quick run fell one sample under three main runs that all scored 46. The coordinator read the bar as met, taking the run-to-run spread as the one sample either way the main model has shown, and the reviewers' scores overlap. The two models drew different cards on 9 samples across the six runs. Two blind readers (Opus and Sonnet, `quick/readers.md`, not told which card came from which model) chose one card for each. Counting a sample for the model whose runs drew the chosen card more often, reader A preferred the quick model's on 5 and the main model's on 4, and reader B the quick model's on 7 and the main model's on 2. Both chose the quick model's proscons, sheet for a recipe, list as a sheet and facts, and the main model's note for "Three tiers" and its explorable slider for the field of view.
 
-**What it costs to stay.** A call asks about up to 8 cards, and on the main model such calls took 13 to 49 s here, past the 12 s a composing card waits (49), so in a drop of several of the user's notes most land as the rules drew them. A single dropped note's call took 3.9 to 7.7 s in the user's headset session. The quick model answered every call in 6 s or less.
+**Why.** A composing card waits 12 s at most (49). On the main model a call for 8 cards took 13 to 49 s, so in a drop of several notes most landed as the rules drew them; the quick model answered every call in 6 s or less, at four fifths of the tokens.
 
-**Alternatives.** Switch now: the cards of a multi-note drop would land as the model's in time, at a score one sample lower in one of three runs. Ask the main model one card per call: each call is shorter, at more calls and tokens.
+**Alternatives.** Stay on the main model: the same choices within a sample, with most cards of a multi-note drop landing before their answer. Ask the main model one card per call: shorter calls, at more calls and tokens.

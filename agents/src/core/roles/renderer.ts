@@ -1088,7 +1088,8 @@ async function composed(ctx: RoleContext, asked: Open[], waitMs: number): Promis
   const ask = async (part: Open[], again: boolean): Promise<void> => {
     let reply: ComponentsReply;
     try {
-      reply = await ctx.model.json({ role: `${ROLE}.components`, system: COMPONENTS_SYSTEM, user: componentsPrompt(part, asset), schema: ComponentsReply, effort: 'low' });
+      // On the quick model: it chose as well as the main one in three runs each, and answered a call of 8 cards in 6 s at most against 49 (DECISIONS 52).
+      reply = await ctx.model.json({ role: `${ROLE}.components`, system: COMPONENTS_SYSTEM, user: componentsPrompt(part, asset), schema: ComponentsReply, effort: 'low', quick: true });
     } catch (err) {
       if (landed) return;
       const halves = again && err instanceof Unreadable;
