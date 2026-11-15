@@ -448,3 +448,37 @@ test('the navigate that ends a run is marked yours only on the connection that a
     await run.close();
   }
 });
+
+for (const [asker, ask] of [
+  ['the web page', (page: { ws: WebSocket }) => page.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this: the long take in Children of Men' }] }))],
+  ['Telegram', (_page: unknown, run: Running) => void run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: the long take in Children of Men' }])],
+] as const) {
+  test(`a first round asked for on ${asker} that waits for a headset round to end is still marked yours only where it was asked`, { timeout: 20000 }, async () => {
+    const slow = { ...fakeRoles, scout: async (...args: Parameters<typeof fakeRoles.scout>) => (await new Promise((r) => setTimeout(r, 400)), fakeRoles.scout(...args)) };
+    const { run } = await boot(undefined, { roles: slow });
+    const headset = await connect(run);
+    const page = await connect(run);
+    const trees = async (n: number) => {
+      while (run.mind.trees.size < n) await new Promise((r) => setTimeout(r, 5));
+    };
+    try {
+      headset.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this: dolly zooms' }] }));
+      await trees(1);
+      page.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this: rack focus' }] }));
+      await trees(2);
+      ask(page, run);
+      await trees(3);
+      await run.pipeline.idle();
+      const told = (m: Msg) => m.t === 'say' && String(m.text).includes('the long take');
+      await Promise.all([headset.until(told), page.until(told)]);
+      const navigates = (c: { seen: Msg[] }) => c.seen.filter((m) => m.t === 'navigate').map((m) => ({ to: run.mind.itemOf(m.nodeId as string).title, yours: m.yours }));
+      const last = { to: 'the long take in Children of Men', yours: undefined };
+      assert.deepEqual(navigates(headset), [last], 'the headset round that ended first does not lend the queued round its connection');
+      assert.deepEqual(navigates(page), [{ ...last, yours: asker === 'the web page' ? true : undefined }]);
+    } finally {
+      headset.ws.close();
+      page.ws.close();
+      await run.close();
+    }
+  });
+}
