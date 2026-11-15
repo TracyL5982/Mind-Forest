@@ -92,72 +92,38 @@ Face::Face(uint32_t seed) : seed(seed ? seed : 1) {
     nextDart = random(dartMin, dartMax);
 }
 
-namespace {
-
-/// A spring let go `t` s ago, from 0 toward 1: most of the way in about 0.2 s, a sixth past it, settled in 0.4 s.
-float spring(float t) {
-    if (t <= 0) return 0;
-    constexpr float w = 2 * pi / 0.3f, z = 0.5f;
-    const float wd = w * std::sqrt(1 - z * z);
-    return 1 - std::exp(-z * w * t) * (std::cos(wd * t) + z * w / wd * std::sin(wd * t));
-}
-
-/// A bubble `t` s after it popped or was pushed: drawn out along its way, then squashed, then round again.
-float jiggle(float t) { return t <= 0 ? 0 : 0.3f * std::exp(-t / 0.12f) * std::sin(2 * pi * t / 0.24f); }
-
-/// When bubble `j` pops, s after the first: the first three quickly, then three every `Face::bubbling`.
-float bornAt(int j) {
-    return j <= 2 ? float(j) * Face::dotPopEvery : 2 * Face::dotPopEvery + float(j - 2) * Face::bubbling / 3;
-}
-
-}  // namespace
-
-Face::Bubbles Face::bubbles(float rising) {
+Face::Dot Face::dot(int j, float rising) {
     // Their three places, as the user drew them against Momo: 0.12, 0.18 and 0.25 of its width across, in a trail going
-    // up and right from just outside its upper right, the smallest nearest. A bubble pushed past the last bursts there.
+    // up and right from just outside its upper right, the smallest nearest.
     static constexpr float home[3][2] = {{2.08f, 2.9f}, {3.3f, 4.0f}, {4.7f, 5.14f}};
     static constexpr float radii[3] = {0.24f, 0.36f, 0.5f};
-    constexpr float burstFor = 0.25f;
-    const Vec2 place[4] = {{home[0][0], home[0][1]}, {home[1][0], home[1][1]}, {home[2][0], home[2][1]},
-                           Vec2{home[2][0], home[2][1]} + (Vec2{home[2][0], home[2][1]} - Vec2{home[1][0], home[1][1]}) * 0.55f};
-    const Vec2 trail = normalize(place[2] - place[0]), across{-trail.y, trail.x};
-    Bubbles out;
-    if (rising < 0) return out;
-    int last = 0;
-    while (bornAt(last + 1) <= rising) last++;
-    for (int j = std::max(0, last - 3); j <= last; j++) {
-        // A bubble's place is how many have popped since it did: each pop pushes every bubble one place out.
-        int p = last - j;
-        float since = rising - bornAt(j + p);
-        Bubble b;
-        b.along = trail;
-        if (p == 3) {
-            // Pushed past the largest place, it moves off quickly out of the way of the next, swells, fades, and leaves a
-            // faint ring going out.
-            float u = since / burstFor;
-            if (u >= 1) continue;
-            float e = 1 - (1 - u) * (1 - u);
-            b.at = place[2] + (place[3] - place[2]) * e;
-            b.radius = radii[2] * (1 + 0.25f * e);
-            b.alpha = 1 - u * u * (3 - 2 * u);
-            b.ring = b.radius * (1 + 0.7f * u);
-            b.ringAlpha = 0.45f * (1 - u);
-        } else {
-            // Born small at the base, or pushed one place out, it springs there and grows to that place's size.
-            float s = spring(since);
-            Vec2 from = place[p == 0 ? 0 : p - 1];
-            float was = p == 0 ? 0 : radii[p - 1];
-            b.at = from + (place[p] - from) * s;
-            b.radius = std::max(0.f, was + (radii[p] - was) * s);
-            b.stretch = 1 + jiggle(since);
-        }
-        // While it waits it wobbles and drifts a little, as a bubble does.
-        float phase = float(j) * 2.1f;
-        b.at += across * (0.1f * std::sin(2 * pi * rising / 1.4f + phase)) + trail * (0.06f * std::sin(2 * pi * rising / 1.9f + 0.7f * phase));
-        b.stretch += 0.05f * std::sin(2 * pi * rising / 0.9f + phase);
-        out.all[out.count++] = b;
+    constexpr float orbit = 0.45f;
+    auto place = [](int p) { return Vec2{home[p][0], home[p][1]}; };
+    // Eased gently in and out, at most about half again its mean speed, so a bubble floats off and settles rather than
+    // being shot.
+    auto glide = [](float t) { return t <= 0 ? 0.f : t >= 1 ? 1.f : 0.5f - 0.5f * std::cos(pi * t); };
+    Dot d{place(0), 0};
+    float age = rising - dotPopEvery * float(j);
+    if (age <= 0) return d;
+    // It swells up from nothing at the base, easing out, a hair past its size.
+    float t = std::min(1.f, age / dotSwell);
+    constexpr float past = 0.6f;
+    d.radius = radii[0] * (1 + (past + 1) * std::pow(t - 1, 3.f) + past * std::pow(t - 1, 2.f));
+    // Each bubble formed after it eases it one place out, growing to that place's size; overlapping pushes add.
+    for (int p = 1; p <= 2 - j; p++) {
+        float e = glide((rising - dotPopEvery * float(j + p)) / dotGlide);
+        d.at += (place(p) - place(p - 1)) * e;
+        d.radius += (radii[p] - radii[p - 1]) * e;
     }
-    return out;
+    // Once all three have settled, each circles its own place, a third of a turn behind the one before, so the three
+    // turn through a line and a triangle and back as they go.
+    float since = rising - dotsAtLeast;
+    if (since <= 0) return d;
+    int k = 2 - j;
+    float swing = orbit * std::min(1.f, since / 0.6f);
+    float a = 2 * pi * since / dotTurn - float(k) * 2 * pi / 3 - pi / 2;
+    d.at += Vec2{std::cos(a), std::sin(a)} * swing;
+    return d;
 }
 
 float Face::random(float lo, float hi) {
