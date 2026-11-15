@@ -72,6 +72,22 @@ std::string percentDecoded(const std::string& s) {
 /// Seconds between showings of "Thinking…" while the service still works on a card (each showing lasts a little longer).
 constexpr double thinkAgain = 2.2;
 
+/// How long a navigate waits for its tree to stand before it is let go: a cover opens into its tree in about a second.
+constexpr double standsWithin = 5;
+/// How long a navigate waits for speaking to end: longer than a reply, so a voice that never says it ended cannot hold it.
+constexpr double speechWithin = 20;
+
+/// Stands the layer a card's group lies on: `parent` leads it, and each card on the way leads its own, as the pinches that
+/// reach it by hand would have made them.
+void standGroup(Tree& t, int parent) {
+    for (int step : t.path(parent)) {
+        // Focusing keeps a card in a tree the gardener grows; in the service's, the service says what is kept.
+        bool kept = t.nodes[step].kept;
+        t.focus(step);
+        t.nodes[step].kept = kept;
+    }
+}
+
 }  // namespace
 
 std::shared_ptr<Bridge> Bridge::fromFlags(OceanModel& model) {
@@ -116,7 +132,10 @@ void Bridge::frame(double t) {
                            if (voice) voice->say(s.text);
                        },
                        [&](Heard&) {},
-                       [&](Navigate&) {},
+                       [&](Navigate& n) {
+                           logLine("[agent] navigate to " + (n.nodeId ? "card " + n.nodeId->value : n.treeId ? "tree " + n.treeId->value : "nowhere"));
+                           going = Going{n, now, std::nullopt};
+                       },
                        [&](Handoff& h) { logLine("[agent] handoff ready: " + h.name); },
                        [&](SettingsChanged& c) {
                            if (voice) voice->renamed(c.settings.agentName);
@@ -165,6 +184,7 @@ void Bridge::frame(double t) {
         voice->frame(now);
         showVoice();
     }
+    goOn();
     reportFocus();
     if (offered) {
         std::optional<int> open = standingTree ? standingTree->tree->focus() : std::nullopt;
@@ -520,6 +540,8 @@ bool Bridge::opens(int nodeID) {
     const TreeNode& n = p->tree->nodes[nodeID];
     // A card that already leads a layer, or one on another layer, is gone to as before.
     if (n.head || p->tree->seat(n).depth != p->tree->standDepth()) return false;
+    // One whose parent leads no layer lies on this one where no group is, so its parent's group stands first.
+    if (n.parent && !p->tree->nodes[*n.parent].head) standGroup(*p->tree, *n.parent);
     p->tree->open(nodeID);
     logLine("[agent] opened " + model.catalog->title(n.ref));
     return true;
@@ -644,6 +666,61 @@ void Bridge::showVoice() {
     sign->orientation = model.stage.facing(sign->position);
     model.root_->addChild(sign);
     model.fadeIn(sign, 0, 0.2f);
+}
+
+bool Bridge::speaking() const {
+    // TODO(WS17): ask the new voice's own state. Until then: the user is recorded, or a reply is on its way or playing.
+    return voice && (voice->state() == Listener::State::hearing || !voice->saying().empty());
+}
+
+void Bridge::goOn() {
+    if (!going || (speaking() && now - going->came < speechWithin)) return;
+    const Navigate& to = going->to;
+    Planted* p = nullptr;
+    int id = 0;
+    if (to.nodeId) {
+        p = holding(to.nodeId->value);
+        if (p) id = p->local[to.nodeId->value];
+    } else if (to.treeId) {
+        auto found = trees.find(to.treeId->value);
+        if (found != trees.end()) {
+            p = &found->second;
+            id = p->tree->root;
+        }
+    }
+    if (!p) {
+        logLine("[agent] nothing here to go to");
+        going.reset();
+        return;
+    }
+    if (!standing(*p)) {
+        auto cover = std::find_if(model.shelf.begin(), model.shelf.end(), [&](const OceanModel::Shelved& s) { return s.tree == p->tree; });
+        if (cover != model.shelf.end() && !model.pressing) model.unfold(cover->uid);
+        if (!going->waitingSince) {
+            going->waitingSince = now;
+        } else if (now - *going->waitingSince > standsWithin) {
+            logLine("[agent] \"" + p->tree->title + "\" did not stand, so it was not gone to");
+            going.reset();
+        }
+        return;
+    }
+    if (model.pressing || !model.standQueue.empty()) return;
+    bring(*p, id);
+    going.reset();
+}
+
+void Bridge::bring(Planted& p, int id) {
+    Tree& t = *p.tree;
+    const TreeNode& n = t.nodes[id];
+    if (n.head) {
+        t.focus(id);
+    } else if (t.condensed(n) || !opens(id)) {
+        standGroup(t, *n.parent);
+        t.open(id);
+    }
+    model.restyle();
+    logLine("[agent] went to " + model.catalog->title(n.ref) + " in \"" + t.title + "\" (" + p.service[id] + "), on the layer of " +
+            p.service[t.stand]);
 }
 
 void Bridge::reportFocus() {

@@ -31,8 +31,9 @@ public:
 
     /// Once a frame, on the frame thread: what the service sent since the last frame reaches the scene.
     void frame(double now);
-    /// A pinch on a card of a service tree on the layer you work on: it opens where it stands, to show its details.
-    /// True when it did; otherwise the scene does what it always did (going back to a card's own layer).
+    /// A pinch on a card of a service tree on the layer you work on: it opens where it stands, to show its details, once
+    /// its parent's group stands (it may not, for a card whose parent has led no layer yet). True when it did; otherwise
+    /// the scene does what it always did (going back to a card's own layer).
     bool opens(int nodeID);
     /// The rows under an open card of a service tree: "Keep this" for a suggestion, then what can be asked about it (the
     /// questions the service wrote for the card and the conversation, once they come), then typing your own.
@@ -134,6 +135,21 @@ private:
     bool standing(const Planted& p) const;
     /// Tells the service which card is open when that changes: standing a tree, unfolding a cover, a pinch, a step.
     void reportFocus();
+
+    /// A `navigate` from the service, carried out once neither the user nor Momo is speaking, so the view does not move
+    /// mid-sentence, and once its tree stands: taken off the shelf as a pinch on its cover takes it. A later one replaces it.
+    struct Going {
+        Navigate to;
+        double came = 0;                        // when it came
+        std::optional<double> waitingSince;     // since its tree was asked to stand
+    };
+    std::optional<Going> going;
+    void goOn();
+    /// Whether the user or Momo is speaking: the only thing the bridge asks of the voice.
+    bool speaking() const;
+    /// Brings a card of the standing tree into view the way hands go to one: a card that leads a layer stands on it, any
+    /// other opens on its group's layer, which stands first, each card on the way leading its own layer.
+    void bring(Planted& p, int id);
 };
 
 }  // namespace agent
