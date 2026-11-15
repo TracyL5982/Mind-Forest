@@ -265,8 +265,8 @@ async function pictureFor(ctx: RoleContext, anchor: Node): Promise<string | unde
 
 /**
  * Thinks of `count` directions and hands each to `arrive` as soon as the model has written it, in the order written, each once.
- * The main model writes them at minimal effort: measured on three cards, as concrete and as varied as at low effort, in 11 to 15 s
- * instead of 20 to 25, and read as they are written, the first is ready 5 to 8 s in. The quick models were faster and more generic.
+ * Read as they are written, each starts the moment it is whole. The quick models wrote them four times faster and lost the concrete
+ * examples a request for examples asks for.
  */
 async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Direction) => void): Promise<void> {
   const asked = run.need
@@ -326,7 +326,8 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
     ].join('\n'),
     schema: Ideas,
     images: run.picture ? [run.picture] : undefined,
-    effort: 'minimal',
+    // Minimal effort writes them in 11 to 15 s instead of 19 to 25, but two blind readers ranked its directions below these on every card.
+    effort: 'low',
     onText: (soFar) => {
       for (const raw of completeElements(soFar, 'directions').slice(read)) {
         read++;
