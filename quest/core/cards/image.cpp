@@ -53,7 +53,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     Words words = item.words;
     sheet.part(tall, [src, tall, words](const Pen& pen, float y) {
         CGRect box = pen.px(Sheet::left, y, Sheet::width, tall);
-        pen.ctx.setFillColor(Color::hex(0x0F1115));
+        pen.ctx.setFillColor(palette::media);
         pen.ctx.fill(box);
         pen.picture(src, box, false, words);
         pen.mask(box, 14 * pen.k, palette::glass);

@@ -274,7 +274,7 @@ void paint(const Pen& pen, const Plot& p, float x, float y, const Look& look) {
         ctx.setLineDash(0, {});
     }
     if (!p.line.empty()) {
-        ctx.setStrokeColor(mix(look.accent, 0.8f, look.fill));
+        ctx.setStrokeColor(palette::bar);
         ctx.setLineWidth(2 * k);
         ctx.setLineCap(Canvas::LineCap::round);
         ctx.setLineJoin(Canvas::LineJoin::round);
@@ -283,14 +283,14 @@ void paint(const Pen& pen, const Plot& p, float x, float y, const Look& look) {
         ctx.strokePath();
     }
     for (const Plot::Bar& b : p.bars) {
-        ctx.setFillColor(b.marked ? look.accent : mix(look.accent, 0.4f, look.fill));
+        ctx.setFillColor(b.marked ? look.accent : palette::bar);
         pen.rounded(pen.px(x + b.x, y + b.y, b.width, b.height), 2 * k);
         ctx.fillPath();
     }
     for (const Plot::Dot& d : p.dots) {
         float r = d.marked ? 4.5f : 2.5f;
         CGRect disc{(x + d.at.x - r) * k, (y + d.at.y - r) * k, 2 * r * k, 2 * r * k};
-        ctx.setFillColor(d.marked ? palette::ink : look.accent);
+        ctx.setFillColor(d.marked ? look.accent : palette::ink);
         ctx.fillEllipse(disc);
         if (!d.marked) continue;
         ctx.setStrokeColor(look.accent);

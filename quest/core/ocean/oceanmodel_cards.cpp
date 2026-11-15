@@ -398,7 +398,7 @@ std::optional<int> OceanModel::previousPiece(int id) const {
 // would push the picture of nearly half the films to a second page.
 void OceanModel::seatCard(CardView& c, const TreeNode& n) {
     std::optional<std::string> id = cards::ocean::cardOf(n.ref);
-    if (id && cards::ocean::seat(*id, cards::Node{.pick = !n.kept, .root = !n.parent})) redrawCard(c);
+    if (id && cards::ocean::seat(*id, cards::Node{.pick = !n.kept, .root = !n.parent, .tone = n.tone})) redrawCard(c);
 }
 
 void OceanModel::redrawCard(CardView& c) {

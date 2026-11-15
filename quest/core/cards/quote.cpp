@@ -11,7 +11,7 @@ constexpr int COLUMN = WIDTH - 41;
 constexpr int MARK = 22;
 constexpr const char* OPEN_QUOTE = "\xE2\x80\x9C";
 /// A quote's `--ink-2`.
-constexpr Color BY = Color::hex(0xBDBDB6);
+constexpr Color BY = palette::meta;
 /// The host's serif stands its large mark higher in the line than a browser does.
 constexpr float MARK_DROP = 4;
 

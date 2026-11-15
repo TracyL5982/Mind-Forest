@@ -18,14 +18,15 @@ namespace cards {
 
 /// What the tree says of a card besides its view and its item.
 struct Node {
-    /// `node.status == "pick"`: amber, a dashed edge, a darker face.
+    /// `node.status == "pick"`: a dashed edge, a darker face and a SUGGESTED kicker.
     bool pick = false;
     /// The first card of a tree (`node.parent` is null): a lighter face and a white edge.
     bool root = false;
     /// `node.why`, which the opened card says.
     std::string why;
-    /// The tree's colour for this card (the web's `store.view.colour`). Its marks take it.
-    Color accent = palette::trunk;
+    /// The tone of the card's place in the tree, as its thread is drawn (`TreeNode::tone`). Its marks take
+    /// the tone's colour, where the web's take the tree's.
+    Tone tone = Tone::note;
 };
 
 /// The footprint the web gives this view and item, px.

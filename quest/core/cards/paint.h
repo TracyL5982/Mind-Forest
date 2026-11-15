@@ -8,28 +8,48 @@
 #include <vector>
 
 #include "../canvas.h"
+#include "../ocean/art.h"
 #include "item.h"
 
 namespace cards {
 
-// style.css `:root`
+// The cards keep the web's layout, type scale, types and sizes, and take every colour from the Ocean
+// (Art in core/ocean/art.h, the tones in stage.h), so they sit in the ocean as its own notes do: flat,
+// opaque, white words at the Ocean's steps of strength, and one accent. Each line says where its value
+// comes from and which of style.css's colours it stands for.
 namespace palette {
-constexpr Color ink = Color::hex(0xECEBE6);
-constexpr Color ink2 = Color::hex(0xA3A39C);
-constexpr Color ink3 = Color::hex(0x909089);
-constexpr Color pick = Color::hex(0xF2C27A);
-constexpr Color trunk = Color::hex(0xE6EFFF);
-constexpr Color face = Color::hex(0x1B1D23);
-constexpr Color sunk = Color::hex(0x111317);
-constexpr Color rootFace = Color::hex(0x262932);
-constexpr Color pickFace = Color::hex(0x14161A);
-constexpr Color pickSunk = Color::hex(0x0F1114);
-constexpr Color media = Color::hex(0x0C0E11);
-/// `--glass` over the page's ground, made opaque: a card's picture is never see-through.
-constexpr Color glass = Color::hex(0x16181C);
-constexpr Color line = Color::white(1, 0.11f);
+/// Words. White, as the Ocean's titles (`--ink`).
+constexpr Color ink = Color::white();
+/// Body text, at the Ocean's 0.82 (`--ink-2`).
+constexpr Color ink2 = Color::white(1, 0.82f);
+/// What a card says about itself: a speaker, a source, a language, at the Ocean's 0.78 for meta.
+constexpr Color meta = Color::white(1, 0.78f);
+/// Faint words: labels, counts, a picture that is not there (`--ink-3`), at the Ocean's 0.6.
+constexpr Color ink3 = Color::white(1, 0.6f);
+/// A card's face: the Ocean's panel ground, Art::panel (`--face`).
+constexpr Color face = Art::panel;
+/// The darker face of a figure, a fact or code: Art::ink, the dark of the Ocean's labels and panels (`--sunk`).
+constexpr Color sunk = Art::ink;
+/// The first card of a tree, a shade lighter: Art::well (the web's root face).
+constexpr Color raised = Art::well;
+/// Behind a picture: Art::well, the frame of a picture not there (`.media-frame`, `.detail-media`).
+constexpr Color media = Art::well;
+/// The opened card: Art::ink, as the ocean's open note is (`--glass`, made flat and opaque).
+constexpr Color glass = Art::ink;
+/// Hairlines and the edge of a card: white, faint (`--line`, `--line-2`).
+constexpr Color line = Color::white(1, 0.12f);
 constexpr Color line2 = Color::white(1, 0.2f);
+/// The edge and the kicker of a pick, the agent's suggestion: white at 0.5, in place of the web's amber.
+constexpr Color pick = Color::white(1, 0.5f);
+/// The one accent, Art::hot: where you are, what you marked, what you send, and danger (`--danger`).
+constexpr Color hot = Art::hot;
+/// A bar or a figure that is not the one a card is about: flat white at 0.35, as Art::bars draws them.
+constexpr Color bar = Color::white(1, 0.35f);
 }  // namespace palette
+
+/// The tone a chip of this kind is drawn in, as the ocean draws its tags: who is people, where is place,
+/// when is era, and where an agent's pick came from is path.
+Tone toneOf(Chip::Kind kind);
 
 /// `color-mix(in srgb, a share, b)`, both opaque.
 Color mix(Color a, float share, Color b);
@@ -70,9 +90,9 @@ float widthOf(const std::string& s, const Setting& t, float k);
 
 /// How a card's face is coloured: its type's face, then what a pick or a tree's first card change.
 struct Look {
-    Color accent = palette::trunk;
+    Color accent = ::color(Tone::note);
     Color fill = palette::face;
-    Color edge = palette::trunk.withAlphaComponent(0.3f);
+    Color edge = palette::line;
     Color ink2 = palette::ink2;
     Color ink3 = palette::ink3;
     float edgeWidth = 1;

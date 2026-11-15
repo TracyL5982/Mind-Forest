@@ -65,7 +65,7 @@ void hatch(const Pen& pen, CGRect frame, Color a, Color b, float stripe) {
 }
 
 void unavailable(const Pen& pen, CGRect frame, const Words& words, float bottom) {
-    hatch(pen, frame, Color::hex(0x131519), Color::hex(0x17191E), 10);
+    hatch(pen, frame, Art::ink, Art::panel, 10);
     std::string said = words.noPicture();
     const TextFrame& set = layoutText(said, attributes(setting::text, palette::ink3, pen.k), frame.width(), 0);
     float w = set.width / pen.k, h = set.height / pen.k;

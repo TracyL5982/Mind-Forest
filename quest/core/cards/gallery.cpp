@@ -14,11 +14,8 @@ namespace {
 
 /// How many of a note's links come up round it (Catalog::offers).
 constexpr size_t RING = 7;
-/// The library page's tree colour.
-constexpr Color TINT = Color::hex(0x9FC3FF);
-
 Color colour(const std::string& hex) {
-    return hex.size() == 7 && hex[0] == '#' ? Color::hex(uint32_t(std::strtoul(hex.c_str() + 1, nullptr, 16))) : palette::trunk;
+    return hex.size() == 7 && hex[0] == '#' ? Color::hex(uint32_t(std::strtoul(hex.c_str() + 1, nullptr, 16))) : Color::white();
 }
 
 struct Link {
@@ -58,7 +55,7 @@ void addLabel(Catalog& catalog, const std::string& id, const std::string& title,
     item.set("title", title).set("summary", summary).set("text", "");
     source.set("from", "paste");
     item.set("source", source);
-    add(catalog, id, view, item, Node{.pick = false, .root = root, .accent = TINT});
+    add(catalog, id, view, item, Node{.pick = false, .root = root});
 }
 
 /// Links `parent` to `links`. More than a ring holds go round a card that says so, at the ring's end.
@@ -99,7 +96,7 @@ int gallery(Catalog& catalog) {
         int i = 0;
         for (const Json& card : type["cards"].array()) {
             std::string id = "cards-" + name + "-" + std::to_string(i++);
-            add(catalog, id, card["view"], card["item"], Node{.pick = card["status"].string("") == "pick", .root = false, .accent = TINT});
+            add(catalog, id, card["view"], card["item"], Node{.pick = card["status"].string("") == "pick", .root = false});
             for (const std::string& src : pictures(id)) {
                 if (src.rfind("sample:", 0) != 0) picture(src, nullptr);
             }

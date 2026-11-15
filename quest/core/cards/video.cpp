@@ -74,7 +74,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     Words words = item.words;
     sheet.part(tall + noteTall, [=](const Pen& pen, float y) {
         CGRect box = pen.px(Sheet::left, y, Sheet::width, tall + noteTall);
-        pen.ctx.setFillColor(Color::hex(0x0F1115));
+        pen.ctx.setFillColor(palette::media);
         pen.ctx.fill(box);
         CGRect frame = pen.px(Sheet::left, y, Sheet::width, tall);
         if (shown) pen.picture(poster, aspect && !missing ? contained(frame, *aspect) : frame, false, words);

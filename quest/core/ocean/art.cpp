@@ -472,7 +472,7 @@ ImageRef Art::layerImage(const std::vector<PressedItem>& items, const std::share
     format.scale = 1;
     format.opaque = true;
     return UIGraphicsImageRenderer(size, format).image([&](Canvas& context) {
-        setFill(Color::hex(0x161A21));
+        setFill(Art::panel);
         UIRectFill(CGRect{CGPoint::zero(), size});
         paint(items, size.width, size.height, context, catalog);
     });

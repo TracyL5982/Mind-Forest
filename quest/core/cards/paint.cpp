@@ -181,9 +181,9 @@ void paintSample(Canvas& ctx, const Sample& s, CGRect r) {
 /// `.media-missing`: stripes, and the words.
 void paintMissing(const Pen& pen, CGRect frame, const Words& words) {
     Canvas& ctx = pen.ctx;
-    ctx.setFillColor(Color::hex(0x131519));
+    ctx.setFillColor(Art::ink);
     ctx.fill(frame);
-    ctx.setFillColor(Color::hex(0x17191E));
+    ctx.setFillColor(Art::panel);
     float band = 10 * pen.k * float(M_SQRT2), reach = frame.width() + frame.height();
     for (float c = band; c < reach + band; c += 2 * band) {
         ctx.move(CGPoint{frame.minX() + c, frame.minY()});
@@ -231,86 +231,34 @@ void Pen::picture(const std::string& src, CGRect frame, bool cover, const Words&
 
 // MARK: - Chips
 
-namespace {
+Tone toneOf(Chip::Kind kind) {
+    switch (kind) {
+    case Chip::Kind::when: return Tone::era;
+    case Chip::Kind::origin: return Tone::path;
+    case Chip::Kind::where: return Tone::place;
+    case Chip::Kind::people: return Tone::people;
+    }
+    return Tone::path;
+}
 
-/// The chip glyphs of components/index.js (a 12 by 12 box), as lines.
-struct Glyph {
-    Canvas& ctx;
-    CGPoint origin;
-    float scale;
-    CGPoint p(float x, float y) const { return {origin.x + x * scale, origin.y + y * scale}; }
-    void circle(float cx, float cy, float r) const {
-        for (int i = 0; i <= 32; i++) {
-            float a = float(i) / 32 * 2 * float(M_PI);
-            CGPoint q = p(cx + r * std::cos(a), cy + r * std::sin(a));
-            if (i == 0) ctx.move(q); else ctx.addLine(q);
-        }
-    }
-    void cubic(CGPoint a, CGPoint b, CGPoint c, CGPoint d) const {
-        for (int i = 1; i <= 16; i++) {
-            float t = float(i) / 16, u = 1 - t;
-            ctx.addLine(p(u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * c.x + t * t * t * d.x,
-                          u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * c.y + t * t * t * d.y));
-        }
-    }
-    void lines(std::initializer_list<CGPoint> points) const {
-        bool first = true;
-        for (CGPoint q : points) {
-            if (first) ctx.move(p(q.x, q.y)); else ctx.addLine(p(q.x, q.y));
-            first = false;
-        }
-    }
-    void draw(Chip::Kind kind) const {
-        switch (kind) {
-        case Chip::Kind::when:
-            circle(6, 6, 4.5f);
-            lines({{6, 3.6f}, {6, 6}, {7.7f, 7.2f}});
-            break;
-        case Chip::Kind::where:
-            ctx.move(p(6, 10.8f));
-            cubic({6, 10.8f}, {3.9f, 8.6f}, {2.7f, 6.8f}, {2.7f, 5.1f});
-            for (int i = 1; i <= 16; i++) {
-                float a = float(M_PI) + float(i) / 16 * float(M_PI);
-                ctx.addLine(p(6 + 3.3f * std::cos(a), 5.1f + 3.3f * std::sin(a)));
-            }
-            cubic({9.3f, 5.1f}, {9.3f, 6.8f}, {8.1f, 8.6f}, {6, 10.8f});
-            circle(6, 5.1f, 1);
-            break;
-        case Chip::Kind::people:
-            circle(6, 3.8f, 2);
-            ctx.move(p(2.2f, 10.4f));
-            cubic({2.2f, 10.4f}, {2.5f, 8.4f}, {4, 7.4f}, {6, 7.4f});
-            cubic({6, 7.4f}, {8, 7.4f}, {9.5f, 8.4f}, {9.8f, 10.4f});
-            break;
-        case Chip::Kind::origin:
-            lines({{2.5f, 2}, {2.5f, 6.5f}, {9, 6.5f}});
-            lines({{6.8f, 4.2f}, {9.2f, 6.5f}, {6.8f, 8.8f}});
-            break;
-        }
-        ctx.strokePath();
-    }
-};
-
-}  // namespace
-
-void Pen::chips(const std::vector<Chip>& line, float x, float y, const Look& look) const {
+void Pen::chips(const std::vector<Chip>& line, float x, float y, const Look&) const {
+    // Each chip is one of the ocean's tags: a flat label in its tone's colour with its words in the tone's ink
+    // (Art::chip), in the box the web gives it. Its kind is told by its tone, where the web draws a glyph.
+    constexpr float pad = 7;
+    Setting t = setting::text;
+    t.weight = Font::Weight::medium;
     for (const Chip& chip : line) {
+        Tone tone = toneOf(chip.kind);
         std::string count = chip.count ? "+" + std::to_string(chip.count) : "";
-        float countWidth = count.empty() ? 0 : 4 + width(count, setting::text);
-        // A box closes up to its text when the text draws narrower than it was counted.
-        float room = float(chip.width) - 28 - (countWidth > 0 ? countWidth : 0);
-        float drawn = std::min(room, width(chip.text, setting::text));
-        float box = std::min(float(chip.width), 28 + std::ceil(drawn) + countWidth);
-        ctx.setFillColor(Color::white(1, 0.07f));
-        rounded(px(x, y, box, 20), 10 * k);
-        ctx.fillPath();
-        ctx.setStrokeColor(look.accent);
-        ctx.setLineWidth(1.2f * k);
-        ctx.setLineCap(Canvas::LineCap::round);
-        ctx.setLineJoin(Canvas::LineJoin::round);
-        Glyph{ctx, CGPoint{(x + 5) * k, (y + 4) * k}, k}.draw(chip.kind);
-        words(chip.text, x + 21, y + 1.5f, std::max(1.f, room + 0.5f), 1, setting::text, look.ink2);
-        if (!count.empty()) words(count, x + 21 + drawn + 4, y + 1.5f, countWidth + 4, 1, setting::text, look.ink2);
+        float countWidth = count.empty() ? 0 : 4 + width(count, t);
+        float room = float(chip.width) - 2 * pad - countWidth;
+        float drawn = std::min(room, width(chip.text, t));
+        // A box closes up to its words when they draw narrower than they were counted.
+        float box = std::min(float(chip.width), 2 * pad + std::ceil(drawn) + countWidth);
+        ctx.setFillColor(::color(tone));
+        ctx.fill(px(x, y, box, 20));
+        words(chip.text, x + pad, y + 1.5f, std::max(1.f, room + 0.5f), 1, t, ::ink(tone));
+        if (!count.empty()) words(count, x + pad + drawn + 4, y + 1.5f, countWidth + 4, 1, t, ::ink(tone));
         x += box + 6;
     }
 }

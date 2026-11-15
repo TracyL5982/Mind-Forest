@@ -22,7 +22,7 @@ struct Tone {
     std::vector<std::vector<CGPoint>> glyph;
 };
 const Tone& toneOf(const Json& props) {
-    static const Tone caution{fixed::caution, Color::hex(0xFF9A92), {{{7, 1.6f}, {13, 12.2f}, {1, 12.2f}, {7, 1.6f}}, {{7, 5.6f}, {7, 8.8f}}, {{7, 10.4f}, {7, 10.6f}}}};
+    static const Tone caution{fixed::caution, palette::hot, {{{7, 1.6f}, {13, 12.2f}, {1, 12.2f}, {7, 1.6f}}, {{7, 5.6f}, {7, 8.8f}}, {{7, 10.4f}, {7, 10.6f}}}};
     static const Tone note{fixed::note, palette::ink2, {ring(7, 7, 5.8f), {{7, 6.2f}, {7, 9.8f}}, {{7, 4.1f}, {7, 4.3f}}}};
     return text(props["tone"]) == "caution" ? caution : note;
 }

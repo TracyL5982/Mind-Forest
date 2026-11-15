@@ -69,7 +69,7 @@ float bars(const Pen& pen, const std::vector<Part>& rows, float x, float top, fl
         pen.rounded(pen.px(left, top + 4.5f, track, 8), 4 * pen.k);
         pen.ctx.fillPath();
         if (row.bar > 0) {
-            pen.ctx.setFillColor(mix(look.accent, 0.62f, look.fill));
+            pen.ctx.setFillColor(palette::bar);
             pen.rounded(pen.px(left, top + 4.5f, std::max(2.f, float(row.bar) * track), 8), 4 * pen.k);
             pen.ctx.fillPath();
         }

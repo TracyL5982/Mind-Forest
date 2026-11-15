@@ -68,7 +68,7 @@ void bar(const Pen& pen, float x, float y, float w, const std::string& site, boo
     pen.ctx.fillPath();
     std::string letter = capital(site);
     float letterWidth = pen.width(letter, DOT);
-    pen.words(letter, left + (17 - letterWidth) / 2, dotTop + 3, letterWidth + 1, 1, DOT, Color::hex(0x0B0D11));
+    pen.words(letter, left + (17 - letterWidth) / 2, dotTop + 3, letterWidth + 1, 1, DOT, Art::ink);
     float lineTop = top + (inner - TEXT) / 2, outWidth = std::ceil(pen.width(OUT, setting::text));
     pen.words(OUT, right - outWidth, lineTop, outWidth + 1, 1, setting::text, palette::ink3);
     float host = left + 17 + 8;
@@ -107,7 +107,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
         Words words = item.words;
         sheet.part(tall, [image, tall, words](const Pen& pen, float y) {
             CGRect box = pen.px(Sheet::left, y, Sheet::width, tall);
-            pen.ctx.setFillColor(Color::hex(0x0F1115));
+            pen.ctx.setFillColor(palette::media);
             pen.ctx.fill(box);
             pen.picture(image, box, false, words);
             pen.mask(box, 14 * pen.k, palette::glass);

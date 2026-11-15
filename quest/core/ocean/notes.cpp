@@ -105,7 +105,7 @@ void Art::drawPicture(const OceanNote& note, CGRect rect) const {
     } else if (ImageRef image = note.image ? picture(*note.image) : nullptr) {
         drawImage(image, rect);
     } else {
-        setFill(Color::hex(0x20252E));
+        setFill(Art::well);
         UIRectFill(rect);
     }
 }

@@ -12,7 +12,7 @@ constexpr int WIDTH = 304;
 constexpr int SHOWN = 7;
 constexpr Setting CODE{12.5f, 17, Font::Weight::regular, false, false, true};
 /// `.code-source`'s colour.
-constexpr Color SOURCE = Color::hex(0xCDD6E4);
+constexpr Color SOURCE = palette::ink2;
 /// Where the source fades out, at the end of its column, px.
 constexpr float FADE = 28;
 

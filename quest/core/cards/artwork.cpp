@@ -57,7 +57,7 @@ void lift(const Pen& pen, CGRect r) {
 
 void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
     Plan p = plan(item, props);
-    pen.ctx.setFillColor(mix(Color::white(), 0.07f, look.fill));
+    pen.ctx.setFillColor(palette::raised);
     pen.ctx.fill(pen.px(1, 1, width - 2, MAT));
     pen.ctx.setFillColor(palette::line);
     pen.ctx.fill(pen.px(1, MAT, width - 2, 1));
@@ -97,7 +97,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     Words words = item.words;
     sheet.part(tall, [src, tall, words, aspect, missing](const Pen& pen, float y) {
         CGRect box = pen.px(Sheet::left, y, Sheet::width, tall);
-        pen.ctx.setFillColor(Color::hex(0x0F1115));
+        pen.ctx.setFillColor(palette::media);
         pen.ctx.fill(box);
         pen.picture(src, aspect && !missing ? contained(box, *aspect) : box, false, words);
         pen.mask(box, 14 * pen.k, palette::glass);

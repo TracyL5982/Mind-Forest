@@ -76,7 +76,7 @@ void dot(const Pen& pen, CGRect box, float radius, const std::string& value) {
     pen.ctx.setStrokeColor(Color::black());
     pen.rounded(box.insetBy(line / 2, line / 2), radius - line / 2);
     pen.ctx.strokePath();
-    pen.ctx.setStrokeColor(Color::hex(0xB0B0AA));
+    pen.ctx.setStrokeColor(palette::ink3);
     pen.rounded(box.insetBy(-line / 2, -line / 2), radius + line / 2);
     pen.ctx.strokePath();
 }
@@ -96,7 +96,7 @@ void row(const Pen& pen, const Colour& colour, float x, float y, float width, in
 void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float) {
     std::vector<Colour> all = colours(props);
     CGRect strip = pen.px(1, 1, width - 2, STRIP);
-    hatch(pen, strip, Color::hex(0x131519), Color::hex(0x1D2026), 6);
+    hatch(pen, strip, Art::ink, Art::panel, 6);
     pen.ctx.setFillColor(palette::line);
     pen.ctx.fill(pen.px(1, STRIP, width - 2, 1));
     size_t blocks = std::min(all.size(), STRIP_MOST);

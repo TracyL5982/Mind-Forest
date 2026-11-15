@@ -22,7 +22,7 @@ constexpr Map OPENED_MAP{348, 200, 12};
 constexpr int PIN = 28;
 constexpr int NAME = COLUMN - PIN - 10;
 /// `.map`: the plain ground a map is when no tile provider is named, as on the headset today.
-constexpr Color GROUND = Color::hex(0x20262C);
+constexpr Color GROUND = Art::well;
 
 struct Point {
     double lat, lon;
@@ -203,7 +203,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
         Words words = item.words;
         sheet.part(tall, [src, tall, words](const Pen& pen, float y) {
             CGRect box = pen.px(Sheet::left, y, Sheet::width, tall);
-            pen.ctx.setFillColor(Color::hex(0x0F1115));
+            pen.ctx.setFillColor(palette::media);
             pen.ctx.fill(box);
             pen.picture(src, box, false, words);
             pen.mask(box, 14 * pen.k, palette::glass);

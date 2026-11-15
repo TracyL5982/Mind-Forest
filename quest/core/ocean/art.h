@@ -99,6 +99,10 @@ public:
     static constexpr Color ink = Color::hex(0x0B0D11);          // the dark of labels and panels
     static constexpr Color paper = Color::hex(0xF4F1EA);
     static constexpr Color hot = Color::hex(0xFF5A36);          // the one accent: where you are, what you marked, what you send
+    // NOTE(port): added for Quest. The two greys the Swift writes in place, named so the agent's cards
+    // (core/cards/paint.h) take the same: the ground a layer's picture is drawn on, and the frame of a picture not there.
+    static constexpr Color panel = Color::hex(0x161A21);
+    static constexpr Color well = Color::hex(0x20252E);
 
     /// The five sizes of type, m. Nothing is set smaller than `micro`:
     /// under a centimeter, words can't be read from where you stand.

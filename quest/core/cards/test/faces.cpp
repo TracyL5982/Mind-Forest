@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
         int i = 0;
         for (const Json& card : type["cards"].array()) {
             std::string id = name + "-" + std::to_string(i++);
-            cards::Node node{.pick = card["status"].string("") == "pick", .root = false, .accent = Color::hex(0x9FC3FF)};
+            cards::Node node{.pick = card["status"].string("") == "pick", .root = false};
             cards::put(id, card["view"], card["item"], node);
             for (const std::string& src : cards::pictures(id)) {
                 if (src.rfind("sample:", 0) != 0) cards::picture(src, nullptr);

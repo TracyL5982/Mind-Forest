@@ -65,9 +65,8 @@ std::map<std::string, Entry>& store() {
 int revisions = 0, generations = 0;
 
 std::string signature(const Json& view, const Json& item, const Node& node) {
-    Color a = node.accent;
-    char tail[96];
-    snprintf(tail, sizeof tail, "|%d%d|%.4f,%.4f,%.4f,%.4f|", int(node.pick), int(node.root), double(a.r), double(a.g), double(a.b), double(a.a));
+    char tail[32];
+    snprintf(tail, sizeof tail, "|%d%d|%d|", int(node.pick), int(node.root), int(node.tone));
     return view.dump() + "\x1f" + item.dump() + tail + node.why;
 }
 
@@ -75,24 +74,21 @@ Look lookOf(const Entry& e) {
     const Kind& kind = *e.view.kind;
     const Node& node = e.node;
     Look look;
-    look.accent = node.pick ? palette::pick : node.accent;
+    look.accent = ::color(node.tone);
     look.radius = kind.radius;
-    Color ground = node.pick ? palette::pickFace : node.root ? palette::rootFace : palette::face;
+    Color ground = node.pick ? palette::sunk : node.root ? palette::raised : palette::face;
     switch (kind.face) {
     case Kind::Face::plain: look.fill = ground; break;
-    case Kind::Face::sunk: look.fill = node.pick ? palette::pickSunk : palette::sunk; break;
+    case Kind::Face::sunk: look.fill = palette::sunk; break;
     case Kind::Face::wash:
         look.fill = mix(look.accent, 0.14f, ground);
-        look.ink2 = Color::hex(0xBDBDB6);
+        look.ink2 = palette::meta;
         break;
     }
-    look.edge = look.accent.withAlphaComponent(kind.face == Kind::Face::wash ? 0.44f : 0.3f);
-    if (node.root) {
-        look.edge = Color::white(1, 0.5f);
-        look.ink3 = Color::hex(0x9A9A93);
-    }
+    look.edge = kind.face == Kind::Face::wash ? look.accent.withAlphaComponent(0.44f) : palette::line;
+    if (node.root) look.edge = Color::white(1, 0.5f);
     if (node.pick) {
-        look.edge = palette::pick.withAlphaComponent(0.62f);
+        look.edge = palette::pick;
         look.edgeWidth = 1.5f;
         look.dashed = true;
     }
@@ -212,7 +208,7 @@ Laid layOut(const Entry& e, float k, float pageTall, float pictureTall) {
                                      pen.rounded(pen.px(19.5f, y + 11.5f, badgeWidth - 1, badgeTall - 1), 10 * pen.k);
                                      ctx.strokePath();
                                      if (pick) ctx.setLineDash(0, {});
-                                     pen.words(badge, 19 + 11, y + 11 + 5, badgeWidth, 1, setting::badge, pick ? palette::pick : palette::ink2);
+                                     pen.words(badge, 19 + 11, y + 11 + 5, badgeWidth, 1, setting::badge, palette::ink2);
                                  }});
 
     std::string title = item.titleOrUntitled();
@@ -222,7 +218,7 @@ Laid layOut(const Entry& e, float k, float pageTall, float pictureTall) {
         float tall = 16.1f + heightOf(why, Sheet::width, 0, setting::why, k);
         sheet.part(tall, [why, pick](const Pen& pen, float y) {
             pen.words("Why it is here", Sheet::left, y, Sheet::width, 1, setting::whyLabel, palette::ink3);
-            pen.words(why, Sheet::left, y + 16.1f, Sheet::width, 0, setting::why, pick ? palette::pick : palette::ink);
+            pen.words(why, Sheet::left, y + 16.1f, Sheet::width, 0, setting::why, pick ? palette::ink2 : palette::ink);
         });
     }
     // A picture is no taller than what the first page has left under the title, or, when that is too little
@@ -438,6 +434,26 @@ int revision(const std::string& noteID) {
     return it == store().end() ? 0 : it->second.revision;
 }
 
+namespace {
+
+/// A pick's kicker, as the ocean writes one over a note: capitals at Art::Size::micro on the small note,
+/// bold, in the card's tone. In the top padding of a padded card, and on a flat label over a picture.
+void suggested(const Pen& pen, const Look& look, const Kind& kind) {
+    constexpr float size = Art::Size::micro * 240 / Metrics::smallNoteWidth;
+    Setting t{size, size + 1, Font::Weight::bold};
+    const std::string said = "SUGGESTED";
+    float wide = std::ceil(pen.width(said, t));
+    if (kind.radius < 12) {
+        pen.ctx.setFillColor(Art::ink);
+        pen.ctx.fill(pen.px(1, 1, wide + 12, size + 5));
+        pen.words(said, 7, 3, wide + 1, 1, t, look.accent);
+    } else {
+        pen.words(said, 16, 0.5f, wide + 1, 1, t, look.accent);
+    }
+}
+
+}  // namespace
+
 std::optional<Drawn> small(const std::string& noteID, float k) {
     auto it = store().find(noteID);
     if (it == store().end()) return std::nullopt;
@@ -449,6 +465,7 @@ std::optional<Drawn> small(const std::string& noteID, float k) {
     Item item = e.item;
     Json props = e.view.props;
     float w = float(f.width), h = float(f.height), body = line.empty() ? h : h - CHIP_LINE;
+    bool pick = e.node.pick;
     Drawn d;
     d.key = "card-s:" + noteID + "#" + std::to_string(e.revision);
     d.size = CGSize{std::ceil(w * k), std::ceil(h * k)};
@@ -457,6 +474,7 @@ std::optional<Drawn> small(const std::string& noteID, float k) {
         pen.face(w, h, look);
         kind->draw(pen, look, item, props, w, body);
         if (!line.empty()) pen.chips(line, 1 + float(kind->chipInset), h - 1 - float(kind->chipBottom) - 20, look);
+        if (pick) suggested(pen, look, *kind);
         pen.corners(w, h, look.radius);
         pen.edge(w, h, look);
     };
