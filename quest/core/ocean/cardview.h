@@ -17,6 +17,9 @@
 #include "art.h"
 #include "bend.h"
 
+/// NOTE(port): added for Quest. How far the open face stands in front of the small one, m (see the constructor).
+constexpr float openLift = 0.0015f;
+
 /// One node of the standing tree as it appears: a small card that can grow,
 /// in place, into its open form. Its origin is the middle of its picture (or
 /// panel, or label), so growing never shifts it.
@@ -77,6 +80,7 @@ public:
     double goneAt = std::numeric_limits<double>::infinity();
     std::optional<int> home;            // its film's or work's place in the ocean
     EntityRef picture;                  // an open work's picture
+    EntityRef openFace;                 // NOTE(port): added for Quest. An open card's face, which turns its pages (core/cards).
     bool pictureFull = false;           // … shown from its own file (asked for, or there), not from the atlas
     bool step = false;                  // it is a layer's first card, standing on the path
     bool lit = true;                    // it glows while it is on the layer you work on
