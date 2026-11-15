@@ -7,6 +7,7 @@ A client is anything that shows the mindstorm: the web client, the Ocean app, a 
 - The service listens on one port (default 8787) for HTTP and WebSocket.
 - Every request except static files and `GET /api/health` needs the access token. Send it as `Authorization: Bearer <token>`, as `?token=<token>`, or rely on the `mp_token` cookie the service sets after the first authorized request. The service prints the token at start and saves it in `data/token`.
 - Open the socket at `ws://<host>:<port>/ws?token=<token>`. All socket messages are JSON objects with a `t` field.
+- **Hosted.** The judging service (`MIND_PALACE_HOSTED=1`) serves many headsets, each with its own mindstorm. A device's token is `<appKey>.<deviceId>`, sent everywhere a token goes above. `appKey` is built into the app. `deviceId` is 16 to 64 of `A-Z a-z 0-9 _ -`, made on the app's first launch and kept. Everything else in this document holds as written. A wrong key is refused with 401. The web page and every path outside `/api/`, `/assets/` and `/handoffs/` answer 404. Work over a limit is refused in a short line Momo says: a `say` reply marked `yours`, or on `/live` an `over` for the turn, then `text`, `audio` and `done` with the line. `test/hosted.test.ts` holds a version 1 client to this.
 
 ## State a client keeps
 
