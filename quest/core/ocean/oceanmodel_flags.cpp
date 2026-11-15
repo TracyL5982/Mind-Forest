@@ -359,9 +359,12 @@ void OceanModel::runFlags() {
     });
     at("zoomAt", [](OceanModel& m) { m.zoomIn(); });
     at("zoomAgainAt", [](OceanModel& m) { m.zoomIn(); });
-    at("askAt", [](OceanModel& m) {
-        if (std::optional<int> id = m.tree ? m.tree->focus() : std::nullopt) m.askGardener(*id, Flags::integer("ask"));
-    });
+    // NOTE(port): added for Quest. `-askTimes n` picks the row n times, 0.4 s apart, as an impatient hand would.
+    for (int k = 0; Flags::number("askAt") > 0 && k < std::max(1, Flags::integer("askTimes")); k++) {
+        after(Flags::number("askAt") + 0.4 * double(k), [this] {
+            if (std::optional<int> id = tree ? tree->focus() : std::nullopt) askGardener(*id, Flags::integer("ask"));
+        });
+    }
     // NOTE(port): added for Quest (core/cards). `-scrollAt t` drags the open card's panel by `-scrollBy` (a share of
     // how far it runs on, 1 if not given) as a hand would; `-holdAt t` holds a pinch still on its first words
     // for 0.6 s and then draws it across them, which marks them; `-tapAt t` pinches it without moving.
@@ -417,6 +420,11 @@ void OceanModel::runFlags() {
     at("outAt", [](OceanModel& m) { m.stepOut(); });
     at("forwardAt", [](OceanModel& m) { m.moveLayer(-1); });
     at("placeAt", [](OceanModel& m) { m.carryOne(); });
+    // NOTE(port): added for Quest. `-carryAt t` carries the cover `-carry <i>` (the first, if not given) along the shelf,
+    // drawn `-carryRight` and `-carryUp` metres.
+    at("carryAt", [](OceanModel& m) {
+        m.carryCoverByFlag(Flags::integer("carry"), m.stage.r * float(Flags::number("carryRight")) + m.stage.u * float(Flags::number("carryUp")));
+    });
     at("markAt", [](OceanModel& m) { m.markByFlag(Flags::string("mark").value_or("words")); });
     at("askMarkAt", [](OceanModel& m) {
         if (std::optional<int> id = m.tree ? m.tree->focus() : std::nullopt) m.askMark(*id);
@@ -494,6 +502,23 @@ void OceanModel::pickOffer(int k) {
     }
     if (ring.empty()) return;
     take(ring[size_t(k * 2) % ring.size()].id);
+}
+
+void OceanModel::carryCoverByFlag(int i, Vec3 d) {
+    if (i < 0 || i >= int(shelf.size())) return;
+    EntityRef on = shelf[size_t(i)].mover->entity;
+    Vec3 start = on->position;
+    logLine("[ocean] carrying the cover of " + shelf[size_t(i)].tree->title + " by flag");
+    pinchChanged(on, start, start);
+    const int steps = 12;
+    for (int k = 1; k <= steps; k++) {
+        after(0.5 * double(k) / steps, [this, on, start, d, k] {
+            if (press) pinchChanged(on, start + d * (float(k) / float(steps)), start);
+        });
+    }
+    after(0.55, [this, start, d] {
+        if (press) pinchEnded(start + d);
+    });
 }
 
 /// Carries one card on the layer aside, as a hand would.

@@ -46,6 +46,7 @@ const ctx: RoleContext = {
   // NO_EMBEDS=1 stands for a headset connected: videos are looked for as files that play directly.
   playback: () => ({ embeds: !process.env.NO_EMBEDS, files: [] }),
   note: (role, message) => console.log(`  note ${role}: ${message}`),
+  step: (role, label, body) => (console.log(`  step ${role}: ${label}`), body()),
 };
 const wanted = process.argv[2] ?? '';
 let anchor = [...mind.nodes.values()].find((node) => node.status === 'kept' && mind.itemOf(node.id).title.toLowerCase().includes(wanted.toLowerCase()));

@@ -124,13 +124,16 @@ test('speech that settles is acted on once, and the final transcript does not re
   await run.pipeline.idle();
   const root = [...run.mind.trees.values()][0]!.rootId;
   const scene = { focus: root, selection: [] };
+  await c.until((m) => m.t === 'say' && /under Jaws beach scene/.test(String(m.text)));
   const before = c.seen.filter((m) => m.t === 'say').length;
   run.pipeline.utter('why does this scene feel so wrong', scene, false);
   await new Promise((r) => setTimeout(r, 1000));
   run.pipeline.utter('why does this scene feel so wrong', scene, true);
   await run.pipeline.idle();
   await new Promise((r) => setTimeout(r, 50));
-  assert.equal(c.seen.filter((m) => m.t === 'say').length - before, 1);
+  const said = c.seen.filter((m) => m.t === 'say').slice(before).map((m) => String(m.text));
+  assert.equal(said.length, 2, `one reply, then one line on what the run brought: ${JSON.stringify(said)}`);
+  assert.match(said[1]!, /new things? under|found nothing new/);
   c.ws.close();
   await run.close();
 });
@@ -399,3 +402,83 @@ test('the seq a client receives rises by exactly one from hello, also across cha
   const from = (hello.snapshot as { seq: number }).seq;
   assert.deepEqual(seqs, seqs.map((_s, i) => from + 1 + i));
 });
+
+test('a change is marked yours only on the connection whose request made it, so a client can tell the tree it asked for from one asked for elsewhere', { timeout: 20000 }, async () => {
+  const { run } = await boot();
+  const headset = await connect(run);
+  const page = await connect(run);
+  const createsTree = (m: Msg) => m.t === 'change' && (m.set as { patches: { entity: string; before: unknown }[] }).patches.some((p) => p.entity === 'tree' && p.before === null);
+  const trees = (c: { seen: Msg[] }) => c.seen.filter(createsTree);
+  const until = async (n: number) => {
+    while (trees(headset).length < n || trees(page).length < n) await new Promise((r) => setTimeout(r, 20));
+  };
+
+  headset.ws.send(JSON.stringify({ t: 'utter', text: 'Hey Momo, make a tree about dolly zooms', final: true, scene: { selection: [] } }));
+  await until(1);
+  await run.pipeline.idle();
+  page.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this: the long take in Children of Men' }] }));
+  await until(2);
+  await run.pipeline.idle();
+  await run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: rack focus' }]);
+  await until(3);
+  await run.pipeline.idle();
+
+  assert.equal(run.mind.trees.size, 3);
+  assert.deepEqual(trees(headset).map((m) => m.yours), [true, undefined, undefined], 'the headset asked for the first tree alone');
+  assert.deepEqual(trees(page).map((m) => m.yours), [undefined, true, undefined], 'the page asked for the second alone');
+  headset.ws.close();
+  page.ws.close();
+  await run.close();
+});
+
+test('the navigate that ends a run is marked yours only on the connection that asked for the run, so the headset is not moved by a run asked for on the web page', { timeout: 20000 }, async () => {
+  const { run } = await boot();
+  const headset = await connect(run);
+  const page = await connect(run);
+  try {
+    const navigates = (c: { seen: Msg[] }) => c.seen.filter((m) => m.t === 'navigate');
+    page.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this: the long take in Children of Men' }] }));
+    for (let i = 0; i < 500 && (navigates(page).length < 1 || navigates(headset).length < 1); i++) await new Promise((r) => setTimeout(r, 20));
+    await run.pipeline.idle();
+    assert.deepEqual(navigates(page).map((m) => m.yours), [true], 'the page asked for the tree whose first round brought the card into view');
+    assert.deepEqual(navigates(headset).map((m) => m.yours), [undefined], 'the headset hears it unmarked');
+  } finally {
+    headset.ws.close();
+    page.ws.close();
+    await run.close();
+  }
+});
+
+for (const [asker, ask] of [
+  ['the web page', (page: { ws: WebSocket }) => page.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this: the long take in Children of Men' }] }))],
+  ['Telegram', (_page: unknown, run: Running) => void run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: the long take in Children of Men' }])],
+] as const) {
+  test(`a first round asked for on ${asker} that waits for a headset round to end is still marked yours only where it was asked`, { timeout: 20000 }, async () => {
+    const slow = { ...fakeRoles, scout: async (...args: Parameters<typeof fakeRoles.scout>) => (await new Promise((r) => setTimeout(r, 400)), fakeRoles.scout(...args)) };
+    const { run } = await boot(undefined, { roles: slow });
+    const headset = await connect(run);
+    const page = await connect(run);
+    const trees = async (n: number) => {
+      while (run.mind.trees.size < n) await new Promise((r) => setTimeout(r, 5));
+    };
+    try {
+      headset.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this: dolly zooms' }] }));
+      await trees(1);
+      page.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Start a tree on this: rack focus' }] }));
+      await trees(2);
+      ask(page, run);
+      await trees(3);
+      await run.pipeline.idle();
+      const told = (m: Msg) => m.t === 'say' && String(m.text).includes('the long take');
+      await Promise.all([headset.until(told), page.until(told)]);
+      const navigates = (c: { seen: Msg[] }) => c.seen.filter((m) => m.t === 'navigate').map((m) => ({ to: run.mind.itemOf(m.nodeId as string).title, yours: m.yours }));
+      const last = { to: 'the long take in Children of Men', yours: undefined };
+      assert.deepEqual(navigates(headset), [last], 'the headset round that ended first does not lend the queued round its connection');
+      assert.deepEqual(navigates(page), [{ ...last, yours: asker === 'the web page' ? true : undefined }]);
+    } finally {
+      headset.ws.close();
+      page.ws.close();
+      await run.close();
+    }
+  });
+}

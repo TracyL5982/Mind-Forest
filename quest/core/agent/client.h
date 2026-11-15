@@ -76,6 +76,8 @@ struct Changed {
     ChangeSet set;
     std::optional<std::string> undo;
     Delta delta;
+    /// This connection asked for it (`Change::yours`).
+    bool yours = false;
 };
 
 /// What the frame thread hears, in the order the service said it.

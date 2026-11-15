@@ -154,7 +154,7 @@ test('a run takes nothing away, and is told what already hangs there', async () 
   assert.match(prompt, /Do not repeat these[\s\S]*An earlier pick/);
 });
 
-test('written ideas are delivered first, then each made direction as it is ready', async () => {
+test('each direction is delivered on its own as soon as it is ready, a written idea the moment it is written', async () => {
   const { k, anchor } = setup();
   const early: string[][] = [];
 
@@ -166,9 +166,9 @@ test('written ideas are delivered first, then each made direction as it is ready
     },
   });
 
-  assert.deepEqual(early[0]!.sort(), [NOTE.title, STEPS.title].sort());
-  assert.equal(early.length, 4, 'the picture, the museum work and the video each arrive on their own');
-  assert.ok(early.slice(1).every((titles) => titles.length === 1));
+  assert.deepEqual(early.slice(0, 2), [[NOTE.title], [STEPS.title]]);
+  assert.equal(early.length, 5, 'the picture, the museum work and the video each arrive on their own');
+  assert.ok(early.every((titles) => titles.length === 1));
   apply(k, rest);
   assert.equal(k.mind.picks(anchor).length, 5);
 });
@@ -365,16 +365,14 @@ test('a video that cannot be played in place is left out', async () => {
   assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title]);
 });
 
-test('a gallery becomes one picture per entry, and a run never generates more than four pictures', async () => {
-  const set = (title: string) =>
-    direction('gallery', title, { images: ['one', 'two', 'three'].map((t) => ({ title: `${title} ${t}`, prompt: `${title} ${t}, flat illustration` })) });
-  const { k, anchor } = setup({}, [set('Places'), set('Moods')]);
+test('a run never generates more than four pictures, and each picture made keeps its slot', async () => {
+  const picture = (n: number) => direction('image', `Picture ${n}`, { images: [{ title: `Picture ${n}`, prompt: `picture ${n}, flat illustration` }] });
+  const { k, anchor } = setup({}, [1, 2, 3, 4, 5].map(picture));
 
   apply(k, await scout(k.ctx, { anchor }));
 
-  const titles = picked(k, anchor).map((i) => i.title);
-  assert.deepEqual(titles, ['Places one', 'Places two', 'Places three', 'Moods one']);
   assert.equal(k.model.calls.filter((c) => c.kind === 'image').length, 4);
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['Picture 1', 'Picture 2', 'Picture 3', 'Picture 4']);
 });
 
 test('the model is shown the picture the user dropped, also when asked about a card under it', async () => {
@@ -673,4 +671,202 @@ test('a card deleted while the Scout works on it ends the run without an unhandl
     process.off('unhandledRejection', listen);
   }
   assert.deepEqual(unhandled.map(String), [], 'no failure is left for the process to die of');
+});
+
+const BOOKS = { id: 'books', name: 'Books', goodFor: 'Books on it.', query: 'Title words.', show: 2 };
+const NEWS = { id: 'news', name: 'News', goodFor: 'Reporting.', query: 'Plain words.', show: 1 };
+const record = (source: string, n: number) => ({ title: `${source} record ${n}`, by: `Writer ${source} ${n}`, date: '2020', text: `What ${source} record ${n} says.`, url: `https://${source}.example/${n}` });
+
+/** Four finds from three sources over three slots: the papers and the books each hold two records, the news one each. */
+function crowded(first: unknown = direction('find', 'What the studies found', { source: 'papers', lookups: ['zoom'] })) {
+  const k = kit({ picksPerRun: 3 });
+  const film = k.seedTree('Film', ['Dolly zoom']);
+  k.world.sources = [WEB, PAPERS, BOOKS, NEWS];
+  k.world.found.set('papers:zoom', [record('papers', 1), record('papers', 2)]);
+  k.world.found.set('books:zoom', [record('books', 1), record('books', 2)]);
+  k.world.found.set('news:zoom', [record('news', 1)]);
+  k.world.found.set('news:later', [record('news', 2)]);
+  const directions = [
+    first,
+    direction('find', 'Books on the shot', { source: 'books', lookups: ['zoom'] }),
+    direction('find', 'How it was reported', { source: 'news', lookups: ['zoom'] }),
+    direction('find', 'Reported later', { source: 'news', lookups: ['later'] }),
+  ];
+  k.model.on('scout.ideate', () => ({ reading: '', directions })).on('scout.curate', (req) => ({
+    chosen: [...req.user.matchAll(/^(\d+)\. "/gm)].map(([, n]) => ({ number: Number(n), note: '', excerpt: '' })),
+  }));
+  return { k, anchor: film.nodeIds[0]! };
+}
+
+function gate(): { wait: Promise<void>; open: () => void } {
+  let open!: () => void;
+  return { wait: new Promise<void>((r) => (open = r)), open };
+}
+
+async function until(done: () => boolean): Promise<void> {
+  for (let i = 0; i < 200 && !done(); i++) await new Promise((r) => setTimeout(r, 1));
+  assert.ok(done(), 'the run got there');
+}
+
+test('each direction brings one pick before any direction brings a second', async () => {
+  const { k, anchor } = crowded();
+
+  apply(k, await scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }));
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['papers record 1', 'books record 1', 'news record 1']);
+});
+
+test('a waiting second record takes a slot that a direction coming back empty leaves', async () => {
+  const { k, anchor } = crowded();
+  k.world.found.delete('news:zoom');
+  k.world.found.delete('news:later');
+
+  apply(k, await scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }));
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), ['books record 1', 'papers record 1', 'papers record 2']);
+});
+
+test('a picture still being made keeps its slot from faster finds, and the find left over is the one dropped', async () => {
+  const { k, anchor } = crowded(direction('image', 'The shot at night', { images: [{ title: 'Night', prompt: 'the staircase at night' }] }));
+  const painting = gate();
+  const generate = k.ctx.tools.images.generate;
+  k.ctx.tools.images.generate = async (prompt) => {
+    await painting.wait;
+    return generate(prompt);
+  };
+
+  let ended = false;
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }).then((rest) => ((ended = true), rest));
+  await until(() => k.mind.picks(anchor).length === 2 && ended);
+  apply(k, await run);
+  assert.equal(k.mind.picks(anchor).length, 2, 'the run is over while only the picture is still being made');
+  painting.open();
+  await until(() => k.mind.picks(anchor).length === 3);
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['books record 1', 'news record 1', 'The shot at night']);
+});
+
+test('a gallery with no slot to spare makes one picture, not three', async () => {
+  const gallery = direction('gallery', 'Three nights', { images: ['one', 'two', 'three'].map((t) => ({ title: `Night ${t}`, prompt: `night ${t}` })) });
+  const { k, anchor } = crowded(gallery);
+
+  apply(k, await scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }));
+
+  assert.equal(k.model.calls.filter((c) => c.kind === 'image').length, 1);
+  assert.equal(picked(k, anchor).filter((i) => i.kind === 'image').length, 1);
+  assert.equal(picked(k, anchor).length, 3);
+});
+
+test('the run is over once its slots are full, without waiting on a direction that can no longer land', async () => {
+  const { k, anchor } = crowded();
+  const never = gate();
+  const search = k.ctx.tools.sources.search;
+  k.ctx.tools.sources.search = async (id, query) => {
+    if (query === 'later') await never.wait;
+    return search(id, query);
+  };
+
+  const rest = await Promise.race([scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }), new Promise<null>((r) => setTimeout(() => r(null), 500))]);
+
+  assert.ok(rest, 'the run ended');
+  assert.equal(picked(k, anchor).length, 3);
+});
+
+test('the run is over once every slot left is held by a picture still being made, and a find still out cannot take it', async () => {
+  const { k, anchor } = crowded(direction('image', 'The shot at night', { images: [{ title: 'Night', prompt: 'the staircase at night' }] }));
+  const painting = gate();
+  const slow = gate();
+  const generate = k.ctx.tools.images.generate;
+  k.ctx.tools.images.generate = async (prompt) => {
+    await painting.wait;
+    return generate(prompt);
+  };
+  const search = k.ctx.tools.sources.search;
+  k.ctx.tools.sources.search = async (id, query) => {
+    if (query === 'later') await slow.wait;
+    return search(id, query);
+  };
+
+  const rest = await Promise.race([scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }), new Promise<null>((r) => setTimeout(() => r(null), 500))]);
+
+  assert.ok(rest, 'the run ended with the picture and a find still out');
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['books record 1', 'news record 1']);
+  painting.open();
+  slow.open();
+  await until(() => k.mind.picks(anchor).length === 3);
+  assert.equal(picked(k, anchor)[2]!.title, 'The shot at night');
+});
+
+test('a direction starts the moment the model has written it: a written idea lands and a search runs while the rest is still being written', async () => {
+  const { k, anchor } = setup({ picksPerRun: 2 }, [NOTE, direction('find', 'What the studies measured', { source: 'papers', lookups: ['dolly zoom'] })]);
+  k.world.found.set('papers:dolly zoom', [PAPER]);
+  const searched: string[] = [];
+  const search = k.ctx.tools.sources.search;
+  k.ctx.tools.sources.search = async (id, query) => (searched.push(query), search(id, query));
+  const writing = gate();
+  const json = k.model.json.bind(k.model);
+  k.model.json = (async (req: Parameters<typeof json>[0]) => {
+    if (req.role !== 'scout.ideate') return json(req);
+    const reply = { reading: '', directions: [NOTE, direction('find', 'What the studies measured', { source: 'papers', lookups: ['dolly zoom'] })] };
+    const text = JSON.stringify(reply);
+    req.onText?.(text.slice(0, text.indexOf('What the studies')));
+    await writing.wait;
+    req.onText?.(text);
+    return req.schema.parse(reply);
+  }) as typeof k.model.json;
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  await until(() => k.mind.picks(anchor).length === 1);
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title], 'the written idea landed while the model was still writing');
+  assert.deepEqual(searched, []);
+  writing.open();
+  apply(k, await run);
+
+  assert.equal(searched[0], 'dolly zoom', 'the find started once it was written');
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), [NOTE.title, PAPER.title].sort());
+});
+
+test('the run is over while the model is still writing, once nothing it writes could land', async () => {
+  const night = direction('image', 'The shot at night', { images: [{ title: 'Night', prompt: 'the staircase at night' }] });
+  const { k, anchor } = setup({ picksPerRun: 2 }, [NOTE, night]);
+  const writing = gate();
+  const json = k.model.json.bind(k.model);
+  k.model.json = (async (req: Parameters<typeof json>[0]) => {
+    if (req.role !== 'scout.ideate') return json(req);
+    const reply = { reading: '', directions: [NOTE, night] };
+    req.onText?.(JSON.stringify(reply).replace(/\]\}$/, ''));
+    await writing.wait;
+    return req.schema.parse(reply);
+  }) as typeof k.model.json;
+
+  const rest = await Promise.race([scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }), new Promise<null>((r) => setTimeout(() => r(null), 500))]);
+
+  assert.ok(rest, 'the run ended before the model finished writing');
+  writing.open();
+  await until(() => k.mind.picks(anchor).length === 2);
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title, 'The shot at night']);
+});
+
+test('a find that came with no searches searches its title, whole on the web and cut to three plain words in a catalogue', async () => {
+  const k = kit({ picksPerRun: 2 });
+  const film = k.seedTree('Film', ['Dolly zoom']);
+  k.world.sources = [WEB, PAPERS];
+  const searched: string[] = [];
+  const search = k.ctx.tools.sources.search;
+  k.ctx.tools.sources.search = async (id, query) => (searched.push(`${id}: ${query}`), search(id, query));
+  k.model
+    .on('scout.ideate', () => ({
+      reading: '',
+      directions: [
+        direction('find', 'What the Studies Measured About the Dolly Zoom', { source: 'papers', lookups: [] }),
+        direction('find', 'Why These Fields Are Yellow', { source: 'web', lookups: ['', ' '] }),
+      ],
+    }))
+    .on('scout.curate', () => ({ chosen: [] }));
+
+  await scout(k.ctx, { anchor: film.nodeIds[0]! });
+
+  assert.ok(searched.includes('papers: Studies Measured Dolly'), JSON.stringify(searched));
+  assert.ok(searched.includes('web: Why These Fields Are Yellow'), JSON.stringify(searched));
+  assert.ok(!searched.some((s) => /: $/.test(s)), 'no search is ever empty');
 });

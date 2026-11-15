@@ -1447,7 +1447,9 @@ async function askComposites(ctx: RoleContext, pools: Pool[], changed: ReadonlyS
     const members = [...new Set(g.composite === 'layout' ? g.parts.filter((part) => part.kind === 'card').map((part) => part.id) : g.members)];
     const pool = asked.find((p) => p.parent.id === g.parent && members.length > 0 && members.every((id) => p.asked.includes(id)));
     if (!pool) continue;
-    const draft = draftFrom(ctx, g, members, members.filter((id) => !pool.taken.has(id)), pool.nodes[0]!.status);
+    // A sibling that gave way to a fuller round while the model was asked is not read.
+    const stayed = members.filter((id) => ctx.mind.nodes.has(id));
+    const draft = draftFrom(ctx, g, stayed, stayed.filter((id) => !pool.taken.has(id)), pool.nodes[0]!.status);
     if (draft) add(ctx, pool, draft, out);
   }
 }
@@ -1466,9 +1468,10 @@ function sameView(a: { component: string; props: unknown }, b: { component: stri
  * Chooses a component for each given node and composites for their siblings. Rules first, the model only where rules cannot tell.
  * On an unsure item, `by: 'renderer'` says the model answered for the item as it is, so it is not asked again until the item changes.
  * An unsure item the pass got no answer for keeps `by: 'default'`, and `later` is told of it, unless no call of the pass got an
- * answer back: then the model is down, and the item waits for its next change.
+ * answer back: then the model is down, and the item waits for its next change. The views go to `deliver` as soon as they are
+ * chosen, so a card takes its look without waiting on the main model's answer on how its siblings group, which takes 3 to 25 s.
  */
-export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], again = false, later }) => {
+export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], again = false, later, deliver }) => {
   const nodes = [...new Set(nodeIds)].flatMap((id) => ctx.mind.nodes.get(id) ?? []);
   const changed = new Set(edited);
   const draws = new Map<Id, Draw>();
@@ -1497,15 +1500,17 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
   };
   const pools = survey(ctx, parents, look, groups);
 
-  const [{ answers, replied }] = await Promise.all([askComponents(ctx, open), again ? undefined : askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups)]);
+  const composites = again ? undefined : askComposites(ctx, pools, new Set(nodes.map((n) => n.id)), groups);
+  const { answers, replied } = await askComponents(ctx, open);
   for (const [id, draw] of answers) if (draw) draws.set(id, draw);
-  for (const pool of pools) ARRANGED.forEach((rule, row) => rule.late && settle(ctx, pool, groups, row, look));
+  // The mind may have changed while the model was asked: a card that gave way to a fuller round is not drawn.
+  const there = (id: Id) => ctx.mind.nodes.has(id);
 
   const asked = new Set(open.map(({ node }) => node.id));
-  const views: Command[] = [];
+  let views: Command[] = [];
   for (const node of nodes) {
     const draw = draws.get(node.id);
-    if (!draw) continue;
+    if (!draw || !there(node.id)) continue;
     // An unsure item the model did not answer for keeps the rule's card as a default, so the next pass asks again.
     const by = asked.has(node.id) && !answers.has(node.id) ? 'default' : 'renderer';
     if (sameView(draw, node.view) && (!asked.has(node.id) || node.view.by === by)) continue;
@@ -1514,7 +1519,21 @@ export const renderer: Roles['renderer'] = async (ctx, { nodeIds, edited = [], a
   }
   const owed = open.flatMap(({ node }) => (answers.has(node.id) ? [] : [node.id]));
   if (owed.length > 0 && replied) later?.(owed);
+  if (deliver && views.length > 0) {
+    deliver(views);
+    views = [];
+  }
+  await composites;
+  for (const pool of pools) ARRANGED.forEach((rule, row) => rule.late && settle(ctx, pool, groups, row, look));
+  // Another pass may have grouped a card, or the user kept one, while the model was asked: such a group no longer holds.
+  const removing = new Set(groups.flatMap((c) => (c.type === 'removeGroup' ? [c.id] : [])));
+  const holds = ({ id, anchor, members }: Group) =>
+    there(anchor) &&
+    members.every(there) &&
+    new Set(members.map((m) => ctx.mind.node(m).status)).size === 1 &&
+    ![...ctx.mind.groups.values()].some((g) => g.id !== id && !removing.has(g.id) && g.members.some((m) => members.includes(m)));
+  const standing = groups.filter((c) => (c.type === 'setGroup' ? holds(c.group) : c.type !== 'removeGroup' || ctx.mind.groups.has(c.id)));
   // Two parents of one pass may each find that a group no longer holds.
-  const removals = [...new Map(groups.flatMap((c) => (c.type === 'removeGroup' ? [[c.id, c] as const] : []))).values()];
-  return [...views, ...removals, ...groups.filter((c) => c.type !== 'removeGroup')];
+  const removals = [...new Map(standing.flatMap((c) => (c.type === 'removeGroup' ? [[c.id, c] as const] : []))).values()];
+  return [...views, ...removals, ...standing.filter((c) => c.type !== 'removeGroup')];
 };

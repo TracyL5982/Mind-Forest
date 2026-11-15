@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -91,9 +92,11 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   };
   /** The devices on `/live`, each with its own voice. */
   const voices = new Set<LiveVoice>();
-  const broadcast = (message: unknown) => {
+  /** The connection whose message the work under way was started by: its changes are marked `yours` to it alone. */
+  const asking = new AsyncLocalStorage<WebSocket>();
+  const broadcast = (message: object, yours?: WebSocket) => {
     const text = JSON.stringify(message);
-    for (const ws of sockets) if (ws.readyState === ws.OPEN) ws.send(text);
+    for (const ws of sockets) if (ws.readyState === ws.OPEN) ws.send(ws === yours ? JSON.stringify({ ...message, yours: true }) : text);
   };
 
   const emit = (message: Outbound) => {
@@ -114,7 +117,9 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     }
     if (message.t === 'activity') for (const voice of voices) voice.activity(message.activity);
     if (message.t === 'activity') log(`[${message.activity.role}] ${message.activity.state}: ${message.activity.message}`);
-    broadcast(message.t === 'change' ? { ...message, undo: pipeline.undoLabel() } : message);
+    if (message.t === 'change') broadcast({ ...message, undo: pipeline.undoLabel() }, asking.getStore());
+    else if (message.t === 'navigate') broadcast(message, asking.getStore());
+    else broadcast(message);
   };
 
   const pipeline = new Pipeline({
@@ -302,7 +307,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         ws.send(JSON.stringify({ t: 'error', message: `bad message: ${String(err instanceof Error ? err.message : err).slice(0, 300)}` }));
         return;
       }
-      void handle(message, ws).catch((err) => ws.send(JSON.stringify({ t: 'error', message: String(err instanceof Error ? err.message : err) })));
+      void asking.run(ws, () => handle(message, ws)).catch((err) => ws.send(JSON.stringify({ t: 'error', message: String(err instanceof Error ? err.message : err) })));
     });
   });
 
@@ -339,7 +344,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         pipeline.userCommands(m.label, m.commands);
         return;
       case 'organize':
-        emit({ t: 'say', text: await pipeline.organize(m.request, m.scope, m.focus) });
+        await pipeline.organize(m.request, m.scope, m.focus);
         return;
       case 'handoff':
         await pipeline.handoff(m.scope, m.note);

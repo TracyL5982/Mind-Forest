@@ -63,6 +63,7 @@ export class FakeModel implements ModelClient {
     const reply = await handler(req as JsonRequest<unknown>);
     const parsed = req.schema.safeParse(reply);
     if (!parsed.success) throw new Unreadable(req.role, parsed.error.issues);
+    req.onText?.(JSON.stringify(parsed.data));
     return parsed.data;
   }
   async search(req: { role: string; query: string; max?: number }): Promise<WebResult[]> {
