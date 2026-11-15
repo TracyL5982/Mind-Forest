@@ -265,6 +265,8 @@ test('a handoff comes to the paired chat as a message and one Markdown file that
 
   bot.push(ADA, { text: '/handoff' });
   await bot.reply(ADA.id, /^No handoff yet/);
+  bot.push(ADA, { text: '/help' });
+  await bot.reply(ADA.id, /^You are paired\./);
 
   bot.file('stairs', new Uint8Array([1, 2, 3]));
   bot.push(ADA, { photo: [{ file_id: 'stairs', width: 800, height: 600 }], caption: 'Start a tree on this' });

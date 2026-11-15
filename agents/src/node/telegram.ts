@@ -182,7 +182,7 @@ export class Telegram implements Channel {
       } catch (err) {
         if (this.stop.signal.aborted) return;
         if (err instanceof BotError && err.status === 409) {
-          if (!conflicted) this.opts.log(`[telegram] another program is reading this bot's messages (Telegram answered 409). Only one may. Trying again every ${Math.round((this.opts.conflictMs ?? 30_000) / 1000)} s.`);
+          if (!conflicted) this.opts.log(`[telegram] another program is reading this bot's messages, or a webhook is set (${err.message}). Only one may. Trying again every ${Math.round((this.opts.conflictMs ?? 30_000) / 1000)} s.`);
           conflicted = true;
           await this.pause(this.opts.conflictMs ?? 30_000);
           continue;
@@ -359,7 +359,7 @@ export class Telegram implements Channel {
 function read(m: Message): Arrival {
   if (m.text !== undefined) {
     const text = m.text.trim();
-    const start = /^\/start(?:@\w+)?(?:\s+(\S+))?$/i.exec(text);
+    const start = /^\/(?:start|help)(?:@\w+)?(?:\s+(\S+))?$/i.exec(text);
     if (start) return { kind: 'start', code: start[1] ?? '' };
     if (HANDOFF.test(text)) return { kind: 'handoff' };
     return text ? { kind: 'text', text } : { kind: 'other' };
