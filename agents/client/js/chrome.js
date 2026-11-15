@@ -157,6 +157,66 @@ export function bindSettings(send) {
   $('picks-more').addEventListener('click', () => step(1));
 }
 
+const PAIR_WATCH_MS = 2000;
+const PAIR_LIFE_MS = 10 * 60 * 1000;
+
+/**
+ * The Telegram row of Settings: pair once with a link, see who is paired, unpair. Telegram brings the chat to every device of the
+ * account, so one device is enough. While a link is out, the row asks every two seconds whether it was used.
+ */
+export function bindTelegram(api) {
+  let watching = null;
+  const show = (contact, link = null) => {
+    $('telegram-state').textContent = !contact.available
+      ? 'Add TELEGRAM_BOT_TOKEN to ~/.muse-garden.env and restart the service to reach Mind Palace from Telegram on any phone or computer.'
+      : contact.paired
+        ? `Paired with ${contact.paired}. What you send the bot goes into your mindstorm, and each handoff comes back there as a file.`
+        : link
+          ? 'Open the link on any device signed in to Telegram and press Start. It works once, for 10 minutes.'
+          : contact.ready ? 'Not paired.' : 'Telegram has not answered the service yet.';
+    $('telegram-link').hidden = !link || Boolean(contact.paired);
+    if (link) $('telegram-link').href = link;
+    $('telegram-pair').hidden = !contact.available || Boolean(contact.paired) || Boolean(link);
+    $('telegram-pair').disabled = !contact.ready;
+    $('telegram-unpair').hidden = !contact.paired;
+  };
+  const stop = () => {
+    clearInterval(watching);
+    watching = null;
+  };
+  const refresh = async () => {
+    try {
+      show(await api('GET', '/api/telegram'));
+    } catch {
+      $('telegram-state').textContent = 'The service did not say whether Telegram is set up.';
+    }
+  };
+  $('settings-open').addEventListener('click', () => {
+    if (!$('settings').hidden && !watching) void refresh();
+  });
+  $('telegram-pair').addEventListener('click', async () => {
+    try {
+      const { link } = await api('POST', '/api/telegram/pair');
+      show({ available: true, ready: true, paired: null }, link);
+      const until = Date.now() + PAIR_LIFE_MS;
+      stop();
+      watching = setInterval(async () => {
+        const contact = await api('GET', '/api/telegram').catch(() => null);
+        if (contact?.paired || Date.now() > until) {
+          stop();
+          if (contact) show(contact);
+        }
+      }, PAIR_WATCH_MS);
+    } catch {
+      $('telegram-state').textContent = 'No link could be made. Try again in a moment.';
+    }
+  });
+  $('telegram-unpair').addEventListener('click', async () => {
+    stop();
+    await api('POST', '/api/telegram/unpair').then(show, refresh);
+  });
+}
+
 export function showSettings(settings) {
   for (const button of $('settings').querySelectorAll('[data-mode]')) {
     button.setAttribute('aria-checked', String(button.dataset.mode === settings.picksMode));

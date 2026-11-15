@@ -4,7 +4,7 @@ import { Field } from './field.js';
 import { Panel } from './panel.js';
 import { bindField, bindDump, textDump } from './input.js';
 import { Voice, speak, hush } from './voice.js';
-import { HandoffSheet, WorkLog, bindGate, bindSettings, caption, showGate, showKnowledge, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
+import { HandoffSheet, WorkLog, bindGate, bindSettings, bindTelegram, caption, showGate, showKnowledge, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
 
 const $ = (id) => document.getElementById(id);
 const MUTED = 'mind-palace-muted';
@@ -315,6 +315,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 bindSettings(send);
+bindTelegram((method, path) => conn.api(method, path));
 showSettings(store.settings);
 bindGate((token) => {
   saveToken(token);
