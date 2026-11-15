@@ -38,10 +38,11 @@ const RULES_AGREE = { reviewers: { research: 39, brainstorming: 35, memories: 35
  * How many of each group the rules draw as the very card a person picked. A structured card shows its whole item, so a card that would
  * show a part of one is a note: the steps of A-M06 and B-B05 beside a list of ingredients, and of B-M20 above a closing line; the quotes
  * of B-M06 and B-M18, whose speaker Intake gave as a name where the text says more of who and where; and the eight figures of B-M21,
- * past the six a facts card shows. Three definitions the text gives whole, A-R12, B-R07 and B-R19, are drawn now. So 109 of the
- * reviewers' agree and 102 are exact, from 112 and 105.
+ * past the six a facts card shows. The person card of A-M17, which accepts a note, shows its name alone once its frame leaves out the
+ * role the text does not write as a sentence, and that is under a fifth of the item. Three definitions the text gives whole, A-R12, B-R07
+ * and B-R19, are drawn now. So 109 of the reviewers' agree and 101 are exact, from 112 and 105.
  */
-const RULES_EXACT = { reviewers: 102, authors: 10 };
+const RULES_EXACT = { reviewers: 101, authors: 10 };
 
 test('the rules alone agree with a person on at least as many samples of each group and activity as they did', () => {
   for (const origin of ORIGINS) {

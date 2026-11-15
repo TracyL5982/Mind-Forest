@@ -237,9 +237,9 @@ export const SAMPLES = {
     "props": {
       "labels": [
         "Rent",
-        "Food",
-        "Transport",
-        "Savings"
+        "food",
+        "transport",
+        "savings"
       ],
       "values": [
         45,
@@ -802,7 +802,7 @@ export const SHEETS = [
         },
         {
           "kind": "excerpt",
-          "text": "I would come back just for the sardines.",
+          "text": "\"I would come back just for the sardines.\"",
           "by": "Ines said"
         }
       ]

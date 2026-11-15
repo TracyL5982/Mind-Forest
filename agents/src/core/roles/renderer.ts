@@ -274,8 +274,8 @@ function factInText(item: Item): { value: string; label: string } | undefined {
   const text = (item.text.trim() || item.title).trim();
   if (text.length > 80 || text.includes('\n')) return undefined;
   const valueFirst = VALUE_FIRST.exec(text);
-  // "42% of users leave" labels its value "users leave": a label that opens with "of" is a piece of a phrase.
-  if (valueFirst) return { value: valueFirst[1]!, label: valueFirst[2]!.replace(/[.\s]+$/, '').replace(/^(?:of|in|at|on|for|per|from|to|by|with)\s+/i, '') };
+  // "42% of users leave" labels its value "of users leave": the rest of the line, as the card shows the whole item.
+  if (valueFirst) return { value: valueFirst[1]!, label: valueFirst[2]!.replace(/[.\s]+$/, '') };
   const labelFirst = LABEL_FIRST.exec(text);
   if (!labelFirst) return undefined;
   const [label, value] = [labelFirst[1]!.trim(), labelFirst[2]!.trim()];
@@ -586,23 +586,23 @@ const RULES_OF: Partial<Record<Item['kind'], Rule[]>> = {
 
 /**
  * The least share of an item's text that a card drawn from what Intake extracted must show when its words are no structure of the item's
- * own, as a person's name or a palette's colours are: a small piece never stands in for a long item.
+ * own, as a palette's colours are: a small piece never stands in for a long item.
  */
 const COVERAGE_FLOOR = 0.2;
-/** The cards drawn from extracted structure that show a piece of their item and not the whole of it: a person's name, a palette. */
-const PIECES = new Set<string>(['person', 'swatch']);
+/** The cards drawn from extracted structure that show a piece of their item and not the whole of it: a palette. */
+const PIECES = new Set<string>(['swatch']);
 
 /**
- * How much an item says, which such a piece is measured against. The model wrote the title of a text the user made,
- * so the same two lines must not be a person card under a short title and a note under a long one: there the text alone counts.
+ * How much an item says, which such a piece is measured against. The model wrote the title of a text the user made, so the same lines
+ * must not be a palette under a short title and a note under a long one: there the text alone counts.
  */
 const wholeOf = (item: Item): number => (item.kind === 'text' && !byAgent(item) && item.text.trim() ? sizeOf(item.text) : sizeOf(item.title) + sizeOf(item.text));
 
 /**
  * The first row that holds draws the item. A row that reads extracted structure holds only when its card shows the whole item, as its
  * frame reads it against the item's own words: the role that extracted the piece checked each value, and the card is held to how they
- * stand together. A card with no frame, which names a person or shows colours, holds when it shows at least `COVERAGE_FLOOR` of the
- * item. A row that does not hold leaves the item to the next.
+ * stand together. A card with no frame, which shows colours, holds when it shows at least `COVERAGE_FLOOR` of the item. A row that does
+ * not hold leaves the item to the next.
  */
 export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
   const asked = { assetUrl };
@@ -611,9 +611,10 @@ export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
     if (!rule.when(item, asked)) continue;
     let draw: Draw | undefined = { component: rule.component, props: rule.props(item, asked) };
     if (rule.reads === 'structure') {
-      const small = PIECES.has(rule.component) && held(draw.props, false).reduce((sum, value) => sum + sizeOf(value), 0) < COVERAGE_FLOOR * wholeOf(item);
-      const result = small ? undefined : checked(draw, (content ??= contentOf(item, assetUrl, true)), 'rule');
-      draw = result && 'draw' in result ? result.draw : undefined;
+      const result = checked(draw, (content ??= contentOf(item, assetUrl, true)), 'rule');
+      draw = 'draw' in result ? result.draw : undefined;
+      // The share is of what the card shows once its frame has read it.
+      if (draw && PIECES.has(rule.component) && held(draw.props, false).reduce((sum, value) => sum + sizeOf(value), 0) < COVERAGE_FLOOR * wholeOf(item)) draw = undefined;
     }
     if (draw && isValidView(draw)) return draw;
   }
@@ -954,8 +955,8 @@ Cards, and the fields each one uses:
 - quote: the item is someone's words. passage is the words, whole and at most ${ROOM.passage.spaced} characters (${ROOM.passage.spaceless} in Chinese or Japanese), and by the text's own words that say who said them, as they are written, or nothing.
 - fact: the item is one number or short value with its label. passage is the value as the text writes it, and subject its label: the rest of the item, as it is written.
 - facts: the item is two to six figures or attributes, one to a line or a row. lines has one "label | value" for each, the label as its line or row writes it before the value, and the value after.
-- steps: the item is an ordered procedure. lines has one step each, a whole line or sentence of the item, without its number.
-- list: the item is a list of things in no particular order. lines has one entry each, a whole line or sentence of the item, without its bullet and with any tick or cross it writes.
+- steps: the item is an ordered procedure. lines has one step each, a whole line or sentence of the item, without its number. The card numbers its steps 1, 2, 3, so the item's own numbers must count its numbered lines so: a countdown, years or a line left unnumbered after numbered ones is a list.
+- list: the item is a list of things in no particular order. lines has one entry each, a whole line or sentence of the item, without its bullet and with any tick or cross it writes, and with its number when the item's numbers are not 1, 2, 3 in order.
 - chart: the item is several numbers of the same kind that are worth comparing. labels and numbers have equal length, each label as the text writes it beside its number, and unit is given when the text states one.
 - breakdown: the item is mainly the shares of one whole, in percent, adding up to a hundred. labels, numbers and unit, as for chart.
 - table: the item is mainly rows and columns. lines has the row of column heads first and then one row each, with " | " between cells.
@@ -964,7 +965,7 @@ Cards, and the fields each one uses:
 - proscons: the item weighs one choice and gives each side its own heading or label, such as "Pros:" and "Cons:". left has the points under the first and right the points under the second, each a whole line or sentence.
 - callout: the item is a warning, a caveat or a reminder the reader must not miss. passage is the whole item, with any word before a colon that opens it, such as "Note:", and tone is "caution" for a warning or "note" for a remark.
 - excerpt: the item is a passage copied out of a longer source. passage is the whole passage, no longer than a quote, and by where it sits in the source when the text says.
-- explorable: the item explains how something works by relating quantities or by contrasting states, so a reader learns more by changing it. To contrast two to four states of one thing, controls has one control of kind "segmented", or "toggle" for two, with label naming what changes, states the name of each state, and texts the whole line or sentences that say each state, copied whole with any name and colon that opens them, and in the same order. To relate quantities, controls has one control of kind "slider", with label and unit, name (a short name for the quantity, used in formula), min and max (the range worth exploring), and values (each value of it the item states); formula gives the result from name, written with numbers, + - * / ^, brackets and min, max, round, sqrt, exp, ln and atan (in radians), and nothing else; subject is the result's label, unit its unit, and numbers the result the item states at each of those values, in the same order.
+- explorable: the item explains how something works by relating quantities or by contrasting states, so a reader learns more by changing it. To contrast two to four states of one thing, controls has one control of kind "segmented", or "toggle" for two, with label naming what changes, states the name of each state, which is the label that opens the state's own line or the heading over it, and texts the whole line or sentences that say each state, copied whole with any name and colon that opens them, and in the same order. To relate quantities, controls has one control of kind "slider", with label and unit, name (a short name for the quantity, used in formula), min and max (the range worth exploring), and values (each value of it the item states); formula gives the result from name, written with numbers, + - * / ^, brackets and min, max, round, sqrt, exp, ln and atan (in radians), and nothing else; subject is the result's label, unit its unit, and numbers the result the item states at each of those values, in the same order.
 - sheet: an assembled card, for a short item made of two or more kinds of part that no card above covers, such as a sentence and a list. sections has two to four parts, a heading counted, that together are the whole item in its order. Each has a kind:
   - heading: text is a heading line of the item. At most one, and first.
   - text: text is whole sentences of the item.
@@ -1006,7 +1007,14 @@ const LEFT: Record<Why, string> = {
 
 /** The card a reply draws for its item, or nothing, with a line in the run log that names the item and the prop that failed. */
 export function drawn(ctx: RoleContext, reply: Entry, item: Item): Draw | undefined {
-  const verdict = byModel(reply, item, (id) => ctx.assets.url(id));
+  let verdict: Verdict;
+  try {
+    verdict = byModel(reply, item, (id) => ctx.assets.url(id));
+  } catch (err) {
+    // One reply the checks cannot read leaves its item as the rules drew it, and never the rest of the pass.
+    ctx.note(ROLE, `Kept "${clip(item.title, 40)}" as the rules drew it: the model's ${reply.component} could not be checked (${err instanceof Error ? err.message : String(err)}).`);
+    return undefined;
+  }
   const name = `"${clip(item.title, 40)}"`;
   const card = 'refused' in verdict ? verdict.component : verdict.draw.component;
   // What a refusal names needs no second line.
@@ -1322,10 +1330,12 @@ const wholeLine = (text: string): Way[] => [{ pieces: [{ text, entry: true }] }]
 function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], members: Id[], ids: Id[], status: Node['status']): GroupDraft | null {
   const content = membersContent(ctx);
   const title = clip(g.title, 40);
-  /** A line set beside a member stands when it is the whole text of one of these members, and short enough. */
+  /** A line set beside a member stands when it is the whole text of one of these members, and short enough. It is drawn as that member writes it. */
   const line = (said: string | undefined, ...of: Id[]) => {
     const text = (said ?? '').trim();
-    return text !== '' && text.length <= roomOf(ROOM.reason, text) && of.some((id) => content(id).shows(wholeLine(text))?.above.length === 0) ? text : '';
+    if (text === '' || text.length > roomOf(ROOM.reason, text)) return '';
+    const shown = of.map((id) => content(id).shows(wholeLine(text))).find((one) => one?.above.length === 0);
+    return shown?.texts[0] ?? '';
   };
   const whole = ids.length === members.length;
   switch (g.composite) {

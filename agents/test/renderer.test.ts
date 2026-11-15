@@ -5,7 +5,7 @@ import { byModel, byRule, CHOSEN, grounded, renderer, type Chosen, type Componen
 import { EXPLORABLES, SAMPLES, SHEETS, STRUCTURED_IDS, sampleAssetUrl, type StructuredId } from '../src/core/samples.ts';
 import { Pipeline } from '../src/core/pipeline.ts';
 import { makeNode } from '../src/core/roles/types.ts';
-import { CHECKS, COMPONENT_IDS, isValidGroup, isValidView, ROOM } from '../src/core/views.ts';
+import { CHECKS, COMPONENT_IDS, isValidGroup, isValidView, ROOM, type PropsOf } from '../src/core/views.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { kit, type Kit } from './kit.ts';
 
@@ -127,7 +127,7 @@ test('structured data picks the component without asking the model', async () =>
   assert.deepEqual(view(k, fact), { component: 'fact', props: { value: '4.2', label: 'Monthly churn' }, by: 'renderer' });
   assert.deepEqual(view(k, valueFirst).props, { value: '42%', label: 'churn in month one' }, 'the label is the rest of the line as it is written');
   assert.deepEqual(view(k, labelFirst).props, { value: '$1.2M', label: 'Budget' }, 'the label is the words before the colon');
-  assert.equal(view(k, phrase).component, 'note', 'a label without the "of" that joins it to its value would leave a word of the item out');
+  assert.deepEqual(view(k, phrase).props, { value: '42%', label: 'of users leave in month one' }, 'the label keeps the "of" that joins it to its value, as the line writes it');
   assert.equal(k.model.calls.filter((c) => c.role === 'renderer.components').length, 0);
 });
 
@@ -204,7 +204,7 @@ test('the model upgrades a text item to a quote that is in its text', async () =
 
   assert.deepEqual(view(k, ids[0]!), {
     component: 'quote',
-    props: { text: 'the best way to predict the future is to invent it', by: 'Alan Kay' },
+    props: { text: 'the best way to predict\nthe future is to invent it', by: 'Alan Kay' },
     by: 'renderer',
   });
   assert.deepEqual(view(k, ids[1]!).props, { emphasis: LONG });
@@ -572,7 +572,7 @@ function lenses(status: Node['status'] = 'pick') {
   const order = [ids[2]!, ids[0]!, ids[1]!, ids[4]!, ids[3]!] as const;
   k.model.on('renderer.composites', () => ({
     groups: [
-      proposal({ parent: root, composite: 'ranked', title: 'Which lens', members: [...order], reasons: ['Sharp at every stop.', 'Small and sharp. It costs the most.', 'Fast and cheap.', 'Made in 1950.', ''] }),
+      proposal({ parent: root, composite: 'ranked', title: 'Which lens', members: [...order], reasons: ['sharp at every stop', 'Small and sharp, it costs the most', 'Fast and cheap.', 'Made in 1950.', ''] }),
     ],
   }));
   return { k, ids, order };
@@ -588,7 +588,7 @@ test('the model may rank picks best first, a reason stands only as the whole tex
   assert.deepEqual(
     ranked!.props.reasons,
     { [order[0]]: 'Sharp at every stop.', [order[1]]: 'Small and sharp. It costs the most.', [order[2]]: '', [order[3]]: '', [order[4]]: '' },
-    'one sentence of a pick that says more, and a sentence the pick does not hold, are blank',
+    'a reason is drawn as its pick writes it, its case and its stops, and one sentence of a pick that says more, or one the pick does not hold, is blank',
   );
 
   k.mind.apply({ origin: USER, label: 'keep', commands: [{ type: 'keepPick', id: ids[0]! }] });
@@ -860,29 +860,19 @@ test('a structure draws its item only when its card shows the whole item, or a f
   assert.deepEqual(long.data.facts, [{ label: 'Height', value: '330 m' }], 'the structure stays with the item');
 });
 
-test('the share a person card covers is counted in characters of one written form, against the text the user wrote, or the title and text of anything else', () => {
-  /** A text of `size` characters in all that ends in a line of its own with the name. */
-  const around = (said: string, size: number, filler = 'x') => `${filler.repeat(size - said.length - 1)}\n\n${said}`;
-  const naming = (name: string, text: string) => chosen({ title: 'A title the model wrote', text, data: { person: { name } } });
-  assert.equal(naming('y'.repeat(20), around('y'.repeat(20), 100)), 'person', 'twenty of a hundred');
-  assert.equal(naming('y'.repeat(19), around('y'.repeat(19), 100)), 'note', 'nineteen of a hundred');
-  assert.equal(naming('y'.repeat(20), `${'x'.repeat(39)}${' '.repeat(40)}\n\n${'x'.repeat(39)}\n\n${'y'.repeat(20)}`), 'person', 'a run of white space counts once');
-  assert.equal(naming('y'.repeat(20), around('y'.repeat(20), 100, 'ｘ')), 'person', 'a full-width letter is one character');
-  assert.equal(naming('字'.repeat(20), around('字'.repeat(20), 100, '文')), 'person', 'twenty characters of a hundred in a script without spaces');
-  assert.equal(naming('字'.repeat(19), around('字'.repeat(19), 100, '文')), 'note', 'nineteen of a hundred in a script without spaces');
-  assert.equal(naming('y'.repeat(20), 'x'.repeat(40)), 'note', 'a name the text does not hold is no person of it, whatever the data says');
-
-  const saved = (name: string) => chosen({ ...LINKED, title: 'Ten chars!', text: around(name, 90), data: { person: { name } } });
-  assert.deepEqual([saved('y'.repeat(20)), saved('y'.repeat(19))], ['person', 'link'], 'a saved page has its own title, which counts');
-  const brought = (name: string) => chosen({ title: 'Ten chars!', text: around(name, 90), origin: SCOUT, data: { person: { name } } });
-  assert.deepEqual([brought('y'.repeat(20)), brought('y'.repeat(19))], ['person', 'note'], 'and so does the title of what an agent brought');
-  const titled = (name: string) => chosen({ title: `${'x'.repeat(98 - name.length)}. ${name}`, text: '', data: { person: { name } } });
-  assert.deepEqual([titled('y'.repeat(20)), titled('y'.repeat(19))], ['person', 'note'], 'a title alone is all the item says');
-
+test('a person card shows its whole item, the name and the line that says who they are, or the item is a note', () => {
+  const person = { name: 'Amir Haddad', role: "Consultant cardiologist at St Mary's." };
+  const drawn = (text: string, data: Record<string, unknown> = { person }) => ruled({ title: 'A title the model wrote', text, data });
+  assert.deepEqual(drawn("Amir Haddad\nConsultant cardiologist at St Mary's."), { component: 'person', props: person }, 'the name and the role are all it says');
+  assert.deepEqual(drawn('Amir Haddad', { person: { name: 'Amir Haddad' } }), { component: 'person', props: { name: 'Amir Haddad' } }, 'a name alone');
+  const struck = "Amir Haddad\nConsultant cardiologist at St Mary's.\nStruck off in March 2026 for falsifying trial data.";
+  assert.equal(drawn(struck).component, 'note', 'a line the card would leave out keeps the item a note');
+  assert.equal(drawn(`${'x'.repeat(79)}\n\n${'y'.repeat(20)}`, { person: { name: 'y'.repeat(20) } }).component, 'note', 'a name is no share of its item');
+  assert.equal(drawn('Rumoured: Chief Scientist at NASA.\nAmir Haddad', { person: { name: 'Amir Haddad', role: 'Chief Scientist at NASA.' } }).component, 'note', 'a role is the line after the name, in order');
   assert.deepEqual(
-    ruled({ title: 'A title the model wrote', text: around('y'.repeat(19), 100), data: { quote: { text: 'y'.repeat(19) } } }),
+    ruled({ title: 'A title the model wrote', text: `${'x'.repeat(80)}\n\n${'y'.repeat(19)}`, data: { quote: { text: 'y'.repeat(19) } } }),
     { component: 'quote', props: { text: 'y'.repeat(19), above: ['x'.repeat(80)] } },
-    'a quote has no share to cover: it shows the whole item, with the line before it drawn over it',
+    'a quote shows the whole item, with the line before it drawn over it',
   );
 });
 
@@ -1024,7 +1014,7 @@ test('an item that is code draws as code, whatever was read off it and however l
   assert.equal(chosen({ ...LINKED, title: 'Gist', data: { code: { source: 'const a = 1;' } } }), 'code');
   assert.equal(chosen({ title: 'Empty', kind: 'code', text: '' }), 'note', 'code with no source is a note');
   assert.equal(chosen({ title: 'Empty', kind: 'code', text: '', data: { code: { source: '' } } }), 'note');
-  assert.deepEqual(ruled({ title: 'Agnès Varda', kind: 'code', text: '', data: { person: { name: 'Agnès Varda', role: 'Director' } } }), { component: 'person', props: { name: 'Agnès Varda' } }, 'and what it carries still draws it, without a role its words do not write');
+  assert.equal(chosen({ title: 'Agnès Varda', kind: 'code', text: '', data: { person: { name: 'Agnès Varda', role: 'Director' } } }), 'note', 'a person it carries is no card of its own: the card would show none of its words');
 });
 
 test('three sibling pictures become a gallery whether a rule draws them as images, videos or artworks', async () => {
@@ -1302,7 +1292,8 @@ test('an address in the data states nothing, a table cell holds no cell break, a
   assert.equal(table([['Solo', '$8', '1']], ['Plan | Price', 'Price', 'Seats']), false);
 
   const said = k.item({ title: 'Cameras', text: 'People say this. The   best  camera\tis the one you have with you.' });
-  assert.ok(grounded({ component: 'quote', props: { text: 'The best camera is the one you have with you', above: ['People say this.'] } }, said, url), 'a tab in prose is white space');
+  assert.ok(grounded({ component: 'quote', props: { text: 'The   best  camera\tis the one you have with you.', above: ['People say this.'] } }, said, url), 'a tab in prose is white space to the match, and drawn as the item writes it');
+  assert.equal(grounded({ component: 'quote', props: { text: 'The best camera is the one you have with you', above: ['People say this.'] } }, said, url), false, 'a quotation drawn in other characters than the item writes is redrawn in its own');
   assert.equal(grounded({ component: 'quote', props: { text: 'The best camera is the one you have with you' } }, said, url), false, 'and the sentence before the quotation is drawn over it');
 });
 
@@ -1808,7 +1799,7 @@ test('a sheet is assembled from the sections that are its whole item', () => {
             { kind: 'heading', text: 'The pool roof' },
             { kind: 'text', text: `${COUNCIL} ${MEANTIME}` },
             { kind: 'figures', facts: [{ label: 'Repair', value: '£48,000' }, { label: 'Pool will close', value: '6 weeks' }] },
-            { kind: 'excerpt', text: 'We have patched that roof for twenty years, and it has cost us more than a new one.', by: 'Mrs Adeyemi' },
+            { kind: 'excerpt', text: ADEYEMI, by: 'Mrs Adeyemi' },
           ],
         },
       },
@@ -1873,7 +1864,7 @@ test('a figure, a list entry, a table row or a section the text does not state r
 test('an entry written twice counts once: thirty lines of two entries are a list of two', () => {
   const best = 'Best of the weekend:\n- the bridge at dusk\n- the tiled station';
   const twice = Array.from({ length: 30 }, (_v, n) => (n % 2 ? 'The  tiled station' : 'the bridge at dusk'));
-  assert.deepEqual(verdict(best, 'list', { lines: twice }), { draw: { component: 'list', props: { items: ['the bridge at dusk', 'The  tiled station'], above: ['Best of the weekend:'] } } }, 'no list of thirty stands for two lines');
+  assert.deepEqual(verdict(best, 'list', { lines: twice }), { draw: { component: 'list', props: { items: ['the bridge at dusk', 'the tiled station'], above: ['Best of the weekend:'] } } }, 'no list of thirty stands for two lines, and each entry is drawn as the item writes it');
   const figures = part('figures', { lines: ['Two nights | €240', 'Train, each | €38'] });
   const made = verdict(`Two nights: €240\nTrain, each: €38\n${best}`, 'sheet', { sections: [figures, figures, part('list', { text: 'Best of the weekend:', lines: twice })] });
   assert.deepEqual(
@@ -2193,4 +2184,99 @@ test('a figure whose label is a piece cut out of its line refuses the card, with
   );
   assert.equal(view(k, ids[1]!).component, 'note', 'a label without the words that open its line');
   assert.deepEqual(k.notes, [`renderer: Kept "Piece" as the rules drew it: the model's facts ${WHOLE}.`], 'the run log says why');
+});
+
+test('a reply the checks cannot read leaves its own item as the rules drew it, and the rest of the pass draws on', async () => {
+  const k = kit();
+  const { ids } = grow(k, [
+    { title: 'Bring for the weekend', text: 'Bring for the weekend:\n- a tent\n- two sleeping bags\n- a head torch, and spare batteries for it' },
+    { title: 'Sourdough', text: 'Feed the starter once a day with flour and water.\nNever rinse the jar with hot water.' },
+  ]);
+  const list = CHECKS.list as { frame?: unknown };
+  const frame = list.frame;
+  list.frame = () => {
+    throw new Error('no frame');
+  };
+  try {
+    k.model
+      .on('renderer.components', () => ({
+        items: [
+          entry({ id: ids[0]!, component: 'list', lines: ['a tent', 'two sleeping bags', 'a head torch, and spare batteries for it'] }),
+          entry({ id: ids[1]!, component: 'callout', passage: 'Never rinse the jar with hot water.', tone: 'caution' }),
+        ],
+      }))
+      .on('renderer.composites', () => ({ groups: [] }));
+    await render(k, ids);
+  } finally {
+    list.frame = frame;
+  }
+  assert.equal(view(k, ids[0]!).component, 'note', 'the reply that threw keeps the rules\' card');
+  assert.deepEqual(view(k, ids[1]!).props, { text: 'Never rinse the jar with hot water.', tone: 'caution', above: ['Feed the starter once a day with flour and water.'] }, 'the other reply of the pass is drawn');
+  assert.ok(k.notes.some((note) => note.includes('could not be checked (no frame)')), 'the run log says which reply could not be checked');
+});
+
+test('a card draws each piece of its item where it stands, with the marks around it: quotation marks, the item\'s own numbers, a sign and its row and column', () => {
+  const drawn = (text: string, component: Chosen, slots: Partial<ComponentsReply['items'][number]>, title = 'Card') => {
+    const result = verdict(text, component, slots, title);
+    return 'draw' in result ? result.draw.props : result.refused;
+  };
+  // Quotation marks around an entry or a passage are its words; a quote card draws a pair of its own, and never one mark of a pair.
+  assert.deepEqual(drawn('- "Vaccines cause autism."\n- "Detox teas flush out toxins."', 'list', { lines: ['Vaccines cause autism.', 'Detox teas flush out toxins.'] }), { items: ['"Vaccines cause autism."', '"Detox teas flush out toxins."'] });
+  for (const passage of ['"Never mix bleach and ammonia." — Mum', 'Never mix bleach and ammonia." — Mum']) {
+    assert.deepEqual(drawn('"Never mix bleach and ammonia." — Mum', 'callout', { passage, tone: 'caution' }), { text: '"Never mix bleach and ammonia." — Mum', tone: 'caution' }, passage);
+  }
+  assert.deepEqual(drawn('“药不管用就加倍吃。”', 'callout', { passage: '药不管用就加倍吃。', tone: 'caution' }), { text: '“药不管用就加倍吃。”', tone: 'caution' });
+  assert.deepEqual(drawn('“The best way to predict the future is to invent it.” — Alan Kay', 'quote', { passage: 'The best way to predict the future is to invent it.', by: 'Alan Kay' }), { text: 'The best way to predict the future is to invent it.', by: 'Alan Kay' });
+  assert.equal(drawn('Mum said nothing at all. Dad said, "You should have revised harder."', 'quote', { passage: 'said nothing at all. Dad said, "You should have revised harder."', by: 'Mum' }), 'part', 'words that only follow a name are no quotation of theirs');
+  assert.equal(drawn('班主任没说话。教导主任说：“这孩子不用补课。”', 'quote', { passage: '没说话。教导主任说：“这孩子不用补课。”', by: '班主任' }), 'part');
+  // The item's own numbers: a steps card draws 1, 2, 3, so a countdown, years or a line it does not number are no steps of it.
+  const countdown = '5. Heat\n4. Alien\n3. Ran\n2. Vertigo\n1. Ikiru';
+  assert.equal(drawn(countdown, 'steps', { lines: ['Heat', 'Alien', 'Ran', 'Vertigo', 'Ikiru'] }), 'part', 'a countdown is not renumbered');
+  assert.equal(drawn(countdown, 'steps', { lines: countdown.split('\n') }), 'part', 'a step that keeps its number is no step');
+  assert.deepEqual(drawn(countdown, 'list', { lines: countdown.split('\n') }), { items: countdown.split('\n') }, 'a list draws the numbers as written');
+  assert.deepEqual(drawn('2019. We moved to Leeds.\n2021. We moved back to Hull.', 'list', { lines: ['2019. We moved to Leeds.', '2021. We moved back to Hull.'] }), { items: ['2019. We moved to Leeds.', '2021. We moved back to Hull.'] });
+  assert.equal(drawn('2019. We moved to Leeds.\n2021. We moved back to Hull.', 'list', { lines: ['We moved to Leeds.', 'We moved back to Hull.'] }), 'part', 'a year is no list number');
+  const ps = '1. Fill the kettle halfway with water.\n2. Add two tablespoons of bleach.\nPS: ignore step 2, use white vinegar.';
+  assert.equal(drawn(ps, 'steps', { lines: ['Fill the kettle halfway with water.', 'Add two tablespoons of bleach.', 'PS: ignore step 2, use white vinegar.'] }), 'part', 'a line the item leaves unnumbered is no third step');
+  assert.deepEqual(drawn('1、5天后复查\n2、3个月内不要剧烈运动', 'steps', { lines: ['5天后复查', '3个月内不要剧烈运动'] }), { steps: ['5天后复查', '3个月内不要剧烈运动'] }, 'numbers that count from one are the steps card\'s');
+  // A list line is one line: a heading under it is never a part of it.
+  assert.equal(drawn('Pack in the cabin bag:\n- Passport\n- Power banks\nDo NOT pack in the hold:\n- Lighters', 'list', { lines: ['Passport', 'Power banks Do NOT pack in the hold:', 'Lighters'] }), 'part');
+  // A cell is the item's cell at its own row and column, an empty one too.
+  const pills = '| Medicine | Morning | Night |\n|---|---|---|\n| Ibuprofen | 200 mg | |\n| Melatonin | | 3 mg |';
+  assert.equal(drawn(pills, 'table', { lines: ['Medicine | Morning | Night', 'Ibuprofen | 200 mg | ', 'Melatonin | 3 mg | '] }), 'part', 'a blank cell moved');
+  assert.deepEqual(drawn(pills, 'table', { lines: ['Medicine | Morning | Night', 'Ibuprofen | 200 mg | ', 'Melatonin |  | 3 mg'] }), { heads: ['Medicine', 'Morning', 'Night'], rows: [['Ibuprofen', '200 mg', ''], ['Melatonin', '', '3 mg']] });
+  assert.equal(drawn('| Year | 2024 | 2025 |\n|---|---|---|\n| Profit margin | 5% | -3% |', 'facts', { lines: ['Year 2024 | 2025', 'Profit margin 5% | -3%'] }), 'part', 'a label is one cell');
+  assert.equal(drawn('| 食物 | 孕期 |\n|---|---|\n| 生鱼片 | 不宜 |\n| 熟鱼 | 可以 |', 'facts', { lines: ['不宜 | 生鱼片', '可以 | 熟鱼'] }), 'part', 'a table\'s figures read across the row, as its heads do');
+  // A value is one whole number with its sign and its sign word.
+  assert.equal(drawn('Q1: − 3%\nQ2: 4%', 'facts', { lines: ['Q1 | 3%', 'Q2 | 4%'] }), 'part', 'a minus sign with a space after it');
+  assert.deepEqual(drawn('Q1: − 3%\nQ2: 4%', 'facts', { lines: ['Q1 | -3%', 'Q2 | 4%'] }), { facts: [{ label: 'Q1', value: '− 3%' }, { label: 'Q2', value: '4%' }] });
+  assert.equal(drawn('Margin: minus 3%', 'fact', { subject: 'Margin minus', passage: '3%' }), 'part');
+  assert.equal(drawn('利润率：负3%\n营收：12亿', 'facts', { lines: ['利润率：负 | 3%', '营收 | 12亿'] }), 'part');
+  assert.equal(drawn('今晚最低气温\n零下\n25度', 'fact', { subject: '零下', passage: '25度' }), 'part', 'a sign word on the line over the value');
+  assert.equal(drawn('Dose: 1/2 tablet\nAt night: 4,5 mg', 'facts', { lines: ['Dose: 1 | 2 tablet', 'At night: 4 | 5 mg'] }), 'part', 'a number split across a label and a value');
+  // A term ends where a word does; a state's name labels its own line; an answer answers one question.
+  assert.equal(drawn('病毒性肺炎是由病毒引起的肺部感染。', 'definition', { subject: '病毒', passage: '病毒性肺炎是由病毒引起的肺部感染。' }), 'part');
+  assert.deepEqual(drawn('病毒性肺炎是由病毒引起的肺部感染。', 'definition', { subject: '病毒性肺炎', passage: '病毒性肺炎是由病毒引起的肺部感染。' }), { term: '病毒性肺炎', definition: '病毒性肺炎是由病毒引起的肺部感染。' });
+  const aperture = 'Wide open vs stopped down\n- The background melts into a soft blur.\n- Everything from the fence to the hills is sharp.';
+  const toggle = (states: string[], texts: string[]) => ({ controls: [{ kind: 'toggle' as const, label: 'Aperture', states, texts, name: '', unit: '', min: 0, max: 0, values: [] }] });
+  assert.equal(drawn(aperture, 'explorable', toggle(['Stopped down', 'Wide open'], ['The background melts into a soft blur.', 'Everything from the fence to the hills is sharp.']), 'Aperture'), 'part', 'names that label no line of their state');
+  const labelled = 'Wide open: the background melts into a soft blur.\nStopped down: everything from the fence to the hills is sharp.';
+  assert.equal(drawn(labelled, 'explorable', toggle(['Stopped down', 'Wide open'], ['the background melts into a soft blur.', 'everything from the fence to the hills is sharp.']), 'Aperture'), 'part', 'names swapped against the lines they label');
+  assert.deepEqual(
+    (drawn(labelled, 'explorable', toggle(['wide open', 'stopped down'], ['the background melts into a soft blur.', 'everything from the fence to the hills is sharp.']), 'Aperture') as PropsOf<'explorable'>).controls[0],
+    { kind: 'toggle', label: 'Aperture', states: [{ name: 'Wide open', text: 'the background melts into a soft blur.' }, { name: 'Stopped down', text: 'everything from the fence to the hills is sharp.' }] },
+    'each name as its line writes it',
+  );
+  assert.equal(drawn('问：怀孕34周能坐飞机吗？\n答：大多数航空公司允许。\n问：36周以后呢？\n答：基本都不允许。', 'qa', { subject: '怀孕34周能坐飞机吗？', passage: '大多数航空公司允许。\n问：36周以后呢？\n答：基本都不允许。' }), 'part');
+});
+
+test('a number that opens a line is an entry\'s only when white space follows its stop', () => {
+  const rates = 'Rates we were quoted this week by the banks:\n4.2%\n3.1%';
+  assert.deepEqual(verdict(rates, 'list', { lines: ['2%', '1%'] }), { refused: 'part', component: 'list' }, 'the decimals of 4.2% and 3.1% are no list numbers');
+  assert.deepEqual(verdict(rates, 'list', { lines: ['4.2%', '3.1%'] }), { draw: { component: 'list', props: { items: ['4.2%', '3.1%'], above: ['Rates we were quoted this week by the banks:'] } } }, 'the whole rates are the list');
+  for (const line of ['1.5 cups flour', '3.14 is pi', '2024.11 发布']) {
+    assert.deepEqual(verdict(`Notes:\n${line}\n2 eggs`, 'list', { lines: [line.slice(line.indexOf(' ') + 1), '2 eggs'] }), { refused: 'part', component: 'list' }, `${line}: its number is its own`);
+  }
+  assert.deepEqual(verdict('Steps:\n1. Stop the writer.\n2. Copy the file.', 'steps', { lines: ['Stop the writer.', 'Copy the file.'] }), { draw: { component: 'steps', props: { steps: ['Stop the writer.', 'Copy the file.'], above: ['Steps:'] } } }, 'a step number with a space after its stop');
+  assert.deepEqual(verdict('步骤：\n1、关掉电源\n2、拆下灯罩', 'steps', { lines: ['关掉电源', '拆下灯罩'] }), { draw: { component: 'steps', props: { steps: ['关掉电源', '拆下灯罩'], above: ['步骤：'] } } }, 'a number before 、');
 });
