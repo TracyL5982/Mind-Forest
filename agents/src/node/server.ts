@@ -111,7 +111,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   async function bundle(handoff: Handoff): Promise<{ name: string; url: string; markdown: string; files: string[] }> {
     const name = handoff.name.replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'handoff';
     const files: { name: string; bytes: Uint8Array }[] = [
-      { name: `${name}/handoff.md`, bytes: new TextEncoder().encode(handoff.markdown) },
+      { name: `${name}/handoff.md`, bytes: new TextEncoder().encode(handoff.bundled) },
       { name: `${name}/handoff.json`, bytes: new TextEncoder().encode(JSON.stringify(handoff.json, null, 2)) },
     ];
     for (const id of handoff.assets) {
