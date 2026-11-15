@@ -1438,6 +1438,8 @@ async function askComposites(ctx: RoleContext, pools: Pool[], changed: ReadonlyS
       user: compositesPrompt(ctx, asked),
       schema: CompositesReply,
       effort: 'low',
+      // The groups come after the cards' own looks, off the path to the card (44).
+      priority: 'background',
     });
   } catch (err) {
     ctx.note(ROLE, `The model could not look for composites (${message(err)}). Kept the rule-based groups.`);
