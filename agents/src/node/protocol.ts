@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Command, Id } from '../core/domain.ts';
+import { Command, Id, Sound } from '../core/domain.ts';
 
 export const PROTOCOL_VERSION = 1;
 
@@ -8,7 +8,7 @@ const Scope = z.object({ treeIds: z.array(Id).default([]), nodeIds: z.array(Id).
 const RawDump = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('text'), text: z.string().min(1), name: z.string().optional() }),
   z.object({ kind: z.literal('link'), url: z.string().url() }),
-  z.object({ kind: z.literal('asset'), asset: z.string(), mime: z.string(), name: z.string().optional() }),
+  z.object({ kind: z.literal('asset'), asset: z.string(), mime: z.string(), name: z.string().optional(), sound: Sound.optional() }),
 ]);
 
 /** Every message a client may send. See docs/protocol.md. */

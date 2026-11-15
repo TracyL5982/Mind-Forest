@@ -1,4 +1,4 @@
-import { CommandError, type ChangeSet, type Command, type Id, type Item, type Origin } from './domain.ts';
+import { CommandError, type ChangeSet, type Command, type Id, type Item, type Origin, type Patch } from './domain.ts';
 import type { Assets, ModelClient, Store, Tools } from './ports.ts';
 import { admit, plainTitle } from './round.ts';
 import { treeRequest } from './tree-request.ts';
@@ -67,6 +67,11 @@ export interface PipelineDeps {
 
 const USER: Origin = { by: 'user' };
 const MAX_PARALLEL_SCOUTS = 2;
+/**
+ * The most passes the Renderer makes over what one change brought in. One pass asks the model about 24 items, so four passes answer
+ * for a drop of up to 96. Past that, and after a pass in which every call failed, an item keeps its plain card until it is next touched.
+ */
+const RENDER_PASSES = 4;
 
 /**
  * The one place roles are run and their commands applied.
@@ -399,12 +404,24 @@ export class Pipeline {
         }),
       ),
     ].filter((id) => mind.nodes.has(id));
+    const edited = set.patches.flatMap((p) => (p.entity === 'item' && saysOtherwise(p as Patch<'item'>) ? mind.nodesOfItem(p.id).map((n) => n.id) : []));
     this.digest(set);
-    if (nodeIds.length === 0) return;
+    if (nodeIds.length > 0) this.render(nodeIds, edited, 1);
+  }
+
+  /**
+   * One pass of the Renderer over these nodes. The nodes it still owes an answer go into another pass, which starts only when this
+   * one has ended: a drop of sixty items is asked about in three passes one after another, never in all their calls at once.
+   */
+  private render(nodeIds: Id[], edited: Id[], pass: number): void {
+    const mind = this.deps.mind;
     this.track(
       this.work('renderer', 'Choosing how to show this', nodeIds[0], async () => {
-        const commands = await this.deps.roles.renderer(this.ctx, { nodeIds: nodeIds.filter((id) => mind.nodes.has(id)) });
+        let owed: Id[] = [];
+        const commands = await this.deps.roles.renderer(this.ctx, { nodeIds: nodeIds.filter((id) => mind.nodes.has(id)), edited, again: pass > 1, later: (ids) => (owed = ids) });
         if (commands.length > 0) this.apply(AGENT('renderer'), 'Choose formats', commands);
+        const left = owed.filter((id) => mind.nodes.has(id));
+        if (left.length > 0 && pass < RENDER_PASSES) this.render(left, [], pass + 1);
       }).catch((err) => this.fail('renderer', err)),
     );
   }
@@ -479,6 +496,11 @@ export class Pipeline {
 /** Formats and digests follow from content. They are not something a user thinks of undoing. */
 function isHousekeeping(set: ChangeSet): boolean {
   return set.origin.role === 'renderer' || set.origin.role === 'archivist';
+}
+
+/** Whether an item that was there before now has another title, text or data: what a card is drawn from. Its summary and tags are not. */
+function saysOtherwise({ before, after }: Patch<'item'>): boolean {
+  return before !== null && after !== null && (before.title !== after.title || before.text !== after.text || JSON.stringify(before.data) !== JSON.stringify(after.data));
 }
 
 /** A drop whose text asks for a tree: the request, and what was dropped without the words that asked. */

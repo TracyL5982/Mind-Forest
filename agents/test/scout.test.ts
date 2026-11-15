@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Command, Id, Item, Node } from '../src/core/domain.ts';
+import { byRule } from '../src/core/roles/renderer.ts';
 import { scout } from '../src/core/roles/scout.ts';
 import { makeNode, type Settings } from '../src/core/roles/types.ts';
 import { AGENT, kit, type Kit } from './kit.ts';
@@ -284,7 +285,7 @@ test('a chart, steps and a recording a source returns reach the card', async () 
   k.world.found.set('papers:numbers', [
     { ...PAPER, title: 'The numbers by decade', url: 'https://x.example/chart', chart: { labels: ['2000', '2010'], values: [1, 2], unit: 'billions' } },
     { ...PAPER, title: 'Two steps', url: 'https://x.example/steps', steps: ['Chop', 'Stir'] },
-    { ...PAPER, title: 'An episode', url: 'https://x.example/episode', media: 'https://cdn.example/episode.mp3', image: 'https://img.example/cover.jpg' },
+    { ...PAPER, title: 'An episode', url: 'https://x.example/episode', media: 'https://cdn.example/episode.mp3', seconds: 2520, image: 'https://img.example/cover.jpg' },
   ]);
   k.world.sources = [{ ...PAPERS, show: 3 }];
   k.model.on('scout.curate', () => ({ chosen: [1, 2, 3].map((number) => ({ number, note: '', excerpt: '' })) }));
@@ -294,9 +295,11 @@ test('a chart, steps and a recording a source returns reach the card', async () 
   const [chart, steps, episode] = picked(k, anchor);
   assert.deepEqual(chart!.data.chart, { labels: ['2000', '2010'], values: [1, 2], unit: 'billions' });
   assert.deepEqual(steps!.data.steps, ['Chop', 'Stir']);
-  assert.equal(episode!.kind, 'video');
+  assert.equal(episode!.kind, 'audio');
   assert.equal(k.assets.links.get(served(k, episode!.data.mediaUrl)), 'https://cdn.example/episode.mp3', 'the recording streams through the service');
   assert.ok(k.assets.files.has(served(k, episode!.data.thumbnailUrl)), 'its cover was brought in');
+  assert.deepEqual(episode!.data.sound, { seconds: 2520 });
+  assert.deepEqual(byRule(episode!, (id) => `/assets/${id}`), { component: 'audio', props: { src: episode!.data.mediaUrl, seconds: 2520 } });
 });
 
 test('a search that finds little is tried in other words, and the records are pooled without repeats', async () => {

@@ -1,14 +1,16 @@
 import type { Command, Item } from '../core/domain.ts';
-import type { Found } from '../core/ports.ts';
+import type { Found, ModelClient } from '../core/ports.ts';
 import { MINDSTORM } from '../core/round.ts';
 import { treeIntent } from '../core/roles/conductor.ts';
 import { filer } from '../core/roles/filer.ts';
+import { intake } from '../core/roles/intake.ts';
 import { codeIn } from '../core/roles/intake/code.ts';
 import { structure } from '../core/roles/intake/describe.ts';
-import { byRule, grounded } from '../core/roles/renderer.ts';
+import { located } from '../core/roles/intake/located.ts';
+import { byRule, drawn, layoutDraft, unsure } from '../core/roles/renderer.ts';
 import { catalogued } from '../core/roles/scout.ts';
 import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles } from '../core/roles/types.ts';
-import { describe } from './model.ts';
+import { assemble, choose, describe, FakeModel, tones } from './model.ts';
 
 const WORK: Found = {
   kind: 'artwork', title: 'Stairwell, seen from above', by: 'Ilse Brandt', date: '1928', text: 'Gelatin silver print',
@@ -19,16 +21,43 @@ const PAPER: Found = {
   text: 'Viewers judged the room to stretch by half when the lens zoomed in as the camera pulled back.',
   authors: ['M. Okafor', 'L. Haas', 'R. Itō'], venue: 'Journal of Example Vision', url: 'https://doi.example/10.1000/zoom.2011',
 };
+const EPISODE: Found = {
+  title: 'Why the room seems to stretch', by: 'The Example Film Hour', date: '2024-03-08', seconds: 12, media: 'https://podcasts.example/film-hour/41.mp3',
+  text: 'Two cinematographers talk through the dolly zoom: how Hitchcock\'s crew found it, why the background seems to rush away while the subject holds still, and when it turns from dread into comedy.',
+  url: 'https://podcasts.example/film-hour/41',
+};
 const STAIRS = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240"><rect width="320" height="240" fill="#1d1b1a"/>${Array.from({ length: 9 }, (_v, n) => `<rect x="${40 + n * 14}" y="${20 + n * 12}" width="${240 - n * 28}" height="${200 - n * 24}" fill="none" stroke="#d8cfc0" stroke-opacity="${1 - n * 0.09}" stroke-width="3" transform="rotate(${n * 7} 160 120)"/>`).join('')}</svg>`;
 
-/** One pick made from a source record the way the Scout makes it, with a stored picture when the record is a work to look at. */
+/**
+ * One pick made from a source record the way the Scout makes it, with a stored picture when the record is a work to look at.
+ * A record that plays plays a few seconds of tones stored here, since the stand-in reaches no source.
+ */
 async function found(ctx: RoleContext, record: Found, source: { id: string; name: string }): Promise<Item> {
   const picture = record.kind === 'artwork' ? await ctx.assets.put(new TextEncoder().encode(STAIRS), 'image/svg+xml', 'stairwell.svg') : null;
+  const media = record.media ? ctx.assets.url((await ctx.assets.put(tones(record.seconds ?? 8), 'audio/wav', 'episode.wav')).id) : undefined;
   const from = record.from ?? source.name;
   return makeItem(ctx, {
-    kind: picture ? 'image' : 'text', title: record.title, text: `${record.text}\n\n${record.by}, ${record.date}, ${from}`, summary: record.text, tags: [record.kind ?? 'find'],
-    data: { site: new URL(record.url).hostname, by: record.by, date: record.date, from, ...catalogued(record) },
+    kind: media ? 'audio' : picture ? 'image' : 'text', title: record.title, text: `${record.text}\n\n${record.by}, ${record.date}, ${from}`, summary: record.text, tags: [record.kind ?? 'find'],
+    data: { site: new URL(record.url).hostname, by: record.by, date: record.date, from, ...catalogued(record), ...(media && { mediaUrl: media, ...(record.seconds && { sound: { seconds: record.seconds } }) }) },
     origin: AGENT('scout', source.id), source: { from: 'web', url: record.url, ...(picture ? { asset: picture.id } : {}) },
+  });
+}
+
+/**
+ * Where the model would lay out the kept siblings of a changed card, the stand-in's own structure, read from their titles, goes
+ * through the same checks. Each parent has at most one such group, under one id, and siblings in another group stay out of it.
+ */
+function assembled(ctx: RoleContext, nodeIds: readonly string[]): Command[] {
+  const parents = new Set(nodeIds.flatMap((id) => ctx.mind.nodes.get(id)?.parent ?? []));
+  return [...parents].flatMap((anchor): Command[] => {
+    const id = `${anchor}-layout`;
+    const elsewhere = new Set([...ctx.mind.groups.values()].filter((group) => group.id !== id).flatMap((group) => group.members));
+    const kept = ctx.mind.children(anchor).filter((node) => node.status === 'kept' && !elsewhere.has(node.id));
+    const parts = assemble(kept.map((node) => ({ id: node.id, title: ctx.mind.itemOf(node.id).title })));
+    const draft = parts && layoutDraft(ctx, { parent: anchor, title: '', parts }, kept.map((node) => node.id));
+    const standing = ctx.mind.groups.get(id);
+    if (!draft || JSON.stringify(standing && [standing.members, standing.props]) === JSON.stringify([draft.members, draft.props])) return [];
+    return [{ type: 'setGroup', group: { id, treeId: ctx.mind.node(anchor).treeId, anchor, ...draft } }];
   });
 }
 
@@ -55,7 +84,12 @@ export const fakeRoles: Roles = {
   },
 
   async intake(ctx, dumps) {
-    return dumps.map((d): Item => {
+    // A recording goes through the real Intake, with a stand-in describing its transcript, so it is transcribed as the real service does it.
+    const describer = new FakeModel().describing();
+    const model: ModelClient = { json: (req) => describer.json(req), search: (req) => describer.search(req), image: (req) => describer.image(req), transcribe: (req) => ctx.model.transcribe(req) };
+    const heard = await Promise.all(dumps.map((d) => (d.kind === 'asset' && d.mime.startsWith('audio/') ? intake({ ...ctx, model }, [d]) : undefined)));
+    return located(ctx, dumps.flatMap((d, n): Item[] | Item => {
+      if (heard[n]) return heard[n];
       if (d.kind === 'link') {
         return makeItem(ctx, { kind: 'link', title: d.url.replace(/^https?:\/\//, '').slice(0, 60), summary: 'A page you dropped in.', tags: ['link'], origin: { by: 'user' }, source: { from: 'link', url: d.url } });
       }
@@ -63,11 +97,11 @@ export const fakeRoles: Roles = {
         const kind = d.mime.startsWith('image/') ? 'image' : d.mime.startsWith('video/') ? 'video' : 'file';
         const title = d.name ?? 'Dropped file';
         // The real rules caption a picture with its summary, so the summary names the file as a description would.
-        return makeItem(ctx, { kind, title, summary: `${title}, a ${kind} you dropped in.`, tags: [kind], origin: { by: 'user' }, source: { from: 'drop', asset: d.asset } });
+        return makeItem(ctx, { kind, title, summary: `${title}, ${kind === 'image' ? 'an' : 'a'} ${kind} you dropped in.`, tags: [kind], origin: { by: 'user' }, source: { from: 'drop', asset: d.asset } });
       }
       const described = describe(d.text);
       return makeItem(ctx, { kind: 'text', title: described.title, text: d.text, summary: d.text.slice(0, 160), data: { ...structure(described, d.text), ...(codeIn(d.text) ? { code: codeIn(d.text) } : {}) }, tags: described.tags, origin: { by: 'user' }, source: { from: 'paste' } });
-    });
+    }));
   },
 
   /** A tree the user asked for is grown as the real Filer grows it, which needs no model. Otherwise a card that shares most of an item's title words is a strong fit. */
@@ -89,12 +123,14 @@ export const fakeRoles: Roles = {
     const n = ctx.mind.children(anchor).length;
     // Nothing repeats inside a tree, so a later run under a card that already holds picks brings them under other titles.
     const again = (title: string) => (n > 0 ? `${title}, take ${n + 1}` : title);
-    // Asked for a museum work or a paper, the fake brings one as its first pick, so a card that draws a source's own record can be seen offline.
-    const asked = /\b(museum|artwork|painting)/i.test(need ?? '') ? await found(ctx, WORK, { id: 'museums', name: 'Museum collections' }) : /\b(paper|study|research)/i.test(need ?? '') ? await found(ctx, PAPER, { id: 'papers', name: 'Research papers' }) : null;
+    // Asked for a museum work, a paper or a podcast, the fake brings one as its first pick, so a card that draws a source's own record can be seen offline.
+    const asked = /\b(museum|artwork|painting)/i.test(need ?? '') ? await found(ctx, WORK, { id: 'museums', name: 'Museum collections' })
+      : /\b(paper|study|research)/i.test(need ?? '') ? await found(ctx, PAPER, { id: 'papers', name: 'Research papers' })
+        : /\b(podcast|episode|listen)/i.test(need ?? '') ? await found(ctx, EPISODE, { id: 'podcasts', name: 'Podcasts' }) : null;
     const drafts: Item[] = [
       asked ?? makeItem(ctx, { kind: 'link', title: again(`An essay on ${topic}`), summary: 'A long read that argues the idea from first principles.', tags: ['essay'], origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/essay-${n}` } }),
-      makeItem(ctx, { kind: 'text', title: again('7 in 10 notice it without naming it'), text: 'In a small survey, 7 in 10 viewers noticed the effect without being able to name it.', summary: 'A survey figure.', tags: ['data'], data: { facts: [{ label: 'viewers who notice it', value: '70%' }] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/survey-${n}` } }),
-      makeItem(ctx, { kind: 'text', title: again('How to try it'), summary: 'Three steps.', tags: ['how-to'], data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/howto-${n}` } }),
+      makeItem(ctx, { kind: 'text', title: again('7 in 10 notice it without naming it'), text: 'Viewers who notice it: 70%', summary: 'In a small survey, 7 in 10 viewers noticed the effect without being able to name it.', tags: ['data'], data: { facts: [{ label: 'Viewers who notice it', value: '70%' }] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/survey-${n}` } }),
+      makeItem(ctx, { kind: 'text', title: again('How to try it'), text: '1. Pick a subject\n2. Move away while zooming in\n3. Keep the subject the same size', summary: 'Three steps.', tags: ['how-to'], data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/howto-${n}` } }),
       makeItem(ctx, { kind: 'text', title: again('Where it turns up'), summary: 'How often each genre uses it.', tags: ['history'], data: { chart: { labels: ['Horror', 'Thriller', 'Drama', 'Comedy'], values: [14, 11, 9, 3], unit: 'films' } }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/chart-${n}` } }),
     ];
     const commands: Command[] = [];
@@ -113,17 +149,17 @@ export const fakeRoles: Roles = {
 
   async renderer(ctx, { nodeIds }) {
     const assetUrl = (id: string) => ctx.assets.url(id);
-    return nodeIds.flatMap((id): Command[] => {
+    const views = nodeIds.flatMap((id): Command[] => {
       const node = ctx.mind.nodes.get(id);
       const item = node && ctx.mind.items.get(node.itemId);
       if (!node || !item) return [];
-      // No rule draws a callout, so the fake draws one from a line that opens "Caution:", "Warning:" or "Note:".
-      const marked = /^(caution|warning|note):\s*(\S.*)$/im.exec(item.text);
-      const callout = { component: 'callout', props: { text: marked?.[2]?.trim(), tone: marked?.[1]!.toLowerCase() === 'note' ? 'note' : 'caution' } };
-      const draw = marked && grounded(callout, item, assetUrl) ? callout : byRule(item, assetUrl);
+      const ruled = byRule(item, assetUrl);
+      // Where the real Renderer would ask the model, the fake's own choice goes through the same checks.
+      const draw = (unsure(item, ruled) && drawn(ctx, { id, ...choose(item.text, ruled.component === 'idea' ? 'idea' : 'note') }, item)) || ruled;
       const same = draw.component === node.view.component && JSON.stringify(draw.props) === JSON.stringify(node.view.props);
       return same ? [] : [{ type: 'setView', id, view: { ...draw, by: 'renderer' } }];
     });
+    return [...views, ...assembled(ctx, nodeIds)];
   },
 
   async packager(ctx, { scope, note }) {

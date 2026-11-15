@@ -308,6 +308,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
         title: str(e.trackName), by: str(e.collectionName), date: str(e.releaseDate).slice(0, 10),
         text: plain(str(e.description) || str(e.shortDescription)).slice(0, 1200),
         url: str(e.trackViewUrl) || str(e.episodeUrl), media: str(e.episodeUrl),
+        ...(Number(e.trackTimeMillis) > 0 ? { seconds: Math.round(Number(e.trackTimeMillis) / 1000) } : {}),
         ...(str(e.artworkUrl600) ? { image: str(e.artworkUrl600) } : {}),
       }));
     },

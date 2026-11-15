@@ -19,6 +19,10 @@ CardView::CardView(const TreeNode& node, Vec2 smallBody, Vec2 openBody)
     root->addChild(stepHolder);
     stepHolder->isEnabled = false;
     openHolder->isEnabled = false;
+    // NOTE(port): added for Quest. The open face lies a little in front of the small one. While one gives
+    // way to the other they are bent into different columns, and in one plane each column of one would
+    // hide the other's in stripes.
+    openHolder->position.z = openLift;
     root->isEnabled = false;
 }
 
@@ -156,6 +160,14 @@ void Screen::loop(std::optional<Span> range) {
     // in `update`; VideoPlayer::seek has one kind of seek, and how near it lands is the host's.
     player->seek(range->lowerBound);
     player->play();
+}
+
+void Screen::cover(const EntityRef& e) {
+    if (covering) covering->removeFromParent();
+    covering = entity && e ? e : nullptr;
+    if (!covering) return;
+    covering->position.z = 0.001f;
+    entity->addChild(covering);
 }
 
 void Screen::hide() {

@@ -12,6 +12,7 @@ import { spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
 import { whereItWent, type Delivery, type Desk } from './contact.ts';
 import { describeScene, LiveVoice, type LiveOptions, type OpenRealtime } from './live.ts';
+import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
 import type { Speak, Transcribe } from './speech-openai.ts';
 import { SqliteStore } from './store.ts';
@@ -37,6 +38,8 @@ export interface ServerOptions {
   /** Momo's real-time voice on `/live`: the realtime model, and how it is set up. Without it `/live` is refused. */
   live?: { open: OpenRealtime; options: LiveOptions };
   settings?: Partial<Settings>;
+  /** Maps switched on. Without it no place is looked up and clients are told to load no tiles. */
+  maps?: Maps;
   /** The only folder a linked file may be served from. Defaults to the repository's `public/clips/full`. */
   films?: string;
   /** Mind Palace as a Telegram contact, reached with this bot's token. */
@@ -77,6 +80,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID() });
   mind.load(store.all());
   const settings: Settings = { ...DEFAULT_SETTINGS, ...opts.settings };
+  const maps = opts.maps ? { tiles: opts.maps.tiles, credit: opts.maps.credit, link: opts.maps.link } : null;
   const sockets = new Set<WebSocket>();
   /** What each connection said it can play. A connection that has not said is taken to be a browser. */
   const plays = new Map<WebSocket, Playback>();
@@ -125,7 +129,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     mind,
     roles: opts.roles,
     model: opts.model,
-    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys }),
+    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder }),
     assets,
     store,
     settings,
@@ -212,7 +216,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       res.end();
       return;
     }
-    if (req.method === 'GET' && path === '/api/state') return json(res, 200, { snapshot: mind.snapshot(), settings });
+    if (req.method === 'GET' && path === '/api/state') return json(res, 200, { snapshot: mind.snapshot(), settings, maps });
     if (req.method === 'GET' && path === '/api/telegram') return json(res, 200, contact());
     if (req.method === 'POST' && path === '/api/telegram/pair') {
       if (!telegram) return json(res, 404, { error: 'TELEGRAM_BOT_TOKEN is not set' });
@@ -292,7 +296,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
 
   wss.on('connection', (ws: WebSocket) => {
     sockets.add(ws);
-    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser', live: Boolean(opts.live) }));
+    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, maps, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser', live: Boolean(opts.live) }));
     ws.on('close', () => {
       sockets.delete(ws);
       plays.delete(ws);

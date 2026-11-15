@@ -1,39 +1,30 @@
 import { s } from '../dom.js';
-import { FIGURES, FRAME, SIDES, say, wrap, titleOf } from './shared.js';
+import { FIGURES, WIDTH, drawFace, lay, linesOf, titleOf, wordsIn } from './shared.js';
+import { wordsOf } from '../words.js';
 
-const WIDTH = 272;
-const COLUMN = WIDTH - SIDES;
 /** The spark over the thought, and the gap under it. */
 const MARK = 22;
+const COLUMN = WIDTH - 33;
 /**
- * The thought steps down as it grows: the largest size for up to two lines, the middle size for up
- * to four, then the smallest. A thought too long for five lines there is cut with an ellipsis, so
- * a view sent straight to a client cannot spill.
+ * The thought steps down as it grows: the largest size for up to two lines, the middle size for up to three, then the smallest
+ * for three, where a longer thought shows its first three lines and the cue.
  */
-const STEPS = [[FIGURES[0], 2], [FIGURES[1], 4], [FIGURES[2], 5]];
+const STEPS = [['display', 2, FIGURES[0][0]], ['middle', 3, FIGURES[1][0]], ['figure', 3, FIGURES[2][0]]];
 
-function plan(item) {
+function face(item) {
   const thought = titleOf(item);
-  for (const [[cls, lead, letter], most] of STEPS) {
-    const lines = wrap(thought, COLUMN, letter, most + 1);
-    if (lines <= most || most === STEPS.at(-1)[1]) return { thought, cls, lead, lines: Math.min(lines, most), cut: lines > most };
-  }
-  return undefined;
+  const [measure, most, cls] = STEPS.find(([step, lines]) => linesOf(thought, COLUMN, step) <= lines) ?? STEPS.at(-1);
+  return lay([
+    { tall: MARK, draw: spark },
+    { words: thought, measure, column: COLUMN, most, draw: wordsIn(`fact-value idea-text ${cls}`) },
+  ], { words: wordsOf(item) });
 }
 
 const spark = () => s('svg', { class: 'idea-spark', viewBox: '0 0 14 14', width: 14, height: 14, 'aria-hidden': 'true' },
   s('path', { d: 'M7 .6 8.5 5.5 13.4 7 8.5 8.5 7 13.4 5.5 8.5 .6 7 5.5 5.5Z' }));
 
-export const shows = [];
+export const size = (item) => [WIDTH, face(item).height];
 
-export function size(item) {
-  const { lead, lines } = plan(item);
-  return [WIDTH, FRAME + MARK + lines * lead];
-}
-
-export function draw(item) {
-  const { thought, cls, lines, cut } = plan(item);
-  return [spark(), say('div', `fact-value idea-text ${cls}${cut ? ` clamp-${lines}` : ''}`, thought)];
-}
+export const draw = (item) => drawFace(face(item));
 
 export const detail = () => [];

@@ -1,4 +1,5 @@
-import type { Command, Id, Item, ItemKind, Node, Origin } from '../domain.ts';
+import type { Command, Id, Item, ItemKind, Node, Origin, Sound } from '../domain.ts';
+import { shortTitleOf } from '../fitted.ts';
 import type { Assets, ModelClient, Tools } from '../ports.ts';
 import type { Mindstorm } from '../state.ts';
 import { defaultView } from '../views.ts';
@@ -51,7 +52,8 @@ export interface RoleContext {
 export type RawDump =
   | { kind: 'text'; text: string; name?: string }
   | { kind: 'link'; url: string }
-  | { kind: 'asset'; asset: string; mime: string; name?: string };
+  /** `sound` is what the client measured of a recording it could decode. A recording without it is filed by name only. */
+  | { kind: 'asset'; asset: string; mime: string; name?: string; sound?: Sound };
 
 export interface Scene {
   /** The node the user is looking at or has open. */
@@ -160,8 +162,15 @@ export interface Roles {
     },
   ): Promise<Command[]>;
   organizer(ctx: RoleContext, input: { request: string; scope: Scope; focus?: Id }): Promise<{ commands: Command[]; summary: string }>;
-  /** Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup. */
-  renderer(ctx: RoleContext, input: { nodeIds: Id[] }): Promise<Command[]>;
+  /**
+   * Chooses a component for each node and composites for groups of siblings. Returns setView and setGroup.
+   * `edited` names the nodes whose item's title, text or data changed since it was last drawn.
+   * One pass asks the model about a bounded number of items. `later` is told the nodes it still owes an answer, because the pass was
+   * full or a call failed, so the caller can run another pass over them. It is told nothing after a pass in which every call failed:
+   * the model is then down, and another pass would only wait on it again. `again` marks such a pass: it looks at cards alone, since
+   * the first pass already looked for arrangements among the siblings.
+   */
+  renderer(ctx: RoleContext, input: { nodeIds: Id[]; edited?: Id[]; again?: boolean; later?: (nodeIds: Id[]) => void }): Promise<Command[]>;
   packager(ctx: RoleContext, input: { scope: Scope; note?: string }): Promise<Handoff>;
   /** Up to four short questions the user is likely to ask next about an open card. Throws when the model fails. */
   questions(ctx: RoleContext, input: { card: CardBrief; history: Turn[] }): Promise<string[]>;
@@ -169,6 +178,10 @@ export interface Roles {
 
 export const AGENT = (role: string, tool?: string): Origin => ({ by: 'agent', role, ...(tool ? { tool } : {}) });
 
+/**
+ * A new item. Its title is kept as the role gives it. A title the model wrote is already held to a small face's two lines by
+ * `fittedTitle`; any other, a source's own, keeps every word, and `data.shortTitle` holds the start of it the face shows.
+ */
 export function makeItem(
   ctx: RoleContext,
   fields: Pick<Item, 'kind' | 'title' | 'origin'> & Partial<Pick<Item, 'text' | 'summary' | 'tags' | 'data'>> & {
@@ -182,12 +195,19 @@ export function makeItem(
     text: fields.text ?? '',
     summary: fields.summary ?? '',
     tags: fields.tags ?? [],
-    data: fields.data ?? {},
+    data: withShortTitle(fields.data ?? {}, fields.title),
     source: { ...fields.source, capturedAt: ctx.now() },
     origin: fields.origin,
     archived: false,
     revision: 0,
   };
+}
+
+/** An item's data with `shortTitle` set to what a small face shows of `title`, or without it when the whole title fits. */
+export function withShortTitle(data: Item['data'], title: string): Item['data'] {
+  const { shortTitle: _, ...rest } = data;
+  const short = shortTitleOf(title);
+  return short ? { ...rest, shortTitle: short } : rest;
 }
 
 /** A node for an item, with its default view. `order` continues after the parent's existing children plus `offset`. */

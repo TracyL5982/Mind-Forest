@@ -355,7 +355,25 @@ In a real browser with a fake microphone (`scripts/wake-check.ts`), OpenAI's tra
 
 **Alternative.** Picovoice Porcupine needs an account and a key on every device. openWakeWord needs a model trained for each name. Both fix the name in advance.
 
-## 39. Live voice: Momo hears and speaks through OpenAI's realtime model, and the pipeline still decides
+## 39. One home: a source's recording is a film or a sound by its file, and plays from the service
+
+**Decision.** `tracy/agents` holds the Quest app, the service and the card libraries in one line, merged from `tracy/quest-net`. Both lines had decided what a source's playable record becomes, and the merge keeps both rules. A record whose file is a film (`.mp4`, `.m4v` or `.webm`) is a video item. Any other is an audio item, with the length its source gives as `sound.seconds`, which the audio card draws. Either way its file is linked as a service asset and its cover is stored, so a client loads only the service's own addresses (entry 26).
+
+**Why.** The card library line made a podcast episode an audio card that played from the episode's own address. The Quest line made every playable record a video streamed through the service, because it had no audio kind and every address a card loads must be the service's. The same `Found.media` field carries Internet Archive films and podcast episodes, so the file's type tells them apart.
+
+**The headset.** Its card registry (`quest/core/cards`) knows the note, quote and image cards and draws any other component as a note. A podcast pick is a note there, as a video card it was before the merge.
+
+**Also.** The browser checks from the card library line that dropped a recording or pasted an explainer now ask for a tree first, since a drop starts no tree unless asked (entry 29). The check that opening a card brings nothing compares the card's children before and after, since the Every shape tree now hangs a map under that card.
+
+## 40. One home: the Vision Pro adapter stays out
+
+**Decision.** The merge keeps `visionos/` as the Quest line has it, without the adapter in `visionos/MindPalace/Ocean/Agent/` and its hooks in `OceanModel.swift`, `Notes.swift` and `Info.plist`.
+
+**Why.** The Quest line left the adapter out on purpose when the service joined it (1dc37a6, 14 November), and every merge since kept it out. Its `OceanModel.swift` differs from the agents line's by 388 changed lines, so the adapter's hooks do not apply as they were. The Quest app is the final home, and Vision Pro was the prototype.
+
+**To bring it back.** The five files and the hooks are as they were at 088452d. Putting them back means writing the hooks again against the Quest line's `OceanModel.swift` and typechecking with the visionOS 2.5 simulator SDK, since visionOS 26 cannot be built on this Mac.
+
+## 41. Live voice: Momo hears and speaks through OpenAI's realtime model, and the pipeline still decides
 
 **Decision.** After the wake phrase a client streams its microphone to the service on `/live`, and the service relays it to `gpt-realtime-2.1-mini` in one realtime session per client (`src/node/live.ts`). The model is Momo's ears and voice. It speaks a short preamble in its own words and calls its one tool, `act`, with the user's request, which the service hands to the pipeline as a final `utter` in the client's scene. The Conductor and the rest decide what happens. The first `say` after an `act` goes back as that call's result, and every other `say`, and every `say` with `kind: 'results'`, goes in as news. The model voices both in the same session, so announcements need no `/api/speak`. Its voice streams back as 24 kHz PCM and plays as it arrives. The wake phrase stays on the device (38). The model's semantic turn detection, at its most eager, ends the turn, in place of the 1.2 s pause rule. While Momo speaks no microphone sound is sent, because the headset has no echo cancelling, but the phrase is still listened for: saying it stops Momo and starts a new turn, except while what Momo is saying names itself. Without a live voice (no OpenAI key, `MIND_PALACE_LIVE=off`) `/live` is refused and the clients use 38's path.
 

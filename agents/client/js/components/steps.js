@@ -1,29 +1,33 @@
 import { h } from '../dom.js';
-import { FRAME, TEXT, TITLE, andMore, list, say, title } from './shared.js';
+import { COLUMN, GAP, WIDTH, aboveRows, drawFace, lay, list, say, text, titleRow } from './shared.js';
+import { wordsOf } from '../words.js';
 
-const SHOWN = 5;
-const ROW = 20;
-const GAP = 8;
+/** A step's number, round, and the gap after it. */
+const NUMBER = 32;
+const STEP_LINES = 2;
 
-const step = (label, i, lines) => h('li', null, h('span', { class: 'step-n', text: String(i + 1) }), say('span', lines, String(label)));
+const step = (label, i, tag, cls) => h(tag, { class: cls }, h('span', { class: 'step-n', text: String(i + 1) }), say('span', '', label));
 
-export const shows = [];
-
-export function size(item, props) {
-  const n = list(props.steps).length;
-  const rows = Math.min(n, SHOWN);
-  return [256, FRAME + TITLE + (rows ? 10 + rows * ROW + (rows - 1) * GAP : 0) + (n > SHOWN ? 8 + TEXT : 0)];
+/**
+ * The title, the lines the item writes over its steps, then each step whole on up to two lines beside its number, as many as the
+ * face has room for. The cue counts the steps left out.
+ */
+function face(item, props) {
+  const words = wordsOf(item);
+  return lay([
+    titleRow(item),
+    ...aboveRows(props),
+    ...list(props.steps).map((label, i) => ({
+      words: text(label).trim(), column: COLUMN - NUMBER, most: STEP_LINES, unit: true, gap: i === 0 ? GAP : 8,
+      draw: (row) => step(row.words, i, 'div', i > 0 ? 'step is-after' : 'step'),
+    })),
+  ], { words, cue: (left) => (left > 0 ? words.cue.left(left) : '') });
 }
 
-export function draw(item, props) {
-  const steps = list(props.steps);
-  return [
-    title(item, 1),
-    steps.length > 0 && h('ol', { class: 'steps' }, steps.slice(0, SHOWN).map((label, i) => step(label, i, 'clamp-1'))),
-    steps.length > SHOWN && andMore(steps.length - SHOWN, item),
-  ];
-}
+export const size = (item, props) => [WIDTH, face(item, props).height];
+
+export const draw = (item, props) => drawFace(face(item, props));
 
 export const detail = (item, props) => [
-  h('ol', { class: 'steps is-full' }, list(props.steps).map((label, i) => step(label, i, ''))),
+  h('ol', { class: 'steps is-full' }, list(props.steps).map((label, i) => step(String(label), i, 'li', ''))),
 ];

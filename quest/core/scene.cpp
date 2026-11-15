@@ -51,7 +51,6 @@ TextureRef Texture::make(const ImageRef& image, bool mipmaps) {
     t->height = image->height;
     t->mipmaps = mipmaps;
     t->pending = image;
-    t->madeAt = mediaTime();
     return t;
 }
 

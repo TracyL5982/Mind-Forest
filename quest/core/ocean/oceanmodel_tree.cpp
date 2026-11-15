@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstdlib>
 
+#include "../cards/ocean.h"
+
 // MARK: - Starting, picking, layers
 
 /// Stands a tree up out of the ocean.
@@ -376,7 +378,9 @@ void OceanModel::markBegin(int id, Vec2 a) {
         auto note = catalog->notes.find(c.ref.id);
         if (note != catalog->notes.end() && note->second.clip) video = true;
     }
-    if (c.ref.kind == Ref::Kind::film) {
+    // NOTE(port): added for Quest. A film drawn as a card has words besides its picture, and is marked as a video note is (core/cards).
+    if (c.ref.kind == Ref::Kind::film && c.layout) video = true;
+    if (c.ref.kind == Ref::Kind::film && !c.layout) {
         marking = Marking{id, MarkKind::time(), a, a, std::nullopt, ""};
     } else if (c.layout) {
         const NoteLayout& layout = *c.layout;

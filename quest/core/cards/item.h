@@ -36,6 +36,10 @@ struct Item {
 
 /// A prop that is a string, or "".
 std::string text(const Json& value);
+/// A string prop with the white space at both ends taken off, as the structured types read one; "" for what is no string.
+std::string trimmed(const Json& value);
+/// `\p{Script=Han}`.
+bool han(char32_t c);
 /// JavaScript's `Number(value)`: NaN for what is no number.
 double number(const Json& value);
 

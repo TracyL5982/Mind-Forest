@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { inLibrary, type Command, type Id, type Item, type ItemData, type Node } from '../domain.ts';
 import type { Found, Source } from '../ports.ts';
 import { givesWay, KNOWN_MOST, LIBRARY_TOOL, MINDSTORM, newSlots, ROUND_MOST, sameness, treeKeys, urlKey } from '../round.ts';
+import { fittedTitle } from '../fitted.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
 import { AGENT, idFrom, makeItem, makeNode, pickStatus, type RoleContext, type Roles, type Turn } from './types.ts';
@@ -232,7 +233,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number): Promise<Direct
       'For each direction:',
       '- angle: two to five words naming the direction.',
       '- format: one of the formats below.',
-      '- title: under 60 characters, specific, no trailing period.',
+      '- title: about 26 characters in English or 18 in Chinese, so it stands whole on the two lines a small card gives a title; specific, no trailing period.',
       '- why: under eight words, shown on the thread that joins this card to the original. It names where this direction goes ("what the studies found").',
       '- tags: 2 to 4 short lowercase words.',
       '- body, steps, images, source, lookups: as the format says. Leave the ones a format does not use empty.',
@@ -268,7 +269,7 @@ type Made = { item: Item; tool: string };
 
 function common(d: Direction, tool: string) {
   return {
-    title: oneLine(d.title, 120),
+    title: fittedTitle(oneLine(d.title, 120)),
     tags: [...new Set(d.tags.map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 6),
     origin: AGENT(ROLE, tool),
   };
@@ -352,7 +353,7 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
             tool: 'web',
             item: makeItem(ctx, {
               ...common(d, 'web'),
-              title: oneLine(d.title || video.title, 120),
+              title: fittedTitle(oneLine(d.title, 120)) || oneLine(video.title, 120),
               kind: 'video',
               text: [d.body.trim(), video.title].filter(Boolean).join('\n\n'),
               summary: oneLine(d.body || video.title, 400),
@@ -421,7 +422,8 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
       taken.add(urlKey(record.url));
       const picture = record.stored ?? (record.image ? await ctx.tools.web.picture(record.image) : null);
       // A recording plays from the service, which streams it from its source, so a client only ever fetches from the service.
-      const media = record.media ? await ctx.assets.link(record.media, mediaType(record.media)) : null;
+      const mime = record.media ? mediaType(record.media) : '';
+      const media = record.media ? await ctx.assets.link(record.media, mime) : null;
       const label = [...new Set([record.by, record.date, record.from ?? source.name].filter(Boolean))].join(', ');
       const passage = excerpt || clipText(record.text, EXCERPT);
       return {
@@ -429,7 +431,7 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
         item: makeItem(ctx, {
           ...common(d, source.id),
           title: oneLine(record.title, 120),
-          kind: media ? 'video' : picture ? 'image' : 'text',
+          kind: media ? (mime.startsWith('video/') ? 'video' : 'audio') : picture ? 'image' : 'text',
           text: [passage, label].filter(Boolean).join('\n\n'),
           summary: oneLine(note || passage || label, 400),
           data: {
@@ -441,6 +443,7 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
             ...(record.chart ? { chart: record.chart } : {}),
             ...(record.steps && !picture ? { steps: record.steps } : {}),
             ...(media ? { mediaUrl: ctx.assets.url(media.id), ...(picture ? { thumbnailUrl: ctx.assets.url(picture.asset) } : {}) } : {}),
+            ...(media && record.seconds && record.seconds > 0 ? { sound: { seconds: record.seconds } } : {}),
           },
           source: { from: 'web', url: record.url, ...(picture && !media ? { asset: picture.asset } : {}) },
         }),

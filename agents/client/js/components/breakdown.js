@@ -1,14 +1,10 @@
 import { h } from '../dom.js';
-import { FRAME, SIDES, TEXT, TITLE, TITLE_LETTER, list, say, text, textWidth, wrap, titleOf } from './shared.js';
+import { GAP, WIDTH, aboveRows, drawFace, headsRow, lay, list, say, text, titleRow, wordsIn } from './shared.js';
+import { wordsOf } from '../words.js';
 
-const WIDTH = 300;
-const COLUMN = WIDTH - SIDES;
 const MOST = 8;
-const GAP = 7;
-/** The gap either side of a bar, the least a bar is left, and the least and the most a label may take. */
-const BESIDE = 8;
-const BAR = 72;
-const LABEL = { least: 48, most: 128 };
+/** The one bar that holds every part. */
+const BAR = 16;
 const PERCENT = new Set(['%', '％']);
 
 const exact = (value) => value.toLocaleString('en', { maximumFractionDigits: 6 });
@@ -35,33 +31,40 @@ export function parts(props) {
   return { rows: rows.map((row) => ({ ...row, bar: exact(row.value) === '0' ? 0 : row.value / total })), unit: named(props), total };
 }
 
-export const shows = [];
+/** The one bar split into the parts by their shares, the largest in the accent, with no text. */
+const split = (rows, largest) => h('div', { class: 'breakdown-split', 'aria-hidden': 'true' },
+  rows.map((row) => row.bar > 0 && h('span', { class: row === largest ? 'is-largest' : '', style: { flexGrow: String(row.bar) } })));
 
-export function size(item, props) {
-  const rows = Math.min(list(props.labels).length, MOST);
-  return [WIDTH, FRAME + wrap(titleOf(item), COLUMN, TITLE_LETTER, 2) * TITLE + (named(props) ? TEXT : 0) + (rows ? 10 + rows * TEXT + (rows - 1) * GAP : 0)];
+/**
+ * A designed preview, because no label of a part reads beside its bar at the face's sizes: the title, the lines the item writes
+ * over the parts and the heads row of their table, one bar split into the parts, the largest part as the item writes its label
+ * and its share, and the cue, which counts the parts the opened card shows.
+ */
+function face(item, props) {
+  const words = wordsOf(item);
+  const { rows, unit } = parts(props);
+  const largest = rows.reduce((best, row) => (best && best.value >= row.value ? best : row), null);
+  const said = largest && [largest.label, largest.written, unit].filter(Boolean).join(' ');
+  return lay([
+    titleRow(item),
+    ...aboveRows(props),
+    headsRow(props),
+    largest && { tall: BAR, gap: GAP, draw: () => split(rows, largest) },
+    said && { words: said, measure: 'body', most: 2, gap: GAP, draw: wordsIn('breakdown-largest') },
+  ], { words, more: rows.length > 0, cue: () => (rows.length > 0 ? words.cue.parts(rows.length) : '') });
 }
 
-const bars = (rows, columns, clamped) => h('div', { class: 'breakdown', style: { gridTemplateColumns: columns } }, rows.map((row) => [
-  say('div', `breakdown-label ${clamped}`, row.label),
+export const size = (item, props) => [WIDTH, face(item, props).height];
+
+export const draw = (item, props) => drawFace(face(item, props));
+
+const bars = (rows, columns) => h('div', { class: 'breakdown', style: { gridTemplateColumns: columns } }, rows.map((row) => [
+  say('div', 'breakdown-label', row.label),
   h('div', { class: 'breakdown-track' }, row.bar > 0 && h('div', { class: 'breakdown-bar', style: { width: `${row.bar * 100}%` } })),
   h('div', { class: 'breakdown-share', text: row.written }),
 ]));
 
-/** Every share is written whole, so the labels give way first and then the bars. */
-export function draw(item, props) {
-  const { rows, unit } = parts(props);
-  const shares = Math.max(0, ...rows.map((row) => textWidth(row.written)));
-  const labels = Math.min(Math.max(0, ...rows.map((row) => textWidth(row.label))), LABEL.most, Math.max(LABEL.least, COLUMN - 2 * BESIDE - shares - BAR));
-  return [
-    h('div', { class: 'chart-head' },
-      say('div', `card-title clamp-${wrap(titleOf(item), COLUMN, TITLE_LETTER, 2)}`, titleOf(item)),
-      unit && say('div', 'card-tag clamp-1', unit)),
-    rows.length > 0 && bars(rows, `${labels}px minmax(0, 1fr) ${shares}px`, 'clamp-1'),
-  ];
-}
-
-/** The same bars with every label whole, and each share of the whole beside a value that is no percentage. */
+/** Each part's bar with its label whole, and each share of the whole beside a value that is no percentage. */
 export function detail(item, props) {
   const { rows, unit, total } = parts(props);
   const percent = rows.some((row) => row.written.endsWith('%'));
@@ -69,6 +72,6 @@ export function detail(item, props) {
   return [
     h('div', { class: 'detail-chart detail-breakdown' },
       unit && say('div', 'card-tag', unit),
-      bars(shared, 'fit-content(45%) minmax(48px, 1fr) auto', '')),
+      bars(shared, 'fit-content(45%) minmax(48px, 1fr) auto')),
   ];
 }

@@ -48,7 +48,7 @@ test('deleting a node removes its subtree, archives its items, and undo restores
       { type: 'addItem', item: leaf },
       { type: 'addNode', node: leafNode },
       { type: 'link', link: { id: 'l1', a: leafNode.id, b, why: 'same idea', strength: 0.9 } },
-      { type: 'setGroup', group: { id: 'g1', treeId, anchor: root, composite: 'cluster', title: '', members: [a, b], props: {} } },
+      { type: 'setGroup', group: { id: 'g1', treeId, anchor: root, composite: 'comparison', title: '', members: [a, b], props: { criteria: [], cells: {} } } },
     ],
   });
   const before = k.mind.snapshot();
@@ -153,6 +153,32 @@ test('when an earlier part was changed since, undo still takes back the latest p
   assert.equal(k.mind.itemOf(nodeIds[2]!).title, 'B');
   assert.equal(k.mind.itemOf(nodeIds[1]!).title, 'A edited by the user');
   assert.ok(edit.id);
+});
+
+test('the service refuses a group that mixes picks with kept cards, is of no known kind, has the wrong number of members or takes a node from another group', () => {
+  const k = kit();
+  const { treeId, nodeIds } = k.seedTree('Film', ['Root']);
+  const root = nodeIds[0]!;
+  const ids = Array.from({ length: 6 }, (_, i) => {
+    const item = k.item({ title: `card ${i}` });
+    const node = makeNode(k.ctx, item, { treeId, parent: root, status: i < 5 ? 'kept' : 'pick', why: '', origin: USER });
+    k.mind.apply({ origin: USER, label: 'add', commands: [{ type: 'addItem', item }, { type: 'addNode', node }] });
+    return node.id;
+  });
+  const group = (id: string, composite: string, members: string[], props: Record<string, unknown> = {}) => () =>
+    k.mind.apply({ origin: USER, label: 'group', commands: [{ type: 'setGroup', group: { id, treeId, anchor: root, composite, title: '', members, props } }] });
+  assert.throws(group('g', 'cluster', [ids[3]!, ids[4]!, ids[5]!]), /picks or kept cards, never both/);
+  assert.throws(group('g', 'heap', ids.slice(0, 3)), /no composite is called heap/);
+  assert.throws(group('g', 'cluster', ids.slice(0, 2)), /a cluster holds at least 3 members, not 2/);
+  assert.throws(group('g', 'beforeafter', ids.slice(0, 5), { changes: {} }), /a beforeafter holds 2 to 4 members, not 5/);
+  assert.throws(group('g', 'matrix', ids.slice(0, 3), { x: 'Cost', y: 'Reach', reasons: {} }), /a matrix holds 4 members, not 3/);
+  assert.throws(group('g', 'matrix', ids.slice(0, 4), { x: '', y: 'Reach', reasons: {} }), /props of a matrix/);
+  group('g1', 'sequence', ids.slice(0, 3))();
+  assert.throws(group('g2', 'cluster', ids.slice(2, 5)), new RegExp(`node ${ids[2]} is already in group g1`));
+  group('g1', 'sequence', ids.slice(1, 4))();
+  assert.deepEqual(k.mind.groups.get('g1')!.members, ids.slice(1, 4), 'a group may be set again under its own id');
+  group('g3', 'beforeafter', [ids[0]!, ids[4]!], { changes: { [ids[4]!]: 'Recut' } })();
+  assert.equal(k.mind.groups.size, 2);
 });
 
 test('a library item is never listed as unplaced, outlives its last node, and is found unless only placed items are asked for', () => {

@@ -42,6 +42,10 @@ std::optional<Clip> Clip::from(const Json& j) {
         !decode::integer(j["year"], c.year) || !decode::string(j["genre"], c.genre) || !decode::strings(j["cast"], c.cast) ||
         !decode::string(j["scene"], c.scene) || !decode::real(j["aspect"], c.aspect) || !decode::real(j["loopAspect"], c.loopAspect) ||
         !decode::integers(j["tile"], c.tile) || !decode::value(j["full"], c.full) || !decode::value(j["tag"], c.tag)) return std::nullopt;
+    // NOTE(port): added for Quest (core/cards/pieces.h). Optional, so a clips.json without them still loads.
+    decode::strings(j["genres"], c.genres);
+    decode::string(j["description"], c.description);
+    decode::string(j["videoid"], c.videoid);
     return c;
 }
 

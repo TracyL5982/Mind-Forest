@@ -2,7 +2,7 @@
 
 The agent system behind the mindstorm. You drop things in, and they go into your knowledge base. Agents hang a dump under a card only when it plainly belongs there, start a tree when you ask ("make a tree about …"), bring picks around a card when you talk about it (what you already have that fits, and new content, at most ten, the least related making room), follow what you say, choose how each card is drawn, and package handoffs.
 
-It is a TypeScript service. Clients are thin. The web client in `client/` runs in any browser, including the Quest browser. The Ocean app on Vision Pro connects through `visionos/MindPalace/Ocean/Agent/`.
+It is a TypeScript service. Clients are thin. The web client in `client/` runs in any browser, including the Quest browser. The Vision Pro adapter, `visionos/MindPalace/Ocean/Agent/`, is not on this line (DECISIONS 40).
 
 ## Run it
 
@@ -55,14 +55,15 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 | `MIND_PALACE_QUICK_MODEL` | `muse-ember-1.0` | The model for the suggested questions under an open card, which the user waits on. |
 | `MIND_PALACE_TOKEN_BUDGET` | 5,000,000 | Tokens the service may spend before it refuses model calls. Restart to reset. |
 | `MIND_PALACE_ENV` | `~/.muse-garden.env` | The file keys are read from. |
+| `MIND_PALACE_MAPS` | unset, maps off | A map provider: `openstreetmap`. With it set, a place a note names is looked up on that provider's server, which sends the place's name off this machine, and place cards draw a map from its tiles. Unset, nothing about a place leaves the machine. Lookups are kept in `data/places.json`. |
 | `TELEGRAM_BOT_TOKEN` | unset | The bot that makes Mind Palace a Telegram contact. See Reach it from Telegram. |
 
 ## Check it
 
 ```bash
-npm test                 # tests on scripted models and the client's card sizes, no network
+npm test                 # 433 tests on scripted models and the client's card sizes, no network
 npx tsc --noEmit
-node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 39 checks
+node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 43 checks
 npm run scenario         # everything against the live model, 28 checks, about 160,000 tokens
 MIND_PALACE_DATA=<a copy of a data folder> node --no-warnings --import tsx scripts/mindstorm-check.ts "<a thought>" "<a subject>"
                          # drops a thought and asks for a tree on a copy of a mindstorm, and prints the round, live
@@ -100,7 +101,7 @@ You talk to one voice. Content roles decide what exists. The Renderer decides ho
 - **Quest, at your desk.** Put the Quest in developer mode, plug it in, and run `adb reverse tcp:8787 tcp:8787`. Open `http://localhost:8787/#token=…` in the Quest browser. `localhost` counts as a secure page, so the microphone is allowed.
 - **Quest, untethered.** Run a tunnel such as `cloudflared tunnel --url http://localhost:8787` and open its HTTPS address with the same `#token=…`.
 - **Quest app.** The native app in `quest/` is a client of the same protocol. It tells the service it cannot show embedded players (`{t: 'client', media: {embeds: false, ...}}`), and while it is connected the Scout looks for videos as files the service streams.
-- **Vision Pro.** Launch Ocean with `-agent ws://<your Mac's address>:8787 -agentToken <token>`. See `docs/ocean-adapter.md`.
+- **Vision Pro.** The Ocean adapter is not on this line (DECISIONS 40). `docs/ocean-adapter.md` describes it as it was.
 
 Over plain `http://` on a local network address, browsers refuse the microphone. Typing still works.
 
