@@ -182,7 +182,7 @@ void Bridge::frame(double t) {
     }
     if (voice) {
         voice->frame(now);
-        showVoice();
+        showPresence();
     }
     goOn();
     reportFocus();
@@ -637,35 +637,34 @@ Scene Bridge::scene() {
     return s;
 }
 
-void Bridge::showVoice() {
-    std::optional<Listener::State> state = voice->state();
-    std::string words;
-    float ink = 0.9f;
-    if (state == Listener::State::waiting) {
-        words = "Say “Hey " + voice->name() + "”";
-        ink = 0.5f;
-    } else if (state == Listener::State::hearing) {
-        words = "Listening…";
-    } else if (state == Listener::State::working) {
-        words = "Thinking…";
-    } else if (state == Listener::State::speaking) {
-        // Once the reply has ended its words stay up while its echo fades.
-        if (voice->saying().empty()) return;
-        words = voice->name() + ": " + clipped(voice->saying(), 72);
+void Bridge::showPresence() {
+    if (!presenceView) {
+        if (!model.art || !model.lineMaterial) return;
+        presenceView = std::make_unique<PresenceView>(model.art, *model.lineMaterial, model.root_);
     }
-    if (words == signWords || !model.art) return;
-    signWords = words;
-    if (sign) model.fadeOut(sign, 0.2f);
-    sign = nullptr;
-    if (words.empty()) return;
-    std::optional<Piece> piece = model.art->line(words, Art::Size::label, Font::Weight::medium, Color::white(1, ink));
-    if (!piece) return;
-    // Low and ahead, nearer than the cards, where a glance down finds it; the tray of sent trees is off to the right.
-    sign = model.art->quad(*piece);
-    sign->position = model.stage.point(0, -26, 1.25f);
-    sign->orientation = model.stage.facing(sign->position);
-    model.root_->addChild(sign);
-    model.fadeIn(sign, 0, 0.2f);
+    // Until the voice says what it is doing itself (WS17), it is read from what the voice shows now.
+    using S = Presence::State;
+    std::optional<Listener::State> state = voice->state();
+    presence.state = !state ? S::off
+                     : *state == Listener::State::hearing ? S::listening
+                     : *state == Listener::State::working ? S::thinking
+                     : *state == Listener::State::speaking ? S::responding
+                                                           : S::waiting;
+    presence.momoText = voice->saying();
+    presence.workingOn.reset();
+    for (const auto& [id, t] : thinking) {
+        auto p = trees.find(t.tree);
+        if (presence.state == S::waiting && p != trees.end() && standing(p->second)) {
+            presence.state = S::working;
+            presence.workingOn = t.node;
+        }
+    }
+    std::optional<Vec3> at;
+    if (presence.workingOn) {
+        if (const auto& c = model.card(*presence.workingOn)) at = c->root->transformMatrix(nullptr).position();
+    }
+    Mat4 head = platform::head().value_or(Mat4::trs(model.stage.origin, Quat::identity(), {1, 1, 1}));
+    presenceView->frame(presence, voice->name(), at, head, now);
 }
 
 bool Bridge::speaking() const {
