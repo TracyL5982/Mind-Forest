@@ -2,7 +2,7 @@
 
 The agent system behind the mindstorm. You drop things in, and they go into your knowledge base. Agents hang a dump under a card only when it plainly belongs there, start a tree when you ask ("make a tree about …"), bring picks around a card when you talk about it (what you already have that fits, and new content, at most ten, the least related making room), follow what you say, choose how each card is drawn, and package handoffs.
 
-It is a TypeScript service. Clients are thin. The web client in `client/` runs in any browser, including the Quest browser. The Ocean app on Vision Pro connects through `visionos/MindPalace/Ocean/Agent/`.
+It is a TypeScript service. Clients are thin. The web client in `client/` runs in any browser, including the Quest browser. The Vision Pro adapter, `visionos/MindPalace/Ocean/Agent/`, is not on this line (DECISIONS 40).
 
 ## Run it
 
@@ -101,7 +101,7 @@ You talk to one voice. Content roles decide what exists. The Renderer decides ho
 - **Quest, at your desk.** Put the Quest in developer mode, plug it in, and run `adb reverse tcp:8787 tcp:8787`. Open `http://localhost:8787/#token=…` in the Quest browser. `localhost` counts as a secure page, so the microphone is allowed.
 - **Quest, untethered.** Run a tunnel such as `cloudflared tunnel --url http://localhost:8787` and open its HTTPS address with the same `#token=…`.
 - **Quest app.** The native app in `quest/` is a client of the same protocol. It tells the service it cannot show embedded players (`{t: 'client', media: {embeds: false, ...}}`), and while it is connected the Scout looks for videos as files the service streams.
-- **Vision Pro.** Launch Ocean with `-agent ws://<your Mac's address>:8787 -agentToken <token>`. See `docs/ocean-adapter.md`.
+- **Vision Pro.** The Ocean adapter is not on this line (DECISIONS 40). `docs/ocean-adapter.md` describes it as it was.
 
 Over plain `http://` on a local network address, browsers refuse the microphone. Typing still works.
 

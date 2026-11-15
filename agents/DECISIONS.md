@@ -364,3 +364,11 @@ In a real browser with a fake microphone (`scripts/wake-check.ts`), OpenAI's tra
 **The headset.** Its card registry (`quest/core/cards`) knows the note, quote and image cards and draws any other component as a note. A podcast pick is a note there, as a video card it was before the merge.
 
 **Also.** The browser checks from the card library line that dropped a recording or pasted an explainer now ask for a tree first, since a drop starts no tree unless asked (entry 29). The check that opening a card brings nothing compares the card's children before and after, since the Every shape tree now hangs a map under that card.
+
+## 40. One home: the Vision Pro adapter stays out
+
+**Decision.** The merge keeps `visionos/` as the Quest line has it, without the adapter in `visionos/MindPalace/Ocean/Agent/` and its hooks in `OceanModel.swift`, `Notes.swift` and `Info.plist`.
+
+**Why.** The Quest line left the adapter out on purpose when the service joined it (1dc37a6, 14 November), and every merge since kept it out. Its `OceanModel.swift` differs from the agents line's by 388 changed lines, so the adapter's hooks do not apply as they were. The Quest app is the final home, and Vision Pro was the prototype.
+
+**To bring it back.** The five files and the hooks are as they were at 088452d. Putting them back means writing the hooks again against the Quest line's `OceanModel.swift` and typechecking with the visionOS 2.5 simulator SDK, since visionOS 26 cannot be built on this Mac.
