@@ -164,6 +164,18 @@ float levelOf(float rms) {
     return std::clamp((db + 48) / 36, 0.f, 1.f);
 }
 
+/// How long a reply file would take to hear, for `-mute`, which plays none: about 2.6 words a second, as a voice speaks.
+double spokenSeconds(const std::string& text) {
+    int words = 0;
+    bool inWord = false;
+    for (char c : text) {
+        bool space = c == ' ' || c == '\n';
+        if (!space && !inWord) words++;
+        inWord = !space;
+    }
+    return std::max(1.0, words / 2.6);
+}
+
 /// The first `share` of the text, ending on a whole word, or on a whole character in words without spaces, as Chinese.
 std::string revealed(const std::string& text, double share) {
     if (share >= 1) return text;
@@ -390,11 +402,16 @@ void Voice::send(Command command) {
 }
 
 void Voice::say(const std::string& text) {
+    if (std::holds_alternative<Ready>(link) || serviceSpeaks) lineAt = clock;
     if (std::holds_alternative<Ready>(link)) {
         logLine("[voice] the live voice says it");
         return;
     }
-    if (!serviceSpeaks || muted) return;
+    if (!serviceSpeaks) {
+        // The reply has come, and nothing will be heard of it.
+        if (awaiting()) endThinking();
+        return;
+    }
     pending = text;
     if (ears) {
         send(AskToSpeak{});
@@ -494,7 +511,7 @@ void Voice::frame(double now) {
                        [&](Listener::Recorded& r) {
                            logLine(fmt("[voice] recorded %.1f s, sending it to be transcribed", r.seconds));
                            transcribe(r.wav);
-                           turnTo(Sent{clock, muted || !serviceSpeaks});
+                           turnTo(Sent{clock, !serviceSpeaks});
                        },
                        [&](Listener::NothingSaid&) {
                            logLine("[voice] nothing was said after the name");
@@ -584,16 +601,25 @@ void Voice::frame(double now) {
         }
         std::weak_ptr<Inbox> box = inbox;
         int number = f.reply;
-        sound = play(f.file, [box, number](bool) {
-            if (auto b = box.lock()) {
-                std::lock_guard<std::mutex> g(b->lock);
-                b->played.push_back(number);
-            }
-        });
+        if (muted) {
+            sound = std::make_shared<UnheardFile>();
+            unheardReply = UnheardReply{number, now + spokenSeconds(spoken)};
+        } else {
+            sound = play(f.file, [box, number](bool) {
+                if (auto b = box.lock()) {
+                    std::lock_guard<std::mutex> g(b->lock);
+                    b->played.push_back(number);
+                }
+            });
+        }
         if (!sound) continue;
         logLine("[voice] speaking: " + spoken);
         if (awaiting()) turnTo(Idle{});
         shown.momoText = spoken;
+    }
+    if (unheardReply && now >= unheardReply->until) {
+        played.push_back(unheardReply->number);
+        unheardReply.reset();
     }
     for (int number : played) {
         if (number != reply) continue;
@@ -638,6 +664,7 @@ void Voice::frame(double now) {
     if (auto* shut = std::get_if<Shut>(&link); shut && liveOffered && now >= shut->retryAt && client.state() == Client::State::live) {
         openLive(now);
     }
+    if (sounding || sound) lineAt = -1;
     show();
     if (Flags::has("agentLog") && busy.heard - busyLogged >= 60) {
         busyLogged = busy.heard;

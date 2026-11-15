@@ -684,7 +684,8 @@ bool Bridge::speaking() const {
     using S = Presence::State;
     if (!voice) return false;
     S state = voice->presence().state;
-    return state == S::listening || state == S::sent || state == S::thinking || state == S::responding;
+    // Thinking alone does not hold the view: only once Momo's reply has come and is about to sound, or is on its way as a file.
+    return state == S::listening || state == S::sent || state == S::responding || voice->lineComing() || !voice->saying().empty();
 }
 
 void Bridge::goOn() {

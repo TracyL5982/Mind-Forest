@@ -6,6 +6,7 @@
 #include <mutex>
 #include <set>
 
+#include "base.h"
 #include "platform.h"
 
 namespace {
@@ -223,7 +224,13 @@ SoundRef playSound(const std::string& path, std::function<void(bool played)> don
     NSError* error = nil;
     AVAudioPlayer* player = [[AVAudioPlayer alloc] initWithContentsOfURL:[NSURL fileURLWithPath:[NSString stringWithUTF8String:path.c_str()]]
                                                                    error:&error];
-    if (!player || ![player play]) {
+    if (!player) {
+        ending->finish(false);
+        return nullptr;
+    }
+    // `-mute` is every sound the app makes, whoever asks for it: it plays at no volume and ends as it would have.
+    if (Flags::has("mute")) player.volume = 0;
+    if (![player play]) {
         ending->finish(false);
         return nullptr;
     }
@@ -248,6 +255,7 @@ StreamRef playStream(int rate, std::function<void(bool played)> done) {
     state->format = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:rate channels:1];
     [state->engine attachNode:state->node];
     [state->engine connect:state->node to:state->engine.mainMixerNode format:state->format];
+    if (Flags::has("mute")) state->node.volume = 0;
     [state->engine prepare];
     NSError* error = nil;
     if (!state->format || ![state->engine startAndReturnError:&error]) {
