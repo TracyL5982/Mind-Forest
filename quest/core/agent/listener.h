@@ -100,6 +100,9 @@ private:
     void settle();
 };
 
+/// Two short rising notes, played when the name is heard: the web client's chime (agents/client/js/wake.js).
+std::vector<float> chime();
+
 /// A 16 kHz mono 16-bit WAV file.
 std::string wavFile(const std::vector<float>& samples);
 /// The samples of a 16 kHz mono 16-bit PCM WAV file, or nullopt for any other.

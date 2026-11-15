@@ -192,3 +192,25 @@ TEST(listenerAnswersToANewName) {
     CHECK_EQ(heard("hey-momo"), size_t(0));
     CHECK_EQ(heard("hey-juno"), size_t(1));
 }
+
+TEST(listenerDoesNotTakeItsOwnChimeForSpeech) {
+    // The chime comes back into the microphone, as the headset's speaker sends it, a few tenths of a second after the name.
+    for (int late : {1, 3}) {
+        Listener listener(spotterFor("momo"));
+        std::vector<float> s = Sound().quiet(1).say("hey-momo").quiet(10).withHiss();
+        std::vector<float> ring = chime();
+        std::vector<Said> heard;
+        for (size_t at = 0; at + Listener::pieceLength <= s.size(); at += Listener::pieceLength) {
+            for (Listener::Event& e : listener.hear(s.data() + at, Listener::pieceLength)) {
+                if (std::holds_alternative<Listener::Woke>(e)) {
+                    size_t from = at + size_t(1 + late) * Listener::pieceLength;
+                    for (size_t i = 0; i < ring.size() && from + i < s.size(); i++) s[from + i] += ring[i];
+                }
+                heard.push_back(Said{std::move(e), at});
+            }
+        }
+        CHECK_EQ(only<Listener::Woke>(heard).size(), size_t(1));
+        CHECK_EQ(only<Listener::Recorded>(heard).size(), size_t(0));
+        CHECK(only<Listener::NothingSaid>(heard).size() == 1, "the chime %d tenths after the name is not what was said", late);
+    }
+}

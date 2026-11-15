@@ -23,6 +23,9 @@ constexpr int pause = 12;
 constexpr int nothingSaid = 80;
 constexpr int longest = 600;
 constexpr int echo = 3;
+/// The chime plays as the recording starts, and the headset's microphone has no echo cancelling to take it out. It
+/// is not taken for speech: it starts up to a few tenths of a second after the name is spotted and lasts a quarter second.
+constexpr int chimeHeard = 6;
 /// A reply that never says it ended stops holding the listener after this long.
 constexpr int longestReply = 900;
 
@@ -132,7 +135,7 @@ void Listener::record(const Piece& piece, std::vector<Event>& events) {
     r.pieces.push_back(piece);
     r.sinceWake++;
     r.quietest = std::min(r.quietest, piece.level);
-    if (speech(piece.level, r.quietest)) {
+    if (r.sinceWake > chimeHeard && speech(piece.level, r.quietest)) {
         r.spoke = true;
         r.lastVoice = r.sinceWake;
     }
@@ -179,6 +182,20 @@ void Listener::settle() {
     bool now = state() == State::waiting;
     if (now && !spotting) listen();
     spotting = now;
+}
+
+std::vector<float> chime() {
+    std::vector<float> s(size_t(Listener::rate / 4), 0.f);
+    const double pitches[] = {660, 990};
+    for (int i = 0; i < 2; i++) {
+        double begin = i * 0.09;
+        for (size_t n = size_t(begin * Listener::rate); n < size_t((begin + 0.13) * Listener::rate) && n < s.size(); n++) {
+            double t = double(n) / Listener::rate - begin;
+            double gain = t < 0.01 ? 0.18 * t / 0.01 : 0.18 * std::pow(0.001 / 0.18, (t - 0.01) / 0.11);
+            s[n] += float(gain * std::sin(2 * M_PI * pitches[i] * t));
+        }
+    }
+    return s;
 }
 
 // MARK: - WAV

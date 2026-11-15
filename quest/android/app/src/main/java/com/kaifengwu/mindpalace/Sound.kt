@@ -49,22 +49,23 @@ object Sound {
         else microphoneFailed(waiting.first, "the microphone is not allowed for this app".toByteArray(Charsets.UTF_8))
     }
 
+    /** Everything about the recorder happens on its own thread, so neither making it nor reading it costs a frame. */
     private fun start(handle: Long, source: Int) {
-        val least = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        val record = try {
-            AudioRecord(source, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(least, RATE * 2))
-        } catch (e: Exception) {
-            microphoneFailed(handle, "AudioRecord: $e".toByteArray(Charsets.UTF_8))
-            return
-        }
-        if (record.state != AudioRecord.STATE_INITIALIZED) {
-            record.release()
-            microphoneFailed(handle, "AudioRecord did not start".toByteArray(Charsets.UTF_8))
-            return
-        }
         val running = AtomicBoolean(true)
         val thread = Thread({
             Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+            val least = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            val record = try {
+                AudioRecord(source, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(least, RATE * 2))
+            } catch (e: Exception) {
+                microphoneFailed(handle, "AudioRecord: $e".toByteArray(Charsets.UTF_8))
+                return@Thread
+            }
+            if (record.state != AudioRecord.STATE_INITIALIZED) {
+                record.release()
+                microphoneFailed(handle, "AudioRecord did not start".toByteArray(Charsets.UTF_8))
+                return@Thread
+            }
             record.startRecording()
             val piece = ShortArray(RATE / 10)
             while (running.get()) {

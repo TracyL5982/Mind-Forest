@@ -75,21 +75,6 @@ private:
     std::thread thread;
 };
 
-/// Two short rising notes: the agent heard its name. The web client's chime (agents/client/js/wake.js).
-std::string chimeWav() {
-    std::vector<float> s(size_t(Listener::rate * 0.25), 0.f);
-    const double pitches[] = {660, 990};
-    for (int i = 0; i < 2; i++) {
-        double begin = i * 0.09;
-        for (size_t n = size_t(begin * Listener::rate); n < size_t((begin + 0.13) * Listener::rate) && n < s.size(); n++) {
-            double t = double(n) / Listener::rate - begin;
-            double gain = t < 0.01 ? 0.18 * t / 0.01 : 0.18 * std::pow(0.001 / 0.18, (t - 0.01) / 0.11);
-            s[n] += float(gain * std::sin(2 * M_PI * pitches[i] * t));
-        }
-    }
-    return wavFile(s);
-}
-
 std::string titled(const std::string& name) {
     std::string out = name;
     bool start = true;
@@ -137,7 +122,7 @@ void Voice::start() {
         return;
     }
     modelDir = tokens.substr(0, tokens.rfind('/'));
-    chime = platform::dataDirectory() + "/agent-chime.wav";
+    chimePath = platform::dataDirectory() + "/agent-chime.wav";
     struct Made {
         std::shared_ptr<const Vocabulary> vocabulary;
         std::unique_ptr<Spotter> spotter;
@@ -145,11 +130,11 @@ void Voice::start() {
         std::string why;
     };
     auto made = std::make_shared<Made>();
-    std::string dir = modelDir, name = wanted, chimeFile = chime;
+    std::string dir = modelDir, name = wanted, chimeFile = chimePath;
     std::optional<std::string> clipFile = clip;
     Async::run(
         [made, dir, name, chimeFile, clipFile] {
-            platform::writeFile(chimeFile, chimeWav());
+            platform::writeFile(chimeFile, wavFile(chime()));
             if (clipFile) {
                 std::optional<std::string> bytes = platform::readFile(*clipFile);
                 made->clip = bytes ? readWav(*bytes) : std::nullopt;
@@ -291,7 +276,7 @@ void Voice::frame() {
         std::visit(overloaded{
                        [&](Listener::Woke& w) {
                            logLine("[voice] heard " + w.keyword);
-                           platform::playSound(chime, nullptr);
+                           platform::playSound(chimePath, nullptr);
                        },
                        [&](Listener::Recorded& r) {
                            logLine(fmt("[voice] recorded %.1f s, sending it to be transcribed", r.seconds));

@@ -88,7 +88,7 @@ private:
     int reply = 0;                  // the reply playing or on its way; earlier ones are let go
     platform::SoundRef sound;
     std::string spoken;
-    std::string chime;              // the file the waking chime plays from
+    std::string chimePath;          // the file the waking chime plays from
     double busyLogged = 0;
 
     void start();
