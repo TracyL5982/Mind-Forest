@@ -3,6 +3,8 @@ const LISTENER = 'vendor/sherpa-onnx/versions.json';
 /** Measured on synthetic speech (scripts/wake-measure.py, DECISIONS.md). */
 const TUNING = { threshold: 0.05, boost: 2.0, highForHi: true };
 const AFTER_REPLY_MS = 300;
+/** A reply that never reports its end stops holding the listener after this long. */
+const LONGEST_REPLY_MS = 90000;
 
 /** Why this page cannot listen for the agent's name, or null when it can. */
 export async function wakeProblem() {
@@ -69,12 +71,12 @@ export class HandsFree {
       return;
     }
     worker.onmessage = (event) => this.heard(event.data);
+    worker.onerror = (event) => this.heard({ t: 'failed', message: event.message || 'the listener crashed' });
     this.set('waiting');
     this.sync();
   }
 
   stop() {
-    clearTimeout(this.resume);
     if (this.parts) release(this.parts);
     this.parts = null;
     this.set('off');
@@ -93,14 +95,12 @@ export class HandsFree {
   /** A reply started or stopped playing. The room's echo of it fades for a moment before listening starts again. */
   replyPlaying(playing) {
     clearTimeout(this.resume);
-    if (playing) {
-      this.replying = true;
-      return this.sync();
-    }
+    this.replying = true;
     this.resume = setTimeout(() => {
       this.replying = false;
       this.sync();
-    }, AFTER_REPLY_MS);
+    }, playing ? LONGEST_REPLY_MS : AFTER_REPLY_MS);
+    this.sync();
   }
 
   /** How busy the listener is: milliseconds spent spotting, and seconds of sound it spotted in. */

@@ -461,16 +461,27 @@ async function main(): Promise<void> {
   }
 }
 
-/** A spoken clip for the fake microphone, made with a macOS voice: a second of quiet, the words, then quiet for the page to notice the pause. */
-function spoken(text: string, dir: string): string {
+/**
+ * A spoken clip for the fake microphone, made with a macOS voice: quiet, the words, then quiet for the page to notice the pause.
+ * The quiet is a faint hiss, 60 dB below full scale, as a real room is never silent.
+ */
+function spoken(text: string, dir: string, quietFirst = 1): string {
   const aiff = join(dir, 'clip.aiff');
   const wav = join(dir, `${text.replace(/\W+/g, '-').slice(0, 30)}.wav`);
   execFileSync('say', ['-v', 'Samantha', '-o', aiff, text]);
   execFileSync('afconvert', ['-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1', aiff, join(dir, 'speech.wav')]);
   const speech = readFileSync(join(dir, 'speech.wav'));
   const pcm = speech.subarray(speech.indexOf('data') + 8);
-  const quiet = (seconds: number) => Buffer.alloc(16000 * 2 * seconds);
-  const body = Buffer.concat([quiet(1), pcm, quiet(4)]);
+  let seed = 1;
+  const quiet = (seconds: number) => {
+    const hiss = Buffer.alloc(16000 * 2 * seconds);
+    for (let at = 0; at < hiss.length; at += 2) {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31;
+      hiss.writeInt16LE(Math.round((seed / 2 ** 31 - 0.5) * 114), at);
+    }
+    return hiss;
+  };
+  const body = Buffer.concat([quiet(quietFirst), pcm, quiet(4)]);
   const head = Buffer.alloc(44);
   head.write('RIFF', 0);
   head.writeUInt32LE(36 + body.length, 4);
@@ -553,16 +564,16 @@ async function wakeChecks(): Promise<void> {
   const real = existsSync(join(here, '../client/vendor/sherpa-onnx/versions.json'));
   const dir = mkdtempSync(join(tmpdir(), 'mp-wake-'));
   const acted: string[] = [];
-  const posted: { mime: string; seconds: number; firstTenthLevel: number; loudest: number }[] = [];
+  const posted: { mime: string; seconds: number; quietFirst: number; loudest: number }[] = [];
   const server = await startServer({
     port: 0, host: '127.0.0.1', dataDir: join(dir, 'data'), clientDir: real ? join(here, '../client') : standInClient(dir), model: new FakeModel(), token: 'secret',
     roles: { ...fakeRoles, conductor: async (ctx, input) => (acted.push(input.utterance), fakeRoles.conductor(ctx, input)) },
     transcribe: async (audio, mime) => {
       const samples = new Int16Array(audio.slice(44).buffer);
       const level = (from: number, to: number) => Math.sqrt(samples.slice(from, to).reduce((sum, s) => sum + (s / 32768) ** 2, 0) / Math.max(1, to - from));
-      let loudest = 0;
-      for (let at = 0; at < samples.length; at += 1600) loudest = Math.max(loudest, level(at, at + 1600));
-      posted.push({ mime, seconds: samples.length / 16000, firstTenthLevel: level(0, 1600), loudest });
+      const tenths = Array.from({ length: Math.floor(samples.length / 1600) }, (_, i) => level(i * 1600, (i + 1) * 1600));
+      const firstSound = tenths.findIndex((l) => l >= 0.01);
+      posted.push({ mime, seconds: samples.length / 16000, quietFirst: firstSound / 10, loudest: Math.max(...tenths) });
       return 'Hey Momo, show me more like this.';
     },
   });
@@ -596,7 +607,8 @@ async function wakeChecks(): Promise<void> {
       ? 'the page wakes on "hey Momo", records what follows, and the service acts on it without the name'
       : 'with a stand-in spotter, the page records from just before the phrase to the pause, the service acts without the name, and the page does not listen while the reply plays';
     await check(woke, async () => {
-      const { browser, page, problems, states } = await open(spoken('Hey Momo, show me more like this.', dir));
+      // Three seconds of quiet first: the spotter restarts its clock after 1.5 seconds of it, which must not move where the recording starts.
+      const { browser, page, problems, states } = await open(spoken('Hey Momo, show me more like this.', dir, 3));
       try {
         await page.locator('.card').first().click();
         await page.locator('#mic').click();
@@ -609,8 +621,8 @@ async function wakeChecks(): Promise<void> {
         await until('the reply heard and the page waiting again', async () => (await states()).join() === 'starting,waiting,hearing,working,waiting,speaking,waiting', 10000);
         assert.deepEqual(acted, ['Show me more like this.']);
         assert.equal(posted[0]!.mime, 'audio/wav');
-        assert.ok(posted[0]!.seconds > 2.4 && posted[0]!.seconds < 5, `the recording holds the phrase, the command and the pause: ${posted[0]!.seconds} s`);
-        assert.ok(posted[0]!.firstTenthLevel < 0.01 && posted[0]!.loudest > 0.05, `the recording starts in the quiet before the phrase: ${JSON.stringify(posted[0])}`);
+        assert.ok(posted[0]!.seconds > 2.4 && posted[0]!.seconds < 4.6, `the recording holds the phrase, the command and the pause: ${posted[0]!.seconds} s`);
+        assert.ok(posted[0]!.quietFirst > 0 && posted[0]!.quietFirst <= 0.6 && posted[0]!.loudest > 0.05, `the recording starts a moment before the phrase: ${JSON.stringify(posted[0])}`);
         assert.deepEqual(problems, []);
       } finally {
         await browser.close();

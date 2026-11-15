@@ -10,8 +10,18 @@ const VENDOR = new URL('../vendor/sherpa-onnx/', self.location).href;
 const RATE = 16000;
 const PIECE_S = 0.1;
 const RING_S = 3;
-const BEFORE_PHRASE_S = 0.3;
-const SHORTEST_BEFORE_S = 0.9;
+/**
+ * The phrase is spotted at least 0.2 seconds after it ends, and its last word piece lasts about a quarter second.
+ * So it began no later than its span between first and last piece plus 0.45 seconds before it was spotted.
+ */
+const AFTER_LAST_PIECE_S = 0.45;
+/** How far before that guess the start of the phrase is looked for, at most. */
+const LOOK_BACK_S = 0.5;
+/**
+ * The spotter clears itself after 1.5 seconds without speech, and a phrase that begins as it does is lost: after 1.5 or 3 seconds of quiet,
+ * 11 and 0 phrases of 60 were caught (scripts/wake-quiet.py). Starting a fresh stream after each second of quiet, before it clears itself, catches 54 and 57.
+ */
+const FRESH_AFTER_QUIET_S = 1.0;
 const PAUSE_S = 1.2;
 const NOTHING_SAID_S = 8;
 const LONGEST_S = 60;
@@ -22,9 +32,9 @@ let tuning = null;
 let name = '';
 let kws = null;
 let stream = null;
-let fed = 0;
 const ring = [];
 let heard = null;
+let quietS = 0;
 let vocabulary = null;
 const busy = { decodeMs: 0, audioS: 0 };
 
@@ -52,9 +62,9 @@ self.onmessage = (event) => {
     name = m.name;
     if (kws) build();
   } else if (m.t === 'listen') {
-    if (mode !== 'loading') listen();
+    if (mode === 'held' || mode === 'waiting') listen();
   } else if (m.t === 'hold') {
-    if (mode !== 'loading') mode = 'held';
+    if (mode === 'waiting') mode = 'held';
   } else if (m.t === 'busy') {
     self.postMessage({ t: 'busy', ...busy });
   }
@@ -115,7 +125,7 @@ function keywords(spoken) {
 function listen() {
   stream?.free();
   stream = kws.createStream();
-  fed = 0;
+  quietS = 0;
   heard = null;
   mode = 'waiting';
 }
@@ -129,8 +139,9 @@ function hear(piece) {
 
 function spot(piece) {
   const started = performance.now();
+  quietS = speech(piece, Math.min(...ring.map(level))) ? 0 : quietS + PIECE_S;
+  if (quietS >= FRESH_AFTER_QUIET_S) listen();
   stream.acceptWaveform(RATE, piece);
-  fed += piece.length;
   let found = null;
   while (kws.isReady(stream)) {
     kws.decode(stream);
@@ -146,24 +157,35 @@ function spot(piece) {
   if (found) wake(found);
 }
 
-/** Starts the recording a moment before the phrase, which the spotter's timestamps place, so what follows it is kept whole. */
+/**
+ * Starts the recording one piece before the phrase, so what follows it is kept whole and what came before stays here.
+ * The spotter's timestamps place the phrase only by its span: they restart after 1.5 seconds of quiet while `start_time` does not move.
+ * From the latest the phrase can have begun, the start is moved back to where its sound begins, or forward past quiet to it.
+ * A short command said straight after the name ("hey Momo, more") can end before the name is spotted, so sound in the last piece counts as speech.
+ */
 function wake(result) {
-  const phrase = (result.start_time ?? 0) + (result.timestamps?.[0] ?? 0);
-  const ago = fed / RATE - phrase + BEFORE_PHRASE_S;
-  const before = Math.min(RING_S, Math.max(SHORTEST_BEFORE_S, Number.isFinite(ago) ? ago : SHORTEST_BEFORE_S));
-  const pieces = ring.slice(-Math.ceil(before / PIECE_S));
-  heard = { pieces, quietest: Math.min(...pieces.map(level)), spoke: false, sinceWake: 0, lastVoice: 0 };
+  const times = result.timestamps ?? [];
+  const span = times.length > 1 ? times.at(-1) - times[0] : 0;
+  const floor = Math.min(...ring.map(level));
+  const guess = Math.max(0, ring.length - Math.ceil((span + AFTER_LAST_PIECE_S) / PIECE_S));
+  let start = guess;
+  if (speech(ring[start], floor)) {
+    while (start > 0 && guess - start < LOOK_BACK_S / PIECE_S && speech(ring[start - 1], floor)) start--;
+  } else {
+    while (start < ring.length - 1 && !speech(ring[start], floor)) start++;
+  }
+  const pieces = ring.slice(Math.max(0, start - 1));
+  const quietest = Math.min(...pieces.map(level));
+  heard = { pieces, quietest, spoke: speech(pieces.at(-1), quietest), sinceWake: 0, lastVoice: 0 };
   mode = 'hearing';
   self.postMessage({ t: 'wake', keyword: result.keyword, beforeS: pieces.length * PIECE_S });
 }
 
-/** The same rule as the page's recorder: speech is louder than both a floor and three times the quietest moment. */
 function record(piece) {
   heard.pieces.push(piece);
   heard.sinceWake += PIECE_S;
-  const loud = level(piece);
-  heard.quietest = Math.min(heard.quietest, loud);
-  if (loud > Math.max(0.015, heard.quietest * 3)) {
+  heard.quietest = Math.min(heard.quietest, level(piece));
+  if (speech(piece, heard.quietest)) {
     heard.spoke = true;
     heard.lastVoice = heard.sinceWake;
   }
@@ -174,6 +196,11 @@ function record(piece) {
   if (!heard.spoke) return self.postMessage({ t: 'nothing' });
   const wav = toWav(heard.pieces);
   self.postMessage({ t: 'recorded', wav, seconds: (heard.pieces.length * PIECE_S) }, [wav]);
+}
+
+/** The same rule as the page's recorder: speech is louder than both a floor and three times the quietest moment. */
+function speech(piece, quietest) {
+  return level(piece) > Math.max(0.015, quietest * 3);
 }
 
 function level(piece) {
