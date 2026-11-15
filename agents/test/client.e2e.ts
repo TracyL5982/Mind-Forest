@@ -388,11 +388,11 @@ async function main(): Promise<void> {
       await page.getByRole('radio', { name: 'Dashed until kept' }).click();
       await page.locator('[data-mode="provisional"][aria-checked="true"]').waitFor();
       assert.equal(await page.locator('#words-title').textContent(), "Juno's words");
-      await page.locator('[data-style="own words"][aria-checked="true"]').waitFor();
-      await page.getByRole('radio', { name: 'As written' }).click();
       await page.locator('[data-style="verbatim"][aria-checked="true"]').waitFor();
       await page.getByRole('radio', { name: 'Own words' }).click();
       await page.locator('[data-style="own words"][aria-checked="true"]').waitFor();
+      await page.getByRole('radio', { name: 'As written' }).click();
+      await page.locator('[data-style="verbatim"][aria-checked="true"]').waitFor();
       await page.keyboard.press('Escape');
     });
 
