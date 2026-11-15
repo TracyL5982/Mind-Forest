@@ -341,6 +341,17 @@ private:
         Vec3 start;
         bool cancelled;
         std::vector<int> riders;
+        // NOTE(port): added for Quest (core/cards). Under `-cards` a pinch on the open card scrolls it or, held
+        // still first, marks it: when it began, where it is now, whether the hold has armed a mark, and what
+        // the drag was claimed for. A claimed drag is never a tap.
+        enum class Claim { open, scroll, mark, spent };
+        double began = 0;
+        Vec3 at = Vec3::zero();
+        bool armed = false;
+        Claim claim = Claim::open;
+        /// Scrolling: the offset, px, and the point on the face, m, where the scroll was claimed.
+        float scrollFrom = 0;
+        Vec2 scrollAt = Vec2::zero();
     };
     std::optional<Press> press;
     double time = 0.0;
@@ -590,6 +601,29 @@ private:
     /// Shows an open work from its own file, at full size, as soon as it is read.
     void showFull(CardView& c);
 
+    // NOTE(port): added for Quest (core/cards). Under `-cards` the ocean's pieces are cards, which ask for their
+    // pictures by address and are drawn anew in place when one comes or when the tree's say on them changes.
+    /// Puts what the tree says of a node on its card: a suggestion is a pick, and the root starts the tree.
+    void seatCard(CardView& c, const TreeNode& n);
+    /// Draws a card's faces again where they stand. A face drawn anew takes the old one's place once it is
+    /// painted (`repaintCards`, each frame), so the card never shows an empty face in between.
+    void redrawCard(CardView& c);
+    struct Repaint {
+        int id;
+        EntityRef quad;
+        TextureRef texture;
+    };
+    std::vector<Repaint> repaints;
+    void repaintCards();
+    /// Hands a card the pictures it shows that the ocean has now, and asks for the rest. True when it has them all.
+    bool cardPictures(const std::string& id);
+    /// Hands over the pictures asked for that have come, each frame.
+    void landPictures();
+    void handPicture(const std::string& src, const ImageRef& image);
+    /// A card's picture by its address, if it is here: nothing while it is unpacked, null when there is none.
+    std::optional<ImageRef> pictureNow(const std::string& src);
+    std::vector<std::string> picturesDue;
+
     struct Look {
         float scale;
         float alpha;
@@ -726,6 +760,25 @@ private:
     void bring(const OceanNote& note, const std::string& why);
 
     void openLink(int nodeID);
+
+    // NOTE(port): added for Quest (core/cards). An open card's panel scrolls inside its frame, and a pinch held
+    // still arms a mark first (`-cards`).
+    /// Scrolls an open card's panel to `offset` px from its top, held to its range, and moves what is shown on it.
+    void scrollCard(CardView& c, float offset);
+    void solid(const EntityRef& quad);
+    /// When the card has finished growing and the layer has stopped gliding.
+    double settledAt(const CardView& c) const;
+    /// Arms a mark at `a` on the open face when it lies on words or the picture: the word takes the mark's
+    /// stroke, the picture an outline. False, and nothing shown, anywhere else.
+    bool arm(CardView& c, Vec2 a);
+    void disarm(CardView& c);
+    /// Checks each frame whether the pinch on the open card has been held still long enough to arm.
+    void holdPress();
+    /// A point of a card's open face in the world, for pinches made by flag.
+    Vec3 facePoint(const CardView& c, Vec2 at) const;
+    /// Pinches the open card by flag, as a hand would: held `hold` s at `from`, then drawn to `to` over `over` s.
+    void pinchByFlag(Vec2 from, Vec2 to, double hold, double over);
+    bool cardGestures = false;
 
     void moveLayer(int direction);
 

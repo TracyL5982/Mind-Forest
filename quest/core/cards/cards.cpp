@@ -6,6 +6,7 @@
 #include <ctime>
 #include <map>
 
+#include "face.h"
 #include "said.h"
 
 namespace cards {
@@ -27,12 +28,18 @@ struct Sized {
     /// The chips as the line draws them.
     std::vector<Chip> line;
 };
-Sized sized(const Kind& kind, const Item& item, const Json& props) {
-    Footprint f = kind.size(item, props);
-    std::vector<Chip> all = chips(item, kind.shows);
-    if (all.empty()) return {f, {}};
-    return {{f.width, f.height + CHIP_LINE}, fit(all, f.width - 2 - 2 * kind.chipInset)};
-}
+/// The small face holds no chips on the Quest: they are listed on the opened card (the sizing spec, section 1).
+Sized sized(const Kind& kind, const Item& item, const Json& props) { return {kind.size(item, props), {}}; }
+
+/// The opened card laid out once, for the view and picture heights it was asked for.
+struct Laid {
+    float k, viewTall, pictureTall;
+    std::vector<Block> blocks;
+    std::vector<Run> runs;
+    std::optional<CGRect> picture;
+    /// Where the panel ends, px.
+    float end = 0;
+};
 
 struct Entry {
     std::string signature;
@@ -41,18 +48,22 @@ struct Entry {
     Node node;
     Sized sized;
     int revision = 0;
+    int generation = 0;
+    /// Kept until the card is put again: a picture that comes later is drawn into it, and changes no size.
+    std::optional<Laid> laid;
+    /// Its first picture's width over its height, as known when its sizes were first asked for.
+    std::optional<float> aspect;
 };
 
 std::map<std::string, Entry>& store() {
     static std::map<std::string, Entry> all;
     return all;
 }
-int revisions = 0;
+int revisions = 0, generations = 0;
 
 std::string signature(const Json& view, const Json& item, const Node& node) {
-    Color a = node.accent;
-    char tail[96];
-    snprintf(tail, sizeof tail, "|%d%d|%.4f,%.4f,%.4f,%.4f|", int(node.pick), int(node.root), double(a.r), double(a.g), double(a.b), double(a.a));
+    char tail[32];
+    snprintf(tail, sizeof tail, "|%d%d|%d|", int(node.pick), int(node.root), int(node.tone));
     return view.dump() + "\x1f" + item.dump() + tail + node.why;
 }
 
@@ -60,24 +71,21 @@ Look lookOf(const Entry& e) {
     const Kind& kind = *e.view.kind;
     const Node& node = e.node;
     Look look;
-    look.accent = node.pick ? palette::pick : node.accent;
+    look.accent = ::color(node.tone);
     look.radius = kind.radius;
-    Color ground = node.pick ? palette::pickFace : node.root ? palette::rootFace : palette::face;
+    Color ground = node.pick ? palette::sunk : node.root ? palette::raised : palette::face;
     switch (kind.face) {
     case Kind::Face::plain: look.fill = ground; break;
-    case Kind::Face::sunk: look.fill = node.pick ? palette::pickSunk : palette::sunk; break;
+    case Kind::Face::sunk: look.fill = palette::sunk; break;
     case Kind::Face::wash:
         look.fill = mix(look.accent, 0.14f, ground);
-        look.ink2 = Color::hex(0xBDBDB6);
+        look.ink2 = palette::meta;
         break;
     }
-    look.edge = look.accent.withAlphaComponent(kind.face == Kind::Face::wash ? 0.44f : 0.3f);
-    if (node.root) {
-        look.edge = Color::white(1, 0.5f);
-        look.ink3 = Color::hex(0x9A9A93);
-    }
+    look.edge = kind.face == Kind::Face::wash ? look.accent.withAlphaComponent(0.44f) : palette::line;
+    if (node.root) look.edge = Color::white(1, 0.5f);
     if (node.pick) {
-        look.edge = palette::pick.withAlphaComponent(0.62f);
+        look.edge = palette::pick;
         look.edgeWidth = 1.5f;
         look.dashed = true;
     }
@@ -97,7 +105,8 @@ const char* cameFrom(const Item& item, std::string& made) {
                                                          {"idea", "An idea from the librarian"}};
     if (auto it = how.find(item.sourceFrom); it != how.end()) return it->second;
     if (item.sourceFrom.rfind("chat-export", 0) == 0) return "From a chat you exported";
-    made = (item.agent ? "Brought by the librarian (" : "You added this (") + item.sourceFrom + ")";
+    made = item.agent ? "Brought by the librarian" : "You added this";
+    if (!item.sourceFrom.empty()) made += " (" + item.sourceFrom + ")";
     return made.c_str();
 }
 
@@ -134,18 +143,36 @@ const char* label(Chip::Kind kind) {
     return "";
 }
 
-Opened open(const std::string& noteID, const Entry& e, float k) {
+constexpr float WIDTH = 384;
+/// The panel shows through a window inside the card's frame, clear of its round corners, px.
+constexpr float INSET_X = 3, INSET_Y = 10;
+/// The least a picture is shrunk to so it shows whole in the first view, px.
+constexpr float LEAST = 140;
+/// The tallest panel a card draws, px: ten views or so, within what one texture holds.
+constexpr float LONGEST = 3200;
+
+/// The web's panel (panel.js) laid out top to bottom, its badge first.
+Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
     const Kind& kind = *e.view.kind;
     const Item& item = e.item;
     Look look = lookOf(e);
     Sheet sheet{k, look, item.words};
-    const float width = 384;
     bool pick = e.node.pick;
 
     // `.panel-head`: the badge.
     std::string badge = pick ? "Pick from the librarian" : e.node.root ? "Start of a tree" : "Kept";
     float badgeWidth = std::ceil(widthOf(badge, setting::badge, k)) + 22, badgeTall = 16.8f + 10;
     sheet.y = 1 + 10 + badgeTall + 6 + 4;
+    sheet.blocks.push_back(Block{0, sheet.y, [=](const Pen& pen, float y) {
+                                     Canvas& ctx = pen.ctx;
+                                     ctx.setStrokeColor(pick ? palette::pick : palette::line2);
+                                     ctx.setLineWidth(pen.k);
+                                     if (pick) ctx.setLineDash(0, {3 * pen.k, 2.4f * pen.k});
+                                     pen.rounded(pen.px(19.5f, y + 11.5f, badgeWidth - 1, badgeTall - 1), 10 * pen.k);
+                                     ctx.strokePath();
+                                     if (pick) ctx.setLineDash(0, {});
+                                     pen.words(badge, 19 + 11, y + 11 + 5, badgeWidth, 1, setting::badge, palette::ink2);
+                                 }});
 
     std::string title = item.titleOrUntitled();
     sheet.paragraph(title, setting::heading, palette::ink);
@@ -154,8 +181,30 @@ Opened open(const std::string& noteID, const Entry& e, float k) {
         float tall = 16.1f + heightOf(why, Sheet::width, 0, setting::why, k);
         sheet.part(tall, [why, pick](const Pen& pen, float y) {
             pen.words("Why it is here", Sheet::left, y, Sheet::width, 1, setting::whyLabel, palette::ink3);
-            pen.words(why, Sheet::left, y + 16.1f, Sheet::width, 0, setting::why, pick ? palette::pick : palette::ink);
+            pen.words(why, Sheet::left, y + 16.1f, Sheet::width, 0, setting::why, pick ? palette::ink2 : palette::ink);
         });
+    }
+    // A picture is no taller than what the first view has left under the title, or, when that is too little
+    // to show one, than a view.
+    float under = viewTall - INSET_Y - sheet.y - Sheet::gap;
+    sheet.most = std::min(pictureTall, under >= LEAST ? under : viewTall - 2 * INSET_Y);
+    // The item's own lines over its structure, in order, and the heads row over a structure of two columns.
+    for (const Over& line : oversOf(e.view.props)) {
+        sheet.paragraph(line.words, line.head ? setting::bodyHead : setting::body, palette::ink);
+        sheet.said.push_back(line.words);
+    }
+    const std::string named = kind.name;
+    if (std::optional<std::array<std::string, 2>> h = headsOf(e.view.props); h && (named == "facts" || named == "fact" || named == "chart" || named == "breakdown")) {
+        const float half = std::floor((Sheet::width - 17) / 2);
+        float tall = std::max(heightOf((*h)[0], half, 0, setting::body, k), heightOf((*h)[1], half, 0, setting::body, k));
+        sheet.part(tall + 4 + 1, [h = *h, half, tall](const Pen& pen, float y) {
+            pen.words(h[0], Sheet::left, y, half, 0, setting::body, palette::ink2);
+            float w = std::min(half, std::ceil(pen.width(h[1], setting::body)) + 1);
+            pen.words(h[1], Sheet::left + Sheet::width - w, y, w + 1, 0, setting::body, palette::ink2);
+            pen.ctx.setFillColor(palette::line);
+            pen.ctx.fill(pen.px(Sheet::left, y + tall + 4, Sheet::width, 1));
+        });
+        sheet.said.insert(sheet.said.end(), h->begin(), h->end());
     }
     kind.detail(sheet, item, e.view.props);
 
@@ -177,28 +226,33 @@ Opened open(const std::string& noteID, const Entry& e, float k) {
         std::vector<std::pair<std::string, float>> pills;
         for (const std::string& tag : item.tags) pills.push_back({tag, std::ceil(widthOf(tag, setting::tag, k)) + 20});
         float x = 0, rows = 1;
+        std::vector<float> breaks;
+        float rowTall = 17.5f + 6;
         for (const auto& [tag, w] : pills) {
             if (x > 0 && x + w > Sheet::width) {
+                breaks.push_back(rows * (rowTall + 6) - 3);
                 rows += 1;
                 x = 0;
             }
             x += w + 6;
         }
-        float rowTall = 17.5f + 6;
-        sheet.part(rows * rowTall + (rows - 1) * 6, [pills, rowTall](const Pen& pen, float y) {
-            float x = 0;
-            for (const auto& [tag, w] : pills) {
-                if (x > 0 && x + w > Sheet::width) {
-                    x = 0;
-                    y += rowTall + 6;
+        sheet.part(
+            rows * rowTall + (rows - 1) * 6,
+            [pills, rowTall](const Pen& pen, float y) {
+                float x = 0;
+                for (const auto& [tag, w] : pills) {
+                    if (x > 0 && x + w > Sheet::width) {
+                        x = 0;
+                        y += rowTall + 6;
+                    }
+                    pen.ctx.setFillColor(Color::white(1, 0.07f));
+                    pen.rounded(pen.px(Sheet::left + x, y, w, rowTall), 10 * pen.k);
+                    pen.ctx.fillPath();
+                    pen.words(tag, Sheet::left + x + 10, y + 3, w - 19, 1, setting::tag, palette::ink2);
+                    x += w + 6;
                 }
-                pen.ctx.setFillColor(Color::white(1, 0.07f));
-                pen.rounded(pen.px(Sheet::left + x, y, w, rowTall), 10 * pen.k);
-                pen.ctx.fillPath();
-                pen.words(tag, Sheet::left + x + 10, y + 3, w - 19, 1, setting::tag, palette::ink2);
-                x += w + 6;
-            }
-        });
+            },
+            breaks);
     }
 
     // `.facts`: a rule, then label and value in two columns.
@@ -215,48 +269,59 @@ Opened open(const std::string& noteID, const Entry& e, float k) {
     float labels = 0;
     for (const auto& fact : facts) labels = std::max(labels, std::ceil(widthOf(fact.first, setting::fact, k)));
     float valueWidth = Sheet::width - labels - 14;
-    std::vector<float> rows;
+    std::vector<float> rows, breaks;
     float tall = 1 + 12;
     for (const auto& fact : facts) {
-        rows.push_back(std::max(18.2f, heightOf(fact.second, valueWidth, 0, setting::fact, k)));
-        tall += rows.back();
+        if (!rows.empty()) breaks.push_back(tall - 3);
+        rows.push_back(std::max(setting::body.lead, heightOf(fact.second, valueWidth, 0, setting::body, k)));
+        tall += rows.back() + 6;
     }
-    tall += 6 * float(facts.size() - 1);
-    sheet.part(tall, [facts, rows, labels, valueWidth, look](const Pen& pen, float y) {
-        pen.ctx.setFillColor(palette::line);
-        pen.ctx.fill(pen.px(Sheet::left, y, Sheet::width, 1));
-        y += 13;
-        for (size_t i = 0; i < facts.size(); i++) {
-            pen.words(facts[i].first, Sheet::left, y, labels + 1, 1, setting::fact, look.ink3);
-            pen.words(facts[i].second, Sheet::left + labels + 14, y, valueWidth, 0, setting::fact, look.ink2);
-            y += rows[i] + 6;
-        }
-    });
+    tall -= 6;
+    sheet.part(
+        tall,
+        [facts, rows, labels, valueWidth, look](const Pen& pen, float y) {
+            pen.ctx.setFillColor(palette::line);
+            pen.ctx.fill(pen.px(Sheet::left, y, Sheet::width, 1));
+            y += 13;
+            for (size_t i = 0; i < facts.size(); i++) {
+                pen.words(facts[i].first, Sheet::left, y, labels + 1, 1, setting::fact, look.ink3);
+                pen.words(facts[i].second, Sheet::left + labels + 14, y, valueWidth, 0, setting::body, look.ink2);
+                y += rows[i] + 6;
+            }
+        },
+        breaks);
 
-    float height = std::ceil(sheet.y + 16 + 1);
-    std::vector<std::function<void(Canvas&)>> draws = sheet.draws;
+    return Laid{k, viewTall, pictureTall, std::move(sheet.blocks), std::move(sheet.runs), sheet.picture, std::min(sheet.y + 16, LONGEST)};
+}
+
+Opened open(const std::string& noteID, const Entry& e) {
+    const Laid& laid = *e.laid;
+    // The panel runs on until its end can stand at the window's foot.
+    float k = laid.k, width = WIDTH, height = laid.viewTall, end = std::max(laid.end + INSET_Y, height);
     Opened out;
     out.key = "card-o:" + noteID + "#" + std::to_string(e.revision);
     out.size = CGSize{std::ceil(width * k), std::ceil(height * k)};
-    out.runs = sheet.runs;
-    out.picture = sheet.picture;
-    out.draw = [=](Canvas& ctx) {
+    out.window = CGRect{INSET_X * k, INSET_Y * k, (width - 2 * INSET_X) * k, (height - 2 * INSET_Y) * k};
+    out.contentTall = std::ceil(end * k);
+    out.runs = laid.runs;
+    out.picture = laid.picture;
+    out.frame = [=](Canvas& ctx) {
         Pen pen{ctx, k};
         Look panel;
         panel.fill = palette::glass;
         panel.edge = palette::line;
         panel.radius = 20;
         pen.face(width, height, panel);
-        Color edge = pick ? palette::pick : palette::line2;
-        ctx.setStrokeColor(edge);
-        ctx.setLineWidth(k);
-        if (pick) ctx.setLineDash(0, {3 * k, 2.4f * k});
-        pen.rounded(pen.px(19.5f, 11.5f, badgeWidth - 1, badgeTall - 1), 10 * k);
-        ctx.strokePath();
-        if (pick) ctx.setLineDash(0, {});
-        pen.words(badge, 19 + 11, 11 + 5, badgeWidth, 1, setting::badge, pick ? palette::pick : palette::ink2);
-        for (const auto& draw : draws) draw(ctx);
         pen.edge(width, height, panel);
+    };
+    std::vector<Block> blocks = laid.blocks;
+    out.content = [=](Canvas& ctx) {
+        Pen pen{ctx, k};
+        ctx.setFillColor(palette::glass);
+        ctx.fill(pen.px(0, 0, width, end));
+        for (const Block& b : blocks) {
+            if (b.top < end) b.draw(pen, b.top);
+        }
     };
     return out;
 }
@@ -286,6 +351,7 @@ bool put(const std::string& noteID, const Json& view, const Json& item, const No
     e.node = node;
     e.sized = sized(*e.view.kind, e.item, e.view.props);
     e.revision = ++revisions;
+    e.generation = ++generations;
     store()[noteID] = std::move(e);
     return true;
 }
@@ -333,11 +399,11 @@ std::optional<Drawn> small(const std::string& noteID, float k) {
     const Entry& e = it->second;
     Look look = lookOf(e);
     Footprint f = e.sized.size;
-    std::vector<Chip> line = e.sized.line;
     const Kind* kind = e.view.kind;
     Item item = e.item;
     Json props = e.view.props;
-    float w = float(f.width), h = float(f.height), body = line.empty() ? h : h - CHIP_LINE;
+    float w = float(f.width), h = float(f.height), body = h;
+    bool pick = e.node.pick;
     Drawn d;
     d.key = "card-s:" + noteID + "#" + std::to_string(e.revision);
     d.size = CGSize{std::ceil(w * k), std::ceil(h * k)};
@@ -345,17 +411,42 @@ std::optional<Drawn> small(const std::string& noteID, float k) {
         Pen pen{ctx, k};
         pen.face(w, h, look);
         kind->draw(pen, look, item, props, w, body);
-        if (!line.empty()) pen.chips(line, 1 + float(kind->chipInset), h - 1 - float(kind->chipBottom) - 20, look);
         pen.corners(w, h, look.radius);
         pen.edge(w, h, look);
+        if (pick) kicker(pen, look, kind->radius);
     };
     return d;
 }
 
-std::optional<Opened> opened(const std::string& noteID, float k) {
+std::optional<Opened> opened(const std::string& noteID, float k, float viewTall, float pictureTall) {
     auto it = store().find(noteID);
     if (it == store().end()) return std::nullopt;
-    return open(noteID, it->second, k);
+    Entry& e = it->second;
+    if (!e.laid || e.laid->k != k || e.laid->viewTall != viewTall || e.laid->pictureTall != pictureTall) e.laid = layOut(e, k, viewTall, pictureTall);
+    return open(noteID, e);
+}
+
+int generation(const std::string& noteID) {
+    auto it = store().find(noteID);
+    return it == store().end() ? 0 : it->second.generation;
+}
+
+const Kind* kindOf(const std::string& noteID) {
+    auto it = store().find(noteID);
+    return it == store().end() ? nullptr : it->second.view.kind;
+}
+
+std::optional<float> pictureAspect(const std::string& noteID) {
+    auto it = store().find(noteID);
+    if (it == store().end()) return std::nullopt;
+    Entry& e = it->second;
+    if (!e.aspect) {
+        std::vector<std::string> shown = pictures(noteID);
+        std::optional<float> known = shown.empty() ? std::nullopt : aspectOf(shown.front());
+        double given = number(e.view.props["aspect"]);
+        e.aspect = known ? *known : given > 0 ? float(given) : 1.35f;
+    }
+    return e.aspect;
 }
 
 }  // namespace cards

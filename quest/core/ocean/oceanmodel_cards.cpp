@@ -5,10 +5,18 @@
 
 #include <cmath>
 
+#include "../cards/ocean.h"
+#include "../cards/pieces.h"
+
 // MARK: - Cards
 
 OceanModel::Bodies OceanModel::bodies(const Ref& ref) const {
     if (!art || !catalog) return Bodies{{0.1f, 0.1f}, {0.2f, 0.2f}};
+    // NOTE(port): added for Quest. A piece drawn as a card takes its card's sizes (core/cards).
+    if (std::optional<std::string> card = cards::ocean::cardOf(ref)) {
+        std::optional<Vec2> small = cards::ocean::smallSize(*card), open = cards::ocean::openSize(*card);
+        if (small && open) return Bodies{*small, *open};
+    }
     switch (ref.kind) {
     case Ref::Kind::film: {
         int i = ref.index;
@@ -37,6 +45,7 @@ void OceanModel::makeCard(const TreeNode& n, double delay) {
     const Tree& tree = *this->tree;
     Bodies b = bodies(n.ref);
     CardRef c = std::make_shared<CardView>(n, b.small, b.open);
+    seatCard(*c, n);    // NOTE(port): added for Quest (core/cards).
     Rest at = rest(n, tree);
     c->xy.set(at.xy);
     c->plane.set(float(at.depth));
@@ -157,7 +166,14 @@ void OceanModel::buildSmall(CardView& c) {
         ghosts.erase(ghost);
     }
     std::optional<Piece> piece;
-    switch (c.ref.kind) {
+    // NOTE(port): added for Quest. A piece drawn as a card shows the pictures it has, and its open frame and
+    // panel are made with its small face, so they are there before the card can open (core/cards).
+    if (std::optional<std::string> card = cards::ocean::cardOf(c.ref)) {
+        cardPictures(*card);
+        piece = cards::ocean::small(*art, *card);
+        cards::ocean::open(*art, *card);
+        cards::ocean::panel(*art, *card);
+    } else switch (c.ref.kind) {
     case Ref::Kind::film:
         piece = art->filmSmall(catalog->clips[c.ref.index]);    // its why rides on its thread
         break;
@@ -201,7 +217,29 @@ void OceanModel::buildStep(CardView& c, int number, const std::string& words) {
 void OceanModel::buildOpen(CardView& c, const TreeNode& node) {
     if (!(art && catalog && !c.openBuilt)) return;
     c.openBuilt = true;
-    switch (c.ref.kind) {
+    // NOTE(port): added for Quest. A piece drawn as a card opens to its card's frame, with the whole panel
+    // behind a window in it, at its top, and the bar that says where the window is while the panel runs on
+    // past it (core/cards).
+    if (std::optional<std::string> card = cards::ocean::cardOf(c.ref)) {
+        cards::ocean::scrollTo(*card, 0);
+        c.layout = cards::ocean::layout(*card);
+        if (std::optional<Piece> piece = cards::ocean::open(*art, *card)) {
+            c.openFace = art->quad(*piece);
+            c.openHolder->addChild(c.openFace);
+        }
+        if (std::optional<Piece> piece = cards::ocean::panel(*art, *card)) {
+            c.openPanel = art->quad(*piece);
+            solid(c.openPanel);
+            c.openPanel->position.z = 0.0003f;
+            cards::ocean::showPanel(c.openPanel, *card);
+            c.openHolder->addChild(c.openPanel);
+        }
+        c.scrollBar = art->swatch(Color::white(), {cards::ocean::INDICATOR_WIDE * cards::ocean::openScale / Art::ppm, cards::ocean::INDICATOR_UNIT}, 0.4f);
+        cards::ocean::showIndicator(c.scrollBar, *card);
+        c.openHolder->addChild(c.scrollBar);
+        c.addGlow(art->glow(c.openBody), c.openHolder);
+        if (EntityRef rim = art->gazeRim(c.openBody, gazeMaterial)) c.openHolder->addChild(rim);
+    } else switch (c.ref.kind) {
     case Ref::Kind::film: {
         const Clip& clip = catalog->clips[c.ref.index];
         if (MeshRef mesh = art->stillMesh(clip, c.openBody)) {
@@ -256,7 +294,10 @@ void OceanModel::buildOpen(CardView& c, const TreeNode& node) {
         if (found == catalog->notes.end()) break;
         const OceanNote& note = found->second;
         c.layout = art->noteLayout(note, catalog);
-        if (std::optional<Piece> piece = art->noteOpen(note, catalog)) c.openHolder->addChild(art->quad(*piece));
+        if (std::optional<Piece> piece = art->noteOpen(note, catalog)) {
+            c.openFace = art->quad(*piece);
+            c.openHolder->addChild(c.openFace);
+        }
         c.addGlow(art->glow(c.openBody), c.openHolder);
         if (EntityRef rim = art->gazeRim(c.openBody, gazeMaterial)) c.openHolder->addChild(rim);
         break;
@@ -356,6 +397,222 @@ std::optional<int> OceanModel::previousPiece(int id) const {
         at = n->parent;
     }
     return std::nullopt;
+}
+
+// NOTE(port): added for Quest (core/cards), to the end of `pictureNow`.
+
+// Its why is left to the label on its thread, as the card library's own tree leaves it: said again on the card it
+// would push the picture of nearly half the films to a second page.
+void OceanModel::seatCard(CardView& c, const TreeNode& n) {
+    std::optional<std::string> id = cards::ocean::cardOf(n.ref);
+    if (id && cards::ocean::seat(*id, cards::Node{.pick = !n.kept, .root = !n.parent, .tone = n.tone})) redrawCard(c);
+}
+
+void OceanModel::redrawCard(CardView& c) {
+    std::optional<std::string> id = art ? cards::ocean::cardOf(c.ref) : std::nullopt;
+    if (!id) return;
+    auto repaint = [&](const EntityRef& quad, const std::optional<Piece>& piece) {
+        if (!(quad && piece)) return;
+        repaints.erase(std::remove_if(repaints.begin(), repaints.end(), [&](const Repaint& r) { return r.quad == quad; }), repaints.end());
+        repaints.push_back(Repaint{c.id, quad, piece->texture});
+    };
+    if (c.smallQuad) repaint(c.smallQuad->entity, cards::ocean::small(*art, *id));
+    if (c.openFace) {
+        repaint(c.openFace, cards::ocean::open(*art, *id));
+        // Drawn anew, it may run less far: it keeps its scroll as far as it can.
+        cards::ocean::scrollTo(*id, cards::ocean::scroll(*id));
+        if (c.openPanel) {
+            repaint(c.openPanel, cards::ocean::panel(*art, *id));
+            cards::ocean::showPanel(c.openPanel, *id);
+            c.remade(c.openPanel);
+        }
+        cards::ocean::showIndicator(c.scrollBar, *id);
+        c.layout = cards::ocean::layout(*id);
+        if (tree && tree->focus() == c.id) buildRows(c);
+    }
+    touch(time + 0.3);
+}
+
+/// The panel's picture has no clear pixel, so it is drawn with what is solid: a mark's stroke, which is
+/// see-through, then always lies over it, wherever the bend puts the two.
+void OceanModel::solid(const EntityRef& quad) {
+    if (quad && quad->model && !quad->model->materials.empty()) quad->model->materials[0].transparent = false;
+}
+
+void OceanModel::scrollCard(CardView& c, float offset) {
+    std::optional<std::string> id = c.openPanel ? cards::ocean::cardOf(c.ref) : std::nullopt;
+    if (!id) return;
+    float was = cards::ocean::scroll(*id);
+    if (!cards::ocean::scrollTo(*id, offset)) return;
+    float moved = (cards::ocean::scroll(*id) - was) * cards::ocean::openScale / Art::ppm;
+    bool pictured = c.layout && c.layout->picture;
+    cards::ocean::showPanel(c.openPanel, *id);
+    c.remade(c.openPanel);
+    cards::ocean::showIndicator(c.scrollBar, *id);
+    c.layout = cards::ocean::layout(*id);
+    // What is marked goes with the words under it, and shows only while all of it is in the window.
+    if (c.markHolder) {
+        c.markHolder->position.y += moved;
+        std::optional<Vec2> span = cards::ocean::window(*id);
+        bool inside = true;
+        for (const EntityRef& part : c.markHolder->children) {
+            if (!(part->model && part->model->mesh && span)) continue;
+            const BoundingBox& box = part->model->mesh->bounds;
+            float y = c.markHolder->position.y + part->position.y;
+            inside = inside && y + box.min.y * part->scale.y >= span->x && y + box.max.y * part->scale.y <= span->y;
+        }
+        c.markHolder->isEnabled = inside;
+    }
+    c.changed();
+    touch(time + 0.2);
+    // Its film plays only while its picture is in view.
+    if (pictured != (c.layout && c.layout->picture)) restyle(false);
+}
+
+double OceanModel::settledAt(const CardView& c) const {
+    return std::max({c.openMix.end(), c.xy.end(), c.nudge.end(), focusLevel.end(), pan.end()});
+}
+
+bool OceanModel::arm(CardView& c, Vec2 a) {
+    if (!(art && c.layout)) return false;
+    const NoteLayout& layout = *c.layout;
+    PictureFrame picture = pictureFrame(c);
+    bool inPicture = layout.picture && std::fabs(a.x - picture.center.x) <= picture.size.x / 2 && std::fabs(a.y - picture.center.y) <= picture.size.y / 2;
+    CGPoint p = layout.pixels(a);
+    int k = -1;
+    for (size_t i = 0; !inPicture && i < layout.blocks.size(); i++) {
+        if (layout.blocks[i]->frame().insetBy(-10, -10).contains(p)) {
+            k = int(i);
+            break;
+        }
+    }
+    if (!inPicture && k < 0) return false;
+    EntityRef holder = Entity::make();
+    holder->position = {0, 0, 0.004f};
+    if (inPicture) {
+        // The picture's frame takes a 2 px outline.
+        float w = 2 * cards::ocean::openScale / Art::ppm;
+        Vec2 h = picture.size / 2;
+        for (const auto& [at, size] : std::vector<std::pair<Vec2, Vec2>>{{{0, h.y - w / 2}, {picture.size.x, w}},
+                                                                          {{0, -h.y + w / 2}, {picture.size.x, w}},
+                                                                          {{-h.x + w / 2, 0}, {w, picture.size.y}},
+                                                                          {{h.x - w / 2, 0}, {w, picture.size.y}}}) {
+            EntityRef side = art->swatch(Art::hot, size);
+            side->position = {picture.center.x + at.x, picture.center.y + at.y, 0};
+            holder->addChild(side);
+        }
+    } else {
+        // The word under the pinch takes the mark's own stroke, as `markMove` draws a marked word.
+        if (std::optional<TextBlock::Words> found = layout.blocks[size_t(k)]->words(p, p)) {
+            for (const CGRect& rect : found->rects) {
+                EntityRef stroke = art->swatch(Art::hot, {rect.width() / Art::ppm + 0.004f, rect.height() / Art::ppm}, 0.45f);
+                Vec2 mid = layout.meters(CGPoint(rect.midX(), rect.midY()));
+                stroke->position = {mid.x, mid.y, 0};
+                holder->addChild(stroke);
+            }
+        }
+    }
+    disarm(c);
+    c.openHolder->addChild(holder);
+    c.armHolder = holder;
+    c.changed();
+    touch(time + 0.2);
+    return true;
+}
+
+void OceanModel::disarm(CardView& c) {
+    if (!c.armHolder) return;
+    c.armHolder->removeFromParent();
+    c.armHolder = nullptr;
+    c.changed();
+    touch(time + 0.1);
+}
+
+void OceanModel::holdPress() {
+    if (!(cardGestures && press && !press->cancelled && !press->armed && press->claim == Press::Claim::open && press->pick.kind == Pick::Kind::card)) return;
+    int id = press->pick.index;
+    CardRef c = card(id);
+    if (!(c && c->openBuilt && tree && tree->focus() == id)) return;
+    double settled = settledAt(*c);
+    if (time < settled || time - std::max(press->began, settled) < 0.4 || length(press->at - press->start) > 0.02f) return;
+    // On the margin, away from any block, it never arms, and a drag after it scrolls.
+    if (arm(*c, onCard(*c, press->start))) press->armed = true;
+}
+
+void OceanModel::repaintCards() {
+    for (auto r = repaints.begin(); r != repaints.end();) {
+        if (r->texture->pending && !r->texture->pending->ready.load()) {
+            ++r;
+            continue;
+        }
+        if (CardRef c = card(r->id); c && art) {
+            bool small = c->smallQuad && c->smallQuad->entity == r->quad;
+            if (small) c->smallQuad->texture = r->texture;
+            if (small || c->openFace == r->quad || c->openPanel == r->quad) art->shade(r->quad, r->texture, small ? c->dimNow() : 0);
+            if (c->openPanel == r->quad) solid(r->quad);
+            c->changed();
+        }
+        r = repaints.erase(r);
+        touch(time + 0.1);
+    }
+}
+
+bool OceanModel::cardPictures(const std::string& id) {
+    bool all = true;
+    for (const std::string& src : cards::pictures(id)) {
+        if (cards::pictureAt(src) || !cards::oceanPicture(src)) continue;
+        if (std::optional<ImageRef> image = pictureNow(src)) {
+            handPicture(src, *image);
+        } else {
+            all = false;
+            if (std::find(picturesDue.begin(), picturesDue.end(), src) == picturesDue.end()) picturesDue.push_back(src);
+        }
+    }
+    return all;
+}
+
+void OceanModel::landPictures() {
+    std::vector<std::string> due = picturesDue;
+    for (const std::string& src : due) {
+        std::optional<ImageRef> image;
+        if (!cards::pictureAt(src)) {
+            image = pictureNow(src);
+            if (!image) continue;
+        }
+        picturesDue.erase(std::find(picturesDue.begin(), picturesDue.end(), src));
+        if (image) handPicture(src, *image);
+    }
+}
+
+void OceanModel::handPicture(const std::string& src, const ImageRef& image) {
+    for (const std::string& changed : cards::picture(src, image)) {
+        for (const auto& [id, c] : cards) {
+            if (c && cards::ocean::cardOf(c->ref) == changed) redrawCard(*c);
+        }
+    }
+}
+
+std::optional<ImageRef> OceanModel::pictureNow(const std::string& src) {
+    std::optional<cards::OceanPicture> at = cards::oceanPicture(src);
+    if (!(at && art && catalog)) return ImageRef();
+    // A file is unpacked on the background thread; until it is, the card shows the library's dark frame.
+    auto unpacked = [](const std::string& path, int maxPixel) -> std::optional<ImageRef> {
+        if (path.empty()) return ImageRef();
+        if (platform::imageReady(path, maxPixel)) return platform::loadImage(path, maxPixel);
+        platform::prefetchImage(path, maxPixel);
+        return std::nullopt;
+    };
+    switch (at->kind) {
+    case cards::OceanPicture::Kind::still:
+        return at->index >= 0 && at->index < int(catalog->clips.size()) ? art->stillPicture(catalog->clips[size_t(at->index)]) : ImageRef();
+    case cards::OceanPicture::Kind::work: {
+        if (!(at->index >= 0 && at->index < int(catalog->works.size()))) return ImageRef();
+        Art::Source source = art->pictureSource(catalog->works[size_t(at->index)], 512);
+        return unpacked(source.url, source.maxPixel);
+    }
+    case cards::OceanPicture::Kind::file: return unpacked(platform::resourcePath(at->file), 0);
+    }
+    return ImageRef();
 }
 
 /// Shows an open work from its own file, at full size, as soon as it is read.
@@ -497,6 +754,7 @@ void OceanModel::restyle(bool stirring) {
         const CardRef& held = card(n.id);
         if (!held) continue;
         CardView& c = *held;
+        seatCard(c, n);     // NOTE(port): added for Quest (core/cards).
         Look look = style(n, tree);
         Rest at = rest(n, tree, &frames);
         c.step = n.head && routeIndex(tree, n.id) >= 0 && !tree.folded(n);
@@ -534,6 +792,8 @@ void OceanModel::restyle(bool stirring) {
                 buildSmall(c);
                 buildOpen(c, n);
                 showFull(c);
+                // NOTE(port): added for Quest. Each time a card opens, its panel stands at its top (core/cards).
+                scrollCard(c, 0);
             }
             c.openMix.go(look.open, now, Pace::grow, Ease::out);
         }
@@ -591,6 +851,8 @@ void OceanModel::restyle(bool stirring) {
         case Ref::Kind::tag:
             break;
         }
+        // NOTE(port): added for Quest. A card plays its film where its picture is, so not on a page without it (core/cards).
+        if (CardRef c = card(current->id); c && c->layout && !c->layout->picture) film = std::nullopt;
     }
     if (film && current) {
         if (screenNode != current->id) {
@@ -603,6 +865,10 @@ void OceanModel::restyle(bool stirring) {
                 if (!(c && library && film >= 0 && film < int(library->clips.size()))) return;
                 PictureFrame frame = pictureFrame(*c);
                 screen->show(film, library->fullURL(library->clips[film]), frame.size, c->openHolder, frame.center);
+                // NOTE(port): added for Quest. An agent's card's poster has round corners, and the film over it takes them (core/cards).
+                if (cards::ocean::cardOf(c->ref)) {
+                    if (std::optional<Piece> round = cards::ocean::corners(*art, frame.size)) screen->cover(art->quad(*round));
+                }
                 if (auto mark = marks.find(id); mark != marks.end() && mark->second.kind == Mark::Kind::time) {
                     screen->loop(Screen::Span{mark->second.from, mark->second.to});
                 }

@@ -100,6 +100,17 @@ void Art::still(const Clip& clip, CGRect rect) const {
     drawImage(tile, rect);
 }
 
+// NOTE(port): added for Quest (core/cards). Drawn to the film's own shape, as `still` and `stillMesh` show it,
+// so the film covers it exactly when it plays: the atlas keeps every still at 16:9.
+ImageRef Art::stillPicture(const Clip& clip) const {
+    if (clip.tile.size() < 4 || !(clip.aspect > 0)) return nullptr;
+    float h = float(clip.tile[3]) * stillScale, w = std::round(h * clip.aspect);
+    UIGraphicsImageRendererFormat format;
+    format.scale = 1;
+    format.opaque = true;
+    return UIGraphicsImageRenderer(CGSize{w, h}, format).image([&](Canvas&) { still(clip, CGRect{0, 0, w, h}); });
+}
+
 // MARK: - Films
 
 Vec2 Art::filmSize(const Clip& clip, bool open) const {
@@ -461,7 +472,7 @@ ImageRef Art::layerImage(const std::vector<PressedItem>& items, const std::share
     format.scale = 1;
     format.opaque = true;
     return UIGraphicsImageRenderer(size, format).image([&](Canvas& context) {
-        setFill(Color::hex(0x161A21));
+        setFill(Art::panel);
         UIRectFill(CGRect{CGPoint::zero(), size});
         paint(items, size.width, size.height, context, catalog);
     });

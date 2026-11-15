@@ -99,6 +99,10 @@ public:
     static constexpr Color ink = Color::hex(0x0B0D11);          // the dark of labels and panels
     static constexpr Color paper = Color::hex(0xF4F1EA);
     static constexpr Color hot = Color::hex(0xFF5A36);          // the one accent: where you are, what you marked, what you send
+    // NOTE(port): added for Quest. The two greys the Swift writes in place, named so the agent's cards
+    // (core/cards/paint.h) take the same: the ground a layer's picture is drawn on, and the frame of a picture not there.
+    static constexpr Color panel = Color::hex(0x161A21);
+    static constexpr Color well = Color::hex(0x20252E);
 
     /// The five sizes of type, m. Nothing is set smaller than `micro`:
     /// under a centimeter, words can't be read from where you stand.
@@ -160,6 +164,8 @@ public:
                                const std::function<void(Canvas&, CGSize)>& draw) {
         return piece(key, width, height, ppm, Vec2::zero(), draw);
     }
+    /// NOTE(port): added for Quest. Lets a kept piece go once nothing will ask for it again: a card drawn anew (core/cards).
+    void forget(const std::string& key) { cache.erase(key); }
 
     TextAttributes attributes(Font font, Color color, float kern = 0, std::optional<float> lineHeight = std::nullopt,
                               bool truncate = false) const;
@@ -293,6 +299,8 @@ public:
 
     /// A rectangle showing one film's still, cut from the atlas.
     MeshRef stillMesh(const Clip& clip, Vec2 size) const;
+    /// NOTE(port): added for Quest. A film's still as a picture of its own, at the film's shape: a card's poster (core/cards).
+    ImageRef stillPicture(const Clip& clip) const;
 
     // MARK: - Notes.swift
 

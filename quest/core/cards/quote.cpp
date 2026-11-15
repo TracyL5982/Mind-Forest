@@ -1,4 +1,5 @@
 // components/quote.js: a serif on a face washed with the tree's colour.
+#include "face.h"
 #include "kind.h"
 
 namespace cards {
@@ -11,7 +12,7 @@ constexpr int COLUMN = WIDTH - 41;
 constexpr int MARK = 22;
 constexpr const char* OPEN_QUOTE = "\xE2\x80\x9C";
 /// A quote's `--ink-2`.
-constexpr Color BY = Color::hex(0xBDBDB6);
+constexpr Color BY = palette::meta;
 /// The host's serif stands its large mark higher in the line than a browser does.
 constexpr float MARK_DROP = 4;
 
@@ -22,25 +23,53 @@ std::string words(const Item& item, const Json& props) {
 
 int lines(const Item& item, const Json& props) { return fold(points(words(item, props)), COLUMN, QUOTE_LETTER, 5); }
 
-Footprint size(const Item& item, const Json& props) {
-    return {WIDTH, FRAME + MARK + lines(item, props) * TITLE + (text(props["by"]).empty() ? 0 : 8 + TEXT)};
-}
-
 /// `.quote-by`: a short rule, then who said it.
 void by(const Pen& pen, const std::string& who, float x, float y, float column, int lines, float ruleDrop) {
     pen.ctx.setFillColor(BY);
     pen.ctx.fill(pen.px(x, y + ruleDrop, 14, 1));
-    pen.words(who, x + 22, y, column - 22, lines, setting::text, BY);
+    pen.words(who, x + 22, y, column - 22, lines, setting::body, BY);
 }
 
-void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float width, float body) {
-    float x = 20, column = width - 40, y = 14;
-    pen.words(OPEN_QUOTE, x, y + MARK_DROP, column, 1, setting::mark, look.accent);
-    pen.words(words(item, props), x, y + MARK, column, lines(item, props), setting::quote, palette::ink);
-    std::string who = text(props["by"]);
-    // Spare room sits between the words and the speaker.
-    if (!who.empty()) by(pen, who, x, body - 14 - TEXT, column, 1, 8);
+
+/// The mark, the quotation upright in the serif, the speaker under a short rule, and the cue.
+void lay(Col& c, const Item& item, const Json& props) {
+    if (!c.above(props)) {
+        c.cue(cueMore(c.words));
+        return;
+    }
+    c.x = 20;
+    c.width = face::W - 40;
+    std::string said = words(item, props), who = text(props["by"]);
+    // The mark stands only over at least one line of the words.
+    if (float(MARK + face::BODY) + (who.empty() ? 0.f : 8.f + face::META) > c.room() - face::CUE) {
+        c.more = true;
+        c.cue(cueMore(c.words));
+        return;
+    }
+    if (c.pen) c.say(OPEN_QUOTE, setting::mark, 1, c.x, c.y + MARK_DROP, c.width, c.look.accent);
+    c.gap(MARK);
+    int quoted = c.lines(said, Measure::passage, 99, palette::ink, who.empty() ? 0 : 8 + face::META, -1, face::W - 41, c.width);
+    // The speaker only under the words they said.
+    if (quoted > 0 && !who.empty() && c.room() >= 8 + face::META + (c.more ? face::CUE : 0)) {
+        c.gap(8);
+        if (c.pen) {
+            c.pen->ctx.setFillColor(BY);
+            c.pen->ctx.fill(c.pen->px(c.x, c.y + 9, 14, 1));
+        }
+        c.lines(who, Measure::meta, 1, BY, 0, c.x + 22, c.width - 22);
+    }
+    if (c.more) c.cue(cueMore(c.words));
 }
+
+Footprint size(const Item& item, const Json& props) {
+    return footprint(item, [&](Col& c) { lay(c, item, props); });
+}
+
+void draw(const Pen& pen, const Look& look, const Item& item, const Json& props, float, float) {
+    drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
+}
+
+
 
 /// `.detail-quote`: the same face in a box, the words larger and whole.
 void detail(Sheet& sheet, const Item& item, const Json& props) {
@@ -48,7 +77,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     std::string said = words(item, props), who = text(props["by"]);
     float column = Sheet::width - 40;
     float wordsTall = heightOf(said, column, 0, big, sheet.k);
-    float byTall = who.empty() ? 0 : 8 + heightOf(who, column - 22, 0, setting::text, sheet.k);
+    float byTall = who.empty() ? 0 : 8 + heightOf(who, column - 22, 0, setting::body, sheet.k);
     float tall = 1 + 13 + MARK + wordsTall + byTall + 13 + 1;
     Look look = sheet.look;
     sheet.part(tall, [=](const Pen& pen, float y) {

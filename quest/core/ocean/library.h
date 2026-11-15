@@ -51,6 +51,10 @@ struct Clip {
     std::vector<int> tile;      // x, y, w, h in atlas pixels, top-left origin
     FullClipInfo full;
     ClipTag tag;
+    /// NOTE(port): added for Quest. What the service's library import says of a film besides (core/cards/pieces.h).
+    std::vector<std::string> genres;
+    std::string description;
+    std::string videoid;
     int id() const { return index; }
     static std::optional<Clip> from(const Json& j);
 };

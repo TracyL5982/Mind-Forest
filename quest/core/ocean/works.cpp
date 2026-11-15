@@ -32,7 +32,7 @@ void Art::thumb(const Work& work, CGRect rect) const {
     std::optional<CGRect> crop = tile(work);
     ImageRef image = crop ? cropping(workAtlas, *crop) : nullptr;
     if (!image) {
-        setFill(Color::hex(0x20252E));
+        setFill(Art::well);
         UIRectFill(rect);
         return;
     }

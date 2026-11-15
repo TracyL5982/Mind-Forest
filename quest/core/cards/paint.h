@@ -8,28 +8,48 @@
 #include <vector>
 
 #include "../canvas.h"
+#include "../ocean/art.h"
 #include "item.h"
 
 namespace cards {
 
-// style.css `:root`
+// The cards keep the web's layout, type scale, types and sizes, and take every colour from the Ocean
+// (Art in core/ocean/art.h, the tones in stage.h), so they sit in the ocean as its own notes do: flat,
+// opaque, white words at the Ocean's steps of strength, and one accent. Each line says where its value
+// comes from and which of style.css's colours it stands for.
 namespace palette {
-constexpr Color ink = Color::hex(0xECEBE6);
-constexpr Color ink2 = Color::hex(0xA3A39C);
-constexpr Color ink3 = Color::hex(0x909089);
-constexpr Color pick = Color::hex(0xF2C27A);
-constexpr Color trunk = Color::hex(0xE6EFFF);
-constexpr Color face = Color::hex(0x1B1D23);
-constexpr Color sunk = Color::hex(0x111317);
-constexpr Color rootFace = Color::hex(0x262932);
-constexpr Color pickFace = Color::hex(0x14161A);
-constexpr Color pickSunk = Color::hex(0x0F1114);
-constexpr Color media = Color::hex(0x0C0E11);
-/// `--glass` over the page's ground, made opaque: a card's picture is never see-through.
-constexpr Color glass = Color::hex(0x16181C);
-constexpr Color line = Color::white(1, 0.11f);
+/// Words. White, as the Ocean's titles (`--ink`).
+constexpr Color ink = Color::white();
+/// Body text, at the Ocean's 0.82 (`--ink-2`).
+constexpr Color ink2 = Color::white(1, 0.82f);
+/// What a card says about itself: a speaker, a source, a language, at the Ocean's 0.78 for meta.
+constexpr Color meta = Color::white(1, 0.78f);
+/// Faint words: labels, counts, a picture that is not there (`--ink-3`), at the Ocean's 0.6.
+constexpr Color ink3 = Color::white(1, 0.6f);
+/// A card's face: the Ocean's panel ground, Art::panel (`--face`).
+constexpr Color face = Art::panel;
+/// The darker face of a figure, a fact or code: Art::ink, the dark of the Ocean's labels and panels (`--sunk`).
+constexpr Color sunk = Art::ink;
+/// The first card of a tree, a shade lighter: Art::well (the web's root face).
+constexpr Color raised = Art::well;
+/// Behind a picture: Art::well, the frame of a picture not there (`.media-frame`, `.detail-media`).
+constexpr Color media = Art::well;
+/// The opened card: Art::ink, as the ocean's open note is (`--glass`, made flat and opaque).
+constexpr Color glass = Art::ink;
+/// Hairlines and the edge of a card: white, faint (`--line`, `--line-2`).
+constexpr Color line = Color::white(1, 0.12f);
 constexpr Color line2 = Color::white(1, 0.2f);
+/// The edge and the kicker of a pick, the agent's suggestion: white at 0.5, in place of the web's amber.
+constexpr Color pick = Color::white(1, 0.5f);
+/// The one accent, Art::hot: where you are, what you marked, what you send, and danger (`--danger`).
+constexpr Color hot = Art::hot;
+/// A bar or a figure that is not the one a card is about: flat white at 0.35, as Art::bars draws them.
+constexpr Color bar = Color::white(1, 0.35f);
 }  // namespace palette
+
+/// The tone a chip of this kind is drawn in, as the ocean draws its tags: who is people, where is place,
+/// when is era, and where an agent's pick came from is path.
+Tone toneOf(Chip::Kind kind);
 
 /// `color-mix(in srgb, a share, b)`, both opaque.
 Color mix(Color a, float share, Color b);
@@ -39,21 +59,32 @@ struct Setting {
     float size, lead;
     Font::Weight weight = Font::Weight::regular;
     bool serif = false, italic = false;
+    /// Fixed-width (`ui-monospace`), as code is set.
+    bool mono = false;
 };
 namespace setting {
 constexpr Setting title{16, 21, Font::Weight::semibold};
-constexpr Setting text{12.5f, 17};
+/// Medium, not regular: white at 0.82 in the regular weight reads too thin at this size on the headset.
+constexpr Setting text{12.5f, 17, Font::Weight::medium};
 constexpr Setting quote{16, 21, Font::Weight::regular, true, true};
 constexpr Setting mark{34, 36, Font::Weight::regular, true};
-// The opened card (`.panel`), where a line is 1.4 of its size unless it says otherwise.
-constexpr Setting badge{12, 16.8f};
+// The opened card (`.panel`), by the sizing spec: the title 21 px semibold, every line that is read 15 px
+// medium, and labels, tags and chips 11.5 px medium.
+constexpr Setting badge{11.5f, 16.8f, Font::Weight::medium};
 constexpr Setting heading{21, 25.62f, Font::Weight::semibold};
-constexpr Setting whyLabel{11.5f, 16.1f};
-constexpr Setting why{14, 19.6f};
-constexpr Setting body{15, 21};
-constexpr Setting caption{13.5f, 18.9f};
-constexpr Setting tag{12.5f, 17.5f};
-constexpr Setting fact{13, 18.2f};
+constexpr Setting whyLabel{11.5f, 16.1f, Font::Weight::medium};
+constexpr Setting why{15, 21, Font::Weight::medium};
+constexpr Setting body{15, 21, Font::Weight::medium};
+/// A heading over a structure (`props.above`): the title's weight at the reading size.
+constexpr Setting bodyHead{15, 21, Font::Weight::semibold};
+constexpr Setting caption{15, 21, Font::Weight::medium};
+constexpr Setting tag{11.5f, 17.5f, Font::Weight::medium};
+/// A label on the opened card: a unit, a chart's axes and the values written on it, a slider's ends.
+constexpr Setting small{11.5f, 16, Font::Weight::medium};
+/// A fact's label in the list at the opened card's foot; its value is `body`.
+constexpr Setting fact{11.5f, 21, Font::Weight::medium};
+/// The size of a kind label (`label`) on the opened card, and on the small face, where nothing read is under 13.5 px.
+constexpr float labelSize = 11.5f, faceLabelSize = 13.5f;
 }  // namespace setting
 
 /// Text attributes for a setting at `k` pixels to a px.
@@ -68,15 +99,28 @@ float widthOf(const std::string& s, const Setting& t, float k);
 
 /// How a card's face is coloured: its type's face, then what a pick or a tree's first card change.
 struct Look {
-    Color accent = palette::trunk;
+    Color accent = ::color(Tone::note);
     Color fill = palette::face;
-    Color edge = palette::trunk.withAlphaComponent(0.3f);
+    Color edge = palette::line;
     Color ink2 = palette::ink2;
     Color ink3 = palette::ink3;
     float edgeWidth = 1;
     bool dashed = false;
     float radius = 12;
 };
+
+/// For the checks (test/sizes.cpp): while `on`, each text a card draws cut short, with an ellipsis or by
+/// lines left out with no cue after them, is written down in `seen`.
+struct Cuts {
+    static inline bool on = false;
+    static inline std::vector<std::string> seen;
+};
+
+struct Pen;
+/// A pick's kicker, as the ocean writes one over a note: SUGGESTED in capitals at Art::Size::micro on the
+/// small note, bold, in the card's tone, as a flat ink label over the top edge, left of the corner's curve
+/// of a card with corners of `radius` px.
+void kicker(const Pen& pen, const Look& look, float radius);
 
 /// A canvas and the scale it is drawn at.
 struct Pen {
@@ -105,6 +149,14 @@ struct Pen {
     /// The line of chips, its left edge at `x` and its top at `y`, px.
     void chips(const std::vector<Chip>& line, float x, float y, const Look& look) const;
 };
+
+/// How far below the top of its line a setting's baseline is, px: where `align-items: baseline` lines things up.
+float baseline(const Setting& t, float k);
+/// `.kind`, in the text's line, its top-left at (x, y) px: a short label set in small capitals, or as
+/// written when it holds Han. The canvas has no small capitals, so it sets capitals a size down on the
+/// text's baseline.
+float labelWidth(const std::string& label, float k, float size = setting::labelSize);
+void label(const Pen& pen, const std::string& label, float x, float y, Color color, float size = setting::labelSize);
 
 /// A picture a card shows, as the caller has it.
 struct Picture {

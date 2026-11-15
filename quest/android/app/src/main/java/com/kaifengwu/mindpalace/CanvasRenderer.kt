@@ -68,7 +68,7 @@ object CanvasRenderer {
 
     /**
      * A font by its face code (faceCode in canvas.h): one of Font::Weight's four in the low two bits
-     * (0 regular, 1 medium, 2 semibold, 3 bold), 4 for the serif, 8 for italics.
+     * (0 regular, 1 medium, 2 semibold, 3 bold), 4 for the serif, 8 for italics, 16 for fixed width.
      */
     private fun typeface(face: Int): Typeface = typefaces.getOrPut(face) {
         val w = when (face and 3) {
@@ -77,7 +77,8 @@ object CanvasRenderer {
             3 -> 700
             else -> 400
         }
-        Typeface.create(if (face and 4 != 0) Typeface.SERIF else Typeface.DEFAULT, w, face and 8 != 0)
+        val family = if (face and 16 != 0) Typeface.MONOSPACE else if (face and 4 != 0) Typeface.SERIF else Typeface.DEFAULT
+        Typeface.create(family, w, face and 8 != 0)
     }
 
     /**

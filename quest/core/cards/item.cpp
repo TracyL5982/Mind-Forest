@@ -9,13 +9,6 @@ namespace cards {
 
 namespace {
 
-/// Unicode's Han script, the code points `\p{Script=Han}` matches.
-bool han(char32_t c) {
-    return (c >= 0x2e80 && c <= 0x2e99) || (c >= 0x2e9b && c <= 0x2ef3) || (c >= 0x2f00 && c <= 0x2fd5) || c == 0x3005 || c == 0x3007 ||
-           (c >= 0x3021 && c <= 0x3029) || (c >= 0x3038 && c <= 0x303b) || (c >= 0x3400 && c <= 0x4dbf) || (c >= 0x4e00 && c <= 0x9fff) ||
-           (c >= 0xf900 && c <= 0xfa6d) || (c >= 0xfa70 && c <= 0xfad9) || c == 0x16fe2 || c == 0x16fe3 || c == 0x16ff0 ||
-           c == 0x16ff1 || (c >= 0x20000 && c <= 0x2fa1f) || (c >= 0x30000 && c <= 0x323af);
-}
 bool latin(char32_t c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'); }
 bool wordChar(char32_t c) { return latin(c) || (c >= '0' && c <= '9') || c == '_'; }
 bool hex(char32_t c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
@@ -74,8 +67,6 @@ bool chinese(const std::string& title, const std::string& text) {
     return hans > 0 && latins <= hans;
 }
 
-std::string trimmed(const Json& value) { return value.isString() ? utf8(trim(points(value.string()))) : ""; }
-
 std::vector<std::string> names(const Json& value) {
     std::vector<std::string> out;
     for (const Json& name : value.array()) {
@@ -86,6 +77,14 @@ std::vector<std::string> names(const Json& value) {
 }
 
 }  // namespace
+
+bool han(char32_t c) {
+    return (c >= 0x2e80 && c <= 0x2e99) || (c >= 0x2e9b && c <= 0x2ef3) || (c >= 0x2f00 && c <= 0x2fd5) || c == 0x3005 || c == 0x3007 ||
+           (c >= 0x3021 && c <= 0x3029) || (c >= 0x3038 && c <= 0x303b) || (c >= 0x3400 && c <= 0x4dbf) || (c >= 0x4e00 && c <= 0x9fff) ||
+           (c >= 0xf900 && c <= 0xfa6d) || (c >= 0xfa70 && c <= 0xfad9) || c == 0x16fe2 || c == 0x16fe3 || c == 0x16ff0 ||
+           c == 0x16ff1 || (c >= 0x20000 && c <= 0x2fa1f) || (c >= 0x30000 && c <= 0x323af);
+}
+std::string trimmed(const Json& value) { return value.isString() ? utf8(trim(points(value.string()))) : ""; }
 
 std::string Words::more(int count) const { return chinese ? "还有 " + std::to_string(count) + " 项" : "and " + std::to_string(count) + " more"; }
 

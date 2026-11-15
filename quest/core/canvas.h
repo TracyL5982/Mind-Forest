@@ -134,8 +134,8 @@ struct Font {
     /// UIFont.Weight
     enum class Weight { regular, medium, semibold, bold };
     /// Added for Quest: the agent's cards are set as the web client sets them, a few lines in a serif
-    /// ('Iowan Old Style', Georgia) and some in italics. The ported sources only ever ask for `system`.
-    enum class Design { system, serif };
+    /// ('Iowan Old Style', Georgia), some in italics, and code fixed-width. The ported sources only ever ask for `system`.
+    enum class Design { system, serif, mono };
     float pointSize = 12;
     Weight weight = Weight::regular;
     Design design = Design::system;
@@ -153,13 +153,15 @@ inline bool operator==(const Font& a, const Font& b) {
     return a.pointSize == b.pointSize && a.weight == b.weight && a.design == b.design && a.italic == b.italic;
 }
 
-/// How a font's face is told to the host, beside its size: the weight (0…3), plus 4 for the serif and
-/// 8 for italics. The system font's four weights are their own numbers, as they were before there was more.
+/// How a font's face is told to the host, beside its size: the weight (0…3), plus 4 for the serif, 8 for
+/// italics and 16 for fixed width. The system font's four weights are their own numbers, as they were before there was more.
 inline int faceCode(const Font& font) {
-    return int(font.weight) | (font.design == Font::Design::serif ? 4 : 0) | (font.italic ? 8 : 0);
+    return int(font.weight) | (font.design == Font::Design::serif ? 4 : 0) | (font.italic ? 8 : 0) |
+           (font.design == Font::Design::mono ? 16 : 0);
 }
 inline Font fontOfFace(float size, int code) {
-    return {size, Font::Weight(code & 3), (code & 4) ? Font::Design::serif : Font::Design::system, (code & 8) != 0};
+    Font::Design design = (code & 16) ? Font::Design::mono : (code & 4) ? Font::Design::serif : Font::Design::system;
+    return {size, Font::Weight(code & 3), design, (code & 8) != 0};
 }
 
 /// `weight.rawValue`

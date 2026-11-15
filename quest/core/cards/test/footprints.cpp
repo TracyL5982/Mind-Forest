@@ -1,6 +1,10 @@
-// Checks every card type this library draws against the web client's own footprints:
-// agents/test/footprints.json, which `npm test` holds the web client to. Each sample's size, and the
-// chips its card draws with each one's box, must come out the same, to the px.
+// Checks every card type this library draws, on the web client's own samples (agents/test/footprints.json),
+// against the sizing spec: each sample is 210 px wide, at most 146 px tall, and carries no chip line, since
+// chips are listed on the opened card. It prints each type's tallest beside the tallest face derive.mjs
+// works out for it (sizing/quest-card-sizing.md, section 6), which counted shorter titles than a face now
+// keeps whole (up to three lines, first in the height budget): a type may now stand taller than that,
+// never than 146 px. The web keeps its own sizes until it adopts the spec, so its golden sizes are not
+// compared here; once it does, this goes back to matching them to the px.
 //   quest/core/cards/test/run.sh <path to agents/test/footprints.json>
 #include <cstdio>
 #include <fstream>
@@ -9,6 +13,19 @@
 #include <string>
 
 #include "../cards.h"
+
+namespace {
+
+/// derive.mjs, section 6: the tallest face of each type, px, with the taller of the two cases its own limit
+/// allows for quote (144), qa (132) and idea (142), and facts' value on two lines (146).
+const std::map<std::string, int> TALLEST{
+    {"note", 146},     {"quote", 144},      {"fact", 140},    {"image", 146},   {"video", 146},      {"audio", 146},     {"link", 146},
+    {"chart", 146},    {"person", 140},     {"chat", 136},    {"code", 102},    {"steps", 134},      {"facts", 146},     {"table", 124},
+    {"list", 140},     {"breakdown", 128},  {"qa", 132},      {"callout", 144}, {"excerpt", 146},    {"definition", 134}, {"idea", 142},
+    {"proscons", 131}, {"swatch", 145},     {"artwork", 146}, {"reference", 134}, {"place", 146},    {"sheet", 146},     {"explorable", 126},
+};
+
+}  // namespace
 
 int main(int argc, char** argv) {
     if (argc < 2) {
@@ -24,7 +41,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     struct Tally {
-        int samples = 0, sizes = 0, chips = 0, chipSamples = 0;
+        int samples = 0, held = 0, tallest = 0, web = 0;
     };
     std::map<std::string, Tally> drawn, skipped;
     int failed = 0;
@@ -40,37 +57,26 @@ int main(int argc, char** argv) {
         view.set("component", type);
         view.set("props", sample["props"]);
         cards::Footprint got = cards::footprint(view, sample["item"]);
-        int w = sample["size"][0].integer(), h = sample["size"][1].integer();
-        if (got.width == w && got.height == h) {
-            t.sizes++;
+        const int cap = 146;
+        bool chips = !cards::chipsOf(view, sample["item"]).empty();
+        t.tallest = std::max(t.tallest, got.height);
+        t.web = std::max(t.web, sample["size"][1].integer());
+        if (got.width == 210 && got.height <= cap && !chips) {
+            t.held++;
         } else {
             failed++;
-            fprintf(stderr, "%s: %d by %d, the web gives %d by %d: %s\n", type.c_str(), got.width, got.height, w, h, sample["item"].dump().c_str());
-        }
-        if (!sample.has("chips")) continue;
-        t.chipSamples++;
-        std::vector<cards::Chip> line = cards::chipsOf(view, sample["item"]);
-        const std::vector<Json>& want = sample["chips"].array();
-        bool same = line.size() == want.size();
-        for (size_t i = 0; same && i < line.size(); i++) {
-            same = want[i]["kind"].string("") == cards::name(line[i].kind) && want[i]["text"].string("") == line[i].text &&
-                   want[i]["width"].integer() == line[i].width && want[i]["count"].integer() == line[i].count;
-        }
-        if (same) {
-            t.chips++;
-        } else {
-            failed++;
-            std::string mine;
-            for (const cards::Chip& c : line) mine += std::string(cards::name(c.kind)) + " '" + c.text + "' " + std::to_string(c.width) + "  ";
-            fprintf(stderr, "%s chips: %s, the web gives %s\n", type.c_str(), mine.c_str(), sample["chips"].dump().c_str());
+            fprintf(stderr, "%s: %d by %d, the spec allows 210 by %d%s: %s\n", type.c_str(), got.width, got.height, cap, chips ? ", and it has a chip line" : "",
+                    sample["item"].dump().c_str());
         }
     }
     for (const auto& [type, t] : drawn) {
-        printf("%-12s sizes %d/%d  chips %d/%d\n", type.c_str(), t.sizes, t.samples, t.chips, t.chipSamples);
+        auto most = TALLEST.find(type);
+        printf("%-12s %d/%d within the spec, tallest %3d px (derive.mjs %3d, the web's today %3d)\n", type.c_str(), t.held, t.samples, t.tallest,
+               most == TALLEST.end() ? 146 : most->second, t.web);
     }
     std::string rest;
     for (const auto& [type, t] : skipped) rest += type + " ";
     printf("not drawn yet: %s\n", rest.c_str());
-    printf(failed ? "FAIL: %d differ\n" : "PASS\n", failed);
+    printf(failed ? "FAIL: %d over the spec\n" : "PASS\n", failed);
     return failed ? 1 : 0;
 }
