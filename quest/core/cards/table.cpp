@@ -375,7 +375,11 @@ void detail(Sheet& sheet, const Item&, const Json& props) {
     });
 }
 
-Kind make() { return Kind{"table", size, {}, draw, detail}; }
+Kind make() {
+    Kind k{"table", size, {}, draw, detail};
+    k.opens = Kind::Opens::chart;
+    return k;
+}
 
 const Kind kind = make();
 const Registered registered{kind};

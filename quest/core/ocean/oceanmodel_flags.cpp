@@ -137,6 +137,9 @@ void OceanModel::tap(const Pick& pick) {
     case Pick::Kind::openLink:
         openLink(pick.index);
         break;
+    case Pick::Kind::page:
+        turnPage(pick.index);
+        break;
     case Pick::Kind::speck:
         peekAt(pick.index);
         break;
@@ -311,6 +314,12 @@ void OceanModel::runFlags() {
     at("askAt", [](OceanModel& m) {
         if (std::optional<int> id = m.tree ? m.tree->focus() : std::nullopt) m.askGardener(*id, Flags::integer("ask"));
     });
+    // NOTE(port): added for Quest. `-pageAt` and `-pageAgainAt` turn the open card's page (core/cards).
+    for (const char* key : {"pageAt", "pageAgainAt"}) {
+        at(key, [](OceanModel& m) {
+            if (std::optional<int> id = m.tree ? m.tree->focus() : std::nullopt) m.turnPage(*id);
+        });
+    }
     at("backAt", [](OceanModel& m) { m.moveLayer(1); });
     at("backAgainAt", [](OceanModel& m) { m.moveLayer(1); });
     // `-backs <n>` steps back n layers, one every 2.4 s from `-backsAt` (or 4 s); `-forwards <n>` then comes forward again.

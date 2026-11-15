@@ -67,7 +67,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     std::optional<float> aspect = embedded ? std::optional(16.f / 9) : aspectOf(poster);
     // A player shows a poster it cannot have as no picture at all; a picture shows it as one unavailable.
     bool shown = !poster.empty() && !(plays && missing);
-    float tall = !plays && poster.empty() ? 0 : !plays && missing ? 120 : std::min(Sheet::width / aspect.value_or(16.f / 9), 420.f);
+    float tall = !plays && poster.empty() ? 0 : !plays && missing ? 120 : std::min(Sheet::width / aspect.value_or(16.f / 9), std::min(420.f, sheet.most));
     std::string note = plays ? "" : item.words.chinese ? "这段视频没有可播放的文件。" : "This clip has no file to play.";
     float noteTall = note.empty() ? 0 : 12 + heightOf(note, Sheet::width - 28, 0, NOTE, sheet.k) + 12;
     if (tall > 0) sheet.picture = CGRect{Sheet::left * sheet.k, (sheet.y + Sheet::gap) * sheet.k, Sheet::width * sheet.k, tall * sheet.k};
@@ -94,6 +94,7 @@ Kind make() {
     k.radius = 4;
     k.chipInset = 12;
     k.chipBottom = 10;
+    k.opens = Kind::Opens::picture;
     return k;
 }
 

@@ -196,7 +196,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     Plan p = plan(item, props);
     if (!p.src.empty()) {
         std::optional<Picture> known = pictureAt(p.src);
-        float tall = known && known->missing ? 120 : std::min(Sheet::width / aspectOf(p.src).value_or(1.35f), 420.f);
+        float tall = known && known->missing ? 120 : std::min(Sheet::width / aspectOf(p.src).value_or(1.35f), std::min(420.f, sheet.most));
         float top = sheet.y + (sheet.first ? 0 : Sheet::gap);
         sheet.picture = CGRect{Sheet::left * sheet.k, top * sheet.k, Sheet::width * sheet.k, tall * sheet.k};
         std::string src = p.src;
@@ -226,7 +226,13 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
 
 std::vector<std::string> pictures(const Json& props) { return {trimmed(props["src"])}; }
 
-const Kind kind{"place", size, {"where"}, draw, detail, pictures};
+Kind make() {
+    Kind k{"place", size, {"where"}, draw, detail, pictures};
+    k.opens = Kind::Opens::picture;
+    return k;
+}
+
+const Kind kind = make();
 const Registered registered{kind};
 
 }  // namespace

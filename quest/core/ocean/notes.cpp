@@ -138,7 +138,12 @@ Vec2 Art::noteSmallSize(const OceanNote& note, const std::shared_ptr<Catalog>& c
 }
 
 std::optional<Piece> Art::noteSmall(const OceanNote& note, const std::shared_ptr<Catalog>& catalog) {
-    if (cards::has(note.id)) return cards::ocean::small(*this, note.id);    // NOTE(port): added for Quest (core/cards).
+    // NOTE(port): added for Quest (core/cards). Its open face is made with it, so it is there before the card can open.
+    if (cards::has(note.id)) {
+        std::optional<Piece> small = cards::ocean::small(*this, note.id);
+        cards::ocean::open(*this, note.id);
+        return small;
+    }
     Vec2 size = noteSmallSize(note, catalog);
     float w = px(size.x), h = px(size.y);
     switch (note.kind()) {

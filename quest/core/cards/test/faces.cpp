@@ -1,6 +1,7 @@
 // Draws every gallery sample's card, small and opened, to PNG files with the Mac's fonts, at 2 pixels to
 // a web px, and lists them in manifest.json, so each can be set beside the web's own drawing
-// (quest/tools/cards_compare.mjs).
+// (quest/tools/cards_compare.mjs). The opened card is drawn in the pages the Quest shows it in: the first
+// is <id>-open.png, the others <id>-open-2.png and on.
 //   quest/core/cards/test/faces.sh <out folder>
 #include <cstdio>
 
@@ -8,6 +9,7 @@
 #include "../../base.h"
 #include "../cards.h"
 #include "../gallery.h"
+#include "../ocean.h"
 
 namespace {
 
@@ -58,8 +60,12 @@ int main(int argc, char** argv) {
             for (const std::string& src : cards::pictures(id)) {
                 if (src.rfind("sample:", 0) != 0) cards::picture(src, nullptr);
             }
-            bool ok = save(render(*cards::small(id, k)), out + "/" + id + "-small.png") &&
-                      save(render(*cards::opened(id, k)), out + "/" + id + "-open.png");
+            bool ok = save(render(*cards::small(id, k)), out + "/" + id + "-small.png");
+            cards::Opened opened = *cards::ocean::opened(id, k);
+            for (int p = 0; ok && p < int(opened.pages.size()); p++) {
+                cards::Drawn page{opened.key, opened.size, [&](Canvas& ctx) { opened.draw(ctx, p); }};
+                ok = save(render(page), out + "/" + id + "-open" + (p ? "-" + std::to_string(p + 1) : "") + ".png");
+            }
             if (!ok) {
                 fprintf(stderr, "could not draw %s\n", id.c_str());
                 return 1;

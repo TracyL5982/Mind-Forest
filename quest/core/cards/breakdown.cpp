@@ -139,7 +139,13 @@ void detail(Sheet& sheet, const Item&, const Json& props) {
     }
 }
 
-const Kind kind{"breakdown", size, {}, draw, detail};
+Kind make() {
+    Kind k{"breakdown", size, {}, draw, detail};
+    k.opens = Kind::Opens::chart;
+    return k;
+}
+
+const Kind kind = make();
 const Registered registered{kind};
 
 }  // namespace

@@ -28,22 +28,33 @@ struct Run {
     TextAttributes attributes;
 };
 
+/// One part of the opened card: where it starts and how tall it is, px, and how it is drawn with its top at a
+/// given place.
+struct Block {
+    float top, height;
+    std::function<void(const Pen&, float top)> draw;
+    /// Where a page may end inside it, px from its top: between the lines of a paragraph.
+    std::vector<float> breaks;
+};
+
 /// The opened card being laid out top to bottom, in px: the web client's panel, one part under another.
 struct Sheet {
     static constexpr float left = 19, width = 346, gap = 13;
     float k;
     Look look;
     Words words;
+    /// The tallest a picture may be set, px: what one page holds.
+    float most = INFINITY;
     float y = 0;
     bool first = true;
     /// Every string the card has written so far, for what the item's text still has to say.
     std::vector<std::string> said;
     std::vector<Run> runs;
-    std::vector<std::function<void(Canvas&)>> draws;
+    std::vector<Block> blocks;
     std::optional<CGRect> picture;
 
     /// A part `height` px tall, drawn at its top.
-    void part(float height, std::function<void(const Pen&, float top)> draw);
+    void part(float height, std::function<void(const Pen&, float top)> draw, std::vector<float> breaks = {});
     /// A paragraph across the sheet; `lines` 0 for all of it. It can be marked.
     void paragraph(const std::string& s, const Setting& t, Color color, int lines = 0);
 };
@@ -61,6 +72,8 @@ struct Kind {
     std::vector<std::string> (*pictures)(const Json& props) = nullptr;
     float radius = 12;
     enum class Face { plain, sunk, wash } face = Face::plain;
+    /// Which of the ocean's own notes it opens as: its box is that note's (cards::ocean::openBox).
+    enum class Opens { text, chart, link, picture } opens = Opens::text;
     /// The chip line's margin each side, and its distance from the bottom, px.
     int chipInset = 15, chipBottom = 12;
 };

@@ -503,18 +503,27 @@ float Catalog::aspect(const OceanNote& note) const {
 
 /// The picture on an open image or video note, m.
 Vec2 Catalog::pictureSize(const OceanNote& note) const {
-    return Metrics::film(Metrics::openNoteWidth, 0.262f, aspect(note));
+    return pictureSize(aspect(note));
+}
+
+Vec2 Catalog::pictureSize(float aspect) {
+    return Metrics::film(Metrics::openNoteWidth, 0.262f, aspect);
 }
 
 /// An open note, m. Its width never changes; its height goes with what it carries.
 Vec2 Catalog::openSize(const OceanNote& note) const {
     if (std::optional<Vec2> card = cards::ocean::openSize(note.id)) return *card;    // NOTE(port): added for Quest (core/cards).
-    switch (note.kind()) {
-    case OceanNote::Kind::text: return {Metrics::openNoteWidth, note.diagram ? 0.372f : 0.27f};
+    return openSize(note.kind(), note.diagram.has_value(), aspect(note));
+}
+
+// NOTE(port): the Swift's `openSize(_:)` from its switch on, for a kind of note: a card opens as one (core/cards).
+Vec2 Catalog::openSize(OceanNote::Kind kind, bool diagram, float aspect) {
+    switch (kind) {
+    case OceanNote::Kind::text: return {Metrics::openNoteWidth, diagram ? 0.372f : 0.27f};
     case OceanNote::Kind::chart: return {Metrics::openNoteWidth, 0.372f};
     case OceanNote::Kind::link: return {Metrics::openNoteWidth, 0.218f};
     case OceanNote::Kind::image:
-    case OceanNote::Kind::video: return {Metrics::openNoteWidth, pictureSize(note).y + 0.146f};
+    case OceanNote::Kind::video: return {Metrics::openNoteWidth, pictureSize(aspect).y + 0.146f};
     }
     return {Metrics::openNoteWidth, 0.27f};
 }

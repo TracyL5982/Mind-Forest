@@ -47,7 +47,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     bool missing = src.empty() || (known && known->missing);
     float given = float(number(props["aspect"]));
     float aspect = aspectOf(src).value_or(given > 0 ? given : 1.35f);
-    float tall = missing ? 120 : std::min(Sheet::width / aspect, 420.f);
+    float tall = missing ? 120 : std::min(Sheet::width / aspect, std::min(420.f, sheet.most));
     float top = sheet.y + (sheet.first ? 0 : Sheet::gap);
     sheet.picture = CGRect{Sheet::left * sheet.k, top * sheet.k, Sheet::width * sheet.k, tall * sheet.k};
     Words words = item.words;
@@ -69,6 +69,7 @@ Kind make() {
     k.radius = 4;
     k.chipInset = 12;
     k.chipBottom = 10;
+    k.opens = Kind::Opens::picture;
     return k;
 }
 

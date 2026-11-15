@@ -307,7 +307,8 @@ private:
     std::optional<int> zoomedFor;
     std::optional<float> magnifyBase;
     struct Pick {
-        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink };
+        // NOTE(port): `page` added for Quest: the row that turns a card's pages (core/cards).
+        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink, page };
         Kind kind = Kind::background;
         int index = 0;                      // card, ask, askMark, openLink: the card; speck: the piece; brief: which one; shelf: the cover's uid
         int question = 0;                   // ask: which of the card's questions
@@ -323,6 +324,7 @@ private:
         static Pick ask(int id, int question) { return {Kind::ask, id, question}; }
         static Pick askMark(int id) { return {Kind::askMark, id, 0}; }
         static Pick openLink(int id) { return {Kind::openLink, id, 0}; }
+        static Pick page(int id) { return {Kind::page, id, 0}; }
     };
     // (Keyed by the entity's address: ObjectIdentifier.)
     std::map<const Entity*, Pick> picks;
@@ -719,6 +721,9 @@ private:
     void bring(const OceanNote& note, const std::string& why);
 
     void openLink(int nodeID);
+
+    /// NOTE(port): added for Quest. Shows the next page of an open card's face (core/cards).
+    void turnPage(int nodeID);
 
     void moveLayer(int direction);
 

@@ -3,6 +3,8 @@
 
 #include <cmath>
 
+#include "../cards/ocean.h"
+
 // MARK: - Cards
 
 OceanModel::Bodies OceanModel::bodies(const Ref& ref) const {
@@ -254,7 +256,12 @@ void OceanModel::buildOpen(CardView& c, const TreeNode& node) {
         if (found == catalog->notes.end()) break;
         const OceanNote& note = found->second;
         c.layout = art->noteLayout(note, catalog);
-        if (std::optional<Piece> piece = art->noteOpen(note, catalog)) c.openHolder->addChild(art->quad(*piece));
+        if (std::optional<Piece> piece = art->noteOpen(note, catalog)) {
+            c.openFace = art->quad(*piece);
+            c.openHolder->addChild(c.openFace);
+        }
+        // NOTE(port): added for Quest. A card's next page is made ahead, so it is there when it is turned to (core/cards).
+        if (cards::ocean::pages(note.id) > 1) cards::ocean::open(*art, note.id, cards::ocean::page(note.id) + 1);
         c.addGlow(art->glow(c.openBody), c.openHolder);
         if (EntityRef rim = art->gazeRim(c.openBody, gazeMaterial)) c.openHolder->addChild(rim);
         break;
@@ -287,6 +294,13 @@ void OceanModel::buildRows(CardView& c) {
     };
     std::vector<Row> rows;
     std::string key;
+    // NOTE(port): added for Quest. A card longer than one open note turns its pages here (core/cards).
+    if (int count = c.ref.kind == Ref::Kind::note ? cards::ocean::pages(c.ref.id) : 0; count > 1) {
+        int now = cards::ocean::page(c.ref.id);
+        std::string words = now + 1 < count ? fmt("Next page  ·  %d of %d", now + 2, count) : "Back to the first page";
+        rows.push_back(Row{art->row(words), Pick::page(c.id), 0});
+        key += words + "|";
+    }
     if (c.ref.kind == Ref::Kind::note) {
         auto note = catalog->notes.find(c.ref.id);
         if (note != catalog->notes.end() && note->second.link) {

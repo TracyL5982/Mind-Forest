@@ -166,6 +166,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
 Kind make() {
     Kind k{"facts", size, {}, draw, detail};
     k.face = Kind::Face::sunk;
+    k.opens = Kind::Opens::chart;
     return k;
 }
 

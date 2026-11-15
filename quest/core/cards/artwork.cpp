@@ -92,7 +92,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     std::optional<Picture> known = pictureAt(src);
     bool missing = src.empty() || (known && known->missing);
     std::optional<float> aspect = aspectOf(src);
-    float tall = missing ? 120 : std::min(Sheet::width / aspect.value_or(1.35f), 420.f);
+    float tall = missing ? 120 : std::min(Sheet::width / aspect.value_or(1.35f), std::min(420.f, sheet.most));
     sheet.picture = CGRect{Sheet::left * sheet.k, (sheet.y + Sheet::gap) * sheet.k, Sheet::width * sheet.k, tall * sheet.k};
     Words words = item.words;
     sheet.part(tall, [src, tall, words, aspect, missing](const Pen& pen, float y) {
@@ -120,6 +120,7 @@ std::vector<std::string> pictures(const Json& props) { return {text(props["src"]
 Kind make() {
     Kind k{"artwork", size, {"holder", "date"}, draw, detail, pictures};
     k.radius = 4;
+    k.opens = Kind::Opens::picture;
     return k;
 }
 

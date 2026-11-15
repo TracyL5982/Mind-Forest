@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstdlib>
 
+#include "../cards/ocean.h"
+
 // MARK: - Starting, picking, layers
 
 /// Stands a tree up out of the ocean.
@@ -286,6 +288,27 @@ void OceanModel::openLink(int nodeID) {
     logLine("[ocean] opening " + link.url);
     // `UIApplication.shared.open(url)`: on the Quest the system's browser opens over the app.
     platform::openURL(link.url);
+}
+
+// NOTE(port): added for Quest (core/cards). The face keeps its place and size and shows the next page;
+// what was marked on the page it showed goes with it.
+void OceanModel::turnPage(int nodeID) {
+    const CardRef& c = card(nodeID);
+    if (!(c && c->openFace && c->ref.kind == Ref::Kind::note && art)) return;
+    const std::string& id = c->ref.id;
+    cards::ocean::turn(id);
+    std::optional<Piece> face = cards::ocean::open(*art, id);
+    if (!face) return;
+    art->shade(c->openFace, face->texture, 0);
+    if (cards::ocean::pages(id) > 1) cards::ocean::open(*art, id, (cards::ocean::page(id) + 1) % cards::ocean::pages(id));
+    c->layout = cards::ocean::layout(id);
+    if (marking && marking->id == nodeID) marking = std::nullopt;
+    marks.erase(nodeID);
+    if (c->markHolder) c->markHolder->removeFromParent();
+    c->markHolder = nullptr;
+    buildRows(*c);
+    c->changed();
+    touch(time + 0.3);
 }
 
 void OceanModel::moveLayer(int direction) {

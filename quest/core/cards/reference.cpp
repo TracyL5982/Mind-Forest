@@ -106,7 +106,11 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     }
 }
 
-Kind make() { return Kind{"reference", size, {"venue", "date", "authors"}, draw, detail}; }
+Kind make() {
+    Kind k{"reference", size, {"venue", "date", "authors"}, draw, detail};
+    k.opens = Kind::Opens::link;
+    return k;
+}
 
 const Kind kind = make();
 const Registered registered{kind};
