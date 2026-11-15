@@ -136,6 +136,8 @@ export interface LiveDeps {
   spoken: (turn: Turn) => void;
   /** A step of Momo's own, shown as the pipeline's steps are. */
   activity: (a: Activity) => void;
+  /** What a response or a transcription cost, in dollars, as it is known. */
+  spent?: (dollars: number) => void;
   log: (line: string) => void;
   now?: () => number;
   idleMs?: number;
@@ -642,6 +644,7 @@ export class LiveVoice {
         const text = String(e.transcript ?? '').trim();
         const usage = e.usage as Usage | undefined;
         const dollars = usage ? cost(this.deps.options.hearing, usage) : null;
+        if (dollars !== null) this.deps.spent?.(dollars);
         this.deps.log(`[live] turn ${t.turn} written down ${now - t.over} ms after it was over: ${text}${dollars === null ? '' : ` ($${dollars.toFixed(5)})`}`);
         const whole = this.wordsOf(t.turn, text);
         if (this.words.turn === t.turn) this.words.text = whole;
@@ -736,6 +739,7 @@ export class LiveVoice {
         for (const out of response.output ?? []) if (out.type === 'function_call' && out.call_id) this.called(out.call_id, out.name ?? '', out.arguments ?? '');
         this.speaking = null;
         const dollars = response.usage ? cost(this.deps.options.model, response.usage) : null;
+        if (dollars !== null) this.deps.spent?.(dollars);
         this.deps.log(`[live] ${m.purpose.kind} ${response.status}${m.calls.size ? ` with ${[...m.calls].map((c) => this.names.get(c) ?? '?').join(', ')}` : ''}: ${m.text}${dollars === null ? '' : ` ($${dollars.toFixed(4)})`}`);
         if (m.text || m.heard) this.device({ t: 'done', id: m.id, ...(response.usage ? { usage: response.usage } : {}) });
         if (m.text.trim() && response.status === 'completed') this.deps.spoken({ who: 'agent', text: m.text.trim() });

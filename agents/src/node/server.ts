@@ -3,7 +3,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
-import { Readable } from 'node:stream';
+import { Readable, type Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { ModelClient } from '../core/ports.ts';
 import { Pipeline, type Outbound } from '../core/pipeline.ts';
@@ -13,7 +13,7 @@ import { spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
 import { whereItWent, type Delivery, type Desk } from './contact.ts';
 import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '../core/voice-tools.ts';
-import { LiveVoice, type LiveOptions, type OpenRealtime } from './live.ts';
+import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
 import type { Speak, Transcribe } from './speech-openai.ts';
@@ -47,8 +47,38 @@ export interface ServerOptions {
   films?: string;
   /** Mind Palace as a Telegram contact, reached with this bot's token. */
   telegram?: Omit<TelegramOptions, 'desk' | 'file' | 'log'>;
+  /** Hosted mode: what this space's device may still do today, and where its use and spend are counted. */
+  meter?: Meter;
   log?: (line: string) => void;
 }
+
+/** What a device's day is counted in: minutes of voice with Momo both ways, Scout runs, and Momo's web answers. */
+export type Metered = 'voiceMs' | 'searches' | 'webAnswers';
+
+export interface Meter {
+  /** The short line Momo says when this kind of work is refused now, or null when it may go ahead. */
+  refused(kind: Metered): string | null;
+  used(kind: Metered, amount: number): void;
+  spent(dollars: number): void;
+  /** A line said in Momo's voice, as 16-bit mono PCM at the live voice's rate, when it can be made. */
+  recorded(text: string): Promise<Uint8Array | null>;
+}
+
+/** One device's mindstorm, pipeline and voice, answering the requests a listener hands it. */
+export interface Space {
+  token: string;
+  pipeline: Pipeline;
+  mind: Mindstorm;
+  /** Answers one request. The caller has checked nothing. */
+  serve(req: IncomingMessage, res: ServerResponse): Promise<void>;
+  upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void;
+  /** Sockets open on it now. */
+  online(): number;
+  close(): Promise<void>;
+}
+
+/** The voice tools that start a Scout run. */
+const SEARCHING = new Set(['find_new', 'more_like_this', 'start_tree']);
 
 export interface Running {
   url: string;
@@ -72,7 +102,31 @@ const TYPES: Record<string, string> = {
 };
 
 export async function startServer(opts: ServerOptions): Promise<Running> {
+  const space = await openSpace(opts);
+  const http: Server = createServer((req, res) => void space.serve(req, res));
+  http.on('upgrade', (req, socket, head) => space.upgrade(req, socket, head));
+  await new Promise<void>((ready) => http.listen(opts.port, opts.host, ready));
+  // Another process writing this data folder while the service runs would corrupt it. `npm run import-library` checks for this file.
+  const lock = join(opts.dataDir, 'service.pid');
+  writeFileSync(lock, String(process.pid));
+  const address = http.address();
+  const port = typeof address === 'object' && address ? address.port : opts.port;
+  return {
+    url: `http://${opts.host === '0.0.0.0' ? 'localhost' : opts.host}:${port}`,
+    token: space.token,
+    pipeline: space.pipeline,
+    mind: space.mind,
+    async close() {
+      await space.close();
+      await new Promise<void>((done) => http.close(() => done()));
+      rmSync(lock, { force: true });
+    },
+  };
+}
+
+export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Promise<Space> {
   const log = opts.log ?? (() => {});
+  const meter = opts.meter;
   mkdirSync(opts.dataDir, { recursive: true });
   const token = opts.token ?? savedToken(join(opts.dataDir, 'token'));
   const store = new SqliteStore(join(opts.dataDir, 'mindstorm.sqlite'));
@@ -128,7 +182,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
 
   const pipeline = new Pipeline({
     mind,
-    roles: opts.roles,
+    roles: meter ? metered(opts.roles, meter) : opts.roles,
     model: opts.model,
     tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder }),
     assets,
@@ -172,13 +226,12 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     return [header, url.searchParams.get('token'), cookie].some((given) => given !== undefined && given !== null && equal(given, token));
   };
 
-  const http: Server = createServer((req, res) => {
-    void route(req, res).catch((err) => {
+  const serve = (req: IncomingMessage, res: ServerResponse): Promise<void> =>
+    route(req, res).catch((err) => {
       log(`http error: ${String(err)}`);
       if (!res.headersSent) json(res, 500, { error: String(err instanceof Error ? err.message : err) });
       else res.end();
     });
-  });
 
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -252,7 +305,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
 
   const wss = new WebSocketServer({ noServer: true });
   const liveWss = new WebSocketServer({ noServer: true });
-  http.on('upgrade', (req, socket, head) => {
+  const upgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const refuse = (status: string) => {
       socket.write(`HTTP/1.1 ${status}\r\n\r\n`);
@@ -262,12 +315,43 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     if (url.pathname === '/ws') return wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
     if (url.pathname === '/live' && opts.live) return liveWss.handleUpgrade(req, socket, head, (ws) => liveWss.emit('connection', ws, req));
     refuse('404 Not Found');
-  });
+  };
+
+  /** Each connection's `/live` socket, for a line said in Momo's recorded voice there. */
+  const liveOf = new Map<WebSocket, WebSocket>();
+  let lines = 0;
+  /** A refusal Momo says on the device's `/live` socket from a recording, so a refused device costs no realtime model. */
+  const sayRecorded = async (live: WebSocket, text: string) => {
+    const id = `line-${++lines}`;
+    const send = (frame: VoiceFrame) => live.readyState === live.OPEN && live.send(JSON.stringify(frame));
+    send({ t: 'text', id, text, kind: 'reply' });
+    const pcm = await meter?.recorded(text).catch(() => null);
+    const piece = (RATE / 10) * 2;
+    if (pcm) for (let at = 0; at < pcm.length; at += piece) send({ t: 'audio', id, pcm: Buffer.from(pcm.subarray(at, at + piece)).toString('base64') });
+    send({ t: 'done', id });
+  };
+  /** A refusal told to the connection that asked: in Momo's recorded voice when it has `/live`, else as a reply it reads aloud. */
+  const decline = (ws: WebSocket, text: string) => {
+    log(`[limits] refused: ${text}`);
+    const live = liveOf.get(ws);
+    if (live) void sayRecorded(live, text);
+    else ws.send(JSON.stringify({ t: 'say', text, kind: 'reply', yours: true }));
+  };
 
   liveWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const live = opts.live!;
     /** The device's own connection, as its hello named it: what Momo starts is that connection's, and Momo hears of its work. */
     const own = connections.get(new URL(req.url ?? '/', 'http://localhost').searchParams.get('connection') ?? '');
+    const webAnswer: typeof live.webAnswer = live.webAnswer && meter
+      ? async (question) => {
+          const why = meter.refused('webAnswers');
+          if (why) throw new Error(why);
+          meter.used('webAnswers', 1);
+          return live.webAnswer!(question);
+        }
+      : live.webAnswer;
+    /** Audio is counted as 16-bit mono: the device's at 16 kHz, Momo's at the live voice's rate. */
+    const counted = (pcm: string, rate: number) => meter?.used('voiceMs', ((pcm.length * 3) / 4 / 2 / rate) * 1000);
     const voice: LiveVoice = new LiveVoice(
       {
         open: live.open,
@@ -275,7 +359,11 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         name: () => spokenName(settings.agentName),
         words: (scene) => likelyWords(mind, scene.treeId ?? null),
         tools: toolSpecs,
-        call: (name, args, scene, said) => asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer: live.webAnswer, said })),
+        call: (name, args, scene, said) => {
+          const why = SEARCHING.has(name) ? meter?.refused('searches') : null;
+          if (why) return Promise.resolve({ error: why });
+          return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said }));
+        },
         label: toolLabel,
         where: (scene) => whereNote(pipeline.ctx, scene),
         cards: (set) => landedCards(mind, set),
@@ -286,25 +374,49 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
           log(`[momo] ${activity.state}: ${activity.label}`);
           if (own && own.readyState === own.OPEN) own.send(JSON.stringify({ t: 'activity', activity }));
         },
+        spent: (dollars) => meter?.spent(dollars),
         log,
       },
       (frame) => {
+        if (frame.t === 'audio') counted(frame.pcm, RATE);
         if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame));
       },
     );
-    if (own) voices.set(own, voice);
+    if (own) {
+      voices.set(own, voice);
+      liveOf.set(own, ws);
+    }
     ws.on('close', () => {
       if (own && voices.get(own) === voice) voices.delete(own);
+      if (own && liveOf.get(own) === ws) liveOf.delete(own);
       voice.close();
     });
+    /** The turn being refused: its audio goes nowhere, and it is over at once. */
+    let refusedTurn: number | null = null;
     ws.on('message', (raw) => {
       let frame: DeviceFrame;
       try {
         frame = DeviceFrame.parse(JSON.parse(String(raw)));
-      } catch (err) {
-        log(`[live] a frame that is not one: ${String(err instanceof Error ? err.message : err).slice(0, 200)}`);
+      } catch {
+        // The error would quote the frame, and a frame may be the user's voice.
+        log(`[live] a frame that is not one (${String(raw).length} bytes)`);
         return;
       }
+      if (frame.t === 'start') {
+        const why = meter?.refused('voiceMs');
+        refusedTurn = why ? frame.turn : null;
+        if (why) {
+          log(`[limits] refused: ${why}`);
+          if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ t: 'over', turn: frame.turn } satisfies VoiceFrame));
+          void sayRecorded(ws, why);
+          return;
+        }
+      }
+      if (refusedTurn !== null) {
+        if (frame.t === 'end' || frame.t === 'cancel') refusedTurn = null;
+        return;
+      }
+      if (frame.t === 'audio') counted(frame.pcm, 16000);
       voice.heard(frame);
     });
   });
@@ -319,6 +431,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       plays.delete(ws);
       connections.delete(connection);
       voices.delete(ws);
+      liveOf.delete(ws);
     });
     ws.on('message', (raw) => {
       let message: ClientMessage;
@@ -350,11 +463,12 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         ws.send(JSON.stringify({ t: 'questions', nodeId: m.nodeId, questions: await pipeline.questions(m.nodeId) }));
         return;
       case 'ask':
-        await pipeline.ask(m.nodeId, m.need);
+      case 'more': {
+        const why = meter?.refused('searches');
+        if (why) return decline(ws, why);
+        await (m.t === 'ask' ? pipeline.ask(m.nodeId, m.need) : pipeline.more(m.nodeId, m.need));
         return;
-      case 'more':
-        await pipeline.more(m.nodeId, m.need);
-        return;
+      }
       case 'keep':
         pipeline.keep(m.nodeIds);
         return;
@@ -376,27 +490,34 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     }
   }
 
-  await new Promise<void>((ready) => http.listen(opts.port, opts.host, ready));
-  // Another process writing this data folder while the service runs would corrupt it. `npm run import-library` checks for this file.
-  const lock = join(opts.dataDir, 'service.pid');
-  writeFileSync(lock, String(process.pid));
   telegram?.start();
-  const address = http.address();
-  const port = typeof address === 'object' && address ? address.port : opts.port;
   return {
-    url: `http://${opts.host === '0.0.0.0' ? 'localhost' : opts.host}:${port}`,
     token,
     pipeline,
     mind,
+    serve,
+    upgrade,
+    online: () => sockets.size + liveWss.clients.size,
     async close() {
       await telegram?.close();
       for (const ws of sockets) ws.terminate();
       for (const ws of liveWss.clients) ws.terminate();
       wss.close();
       liveWss.close();
-      await new Promise<void>((done) => http.close(() => done()));
       store.close();
-      rmSync(lock, { force: true });
+    },
+  };
+}
+
+/** The Scout counted against the device's searches, and refused once they are used up. */
+function metered(roles: Roles, meter: Meter): Roles {
+  return {
+    ...roles,
+    scout: (ctx, req) => {
+      const why = meter.refused('searches');
+      if (why) return Promise.reject(new Error(why));
+      meter.used('searches', 1);
+      return roles.scout(ctx, req);
     },
   };
 }

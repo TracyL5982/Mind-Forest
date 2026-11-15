@@ -55,9 +55,10 @@ Give the date of each event you name. Asked about this week, month or year, name
 }
 
 /** Asks once. `log` hears what it cost and the pages it cited and read. */
-export function openaiWebAnswer(send: typeof fetch, opts: { apiKey: string; model?: string; effort?: string; now?: () => Date; log?: (line: string) => void }): WebAnswer {
+export function openaiWebAnswer(send: typeof fetch, opts: { apiKey: string; model?: string; effort?: string; now?: () => Date; log?: (line: string) => void; spent?: (dollars: number) => void }): WebAnswer {
   return async (question) => {
     const answered = await ask(send, opts, question);
+    opts.spent?.(answered.dollars);
     const pages = (list: string[]) => list.join(' ') || 'nothing';
     opts.log?.(
       `[voice] web answer, ${answered.searches} search${answered.searches === 1 ? '' : 'es'}, $${answered.dollars.toFixed(4)}: ${answered.text} | cited ${pages(answered.cited)} | read ${pages(answered.read)}`,
