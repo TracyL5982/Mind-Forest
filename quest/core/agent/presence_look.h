@@ -56,9 +56,9 @@ private:
 /// Assets/Scripts/AgentVisual (AgentRing, AgentNoiseDisc) and AgentSphere, with the values its Scene.scene gives them.
 /// Three hollow rings, cyan, magenta and yellow, each bent by Perlin noise, add up to one white ring, with two white
 /// eyes in the middle that blink and dart. A voice makes the rings wobble further and faster, and Momo's own voice
-/// draws them apart into coloured fringes. Two looks are Momo's own: thinking, three dots of three sizes pop out from
-/// its upper right one by one and then circle as they hang there; while any agent works it wears a monocle, and its eyes
-/// glance about, slower and wider than they dart.
+/// draws them apart into coloured fringes. Two looks are Momo's own: thinking, bubbles rise from its upper right, each
+/// born small and pushed out, growing, by the next, the largest bursting at the far end; while any agent works it
+/// wears a monocle, and its eyes glance about, slower and wider than they dart.
 class Face {
 public:
     // CurioCity's, in its centimetres, on its ring of 2 cm (the view scales them to Momo's size).
@@ -89,21 +89,31 @@ public:
     static constexpr float monocleShift = 0.12f;
     static constexpr float monocleLine = 0.06f, cordLine = 0.045f;
 
-    /// A thinking dot: where it is, cm from Momo's middle, and how big.
-    struct Dot {
+    /// A thinking bubble: where it is, cm from Momo's middle, how big, and how it is drawn out along its trail.
+    struct Bubble {
         Vec2 at;
-        float radius = 0;           // 0 before it has come
+        float radius = 0;
+        Vec2 along{1, 0};           // the way it is drawn out or squashed
+        float stretch = 1;          // along over across: above 1 drawn out, below squashed
+        float alpha = 1;            // less as it bursts
+        float ring = 0;             // a burst's faint ring: its radius, 0 for none
+        float ringAlpha = 0;
     };
-    // When the dots come and how long they stay. Momo's first sound comes about 0.7 s after a turn is sent, so the
-    // dots start as it is sent, pop quickly, and once begun stay until all three are in, then fade gently.
+    struct Bubbles {
+        Bubble all[4];              // the oldest first: three, and one bursting
+        int count = 0;
+    };
+    // When the bubbles come and how long they stay. Momo's first sound comes about 0.7 s after a turn is sent, so they
+    // start as it is sent, the first three pop quickly, and once begun they stay until all three are in, then fade gently.
     static constexpr bool dotsWhenSent = true;          // false: only once thinking, Voice::sentFor after the turn is sent
-    static constexpr float dotPopEvery = 0.15f;         // s from one dot beginning to pop to the next
-    static constexpr float dotPop = 0.18f;              // s a dot takes to pop
+    static constexpr float dotPopEvery = 0.15f;         // s between the first three pops
+    static constexpr float dotPop = 0.18f;              // s a pop takes, about
     static constexpr float dotsAtLeast = 2 * dotPopEvery + dotPop;  // s they show once begun: until all three are in
     static constexpr float dotsFade = 0.2f;             // s, about, they take to fade
-    static constexpr float dotTurn = 2.0f;              // s each dot takes to circle its place
-    /// Thinking dot `k`, 0 the one nearest Momo, `rising` s after the dots began to come.
-    static Dot dot(int k, float rising);
+    static constexpr float bubbling = 2.0f;             // s for three more to pop, once the first three are in
+    static constexpr float bubblesTop = 7.0f;           // cm above Momo's middle the highest burst reaches
+    /// The thinking bubbles `rising` s after the first began to pop.
+    static Bubbles bubbles(float rising);
 
     struct Look {
         float shown = 0;            // 0 gone … 1
