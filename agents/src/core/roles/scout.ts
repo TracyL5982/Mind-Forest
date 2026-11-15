@@ -62,6 +62,8 @@ const Direction = z.object({
 });
 type Direction = z.infer<typeof Direction>;
 const isWritten = (d: Direction): d is Direction & { format: Written } => (WRITTEN as readonly string[]).includes(d.format);
+/** The written slots of a direction that is no written idea. */
+const UNWRITTEN = { lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [], formula: '', numbers: [], unit: '' } satisfies Partial<Direction>;
 const Ideas = z.object({ reading: z.string(), directions: z.array(Direction) });
 
 const Ratings = z.object({
@@ -525,16 +527,7 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
       body: video ? '' : run.need ? `What the user asked for: "${run.need}".` : '',
       why: look.why,
       tags: look.tags,
-      lines: [],
-      pros: [],
-      cons: [],
-      subject: '',
-      passage: '',
-      by: '',
-      controls: [],
-      formula: '',
-      numbers: [],
-      unit: '',
+      ...UNWRITTEN,
       images: [],
       source: video ? '' : source,
       lookups: [search],
