@@ -573,7 +573,7 @@ As the cards of a Scout run this device asked for land, by voice or by a picked 
 
 **Hearing the end of the turn.** Semantic turn detection, eager, answers the turn itself (`create_response: true`). The turn is over for the device when Momo's answer begins, not when the detection first takes a pause for the end: if the user goes on before the answer begins, the early answer is cancelled and the turn goes on, its words written down whole. 1.8 s of quiet after the last word, by the headset recorder's own rule for a word, ends a turn the detection has not (`pauseMs`, `MIND_PALACE_LIVE_PAUSE`). The name while Momo speaks cancels the response and cuts Momo's words in the conversation (`conversation.item.truncate`) where the device had played them to.
 
-**The model.** `gpt-realtime-2.1`, the full model, by the rule set for this choice: the full model unless mini matches it on choosing the way, answer quality and time to first sound. Mini chose the way as often as needed, but said things about cards that their notes do not state.
+**The model.** `gpt-realtime-2.1`, the full model, by the rule set for this choice: the full model unless mini matches it on choosing the way, answer quality and time to first sound. Mini chose the way as often as needed and was first heard as soon, but two blind readers preferred the full model's answers (35 to 3 with 2 ties, and 24 to 6 with 10 ties, over the 40 requests of one run each), and mini said things about cards that their notes do not state. The readers caught mini answering a question about De Stijl and the Bauhaus with Vermeer, saying ESCAPADE launched this month when it launched in November 2025, and naming unkept suggestions as saved cards.
 
 **Measured.** `scripts/live-bench.ts` on 40 spoken requests (`scripts/live-requests.ts`: 10 questions Momo knows, 8 for the web, 6 about saved cards, 6 for new content, 6 commands, 2 small talk, 2 unclear), each said by `gpt-4o-mini-tts` into a file, never played, with a room's faint noise under it, streamed at the pace it was said into a service on a copy of the user's data with the stand-in roles. Two runs a model, B and C, the models side by side; `scripts/live-summary.ts` reads them.
 
@@ -587,6 +587,7 @@ As the cards of a Scout run this device asked for land, by voice or by a picked 
 | A card landed to Momo's first word about it (the service's side) | median 0.53 and 0.62 s | median 0.38 and 0.40 s |
 | Lines about cards stating something their note does not | 0 of 28 | 7 of 28 ("It shows a structured interior with a classic photographic look" of a card whose note said only "gelatin silver print") |
 | Words in the answer to a turn | median 42 and 40 | median 54 and 58 |
+| Two blind readers' choice of the better answer, run B | 35 and 24 of 40 | 3 and 6 of 40 (ties 2 and 10) |
 | A turn's cost (the realtime model, writing the turn down, web answers) | $0.036 | $0.016 |
 
 The lines about cards were judged by `gpt-5.4`, shown the user's request and every note.
