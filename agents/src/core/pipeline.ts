@@ -7,6 +7,7 @@ import { treeRequest } from './tree-request.ts';
 import { brief } from './roles/questions.ts';
 import {
   AGENT,
+  makeItem,
   type Handoff,
   type Intent,
   type RawDump,
@@ -76,6 +77,8 @@ export interface PipelineDeps {
 }
 
 const USER: Origin = { by: 'user' };
+/** A tree's subject up to this many characters is its root's title. A longer one, or a link, is read by Intake. */
+const SUBJECT_MOST = 120;
 const MAX_PARALLEL_SCOUTS = 2;
 /**
  * The most passes the Renderer makes over what one change brought in. One pass asks the model about 24 items, so four passes answer
@@ -164,6 +167,11 @@ export class Pipeline {
       .search(request.title, { limit: 10 })
       .find((hit) => mind.known(hit.id) && plainTitle(hit.item.title) === plainTitle(request.title));
     if (named) return this.file([named.item], request);
+    // A subject named in a few words is the root as the user said it. Read by Intake as something dropped, "Dutch artist"
+    // became a card called "Dutch artist reference note", and the tree waited on a model call for it.
+    if (!/\n|:\/\//.test(request.title) && request.title.length <= SUBJECT_MOST) {
+      return this.file([makeItem(this.ctx, { kind: 'text', title: request.title, text: request.title, origin: USER, source: { from: 'paste' } })], request);
+    }
     return this.work('intake', label('Starting a tree on', request.title), undefined, async () => {
       const items = await this.deps.roles.intake(this.ctx, [{ kind: 'text', text: request.title }]);
       return items.length === 0 ? NOTHING : this.file(items, request);

@@ -304,3 +304,34 @@ test('nothing repeats inside a tree, by item, by address or by title, and what t
   const keys = k.mind.treeNodes(film.treeId).map((n) => k.mind.itemOf(n.id).title.toLowerCase().replace(/^the /, ''));
   assert.equal(new Set(keys).size, keys.length, 'no two cards of the tree share a title');
 });
+
+test('a tree asked for by its subject is rooted in that subject as said, not in a note Intake writes about the words', async () => {
+  for (const [said, subject] of [
+    ['Can you start a new tree on Dutch artist?', 'Dutch artist'],
+    ['start a tree about Hitchcock\'s films', 'Hitchcock\'s films'],
+    ['Make a new tree on the Bauhaus', 'the Bauhaus'],
+  ]) {
+    const { k, pipeline } = harness();
+    ideas(k);
+    pipeline.utter(said!, { selection: [] }, true);
+    await pipeline.idle();
+
+    const [tree] = [...k.mind.trees.values()];
+    assert.equal(k.mind.trees.size, 1, said);
+    assert.equal(k.mind.itemOf(tree!.rootId).title, subject, said);
+    assert.ok(!k.model.calls.some((c) => c.role.startsWith('intake')), `${said}: no Intake call`);
+  }
+});
+
+test('a tree asked for in Chinese is rooted in the subject the Conductor heard', async () => {
+  const { k, pipeline } = harness();
+  ideas(k);
+  k.model.on('conductor', () => ({ kind: 'tree', text: '荷兰画家', anchorId: '', need: '', nodeId: '', treeId: '', request: '', scopeNodeIds: [], scopeTreeIds: [], note: '', keepNodeIds: [], say: '好，开一棵关于荷兰画家的树。' }));
+
+  pipeline.utter('帮我建一棵关于荷兰画家的新树', { selection: [] }, true);
+  await pipeline.idle();
+
+  const [tree] = [...k.mind.trees.values()];
+  assert.equal(k.mind.itemOf(tree!.rootId).title, '荷兰画家');
+  assert.ok(k.mind.picks(tree!.rootId).length > 0, 'and its first round came');
+});
