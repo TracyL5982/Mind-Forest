@@ -112,6 +112,7 @@ void Bridge::frame(double t) {
                        [&](Handoff& h) { logLine("[agent] handoff ready: " + h.name); },
                        [&](SettingsChanged&) {},
                        [&](Note&) {},
+                       [&](Questions& q) { offer(q); },
                        [&](Rejected& r) { logLine("[agent] the service refused a message: " + r.message); },
                    },
                    event);
@@ -151,6 +152,10 @@ void Bridge::frame(double t) {
         logLine(std::string("[agent] keyboard test: ") + (shown ? "asked the system for its keyboard" : "no keyboard here"));
     }
     reportFocus();
+    if (offered) {
+        std::optional<int> open = standingTree ? standingTree->tree->focus() : std::nullopt;
+        if (!open || !standingTree->service.count(*open) || standingTree->service[*open] != offered->nodeId) offered.reset();
+    }
     for (auto& [id, t] : thinking) {
         if (now - t.shown < thinkAgain) continue;
         auto p = trees.find(t.tree);
@@ -509,11 +514,40 @@ bool Bridge::opens(int nodeID) {
 void Bridge::rows(const TreeNode& node, std::vector<Ask>& asks) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
     if (!p || !p->service.count(node.id)) return;
+    const std::string& id = p->service[node.id];
+    if (!offered || offered->nodeId != id) {
+        offered = Offered{id, {}};
+        client.send(Outbound::questions(NodeId{id}));
+    }
     asks.clear();
     if (!node.kept) asks.push_back(Ask{"keep", "Keep this"});
-    asks.push_back(Ask{"more", "What else is like this?"});
-    asks.push_back(Ask{"deeper", "Tell me more about this"});
+    if (offered->questions.empty()) {
+        asks.push_back(Ask{"more", "What else is like this?"});
+        asks.push_back(Ask{"deeper", "Tell me more about this"});
+    }
+    for (const std::string& q : offered->questions) asks.push_back(Ask{"question", q});
     asks.push_back(Ask{"type", "Type your own question…"});
+}
+
+void Bridge::offer(const Questions& q) {
+    // A card closed or another opened while the service wrote them: they are for a card no longer shown.
+    if (!offered || offered->nodeId != q.nodeId.value || q.questions.empty()) return;
+    offered->questions = q.questions;
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    if (!p || !p->local.count(q.nodeId.value)) return;
+    int local = p->local[q.nodeId.value];
+    logLine(fmt("[agent] %d questions for %s", int(q.questions.size()), model.catalog->title(p->tree->nodes[local].ref).c_str()));
+    refreshRows(local);
+}
+
+void Bridge::refreshRows(int localId) {
+    auto found = model.cards.find(localId);
+    const TreeNode* n = model.tree ? model.find(*model.tree, localId) : nullptr;
+    if (!n || found == model.cards.end()) return;
+    CardView& c = *found->second;
+    c.asks = model.catalog->asks(c.ref, model.previousPiece(localId));
+    rows(*n, c.asks);
+    model.buildRows(c);
 }
 
 void Bridge::type(int nodeID) {
@@ -581,6 +615,10 @@ bool Bridge::ask(int nodeID, int k) {
     if (row.key == "type") {
         type(nodeID);
         return true;
+    }
+    if (row.key == "question" && offered) {
+        auto& q = offered->questions;
+        q.erase(std::remove(q.begin(), q.end(), row.question), q.end());
     }
     if (row.key == "keep") {
         TreeNode& n = p->tree->nodes[nodeID];

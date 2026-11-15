@@ -189,8 +189,6 @@ enum class PicksMode { provisional, immediate };
 struct Settings {
     PicksMode picksMode = PicksMode::provisional;
     int picksPerRun = 0;
-    int maxLinksPerRun = 0;
-    double linkThreshold = 0;
     bool scoutOnDump = false;
 };
 
@@ -253,6 +251,11 @@ struct Note {
     std::string role;
     std::string message;
 };
+/// What the user might ask next about an open node, answered to this connection alone. Empty when the service has none.
+struct Questions {
+    NodeId nodeId;
+    std::vector<std::string> questions;
+};
 /// The service rejected the last message this client sent.
 struct Rejected {
     std::string message;
@@ -268,7 +271,7 @@ struct Malformed {
     std::string why;
 };
 
-using Inbound = std::variant<Hello, Change, Activity, Say, Heard, Navigate, Handoff, SettingsChanged, Note, Rejected, Unknown, Malformed>;
+using Inbound = std::variant<Hello, Change, Activity, Say, Heard, Navigate, Handoff, SettingsChanged, Note, Questions, Rejected, Unknown, Malformed>;
 
 /// Reads one socket message. Never fails: what can't be read comes back as Unknown or Malformed.
 Inbound parseInbound(const std::string& text);
@@ -336,10 +339,12 @@ public:
     static Outbound dump(const std::vector<Dump>& dumps);
     /// Speech as text: partials with `final` false as they come, then the last with `final` true.
     static Outbound utter(const std::string& text, bool final, const Scene& scene);
-    /// The user opened or looked at a node. The agent brings picks for it if it has none.
+    /// The user opened or looked at a node, to see it whole. It brings no picks.
     static Outbound focus(const NodeId& nodeId);
     static Outbound ask(const NodeId& nodeId, const std::string& need);
     static Outbound more(const NodeId& nodeId, const std::optional<std::string>& need = std::nullopt);
+    /// Asks what the user might ask next about an open node. Only this connection hears the answer, as `Questions`.
+    static Outbound questions(const NodeId& nodeId);
     static Outbound keep(const std::vector<NodeId>& nodeIds);
     /// The latest real change, or the named set.
     static Outbound undo(const std::optional<SetId>& id = std::nullopt);

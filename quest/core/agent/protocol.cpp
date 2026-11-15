@@ -380,8 +380,6 @@ std::optional<Settings> readSettings(const Json& j, Why& why) {
     return done(f, Settings{
                        .picksMode = f.choice<PicksMode>("picksMode", {{"provisional", PicksMode::provisional}, {"immediate", PicksMode::immediate}}),
                        .picksPerRun = int(f.whole("picksPerRun")),
-                       .maxLinksPerRun = int(f.whole("maxLinksPerRun")),
-                       .linkThreshold = f.number("linkThreshold"),
                        .scoutOnDump = f.boolean("scoutOnDump"),
                    });
 }
@@ -467,6 +465,11 @@ std::optional<Inbound> readNote(const Json& j, Why& why) {
     return message(f, Note{.role = f.string("role"), .message = f.string("message")});
 }
 
+std::optional<Inbound> readQuestions(const Json& j, Why& why) {
+    Fields f(j, why);
+    return message(f, Questions{.nodeId = f.id<NodeId>("nodeId"), .questions = f.strings("questions")});
+}
+
 std::optional<Inbound> readError(const Json& j, Why& why) {
     Fields f(j, why);
     return message(f, Rejected{.message = f.string("message")});
@@ -477,7 +480,7 @@ const std::map<std::string, Reader, std::less<>>& readers() {
         {"hello", readHello},       {"change", readChange},     {"activity", readActivityMessage},
         {"say", readSay},           {"heard", readHeard},       {"navigate", readNavigate},
         {"handoff", readHandoff},   {"settings", readSettingsMessage},
-        {"note", readNote},         {"error", readError},
+        {"note", readNote},         {"questions", readQuestions}, {"error", readError},
     };
     return table;
 }
@@ -557,6 +560,8 @@ Outbound Outbound::focus(const NodeId& nodeId) { return Outbound(named("focus").
 Outbound Outbound::ask(const NodeId& nodeId, const std::string& need) {
     return Outbound(named("ask").set("nodeId", nodeId.value).set("need", need));
 }
+
+Outbound Outbound::questions(const NodeId& nodeId) { return Outbound(named("questions").set("nodeId", nodeId.value)); }
 
 Outbound Outbound::more(const NodeId& nodeId, const std::optional<std::string>& need) {
     Json j = named("more").set("nodeId", nodeId.value);

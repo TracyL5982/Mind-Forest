@@ -16,6 +16,7 @@ std::string kindOf(const Inbound& message) {
                           [](const Handoff&) { return std::string("handoff"); },
                           [](const SettingsChanged&) { return std::string("settings"); },
                           [](const Note&) { return std::string("note"); },
+                          [](const Questions&) { return std::string("questions"); },
                           [](const Rejected&) { return std::string("error"); },
                           [](const Unknown& u) { return "unknown " + u.t; },
                           [](const Malformed& m) { return "malformed " + m.t + ": " + m.why; },
@@ -61,9 +62,16 @@ TEST(helloReadsTheWholeSnapshot) {
     CHECK(!hello.voice && hello.hearing == Hearing::browser, "the scripted service has neither voice nor hearing");
     CHECK(hello.settings.picksMode == PicksMode::provisional, "picksMode");
     CHECK_EQ(hello.settings.picksPerRun, 3);
-    CHECK_EQ(hello.settings.maxLinksPerRun, 2);
-    CHECK_EQ(hello.settings.linkThreshold, 0.8);
     CHECK(hello.settings.scoutOnDump, "scoutOnDump");
+
+    // The service's settings change between versions; a hello still reads with settings this client does not use.
+    std::string newer = edited(text, [](Json j) {
+        j.set("settings", Json::object().set("picksMode", "provisional").set("picksPerRun", 5).set("strongTie", 0.8).set("scoutOnDump", true));
+        return j;
+    });
+    Inbound read = parseInbound(newer);
+    auto* fresh = std::get_if<Hello>(&read);
+    CHECK(fresh && fresh->settings.picksPerRun == 5, "a hello whose settings name strongTie and no link settings reads (got %s)", kindOf(read).c_str());
 
     for (size_t i = 0; i < hello.snapshot.nodes.size(); i++) {
         const Json& r = j["snapshot"]["nodes"][i];
@@ -273,6 +281,12 @@ TEST(theOtherMessagesRead) {
             CHECK_EQ(activity->nodeId ? activity->nodeId->value : "none", r["activity"]["nodeId"].string("none"));
         }
     }
+    Inbound asked = parseInbound(R"({"t":"questions","nodeId":"n1","questions":["Where did it start?","Who uses it now?"]})");
+    auto* q = std::get_if<Questions>(&asked);
+    const std::vector<std::string> written = {"Where did it start?", "Who uses it now?"};
+    CHECK(q && q->nodeId.value == "n1" && q->questions == written, "questions");
+    Inbound none = parseInbound(R"({"t":"questions","nodeId":"n1","questions":[]})");
+    CHECK(std::get_if<Questions>(&none) && std::get_if<Questions>(&none)->questions.empty(), "no questions");
     Inbound note = parseInbound(R"({"t":"note","role":"scout","message":"failed: no network"})");
     auto* n = std::get_if<Note>(&note);
     CHECK(n && n->role == "scout" && n->message == "failed: no network", "note");
@@ -297,6 +311,7 @@ std::vector<std::pair<Outbound, std::string>> outboundCases() {
         {Outbound::focus(n1), R"({"nodeId":"n1","t":"focus"})"},
         {Outbound::ask(n1, "why does it work"), R"({"need":"why does it work","nodeId":"n1","t":"ask"})"},
         {Outbound::more(n1), R"({"nodeId":"n1","t":"more"})"},
+        {Outbound::questions(n1), R"({"nodeId":"n1","t":"questions"})"},
         {Outbound::more(n1, "older films"), R"({"need":"older films","nodeId":"n1","t":"more"})"},
         {Outbound::keep({n1, n2}), R"({"nodeIds":["n1","n2"],"t":"keep"})"},
         {Outbound::undo(), R"({"t":"undo"})"},

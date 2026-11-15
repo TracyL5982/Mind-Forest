@@ -33,7 +33,8 @@ public:
     /// A pinch on a card of a service tree on the layer you work on: it opens where it stands, to show its details.
     /// True when it did; otherwise the scene does what it always did (going back to a card's own layer).
     bool opens(int nodeID);
-    /// The rows under an open card of a service tree: "Keep this" for a suggestion, then what can be asked about it.
+    /// The rows under an open card of a service tree: "Keep this" for a suggestion, then what can be asked about it (the
+    /// questions the service wrote for the card and the conversation, once they come), then typing your own.
     void rows(const TreeNode& node, std::vector<Ask>& asks);
     /// One of the open card's rows was picked. A question is a conversation about the card: the card starts a layer
     /// (keeping it, if it was a suggestion) and the service brings related suggestions round it. True when the
@@ -67,6 +68,15 @@ private:
     std::map<std::string, Thinking> thinking;       // by activity id
     /// The service node last reported as open, so the service hears each time the open card changes.
     std::optional<std::string> focusSent;
+    /// The open card's questions from the service: asked for once each time it opens, empty until they come.
+    struct Offered {
+        std::string nodeId;
+        std::vector<std::string> questions;
+    };
+    std::optional<Offered> offered;
+    void offer(const Questions& q);
+    /// Builds an open card's rows again where they stand, after what they offer changed.
+    void refreshRows(int localId);
     /// `-agentWalk <n>`: for runs with no hands, the first new pick round the open card is pinched, n times.
     int walk = 0;
     /// `-keyboardTest`: brings up the system keyboard once, 3 s in, and logs what is typed.
