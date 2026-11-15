@@ -844,23 +844,27 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
     return [];
   }
   // Things to look at are brought in first, so the model chooses among them by sight and a missing picture is never shown. A
-  // source whose pictures may not be copied is looked at where they are, and only the ones chosen are linked.
+  // source whose pictures may not be copied is looked at from a copy kept nowhere, and only the ones chosen are linked.
   const pictured = fresh.slice(0, VISUAL_SHOWN_TO_MODEL);
   const found = !source.visual
-    ? fresh.slice(0, FOUND_SHOWN_TO_MODEL).map((f) => ({ ...f, stored: null }))
-    : source.hotlink
-      ? pictured.filter((f) => f.image).map((f) => ({ ...f, stored: null }))
-      : (
-          await ctx.step(ROLE, label(`Fetching ${pictured.length} pictures from`, sourceWords(source)), () =>
-            Promise.all(pictured.map(async (f) => ({ ...f, stored: f.image ? await ctx.tools.web.picture(f.image) : null }))),
-          )
-        ).filter((f) => f.stored);
+    ? fresh.slice(0, FOUND_SHOWN_TO_MODEL).map((f) => ({ ...f, stored: null, seen: null }))
+    : (
+        await ctx.step(ROLE, label(`Fetching ${pictured.length} pictures from`, sourceWords(source)), () =>
+          Promise.all(
+            pictured.map(async (f) =>
+              !f.image ? { ...f, stored: null, seen: null }
+              : source.hotlink ? { ...f, stored: null, seen: await ctx.tools.web.look(f.preview ?? f.image) }
+              : { ...f, stored: await ctx.tools.web.picture(f.image), seen: null },
+            ),
+          ),
+        )
+      ).filter((f) => f.stored || f.seen);
   if (found.length === 0) {
     ctx.note(ROLE, `${source.name} has nothing for "${query}", left out`);
     return [];
   }
   // A search matches words, so the model picks the records that carry the direction before any is shown.
-  const pictures = !source.visual ? undefined : source.hotlink ? found.map((f) => f.image!) : await dataUrls(ctx, found.map((f) => f.stored!.asset));
+  const pictures = !source.visual ? undefined : source.hotlink ? found.map((f) => f.seen!) : await dataUrls(ctx, found.map((f) => f.stored!.asset));
   const chosen = await ctx.step(ROLE, label(`Reading ${found.length} ${found.length === 1 ? 'result' : 'results'} from`, sourceWords(source)), () => curate(ctx, d, source, found, most, pictures));
   if (chosen.length === 0) ctx.note(ROLE, `none of the ${found.length} records ${source.name} returned for "${query}" fit, left out`);
   const made = await Promise.all(

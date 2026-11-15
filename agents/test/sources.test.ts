@@ -325,6 +325,7 @@ test('Unsplash is offered only with its key, and its photos keep its own address
   const image = new URL(photo!.image!);
   assert.equal(image.origin + image.pathname, 'https://images.unsplash.com/photo-1', "the picture is Unsplash's own address");
   assert.equal(image.searchParams.get('ixid'), 'abc123', 'resized, it keeps the ixid Unsplash asks to be kept');
+  assert.equal(photo!.preview, 'https://images.unsplash.com/photo-1?ixid=abc123&w=400', 'its small copy, for the model to look at');
   assert.equal(photo!.title, 'Fog over a harbour at dawn');
   assert.deepEqual(photo!.credit, { text: 'Photo by Jeff Sheldon on Unsplash', url: 'https://unsplash.com/@ugmonk?utm_source=mind_palace&utm_medium=referral' });
   assert.equal(photo!.url, 'https://unsplash.com/photos/p1?utm_source=mind_palace&utm_medium=referral');

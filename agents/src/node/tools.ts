@@ -56,7 +56,14 @@ export function makeTools(opts: ToolOptions): Tools {
     web: {
       search: (query, max) => opts.model.search({ role: 'tool.web', query, max }),
       read: (url) => readPage(send, url),
-      picture: (url) => storePicture(send, opts.assets, url),
+      picture: async (url) => {
+        const got = await fetchPicture(send, url);
+        return got ? { asset: (await opts.assets.put(got.bytes, got.mime, 'found')).id } : null;
+      },
+      async look(url) {
+        const got = await fetchPicture(send, url);
+        return got ? `data:${got.mime};base64,${Buffer.from(got.bytes).toString('base64')}` : null;
+      },
       async videos(query) {
         if (opts.keys?.YOUTUBE_API_KEY) return youtube(send, opts.keys.YOUTUBE_API_KEY, query);
         // Without a YouTube key the model's web search finds addresses, and each is confirmed with YouTube before it is used.
@@ -125,14 +132,14 @@ const AGENT_NAME = 'MindPalace/0.1 (local prototype)';
 const MIN_PICTURE_BYTES = 4_000;
 const MAX_PICTURE_BYTES = 8_000_000;
 
-async function storePicture(send: typeof fetch, assets: Assets, url: string): Promise<{ asset: string } | null> {
+async function fetchPicture(send: typeof fetch, url: string): Promise<{ bytes: Uint8Array; mime: string } | null> {
   try {
     const res = await send(url, { headers: { 'User-Agent': AGENT_NAME, Accept: 'image/*' }, redirect: 'follow', signal: AbortSignal.timeout(12_000) });
     const mime = (res.headers.get('content-type') ?? '').split(';')[0]!.trim();
     if (!res.ok || !/^image\/(jpeg|png|webp|gif)$/.test(mime)) return null;
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (bytes.length < MIN_PICTURE_BYTES || bytes.length > MAX_PICTURE_BYTES) return null;
-    return { asset: (await assets.put(bytes, mime, 'found')).id };
+    return { bytes, mime };
   } catch {
     return null;
   }

@@ -86,3 +86,14 @@ test('without the fal key, or when fal fails, the picture is made by the Meta mo
     assert.equal(posted.length, keys.FAL_KEY && keys.MIND_PALACE_FAL_MODEL ? 1 : 0, JSON.stringify(keys));
   }
 });
+
+test('a picture looked at for the model comes back as data and is kept nowhere', async () => {
+  const at = (name: string) => `https://example.com/${name}`;
+  const { web: tools, assets } = web({ [at('small.jpg')]: picture('image/jpeg', 20_000), [at('pixel.gif')]: picture('image/gif', 43) });
+
+  const seen = await tools.look(at('small.jpg'));
+
+  assert.equal(seen, `data:image/jpeg;base64,${Buffer.from(new Uint8Array(20_000)).toString('base64')}`);
+  assert.equal(await tools.look(at('pixel.gif')), null);
+  assert.equal(assets.files.size, 0);
+});

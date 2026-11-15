@@ -557,6 +557,8 @@ export function makeSources(opts: SourceOptions): Tools['sources'] {
           title: (said[0] ?? '').replace(/^\p{Ll}/u, (c) => c.toUpperCase()).slice(0, 120) || `Photo by ${name}`,
           by: name, date: str(p.created_at).slice(0, 4), text: said.join('\n'), from: 'Unsplash',
           url: withUtm(page), image: raw.href,
+          // The Meta model cannot fetch Unsplash's addresses itself, so it is shown this small one, fetched and kept nowhere.
+          ...(/^https:\/\/images\.unsplash\.com\//.test(str(p.urls?.small)) ? { preview: str(p.urls.small) } : {}),
           credit: { text: `Photo by ${name} on Unsplash`, ...(profile ? { url: withUtm(profile) } : {}) },
           licence: 'Unsplash License',
           ...(str(p.links?.download_location) ? { report: str(p.links.download_location) } : {}),

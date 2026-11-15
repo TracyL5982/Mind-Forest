@@ -75,6 +75,7 @@ export function kit(settings: Partial<Settings> = {}): Kit {
       },
       read: async (url) => world.pages.get(url) ?? null,
       picture: async (url) => (world.pictures.has(url) ? { asset: (await assets.put(new Uint8Array([1]), 'image/jpeg', 'found')).id } : null),
+      look: async (url) => (world.pictures.has(url) ? `data:image/jpeg;base64,${Buffer.from(url).toString('base64')}` : null),
       videos: async () => world.web.flatMap((hit) => world.videos.get(hit.url) ?? []),
     },
     sources: {

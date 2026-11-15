@@ -103,6 +103,8 @@ export interface Found {
   /** The collection or channel it came from, when that is narrower than the source. */
   from?: string;
   image?: string;
+  /** A smaller copy of `image` for the model to look at, when the source serves one. */
+  preview?: string;
   /** A recording that plays in place, such as a podcast episode or a film. */
   media?: string;
   /** How long `media` plays, in seconds, when the source says. */
@@ -158,6 +160,8 @@ export interface Tools {
     read(url: string): Promise<Page | null>;
     /** Downloads a picture and stores it, so a client shows it in place. Null when the address holds no usable picture. */
     picture(url: string): Promise<{ asset: string } | null>;
+    /** Downloads a picture for the model to look at, as a data URL, and keeps no copy. Null when the address holds no usable picture. */
+    look(url: string): Promise<string | null>;
     /** Videos for a search that can be played in place, best first. */
     videos(query: string): Promise<Playable[]>;
   };

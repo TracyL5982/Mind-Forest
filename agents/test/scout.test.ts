@@ -1161,17 +1161,19 @@ test('a find of pictures written after the inventive lane has its count of direc
 const PHOTOS = { id: 'photos', name: 'Unsplash', goodFor: 'Photographs.', query: 'Plain words.', show: 2, visual: true, hotlink: true };
 const photo = (n: number) => ({
   title: `Harbour in fog ${n}`, by: `Photographer ${n}`, date: '2021', text: `Fog over the harbour, take ${n}.`, from: 'Unsplash',
-  url: `https://unsplash.example/photos/${n}`, image: `https://images.unsplash.example/photo-${n}?ixid=abc&w=640`,
+  url: `https://unsplash.example/photos/${n}`, image: `https://images.unsplash.example/photo-${n}?ixid=abc&w=640`, preview: `https://images.unsplash.example/photo-${n}?ixid=abc&w=400`,
   credit: { text: `Photo by Photographer ${n} on Unsplash`, url: `https://unsplash.example/@p${n}` }, licence: 'Unsplash License',
   report: `https://api.unsplash.example/photos/${n}/download?ixid=abc`,
 });
 
-test("a photo whose source forbids copies is looked at and shown from the source's own address, credited, and reported once it lands", async () => {
+test("a photo whose source forbids copies is looked at from a copy kept nowhere, shown from the source's own address, credited, and reported once it lands", async () => {
   const k = kit();
   const film = k.seedTree('Film', ['Dolly zoom']);
   const anchor = film.nodeIds[0]!;
   k.world.sources = [WEB, PHOTOS];
   k.world.found.set('photos:fog harbour', [photo(1), photo(2), photo(3)]);
+  // The third photo's small copy cannot be fetched, so the model is never asked about it.
+  for (const n of [1, 2]) k.world.pictures.add(photo(n).preview);
   const shown: string[][] = [];
   const json = k.model.json.bind(k.model);
   k.model.json = (async (req: Parameters<typeof json>[0]) => (req.role === 'scout.curate' && shown.push(req.images ?? []), json(req))) as typeof k.model.json;
@@ -1181,7 +1183,8 @@ test("a photo whose source forbids copies is looked at and shown from the source
 
   apply(k, await scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }));
 
-  assert.deepEqual(shown, [[photo(1).image, photo(2).image, photo(3).image]], 'the model is shown the source’s own addresses');
+  const looked = (n: number) => `data:image/jpeg;base64,${Buffer.from(photo(n).preview).toString('base64')}`;
+  assert.deepEqual(shown, [[looked(1), looked(2)]], 'the model is shown each small copy as data, never an address it would have to fetch');
   const [pick] = picked(k, anchor);
   assert.equal(pick!.title, 'Harbour in fog 2');
   assert.equal(k.assets.links.get(served(k, `/assets/${pick!.source.asset}`)), photo(2).image, 'the card’s picture is relayed from the source');
