@@ -1733,6 +1733,20 @@ test('through the pipeline a card the model is asked about is made composing and
   assert.deepEqual(failing.faces(failing.ids[11]!), ['note composing', 'note', 'note']);
 });
 
+test('a card left composing when the service stopped is composed again when it starts, and lands', async () => {
+  const k = kit();
+  const { ids } = grow(k, [{ title: 'Ferry', text: `${LONG} We paid 12 euros for the ferry.` }]);
+  assert.equal(view(k, ids[0]!).composing, true);
+  k.model.on('renderer.components', (req) => ({ items: idsIn(req.user).map((id) => entry({ id })) })).on('renderer.composites', () => ({ groups: [] }));
+  const pipeline = new Pipeline({
+    mind: k.mind, roles: { ...fakeRoles, renderer }, model: k.model, tools: k.ctx.tools, assets: k.assets, store: { append: () => {}, all: () => [] },
+    settings: k.ctx.settings, newId: k.ctx.newId, now: k.ctx.now, emit: () => {},
+  });
+  pipeline.resume();
+  await pipeline.idle();
+  assert.deepEqual(view(k, ids[0]!), { component: 'note', props: {}, by: 'renderer' });
+});
+
 test('a composing card waits for its look at most as long as the pass allows, then lands as the rules drew it, and an answer that comes later is not drawn', async () => {
   const k = kit();
   const { ids } = grow(k, [{ title: 'Ferry', text: `${LONG} We paid 12 euros for the ferry.` }]);

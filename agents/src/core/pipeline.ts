@@ -451,6 +451,12 @@ export class Pipeline {
     if (nodeIds.length > 0) this.render(nodeIds, edited);
   }
 
+  /** Cards left composing when the service last stopped are composed again, so none stands in progress for good. */
+  resume(): void {
+    const composing = [...this.deps.mind.nodes.values()].filter((node) => node.view.composing).map((node) => node.id);
+    if (composing.length > 0) this.render(composing, []);
+  }
+
   /** One pass of the Renderer over these nodes. Every card it brings to the model lands within the pass. */
   private render(nodeIds: Id[], edited: Id[]): void {
     const mind = this.deps.mind;
