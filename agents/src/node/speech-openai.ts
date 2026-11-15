@@ -26,7 +26,7 @@ export function openaiSpeech(send: typeof fetch, opts: { apiKey: string; model?:
   };
 }
 
-const HEARING_MODEL = 'gpt-4o-transcribe';
+export const HEARING_MODEL = 'gpt-4o-transcribe';
 const EXTENSION: Record<string, string> = { 'audio/webm': 'webm', 'audio/mp4': 'mp4', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/mpeg': 'mp3' };
 
 /** Words the user is likely to say: what they call the agent, and the titles of their cards. */

@@ -8,7 +8,7 @@ import { openMaps, type Maps } from './geocoder.ts';
 import { MetaModel } from './model-meta.ts';
 import { startServer } from './server.ts';
 import type { LiveOptions } from './live.ts';
-import { openaiRealtime, openaiSpeech, openaiTranscribe, SPEECH_VOICE } from './speech-openai.ts';
+import { HEARING_MODEL, openaiRealtime, openaiSpeech, openaiTranscribe, SPEECH_VOICE } from './speech-openai.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -44,6 +44,7 @@ const liveOptions: LiveOptions = {
   model: liveModel,
   voice: env.MIND_PALACE_VOICE || SPEECH_VOICE,
   turn: turn ? { kind: 'server', ms: Number(turn[1]) } : { kind: 'semantic' },
+  hearing: env.MIND_PALACE_HEARING_MODEL || HEARING_MODEL,
   effort: (env.MIND_PALACE_LIVE_EFFORT as LiveOptions['effort']) || 'minimal',
 };
 

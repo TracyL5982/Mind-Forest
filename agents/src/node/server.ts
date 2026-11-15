@@ -11,7 +11,7 @@ import { Mindstorm } from '../core/state.ts';
 import { spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
 import { whereItWent, type Delivery, type Desk } from './contact.ts';
-import { describeScene, LiveVoice, type LiveOptions, type OpenRealtime } from './live.ts';
+import { LiveVoice, type LiveOptions, type OpenRealtime } from './live.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
 import type { Speak, Transcribe } from './speech-openai.ts';
@@ -91,12 +91,6 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   };
   /** The devices on `/live`, each with its own voice. */
   const voices = new Set<LiveVoice>();
-  /** What was said lately, for a voice that starts without the conversation. */
-  const recent: { who: 'user' | 'agent'; text: string }[] = [];
-  const remember = (who: 'user' | 'agent', text: string) => {
-    recent.push({ who, text });
-    if (recent.length > 6) recent.shift();
-  };
   const broadcast = (message: unknown) => {
     const text = JSON.stringify(message);
     for (const ws of sockets) if (ws.readyState === ws.OPEN) ws.send(text);
@@ -114,13 +108,11 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       return;
     }
     if (message.t === 'note') log(`[${message.role}] ${message.message}`);
-    if (message.t === 'heard' && message.final) remember('user', message.text);
     if (message.t === 'say') {
-      remember('agent', message.text);
-      const kind = 'kind' in message && typeof message.kind === 'string' ? message.kind : undefined;
+      const kind = 'kind' in message && (message.kind === 'reply' || message.kind === 'results') ? message.kind : undefined;
       for (const voice of voices) voice.said(message.text, kind);
     }
-    if (message.t === 'activity' && message.activity.role === 'conductor' && message.activity.state === 'error') for (const voice of voices) voice.actFailed();
+    if (message.t === 'activity') for (const voice of voices) voice.activity(message.activity);
     if (message.t === 'activity') log(`[${message.activity.role}] ${message.activity.state}: ${message.activity.message}`);
     broadcast(message.t === 'change' ? { ...message, undo: pipeline.undoLabel() } : message);
   };
@@ -269,7 +261,8 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         open: live.open,
         options: live.options,
         utter: (text, scene) => pipeline.utter(text, scene, true),
-        context: (scene) => describeScene(mind, scene, recent),
+        style: () => settings.voiceStyle,
+        words: (scene) => likelyWords(mind, scene.treeId ?? null),
         name: () => spokenName(settings.agentName),
         log,
       },

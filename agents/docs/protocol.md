@@ -156,26 +156,32 @@ The service drops a leading wake phrase from `/api/transcribe` replies and from 
 
 ### The live voice: `/live`
 
-When the service has a live voice (an OpenAI key, and `MIND_PALACE_LIVE` is not `off`), `hello.live` is true and a client can talk to Momo in real time on a second WebSocket, `/live?token=<token>`. Without one the upgrade is refused with 404, and the client uses the path above. The service holds one OpenAI realtime session per `/live` socket, opened at the first wake and closed after 5 quiet minutes or with the socket. The key stays in the service. Audio is base64 of 16-bit little-endian mono PCM, one JSON object per text frame.
+When the service has a live voice (an OpenAI key, and `MIND_PALACE_LIVE` is not `off`), `hello.live` is true and a client talks to Momo in real time on a second WebSocket, `/live?token=<token>`. A client opens it only when `hello.live` is true, and opens it again 5 s after it closes while that holds. Without a live voice the upgrade is refused with 404 and the client uses the path above. The service holds one OpenAI realtime session per `/live` socket, opened at the first wake and closed after 5 quiet minutes or with the socket. The key stays in the service. Audio is base64 of 16-bit little-endian mono PCM, one JSON object per text frame.
+
+The realtime model is Momo's ears and mouth only. It never answers the user itself. It hears the user's turn, the service hands the turn's transcript to the pipeline as a final `utter`, and the model speaks each `say` the pipeline makes, in one voice. With `settings.voiceStyle` `own words` it says a line in its own words, keeping every fact, name and number and adding nothing; with `verbatim` it says the line as written.
 
 Service to client:
 
 | Frame | Meaning |
 |---|---|
 | `{t:'ready', rate}` | Sent on connect. Momo's voice comes at `rate` Hz (24000). |
-| `{t:'over', turn}` | The user's turn has been heard: Momo has begun to answer it, or decided to say nothing. Stop sending the microphone. |
-| `{t:'audio', id, pcm}` | Momo's voice, in order, to play as it comes. A new `id` is a new response. |
-| `{t:'text', id, text}` | All Momo has said so far in this response. |
-| `{t:'done', id, usage?}` | This response has no more audio. `usage` is OpenAI's token count. |
+| `{t:'over', turn}` | The user's turn has been heard. Stop sending the microphone. The turn is sent: play the sent tone and think until Momo's reply begins. |
+| `{t:'heard', turn, text, final}` | What the user said in turn `turn`, all of it so far: the words as they are transcribed, which begins after `over`, then once more with `final: true`. The final is what the pipeline acts on. |
+| `{t:'quiet', turn}` | No reply is coming for turn `turn`: nothing was said after the name, the pipeline failed or had nothing to say, or 15 s went by. Stop thinking. |
+| `{t:'text', id, text, kind}` | Response `id` begins or goes on: all Momo has said in it so far, and which kind of line it is, `reply` (the answer to what was just said) or `results` (what a piece of work brought). A new `id` is a new response. A turn's reply always comes before any `results` line waiting with it. |
+| `{t:'audio', id, pcm}` | Momo's voice for response `id`, in order, to play as it comes, after any response still playing. |
+| `{t:'done', id, usage?}` | Response `id` has no more audio. `usage` is OpenAI's token count. |
 | `{t:'failed', why}` | The session failed, and any turn in progress is over. The next `start` opens a new one. |
 
 Client to service:
 
 | Frame | Meaning |
 |---|---|
-| `{t:'start', turn, scene}` | The wake phrase was heard. Turn `turn` (1, 2, … per socket) follows as audio. It also stops whatever Momo is saying. |
+| `{t:'start', turn, scene}` | The wake phrase was heard. Turn `turn` (1, 2, … per socket) follows as audio. It also stops whatever Momo is saying: the client stops playing at once, and the service cancels the response and remembers only what was heard of it. |
 | `{t:'audio', pcm}` | The microphone at 16000 Hz until `over`: from 0.8 s before the first word after the phrase, or from a moment before the phrase when the request follows straight on. Nothing before the phrase, and not the phrase alone. |
 | `{t:'end'}` | The client stopped sending before `over` (it sends a minute at most): take what was sent. |
 | `{t:'cancel'}` | Nothing was said after the phrase for 8 seconds: drop the turn. |
 
-The model hears the end of the turn itself. It answers in its own words and hands every request that changes the mindstorm to the pipeline as a final `utter` with the turn's scene. Every `say` is voiced on each `/live` socket: the first after a request is its result, and the rest, and every `say` with `kind: 'results'`, are news. While its `/live` socket is open a client does not speak `say` messages itself.
+While its `/live` socket is open a client does not speak `say` messages itself: every `say` is voiced on every `/live` socket. When the live voice is down, a client speaks them through `GET /api/speak` as before.
+
+What a client shows and plays for a turn, in order: `waiting` for the name; `listening` from the name to `over`, with the user's words from `heard`; `sent` as `over` comes, with a short tone; `thinking` from then until the first audio of the reply, with a quiet sound looping; `responding` while Momo is heard; `working` once Momo is done while activity goes on, with the `label` of the latest step that has started and not ended; then `waiting`. A question picked or typed under a card goes straight to `sent` and `thinking`, which ends at the first audio of a reply or when the work starts. Only the sent tone and the thinking loop are sounds of the client's own. Nothing sounds while the agent works.
