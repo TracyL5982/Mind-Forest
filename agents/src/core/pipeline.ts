@@ -1,3 +1,4 @@
+import { announcement } from './announce.ts';
 import { CommandError, type ChangeSet, type Command, type Id, type Item, type Origin } from './domain.ts';
 import type { Assets, ModelClient, Store, Tools } from './ports.ts';
 import { admit, plainTitle } from './round.ts';
@@ -86,6 +87,8 @@ export class Pipeline {
   private dropped: Id[] = [];
   /** The questions last written for each card, under what they were written from. */
   private readonly offered = new Map<Id, { from: string; questions: Promise<string[]> }>();
+  /** What the user last turned to (a card opened, a place they were taken, a card asked about), counted so a run can tell whether they moved on. */
+  private attention: { seq: number; on?: Id } = { seq: 0 };
 
   constructor(private readonly deps: PipelineDeps) {
     this.ctx = {
@@ -179,8 +182,9 @@ export class Pipeline {
    * The user opened or looked at a card. A card opens to show what it holds and brings nothing: picks come from talking about it,
    * and from the first round of a tree the user asked for. "This" stops meaning the latest drop.
    */
-  focus(_nodeId: Id): void {
+  focus(nodeId: Id): void {
     this.dropped = [];
+    this.attend(nodeId);
   }
 
   /** A typed or picked question about a card. It joins the conversation, as a spoken one does. What it brings joins the card's round, and the picks least related to the question make room. */
@@ -297,6 +301,7 @@ export class Pipeline {
       case 'navigate':
         this.deps.emit({ t: 'navigate', nodeId: intent.nodeId, treeId: intent.treeId });
         if (intent.nodeId) this.focus(intent.nodeId);
+        else this.attend(undefined);
         return;
       case 'organize':
         this.say(await this.organize(intent.request, intent.scope, scene.focus));
@@ -326,6 +331,11 @@ export class Pipeline {
   private say(text: string): void {
     this.history.push({ who: 'agent', text });
     this.deps.emit({ t: 'say', text });
+  }
+
+  private attend(on: Id | undefined): number {
+    this.attention = { seq: this.attention.seq + 1, on };
+    return this.attention.seq;
   }
 
   // ---- content flow
@@ -363,12 +373,19 @@ export class Pipeline {
     }
   }
 
-  /** A newer request for the same anchor wins. The older one's results are dropped when they arrive. */
+  /**
+   * A newer request for the same anchor wins. The older one's results are dropped when they arrive, and it is not announced.
+   * Every run is one the user asked for, so when it ends the agent says what it brought, and brings the card into view unless
+   * the user has turned to something else since asking.
+   */
   private async runScout(anchor: Id, need: string | undefined): Promise<void> {
-    if (!this.deps.mind.nodes.has(anchor)) return;
+    const { mind } = this.deps;
+    if (!mind.nodes.has(anchor)) return;
     const run = (this.scoutRun.get(anchor) ?? 0) + 1;
     this.scoutRun.set(anchor, run);
-    const title = this.deps.mind.itemOf(anchor).title;
+    const asked = this.attend(anchor);
+    const brought: Id[] = [];
+    const title = mind.itemOf(anchor).title;
     try {
       await this.work('scout', need ? `Looking for: ${need}` : `Finding more around "${title}"`, anchor, async () => {
         // The picks of one run arrive in several deliveries. They share a part, so one undo takes the whole run back.
@@ -377,13 +394,20 @@ export class Pipeline {
           // A card deleted while its picks were being found takes the run with it.
           if (this.scoutRun.get(anchor) !== run || commands.length === 0 || !this.deps.mind.nodes.has(anchor)) return;
           const set = this.apply(AGENT('scout'), need ? `Picks for: ${need}`.slice(0, 120) : `Picks for "${title}"`, admit(this.deps.mind, commands), part);
-          if (set) this.afterContent(set);
+          if (!set) return;
+          brought.push(...newNodeIds(set).filter((id) => mind.nodes.get(id)?.parent === anchor));
+          this.afterContent(set);
         };
         bring(await this.deps.roles.scout(this.ctx, { anchor, need, history: this.history.slice(-6), deliver: bring }));
       });
     } catch (err) {
       this.fail('scout', err);
     }
+    if (this.scoutRun.get(anchor) !== run || !mind.nodes.has(anchor)) return;
+    const there = brought.filter((id) => mind.nodes.has(id));
+    const stillHere = this.attention.seq === asked || this.attention.on === anchor;
+    if (there.length > 0 && stillHere) this.deps.emit({ t: 'navigate', nodeId: anchor });
+    this.say(announcement(mind, anchor, there));
   }
 
   /** New or changed content goes to the Renderer, and the trees it touched get fresh digests. */
