@@ -31,7 +31,7 @@ const DEFAULT_SAY: Record<Intent['kind'], string> = {
 // ---- fast path
 
 /** A command plain code recognises. Anything else needs the model. */
-type Fast =
+export type Fast =
   | { kind: 'more' }
   | { kind: 'undo' }
   | { kind: 'keep'; which: 'that' | 'all' | number }
@@ -74,7 +74,7 @@ export function isFastPath(utterance: string): boolean {
 
 // ---- scene
 
-interface Seen {
+export interface Seen {
   focus?: Node;
   selection: Node[];
   treeId?: Id;
@@ -84,7 +84,7 @@ interface Seen {
   picksOf?: Id;
 }
 
-function see(ctx: RoleContext, scene: Scene): Seen {
+export function see(ctx: RoleContext, scene: Scene): Seen {
   const { mind } = ctx;
   const focus = scene.focus ? mind.nodes.get(scene.focus) : undefined;
   const selection = scene.selection.flatMap((id) => mind.nodes.get(id) ?? []);
@@ -95,7 +95,7 @@ function see(ctx: RoleContext, scene: Scene): Seen {
   return { focus, selection, treeId, anchor, picksOf };
 }
 
-function defaultScope(seen: Seen): Scope | null {
+export function defaultScope(seen: Seen): Scope | null {
   if (seen.selection.length > 0) return { treeIds: [], nodeIds: seen.selection.map((n) => n.id) };
   if (seen.focus) return { treeIds: [], nodeIds: [seen.focus.id] };
   if (seen.treeId) return { treeIds: [seen.treeId], nodeIds: [] };
@@ -108,7 +108,7 @@ const point = (): Conducted => ({ intent: { kind: 'reply' }, say: SAY_POINT });
  * A new tree about `subject`. With no subject the user means "this": what they just dropped, or else the card they have open.
  * Null when there is nothing it could mean.
  */
-function treeOf(ctx: RoleContext, subject: string, seen: Seen, dropped: Id[]): Intent | null {
+export function treeOf(ctx: RoleContext, subject: string, seen: Seen, dropped: Id[]): Intent | null {
   if (subject) return { kind: 'tree', subject, itemIds: [] };
   const items = dropped.filter((id) => ctx.mind.items.has(id));
   if (items.length > 0) return { kind: 'tree', subject: '', itemIds: items };
@@ -123,7 +123,7 @@ export function treeIntent(ctx: RoleContext, utterance: string, scene: Scene, dr
   return intent ? { intent, say: DEFAULT_SAY.tree } : { intent: { kind: 'reply' }, say: SAY_TREE_ABOUT };
 }
 
-function runFast(ctx: RoleContext, fast: Fast, seen: Seen): Conducted {
+export function runFast(ctx: RoleContext, fast: Fast, seen: Seen): Conducted {
   const { mind } = ctx;
   switch (fast.kind) {
     case 'more':
@@ -251,7 +251,7 @@ function describe(ctx: RoleContext, input: { utterance: string; history: Turn[] 
 }
 
 /** The tree whose title the utterance says, longest title first. */
-function treeNamed(ctx: RoleContext, utterance: string): Id | undefined {
+export function treeNamed(ctx: RoleContext, utterance: string): Id | undefined {
   const said = ` ${normalize(utterance)} `;
   return [...ctx.mind.trees.values()]
     .map((t) => ({ id: t.id, title: normalize(t.title) }))

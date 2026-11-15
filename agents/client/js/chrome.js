@@ -36,10 +36,11 @@ export function showGate(on, why) {
   if (on) $('gate-token').focus();
 }
 
-/** The two lines above the input bar: what was heard, and what the librarian said. */
+/** The lines above the input bar: what was heard, and what the librarian said. A null text takes the line away. */
 export function caption(who, text, { faint = false } = {}) {
   const box = $('caption');
   let line = box.querySelector(`[data-who="${who}"]`);
+  if (text === null) return line?.remove();
   if (!line) {
     line = h('p', { data: { who } }, h('b', { text: who === 'you' ? 'You' : 'Librarian' }), h('span'));
     if (who === 'you') box.prepend(line);
@@ -49,6 +50,20 @@ export function caption(who, text, { faint = false } = {}) {
   line.classList.toggle('is-faint', faint);
   clearTimeout(line.timer);
   line.timer = setTimeout(() => line.remove(), 9000);
+}
+
+/** The short line under what was heard: what the agent is doing, such as thinking or a step of its work. Null takes it away. */
+export function showDoing(text) {
+  const box = $('caption');
+  let line = box.querySelector('[data-who="doing"]');
+  if (text === null) return line?.remove();
+  if (!line) {
+    line = h('p', { class: 'caption-doing', data: { who: 'doing' } });
+    const you = box.querySelector('[data-who="you"]');
+    if (you) you.after(line);
+    else box.prepend(line);
+  }
+  line.textContent = text;
 }
 
 /** The work log: which of the librarian's roles is doing what. */

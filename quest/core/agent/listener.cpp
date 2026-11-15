@@ -27,6 +27,10 @@ constexpr int echo = 3;
 constexpr int longestChime = 10;
 /// A reply that never says it ended stops holding the listener after this long.
 constexpr int longestReply = 900;
+/// Streaming, what follows the name goes out from this long before its first word, so a word begun while the chime
+/// played, when nothing counts as words, is kept whole. The name alone and the pause after it are never sent, so the
+/// model cannot take the pause for the end of the turn.
+constexpr int heldBack = 8;
 
 /// Speech is louder than both a floor and three times the quietest moment, the rule the web client's recorder uses.
 bool speech(float level, float quietest) { return level > std::max(0.015f, quietest * 3); }
@@ -42,7 +46,7 @@ double cpuSeconds() {
 Listener::Listener(std::unique_ptr<Spotter> spotter) : spotter(std::move(spotter)) {}
 
 Listener::State Listener::state() const {
-    if (std::holds_alternative<Recording>(phase)) return State::hearing;
+    if (std::holds_alternative<Recording>(phase) || std::holds_alternative<Streaming>(phase)) return State::hearing;
     if (std::holds_alternative<Working>(phase)) return State::working;
     return reply.kind == Own::Kind::none ? State::waiting : State::speaking;
 }
@@ -67,9 +71,9 @@ void Listener::hearPiece(Piece p, std::vector<Event>& events) {
     ring.push_back(std::move(p));
     while (int(ring.size()) > ringPieces) ring.pop_front();
     const Piece& piece = ring.back();
-    State now = state();
-    if (now == State::waiting) spot(piece, events);
-    else if (now == State::hearing) record(piece, events);
+    if (spotsNow()) spot(piece, events);
+    else if (std::holds_alternative<Recording>(phase)) record(piece, events);
+    else if (std::holds_alternative<Streaming>(phase)) stream(piece, events);
     chiming.tick(longestChime);
     if (reply.kind != Own::Kind::none) {
         reply.tick(longestReply);
@@ -117,23 +121,70 @@ void Listener::wake(const Spotter::Found& found, std::vector<Event>& events) {
     } else {
         while (start < n - 1 && !speech(ring[start].level, floor)) start++;
     }
-    Recording r;
-    r.pieces.assign(ring.begin() + std::max(0, start - 1), ring.end());
-    r.quietest = std::numeric_limits<float>::infinity();
-    for (const Piece& p : r.pieces) r.quietest = std::min(r.quietest, p.level);
+    int from = std::max(0, start - 1);
+    float quietest = std::numeric_limits<float>::infinity();
+    for (int i = from; i < n; i++) quietest = std::min(quietest, ring[i].level);
     int phraseEnd = start + std::max(0, int(std::lround(span / 0.1)) - 1);
     float loudest = -std::numeric_limits<float>::infinity();
     for (int i = start; i <= phraseEnd && i < n; i++) loudest = std::max(loudest, ring[i].level);
     float dip = loudest / 5;
     while (phraseEnd < n && ring[phraseEnd].level >= dip) phraseEnd++;
+    auto word = [&](int i) { return i > phraseEnd && ring[i].level >= dip; };
+    if (mode == Mode::stream) {
+        Streaming st;
+        st.quietest = quietest;
+        for (int i = from; i < n; i++) st.spoke = st.spoke || word(i);
+        // A request said straight after the name goes out with it; otherwise only from just before its first word.
+        if (!st.spoke) {
+            for (int i = std::max(phraseEnd + 1, n - heldBack); i < n; i++) st.held.push_back(ring[i].samples);
+        }
+        bool spoke = st.spoke;
+        phase = std::move(st);
+        settle();
+        events.push_back(Woke{found.keyword, true});
+        if (spoke) {
+            for (int i = from; i < n; i++) events.push_back(Streamed{ring[i].samples, word(i)});
+        }
+        return;
+    }
+    Recording r;
+    r.pieces.assign(ring.begin() + from, ring.end());
+    r.quietest = quietest;
     for (int i = phraseEnd + 1; i < n; i++) {
-        if (ring[i].level < dip) continue;
+        if (!word(i)) continue;
         r.spoke = true;
         r.lastVoice = i + 1 - n;
     }
     phase = std::move(r);
     settle();
     events.push_back(Woke{found.keyword});
+}
+
+/// Every piece is handed over, marked as words or not by the recording's rule. It does not end on a pause: the turn is
+/// over when the service says so (`turnOver`), or after 8 seconds with nothing said, or at 60 seconds.
+void Listener::stream(const Piece& piece, std::vector<Event>& events) {
+    Streaming& st = std::get<Streaming>(phase);
+    st.sinceWake++;
+    st.quietest = std::min(st.quietest, piece.level);
+    bool words = chiming.kind == Own::Kind::none && speech(piece.level, st.quietest);
+    if (st.spoke) {
+        events.push_back(Streamed{piece.samples, words});
+    } else if (words) {
+        for (std::vector<float>& before : st.held) events.push_back(Streamed{std::move(before), false});
+        st.held.clear();
+        st.spoke = true;
+        events.push_back(Streamed{piece.samples, true});
+    } else {
+        st.held.push_back(piece.samples);
+        if (int(st.held.size()) > heldBack) st.held.pop_front();
+    }
+    bool silent = !st.spoke && st.sinceWake >= nothingSaid;
+    bool cut = st.sinceWake >= longest;
+    if (!silent && !cut) return;
+    phase = Between{};
+    if (silent) events.push_back(NothingSaid{});
+    else events.push_back(Cut{});
+    ended(events);
 }
 
 void Listener::record(const Piece& piece, std::vector<Event>& events) {
@@ -178,14 +229,32 @@ void Listener::done() {
     settle();
 }
 
+void Listener::setMode(Mode m) {
+    mode = m;
+    settle();
+}
+
+void Listener::turnOver() {
+    if (!std::holds_alternative<Streaming>(phase)) return;
+    phase = Between{};
+    settle();
+}
+
 bool Listener::askToSpeak() {
     if (std::holds_alternative<Recording>(phase)) {
         replyHeld = true;
         return false;
     }
     reply = Own{Own::Kind::playing, 0};
+    interruptible = false;
     settle();
     return true;
+}
+
+void Listener::replyStreams(bool may) {
+    if (reply.kind != Own::Kind::playing) reply = Own{Own::Kind::playing, 0};
+    interruptible = may;
+    settle();
 }
 
 void Listener::replyEnded() {
@@ -201,7 +270,7 @@ void Listener::chimeEnded() {
 
 std::unique_ptr<Spotter> Listener::respell(std::unique_ptr<Spotter> next) {
     std::swap(spotter, next);
-    if (state() == State::waiting) listen();
+    if (spotsNow()) listen();
     return next;
 }
 
@@ -210,8 +279,13 @@ void Listener::listen() {
     if (Between* between = std::get_if<Between>(&phase)) between->quiet = 0;
 }
 
+bool Listener::spotsNow() const {
+    if (!std::holds_alternative<Between>(phase)) return false;
+    return reply.kind == Own::Kind::none || (mode == Mode::stream && interruptible);
+}
+
 void Listener::settle() {
-    bool now = state() == State::waiting;
+    bool now = spotsNow();
     if (now && !spotting) listen();
     spotting = now;
 }
@@ -225,6 +299,39 @@ std::vector<float> chime() {
             double t = double(n) / Listener::rate - begin;
             double gain = t < 0.01 ? 0.18 * t / 0.01 : 0.18 * std::pow(0.001 / 0.18, (t - 0.01) / 0.11);
             s[n] += float(gain * std::sin(2 * M_PI * pitches[i] * t));
+        }
+    }
+    return s;
+}
+
+namespace {
+
+/// A note that rises to `peak` over `attack` seconds and decays to a thousandth of it by `length`, added into `s`.
+void note(std::vector<float>& s, double begin, double pitch, double peak, double attack, double length) {
+    for (size_t n = size_t(begin * Listener::rate); n < size_t((begin + length) * Listener::rate) && n < s.size(); n++) {
+        double t = double(n) / Listener::rate - begin;
+        double gain = t < attack ? peak * t / attack : peak * std::pow(0.001, (t - attack) / (length - attack));
+        s[n] += float(gain * std::sin(2 * M_PI * pitch * t));
+    }
+}
+
+}  // namespace
+
+std::vector<float> sentTone() {
+    std::vector<float> s(size_t(Listener::rate * 0.18), 0.f);
+    note(s, 0, 784, 0.12, 0.006, 0.09);
+    note(s, 0.07, 587, 0.12, 0.006, 0.11);
+    return s;
+}
+
+std::vector<float> thinkingLoop() {
+    std::vector<float> s(size_t(Listener::rate * 1.6), 0.f);
+    // Slow swells rather than strikes, so it reads as waiting, not as another signal.
+    for (auto [begin, pitch] : {std::pair{0.05, 392.0}, std::pair{0.55, 523.25}}) {
+        for (size_t n = size_t(begin * Listener::rate); n < size_t((begin + 0.5) * Listener::rate); n++) {
+            double t = double(n) / Listener::rate - begin;
+            double swell = std::pow(std::sin(M_PI * t / 0.5), 2);
+            s[n] += float(0.04 * swell * std::sin(2 * M_PI * pitch * t));
         }
     }
     return s;

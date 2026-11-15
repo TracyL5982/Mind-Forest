@@ -15,6 +15,10 @@ double mediaTime();
 /// printf-style formatting into a std::string: String(format:).
 std::string fmt(const char* format, ...) __attribute__((format(printf, 1, 2)));
 
+/// Bytes as base64 (RFC 4648, padded), and back. nullopt for text that is not base64.
+std::string base64Encode(const std::string& bytes);
+std::optional<std::string> base64Decode(const std::string& text);
+
 /// NSLog. On the headset it goes to logcat under the tag "ocean"; on the Mac to stderr.
 void logLine(const std::string& line);
 

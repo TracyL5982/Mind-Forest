@@ -3,8 +3,9 @@
  * The wake phrase, off the page's thread. Hears the microphone at 16 kHz from the audio thread, spots "hey <name>" or "hi <name>"
  * with sherpa-onnx's keyword spotter, then records until the speaker pauses and hands back that recording as a WAV.
  * Nothing is recorded before the phrase except a short ring of the last seconds, kept here, so the words right after it are not lost.
+ * Streaming (the service's live voice), it hands back each piece after the phrase as it is heard instead, until the page says the turn is over.
  *
- * mode: 'loading' | 'held' | 'waiting' | 'hearing'
+ * mode: 'loading' | 'held' | 'waiting' | 'hearing' | 'streaming'
  */
 const VENDOR = new URL('../vendor/sherpa-onnx/', self.location).href;
 const RATE = 16000;
@@ -26,6 +27,11 @@ const PAUSE_S = 1.2;
 const NOTHING_SAID_S = 8;
 const LONGEST_S = 60;
 const GREETINGS = ['HEY', 'HI'];
+/**
+ * Streaming, what follows the phrase goes out from this long before its first word, and the phrase itself only when the request follows
+ * straight on. The live model took the pause after "Hey Momo." for the end of the turn and answered the greeting (DECISIONS.md 39).
+ */
+const HELD_BACK_S = 0.8;
 
 let mode = 'loading';
 let tuning = null;
@@ -34,6 +40,8 @@ let kws = null;
 let stream = null;
 const ring = [];
 let heard = null;
+/** Whether what follows the phrase is streamed rather than recorded, from the next phrase on. */
+let streams = false;
 let quietS = 0;
 let vocabulary = null;
 const busy = { decodeMs: 0, audioS: 0 };
@@ -65,6 +73,10 @@ self.onmessage = (event) => {
     if (mode === 'held' || mode === 'waiting') listen();
   } else if (m.t === 'hold') {
     if (mode === 'waiting') mode = 'held';
+  } else if (m.t === 'stream') {
+    streams = m.on;
+  } else if (m.t === 'over') {
+    if (mode === 'streaming') mode = 'held';
   } else if (m.t === 'busy') {
     self.postMessage({ t: 'busy', ...busy });
   }
@@ -135,6 +147,7 @@ function hear(piece) {
   while (ring.length * PIECE_S > RING_S) ring.shift();
   if (mode === 'waiting') spot(piece);
   else if (mode === 'hearing') record(piece);
+  else if (mode === 'streaming') flow(piece);
 }
 
 function spot(piece) {
@@ -185,8 +198,39 @@ function wake(result) {
   let lastVoice = -Infinity;
   for (let i = phraseEnd + 1; i < ring.length; i++) if (level(ring[i]) >= dip) lastVoice = (i + 1 - ring.length) * PIECE_S;
   heard = { pieces, quietest, spoke: lastVoice > -Infinity, sinceWake: 0, lastVoice };
-  mode = 'hearing';
-  self.postMessage({ t: 'wake', keyword: result.keyword, beforeS: pieces.length * PIECE_S });
+  mode = streams ? 'streaming' : 'hearing';
+  self.postMessage({ t: 'wake', keyword: result.keyword, beforeS: pieces.length * PIECE_S, streaming: streams });
+  if (!streams) return;
+  if (heard.spoke) for (const piece of pieces) send(piece);
+  else heard.held = ring.slice(Math.max(phraseEnd + 1, ring.length - HELD_BACK_S / PIECE_S));
+}
+
+/** Streaming: every piece goes to the page as it is heard, once the first word after the phrase has come. A pause does not end it. */
+function flow(piece) {
+  heard.sinceWake += PIECE_S;
+  heard.quietest = Math.min(heard.quietest, level(piece));
+  const words = speech(piece, heard.quietest);
+  if (heard.spoke) send(piece);
+  else if (words) {
+    for (const before of heard.held) send(before);
+    heard.held = [];
+    heard.spoke = true;
+    send(piece);
+  } else {
+    heard.held.push(piece);
+    if (heard.held.length > HELD_BACK_S / PIECE_S) heard.held.shift();
+  }
+  const silent = !heard.spoke && heard.sinceWake > NOTHING_SAID_S;
+  if (!silent && heard.sinceWake < LONGEST_S) return;
+  mode = 'held';
+  self.postMessage({ t: silent ? 'nothing' : 'cut' });
+}
+
+/** A piece as /live carries it: 16-bit little-endian PCM. */
+function send(piece) {
+  const pcm = new Int16Array(piece.length);
+  for (let i = 0; i < piece.length; i++) pcm[i] = Math.max(-1, Math.min(1, piece[i])) * 0x7fff;
+  self.postMessage({ t: 'piece', pcm: pcm.buffer }, [pcm.buffer]);
 }
 
 function record(piece) {

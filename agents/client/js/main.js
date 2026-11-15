@@ -5,8 +5,10 @@ import { Panel } from './panel.js';
 import { useMaps } from './map.js';
 import { bindField, bindDump, isSound, measure, textDump } from './input.js';
 import { Voice, speak, hush, watchReplies } from './voice.js';
-import { HandsFree, wakeProblem } from './wake.js';
-import { HandoffSheet, WorkLog, bindGate, bindSettings, bindTelegram, caption, showGate, showKnowledge, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
+import { Cues, HandsFree, wakeProblem } from './wake.js';
+import { LiveVoice } from './live.js';
+import { Turn } from './turn.js';
+import { HandoffSheet, WorkLog, bindGate, bindSettings, bindTelegram, caption, showDoing, showGate, showKnowledge, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
 
 const $ = (id) => document.getElementById(id);
 const MUTED = 'mind-palace-muted';
@@ -16,7 +18,7 @@ const conn = new Connection({ onMessage: receive, onStatus: status });
 const asset = (url) => conn.withToken(url);
 const field = new Field({ root: $('field'), store, asset });
 const log = new WorkLog();
-const panel = new Panel({ el: $('panel'), store, send, asset, onClose: () => choose([]) });
+const panel = new Panel({ el: $('panel'), store, send: (message) => (message.t === 'ask' ? ask(message) : send(message)), asset, onClose: () => choose([]) });
 const handoff = new HandoffSheet({ send, link: asset, choices: handoffChoices });
 
 let selection = [];
@@ -26,6 +28,8 @@ let drawQueued = false;
 let refit = false;
 let muted = false;
 let voiced = false;
+/** Momo's live voice, once the service is reached: it speaks every reply itself while it is ready. */
+let live = null;
 try { muted = localStorage.getItem(MUTED) === '1'; } catch { /* keeps the default */ }
 
 function send(message) {
@@ -105,8 +109,30 @@ function receive(message) {
       showMic();
       voiced = message.voice === true;
       voice.serviceHears = message.hearing === 'service';
+      if (message.live) live ??= new LiveVoice({
+        token: conn.token,
+        connection: message.connection,
+        name: agentName,
+        onReady: (on) => handsFree.stream(on),
+        onOver: () => {
+          handsFree.over();
+          turn.over();
+        },
+        onHeard: (text, final) => caption('you', text, { faint: !final }),
+        onQuiet: () => {
+          handsFree.over();
+          turn.quiet();
+        },
+        onSpeaking: momoHeard,
+        onText: (text) => caption('librarian', text),
+      });
+      if (live) {
+        live.muted = muted;
+        live.link(message.connection);
+      }
       showSettings(store.settings);
       log.reset();
+      turn.reset();
       for (const id of field.thinking.keys()) field.thinking.set(id, 0);
       activityNode.clear();
       if (first) {
@@ -132,6 +158,7 @@ function receive(message) {
     case 'activity': {
       const { id, state, nodeId } = message.activity;
       log.activity(message.activity);
+      turn.activity(message.activity);
       if (state === 'start' && nodeId) {
         activityNode.set(id, nodeId);
         field.setThinking(nodeId, 1);
@@ -143,6 +170,7 @@ function receive(message) {
     }
     case 'say':
       caption('librarian', message.text);
+      turn.said(muted && !live?.ready);
       if (!muted) reply(message.text);
       return;
     case 'heard':
@@ -234,6 +262,18 @@ function utter(text, final) {
   return send({ t: 'utter', text, final, scene: scene() });
 }
 
+/** A question typed or picked goes straight to the agent: sent, then thinking. */
+function asked(sent) {
+  if (!sent) return false;
+  cues.unlock();
+  turn.over(true);
+  return true;
+}
+
+function ask(message) {
+  return asked(send(message));
+}
+
 function handoffChoices() {
   const tree = store.tree.get(currentTree());
   return [
@@ -259,7 +299,7 @@ bindDump({ veil: $('veil'), onDump: dump });
 $('dump').addEventListener('submit', async (e) => {
   e.preventDefault();
   const what = textDump($('dump-text').value);
-  if (what && (aboutChosen(what) ? utter(what.text, true) : await dump(what))) {
+  if (what && (aboutChosen(what) ? asked(utter(what.text, true)) : await dump(what))) {
     $('dump-text').value = '';
     $('dump-text').style.height = '';
   }
@@ -282,7 +322,7 @@ $('file-pick').addEventListener('change', (e) => {
 $('talk').addEventListener('submit', (e) => {
   e.preventDefault();
   const text = $('talk-text').value.trim();
-  if (text && utter(text, true)) $('talk-text').value = '';
+  if (text && asked(utter(text, true))) $('talk-text').value = '';
 });
 
 // ---- the microphone: hands-free when the page can listen for the agent's name, a tap per recording when it cannot
@@ -290,46 +330,86 @@ $('talk').addEventListener('submit', (e) => {
 const agentName = () => (store.settings?.agentName ?? 'momo').trim().replace(/(^|\s)(\p{L})/gu, (_, gap, letter) => gap + letter.toUpperCase());
 /** null when the page can listen for the name, otherwise why not. Undefined until the microphone is first pressed. */
 let cannotListen;
-let micState = 'off';
+/** The microphone itself: off, starting, waiting for the name, or idle (a tap per recording). The turn's state shows over it. */
+let listener = 'off';
 
 const MIC = {
   off: () => [`Listen for "Hey ${agentName()}"`, 'Ask or tell the librarian'],
   starting: () => ['Starting to listen', 'Starting to listen…'],
   waiting: () => [`Listening for "Hey ${agentName()}". Tap to stop.`, `Say "Hey ${agentName()}", or type`],
-  hearing: () => ['Hearing you. Tap to stop.', 'Hearing you…'],
-  working: () => ['Working on what you said', 'Working on what you said…'],
-  speaking: () => [`${agentName()} is speaking`, `${agentName()} is speaking…`],
   idle: () => [cannotListen ? `Tap to talk. Hands-free listening is off because ${cannotListen}.` : 'Talk', 'Ask or tell the librarian'],
-  listening: () => ['Listening. Tap to stop.', 'Listening…'],
+  listening: () => ['Hearing you. Tap to stop.', 'Hearing you…'],
+  sent: () => ['Sent', 'Sent'],
+  thinking: () => [`${agentName()} is thinking`, `${agentName()} is thinking…`],
+  responding: () => [`${agentName()} is speaking`, `${agentName()} is speaking…`],
+  working: () => [`${agentName()} is working: ${turn.step}`, `${turn.step}…`],
 };
 
-function showMic(state = micState) {
-  micState = state;
+/** The short line under the question, for the states that have one. */
+const DOING = {
+  sent: () => 'Thinking…',
+  thinking: () => 'Thinking…',
+  working: () => `${turn.step}…`,
+};
+
+function showMic() {
+  const state = turn.state === 'waiting' ? listener : turn.state;
   const [label, prompt] = MIC[state]();
   $('mic').dataset.state = state;
-  $('mic').setAttribute('aria-pressed', String(!['off', 'idle'].includes(state)));
+  $('mic').setAttribute('aria-pressed', String(listener === 'starting' || listener === 'waiting' || turn.state === 'listening'));
   $('mic').setAttribute('aria-label', label);
   $('mic').title = label;
   $('talk-text').placeholder = prompt;
 }
 
+const cues = new Cues();
+cues.mute(muted);
+const turn = new Turn((state, from) => {
+  if (state === 'sent' && from !== 'sent') cues.sent();
+  cues.thinking(state === 'thinking');
+  if (state === 'listening' && from !== 'listening') caption('you', null);
+  showDoing(DOING[state]?.() ?? null);
+  showMic();
+});
+
+/** Momo started or stopped being heard, by the live voice or the page's own. Muted nothing echoes, so the name is still listened for. */
+function momoHeard(playing, interruptible = false) {
+  handsFree.replyPlaying(playing, muted || interruptible);
+  turn.speaking(playing);
+}
+
 const voice = new Voice({
-  onWords: utter,
+  onWords: (text, final) => {
+    utter(text, final);
+    if (final && turn.state === 'listening') turn.over();
+  },
   onProblem: toast,
-  onState: showMic,
+  onState: (state) => {
+    listener = 'idle';
+    if (state === 'listening') turn.listen();
+    else if (state === 'working') turn.over();
+    else if (turn.state === 'listening') turn.quiet();
+    showMic();
+  },
   transcribe: (blob) => conn.transcribe(blob, currentTree()),
 });
 
 /** A reply that arrives while the user is being recorded waits until the recording ends, so it is not recorded into what they say. */
 let waitingReply = null;
 function reply(text) {
+  if (live?.ready) return;
   if (handsFree.state === 'hearing') waitingReply = text;
   else speak(text, voiced ? conn.speechUrl(text) : null);
 }
 
 const handsFree = new HandsFree({
+  cues,
   onState: (state) => {
-    showMic(state);
+    listener = state === 'off' || state === 'starting' ? state : 'waiting';
+    if (state === 'hearing') turn.listen();
+    else if (state === 'working') turn.over();
+    else if (state === 'off' && turn.state === 'listening') turn.quiet();
+    showMic();
     if (state === 'hearing' || waitingReply === null) return;
     const text = waitingReply;
     waitingReply = null;
@@ -340,14 +420,25 @@ const handsFree = new HandsFree({
     try {
       const text = (await conn.transcribe(blob, currentTree())).trim();
       if (text) utter(text, true);
-      else toast('Nothing was heard after the name.');
+      else {
+        toast('Nothing was heard after the name.');
+        turn.quiet();
+      }
     } catch {
       toast('That recording could not be turned into text.');
+      turn.quiet();
     }
     handsFree.done();
   },
+  onStart: () => live?.start(scene()),
+  onPiece: (pcm) => live?.audio(pcm),
+  onEnd: (said) => {
+    if (said) return live?.end();
+    live?.cancel();
+    turn.quiet();
+  },
 });
-watchReplies((playing) => handsFree.replyPlaying(playing));
+watchReplies((playing) => momoHeard(playing));
 /** For scripts/wake-check.ts, which measures how hard the listener works. */
 window.handsFreeBusy = () => handsFree.busy();
 
@@ -356,10 +447,13 @@ $('mic').addEventListener('click', async () => {
     cannotListen = await wakeProblem();
     // The press asked for hands-free listening, not a recording, so it only says why that is off.
     if (cannotListen) {
-      showMic('idle');
+      listener = 'idle';
+      showMic();
       return toast(`This page cannot listen for "Hey ${agentName()}": ${cannotListen}. Tap the microphone again to talk once.`);
     }
   }
+  live?.unlock();
+  cues.unlock();
   if (cannotListen === null) return handsFree.on ? handsFree.stop() : handsFree.start(agentName());
   voice.toggle();
 });
@@ -371,6 +465,10 @@ function showMute() {
 $('mute').addEventListener('click', () => {
   muted = !muted;
   if (muted) hush();
+  if (live) live.muted = muted;
+  if (muted) live?.stop();
+  cues.mute(muted);
+  cues.thinking(turn.state === 'thinking');
   try { localStorage.setItem(MUTED, muted ? '1' : '0'); } catch { /* lasts for this visit only */ }
   showMute();
 });

@@ -2,6 +2,7 @@
 // implement this: the Quest (android/, OpenXR) and a Mac preview window
 // (desktop/), which exists so a change can be looked at without the headset.
 #pragma once
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -230,5 +231,20 @@ using SoundRef = std::shared_ptr<Sound>;
 /// Plays a sound file (MP3 or WAV). `done` is called once, on a thread of the host's, when it ends, fails or is
 /// stopped: true when it played to its end.
 SoundRef playSound(const std::string& path, std::function<void(bool played)> done);
+
+/// Raw sound played as it arrives: 16-bit mono PCM at `rate` Hz, in the order written. The host keeps it until `done`.
+class Stream {
+public:
+    virtual ~Stream() = default;
+    /// Queues samples after those already queued. Called from one thread (the frame thread), and never waits.
+    virtual void write(const int16_t* samples, size_t count) = 0;
+    /// Nothing more will be written: `done(true)` follows once everything queued has played.
+    virtual void finish() = 0;
+    /// Stops at once and drops what is queued: `done(false)` follows.
+    virtual void stop() = 0;
+};
+using StreamRef = std::shared_ptr<Stream>;
+/// `done` is called once, on a thread of the host's. Null, with `done(false)` already called, when it cannot play.
+StreamRef playStream(int rate, std::function<void(bool played)> done);
 
 }  // namespace platform

@@ -395,6 +395,7 @@ std::optional<Activity> readActivity(const Json& j, Why& why) {
                                                    {"error", Activity::State::error}}),
                        .message = f.string("message"),
                        .nodeId = f.optionalId<NodeId>("nodeId"),
+                       .label = f.optionalString("label"),
                        .detail = f.optionalString("detail"),
                    });
 }
@@ -410,7 +411,7 @@ std::optional<Inbound> message(const Fields& f, T value) {
 
 std::optional<Inbound> readHello(const Json& j, Why& why) {
     Fields f(j, why);
-    // `voice` and `hearing` came later than version 1; a service without them reads as one with neither.
+    // `voice`, `hearing` and `live` came later than version 1; a service without them reads as one with none.
     return message(f, Hello{
                           .protocol = int(f.whole("protocol")),
                           .snapshot = f.nested("snapshot", readSnapshot),
@@ -420,6 +421,8 @@ std::optional<Inbound> readHello(const Json& j, Why& why) {
                           .hearing = j["hearing"].isNull()
                                          ? Hearing::browser
                                          : f.choice<Hearing>("hearing", {{"browser", Hearing::browser}, {"service", Hearing::service}}),
+                          .live = f.optionalBoolean("live").value_or(false),
+                          .connection = f.optionalString("connection").value_or(""),
                       });
 }
 
@@ -499,6 +502,17 @@ Json idList(const std::vector<I>& ids) {
 
 Json named(const char* t) { return Json::object().set("t", t); }
 
+}  // namespace
+
+Json sceneJson(const Scene& scene) {
+    Json s = Json::object().set("selection", idList(scene.selection));
+    if (scene.focus) s.set("focus", scene.focus->value);
+    if (scene.treeId) s.set("treeId", scene.treeId->value);
+    return s;
+}
+
+namespace {
+
 Json scope(const Scope& s) { return Json::object().set("treeIds", idList(s.treeIds)).set("nodeIds", idList(s.nodeIds)); }
 
 }  // namespace
@@ -552,10 +566,7 @@ Outbound Outbound::dump(const std::vector<Dump>& dumps) {
 }
 
 Outbound Outbound::utter(const std::string& text, bool final, const Scene& scene) {
-    Json s = Json::object().set("selection", idList(scene.selection));
-    if (scene.focus) s.set("focus", scene.focus->value);
-    if (scene.treeId) s.set("treeId", scene.treeId->value);
-    return Outbound(named("utter").set("text", text).set("final", final).set("scene", std::move(s)));
+    return Outbound(named("utter").set("text", text).set("final", final).set("scene", sceneJson(scene)));
 }
 
 Outbound Outbound::focus(const NodeId& nodeId) { return Outbound(named("focus").set("nodeId", nodeId.value)); }

@@ -35,6 +35,8 @@ export interface Activity {
   message: string;
   /** The node the work is about, so a client can show the work state in place. */
   nodeId?: Id;
+  /** The step is a whole Scout run on `nodeId`, not one of its parts, which name the card too. */
+  whole?: true;
 }
 
 /** `reply`: what the agent answers at once to what was said. `results`: what a piece of work brought, said when it is done. */
@@ -306,7 +308,7 @@ export class Pipeline {
       if (run !== this.voiceRun) return;
       this.history.push({ who: 'user', text });
       if (say) this.say(say, 'reply');
-      await this.dispatch(intent, scene);
+      await this.perform(intent, scene);
     } catch (err) {
       this.fail('conductor', err);
     } finally {
@@ -314,7 +316,21 @@ export class Pipeline {
     }
   }
 
-  private async dispatch(intent: Intent, scene: Scene): Promise<void> {
+  /**
+   * Something said in a live conversation that no Conductor reads: what the user said and what Momo answered. It joins the
+   * conversation the Scout and the suggested questions read.
+   */
+  spoken(turn: Turn): void {
+    if (turn.text.trim()) this.history.push(turn);
+  }
+
+  /** Does what an intent says in the background, for one of Momo's live tools, which answers before the work is done. */
+  carryOut(intent: Intent, scene: Scene): void {
+    this.track(this.perform(intent, scene));
+  }
+
+  /** Does what an intent says, as the Conductor's reading of an utterance asks. */
+  async perform(intent: Intent, scene: Scene): Promise<void> {
     switch (intent.kind) {
       case 'ask':
         return this.runScout(intent.anchor, intent.need);
@@ -423,7 +439,7 @@ export class Pipeline {
           this.afterContent(set);
         };
         bring(await this.deps.roles.scout(this.ctx, { anchor, need, history: this.history.slice(-6), deliver: bring }));
-      }, need);
+      }, need, true);
     } catch (err) {
       this.fail('scout', err);
     }
@@ -514,9 +530,9 @@ export class Pipeline {
     this.deps.emit({ t: 'change', set });
   }
 
-  private async work<T>(role: string, label: string, nodeId: Id | undefined, body: () => Promise<T>, detail?: string): Promise<T> {
+  private async work<T>(role: string, label: string, nodeId: Id | undefined, body: () => Promise<T>, detail?: string, whole?: true): Promise<T> {
     const id = this.deps.newId();
-    const about = { id, role, label, ...(detail ? { detail } : {}), nodeId };
+    const about = { id, role, label, ...(detail ? { detail } : {}), nodeId, ...(whole ? { whole } : {}) };
     this.deps.emit({ t: 'activity', activity: { ...about, state: 'start', message: label } });
     try {
       const result = await body();

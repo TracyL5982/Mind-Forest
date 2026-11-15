@@ -204,6 +204,8 @@ struct Activity {
     State state = State::start;
     std::string message;
     std::optional<NodeId> nodeId;
+    /// A few words on the step, for showing; `message` stands in when the service gives none.
+    std::optional<std::string> label;
     /// More about the step: for a Scout run on a card, the question it answers; on an error, what went wrong.
     std::optional<std::string> detail;
 };
@@ -223,6 +225,10 @@ struct Hello {
     /// Whether GET /api/speak reads replies aloud.
     bool voice = false;
     Hearing hearing = Hearing::browser;
+    /// Whether Momo's live voice answers on /live.
+    bool live = false;
+    /// This connection's id, which /live names so that what Momo starts there is this connection's own.
+    std::string connection;
 };
 struct Change {
     ChangeSet set;
@@ -294,6 +300,8 @@ struct Scene {
     std::vector<NodeId> selection;
     std::optional<TreeId> treeId;
 };
+/// As the service reads it, in an `utter` and in /live's `start`.
+Json sceneJson(const Scene& scene);
 
 /// What an organize or handoff covers. Empty means everything.
 struct Scope {

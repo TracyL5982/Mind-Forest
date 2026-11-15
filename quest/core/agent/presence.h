@@ -1,5 +1,5 @@
 // What the voice is doing, for the view of Momo's presence in the scene (presence_view.h): one value the frame
-// thread reads each frame. WS17 (tracy/quest-live) owns this file; this copy stands in until its commit lands.
+// thread reads each frame. The voice fills it (Voice::presence), and the bridge adds the card the agent works on.
 #pragma once
 #include <optional>
 #include <string>

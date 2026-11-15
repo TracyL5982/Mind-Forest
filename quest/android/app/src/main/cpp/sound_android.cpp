@@ -1,4 +1,4 @@
-// platform.h's sound on the Quest: the microphone and MediaPlayer from Kotlin (Sound.kt), reached through JNI.
+// platform.h's sound on the Quest: the microphone, MediaPlayer and streamed speech from Kotlin (Sound.kt), reached through JNI.
 #include <jni.h>
 
 #include <atomic>
@@ -14,7 +14,7 @@ namespace {
 
 struct SoundClass {
     jclass cls = nullptr;
-    jmethodID openMicrophone, closeMicrophone, play, stop;
+    jmethodID openMicrophone, closeMicrophone, play, stop, openStream, writeStream, finishStream, stopStream;
     SoundClass() {
         JNIEnv* e = jni::env();
         cls = jni::findClass("com/kaifengwu/mindpalace/Sound");
@@ -22,6 +22,10 @@ struct SoundClass {
         closeMicrophone = e->GetStaticMethodID(cls, "closeMicrophone", "(J)V");
         play = e->GetStaticMethodID(cls, "play", "(Landroid/app/Activity;Ljava/lang/String;J)V");
         stop = e->GetStaticMethodID(cls, "stop", "(Landroid/app/Activity;J)V");
+        openStream = e->GetStaticMethodID(cls, "openStream", "(IJ)V");
+        writeStream = e->GetStaticMethodID(cls, "writeStream", "(J[S)V");
+        finishStream = e->GetStaticMethodID(cls, "finishStream", "(J)V");
+        stopStream = e->GetStaticMethodID(cls, "stopStream", "(J)V");
     }
 };
 
@@ -60,6 +64,26 @@ private:
     int64_t handle;
 };
 
+/// Its samples go to Sound.kt's queue for the stream's own thread; `done` comes through `played`, as a file's does.
+class AndroidStream : public platform::Stream {
+public:
+    explicit AndroidStream(int64_t handle) : handle(handle) {}
+    void write(const int16_t* samples, size_t count) override {
+        if (count == 0) return;
+        JNIEnv* e = jni::env();
+        jshortArray array = e->NewShortArray(jsize(count));
+        if (!array) return;
+        e->SetShortArrayRegion(array, 0, jsize(count), reinterpret_cast<const jshort*>(samples));
+        e->CallStaticVoidMethod(sound().cls, sound().writeStream, jlong(handle), array);
+        e->DeleteLocalRef(array);
+    }
+    void finish() override { jni::env()->CallStaticVoidMethod(sound().cls, sound().finishStream, jlong(handle)); }
+    void stop() override { jni::env()->CallStaticVoidMethod(sound().cls, sound().stopStream, jlong(handle)); }
+
+private:
+    int64_t handle;
+};
+
 }  // namespace
 
 namespace platform {
@@ -87,6 +111,16 @@ SoundRef playSound(const std::string& path, std::function<void(bool played)> don
     e->CallStaticVoidMethod(sound().cls, sound().play, jni::activity(), jpath, jlong(handle));
     e->DeleteLocalRef(jpath);
     return std::make_shared<AndroidSound>(handle);
+}
+
+StreamRef playStream(int rate, std::function<void(bool played)> done) {
+    int64_t handle = nextHandle++;
+    {
+        std::lock_guard<std::mutex> g(registry);
+        playing[handle] = std::move(done);
+    }
+    jni::env()->CallStaticVoidMethod(sound().cls, sound().openStream, jint(rate), jlong(handle));
+    return std::make_shared<AndroidStream>(handle);
 }
 
 }  // namespace platform
