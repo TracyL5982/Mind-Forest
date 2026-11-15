@@ -39,7 +39,9 @@ public:
     };
     /// The name, then nothing for 8 seconds: nothing is sent.
     struct NothingSaid {};
-    using Event = std::variant<Woke, Recorded, NothingSaid>;
+    /// A reply held while the user was recorded may play now (see `askToSpeak`).
+    struct Speak {};
+    using Event = std::variant<Woke, Recorded, NothingSaid, Speak>;
 
     explicit Listener(std::unique_ptr<Spotter> spotter);
 
@@ -47,10 +49,18 @@ public:
     std::vector<Event> hear(const float* samples, size_t count);
     /// The recording has been dealt with: it listens for its name again.
     void done();
-    /// A reply started or stopped playing. Nothing is heard while it plays, nor for 300 ms after, while its echo fades.
-    void replyPlaying(bool playing);
-    /// Listens for another name from now on.
-    void respell(std::unique_ptr<Spotter> spotter);
+    /// A reply would play. True when it may now. From then nothing is heard until `replyEnded`, nor for 300 ms after,
+    /// while its echo fades. While the user is being recorded it waits, so it is not recorded into what they say:
+    /// `Speak` comes as the recording ends.
+    bool askToSpeak();
+    /// The reply ended, or could not play.
+    void replyEnded();
+    /// The chime that says the name was heard started, or ended. Sound is still recorded while it plays and for 300 ms
+    /// after, but is not taken for speech: the headset's microphone has no echo cancelling to take the chime out.
+    void chimeStarted();
+    void chimeEnded();
+    /// Listens for another name from now on. The spotter it listened with before, to be let go.
+    std::unique_ptr<Spotter> respell(std::unique_ptr<Spotter> spotter);
     State state() const;
 
     /// How hard it works: CPU seconds spent spotting, over seconds of sound spotted in.
@@ -77,16 +87,21 @@ private:
         int lastVoice = 0;          // the piece of the last speech, counted as `sinceWake` is
     };
     struct Working {};
-    struct Reply {
+    /// A sound of the agent's own, a reply or the chime: playing, or its echo fading after it ended.
+    struct Own {
         enum class Kind { none, playing, echo } kind = Kind::none;
         int pieces = 0;             // since it started playing, or stopped
+        /// Counts a piece. A sound that never says it ended is taken to have ended after `longest` pieces.
+        void tick(int longest);
     };
 
     std::unique_ptr<Spotter> spotter;
     std::deque<Piece> ring;         // the last three seconds
     std::vector<float> partial;     // samples not yet a whole piece
     std::variant<Between, Recording, Working> phase = Between{};
-    Reply reply;
+    Own reply;
+    Own chiming;
+    bool replyHeld = false;         // a reply asked to play while the user was recorded
     /// Whether it was spotting after the last change, so a fresh stream starts each time spotting starts again.
     bool spotting = true;
     Busy busy_;
@@ -95,6 +110,8 @@ private:
     void spot(const Piece& piece, std::vector<Event>& events);
     void wake(const Spotter::Found& found, std::vector<Event>& events);
     void record(const Piece& piece, std::vector<Event>& events);
+    /// The recording ended: a held reply may play.
+    void ended(std::vector<Event>& events);
     /// A fresh stream: the spotter clears itself after 1.5 seconds of quiet and loses a phrase that begins as it does.
     void listen();
     void settle();

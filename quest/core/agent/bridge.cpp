@@ -162,7 +162,7 @@ void Bridge::frame(double t) {
         logLine(std::string("[agent] keyboard test: ") + (shown ? "asked the system for its keyboard" : "no keyboard here"));
     }
     if (voice) {
-        voice->frame();
+        voice->frame(now);
         showVoice();
     }
     reportFocus();

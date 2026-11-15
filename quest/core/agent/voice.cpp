@@ -13,8 +13,10 @@
 namespace agent {
 
 struct Voice::Ears {
-    std::unique_ptr<Listener> listener;     // the sound thread's alone, once it hears
-    std::mutex lock;
+    /// The listener's own: the sound thread holds it while it hears a run of sound, the frame thread only when it is free.
+    std::mutex hearing;
+    std::unique_ptr<Listener> listener;
+    std::mutex lock;                        // the two queues
     std::vector<Command> commands;
     std::vector<Listener::Event> events;
     Listener::Busy busy;
@@ -24,23 +26,55 @@ struct Voice::Ears {
 
     explicit Ears(std::unique_ptr<Spotter> spotter) : listener(std::make_unique<Listener>(std::move(spotter))) {}
 
+    /// The sound thread.
     void heard(const float* samples, size_t count) {
+        std::lock_guard<std::mutex> h(hearing);
+        std::vector<Listener::Event> out;
+        std::vector<std::unique_ptr<Spotter>> retired = apply(out);
+        for (Listener::Event& e : listener->hear(samples, count)) out.push_back(std::move(e));
+        live = true;
+        publish(out);
+    }
+
+    /// The frame thread: what was asked is done now, unless the sound thread is hearing, which then does it first.
+    /// A spotter let go is unpacked from memory on the background thread, not the frame thread.
+    void settle() {
+        std::unique_lock<std::mutex> h(hearing, std::try_to_lock);
+        if (!h.owns_lock()) return;
+        std::vector<Listener::Event> out;
+        auto retired = std::make_shared<std::vector<std::unique_ptr<Spotter>>>(apply(out));
+        publish(out);
+        h.unlock();
+        if (!retired->empty()) Async::run([retired] { retired->clear(); });
+    }
+
+private:
+    /// Under `hearing`.
+    std::vector<std::unique_ptr<Spotter>> apply(std::vector<Listener::Event>& out) {
         std::vector<Command> todo;
         {
             std::lock_guard<std::mutex> g(lock);
             todo.swap(commands);
         }
+        std::vector<std::unique_ptr<Spotter>> retired;
         for (Command& c : todo) {
             std::visit(overloaded{
                            [&](Done&) { listener->done(); },
-                           [&](ReplyPlaying& r) { listener->replyPlaying(r.playing); },
-                           [&](Respell& r) { listener->respell(std::move(r.spotter)); },
+                           [&](AskToSpeak&) {
+                               if (listener->askToSpeak()) out.push_back(Listener::Speak{});
+                           },
+                           [&](ReplyEnded&) { listener->replyEnded(); },
+                           [&](ChimeStarted&) { listener->chimeStarted(); },
+                           [&](ChimeEnded&) { listener->chimeEnded(); },
+                           [&](Respell& r) { retired.push_back(listener->respell(std::move(r.spotter))); },
                        },
                        c);
         }
-        std::vector<Listener::Event> out = listener->hear(samples, count);
+        return retired;
+    }
+
+    void publish(std::vector<Listener::Event>& out) {
         state = listener->state();
-        live = true;
         std::lock_guard<std::mutex> g(lock);
         busy = listener->busy();
         for (Listener::Event& e : out) events.push_back(std::move(e));
@@ -163,25 +197,44 @@ void Voice::start() {
             vocabulary = made->vocabulary;
             spelled = keywordLines(name, *vocabulary) ? name : "momo";
             ears = std::make_shared<Ears>(std::move(made->spotter));
-            std::weak_ptr<Ears> weak = ears;
-            platform::MicrophoneEvents events{
-                [weak](const float* samples, size_t count) {
+            if (made->clip) {
+                std::weak_ptr<Ears> weak = ears;
+                platform::MicrophoneEvents events;
+                events.heard = [weak](const float* samples, size_t count) {
                     if (auto e = weak.lock()) e->heard(samples, count);
-                },
-                [weak](const std::string& why) {
-                    if (auto e = weak.lock()) e->live = false;
-                    logLine("[voice] the microphone stopped: " + why);
-                },
-            };
-            if (made->clip) microphone = std::make_shared<ClipMicrophone>(std::move(*made->clip), std::move(events));
-            else microphone = platform::openMicrophone(std::move(events));
-            if (!microphone) {
-                ears.reset();
-                return;
+                };
+                microphone = std::make_shared<ClipMicrophone>(std::move(*made->clip), std::move(events));
+            } else {
+                openMicrophone();
             }
             logLine("[voice] listening for \"Hey " + this->name() + "\"" + (clip ? " in " + *clip : ""));
             if (wanted != spelled) respell();
         });
+}
+
+void Voice::openMicrophone() {
+    std::weak_ptr<Ears> weak = ears;
+    std::weak_ptr<Inbox> box = inbox;
+    microphone = platform::openMicrophone({
+        [weak](const float* samples, size_t count) {
+            if (auto e = weak.lock()) e->heard(samples, count);
+        },
+        [weak, box](const std::string& why) {
+            if (auto e = weak.lock()) e->live = false;
+            logLine("[voice] the microphone stopped: " + why);
+            if (auto b = box.lock()) {
+                std::lock_guard<std::mutex> g(b->lock);
+                b->microphoneFailed = true;
+            }
+        },
+        [weak, box] {
+            if (auto e = weak.lock()) e->live = false;
+            if (auto b = box.lock()) {
+                std::lock_guard<std::mutex> g(b->lock);
+                b->microphoneRefused = true;
+            }
+        },
+    });
 }
 
 void Voice::respell() {
@@ -210,12 +263,14 @@ void Voice::send(Command command) {
 }
 
 void Voice::say(const std::string& text) {
-    if (!serviceSpeaks || !ears) return;
-    if (ears->state.load() == Listener::State::hearing) {
-        held = text;
+    if (!serviceSpeaks) return;
+    pending = text;
+    if (ears) {
+        send(AskToSpeak{});
         return;
     }
     speak(text);
+    pending.reset();
 }
 
 void Voice::speak(const std::string& text) {
@@ -223,7 +278,6 @@ void Voice::speak(const std::string& text) {
     sound.reset();
     int number = ++reply;
     spoken = text;
-    send(ReplyPlaying{true});
     platform::Request request;
     request.url = client.address().http + "/api/speak?text=" + queryEscape(text);
     request.headers = {{"Authorization", "Bearer " + client.address().token}};
@@ -263,11 +317,11 @@ void Voice::transcribe(const std::string& wav) {
     });
 }
 
-void Voice::frame() {
-    if (!ears) return;
+void Voice::frame(double now) {
     std::vector<Listener::Event> events;
     Listener::Busy busy;
-    {
+    if (ears) {
+        ears->settle();
         std::lock_guard<std::mutex> g(ears->lock);
         events.swap(ears->events);
         busy = ears->busy;
@@ -276,13 +330,25 @@ void Voice::frame() {
         std::visit(overloaded{
                        [&](Listener::Woke& w) {
                            logLine("[voice] heard " + w.keyword);
-                           platform::playSound(chimePath, nullptr);
+                           send(ChimeStarted{});
+                           std::weak_ptr<Inbox> box = inbox;
+                           platform::playSound(chimePath, [box](bool) {
+                               if (auto b = box.lock()) {
+                                   std::lock_guard<std::mutex> g(b->lock);
+                                   b->chimesEnded++;
+                               }
+                           });
                        },
                        [&](Listener::Recorded& r) {
                            logLine(fmt("[voice] recorded %.1f s, sending it to be transcribed", r.seconds));
                            transcribe(r.wav);
                        },
                        [&](Listener::NothingSaid&) { logLine("[voice] nothing was said after the name"); },
+                       [&](Listener::Speak&) {
+                           if (!pending) return;
+                           speak(*pending);
+                           pending.reset();
+                       },
                    },
                    e);
     }
@@ -290,12 +356,40 @@ void Voice::frame() {
     std::vector<Transcript> transcripts;
     std::vector<Fetched> fetched;
     std::vector<int> played;
+    int chimesEnded = 0;
+    bool failed = false, refused = false;
     {
         std::lock_guard<std::mutex> g(inbox->lock);
         transcripts.swap(inbox->transcripts);
         fetched.swap(inbox->fetched);
         played.swap(inbox->played);
+        std::swap(chimesEnded, inbox->chimesEnded);
+        std::swap(failed, inbox->microphoneFailed);
+        std::swap(refused, inbox->microphoneRefused);
     }
+    for (int i = 0; i < chimesEnded; i++) send(ChimeEnded{});
+    if (refused) {
+        // Asked again, the headset would ask the user again: it stops listening, and replies are still spoken.
+        logLine("[voice] the microphone is not allowed, so the headset does not listen");
+        if (microphone) microphone->stop();
+        microphone.reset();
+        ears.reset();
+        reopenAt = -1;
+        if (pending) speak(*pending);
+        pending.reset();
+    } else if (failed && ears) {
+        if (microphone) microphone->stop();
+        microphone.reset();
+        double wait = reopenDelays[std::min(microphoneFailures, int(std::size(reopenDelays)) - 1)];
+        microphoneFailures++;
+        reopenAt = now + wait;
+        logLine(fmt("[voice] opening the microphone again in %.0f s", wait));
+    }
+    if (ears && !microphone && reopenAt >= 0 && now >= reopenAt) {
+        reopenAt = -1;
+        openMicrophone();
+    }
+    if (ears && microphone && ears->live) microphoneFailures = 0;
     for (const Transcript& t : transcripts) {
         std::string text = t.text;
         size_t first = text.find_first_not_of(" \t\n"), last = text.find_last_not_of(" \t\n");
@@ -310,7 +404,7 @@ void Voice::frame() {
         if (f.reply != reply) continue;
         if (!f.ok) {
             logLine("[voice] the reply could not be spoken (" + f.why + ")");
-            send(ReplyPlaying{false});
+            send(ReplyEnded{});
             spoken.clear();
             continue;
         }
@@ -328,13 +422,8 @@ void Voice::frame() {
         if (number != reply) continue;
         sound.reset();
         spoken.clear();
-        send(ReplyPlaying{false});
+        send(ReplyEnded{});
         logLine("[voice] done speaking");
-    }
-    if (held && ears->state.load() != Listener::State::hearing) {
-        std::string text = *held;
-        held.reset();
-        speak(text);
     }
     if (Flags::has("agentLog") && busy.heard - busyLogged >= 60) {
         busyLogged = busy.heard;

@@ -211,8 +211,10 @@ using MicrophoneRef = std::shared_ptr<Microphone>;
 struct MicrophoneEvents {
     /// 16 kHz mono samples in -1...1, in runs of any length.
     std::function<void(const float* samples, size_t count)> heard;
-    /// Once, when it could not open or stopped by itself; `why` is for the log.
+    /// Once, when it could not open or stopped by itself; `why` is for the log. It may be opened again.
     std::function<void(const std::string& why)> failed;
+    /// Once, when the user did not allow it. Opened again, it would ask them again.
+    std::function<void()> denied;
 };
 /// Opens the microphone. Where the user must allow it first (the Quest), sound starts once they have.
 MicrophoneRef openMicrophone(MicrophoneEvents events);
