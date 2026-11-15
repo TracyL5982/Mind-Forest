@@ -8,7 +8,7 @@ import type { DeviceFrame } from './protocol.ts';
  * the device's microphone goes to the model, whose turn detection hears when the user is done and whose transcription writes down what
  * they said. The model never answers the user itself: the transcript goes to the pipeline as a final utterance, and the model speaks
  * each `say` the pipeline makes, in one voice, in its own words or as written. The frames are in docs/protocol.md; why it is built this
- * way is in agents/DECISIONS.md (41 and 42).
+ * way is in agents/DECISIONS.md (49 and 50).
  */
 
 export type SayKind = 'reply' | 'results';
