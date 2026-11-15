@@ -125,6 +125,17 @@ JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_Sound_microphoneFailed(JNIE
     if (failed) failed(text);
 }
 
+JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_Sound_microphoneDenied(JNIEnv*, jclass, jlong handle) {
+    std::function<void()> denied;
+    {
+        std::lock_guard<std::mutex> g(registry);
+        auto m = microphones.find(handle);
+        if (m == microphones.end()) return;
+        denied = m->second.denied;
+    }
+    if (denied) denied();
+}
+
 JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_Sound_played(JNIEnv*, jclass, jlong handle, jboolean toEnd) {
     std::function<void(bool)> done;
     {

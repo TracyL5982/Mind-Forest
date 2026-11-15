@@ -71,7 +71,9 @@ Talking to it works as in the web client. The headset listens on the device for 
 service's agent name), and nothing it hears leaves the headset unless it began with the name. After the name it
 chimes and records until you pause for 1.2 s; the service transcribes that and acts on it, and its reply is spoken
 when the service has a voice. A line of words low in front of you says what it is doing: `Say "Hey Momo"`,
-`Listening…`, `Thinking…`, then the reply. The first time, the headset asks to use the microphone. `-agentVoice off`
+`Listening…`, `Thinking…`, then the reply. The first time, the headset asks to use the microphone; refused, it does
+not ask again until the app starts again, and replies are still spoken. A microphone that stops is opened again after
+1, 2, 4, 8, then every 15 s. `-agentVoice off`
 turns it off; `-wakeClip <file.wav>` (16 kHz mono 16-bit) is heard in place of the microphone; `-micSource
 communication` reads Android's echo-cancelled source instead of the recognizer's. The listener is sherpa-onnx's
 keyword spotter, which `tools/fetch-voice.sh` fetches into `quest/vendor/` (the builds run it); `core/agent/test/run.sh`

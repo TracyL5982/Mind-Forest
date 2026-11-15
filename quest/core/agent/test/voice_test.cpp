@@ -26,6 +26,7 @@ struct Host {
     std::vector<Fetch> fetches;
     std::vector<Play> plays;
     platform::MicrophoneEvents microphone;
+    int opens = 0;
 };
 Host host;
 
@@ -67,6 +68,7 @@ struct Talking {
     std::shared_ptr<Transport> transport = std::make_shared<Transport>();
     Client client{*Address::parse("127.0.0.1:8790", "tok"), transport};
     Voice voice{client, [] { return Scene{NodeId{"n1"}, {}, TreeId{"t1"}}; }, std::nullopt};
+    double now = 0;
 
     explicit Talking(bool serviceSpeaks, const std::string& name = "momo") {
         host = Host{};
@@ -83,7 +85,41 @@ struct Talking {
         std::vector<float> s = sound.withHiss();
         for (size_t at = 0; at < s.size(); at += Listener::pieceLength) {
             host.microphone.heard(s.data() + at, std::min(size_t(Listener::pieceLength), s.size() - at));
-            voice.frame();
+            frame(0.1);
+        }
+    }
+    void frame(double seconds = 0) {
+        now += seconds;
+        voice.frame(now);
+    }
+    /// As `hear`, with the chime the voice plays heard back through the microphone, as on the headset, and said to
+    /// have ended once it has played. `after` is what is said once it has.
+    void hearWithChime(const Sound& before, std::function<void(Sound&)> after) {
+        std::vector<float> s = before.withHiss();
+        std::vector<float> ring = chime();
+        size_t chimeEnds = 0;
+        std::optional<size_t> chimed;
+        for (size_t at = 0;; at += Listener::pieceLength) {
+            if (chimed && at >= chimeEnds) {
+                host.plays[*chimed].done(true);
+                chimed.reset();
+                Sound rest;
+                after(rest);
+                std::vector<float> more = rest.withHiss();
+                s.resize(std::max(s.size(), at + more.size()), 0.f);
+                for (size_t i = 0; i < more.size(); i++) s[at + i] += more[i];
+            }
+            if (at + Listener::pieceLength > s.size()) break;
+            size_t plays = host.plays.size();
+            host.microphone.heard(s.data() + at, Listener::pieceLength);
+            frame(0.1);
+            if (host.plays.size() > plays && host.plays.back().path == dataDir() + "/agent-chime.wav") {
+                chimed = host.plays.size() - 1;
+                size_t from = at + 2 * Listener::pieceLength;
+                s.resize(std::max(s.size(), from + ring.size()), 0.f);
+                for (size_t i = 0; i < ring.size(); i++) s[from + i] += ring[i];
+                chimeEnds = from + ring.size();
+            }
         }
     }
     std::vector<std::string> utters() const {
@@ -137,6 +173,7 @@ SoundRef playSound(const std::string& path, std::function<void(bool)> done) {
     return std::make_shared<Silent>();
 }
 MicrophoneRef openMicrophone(MicrophoneEvents events) {
+    host.opens++;
     host.microphone = std::move(events);
     return std::make_shared<Quiet>();
 }
@@ -167,7 +204,7 @@ TEST(voiceSendsWhatFollowsTheNameAsAnUtter) {
     CHECK(t.voice.state() == Listener::State::working, "working while it is transcribed");
     CHECK_EQ(t.utters().size(), size_t(0));
     posts[0].done(ok(R"({"text":"Show me more like this."})"));
-    t.voice.frame();
+    t.frame();
     CHECK_EQ(t.utters().size(), size_t(1));
     if (!t.utters().empty()) {
         Json u = Json::parse(t.utters()[0]).value_or(Json());
@@ -187,7 +224,7 @@ TEST(voiceSendsNothingWhenNothingWasHeard) {
     CHECK_EQ(posts.size(), size_t(1));
     if (posts.empty()) return;
     posts[0].done(ok(R"({"text":"  "})"));
-    t.voice.frame();
+    t.frame();
     CHECK_EQ(t.utters().size(), size_t(0));
     t.hear(Sound().quiet(0.2));
     CHECK(t.voice.state() == Listener::State::waiting, "listening for the name again");
@@ -198,7 +235,7 @@ TEST(voiceHoldsAReplyThatArrivesWhileItRecords) {
     t.hear(Sound().quiet(1).say("command"));
     CHECK(t.voice.state() == Listener::State::hearing, "recording the command");
     t.voice.say("Looking into that.");
-    t.voice.frame();
+    t.frame();
     CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(0));
     t.hear(Sound().quiet(2));
     auto speaks = t.fetchesTo("/api/speak");
@@ -215,11 +252,12 @@ TEST(voiceHearsNothingWhileItSpeaks) {
     Talking t(true);
     t.hear(Sound().quiet(0.5));
     t.voice.say("Bringing more.");
+    t.frame();
     auto speaks = t.fetchesTo("/api/speak");
     CHECK_EQ(speaks.size(), size_t(1));
     if (speaks.empty()) return;
     speaks[0].done(ok(""));
-    t.voice.frame();
+    t.frame();
     CHECK_EQ(host.plays.size(), size_t(1));
     t.hear(Sound().say("command").quiet(2));
     CHECK(t.voice.state() == Listener::State::speaking, "speaking");
@@ -234,7 +272,7 @@ TEST(voiceSpeaksOnlyWhenTheServiceHasAVoice) {
     Talking t(false);
     t.hear(Sound().quiet(0.5));
     t.voice.say("Bringing more.");
-    t.voice.frame();
+    t.frame();
     CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(0));
     CHECK(t.voice.state() == Listener::State::waiting, "still listening");
 }
@@ -244,4 +282,69 @@ TEST(voiceAnswersToTheNameTheServiceGives) {
     CHECK_EQ(t.voice.name(), "Juno");
     t.hear(Sound().quiet(0.2).say("hey-juno").quiet(1));
     CHECK(t.voice.state() == Listener::State::hearing, "\"Hey Juno\" wakes it");
+}
+
+TEST(voiceSendsACommandSaidAWhileAfterTheChime) {
+    Talking t(false);
+    t.hearWithChime(Sound().quiet(1).say("hey-momo").quiet(1), [&](Sound& s) {
+        s.quiet(1.5).say("also");
+        CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(0));
+        s.quiet(3);
+    });
+    auto posts = t.fetchesTo("/api/transcribe");
+    CHECK_EQ(posts.size(), size_t(1));
+    if (posts.empty()) return;
+    double seconds = double(readWav(posts[0].request.body).value_or(std::vector<float>{}).size()) / second;
+    CHECK(seconds > 1.5 + 1.2 + 1.0, "the command 1.5 s after the chime is in what was sent (%.1f s)", seconds);
+}
+
+TEST(voiceSendsNothingWhenOnlyItsChimeFollowsTheName) {
+    Talking t(false);
+    t.hearWithChime(Sound().quiet(1).say("hey-momo").quiet(1), [](Sound& s) { s.quiet(10); });
+    CHECK_EQ(host.plays.size(), size_t(1));
+    CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(0));
+    CHECK(t.voice.state() == Listener::State::waiting, "listening for the name again");
+}
+
+TEST(voiceOpensTheMicrophoneAgainAfterItFails) {
+    Talking t(false);
+    t.hear(Sound().quiet(0.5));
+    CHECK_EQ(host.opens, 1);
+    host.microphone.failed("ERROR_DEAD_OBJECT");
+    t.frame();
+    CHECK(t.voice.state() == std::nullopt, "no sign while the microphone is down");
+    t.frame(0.9);
+    CHECK_EQ(host.opens, 1);
+    t.frame(0.2);
+    CHECK_EQ(host.opens, 2);
+    host.microphone.failed("ERROR_DEAD_OBJECT");
+    t.frame();
+    t.frame(1.5);
+    CHECK_EQ(host.opens, 2);
+    t.frame(0.6);
+    CHECK_EQ(host.opens, 3);
+    t.hear(Sound().quiet(0.5).say("command").quiet(2));
+    CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(1));
+}
+
+TEST(voiceStillSpeaksWhileTheMicrophoneIsDown) {
+    Talking t(true);
+    t.hear(Sound().quiet(0.5));
+    host.microphone.failed("ERROR_DEAD_OBJECT");
+    t.frame();
+    t.voice.say("Bringing more.");
+    t.frame();
+    CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(1));
+}
+
+TEST(voiceStopsListeningWhenTheMicrophoneIsRefused) {
+    Talking t(true);
+    host.microphone.denied();
+    t.frame();
+    for (int i = 0; i < 60; i++) t.frame(1);
+    CHECK_EQ(host.opens, 1);
+    CHECK(t.voice.state() == std::nullopt, "no sign");
+    t.voice.say("Bringing more.");
+    t.frame();
+    CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(1));
 }
