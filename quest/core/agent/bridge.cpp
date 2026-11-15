@@ -90,14 +90,19 @@ std::shared_ptr<Bridge> Bridge::fromFlags(OceanModel& model) {
 
 Bridge::Bridge(OceanModel& model, Address address, std::shared_ptr<Transport> transport, std::optional<std::string> dump)
     : model(model), client(std::move(address), std::move(transport)), dump(std::move(dump)), walk(Flags::integer("agentWalk")),
-      keyboardTest(Flags::has("keyboardTest")) {}
+      keyboardTest(Flags::has("keyboardTest")) {
+    if (Flags::string("agentVoice").value_or("on") != "off") voice = std::make_unique<Voice>(client, [this] { return scene(); }, Flags::string("wakeClip"));
+}
 
 void Bridge::frame(double t) {
     now = t;
     client.tick(now);
     for (Event& event : client.drain()) {
         std::visit(overloaded{
-                       [&](Synced& s) { synced(s.delta); },
+                       [&](Synced& s) {
+                           synced(s.delta);
+                           if (voice) voice->joined(s.settings, s.voice);
+                       },
                        [&](Changed& c) {
                            if (Flags::has("agentLog")) {
                                logLine(fmt("[agent] change %lld \"%s\": nodes +%d ~%d -%d", (long long)c.set.seq, c.set.label.c_str(),
@@ -106,11 +111,16 @@ void Bridge::frame(double t) {
                            changed(c.delta, c.set.origin.by == Origin::By::agent);
                        },
                        [&](Activity& a) { activity(a); },
-                       [&](Say& s) { logLine("[agent] says: " + s.text); },
+                       [&](Say& s) {
+                           logLine("[agent] says: " + s.text);
+                           if (voice) voice->say(s.text);
+                       },
                        [&](Heard&) {},
                        [&](Navigate&) {},
                        [&](Handoff& h) { logLine("[agent] handoff ready: " + h.name); },
-                       [&](SettingsChanged&) {},
+                       [&](SettingsChanged& c) {
+                           if (voice) voice->renamed(c.settings.agentName);
+                       },
                        [&](Note&) {},
                        [&](Questions& q) { offer(q); },
                        [&](Rejected& r) { logLine("[agent] the service refused a message: " + r.message); },
@@ -150,6 +160,10 @@ void Bridge::frame(double t) {
             [](const std::string& text, bool sent) { logLine(std::string("[agent] keyboard test ") + (sent ? "sent: " : "closed: ") + text); },
         });
         logLine(std::string("[agent] keyboard test: ") + (shown ? "asked the system for its keyboard" : "no keyboard here"));
+    }
+    if (voice) {
+        voice->frame();
+        showVoice();
     }
     reportFocus();
     if (offered) {
@@ -587,6 +601,49 @@ void Bridge::converse(int nodeID, const std::string& question) {
     }
     client.send(Outbound::ask(id, question));
     logLine("[agent] asked: " + question);
+}
+
+Scene Bridge::scene() {
+    Scene s;
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    if (!p) return s;
+    for (const auto& [key, planted] : trees) {
+        if (&planted == p) s.treeId = TreeId{key};
+    }
+    std::optional<int> open = p->tree->focus();
+    if (open && p->service.count(*open)) s.focus = NodeId{p->service[*open]};
+    return s;
+}
+
+void Bridge::showVoice() {
+    std::optional<Listener::State> state = voice->state();
+    std::string words;
+    float ink = 0.9f;
+    if (state == Listener::State::waiting) {
+        words = "Say “Hey " + voice->name() + "”";
+        ink = 0.5f;
+    } else if (state == Listener::State::hearing) {
+        words = "Listening…";
+    } else if (state == Listener::State::working) {
+        words = "Thinking…";
+    } else if (state == Listener::State::speaking) {
+        // Once the reply has ended its words stay up while its echo fades.
+        if (voice->saying().empty()) return;
+        words = voice->name() + ": " + clipped(voice->saying(), 72);
+    }
+    if (words == signWords || !model.art) return;
+    signWords = words;
+    if (sign) model.fadeOut(sign, 0.2f);
+    sign = nullptr;
+    if (words.empty()) return;
+    std::optional<Piece> piece = model.art->line(words, Art::Size::label, Font::Weight::medium, Color::white(1, ink));
+    if (!piece) return;
+    // Low and ahead, nearer than the cards, where a glance down finds it; the tray of sent trees is off to the right.
+    sign = model.art->quad(*piece);
+    sign->position = model.stage.point(0, -26, 1.25f);
+    sign->orientation = model.stage.facing(sign->position);
+    model.root_->addChild(sign);
+    model.fadeIn(sign, 0, 0.2f);
 }
 
 void Bridge::reportFocus() {

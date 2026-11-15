@@ -27,7 +27,8 @@ namespace platform {
 // MARK: - Files
 
 std::string resourcePath(const std::string& name) {
-    std::string path = host::mediaDir + "/" + name;
+    // The keyword model comes inside the APK, and MainActivity copies it to the app's own files.
+    std::string path = (name.rfind("kws/", 0) == 0 ? host::dataDir : host::mediaDir) + "/" + name;
     struct stat st;
     return stat(path.c_str(), &st) == 0 ? path : "";
 }

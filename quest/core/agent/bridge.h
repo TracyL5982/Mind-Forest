@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "agent/client.h"
+#include "agent/voice.h"
 #include "ocean/catalog.h"
 #include "ocean/tree.h"
 
@@ -63,6 +64,14 @@ private:
 
     OceanModel& model;
     Client client;
+    /// Talking to the agent: on with `-agent`, unless `-agentVoice off`.
+    std::unique_ptr<Voice> voice;
+    /// A line of words low in front of you that says what the voice is doing, and the words it shows.
+    EntityRef sign;
+    std::string signWords;
+    void showVoice();
+    /// Where the user is, for what they say: the standing tree and its open card.
+    Scene scene();
     std::optional<std::string> dump;
     std::map<std::string, Planted> trees;           // by service tree id
     std::map<std::string, Thinking> thinking;       // by activity id

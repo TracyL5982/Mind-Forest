@@ -11,7 +11,7 @@ AGENTS="$(cd "$CORE/../../agents" && pwd)"
 VOICE="$(cd "$CORE/../vendor/sherpa-onnx" && pwd)"
 OUT="$(mktemp -d "${TMPDIR:-/tmp}/mind-palace-agent-tests.XXXX")"
 trap 'rm -rf "$OUT"' EXIT
-SOURCES=("$CORE/base.cpp" "$CORE/json.cpp" "$CORE/agent/protocol.cpp" "$CORE/agent/mirror.cpp" "$CORE/agent/client.cpp" "$CORE/agent/spotter.cpp" "$CORE/agent/listener.cpp" "$TEST"/*_test.cpp "$TEST/main.cpp")
+SOURCES=("$CORE/base.cpp" "$CORE/json.cpp" "$CORE/agent/protocol.cpp" "$CORE/agent/mirror.cpp" "$CORE/agent/client.cpp" "$CORE/agent/spotter.cpp" "$CORE/agent/listener.cpp" "$CORE/agent/voice.cpp" "$TEST"/*_test.cpp "$TEST/main.cpp")
 FLAGS=(-std=c++20 -g -O1 -Wall -Wextra -Werror -I"$CORE" -I"$VOICE/include" -L"$VOICE/mac" -lsherpa-onnx-c-api -Wl,-rpath,"$VOICE/mac")
 
 xcrun clang++ "${FLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all "${SOURCES[@]}" -o "$OUT/tests" &

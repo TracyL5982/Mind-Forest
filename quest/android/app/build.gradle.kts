@@ -54,6 +54,9 @@ android {
 
     buildFeatures { prefab = true }
 
+    // The keyword model the headset listens with (quest/tools/fetch-voice.sh puts it there).
+    sourceSets["main"].assets.srcDir("../../vendor/sherpa-onnx/assets")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

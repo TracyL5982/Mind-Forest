@@ -23,6 +23,7 @@ namespace platform {
 std::string resourcePath(const std::string& name) {
     // (The works' small copies are made by tools/push_media.sh into media-src/quest.)
     std::string path = name.rfind("works-small/", 0) == 0 ? host::repoRoot + "/media-src/quest/" + name
+        : name.rfind("kws/", 0) == 0 ? host::repoRoot + "/quest/vendor/sherpa-onnx/assets/" + name
         : name.rfind("clips/", 0) == 0 || name.rfind("works/", 0) == 0
         ? host::repoRoot + "/public/" + name
         : host::repoRoot + "/visionos/MindPalace/Resources/" + name;

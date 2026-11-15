@@ -364,7 +364,7 @@ public:
     virtual void magnifyEnded() = 0;
     /// Quest only: whether a hand's ray and dot should not be drawn or used right now (0 left, 1 right),
     /// because that hand is doing something its fingers do themselves.
-    virtual bool pointerHidden(int hand) { return false; }
+    virtual bool pointerHidden(int /*hand*/) { return false; }
     /// How much the room around is dimmed, 0...1 (visionOS: preferredSurroundingsEffect); 0 leaves it alone.
     virtual float surroundingsDim() { return 0; }
 };

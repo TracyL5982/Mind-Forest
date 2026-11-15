@@ -2,6 +2,7 @@ package com.kaifengwu.mindpalace
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import java.io.File
@@ -34,7 +35,25 @@ class MainActivity : Activity() {
         val external = getExternalFilesDir(null) ?: filesDir
         val media = File(external, "media")
         val out = File(external, "out").apply { mkdirs() }
+        copyListenerModel()
         nativeStart(args.toTypedArray(), media.absolutePath, filesDir.absolutePath, out.absolutePath)
+    }
+
+    /** The keyword model comes inside the APK; the spotter reads files, so it is copied to the app's own files once per build. */
+    private fun copyListenerModel() {
+        val into = File(filesDir, "kws").apply { mkdirs() }
+        val stamp = File(into, "installed")
+        val build = packageManager.getPackageInfo(packageName, 0).lastUpdateTime.toString()
+        if (stamp.exists() && stamp.readText() == build) return
+        for (name in assets.list("kws") ?: emptyArray()) {
+            assets.open("kws/$name").use { from -> File(into, name).outputStream().use { from.copyTo(it) } }
+        }
+        stamp.writeText(build)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        Sound.answered(requestCode, grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
     }
 
     /** Called from native code when a run is over (`-quitAfter`). */
