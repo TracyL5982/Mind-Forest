@@ -68,15 +68,19 @@
 ///
 /// Small things a hand causes are quick; anything that moves the whole
 /// tree glides. Nothing moves because the head did.
-// AGENT: the agent service's bridge (core/agent/bridge.h) reaches the scene's insides as a friend.
+// AGENT: the agent service's bridge (core/agent/bridge.h), and the preview of Momo's presence (core/agent/presence_demo.h),
+// reach the scene's insides as friends.
 namespace agent {
 class Bridge;
+class PresenceDemo;
 }
 
 class OceanModel : public PalaceScene {
 public:
     friend class agent::Bridge;
+    friend class agent::PresenceDemo;
     std::shared_ptr<agent::Bridge> agentBridge;     // AGENT: only with -agent
+    std::shared_ptr<agent::PresenceDemo> presenceDemo;     // AGENT: only with -presenceDemo
     // NOTE(port): `root` in the Swift. PalaceScene asks for it as a function, so the field takes an underscore.
     EntityRef root_ = Entity::make();
     EntityRef root() override { return root_; }
