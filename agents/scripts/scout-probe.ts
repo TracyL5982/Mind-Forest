@@ -74,6 +74,6 @@ const show = (label: string, commands: Awaited<ReturnType<typeof scout>>) => {
     } else if (c.type !== 'addNode') console.log(`- ${c.type}`);
   }
 };
-const rest = await scout(ctx, { anchor: anchor.id, need: process.argv[3], mode: 'more', deliver: (commands) => show('delivered early', commands) });
+const rest = await scout(ctx, { anchor: anchor.id, need: process.argv[3], deliver: (commands) => show('delivered early', commands) });
 show('returned', rest);
 console.log(`\ntokens: ${model.spent}`);

@@ -1,5 +1,5 @@
 /**
- * Drops typed thoughts into a fresh mindstorm through the whole pipeline and counts what each provider was asked for.
+ * Drops typed thoughts into a fresh mindstorm through the whole pipeline, each asking for a tree, and counts what each provider was asked for.
  * Usage: tsx scripts/cost-probe.ts ["a thought" ...]
  * Token counts come from each provider's own usage field. Prices are passed in, not looked up.
  */
@@ -100,7 +100,7 @@ for (const thought of thoughts) {
   openai = blank();
   others = new Map();
   const started = Date.now();
-  await pipeline.dump([{ kind: 'text', text: thought }]);
+  await pipeline.dump([{ kind: 'text', text: `${thought} Start a tree on this.` }]);
   await pipeline.idle();
   const picks = [...mind.nodes.values()].filter((n) => n.status === 'pick').length;
   console.log(JSON.stringify({ thought: thought.slice(0, 50), seconds: Math.round((Date.now() - started) / 1000), picksSoFar: picks, meta, openai, others: Object.fromEntries(others) }));

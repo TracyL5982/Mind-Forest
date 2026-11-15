@@ -4,7 +4,7 @@ import { Field } from './field.js';
 import { Panel } from './panel.js';
 import { bindField, bindDump, textDump } from './input.js';
 import { Voice, speak, hush } from './voice.js';
-import { HandoffSheet, WorkLog, bindGate, bindSettings, caption, showGate, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
+import { HandoffSheet, WorkLog, bindGate, bindSettings, caption, showGate, showKnowledge, showSettings, showStatus, showTrees, showUndo, toast } from './chrome.js';
 
 const $ = (id) => document.getElementById(id);
 const MUTED = 'mind-palace-muted';
@@ -63,9 +63,10 @@ function draw({ instant = false } = {}) {
   panel.selection = new Set(selection);
   panel.refresh();
   const current = currentTree();
+  showKnowledge(store.view.unplaced);
   showTrees(store.view.trees, current, goToTree);
   showUndo(store.undoLabel);
-  $('empty').hidden = store.view.trees.length > 0;
+  $('empty').hidden = store.view.trees.length + store.view.unplaced.length > 0;
   if (refit && following && store.tree.has(following)) {
     field.insets = insets();
     field.show(field.treeCards(following), { instant });
@@ -115,6 +116,10 @@ function receive(message) {
       store.apply(message.set, message.undo ?? null);
       const made = [...store.tree.keys()].find((id) => !before.has(id));
       if (made) following = made;
+      // A drop that no tree takes would otherwise seem to vanish, so the user is told where it went.
+      const added = new Set((message.set.patches ?? []).filter((p) => p.entity === 'item' && p.before === null && p.after).map((p) => p.id));
+      const loose = store.view.unplaced.filter((item) => added.has(item.id));
+      if (loose.length > 0 && !message.set.undoes) toast(loose.length === 1 ? `“${loose[0].title}” is in your knowledge base` : `${loose.length} things are in your knowledge base`);
       refit = true;
       queueDraw();
       return;

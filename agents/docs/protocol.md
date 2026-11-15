@@ -21,10 +21,30 @@ Five maps keyed by id: `item`, `node`, `tree`, `link`, `group`. Shapes are in `s
 Drawing rules:
 
 - A node whose `status` is `pick` is the agent's suggestion. Draw its thread to its parent dashed. When it becomes `kept` the thread turns solid.
-- Draw a link as a dashed, bowed line between its two nodes, labelled with `why`.
+- Draw a link as a dashed, bowed line between its two nodes, labelled with `why`. The Organizer can make links. The Scout no longer does: it brings what the user already has into the round instead (below).
 - A node's layer is its depth: the number of parents above it.
 - `view.component` and `view.props` say how to draw a node. `group.composite` says how to arrange its members. Both libraries are documented in `docs/libraries.md`. A client that does not know a component draws it as `note`.
 - An asset address such as `/assets/<id>` is relative to the service.
+
+## The knowledge base
+
+Everything the user drops becomes an item, and every item is part of the user's knowledge base, whether a tree holds it or not.
+
+- A dump starts no tree. Its `change` adds the items. When an item plainly belongs under a card of a tree, the same `change` also adds one node for it there with `status: 'pick'`, a `why`, and `origin` `{by: 'agent', role: 'filer', tool: 'mindstorm'}`.
+- An item that no node holds, is not archived, and whose `source.from` is not `library` is a loose part of the knowledge base. A client must show these somewhere, so a dump never seems to vanish. The web client lists them under "Knowledge base" in its tree row.
+- Words that ask for a tree start one. In a text dump, at its start or its end: "start a tree on this: …", "make a tree about Kubrick", "… make a tree from this". Said or typed as an `utter`: "make a tree about …", or "start a tree on this" for what was just dropped or, failing that, the open card. The words are taken off what was dropped. The `change` holds a `createTree` whose root is kept, and the root's first round follows.
+- "Make a tree about X" where X is the title of something the user already has, such as a library film, makes that item the root.
+- Taking away a pick that holds what the user dropped leaves the item in the knowledge base. Deleting a kept card archives its item, as before.
+
+## Rounds
+
+The unkept picks hanging off one card are its round. The service holds every round to these rules, in the same `change` that adds to it:
+
+- At most 10 unkept picks around one card. At most 8 of them hold something the user already had, so new content always has room.
+- A pick that holds something the user already had adds a node and no item. Its `origin.tool` is `library` for an item of the headset's library and `mindstorm` for anything else the user has: a dump, or a card of another tree. One item may appear in several trees.
+- Picks come from conversation about a card (`ask`, `more`, or speech the agent takes to be about it) and from the first round of a tree the user asked for. Opening a card brings none. New picks join the round; none is replaced.
+- When picks arrive at a card that is full, the unkept picks least related to what the user is asking now are deleted in the same `change`. Each conversational run near the cap rates the picks already there against the question and the recent conversation, and stores that as their `importance` with `setWhy`. The lowest go first, the oldest first among equals. Kept nodes never count and are never deleted.
+- No two nodes of one tree hold the same content: the same item, the same `source.url`, `data.mediaUrl` or `source.asset`, or the same title once case, punctuation and a leading "the", "a" or "an" are set aside. Something the user already had takes the place of an unkept pick that brought the same thing new.
 
 ## Pictures and media
 
@@ -47,7 +67,7 @@ A client fetches only from the service. Every address in an item or a view that 
   - `tag`: `key` is the tag's `id` in `ocean.json` or `works.json`.
 - A headset draws a library item from its own media by `data.library`. A web client draws it like any other item: a film plays `data.mediaUrl` with `data.thumbnailUrl` as its still, and a work shows `source.asset`, a JPEG.
 - Most library items are in no tree. They arrive in `snapshot.items` with no node. Keep them in the item map, and draw one only where a node holds it: in a saved tree, or as a pick under a card.
-- The Scout hangs a library item under a card only when the tie is strong. The `change` adds a node whose `itemId` is the library item's id and adds no item. The node's `origin` is `{by: 'agent', role: 'scout', tool: 'library'}`.
+- The Scout brings a library item into a card's round only when the tie is strong. The `change` adds a node whose `itemId` is the library item's id and adds no item. The node's `origin` is `{by: 'agent', role: 'scout', tool: 'library'}`.
 - Deleting a library item's last node leaves the item in the library. It is never archived.
 
 ## Service to client
@@ -71,11 +91,11 @@ A client fetches only from the service. Every address in an item or a view that 
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `dump` | `dumps` | Things dropped into the mindstorm. Each is `{kind:'text', text, name?}`, `{kind:'link', url}`, or `{kind:'asset', asset, mime, name?}`. Upload files first (below). |
+| `dump` | `dumps` | Things dropped into the mindstorm. Each is `{kind:'text', text, name?}`, `{kind:'link', url}`, or `{kind:'asset', asset, mime, name?}`. Upload files first (below). They join the knowledge base, and start a tree only when a text asks for one (see The knowledge base). |
 | `utter` | `text`, `final`, `scene` | Speech as text. Send partials with `final: false` as they arrive and the last one with `final: true`. |
-| `focus` | `nodeId` | The user opened or looked at a node. The agent brings picks for it if it has none. |
-| `ask` | `nodeId`, `need` | A typed question about a node. |
-| `more` | `nodeId`, `need?` | More picks for a node. |
+| `focus` | `nodeId` | The user opened or looked at a node, to see it whole. It brings no picks. "Start a tree on this" means this node from now on, rather than the latest drop. |
+| `ask` | `nodeId`, `need` | A typed question about a node. What it brings joins the node's round (see Rounds). |
+| `more` | `nodeId`, `need?` | More picks for a node, joining its round. |
 | `keep` | `nodeIds` | Keep picks. |
 | `undo` | `id?` | Undo the latest real change, or the named one. Format choices and digests that followed it are undone with it. |
 | `commands` | `label`, `commands` | Direct manipulation: any commands from `src/core/domain.ts`, such as `moveNode`, `editItem`, `deleteNode`. Applied as one undoable set. |

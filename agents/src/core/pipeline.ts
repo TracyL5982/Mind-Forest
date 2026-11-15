@@ -1,5 +1,7 @@
 import { CommandError, type ChangeSet, type Command, type Id, type Item, type Origin } from './domain.ts';
 import type { Assets, ModelClient, Store, Tools } from './ports.ts';
+import { admit, plainTitle } from './round.ts';
+import { treeRequest } from './tree-request.ts';
 import {
   AGENT,
   type Handoff,
@@ -11,6 +13,7 @@ import {
   type Scope,
   type Playback,
   type Settings,
+  type TreeRequest,
   type Turn,
 } from './roles/types.ts';
 import type { Mindstorm } from './state.ts';
@@ -53,8 +56,6 @@ export interface PipelineDeps {
 }
 
 const USER: Origin = { by: 'user' };
-/** Dumped nodes scouted straight away. The rest get picks when the user first looks at them. */
-const EAGER_SCOUTS = 3;
 const MAX_PARALLEL_SCOUTS = 2;
 
 /**
@@ -65,13 +66,14 @@ export class Pipeline {
   readonly ctx: RoleContext;
   private readonly history: Turn[] = [];
   private readonly scoutRun = new Map<Id, number>();
-  private readonly scouted = new Set<Id>();
   private scoutQueue: (() => Promise<void>)[] = [];
   private scoutsRunning = 0;
   private voiceRun = 0;
   private settle: ReturnType<typeof setTimeout> | null = null;
   private acting: { text: string; run: number } | null = null;
   private readonly pending = new Set<Promise<unknown>>();
+  /** The items of the latest drop, until the user opens a card, so "start a tree on this" can mean them. */
+  private dropped: Id[] = [];
 
   constructor(private readonly deps: PipelineDeps) {
     this.ctx = {
@@ -85,9 +87,6 @@ export class Pipeline {
       now: deps.now,
       note: (role, message) => deps.emit({ t: 'note', role, message }),
     };
-    for (const node of deps.mind.nodes.values()) {
-      if (node.status === 'pick') this.scouted.add(node.parent ?? node.id);
-    }
   }
 
   /** Resolves when every piece of background work started so far has finished. For tests and scripts. */
@@ -100,12 +99,44 @@ export class Pipeline {
 
   // ---- what a user can do
 
-  /** Anything dropped into the mindstorm: Intake reads it, the Filer places it, the Scout brings picks. */
+  /**
+   * Anything dropped into the mindstorm joins the knowledge base: Intake reads it, and the Filer hangs it under a card only when it
+   * plainly belongs there. A drop whose words ask for a tree ("start a tree on this", "make a tree about …") becomes one instead.
+   */
   async dump(dumps: RawDump[]): Promise<Id[]> {
+    const asked = askedForTree(dumps);
+    if (asked.request && asked.dumps.length === 0) return this.makeTree(asked.request.title, asked.request.title ? [] : this.dropped);
     return this.work('intake', `Reading ${dumps.length === 1 ? 'what you dropped' : `${dumps.length} things`}`, undefined, async () => {
-      const items = await this.deps.roles.intake(this.ctx, dumps);
+      const items = await this.deps.roles.intake(this.ctx, asked.dumps);
       if (items.length === 0) return [];
-      return this.file(items);
+      this.dropped = asked.request ? [] : items.map((i) => i.id);
+      return this.file(items, asked.request);
+    });
+  }
+
+  /**
+   * A new tree the user asked for: grown from items they already have, or about a subject. A subject that names something the user
+   * already has, such as a film of the library, makes that thing the root. The root's first round draws on everything the user has.
+   */
+  async makeTree(subject: string, itemIds: Id[] = []): Promise<Id[]> {
+    const { mind } = this.deps;
+    const request: TreeRequest = { title: subject.trim() };
+    const have = itemIds.flatMap((id) => mind.items.get(id) ?? []);
+    if (have.length > 0) {
+      this.dropped = [];
+      return this.file(have, request);
+    }
+    if (!request.title) {
+      this.say('What should the tree be about?');
+      return [];
+    }
+    const named = mind
+      .search(request.title, { limit: 10 })
+      .find((hit) => mind.known(hit.id) && plainTitle(hit.item.title) === plainTitle(request.title));
+    if (named) return this.file([named.item], request);
+    return this.work('intake', `Starting a tree on "${request.title}"`, undefined, async () => {
+      const items = await this.deps.roles.intake(this.ctx, [{ kind: 'text', text: request.title }]);
+      return items.length === 0 ? [] : this.file(items, request);
     });
   }
 
@@ -131,19 +162,21 @@ export class Pipeline {
     }, this.deps.settleMs ?? 900);
   }
 
-  /** The user looked at a node. If nothing has been scouted for it yet, scout now. */
-  focus(nodeId: Id): void {
-    if (!this.deps.mind.nodes.has(nodeId) || this.scouted.has(nodeId)) return;
-    if (this.deps.mind.node(nodeId).status === 'pick') return;
-    this.queueScout(nodeId, undefined, 'refresh');
+  /**
+   * The user opened or looked at a card. A card opens to show what it holds and brings nothing: picks come from talking about it,
+   * and from the first round of a tree the user asked for. "This" stops meaning the latest drop.
+   */
+  focus(_nodeId: Id): void {
+    this.dropped = [];
   }
 
+  /** A question about a card. What it brings joins the card's round, and the picks least related to the question make room. */
   ask(anchor: Id, need: string): Promise<void> {
-    return this.runScout(anchor, need, 'refresh');
+    return this.runScout(anchor, need);
   }
 
   more(anchor: Id, need?: string): Promise<void> {
-    return this.runScout(anchor, need, 'more');
+    return this.runScout(anchor, need);
   }
 
   keep(nodeIds: Id[]): void {
@@ -208,7 +241,7 @@ export class Pipeline {
     this.acting = { text, run };
     try {
       const { intent, say } = await this.work('conductor', 'Listening', scene.focus, () =>
-        this.deps.roles.conductor(this.ctx, { utterance: text, scene, history: this.history.slice(-6) }),
+        this.deps.roles.conductor(this.ctx, { utterance: text, scene, history: this.history.slice(-6), dropped: this.dropped }),
       );
       if (run !== this.voiceRun) return;
       this.history.push({ who: 'user', text });
@@ -242,6 +275,9 @@ export class Pipeline {
       case 'capture':
         await this.dump([{ kind: 'text', text: intent.text }]);
         return;
+      case 'tree':
+        await this.makeTree(intent.subject, intent.itemIds);
+        return;
       case 'keep':
         this.keep(intent.nodeIds);
         return;
@@ -260,30 +296,25 @@ export class Pipeline {
 
   // ---- content flow
 
-  private file(items: Item[]): Promise<Id[]> {
-    return this.work('filer', `Finding a place for ${items.length === 1 ? `"${items[0]!.title}"` : `${items.length} items`}`, undefined, async () => {
-      const placing = await this.deps.roles.filer(this.ctx, items);
-      const set = this.apply(AGENT('filer'), items.length === 1 ? `Add "${items[0]!.title}"` : `Add ${items.length} items`, [
-        ...items.map((item): Command => ({ type: 'addItem', item })),
-        ...placing,
-      ]);
+  /** Adds what is new of `items` to the knowledge base and places them as the Filer says. A tree the user asked for gets its first round. */
+  private file(items: Item[], request?: TreeRequest): Promise<Id[]> {
+    const { mind } = this.deps;
+    const named = items.length === 1 ? `"${items[0]!.title}"` : `${items.length} items`;
+    return this.work('filer', request ? `Starting a tree with ${named}` : `Finding a place for ${named}`, undefined, async () => {
+      const placing = await this.deps.roles.filer(this.ctx, items, request);
+      const fresh = items.filter((item) => !mind.items.has(item.id)).map((item): Command => ({ type: 'addItem', item }));
+      const set = this.apply(AGENT('filer'), request ? `Start a tree with ${named}` : `Add ${named}`, admit(mind, [...fresh, ...placing]));
       if (!set) return [];
       const nodeIds = newNodeIds(set);
       this.afterContent(set);
-      if (this.deps.settings.scoutOnDump) {
-        const roots = nodeIds.filter((id) => {
-          const parent = this.deps.mind.node(id).parent;
-          return parent === null || !nodeIds.includes(parent);
-        });
-        for (const id of roots.slice(0, EAGER_SCOUTS)) this.queueScout(id, undefined, 'refresh');
-      }
+      const root = nodeIds.find((id) => mind.node(id).parent === null);
+      if (request && root && this.deps.settings.scoutOnDump) this.queueScout(root);
       return nodeIds;
     });
   }
 
-  private queueScout(anchor: Id, need: string | undefined, mode: 'refresh' | 'more'): void {
-    this.scouted.add(anchor);
-    this.scoutQueue.push(() => this.runScout(anchor, need, mode));
+  private queueScout(anchor: Id): void {
+    this.scoutQueue.push(() => this.runScout(anchor, undefined));
     this.drainScouts();
   }
 
@@ -299,9 +330,8 @@ export class Pipeline {
   }
 
   /** A newer request for the same anchor wins. The older one's results are dropped when they arrive. */
-  private async runScout(anchor: Id, need: string | undefined, mode: 'refresh' | 'more'): Promise<void> {
+  private async runScout(anchor: Id, need: string | undefined): Promise<void> {
     if (!this.deps.mind.nodes.has(anchor)) return;
-    this.scouted.add(anchor);
     const run = (this.scoutRun.get(anchor) ?? 0) + 1;
     this.scoutRun.set(anchor, run);
     const title = this.deps.mind.itemOf(anchor).title;
@@ -312,10 +342,10 @@ export class Pipeline {
         const bring = (commands: Command[]) => {
           // A card deleted while its picks were being found takes the run with it.
           if (this.scoutRun.get(anchor) !== run || commands.length === 0 || !this.deps.mind.nodes.has(anchor)) return;
-          const set = this.apply(AGENT('scout'), need ? `Picks for: ${need}`.slice(0, 120) : `Picks for "${title}"`, commands, part);
+          const set = this.apply(AGENT('scout'), need ? `Picks for: ${need}`.slice(0, 120) : `Picks for "${title}"`, admit(this.deps.mind, commands), part);
           if (set) this.afterContent(set);
         };
-        bring(await this.deps.roles.scout(this.ctx, { anchor, need, mode, history: this.history.slice(-6), deliver: bring }));
+        bring(await this.deps.roles.scout(this.ctx, { anchor, need, history: this.history.slice(-6), deliver: bring }));
       });
     } catch (err) {
       this.fail('scout', err);
@@ -415,6 +445,17 @@ export class Pipeline {
 /** Formats and digests follow from content. They are not something a user thinks of undoing. */
 function isHousekeeping(set: ChangeSet): boolean {
   return set.origin.role === 'renderer' || set.origin.role === 'archivist';
+}
+
+/** A drop whose text asks for a tree: the request, and what was dropped without the words that asked. */
+function askedForTree(dumps: RawDump[]): { request?: TreeRequest; dumps: RawDump[] } {
+  for (const [at, dump] of dumps.entries()) {
+    const asked = dump.kind === 'text' ? treeRequest(dump.text) : null;
+    if (!asked) continue;
+    const rest = dumps.flatMap((d, i) => (i !== at ? [d] : asked.rest ? [{ ...d, text: asked.rest }] : []));
+    return { request: { title: asked.subject }, dumps: rest };
+  }
+  return { dumps };
 }
 
 function newNodeIds(set: ChangeSet): Id[] {

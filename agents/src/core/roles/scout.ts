@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { inLibrary, type Command, type Id, type Item, type ItemData, type Node } from '../domain.ts';
 import type { Found, Source } from '../ports.ts';
+import { givesWay, KNOWN_MOST, LIBRARY_TOOL, MINDSTORM, newSlots, ROUND_MOST, sameness, treeKeys, urlKey } from '../round.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
-import { AGENT, makeItem, makeNode, pickStatus, type RoleContext, type Roles, type Turn } from './types.ts';
+import { AGENT, idFrom, makeItem, makeNode, pickStatus, type RoleContext, type Roles, type Turn } from './types.ts';
 
 const ROLE = 'scout';
 const MAX_GENERATED_IMAGES = 4;
@@ -14,8 +15,9 @@ const SEARCHES_PER_FIND = 3;
 const ENOUGH_FOUND = 6;
 const THIN_POOL = 3;
 const EXCERPT = 900;
-const MAX_LINK_CANDIDATES = 5;
-const LINK_COVERAGE = 0.5;
+/** Things the user already has that share words with the card, offered to the model to rate. */
+const KNOWN_CANDIDATES = 20;
+const KNOWN_COVERAGE = 0.5;
 const HISTORY_TURNS = 6;
 
 const Ideas = z.object({
@@ -54,7 +56,10 @@ interface Run {
 /**
  * Extends the anchor in several different directions and brings each back as content the user can take in on the spot:
  * a written idea, a generated picture, a set of pictures, real material found in a source that suits the subject, a video that plays in place.
- * Nothing it brings is a bare link out of the app.
+ * Nothing it brings is a bare link out of the app. Beside the new content, the things the user already has that are strongly tied
+ * to the card come into the same round, the strongest first, leaving room for new content. Nothing it brings repeats what the tree holds.
+ * It never takes a pick away. When the round could pass its cap, the picks already there are rated against what the user is asking
+ * now, and that rating becomes their importance, so the pipeline lets the least related ones give way.
  */
 export const scout: Roles['scout'] = async (ctx, input) => {
   const anchor = ctx.mind.nodes.get(input.anchor);
@@ -65,13 +70,21 @@ export const scout: Roles['scout'] = async (ctx, input) => {
   const item = ctx.mind.itemOf(anchor.id);
   const need = oneLine(input.need ?? '', 400);
   const run: Run = { anchor, item, need, brief: describe(ctx, anchor, item, need, input.history ?? []), picture: await pictureFor(ctx, anchor) };
-  const count = Math.max(1, Math.floor(input.count ?? ctx.settings.picksPerRun));
-  const replaced = input.mode === 'refresh' ? ctx.mind.picks(anchor.id) : [];
+  const wanted = Math.max(1, Math.floor(input.count ?? ctx.settings.picksPerRun));
+  // Nothing the run brings may repeat what the tree holds, except that what the user already has may take the place of the same thing brought new.
+  const seen = new Set(treeKeys(ctx.mind, anchor.treeId).keys());
+  const firm = new Set(treeKeys(ctx.mind, anchor.treeId, new Set(ctx.mind.treeNodes(anchor.treeId).filter(givesWay).map((n) => n.id))).keys());
 
+  // Ties to what the user already has are rated while the directions are thought of. Its failure is caught here, where it starts:
+  // awaited only after the directions, it would otherwise go unhandled while they are thought of.
+  const rating = rate(ctx, run, firm, wanted).catch((err): Rated => {
+    ctx.note(ROLE, `ties to what is already here were not rated (${message(err)})`);
+    return { ties: [], relevance: new Map() };
+  });
   let directions: Direction[];
   try {
     // Some searches find nothing that fits, so one direction more than the count is asked for.
-    directions = await ideate(ctx, run, count >= 3 ? count + 1 : count);
+    directions = await ideate(ctx, run, wanted >= 3 ? wanted + 1 : wanted);
   } catch (err) {
     ctx.note(ROLE, `could not think of directions (${message(err)}), the picks stay as they are`);
     return [];
@@ -80,28 +93,34 @@ export const scout: Roles['scout'] = async (ctx, input) => {
     ctx.note(ROLE, 'no directions came back, the picks stay as they are');
     return [];
   }
+  const { ties, relevance } = await rating;
+  for (const tie of ties) for (const key of sameness(tie.item)) seen.add(key);
+  const slots = newSlots(ties.length, wanted);
+  directions = directions.slice(0, slots >= 3 ? slots + 1 : slots);
+  // A source can return several records and a set several pictures, so the new content is counted per pick, up to what was asked for.
+  let room = slots;
 
   let placed = 0;
-  const hang = (pick: Item, d: Direction, tool: string): Command[] => [
-    { type: 'addItem', item: pick },
-    {
-      type: 'addNode',
-      node: makeNode(ctx, pick, {
-        treeId: anchor.treeId,
-        parent: anchor.id,
-        status: pickStatus(ctx),
-        why: oneLine(d.why, 80) || oneLine(d.angle, 80) || (need ? `for "${oneLine(need, 60)}"` : `from ${oneLine(nameOf(item), 60)}`),
-        importance: 0.5,
-        origin: AGENT(ROLE, tool),
-        offset: placed++,
-      }),
-    },
-  ];
+  const under = (pick: Item, fields: { why: string; importance: number; tool: string }): Command => ({
+    type: 'addNode',
+    node: makeNode(ctx, pick, { treeId: anchor.treeId, parent: anchor.id, status: pickStatus(ctx), why: fields.why, importance: fields.importance, origin: AGENT(ROLE, fields.tool), offset: placed++ }),
+  });
+  const hang = (pick: Item, d: Direction, tool: string): Command[] => {
+    const keys = sameness(pick);
+    if (room <= 0 || keys.some((key) => seen.has(key))) return [];
+    room--;
+    for (const key of keys) seen.add(key);
+    const why = oneLine(d.why, 80) || oneLine(d.angle, 80) || (need ? `for "${oneLine(need, 60)}"` : `from ${oneLine(nameOf(item), 60)}`);
+    // Made for what the user asked just now, so nothing in the round is more related to it.
+    return [{ type: 'addItem', item: pick }, under(pick, { why, importance: 1, tool })];
+  };
 
   const written = directions.filter((d) => d.format === 'note' || d.format === 'steps');
   const made = directions.filter((d) => !written.includes(d));
   let commands: Command[] = [
-    ...replaced.map((n): Command => ({ type: 'deleteNode', id: n.id })),
+    ...[...relevance].map(([node, importance]): Command => ({ type: 'setWhy', id: node.id, why: node.why, importance })),
+    // What the user already has is shown in place, the item itself and not a copy.
+    ...ties.map((tie) => under(tie.item, { why: tie.why, importance: tie.strength, tool: inLibrary(tie.item) ? LIBRARY_TOOL : MINDSTORM })),
     ...written.flatMap((d) => hang(writtenItem(ctx, d), d, 'idea')),
   ];
   const flush = () => {
@@ -110,17 +129,11 @@ export const scout: Roles['scout'] = async (ctx, input) => {
     commands = [];
     placed = 0;
   };
-  // Written ideas need no tool, so the user gets them while the rest is still being fetched.
-  if (written.length > 0 && made.length > 0) flush();
+  // Written ideas and what the user already has need no tool, so the user gets them while the rest is still being fetched.
+  if (written.length + ties.length > 0 && made.length > 0) flush();
 
   let imagesLeft = MAX_GENERATED_IMAGES;
   const taken = knownUrls(ctx);
-  // Links are rated while the pictures are made, so they never hold the new content back. Its failure is caught
-  // here, where it starts: awaited only after the pictures, it would otherwise go unhandled while they are made.
-  const linking = links(ctx, run).catch((err): Tie[] => {
-    ctx.note(ROLE, `ties to what is already here were not rated (${message(err)})`);
-    return [];
-  });
   await Promise.all(
     made.map(async (d) => {
       const budget = d.format === 'gallery' ? Math.min(GALLERY_SIZE, imagesLeft) : d.format === 'image' ? Math.min(1, imagesLeft) : 0;
@@ -135,12 +148,6 @@ export const scout: Roles['scout'] = async (ctx, input) => {
       flush();
     }),
   );
-  for (const tie of await linking) {
-    const there = shownAt(ctx, tie.item.id, anchor);
-    if (there) commands.push({ type: 'link', link: { id: ctx.newId(), a: anchor.id, b: there.id, why: tie.why, strength: tie.strength } });
-    // A library film or work that no tree holds is shown in place under the card, the way a new pick is.
-    else commands.push({ type: 'addNode', node: makeNode(ctx, tie.item, { treeId: anchor.treeId, parent: anchor.id, status: pickStatus(ctx), why: tie.why, importance: tie.strength, origin: AGENT(ROLE, 'library'), offset: placed++ }) });
-  }
   return commands;
 };
 
@@ -538,82 +545,84 @@ function knownUrls(ctx: RoleContext): Set<string> {
   return urls;
 }
 
-/** Where an item the user already has is shown, to link to: a node in another tree first. None for library items no tree holds. */
-function shownAt(ctx: RoleContext, itemId: Id, anchor: Node): Node | undefined {
-  const nodes = ctx.mind.nodesOfItem(itemId);
-  return nodes.find((n) => n.treeId !== anchor.treeId) ?? nodes[0];
-}
-
 interface Tie {
   item: Item;
   strength: number;
   why: string;
 }
 
-/** Ties to what the user already has, kept only when plain search and then the model both call them strong. */
-async function links(ctx: RoleContext, run: Run): Promise<Tie[]> {
-  const { anchor, item } = run;
-  if (ctx.settings.maxLinksPerRun <= 0) return [];
-  const exclude = new Set<Id>([
-    ...ctx.mind.path(anchor.id).map((n) => n.itemId),
-    ...ctx.mind.subtree(anchor.id).map((n) => n.itemId),
-    ...ctx.mind.linksOf(anchor.id).map((l) => ctx.mind.node(l.a === anchor.id ? l.b : l.a).itemId),
-  ]);
+interface Rated {
+  ties: Tie[];
+  /** The picks already around the card, each with how related it is to what the user is asking now. */
+  relevance: Map<Node, number>;
+}
 
+/**
+ * What the user already has that belongs beside the card: their dumps, cards of their other trees, the library. Found by plain
+ * search, rated by the model, and kept only when the model calls the tie strong, the strongest first and never more than the round holds.
+ * When the round could pass its cap, the same call rates the picks already around the card against the question and the conversation.
+ */
+async function rate(ctx: RoleContext, run: Run, seen: ReadonlySet<string>, wanted: number): Promise<Rated> {
+  const { item, anchor } = run;
   const coverage = new Map<Id, number>();
-  for (const query of [`${item.title} ${item.tags.join(' ')}`, run.need]) {
-    for (const hit of ctx.mind.search(query, { limit: 20, exclude })) {
-      if (hit.coverage >= LINK_COVERAGE && (shownAt(ctx, hit.id, anchor) || inLibrary(hit.item))) coverage.set(hit.id, Math.max(coverage.get(hit.id) ?? 0, hit.coverage));
+  for (const query of [item.title, `${item.title} ${item.tags.join(' ')}`, run.need]) {
+    if (!query.trim()) continue;
+    for (const hit of ctx.mind.search(query, { limit: KNOWN_CANDIDATES * 2 })) {
+      if (hit.coverage < KNOWN_COVERAGE || !ctx.mind.known(hit.id) || sameness(hit.item).some((key) => seen.has(key))) continue;
+      coverage.set(hit.id, Math.max(coverage.get(hit.id) ?? 0, hit.coverage));
     }
   }
-  const candidates = [...coverage].sort((a, b) => b[1] - a[1]).slice(0, MAX_LINK_CANDIDATES).map(([id]) => ctx.mind.item(id));
-  if (candidates.length === 0) return [];
+  const candidates = [...coverage].sort((a, b) => b[1] - a[1]).slice(0, KNOWN_CANDIDATES).map(([id]) => ctx.mind.item(id));
+  const round = ctx.mind.picks(anchor.id);
+  const shown = round.length + wanted + Math.min(candidates.length, KNOWN_MOST) > ROUND_MOST ? round : [];
+  if (candidates.length + shown.length === 0) return { ties: [], relevance: new Map() };
 
-  try {
-    const answer = await ctx.model.json({
-      role: `${ROLE}.links`,
-      system: SYSTEM,
-      user: [
-        run.brief,
-        '',
-        "These items are already in the user's notes or in their library of films and works, and share some words with it:",
-        ...candidates.map((c) => `- item ${c.id} "${oneLine(nameOf(c), 100)}": ${oneLine(c.summary || c.text, 240)}`),
-        '',
-        'Rate how strongly each is connected to what the user is looking at, from 0 to 1, using the item ids exactly as written.',
-        'Be strict. Sharing a word or a broad subject is weak (below 0.5). Only a connection the user would be glad to have pointed out, such as the same specific thing, a direct cause, a direct answer or a direct contradiction, is strong (0.8 or above). When in doubt, rate low: a missing link costs nothing and a forced one is noise.',
-        'why: a short phrase naming the connection.',
-      ].join('\n'),
-      schema: Ratings,
-      effort: 'low',
-    });
-    const offered = new Set(candidates.map((c) => c.id));
-    const best = new Map<Id, { strength: number; why: string }>();
-    for (const r of answer.ratings) {
-      if (!offered.has(r.itemId) || best.has(r.itemId)) continue;
-      best.set(r.itemId, { strength: clamp(r.strength), why: oneLine(r.why, 80) });
-    }
-    return [...best]
-      .filter(([, r]) => r.strength >= ctx.settings.linkThreshold)
-      .sort((a, b) => b[1].strength - a[1].strength)
-      .slice(0, ctx.settings.maxLinksPerRun)
-      .map(([itemId, r]) => ({ item: ctx.mind.item(itemId), strength: r.strength, why: r.why || 'closely related' }));
-  } catch (err) {
-    ctx.note(ROLE, `could not rate links to existing notes (${message(err)}), drawing none`);
-    return [];
+  const line = (c: Item) => `- item ${c.id} "${oneLine(nameOf(c), 100)}": ${oneLine(c.summary || c.text, 240)}`;
+  const answer = await ctx.model.json({
+    role: `${ROLE}.rate`,
+    system: SYSTEM,
+    user: [
+      run.brief,
+      ...(candidates.length > 0
+        ? ['', 'These are things the user already has: what they dropped in, cards of their other trees, films and works of their library. Each shares some words with what they are looking at:', ...candidates.map(line)]
+        : []),
+      ...(shown.length > 0 ? ['', 'These are already shown under it as suggestions:', ...shown.map((n) => line(ctx.mind.itemOf(n.id)))] : []),
+      '',
+      'Rate how strongly each belongs beside what the user is looking at, given what they are asking now and the recent conversation, from 0 to 1, using the item ids exactly as written. The strong ones the user already has are shown under it beside new material, and the suggestions rated lowest make room for them.',
+      'Be strict. Sharing a word or a broad subject is weak (below 0.5). Only a connection the user would be glad to have pointed out, such as the same specific thing, a direct cause, a direct answer or a direct contradiction, is strong (0.8 or above). When in doubt, rate low: a missing tie costs nothing and a forced one is noise.',
+      'why: a short phrase naming the connection.',
+    ].join('\n'),
+    schema: Ratings,
+    effort: 'low',
+  });
+  const offered = new Set(candidates.map((c) => c.id));
+  const showing = new Map(shown.map((n) => [n.itemId, n]));
+  const best = new Map<Id, { strength: number; why: string }>();
+  const relevance = new Map<Node, number>();
+  for (const r of answer.ratings) {
+    const itemId = idFrom(r.itemId);
+    const there = showing.get(itemId);
+    if (there && !relevance.has(there)) relevance.set(there, clamp(r.strength));
+    if (!offered.has(itemId) || best.has(itemId)) continue;
+    best.set(itemId, { strength: clamp(r.strength), why: oneLine(r.why, 80) });
   }
+  // Two things the user has can be the same content, such as one film held twice. The stronger is brought.
+  const chosen = new Set<string>();
+  const ties = [...best]
+    .filter(([, r]) => r.strength >= ctx.settings.strongTie)
+    .sort((a, b) => b[1].strength - a[1].strength)
+    .flatMap(([itemId, r]) => {
+      const keys = sameness(ctx.mind.item(itemId));
+      if (keys.some((key) => chosen.has(key))) return [];
+      for (const key of keys) chosen.add(key);
+      return [{ item: ctx.mind.item(itemId), strength: r.strength, why: r.why || 'closely related' }];
+    })
+    .slice(0, KNOWN_MOST);
+  return { ties, relevance };
 }
 
 function nameOf(item: Item): string {
   return item.title || item.summary || item.text || item.source.url || 'Untitled';
-}
-
-function urlKey(url: string): string {
-  try {
-    const u = new URL(url);
-    return `${u.hostname.replace(/^www\./, '').toLowerCase()}${u.pathname.replace(/\/+$/, '')}${u.search}`;
-  } catch {
-    return url.trim().toLowerCase();
-  }
 }
 
 function clamp(n: number): number {

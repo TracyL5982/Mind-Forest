@@ -1,5 +1,8 @@
 import type { Command, Item } from '../core/domain.ts';
 import type { Found } from '../core/ports.ts';
+import { MINDSTORM } from '../core/round.ts';
+import { treeIntent } from '../core/roles/conductor.ts';
+import { filer } from '../core/roles/filer.ts';
 import { codeIn } from '../core/roles/intake/code.ts';
 import { structure } from '../core/roles/intake/describe.ts';
 import { byRule, grounded } from '../core/roles/renderer.ts';
@@ -34,7 +37,9 @@ async function found(ctx: RoleContext, record: Found, source: { id: string; name
  * They return plausible content of every kind so each component and composite gets drawn.
  */
 export const fakeRoles: Roles = {
-  async conductor(_ctx, { utterance, scene }) {
+  async conductor(ctx, { utterance, scene, dropped }) {
+    const tree = treeIntent(ctx, utterance, scene, dropped);
+    if (tree) return tree;
     const anchor = scene.selection[0] ?? scene.focus;
     const text = utterance.toLowerCase();
     if (/^undo\b/.test(text)) return { intent: { kind: 'undo' }, say: 'Undone.' };
@@ -65,36 +70,34 @@ export const fakeRoles: Roles = {
     });
   },
 
-  async filer(ctx, items) {
+  /** A tree the user asked for is grown as the real Filer grows it, which needs no model. Otherwise a card that shares most of an item's title words is a strong fit. */
+  async filer(ctx, items, request) {
+    if (request) return filer(ctx, items, request);
     const commands: Command[] = [];
     for (const item of items) {
       const hit = ctx.mind.search(`${item.title} ${item.tags.join(' ')}`, { limit: 1, placed: true })[0];
-      const home = hit && hit.coverage >= 0.5 ? ctx.mind.nodesOfItem(hit.id)[0] : undefined;
-      if (home) {
-        commands.push({ type: 'addNode', node: makeNode(ctx, item, { treeId: home.treeId, parent: home.id, status: 'kept', why: 'Same topic', origin: item.origin }) });
-      } else {
-        const treeId = ctx.newId();
-        const root = makeNode(ctx, item, { treeId, parent: null, status: 'kept', why: '', origin: item.origin });
-        commands.push({ type: 'createTree', tree: { id: treeId, title: item.title.slice(0, 40), rootId: root.id, digest: item.summary, createdAt: ctx.now() }, root });
-      }
+      const home = hit && hit.coverage >= 0.75 ? ctx.mind.nodesOfItem(hit.id).find((n) => n.status === 'kept') : undefined;
+      if (home) commands.push({ type: 'addNode', node: makeNode(ctx, item, { treeId: home.treeId, parent: home.id, status: pickStatus(ctx), why: 'Same topic', origin: AGENT('filer', MINDSTORM) }) });
     }
     return commands;
   },
 
-  async scout(ctx, { anchor, need, mode }) {
+  async scout(ctx, { anchor, need }) {
     await new Promise((r) => setTimeout(r, 900));
     const node = ctx.mind.node(anchor);
     const topic = need ?? ctx.mind.itemOf(anchor).title;
     const n = ctx.mind.children(anchor).length;
+    // Nothing repeats inside a tree, so a later run under a card that already holds picks brings them under other titles.
+    const again = (title: string) => (n > 0 ? `${title}, take ${n + 1}` : title);
     // Asked for a museum work or a paper, the fake brings one as its first pick, so a card that draws a source's own record can be seen offline.
     const asked = /\b(museum|artwork|painting)/i.test(need ?? '') ? await found(ctx, WORK, { id: 'museums', name: 'Museum collections' }) : /\b(paper|study|research)/i.test(need ?? '') ? await found(ctx, PAPER, { id: 'papers', name: 'Research papers' }) : null;
     const drafts: Item[] = [
-      asked ?? makeItem(ctx, { kind: 'link', title: `An essay on ${topic}`, summary: 'A long read that argues the idea from first principles.', tags: ['essay'], origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/essay-${n}` } }),
-      makeItem(ctx, { kind: 'text', title: '7 in 10 notice it without naming it', text: 'In a small survey, 7 in 10 viewers noticed the effect without being able to name it.', summary: 'A survey figure.', tags: ['data'], data: { facts: [{ label: 'viewers who notice it', value: '70%' }] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/survey-${n}` } }),
-      makeItem(ctx, { kind: 'text', title: 'How to try it', summary: 'Three steps.', tags: ['how-to'], data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/howto-${n}` } }),
-      makeItem(ctx, { kind: 'text', title: 'Where it turns up', summary: 'How often each genre uses it.', tags: ['history'], data: { chart: { labels: ['Horror', 'Thriller', 'Drama', 'Comedy'], values: [14, 11, 9, 3], unit: 'films' } }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/chart-${n}` } }),
+      asked ?? makeItem(ctx, { kind: 'link', title: again(`An essay on ${topic}`), summary: 'A long read that argues the idea from first principles.', tags: ['essay'], origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/essay-${n}` } }),
+      makeItem(ctx, { kind: 'text', title: again('7 in 10 notice it without naming it'), text: 'In a small survey, 7 in 10 viewers noticed the effect without being able to name it.', summary: 'A survey figure.', tags: ['data'], data: { facts: [{ label: 'viewers who notice it', value: '70%' }] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/survey-${n}` } }),
+      makeItem(ctx, { kind: 'text', title: again('How to try it'), summary: 'Three steps.', tags: ['how-to'], data: { steps: ['Pick a subject', 'Move away while zooming in', 'Keep the subject the same size'] }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/howto-${n}` } }),
+      makeItem(ctx, { kind: 'text', title: again('Where it turns up'), summary: 'How often each genre uses it.', tags: ['history'], data: { chart: { labels: ['Horror', 'Thriller', 'Drama', 'Comedy'], values: [14, 11, 9, 3], unit: 'films' } }, origin: AGENT('scout', 'web'), source: { from: 'web', url: `https://example.com/chart-${n}` } }),
     ];
-    const commands: Command[] = mode === 'refresh' ? ctx.mind.picks(anchor).map((p) => ({ type: 'deleteNode', id: p.id })) : [];
+    const commands: Command[] = [];
     drafts.slice(0, ctx.settings.picksPerRun).forEach((item, i) => {
       commands.push({ type: 'addItem', item });
       commands.push({ type: 'addNode', node: makeNode(ctx, item, { treeId: node.treeId, parent: anchor, status: pickStatus(ctx), why: ['Background', 'Evidence', 'Try it', 'History'][i]!, importance: 0.8 - i * 0.15, origin: item.origin, offset: i }) });

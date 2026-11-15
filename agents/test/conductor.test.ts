@@ -267,3 +267,28 @@ test('a model reply that breaks the schema is treated as a failure', async () =>
   assert.deepEqual(out.intent, { kind: 'ask', anchor: f.dolly, need: 'what is the opposite of this?' });
   assert.equal(k.notes.length, 1);
 });
+
+test('"make a tree about X" is heard without the model, and "start a tree on this" means what was just dropped, or else the open card', async () => {
+  const k = kit();
+  const f = film(k);
+  const dropped = k.item({ title: 'Kubrick hated small talk' });
+  k.mind.apply({ origin: { by: 'user' }, label: 'drop', commands: [{ type: 'addItem', item: dropped }] });
+  const conduct = (utterance: string, scene: Scene, ids: string[] = []) => conductor(k.ctx, { utterance, scene, history: [], dropped: ids });
+
+  assert.deepEqual((await conduct('Make me a new tree about Stanley Kubrick.', { focus: f.dolly, selection: [] })).intent, { kind: 'tree', subject: 'Stanley Kubrick', itemIds: [] });
+  assert.deepEqual((await conduct('start a tree on this', { focus: f.dolly, selection: [] }, [dropped.id])).intent, { kind: 'tree', subject: '', itemIds: [dropped.id] });
+  assert.deepEqual((await conduct('start a tree on this', { focus: f.dolly, selection: [] })).intent, { kind: 'tree', subject: '', itemIds: [k.mind.node(f.dolly).itemId] });
+  const lost = await conduct('make a tree from this', { selection: [] });
+  assert.deepEqual([lost.intent.kind, lost.say], ['reply', 'What should the tree be about?']);
+  assert.deepEqual(k.model.calls, []);
+});
+
+test('a tree asked for in other words is the model\'s call, and a topic alone with a card open is still a question about it', async () => {
+  const k = kit();
+  const f = film(k);
+  k.model.on('conductor', (req) => (/Hitchcock/.test(req.user) ? { ...EMPTY, kind: 'tree', text: "Hitchcock's films", say: 'Starting it.' } : { ...EMPTY, kind: 'ask', need: 'soundtracks for this', say: 'Looking.' }));
+
+  assert.deepEqual((await hear(k, "grow me something around Hitchcock's films", { selection: [] })).intent, { kind: 'tree', subject: "Hitchcock's films", itemIds: [] });
+  assert.equal((await hear(k, "let's think about the soundtrack", { focus: f.dolly, selection: [] })).intent.kind, 'ask');
+  assert.match(k.model.calls[0]!.detail, /Hitchcock/);
+});
