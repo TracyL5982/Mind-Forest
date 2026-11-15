@@ -3,8 +3,11 @@
 // words, answers every reply with reply.mp3 (the Mac's Samantha through ffmpeg, 48 kbit/s), and sends:
 //   2 s after hello       navigate to the copy's tree, which hangs on the shelf
 //   1.5 s after the name  navigate to a card two layers up in the copy, while the user is recorded (-wakeClip)
+//   0.3 s after the utter navigate to a card the copy hangs from a card that leads no layer (added to the copy)
 //   1.5 s after the utter a reply, and with it a navigate to a card of the first tree
 //   12 s after the utter  navigate to a card that is not there
+//   14 s after the utter  a reply whose sound never comes, and with it a navigate, which goes after 20 s anyway
+// Each card gone to must open on its parent's layer, a tree's root on its own.
 //
 //   quest/desktop/build.sh && node quest/desktop/test/navigate_check.mjs [--shots <folder>] [--port <port>]
 import { spawn } from 'node:child_process';
@@ -28,6 +31,7 @@ const port = Number(flag('--port', '8796'));
 const shots = flag('--shots');
 const transcript = 'Show me more like this.';
 const reply = 'Bringing more. Here is the first of them, about the dolly zoom.';
+const stalled = 'This reply never comes.';
 const firstByte = 0.6;
 const bytesPerSecond = 9000;
 
@@ -46,11 +50,16 @@ const nodes = snapshot.nodes.filter((n) => n.treeId === first.id);
 snapshot.trees.push(older);
 for (const n of nodes) snapshot.nodes.push({ ...n, id: copy(n.id), treeId: older.id, parent: n.parent ? copy(n.parent) : null });
 const treeOf = (id) => snapshot.trees.find((t) => t.id === snapshot.nodes.find((n) => n.id === id).treeId).title;
-const wentTo = (id) => new RegExp(` in "${escape(treeOf(id))}" \\(${escape(id)}\\)$`);
+const wentTo = (id) => new RegExp(` in "${escape(treeOf(id))}" \\(${escape(id)}\\), on the layer of ${escape(parentOf(id) ?? id)}$`);
 const childrenOf = (id) => nodes.filter((n) => n.parent === id);
 const kept = childrenOf(first.rootId).find((n) => n.status === 'kept' && childrenOf(n.id).length > 0);
 const deep = copy(childrenOf(kept.id)[0].id);
-const near = childrenOf(first.rootId).find((n) => n.status === 'pick').id;
+const picks = childrenOf(first.rootId).filter((n) => n.status === 'pick');
+const near = picks[0].id;
+const far = picks[1].id;
+const under = 'under-a-pick-older';
+snapshot.nodes.push({ ...picks[2], id: under, treeId: older.id, parent: copy(picks[2].id) });
+const parentOf = (id) => snapshot.nodes.find((n) => n.id === id).parent;
 
 // The stand-in.
 let socket = null;
@@ -70,6 +79,7 @@ const server = createServer((req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/speak') {
     const mp3 = readFileSync(join(here, 'reply.mp3'));
     note('service', 'speak asked');
+    if (url.searchParams.get('text') === stalled) return;
     let at = 0;
     const step = Math.round(bytesPerSecond / 20);
     later(firstByte, () => {
@@ -94,12 +104,17 @@ sockets.on('connection', (ws) => {
     note('client', `sends ${message.t}${message.text ? ` "${message.text}"` : ''}`);
     if (message.t !== 'utter' || spoke) return;
     spoke = true;
+    later(0.3, () => send({ t: 'navigate', nodeId: under }));
     later(1.5, () => {
       send({ t: 'say', text: reply });
       send({ t: 'navigate', nodeId: near });
     });
     later(12, () => send({ t: 'navigate', nodeId: 'not-a-card' }));
-    later(14, finish);
+    later(14, () => {
+      send({ t: 'say', text: stalled });
+      send({ t: 'navigate', nodeId: far });
+    });
+    later(37, finish);
   });
   ws.send(JSON.stringify({ ...hello, snapshot, settings: { ...hello.settings, agentName: 'momo' }, voice: true, hearing: 'service' }));
   note('service', 'hello');
@@ -135,7 +150,7 @@ header.writeUInt32LE(pcm.length, 40);
 const wav = Buffer.concat([header, pcm]);
 writeFileSync(join(work, 'clip.wav'), wav);
 const shotArgs = shots ? ['-shot', join(shots, 'navigate.png'), '-shotEvery', '0.5'] : ['-shot', join(work, 'end.png')];
-const preview = spawn(join(quest, 'desktop/preview'), ['-agent', `ws://127.0.0.1:${port}`, '-agentToken', 'standin', '-wakeClip', join(work, 'clip.wav'), ...shotArgs, '-shotAt', '130', '-realtime'], {
+const preview = spawn(join(quest, 'desktop/preview'), ['-agent', `ws://127.0.0.1:${port}`, '-agentToken', 'standin', '-wakeClip', join(work, 'clip.wav'), ...shotArgs, '-shotAt', '160', '-realtime'], {
   stdio: ['ignore', 'ignore', 'pipe'],
 });
 let partial = '';
@@ -153,7 +168,7 @@ preview.stderr.on('data', (chunk) => {
     }
   }
 });
-const timeout = later(120, () => finish('the run did not reach its end'));
+const timeout = later(150, () => finish('the run did not reach its end'));
 
 function finish(why) {
   clearTimeout(timeout);
@@ -182,8 +197,16 @@ function finish(why) {
   const atNear = when('preview', wentTo(near), toNear);
   check(doneSpeaking && atNear && atNear >= doneSpeaking, `a navigate sent with a reply waits until the reply has played (${seconds(atNear, doneSpeaking)} after it ended)`);
 
+  const toUnder = when('service', new RegExp(`navigate","nodeId":"${under}`));
+  check(when('preview', wentTo(under), toUnder), "a card hanging from one that leads no layer opens on its parent's layer, which stands first");
+
   const missing = when('service', /not-a-card/);
   check(when('preview', /nothing here to go to/, missing), 'a navigate to a card that is not there is let go');
+
+  const toFar = when('service', new RegExp(`navigate","nodeId":"${far}`));
+  const atFar = when('preview', wentTo(far), toFar);
+  const gaveUp = when('preview', /could not be spoken/, toFar);
+  check(atFar - toFar > 19 && atFar - toFar < 22 && !(gaveUp < atFar), `a reply that never comes holds a navigate only 20 s (${seconds(atFar, toFar)})`);
 
   for (const c of checks) console.log(`${c.ok ? 'ok    ' : 'FAILED'} ${c.what}`);
   const failed = checks.filter((c) => !c.ok).length;

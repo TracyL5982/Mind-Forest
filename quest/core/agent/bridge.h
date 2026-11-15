@@ -31,8 +31,9 @@ public:
 
     /// Once a frame, on the frame thread: what the service sent since the last frame reaches the scene.
     void frame(double now);
-    /// A pinch on a card of a service tree on the layer you work on: it opens where it stands, to show its details.
-    /// True when it did; otherwise the scene does what it always did (going back to a card's own layer).
+    /// A pinch on a card of a service tree on the layer you work on: it opens where it stands, to show its details, once
+    /// its parent's group stands (it may not, for a card whose parent has led no layer yet). True when it did; otherwise
+    /// the scene does what it always did (going back to a card's own layer).
     bool opens(int nodeID);
     /// The rows under an open card of a service tree: "Keep this" for a suggestion, then what can be asked about it (the
     /// questions the service wrote for the card and the conversation, once they come), then typing your own.

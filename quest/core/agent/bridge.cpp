@@ -74,8 +74,19 @@ constexpr double thinkAgain = 2.2;
 
 /// How long a navigate waits for its tree to stand before it is let go: a cover opens into its tree in about a second.
 constexpr double standsWithin = 5;
-/// How long a navigate waits for speaking to end: longer than any reply, so a voice that never says it ended cannot hold it.
-constexpr double speechWithin = 30;
+/// How long a navigate waits for speaking to end: longer than a reply, so a voice that never says it ended cannot hold it.
+constexpr double speechWithin = 20;
+
+/// Stands the layer a card's group lies on: `parent` leads it, and each card on the way leads its own, as the pinches that
+/// reach it by hand would have made them.
+void standGroup(Tree& t, int parent) {
+    for (int step : t.path(parent)) {
+        // Focusing keeps a card in a tree the gardener grows; in the service's, the service says what is kept.
+        bool kept = t.nodes[step].kept;
+        t.focus(step);
+        t.nodes[step].kept = kept;
+    }
+}
 
 }  // namespace
 
@@ -529,6 +540,8 @@ bool Bridge::opens(int nodeID) {
     const TreeNode& n = p->tree->nodes[nodeID];
     // A card that already leads a layer, or one on another layer, is gone to as before.
     if (n.head || p->tree->seat(n).depth != p->tree->standDepth()) return false;
+    // One whose parent leads no layer lies on this one where no group is, so its parent's group stands first.
+    if (n.parent && !p->tree->nodes[*n.parent].head) standGroup(*p->tree, *n.parent);
     p->tree->open(nodeID);
     logLine("[agent] opened " + model.catalog->title(n.ref));
     return true;
@@ -699,21 +712,15 @@ void Bridge::goOn() {
 void Bridge::bring(Planted& p, int id) {
     Tree& t = *p.tree;
     const TreeNode& n = t.nodes[id];
-    std::optional<Tree::Place> at = t.shown(n);
-    // A card stands round its parent only once the parent leads a layer; until then it lies where no group is.
-    bool here = at && at->depth == t.standDepth() && !t.condensed(n) && n.parent && t.nodes[*n.parent].head;
-    if (!n.head && !here && n.parent) {
-        for (int step : t.path(*n.parent)) {
-            // Focusing keeps a card in a tree the gardener grows; in the service's, the service says what is kept.
-            bool kept = t.nodes[step].kept;
-            t.focus(step);
-            t.nodes[step].kept = kept;
-        }
+    if (n.head) {
+        t.focus(id);
+    } else if (t.condensed(n) || !opens(id)) {
+        standGroup(t, *n.parent);
+        t.open(id);
     }
-    if (n.head) t.focus(id);
-    else t.open(id);
     model.restyle();
-    logLine("[agent] went to " + model.catalog->title(n.ref) + " in \"" + t.title + "\" (" + p.service[id] + ")");
+    logLine("[agent] went to " + model.catalog->title(n.ref) + " in \"" + t.title + "\" (" + p.service[id] + "), on the layer of " +
+            p.service[t.stand]);
 }
 
 void Bridge::reportFocus() {
