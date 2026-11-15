@@ -124,7 +124,7 @@ The face is 210 × 146 px, which is 21 × 14.6 cm at 1 mm a px. The ring's box s
 | image | Picture, caption plate | Picture 210 px wide, 81 to 103 px tall. Caption 2 lines (about 8 words or 22 Chinese), else 1 line and the cue over an 85 px picture. | Picture 130 to 260 px at 240 px |
 | video | Poster at 16:9 with its play mark, caption plate | Poster 183 × 103 px under a 1-line caption, 144 × 81 under 2 | Poster 272 × 153 px |
 | audio | Title, play strip, transcript, cue | Title 1 line, the strip and 1 line of transcript (about 4 words or 11 Chinese). A 2-line title leaves the strip and the cue. | Transcript 3 lines at 272 px |
-| link | Site bar, title, description, cue | Title 1 line and 2 description lines (about 8 words or 22 Chinese), or title 2 lines and 1. No thumbnail on the small face. | Description 2, 272 or 316 px |
+| link | Site bar, title, description, cue | Title 1 line and 2 description lines (about 8 words or 22 Chinese), or title 2 lines and 1. On the headset a picture taller than wide, such as a film's poster, stands at the right, 60 × 90 px. Any other, such as a page's own preview, lies in a 48 px band under the site bar, with the title on 1 line (DECISIONS 55). The web draws no picture on the small face. | Description 2, 272 or 316 px |
 | chart | Designed: title, the shape, one meta line | Title; the bars or line, 38 to 62 px tall, with no text; one meta line with the count and the first and last labels, such as "12 points, 2015 to 2026" | 300 × 195 px with labels |
 | person | Face, name, role | Face 48 px, name 2 lines of about 10 letters or 6 Chinese, role 2 lines | 252 × 88, each cut to 1 line |
 | chat | Title, bubbles, cue | 2 messages of 1 line (about 14 letters or 8 Chinese) when that is all, else the first message whole in up to 2 lines and the cue | 3 messages at 288 px |
@@ -228,7 +228,7 @@ Heights are the most each face takes, every one at most 146 px. "Cue" means the 
 | image | picture, 2, plate (19 + caption lines) | Picture 210 × 81 to 103; caption 2 lines, else 1 line and the cue |
 | video | poster at 16:9, 2, plate | 183 × 103 under 1 caption line, 144 × 81 under 2 |
 | audio | frame, title, 6, strip 40, 6, transcript lines, cue | Title 1 line and 1 transcript line, or title 2 and the strip |
-| link | site bar 30, frame 26, title, 4, description lines, cue | Title 1 and description 2, or title 2 and 1; no thumbnail |
+| link | site bar 30, a wide picture's band 48, frame 26, title, 4, description lines, cue; a portrait picture 60 × 90 at the right | Title 1 and description 2, or title 2 and 1; title 1 under a band |
 | chart | frame, title, 6, shape 38 to 62 with no text, 6, meta line | The meta line holds the count and the first and last labels |
 | person | frame, face 48 beside the name (title) and the role (body) | Name 2 lines, role 2 lines |
 | chat | frame, title, 2, bubbles (6 + 12 + 22 a line, at most 86% wide), cue | 2 one-line messages, or the first message in up to 2 lines and the cue |
