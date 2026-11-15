@@ -245,8 +245,7 @@ void Pen::chips(const std::vector<Chip>& line, float x, float y, const Look&) co
     // Each chip is one of the ocean's tags: a flat label in its tone's colour with its words in the tone's ink
     // (Art::chip), in the box the web gives it. Its kind is told by its tone, where the web draws a glyph.
     constexpr float pad = 7;
-    Setting t = setting::text;
-    t.weight = Font::Weight::medium;
+    const Setting& t = setting::text;
     for (const Chip& chip : line) {
         Tone tone = toneOf(chip.kind);
         std::string count = chip.count ? "+" + std::to_string(chip.count) : "";

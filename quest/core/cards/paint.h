@@ -64,7 +64,8 @@ struct Setting {
 };
 namespace setting {
 constexpr Setting title{16, 21, Font::Weight::semibold};
-constexpr Setting text{12.5f, 17};
+/// Medium, not regular: white at 0.82 in the regular weight reads too thin at this size on the headset.
+constexpr Setting text{12.5f, 17, Font::Weight::medium};
 constexpr Setting quote{16, 21, Font::Weight::regular, true, true};
 constexpr Setting mark{34, 36, Font::Weight::regular, true};
 // The opened card (`.panel`), where a line is 1.4 of its size unless it says otherwise.
