@@ -22,6 +22,11 @@ const EXCERPT = 900;
 const KNOWN_CANDIDATES = 20;
 const KNOWN_COVERAGE = 0.5;
 const HISTORY_TURNS = 6;
+/** The fast lane searches this many catalogues at most, and fills at most FAST_MOST slots, never half of a run's. */
+const FAST_LOOKS = 3;
+const FAST_MOST = 2;
+/** What the fast lane names to look for a video, beside the catalogues' ids. */
+const VIDEO_LOOK = 'video';
 
 const Direction = z.object({
   angle: z.string(),
@@ -42,6 +47,29 @@ const Ratings = z.object({
   ratings: z.array(z.object({ itemId: z.string(), strength: z.number(), why: z.string() })),
 });
 
+const Looks = z.object({
+  looks: z.array(z.object({ source: z.string(), search: z.string(), title: z.string(), why: z.string(), tags: z.array(z.string()) })),
+});
+
+/** One of the two writers of a run's directions: the fast lane, which starts at once, or the inventive lane, which thinks first. */
+interface Lane {
+  /** Still writing, so the slots its directions to come would take are kept for them. */
+  writing: boolean;
+  /** Its directions started so far, pictures aside. */
+  arrived: number;
+  /** Its picks landed. */
+  filled: number;
+}
+
+interface Waiting {
+  pick: Item;
+  d: Direction;
+  tool: string;
+  lane: Lane;
+  /** Its direction's first pick, held back only for a slot kept for a picture or the fast lane, so it lands before any second pick. */
+  first: boolean;
+}
+
 interface Run {
   anchor: Node;
   item: Item;
@@ -59,6 +87,9 @@ interface Run {
  * to the card come into the same round, the strongest first, leaving room for new content. Nothing it brings repeats what the tree holds.
  * It never takes a pick away. When the round could pass its cap, the picks already there are rated against what the user is asking
  * now, and that rating becomes their importance, so the pipeline lets the least related ones give way.
+ * Two lanes write its directions. In the fast lane the quick model names a few catalogues and what to search in each, in under
+ * a second, so its cards land within seconds. The inventive lane, the main model, thinks for 13 to 19 s before its first
+ * direction. They share the run's slots, and the fast lane never fills more than two of them or half.
  */
 export const scout: Roles['scout'] = async (given, input) => {
   // Every step of the run is shown on its card.
@@ -89,11 +120,13 @@ export const scout: Roles['scout'] = async (given, input) => {
     node: makeNode(ctx, pick, { treeId: anchor.treeId, parent: anchor.id, status: pickStatus(ctx), why: fields.why, importance: fields.importance, origin: AGENT(ROLE, fields.tool), offset: placed++ }),
   });
   // A source can return several records and a set several pictures, so the new content is counted per pick, up to what was asked for.
+  let slots = 0;
   let room = 0;
-  const hang = (pick: Item, d: Direction, tool: string): Command[] => {
+  const hang = (pick: Item, d: Direction, tool: string, lane: Lane): Command[] => {
     const keys = sameness(pick);
     if (room <= 0 || keys.some((key) => seen.has(key))) return [];
     room--;
+    lane.filled++;
     for (const key of keys) seen.add(key);
     const why = oneLine(d.why, 80) || oneLine(d.angle, 80) || (need ? `for "${oneLine(need, 60)}"` : `from ${oneLine(nameOf(item), 60)}`);
     // Made for what the user asked just now, so nothing in the round is more related to it.
@@ -107,16 +140,14 @@ export const scout: Roles['scout'] = async (given, input) => {
     placed = 0;
   };
 
-  // Some searches find nothing that fits, so one direction more than the count is asked for and taken.
+  // Some searches find nothing that fits, so one direction more than the count is asked for.
   const asked = wanted >= 3 ? wanted + 1 : wanted;
-  let expected = 0;
   let ready = false;
   // What the user already has comes in place as soon as it is rated, the item itself and not a copy, before any new content.
   const rated = rating.then(({ ties, relevance }) => {
     for (const tie of ties) for (const key of sameness(tie.item)) seen.add(key);
-    const slots = newSlots(ties.length, wanted);
+    slots = newSlots(ties.length, wanted);
     room = slots;
-    expected = Math.min(asked, slots >= 3 ? slots + 1 : slots);
     commands.push(
       ...[...relevance].map(([node, importance]): Command => ({ type: 'setWhy', id: node.id, why: node.why, importance })),
       ...ties.map((tie) => under(tie.item, { why: tie.why, importance: tie.strength, tool: inLibrary(tie.item) ? LIBRARY_TOOL : MINDSTORM })),
@@ -127,67 +158,125 @@ export const scout: Roles['scout'] = async (given, input) => {
 
   let imagesLeft = MAX_GENERATED_IMAGES;
   const taken = knownUrls(ctx);
-  // Directions are taken as the model writes them, and each starts the moment it is written. Each is owed a slot, and there is
-  // one more than the slots. So a direction's first pick lands the moment it is ready, except into a slot held by a picture still
-  // being made, since a picture is paid for when it is started. A further pick waits until every direction still out, or still to
-  // be written, keeps a slot, then lands in the order it came.
+  // Directions are taken as they are written, and each starts the moment it is written. Each is owed a slot, and the inventive
+  // lane is taken for one more than the slots it may fill. So a direction's first pick lands the moment it is ready, except into a
+  // slot held by a picture, or kept for the fast lane's finds still out or for a picture the inventive lane may still write,
+  // since it writes pictures last and a picture is paid for when it is started. A further pick waits until every direction still
+  // out, or still to be written, keeps a slot, then lands in the order it came.
+  const fast: Lane = { writing: true, arrived: 0, filled: 0 };
+  const inventive: Lane = { writing: true, arrived: 0, filled: 0 };
+  const lanes = new Map<Direction, Lane>();
   const out = new Set<Direction>();
-  const waiting: { pick: Item; d: Direction; tool: string }[] = [];
-  let arrived = 0;
-  let thought = false;
+  const waiting: Waiting[] = [];
+  let pictureTaken = false;
   const pictured = (d: Direction) => d.format === 'image' || d.format === 'gallery';
-  const held = () => [...out].filter(pictured).length;
-  const owed = () => out.size + (thought ? 0 : Math.max(0, expected - arrived));
+  const making = () => [...out].filter(pictured).length;
+  const kept = () => (inventive.writing && !pictureTaken && imagesLeft > 0 ? 1 : 0);
+  const held = () => making() + kept();
+  // The fast lane fills at most two slots and never half, so the inventive lane always keeps the most.
+  const fastShare = () => Math.min(FAST_MOST, Math.floor(slots / 2));
+  // What it may still fill: its whole share while it is choosing, then no more than its finds still out could bring.
+  const fastOwed = () => {
+    const stillOut = [...out].filter((d) => lanes.get(d) === fast).length;
+    return Math.max(0, (fast.writing ? fastShare() : Math.min(fastShare(), fast.filled + stillOut)) - fast.filled);
+  };
+  // Counted from what the fast lane has filled, not what it may still fill, so no direction is turned away for a find that then comes back empty.
+  const inventiveExpected = () => {
+    const free = slots - fast.filled;
+    return Math.min(asked, free >= 3 ? free + 1 : free);
+  };
+  const owed = () =>
+    out.size + kept() + (fast.writing ? FAST_LOOKS : 0) + (inventive.writing ? Math.max(0, inventiveExpected() - inventive.arrived) : 0);
+  const mayLand = (lane: Lane) => (lane === fast ? fast.filled < fastShare() && room > held() : room - fastOwed() > held());
+  const take = (w: Waiting) => {
+    waiting.splice(waiting.indexOf(w), 1);
+    commands.push(...hang(w.pick, w.d, w.tool, w.lane));
+  };
+  // Each direction is shown the moment it is ready, so a slow search never holds back a finished picture.
+  const drain = () => {
+    for (const w of waiting.filter((w) => w.first)) if (mayLand(w.lane)) take(w);
+    while (waiting.length > 0 && room > owed()) take(waiting[0]!);
+    flush();
+  };
   const land = (d: Direction, items: Made[]) => {
+    const lane = lanes.get(d)!;
     out.delete(d);
     let landed = false;
+    let first = lane === inventive || fast.filled < fastShare();
     for (const { item: pick, tool } of items) {
-      const hung = !landed && room > held() ? hang(pick, d, tool) : null;
-      if (!hung) waiting.push({ pick, d, tool });
-      else if (hung.length > 0) {
+      if (!landed && mayLand(lane)) {
+        const hung = hang(pick, d, tool, lane);
         commands.push(...hung);
-        landed = true;
+        landed = hung.length > 0;
+        continue;
       }
+      waiting.push({ pick, d, tool, lane, first: first && !landed });
+      first = false;
     }
-    while (waiting.length > 0 && room > owed()) {
-      const next = waiting.shift()!;
-      commands.push(...hang(next.pick, next.d, next.tool));
-    }
-    // Each direction is shown the moment it is ready, so a slow search never holds back a finished picture.
-    flush();
+    drain();
   };
   // The run is over once its slots are full, so what it says it brought does not wait on work that can no longer land. With somewhere
   // to deliver, it is also over when every slot left is held by a picture, or only pictures are still being made: a picture takes
   // 10 to 20 s and is delivered when it is ready, and a find still out lands after it only if a picture fails.
   const over = () => {
     if (!ready) return false;
-    if (room <= 0 || (input.deliver !== undefined && room <= held())) return true;
-    return thought && (out.size === 0 || (input.deliver !== undefined && held() === out.size));
+    if (room <= 0 || (input.deliver !== undefined && room <= making())) return true;
+    return !fast.writing && !inventive.writing && (out.size === 0 || (input.deliver !== undefined && making() === out.size));
   };
   let check = () => {};
   const finished = new Promise<void>((done) => (check = () => over() && done()));
-  const accept = (d: Direction) => {
-    if (arrived >= expected || room <= 0) return;
-    arrived++;
-    if (d.format === 'note' || d.format === 'steps') return land(d, [{ item: writtenItem(ctx, d), tool: 'idea' }]);
-    // A picture is only made into a slot that no other picture holds.
-    if (pictured(d) && room <= held()) return;
-    // A gallery makes only the pictures it could keep: one, and more only when there are slots to spare.
-    const spare = Math.max(0, room - owed() - 1);
-    const budget = d.format === 'gallery' ? Math.min(GALLERY_SIZE, imagesLeft, 1 + spare) : d.format === 'image' ? Math.min(1, imagesLeft) : 0;
-    imagesLeft -= budget;
+  const start = (d: Direction, lane: Lane, budget: number) => {
+    lanes.set(d, lane);
     out.add(d);
-    void realize(ctx, d, budget, taken)
+    void realize(ctx, d, budget, taken, lane === fast)
       .catch((err) => {
         ctx.note(ROLE, `"${oneLine(d.title, 60)}" could not be made (${message(err)})`);
         return [] as Made[];
       })
-      .then((items) => {
-        land(d, items);
-        check();
-      });
+      .then((items) =>
+        rated.then(() => {
+          land(d, items);
+          check();
+        }),
+      );
+  };
+  const started = () => fast.arrived + inventive.arrived > 0 || pictureTaken;
+  const accept = (d: Direction) => {
+    if (room <= 0) return;
+    if (pictured(d)) {
+      // A picture is only made into a slot that no other picture holds.
+      if (room <= making()) return;
+      pictureTaken = true;
+    } else {
+      if (inventive.arrived >= inventiveExpected()) return;
+      inventive.arrived++;
+    }
+    if (d.format === 'note' || d.format === 'steps') {
+      lanes.set(d, inventive);
+      return land(d, [{ item: writtenItem(ctx, d), tool: 'idea' }]);
+    }
+    // A gallery makes only the pictures it could keep: one, and more only when there are slots to spare.
+    const spare = Math.max(0, room - owed() - 1);
+    const budget = d.format === 'gallery' ? Math.min(GALLERY_SIZE, imagesLeft, 1 + spare) : d.format === 'image' ? Math.min(1, imagesLeft) : 0;
+    imagesLeft -= budget;
+    start(d, inventive, budget);
   };
 
+  // The fast lane starts at once and searches while the main model thinks. Its finds land once the ties are rated.
+  void (async () => {
+    try {
+      for (const d of await ctx.step(ROLE, 'Choosing where to look first', () => firstLooks(ctx, run))) {
+        fast.arrived++;
+        start(d, fast, 0);
+      }
+    } catch (err) {
+      ctx.note(ROLE, `could not choose where to look first (${message(err)})`);
+    }
+    fast.writing = false;
+    await rated;
+    drain();
+    check();
+  })();
   // The run can be over before the model has finished writing, once nothing it writes could still land.
   void (async () => {
     try {
@@ -200,11 +289,12 @@ export const scout: Roles['scout'] = async (given, input) => {
         }),
       );
     } catch (err) {
-      ctx.note(ROLE, `could not think of directions (${message(err)})${arrived > 0 ? '' : ', the picks stay as they are'}`);
+      ctx.note(ROLE, `could not think of directions (${message(err)})${started() ? '' : ', the picks stay as they are'}`);
     }
     await rated;
-    thought = true;
-    if (arrived === 0) ctx.note(ROLE, 'no directions came back, the picks stay as they are');
+    inventive.writing = false;
+    if (!started()) ctx.note(ROLE, 'no directions came back, the picks stay as they are');
+    drain();
     check();
   })();
   await finished;
@@ -303,7 +393,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
           ? '- Mix the formats: at least one "find" and at least one "note".'
           : '- Prefer different formats.',
       '- Use "image" or "gallery" when seeing something new helps: the user has a picture or a visual subject, or asked to see something. Then include at least one. For a subject that is not visual, leave them out.',
-      '- Write an "image" or "gallery" direction first, since a picture takes longest to make.',
+      '- Write any "image" or "gallery" direction last, after the others.',
       '',
       'For each direction:',
       '- angle: two to five words naming the direction.',
@@ -340,6 +430,61 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
   if (answer.reading.trim()) ctx.note(ROLE, `reads it as: ${oneLine(answer.reading, 200)}`);
 }
 
+/**
+ * The fast lane: the quick model names two or three catalogues likely to hold this subject and what to type into each, in under a
+ * second, so they are searched while the main model is still thinking. Words as the user said them find records only where they
+ * name the subject. The web and generated pictures take 5 to 40 s, and are left to the inventive lane.
+ */
+async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
+  const catalogues = ctx.tools.sources.list().filter((src) => src.id !== 'web');
+  if (catalogues.length === 0) return [];
+  const answer = await ctx.model.json({
+    role: `${ROLE}.looks`,
+    system: SYSTEM,
+    user: [
+      run.brief,
+      '',
+      'The user is waiting for the first cards, and a slower search will bring more later. Name two or three of the catalogues below that are likely to hold a strong record for what the user asked, as it applies to this very thing. Each a different catalogue.',
+      'For each:',
+      '- source: its id as listed.',
+      '- search: what to type into its search box, as its line says. It names the subject itself, never the words of the request ("something interesting", "help me") and never a question. Each extra word removes results.',
+      '- title: about 26 characters, what you hope to find.',
+      '- why: under eight words, shown on the thread that joins the card to the original ("what the studies found").',
+      '- tags: 2 to 4 short lowercase words.',
+      '',
+      'Catalogues:',
+      ...catalogues.map((src) => `- ${src.id}: ${src.name}. ${src.goodFor} Search: ${src.query}`),
+      `- ${VIDEO_LOOK}: A video that plays in the card, when watching teaches more than reading. Search: a short phrase, as you would type it into a video site.`,
+    ].join('\n'),
+    schema: Looks,
+    quick: true,
+  });
+  const known = new Set(catalogues.map((src) => src.id));
+  const used = new Set<string>();
+  const looks = answer.looks.flatMap((look): Direction[] => {
+    const source = look.source.trim();
+    const search = oneLine(look.search, 120);
+    if (!search || used.has(source) || (source !== VIDEO_LOOK && !known.has(source))) return [];
+    used.add(source);
+    const video = source === VIDEO_LOOK;
+    return [{
+      angle: oneLine(look.why, 80),
+      format: video ? 'video' : 'find',
+      title: oneLine(look.title, 120) || search,
+      // A video shows its direction's body as its text. A find's goes only to the model choosing among the records.
+      body: video ? '' : run.need ? `What the user asked for: "${run.need}".` : '',
+      why: look.why,
+      tags: look.tags,
+      steps: [],
+      images: [],
+      source: video ? '' : source,
+      lookups: [search],
+    }];
+  }).slice(0, FAST_LOOKS);
+  if (looks.length > 0) ctx.note(ROLE, `looks first in ${looks.map((d) => `${d.source || 'videos'} for "${d.lookups[0]}" (${oneLine(d.why, 60)})`).join(', ')}`);
+  return looks;
+}
+
 type Made = { item: Item; tool: string };
 
 function common(d: Direction, tool: string) {
@@ -363,8 +508,11 @@ function writtenItem(ctx: RoleContext, d: Direction): Item {
   });
 }
 
-/** Turns one direction that needs a tool into the items it stands for. An empty list means it could not be made real. */
-async function realize(ctx: RoleContext, d: Direction, imageBudget: number, taken: Set<string>): Promise<Made[]> {
+/**
+ * Turns one direction that needs a tool into the items it stands for. An empty list means it could not be made real.
+ * A find of the fast lane keeps to its catalogue and its best record, since the web would take seconds it is there to save.
+ */
+async function realize(ctx: RoleContext, d: Direction, imageBudget: number, taken: Set<string>, fast: boolean): Promise<Made[]> {
   switch (d.format) {
     case 'image':
     case 'gallery': {
@@ -400,21 +548,21 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
       if (!source) return [];
       const onWeb = () => gather(ctx, web!, [oneLine(d.title, 120)], taken);
       const pool = await gather(ctx, source, lookupsOf(ctx, d, source), taken);
-      const rescue = web && source.id !== 'web';
+      const rescue = !fast && web && source.id !== 'web';
       // A thin pool usually ends with nothing, so the slow web search starts now instead of after the model has said no.
       const early = rescue && pool.fresh.length < THIN_POOL ? onWeb() : null;
-      const first = await choose(ctx, d, source, pool, taken);
+      const first = await choose(ctx, d, source, pool, taken, fast ? 1 : source.show);
       if (first.length > 0 || !rescue) return first;
       // A catalogue only holds what it holds. The open web is asked once before the direction is given up.
       ctx.note(ROLE, `trying the web for "${oneLine(d.title, 60)}"`);
-      return choose(ctx, d, web!, await (early ?? onWeb()), taken);
+      return choose(ctx, d, web!, await (early ?? onWeb()), taken, web!.show);
     }
     case 'video': {
       const wanted = oneLine(d.lookups[0] || d.title, 160);
       // A client that cannot show a player from another site would get only a still, so while one is connected a film that plays as a file is looked for first.
       const files = ctx.playback().embeds ? undefined : ctx.tools.sources.list().find((src) => src.id === 'archive');
       if (files) {
-        const played = await choose(ctx, d, files, await gather(ctx, files, [wanted], taken), taken);
+        const played = await choose(ctx, d, files, await gather(ctx, files, [wanted], taken), taken, files.show);
         if (played.length > 0) return played;
       }
       for (const video of await ctx.step(ROLE, label('Looking for a video of', wanted), () => ctx.tools.web.videos(wanted))) {
@@ -472,8 +620,8 @@ async function gather(ctx: RoleContext, source: Source, wanted: string[], taken:
   return { fresh, query: queries.join('" or "'), failed };
 }
 
-/** Lets the model choose from what a search gathered and returns its choices as items. Empty when nothing fit. */
-async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, query, failed }: Pool, taken: Set<string>): Promise<Made[]> {
+/** Lets the model choose up to `most` of what a search gathered and returns its choices as items. Empty when nothing fit. */
+async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, query, failed }: Pool, taken: Set<string>, most: number): Promise<Made[]> {
   if (fresh.length === 0 && failed) {
     ctx.note(ROLE, `${source.name} could not be reached (${failed}), "${oneLine(d.title, 60)}" left out`);
     return [];
@@ -493,7 +641,7 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
   }
   // A search matches words, so the model picks the records that carry the direction before any is shown.
   const pictures = source.visual ? await dataUrls(ctx, found.map((f) => f.stored!.asset)) : undefined;
-  const chosen = await ctx.step(ROLE, label(`Reading ${found.length} ${found.length === 1 ? 'result' : 'results'} from`, sourceWords(source)), () => curate(ctx, d, source, found, pictures));
+  const chosen = await ctx.step(ROLE, label(`Reading ${found.length} ${found.length === 1 ? 'result' : 'results'} from`, sourceWords(source)), () => curate(ctx, d, source, found, most, pictures));
   if (chosen.length === 0) ctx.note(ROLE, `none of the ${found.length} records ${source.name} returned for "${query}" fit, left out`);
   const made = await Promise.all(
     chosen.map(async ({ index, note, excerpt }): Promise<Made | null> => {
@@ -552,7 +700,7 @@ async function dataUrls(ctx: RoleContext, assets: string[]): Promise<string[] | 
   return files.every(Boolean) ? files.map((file) => `data:${file!.mime};base64,${toBase64(file!.bytes)}`) : undefined;
 }
 
-async function curate(ctx: RoleContext, d: Direction, source: Source, found: Found[], pictures?: string[]): Promise<{ index: number; note: string; excerpt: string }[]> {
+async function curate(ctx: RoleContext, d: Direction, source: Source, found: Found[], most: number, pictures?: string[]): Promise<{ index: number; note: string; excerpt: string }[]> {
   const perRecord = Math.floor(9000 / found.length);
   const ask = (images?: string[]) =>
     ctx.model.json({
@@ -565,7 +713,7 @@ async function curate(ctx: RoleContext, d: Direction, source: Source, found: Fou
         ...found.map((f, i) => `${i + 1}. "${oneLine(f.title, 140)}"${f.by ? ` by ${oneLine(f.by, 80)}` : ''}${f.date ? `, ${f.date}` : ''}${f.from ? ` (${f.from})` : ''}${f.text ? `\n   ${oneLine(f.text, perRecord)}` : ''}`),
         ...(images ? ['', 'Their pictures are attached in the same order. Look at them and judge by what you see.'] : []),
         '',
-        `Choose up to ${source.show} that would really help the user in this direction, best first, and prefer different makers. The direction was written before the search, so a strong record that comes at it from a slightly different side still belongs. Leave out records that are off the subject, thin, promotional, or that only share a word with the search. Choose none when none are worth the user's time.`,
+        `Choose up to ${most} that would really help the user in this direction, best first, and prefer different makers. The direction was written before the search, so a strong record that comes at it from a slightly different side still belongs. Leave out records that are off the subject, thin, promotional, or that only share a word with the search. Choose none when none are worth the user's time.`,
         'For each:',
         '- number.',
         `- note: one or two sentences on what the user should take from it and how it bears on what they have. Say only what the record ${images ? 'or its picture ' : ''}supports.`,
@@ -594,7 +742,7 @@ async function curate(ctx: RoleContext, d: Direction, source: Source, found: Fou
         const quoted = excerpt.trim();
         return [{ index, note: note.trim(), excerpt: quoted && squash(record.text).includes(squash(quoted)) ? clipText(quoted, EXCERPT) : '' }];
       })
-      .slice(0, source.show);
+      .slice(0, most);
   } catch (err) {
     ctx.note(ROLE, `could not choose among what ${source.name} returned (${message(err)}), left out`);
     return [];

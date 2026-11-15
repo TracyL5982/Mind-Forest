@@ -482,12 +482,14 @@ test('what the user has comes first in a round, the strongest first, at most eig
 
   const rest = await scout(k.ctx, { anchor, deliver: (commands) => (early.push(commands), apply(k, commands)) });
   apply(k, rest);
+  // The second slot is kept for the picture, which lands when it is made.
+  await until(() => k.mind.picks(anchor).length === 10);
 
   const known = k.mind.picks(anchor).filter((n) => n.origin.tool === 'mindstorm');
   assert.deepEqual(known.map((n) => n.why), ['tie 11', 'tie 10', 'tie 9', 'tie 8', 'tie 7', 'tie 6', 'tie 5', 'tie 4']);
   assert.ok(early[0]!.some((c) => c.type === 'addNode' && c.node.origin.tool === 'mindstorm'), 'they arrive with the first delivery');
   const fresh = k.mind.picks(anchor).filter((n) => n.origin.tool !== 'mindstorm');
-  assert.equal(fresh.length, 2, 'the round keeps room for two new things');
+  assert.deepEqual(fresh.map((n) => k.mind.itemOf(n.id).title), [NOTE.title, IMAGE.title], 'the round keeps room for two new things');
   assert.equal(k.mind.picks(anchor).length, 10);
 });
 
@@ -869,4 +871,112 @@ test('a find that came with no searches searches its title, whole on the web and
   assert.ok(searched.includes('papers: Studies Measured Dolly'), JSON.stringify(searched));
   assert.ok(searched.includes('web: Why These Fields Are Yellow'), JSON.stringify(searched));
   assert.ok(!searched.some((s) => /: $/.test(s)), 'no search is ever empty');
+});
+
+const looked = (source: string, search: string) => ({ source, search, title: `First look in ${source}`, why: `first from ${source}`, tags: ['first'] });
+
+/**
+ * A film card, three catalogues that each hold one record for the fast lane's search ("quick") and another for the inventive
+ * lane's ("zoom"), and a main model that writes nothing until `thinking` opens and ends its reply only when `finishing` does.
+ */
+function twoLanes(directions: unknown[], looks: unknown[]) {
+  const k = kit();
+  const film = k.seedTree('Film', ['Dolly zoom']);
+  k.world.sources = [WEB, PAPERS, BOOKS, NEWS];
+  for (const source of ['papers', 'books', 'news']) {
+    k.world.found.set(`${source}:quick`, [record(source, 1)]);
+    k.world.found.set(`${source}:zoom`, [record(source, 2)]);
+  }
+  const searched: string[] = [];
+  const search = k.ctx.tools.sources.search;
+  k.ctx.tools.sources.search = async (id, query) => (searched.push(`${id}: ${query}`), search(id, query));
+  k.model.on('scout.looks', () => ({ looks })).on('scout.curate', (req) => ({
+    chosen: [...req.user.matchAll(/^(\d+)\. "/gm)].map(([, n]) => ({ number: Number(n), note: '', excerpt: '' })),
+  }));
+  const thinking = gate();
+  const finishing = gate();
+  const json = k.model.json.bind(k.model);
+  k.model.json = (async (req: Parameters<typeof json>[0]) => {
+    if (req.role !== 'scout.ideate') return json(req);
+    await thinking.wait;
+    const reply = { reading: '', directions };
+    req.onText?.(JSON.stringify(reply).replace(/\]\}$/, ''));
+    await finishing.wait;
+    return req.schema.parse(reply);
+  }) as typeof k.model.json;
+  return { k, anchor: film.nodeIds[0]!, thinking, finishing, searched };
+}
+
+test('the fast lane lands its cards while the main model is still thinking, and never looks on the web', async () => {
+  const { k, anchor, thinking, finishing, searched } = twoLanes([NOTE], [looked('papers', 'quick'), looked('web', 'quick'), looked('books', 'quick'), looked('news', 'nothing')]);
+
+  const run = scout(k.ctx, { anchor, need: 'what is known about it', deliver: (commands) => apply(k, commands) });
+  await until(() => k.mind.picks(anchor).length === 2);
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['papers record 1', 'books record 1']);
+  assert.deepEqual(k.mind.picks(anchor).map((n) => n.why), ['first from papers', 'first from books'], 'the thread names where the look went');
+  const asked = k.model.calls.find((c) => c.role === 'scout.looks')!.detail;
+  assert.match(asked, /^- papers: Research papers\. What studies found\. Search: Title words\.$/m, 'each catalogue is offered with how to search it');
+  assert.doesNotMatch(asked, /^- web:/m, 'the web is not offered');
+  assert.ok(!searched.some((s) => s.startsWith('web:')), `a look with nothing is not tried on the web: ${JSON.stringify(searched)}`);
+  thinking.open();
+  finishing.open();
+  apply(k, await run);
+  assert.ok(picked(k, anchor).some((i) => i.title === NOTE.title), 'the inventive lane still brings its own');
+});
+
+test('the fast lane fills at most two slots, and the inventive lane takes the rest', async () => {
+  const finds = ['papers', 'books', 'news'].map((source) => direction('find', `More from ${source}`, { source, lookups: ['zoom'] }));
+  const { k, anchor, thinking, finishing } = twoLanes([...finds, NOTE], [looked('papers', 'quick'), looked('books', 'quick'), looked('news', 'quick')]);
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  await until(() => k.mind.picks(anchor).length === 2);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(k.mind.picks(anchor).length, 2, 'the third look waits while the inventive lane may still fill its slots');
+  thinking.open();
+  finishing.open();
+  apply(k, await run);
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), ['books record 1', 'books record 2', 'papers record 1', 'papers record 2', NOTE.title].sort());
+});
+
+test('a record both lanes find lands once', async () => {
+  const { k, anchor, thinking, finishing } = twoLanes([direction('find', 'What the studies found', { source: 'papers', lookups: ['quick'] }), NOTE], [looked('papers', 'quick')]);
+  thinking.open();
+  finishing.open();
+
+  apply(k, await scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }));
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), ['papers record 1', NOTE.title].sort());
+});
+
+test('a picture the inventive lane writes last still has a slot after the fast lane and the faster finds', async () => {
+  const finds = ['papers', 'books'].map((source) => direction('find', `More from ${source}`, { source, lookups: ['zoom'] }));
+  const { k, anchor, thinking, finishing } = twoLanes([NOTE, STEPS, ...finds, IMAGE], [looked('papers', 'quick'), looked('books', 'quick')]);
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  await until(() => k.mind.picks(anchor).length === 2);
+  thinking.open();
+  finishing.open();
+  apply(k, await run);
+  await until(() => k.mind.picks(anchor).length === 5);
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['papers record 1', 'books record 1', NOTE.title, STEPS.title, IMAGE.title]);
+  assert.equal(k.model.calls.filter((c) => c.kind === 'image').length, 1);
+});
+
+test('with no picture written, the slot kept for one goes to the first find held back, once the model has finished writing', async () => {
+  const finds = ['papers', 'books'].map((source) => direction('find', `More from ${source}`, { source, lookups: ['zoom'] }));
+  const { k, anchor, thinking, finishing } = twoLanes([NOTE, STEPS, ...finds], [looked('papers', 'quick'), looked('books', 'quick')]);
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  await until(() => k.mind.picks(anchor).length === 2);
+  thinking.open();
+  await until(() => k.mind.picks(anchor).length === 4);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(k.mind.picks(anchor).length, 4, 'while the model writes, the last slot is kept for a picture');
+  finishing.open();
+  apply(k, await run);
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['papers record 1', 'books record 1', NOTE.title, STEPS.title, 'papers record 2']);
 });
