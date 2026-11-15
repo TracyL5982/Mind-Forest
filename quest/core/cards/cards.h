@@ -71,6 +71,9 @@ struct Opened {
 };
 /// A note's card small, `k` pixels to a web px.
 std::optional<Drawn> small(const std::string& noteID, float k);
+/// Its small face's frame alone: the face, its corners and its edge, and none of its words. What an in-progress card
+/// eases to its finished card's size as.
+std::optional<Drawn> frame(const std::string& noteID, float k);
 /// A note's card opened in a frame `viewTall` px tall, its pictures at most `pictureTall` px, `k` pixels to a web px.
 /// It is laid out once and kept until the card is put again: a picture that comes later moves nothing.
 std::optional<Opened> opened(const std::string& noteID, float k, float viewTall, float pictureTall);

@@ -15,6 +15,8 @@ constexpr int WIDTH = 320;
 constexpr int COLUMN = WIDTH - SIDES;
 /// A picture leads the card in a band this tall, across its whole width.
 constexpr int PICTURE = 140;
+/// On the small face the picture is a band across the top, low enough to leave the title and a line of the first part room.
+constexpr int BAND = 40;
 constexpr int TITLE_LINES = 3;
 constexpr int TEXT_LINES = 6;
 /// As many entries as a sheet's list may hold. A list sent with more counts the rest.
@@ -231,23 +233,36 @@ void drawPart(const Pen& pen, const Look& look, const Item& item, const Part& pa
 }
 
 
-/// The title and the first part as its own preview in at most 68 px, and the cue counting the other parts.
+/// Its picture in a band across the top when it has one, then the title and the first part as its own preview in at most 68 px, and
+/// the cue counting the other parts.
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
+    if (!p.src.empty()) {
+        if (c.pen) {
+            CGRect box = c.pen->px(0, 0, face::W, BAND);
+            c.pen->ctx.setFillColor(palette::media);
+            c.pen->ctx.fill(box);
+            c.pen->picture(p.src, box, true, c.words);
+        }
+        c.y = BAND + face::TOP - 2;
+    }
     if (!c.title(p.title)) return;
     if (!p.parts.empty() && c.above(props)) {
         const Part& part = p.parts.front();
         c.gap(face::GAP);
         float top = c.y, most = std::min(68.f, c.room() - (p.parts.size() > 1 ? face::CUE : 0));
         switch (part.kind) {
-        case Part::Kind::text: c.lines(part.words, Measure::body, int(most / face::BODY), c.look.ink2); break;
+        case Part::Kind::text:
+            // A first part with no room for a line of its own is left out with the rest, and the cue counts it.
+            if (c.lines(part.words, Measure::body, int(most / face::BODY), c.look.ink2) == 0) c.ended = true;
+            break;
         case Part::Kind::excerpt: c.lines(part.words, Measure::passage, int(most / face::BODY), palette::ink); break;
         case Part::Kind::list: {
             size_t n = std::min(part.entries.size(), size_t(std::max(0, int((most + 5) / (face::BODY + 5)))));
             for (size_t i = 0; i < n; i++) {
                 if (i) c.gap(5);
                 if (c.pen) entryMark(*c.pen, c.x, c.y + 5, c.look);
-                c.lines(part.entries[i], Measure::body, 1, palette::ink, 0, c.x + MARK, face::COL - MARK);
+                c.lines(part.entries[i], Measure::body, 1, palette::ink, 0, c.x + MARK, c.width - MARK);
             }
             if (part.entries.size() > n) c.more = true;
             break;

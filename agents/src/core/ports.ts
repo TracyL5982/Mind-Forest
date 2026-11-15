@@ -97,8 +97,12 @@ export interface Found {
   seconds?: number;
   steps?: string[];
   chart?: { labels: string[]; values: number[]; unit?: string };
-  /** What kind of thing the record is, when its source knows. */
-  kind?: 'artwork' | 'paper' | 'book';
+  /**
+   * What kind of thing the record is, when its source knows, which decides its card (DECISIONS 55). A repository's text is its own
+   * short description, a page's, an article's or a question's is where it starts, an answer's answers its title, a thread's is what
+   * people wrote, and a recipe's is its ingredients and its numbered steps.
+   */
+  kind?: 'artwork' | 'paper' | 'book' | 'repository' | 'page' | 'article' | 'question' | 'answer' | 'thread' | 'film' | 'recipe';
   /** What a work is made of, as its holder catalogues it. */
   medium?: string;
   /** The museum or collection that holds a work. */

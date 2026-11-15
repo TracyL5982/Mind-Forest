@@ -166,6 +166,7 @@ void OceanModel::buildSmall(CardView& c) {
         ghosts.erase(ghost);
     }
     std::optional<Piece> piece;
+    EntityRef holder = c.smallHolder;
     // NOTE(port): added for Quest. A piece drawn as a card shows the pictures it has, and its open frame and
     // panel are made with its small face, so they are there before the card can open (core/cards).
     if (std::optional<std::string> card = cards::ocean::cardOf(c.ref)) {
@@ -173,6 +174,22 @@ void OceanModel::buildSmall(CardView& c) {
         piece = cards::ocean::small(*art, *card);
         cards::ocean::open(*art, *card);
         cards::ocean::panel(*art, *card);
+        // A card still composing is drawn in a holder of its own, so it can ease to its finished card's size, and
+        // a soft light runs across it (composeFrame).
+        if (cards::ocean::composing(*card)) {
+            c.shape = Entity::make();
+            c.smallHolder->addChild(c.shape);
+            holder = c.shape;
+            c.shimmer = shimmerBand(*art, c.smallBody);
+            // Its frame without its words lies under its face all along, so it is ready to ease to the finished size
+            // when the face gives way (settleCard).
+            if (std::optional<Piece> frame = cards::ocean::frame(*art, *card)) {
+                EntityRef bare = art->quad(*frame);
+                bare->position.z = -0.0002f;
+                holder->addChild(bare);
+            }
+            touch(time + 0.1);
+        }
     } else switch (c.ref.kind) {
     case Ref::Kind::film:
         piece = art->filmSmall(catalog->clips[c.ref.index]);    // its why rides on its thread
@@ -189,13 +206,138 @@ void OceanModel::buildSmall(CardView& c) {
     }
     if (piece) {
         EntityRef quad = art->quad(*piece);
-        c.smallHolder->addChild(quad);
+        holder->addChild(quad);
         c.smallQuad = CardView::SmallQuad{quad, piece->texture};
         // (`[weak art]` in the Swift: the art lives as long as the model does.)
         c.shade = [art = art.get()](const EntityRef& quad, const TextureRef& texture, float dim) { art->shade(quad, texture, dim); };
     }
-    c.addGlow(art->glow(c.smallBody), c.smallHolder);
-    if (EntityRef rim = art->gazeRim(c.smallBody, gazeMaterial)) c.smallHolder->addChild(rim);
+    if (c.shimmer) holder->addChild(c.shimmer);
+    c.addGlow(art->glow(c.smallBody), holder);
+    if (EntityRef rim = art->gazeRim(c.smallBody, gazeMaterial)) holder->addChild(rim);
+}
+
+// NOTE(port): added for Quest (core/cards), with `settleCard` and `composeFrame`.
+
+namespace {
+/// How long an in-progress card takes to ease to its finished card's size, and the finished card to come up inside it, s.
+constexpr float SETTLE = 0.32f, APPEAR = 0.3f;
+/// The light that runs across a composing card: a third of its width, and once across every 1.6 s.
+constexpr float BAND = 0.32f;
+constexpr double PASS = 1.6;
+}  // namespace
+
+/// A soft band of light as tall as a composing card, brightest down its middle and gone at its sides: thin strips of
+/// flat light, which need no picture, so nothing stands in for one while it is on its way to the GPU.
+EntityRef OceanModel::shimmerBand(Art& art, Vec2 body) {
+    constexpr int strips = 31;
+    float wide = body.x * BAND, tall = std::max(body.y - 0.004f, 0.01f), each = wide / strips;
+    EntityRef band = Entity::make();
+    for (int i = 0; i < strips; i++) {
+        float x = (float(i) + 0.5f) / strips - 0.5f;
+        EntityRef strip = art.swatch(Color::white(), {each * 1.02f, tall}, 0.1f * std::exp(-x * x / 0.045f));
+        // Light only: it hides nothing drawn after it, as the face under it may be when the band stands nearer the eye.
+        strip->model->materials[0].writesDepth = false;
+        strip->position.x = x * wide;
+        band->addChild(strip);
+    }
+    band->position.z = 0.0004f;
+    return band;
+}
+
+void OceanModel::settleCard(int id) {
+    auto found = cards.find(id);
+    const TreeNode* n = tree ? find(*tree, id) : nullptr;
+    if (!n || found == cards.end()) return;
+    CardRef old = found->second;
+    cards.erase(found);
+    for (const Entity* e : old->extras) picks.erase(e);
+    old->root->inputTarget = false;
+    old->home = std::nullopt;
+    buildQueue.erase(std::remove(buildQueue.begin(), buildQueue.end(), id), buildQueue.end());
+    makeCard(*n, 0);
+    CardRef made = card(id);
+    leaving.push_back(old);
+    if (!made) {
+        old->alpha.go(0, time, 0.15f);
+        old->goneAt = time + 0.16;
+        return;
+    }
+    // The same card with its finished face carries on from where it was, and does not arrive again.
+    made->source = old->source;
+    made->sourceScale = old->sourceScale;
+    made->emerge = old->emerge;
+    made->bornAt = old->bornAt;
+    buildSmall(*made);
+    buildQueue.erase(std::remove(buildQueue.begin(), buildQueue.end(), id), buildQueue.end());
+    // The composing card stays as it is until the finished card's faces are on the GPU (startSettle). Meanwhile the finished
+    // card is drawn all but clear, which is what brings its faces there.
+    made->appear = 0.003f;
+    old->givingWay = made;
+    old->givingWaySince = time;
+    old->goneAt = std::numeric_limits<double>::infinity();
+    if (old->shape) old->shape->position.z = -0.002f;
+    old->openHolder->position.z = -0.002f;
+    touch(time + 0.6);
+}
+
+namespace {
+/// Whether every face of a card that shows is on the GPU: drawn first, before it, the renderer would show nothing in its place.
+bool facesReady(const CardView& c) {
+    auto ready = [](const EntityRef& e) {
+        if (!e || !e->model || e->model->materials.empty()) return true;
+        const TextureRef& t = e->model->materials[0].texture;
+        return !t || t->gl != 0;
+    };
+    bool open = c.openMix.target() > 0.5f;
+    return open ? ready(c.openFace) && ready(c.openPanel) : !c.smallQuad || ready(c.smallQuad->entity);
+}
+}  // namespace
+
+/// The in-progress card eases to the finished card's size and place, a hair behind it, and goes once the finished card has
+/// come up inside it. Its words leave as the finished card starts to come up, so the frame is never empty.
+void OceanModel::startSettle(CardView& old, CardView& made, double now) {
+    old.givingWay.reset();
+    old.settle = CardView::Settle{old.smallBody, made.smallBody, now};
+    if (old.smallQuad) old.smallQuad->entity->isEnabled = false;
+    if (old.shimmer) old.shimmer->isEnabled = false;
+    // Opened, it keeps its frame, which is the finished card's, and the words of its panel go.
+    if (old.openPanel) old.openPanel->isEnabled = false;
+    old.xy.go(made.xy.target(), now, SETTLE);
+    old.goneAt = now + std::max(SETTLE, APPEAR) + 0.05;
+    made.appear = 0.25f;
+    made.appearAt = now;
+    touch(old.goneAt + 0.1);
+}
+
+void OceanModel::composeFrame(double now) {
+    auto run = [&](CardView& c) {
+        // A finished card whose faces have not reached the GPU in half a second comes up all the same.
+        if (CardRef into = c.givingWay.lock(); into && (facesReady(*into) || now - c.givingWaySince > 0.5)) startSettle(c, *into, now);
+        else if (c.givingWay.expired() && !c.settle && c.goneAt == std::numeric_limits<double>::infinity() && c.givingWaySince > 0) c.goneAt = now;
+        if (c.shimmer) {
+            // It comes in at the left, brightest across the middle, and goes at the right.
+            float t = float(std::fmod(std::max(0.0, now - c.bornAt), PASS) / PASS);
+            c.shimmer->position.x = (t - 0.5f) * c.smallBody.x * (1 - BAND);
+            c.shimmer->opacity = std::clamp(std::sin(float(M_PI) * t), 0.f, 1.f);
+            c.changed();
+        }
+        if (c.appearAt) {
+            float t = std::clamp(float((now - *c.appearAt) / APPEAR), 0.f, 1.f);
+            // From a quarter at once, so the frame the composing words left is never shown empty.
+            c.appear = 0.25f + 0.75f * (1 - (1 - t) * (1 - t));
+            if (t >= 1) c.appearAt.reset();
+        }
+        if (c.settle && c.shape) {
+            float t = std::clamp(float((now - c.settle->start) / SETTLE), 0.f, 1.f), e = t * t * (3 - 2 * t);
+            Vec2 from = c.settle->from, to = c.settle->to;
+            c.shape->scale = {1 + (to.x / std::max(from.x, 1e-4f) - 1) * e, 1 + (to.y / std::max(from.y, 1e-4f) - 1) * e, 1};
+            c.changed();
+        }
+    };
+    for (const auto& [id, c] : cards) {
+        if (c) run(*c);
+    }
+    for (const CardRef& c : leaving) run(*c);
 }
 
 /// A card as an earlier step of the path: its number and name.

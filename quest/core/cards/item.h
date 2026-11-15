@@ -21,6 +21,8 @@ struct Words {
 /// An item, as a card reads it. A field that is not a string reads as an empty one; `title`, `text`
 /// and `summary` are never trimmed.
 struct Item {
+    /// `item.kind`: text, image, video, link, chat, file, code or audio.
+    std::string kind;
     std::string title, text, summary;
     Json data = Json::object();
     /// `origin.by == "agent"`: the agents brought it.

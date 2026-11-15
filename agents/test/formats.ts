@@ -128,7 +128,8 @@ export async function run(given: ModelClient | ((keyOf: (nodeId: string) => stri
   const sure = placed.filter((one) => !one.asked).map((one) => one.id);
   const open = placed.filter((one) => one.asked).map((one) => one.id);
   const passes = [sure, ...Array.from({ length: Math.ceil(open.length / ASKED_AT_ONCE) }, (_v, n) => open.slice(n * ASKED_AT_ONCE, (n + 1) * ASKED_AT_ONCE))];
-  for (const commands of await Promise.all(passes.map((nodeIds) => renderer(ctx, { nodeIds })))) {
+  // The score is of what the model chooses, so a slow answer is waited for. How many calls would miss a composing card's 12 s is in the call times.
+  for (const commands of await Promise.all(passes.map((nodeIds) => renderer(ctx, { nodeIds, waitMs: 600_000 })))) {
     if (commands.length > 0) k.mind.apply({ origin: { by: 'agent', role: 'renderer' }, label: 'render', commands });
   }
 

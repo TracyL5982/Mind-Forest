@@ -126,6 +126,7 @@ double number(const Json& value) {
 
 Item Item::from(const Json& j) {
     Item item;
+    item.kind = cards::text(j["kind"]);
     item.title = cards::text(j["title"]);
     item.text = cards::text(j["text"]);
     item.summary = cards::text(j["summary"]);

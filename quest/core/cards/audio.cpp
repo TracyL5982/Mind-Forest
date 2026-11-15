@@ -20,6 +20,8 @@ constexpr int GAP = 6;
 /// One bar of the waveform and the space after it, in the units of its view box, which is stretched to the room it has.
 constexpr float BAR = 2, STEP = 3, WAVE = 24;
 constexpr Setting NOTE{15, 21, Font::Weight::medium};
+/// An episode's cover art, square, at the face's left.
+constexpr int ART = 56;
 
 /// A length in seconds as a clock writes it: 0:20, 12:05, 1:02:03.
 std::string clock(double seconds) {
@@ -116,14 +118,17 @@ void player(const Pen& pen, const std::string& length, float x, float y, float w
 }
 
 
-/// The title, the strip of play mark, waveform and length, the first words of the transcript, and the cue.
+/// An episode's cover art at the left when it has one, then beside it the title, the strip of play mark, waveform and length, the
+/// first words of the transcript, and the cue.
 void lay(Col& c, const Item& item, const Json& props) {
-    std::string words = heard(item);
+    std::string words = heard(item), art = text(props["image"]);
+    float foot = art.empty() ? 0 : sidePicture(c, art, ART, ART);
     if (!c.title(item.titleOrUntitled())) return;
     // Under a long title the strip gives way.
     if (c.room() < face::GAP + STRIP + (words.empty() ? 0 : face::CUE)) {
         c.more = true;
         c.cue(cueMore(c.words));
+        c.y = std::max(c.y, foot);
         return;
     }
     c.gap(face::GAP);
@@ -136,6 +141,7 @@ void lay(Col& c, const Item& item, const Json& props) {
         c.more = true;
     }
     if (c.more) c.cue(cueMore(c.words));
+    c.y = std::max(c.y, foot);
 }
 
 Footprint size(const Item& item, const Json& props) {
@@ -183,7 +189,9 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
     sheet.paragraph(utf8(trim(points(item.text))), setting::body, palette::ink2);
 }
 
-const Kind kind{"audio", size, {}, draw, detail};
+std::vector<std::string> pictures(const Json& props) { return {text(props["image"])}; }
+
+const Kind kind{"audio", size, {}, draw, detail, pictures};
 const Registered registered{kind};
 
 }  // namespace

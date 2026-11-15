@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { LIBRARY, type Command, type Id, type Item, type LibraryRef, type Node, type Origin } from '../core/domain.ts';
 import type { Assets } from '../core/ports.ts';
 import type { Draft, Mindstorm } from '../core/state.ts';
-import { defaultView } from '../core/views.ts';
+import { byRule } from '../core/roles/renderer.ts';
 
 /**
  * The headset's library as items of the mindstorm: its 100 films, 750 works, the notes and tags of ocean.json, and its saved trees.
@@ -283,7 +283,7 @@ export async function libraryDraft(opts: { files: LibraryFiles; mind: Mindstorm;
         why: step.why,
         importance: 0.5,
         origin: USER,
-        view: defaultView(item, (id) => assets.url(id)),
+        view: { ...byRule(item, (id) => assets.url(id)), by: 'default' },
         order,
       };
     });

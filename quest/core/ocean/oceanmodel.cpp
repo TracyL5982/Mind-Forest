@@ -213,6 +213,7 @@ void OceanModel::update(float dt) {
     landPictures();
     repaintCards();
     holdPress();
+    composeFrame(now);
 
     if (now < busyUntil + 0.1) {
         if (shell) shell->setShift(stirred.value(now));

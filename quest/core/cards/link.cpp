@@ -12,6 +12,8 @@ namespace {
 
 constexpr int BAR = 30;
 constexpr int THUMB = 64;
+/// A film's poster beside the words under the bar, two by three as a poster stands.
+constexpr int POSTER_WIDE = 60, POSTER_TALL = 90;
 constexpr const char* OUT = "\xE2\x86\x97";
 constexpr Setting DOT{11, 11, Font::Weight::bold};
 
@@ -72,10 +74,13 @@ void bar(const Pen& pen, float x, float y, float w, const std::string& site, boo
 }
 
 
-/// The address bar across the top, the title, the description in whole lines, and the cue. No thumbnail.
+/// The address bar across the top, then the title and the description in whole lines, and the cue, beside a film's poster at the right
+/// when the record has one.
 void lay(Col& c, const Item& item, const Json& props) {
     if (c.pen) bar(*c.pen, 1, 1, face::W - 2, siteOf(item, props), false, setting::faceMeta, c.look.dashed);
     c.y = 30 + 13;
+    std::string poster = text(props["image"]);
+    float foot = poster.empty() ? 0 : sidePictureRight(c, poster, POSTER_WIDE, POSTER_TALL);
     std::string about = text(props["description"]);
     if (about.empty()) about = item.summary;
     if (!c.title(item.titleOrUntitled())) return;
@@ -86,6 +91,7 @@ void lay(Col& c, const Item& item, const Json& props) {
         c.more = true;
     }
     if (c.more) c.cue(cueMore(c.words));
+    c.y = std::max(c.y, foot);
     c.y += 13 - face::BOTTOM;
 }
 
