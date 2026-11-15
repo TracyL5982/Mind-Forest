@@ -274,8 +274,8 @@ function factInText(item: Item): { value: string; label: string } | undefined {
   const text = (item.text.trim() || item.title).trim();
   if (text.length > 80 || text.includes('\n')) return undefined;
   const valueFirst = VALUE_FIRST.exec(text);
-  // "42% of users leave" labels its value "users leave": a label that opens with "of" is a piece of a phrase.
-  if (valueFirst) return { value: valueFirst[1]!, label: valueFirst[2]!.replace(/[.\s]+$/, '').replace(/^(?:of|in|at|on|for|per|from|to|by|with)\s+/i, '') };
+  // "42% of users leave" labels its value "of users leave": the rest of the line, as the card shows the whole item.
+  if (valueFirst) return { value: valueFirst[1]!, label: valueFirst[2]!.replace(/[.\s]+$/, '') };
   const labelFirst = LABEL_FIRST.exec(text);
   if (!labelFirst) return undefined;
   const [label, value] = [labelFirst[1]!.trim(), labelFirst[2]!.trim()];
@@ -611,9 +611,10 @@ export function byRule(item: Item, assetUrl: (id: string) => string): Draw {
     if (!rule.when(item, asked)) continue;
     let draw: Draw | undefined = { component: rule.component, props: rule.props(item, asked) };
     if (rule.reads === 'structure') {
-      const small = PIECES.has(rule.component) && held(draw.props, false).reduce((sum, value) => sum + sizeOf(value), 0) < COVERAGE_FLOOR * wholeOf(item);
-      const result = small ? undefined : checked(draw, (content ??= contentOf(item, assetUrl, true)), 'rule');
-      draw = result && 'draw' in result ? result.draw : undefined;
+      const result = checked(draw, (content ??= contentOf(item, assetUrl, true)), 'rule');
+      draw = 'draw' in result ? result.draw : undefined;
+      // The share is of what the card shows once its frame has left out what the item does not write, as a role it does not name.
+      if (draw && PIECES.has(rule.component) && held(draw.props, false).reduce((sum, value) => sum + sizeOf(value), 0) < COVERAGE_FLOOR * wholeOf(item)) draw = undefined;
     }
     if (draw && isValidView(draw)) return draw;
   }
@@ -1006,7 +1007,14 @@ const LEFT: Record<Why, string> = {
 
 /** The card a reply draws for its item, or nothing, with a line in the run log that names the item and the prop that failed. */
 export function drawn(ctx: RoleContext, reply: Entry, item: Item): Draw | undefined {
-  const verdict = byModel(reply, item, (id) => ctx.assets.url(id));
+  let verdict: Verdict;
+  try {
+    verdict = byModel(reply, item, (id) => ctx.assets.url(id));
+  } catch (err) {
+    // One reply the checks cannot read leaves its item as the rules drew it, and never the rest of the pass.
+    ctx.note(ROLE, `Kept "${clip(item.title, 40)}" as the rules drew it: the model's ${reply.component} could not be checked (${err instanceof Error ? err.message : String(err)}).`);
+    return undefined;
+  }
   const name = `"${clip(item.title, 40)}"`;
   const card = 'refused' in verdict ? verdict.component : verdict.draw.component;
   // What a refusal names needs no second line.

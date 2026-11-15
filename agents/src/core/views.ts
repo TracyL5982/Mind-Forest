@@ -329,9 +329,36 @@ const alike = (a: readonly string[] | undefined, b: readonly string[] | undefine
 function framed<P extends { above?: string[] }>(props: P, text: Grounding, ways: Way[], fit: (props: P, shown: Shown) => P | undefined = (same) => same): P | undefined {
   const shown = text.shows(ways, props.above);
   if (!shown) return undefined;
-  const drops = new Set(['above', ...(ways[shown.way]!.drops ?? [])]);
+  const way = ways[shown.way]!;
+  const drops = new Set(['above', ...(way.drops ?? [])]);
   const kept = Object.fromEntries(Object.entries(props).filter(([key]) => !drops.has(key))) as P;
-  return fit(shown.above.length > 0 ? { ...kept, above: shown.above } : kept, shown);
+  return fit(written(shown.above.length > 0 ? { ...kept, above: shown.above } : kept, way, shown), shown);
+}
+
+/** A mark a piece adds for the card's slot, which the slot draws in its place: "Q:", "A:", "问：", "答：", "At:" and ">". */
+const SLOT_MARK = /^\s*(?:(?:q|a|问|答|at)\s*[:：]\s*|>\s*)/iu;
+
+/**
+ * The props with each string the card was given for a piece of its item replaced by that piece as the item writes it: the item's own
+ * characters, its case, its punctuation and its quotation marks, though the words were matched in their plain form.
+ */
+function written<P>(props: P, way: Way, shown: Shown): P {
+  const queue = new Map<string, string[]>();
+  let n = 0;
+  for (const piece of way.pieces) {
+    if ('slot' in piece) continue;
+    const own = shown.texts[n++] ?? piece.text;
+    const given = piece.for ?? piece.text;
+    queue.set(given, [...(queue.get(given) ?? []), piece.for === undefined ? own : own.replace(SLOT_MARK, '')]);
+  }
+  const swap = (value: unknown, key: string): unknown => {
+    if (key === 'above' || key === 'heads') return value;
+    if (typeof value === 'string') return queue.get(value)?.shift() ?? value;
+    if (Array.isArray(value)) return value.map((one) => swap(one, ''));
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([inner, one]) => [inner, swap(one, inner)]));
+    return value;
+  };
+  return swap(props, '') as P;
 }
 
 /** A facts grid or a chart drawn from a table of two columns carries that table's heads row, and one drawn from other lines none. */
@@ -451,8 +478,8 @@ export const CHECKS: ContentChecks = {
     frame: (p, text) =>
       framed(p, text, [
         { pieces: [entry(p.question), entry(p.answer)] },
-        { pieces: [entry(`Q: ${p.question}`), entry(`A: ${p.answer}`)] },
-        { pieces: [entry(`问：${p.question}`), entry(`答：${p.answer}`)] },
+        { pieces: [{ ...entry(`Q: ${p.question}`), for: p.question }, { ...entry(`A: ${p.answer}`), for: p.answer }] },
+        { pieces: [{ ...entry(`问：${p.question}`), for: p.question }, { ...entry(`答：${p.answer}`), for: p.answer }] },
       ]),
   },
   callout: { props: { text: 'shown', tone: 'choice', above: 'shown' }, frame: (p, text) => framed(p, text, [{ pieces: [entry(p.text)] }]) },
@@ -460,9 +487,9 @@ export const CHECKS: ContentChecks = {
     props: { text: 'shown', at: 'says', source: 'own', above: 'shown' },
     // The card draws a passage as quoted and where it sits, so it may stand for a ">" that marks the passage and a line that says "At:".
     frame: (p, text) => {
-      const quoted = [p.text, `> ${p.text}`];
-      const where = p.at ? [`At: ${p.at}`] : [];
-      return framed(p, text, quoted.flatMap((passage) => [{ pieces: [entry(passage)] }, ...where.map((at) => ({ pieces: [entry(passage), entry(at)] }))]));
+      const quoted = [entry(p.text), { ...entry(`> ${p.text}`), for: p.text }];
+      const where = p.at ? [{ ...entry(`At: ${p.at}`), for: p.at }] : [];
+      return framed(p, text, quoted.flatMap((passage) => [{ pieces: [passage] }, ...where.map((at) => ({ pieces: [passage, at] }))]));
     },
   },
   definition: {

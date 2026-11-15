@@ -237,9 +237,9 @@ export const SAMPLES = {
     "props": {
       "labels": [
         "Rent",
-        "Food",
-        "Transport",
-        "Savings"
+        "food",
+        "transport",
+        "savings"
       ],
       "values": [
         45,

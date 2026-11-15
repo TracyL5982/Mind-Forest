@@ -35,9 +35,10 @@ export interface Grounding {
 /**
  * One piece of what a card shows. An entry, such as a step or a list line, begins and ends where a sentence, a line or a cell of the
  * item does; a loose piece, such as a figure's label, need not. A slot is one heading or label of the item: any heading or label, or
- * only a label that opens a line, and with `says` only one that says those words.
+ * only a label that opens a line, and with `says` only one that says those words. `for` is the prop a piece stands for when the piece
+ * adds the mark the card draws in its place, as "Q: " does to a question.
  */
-export type Piece = { text: string; entry: boolean } | { slot: 'heading' | 'label'; says?: string };
+export type Piece = { text: string; entry: boolean; for?: string } | { slot: 'heading' | 'label'; says?: string };
 
 /**
  * One way a card's pieces may read. `drops` are the props this reading leaves out, as a speaker the item does not write where the
@@ -61,6 +62,8 @@ export interface Shown {
   slots: string[];
   /** The check box on the line where each text piece starts: ticked, empty, or none. */
   boxes: (boolean | undefined)[];
+  /** Each text piece as the item writes it, which a card draws in place of the words it was given. */
+  texts: string[];
   /** How many cells stand in each row of the item, when the card's pieces are a table and nothing else. */
   rows?: number[];
 }
@@ -563,22 +566,47 @@ const JOINS = new Set(['and', '和', '与', '及']);
  * its own. Quotation marks around a piece are its card's to draw; those inside it, as in a "safe" dose, are its words'.
  */
 function marksOf(text: string): string[] {
-  const out: string[] = [];
-  for (const m of plain(text).toLowerCase().matchAll(MARKS)) {
-    if (m[1]) out.push(/^\d{1,3}(?:,\d{3})+/.test(m[1]) ? m[1].replaceAll(',', '') : m[1]);
-    else if (m[2] && !CJK.test(m[2])) out.push(m[2]);
+  return marksAt(text).map((mark) => mark.word);
+}
+
+/**
+ * The marks of a text with where each stands in it as written, so a card can draw the item's own characters for words it matched in
+ * their plain form. Each character is brought to its plain form alone, which keeps every plain character's place in the text.
+ */
+function marksAt(text: string): { word: string; from: number; to: number }[] {
+  let flat = '';
+  const at: number[] = [];
+  for (let index = 0; index < text.length; ) {
+    const char = String.fromCodePoint(text.codePointAt(index)!);
+    const made = plain(char).toLowerCase();
+    for (let n = 0; n < made.length; n++) at.push(index);
+    flat += made;
+    index += char.length;
+  }
+  at.push(text.length);
+  const out: { word: string; from: number; to: number }[] = [];
+  const push = (word: string, from: number, size: number) => out.push({ word, from: at[from]!, to: at[from + size - 1]! + (text.codePointAt(at[from + size - 1]!)! > 0xffff ? 2 : 1) });
+  for (const m of flat.matchAll(MARKS)) {
+    const index = m.index!;
+    if (m[1]) push(/^\d{1,3}(?:,\d{3})+/.test(m[1]) ? m[1].replaceAll(',', '') : m[1], index, m[1].length);
+    else if (m[2] && !CJK.test(m[2])) push(m[2], index, m[2].length);
     else if (m[2]) {
       let run = '';
+      let from = index;
+      let offset = index;
       for (const char of m[2]) {
-        if (!CJK.test(char)) run += char;
-        else {
-          if (run) out.push(run);
+        if (!CJK.test(char)) {
+          if (!run) from = offset;
+          run += char;
+        } else {
+          if (run) push(run, from, run.length);
           run = '';
-          out.push(char);
+          push(char, offset, char.length);
         }
+        offset += char.length;
       }
-      if (run) out.push(run);
-    } else out.push(m[0]);
+      if (run) push(run, from, run.length);
+    } else push(m[0], index, m[0].length);
   }
   return out;
 }
@@ -596,8 +624,11 @@ const labelled = (text: string): boolean => text.length <= 80 && sizeOf(text) > 
 
 /** A line that ends a sentence or goes on. */
 const ENDED = /[.!?。;,:、！？；，：-]["')\]」』”’]*\s*$/u;
-/** A bullet, a number, a check box or a step's number, which a list or a steps card draws itself. A ">" or a speaker's "A:" is no layout. */
-const LAYOUT = /^\s*(?:(?:[-*•·]\s+|\d+[.)、]\s*|\(\d+\)\s*)(?:\[[ xX✓✔]?\]\s*|[☐☑]\s*)?|\[[ xX✓✔]?\]\s*|[☐☑]\s*|第[一二三四五六七八九十\d]+步[,，:：、.]?\s*|step\s*\d+[:.)]\s*)/iu;
+/**
+ * A bullet, a number, a check box or a step's number, which a list or a steps card draws itself. A ">" or a speaker's "A:" is no layout.
+ * A number is an entry's only when white space follows its stop, so "4.2%" and "1.5 cups" are the line's own words.
+ */
+const LAYOUT = /^\s*(?:(?:[-*•·]\s+|\d+(?:[.)](?=\s)|、)\s*|\(\d+\)\s*)(?:\[[ xX✓✔]?\]\s*|[☐☑]\s*)?|\[[ xX✓✔]?\]\s*|[☐☑]\s*|第[一二三四五六七八九十\d]+步[,，:：、.]?\s*|step\s*\d+[:.)]\s*)/iu;
 /** A tick or a cross that opens a line, which is a word of the line and never a check box. */
 const TICKED = /^\s*[✓✔✅✗✘❌☒]/u;
 const ASKS = /^\s*(q|问)\s*[:：]/iu;
@@ -746,6 +777,10 @@ interface Unit {
   start: number;
   end: number;
   words: string[];
+  /** Where each word stands in `of`. */
+  spans: [number, number][];
+  /** The text `start`, `end` and `spans` count in: its line's, or its cell's. */
+  of: string;
 }
 
 class Whole {
@@ -757,9 +792,11 @@ class Whole {
   constructor(source: string, title: string) {
     this.lines = linesOf(source, title);
     const add = (kind: Unit['kind'], line: Line, start: number, end: number) => {
-      const text = line.text.slice(start, end).trim();
-      const words = marksOf(text);
-      if (words.length > 0) this.parts.push({ kind, line: line.n, text, start, end, words });
+      const slice = line.text.slice(start, end);
+      const text = slice.trim();
+      const lead = start + slice.length - slice.trimStart().length;
+      const marks = marksAt(text);
+      if (marks.length > 0) this.parts.push({ kind, line: line.n, text, start: lead, end: lead + text.length, words: marks.map((mark) => mark.word), spans: marks.map((mark) => [lead + mark.from, lead + mark.to]), of: line.text });
     };
     for (const line of this.lines) {
       if (line.kind === 'blank' || line.kind === 'divider') continue;
@@ -829,20 +866,38 @@ class Whole {
     return undefined;
   }
 
-  private read(units: Unit[], way: Way, cells: boolean): Pick<Shown, 'slots' | 'boxes'> | undefined {
+  /**
+   * The item's own characters from the word at `from` up to the word before `to`: whole units when the piece is an entry, so its marks and
+   * stops come with it, and the words alone otherwise. Lines are joined by a line break.
+   */
+  private written(units: Unit[], owner: number[], spans: [number, number][], from: number, to: number, entry: boolean, stops: boolean): string {
+    const [first, last] = [units[owner[from]!]!, units[owner[to - 1]!]!];
+    const start = entry ? first.start : spans[from]![0];
+    let end = entry ? last.end : spans[to - 1]![1];
+    // A piece given with its full stop keeps the item's own, as a quotation does that ends its sentence.
+    while (stops && !entry && end < last.end && /[.!?。！？…;；,，:：]/u.test(last.of[end]!)) end++;
+    if (first === last || (first.line === last.line && first.kind !== 'cell')) return first.of.slice(start, end);
+    const middle = this.lines.slice(first.line + 1, last.line).map((line) => line.text);
+    return [first.of.slice(start), ...middle, last.of.slice(0, end)].join('\n');
+  }
+
+  private read(units: Unit[], way: Way, cells: boolean): Pick<Shown, 'slots' | 'boxes' | 'texts'> | undefined {
     if (units.length === 0) return undefined;
     const words: string[] = [];
-    /** The unit each word stands in, and the units by the word they start at. */
+    /** The unit each word stands in, where it stands in its line, and the units by the word they start at. */
     const owner: number[] = [];
+    const spans: [number, number][] = [];
     const starts = new Map<number, number>();
     for (const [n, unit] of units.entries()) {
       starts.set(words.length, n);
       words.push(...unit.words);
       owner.push(...unit.words.map(() => n));
+      spans.push(...unit.spans);
     }
     starts.set(words.length, units.length);
     const slots: string[] = [];
     const boxes: (boolean | undefined)[] = [];
+    const texts: string[] = [];
     let at = 0;
     for (const piece of way.pieces) {
       if ('slot' in piece) {
@@ -864,6 +919,7 @@ class Whole {
       if (asked.length === 0) {
         if (!cells) return undefined;
         boxes.push(undefined);
+        texts.push('');
         continue;
       }
       while (QUOTE.has(words[at] ?? '') && words[at] !== asked[0]) at++;
@@ -872,12 +928,13 @@ class Whole {
       if (!alike(words.slice(at, at + asked.length), asked)) return undefined;
       const first = units[owner[at] ?? -1];
       boxes.push(first ? this.lines[first.line]!.box : undefined);
+      texts.push(this.written(units, owner, spans, at, at + asked.length, aligned && starts.has(at) && starts.has(at + asked.length), /[.!?。！？…;；,，:：]["'”’」』]*\s*$/u.test(piece.text)));
       at += asked.length;
       while (QUOTE.has(words[at] ?? '') && !(starts.has(at) && piece.entry)) at++;
       if (aligned && !edge(at, -1) && !edge(at, 1)) return undefined;
     }
     while (QUOTE.has(words[at] ?? '')) at++;
-    return at === words.length ? { slots, boxes } : undefined;
+    return at === words.length ? { slots, boxes, texts } : undefined;
   }
 
   units(asked: string): number | undefined {

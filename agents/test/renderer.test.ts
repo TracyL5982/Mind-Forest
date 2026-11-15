@@ -127,7 +127,7 @@ test('structured data picks the component without asking the model', async () =>
   assert.deepEqual(view(k, fact), { component: 'fact', props: { value: '4.2', label: 'Monthly churn' }, by: 'renderer' });
   assert.deepEqual(view(k, valueFirst).props, { value: '42%', label: 'churn in month one' }, 'the label is the rest of the line as it is written');
   assert.deepEqual(view(k, labelFirst).props, { value: '$1.2M', label: 'Budget' }, 'the label is the words before the colon');
-  assert.equal(view(k, phrase).component, 'note', 'a label without the "of" that joins it to its value would leave a word of the item out');
+  assert.deepEqual(view(k, phrase).props, { value: '42%', label: 'of users leave in month one' }, 'the label keeps the "of" that joins it to its value, as the line writes it');
   assert.equal(k.model.calls.filter((c) => c.role === 'renderer.components').length, 0);
 });
 
@@ -204,7 +204,7 @@ test('the model upgrades a text item to a quote that is in its text', async () =
 
   assert.deepEqual(view(k, ids[0]!), {
     component: 'quote',
-    props: { text: 'the best way to predict the future is to invent it', by: 'Alan Kay' },
+    props: { text: 'the best way to predict\nthe future is to invent it', by: 'Alan Kay' },
     by: 'renderer',
   });
   assert.deepEqual(view(k, ids[1]!).props, { emphasis: LONG });
@@ -1302,7 +1302,8 @@ test('an address in the data states nothing, a table cell holds no cell break, a
   assert.equal(table([['Solo', '$8', '1']], ['Plan | Price', 'Price', 'Seats']), false);
 
   const said = k.item({ title: 'Cameras', text: 'People say this. The   best  camera\tis the one you have with you.' });
-  assert.ok(grounded({ component: 'quote', props: { text: 'The best camera is the one you have with you', above: ['People say this.'] } }, said, url), 'a tab in prose is white space');
+  assert.ok(grounded({ component: 'quote', props: { text: 'The   best  camera\tis the one you have with you.', above: ['People say this.'] } }, said, url), 'a tab in prose is white space to the match, and drawn as the item writes it');
+  assert.equal(grounded({ component: 'quote', props: { text: 'The best camera is the one you have with you', above: ['People say this.'] } }, said, url), false, 'a quotation drawn in other characters than the item writes is redrawn in its own');
   assert.equal(grounded({ component: 'quote', props: { text: 'The best camera is the one you have with you' } }, said, url), false, 'and the sentence before the quotation is drawn over it');
 });
 
@@ -1873,7 +1874,7 @@ test('a figure, a list entry, a table row or a section the text does not state r
 test('an entry written twice counts once: thirty lines of two entries are a list of two', () => {
   const best = 'Best of the weekend:\n- the bridge at dusk\n- the tiled station';
   const twice = Array.from({ length: 30 }, (_v, n) => (n % 2 ? 'The  tiled station' : 'the bridge at dusk'));
-  assert.deepEqual(verdict(best, 'list', { lines: twice }), { draw: { component: 'list', props: { items: ['the bridge at dusk', 'The  tiled station'], above: ['Best of the weekend:'] } } }, 'no list of thirty stands for two lines');
+  assert.deepEqual(verdict(best, 'list', { lines: twice }), { draw: { component: 'list', props: { items: ['the bridge at dusk', 'the tiled station'], above: ['Best of the weekend:'] } } }, 'no list of thirty stands for two lines, and each entry is drawn as the item writes it');
   const figures = part('figures', { lines: ['Two nights | €240', 'Train, each | €38'] });
   const made = verdict(`Two nights: €240\nTrain, each: €38\n${best}`, 'sheet', { sections: [figures, figures, part('list', { text: 'Best of the weekend:', lines: twice })] });
   assert.deepEqual(
@@ -2193,4 +2194,44 @@ test('a figure whose label is a piece cut out of its line refuses the card, with
   );
   assert.equal(view(k, ids[1]!).component, 'note', 'a label without the words that open its line');
   assert.deepEqual(k.notes, [`renderer: Kept "Piece" as the rules drew it: the model's facts ${WHOLE}.`], 'the run log says why');
+});
+
+test('a reply the checks cannot read leaves its own item as the rules drew it, and the rest of the pass draws on', async () => {
+  const k = kit();
+  const { ids } = grow(k, [
+    { title: 'Bring for the weekend', text: 'Bring for the weekend:\n- a tent\n- two sleeping bags\n- a head torch, and spare batteries for it' },
+    { title: 'Sourdough', text: 'Feed the starter once a day with flour and water.\nNever rinse the jar with hot water.' },
+  ]);
+  const list = CHECKS.list as { frame?: unknown };
+  const frame = list.frame;
+  list.frame = () => {
+    throw new Error('no frame');
+  };
+  try {
+    k.model
+      .on('renderer.components', () => ({
+        items: [
+          entry({ id: ids[0]!, component: 'list', lines: ['a tent', 'two sleeping bags', 'a head torch, and spare batteries for it'] }),
+          entry({ id: ids[1]!, component: 'callout', passage: 'Never rinse the jar with hot water.', tone: 'caution' }),
+        ],
+      }))
+      .on('renderer.composites', () => ({ groups: [] }));
+    await render(k, ids);
+  } finally {
+    list.frame = frame;
+  }
+  assert.equal(view(k, ids[0]!).component, 'note', 'the reply that threw keeps the rules\' card');
+  assert.deepEqual(view(k, ids[1]!).props, { text: 'Never rinse the jar with hot water.', tone: 'caution', above: ['Feed the starter once a day with flour and water.'] }, 'the other reply of the pass is drawn');
+  assert.ok(k.notes.some((note) => note.includes('could not be checked (no frame)')), 'the run log says which reply could not be checked');
+});
+
+test('a number that opens a line is an entry\'s only when white space follows its stop', () => {
+  const rates = 'Rates we were quoted this week by the banks:\n4.2%\n3.1%';
+  assert.deepEqual(verdict(rates, 'list', { lines: ['2%', '1%'] }), { refused: 'part', component: 'list' }, 'the decimals of 4.2% and 3.1% are no list numbers');
+  assert.deepEqual(verdict(rates, 'list', { lines: ['4.2%', '3.1%'] }), { draw: { component: 'list', props: { items: ['4.2%', '3.1%'], above: ['Rates we were quoted this week by the banks:'] } } }, 'the whole rates are the list');
+  for (const line of ['1.5 cups flour', '3.14 is pi', '2024.11 发布']) {
+    assert.deepEqual(verdict(`Notes:\n${line}\n2 eggs`, 'list', { lines: [line.slice(line.indexOf(' ') + 1), '2 eggs'] }), { refused: 'part', component: 'list' }, `${line}: its number is its own`);
+  }
+  assert.deepEqual(verdict('Steps:\n1. Stop the writer.\n2. Copy the file.', 'steps', { lines: ['Stop the writer.', 'Copy the file.'] }), { draw: { component: 'steps', props: { steps: ['Stop the writer.', 'Copy the file.'], above: ['Steps:'] } } }, 'a step number with a space after its stop');
+  assert.deepEqual(verdict('步骤：\n1、关掉电源\n2、拆下灯罩', 'steps', { lines: ['关掉电源', '拆下灯罩'] }), { draw: { component: 'steps', props: { steps: ['关掉电源', '拆下灯罩'], above: ['步骤：'] } } }, 'a number before 、');
 });
