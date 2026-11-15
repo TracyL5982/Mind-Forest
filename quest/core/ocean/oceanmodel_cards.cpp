@@ -4,11 +4,17 @@
 #include <cmath>
 
 #include "../cards/ocean.h"
+#include "../cards/pieces.h"
 
 // MARK: - Cards
 
 OceanModel::Bodies OceanModel::bodies(const Ref& ref) const {
     if (!art || !catalog) return Bodies{{0.1f, 0.1f}, {0.2f, 0.2f}};
+    // NOTE(port): added for Quest. A piece drawn as a card takes its card's sizes (core/cards).
+    if (std::optional<std::string> card = cards::ocean::cardOf(ref)) {
+        std::optional<Vec2> small = cards::ocean::smallSize(*card), open = cards::ocean::openSize(*card);
+        if (small && open) return Bodies{*small, *open};
+    }
     switch (ref.kind) {
     case Ref::Kind::film: {
         int i = ref.index;
@@ -37,6 +43,7 @@ void OceanModel::makeCard(const TreeNode& n, double delay) {
     const Tree& tree = *this->tree;
     Bodies b = bodies(n.ref);
     CardRef c = std::make_shared<CardView>(n, b.small, b.open);
+    seatCard(*c, n);    // NOTE(port): added for Quest (core/cards).
     Rest at = rest(n, tree);
     c->xy.set(at.xy);
     c->plane.set(float(at.depth));
@@ -157,7 +164,13 @@ void OceanModel::buildSmall(CardView& c) {
         ghosts.erase(ghost);
     }
     std::optional<Piece> piece;
-    switch (c.ref.kind) {
+    // NOTE(port): added for Quest. A piece drawn as a card shows the pictures it has, and its open face is made
+    // with its small one, so it is there before the card can open (core/cards).
+    if (std::optional<std::string> card = cards::ocean::cardOf(c.ref)) {
+        cardPictures(*card);
+        piece = cards::ocean::small(*art, *card);
+        cards::ocean::open(*art, *card);
+    } else switch (c.ref.kind) {
     case Ref::Kind::film:
         piece = art->filmSmall(catalog->clips[c.ref.index]);    // its why rides on its thread
         break;
@@ -201,7 +214,18 @@ void OceanModel::buildStep(CardView& c, int number, const std::string& words) {
 void OceanModel::buildOpen(CardView& c, const TreeNode& node) {
     if (!(art && catalog && !c.openBuilt)) return;
     c.openBuilt = true;
-    switch (c.ref.kind) {
+    // NOTE(port): added for Quest. A piece drawn as a card opens to its card's first page, and the next page is
+    // made ahead, so it is there when it is turned to (core/cards).
+    if (std::optional<std::string> card = cards::ocean::cardOf(c.ref)) {
+        c.layout = cards::ocean::layout(*card);
+        if (std::optional<Piece> piece = cards::ocean::open(*art, *card)) {
+            c.openFace = art->quad(*piece);
+            c.openHolder->addChild(c.openFace);
+        }
+        if (cards::ocean::pages(*card) > 1) cards::ocean::open(*art, *card, cards::ocean::page(*card) + 1);
+        c.addGlow(art->glow(c.openBody), c.openHolder);
+        if (EntityRef rim = art->gazeRim(c.openBody, gazeMaterial)) c.openHolder->addChild(rim);
+    } else switch (c.ref.kind) {
     case Ref::Kind::film: {
         const Clip& clip = catalog->clips[c.ref.index];
         if (MeshRef mesh = art->stillMesh(clip, c.openBody)) {
@@ -260,8 +284,6 @@ void OceanModel::buildOpen(CardView& c, const TreeNode& node) {
             c.openFace = art->quad(*piece);
             c.openHolder->addChild(c.openFace);
         }
-        // NOTE(port): added for Quest. A card's next page is made ahead, so it is there when it is turned to (core/cards).
-        if (cards::ocean::pages(note.id) > 1) cards::ocean::open(*art, note.id, cards::ocean::page(note.id) + 1);
         c.addGlow(art->glow(c.openBody), c.openHolder);
         if (EntityRef rim = art->gazeRim(c.openBody, gazeMaterial)) c.openHolder->addChild(rim);
         break;
@@ -295,8 +317,9 @@ void OceanModel::buildRows(CardView& c) {
     std::vector<Row> rows;
     std::string key;
     // NOTE(port): added for Quest. A card longer than one open note turns its pages here (core/cards).
-    if (int count = c.ref.kind == Ref::Kind::note ? cards::ocean::pages(c.ref.id) : 0; count > 1) {
-        int now = cards::ocean::page(c.ref.id);
+    std::optional<std::string> card = cards::ocean::cardOf(c.ref);
+    if (int count = card ? cards::ocean::pages(*card) : 0; count > 1) {
+        int now = cards::ocean::page(*card);
         std::string words = now + 1 < count ? fmt("Next page  ·  %d of %d", now + 2, count) : "Back to the first page";
         rows.push_back(Row{art->row(words), Pick::page(c.id), 0});
         key += words + "|";
@@ -367,6 +390,107 @@ std::optional<int> OceanModel::previousPiece(int id) const {
         at = n->parent;
     }
     return std::nullopt;
+}
+
+// NOTE(port): added for Quest (core/cards), to the end of `pictureNow`.
+
+// Its why is left to the label on its thread, as the card library's own tree leaves it: said again on the card it
+// would push the picture of nearly half the films to a second page.
+void OceanModel::seatCard(CardView& c, const TreeNode& n) {
+    std::optional<std::string> id = cards::ocean::cardOf(n.ref);
+    if (id && cards::ocean::seat(*id, cards::Node{.pick = !n.kept, .root = !n.parent})) redrawCard(c);
+}
+
+void OceanModel::redrawCard(CardView& c) {
+    std::optional<std::string> id = art ? cards::ocean::cardOf(c.ref) : std::nullopt;
+    if (!id) return;
+    auto repaint = [&](const EntityRef& quad, const std::optional<Piece>& piece) {
+        if (!(quad && piece)) return;
+        repaints.erase(std::remove_if(repaints.begin(), repaints.end(), [&](const Repaint& r) { return r.quad == quad; }), repaints.end());
+        repaints.push_back(Repaint{c.id, quad, piece->texture});
+    };
+    if (c.smallQuad) repaint(c.smallQuad->entity, cards::ocean::small(*art, *id));
+    if (c.openFace) {
+        repaint(c.openFace, cards::ocean::open(*art, *id));
+        c.layout = cards::ocean::layout(*id);
+        if (tree && tree->focus() == c.id) buildRows(c);
+    }
+    touch(time + 0.3);
+}
+
+void OceanModel::repaintCards() {
+    for (auto r = repaints.begin(); r != repaints.end();) {
+        if (r->texture->pending && !r->texture->pending->ready.load()) {
+            ++r;
+            continue;
+        }
+        if (CardRef c = card(r->id); c && art) {
+            bool small = c->smallQuad && c->smallQuad->entity == r->quad;
+            if (small) c->smallQuad->texture = r->texture;
+            if (small || c->openFace == r->quad) art->shade(r->quad, r->texture, small ? c->dimNow() : 0);
+            c->changed();
+        }
+        r = repaints.erase(r);
+        touch(time + 0.1);
+    }
+}
+
+bool OceanModel::cardPictures(const std::string& id) {
+    bool all = true;
+    for (const std::string& src : cards::pictures(id)) {
+        if (cards::pictureAt(src) || !cards::oceanPicture(src)) continue;
+        if (std::optional<ImageRef> image = pictureNow(src)) {
+            handPicture(src, *image);
+        } else {
+            all = false;
+            if (std::find(picturesDue.begin(), picturesDue.end(), src) == picturesDue.end()) picturesDue.push_back(src);
+        }
+    }
+    return all;
+}
+
+void OceanModel::landPictures() {
+    std::vector<std::string> due = picturesDue;
+    for (const std::string& src : due) {
+        std::optional<ImageRef> image;
+        if (!cards::pictureAt(src)) {
+            image = pictureNow(src);
+            if (!image) continue;
+        }
+        picturesDue.erase(std::find(picturesDue.begin(), picturesDue.end(), src));
+        if (image) handPicture(src, *image);
+    }
+}
+
+void OceanModel::handPicture(const std::string& src, const ImageRef& image) {
+    for (const std::string& changed : cards::picture(src, image)) {
+        for (const auto& [id, c] : cards) {
+            if (c && cards::ocean::cardOf(c->ref) == changed) redrawCard(*c);
+        }
+    }
+}
+
+std::optional<ImageRef> OceanModel::pictureNow(const std::string& src) {
+    std::optional<cards::OceanPicture> at = cards::oceanPicture(src);
+    if (!(at && art && catalog)) return ImageRef();
+    // A file is unpacked on the background thread; until it is, the card shows the library's dark frame.
+    auto unpacked = [](const std::string& path, int maxPixel) -> std::optional<ImageRef> {
+        if (path.empty()) return ImageRef();
+        if (platform::imageReady(path, maxPixel)) return platform::loadImage(path, maxPixel);
+        platform::prefetchImage(path, maxPixel);
+        return std::nullopt;
+    };
+    switch (at->kind) {
+    case cards::OceanPicture::Kind::still:
+        return at->index >= 0 && at->index < int(catalog->clips.size()) ? art->stillPicture(catalog->clips[size_t(at->index)]) : ImageRef();
+    case cards::OceanPicture::Kind::work: {
+        if (!(at->index >= 0 && at->index < int(catalog->works.size()))) return ImageRef();
+        Art::Source source = art->pictureSource(catalog->works[size_t(at->index)], 512);
+        return unpacked(source.url, source.maxPixel);
+    }
+    case cards::OceanPicture::Kind::file: return unpacked(platform::resourcePath(at->file), 0);
+    }
+    return ImageRef();
 }
 
 /// Shows an open work from its own file, at full size, as soon as it is read.
@@ -508,6 +632,7 @@ void OceanModel::restyle(bool stirring) {
         const CardRef& held = card(n.id);
         if (!held) continue;
         CardView& c = *held;
+        seatCard(c, n);     // NOTE(port): added for Quest (core/cards).
         Look look = style(n, tree);
         Rest at = rest(n, tree, &frames);
         c.step = n.head && routeIndex(tree, n.id) >= 0 && !tree.folded(n);
@@ -602,6 +727,8 @@ void OceanModel::restyle(bool stirring) {
         case Ref::Kind::tag:
             break;
         }
+        // NOTE(port): added for Quest. A card plays its film where its picture is, so not on a page without it (core/cards).
+        if (CardRef c = card(current->id); c && c->layout && !c->layout->picture) film = std::nullopt;
     }
     if (film && current) {
         if (screenNode != current->id) {

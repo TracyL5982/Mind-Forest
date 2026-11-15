@@ -246,7 +246,8 @@ std::optional<int> OceanModel::threadCrossed(Vec3 from, Vec3 to) const {
 /// `-askAt` with `-ask <i>`; `-markAt` with `-mark words|time|region`,
 /// then `-askMarkAt`; `-peekFilm <index>` with `-peekAt`, `-bringAt`;
 /// `-pressAt` puts the tree away, `-sendAt` sends it.
-/// `-demo` plays the whole flow. `-freshShelf` forgets the kept covers. `-cards` stands the card library.
+/// `-demo` plays the whole flow. `-freshShelf` forgets the kept covers. `-cards` draws the ocean as the agent's
+/// cards, and stands the card library when no brief or cover is asked for.
 void OceanModel::runFlags() {
     // NOTE(port): `let d = UserDefaults.standard` and `let args = CommandLine.arguments` are both `Flags` (base.h).
     if (Flags::has("demo")) {
@@ -259,8 +260,9 @@ void OceanModel::runFlags() {
     };
     int brief = Flags::integer("brief");
     if (brief > 0) after(0.8, [this, brief] { startBrief(brief - 1); });
-    // NOTE(port): added for Quest. `-cards` stands the agent's card library as a tree (core/cards/gallery.h).
-    if (int library = Flags::has("cards") && catalog ? cards::gallery(*catalog) : -1; library >= 0) {
+    // NOTE(port): added for Quest. `-cards` stands the agent's card library as a tree (core/cards/gallery.h), unless
+    // `-brief` or `-saved` asks for another.
+    if (int library = Flags::has("cards") && catalog ? cards::gallery(*catalog) : -1; library >= 0 && brief <= 0 && !Flags::has("saved")) {
         after(0.8, [this, library] { startBrief(library); });
     }
     // (`d.object(forKey: "saved") as? Int ?? (d.string(forKey: "saved").flatMap { Int($0) })`: a whole number, or nothing.)

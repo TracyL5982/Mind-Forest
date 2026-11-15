@@ -6,6 +6,8 @@
 #include <cmath>
 #include <cstdlib>
 
+#include "../cards/ocean.h"
+
 OceanModel::~OceanModel() {
     if (handsLog) std::fclose(handsLog);
 }
@@ -34,6 +36,12 @@ void OceanModel::start() {
     this->library = library;
     this->art = art;
     this->catalog = catalog;
+    // NOTE(port): added for Quest. `-cards` draws the ocean's notes, films and works as the agent's cards; a tag keeps its chip (core/cards).
+    if (Flags::has("cards")) {
+        cards::ocean::hold(catalog);
+        logLine(fmt("[cards] the ocean as cards: %d notes, %d films, %d works; kept the ocean's own drawing: %d tags", int(catalog->notes.size()),
+                    int(catalog->clips.size()), int(catalog->works.size()), int(catalog->tags.size())));
+    }
     catalog->chipWidth = [art](const std::string& name) { return art->chipWidth(name); };
     catalog->smallSize = [this](const Ref& ref) { return bodies(ref).small; };
     lineMaterial = Material::line();
@@ -163,12 +171,16 @@ void OceanModel::update(float dt) {
     // and unpacking that takes several frames' time on the headset's chip. It is unpacked on a
     // background thread, and the card waits in the queue until it is there (showing its placeholder)
     // while the cards behind it are built. The Swift builds the first two, whatever they are.
+    // A piece drawn as a card waits the same way for the pictures it shows (core/cards).
+    auto waits = [&](const CardView& c) {
+        if (std::optional<std::string> drawn = cards::ocean::cardOf(c.ref)) return !cardPictures(*drawn);
+        return c.ref.kind == Ref::Kind::work && !art->smallReady(catalog->works[c.ref.index]);
+    };
     size_t next = 0;
     while (budget > 0 && next < buildQueue.size()) {
         int id = buildQueue[next];
         CardRef c = card(id);
-        if (c && !c->built && c->ref.kind == Ref::Kind::work && art && catalog &&
-            !art->smallReady(catalog->works[c->ref.index]) && buildWaited[id]++ < 900) {
+        if (c && !c->built && art && catalog && waits(*c) && buildWaited[id]++ < 900) {
             next++;
             continue;
         }
@@ -189,6 +201,9 @@ void OceanModel::update(float dt) {
             i++;
         }
     }
+    // NOTE(port): added for Quest (core/cards).
+    landPictures();
+    repaintCards();
 
     if (now < busyUntil + 0.1) {
         if (shell) shell->setShift(stirred.value(now));

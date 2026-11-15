@@ -160,6 +160,8 @@ public:
                                const std::function<void(Canvas&, CGSize)>& draw) {
         return piece(key, width, height, ppm, Vec2::zero(), draw);
     }
+    /// NOTE(port): added for Quest. Lets a kept piece go once nothing will ask for it again: a card drawn anew (core/cards).
+    void forget(const std::string& key) { cache.erase(key); }
 
     TextAttributes attributes(Font font, Color color, float kern = 0, std::optional<float> lineHeight = std::nullopt,
                               bool truncate = false) const;
@@ -293,6 +295,8 @@ public:
 
     /// A rectangle showing one film's still, cut from the atlas.
     MeshRef stillMesh(const Clip& clip, Vec2 size) const;
+    /// NOTE(port): added for Quest. A film's still as a picture of its own, at the film's shape: a card's poster (core/cards).
+    ImageRef stillPicture(const Clip& clip) const;
 
     // MARK: - Notes.swift
 

@@ -25,7 +25,7 @@ All calls run on the frame thread.
 - `why` is `node.why`. The opened card prints it.
 - `accent` is the tree's colour for the card, as the web's `store.view.colour` gives it. The default is the web's trunk colour, `#e6efff`.
 
-The note is the scene's `OceanNote` with the id `noteID`, in `catalog->notes`. Its kind does not matter. Once `put` holds a card for a note, `notes.cpp` and `Catalog::openSize` draw and size the note through `ocean.h`. The small card is `footprint * ocean::smallScale` pixels, so a 240 px note is as wide as the ocean's own small note. The opened card is the web's 384 px panel at `ocean::openScale`, as wide as the ocean's open note.
+The note is the scene's `OceanNote` with the id `noteID`, in `catalog->notes`. Its kind does not matter. Once `put` holds a card for a note, the scene sizes and draws it through `ocean.h` (`OceanModel::bodies`, `buildSmall`, `buildOpen` and `Tree::openExtent` ask `cards::ocean::cardOf` first). The small card is `footprint * ocean::smallScale` pixels, so a 240 px note is as wide as the ocean's own small note. The opened card is the web's 384 px panel at `ocean::openScale`, as wide as the ocean's open note.
 
 When `put` or `picture` reports a change for a note that is already on screen, rebuild that note's card in the scene. Each change gets a new texture key, so a rebuilt card never shows the old texture.
 
@@ -33,9 +33,15 @@ When `put` or `picture` reports a change for a note that is already on screen, r
 
 An address that starts with `sample:` is a sample picture from the web library page, which this library paints itself. Any other address is the caller's to fetch, for example `/assets/<id>` from the service. Until `picture` is called for an address, the card shows a dark frame. After `picture(src, nullptr)`, the card shows the web's "Picture unavailable" stripes.
 
+## The ocean's own pieces
+
+Under `-cards` the ocean's notes, films and works are cards too, as the service's library import (`npm run import-library`) makes them: `pieces.h` turns each into the import's item and view. A film is a video card, a work an artwork card, and a note a note, quote, image, video, chart or link card by what it holds. Its people and place tags become its chips. A tag keeps the ocean's chip. Each card is made the first time the scene asks about it, under the note's own id or the film's or work's `Ref::key` (`film:3`), and the tree's node gives it its pick and root look.
+
+Its pictures are the ocean's own: a film's still from the atlas, drawn at the film's shape so the film covers it when it plays (`still:<film>`), a work's small picture (`work:<work>`), and a note's picture file (`file:<name>`). A file is unpacked on the background thread. Until it is there the card shows the dark frame, and then its faces are drawn again in place, the old face staying up until the new one is painted.
+
 ## The gallery
 
-`-cards` stands the web library page's samples as a tree, with no service and no network. The root card is the library, with four groups round it: Words, Pictures and sound, Numbers, and Lists and the rest. Pinch a group to bring its types round it. Pinch a type to bring its other samples round it, such as the pick, the card with chips and other content. Each sample's label from the web page is on its thread.
+`-cards` stands the web library page's samples as a tree, with no service and no network, unless `-brief` or `-saved` asks for another tree. The root card is the library, with four groups round it: Words, Pictures and sound, Numbers, and Lists and the rest. Pinch a group to bring its types round it. Pinch a type to bring its other samples round it, such as the pick, the card with chips and other content. Each sample's label from the web page is on its thread.
 
 ```bash
 quest/desktop/preview -cards
@@ -83,4 +89,5 @@ node quest/tools/cards_compare.mjs --faces /tmp/faces --out /tmp/compare --playw
 | `said.h`, `said.cpp` | What the opened card still prints of the item's text (`said.js`). |
 | `paint.h`, `paint.cpp` | The web look as canvas calls: colours, type sizes, faces and edges, pictures, chips. |
 | `ocean.h`, `ocean.cpp` | Where `notes.cpp` and `catalog.cpp` ask about a note's card. |
+| `pieces.h`, `pieces.cpp` | The ocean's notes, films and works as the library import's items and views. |
 | `gallery.h`, `gallery.cpp`, `samples.cpp` | `-cards`. |

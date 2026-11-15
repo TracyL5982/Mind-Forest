@@ -291,14 +291,16 @@ void OceanModel::openLink(int nodeID) {
 }
 
 // NOTE(port): added for Quest (core/cards). The face keeps its place and size and shows the next page;
-// what was marked on the page it showed goes with it.
+// what was marked on the page it showed goes with it, and its film plays only on the page with its picture.
 void OceanModel::turnPage(int nodeID) {
     const CardRef& c = card(nodeID);
-    if (!(c && c->openFace && c->ref.kind == Ref::Kind::note && art)) return;
-    const std::string& id = c->ref.id;
+    std::optional<std::string> drawn = c && c->openFace && art ? cards::ocean::cardOf(c->ref) : std::nullopt;
+    if (!drawn) return;
+    const std::string& id = *drawn;
     cards::ocean::turn(id);
     std::optional<Piece> face = cards::ocean::open(*art, id);
     if (!face) return;
+    repaints.erase(std::remove_if(repaints.begin(), repaints.end(), [&](const Repaint& r) { return r.quad == c->openFace; }), repaints.end());
     art->shade(c->openFace, face->texture, 0);
     if (cards::ocean::pages(id) > 1) cards::ocean::open(*art, id, (cards::ocean::page(id) + 1) % cards::ocean::pages(id));
     c->layout = cards::ocean::layout(id);
@@ -309,6 +311,7 @@ void OceanModel::turnPage(int nodeID) {
     buildRows(*c);
     c->changed();
     touch(time + 0.3);
+    if (screenNode == nodeID || (c->layout && c->layout->picture)) restyle(false);
 }
 
 void OceanModel::moveLayer(int direction) {
@@ -388,7 +391,9 @@ void OceanModel::markBegin(int id, Vec2 a) {
         auto note = catalog->notes.find(c.ref.id);
         if (note != catalog->notes.end() && note->second.clip) video = true;
     }
-    if (c.ref.kind == Ref::Kind::film) {
+    // NOTE(port): added for Quest. A film drawn as a card has words besides its picture, and is marked as a video note is (core/cards).
+    if (c.ref.kind == Ref::Kind::film && c.layout) video = true;
+    if (c.ref.kind == Ref::Kind::film && !c.layout) {
         marking = Marking{id, MarkKind::time(), a, a, std::nullopt, ""};
     } else if (c.layout) {
         const NoteLayout& layout = *c.layout;

@@ -585,6 +585,29 @@ private:
     /// Shows an open work from its own file, at full size, as soon as it is read.
     void showFull(CardView& c);
 
+    // NOTE(port): added for Quest (core/cards). Under `-cards` the ocean's pieces are cards, which ask for their
+    // pictures by address and are drawn anew in place when one comes or when the tree's say on them changes.
+    /// Puts what the tree says of a node on its card: a suggestion is a pick, and the root starts the tree.
+    void seatCard(CardView& c, const TreeNode& n);
+    /// Draws a card's faces again where they stand. A face drawn anew takes the old one's place once it is
+    /// painted (`repaintCards`, each frame), so the card never shows an empty face in between.
+    void redrawCard(CardView& c);
+    struct Repaint {
+        int id;
+        EntityRef quad;
+        TextureRef texture;
+    };
+    std::vector<Repaint> repaints;
+    void repaintCards();
+    /// Hands a card the pictures it shows that the ocean has now, and asks for the rest. True when it has them all.
+    bool cardPictures(const std::string& id);
+    /// Hands over the pictures asked for that have come, each frame.
+    void landPictures();
+    void handPicture(const std::string& src, const ImageRef& image);
+    /// A card's picture by its address, if it is here: nothing while it is unpacked, null when there is none.
+    std::optional<ImageRef> pictureNow(const std::string& src);
+    std::vector<std::string> picturesDue;
+
     struct Look {
         float scale;
         float alpha;

@@ -5,7 +5,6 @@
 #include <cstdlib>
 
 #include "../platform.h"
-#include "../cards/ocean.h"
 #include "tree.h"
 
 namespace {
@@ -512,7 +511,6 @@ Vec2 Catalog::pictureSize(float aspect) {
 
 /// An open note, m. Its width never changes; its height goes with what it carries.
 Vec2 Catalog::openSize(const OceanNote& note) const {
-    if (std::optional<Vec2> card = cards::ocean::openSize(note.id)) return *card;    // NOTE(port): added for Quest (core/cards).
     return openSize(note.kind(), note.diagram.has_value(), aspect(note));
 }
 

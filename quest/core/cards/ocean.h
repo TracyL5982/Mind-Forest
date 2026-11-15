@@ -6,7 +6,12 @@
 // ocean's open note of the kind it opens as (Kind::opens), and what the web's panel holds beyond that
 // note's height goes on further pages of the same size. Both are worked out when the scene first asks
 // for them and kept until the card is put again, so a picture that comes later never moves a card.
+//
+// Under `-cards` the ocean's own notes, films and works are cards too (pieces.h). Each is made the first
+// time the scene asks about it, under the id `cardOf` gives, and its sizes come from the ocean's own
+// shape of its picture, so they are the same whether the picture is there yet or not.
 #pragma once
+#include <memory>
 #include <optional>
 #include <string>
 
@@ -20,6 +25,15 @@ constexpr float openScale = Metrics::openNoteWidth * Art::ppm / 384;
 /// The tallest a card is small, m: about the ocean's tallest small card, a portrait film with its title on a
 /// label under it (Art::filmSmall). A card that would be taller at the small note's width is drawn smaller.
 constexpr float smallCeiling = Metrics::smallFilmMaxHeight + 0.006f + 1.2f * Art::Size::label + 2 * Art::pad.y;
+
+/// Draws the notes, films and works of `catalog` as cards from now on (`-cards`).
+void hold(const std::shared_ptr<const Catalog>& catalog);
+/// The note a piece's card is put for, made now if the held catalog draws the piece as a card; nothing for a
+/// piece without one. A note's own id, or a film's or a work's `Ref::key`.
+std::optional<std::string> cardOf(const Ref& ref);
+/// Puts a held piece's card again with what the tree says of the node that shows it. True when what it
+/// draws changed. Its sizes stay: they never depend on the node.
+bool seat(const std::string& noteID, const Node& node);
 
 /// A note's card small, m.
 std::optional<Vec2> smallSize(const std::string& noteID);
