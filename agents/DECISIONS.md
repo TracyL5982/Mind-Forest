@@ -865,3 +865,37 @@ The shorter lead-in is not kept. It is real at its part, 0.23 to 0.29 s, about 3
 **Not done.** A longer wait than 10 s for a web answer: not taken.
 
 **Measured with.** Throwaway scripts outside the repository that called `ask` with each set of instructions, keeping each response's citations, pages read and searches, and `scripts/live-bench.ts`, run from a copy whose web answer added (a) or not, for the voice runs. About $5.35 of OpenAI calls, $1.60 of them for the voice comparison.
+
+## 64. Scout: the accounts the user chose on Instagram are a library on this machine, read in the background and searched in milliseconds
+
+**Decision.** With `META_IG_TOKEN`, `META_IG_USER_ID` and a list of accounts (`MIND_PALACE_INSTAGRAM_LIST`, by default `~/.mind-palace/instagram-following.md`, outside the repository since it names the user's account and who they follow), the service keeps a library in `data/instagram/` (`src/node/instagram.ts`), and the Scout has one more source of pictures, `instagram`, whose catalogue line reads "Posts from accounts you follow:" and the list's categories. Without the list or the connection, or until the library holds a post, it is not offered.
+
+- **Reading.** Business Discovery, one call per account for its newest 25 posts (caption, type, time, permalink, and the picture's address: an album's first picture, a video's thumbnail). Accounts never read come first, the list's categories taken in turn so the first posts already span them; then each account about two days after its last read, spread over the two days once every account has been read. The wait after each answer follows the highest share Instagram reports in `X-App-Usage` or `X-Business-Use-Case-Usage`: 15 s under 50%, 40 s under 75%, 2 min under 90%, 15 min above, and any wait Instagram names. An account Instagram cannot read ("Cannot find User", as for a personal account) is kept as such and tried again in two days; a limit reached or a refused token holds every read; any other failure tries the account again in an hour.
+- **Pictures.** Each post's picture is fetched once, four at a time, and kept as a 640 px JPEG at quality 60, `pictures/<post id>.jpg`, made with `sips` as the headset's library makes its pictures. A post whose picture cannot be fetched or made is left out, and its account is read again in an hour. Pictures of posts an account no longer shows are deleted. Each account's read is one file, `accounts/<handle>.json`, written whole and renamed into place, so a read that stops halfway leaves the last whole one and a repeat converges.
+- **Searching.** In memory, with the BM25 index the mindstorm search uses (`src/core/search.ts`): the account's name as the title, hashtags and the account's categories as tags, the caption and the list's description of the account as the body. When the words name some of the list's categories, posts of accounts in those categories come first. At most two posts of one account, eight in all, each with its picture copied into the service's assets, so the Scout fetches nothing (`Found.asset`; the Scout fetches only the pictures a record does not carry). A card is the picture, titled with the account's name, credited `@handle, date, Instagram`, and opens the post.
+
+**Why.** The user wants more pictures and more variety in what searches bring, from accounts they chose, without searches getting slower. Instagram has no search of other people's posts, and reading 231 accounts during a search would take minutes and use up the hour's limit, so reading happens ahead and a search is a local lookup.
+
+**Measured, live.** 30 accounts at most during the build: 28 of the list's, the categories in turn, and two probes.
+
+| | |
+|---|---|
+| Readable | 27 of 28; 1 "Cannot find User" |
+| Posts | 25 an account; 228 albums, 353 videos, 94 pictures of 675 |
+| Time a call | 0.5 to 2.7 s, about 1 s typical; the same call with each album's children took 5.6 s |
+| Usage | `X-App-Usage` rose from 3% to 22% over the 28 calls at 15 s apart, about 0.7% a call; `total_time` led (26%) with `call_count` at 15%. Own-media calls answer with `X-Business-Use-Case-Usage` instead |
+| Captions worth searching (five words or more besides hashtags and mentions) | 625 of 675, 92.6%; the thinnest category 62% |
+| Picture, 640 px | 75 KB at quality 82 (675 pictures), 53 KB at quality 60 against 79 KB at 82 for the same 3 accounts read again |
+| Search | 3 to 16 ms for 675 posts, the 8 picture copies included; ranking alone at most 1.0 ms at the median and 3.4 ms at worst over 5,775 posts (the 675 repeated, 20 runs a query) |
+
+**The first full fill, inferred.** At about 0.7% a call, the first 70 calls take about 18 minutes before usage reaches 50%; the rest at one call every 40 s, which holds usage near 63%, take about 1.8 hours: about 2 to 2.5 hours for 231 accounts, plus picture downloads. About 5,800 posts and 290 MB of pictures. After that, about 5 calls an hour.
+
+**Alternatives.**
+- Quality 82, the headset library's: 447 MB, with no difference seen at card size against 60 on a photograph with sky and lettering.
+- 512 px: 257 MB at quality 70, but a 4:5 post would be 410 px wide, under the 420 to 620 px a card's picture takes.
+- Describing every picture with the quick model so thin captions can be searched: not measured, since 92.6% of captions are worth searching.
+- Fetching every picture of an account at once: with the network at 136 KB/s, all 25 ran past 15 s and none was kept.
+
+**Not done.** The Scout's choices among Instagram posts are measured only with the lead's go on the shared key. A picture copied into the assets for a search is copied once per run of the service, so a post found after every restart is copied again, as the museums' fetched pictures are.
+
+**Measured with.** `scripts/instagram.ts` (`read`, `report` and `search` on a data folder), the service's own reader and library, against a scratch data folder; one-off probes for the headers, the album children and the sizes, kept outside the repository. No model calls.

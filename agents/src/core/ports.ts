@@ -103,6 +103,8 @@ export interface Found {
   /** The collection or channel it came from, when that is narrower than the source. */
   from?: string;
   image?: string;
+  /** Its picture, already stored with the service, so nothing is fetched to show it. */
+  asset?: string;
   /** A recording that plays in place, such as a podcast episode or a film. */
   media?: string;
   /** How long `media` plays, in seconds, when the source says. */

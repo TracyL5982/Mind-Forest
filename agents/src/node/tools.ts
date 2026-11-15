@@ -1,12 +1,14 @@
 import { z } from 'zod';
 import type { Assets, Geocoder, ModelClient, Page, Playable, SocialPost, Tools } from '../core/ports.ts';
 import { siteOf } from '../core/views.ts';
-import { makeSources, plain } from './sources.ts';
+import { makeSources, plain, type Following } from './sources.ts';
 
 export interface ToolOptions {
   model: ModelClient;
   assets: Assets;
   instagram?: { token: string; userId: string };
+  /** The user's chosen Instagram accounts, kept on this machine, searched as a source. */
+  following?: Following;
   /** Keys for sources that need one, by the name they have in the env file. A source without its key is left out. */
   keys?: Record<string, string | undefined>;
   fetch?: typeof fetch;
@@ -64,7 +66,7 @@ export function makeTools(opts: ToolOptions): Tools {
         return (await Promise.all(hits.map((hit) => playable(send, hit.url)))).flatMap((v) => v ?? []);
       },
     },
-    sources: makeSources({ send, model: opts.model, read: (url) => readPage(send, url), keys: opts.keys }),
+    sources: makeSources({ send, model: opts.model, read: (url) => readPage(send, url), keys: opts.keys, following: opts.following }),
     instagram: {
       async recent(limit = 12): Promise<SocialPost[]> {
         if (!opts.instagram) return [];

@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ModelClient } from '../core/ports.ts';
@@ -91,7 +92,16 @@ const running = await startServer({
         }
       : undefined,
   transcribe: !fake && env.OPENAI_API_KEY ? openaiTranscribe(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_HEARING_MODEL }) : undefined,
-  instagram: env.META_IG_TOKEN && env.META_IG_USER_ID ? { token: env.META_IG_TOKEN, userId: env.META_IG_USER_ID } : undefined,
+  // The accounts the user chose, outside the repository since the list names them. MIND_PALACE_INSTAGRAM_READ=off searches what is kept without reading Instagram.
+  instagram:
+    env.META_IG_TOKEN && env.META_IG_USER_ID
+      ? {
+          token: env.META_IG_TOKEN,
+          userId: env.META_IG_USER_ID,
+          list: env.MIND_PALACE_INSTAGRAM_LIST || join(homedir(), '.mind-palace', 'instagram-following.md'),
+          read: env.MIND_PALACE_INSTAGRAM_READ !== 'off',
+        }
+      : undefined,
   maps,
   // One program at a time may read a bot's messages, so the offline stand-in leaves the bot to the real service.
   telegram: !fake && env.TELEGRAM_BOT_TOKEN ? { token: env.TELEGRAM_BOT_TOKEN } : undefined,

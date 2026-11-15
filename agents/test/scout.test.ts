@@ -361,6 +361,26 @@ test('a work whose picture cannot be brought in is left out', async () => {
   assert.deepEqual(picked(k, anchor), []);
 });
 
+test('a record whose picture its source already stored lands with that picture, and no picture is fetched', async () => {
+  const { k, anchor } = setup({}, [direction('find', 'Dancers on the floor', { source: 'instagram', lookups: ['floor work'] })]);
+  const { id } = await k.assets.put(new Uint8Array([7]), 'image/jpeg', 'instagram-1.jpg');
+  k.world.sources = [WEB, { id: 'instagram', name: 'Instagram', goodFor: 'Posts from accounts you follow: Movement.', query: 'Words.', show: 2, visual: true }];
+  k.world.found.set('instagram:floor work', [{ title: 'Floorwork', by: '@floorwork', date: '2026-11-14', text: 'Rehearsal', from: 'Instagram', url: 'https://www.instagram.com/p/1/', asset: id }]);
+  const fetched: string[] = [];
+  k.ctx.tools.web.picture = async (url) => {
+    fetched.push(url);
+    return null;
+  };
+
+  apply(k, await scout(k.ctx, { anchor }));
+
+  const [post] = picked(k, anchor);
+  assert.equal(post?.kind, 'image');
+  assert.equal(post?.source.asset, id);
+  assert.equal(post?.source.url, 'https://www.instagram.com/p/1/');
+  assert.deepEqual(fetched, []);
+});
+
 test('a video that cannot be played in place is left out', async () => {
   const { k, anchor } = setup({}, [NOTE, VIDEO]);
   k.world.videos.clear();

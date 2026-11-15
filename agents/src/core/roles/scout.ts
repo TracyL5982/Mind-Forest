@@ -850,11 +850,7 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
     ? fresh.slice(0, FOUND_SHOWN_TO_MODEL).map((f) => ({ ...f, stored: null }))
     : source.hotlink
       ? pictured.filter((f) => f.image).map((f) => ({ ...f, stored: null }))
-      : (
-          await ctx.step(ROLE, label(`Fetching ${pictured.length} pictures from`, sourceWords(source)), () =>
-            Promise.all(pictured.map(async (f) => ({ ...f, stored: f.image ? await ctx.tools.web.picture(f.image) : null }))),
-          )
-        ).filter((f) => f.stored);
+      : (await fetchPictures(ctx, source, pictured)).filter((f) => f.stored);
   if (found.length === 0) {
     ctx.note(ROLE, `${source.name} has nothing for "${query}", left out`);
     return [];
@@ -902,6 +898,13 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
     }),
   );
   return made.flatMap((m) => m ?? []);
+}
+
+/** Each record with its picture brought in. A picture the source already stored is used as it is, and only the rest are fetched. */
+async function fetchPictures(ctx: RoleContext, source: Source, records: Found[]): Promise<(Found & { stored: { asset: string } | null })[]> {
+  const bring = () => Promise.all(records.map(async (f) => ({ ...f, stored: f.asset ? { asset: f.asset } : f.image ? await ctx.tools.web.picture(f.image) : null })));
+  const fetching = records.filter((f) => !f.asset && f.image).length;
+  return fetching > 0 ? ctx.step(ROLE, label(`Fetching ${fetching} pictures from`, sourceWords(source)), bring) : bring();
 }
 
 /** What a source's catalogue says about a record, as `item.data` keys a card can draw. */

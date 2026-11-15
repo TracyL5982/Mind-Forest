@@ -20,6 +20,7 @@ import type { Speak, Transcribe } from './speech-openai.ts';
 import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
 import { Telegram, type TelegramOptions } from './telegram.ts';
+import { openInstagram } from './instagram.ts';
 import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
 
@@ -32,7 +33,11 @@ export interface ServerOptions {
   roles: Roles;
   /** Every request must carry it. Generated and saved under dataDir when absent. */
   token?: string;
-  instagram?: { token: string; userId: string };
+  /**
+   * The Instagram connection. With `list`, the accounts in that file are read into a library under dataDir and searched as a source;
+   * `read: false` searches what the library holds without reading Instagram.
+   */
+  instagram?: { token: string; userId: string; list?: string; read?: boolean };
   keys?: Record<string, string | undefined>;
   /** Reads a reply aloud. Without it the client uses the browser's own voice. */
   speak?: Speak;
@@ -79,6 +84,10 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   const assets = new DiskAssets(join(opts.dataDir, 'assets'), '', opts.films);
   const handoffDir = join(opts.dataDir, 'handoffs');
   mkdirSync(handoffDir, { recursive: true });
+  const instagram = opts.instagram;
+  const following = instagram?.list
+    ? openInstagram({ connection: instagram, list: instagram.list, dir: join(opts.dataDir, 'instagram'), assets, read: instagram.read !== false, log })
+    : null;
 
   const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID() });
   mind.load(store.all());
@@ -130,7 +139,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     mind,
     roles: opts.roles,
     model: opts.model,
-    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder, log: opts.log }),
+    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, following: following?.library, keys: opts.keys, geocoder: opts.maps?.geocoder, log: opts.log }),
     assets,
     store,
     settings,
@@ -389,6 +398,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     pipeline,
     mind,
     async close() {
+      following?.reader?.stop();
       await telegram?.close();
       for (const ws of sockets) ws.terminate();
       for (const ws of liveWss.clients) ws.terminate();
