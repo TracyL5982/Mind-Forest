@@ -7,6 +7,11 @@ export interface MetaModelOptions {
   model?: string;
   /** The model for a request marked quick. */
   quickModel?: string;
+  /**
+   * How long a quick request may go unanswered before it is tried again. The quick model answers in 0.5 to 4 s, and on one evening
+   * one of its requests in about twenty went unanswered until the 120 s limit, after which the same request answered in 1 to 2 s.
+   */
+  quickWaitMs?: number;
   imageModel?: string;
   voiceModel?: string;
   fetch?: typeof fetch;
@@ -59,7 +64,7 @@ export class MetaModel implements ModelClient {
         },
       },
     };
-    const output = await this.responses('json', req.role, body);
+    const output = await this.responses('json', req.role, body, req.quick ? (this.opts.quickWaitMs ?? 20_000) : undefined);
     const text = finalText(output);
     if (!text) throw new Error(`${req.role}: the model returned no text`);
     return req.schema.parse(dropNulls(JSON.parse(text)));
@@ -156,13 +161,13 @@ export class MetaModel implements ModelClient {
     return transcriptOf(await res.json()).replace(/([.?!])\1+$/, '$1').trim();
   }
 
-  private async responses(kind: string, role: string, body: unknown): Promise<OutputItem[]> {
-    const json = (await this.post(kind, role, '/responses', body)) as { output?: OutputItem[]; status?: string };
+  private async responses(kind: string, role: string, body: unknown, waitMs?: number): Promise<OutputItem[]> {
+    const json = (await this.post(kind, role, '/responses', body, waitMs)) as { output?: OutputItem[]; status?: string };
     if (!Array.isArray(json.output)) throw new Error(`${role}: malformed response`);
     return json.output;
   }
 
-  private async post(kind: string, role: string, path: string, body: unknown): Promise<unknown> {
+  private async post(kind: string, role: string, path: string, body: unknown, waitMs = 120_000): Promise<unknown> {
     const budget = this.opts.tokenBudget ?? 5_000_000;
     if (this.spent >= budget) throw new Error(`${role}: token budget of ${budget} is used up; restart the service to reset it`);
     const started = Date.now();
@@ -175,7 +180,7 @@ export class MetaModel implements ModelClient {
           method: 'POST',
           headers: { Authorization: `Bearer ${this.opts.apiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(120_000),
+          signal: AbortSignal.timeout(waitMs),
         });
       } catch (err) {
         lastError = String(err);
