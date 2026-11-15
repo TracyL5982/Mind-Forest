@@ -7,6 +7,7 @@ import { givesWay, KNOWN_MOST, LIBRARY_TOOL, MINDSTORM, newSlots, ROUND_MOST, sa
 import { fittedTitle } from '../fitted.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
+import { byRule } from './renderer.ts';
 import { AGENT, idFrom, makeItem, makeNode, pickStatus, type RoleContext, type Roles, type Turn } from './types.ts';
 
 const ROLE = 'scout';
@@ -28,19 +29,38 @@ const FAST_MOST = 2;
 /** What the fast lane names to look for a video, beside the catalogues' ids. */
 const VIDEO_LOOK = 'video';
 
+/** The formats the model writes out itself, each the card the Renderer's rules draw from the item's data. */
+const WRITTEN = ['note', 'steps', 'list', 'facts', 'quote', 'table', 'qa', 'definition', 'proscons', 'callout'] as const;
+type Written = (typeof WRITTEN)[number];
+
+/**
+ * One direction as the model writes it. Structured output wants every key present, so an empty string or list means "none".
+ * A written format's contents go in a few slots every written format shares: `lines` are steps, list entries, "label | value"
+ * figures or table rows, `pros` and `cons` the two sides, `subject` a question or a term, `passage` an answer, a meaning, a warning
+ * or words someone said, and `by` who said them. An explorable is left out until the headset can work its controls: asked for one,
+ * the model also drew parallel examples and rules to apply together as states to switch between.
+ */
 const Direction = z.object({
   angle: z.string(),
-  format: z.enum(['note', 'steps', 'image', 'gallery', 'find', 'video']),
+  format: z.enum([...WRITTEN, 'image', 'gallery', 'find', 'video']),
   title: z.string(),
   body: z.string(),
   why: z.string(),
   tags: z.array(z.string()),
-  steps: z.array(z.string()),
+  lines: z.array(z.string()),
+  pros: z.array(z.string()),
+  cons: z.array(z.string()),
+  subject: z.string(),
+  passage: z.string(),
+  by: z.string(),
   images: z.array(z.object({ title: z.string(), prompt: z.string() })),
   source: z.string(),
   lookups: z.array(z.string()),
 });
 type Direction = z.infer<typeof Direction>;
+const isWritten = (d: Direction): d is Direction & { format: Written } => (WRITTEN as readonly string[]).includes(d.format);
+/** The written slots of a direction that is no written idea. */
+const UNWRITTEN = { lines: [], pros: [], cons: [], subject: '', passage: '', by: '' } satisfies Partial<Direction>;
 const Ideas = z.object({ reading: z.string(), directions: z.array(Direction) });
 
 const Ratings = z.object({
@@ -264,9 +284,10 @@ export const scout: Roles['scout'] = async (given, input) => {
       if (inventive.arrived >= inventiveExpected()) return;
       inventive.arrived++;
     }
-    if (d.format === 'note' || d.format === 'steps') {
+    if (isWritten(d)) {
       lanes.set(d, inventive);
-      return land(d, [{ item: writtenItem(ctx, d), tool: 'idea' }]);
+      const written = writtenItem(ctx, d);
+      return land(d, written ? [{ item: written, tool: 'idea' }] : []);
     }
     // A gallery makes only the pictures it could keep: one, and more only when there are slots to spare.
     const spare = Math.max(0, room - owed() - 1);
@@ -404,12 +425,12 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
       '- No two directions share an angle. Angles to draw from: the evidence or data behind it, how others have built or solved it, the strongest objection or a counterexample, a neighbouring field that met the same problem, a what-if that changes one thing, a detail worth zooming into, where it comes from historically, the people working on it, what it would look or sound like, the same idea in another medium, a concrete next step.',
       '- A direction that would fit any subject is a failure. Name specifics.',
       count >= 4
-        ? '- Mix the formats: at least three "find" directions that use different sources, and at least one "note". At most one "gallery" and one "video".'
+        ? '- Mix the formats: at least three "find" directions that use different sources, and at least one written idea. At most one "gallery" and one "video".'
         : count === 3
-          ? '- Mix the formats: at least one "find" and at least one "note".'
+          ? '- Mix the formats: at least one "find" and at least one written idea.'
           : '- Prefer different formats.',
       '- Use "image" or "gallery" when seeing something new helps: the user has a picture or a visual subject, or asked to see something. Then include at least one. For a subject that is not visual, leave them out.',
-      '- Write any "image" or "gallery" direction last, after the others.',
+      '- Write the written ideas first, since each lands the moment it is written, and any "image" or "gallery" direction last, after the others.',
       '',
       'For each direction:',
       '- angle: two to five words naming the direction.',
@@ -417,11 +438,22 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
       '- title: about 26 characters in English or 18 in Chinese, so it stands whole on the two lines a small card gives a title; specific, no trailing period.',
       '- why: under eight words, shown on the thread that joins this card to the original. It names where this direction goes ("what the studies found").',
       '- tags: 2 to 4 short lowercase words.',
-      '- body, steps, images, source, lookups: as the format says. Leave the ones a format does not use empty.',
+      '- body, lines, pros, cons, subject, passage, by, images, source, lookups: as the format says. Leave the ones a format does not use empty.',
       '',
-      'Formats:',
-      '- "note": body is two to four sentences of real substance: a concrete idea, a what-if, an objection, a piece of knowledge. Not a description of what the user already has, and not advice to explore something.',
-      '- "steps": steps is three to six short steps for making or trying something. body is one sentence saying what the steps achieve.',
+      'Written formats. Choose the one that fits what the idea is, a note only when the idea needs its sentences. Each is the content itself, with names, numbers and specifics:',
+      '- "note": an argument, a story, a what-if or an objection. body is two to four sentences of real substance, not a description of what the user already has and not advice to explore something.',
+      '- "steps": how to make or try something. lines is three to six steps in order, without numbers, and body says in one sentence what they achieve.',
+      '- "list": examples, options, names, places or rules of one kind, which hold together and are seen together. lines is three to seven entries, each a few words or one sentence, and body introduces them in one sentence.',
+      '- "facts": figures or attributes. lines is two to six "label | value" lines, each value a number, a date or a few words, and body introduces them.',
+      '- "table": several things compared on the same points. lines is the heads, then two to six rows, with " | " between cells and a cell for every head, and body introduces it.',
+      '- "quote": someone\'s real words, exactly as said or written, never a paraphrase, at most 300 characters. passage is the words, by who said them, and body why they matter.',
+      '- "qa": subject is a question the user would ask, and passage its answer in one to three sentences.',
+      '- "definition": subject is a term, and passage what it means in one or two sentences, without the term.',
+      '- "proscons": a choice weighed. pros and cons are two to four points each, and body names the choice.',
+      '- "callout": a warning or a pitfall the user must not miss. passage says it in one or two sentences.',
+      '- Where a written format does not ask for body, it is one sentence of context or empty.',
+      '',
+      'Other formats:',
       '- "image": images has one entry. Its prompt is a complete prompt for an image generator: subject, composition, style, palette, light. When it extends a picture the user dropped, carry over that picture\'s style and palette so it reads as the same world. body is one sentence saying what it shows.',
       `- "gallery": images has exactly ${GALLERY_SIZE} entries, variations on one theme, each with its own short title and full prompt. title names the set.`,
       '- "find": real material from one source. source is one id from the list of sources, chosen for what this direction needs. lookups is two or three searches for the same thing in different words, the shortest and broadest first. Every source except the web is a keyword catalogue where each extra word removes results, so keep each search to two or three plain words and never put a whole question in one. title names what you hope to find. body is one or two sentences on what the user should get from it.',
@@ -491,7 +523,7 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
       body: video ? '' : run.need ? `What the user asked for: "${run.need}".` : '',
       why: look.why,
       tags: look.tags,
-      steps: [],
+      ...UNWRITTEN,
       images: [],
       source: video ? '' : source,
       lookups: [search],
@@ -509,17 +541,134 @@ function common(d: Direction, tool: string) {
   };
 }
 
-function writtenItem(ctx: RoleContext, d: Direction): Item {
-  const steps = d.format === 'steps' ? d.steps.map((s) => oneLine(s, 200)).filter(Boolean).slice(0, 8) : [];
-  const body = d.body.trim();
-  return makeItem(ctx, {
-    ...common(d, 'idea'),
-    kind: 'text',
-    text: steps.length >= 2 ? [body, ...steps.map((s, i) => `${i + 1}. ${s}`)].filter(Boolean).join('\n') : body,
-    summary: oneLine(body, 400),
-    data: steps.length >= 2 ? { steps } : {},
-    source: { from: 'idea' },
-  });
+/**
+ * A written format filled from a direction's slots: the lines of the item's text, the data its card is drawn from, and what the slots
+ * lack for the format's strict form, if anything. The text is built from the same fields as the data, so the card shows the whole item.
+ */
+interface Form {
+  lines: string[];
+  data: ItemData;
+  lacks?: string;
+}
+
+/** The entries of a list the model wrote, one to a line, without a bullet or a number it put in front, which the card draws itself. */
+const entries = (lines: string[]): string[] => [...new Set(lines.map((line) => oneLine(line, 300).replace(/^(?:[-*•·]|\d{1,2}[.)])\s+/, '')).filter(Boolean))];
+/** The cells of a row written with "|" between them, without the fence a row may have at either end. */
+const cellsOf = (row: string): string[] => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => oneLine(cell, 120));
+const unquoted = (words: string): string => oneLine(words, 600).replace(/^["'“”‘’「『]+|["'“”‘’」』]+$/g, '').trim();
+const atLeast = (have: number, least: number, what: string): string | undefined => (have < least ? `only ${have} of the ${least} ${what} it needs` : undefined);
+
+/** Each written format: what it is called in the run log, and how a direction's slots fill it. */
+const FORMS: Record<Written, { name: string; fill: (d: Direction) => Form }> = {
+  note: { name: 'a note', fill: (d) => ({ lines: [d.body], data: {} }) },
+  steps: {
+    name: 'steps',
+    fill: (d) => {
+      const steps = entries(d.lines).slice(0, 8);
+      return { lines: [d.body, ...steps.map((step, n) => `${n + 1}. ${step}`)], data: { steps }, lacks: atLeast(steps.length, 3, 'steps') };
+    },
+  },
+  list: {
+    name: 'a list',
+    fill: (d) => {
+      const items = entries(d.lines).slice(0, 8);
+      return { lines: [d.body, ...items.map((entry) => `- ${entry}`)], data: { items }, lacks: atLeast(items.length, 3, 'entries') };
+    },
+  },
+  facts: {
+    name: 'facts',
+    fill: (d) => {
+      // A figure asked for as "label | value" sometimes comes as "label: value".
+      const facts = entries(d.lines).map((line) => {
+        const [label = '', ...value] = line.includes('|') ? cellsOf(line) : line.split(/:\s+/);
+        return { label: label.trim(), value: value.join(line.includes('|') ? ' ' : ': ').trim() };
+      });
+      const whole = facts.filter((fact) => fact.label && fact.value);
+      return {
+        lines: [d.body, ...facts.map(({ label, value }) => (value ? `${label}: ${value}` : label))],
+        data: { facts: whole },
+        lacks: whole.length < facts.length ? 'a figure without its label or value' : facts.length > 6 ? `${facts.length} figures, more than the 6 it holds` : atLeast(facts.length, 2, 'figures'),
+      };
+    },
+  },
+  quote: {
+    name: 'a quote',
+    fill: (d) => {
+      const [text, by] = [unquoted(d.passage), oneLine(d.by, 120)];
+      return { lines: [d.body, text && `“${text}”`, by && `— ${by}`], data: { quote: { text, by } }, lacks: !text ? 'no words quoted' : !by ? 'nobody named as saying it' : undefined };
+    },
+  },
+  table: {
+    name: 'a table',
+    fill: (d) => {
+      const [heads = [], ...rows] = entries(d.lines).map(cellsOf).filter((cells) => !cells.every((cell) => /^[-:\s]*$/.test(cell)));
+      return {
+        lines: [d.body, ...[heads, ...rows].map((cells) => `| ${cells.join(' | ')} |`)],
+        data: { table: { heads, rows } },
+        lacks: atLeast(heads.length, 2, 'heads') ?? (rows.some((row) => row.length !== heads.length) ? 'a row whose cells do not match the heads' : atLeast(rows.length, 2, 'rows')),
+      };
+    },
+  },
+  qa: {
+    name: 'a question and answer',
+    fill: (d) => {
+      const [question, answer] = [oneLine(d.subject, 300), oneLine(d.passage, 800)];
+      return { lines: [d.body, question, answer], data: { question, answer }, lacks: !question ? 'no question' : !answer ? 'no answer' : undefined };
+    },
+  },
+  definition: {
+    name: 'a definition',
+    fill: (d) => {
+      const [term, definition] = [oneLine(d.subject, 120), oneLine(d.passage, 800)];
+      return { lines: [d.body, term && definition ? `${term}: ${definition}` : term || definition], data: { term, definition }, lacks: !term ? 'no term' : !definition ? 'no meaning' : undefined };
+    },
+  },
+  proscons: {
+    name: 'pros and cons',
+    fill: (d) => {
+      const [pros, cons] = [entries(d.pros).slice(0, 6), entries(d.cons).slice(0, 6)];
+      return {
+        lines: [d.body, ...(pros.length > 0 ? ['For', ...pros.map((point) => `- ${point}`)] : []), ...(cons.length > 0 ? ['Against', ...cons.map((point) => `- ${point}`)] : [])],
+        data: { pros, cons },
+        lacks: atLeast(pros.length, 2, 'points for') ?? atLeast(cons.length, 2, 'points against'),
+      };
+    },
+  },
+  callout: {
+    name: 'a callout',
+    fill: (d) => {
+      const text = oneLine(d.passage, 600);
+      return { lines: [d.body, text], data: { callout: { text, tone: 'caution' } }, lacks: text ? undefined : 'no warning' };
+    },
+  },
+};
+
+/**
+ * The item a written direction stands for: in the format the model chose when its slots fill that format's strict form and the
+ * Renderer's rules draw the item so, which is the card it lands as. Otherwise it lands as plain text in its own words, which the rules
+ * draw from its text alone, and the run log says why. Nothing when it has no words at all.
+ */
+function writtenItem(ctx: RoleContext, d: Direction & { format: Written }): Item | undefined {
+  const { name, fill } = FORMS[d.format];
+  const form = fill(d);
+  const text = form.lines.map((line) => line.trim()).filter(Boolean).join('\n');
+  const title = `"${oneLine(d.title, 60)}"`;
+  if (!text) {
+    ctx.note(ROLE, `${title} came with no words, left out`);
+    return undefined;
+  }
+  const make = (data: ItemData) =>
+    makeItem(ctx, { ...common(d, 'idea'), kind: 'text', text, summary: oneLine(d.body.trim() || text, 400), data, source: { from: 'idea' } });
+  if (form.lacks) {
+    ctx.note(ROLE, `${title} lands as plain text, not ${name}: it has ${form.lacks}`);
+    return make({});
+  }
+  const item = make(form.data);
+  if (d.format === 'note') return item;
+  const card = byRule(item, (id) => ctx.assets.url(id)).component;
+  if (card === d.format) return item;
+  ctx.note(ROLE, `${title} lands as plain text, not ${name}: the card's check draws it as ${card === 'note' ? 'a note' : `a ${card}`}`);
+  return make({});
 }
 
 /**
