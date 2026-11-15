@@ -62,7 +62,7 @@ private:
     struct Program {
         unsigned id = 0;
         int model = -1, viewProj = -1, tint = -1, useTexture = -1, tex = -1, opacity = -1, threshold = -1;
-        int hover = -1, opaque = -1, time = -1, shift = -1, center = -1, uvMatrix = -1, loading = -1;
+        int hover = -1, opaque = -1, time = -1, shift = -1, center = -1, uvMatrix = -1, loading = -1, additive = -1;
     };
     struct Item {
         const Entity* entity;
