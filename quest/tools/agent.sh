@@ -5,10 +5,12 @@
 #   tools/agent.sh wifi [-- flags]    move adb to the headset's Wi-Fi (the cable is needed this once), then the same
 #   tools/agent.sh resume             after the headset slept or adb lost it: reconnect and carry the port again
 #   tools/agent.sh status             what adb sees and whether the service answers
+#   tools/agent.sh forget             start the app with -agentForget: it forgets the service, and starts as it was
 # The service must be running on this Mac: (cd agents && npm start). Its access key is read from agents/data/token
 # (or MIND_PALACE_DATA/token, or MIND_PALACE_TOKEN).
 # It works on the copy installed with QUEST_APP_SUFFIX=.agents unless QUEST_APP_SUFFIX says otherwise ("" for the first).
 # The app starts with -cards, so the service's trees and the library's films, works and notes are drawn as the agent's cards.
+# It remembers the address, the key and -cards in its own storage, and joins with them when started from the app library.
 set -e
 export QUEST_APP_SUFFIX="${QUEST_APP_SUFFIX-.agents}"
 source "$(dirname "$0")/env.sh"
@@ -70,13 +72,17 @@ case "$mode" in
     carry
     echo "The app reconnects by itself within 15 seconds."
     ;;
+  forget)
+    "$QUEST_ROOT/tools/run.sh" -- -agentForget >/dev/null
+    echo "started with -agentForget: the app forgot the service, until usb or wifi joins it again"
+    ;;
   status)
     adb devices
     for s in $(adb devices | awk 'NR > 1 && $2 == "device" {print $1}'); do echo "$s carries: $(adb -s "$s" reverse --list | tr '\n' ' ')"; done
     curl -fs "http://127.0.0.1:$PORT/api/health" && echo || echo "service: not answering on port $PORT"
     ;;
   *)
-    sed -n 2,9p "$0"
+    sed -n 2,10p "$0"
     exit 1
     ;;
 esac

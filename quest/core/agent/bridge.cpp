@@ -77,6 +77,12 @@ constexpr double standsWithin = 5;
 /// How long a navigate waits for speaking to end: longer than a reply, so a voice that never says it ended cannot hold it.
 constexpr double speechWithin = 20;
 
+/// Where the covers of the service's trees hang between launches: beside the headset's own shelf file, never in it.
+std::string spotsFile() {
+    std::string folder = platform::dataDirectory();
+    return folder.empty() ? "" : folder + "/agent-shelf.json";
+}
+
 /// Stands the layer a card's group lies on: `parent` leads it, and each card on the way leads its own, as the pinches that
 /// reach it by hand would have made them.
 void standGroup(Tree& t, int parent) {
@@ -108,6 +114,9 @@ Bridge::Bridge(OceanModel& model, Address address, std::shared_ptr<Transport> tr
     : model(model), client(std::move(address), std::move(transport)), dump(std::move(dump)), walk(Flags::integer("agentWalk")),
       keyboardTest(Flags::has("keyboardTest")) {
     if (Flags::string("agentVoice").value_or("on") != "off") voice = std::make_unique<Voice>(client, [this] { return scene(); }, Flags::string("wakeClip"));
+    if (Flags::string("agentType") && Flags::number("agentTypeAt") > 0) typeAt = Flags::number("agentTypeAt");
+    std::string file = spotsFile();
+    if (!file.empty()) spots = ShelfSpots::parse(platform::readFile(file).value_or("")).services[client.address().http];
 }
 
 void Bridge::frame(double t) {
@@ -124,7 +133,7 @@ void Bridge::frame(double t) {
                                logLine(fmt("[agent] change %lld \"%s\": nodes +%d ~%d -%d", (long long)c.set.seq, c.set.label.c_str(),
                                            int(c.delta.nodes.added.size()), int(c.delta.nodes.changed.size()), int(c.delta.nodes.removed.size())));
                            }
-                           changed(c.delta, c.set.origin.by == Origin::By::agent);
+                           changed(c.delta, c.set.origin.by == Origin::By::agent, c.yours);
                        },
                        [&](Activity& a) { activity(a); },
                        [&](Say& s) {
@@ -133,7 +142,13 @@ void Bridge::frame(double t) {
                        },
                        [&](Heard&) {},
                        [&](Navigate& n) {
-                           logLine("[agent] navigate to " + (n.nodeId ? "card " + n.nodeId->value : n.treeId ? "tree " + n.treeId->value : "nowhere"));
+                           std::string to = n.nodeId ? "card " + n.nodeId->value : n.treeId ? "tree " + n.treeId->value : "nowhere";
+                           // Another client's request moves its own view; the headset's stays where the user is.
+                           if (!n.yours) {
+                               logLine("[agent] navigate to " + to + " was asked for elsewhere, so the view stays");
+                               return;
+                           }
+                           logLine("[agent] navigate to " + to);
                            going = Going{n, now, std::nullopt};
                        },
                        [&](Handoff& h) { logLine("[agent] handoff ready: " + h.name); },
@@ -172,6 +187,12 @@ void Bridge::frame(double t) {
         }
         if (card && model.tree && model.tree->nodes.count(*card)) converse(*card, text);
     }
+    if (typeAt && now > *typeAt && client.state() == Client::State::live) {
+        typeAt.reset();
+        std::string words = percentDecoded(*Flags::string("agentType"));
+        client.send(Outbound::utter(words, true, scene()));
+        logLine("[agent] typed: " + words);
+    }
     if (keyboardTest && now > 3) {
         keyboardTest = false;
         bool shown = platform::showKeyboard("", {
@@ -203,7 +224,9 @@ void Bridge::synced(const Delta& delta) {
     logLine(fmt("[agent] connected: %d trees, %d cards", int(client.mirror().trees().size()), int(client.mirror().nodes().size())));
     // The headset shows no player from another site, and its player takes these files (Android's MediaPlayer).
     client.send(Outbound::client(Media{false, {"mp4", "m4a", "mp3"}}));
-    changed(delta, false);
+    // A tree deleted at the service while the headset was away leaves no spot behind.
+    for (auto s = spots.begin(); s != spots.end();) s = client.mirror().tree(TreeId{s->first}) ? std::next(s) : spots.erase(s);
+    changed(delta, false, false);
     if (dump) {
         client.send(Outbound::dump({Dump::text(*dump)}));
         logLine("[agent] dropped in: " + *dump);
@@ -211,7 +234,7 @@ void Bridge::synced(const Delta& delta) {
     }
 }
 
-void Bridge::changed(const Delta& delta, bool animate) {
+void Bridge::changed(const Delta& delta, bool animate, bool yours) {
     const Mirror& mirror = client.mirror();
     bool touched = false;
 
@@ -221,6 +244,8 @@ void Bridge::changed(const Delta& delta, bool animate) {
         // A standing tree stays up until it is put away; a cover stays on the shelf. Neither is fed again.
         logLine("[agent] tree \"" + gone.title + "\" was deleted at the service");
         trees.erase(p);
+        spots.erase(gone.id.value);
+        model.shelfDirty = true;
     }
 
     std::vector<std::pair<Planted*, const TreeInfo*>> planted;
@@ -229,31 +254,26 @@ void Bridge::changed(const Delta& delta, bool animate) {
             if (Planted* p = plant(*info)) planted.emplace_back(p, info);
         }
     }
-    // When nothing stands, the user's own newest tree stands; a tree from the headset's library only when
-    // there is no other. Every other new tree hangs on the shelf.
-    auto own = [&](const TreeInfo* info) {
-        const Item* root = mirror.itemOf(info->rootId);
-        return root && root->source.from != "library";
-    };
-    std::optional<size_t> stands;
-    for (size_t i = 0; i < planted.size(); i++) {
-        if (!stands) {
-            stands = i;
-            continue;
-        }
-        const TreeInfo* best = planted[*stands].second;
-        const TreeInfo* next = planted[i].second;
-        if (own(next) != own(best) ? own(next) : next->createdAt >= best->createdAt) stands = i;
-    }
-    if (model.tree || model.pressing) stands.reset();
-    for (size_t i = 0; i < planted.size(); i++) {
-        if (stands == i) {
-            model.stand(planted[i].first->tree);
-        } else {
-            model.shelve(planted[i].first->tree, std::nullopt);
-            model.shelfDirty = true;
+    // The newest first, as the headset hangs its own covers at launch. A tree this headset asked for stands as a tree the
+    // user starts always has, once the standing one has pressed itself onto the shelf. Every other new tree, and every
+    // tree there at launch, hangs as a cover where it hung last time, or else at the first place no remembered one holds.
+    std::stable_sort(planted.begin(), planted.end(), [](const auto& a, const auto& b) { return a.second->createdAt > b.second->createdAt; });
+    std::shared_ptr<Tree> stands = yours && !planted.empty() ? planted.front().first->tree : nullptr;
+    for (bool remembered : {true, false}) {
+        for (const auto& [p, info] : planted) {
+            auto spot = spots.find(info->id.value);
+            if (p->tree == stands || (spot != spots.end()) != remembered) continue;
+            model.shelve(p->tree, std::nullopt, nullptr, remembered ? std::optional<Vec2>(spot->second) : std::nullopt);
         }
     }
+    if (stands) {
+        logLine("[agent] \"" + stands->title + "\" was asked for here, so it stands");
+        model.whenClear([this, stands] {
+            model.standingSpot = std::nullopt;
+            model.stand(stands);
+        });
+    }
+    if (!planted.empty()) model.shelfDirty = true;
 
     for (const Node& gone : delta.nodes.removed) {
         if (holding(gone.id.value)) touched = true;
@@ -347,9 +367,11 @@ void Bridge::changed(const Delta& delta, bool animate) {
 void Bridge::activity(const Activity& a) {
     if (a.state != Activity::State::start) {
         thinking.erase(a.id);
+        asking.ended(a.id);
         return;
     }
     if (!a.nodeId) return;
+    if (a.role == "scout" && a.detail) asking.searching(a.id, a.nodeId->value, *a.detail);
     for (auto& [key, p] : trees) {
         auto local = p.local.find(a.nodeId->value);
         if (local != p.local.end()) {
@@ -756,10 +778,6 @@ bool Bridge::ask(int nodeID, int k) {
         type(nodeID);
         return true;
     }
-    if (row.key == "question" && offered) {
-        auto& q = offered->questions;
-        q.erase(std::remove(q.begin(), q.end(), row.question), q.end());
-    }
     if (row.key == "keep") {
         TreeNode& n = p->tree->nodes[nodeID];
         if (!n.kept) {
@@ -771,8 +789,31 @@ bool Bridge::ask(int nodeID, int k) {
         model.restyle();
         return true;
     }
+    if (!asking.begin(s->second, row.question, now)) {
+        logLine("[agent] still asking, so not again: " + row.question);
+        return true;
+    }
+    acknowledge(nodeID, k);
+    if (row.key == "question" && offered) {
+        auto& q = offered->questions;
+        q.erase(std::remove(q.begin(), q.end(), row.question), q.end());
+    }
     converse(nodeID, row.question);
     return true;
+}
+
+void Bridge::acknowledge(int nodeID, int k) {
+    const auto& c = model.card(nodeID);
+    if (!c) return;
+    for (const EntityRef& row : c->askHolder->children) {
+        auto pick = model.picks.find(row.get());
+        if (pick == model.picks.end() || pick->second.kind != OceanModel::Pick::Kind::ask || pick->second.question != k) continue;
+        Tween<float> alpha(0.35f);
+        alpha.go(1, model.time, 0.1, 0.45f, Ease::out);
+        row->opacity = 0.35f;
+        model.fades.push_back(OceanModel::Fade{row, alpha, false});
+        model.touch(model.time + 0.6);
+    }
 }
 
 bool Bridge::askMark(int nodeID, const Mark& mark) {
@@ -798,6 +839,22 @@ void Bridge::pruned(int nodeID, const std::vector<TreeNode>& gone) {
         p->local.erase(found->second);
         p->service.erase(found);
     }
+}
+
+void Bridge::saveShelf() {
+    for (const auto& [id, p] : trees) {
+        auto cover = std::find_if(model.shelf.begin(), model.shelf.end(), [&](const OceanModel::Shelved& s) { return s.tree == p.tree; });
+        if (cover != model.shelf.end()) {
+            spots[id] = cover->spot;
+        } else if (standing(p) && model.standingSpot) {
+            spots[id] = *model.standingSpot;
+        }
+    }
+    std::string file = spotsFile();
+    if (file.empty()) return;
+    ShelfSpots kept = ShelfSpots::parse(platform::readFile(file).value_or(""));
+    kept.services[client.address().http] = spots;
+    platform::writeFile(file, kept.text());
 }
 
 void Bridge::pressed(const Tree& tree, bool send) {

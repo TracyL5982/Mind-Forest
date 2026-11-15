@@ -469,7 +469,7 @@ function passageOf(item: Item): string | undefined {
 
 /**
  * The kinds of record drawn as a link card: something that lives at an address, with what its source says of it beside its title. Two
- * blind readers chose it for each of these in the source audit (DECISIONS 53), over the excerpt or the picture they were drawn as.
+ * blind readers chose it for each of these in the source audit (DECISIONS 55), over the excerpt or the picture they were drawn as.
  */
 const LINKED = new Set(['repository', 'page', 'article', 'question', 'film']);
 /** The kinds whose record is never a passage: a link's, an answer's, a recipe's, and a thread's, which is what several people wrote. */
@@ -1119,7 +1119,7 @@ async function composed(ctx: RoleContext, asked: Open[], waitMs: number): Promis
   const ask = async (part: Open[], again: boolean): Promise<void> => {
     let reply: ComponentsReply;
     try {
-      // On the quick model: it chose as well as the main one in three runs each, and answered a call of 8 cards in 6 s at most against 49 (DECISIONS 52).
+      // On the quick model: it chose as well as the main one in three runs each, and answered a call of 8 cards in 6 s at most against 49 (DECISIONS 54).
       reply = await ctx.model.json({ role: `${ROLE}.components`, system: COMPONENTS_SYSTEM, user: componentsPrompt(part, asset), schema: ComponentsReply, effort: 'low', quick: true });
     } catch (err) {
       if (landed) return;
@@ -1510,6 +1510,8 @@ async function askComposites(ctx: RoleContext, pools: Pool[], changed: ReadonlyS
       user: compositesPrompt(ctx, asked),
       schema: CompositesReply,
       effort: 'low',
+      // The groups come after the cards' own looks, off the path to the card (44).
+      priority: 'background',
     });
   } catch (err) {
     ctx.note(ROLE, `The model could not look for composites (${message(err)}). Kept the rule-based groups.`);

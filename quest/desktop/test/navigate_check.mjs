@@ -64,9 +64,11 @@ const parentOf = (id) => snapshot.nodes.find((n) => n.id === id).parent;
 
 // The stand-in.
 let socket = null;
+// Every navigate here stands in for one the headset asked for, which the service marks yours.
 const send = (message) => {
-  note('service', `sends ${JSON.stringify(message)}`);
-  socket?.send(JSON.stringify(message));
+  const sent = message.t === 'navigate' ? { ...message, yours: true } : message;
+  note('service', `sends ${JSON.stringify(sent)}`);
+  socket?.send(JSON.stringify(sent));
 };
 const later = (seconds, run) => setTimeout(run, seconds * 1000);
 let spoke = false;

@@ -517,7 +517,65 @@ So the kept setting brings the first card 13 s sooner and the line 25 s after th
 
 **Why.** On the headset the user said "Can you start a new tree on Dutch artist?". The plain rules heard the request and its subject, but the subject went through Intake like a dropped note, which titled it "Dutch artist reference note", and the tree was rooted in that. The user asked for a tree about Dutch artists, not about a note. It also waited 7 s on Intake's model call before the tree appeared. `test/mindstorm.test.ts` checks that utterance, "start a tree about …", "Make a new tree on …", and one in Chinese the Conductor hears.
 
-## 49. Looks: every card lands in the look it keeps
+## 49. Model client: a request refused for the rate waits for room in the window
+
+**Decision.** `MetaModel` keeps the key's rate window (`src/node/rate-window.ts`). It holds a request while the window has no room, and sends it as soon as it has. Room is the limit less this program's requests in the window, less as many more as a reply counted beyond them, which are other programs'. This program counts each of its requests from when it goes out until a minute and a second after its answer ends, a stream's included. The second covers the clocks' difference. Other programs' requests are taken to stay a minute from the reply that counted them. A refusal the counts do not explain holds every request for the refusal's `retry-after`, or a minute when it has none, as for a request larger than the tokens left. A request still refused after it has been held a minute and a half fails as before. A request says who waits on it with `priority`: `user`, the default, or `background`. Held requests go out the user's first, and background work leaves a tenth of the limit, 6 of 60 requests, to the user. The run log says how long a request was held: `held 41979ms for the rate window`.
+
+**Measured.** The key allows 60 requests and 2,100,000 tokens a minute, shared by every program on it (WS21). Past the limit, 24 of 24 calls failed, since the old retries, 1.6 s and 3.2 s apart, gave up after 5.0 to 5.3 s. One Scout run makes 19 to 21 requests in about 33 s.
+
+**A minute after the answer, not the turn of the minute.** WS21 read the window as resetting on the minute, and the first build here held requests until it turned. Bursts on the real key showed otherwise. Each sent 75 quick requests through one client, 15 every 5 s, and their logs are in the session's scratchpad (`ws26/burst-*.jsonl`).
+- Burst 1 ran the minute build from 10:02:01Z. At 10:03:02, just after the minute turned, the replies said 0 left, where a new window would have said 37. At 10:04:01 a reply said 38 left, so the 22 requests let out at 10:03:01 still counted. The burst failed nothing only because the release at the turn fell just as its first wave left the window. One request was refused and held 98.7 s.
+- Burst 2 ran a build that counted each request from when it was sent, starting from 10:24:25Z. The 10 requests let out 61 s after the first wave was sent were all refused, since that wave's answers ended 1.0 to 2.4 s after it was sent and counted from then. The replies' counts also showed the refused requests counting. All 10 were sent again 5 s later and answered, after being held 45.5 to 45.9 s.
+- The counts lag. 12 of the replies to the first 15 requests, sent together, said all 60 were left, so a request is counted only once it is answered. The client therefore counts its own requests itself and takes from a reply only what is beyond them. A refusal carries `retry-after: 60` and `x-ratelimit-remaining-requests: 0`. No reply carries a reset time.
+- `test/model-meta.test.ts` serves a fake with this behaviour. The minute build and the send-time build each fail its tests, and this one passes them.
+- Burst 3 ran this build from 10:35:25Z: 0 refusals and 75 of 75 answered, at 10,522 tokens, about $0.013. The 60 requests the limit had room for were not held, and were answered in a median of 981 ms. The 10 user requests held went at 10:36:27, as the first wave's answers, which ended at 10:35:26.0 to 27.0, left the window. They were held 42.0 to 42.3 s and none was refused. The 5 background requests held waited until the limit had room beyond the user's tenth, held 46.6 to 51.5 s. The three bursts together cost about $0.04.
+
+**Which requests are background.** Only the Renderer's composites, which are off the path to the card (44). The ratings of ties stay with the user, though they are background in spirit, because a run's first picks wait for them (`rated` in `scout.ts`). Held behind the reserve, they would hold back the first card. The default is the user's, so a request whose call site does not say never waits behind background work. The fast lane's later directions can say `background` where they are made.
+
+**Not covered.** Transcription goes to another endpoint, whose limit is not known, and is not held. Each program on the key keeps its own log and learns of the others' use only from what the replies count, so two programs that start at once can still meet a refusal. The one refused then waits for room.
+
+## 50. Scout: a fast lane brings the first cards while the main model thinks
+
+**Decision.** Two lanes write a Scout run's directions, and they share its slots.
+
+- **The fast lane** starts with the run. The quick model (`scout.looks`, minimal effort) names two or three catalogues likely to hold the subject, or a video, and what to type into each. Each is searched, the quick model chooses its one best record, and the card lands once ties to what the user has are rated. It never searches the web, never makes a picture, and never retries a find on the web.
+- **The inventive lane** is the main model at low effort, streamed, each direction started as it is written, as in 47. It now writes pictures last.
+- **Slots.** The fast lane fills at most two slots and never half of them. A third look's card waits and lands only into a slot left free at the end. The inventive lane is taken for one direction more than the slots the fast lane has left it. Its first picks never take a slot the fast lane's finds still out could fill, until the fast lane has lost.
+- **Losing the race.** Once the inventive lane has a card ready, the fast lane has lost and keeps no slot. A choice of where to look still unanswered is given up, and its late answer brings nothing. A find of its still out lands only into a slot nobody else claims.
+- **Pictures.** While the main model writes, until it has written a picture, one slot is kept for one. A pick that waited for that slot lands first once the model has finished without a picture.
+- **No repeats.** The lanes share the addresses taken and the tree's sameness keys, so a record both find lands once (`test/scout.test.ts`).
+- The run's line comes when nothing more can land, as before.
+
+**Why.** The user: "It's okay to have some cards that come later, but 20 seconds without any cards landing is not acceptable." Nothing could land before the main model wrote its first direction, and it wrote the picture first. The target set in the voice plan is a first card within 8 s (median), never over 12 s, with the inventive cards still landing.
+
+**Measured.** `scratchpad/ws22/bin/service-runs.mts` ran each request through the real service, a copy started per run on its own port from a fresh copy of the mindstorm, with a client that plays as the headset does. Five requests on five cards (something interesting on generative UI, Dutch art, standoffs in horror films, world building on the rural illustration, what studies found on mixed-initiative interfaces), each twice per side. The sides alternated, the first side alternating by pair, 10 runs each, with 20 s between runs. Load average 2.6 to 6.2 on 8 cores. Every model request was logged with its status: none was refused for the rate limit. Times are from the request to what the client received.
+
+| | Before (22a65ed) | After |
+|---|---|---|
+| Momo's reply | 1.2 s (0.8 to 2.0) | 1.2 s (0.9 to 1.4) |
+| First card | 20.6 s (14.6 to 30.8) | 4.1 s (3.5 to 6.3) |
+| First card of the inventive lane | 20.6 s (14.6 to 30.8) | 16.8 s (10.6 to 21.7) |
+| Longest wait for a card before the line | 20.6 s (14.6 to 30.8) | 12.1 s (6.2 to 18.0) |
+| Cards by 20 s | 0 (0 to 4) | 4 (2 to 5) |
+| The line saying what came | 25.7 s (17.7 to 33.0) | 24.2 s (19.1 to 29.4) |
+| Last card | 28.4 s (20.8 to 42.5) | 37.8 s (21.2 to 48.7) |
+| Cards of each lane | 5 inventive | 1 or 2 fast, 3 or 4 inventive |
+| Generated pictures kept | 8 of 10 runs | 7 of 10 runs |
+| Model requests a run | 10 (7 to 12) | 14 (9 to 16) |
+
+In one run of Dutch art the rating also brought two paintings of the headset's library at 3.5 s, the only ties in the 20 runs. The runs without a picture are the two on studies, where neither side wrote one, and on the other side one picture the image model refused (400). Three requests failed on their own, none for load: a choosing request too large to send (413) and one refused (400) before, and that picture after. The last card comes later because the picture is now written last: it lands 10.6 s (0 to 27.0) after the line, against 2.6 s.
+
+**What bounds it.** The first card waits on the Conductor (1.2 s median, quick model), the fast lane's choice of catalogues (1.3 s, 1.1 to 1.9), the search (0.1 to 1.2 s), and choosing the record (1.3 s median). A catalogue of pictures fetches up to eight pictures and shows them to the model first, so a run whose three looks were all museums, boards and heritage had its first card at 6.3 s, the slowest. The rating of ties, 1.7 s (1.4 to 2.5), runs beside it and is usually done first. The wait after the fast cards is the main model, which wrote its directions in 23.5 s (18.4 to 28.6).
+
+**Cost.** Four more model requests a run (the choice of catalogues, two or three choosing calls, and a Renderer pass or two more for the earlier deliveries), and about 22,000 more tokens: at the rate in 2, about $0.078 a run against $0.052. With the key's limit of 60 requests a minute shared by every process, one run of the fast lane peaks at 16 in a minute against 12.
+
+**A quick request that hangs.** An independent check of the first version found that a quick request of the fast lane that went unanswered held the inventive lane back. While the quick model chose where to look, two slots were kept for its finds and the line waited for it, and each try waited 20 s, three tries at most. In the check's timeline, scaled from the service's times, one unanswered choice kept two ready inventive cards back until the retry answered at 21.6 s. Then the fast cards took the slots, those two were dropped, and the line came at 23.3 s. Three unanswered tries held cards about 65 s. A fast find whose choosing hung kept a slot the same way. With the race lost once an inventive card is ready, the same timeline lands each inventive card as it is ready, at 14.6 to 17.8 s, and the line comes at 20.0 s. `test/scout.test.ts` checks a choice that answers after the inventive cards are ready, the line not waiting for it, and a fast find whose choosing hangs. All three failed on 4dbf751. The check's fuzz, 1,000 random runs of both lanes with throws, empty answers, pictures and delays, found no run over its slots, no record twice, and no run that did not end.
+
+A quick request is now tried again after 6 s instead of 20 s (`model-meta.ts`). Of the 175 quick requests answered in the 24 runs above, all but two answered within 4.6 s. Those two, both choosing among pictures, took 11.6 and 14.7 s. The user waits on every quick request: the Conductor, the choice of where to look, choosing a record, and the rating, which every card waits for. By the medians above, one unanswered choice of where to look now puts the fast lane's first card at about 12 s (1.2 s, 6 s, the 1.6 s pause before the retry, 1.3 s, a search and a choice), against about 26 s with the 20 s wait. The cost: if those two slow requests are slow on every try, they now fail after about 23 s, where they landed in 11.6 and 14.7 s. The wait starts when a request is sent, after any time it was held for the rate window (49), so a held request does not use up its 6 s (`test/model-meta.test.ts`).
+
+**Alternatives.** Search the user's words with no model in front: words such as "something interesting" name no subject, and on "adaptive menus" only the web and papers gave a usable top record (voice plan). Minimal effort for the main model: first card about 12 s, with the directions the blind readers ranked lower (47); the fast lane brings the first cards sooner and keeps low effort. More than two fast slots: the inventive lane's directions are the ones the readers ranked, so they keep most of the run. Count pictures as any direction: written last, a picture would find every slot full and never be made. A deadline of its own for the fast lane a few seconds in: until the inventive lane has a card ready the fast lane holds no card back, so giving up earlier would only lose the card its retry brings. Still searching where a choice that answers after the race is lost says, for the slots left: the line would wait on those searches, and in each of the 10 runs before the fast lane the inventive lane alone filled all five slots. A quick wait under 6 s: choosing among pictures took up to 4.5 s, and each needless retry sends the pictures again.
+
+## 51. Looks: every card lands in the look it keeps
 
 **Decision.** A node is made with the card the rules choose for its item (`firstView` in `src/core/roles/renderer.ts`), where it was made with a default from the item's kind alone and the Renderer's pass then swapped in the rules' card. The model's look call is asked only about the user's own text of some length that the rules drew as a note or an idea, and only such a card is made composing (`view.composing: true`, documented in `docs/protocol.md`). It lands once, within 12 s (`COMPOSE_MS`): as the model's card, or as the rules drew it when the answer was refused, failed, came after 12 s, or the pass already held 24 cards. A card that landed is final (`by: 'renderer'`) until its item changes, and an edited card the model is asked about again composes first. An idea the Scout writes is never asked about. The Renderer's later passes (`later`, `again`, up to four) are gone, and a card one pass is composing is left to it by any other pass, as when the user keeps it meanwhile.
 
@@ -525,11 +583,11 @@ So the kept setting brings the first card 13 s sooner and the line 25 s after th
 
 **Measured.** `scratchpad/ws24/replay.ts` replays a copy of `agents/data` (164 change sets, 77 cards on the canvas) through a checkout's own code: every set but the Renderer's and the Archivist's applied again, each new node made as that code makes one, and that code's Renderer run after each set as the pipeline runs it, with a model that keeps the rules' card. Before (22a65ed): 33 cards changed face after landing, 10 note to excerpt, 8 note to steps, 7 image to artwork, 4 note to reference and 4 image to reference. After: none, and 4 composed first. `test/renderer.test.ts` holds the land-once rule: made composing, one landing through the pipeline, a late answer not drawn, a second pass leaving a composing card alone, and nothing asked again after a failed call.
 
-**What it costs.** A drop of more than 24 cards the model would be asked about lands the rest as the rules drew them. A card whose call is slower than 12 s lands as the rules drew it: in the format runs of 52, calls of 8 cards on the main model took 13 to 49 s. A card of the user's that the model would have turned into steps or a callout after a failed call stays a note, where a later pass used to ask again.
+**What it costs.** A drop of more than 24 cards the model would be asked about lands the rest as the rules drew them. A card whose call is slower than 12 s lands as the rules drew it: in the format runs of 54, calls of 8 cards on the main model took 13 to 49 s. A card of the user's that the model would have turned into steps or a callout after a failed call stays a note, where a later pass used to ask again.
 
 **Alternatives.** Keep the kind-only default and have the pass apply the rules: the face changes the user objected to. Keep later passes for cards with no answer: a landed card would turn into another. Wait longer than 12 s: the plan's figure, set against the 3.9 to 7.7 s the call took for single drops in the headset session.
 
-## 50. Looks: the composing card on the headset
+## 52. Looks: the composing card on the headset
 
 **Decision.** The headset draws a composing card as an in-progress card (`quest/core/cards/composing.cpp`): the item's kind and where it came from, "Note · Dropped in" or "Link · nytimes.com", over three soft bars, with a band of light running across it once every 1.6 s. It shows none of the item's title or words, since seven of the shapes the model can choose have no title row, and opened it says the card is being laid out. When the look lands, the card's frame without its words eases over 0.32 s to the finished card's size and place, and the finished card comes up inside it over 0.22 s (`OceanModel::settleCard`). Nothing fades out and back in, where the redraw used to fade the old face out in 0.15 s.
 
@@ -537,7 +595,7 @@ So the kept setting brings the first card 13 s sooner and the line 25 s after th
 
 **Alternatives.** Draw the finished card over the composing one as a crossfade: the composing card's words showed through the new card's for a fifth of a second in the first try. Show the title while composing: it would disappear when a titleless shape lands.
 
-## 51. Looks: a book shows its cover, and a repository its own description
+## 53. Looks: a book shows its cover, and a repository its own description
 
 **Decision.** The reference card takes `cover`, the item's own picture. On the headset's small face a book's cover stands at its left, two by three, with the kind, the year, the title and the first author beside it, and the opened card shows the cover over the details. A code repository the Scout finds is catalogued `kind: 'repository'` by the source, titled with the project's own name, and drawn as a link card with its own short description, where it was an excerpt of that description.
 
@@ -545,13 +603,13 @@ So the kept setting brings the first card 13 s sooner and the line 25 s after th
 
 **Why a repository is a link.** Its text is what the project says of itself and its star count, a blurb and no passage, and the card that leads with where it lives fits it. A real passage of a page, an answer or an article stays an excerpt.
 
-## 52. Looks: the look call moves to the quick model
+## 54. Looks: the look call moves to the quick model
 
 **Decision.** The Renderer's look call for a dropped card is marked quick, so the service answers it on `muse-ember-1.0`, at low effort as before. `npm run formats` measures it so, and `npm run formats -- --main` on the main model.
 
 **The bar, set before the runs.** Switch only if the quick model's score on the authors' samples falls within the main model's run-to-run spread, and its score on the reviewers' samples does not drop. Then two blind readers judge the cards the two models disagree on, and the quick model must not be worse there.
 
-**Measured.** Three runs on each model, in turns, on the code of 49 to 51 (`scratchpad/ws24/quick`). The authors' set has 53 samples now, the six explorable `E` items with them, so the spread of 39 to 41 measured on 47 is of another set.
+**Measured.** Three runs on each model, in turns, on the code of 51 to 53 (`scratchpad/ws24/quick`). The authors' set has 53 samples now, the six explorable `E` items with them, so the spread of 39 to 41 measured on 47 is of another set.
 
 | | Authors' 53 | Reviewers' 120 | Slowest call of a run | Tokens of a run |
 |---|---|---|---|---|
@@ -560,11 +618,11 @@ So the kept setting brings the first card 13 s sooner and the line 25 s after th
 
 Read strictly, one quick run fell one sample under three main runs that all scored 46. The coordinator read the bar as met, taking the run-to-run spread as the one sample either way the main model has shown, and the reviewers' scores overlap. The two models drew different cards on 9 samples across the six runs. Two blind readers (Opus and Sonnet, `quick/readers.md`, not told which card came from which model) chose one card for each. Counting a sample for the model whose runs drew the chosen card more often, reader A preferred the quick model's on 5 and the main model's on 4, and reader B the quick model's on 7 and the main model's on 2. Both chose the quick model's proscons, sheet for a recipe, list as a sheet and facts, and the main model's note for "Three tiers" and its explorable slider for the field of view.
 
-**Why.** A composing card waits 12 s at most (49). On the main model a call for 8 cards took 13 to 49 s, so in a drop of several notes most landed as the rules drew them; the quick model answered every call in 6 s or less, at four fifths of the tokens.
+**Why.** A composing card waits 12 s at most (51). On the main model a call for 8 cards took 13 to 49 s, so in a drop of several notes most landed as the rules drew them; the quick model answered every call in 6 s or less, at four fifths of the tokens.
 
 **Alternatives.** Stay on the main model: the same choices within a sample, with most cards of a multi-note drop landing before their answer. Ask the main model one card per call: shorter calls, at more calls and tokens.
 
-## 53. Looks: every source's records get the card two blind readers chose
+## 55. Looks: every source's records get the card two blind readers chose
 
 **Decision.** Each source says what kind of thing its records are (`Found.kind`, carried to `item.data.kind`), and the rules draw each kind as two blind readers chose for it. A web page, a news article, a Stack Overflow question, a GitHub repository and a film or series are link cards with the record's own words beside the title, a film with its poster. A page a DOI names is a paper's reference card, and OpenAlex's conference papers are papers. An answer is a question and its answer. A recipe is a sheet of its picture, its line of ingredients and its numbered steps, when the sheet can hold them whole. A Europeana painting is an artwork, and one its concepts call a photograph stays a picture. A podcast episode plays beside its cover art, and a Hacker News thread is a note. On the headset a film's poster stands at the right of its link card, an episode's art at the left of its player, and a sheet's picture in a band across its top. A find no source catalogued, as every one already in the user's data, is drawn as before, so no card there changes.
 

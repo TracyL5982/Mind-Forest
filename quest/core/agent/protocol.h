@@ -204,6 +204,8 @@ struct Activity {
     State state = State::start;
     std::string message;
     std::optional<NodeId> nodeId;
+    /// More about the step: for a Scout run on a card, the question it answers; on an error, what went wrong.
+    std::optional<std::string> detail;
 };
 
 /// Who should turn speech into text: the service (record and POST /api/transcribe) or the client's own recognizer.
@@ -225,6 +227,8 @@ struct Hello {
 struct Change {
     ChangeSet set;
     std::optional<std::string> undo;
+    /// This connection's own message started the work that made it ("make a tree about …"), not another client's.
+    bool yours = false;
 };
 /// One short line for the agent to speak.
 struct Say {
@@ -239,6 +243,8 @@ struct Heard {
 struct Navigate {
     std::optional<NodeId> nodeId;
     std::optional<TreeId> treeId;
+    /// This connection asked to go there, or asked for the run whose card it is (`Change::yours`).
+    bool yours = false;
 };
 /// A handoff bundle is ready; `url` is a zip on the service.
 struct Handoff {

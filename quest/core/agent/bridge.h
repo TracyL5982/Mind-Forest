@@ -2,7 +2,9 @@
 // Made at launch only with `-agent <address>`; without it the ocean is exactly as it was.
 //
 // Each service tree is a `Tree` with `grows` off, so its cards come from the service, never from the
-// catalog. The newest stands when nothing does; the rest hang as covers on the shelf. A service item
+// catalog. Its trees keep the shelf's rules: at launch nothing stands and every tree hangs as a cover, the newest
+// first, where it hung last time (spots.h). A tree this headset asks for stands as a tree the user starts always has,
+// the standing one pressed onto the shelf first; one asked for anywhere else only hangs. A service item
 // is a note in the catalog ("agent-<item id>"), or the film or work itself when it is from the
 // headset's own library. A pick is a node that is not kept: its thread is dashed until a pinch keeps it.
 #pragma once
@@ -14,8 +16,10 @@
 #include <string>
 #include <vector>
 
+#include "agent/asking.h"
 #include "agent/client.h"
 #include "agent/presence_view.h"
+#include "agent/spots.h"
 #include "agent/voice.h"
 #include "ocean/catalog.h"
 #include "ocean/tree.h"
@@ -49,6 +53,8 @@ public:
     void pruned(int nodeID, const std::vector<TreeNode>& gone);
     /// The tree was pressed by a clap: sent on, or put away.
     void pressed(const Tree& tree, bool send);
+    /// Writes down where the covers of this service's trees hang, in place of the headset's own shelf file.
+    void saveShelf();
 
 private:
     /// One service tree as the scene holds it.
@@ -77,6 +83,10 @@ private:
     std::optional<std::string> dump;
     std::map<std::string, Planted> trees;           // by service tree id
     std::map<std::string, Thinking> thinking;       // by activity id
+    /// The open cards' rows asked about and still being searched for, so a row picked again is not asked again.
+    Asking asking;
+    /// The row a hand just picked answers at once, before the service does: it dims and comes back.
+    void acknowledge(int nodeID, int k);
     /// The service node last reported as open, so the service hears each time the open card changes.
     std::optional<std::string> focusSent;
     /// The open card's questions from the service: asked for once each time it opens, empty until they come.
@@ -92,10 +102,15 @@ private:
     int walk = 0;
     /// `-keyboardTest`: brings up the system keyboard once, 3 s in, and logs what is typed.
     bool keyboardTest = false;
+    /// `-agentType <words> -agentTypeAt <s>`: the words are asked then, as typed on the headset, for runs with no keyboard.
+    std::optional<double> typeAt;
+    /// Where each of this service's trees' covers hangs, by service tree id: read at launch, written with the shelf.
+    Spots spots;
     double now = 0;
 
     void synced(const Delta& delta);
-    void changed(const Delta& delta, bool animate);
+    /// `yours`: this headset asked for the change.
+    void changed(const Delta& delta, bool animate, bool yours);
     void activity(const Activity& a);
     /// Makes the scene's tree for a service tree, with every node the mirror holds for it.
     Planted* plant(const TreeInfo& info);
@@ -137,7 +152,7 @@ private:
     /// Tells the service which card is open when that changes: standing a tree, unfolding a cover, a pinch, a step.
     void reportFocus();
 
-    /// A `navigate` from the service, carried out once neither the user nor Momo is speaking, so the view does not move
+    /// A `navigate` this headset asked for (`Navigate::yours`), carried out once neither the user nor Momo is speaking, so the view does not move
     /// mid-sentence, and once its tree stands: taken off the shelf as a pinch on its cover takes it. A later one replaces it.
     struct Going {
         Navigate to;

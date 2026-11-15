@@ -9,7 +9,7 @@
  *   npm run formats -- --save out.json   also writes each sample's rule card, the model's reply, the verdict on it and the card drawn
  *   npm run formats -- --replay out.json puts the replies a run saved through the Renderer as it is now, with no model: what a change
  *                                        to a check makes of answers the model already gave
- *   npm run formats -- --main            asks the look call on the main model, which it left in DECISIONS 52
+ *   npm run formats -- --main            asks the look call on the main model, which it left in DECISIONS 54
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { ModelClient } from '../src/core/ports.ts';
