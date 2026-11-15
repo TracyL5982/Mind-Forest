@@ -275,15 +275,20 @@ test('cards of a run this device asked for are walked through: the first at once
   assert.equal(model.told().at(-1), '[From the agents] Your handoff is ready: night-stairs.');
 });
 
-test("a run that brings nothing is told as such, and a newer run on the same card takes the older one's place", () => {
+test("a run's steps all name its card: the run is the step begun while none was open, it may bring nothing, and a card after its wrap-up is news of its own", () => {
   const n = new Narration(6000);
-  n.began('a', 'n1', 'Night stairs');
-  n.began('b', 'n1', 'Night stairs');
-  assert.equal(n.ended('a'), false, 'the older run is gone');
-  assert.equal(n.ended('b'), true);
-  assert.match(n.next(0)!, /^\[All done\] The search for "Night stairs" brought nothing new/);
-  assert.equal(n.next(1), null);
+  n.began('run', 'n1', 'Night stairs');
+  n.began('search', 'n1', 'Night stairs');
+  assert.equal(n.ended('search'), false, 'a step of the run');
+  assert.equal(n.next(0), null);
+  assert.equal(n.ended('run'), true);
+  assert.match(n.next(1)!, /^\[All done\] The search for "Night stairs" brought nothing new/);
   assert.equal(n.due(), null);
+  n.landed(card('A late picture'));
+  assert.match(n.next(10_000)!, /^\[More cards landed\] Under "Night stairs", 1 more: a picture "A late picture"/);
+  n.began('again', 'n1', 'Night stairs');
+  n.landed(card('Fresh'));
+  assert.match(n.next(20_000)!, /^\[Card landed\] The first card under "Night stairs": a picture "Fresh"/, 'a run begun once no step was open is new');
 });
 
 test('the name while Momo speaks stops it and cuts its voice in the conversation where the device was; a response asked for that had not begun is cancelled when it does', () => {

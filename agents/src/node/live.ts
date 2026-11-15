@@ -255,23 +255,32 @@ const described = (c: CardNote) =>
  */
 export class Narration {
   private runs: Run[] = [];
+  /** The Scout's steps open on each card. Every step of a run names its card, so the run is the one begun while none was open. */
+  private open = new Map<string, Set<string>>();
+  /** Cards whose runs were told done, by name, for a card that lands after: a picture made after the run was over. */
+  private finished = new Map<string, string>();
   private lastTold = Number.NEGATIVE_INFINITY;
 
   constructor(private readonly batchMs = BATCH_MS) {}
 
-  /** A Scout run on `anchor` began, as this device asked. */
+  /** A Scout step on `anchor` began, as this device asked: a new run, or a step of the one under way. */
   began(step: string, anchor: string, under: string): void {
-    this.runs = this.runs.filter((r) => r.anchor !== anchor);
-    this.runs.push({ step, anchor, under, told: 0, waiting: [], ended: false });
+    const open = this.open.get(anchor) ?? new Set<string>();
+    if (open.size === 0) {
+      this.runs = this.runs.filter((r) => r.anchor !== anchor);
+      this.runs.push({ step, anchor, under, told: 0, waiting: [], ended: false });
+    }
+    open.add(step);
+    this.open.set(anchor, open);
   }
 
-  /** A card under the newest run on its card, or a late one of a run that ended: a picture made after the run was done. */
+  /** A card under the run on its card; one that lands after the run was told done is news of its own. */
   landed(card: CardNote): void {
-    let run = [...this.runs].reverse().find((r) => r.anchor === card.anchor);
-    if (!run) return;
-    if (run.ended && run.told > 0) {
-      // Told done already: the late card is news of its own.
-      run = { ...run, step: `${run.step} late`, told: 1, waiting: [], ended: false };
+    let run = this.runs.find((r) => r.anchor === card.anchor);
+    const under = this.finished.get(card.anchor);
+    if (!run && under === undefined) return;
+    if (!run) {
+      run = { step: '', anchor: card.anchor, under: under!, told: 1, waiting: [], ended: false };
       this.runs.push(run);
     }
     run.waiting.push(card);
@@ -279,6 +288,7 @@ export class Narration {
 
   /** The step ended. True when it was a run's own. */
   ended(step: string): boolean {
+    for (const open of this.open.values()) open.delete(step);
     const run = this.runs.find((r) => r.step === step && !r.ended);
     if (run) run.ended = true;
     return Boolean(run);
@@ -308,7 +318,7 @@ export class Narration {
       const untold = run.waiting.splice(0);
       const total = run.told + untold.length;
       this.runs = this.runs.filter((r) => r !== run);
-      if (run.step.endsWith(' late')) return `[More cards landed] Under "${run.under}", ${untold.length} more: ${untold.map(described).join('; ')}. Tell the user in one short sentence that names them.`;
+      this.finished.set(run.anchor, run.under);
       if (total === 0) return `[All done] The search for "${run.under}" brought nothing new. Say so in a few words and offer another angle.`;
       const rest = untold.length > 0 ? ` Not told yet: ${untold.map(described).join('; ')}.` : '';
       return `[All done] The search for "${run.under}" is finished: ${total} new card${total === 1 ? '' : 's'} in all.${rest} Wrap up in one or two short sentences: which you would look at first and why, and one next step to offer. Do not go through them one by one.`;
