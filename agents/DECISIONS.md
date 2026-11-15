@@ -544,3 +544,22 @@ So the kept setting brings the first card 13 s sooner and the line 25 s after th
 **Why a cover on the reference card.** The reference card already holds what tells one book from another, the authors, the year and where it appeared, and stays the one card for papers and books. The picture card frames a landscape picture at 1.35 to 1, so a portrait cover would stand small in it, and its one caption line has no room for an author or a year. The web's card library is not changed: it ignores `cover`.
 
 **Why a repository is a link.** Its text is what the project says of itself and its star count, a blurb and no passage, and the card that leads with where it lives fits it. A real passage of a page, an answer or an article stays an excerpt.
+
+## 52. Looks: the look call stays on the main model
+
+**Decision.** The Renderer's look call for a dropped card stays on the main model, `muse-spark-1.3` at low effort. `npm run formats -- --quick` asks it on the quick model, as the service answers a request marked quick, to measure it again.
+
+**The bar, set before the runs.** Switch only if the quick model's score on the authors' samples falls within the main model's run-to-run spread, and its score on the reviewers' samples does not drop.
+
+**Measured.** Three runs on each model, in turns, on the code of 49 to 51 (`scratchpad/ws24/quick`). The authors' set has 53 samples now, the six explorable `E` items with them, so the spread of 39 to 41 measured on 47 no longer applies.
+
+| | Authors' 53 | Reviewers' 120 | Slowest call of a run | Tokens of a run |
+|---|---|---|---|---|
+| `muse-spark-1.3` | 46, 46, 46 | 108, 111, 109 | 39.8 to 49.2 s | 62,600 to 64,400 |
+| `muse-ember-1.0`, quick | 45, 46, 46 | 110, 108, 109 | 4.3 to 6.0 s | 49,300 to 53,100 |
+
+One quick run fell one sample under the main model's spread, which was a single score, so the bar is not met. The two disagreed on 9 samples across the six runs, sent to two blind readers.
+
+**What it costs to stay.** A call asks about up to 8 cards, and on the main model such calls took 13 to 49 s here, past the 12 s a composing card waits (49), so in a drop of several of the user's notes most land as the rules drew them. A single dropped note's call took 3.9 to 7.7 s in the user's headset session. The quick model answered every call in 6 s or less.
+
+**Alternatives.** Switch now: the cards of a multi-note drop would land as the model's in time, at a score one sample lower in one of three runs. Ask the main model one card per call: each call is shorter, at more calls and tokens.
