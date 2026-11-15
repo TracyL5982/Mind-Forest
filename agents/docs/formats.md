@@ -67,8 +67,10 @@ npm test
 
 | Rules alone | All | Exactly as picked | Research | Brainstorming | Memories |
 |---|---|---|---|---|---|
-| Reviewers | 112 of 120 | 105 of 120 | 36 of 40 | 36 of 40 | 40 of 40 |
-| Authors | 21 of 47 | 10 of 47 | 5 of 18 | 7 of 15 | 9 of 14 |
+| Reviewers | 109 of 120 | 102 of 120 | 39 of 40 | 35 of 40 | 35 of 40 |
+| Authors | 26 of 53 | 10 of 53 | 6 | 9 | 11 |
+
+Since the fifth round a structured card shows its whole item, so a card of part of one is a note. Against the fourth round's 112 and 105, five of the reviewers' are notes now: the steps of `A-M06` and `B-B05` beside a list of ingredients, and of `B-M20` above a closing line; the quotes of `B-M06` and `B-M18`, whose speaker Intake gave as a name where the text says more of who and where; and the eight figures of `B-M21`, past the six a facts card shows. Three definitions the text gives whole, `A-R12`, `B-R07` and `B-R19`, are drawn now. See [the fifth round](#the-fifth-round-the-whole-item).
 
 Before the fourth round the rules drew 116 of the reviewers' as a person would and 112 exactly as picked. The fourth round holds what Intake read off the samples to whole units too, so seven of the reviewers' are notes now: the definitions `A-R12`, `B-R07` and `B-R19`, whose meaning is the rest of a sentence after its term; the pros and cons of `A-B05` and the list of `B-B13`, cut out of one sentence; the steps of `B-M05`, beside a step that says "do not"; and the fact of `B-M08`, whose label "Finish time" adds a word its sentence does not write. The first four were agreements. See [the fourth round](#the-fourth-round-whole-units).
 
@@ -96,6 +98,49 @@ Three options help.
 - `npm run formats -- --replay out.json` puts the replies that a run saved through the Renderer as it is now, with no model. Use it to see what a change to a check makes of answers the model already gave. A sample the saved run did not ask about gets no answer.
 
 The Renderer asks the model only about text that the rules drew as a `note` or an `idea`, with at least 40 characters, or at least 16 in a script written without spaces. That is 70 of the 167 samples: 23 of the reviewers' and all 47 of the authors'.
+
+## The fifth round: the whole item
+
+Four rounds checked the part of an item a card shows, and each verifier found cards that changed what the item says. The last found 76 leaks in 86 probes of the fourth round. Every round had assumed the same thing: that a card may show a chosen part of its item, and that a check on strings can tell whether the part it leaves out changes the meaning of the part it shows. What governs a part may stand anywhere in the item: a heading, a heading over that heading, a sentence two before, the paragraph before, a cross before a line, the row a cell sits in, the sentence that names a speaker, the question an answer answers, a condition on the next line, a sign before a number. No table of words closes that. The verifier built a card for each of 76 negations that no table held.
+
+Since 14 November 2026 a structured card shows its whole item. Its structure changes how the item is laid out and which part is set apart, and never what of it is shown.
+
+- A card's words, read in its order, are every word and mark of its item's text, in the item's order. Steps, entries, rows and states are compared by position, never found by searching for their words, so a repeated sentence elsewhere cannot stand in for them and a step out of order is refused.
+- The card draws the item's headings, the labels that open its lines and up to 280 characters of opening prose (140 in a script written without spaces) over its structure, at most six lines, each as the item writes it. `Grounding.shows` finds them and the Renderer sets them as `above`; no model writes them. So "Don'ts:" stands over the list under it, and "Three claims about colds that are all false." over the claims.
+- Every mark is a word of its line: ✗, ✓, ❌, ✅, ▼, ▲, ↓, ↑, brackets, signs, a question mark, quotation marks inside a passage, ">" and a speaker's "A:". A check box is read off its line for a checklist, and a tick or a cross written on a line is never a check box.
+- A table is every row and every cell of one table. A facts grid or a chart drawn from a table of two columns carries the table's heads row as `heads`, drawn over it.
+- A label is the item's own words beside its value, as its line or row writes them. A card's slots may stand for the marks that say the same: a question and answer card for "Q:" and "A:", an excerpt for a ">" before its passage and a line that says "At:", a quote for the words that say who spoke, and a pros and cons card for the item's own heading or label of each side, which it draws as `heads` over each column.
+- A meaning opens with its term, or the term labels the line it opens: a term on a line of its own may head the meaning of another word.
+- A note may set apart a whole sentence, line or cell among its first 180 characters (90), and draws it where it stands. A person card names a role only as a whole line or sentence of the item.
+- A member's line in an arrangement, the reason a ranked or matrix member stands where it does or the change between two states, is that member's whole text.
+- Values that are tokens, such as numbers, dates, names, the labels of an arrangement's members, a timeline's dates, a map's places and an explorable's stated values, keep the check that their words stand in the item. A number there is one token with its sign: a comparison cell "3%" of a member that says "Margin: -3%" is refused.
+- A sheet's figures, list or table may stand under the item's own label for them, as `label`, so a list stands under "Best:".
+- What does not fit a card's room is drawn as a note, which shows the whole item. No section, entry, row or passage is cut to fit.
+
+Deleted with the premise: the reversing-word table and the test of the units beside and over a passage, the rules that joined a line to the next, the quotation and speech-verb heuristics, the label words read in their other forms, the floor of a sheet's opening, the share a card must show of its item (a person card and a palette, which show a piece of their item and not its words, keep it), and the dropping of a figure, an entry or a row that fails. Kept for token values: the number reader with its sign, brackets around money and magnitudes, which the comparison cell above needs.
+
+### What it measured
+
+The premise was first measured as a filter after the fourth round's checks, before any code changed, over every probe set, 11 probes written against the premise itself, the verifier's 76 negations as cards, and three saved runs. A form of it that let a card show one section of its item under the section's headings leaked 8 of the 11, because what governs a section may stand in another. The whole item held all of them.
+
+After the change no probe in any set reaches a view with a meaning its item does not have. Every card drawn for a hostile probe shows its whole item, with the lines over its structure drawn above it.
+
+| Saved run | Reviewers, rules | Reviewers, with the model | Authors, rules | Authors, with the model |
+|---|---|---|---|---|
+| Third round, first live run | 109 | 109 | 26 | 39 |
+| Third round, second live run | 109 | 108 | 26 | 40 |
+| First verifier's run | 109 | 109 | 26 | 41 |
+
+### What a card still sets large
+
+A card shows its whole item, and its layout still chooses what to set large. These pass every check:
+
+- A reply that gave a structure without the lead that denies it is drawn with the lead over it: "False:" over the callout "antibiotics cure the flu.", "Don't:" over the list. The words are all there, in order, and the structure is set larger than the line over it.
+- A callout draws its tone, "Caution" or "Note" and their Chinese, beside its text. That word is the one label a card still writes itself.
+- A fact card may set one figure of two large, with the other in the line over it: "Staff turnover | 4%" under "Profit margin: -3%.".
+- A note sets apart a whole sentence where it stands, which may be a turn of a dialogue only when the dialogue's speakers are no labels.
+
+Against the integration head before this round, the reviewers' fall from 112 to 109 on the rules and from 112, 111 and 112 to 109, 108 and 109 with the model. The authors' with the model go from 41, 41 and 40 to 39, 40 and 41. What the model loses: callouts of one sentence out of two (`C10`, `C14`, `C15`), sheets that pick figures out of a long item (`C03`, `C05`), and facts under labels the model wrote (`C24`). Gained: definitions the text gives whole (`C26`, `D04`). No live run was allowed, so the new prompts are unmeasured; the saved replies were written to the old ones.
 
 ## The fourth round: whole units
 
@@ -235,16 +280,7 @@ One more rule was tried on the saved replies of the second round: a card from th
 
 ### What no check can tell
 
-A check reads which units of the item a card shows and what stands beside them. It does not read what they mean. These cards pass every check and are still worse than the note, or could be.
-
-- `A-B18`. An assistant's answer drawn as the definition of "Three tiers", from the sentence that opens with it.
-- `B-B14`. Open questions drawn as a question and its answer.
-- Points for and points against on the wrong sides. Each point is whole.
-- A stated value under the label of another value of the same unit, as in a chart whose numbers are in another order than their months.
-- A unit denied in words the table does not hold, as "Results: it did not." after "Background: daily aspirin prevents a first heart attack." The table holds "do not" and not "did not".
-- A quotation whose sentence says who said it in a word the speech table does not hold.
-
-Before the fourth round three more classes passed these checks: a sentence its neighbour denies, including after the markers "Background:", "Results:" and "结论："; an entry or an answer cut before "not", "never", "unless" or 除非; and a sign or a magnitude outside the value. A heading line with no full stop also ran on into the sentence under it, which hid an opening "If" or "如果" from the entries cut out of it and lent a heading term the next sentence as its meaning. The fourth round closes all four.
+The fourth round's list of what no check could tell is closed by the fifth: a unit denied in words no table holds, a quotation attributed in a word no table holds, a stated value under another value's label, and points on the wrong sides all fail the whole item. Which card suits an item is still the model's judgment. In the three replays the model's definition and list of `A-B18`, an assistant's answer, are refused as parts of it, and its list of `B-B14`, open questions, shows the whole item as a list a person would accept.
 
 ## The earlier scores
 
