@@ -266,3 +266,19 @@ After the first hands-on session the picks were judged dull: every pick was a we
 **Web client.** Opening a card already showed its details with Ask and More. It still sends `focus`, which now brings nothing. The empty page's text says a new tree gets a first round and asking brings more.
 
 **Alternative.** Let the Scout delete the least related picks itself before delivering. It would have to guess how many of its finds will arrive, and two runs at once would each guess against a stale round.
+
+## 35. Rows: the lines under an open card are questions the service writes for that card and that conversation
+
+**Decision.** When a client opens a card it sends `{t: 'questions', nodeId}`. The service answers that connection alone with `{t: 'questions', nodeId, questions}`: at most four short questions or requests, written by a new role from the card's title, summary, text and reason for being there, the titles above it, under it and beside it, and the last six turns of the conversation. Picking one sends it as an `ask`. A client shows its own rows until the reply comes and keeps them when the list is empty. The web client shows the questions as dashed amber buttons above its Ask box, the look of everything the agent suggests, and drops one once it is asked.
+
+**Names.** `questions` names what is delivered, not how it is drawn: the Quest draws rows, the web client buttons. Reply and request share the name, as `settings` and `handoff` do, and the field repeats it as `{t: 'settings', settings}` does. `asks` was the other candidate, from the Quest's `Ask` rows, and was left because it differs from `ask` by one letter.
+
+**Kept until something changes.** The service keeps each card's questions with the exact input they were written from, the card's brief and the conversation. The same input answers from what was kept, at no cost. Any change to either writes them afresh on the next open, so there is no list of things that must clear the store. A failed call is not kept. Two connections opening one card at once share one call.
+
+**An ask joins the conversation.** A typed or picked `ask` now enters the history the Conductor, the Scout and these questions read, as a spoken one already did. Without it the next questions could repeat the one just picked. A spoken ask is not added twice: the pipeline sends it to the Scout directly.
+
+**A quick model.** On `muse-spark-1.3` the questions took 7.0 to 15.3 s in seven live calls, because it reasoned for 750 to 1,500 tokens to write about 40. Minimal effort barely changed that (7.6 s, 716 reasoning tokens), and the API refuses `none`. `muse-ember-1.0` at minimal effort wrote questions as specific in 0.74 to 3.0 s over eight live calls, 1.2 s typically, with 100 to 230 reasoning tokens. A request marked `quick` goes to that model, set by `MIND_PALACE_QUICK_MODEL`. Each call took 680 to 860 tokens, 480 to 600 of them the prompt. The card's texts are clipped (title 100 characters, summary 300, text 400, ten titles under it, six beside), so a long card costs no more.
+
+**Measured with** `scripts/questions-probe.ts` on a copy of the user's mindstorm, three cards and one conversation in Chinese, which the questions followed, and once through the service's socket, where the other connection heard nothing.
+
+**Alternatives.** Send the questions in answer to `focus`: the Quest sends no `focus` for a card opened where it stands, and every client would hear the questions for a card only one of them opened. Fixed rows: the request this answers. Write them ahead for every card: a call per card that may never be opened.

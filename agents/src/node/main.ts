@@ -28,6 +28,7 @@ if (fake) {
     apiKey: env.MODEL_API_KEY,
     baseUrl: env.MUSE_LLM_BASE_URL || undefined,
     model: env.MUSE_LLM_MODEL || undefined,
+    quickModel: env.MIND_PALACE_QUICK_MODEL || undefined,
     tokenBudget: env.MIND_PALACE_TOKEN_BUDGET ? Number(env.MIND_PALACE_TOKEN_BUDGET) : undefined,
     onCall: (c) => console.log(`  model ${c.kind} ${c.role} ${c.ok ? 'ok' : 'FAILED'} ${c.ms}ms${c.tokens ? ` ${c.tokens} tokens` : ''}`),
   });

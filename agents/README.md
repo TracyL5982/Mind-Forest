@@ -27,7 +27,8 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 | `MIND_PALACE_PORT` | 8787 | Port for HTTP and WebSocket. |
 | `MIND_PALACE_TOKEN` | generated, saved in `data/token` | The access key every client must send. |
 | `MIND_PALACE_DATA` | `agents/data` | Where the mindstorm and files are kept. |
-| `MUSE_LLM_MODEL` | `muse-spark-1.3` | The model for every role. |
+| `MUSE_LLM_MODEL` | `muse-spark-1.3` | The model for every role but the suggested questions. |
+| `MIND_PALACE_QUICK_MODEL` | `muse-ember-1.0` | The model for the suggested questions under an open card, which the user waits on. |
 | `MIND_PALACE_TOKEN_BUDGET` | 5,000,000 | Tokens the service may spend before it refuses model calls. Restart to reset. |
 | `MIND_PALACE_ENV` | `~/.muse-garden.env` | The file keys are read from. |
 
@@ -36,7 +37,7 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 ```bash
 npm test                 # tests on scripted models and the client's card sizes, no network
 npx tsc --noEmit
-node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 29 checks
+node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 30 checks
 npm run scenario         # everything against the live model, 28 checks, about 160,000 tokens
 MIND_PALACE_DATA=<a copy of a data folder> node --no-warnings --import tsx scripts/mindstorm-check.ts "<a thought>" "<a subject>"
                          # drops a thought and asks for a tree on a copy of a mindstorm, and prints the round, live
@@ -56,6 +57,7 @@ You talk to one voice. Content roles decide what exists. The Renderer decides ho
 | Renderer | Picks a component for each card and a composite for groups of cards. Never invents data. | `src/core/roles/renderer.ts` |
 | Archivist | Plain code. Keeps the change log, the search index and each tree's digest current. | `src/core/pipeline.ts`, `src/core/state.ts` |
 | Packager | Writes a handoff bundle another agent can pick up cold. | `src/core/roles/packager.ts` |
+| Questions | Suggests two to four short things to ask about the card you open, from the card, where it stands, the cards round it and the conversation. A client shows them under the card, and picking one asks it. | `src/core/roles/questions.ts` |
 
 `src/core/pipeline.ts` runs the roles and is the only place their commands are applied.
 

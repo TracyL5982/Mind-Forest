@@ -11,6 +11,8 @@ export interface JsonRequest<T> {
   /** Public URLs or data: URLs of video the model should watch. */
   videos?: string[];
   effort?: 'low' | 'medium' | 'high';
+  /** A short answer the user is waiting on. The host answers it with a smaller, faster model and as little reasoning as it allows. */
+  quick?: boolean;
 }
 
 export interface WebResult {

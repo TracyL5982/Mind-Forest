@@ -84,6 +84,7 @@ A client fetches only from the service. Every address in an item or a view that 
 | `settings` | `settings` | Settings changed. |
 | `note` | `role`, `message` | A log line. Optional to show. |
 | `error` | `message` | The last message from this client was rejected. |
+| `questions` | `nodeId`, `questions` | The reply to this connection's own `questions` message, sent to it alone. See Suggested questions below. |
 
 `origin` on a change set is `{by: 'user' | 'agent', role?, tool?}`. Use it to animate agent changes differently from the user's own.
 
@@ -94,7 +95,8 @@ A client fetches only from the service. Every address in an item or a view that 
 | `dump` | `dumps` | Things dropped into the mindstorm. Each is `{kind:'text', text, name?}`, `{kind:'link', url}`, or `{kind:'asset', asset, mime, name?}`. Upload files first (below). They join the knowledge base, and start a tree only when a text asks for one (see The knowledge base). |
 | `utter` | `text`, `final`, `scene` | Speech as text. Send partials with `final: false` as they arrive and the last one with `final: true`. |
 | `focus` | `nodeId` | The user opened or looked at a node, to see it whole. It brings no picks. "Start a tree on this" means this node from now on, rather than the latest drop. |
-| `ask` | `nodeId`, `need` | A typed question about a node. What it brings joins the node's round (see Rounds). |
+| `ask` | `nodeId`, `need` | A typed or picked question about a node. It joins the conversation the agent reads, as a spoken one does. What it brings joins the node's round (see Rounds). |
+| `questions` | `nodeId` | The user opened a node: what might they ask next? Answered to this connection alone with `questions`. |
 | `more` | `nodeId`, `need?` | More picks for a node, joining its round. |
 | `keep` | `nodeIds` | Keep picks. |
 | `undo` | `id?` | Undo the latest real change, or the named one. Format choices and digests that followed it are undone with it. |
@@ -105,6 +107,19 @@ A client fetches only from the service. Every address in an item or a view that 
 | `client` | `media` | What this connection can play, sent right after connecting: `{embeds, files}`. `embeds` is false for a client that cannot show a player from another site, such as the headset. `files` lists the file extensions it plays, such as `["mp4", "mp3"]`. A connection that never sends it is taken to be a browser that shows embeds. While any connected client cannot show embeds, the Scout looks for each video as a file that plays from the service first, and leaves out recordings whose type a connected client did not list. |
 
 `scene` is `{focus?, selection, treeId?}`: the node the user has open, the nodes they have selected, and the tree they are in. The agent uses it to resolve "this" and "that".
+
+## Suggested questions
+
+Under an open card a client offers a few things to ask, so the user can start a conversation about the card without speaking or typing.
+
+1. When a card opens, send `{"t": "questions", "nodeId": "<node id>"}`.
+2. The service answers this connection, and no other, with `{"t": "questions", "nodeId": "<node id>", "questions": ["How did Hitchcock use the dolly zoom?", "Show me a dolly zoom on film"]}`.
+3. When the user picks one, send it as `{"t": "ask", "nodeId": "<node id>", "need": "<the question, as written>"}`.
+
+- `questions` holds at most four strings, each a question or a short request under about eight words, written for that card, where it stands in its tree, the cards round it, and the recent conversation, in the language the user uses. An empty list means the service has nothing to offer: a model failure, or a card that is not there.
+- Show your own rows until the reply arrives, and keep them when the list is empty. The first time a card is asked for, the reply took 0.75 to 3 s in eight live runs, about 1.2 s typically. Ignoring it is always safe, and a client that never asks never gets one.
+- Match a reply by `nodeId`. One for a card that is no longer open is stale: drop it.
+- Ask again each time a card opens. The service keeps what it wrote for each card and answers from it while the card, the cards round it and the conversation are unchanged, so asking again costs nothing then. Once any of them changes, the next ask is written afresh.
 
 ## HTTP
 

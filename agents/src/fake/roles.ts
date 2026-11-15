@@ -131,4 +131,10 @@ export const fakeRoles: Roles = {
     const lines = trees.flatMap((t) => [`## ${t.title}`, ...ctx.mind.treeNodes(t.id).map((n) => `${'  '.repeat(ctx.mind.depth(n.id))}- ${ctx.mind.item(n.itemId).title}`)]);
     return { name: `handoff-${ctx.now().slice(0, 10)}`, markdown: `# Handoff\n\n${note ?? ''}\n\n${lines.join('\n')}\n`, json: { format: 'mind-palace-handoff', version: 1, trees: trees.map((t) => t.title) }, assets: [] };
   },
+
+  async questions(_ctx, { card }) {
+    await new Promise((r) => setTimeout(r, 300));
+    const topic = card.title.split(/\s+/).filter((word, i) => i > 0 || !/^(the|a|an)$/i.test(word)).slice(0, 2).join(' ');
+    return [`Where does ${topic} come from?`, `Who made ${topic} famous?`, `Show me ${topic} in a picture`];
+  },
 };

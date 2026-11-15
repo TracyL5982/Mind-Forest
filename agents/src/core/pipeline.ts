@@ -2,6 +2,7 @@ import { CommandError, type ChangeSet, type Command, type Id, type Item, type Or
 import type { Assets, ModelClient, Store, Tools } from './ports.ts';
 import { admit, plainTitle } from './round.ts';
 import { treeRequest } from './tree-request.ts';
+import { brief } from './roles/questions.ts';
 import {
   AGENT,
   type Handoff,
@@ -74,6 +75,8 @@ export class Pipeline {
   private readonly pending = new Set<Promise<unknown>>();
   /** The items of the latest drop, until the user opens a card, so "start a tree on this" can mean them. */
   private dropped: Id[] = [];
+  /** The questions last written for each card, under what they were written from. */
+  private readonly offered = new Map<Id, { from: string; questions: Promise<string[]> }>();
 
   constructor(private readonly deps: PipelineDeps) {
     this.ctx = {
@@ -170,13 +173,34 @@ export class Pipeline {
     this.dropped = [];
   }
 
-  /** A question about a card. What it brings joins the card's round, and the picks least related to the question make room. */
+  /** A typed or picked question about a card. It joins the conversation, as a spoken one does. What it brings joins the card's round, and the picks least related to the question make room. */
   ask(anchor: Id, need: string): Promise<void> {
+    this.history.push({ who: 'user', text: need });
     return this.runScout(anchor, need);
   }
 
   more(anchor: Id, need?: string): Promise<void> {
     return this.runScout(anchor, need);
+  }
+
+  /**
+   * What the user is likely to ask next about a card, for a client to offer under it. Never rejects.
+   * The same card, with the same cards round it, in the same conversation, gets the questions written before.
+   */
+  questions(nodeId: Id): Promise<string[]> {
+    if (!this.deps.mind.nodes.has(nodeId)) return Promise.resolve([]);
+    const input = { card: brief(this.deps.mind, nodeId), history: this.history.slice(-6) };
+    const from = JSON.stringify(input);
+    const offered = this.offered.get(nodeId);
+    if (offered?.from === from) return offered.questions;
+    const questions = this.deps.roles.questions(this.ctx, input).catch((err: unknown) => {
+      this.fail('questions', err);
+      // A failure is not kept, so the next time the card is opened asks again.
+      if (this.offered.get(nodeId)?.questions === questions) this.offered.delete(nodeId);
+      return [];
+    });
+    this.offered.set(nodeId, { from, questions });
+    return questions;
   }
 
   keep(nodeIds: Id[]): void {
@@ -257,7 +281,7 @@ export class Pipeline {
   private async dispatch(intent: Intent, scene: Scene): Promise<void> {
     switch (intent.kind) {
       case 'ask':
-        return this.ask(intent.anchor, intent.need);
+        return this.runScout(intent.anchor, intent.need);
       case 'more':
         return this.more(intent.anchor, intent.need);
       case 'navigate':

@@ -186,6 +186,20 @@ async function main(): Promise<void> {
       await shot(page, 'desktop-4-second-tree');
     });
 
+    await check("an opened card offers the librarian's questions about it, and picking one asks it", async () => {
+      await page.locator('.card.is-root', { hasText: 'Sourdough' }).click();
+      const offered = page.locator('#panel').getByRole('group', { name: 'Suggested questions' });
+      assert.equal(await offered.isVisible(), false, 'until the reply comes the card shows what it showed before, and none of the last card');
+      await offered.getByRole('button', { name: /^Where does Sourdough/ }).waitFor();
+      const before = await offered.getByRole('button').allTextContents();
+      assert.equal(before.length, 3);
+      await shot(page, 'desktop-4b-questions');
+      await offered.getByRole('button', { name: before[0] }).click();
+      await page.locator('.card', { hasText: `An essay on ${before[0]}` }).waitFor();
+      await until('the new picks to join the old', async () => (await count(page, '.card.is-pick')) === 12);
+      assert.deepEqual(await offered.getByRole('button').allTextContents(), before.slice(1), 'the asked question leaves the list');
+    });
+
     await check('the tree list glides between trees', async () => {
       await page.locator('.tree-chip', { hasText: 'The dolly zoom' }).click();
       await settle(page);
@@ -199,7 +213,7 @@ async function main(): Promise<void> {
       await page.getByRole('button', { name: 'Send' }).click();
       await page.locator('#caption').getByText('show me more').waitFor();
       await page.locator('#caption').getByText('Here is more.').waitFor();
-      await until('twelve picks', async () => (await count(page, '.card.is-pick')) === 12);
+      await until('sixteen picks', async () => (await count(page, '.card.is-pick')) === 16);
       await settle(page);
       assert.deepEqual(await overlaps(page), []);
     });
@@ -210,7 +224,7 @@ async function main(): Promise<void> {
       await panel.getByRole('button', { name: 'Ask' }).click();
       await page.locator(`.card[data-id="${rootId}"].is-thinking`).waitFor();
       await page.locator('.card', { hasText: 'An essay on who invented it' }).waitFor();
-      await until('the card to hold ten picks', async () => (await count(page, '.card.is-pick')) === 14);
+      await until('the card to hold ten picks', async () => (await count(page, '.card.is-pick')) === 18);
       assert.equal(run.mind.picks(rootId).length, 10);
     });
 
