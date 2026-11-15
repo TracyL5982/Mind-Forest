@@ -311,7 +311,7 @@ export class Pipeline {
       if (run !== this.voiceRun) return;
       this.history.push({ who: 'user', text });
       if (say) this.say(say, 'reply');
-      await this.dispatch(intent, scene);
+      await this.perform(intent, scene);
     } catch (err) {
       this.fail('conductor', err);
     } finally {
@@ -319,7 +319,21 @@ export class Pipeline {
     }
   }
 
-  private async dispatch(intent: Intent, scene: Scene): Promise<void> {
+  /**
+   * Something said in a live conversation that no Conductor reads: what the user said and what Momo answered. It joins the
+   * conversation the Scout and the suggested questions read.
+   */
+  spoken(turn: Turn): void {
+    if (turn.text.trim()) this.history.push(turn);
+  }
+
+  /** Does what an intent says in the background, for one of Momo's live tools, which answers before the work is done. */
+  carryOut(intent: Intent, scene: Scene): void {
+    this.track(this.perform(intent, scene));
+  }
+
+  /** Does what an intent says, as the Conductor's reading of an utterance asks. */
+  async perform(intent: Intent, scene: Scene): Promise<void> {
     switch (intent.kind) {
       case 'ask':
         return this.runScout(intent.anchor, intent.need);

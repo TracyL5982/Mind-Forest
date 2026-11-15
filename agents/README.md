@@ -57,6 +57,11 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 | `MIND_PALACE_ENV` | `~/.muse-garden.env` | The file keys are read from. |
 | `MIND_PALACE_MAPS` | unset, maps off | A map provider: `openstreetmap`. With it set, a place a note names is looked up on that provider's server, which sends the place's name off this machine, and place cards draw a map from its tiles. Unset, nothing about a place leaves the machine. Lookups are kept in `data/places.json`. |
 | `TELEGRAM_BOT_TOKEN` | unset | The bot that makes Mind Palace a Telegram contact. See Reach it from Telegram. |
+| `MIND_PALACE_LIVE` | on with `OPENAI_API_KEY` | `off` turns Momo's live voice (`/live`) off; clients then record, transcribe and hear replies read aloud. |
+| `MIND_PALACE_LIVE_MODEL` | `gpt-realtime-2.1` | The realtime model that is Momo's live voice. `gpt-realtime-2.1-mini` costs a third as much. See DECISIONS 51. |
+| `MIND_PALACE_LIVE_TURN` | `semantic` | How the live voice hears that you are done: `semantic`, or `server:<ms>` for a pause of that many milliseconds. |
+| `MIND_PALACE_LIVE_EFFORT` | `minimal` | How hard the realtime model thinks before it answers. |
+| `MIND_PALACE_WEB_MODEL` | `gpt-5.4-mini` | The model behind Momo's quick web answers. |
 
 ## Check it
 
@@ -67,6 +72,12 @@ node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real 
 npm run scenario         # everything against the live model, 28 checks, about 160,000 tokens
 MIND_PALACE_DATA=<a copy of a data folder> node --no-warnings --import tsx scripts/mindstorm-check.ts "<a thought>" "<a subject>"
                          # drops a thought and asks for a tree on a copy of a mindstorm, and prints the round, live
+node --no-warnings --import tsx scripts/live-bench.ts --data <a copy of a data folder> --out <file.jsonl>
+                         # Momo's live voice on the 40 requests of scripts/live-requests.ts, said into files, never played:
+                         # which way it answered, how soon it was first heard, what it cost; about $0.65 on mini
+node --no-warnings --import tsx scripts/live-summary.ts <file.jsonl>   # the same against the voice plan's targets
+node --no-warnings --import tsx scripts/live-samples.ts --data <a copy of a data folder> --out <dir> --voice marin
+                         # three sample conversations with Momo as audio files and transcripts, never played
 ```
 
 ## The roles
@@ -75,7 +86,8 @@ You talk to one voice. Content roles decide what exists. The Renderer decides ho
 
 | Role | Job | File |
 |---|---|---|
-| Conductor | Hears each utterance with what you are looking at, and routes it: ask, more, navigate, organize, handoff, capture, tree, keep, undo. "Make a tree about …" and "start a tree on this" need no model call. When what you asked for lands, the agent says what came and brings the card into view. | `src/core/roles/conductor.ts`, `src/core/tree-request.ts` |
+| Momo, the live voice | Holds the spoken conversation on the headset: answers from what it knows, with a quick web answer, or from what you saved, and starts new cards, a tree, more, keep, undo, going to a card, organizing and handoffs through the pipeline's own moves. It walks you through the cards a run brings as they land. | `src/node/live.ts`, `src/core/voice-tools.ts`, `src/node/web-answer.ts` |
+| Conductor | Hears each typed or Telegram utterance with what you are looking at, and routes it: ask, more, navigate, organize, handoff, capture, tree, keep, undo. "Make a tree about …" and "start a tree on this" need no model call. When what you asked for lands, the agent says what came and brings the card into view. | `src/core/roles/conductor.ts`, `src/core/tree-request.ts` |
 | Intake | Turns a dump into items: text, links, pictures, video, files, and chat exports from ChatGPT, Claude, Muse or a pasted transcript. | `src/core/roles/intake.ts` |
 | Filer | Every dump joins the knowledge base. The Filer hangs an item under a card of a tree, as a pick, only when it plainly belongs there. It starts a tree only when the dump or the user asks for one. | `src/core/roles/filer.ts` |
 | Scout | Works out what a card is and what you are doing with it, then extends it in several different directions. Each comes back as content shown in place: a written idea, steps, a generated picture or set, a video that plays in the card, or real material found in a source that suits the subject. Sources: the web (the page is read and the passage shown), research papers, books (Apple Books), world data as charts, Hacker News threads, GitHub projects, Stack Overflow, museum collections, Are.na, podcasts, recipes, the Internet Archive (films that play as a file), and with their keys news (The Guardian), film and television (TMDB) and Europeana. It looks at a dropped picture itself. Never a bare link. Every round also draws on everything you already have (dumps, cards of other trees, the headset's library) and brings what is strongly tied, the strongest first, up to 8 of the 10 places around a card. Nothing repeats inside a tree. | `src/core/roles/scout.ts`, `src/core/round.ts`, `src/node/sources.ts` |

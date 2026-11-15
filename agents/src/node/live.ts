@@ -1,14 +1,16 @@
-import type { Activity } from '../core/pipeline.ts';
-import type { Scene, VoiceStyle } from '../core/roles/types.ts';
+import type { ChangeSet } from '../core/domain.ts';
+import type { Activity, Outbound } from '../core/pipeline.ts';
+import type { Scene, Turn } from '../core/roles/types.ts';
+import type { CardNote, ToolOutput } from '../core/voice-tools.ts';
 import { withoutWakePhrase } from '../core/wake.ts';
 import type { DeviceFrame } from './protocol.ts';
 
 /**
- * Momo's real-time voice for one device (`/live`): OpenAI's realtime model is Momo's ears and mouth, and nothing else. After the wake
- * the device's microphone goes to the model, whose turn detection hears when the user is done and whose transcription writes down what
- * they said. The model never answers the user itself: the transcript goes to the pipeline as a final utterance, and the model speaks
- * each `say` the pipeline makes, in one voice, in its own words or as written. The frames are in docs/protocol.md; why it is built this
- * way is in agents/DECISIONS.md (41 and 42).
+ * Momo's real-time voice for one device (`/live`): OpenAI's realtime model holds the conversation. After the wake the device's
+ * microphone goes to the model, whose turn detection hears when the user is done; the model answers in its own words, from what it
+ * knows, or through its tools (`core/voice-tools.ts`): a quick web answer, the user's saved cards, and the pipeline's moves, such as
+ * new cards on the open card. As the cards of a run this device asked for land, the service tells the model in short notes, and it
+ * walks the user through them. The frames are in docs/protocol.md; why it is built this way is in agents/DECISIONS.md (49 to 51).
  */
 
 export type SayKind = 'reply' | 'results';
@@ -47,10 +49,22 @@ export interface Usage {
 
 export const RATE = 24000;
 const IDLE_MS = 5 * 60 * 1000;
-/** How long a turn waits for its reply before the device is told none is coming. */
-const OWED_MS = 15_000;
 /** 16-bit mono at RATE. */
 const BYTES_PER_MS = (RATE * 2) / 1000;
+/** Later cards of a run are gathered into one line at most this often. */
+const BATCH_MS = 6000;
+/**
+ * Quiet after the last word that ends the turn when the model's turn detection has not, a word being louder than both a floor and
+ * three times the quietest moment, as the headset's recorder hears it. The detection waited 2.3 to 2.7 s after short commands; the
+ * recorder's own 1.2 s cut every request said with a thinking pause of 1.4 to 2.3 s, three of which the detection kept whole, and
+ * 1.8 s keeps those (DECISIONS 51).
+ */
+const PAUSE_PIECES = 18;
+const PIECE_SAMPLES = 1600;
+/** How long the turn detection may take to begin the turn's answer before the service asks for it. */
+const ANSWER_WAIT_MS = 4000;
+/** Calls whose output Momo always speaks from. The others act, and Momo said what it is doing as it called them. */
+const ANSWERS = new Set(['web_answer', 'look_up_mindstorm']);
 
 /**
  * Dollars per million tokens (https://developers.openai.com/api/docs/pricing): the realtime models as read on 2026-11-14, the
@@ -86,7 +100,7 @@ export interface LiveOptions {
   voice: string;
   /** How the model hears the end of a turn: by meaning (`semantic`, eager) or by a pause of `ms` (`server`). */
   turn: { kind: 'semantic' } | { kind: 'server'; ms: number };
-  /** The model that writes down what the user said. */
+  /** The model that writes down what the user said, for the orb and the log. */
   hearing: string;
   /** For the reasoning models: how hard it thinks before it speaks. */
   effort?: 'minimal' | 'low' | 'medium' | 'high';
@@ -95,87 +109,86 @@ export interface LiveOptions {
 export interface LiveDeps {
   open: OpenRealtime;
   options: LiveOptions;
-  /** Hands what the user said to the pipeline, as a final utterance said in that scene. */
-  utter: (text: string, scene: Scene) => void;
-  /** How Momo says the pipeline's lines. */
-  style: () => VoiceStyle;
   /** What the user calls the agent. */
   name: () => string;
   /** Words the user is likely to say in this scene, such as their card titles, for the transcription. */
   words: (scene: Scene) => string;
+  /** The tools the model may call, as the session declares them. */
+  tools: () => Record<string, unknown>[];
+  /** Runs one call as this device's own request. */
+  call: (name: string, args: string, scene: Scene) => Promise<ToolOutput>;
+  /** A few words for the orb while a call runs, or nothing for a call too quick to show. */
+  label: (name: string, args: string) => string | undefined;
+  /** Where the user is, in a few lines, for the model. */
+  where: (scene: Scene) => string;
+  /** The Scout's new cards in a change. */
+  cards: (set: ChangeSet) => CardNote[];
+  /** A card's name, as Momo is told it. */
+  nameOf: (nodeId: string) => string;
+  /** What was said, for the conversation the pipeline's roles read. */
+  spoken: (turn: Turn) => void;
+  /** A step of Momo's own, shown as the pipeline's steps are. */
+  activity: (a: Activity) => void;
   log: (line: string) => void;
   now?: () => number;
   idleMs?: number;
-  owedMs?: number;
+  batchMs?: number;
 }
 
-/** One line of the pipeline's for Momo to say. A reply answers `turn` when it is the turn's. */
-export interface Line {
-  text: string;
-  kind: SayKind;
-  turn?: number;
-}
+// ---- Momo's character
 
-/** Something said lately. Momo's lines carry when they began to play and for how long, so a cut can be placed in them. */
-interface Said {
-  who: 'user' | 'momo';
-  text: string;
-  from?: number;
-  ms?: number;
-}
+/** The session's instructions, in the labelled parts OpenAI's prompting guide for its realtime models suggests. */
+export function instructions(name: string, today: string): string {
+  return `# Role and objective
+You are ${name}, the voice of Mind Palace, a space in VR where the user's ideas hang as cards in trees. You are a curious, warm friend who knows a lot about art, film, books, science, history, design and ideas. Today is ${today}.
+Your goal is a good conversation: answer what the user asks, think with them, and bring them new things to look at when that helps.
 
-/** What the model is told when it speaks a line: who it is, and the last few things said, oldest first. */
-export interface Lately {
-  name: string;
-  turns: readonly { who: 'user' | 'momo'; text: string }[];
-}
+# Personality and tone
+- Warm, curious and a little playful. You have opinions and share them ("I love that one", "honestly, I'd start with the second").
+- Talk like a person: contractions, plain words, no lists, no headings, never "as an AI".
+- Short turns: one or two sentences, about five to ten seconds aloud. Go longer only when the user asks you to explain.
+- Vary how you begin. Never open two turns alike, and never with "Great question", "Sure" or "Absolutely".
+- At most one short follow-up question in a turn, and only when it moves things on. Never offer a list of things you could do.
+- Never read out a status, an id or an address. Never say "Finding things now", "Processing" or "Searching the database".
+- Never say your own name, nor "Hey ${name}".
 
-/** Which language to speak: the one the user last spoke, named when its script says it. */
-function language(lately: Lately): string {
-  const user = [...lately.turns].reverse().find((t) => t.who === 'user')?.text;
-  if (!user) return 'the language of the message';
-  if (/[぀-ヿ]/.test(user)) return 'Japanese';
-  if (/[가-힯]/.test(user)) return 'Korean';
-  if (/[㐀-鿿]/.test(user)) return 'Mandarin Chinese';
-  return `the language the user last spoke, as in "${user}"`;
-}
+# Language
+Speak the language the user just spoke. Card titles stay as written.
 
-/**
- * The instructions for speaking one line. 'own words' keeps every fact, name and number and adds nothing, about as short, in the user's
- * language, beginning differently from the last lines. 'verbatim' says exactly the text.
- */
-export function lineInstructions(line: Pick<Line, 'text'>, style: VoiceStyle, lately: Lately): string {
-  const role = `# Role
-You are ${lately.name}, the voice of Mind Palace, where the user brainstorms in VR. Mind Palace's agents decide what to say. You only say it out loud, warm, calm and natural. You never answer, ask, offer or decide anything yourself.`;
-  if (style === 'verbatim') {
-    return `${role}
+# Answering: choose one way
+1. From what you know: anything settled, such as who made what and when, what something is, how it works, why it happened, history, explanations, opinions, recommendations and small talk. Answer at once, with no tool. You know a lot: trust it, and say so when you are unsure of a detail.
+2. web_answer: only what changes or is new: news, this year's events and winners, what is on now, prices, opening hours, weather, schedules. Never for settled facts. First say a few natural words, varied ("Let me check that"), then call it. Tell its answer in your own words. When it says something has not happened yet, is only planned or is uncertain, say so plainly.
+3. look_up_mindstorm: questions about what the user has saved ("what did I save about…", "do I have anything on…", "what did that card say"), or a question their cards may answer. Answer from what it returns. If nothing matches, say so.
+4. find_new: the user wants new things to look at ("find me…", "show me something about…", "I need examples of…"), or a topic is better explored as cards than answered in a sentence. Say a short, lively line of your own as you call it, then stop: describe no card until a note says it landed.
+A question gets an answer, not cards: "who painted it?" is answered from what you know, never with find_new. A friend answers first and offers to dig in.
 
-# Say exactly this, word for word, and nothing before or after it
-${line.text}
+# The other tools
+- start_tree: the user asks for a new tree.
+- more_like_this: "more", "more like this", "keep going".
+- keep: "keep that", "keep them all", "keep the first two".
+- undo: "undo", "put it back".
+- go_to: "go up", "back to the top", "open the one about Jaws", "go to my lenses tree". It only opens; it never finds or starts anything.
+- organize: move, group, rename, tidy, delete.
+- hand_off: package cards for another app or agent.
+- save_note: the user dictates a thought to keep.
+Say a few words of your own as you call these ("Keeping that one", "Going up"). When a tool says it could not, say why in a few words.
+
+# Notes from Mind Palace
+Messages in square brackets come from Mind Palace, not from the user.
+- [Where the user is] says what the user has open. "This" and "it" mean that card.
+- [Card landed], [More cards landed] and [All done] tell you what a search you started brought. Tell the user right away, like a friend pointing something out: the first card in a sentence or two, later ones in one short line ("two more: …"), and at the end a one-sentence wrap-up that says which you would look at first and offers one next step.
+- Say only what a note says about a card. Never add a fact, date, name or claim about a card that its note does not state, and never describe what a card looks like or shows beyond its note. Your own taste is fine when it is plainly an opinion ("sounds like a rabbit hole").
+- [From the agents] is a line from Mind Palace's other agents for the user. Say it briefly in your own words, and claim nothing it does not say.
 
 # Rules
-Do not translate, shorten, explain or add anything. Say every title and number as written.`;
-  }
-  const lines = lately.turns.slice(-6).map((t) => `${t.who === 'user' ? 'User' : 'You'}: ${t.text}`);
-  return `${role}
-
-# The message to say
-${line.text}
-
-# Rules
-- Say the message in your own words, as one person talking to another.
-- Keep every fact, name, title and number in it. Say each title exactly as written.
-- Keep what each thing is: a film stays a film, a thing stays a thing, never an idea.
-- A message about what is being done stays a statement about it. Never make it a request or a command.
-- Add nothing it does not say: no facts, opinions, offers, promises, questions or greetings, and never that you have, got or found something unless it says so.
-- About as short as the message, never longer. Never a list.
-- Speak ${language(lately)}. Titles stay as written.
-- Never say your own name, nor "Hey ${lately.name}".${lines.length ? `\n- Begin differently from your last lines.\n\n# Said lately\n${lines.join('\n')}` : ''}`;
+- Never make up what is in the user's saved cards; look it up.
+- Never say you found or made something until a note says it landed.
+- If you cannot tell what the user wants, or which card they mean ("the other one"), ask one short question before you do anything.`;
 }
 
 function turnDetection(turn: LiveOptions['turn']): Record<string, unknown> {
-  // The pipeline answers every turn, so the model makes no response of its own, and only the device stops Momo.
-  const common = { create_response: false, interrupt_response: false };
+  // The device sends no microphone while Momo speaks, and saying the name stops Momo, so only the device interrupts.
+  const common = { create_response: true, interrupt_response: false };
   return turn.kind === 'semantic'
     ? { type: 'semantic_vad', eagerness: 'high', ...common }
     : { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: turn.ms, ...common };
@@ -212,36 +225,175 @@ export class Upsampler {
   }
 }
 
+// ---- walking the user through what lands
+
+/** A Scout run this device asked for, while its cards land. */
+interface Run {
+  /** The run's own step, whose end is the run's. */
+  step: string;
+  anchor: string;
+  under: string;
+  told: number;
+  waiting: CardNote[];
+  ended: boolean;
+}
+
+const described = (c: CardNote) =>
+  `${c.kind} "${c.title}"${c.by ? ` by ${c.by}` : ''}${c.date ? ` (${c.date})` : ''}${c.from ? `, from ${c.from}` : ''}` +
+  `${c.why ? `. Why it was picked: ${c.why}` : ''}${c.says ? `. The card says: ${c.says}` : ''}`;
+
+/**
+ * When Momo hears of the cards a run brings. The first card of a run is told the moment it lands; later ones are gathered and told
+ * together at most every `batchMs`; the run's end is a wrap-up with whatever was not told yet. A newer run on the same card takes
+ * the older one's place, as the pipeline's own rule has it.
+ */
+export class Narration {
+  private runs: Run[] = [];
+  private lastTold = Number.NEGATIVE_INFINITY;
+
+  constructor(private readonly batchMs = BATCH_MS) {}
+
+  /** A Scout run on `anchor` began, as this device asked. */
+  began(step: string, anchor: string, under: string): void {
+    this.runs = this.runs.filter((r) => r.anchor !== anchor);
+    this.runs.push({ step, anchor, under, told: 0, waiting: [], ended: false });
+  }
+
+  /** A card under the newest run on its card, or a late one of a run that ended: a picture made after the run was done. */
+  landed(card: CardNote): void {
+    let run = [...this.runs].reverse().find((r) => r.anchor === card.anchor);
+    if (!run) return;
+    if (run.ended && run.told > 0) {
+      // Told done already: the late card is news of its own.
+      run = { ...run, step: `${run.step} late`, told: 1, waiting: [], ended: false };
+      this.runs.push(run);
+    }
+    run.waiting.push(card);
+  }
+
+  /** The step ended. True when it was a run's own. */
+  ended(step: string): boolean {
+    const run = this.runs.find((r) => r.step === step && !r.ended);
+    if (run) run.ended = true;
+    return Boolean(run);
+  }
+
+  /** The note to give now, if one is due. */
+  next(now: number): string | null {
+    const run = this.runs.find((r) => (this.dueAt(r) ?? Number.POSITIVE_INFINITY) <= now);
+    return run ? this.tell(run, now) : null;
+  }
+
+  /** When the next note will be due, or null when nothing waits. */
+  due(): number | null {
+    const times = this.runs.map((r) => this.dueAt(r)).filter((t): t is number => t !== null);
+    return times.length > 0 ? Math.min(...times) : null;
+  }
+
+  private dueAt(run: Run): number | null {
+    if (run.ended) return run.told === 0 ? Number.NEGATIVE_INFINITY : this.lastTold + this.batchMs / 2;
+    if (run.waiting.length === 0) return null;
+    return run.told === 0 ? Number.NEGATIVE_INFINITY : this.lastTold + this.batchMs;
+  }
+
+  private tell(run: Run, now: number): string {
+    this.lastTold = now;
+    if (run.ended) {
+      const untold = run.waiting.splice(0);
+      const total = run.told + untold.length;
+      this.runs = this.runs.filter((r) => r !== run);
+      if (run.step.endsWith(' late')) return `[More cards landed] Under "${run.under}", ${untold.length} more: ${untold.map(described).join('; ')}. Tell the user in one short sentence that names them.`;
+      if (total === 0) return `[All done] The search for "${run.under}" brought nothing new. Say so in a few words and offer another angle.`;
+      const rest = untold.length > 0 ? ` Not told yet: ${untold.map(described).join('; ')}.` : '';
+      return `[All done] The search for "${run.under}" is finished: ${total} new card${total === 1 ? '' : 's'} in all.${rest} Wrap up in one or two short sentences: which you would look at first and why, and one next step to offer. Do not go through them one by one.`;
+    }
+    if (run.told === 0) {
+      const first = run.waiting.shift()!;
+      run.told = 1;
+      return `[Card landed] The first card under "${run.under}": ${described(first)}. Tell the user about it in one or two short sentences, from this note only.`;
+    }
+    const more = run.waiting.splice(0);
+    run.told += more.length;
+    return `[More cards landed] Under "${run.under}", ${more.length} more: ${more.map(described).join('; ')}. Tell the user in one short sentence that names them.`;
+  }
+}
+
+// ---- the voice
+
 /** The model's events that say who has the floor, logged as they come so a turn can be followed. */
 const TRACED = new Set(['input_audio_buffer.speech_started', 'input_audio_buffer.speech_stopped', 'input_audio_buffer.committed', 'input_audio_buffer.timeout_triggered']);
 
-/** Momo's mouth: saying nothing, a line asked of the model and not begun, or a line being said. */
-type Mouth =
-  | { kind: 'quiet' }
-  | { kind: 'asked'; line: Line; at: number; cancel: boolean }
-  | { kind: 'speaking'; line: Line; id: string; at: number; said: Said };
+/** Why a response is given: to answer a turn (at once, or after its calls), or to tell what the agents did. */
+type Purpose = { kind: 'reply'; turn?: number } | { kind: 'results' };
 
-/** The newest turn whose reply has not been said, and the Conductor run that answers it, once one starts. */
-interface Owed {
-  turn: number;
-  conductor?: string;
-  timer: ReturnType<typeof setTimeout>;
+/** The response the model is giving. */
+interface Speaking {
+  id: string;
+  purpose: Purpose;
+  text: string;
+  heard: boolean;
+  /** Calls it made, by call id. */
+  calls: Set<string>;
+  at: number;
+}
+
+/** A piece of Momo's voice as the device plays it, so a cut can be placed in it. */
+interface Played {
+  item: string;
+  from: number;
+  ms: number;
+}
+
+/** A call's output, to hand the model once nobody has the floor. `answer`: Momo speaks from it. */
+interface Ready {
+  call: string;
+  output: string;
+  turn?: number;
+  answer: boolean;
 }
 
 export class LiveVoice {
   private session: Realtime | null = null;
-  /** The user's turn while it is heard, from the name until the model hears its end. */
-  private hearing: { turn: number; scene: Scene; stopped?: number } | null = null;
-  /** Turns heard and being written down, by the model's item. */
-  private transcribing = new Map<string, { turn: number; scene: Scene; text: string; over: number }>();
-  private owed: Owed | null = null;
-  /** The user spoke over a turn still waiting for its reply: that reply, if it comes before the next utterance, is not said. */
-  private stale = false;
-  private mouth: Mouth = { kind: 'quiet' };
-  private queue: Line[] = [];
+  /**
+   * The user's turn while it is heard, from the name until Momo's answer begins: the turn detection may take a pause for its end
+   * and hear the user go on. `committed`: it took the end, and no word has come since. `manual`: the device or the pause rule ended
+   * it. `quietest`, `spoke` and `quiet`: the recording rule's reading of the pieces so far.
+   */
+  private hearing: { turn: number; stopped?: number; committed?: boolean; manual?: boolean; quietest: number; spoke: boolean; quiet: number } | null = null;
+  /** The latest turn's words as written down so far, every piece of it. */
+  private words = { turn: 0, text: '' };
+  /** Pieces of turns being written down, by the model's item. */
+  private transcribing = new Map<string, { turn: number; text: string; over: number }>();
+  private scene: Scene = { selection: [] };
+  /** What Momo was last told of where the user is. */
+  private toldWhere: string | null = null;
+  /** The turn detection's answer to a turn, expected and not begun. `cancel`: the user spoke again first. */
+  private expected: { turn: number; at: number; timer: ReturnType<typeof setTimeout> } | null = null;
+  private cancelExpected = false;
+  /** A response the service asked for and not begun. `retry`: asked again if the model refuses it while another is under way. */
+  private asked: { purpose: Purpose; at: number; retry: boolean } | null = null;
+  /** Responses the service asked for that the user spoke over before they began. */
+  private cancelling = 0;
+  private speaking: Speaking | null = null;
+  /** The turn whose answer has not been heard yet. */
+  private answering: { turn: number; at: number } | null = null;
+  private calls = new Map<string, { name: string; turn?: number }>();
+  /** Names of calls as the model begins them, for events that carry only the call's id. */
+  private names = new Map<string, string>();
+  /** Every call run, so one announced twice runs once. */
+  private ran = new Set<string>();
+  /** A response the model refused to begin while another was under way, to ask for again. */
+  private refused: Purpose | null = null;
+  private ready: Ready[] = [];
+  private narration: Narration;
+  /** Lines from the pipeline waiting to be told. */
+  private notes: string[] = [];
+  /** A run's step just ended, and its closing line, which the wrap-up stands for, is still to come. */
+  private runEnded = false;
+  private wake: ReturnType<typeof setTimeout> | null = null;
   /** When everything sent to the device so far will have played there. */
   private playedUntil = 0;
-  private turns: Said[] = [];
+  private played: Played[] = [];
   private upsampler = new Upsampler();
   private idle: ReturnType<typeof setTimeout> | null = null;
 
@@ -249,6 +401,7 @@ export class LiveVoice {
     private readonly deps: LiveDeps,
     private readonly device: (frame: VoiceFrame) => void,
   ) {
+    this.narration = new Narration(deps.batchMs);
     device({ t: 'ready', rate: RATE });
   }
 
@@ -263,80 +416,90 @@ export class LiveVoice {
       case 'start': {
         const s = this.ensure();
         this.hush();
-        if (this.owed) {
-          this.stale = true;
-          this.settle(null);
-        }
+        this.scene = frame.scene;
         s.send({ type: 'session.update', session: { type: 'realtime', audio: { input: { transcription: this.transcription(frame.scene) } } } });
         s.send({ type: 'input_audio_buffer.clear' });
+        this.tellWhere();
         this.upsampler = new Upsampler();
-        this.hearing = { turn: frame.turn, scene: frame.scene };
+        this.hearing = { turn: frame.turn, quietest: Number.POSITIVE_INFINITY, spoke: false, quiet: 0 };
+        this.words = { turn: frame.turn, text: '' };
         return;
       }
-      case 'audio':
-        if (!this.hearing || !this.session) return;
-        this.session.send({ type: 'input_audio_buffer.append', audio: this.upsampler.push(Buffer.from(frame.pcm, 'base64')).toString('base64') });
+      case 'audio': {
+        const h = this.hearing;
+        if (!h || !this.session || h.manual) return;
+        const pcm = Buffer.from(frame.pcm, 'base64');
+        this.session.send({ type: 'input_audio_buffer.append', audio: this.upsampler.push(pcm).toString('base64') });
+        for (let at = 0; at + PIECE_SAMPLES * 2 <= pcm.length; at += PIECE_SAMPLES * 2) {
+          let sum = 0;
+          for (let i = 0; i < PIECE_SAMPLES; i++) sum += (pcm.readInt16LE(at + i * 2) / 32768) ** 2;
+          const level = Math.sqrt(sum / PIECE_SAMPLES);
+          h.quietest = Math.min(h.quietest, level);
+          const words = level > Math.max(0.015, h.quietest * 3);
+          if (words) h.spoke = true;
+          h.quiet = words ? 0 : h.quiet + 1;
+          if (h.spoke && h.quiet === PAUSE_PIECES && !h.committed) {
+            this.deps.log(`[live] turn ${h.turn}: ${PAUSE_PIECES * 100} ms of quiet after the last word, so it is over`);
+            return this.endTurn(this.now() - PAUSE_PIECES * 100);
+          }
+        }
         return;
+      }
       case 'end':
-        if (!this.hearing || !this.session) return;
-        this.session.send({ type: 'input_audio_buffer.commit' });
+        this.endTurn();
         return;
       case 'cancel':
         if (!this.hearing || !this.session) return;
         this.session.send({ type: 'input_audio_buffer.clear' });
         this.hearing = null;
-        this.stale = false;
         this.drain();
         return;
     }
   }
 
+  /** All of a turn's words so far: the pieces written down before, then `text`. */
+  private wordsOf(turn: number, text: string): string {
+    const before = this.words.turn === turn ? this.words.text : '';
+    return [before, text.trim()].filter(Boolean).join(' ');
+  }
+
+  /** The turn is over on the service's side: the device stopped sending, or the user paused. The answer is asked for with the commit. */
+  private endTurn(lastWord?: number): void {
+    const h = this.hearing;
+    if (!h || !this.session || h.manual || h.committed) return;
+    h.manual = true;
+    if (lastWord !== undefined) h.stopped = lastWord;
+    this.session.send({ type: 'input_audio_buffer.commit' });
+    this.ask({ kind: 'reply', turn: h.turn }, false);
+  }
+
   /**
-   * A line the pipeline said. Without a kind, the first after the user's utterance is its reply, as is the first after the user spoke
-   * over a turn still waiting for one, and any other is news.
+   * What the pipeline did for this device: work it asked for, by voice or by hand. Its Scout runs are walked through as their cards
+   * land, and a line it says becomes a note for Momo to say in its own words, except a run's closing line, which the wrap-up says.
    */
-  said(text: string, kind?: SayKind): void {
-    const k = kind ?? (this.owed || this.stale ? 'reply' : 'results');
-    if (k === 'reply' && this.stale) {
-      this.deps.log(`[live] not said, since the user spoke over the turn it answers: ${text}`);
-      return;
-    }
-    const line: Line = { text, kind: k, ...(k === 'reply' && this.owed ? { turn: this.owed.turn } : {}) };
-    if (k === 'reply') {
-      this.settle(null);
-      const firstNews = this.queue.findIndex((l) => l.kind !== 'reply');
-      this.queue.splice(firstNews < 0 ? this.queue.length : firstNews, 0, line);
+  observed(message: Outbound): void {
+    if (message.t === 'activity') {
+      const a = message.activity;
+      if (a.role !== 'scout') return;
+      if (a.state === 'start' && a.nodeId) this.narration.began(a.id, a.nodeId, this.deps.nameOf(a.nodeId));
+      else if (a.state !== 'start' && this.narration.ended(a.id)) this.runEnded = true;
+    } else if (message.t === 'change') {
+      const cards = this.deps.cards(message.set);
+      if (cards.length === 0) return;
+      for (const card of cards) this.narration.landed(card);
+    } else if (message.t === 'say') {
+      if (message.kind === 'results' && this.runEnded) this.runEnded = false;
+      else this.notes.push(`[From the agents] ${message.text}`);
     } else {
-      this.queue.push(line);
+      return;
     }
     this.drain();
   }
 
-  /** The pipeline's work. The Conductor run that answers the owed turn ends either with its reply or with nothing to say. */
-  activity(a: Activity): void {
-    if (a.role !== 'conductor' || !this.owed) return;
-    if (a.state === 'start') {
-      this.owed.conductor ??= a.id;
-      return;
-    }
-    if (a.id !== this.owed.conductor) return;
-    const owed = this.owed;
-    if (a.state === 'error') {
-      this.settle(owed.turn, 'the Conductor failed, so nothing is said');
-      return;
-    }
-    // When there is a reply, the pipeline says it straight after the Conductor ends, before this runs.
-    setTimeout(() => {
-      if (this.owed === owed) this.settle(owed.turn, 'the pipeline had nothing to say');
-    }, 0);
-  }
-
   /** The device left. */
   close(): void {
-    if (this.idle) clearTimeout(this.idle);
-    this.idle = null;
-    if (this.owed) clearTimeout(this.owed.timer);
-    this.owed = null;
+    for (const timer of [this.idle, this.wake, this.expected?.timer]) if (timer) clearTimeout(timer);
+    this.idle = this.wake = this.expected = null;
     this.session?.close();
     this.session = null;
   }
@@ -357,13 +520,17 @@ export class LiveVoice {
       },
     });
     this.session = session;
+    this.toldWhere = null;
+    const today = new Date(this.now()).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     session.send({
       type: 'session.update',
       session: {
         type: 'realtime',
         model: options.model,
         output_modalities: ['audio'],
-        instructions: `You are ${this.deps.name()}, the voice of Mind Palace. You only say the lines you are given.`,
+        instructions: instructions(this.deps.name(), today),
+        tools: this.deps.tools(),
+        tool_choice: 'auto',
         audio: {
           input: { format: { type: 'audio/pcm', rate: RATE }, transcription: this.transcription({ selection: [] }), turn_detection: turnDetection(options.turn) },
           output: { format: { type: 'audio/pcm', rate: RATE }, voice: options.voice },
@@ -371,8 +538,20 @@ export class LiveVoice {
         ...(options.effort ? { reasoning: { effort: options.effort } } : {}),
       },
     });
-    this.deps.log(`[live] session opened (${options.model}, hearing with ${options.hearing})`);
+    this.deps.log(`[live] session opened (${options.model}, ${options.voice}, hearing with ${options.hearing})`);
     return session;
+  }
+
+  /** Momo is told where the user is when it changed since it was last told. */
+  private tellWhere(): void {
+    const where = this.deps.where(this.scene);
+    if (where === this.toldWhere) return;
+    this.toldWhere = where;
+    this.note(`[Where the user is] ${where}`);
+  }
+
+  private note(text: string): void {
+    this.session?.send({ type: 'conversation.item.create', item: { type: 'message', role: 'system', content: [{ type: 'input_text', text }] } });
   }
 
   private event(e: RealtimeEvent): void {
@@ -380,23 +559,44 @@ export class LiveVoice {
     const now = this.now();
     if (TRACED.has(e.type)) this.deps.log(`[live] ${e.type}`);
     switch (e.type) {
+      case 'input_audio_buffer.speech_started':
+        if (this.hearing?.committed) {
+          // The user went on after a pause the turn detection took for the end: the turn goes on, and its answer waits.
+          this.hearing.committed = false;
+          if (this.expected) clearTimeout(this.expected.timer);
+          this.expected = null;
+          this.deps.log(`[live] turn ${this.hearing.turn} goes on after a pause`);
+        }
+        return;
       case 'input_audio_buffer.speech_stopped':
         if (this.hearing) this.hearing.stopped = now;
         return;
       case 'input_audio_buffer.committed': {
         const heard = this.hearing;
         if (!heard) return;
-        this.hearing = null;
-        this.transcribing.set(e.item_id as string, { turn: heard.turn, scene: heard.scene, text: '', over: now });
-        this.device({ t: 'over', turn: heard.turn });
+        this.transcribing.set(e.item_id as string, { turn: heard.turn, text: '', over: now });
+        this.answering = { turn: heard.turn, at: heard.stopped ?? now };
         if (heard.stopped !== undefined) this.deps.log(`[live] turn ${heard.turn} over ${now - heard.stopped} ms after the model heard the end of speech`);
+        // The turn detection answers a turn it ended itself; one the device ended was asked for with its end, and one it is slow
+        // to answer the service asks for.
+        if (heard.manual) return;
+        heard.committed = true;
+        if (this.expected) clearTimeout(this.expected.timer);
+        const timer = setTimeout(() => {
+          if (this.expected?.turn !== heard.turn) return;
+          this.expected = null;
+          this.deps.log(`[live] turn ${heard.turn}: no answer began, so one is asked for`);
+          this.drain(heard.turn);
+        }, ANSWER_WAIT_MS);
+        timer.unref?.();
+        this.expected = { turn: heard.turn, at: now, timer };
         return;
       }
       case 'conversation.item.input_audio_transcription.delta': {
         const t = this.transcribing.get(e.item_id as string);
         if (!t) return;
         t.text += e.delta as string;
-        this.device({ t: 'heard', turn: t.turn, text: t.text, final: false });
+        this.device({ t: 'heard', turn: t.turn, text: this.wordsOf(t.turn, t.text), final: false });
         return;
       }
       case 'conversation.item.input_audio_transcription.completed': {
@@ -407,10 +607,11 @@ export class LiveVoice {
         const usage = e.usage as Usage | undefined;
         const dollars = usage ? cost(this.deps.options.hearing, usage) : null;
         this.deps.log(`[live] turn ${t.turn} written down ${now - t.over} ms after it was over: ${text}${dollars === null ? '' : ` ($${dollars.toFixed(5)})`}`);
-        this.device({ t: 'heard', turn: t.turn, text, final: true });
-        // The user's audio is in the model's conversation, where no response reads it.
-        this.session?.send({ type: 'conversation.item.delete', item_id: e.item_id });
-        this.handOn(t.turn, text, t.scene);
+        const whole = this.wordsOf(t.turn, text);
+        if (this.words.turn === t.turn) this.words.text = whole;
+        this.device({ t: 'heard', turn: t.turn, text: whole, final: true });
+        const clean = withoutWakePhrase(text, this.deps.name()).trim();
+        if (clean) this.deps.spoken({ who: 'user', text: clean });
         return;
       }
       case 'conversation.item.input_audio_transcription.failed': {
@@ -418,145 +619,220 @@ export class LiveVoice {
         if (!t) return;
         this.transcribing.delete(e.item_id as string);
         this.deps.log(`[live] turn ${t.turn} could not be written down: ${JSON.stringify(e.error ?? '')}`);
-        this.device({ t: 'quiet', turn: t.turn });
-        this.drain();
         return;
       }
       case 'response.created': {
-        if (this.mouth.kind !== 'asked') return;
-        const id = (e.response as { id: string }).id;
-        const { line, at, cancel } = this.mouth;
-        if (cancel) {
-          this.session?.send({ type: 'response.cancel', response_id: id });
-          this.mouth = { kind: 'quiet' };
-          this.drain();
+        const response = e.response as { id: string; metadata?: { purpose?: string } | null };
+        const ours = Boolean(response.metadata?.purpose);
+        // The user went on talking over a pause, so the turn detection's answer to the first part is not wanted.
+        const early = !ours && Boolean(this.hearing) && !this.hearing?.committed && !this.hearing?.manual;
+        if (ours ? this.cancelling > 0 : this.cancelExpected || early) {
+          if (ours) this.cancelling -= 1;
+          else if (!early) this.cancelExpected = false;
+          this.session?.send({ type: 'response.cancel', response_id: response.id });
           return;
         }
-        this.mouth = { kind: 'speaking', line, id, at, said: { who: 'momo', text: '' } };
+        // The answer begins, so the turn is over: the device stops sending, plays the sent tone and thinks until it is heard.
+        if (this.hearing && (!ours || this.asked?.purpose.kind === 'reply')) {
+          this.device({ t: 'over', turn: this.hearing.turn });
+          this.hearing = null;
+        }
+        let purpose: Purpose = { kind: 'reply' };
+        let at = now;
+        if (ours && this.asked) {
+          purpose = this.asked.purpose;
+          at = this.asked.at;
+          this.asked = null;
+        } else if (!ours && this.expected) {
+          purpose = { kind: 'reply', turn: this.expected.turn };
+          at = this.expected.at;
+          clearTimeout(this.expected.timer);
+          this.expected = null;
+        }
+        this.speaking = { id: response.id, purpose, text: '', heard: false, calls: new Set(), at };
+        return;
+      }
+      case 'response.output_item.added': {
+        const item = e.item as { type?: string; call_id?: string; name?: string } | undefined;
+        if (item?.type === 'function_call' && item.call_id && item.name) this.names.set(item.call_id, item.name);
         return;
       }
       case 'response.output_audio_transcript.delta': {
-        const m = this.mouth;
-        if (m.kind !== 'speaking' || m.id !== e.response_id) return;
-        m.said.text += e.delta as string;
-        this.device({ t: 'text', id: m.id, text: m.said.text, kind: m.line.kind });
+        const m = this.speaking;
+        if (!m || m.id !== e.response_id) return;
+        m.text += e.delta as string;
+        this.device({ t: 'text', id: m.id, text: m.text, kind: m.purpose.kind });
         return;
       }
       case 'response.output_audio.delta': {
-        const m = this.mouth;
-        if (m.kind !== 'speaking' || m.id !== e.response_id) return;
-        if (m.said.from === undefined) {
-          m.said.from = Math.max(now, this.playedUntil);
-          m.said.ms = 0;
-          this.deps.log(`[live] ${m.line.turn !== undefined ? `turn ${m.line.turn}: the reply's` : `the ${m.line.kind} line's`} first sound ${now - m.at} ms after it was asked for`);
+        const m = this.speaking;
+        if (!m || m.id !== e.response_id) return;
+        const item = String(e.item_id ?? m.id);
+        let piece = this.played.at(-1);
+        if (piece?.item !== item) {
+          piece = { item, from: Math.max(now, this.playedUntil), ms: 0 };
+          this.played.push(piece);
+          if (this.played.length > 8) this.played.shift();
         }
-        m.said.ms = (m.said.ms ?? 0) + Buffer.byteLength(e.delta as string, 'base64') / BYTES_PER_MS;
-        this.playedUntil = m.said.from + m.said.ms;
+        if (!m.heard) {
+          m.heard = true;
+          this.deps.log(`[live] ${m.purpose.kind === 'reply' && m.purpose.turn !== undefined ? `turn ${m.purpose.turn}'s answer` : `the ${m.purpose.kind}`}: first sound ${now - m.at} ms after it was asked for`);
+          if (m.purpose.kind === 'reply' && this.answering) {
+            this.deps.log(`[live] turn ${this.answering.turn} first heard ${now - this.answering.at} ms after the end of speech`);
+            this.answering = null;
+          }
+        }
+        piece.ms += Buffer.byteLength(e.delta as string, 'base64') / BYTES_PER_MS;
+        this.playedUntil = piece.from + piece.ms;
         this.device({ t: 'audio', id: m.id, pcm: e.delta as string });
         return;
       }
+      case 'response.function_call_arguments.done':
+        this.called(String(e.call_id), (e.name as string | undefined) ?? this.names.get(String(e.call_id)) ?? '', String(e.arguments ?? ''));
+        return;
       case 'response.done': {
-        const response = e.response as { id: string; status: string; usage?: Usage };
-        const m = this.mouth;
-        if (m.kind !== 'speaking' || m.id !== response.id) return;
+        const response = e.response as { id: string; status: string; usage?: Usage; output?: { type: string; call_id?: string; name?: string; arguments?: string }[] };
+        const m = this.speaking;
+        if (!m || m.id !== response.id) return;
+        // A call the arguments event did not announce is still run.
+        for (const out of response.output ?? []) if (out.type === 'function_call' && out.call_id) this.called(out.call_id, out.name ?? '', out.arguments ?? '');
+        this.speaking = null;
         const dollars = response.usage ? cost(this.deps.options.model, response.usage) : null;
-        this.deps.log(`[live] ${m.line.kind} ${response.status}: ${m.said.text}${dollars === null ? '' : ` ($${dollars.toFixed(4)})`}`);
-        this.device({ t: 'done', id: m.id, ...(response.usage ? { usage: response.usage } : {}) });
-        if (m.said.from !== undefined) this.remember(m.said);
-        else if (m.line.turn !== undefined) this.device({ t: 'quiet', turn: m.line.turn });
-        this.mouth = { kind: 'quiet' };
+        this.deps.log(`[live] ${m.purpose.kind} ${response.status}${m.calls.size ? ` with ${[...m.calls].map((c) => this.names.get(c) ?? '?').join(', ')}` : ''}: ${m.text}${dollars === null ? '' : ` ($${dollars.toFixed(4)})`}`);
+        if (m.text || m.heard) this.device({ t: 'done', id: m.id, ...(response.usage ? { usage: response.usage } : {}) });
+        if (m.text.trim() && response.status === 'completed') this.deps.spoken({ who: 'agent', text: m.text.trim() });
+        const a = this.answering;
+        const waits = a && ([...this.calls.values()].some((c) => c.turn === a.turn) || this.ready.some((r) => r.turn === a.turn && r.answer));
+        if (a && m.purpose.kind === 'reply' && m.purpose.turn === a.turn && !m.heard && !waits) {
+          this.answering = null;
+          this.device({ t: 'quiet', turn: a.turn });
+        }
         this.drain();
         return;
       }
       case 'error': {
         const error = e.error as { message?: string; code?: string } | undefined;
         this.deps.log(`[live] the model refused an event: ${error?.code ?? ''} ${error?.message ?? ''}`.trim());
+        if (error?.code === 'conversation_already_has_active_response' && this.asked) {
+          // The turn detection began one first. What was asked waits for it to end, unless it was that same turn's answer.
+          if (this.asked.retry) this.refused = this.asked.purpose;
+          this.asked = null;
+        }
         return;
       }
     }
   }
 
-  /** The turn's words go to the pipeline, unless they were only the name. */
-  private handOn(turn: number, text: string, scene: Scene): void {
-    this.stale = false;
-    const clean = withoutWakePhrase(text, this.deps.name()).trim();
-    if (!clean) {
-      this.device({ t: 'quiet', turn });
-      this.drain();
-      return;
-    }
-    this.remember({ who: 'user', text: clean });
-    this.settle(null);
-    const owed: Owed = { turn, timer: setTimeout(() => this.owed === owed && this.settle(turn, 'no reply came'), this.deps.owedMs ?? OWED_MS) };
-    owed.timer.unref?.();
-    this.owed = owed;
-    this.deps.utter(text, scene);
+  /** The model called a tool: it runs at once, while the response that called it may still be speaking. */
+  private called(call: string, name: string, args: string): void {
+    if (!call || this.ran.has(call)) return;
+    this.ran.add(call);
+    const turn = this.speaking?.purpose.kind === 'reply' ? this.speaking.purpose.turn : undefined;
+    this.speaking?.calls.add(call);
+    this.names.set(call, name);
+    this.calls.set(call, { name, ...(turn !== undefined ? { turn } : {}) });
+    void this.run(call, name, args, turn);
   }
 
-  /** The owed turn is done with: answered (`quiet` null), or with nothing to say, which the device is told. */
-  private settle(quiet: number | null, why?: string): void {
-    if (this.owed) clearTimeout(this.owed.timer);
-    this.owed = null;
-    if (quiet === null) return;
-    this.deps.log(`[live] turn ${quiet}: ${why ?? 'nothing to say'}`);
-    this.device({ t: 'quiet', turn: quiet });
+  private async run(call: string, name: string, args: string, turn: number | undefined): Promise<void> {
+    const at = this.now();
+    const label = this.deps.label(name, args);
+    const step = (state: Activity['state']) => label && this.deps.activity({ id: `momo-${call}`, role: 'momo', state, label, message: label });
+    step('start');
+    let output: ToolOutput;
+    try {
+      output = await this.deps.call(name, args, this.scene);
+    } catch (err) {
+      output = { error: `It failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    step(output.error ? 'error' : 'done');
+    this.calls.delete(call);
+    this.deps.log(`[live] ${name}(${args}) answered in ${this.now() - at} ms: ${JSON.stringify(output).slice(0, 400)}`);
+    if (!this.session) return;
+    // An act Momo announced as it called it needs no more words, unless it could not be done or nothing was heard of the turn yet.
+    const answer = ANSWERS.has(name) || 'error' in output || 'why' in output || (turn !== undefined && this.answering?.turn === turn);
+    this.ready.push({ call, output: JSON.stringify(output), answer, ...(turn !== undefined ? { turn } : {}) });
     this.drain();
   }
 
-  /** Stops what Momo is saying, and remembers of each line only what the device has played of it by now. */
+  /**
+   * Hands the model what waits once nobody has the floor (the user is not being heard and Momo is not answering): calls' outputs
+   * first, since the user waits on them, then lines from the pipeline, then what landed. `turn`: a turn whose answer never began.
+   */
+  private drain(turn?: number): void {
+    if (this.wake) clearTimeout(this.wake);
+    this.wake = null;
+    if (!this.session || this.hearing || this.speaking || this.asked || this.expected) return;
+    const now = this.now();
+    if (turn !== undefined) return this.ask({ kind: 'reply', turn });
+    if (this.refused) {
+      const again = this.refused;
+      this.refused = null;
+      return this.ask(again);
+    }
+    if (this.ready.length > 0) {
+      const outputs = this.ready.splice(0);
+      for (const r of outputs) this.session.send({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: r.call, output: r.output } });
+      const speak = outputs.find((r) => r.answer);
+      if (speak) return this.ask({ kind: 'reply', ...(speak.turn !== undefined ? { turn: speak.turn } : {}) });
+    }
+    const note = this.notes.shift() ?? this.narration.next(now);
+    if (note) {
+      this.note(note);
+      this.deps.log(`[live] told: ${note}`);
+      return this.ask({ kind: 'results' });
+    }
+    const due = this.narration.due();
+    if (due !== null) {
+      this.wake = setTimeout(() => this.drain(), Math.max(0, due - now));
+      this.wake.unref?.();
+    }
+  }
+
+  private ask(purpose: Purpose, retry = true): void {
+    this.asked = { purpose, at: this.now(), retry };
+    this.session?.send({ type: 'response.create', response: { metadata: { purpose: purpose.kind } } });
+  }
+
+  /** Stops what Momo is saying, and cuts each piece of its voice in the conversation where the device was when the user spoke. */
   private hush(): void {
     const now = this.now();
-    const m = this.mouth;
-    if (m.kind === 'asked') m.cancel = true;
-    if (m.kind === 'speaking') {
-      this.session?.send({ type: 'response.cancel', response_id: m.id });
-      this.deps.log(`[live] ${m.line.kind} cut short: ${m.said.text}`);
-      if (m.said.from !== undefined) this.remember(m.said);
-      this.mouth = { kind: 'quiet' };
+    if (this.asked) {
+      this.cancelling += 1;
+      this.asked = null;
     }
-    for (const t of this.turns) {
-      if (t.from === undefined || t.ms === undefined) continue;
-      if (t.from >= now) t.text = '';
-      else if (t.from + t.ms > now) t.text = cut(t.text, (now - t.from) / t.ms);
+    if (this.expected) {
+      clearTimeout(this.expected.timer);
+      this.expected = null;
+      this.cancelExpected = true;
     }
-    this.turns = this.turns.filter((t) => t.text);
+    if (this.speaking) {
+      this.session?.send({ type: 'response.cancel', response_id: this.speaking.id });
+      this.deps.log(`[live] ${this.speaking.purpose.kind} cut short: ${this.speaking.text}`);
+      this.speaking = null;
+    }
+    for (const p of this.played) {
+      if (p.from + p.ms <= now) continue;
+      const heardMs = Math.max(0, Math.floor(now - p.from));
+      this.session?.send({ type: 'conversation.item.truncate', item_id: p.item, content_index: 0, audio_end_ms: heardMs });
+      this.deps.log(`[live] cut at ${heardMs} of ${Math.round(p.ms)} ms`);
+    }
+    this.played = [];
     this.playedUntil = now;
-  }
-
-  /** Says what is waiting, one line at a time, once the user is not being heard. A turn's reply goes before the news. */
-  private drain(): void {
-    if (this.hearing || this.mouth.kind !== 'quiet') return;
-    const next = this.queue[0];
-    if (!next) return;
-    if (next.kind !== 'reply' && (this.owed || this.transcribing.size > 0)) return;
-    this.queue.shift();
-    const s = this.ensure();
-    s.send({
-      type: 'response.create',
-      response: {
-        conversation: 'none',
-        output_modalities: ['audio'],
-        instructions: lineInstructions(next, this.deps.style(), { name: this.deps.name(), turns: this.turns }),
-        input: [],
-        metadata: { kind: next.kind },
-      },
-    });
-    this.mouth = { kind: 'asked', line: next, at: this.now(), cancel: false };
-  }
-
-  private remember(said: Said): void {
-    if (!said.text.trim()) return;
-    this.turns.push(said);
-    if (this.turns.length > 6) this.turns.shift();
+    this.answering = null;
   }
 
   private lost(why: string): void {
     this.deps.log(`[live] session closed: ${why}`);
     this.session = null;
-    const busy = Boolean(this.hearing) || this.transcribing.size > 0 || this.mouth.kind !== 'quiet';
-    this.hearing = null;
+    const busy = Boolean(this.hearing) || this.transcribing.size > 0 || Boolean(this.speaking) || Boolean(this.asked) || Boolean(this.expected);
+    if (this.expected) clearTimeout(this.expected.timer);
+    this.hearing = this.speaking = this.asked = this.expected = this.answering = null;
     this.transcribing.clear();
-    this.mouth = { kind: 'quiet' };
+    this.ready = [];
+    this.refused = null;
+    this.cancelling = 0;
+    this.cancelExpected = false;
     if (busy) this.device({ t: 'failed', why });
   }
 
@@ -565,21 +841,11 @@ export class LiveVoice {
     if (this.idle) clearTimeout(this.idle);
     this.idle = setTimeout(() => {
       this.idle = null;
-      if (this.hearing || this.mouth.kind !== 'quiet' || this.queue.length > 0 || !this.session) return;
+      if (this.hearing || this.speaking || this.asked || this.calls.size > 0 || !this.session) return;
       this.deps.log('[live] session closed after five quiet minutes');
       this.session.close();
       this.session = null;
     }, this.deps.idleMs ?? IDLE_MS);
     this.idle.unref?.();
   }
-}
-
-/** What was heard of a line `share` of the way through it, ending at a whole word, marked as cut short. */
-export function cut(text: string, share: number): string {
-  const chars = [...text];
-  const at = Math.round(chars.length * Math.max(0, Math.min(1, share)));
-  if (at >= chars.length) return text;
-  const head = chars.slice(0, at).join('');
-  const whole = /\s/.test(head) ? head.replace(/\s+\S*$/, '') : head;
-  return `${whole.trimEnd()}…`;
 }

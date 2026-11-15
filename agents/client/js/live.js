@@ -4,15 +4,15 @@ const LEAD_S = 0.05;
 
 /**
  * Momo's live voice: the service's `/live` socket (docs/protocol.md, "The live voice"). After the name the page's microphone goes to the
- * service, whose realtime model hears the turn and writes it down, and Momo's voice comes back and plays as it arrives, one response
- * after another. The model never answers by itself: what it says is the pipeline's.
+ * service, whose realtime model hears the turn and answers it as Momo, and Momo's voice comes back and plays as it arrives, one
+ * response after another.
  * `onReady(on)`: the voice is there or gone. `onOver()`: the user's turn has been heard and is on its way. `onHeard(text, final)`: what
  * the user said so far. `onQuiet()`: no reply is coming, or the voice failed. `onSpeaking(playing, interruptible)`: Momo started or
  * stopped being heard; saying the name stops it unless what it says names itself. `onText(text)`: what Momo has said so far.
  */
 export class LiveVoice {
-  constructor({ token, name, onReady, onOver, onHeard, onQuiet, onSpeaking, onText }) {
-    Object.assign(this, { token, name, onReady, onOver, onHeard, onQuiet, onSpeaking, onText });
+  constructor({ token, connection, name, onReady, onOver, onHeard, onQuiet, onSpeaking, onText }) {
+    Object.assign(this, { token, connection, name, onReady, onOver, onHeard, onQuiet, onSpeaking, onText });
     this.ready = false;
     this.rate = 24000;
     /** The latest turn, and whether the microphone goes to the service for it. */
@@ -36,7 +36,7 @@ export class LiveVoice {
   }
 
   open() {
-    const ws = new WebSocket(`${this.scheme}://${location.host}/live?token=${encodeURIComponent(this.token)}`);
+    const ws = new WebSocket(`${this.scheme}://${location.host}/live?token=${encodeURIComponent(this.token)}&connection=${encodeURIComponent(this.connection ?? '')}`);
     this.ws = ws;
     ws.onmessage = (event) => {
       if (this.ws === ws) this.frame(JSON.parse(event.data));
@@ -52,6 +52,15 @@ export class LiveVoice {
       if (was) this.onReady(false);
       this.retry = setTimeout(() => this.open(), RETRY_MS);
     };
+  }
+
+  /** The page's /ws connection, whose own work Momo walks through: a new one, after a reconnect, opens /live again for it. */
+  link(connection) {
+    if (connection === this.connection) return;
+    this.connection = connection;
+    const old = this.ws;
+    this.open();
+    old?.close();
   }
 
   /** Playing needs a gesture in most browsers: call this from one, such as the press that starts listening. */

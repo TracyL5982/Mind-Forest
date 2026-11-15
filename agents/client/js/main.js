@@ -111,6 +111,7 @@ function receive(message) {
       voice.serviceHears = message.hearing === 'service';
       if (message.live) live ??= new LiveVoice({
         token: conn.token,
+        connection: message.connection,
         name: agentName,
         onReady: (on) => handsFree.stream(on),
         onOver: () => {
@@ -125,7 +126,10 @@ function receive(message) {
         onSpeaking: momoHeard,
         onText: (text) => caption('librarian', text),
       });
-      if (live) live.muted = muted;
+      if (live) {
+        live.muted = muted;
+        live.link(message.connection);
+      }
       showSettings(store.settings);
       log.reset();
       turn.reset();

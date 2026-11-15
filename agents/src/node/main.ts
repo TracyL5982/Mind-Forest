@@ -9,6 +9,7 @@ import { MetaModel } from './model-meta.ts';
 import { startServer } from './server.ts';
 import type { LiveOptions } from './live.ts';
 import { HEARING_MODEL, openaiRealtime, openaiSpeech, openaiTranscribe, SPEECH_VOICE } from './speech-openai.ts';
+import { openaiWebAnswer } from './web-answer.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -74,7 +75,14 @@ const running = await startServer({
   token: env.MIND_PALACE_TOKEN || undefined,
   keys: { YOUTUBE_API_KEY: env.YOUTUBE_API_KEY, TMDB_API_KEY: env.TMDB_API_KEY, EUROPEANA_API_KEY: env.EUROPEANA_API_KEY, GUARDIAN_API_KEY: env.GUARDIAN_API_KEY, OPENAI_API_KEY: env.OPENAI_API_KEY, MIND_PALACE_SEARCH_MODEL: env.MIND_PALACE_SEARCH_MODEL },
   speak: !fake && env.OPENAI_API_KEY ? openaiSpeech(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_VOICE_MODEL, voice: env.MIND_PALACE_VOICE }) : undefined,
-  live: !fake && env.OPENAI_API_KEY && env.MIND_PALACE_LIVE !== 'off' ? { open: openaiRealtime({ apiKey: env.OPENAI_API_KEY, model: liveModel }), options: liveOptions } : undefined,
+  live:
+    !fake && env.OPENAI_API_KEY && env.MIND_PALACE_LIVE !== 'off'
+      ? {
+          open: openaiRealtime({ apiKey: env.OPENAI_API_KEY, model: liveModel }),
+          options: liveOptions,
+          webAnswer: openaiWebAnswer(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_WEB_MODEL || undefined, log: (line) => console.log(line) }),
+        }
+      : undefined,
   transcribe: !fake && env.OPENAI_API_KEY ? openaiTranscribe(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_HEARING_MODEL }) : undefined,
   instagram: env.META_IG_TOKEN && env.META_IG_USER_ID ? { token: env.META_IG_TOKEN, userId: env.META_IG_USER_ID } : undefined,
   maps,

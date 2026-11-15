@@ -12,10 +12,12 @@ import { Mindstorm } from '../core/state.ts';
 import { spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
 import { whereItWent, type Delivery, type Desk } from './contact.ts';
+import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '../core/voice-tools.ts';
 import { LiveVoice, type LiveOptions, type OpenRealtime } from './live.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
 import type { Speak, Transcribe } from './speech-openai.ts';
+import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
 import { Telegram, type TelegramOptions } from './telegram.ts';
 import { makeTools } from './tools.ts';
@@ -36,8 +38,8 @@ export interface ServerOptions {
   speak?: Speak;
   /** Turns recorded speech into text, told the card titles. When present the client records instead of using the browser's recognition. */
   transcribe?: Transcribe;
-  /** Momo's real-time voice on `/live`: the realtime model, and how it is set up. Without it `/live` is refused. */
-  live?: { open: OpenRealtime; options: LiveOptions };
+  /** Momo's real-time voice on `/live`: the realtime model, how it is set up, and its web answers. Without it `/live` is refused. */
+  live?: { open: OpenRealtime; options: LiveOptions; webAnswer?: WebAnswer };
   settings?: Partial<Settings>;
   /** Maps switched on. Without it no place is looked up and clients are told to load no tiles. */
   maps?: Maps;
@@ -90,10 +92,15 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     const files = said.length === 0 ? [] : said.map((p) => p.files).reduce((both, next) => both.filter((ext) => next.includes(ext)));
     return { embeds: said.every((p) => p.embeds), files };
   };
-  /** The devices on `/live`, each with its own voice. */
-  const voices = new Set<LiveVoice>();
-  /** The connection whose message the work under way was started by: its changes are marked `yours` to it alone. */
-  const asking = new AsyncLocalStorage<WebSocket>();
+  /** Each connection's id, which its hello tells it, so its `/live` socket can name it. */
+  const connections = new Map<string, WebSocket>();
+  /** The live voice of the device on each connection, once its `/live` socket names it. */
+  const voices = new Map<WebSocket, LiveVoice>();
+  /**
+   * Who the work under way was started by: a connection's message or its device's live voice. Its changes and navigates are marked
+   * `yours` to that connection alone, and its voice hears what the work does.
+   */
+  const asking = new AsyncLocalStorage<{ ws?: WebSocket; voice?: LiveVoice }>();
   const broadcast = (message: object, yours?: WebSocket) => {
     const text = JSON.stringify(message);
     for (const ws of sockets) if (ws.readyState === ws.OPEN) ws.send(ws === yours ? JSON.stringify({ ...message, yours: true }) : text);
@@ -110,16 +117,13 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       );
       return;
     }
+    const asker = asking.getStore();
     if (message.t === 'note') log(`[${message.role}] ${message.message}`);
-    if (message.t === 'say') {
-      const kind = 'kind' in message && (message.kind === 'reply' || message.kind === 'results') ? message.kind : undefined;
-      for (const voice of voices) voice.said(message.text, kind);
-    }
-    if (message.t === 'activity') for (const voice of voices) voice.activity(message.activity);
     if (message.t === 'activity') log(`[${message.activity.role}] ${message.activity.state}: ${message.activity.message}`);
-    if (message.t === 'change') broadcast({ ...message, undo: pipeline.undoLabel() }, asking.getStore());
-    else if (message.t === 'navigate') broadcast(message, asking.getStore());
+    if (message.t === 'change') broadcast({ ...message, undo: pipeline.undoLabel() }, asker?.ws);
+    else if (message.t === 'navigate') broadcast(message, asker?.ws);
     else broadcast(message);
+    asker?.voice?.observed(message);
   };
 
   const pipeline = new Pipeline({
@@ -259,25 +263,33 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     refuse('404 Not Found');
   });
 
-  liveWss.on('connection', (ws: WebSocket) => {
+  liveWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const live = opts.live!;
-    const voice = new LiveVoice(
+    /** The device's own connection, as its hello named it: what Momo starts is that connection's, and Momo hears of its work. */
+    const own = connections.get(new URL(req.url ?? '/', 'http://localhost').searchParams.get('connection') ?? '');
+    const voice: LiveVoice = new LiveVoice(
       {
         open: live.open,
         options: live.options,
-        utter: (text, scene) => pipeline.utter(text, scene, true),
-        style: () => settings.voiceStyle,
-        words: (scene) => likelyWords(mind, scene.treeId ?? null),
         name: () => spokenName(settings.agentName),
+        words: (scene) => likelyWords(mind, scene.treeId ?? null),
+        tools: toolSpecs,
+        call: (name, args, scene) => asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer: live.webAnswer })),
+        label: toolLabel,
+        where: (scene) => whereNote(pipeline.ctx, scene),
+        cards: (set) => landedCards(mind, set),
+        nameOf: (nodeId) => (mind.nodes.has(nodeId) ? nameOf(mind.itemOf(nodeId)) : 'this card'),
+        spoken: (turn) => pipeline.spoken(turn),
+        activity: (activity) => emit({ t: 'activity', activity }),
         log,
       },
       (frame) => {
         if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame));
       },
     );
-    voices.add(voice);
+    if (own) voices.set(own, voice);
     ws.on('close', () => {
-      voices.delete(voice);
+      if (own && voices.get(own) === voice) voices.delete(own);
       voice.close();
     });
     ws.on('message', (raw) => {
@@ -294,10 +306,14 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
 
   wss.on('connection', (ws: WebSocket) => {
     sockets.add(ws);
-    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, maps, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser', live: Boolean(opts.live) }));
+    const connection = randomUUID();
+    connections.set(connection, ws);
+    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, maps, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser', live: Boolean(opts.live), connection }));
     ws.on('close', () => {
       sockets.delete(ws);
       plays.delete(ws);
+      connections.delete(connection);
+      voices.delete(ws);
     });
     ws.on('message', (raw) => {
       let message: ClientMessage;
@@ -307,7 +323,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         ws.send(JSON.stringify({ t: 'error', message: `bad message: ${String(err instanceof Error ? err.message : err).slice(0, 300)}` }));
         return;
       }
-      void asking.run(ws, () => handle(message, ws)).catch((err) => ws.send(JSON.stringify({ t: 'error', message: String(err instanceof Error ? err.message : err) })));
+      void asking.run({ ws, voice: voices.get(ws) }, () => handle(message, ws)).catch((err) => ws.send(JSON.stringify({ t: 'error', message: String(err instanceof Error ? err.message : err) })));
     });
   });
 

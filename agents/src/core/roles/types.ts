@@ -15,11 +15,7 @@ export interface Settings {
   scoutOnDump: boolean;
   /** What the user calls the agent. "Hey" or "hi" and this name wake it. */
   agentName: string;
-  /** How the live voice says the agent's lines: in its own words, keeping every fact, name and number, or exactly as written. */
-  voiceStyle: VoiceStyle;
 }
-
-export type VoiceStyle = 'own words' | 'verbatim';
 
 export const DEFAULT_SETTINGS: Settings = {
   picksMode: 'provisional',
@@ -27,7 +23,6 @@ export const DEFAULT_SETTINGS: Settings = {
   strongTie: 0.8,
   scoutOnDump: true,
   agentName: 'momo',
-  voiceStyle: 'verbatim',
 };
 
 /** What the connected clients can play: player pages from other sites (embeds), and which file types. */

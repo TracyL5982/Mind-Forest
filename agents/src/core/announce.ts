@@ -28,7 +28,8 @@ const TEXT_FROM: Record<string, string> = {
   web: 'a page',
 };
 
-function spokenKind(item: Item, tool: string): string {
+/** What a pick is, said aloud: "a film", "a paper", "a picture". */
+export function spokenKind(item: Item, tool: string): string {
   if (item.data.kind === 'paper') return 'a paper';
   if (item.data.kind === 'book') return 'a book';
   if (item.data.kind === 'artwork') return 'an artwork';

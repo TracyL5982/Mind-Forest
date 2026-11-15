@@ -164,9 +164,6 @@ export function bindSettings(send) {
   for (const button of pop.querySelectorAll('[data-mode]')) {
     button.addEventListener('click', () => send({ t: 'settings', patch: { picksMode: button.dataset.mode } }));
   }
-  for (const button of pop.querySelectorAll('[data-style]')) {
-    button.addEventListener('click', () => send({ t: 'settings', patch: { voiceStyle: button.dataset.style } }));
-  }
   const step = (by) => {
     const next = Math.max(1, Math.min(8, Number($('picks-count').value) + by));
     send({ t: 'settings', patch: { picksPerRun: next } });
@@ -244,11 +241,6 @@ export function showSettings(settings) {
   for (const button of $('settings').querySelectorAll('[data-mode]')) {
     button.setAttribute('aria-checked', String(button.dataset.mode === settings.picksMode));
   }
-  for (const button of $('settings').querySelectorAll('[data-style]')) {
-    button.setAttribute('aria-checked', String(button.dataset.style === settings.voiceStyle));
-  }
-  const name = settings.agentName ?? 'momo';
-  $('words-title').textContent = `${name.charAt(0).toUpperCase()}${name.slice(1)}'s words`;
   $('picks-count').value = settings.picksPerRun;
   if (settings.agentName && document.activeElement !== $('agent-name')) $('agent-name').value = settings.agentName;
 }

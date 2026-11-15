@@ -392,12 +392,6 @@ async function main(): Promise<void> {
       await shot(page, 'desktop-5-settings');
       await page.getByRole('radio', { name: 'Dashed until kept' }).click();
       await page.locator('[data-mode="provisional"][aria-checked="true"]').waitFor();
-      assert.equal(await page.locator('#words-title').textContent(), "Juno's words");
-      await page.locator('[data-style="verbatim"][aria-checked="true"]').waitFor();
-      await page.getByRole('radio', { name: 'Own words' }).click();
-      await page.locator('[data-style="own words"][aria-checked="true"]').waitFor();
-      await page.getByRole('radio', { name: 'As written' }).click();
-      await page.locator('[data-style="verbatim"][aria-checked="true"]').waitFor();
       await page.keyboard.press('Escape');
     });
 
@@ -1240,9 +1234,9 @@ async function watchCaption(page: Page): Promise<() => Promise<string[]>> {
 }
 
 /**
- * The page with the service's live voice, played by a scripted realtime model that only hears and speaks: after "hey Momo" the page
- * streams the microphone to /live, the model hears the turn end and writes it down, the pipeline acts on what was written, and the
- * model says the pipeline's reply, which the page plays as Momo's voice. The model never answers by itself.
+ * The page with the service's live voice, played by a scripted realtime model: after "hey Momo" the page streams the microphone to
+ * /live, the model hears the turn end, writes it down and answers it as Momo, which the page plays as Momo's voice. A question typed
+ * on the page goes through the Conductor, and Momo is told the Conductor's line and says it.
  */
 async function liveChecks(): Promise<void> {
   if (!existsSync(join(here, '../client/vendor/sherpa-onnx/versions.json'))) return console.log('skip the live voice checks: they need the real spotter (npm run fetch-wake)');
@@ -1251,7 +1245,8 @@ async function liveChecks(): Promise<void> {
   const spoke: string[] = [];
   /** Seconds of microphone each session was sent, piece by piece. */
   const sessions: number[][] = [];
-  /** What the service asked the model to say, one set of instructions per response. */
+  /** What Mind Palace told the model, and the responses it asked for. */
+  const told: string[] = [];
   const asked: string[] = [];
   /** A tenth of a second of a tone, as the model's voice: 24 kHz 16-bit PCM. */
   const tone = Buffer.alloc(4800);
@@ -1263,18 +1258,20 @@ async function liveChecks(): Promise<void> {
     let items = 0;
     let responses = 0;
     const later = (ms: number, event: RealtimeEvent) => setTimeout(() => on.event(event), ms);
+    const say = (at: number, words: string, purpose?: string) => {
+      const id = `r${++responses}`;
+      later(at, { type: 'response.created', response: { id, metadata: purpose ? { purpose } : null } });
+      for (let k = 0; k < 8; k++) later(at + 10, { type: 'response.output_audio.delta', response_id: id, item_id: `${id}-audio`, delta: tone.toString('base64') });
+      later(at + 20, { type: 'response.output_audio_transcript.delta', response_id: id, delta: words });
+      later(at + 30, { type: 'response.done', response: { id, status: 'completed' } });
+    };
     const hear = () => {
       const item_id = `item-${++items}`;
       later(20, { type: 'input_audio_buffer.committed', item_id });
       for (const [k, delta] of ['Show me', ' more', ' like this.'].entries()) later(150 * (k + 1), { type: 'conversation.item.input_audio_transcription.delta', item_id, delta });
       later(600, { type: 'conversation.item.input_audio_transcription.completed', item_id, transcript: 'Hey Momo, show me more like this.' });
-    };
-    const say = () => {
-      const id = `r${++responses}`;
-      later(400, { type: 'response.created', response: { id } });
-      for (let k = 0; k < 8; k++) later(410, { type: 'response.output_audio.delta', response_id: id, delta: tone.toString('base64') });
-      later(420, { type: 'response.output_audio_transcript.delta', response_id: id, delta: 'Here you go, more like this.' });
-      later(430, { type: 'response.done', response: { id, status: 'completed' } });
+      // The turn detection answers the turn itself.
+      say(400, 'Here you go, more like this.');
     };
     return {
       send(e) {
@@ -1283,9 +1280,14 @@ async function liveChecks(): Promise<void> {
           appended.push(Buffer.from(e.audio as string, 'base64').length / 2 / 24000);
           if (++pieces === 12) hear();
         }
+        if (e.type === 'conversation.item.create') {
+          const item = e.item as { role?: string; content?: { text: string }[] };
+          if (item.role === 'system') told.push(item.content![0]!.text);
+        }
         if (e.type === 'response.create') {
-          asked.push(String((e.response as { instructions?: unknown }).instructions));
-          say();
+          const purpose = (e.response as { metadata?: { purpose?: string } }).metadata?.purpose ?? '';
+          asked.push(purpose);
+          say(100, 'Who first baked it? Good question.', purpose);
         }
       },
       close() {},
@@ -1302,20 +1304,19 @@ async function liveChecks(): Promise<void> {
   await server.pipeline.idle();
   const spokenTurn = /^starting,waiting,listening,sent,thinking,responding,(working,)?waiting$/;
   try {
-    await check('with a live voice, the page streams what follows "hey Momo", shows the words as they are heard, sounds sent and thinking, and plays the pipeline\'s reply as Momo', async () => {
+    await check('with a live voice, the page streams what follows "hey Momo", shows the words as they are heard, sounds sent and thinking, and plays Momo\'s own answer', async () => {
       const { browser, page, problems, micStates, sounds } = await openWithMicrophone(server, spoken('Hey Momo, show me more like this.', dir, 3));
       try {
         const captions = await watchCaption(page);
         await page.locator('.card').first().click();
         await page.locator('#mic').click();
-        await until('what was heard reaching the Conductor', async () => acted.length === 1, 20000);
-        assert.equal(acted[0], 'Show me more like this.');
-        await until('Momo heard and the page waiting again', async () => spokenTurn.test((await micStates()).join()), 10000);
-        assert.equal(asked.length, 1, 'the model spoke only the line it was asked to');
-        assert.ok(asked[0]!.includes('Here is more.'), `the model was asked to say the pipeline's reply: ${asked[0]}`);
+        await until('Momo heard and the page waiting again', async () => spokenTurn.test((await micStates()).join()), 20000);
+        assert.deepEqual(acted, [], 'the Conductor is not on the voice path');
+        assert.deepEqual(asked, [], 'Momo answered the turn without being asked');
+        assert.match(told[0] ?? '', /^\[Where the user is\] /, `Momo was told where the user is: ${told.join(' | ')}`);
         const seconds = sessions[0]!.reduce((a, b) => a + b, 0);
         assert.ok(seconds > 0.5 && seconds < 3, `only what followed the name was sent, not the quiet before it: ${seconds.toFixed(2)} s`);
-        assert.deepEqual(spoke, [], 'the page did not speak the reply itself');
+        assert.deepEqual(spoke, [], 'the page did not speak itself');
         await page.locator('#caption').getByText('Here you go, more like this.').waitFor();
         const shown = await captions();
         for (const line of ['you faint: Show me', 'you faint: Show me more', 'doing: Thinking…', 'you: Show me more like this.']) assert.ok(shown.includes(line), `the caption showed "${line}": ${shown.join(' | ')}`);
@@ -1331,12 +1332,13 @@ async function liveChecks(): Promise<void> {
           const states = (await micStates()).slice(statesBefore);
           return states.includes('responding') && states.at(-1) === 'waiting';
         }, 10000);
+        assert.deepEqual(acted, ['who first baked it'], 'a typed question goes through the Conductor');
+        assert.ok(told.some((t) => t.startsWith('[From the agents] ')), `and Momo was told its line: ${told.join(' | ')}`);
         const typed = (await micStates()).slice(statesBefore).join();
-        assert.match(typed, /^sent,(thinking,)?(working,)?responding,(working,)?waiting$/, 'a typed question goes straight to sent');
+        assert.match(typed, /^sent,(thinking,)?(working,)?responding,(working,)?(waiting,responding,)*(working,)?waiting$/, `a typed question goes straight to sent: ${typed}`);
         const typedSounds = (await sounds()).slice(soundsBefore);
         assert.equal(typedSounds[0], 'sent', `the typed question sounded the sent tone: ${typedSounds.join()}`);
-        assert.ok(typedSounds.includes('voice') && !typedSounds.includes('chime'), `and Momo's reply was heard: ${typedSounds.join()}`);
-        assert.equal(asked.length, 2);
+        assert.ok(typedSounds.includes('voice') && !typedSounds.includes('chime'), `and Momo was heard: ${typedSounds.join()}`);
         assert.deepEqual(spoke, []);
         assert.deepEqual(problems, []);
       } finally {
@@ -1345,14 +1347,12 @@ async function liveChecks(): Promise<void> {
     });
 
     await check('muted, the page makes no sound at all, neither its own nor Momo\'s, and still shows each state of the turn', async () => {
-      const actedBefore = acted.length;
       const { browser, page, problems, micStates, sounds } = await openWithMicrophone(server, spoken('Hey Momo, show me more like this.', dir, 3));
       try {
         await page.locator('.card').first().click();
         await page.locator('#mute').click();
         await page.locator('#mic').click();
-        await until('what was heard reaching the Conductor', async () => acted.length === actedBefore + 1, 20000);
-        await until('Momo done and the page waiting again', async () => spokenTurn.test((await micStates()).join()), 10000);
+        await until('Momo done and the page waiting again', async () => spokenTurn.test((await micStates()).join()), 20000);
         await page.locator('#caption').getByText('Here you go, more like this.').waitFor();
         assert.deepEqual(await sounds(), []);
         assert.deepEqual(spoke, []);

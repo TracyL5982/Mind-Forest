@@ -30,7 +30,6 @@ export const ClientMessage = z.discriminatedUnion('t', [
     picksPerRun: z.number().int().min(1).max(8).optional(),
     scoutOnDump: z.boolean().optional(),
     agentName: z.string().trim().min(1).max(32).regex(/^\p{L}[\p{L}\p{N}' -]*$/u, 'a name is letters, with spaces, hyphens or apostrophes').optional(),
-    voiceStyle: z.enum(['own words', 'verbatim']).optional(),
   }) }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
