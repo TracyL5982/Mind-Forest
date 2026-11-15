@@ -47,16 +47,16 @@ float headword(const Pen& pen, const Plan& p, float x, float y, float width, int
 /// The term as a figure, the meaning upright in the serif in whole lines, and the cue.
 void lay(Col& c, const Item&, const Json& props) {
     Plan p = plan(props);
-    Text term = points(p.term);
     bool large = figureLines(p.term, face::COL, MIDDLE) == 1;
     const Figure& size = large ? MIDDLE : SMALLEST;
-    // The term is the face's title: whole up to three lines, or three and the cue right under them. The lines
-    // over it keep its room.
-    int termNeed = large ? 1 : figureLines(p.term, face::COL, SMALLEST), termLines = std::min(face::TITLE_LINES, termNeed);
+    // The term is the face's title: in up to two lines, cut with an ellipsis past them. The lines over it
+    // keep its room.
+    Titled t = large ? Titled{p.term, 1} : titledFigure(p.term, face::COL, SMALLEST);
+    int termLines = t.lines;
     bool open = c.above(props, 10 + float(termLines * size.lineHeight));
     c.gap(10);
-    if (termNeed > termLines || !open) c.more = c.ended = true;
-    if (c.pen) c.heldBack = figure(*c.pen, p.term, c.x, c.y, c.width, termLines, size, palette::ink) || c.heldBack;
+    if (!open) c.more = c.ended = true;
+    if (c.pen) c.heldBack = figure(*c.pen, t.said, c.x, c.y, c.width, termLines, size, palette::ink) || c.heldBack;
     c.gap(float(termLines * size.lineHeight));
     if (c.ended) {
         c.cue(cueMore(c.words));

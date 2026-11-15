@@ -44,7 +44,6 @@ Plan plan(const Item& item) {
 /// A spark, then the thought as a figure: two lines at the largest size, three at the middle or the smallest, else the cue.
 void lay(Col& c, const Item& item, const Json&) {
     std::string thought = item.titleOrUntitled();
-    Text t = points(thought);
     if (c.pen) {
         const Pen& pen = *c.pen;
         const CGPoint spark[] = {{7, .6f}, {8.5f, 5.5f}, {13.4f, 7}, {8.5f, 8.5f}, {7, 13.4f}, {5.5f, 8.5f}, {.6f, 7}, {5.5f, 5.5f}};
@@ -57,19 +56,18 @@ void lay(Col& c, const Item& item, const Json&) {
         pen.ctx.fillPath();
     }
     c.gap(MARK);
+    // The thought is the face's title: two lines at the largest size that holds it, or the smallest's
+    // first two cut with an ellipsis.
     const Figure* size = &SMALLEST;
-    int lines = wrap(t, face::COL, LARGEST.letter, 3);
-    if (lines <= 2) size = &LARGEST;
-    else if ((lines = wrap(t, face::COL, MIDDLE.letter, 4)) <= 3) size = &MIDDLE;
-    else lines = wrap(t, face::COL, SMALLEST.letter, 4);
-    if (lines > 3) {
-        lines = std::min(3, int(std::floor((c.room() - face::CUE) / float(size->lineHeight))));
-        c.more = true;
+    for (const Figure* step : {&LARGEST, &MIDDLE}) {
+        if (figureLines(thought, face::COL, *step) <= face::TITLE_LINES) {
+            size = step;
+            break;
+        }
     }
-    if (c.pen) {
-        c.say(thought, figureSetting(*size), lines, c.x, c.y, c.width, palette::ink);
-    }
-    c.gap(float(lines * size->lineHeight));
+    Titled said = size == &SMALLEST ? titledFigure(thought, face::COL, SMALLEST) : Titled{thought, figureLines(thought, face::COL, *size)};
+    if (c.pen) c.heldBack = figure(*c.pen, said.said, c.x, c.y, c.width, said.lines, *size, palette::ink) || c.heldBack;
+    c.gap(float(said.lines * size->lineHeight));
     if (c.more) c.cue(cueMore(c.words));
 }
 

@@ -39,10 +39,10 @@ void playMark(const Pen& pen, float cx, float cy) {
 
 /// The poster at 16:9 to the edges with its play mark, then the caption on a plate.
 void lay(Col& c, const Item& item, const Json& props) {
-    // The caption is the title: whole on the plate, and the poster gives way to it, down to its floor.
+    // The caption is the title: on the plate in up to two lines, and the poster gives way to it.
     std::string said = caption(item, props), poster = text(props["poster"]);
-    Plate plate = plateOf(said, face::COL, Measure::body);
-    float tall = said.empty() ? std::round(float(face::W - 2) * 9 / 16) : std::min(103.f, float(face::H) - 2 - 19 - plate.height(face::BODY));
+    Titled plate = titled(said, face::COL, Measure::body);
+    float tall = said.empty() ? std::round(float(face::W - 2) * 9 / 16) : std::min(103.f, float(face::H) - 2 - 19 - float(plate.lines * face::BODY));
     if (c.pen) {
         CGRect frame = c.pen->px(1, 1, face::W - 2, tall);
         c.pen->ctx.setFillColor(palette::media);
@@ -53,12 +53,8 @@ void lay(Col& c, const Item& item, const Json& props) {
     c.y = 1 + tall + 1;
     if (!said.empty()) {
         c.y += 9;
-        c.say(said, setting::faceBody, plate.lines, c.x, c.y, c.width, palette::ink);
+        c.say(plate.said, setting::faceBody, plate.lines, c.x, c.y, c.width, palette::ink);
         c.y += float(plate.lines * face::BODY);
-        if (plate.cue) {
-            c.more = true;
-            c.cue(cueMore(c.words));
-        }
         c.y += 10;
     }
     c.y -= face::BOTTOM;

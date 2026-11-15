@@ -1,10 +1,10 @@
 // Checks every card type this library draws, on the web client's own samples (agents/test/footprints.json),
 // against the sizing spec: each sample is 210 px wide, at most 146 px tall, and carries no chip line, since
 // chips are listed on the opened card. It prints each type's tallest beside the tallest face derive.mjs
-// works out for it (sizing/quest-card-sizing.md, section 6), which counted shorter titles than a face now
-// keeps whole (up to three lines, first in the height budget): a type may now stand taller than that,
-// never than 146 px. The web keeps its own sizes until it adopts the spec, so its golden sizes are not
-// compared here; once it does, this goes back to matching them to the px.
+// works out for it (sizing/quest-card-sizing.md, section 6), which assumed shorter titles for some types
+// than the two lines a face now gives a title first: a type may stand taller than that, never than 146 px.
+// The web keeps its own sizes until it adopts the spec, so its golden sizes are not compared here; once it
+// does, this goes back to matching them to the px.
 //   quest/core/cards/test/run.sh <path to agents/test/footprints.json>
 #include <cstdio>
 #include <fstream>
