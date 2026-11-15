@@ -354,3 +354,88 @@ In a real browser with a fake microphone (`scripts/wake-check.ts`), OpenAI's tra
 **Not measured.** Real voices, a real room, a microphone across the room, and the Quest. Synthetic speech is clean and evenly paced, so real use is likely worse. Names other than Momo.
 
 **Alternative.** Picovoice Porcupine needs an account and a key on every device. openWakeWord needs a model trained for each name. Both fix the name in advance.
+
+## 39. Voice: the Conductor answers on the quick model
+
+**Decision.** The Conductor's one model call is marked `quick`, so it goes to `MIND_PALACE_QUICK_MODEL` (`muse-ember-1.0`) at minimal effort, as the suggested questions already did (35). The plain rules for instant commands and tree requests are unchanged.
+
+**Why.** On the headset the user said "Hey Momo, help me find something interesting to look at" and reported: "voice response is really really slow". The service log showed the Conductor taking 9.9 s (2,990 tokens) before Momo said a word. The user: "the voice response to register it hears the user needs to be almost instant".
+
+**Measured.** `scripts/conductor-compare.ts` on a copy of the user's data: 22 utterances covering ask, more, navigate, organize, handoff, capture, keep, undo, tree and small talk, two of them in Chinese, each routed twice by each model, the order alternating. Both models routed all 22 to the expected kind, with the same card, tree or picks, on every run. No disagreement in 88 calls, and none between the two runs of the main model either.
+
+| | Calls | Median | Range | Tokens in | Tokens out (reasoning) |
+|---|---|---|---|---|---|
+| `muse-spark-1.3`, effort low | 44 | 4.8 s | 2.2 to 11.5 s | 80,374 | 25,333 (21,689) |
+| `muse-ember-1.0`, effort minimal | 44 | 0.9 s | 0.5 to 3.8 s | 80,374 | 6,845 (3,231) |
+
+The user's own utterance was the slowest on the main model (8.0 and 11.5 s) and took 0.9 and 1.0 s on the quick one. Through the whole pipeline the quick Conductor answered in 0.8 to 2.9 s over 16 runs of that utterance, and the main one in 5.1 to 11.7 s over 14, while the machine's load average was between 8 and 117.
+
+**What differs.** The quick model's lines run longer and name the card ("Looking for something interesting on generative UI for you."), still under the 15-word limit. Its `need` sometimes repeats the card ("examples of generative UI in video games for generative UI"), which the Scout reads the same way. Both answered the Chinese utterances in Chinese. In one pipeline run of 14, the main model answered the user's utterance with a question ("What kind of interesting are you in the mood for?") and started nothing. The quick model started a run in all 16.
+
+**Alternative.** The main model at minimal effort: measured on the questions (35), it barely changed the time.
+
+## 40. Voice: Momo says when results land
+
+**Decision.** When a Scout run ends, the service sends one `say` and, unless the user has turned to something else since asking, a `navigate` to the card just before it. Every Scout run is one the user asked for: an `ask`, a `more`, an utterance the Conductor took for either, or the first round of a tree the user asked for, by voice, by a typed drop or from Telegram. A drop the Filer places runs no Scout and says nothing.
+
+**Why.** The user: "I asked to find something interesting for me, it didn't get back to me with anything". The picks had come, 33 to 46 s after the transcript, under the card open at launch, which the user may not have been looking at, and Momo said nothing.
+
+**The line.** Plain code writes it (`src/core/announce.ts`), at most about 20 words: how many picks came, under which card, and one or two of them by kind and title, real material before written ideas, such as `Five new things under generative UI: a film "Her" and a paper "Predictability and accuracy in adaptive user interfaces".` When two do not fit it names one: `…, including a film "Her".` A kind comes from the source when the source says what a pick is (a film from TMDB is a film though it came as its poster), else from the item. A title loses what follows a colon, a bracket or a bar, and a cut title never ends on "of" or "the". With nothing new: `I found nothing new for generative UI.`, and the view stays where it is.
+
+**When.** The run's end, so the count is whole and "nothing" can be said. The Conductor's reply always comes first, since the run starts after it. A run is over once its slots are full, or only pictures are still being made, or every slot left is held by one (41), so the line comes with the last find that can land, not with work that can no longer land or a picture that takes another 10 to 20 s. That picture lands after the line, with no second line.
+
+**The view.** The pipeline counts each time the user turns to something: opening a card (`focus`), being taken somewhere, asking about a card. A run moves the view to its card only when nothing was turned to since it began, or the latest thing was that card. The user who asked and then went to another tree hears where the picks went without being taken back.
+
+**A newer run on the same card.** It wins, as before: the older run's later picks are dropped, and now its line is too. The picks the older run had already brought stay, and only the newer run is announced, counting its own picks.
+
+**Measured.** In six runs of the user's utterance on the final code, the line came 20.8 to 27.9 s after the transcript, 23.6 s typically. In the four runs timed to the end, the run's picture landed 6.5 to 11.9 s after the line. Before, nothing was said after "I'll find something interesting for you."
+
+**Clients.** The web client already opened a card on `navigate`, so at a run's end its panel shows the card, and asks for its questions afresh, now that the conversation and the cards round it have changed. Its browser checks now expect that, and accept the line cutting the reply short when the stand-in agents' runs end at once. The headset's handling is WS16's.
+
+**Not done.** The line is in English whatever language the user speaks. The Conductor answers Chinese in Chinese, so a Chinese conversation hears English here. A model could write the line in the user's language, at a second and a model call more, and could then say things the picks do not hold.
+
+**Alternatives.** Announce the first delivery: the count would be partial and nothing could be said of a run that brings nothing. Always move the view: it would take the user away from what they turned to.
+
+## 41. Scout: choosing on the quick model, and a run's slots shared among its directions
+
+**Decision.** `scout.curate`, which chooses among the records a search returned, is marked `quick`. Thinking of directions (`scout.ideate`) and rating ties (`scout.rate`) stay on the main model. Because the quick model made the finds arrive in a different order, a run's slots are now shared out:
+
+- Each made direction's first pick lands the moment it is ready, except into a slot held by a picture still being made. A picture is paid for when it is started, so it keeps its slot.
+- A further pick of a direction (a second paper, a second film) waits until every direction still out keeps a slot. It lands when a direction comes back empty, or at the end.
+- A gallery makes only the pictures it could keep: one, and more only when the run has slots to spare.
+- The run is over once its slots are full, or, when picks are delivered as they come, once only pictures are still being made or every slot left is held by one. A find still out then lands after the line only if a picture fails.
+
+**Why the quick model.** On the main model one choosing call took 4.5 to 17.7 s, and a find waited for it before it could be shown.
+
+**Measured, choosing.** `scripts/ask-timing.ts` with `COMPARE_ROLES` asked both models every choosing request of three live runs on the copy (the user's utterance, world building for the rural illustration, horror standoffs): 11 searches of papers, books, films, Hacker News, the Internet Archive, podcasts, Europeana and the web. They chose the same records in 8. In the other 3 the quick model added a second film (ADA beside Her), chose Jim Shepard's novel about Murnau over the 1979 Nosferatu, and chose another essay on Alien. Its notes were as specific. Its excerpts were found word for word in the records it was shown as often (13 of 16 against 11 of 15), and the Scout drops one that is not. It answered in 1.0 to 4.0 s against 6.2 to 16.9 s.
+
+**Why the sharing.** With the quick model alone, the catalogues answered first, and a source that shows two records took two slots. Three runs of the user's utterance brought picks from 3, 3 and 4 directions, against 4, 5 and 5 before, and every one of the nine generated pictures, 32,000 to 51,000 image tokens a run, was thrown away because the slots were full when it came. The run, and so its line, also waited 7 to 21 s more for those pictures. The code before this work kept 7 of the 34 pictures it made in 13 runs, for the same reason.
+
+**Measured, end to end.** The user's utterance on the generative UI card, on the copy, each run starting from the same mindstorm, timed from the transcript by `scripts/ask-timing.ts`. Runs alternated between the code before this work, from a plain copy of 36914c7, and the code after. The last six runs, three each:
+
+| | Before | After |
+|---|---|---|
+| Momo's reply | 6.3 to 8.6 s, median 8.6 | 1.0 to 2.2 s, median 1.5 |
+| First pick | 24.5 to 33.9 s, median 27.1 | 18.4 to 21.0 s, median 19.7 |
+| The line saying what came | none | 22.4 to 24.6 s, median 22.6 |
+| Last pick | 37.9 to 47.9 s, median 45.7 | 29.2 to 36.5 s, median 29.3, a picture each time |
+| Pictures made, kept | 7, 4 | 3, 3 |
+| Directions among the five picks | 3, 3, 3 | 5, 5, 5 |
+
+Earlier pairs said the same. An hour before, with the main model twice as slow: before, first pick 31.1 to 40.3 s and last 45.1 to 53.6 s; with choosing and the Renderer on the quick model but no sharing, first 20.3 to 27.8 s and last 24.6 to 30.0 s, with every picture thrown away. In three runs between the sharing and the 20 s wait (`model-meta.ts`), a quick-model request went unanswered until the 120 s limit, and the line came at 144 s once; the retry answered in 1 to 2 s.
+
+**What bounds it.** The first pick waits on thinking of directions, 13 to 30 s on the main model across the runs, because it writes 750 to 1,700 tokens of reasoning and about 800 of directions before any can start. The quick Conductor takes 4 to 11 s off the front of that. The last find comes 1 to 7 s after the directions, from catalogue searches of 0.2 to 5 s and a choosing call of 1 to 4 s. A generated picture takes 8 to 25 s. Between the two halves of an hour the main model's own times halved, so only runs that alternate are compared.
+
+**Cost.** In the last six runs a run used, before, 9 to 10 main-model calls (24,500 tokens in and 12,100 out on average), 1 to 3 pictures (28,200 image tokens in, 4,300 out) and up to one OpenAI search: 75,000 tokens. After, 4 to 5 main-model calls (6,400 in, 6,200 out), 5 to 6 quick-model calls (17,200 in, 1,900 out) and one picture (10,700 in, 1,600 out): 44,000 tokens. The prices are not in this repository. At the roughly $1.20 per million tokens that 2 implies, with the quick model priced no higher, a run went from about $0.09 to about $0.05.
+
+**Alternatives.** Choose on the main model and keep first come, first served: 20 s more to the last find. Count a gallery as one slot: it is three cards. Never generate a picture the run might not keep: with one direction more than the slots, no picture would ever be made.
+
+## 42. Renderer: components on the quick model, composites on the main one, and a card's look does not wait
+
+**Decision.** `renderer.components` is marked `quick`. `renderer.composites`, which decides whether siblings are drawn as one arrangement, stays on the main model. The views are handed to the pipeline as soon as the components are chosen, through a `deliver` like the Scout's, and the groups follow when the main model answers. A view or group naming a card that is gone by then is left out, and a timeline or comparison is drawn from the siblings that stayed.
+
+**Why.** Every view, the ones the rules choose included (steps, excerpt, reference), waited for both model calls, and the composites call took 2.9 to 24.8 s. A card that arrived as a plain note turned into its steps or its excerpt 7 to 12 s later. When a card gave way to a fuller round during that wait, the group that named it failed the whole batch, views included: "renderer: failed: missing: no node …" in two of the first three runs.
+
+**Measured.** With `COMPARE_ROLES` in the three runs of 41: components, 3 calls, the same component every time (a note), with a different phrase picked out for emphasis, in 1.2 to 2.5 s against 5.4 to 6.1 s. Every value a component shows is checked against the item's text before it is drawn, so the quick model cannot draw a number or a quote the item does not hold. Composites, 8 calls: the main model proposed a group 3 times (a comparison of two UI wiring options, a comparison of two books, a cluster of three standoff films), the quick model never. So composites stay where they are, off the path to the card.
+
+**Alternative.** Composites on the quick model as well: about 1 s, and no groups.

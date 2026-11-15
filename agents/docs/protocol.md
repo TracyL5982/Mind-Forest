@@ -95,7 +95,7 @@ A client fetches only from the service. Every address in an item or a view that 
 - **A newer run on the same card.** Asking again about a card while its run still works starts a new run. The older run's picks that already arrived stay, the rest of it is dropped, and only the newer run is announced, counting only its own picks.
 - **After organizing and a handoff.** What the Organizer did, and "Your handoff is ready: …".
 
-The picks of a run arrive in several `change` sets before its `say`: written ideas and what the user already has first, then each find as it is ready. A run ends once its places are full, so the `say` does not wait on work that can no longer land.
+The picks of a run arrive in several `change` sets before its `say`: written ideas and what the user already has first, then each find as it is ready. A run ends once its places are full, or once only a generated picture is still being made, so the `say` does not wait on work that can no longer land or on a picture that takes another 10 to 20 s. That picture arrives after the `say`, in a `change` of its own, with no second line.
 
 ## Client to service
 
