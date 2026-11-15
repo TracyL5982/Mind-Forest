@@ -126,6 +126,13 @@ std::optional<Vec2> openSize(const std::string& noteID) {
     return s ? std::optional(s->open) : std::nullopt;
 }
 
+std::optional<Piece> corners(Art& art, Vec2 size) {
+    float w = std::round(size.x * Art::ppm), h = std::round(size.y * Art::ppm);
+    return art.piece(fmt("card-corners:%gx%g", double(w), double(h)), w, h, [&](Canvas& ctx, CGSize) {
+        Pen{ctx, 1}.mask(CGRect{0, 0, w, h}, 14 * openScale, palette::glass);
+    });
+}
+
 int pages(const std::string& noteID) {
     std::optional<Opened> o = opened(noteID);
     return o ? int(o->pages.size()) : 0;

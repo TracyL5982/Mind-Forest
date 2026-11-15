@@ -741,6 +741,10 @@ void OceanModel::restyle(bool stirring) {
                 if (!(c && library && film >= 0 && film < int(library->clips.size()))) return;
                 PictureFrame frame = pictureFrame(*c);
                 screen->show(film, library->fullURL(library->clips[film]), frame.size, c->openHolder, frame.center);
+                // NOTE(port): added for Quest. An agent's card's poster has round corners, and the film over it takes them (core/cards).
+                if (cards::ocean::cardOf(c->ref)) {
+                    if (std::optional<Piece> round = cards::ocean::corners(*art, frame.size)) screen->cover(art->quad(*round));
+                }
                 if (auto mark = marks.find(id); mark != marks.end() && mark->second.kind == Mark::Kind::time) {
                     screen->loop(Screen::Span{mark->second.from, mark->second.to});
                 }

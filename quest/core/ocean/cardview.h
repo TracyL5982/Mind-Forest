@@ -205,6 +205,15 @@ public:
 
     void hide();
 
+    // NOTE(port): added for Quest. Something drawn just in front of the film, which shows and goes with it:
+    // the round corners of an agent's card's poster (core/cards).
+    void cover(const EntityRef& e);
+
+private:
+    EntityRef covering;
+
+public:
+
     /// Shows the picture once it is really running, so the still never
     /// gives way to a black frame.
     void update();

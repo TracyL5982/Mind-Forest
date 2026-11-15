@@ -162,6 +162,14 @@ void Screen::loop(std::optional<Span> range) {
     player->play();
 }
 
+void Screen::cover(const EntityRef& e) {
+    if (covering) covering->removeFromParent();
+    covering = entity && e ? e : nullptr;
+    if (!covering) return;
+    covering->position.z = 0.001f;
+    entity->addChild(covering);
+}
+
 void Screen::hide() {
     if (!film) return;
     film.reset();

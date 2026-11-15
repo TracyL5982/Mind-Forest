@@ -45,6 +45,9 @@ std::optional<Vec2> openSize(const std::string& noteID);
 std::optional<NoteLayout> layout(const std::string& noteID);
 /// The picture of the page it shows, or of another page, made ahead so it is there when it is wanted.
 std::optional<Piece> open(Art& art, const std::string& noteID, std::optional<int> page = std::nullopt);
+/// The round corners of an opened card's picture, `size` m, to lay over a film that plays on it: the
+/// opened card's face outside each corner, clear inside, as the poster under the film is cut.
+std::optional<Piece> corners(Art& art, Vec2 size);
 /// How many pages it has (0 for a note with no card), and which it shows, from 0.
 int pages(const std::string& noteID);
 int page(const std::string& noteID);
