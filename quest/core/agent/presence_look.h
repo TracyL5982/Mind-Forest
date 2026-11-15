@@ -101,7 +101,7 @@ public:
     static constexpr float dotPop = 0.18f;              // s a dot takes to pop
     static constexpr float dotsAtLeast = 2 * dotPopEvery + dotPop;  // s they show once begun: until all three are in
     static constexpr float dotsFade = 0.2f;             // s, about, they take to fade
-    static constexpr float dotTurn = 2.4f;              // s each dot takes to circle its place
+    static constexpr float dotTurn = 2.0f;              // s each dot takes to circle its place
     /// Thinking dot `k`, 0 the one nearest Momo, `rising` s after the dots began to come.
     static Dot dot(int k, float rising);
 
