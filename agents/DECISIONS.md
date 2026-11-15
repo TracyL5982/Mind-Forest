@@ -450,7 +450,9 @@ Earlier pairs said the same. An hour before, with the main model twice as slow: 
 
 ## 44. Renderer: a card's look does not wait on how its siblings group
 
-**Decision.** Both of the Renderer's calls stay on the main model. The views are handed to the pipeline as soon as the components are chosen, through a `deliver` like the Scout's, and the groups follow when the main model answers. A view or group naming a card that is gone by then is left out, and a timeline or comparison is drawn from the siblings that stayed.
+**Decision.** Both of the Renderer's calls stay on the main model. The views are handed to the pipeline as soon as the components are chosen, through a `deliver` like the Scout's, and the groups follow when the main model answers. A group or view that no longer holds by then is left out: one naming a card that gave way to a fuller round, one naming a card another pass has grouped meanwhile, or one mixing a pick with a card the user kept. A timeline or comparison is drawn from the siblings that stayed.
+
+**Seen live.** On the user's headset session after the one home merge, three passes failed whole with "invalid: node … is already in group …". With directions delivered one by one, passes over one card's siblings overlap more, and each asked the model before the other's group was applied. `test/renderer.test.ts` holds a second pass to leaving out the group the first one made.
 
 **Why.** Every view, the ones the rules choose included (steps, excerpt, reference), waited for both model calls, and the composites call took 2.9 to 24.8 s. A card that arrived as a plain note turned into its steps or its excerpt 7 to 12 s later. When a card gave way to a fuller round during that wait, the group that named it failed the whole batch, views included: "renderer: failed: missing: no node …" in two of the first three runs.
 
@@ -470,42 +472,47 @@ Earlier pairs said the same. An hour before, with the main model twice as slow: 
 
 **Checked.** `test/labels.test.ts` runs every role over a scripted model, a drop, a tree, a spoken ask with a find, a picture and a video, an organize and a handoff, and holds every label to two to seven words in one line, every step to an end, and a Scout run to showing each kind of step on its card.
 
-## 47. Scout: directions are read as the model writes them, at minimal effort, and ties are rated on the quick model
+## 47. Scout: directions are read as the model writes them, and ties are rated on the quick model
 
-**Decision.** The Scout asks the main model for its directions at minimal effort and reads the reply as it is written (`onText` on the request, server-sent events from the Meta API, `completeElements` in `src/core/partial-json.ts`). Each direction is taken the moment it is whole and starts at once: a written idea lands, a find searches, a picture is made. The rating of ties to what the user already has moves to the quick model, and what it brings lands as soon as it is rated, before any new content. A run is over while the model is still writing once nothing it could write would land. The model is asked to write a picture direction first, since a picture takes longest.
+**Decision.** The Scout reads the main model's reply with its directions as it is written (`onText` on the request, server-sent events from the Meta API, `completeElements` in `src/core/partial-json.ts`). Each direction is taken the moment it is whole and starts at once: a written idea lands, a find searches, a picture is made. It stays at low effort. The rating of ties to what the user already has moves to the quick model, and what it brings lands as soon as it is rated, before any new content. A run is over while the model is still writing once nothing it could write would land. The model is asked to write a picture direction first, since a picture takes longest.
 
-**Why.** The user: "it needs 30-60 seconds?? really??" The target they set is the first card about 10 s after the request and all of a run's cards within about 20 s. Thinking of directions was 19 to 25 s of it, and nothing could start until all six were written.
+**Why.** The user: "it needs 30-60 seconds?? really??" The target they set is the first card about 10 s after the request and all of a run's cards within about 20 s, with the suggestions as inventive as before. Thinking of directions was 19 to 25 s of it, and nothing could start until all six were written.
 
 **Measured, the model.** `scripts/ideate-compare.ts` caught the Scout's own request for three cards (the user's "help me find something interesting to look at" on generative UI, world building for the rural illustration with its picture, and "examples of standoffs in horror films") and sent it to each setting twice, alternating.
 
 | Setting | Time to write six directions, 6 runs |
 |---|---|
-| `muse-spark-1.3`, low effort (before) | 18.9 to 24.8 s |
-| `muse-spark-1.3`, minimal effort (adopted) | 11.1 to 15.2 s |
+| `muse-spark-1.3`, low effort (kept) | 18.9 to 24.8 s |
+| `muse-spark-1.3`, minimal effort | 11.1 to 15.2 s |
 | `muse-ember-1.0`, low effort | 3.3 to 4.9 s |
 | `muse-ember-1.0`, minimal effort | 2.7 to 4.1 s |
 | `gpt-5.4-mini`, low effort | 7.7 to 9.6 s (it refuses minimal) |
 
-The horror request decided it. Asked for examples, the main model at either effort named them: The Thing's blood test, Ripley at the airlock, the Get Out teacup, The Shining, the Halloween closet, A Quiet Place. Both quick models and gpt-5.4-mini wrote searches about the subject instead ("Books on the horror showdown tradition", "Essays on horror face-offs"), which the prompt names a failure. On the other two cards they were on topic but more generic. The directions are side by side at https://claude.ai/artifact/UeTq7jLUhs8bxLQGVV1SAm. Two blind readers (Opus, not told which setting wrote which set) ranked the six sets of each card. On every card both put a low-effort set first. The minimal-effort sets came next and never failed the request, though both of its world-building sets had a find with no search words and one horror set used Get Out twice. Both readers failed both quick-model horror sets for giving no examples.
+The horror request decided against the fast ones. Asked for examples, the main model at either effort named them: The Thing's blood test, Ripley at the airlock, the Get Out teacup, The Shining, the Halloween closet, A Quiet Place. Both quick models and gpt-5.4-mini wrote searches about the subject instead ("Books on the horror showdown tradition", "Essays on horror face-offs"), which the prompt names a failure. On the other two cards they were on topic but more generic. Two blind readers (Opus, not told which setting wrote which set) ranked the six sets of each card. On every card both put a low-effort set first, six rankings out of six. The minimal-effort sets came next and never failed the request, though both of its world-building sets had a find with no search words and one horror set used Get Out twice. Both readers failed both quick-model horror sets for giving no examples. The directions are side by side at https://claude.ai/artifact/UeTq7jLUhs8bxLQGVV1SAm.
 
-**Measured, the rating.** On the same three cards the quick model rated in 1.3 to 3.7 s against 9.7 to 15.7 s. Neither model brought a tie in any of the twelve runs, and the picks already there were rated alike, the quick model more steadily than the main one, whose two runs on one card disagreed on six of eight picks. With the directions this fast, a rating on the main model would have held back the first card.
+**Measured, the rating.** On the same three cards the quick model rated in 1.3 to 3.7 s against 9.7 to 15.7 s. Neither model brought a tie in any of the twelve runs, and the picks already there were rated alike, the quick model more steadily than the main one, whose two runs on one card disagreed on six of eight picks. A rating on the main model would hold back the first card, which waits for it.
 
-**Measured, end to end.** `scripts/ask-timing.ts`, the user's utterance on the generative UI card, from the transcript, alternating with a plain copy of 36914c7, three runs each:
+**Measured, end to end.** `scripts/ask-timing.ts`, the user's utterance on the generative UI card, from the transcript, alternating with a plain copy of 36914c7, three runs each per pair. The two pairs ran about half an hour apart, and the provider was slower for the second.
 
-| | Before | After |
-|---|---|---|
-| Momo's reply | median 8.5 s (7.0 to 8.7) | median 1.0 s (0.9 to 1.3) |
-| First card | median 27.0 s (26.4 to 31.6) | median 12.0 s (7.7 to 13.9) |
-| First find | median 35.8 s (34.1 to 41.3) | median 12.0 s (11.9 to 13.9) |
-| The line saying what came | none | median 14.4 s (14.0 to 15.3) |
-| Last card | median 39.7 s (39.2 to 42.0) | median 27.1 s (23.3 to 30.5), a generated picture each time |
+| | Before | Streamed, minimal effort | Before | Streamed, low effort (kept) |
+|---|---|---|---|---|
+| Momo's reply | median 8.5 s | median 1.0 s | median 11.4 s (6.9 to 12.0) | median 1.1 s (0.9 to 1.1) |
+| First card | median 27.0 s | median 12.0 s (7.7 to 13.9) | median 34.9 s (33.4 to 37.8) | median 22.0 s (17.6 to 23.9) |
+| The line saying what came | none | median 14.4 s (14.0 to 15.3) | none | median 25.7 s (20.1 to 27.4) |
+| Last card | median 39.7 s | median 27.1 s (23.3 to 30.5) | median 53.0 s (52.1 to 59.4) | median 43.8 s (33.5 to 62.7) |
 
-Three runs just before, without the picture first, had the first card at 8.0, 9.2 and 13.0 s and the last at 30.7, 34.7 and 12.9 s (no picture). On the other two cards the first card came at 11.4 and 13.3 s and the line at 15.6 and 21.4 s, and the horror run brought The Shining, The Thing, Alien and Nope.
+So the kept setting brings the first card 13 s sooner and the line 25 s after the request, and does not reach the 10 s the user asked for. Minimal effort comes within 2 s of it, at the cost the blind readers found. It is one line in `ideate` (`effort: 'minimal'`), left for the user to choose.
 
-**What bounds it.** The first direction is ready 5 to 8 s after the request reaches the model: it reasons for 240 to 510 tokens and writes its one-sentence reading before the directions. A find lands 1 to 5 s after its direction. A generated picture takes 9 to 24 s on its own, measured at 10.3 to 12.5 s alone with a short prompt and either size, so a run that makes one cannot have every card within 20 s. Its line does not wait for it.
+**What bounds it.** At low effort the model reasons for 890 to 1,390 tokens before it writes the first direction, 13 to 19 s after the request reaches it. At minimal effort it reasons for 240 to 510 and the first comes 5 to 8 s in. A find lands 1 to 5 s after its direction. A generated picture takes 9 to 43 s on its own, measured at 10.3 to 12.5 s alone with a short prompt and either size, so a run that makes one cannot have every card within 20 s. Its line does not wait for it.
 
 **A wrong first measurement.** The first streamed runs showed every search starting when the directions ended. The timing script read each reply to its end before handing it to the client, which undid the streaming. It now reads its copy on the side.
 
-**Cost.** The same six runs used, before, about 92,000 tokens a run (32,000 main-model, 54,000 for three pictures a run, none of them kept, 6,000 OpenAI search) and, after, about 63,000 (11,000 main-model, 30,000 quick-model, 19,000 for one picture). At the rate in 2, about $0.11 and $0.075.
+**Cost.** The minimal-effort pair used, before, about 92,000 tokens a run (32,000 main-model, 54,000 for three pictures a run, none of them kept, 6,000 OpenAI search) and, after, about 63,000 (11,000 main-model, 30,000 quick-model, 19,000 for one picture). At the rate in 2, about $0.11 and $0.075. At low effort the main model writes about 2,500 tokens more a run.
 
-**Alternatives.** The quick model for directions: four times faster, and it loses the concrete examples. Split the six directions over two calls: twice as fast to write, but two calls that cannot see each other repeat angles, and the prompt that keeps them apart would have to be rewritten and judged again. Streaming kept the prompt as it was.
+**Alternatives.** The quick model for directions: four times faster, and it loses the concrete examples. Split the six directions over two calls at low effort: each reasons less before it writes, but two calls that cannot see each other repeat angles, and the prompt that keeps them apart would have to be rewritten and judged again; this is the next lever to try. Streaming kept the prompt as it was.
+
+## 48. A tree asked for by its subject is rooted in the subject as said
+
+**Decision.** `makeTree` with a subject of up to 120 characters that is not a link makes the root item itself, titled with the subject as the user said it. A longer subject, or a link, still goes through Intake.
+
+**Why.** On the headset the user said "Can you start a new tree on Dutch artist?". The plain rules heard the request and its subject, but the subject went through Intake like a dropped note, which titled it "Dutch artist reference note", and the tree was rooted in that. The user asked for a tree about Dutch artists, not about a note. It also waited 7 s on Intake's model call before the tree appeared. `test/mindstorm.test.ts` checks that utterance, "start a tree about …", "Make a new tree on …", and one in Chinese the Conductor hears.
