@@ -18,7 +18,12 @@ function direction(format: Format, title: string, more: Record<string, unknown> 
     body: `Body of ${title}.`,
     why: `toward ${title}`,
     tags: ['Film'],
-    steps: [],
+    lines: [],
+    pros: [],
+    cons: [],
+    subject: '',
+    passage: '',
+    by: '',
     images: [],
     source: '',
     lookups: [],
@@ -27,7 +32,7 @@ function direction(format: Format, title: string, more: Record<string, unknown> 
 }
 
 const NOTE = direction('note', 'The house at the bend');
-const STEPS = direction('steps', 'Shoot it yourself', { steps: ['Pick a subject', 'Pull back while zooming in', 'Hold the subject size'] });
+const STEPS = direction('steps', 'Shoot it yourself', { lines: ['Pick a subject', 'Pull back while zooming in', 'Hold the subject size'] });
 const IMAGE = direction('image', 'The same shot at night', { images: [{ title: 'Night', prompt: 'the same staircase at night, flat illustration' }] });
 const ARTWORK = direction('find', 'Staircases that pull the eye down', { source: 'museums', lookups: ['spiral staircase'] });
 const work = (n: number, title: string) => ({ title, by: `Maker ${n}`, date: '1920', text: 'Gelatin silver print', from: 'A Museum', url: `https://museum.example/works/${n}`, image: `https://img.example/work-${n}.jpg` });
@@ -91,7 +96,7 @@ test('each direction becomes content of its own kind, shown in place', async () 
   assert.equal(note.kind, 'text');
   assert.equal(note.text, 'Body of The house at the bend.');
 
-  assert.deepEqual(byTitle.get(STEPS.title)!.data.steps, STEPS.steps);
+  assert.deepEqual(byTitle.get(STEPS.title)!.data.steps, STEPS.lines);
 
   const image = byTitle.get(IMAGE.title)!;
   assert.equal(image.kind, 'image');

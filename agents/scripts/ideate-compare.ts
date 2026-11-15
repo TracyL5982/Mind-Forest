@@ -119,7 +119,14 @@ async function requestsFor(c: (typeof cases)[number]): Promise<{ ideate: JsonReq
   return { ideate: caught['scout.ideate'], rate: caught['scout.rate'] };
 }
 
-type Directions = { reading: string; directions: { angle: string; format: string; title: string; body: string; why: string; source: string; lookups: string[]; steps: string[]; images: { title: string; prompt: string }[] }[] };
+type Direction = {
+  angle: string; format: string; title: string; body: string; why: string; source: string; lookups: string[]; images: { title: string; prompt: string }[];
+  lines: string[]; pros: string[]; cons: string[]; subject: string; passage: string; by: string;
+};
+type Directions = { reading: string; directions: Direction[] };
+/** What a written idea holds beside its body, as one line. */
+const contents = (d: Direction) =>
+  [d.subject, d.passage && `"${d.passage}"`, d.by && `(${d.by})`, ...d.lines.map((l) => `· ${l}`), ...d.pros.map((p) => `+ ${p}`), ...d.cons.map((c) => `- ${c}`)].filter(Boolean).join(' ');
 interface Answer { option: string; run: number; ms: number; usage: Usage | null; reply?: unknown; error?: string }
 const median = (xs: number[]) => {
   const s = [...xs].sort((a, b) => a - b);
@@ -174,7 +181,8 @@ for (const c of cases) {
       console.log(`    reading: ${r.reading}`);
       for (const d of r.directions) {
         const how = d.format === 'find' ? ` [${d.source}: ${d.lookups.join(' / ')}]` : d.format === 'video' ? ` [${d.lookups.join(' / ')}]` : d.images.length ? ` [${d.images.length} picture${d.images.length > 1 ? 's' : ''}]` : '';
-        console.log(`    - ${d.format.padEnd(7)} ${d.title}${how}\n              ${d.angle} | ${d.why}\n              ${d.body.replace(/\s+/g, ' ').slice(0, 220)}`);
+        const held = contents(d);
+        console.log(`    - ${d.format.padEnd(7)} ${d.title}${how}\n              ${d.angle} | ${d.why}\n              ${d.body.replace(/\s+/g, ' ').slice(0, 220)}${held ? `\n              ${held.slice(0, 400)}` : ''}`);
       }
     }
   }
