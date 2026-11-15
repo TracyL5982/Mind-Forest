@@ -636,3 +636,42 @@ Read strictly, one quick run fell one sample under three main runs that all scor
 **What differs still.** One record of 45: a curry whose line of ingredients runs to 388 characters, past the 280 a sheet's text holds, stays its picture, where the readers chose a sheet or steps. Neither card can hold it whole. The table before and after is `audit/table-final.md`.
 
 **Alternatives.** Change the rules for every find, catalogued or not: cards already in the user's data would turn into others when next touched. Keep excerpts for pages and articles: both readers chose the link for all six, one of them torn on the news.
+
+## 56. Scout: each idea is written in the card that shows it best
+
+**Decision.** The Scout's main model writes each written idea in one of eleven formats, the card that shows it best: a note, steps, a list, facts, a quote, a table, a question and its answer (`qa`), a definition, pros and cons, a callout, or an explorable that switches between states. It fills the fields that card reads in the same streamed reply, in a few slots every written format shares (`lines`, `pros`, `cons`, `subject`, `passage`, `by`, `controls`). `FORMS` in `scout.ts` builds the item's text from those fields, and its `data` as the Renderer's extracted rules read it, so the card shows the whole item. No later agent gathers anything. A format is kept only when its fields fill its strict form and `byRule` draws the item as that format:
+
+- steps and a list: three entries at least; facts: two to six, each a label and a value; a table: two heads at least, two rows at least, a cell for every head;
+- a quote: the words and who said them; a question and its answer, a term and its meaning: both; pros and cons: two points a side at least; a callout: its warning; an explorable: two to four states, each with its words.
+
+Otherwise the idea lands as plain text in its own words, with no structure in its data, and the run log says why: `"Two rooms" lands as plain text, not a list: it has only 2 of the 3 entries it needs`, or `… the card's check draws it as a note`. Finds keep the shape their source gives. The Renderer's rules gain a callout and an explorable that a role wrote out with its item (`data.callout`, `data.explorable`), the explorable built as the look call's is and drawn only when its formula reads and gives every result its item states. With 51, a Scout idea is made with the rules' card and never asked about, so the card it lands as is its last (`test/scout-shapes.test.ts`).
+
+**Why.** The user wants each item "in the best format possible", not "only a few templates", and asked: "how do we make sure that after search agent picks card type, the agent that follows will gather all info needed to fill in the picked card type?" Written in one reply with its fields, the shape has nothing left to gather. Before, the Scout's ideas were notes or steps, and all 9 the look call saw in the user's headset session stayed notes.
+
+**The cost was thinking, not fields.** `scratchpad/ws25/bin/prompt-compare.mts` sent the directions request of a plain copy of cce96dd and of this branch, on DECISIONS 47's three cards, to `muse-spark-1.3` at low effort, alternating, and read each stream on the side. With a paragraph of rules per format and sliders in explorables, the model reasoned for 1,208 tokens before its first direction against 745 (median, 6 calls each), and its first text came 3.5 s later. The empty slots add about 20 tokens to a direction. With one line per format, explorables of states only, and written ideas first: first direction 7.9 s against 7.2 s, first written idea 7.9 s against 7.8 s (6 each). Today's own median moved 1.6 s between two batches an hour apart.
+
+**Sliders left out.** Asked for sliders too, the model set 2 of its 3 over quantities it made up ("Model creativity" from 0 to 1 giving "interface consistency", "Weeks after peak bloom" giving "field still yellow"), which no formula could state. The Renderer's row keeps the check that a slider's formula gives every stated value within 1 percent, for any role that writes one.
+
+**Measured, inventiveness.** The same three cards, two sets a side from the batch above, shuffled under letters per card, ranked by two blind readers (Opus and Sonnet) on how inventive, specific and useful the directions are (`scratchpad/ws25/blind-sheet.md`, `reader-a.md`, `reader-b.md`). The mean rank was 2.5 for both prompts; a set of this one stood above one of today's in 12 of the 24 pairs. Its sets were first in 4 of the 6 rankings and last in 4, each last named for generic finds, as today's were on two cards.
+
+**Measured, ten requests.** `scratchpad/ws25/bin/service-runs.mts`: ten requests on ten cards (WS22's five, and how Kubrick made his films feel cold, where else the grid idea was used, whether "Clippy was the first generative UI" is true, how a scene of The Good, the Bad and the Ugly was made, ideas for a short story like "The machine is scariest when it is polite"), one run each per side, alternating, each through its own copy of the service from a fresh copy of the mindstorm, Telegram off. Another workstream ran four Scout runs on the key meanwhile; no request of these runs was held for the rate window.
+
+| | Before (cce96dd) | After |
+|---|---|---|
+| Shapes the written ideas took | 2: note 10, steps 1 | 8: note 10, explorable 4, steps 2, quote 2, pros and cons, list, definition, facts 1 each |
+| Ideas that fell back to plain text | | 0 of 22 |
+| First card | 4.3 s (2.1 to 6.8) | 3.6 s (2.0 to 6.2) |
+| First card of the inventive lane | 9.4 s (2.1 to 19.9) | 10.0 s (2.0 to 31.0) |
+| First written idea | 10.0 s (7.1 to 13.5, 9 runs) | 11.4 s (8.1 to 31.0) |
+| The line saying what came | 14.3 s | 15.6 s |
+| Last card | 25.3 s | 29.2 s |
+| The directions call | 12.2 s (9.4 to 24.9), 4,200 tokens | 14.7 s (11.4 to 40.1), 5,250 tokens |
+| Spend, 10 runs | $0.73 | $0.70 |
+
+Medians, with the range. The first written idea is 1.4 s later, and 1.3 s by the median of the nine requests both sides wrote one for. Written first, an idea lands the moment it is whole, so the inventive lane's first card is 0.6 s later. One directions call of this side ran 40 s, which put that run's first idea at 31 s. On the code before 51, 12 of the 22 ideas landed as notes and took their shape a pass later; with 51 merged each is made in its shape (`test/scout-shapes.test.ts`).
+
+**What bounds it.** The directions call: about 1,000 tokens more, as the model writes fuller ideas, and 2.5 s longer at the median.
+
+**Not done.** Pros and cons are headed "For" and "Against" in English whatever the language. An explorable's controls do not work on the headset yet: its opened card writes its states out as text. Two blind readers' marks of any card where another shape would be clearly better (`scratchpad/ws25/fit-sheet.md`, the 22 ideas) were not in when this was written.
+
+**Alternatives.** A short shape hint with fields only for the shapes that need them, or the fields after the title: they save output tokens, which were not the cost. A later agent that fills a picked shape: it would wait on a second call and on what it gathers, and could fail to fill it after the card had landed. Sliders: above.

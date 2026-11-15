@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Item } from '../src/core/domain.ts';
-import { byRule } from '../src/core/roles/renderer.ts';
+import { byRule, renderer } from '../src/core/roles/renderer.ts';
 import { scout } from '../src/core/roles/scout.ts';
 import { AGENT, kit, type Kit } from './kit.ts';
 
@@ -111,6 +111,16 @@ for (const { direction, card, props } of SHAPES) {
     assert.deepEqual(drawn.props, props);
     assert.equal(items[0]!.title, direction.title);
     assert.deepEqual(k.notes.filter((n) => n.includes('lands as plain text')), []);
+  });
+
+  test(`${card} "${direction.title}" lands in its final look, which a Renderer pass leaves as it is`, async () => {
+    const { k, items } = await landed(direction);
+    const node = [...k.mind.nodes.values()].find((n) => n.itemId === items[0]!.id)!;
+
+    assert.equal(node.view.component, card);
+    assert.equal(node.view.composing, undefined);
+    const pass = await renderer(k.ctx, { nodeIds: [node.id] });
+    assert.deepEqual(pass.filter((c) => c.type === 'setView'), []);
   });
 }
 
