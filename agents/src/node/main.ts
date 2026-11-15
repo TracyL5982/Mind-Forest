@@ -35,7 +35,7 @@ if (fake) {
       console.log(
         `  model ${c.kind} ${c.role} ${c.ok ? 'ok' : 'FAILED'} ${c.ms}ms${c.tokens ? ` ${c.tokens} tokens` : ''}` +
           `${c.model ? `, ${[c.model, c.effort].filter(Boolean).join(' ')}` : ''}${c.tries && c.tries > 1 ? `, ${c.tries} tries` : ''}` +
-          `${c.heldMs ? `, held ${c.heldMs}ms for the rate window` : ''}`,
+          `${c.heldMs ? `, held ${c.heldMs}ms for the rate window` : ''}${c.gaveUp ? ', gave up waiting for the rate window' : ''}`,
       ),
   });
   roles = (await import('../core/roles/index.ts')).roles;

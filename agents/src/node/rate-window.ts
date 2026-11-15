@@ -7,11 +7,8 @@ import type { Priority } from '../core/ports.ts';
 const KEEP: Record<Priority, number> = { user: 0, background: 0.1 };
 const ORDER: Priority[] = ['user', 'background'];
 
-/** A request let out: how long it was held, and what to call once its answer has ended. */
-export interface Slot {
-  heldMs: number;
-  done: () => void;
-}
+/** A request let out, with what to call once its answer has ended, or one given up when it could not be let out in time. */
+export type Slot = { heldMs: number; done: () => void } | { heldMs: number; done?: undefined };
 
 /**
  * The key's rate limit as the API's replies show it: so many requests and tokens in any window, shared by every program on the key.
@@ -26,20 +23,26 @@ export class RateWindow {
   private others = { count: 0, until: 0 };
   private tokens = { left: Infinity, until: 0 };
   private refusedUntil = 0;
-  private readonly held: Record<Priority, { asked: number; go: (slot: Slot) => void }[]> = { user: [], background: [] };
+  private readonly held: Record<Priority, { asked: number; until: number; go: (slot: Slot) => void }[]> = { user: [], background: [] };
   private timer: ReturnType<typeof setTimeout> | undefined;
-  /** How long a request stays in the window after its answer ends: the window, and a sixtieth more for the clocks' difference. */
+  /** A sixtieth of the window, a second of the API's minute: for the clocks' difference, and the shortest a refusal holds. */
+  private readonly margin: number;
+  /** How long a request stays in the window after its answer ends. */
   private readonly span: number;
 
   constructor(readonly ms = 60_000) {
-    this.span = ms + ms / 60;
+    this.margin = ms / 60;
+    this.span = ms + this.margin;
   }
 
-  /** Resolves once the window has room for a request of this kind. The user's go first. */
-  take(priority: Priority): Promise<Slot> {
+  /**
+   * Resolves once the window has room for a request of this kind, the user's first. A request it cannot let out within `waitMs` is
+   * given up then, or at once when a refusal holds every request for longer.
+   */
+  take(priority: Priority, waitMs: number): Promise<Slot> {
     return new Promise((go) => {
       const now = Date.now();
-      this.held[priority].push({ asked: now, go });
+      this.held[priority].push({ asked: now, until: now + waitMs, go });
       this.release(now);
     });
   }
@@ -58,10 +61,11 @@ export class RateWindow {
       const theirs = Math.max(0, this.limit.requests - requests - this.sent.size);
       if (theirs > this.others.count || now >= this.others.until) this.others = { count: theirs, until: now + this.span };
     }
-    // A refusal the counts do not explain, as of a request larger than the tokens left, holds every request as long as it asks.
+    // A refusal the counts do not explain, as of a request larger than the tokens left, holds every request as long as it asks,
+    // and long enough that a shorter ask does not turn into a request sent again and again.
     if (res.status === 429 && this.room('user', now)) {
       const after = count(res.headers, 'retry-after');
-      this.refusedUntil = Math.max(this.refusedUntil, now + (after ? after * 1000 : this.ms));
+      this.refusedUntil = Math.max(this.refusedUntil, now + Math.max(this.margin, after ? after * 1000 : this.ms));
     }
     this.release(now);
   }
@@ -96,11 +100,24 @@ export class RateWindow {
       }
       if (queue.length > 0) break;
     }
+    for (const priority of ORDER) {
+      this.held[priority] = this.held[priority].filter(({ asked, until, go }) => {
+        if (until > Math.max(now, this.refusedUntil)) return true;
+        go({ heldMs: now - asked });
+        return false;
+      });
+    }
     clearTimeout(this.timer);
     if (ORDER.every((priority) => this.held[priority].length === 0)) return;
     // Room comes back when a request leaves the window, or when what was said of other programs, or a refusal, runs out. While
     // every request in the way is still being answered, the end of an answer releases instead.
-    const times = [this.refusedUntil, this.others.until, this.tokens.until, ...[...this.sent].map((r) => r.until)].filter((t) => t > now && t < Infinity);
+    const times = [
+      this.refusedUntil,
+      this.others.until,
+      this.tokens.until,
+      ...[...this.sent].map((r) => r.until),
+      ...ORDER.flatMap((priority) => this.held[priority].map((h) => h.until)),
+    ].filter((t) => t > now && t < Infinity);
     if (times.length > 0) this.timer = setTimeout(() => this.release(), Math.min(...times) - now);
   }
 }
