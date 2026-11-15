@@ -202,6 +202,8 @@ struct Activity {
     State state = State::start;
     std::string message;
     std::optional<NodeId> nodeId;
+    /// More about the step: for a Scout run on a card, the question it answers; on an error, what went wrong.
+    std::optional<std::string> detail;
 };
 
 /// Who should turn speech into text: the service (record and POST /api/transcribe) or the client's own recognizer.

@@ -367,10 +367,11 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
 void Bridge::activity(const Activity& a) {
     if (a.state != Activity::State::start) {
         thinking.erase(a.id);
-        if (a.role == "scout" && a.nodeId) asking.ended(a.nodeId->value);
+        asking.ended(a.id);
         return;
     }
     if (!a.nodeId) return;
+    if (a.role == "scout" && a.detail) asking.searching(a.id, a.nodeId->value, *a.detail);
     for (auto& [key, p] : trees) {
         auto local = p.local.find(a.nodeId->value);
         if (local != p.local.end()) {

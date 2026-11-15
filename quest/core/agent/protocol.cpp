@@ -394,6 +394,7 @@ std::optional<Activity> readActivity(const Json& j, Why& why) {
                                                    {"error", Activity::State::error}}),
                        .message = f.string("message"),
                        .nodeId = f.optionalId<NodeId>("nodeId"),
+                       .detail = f.optionalString("detail"),
                    });
 }
 

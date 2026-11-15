@@ -269,6 +269,12 @@ TEST(optionalFieldsMayBeMissing) {
     Inbound asked = parseInbound(R"({"t":"navigate","nodeId":"n1","yours":true})");
     auto* mine = std::get_if<Navigate>(&asked);
     CHECK(mine && mine->yours, "a navigate this connection asked for says so");
+    Inbound search = parseInbound(
+        R"({"t":"activity","activity":{"id":"a1","role":"scout","state":"start","label":"Looking into pen","detail":"Who drew on walls first?","message":"Looking into pen","nodeId":"n1"}})");
+    auto* question = std::get_if<Activity>(&search);
+    CHECK(question && question->detail == std::optional<std::string>("Who drew on walls first?"), "a Scout run on a card says the question it answers");
+    Inbound round = parseInbound(R"({"t":"activity","activity":{"id":"a2","role":"scout","state":"start","label":"Finding more for pen","message":"Finding more for pen","nodeId":"n1"}})");
+    CHECK(std::get_if<Activity>(&round) && !std::get_if<Activity>(&round)->detail, "a round with no question has no detail");
 
     Inbound nullUndo = parseInbound(edited(recordedText("Keep a pick"), [](Json j) { return j.set("undo", nullptr); }));
     auto* change = std::get_if<Change>(&nullUndo);

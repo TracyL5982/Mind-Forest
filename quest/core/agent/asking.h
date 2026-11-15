@@ -21,13 +21,22 @@ public:
         return true;
     }
 
-    /// The service's search round the node ended, done or failed: what was asked about it may be asked again.
-    void ended(const std::string& nodeId) {
-        for (auto s = since.begin(); s != since.end();) s = s->first.first == nodeId ? since.erase(s) : std::next(s);
+    /// The service started its search for `question` about the service node `nodeId`, as the activity `activityId`.
+    void searching(const std::string& activityId, const std::string& nodeId, const std::string& question) {
+        runs[activityId] = std::make_pair(nodeId, question);
+    }
+
+    /// The activity `activityId` ended, done or failed. When it was a search for a question, that question may be asked again.
+    void ended(const std::string& activityId) {
+        auto run = runs.find(activityId);
+        if (run == runs.end()) return;
+        since.erase(run->second);
+        runs.erase(run);
     }
 
 private:
     std::map<std::pair<std::string, std::string>, double> since;
+    std::map<std::string, std::pair<std::string, std::string>> runs;
 };
 
 }  // namespace agent
