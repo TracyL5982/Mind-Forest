@@ -1,13 +1,14 @@
 // Runs the Mac preview against a stand-in service and checks, from the preview's log, how it carries out `navigate`.
 // The stand-in serves the recorded session's tree and an older copy of it, transcribes every recording as the same
-// words, answers every reply with reply.mp3 (the Mac's Samantha through ffmpeg, 48 kbit/s), and sends:
+// words, answers every reply with reply.mp3 (3.6 s of silence from ffmpeg's anullsrc, so no voice is heard), and sends:
 //   2 s after hello       navigate to the copy's tree, which hangs on the shelf
 //   1.5 s after the name  navigate to a card two layers up in the copy, while the user is recorded (-wakeClip)
 //   0.3 s after the utter navigate to a card the copy hangs from a card that leads no layer (added to the copy)
 //   1.5 s after the utter a reply, and with it a navigate to a card of the first tree
 //   12 s after the utter  navigate to a card that is not there
 //   14 s after the utter  a reply whose sound never comes, and with it a navigate, which goes after 20 s anyway
-// Each card gone to must open on its parent's layer, a tree's root on its own.
+// Each card gone to must open on its parent's layer, a tree's root on its own. The preview runs with -mute, but the
+// voice's chime on the name still plays aloud once: -mute does not reach the voice's sounds yet.
 //
 //   quest/desktop/build.sh && node quest/desktop/test/navigate_check.mjs [--shots <folder>] [--port <port>]
 import { spawn } from 'node:child_process';
@@ -150,7 +151,7 @@ header.writeUInt32LE(pcm.length, 40);
 const wav = Buffer.concat([header, pcm]);
 writeFileSync(join(work, 'clip.wav'), wav);
 const shotArgs = shots ? ['-shot', join(shots, 'navigate.png'), '-shotEvery', '0.5'] : ['-shot', join(work, 'end.png')];
-const preview = spawn(join(quest, 'desktop/preview'), ['-agent', `ws://127.0.0.1:${port}`, '-agentToken', 'standin', '-wakeClip', join(work, 'clip.wav'), ...shotArgs, '-shotAt', '160', '-realtime'], {
+const preview = spawn(join(quest, 'desktop/preview'), ['-agent', `ws://127.0.0.1:${port}`, '-agentToken', 'standin', '-wakeClip', join(work, 'clip.wav'), ...shotArgs, '-shotAt', '160', '-realtime', '-mute'], {
   stdio: ['ignore', 'ignore', 'pipe'],
 });
 let partial = '';
