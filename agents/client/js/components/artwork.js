@@ -1,6 +1,6 @@
 import { h } from '../dom.js';
 import { chipSources } from '../chips.js';
-import { COLUMN, CUE, HEIGHT, TITLE, WIDTH, drawFace, fit, lay, picture, say, text, titleOf, titleRow } from './shared.js';
+import { COLUMN, HEIGHT, MEASURES, WIDTH, drawFace, fit, lay, picture, say, text, titleRow } from './shared.js';
 import { wordsOf } from '../words.js';
 
 /** The face's border, and the plate's padding under the title with 1 px to spare; the 10 px above the title is its gap. */
@@ -14,15 +14,14 @@ function plan(props) {
 }
 
 /**
- * The work whole on a 6 px mat, as large as the plate leaves room for, over a plate with its title on one line. The maker, the
- * date, the medium and the holder are on the opened card.
+ * The work whole on a 6 px mat, as large as the plate leaves room for, over a plate with its title on up to two lines. The maker,
+ * the date, the medium and the holder are on the opened card.
  */
 function face(item, props, ctx) {
-  const head = titleRow(item, { most: 1, gap: ABOVE });
-  const plate = ABOVE + TITLE + UNDER;
-  const cut = !fit(titleOf(item), COLUMN, 'title', 1).whole;
+  const head = titleRow(item, { gap: ABOVE });
+  const { lines } = fit(head.words, COLUMN, 'title', head.most, true);
   return lay([
-    { tall: HEIGHT - BORDER - plate - (cut ? CUE : 0), draw: () => h('div', { class: 'artwork-mat' }, picture(text(props.src), item.title, ctx)) },
+    { tall: HEIGHT - BORDER - (ABOVE + lines * MEASURES.title.lead + UNDER), draw: () => h('div', { class: 'artwork-mat' }, picture(text(props.src), item.title, ctx)) },
     head,
   ], { words: wordsOf(item), frame: BORDER + UNDER });
 }

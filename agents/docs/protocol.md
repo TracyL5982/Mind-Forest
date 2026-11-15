@@ -13,6 +13,7 @@ A client is anything that shows the mindstorm: the web client, the Ocean app, a 
 Five maps keyed by id: `item`, `node`, `tree`, `link`, `group`. Shapes are in `src/core/domain.ts`.
 
 - **Item.** One piece of content: `kind`, `title`, `text`, `summary`, `tags`, `data`, `source` (`from`, `url`, `asset`), `origin`.
+  - `title` is the item's whole title. A title the model wrote stands on the two lines a small card face gives a title; a source's own title, a paper's, a work's, a page's, a file's name, or one a person wrote, is kept whole. `data.shortTitle`, a string, is then what a small face shows of it: its first whole clause or words that fit two lines, with no ellipsis. It is there only when the whole title does not fit, and the service sets it again whenever the title changes. A client's small face shows `data.shortTitle` when it is there, else `title`, and its opened card shows `title`. docs/libraries.md gives the rule.
 - **Node.** An item's place in a tree: `treeId`, `itemId`, `parent` (null for a root), `status` (`kept` or `pick`), `why`, `importance` (0 to 1), `view` (`component`, `props`), `order` among siblings.
 - **Tree.** `title`, `rootId`, `digest`.
 - **Link.** A tie between two nodes, usually across trees: `a`, `b`, `why`, `strength`.

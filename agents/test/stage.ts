@@ -310,7 +310,8 @@ export function crowd(total: number, { chips = false } = {}): Command[] {
  * What is wrong with each small face on the page, as the sizing rule states it: a face wider than 210 px or taller than 146, a
  * part that reaches past its face, text clamped, clipped or cut with an ellipsis, a row whose parts reach past the height it was
  * counted for, and read text set under 13.5 px or in italics. A card whose `data-said` holds the item and props it was drawn
- * from also has every line that ends in an ellipsis checked against them, since only the item's own words may. A large size's
+ * from also has every line that ends in an ellipsis checked against them, since only the item's own words may, and a title cut
+ * past its two lines. A large size's
  * glyphs stand a little past their line, so text is clipped only when it reaches past its box by more than that.
  */
 export function faceFaults(page: Page): Promise<string[]> {
@@ -340,7 +341,9 @@ export function faceFaults(page: Page): Promise<string[]> {
         else if (clips && el.clientHeight > 0 && el.scrollHeight > el.clientHeight + slack) found.push(`${name}: ${label} is clipped`);
         if (style.textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth) found.push(`${name}: ${label} ends in an ellipsis`);
         const end = el.textContent!.trimEnd();
-        if (said !== null && /(…|\.\.\.)$/.test(end) && !said.includes(end.slice(-8))) found.push(`${name}: ${label} ends in an ellipsis the item does not write`);
+        // A title, or a name that stands for one, past its two lines is the one thing a face cuts with an ellipsis.
+        const title = el.classList.contains('card-title');
+        if (said !== null && !title && /(…|\.\.\.)$/.test(end) && !said.includes(end.slice(-8))) found.push(`${name}: ${label} ends in an ellipsis the item does not write`);
       }
       for (const row of card.querySelectorAll<HTMLElement>('.face-row')) {
         const bottom = row.getBoundingClientRect().bottom;

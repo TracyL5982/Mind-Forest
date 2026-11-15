@@ -37,7 +37,7 @@ function heard(item) {
 /** The title on up to two lines, the strip, and the first words of the transcript on as many lines as the face has room for. */
 function face(item, props) {
   return lay([
-    titleRow(item, { most: 2 }),
+    titleRow(item),
     { tall: STRIP, gap: GAP, draw: () => strip(props, lengthOf(props)) },
     { words: heard(item), gap: GAP, draw: wordsIn('card-text') },
   ], { words: wordsOf(item) });

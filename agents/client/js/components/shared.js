@@ -341,15 +341,44 @@ const counted = (column, measure) => [column, MEASURES[measure].letter];
 /** The lines a string takes on a face in a column `column` px wide, counted as `measure` counts it. */
 export const linesOf = (str, column, measure) => ends(str, ...counted(column, measure)).length;
 
+/** What a cut leaves at its end that only joins it to what was cut. */
+const JOINING = /[\s,;:，；：、–—-]+$/u;
+
+/**
+ * The start of a string that stands on `most` lines with an ellipsis after it: cut where a word ends, at a hyphen that joins two
+ * words, or after any character of a script written without spaces, and without the marks that only joined it to the rest. A word longer than the lines is cut
+ * between the characters a reader sees.
+ */
+function shortened(str, width, letter, most) {
+  const fits = (words) => ends(`${words}…`, width, letter).length <= most;
+  const cuts = [...str.matchAll(/\S(?=\s)|[A-Za-z](?=-[A-Za-z])|[\u3041-\u3096\u30a1-\u30fa\u30fc\u3400-\u9fff\uac00-\ud7af]|[\u3001\u3002\uff0c\uff1b\uff1a\uff1f\uff01\uff09\u300b]/gu)]
+    .map((m) => str.slice(0, m.index + m[0].length).replace(JOINING, '')).filter(Boolean).reverse();
+  let kept = cuts.find(fits);
+  if (kept === undefined) {
+    kept = '';
+    for (const part of graphemes(str)) {
+      if (!fits(kept + part)) break;
+      kept += part;
+    }
+  }
+  return `${kept}…`;
+}
+
 /**
  * The most of a string that stands on `most` whole lines of a column: all of it when it fits, else its first words, to where its
  * last whole line ends. `whole` says nothing was left out. A face draws exactly these words, so it never cuts a line, clamps one
- * or ends one with an ellipsis.
+ * or ends one with an ellipsis. A title is the one exception: `ellipsis` cuts one that needs more than `most` lines at a whole
+ * word and ends it with an ellipsis, which says what is left out, so it counts as whole and brings no cue.
  */
-export function fit(str, column, measure, most = Infinity) {
+export function fit(str, column, measure, most = Infinity, ellipsis = false) {
   if (!str) return { words: '', lines: 0, whole: true };
-  const lines = ends(str, ...counted(column, measure));
+  const [width, letter] = counted(column, measure);
+  const lines = ends(str, width, letter);
   if (lines.length <= most) return { words: str, lines: lines.length, whole: true };
+  if (ellipsis && most > 0) {
+    const words = shortened(str, width, letter, most);
+    return { words, lines: ends(words, width, letter).length, whole: true };
+  }
   return { words: most > 0 ? str.slice(0, lines[most - 1]).trimEnd() : '', lines: Math.max(0, most), whole: false };
 }
 
@@ -369,7 +398,7 @@ export function fit(str, column, measure, most = Infinity) {
 export function lay(rows, { words: said = wordsOf(), cue = () => '', more = false, frame = FRAME } = {}) {
   const lead = (row) => MEASURES[row.measure ?? 'body'].lead;
   const shownIn = (row, most) => {
-    const shown = fit(row.words, row.column ?? COLUMN, row.measure ?? 'body', most);
+    const shown = fit(row.words, row.column ?? COLUMN, row.measure ?? 'body', most, row.ellipsis);
     return { ...row, ...shown, height: shown.lines * lead(row) + (row.pad ?? 0) };
   };
   const sized = rows.filter(Boolean).map((row) => (row.words === undefined ? { ...row, gap: row.gap ?? 0, height: row.tall } : shownIn({ ...row, gap: row.gap ?? 0 }, row.most)));
@@ -489,8 +518,17 @@ export function headsRow(props, { column = COLUMN, gap = GAP } = {}) {
 /** The item's title, or the word for one that is missing. */
 export const titleOf = (item) => item.title || wordsOf(item).untitled;
 
-/** The title as a row of a face: whole, up to four lines. */
-export const titleRow = (item, { column = COLUMN, most = 4, gap = 0 } = {}) => ({ words: titleOf(item), measure: 'title', column, most, gap, draw: wordsIn('card-title') });
+/** The most lines a title, or a name that stands for it, takes on a small face. */
+export const TITLE_LINES = 2;
+
+/**
+ * The title a small face shows: `item.data.shortTitle`, the start of a source's own title the service gives it, else the title. The
+ * opened card shows the whole title.
+ */
+export const faceTitleOf = (item) => text(item.data?.shortTitle).trim() || titleOf(item);
+
+/** The title as a row of a face: whole on up to two lines, else its first two cut at a whole word and ended with an ellipsis. */
+export const titleRow = (item, { column = COLUMN, gap = 0 } = {}) => ({ words: faceTitleOf(item), measure: 'title', column, most: TITLE_LINES, ellipsis: true, gap, draw: wordsIn('card-title') });
 
 /** A short label that names what a card is: a language, where a chat came from, a kind of group. */
 export const kind = (label) => h('span', { class: /\p{Script=Han}/u.test(label) ? 'kind is-han' : 'kind', text: label });

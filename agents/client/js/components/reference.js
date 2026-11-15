@@ -24,7 +24,7 @@ function face(item, props) {
   const words = wordsOf(item);
   return lay([
     { tall: META + RULE, draw: () => head(label, year) },
-    titleRow(item, { most: 2 }),
+    titleRow(item),
     names.length > 0 && { words: words.firstAuthor(names[0], names.length - 1, props.more === true), measure: 'meta', most: 1, gap: GAP, draw: wordsIn('reference-authors') },
   ], { words });
 }

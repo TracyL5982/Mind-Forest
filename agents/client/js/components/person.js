@@ -1,5 +1,5 @@
 import { h } from '../dom.js';
-import { COLUMN, MEASURES, WIDTH, drawFace, fit, initials, lay, picture, say, text } from './shared.js';
+import { COLUMN, MEASURES, TITLE_LINES, WIDTH, drawFace, fit, initials, lay, picture, say, text } from './shared.js';
 import { wordsOf } from '../words.js';
 
 /** The round face and the gap beside it. */
@@ -13,9 +13,9 @@ const nameOf = (item, props) => text(props.name) || item.title || '';
 const portrait = (name, props, ctx) => h('div', { class: 'person-face' },
   text(props.image) ? picture(props.image, name, ctx, () => initials(name)) : initials(name));
 
-/** The face beside the name at the title's size and the role under it, each whole on up to two lines. */
+/** The face beside the name at the title's size, cut as a title is past two lines, and the role under it, whole on up to two. */
 function face(item, props, ctx) {
-  const name = fit(nameOf(item, props), COLUMN - FACE - BESIDE, 'title', MOST_LINES);
+  const name = fit(nameOf(item, props), COLUMN - FACE - BESIDE, 'title', TITLE_LINES, true);
   const role = fit(text(props.role).trim(), COLUMN - FACE - BESIDE, 'body', MOST_LINES);
   return lay([{
     tall: Math.max(FACE, name.lines * MEASURES.title.lead + role.lines * MEASURES.body.lead), whole: name.whole && role.whole,

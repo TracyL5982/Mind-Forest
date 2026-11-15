@@ -3,6 +3,7 @@ import type { Command, Group, Id, Item, Node, View } from '../domain.ts';
 import { parse } from '../formula.ts';
 import { grounding, type Grounding, type Way } from '../grounding.ts';
 import { cardsOf, collapse, JOINS, KINDS, LIMITS, parseFlat, ROLES, type Box, type Part as LayoutPart } from '../layout.ts';
+import { fittedTitle } from '../fitted.ts';
 import { fit } from '../map.ts';
 import { Unreadable, type LatLon } from '../ports.ts';
 import { CHECKS, isValidGroup, isValidView, misses, POINT, recording, ROOM, roomOf, SECTION, siteOf, type Check, type ComponentId, type CompositeId, type PropsOf, type Section, type Stated } from '../views.ts';
@@ -1298,7 +1299,7 @@ Rules:
 - A node belongs to at most one group.
 - Never put a kept sibling and a suggested sibling in the same group.
 - Use the parent and member ids exactly as given.
-- title is a few words: the theme, or what is being compared.
+- title is a few words, about 26 characters in English or 18 in Chinese: the theme, or what is being compared.
 - Fill only the fields of the chosen arrangement. Leave the others as an empty string or an empty list.
 - Choose layout only when no other arrangement fits.
 
@@ -1329,7 +1330,7 @@ const wholeLine = (text: string): Way[] => [{ pieces: [{ text, entry: true }] }]
  */
 function draftFrom(ctx: RoleContext, g: CompositesReply['groups'][number], members: Id[], ids: Id[], status: Node['status']): GroupDraft | null {
   const content = membersContent(ctx);
-  const title = clip(g.title, 40);
+  const title = fittedTitle(g.title.replace(/\s+/g, ' ').trim());
   /** A line set beside a member stands when it is the whole text of one of these members, and short enough. It is drawn as that member writes it. */
   const line = (said: string | undefined, ...of: Id[]) => {
     const text = (said ?? '').trim();
@@ -1415,7 +1416,7 @@ export function layoutDraft(ctx: RoleContext, g: Pick<CompositesReply['groups'][
     return label && stands(label, cardsOf(part)) ? { ...rest, label, children } : { ...rest, children };
   };
   const tree = collapse(grounded(parsed.tree) as Box);
-  return { composite: 'layout', title: clip(g.title, 40), members: cardsOf(tree), props: { tree } };
+  return { composite: 'layout', title: fittedTitle(g.title.replace(/\s+/g, ' ').trim()), members: cardsOf(tree), props: { tree } };
 }
 
 async function askComposites(ctx: RoleContext, pools: Pool[], changed: ReadonlySet<Id>, out: Command[]): Promise<void> {

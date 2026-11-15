@@ -1,4 +1,5 @@
 import type { Command, Id, Item, Node, Origin, Sound } from '../domain.ts';
+import { shortTitleOf } from '../fitted.ts';
 import type { Assets, ModelClient, Tools } from '../ports.ts';
 import type { Mindstorm } from '../state.ts';
 import { defaultView } from '../views.ts';
@@ -131,6 +132,10 @@ export interface Roles {
 
 export const AGENT = (role: string, tool?: string): Origin => ({ by: 'agent', role, ...(tool ? { tool } : {}) });
 
+/**
+ * A new item. Its title is kept as the role gives it. A title the model wrote is already held to a small face's two lines by
+ * `fittedTitle`; any other, a source's own, keeps every word, and `data.shortTitle` holds the start of it the face shows.
+ */
 export function makeItem(
   ctx: RoleContext,
   fields: Pick<Item, 'kind' | 'title' | 'origin'> & Partial<Pick<Item, 'text' | 'summary' | 'tags' | 'data'>> & {
@@ -144,12 +149,19 @@ export function makeItem(
     text: fields.text ?? '',
     summary: fields.summary ?? '',
     tags: fields.tags ?? [],
-    data: fields.data ?? {},
+    data: withShortTitle(fields.data ?? {}, fields.title),
     source: { ...fields.source, capturedAt: ctx.now() },
     origin: fields.origin,
     archived: false,
     revision: 0,
   };
+}
+
+/** An item's data with `shortTitle` set to what a small face shows of `title`, or without it when the whole title fits. */
+export function withShortTitle(data: Item['data'], title: string): Item['data'] {
+  const { shortTitle: _, ...rest } = data;
+  const short = shortTitleOf(title);
+  return short ? { ...rest, shortTitle: short } : rest;
 }
 
 /** A node for an item, with its default view. `order` continues after the parent's existing children plus `offset`. */

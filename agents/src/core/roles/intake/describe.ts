@@ -1,37 +1,12 @@
 import { z } from 'zod';
-import { COLUMN, FRAME, GAP, HEIGHT, TEXT, TITLE, linesOf } from '../../../../client/js/components/shared.js';
 import type { ItemData } from '../../domain.ts';
+import { fittedSummary, fittedTitle } from '../../fitted.ts';
 import { grounding, type Grounding } from '../../grounding.ts';
 import { CHECKS, type ComponentId, type PropsOf } from '../../views.ts';
 import { asColour } from './colours.ts';
 import { clip, squash, tidyTags, TITLE_MAX, type Described } from './plain.ts';
 
-
-/** Where a sentence ends: after a stop and the quotation marks or brackets that close on it, before white space or the end. A stop set with Han needs no space after it. */
-const SENTENCE = /[.!?…]["'”’)\]]*(?=\s|$)|[。！？][”’」』）]*/gu;
-/** Where a clause ends inside a sentence: before a comma, a semicolon, a colon or a dash. */
-const CLAUSE = /\s*(?:[,;:，；：、]|\s[–—-]\s)/gu;
-/** A clause that stands for a summary says something: three words, or six characters of a script written without spaces. */
-const UNSPACED = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu;
-const SAYS = (words: string) => words.split(/\s+/).filter(Boolean).length >= 3 || (words.match(UNSPACED)?.length ?? 0) >= 6;
-
-/**
- * The summary as a note's small face holds it whole under the title, counted by the web client's face rule, which the Quest client
- * shares: on as many lines of the 177 px column as are left under the
- * title's lines, which is three under a title of one line and two under a title of two. A summary that runs longer keeps its
- * first whole sentences that fit, else its first whole clause that fits and says something, without the mark that ends the clause.
- * When neither fits, it is dropped, and the note shows the item's own first lines instead. It never ends in an ellipsis. The
- * opened card shows the item's text whole either way.
- */
-export function fittedSummary(summary: string, title: string): string {
-  const room = Math.floor((HEIGHT - FRAME - linesOf(title, COLUMN, 'title') * TITLE - GAP) / TEXT);
-  const fits = (words: string) => room > 0 && linesOf(words, COLUMN, 'body') <= room;
-  if (!summary || fits(summary)) return summary;
-  const cuts = (pattern: RegExp, at: (m: RegExpMatchArray) => number) => [...summary.matchAll(pattern)].map((m) => summary.slice(0, at(m)).trim()).reverse();
-  const sentence = cuts(SENTENCE, (m) => m.index! + m[0].length).find(fits);
-  if (sentence) return sentence;
-  return cuts(CLAUSE, (m) => m.index!).find((clause) => SAYS(clause) && fits(clause)) ?? '';
-}
+export { fittedSummary, fittedTitle };
 
 type Shape = Record<string, z.ZodType>;
 type Reply<S extends Shape> = { [K in keyof S]: z.infer<S[K]> };
@@ -227,7 +202,7 @@ export const ChatReply = z.object({
 export type Description = z.infer<typeof LinkReply>;
 
 const FIELDS = `For each thing you describe, return:
-- title: under 70 characters, specific to this content, no trailing period.
+- title: about 26 characters in English or 18 in Chinese, so it stands whole on the two lines a small card gives a title; specific to this content, no trailing period.
 - summary: one short sentence saying what it is, about 30 to 45 characters in English or 22 to 33 in Chinese, so it stands whole under the title on a small card. Never end it with an ellipsis.
 - tags: 2 to 6 short lowercase topic words.
 Write in the language of the content.
@@ -280,10 +255,10 @@ export const CHAT_SYSTEM = `You are the intake clerk of a brainstorming app. The
 You are given the conversation. Long messages are shortened and the middle of a long conversation may be left out.
 
 Return:
-- title: under 70 characters, naming what the conversation was about. No trailing period.
+- title: about 26 characters in English or 18 in Chinese, naming what the conversation was about, so it stands whole on the two lines a small card gives a title. No trailing period.
 - summary: one short sentence on what was worked out or decided, about 30 to 45 characters in English or 22 to 33 in Chinese, so it stands whole under the title on a small card. Never end it with an ellipsis.
 - tags: 2 to 6 short lowercase topic words.
-- takeaways: up to 5 ideas, conclusions or decisions from the conversation that are worth keeping on their own. Each has a title under 70 characters and a text of one to three sentences that makes sense without the conversation. Return fewer, or none, when the conversation holds fewer.
+- takeaways: up to 5 ideas, conclusions or decisions from the conversation that are worth keeping on their own. Each has a title of about 26 characters in English or 18 in Chinese and a text of one to three sentences that makes sense without the conversation. Return fewer, or none, when the conversation holds fewer.
 Write in the language of the conversation.`;
 
 /** The parts of the model's description worth keeping as drawable data: those that `source`, the text the model described, states. */
@@ -295,8 +270,11 @@ export function structure(d: Description, source: string): ItemData {
   return data;
 }
 
-/** The model's title, summary and tags, with `plain` standing in for anything it left empty, and the summary as a note's face holds it. */
+/**
+ * The model's title, summary and tags, with `plain` standing in for anything it left empty. The model's title is held to a small
+ * face's two lines; `plain`'s, a file's name or the item's own first line, is kept whole. The summary is as a note's face holds it.
+ */
 export function labels(d: Described, plain: Described): Described {
-  const title = clip(squash(d.title) || plain.title, TITLE_MAX);
+  const title = squash(d.title) ? fittedTitle(clip(squash(d.title), TITLE_MAX)) : plain.title;
   return { title, summary: fittedSummary(squash(d.summary) || plain.summary, title), tags: tidyTags(d.tags, plain.tags) };
 }

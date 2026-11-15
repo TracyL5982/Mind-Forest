@@ -1,14 +1,13 @@
 import { h } from '../dom.js';
-import { COLUMN, FIGURES, MEASURES, WIDTH, aboveRows, drawFace, figureNeed, lay, say, text, wordsIn, fit } from './shared.js';
+import { COLUMN, FIGURES, MEASURES, TITLE_LINES, WIDTH, aboveRows, drawFace, figureNeed, fit, lay, say, text, wordsIn } from './shared.js';
 import { wordsOf } from '../words.js';
 
 /** The meaning in the serif counts its lines in the whole line box, as an excerpt's passage does. */
 const LINE = WIDTH - 32;
 /** The short rule under the headword, and the room either side of it. */
 const RULE = 10;
-const MOST_TERM_LINES = 2;
 
-/** The headword is set in a figure's middle size while it fits on one line, and at the title's size on up to two when it does not. */
+/** The headword is set in a figure's middle size while it fits on one line, and at the title's size when it does not, cut as a title is past two lines. */
 function plan(props) {
   const term = text(props.term).trim();
   return { term, meaning: text(props.definition).trim(), large: figureNeed(term, FIGURES[1]) <= COLUMN * 100 };
@@ -18,7 +17,7 @@ function plan(props) {
 function face(item, props) {
   const { term, meaning, large } = plan(props);
   const above = aboveRows(props, { gap: 0 });
-  const shown = large ? { words: term, lines: 1, whole: true } : fit(term, COLUMN, 'title', MOST_TERM_LINES);
+  const shown = large ? { words: term, lines: 1, whole: true } : fit(term, COLUMN, 'title', TITLE_LINES, true);
   return lay([
     ...above,
     { tall: (large ? MEASURES.middle.lead : shown.lines * MEASURES.title.lead) + RULE, whole: shown.whole, gap: above.length > 0 ? 6 : 0,

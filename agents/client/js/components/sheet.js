@@ -105,7 +105,7 @@ function plan(item, props) {
     const part = kind?.plan(section);
     return part ? [{ ...part, kind, label: text(section.label).trim() }] : [];
   });
-  return { heading, title: heading || text(item.title).trim() || wordsOf(item).untitled, src, parts };
+  return { heading, title: heading || text(item.data?.shortTitle).trim() || text(item.title).trim() || wordsOf(item).untitled, src, parts };
 }
 
 /**

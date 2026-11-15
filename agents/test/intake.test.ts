@@ -68,8 +68,8 @@ test('a summary stands whole under its title on a note\'s small face, cut at a w
   type Card = { size: (item: unknown, props: unknown) => number[] };
   const { COMPONENTS } = (await import(new URL('../client/js/components/index.js', import.meta.url).href)) as { COMPONENTS: Record<string, Card> };
   const { linesOf } = (await import(new URL('../client/js/components/shared.js', import.meta.url).href)) as { linesOf: (str: string, column: number, measure: string) => number };
-  /** A note's face leaves no cue exactly when it shows its whole summary: the frame, the title, 6 px and the summary's lines. */
-  const whole = (title: string, summary: string) => COMPONENTS.note!.size({ title, summary, text: '' }, {})[1] === 30 + linesOf(title, 177, 'title') * 24 + (summary ? 6 + linesOf(summary, 177, 'body') * 22 : 0);
+  /** A note's face leaves no cue exactly when it shows its whole summary: the frame, the title's lines, two at most, 6 px and the summary's lines. */
+  const whole = (title: string, summary: string) => COMPONENTS.note!.size({ title, summary, text: '' }, {})[1] === 30 + Math.min(2, linesOf(title, 177, 'title')) * 24 + (summary ? 6 + linesOf(summary, 177, 'body') * 22 : 0);
   const cases: [string, string, string][] = [
     ['A title', 'A short summary.', 'A short summary.'],
     ['If the river is the highway', 'Barges carry the grain out and the news in. The road behind the houses is used only by locals, so nobody drives it.', 'Barges carry the grain out and the news in.'],
@@ -85,7 +85,8 @@ test('a summary stands whole under its title on a note\'s small face, cut at a w
   }
   let tall = 'A title';
   while (linesOf(tall, 177, 'title') < 4) tall += ' that runs on';
-  assert.equal(fittedSummary('A short summary.', tall), '', 'a title of four lines leaves a summary no room, so the note shows its title alone');
+  assert.equal(fittedSummary('A short summary.', tall), 'A short summary.', 'a title of four lines stands on two on the face, which leaves the summary its two');
+  assert.ok(whole(tall, 'A short summary.'));
   const one = 'Barges carry the grain out and the news in each day';
   assert.equal(linesOf(one, 177, 'body') <= 3, true);
   assert.equal(fittedSummary(one, 'A title'), one, 'three lines under a title of one line');

@@ -1,6 +1,6 @@
 import { h, s } from '../dom.js';
 import { atOf, drawMap } from '../map.js';
-import { COLUMN, FIGURES, MEASURES, WIDTH, drawFace, figureNeed, fit, lay, picture, say, text, titleOf, wordsIn } from './shared.js';
+import { COLUMN, FIGURES, MEASURES, TITLE_LINES, WIDTH, drawFace, faceTitleOf, figureNeed, fit, lay, picture, say, text, wordsIn } from './shared.js';
 import { wordsOf } from '../words.js';
 
 /** The map across the face under the name, and in the opened card. A place card is a town or a sight more often than a street, so both show a few kilometres around it. */
@@ -9,18 +9,17 @@ const OPENED_MAP = { width: 348, height: 200, zoom: 12, link: true };
 /** The round pin beside the name, and the gap after it. */
 const PIN = 28;
 const NAME = COLUMN - PIN - 10;
-const MOST_NAME_LINES = 2;
 /** Over a map, the face is padded above the name only: the border, 13 px and 2 to spare. The map takes the 13 px under the name as its gap. */
 const OVER_MAP = 17;
 
-/** The name is set in a figure's middle size while it fits on one line, and at the title's size on up to two when it does not. */
+/** The name is set in a figure's middle size while it fits on one line, and at the title's size when it does not, cut as a title is past two lines. */
 function plan(item, props) {
-  const name = text(props.name).trim() || titleOf(item);
+  const name = text(props.name).trim() || faceTitleOf(item);
   const large = figureNeed(name, FIGURES[1]) <= NAME * 100;
   const said = item.summary || item.text || '';
   return {
     name, large,
-    shown: large ? { words: name, lines: 1, whole: true } : fit(name, NAME, 'title', MOST_NAME_LINES),
+    shown: large ? { words: name, lines: 1, whole: true } : fit(name, NAME, 'title', TITLE_LINES, true),
     about: said && said !== name && said !== item.title ? said.replace(/\s+/g, ' ') : '',
     src: text(props.src).trim(),
     at: atOf(item.data?.at),

@@ -14,6 +14,7 @@ import {
   type Snapshot,
   type Tree,
 } from './domain.ts';
+import { withShortTitle } from './roles/types.ts';
 import { SearchIndex, type Hit } from './search.ts';
 import { isValidGroup, MEMBERS, type CompositeId } from './views.ts';
 
@@ -289,10 +290,12 @@ export class Mindstorm {
           throw new CommandError('conflict', `item ${c.id} is at revision ${item.revision}, not ${c.expectRevision}`);
         }
         const { data, ...rest } = c.patch;
+        const merged = data ? { ...item.data, ...data } : item.data;
         this.put('item', {
           ...item,
           ...defined(rest),
-          data: data ? { ...item.data, ...data } : item.data,
+          // A new title brings its own short title for a small face, or none when it fits whole.
+          data: rest.title === undefined ? merged : withShortTitle(merged, rest.title),
           revision: item.revision + 1,
         });
         return;
