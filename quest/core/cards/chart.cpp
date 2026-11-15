@@ -68,29 +68,6 @@ std::vector<double> gridValues(double lo, double hi) {
     return out;
 }
 
-/// shared.js's `cut`: the string, or as much of its start as fits `room` px with an ellipsis. A mark
-/// that takes no room stays with the letter before it.
-std::string cut(const std::string& s, double room) {
-    Text str = points(s);
-    if (double(span(str) * TEXT_LETTER) <= room * 100) return s;
-    double budget = room * 100 - double(span(U"…") * TEXT_LETTER);
-    std::vector<Text> parts;
-    bool joined = false;
-    for (char32_t c : str) {
-        if (!parts.empty() && (joined || span(Text(1, c)) == 0)) parts.back() += c;
-        else parts.push_back(Text(1, c));
-        joined = c == 0x200d;
-    }
-    double used = 0;
-    Text kept;
-    for (const Text& part : parts) {
-        used += double(span(part) * TEXT_LETTER);
-        if (used > budget && !kept.empty()) break;
-        kept += part;
-    }
-    while (!kept.empty() && isSpace(kept.back())) kept.pop_back();
-    return utf8(kept) + "…";
-}
 
 /// What a string on the plot is, which sets its colour and weight.
 enum class Role { tick, value, markedValue, label, markedLabel, empty };
@@ -426,5 +403,29 @@ const Kind kind = make();
 const Registered registered{kind};
 
 }  // namespace
+
+/// shared.js's `cut`: the string, or as much of its start as fits `room` px with an ellipsis. A mark
+/// that takes no room stays with the letter before it.
+std::string cut(const std::string& s, double room) {
+    Text str = points(s);
+    if (double(span(str) * TEXT_LETTER) <= room * 100) return s;
+    double budget = room * 100 - double(span(U"…") * TEXT_LETTER);
+    std::vector<Text> parts;
+    bool joined = false;
+    for (char32_t c : str) {
+        if (!parts.empty() && (joined || span(Text(1, c)) == 0)) parts.back() += c;
+        else parts.push_back(Text(1, c));
+        joined = c == 0x200d;
+    }
+    double used = 0;
+    Text kept;
+    for (const Text& part : parts) {
+        used += double(span(part) * TEXT_LETTER);
+        if (used > budget && !kept.empty()) break;
+        kept += part;
+    }
+    while (!kept.empty() && isSpace(kept.back())) kept.pop_back();
+    return utf8(kept) + "…";
+}
 
 }  // namespace cards

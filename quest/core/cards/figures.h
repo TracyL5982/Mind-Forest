@@ -45,4 +45,7 @@ std::string written(const Decimal& d, int grouped);
 /// `value.toLocaleString('en', {maximumFractionDigits: 6})`.
 std::string exact(double value);
 
+/// shared.js's `cut`: the string, or as much of its start as fits `room` px at the text size, with an ellipsis.
+std::string cut(const std::string& s, double room);
+
 }  // namespace cards
