@@ -153,7 +153,7 @@ test('a run takes nothing away, and is told what already hangs there', async () 
   assert.match(prompt, /Do not repeat these[\s\S]*An earlier pick/);
 });
 
-test('written ideas are delivered first, then each made direction as it is ready', async () => {
+test('each direction is delivered on its own as soon as it is ready, a written idea the moment it is written', async () => {
   const { k, anchor } = setup();
   const early: string[][] = [];
 
@@ -165,9 +165,9 @@ test('written ideas are delivered first, then each made direction as it is ready
     },
   });
 
-  assert.deepEqual(early[0]!.sort(), [NOTE.title, STEPS.title].sort());
-  assert.equal(early.length, 4, 'the picture, the museum work and the video each arrive on their own');
-  assert.ok(early.slice(1).every((titles) => titles.length === 1));
+  assert.deepEqual(early.slice(0, 2), [[NOTE.title], [STEPS.title]]);
+  assert.equal(early.length, 5, 'the picture, the museum work and the video each arrive on their own');
+  assert.ok(early.every((titles) => titles.length === 1));
   apply(k, rest);
   assert.equal(k.mind.picks(anchor).length, 5);
 });
@@ -362,16 +362,14 @@ test('a video that cannot be played in place is left out', async () => {
   assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title]);
 });
 
-test('a gallery becomes one picture per entry, and a run never generates more than four pictures', async () => {
-  const set = (title: string) =>
-    direction('gallery', title, { images: ['one', 'two', 'three'].map((t) => ({ title: `${title} ${t}`, prompt: `${title} ${t}, flat illustration` })) });
-  const { k, anchor } = setup({}, [set('Places'), set('Moods')]);
+test('a run never generates more than four pictures, and each picture made keeps its slot', async () => {
+  const picture = (n: number) => direction('image', `Picture ${n}`, { images: [{ title: `Picture ${n}`, prompt: `picture ${n}, flat illustration` }] });
+  const { k, anchor } = setup({}, [1, 2, 3, 4, 5].map(picture));
 
   apply(k, await scout(k.ctx, { anchor }));
 
-  const titles = picked(k, anchor).map((i) => i.title);
-  assert.deepEqual(titles, ['Places one', 'Places two', 'Places three', 'Moods one']);
   assert.equal(k.model.calls.filter((c) => c.kind === 'image').length, 4);
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['Picture 1', 'Picture 2', 'Picture 3', 'Picture 4']);
 });
 
 test('the model is shown the picture the user dropped, also when asked about a card under it', async () => {
@@ -794,4 +792,33 @@ test('the run is over once every slot left is held by a picture still being made
   slow.open();
   await until(() => k.mind.picks(anchor).length === 3);
   assert.equal(picked(k, anchor)[2]!.title, 'The shot at night');
+});
+
+test('a direction starts the moment the model has written it: a written idea lands and a search runs while the rest is still being written', async () => {
+  const { k, anchor } = setup({ picksPerRun: 2 }, [NOTE, direction('find', 'What the studies measured', { source: 'papers', lookups: ['dolly zoom'] })]);
+  k.world.found.set('papers:dolly zoom', [PAPER]);
+  const searched: string[] = [];
+  const search = k.ctx.tools.sources.search;
+  k.ctx.tools.sources.search = async (id, query) => (searched.push(query), search(id, query));
+  const writing = gate();
+  const json = k.model.json.bind(k.model);
+  k.model.json = (async (req: Parameters<typeof json>[0]) => {
+    if (req.role !== 'scout.ideate') return json(req);
+    const reply = { reading: '', directions: [NOTE, direction('find', 'What the studies measured', { source: 'papers', lookups: ['dolly zoom'] })] };
+    const text = JSON.stringify(reply);
+    req.onText?.(text.slice(0, text.indexOf('What the studies')));
+    await writing.wait;
+    req.onText?.(text);
+    return req.schema.parse(reply);
+  }) as typeof k.model.json;
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  await until(() => k.mind.picks(anchor).length === 1);
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), [NOTE.title], 'the written idea landed while the model was still writing');
+  assert.deepEqual(searched, []);
+  writing.open();
+  apply(k, await run);
+
+  assert.equal(searched[0], 'dolly zoom', 'the find started once it was written');
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), [NOTE.title, PAPER.title].sort());
 });

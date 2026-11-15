@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { inLibrary, type Command, type Id, type Item, type ItemData, type Node } from '../domain.ts';
 import type { Found, Source } from '../ports.ts';
 import { label } from '../brief.ts';
+import { completeElements } from '../partial-json.ts';
 import { givesWay, KNOWN_MOST, LIBRARY_TOOL, MINDSTORM, newSlots, ROUND_MOST, sameness, treeKeys, urlKey } from '../round.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
@@ -21,24 +22,20 @@ const KNOWN_CANDIDATES = 20;
 const KNOWN_COVERAGE = 0.5;
 const HISTORY_TURNS = 6;
 
-const Ideas = z.object({
-  reading: z.string(),
-  directions: z.array(
-    z.object({
-      angle: z.string(),
-      format: z.enum(['note', 'steps', 'image', 'gallery', 'find', 'video']),
-      title: z.string(),
-      body: z.string(),
-      why: z.string(),
-      tags: z.array(z.string()),
-      steps: z.array(z.string()),
-      images: z.array(z.object({ title: z.string(), prompt: z.string() })),
-      source: z.string(),
-      lookups: z.array(z.string()),
-    }),
-  ),
+const Direction = z.object({
+  angle: z.string(),
+  format: z.enum(['note', 'steps', 'image', 'gallery', 'find', 'video']),
+  title: z.string(),
+  body: z.string(),
+  why: z.string(),
+  tags: z.array(z.string()),
+  steps: z.array(z.string()),
+  images: z.array(z.object({ title: z.string(), prompt: z.string() })),
+  source: z.string(),
+  lookups: z.array(z.string()),
 });
-type Direction = z.infer<typeof Ideas>['directions'][number];
+type Direction = z.infer<typeof Direction>;
+const Ideas = z.object({ reading: z.string(), directions: z.array(Direction) });
 
 const Ratings = z.object({
   ratings: z.array(z.object({ itemId: z.string(), strength: z.number(), why: z.string() })),
@@ -84,30 +81,14 @@ export const scout: Roles['scout'] = async (given, input) => {
     ctx.note(ROLE, `ties to what is already here were not rated (${message(err)})`);
     return { ties: [], relevance: new Map() };
   });
-  let directions: Direction[];
-  try {
-    // Some searches find nothing that fits, so one direction more than the count is asked for.
-    directions = await ctx.step(ROLE, label('Thinking of directions for', nameOf(item)), () => ideate(ctx, run, wanted >= 3 ? wanted + 1 : wanted));
-  } catch (err) {
-    ctx.note(ROLE, `could not think of directions (${message(err)}), the picks stay as they are`);
-    return [];
-  }
-  if (directions.length === 0) {
-    ctx.note(ROLE, 'no directions came back, the picks stay as they are');
-    return [];
-  }
-  const { ties, relevance } = await rating;
-  for (const tie of ties) for (const key of sameness(tie.item)) seen.add(key);
-  const slots = newSlots(ties.length, wanted);
-  directions = directions.slice(0, slots >= 3 ? slots + 1 : slots);
-  // A source can return several records and a set several pictures, so the new content is counted per pick, up to what was asked for.
-  let room = slots;
 
   let placed = 0;
   const under = (pick: Item, fields: { why: string; importance: number; tool: string }): Command => ({
     type: 'addNode',
     node: makeNode(ctx, pick, { treeId: anchor.treeId, parent: anchor.id, status: pickStatus(ctx), why: fields.why, importance: fields.importance, origin: AGENT(ROLE, fields.tool), offset: placed++ }),
   });
+  // A source can return several records and a set several pictures, so the new content is counted per pick, up to what was asked for.
+  let room = 0;
   const hang = (pick: Item, d: Direction, tool: string): Command[] => {
     const keys = sameness(pick);
     if (room <= 0 || keys.some((key) => seen.has(key))) return [];
@@ -117,77 +98,115 @@ export const scout: Roles['scout'] = async (given, input) => {
     // Made for what the user asked just now, so nothing in the round is more related to it.
     return [{ type: 'addItem', item: pick }, under(pick, { why, importance: 1, tool })];
   };
-
-  const written = directions.filter((d) => d.format === 'note' || d.format === 'steps');
-  const made = directions.filter((d) => !written.includes(d));
-  let commands: Command[] = [
-    ...[...relevance].map(([node, importance]): Command => ({ type: 'setWhy', id: node.id, why: node.why, importance })),
-    // What the user already has is shown in place, the item itself and not a copy.
-    ...ties.map((tie) => under(tie.item, { why: tie.why, importance: tie.strength, tool: inLibrary(tie.item) ? LIBRARY_TOOL : MINDSTORM })),
-    ...written.flatMap((d) => hang(writtenItem(ctx, d), d, 'idea')),
-  ];
+  let commands: Command[] = [];
   const flush = () => {
     if (!input.deliver || commands.length === 0) return;
     input.deliver(commands);
     commands = [];
     placed = 0;
   };
-  // Written ideas and what the user already has need no tool, so the user gets them while the rest is still being fetched.
-  if (written.length + ties.length > 0 && made.length > 0) flush();
 
-  if (room <= 0 || made.length === 0) return commands;
+  // Some searches find nothing that fits, so one direction more than the count is asked for and taken.
+  const asked = wanted >= 3 ? wanted + 1 : wanted;
+  let expected = 0;
+  let ready = false;
+  // What the user already has comes in place as soon as it is rated, the item itself and not a copy, before any new content.
+  const rated = rating.then(({ ties, relevance }) => {
+    for (const tie of ties) for (const key of sameness(tie.item)) seen.add(key);
+    const slots = newSlots(ties.length, wanted);
+    room = slots;
+    expected = Math.min(asked, slots >= 3 ? slots + 1 : slots);
+    commands.push(
+      ...[...relevance].map(([node, importance]): Command => ({ type: 'setWhy', id: node.id, why: node.why, importance })),
+      ...ties.map((tie) => under(tie.item, { why: tie.why, importance: tie.strength, tool: inLibrary(tie.item) ? LIBRARY_TOOL : MINDSTORM })),
+    );
+    ready = true;
+    flush();
+  });
+
   let imagesLeft = MAX_GENERATED_IMAGES;
   const taken = knownUrls(ctx);
-  // Each made direction is owed a slot, and there is one direction more than the slots in case a find comes back empty. So a
-  // direction's first pick lands the moment it is ready, except into a slot held by a picture still being made, since a picture is
-  // paid for when it is started. A further pick waits until every direction still out keeps a slot, then lands in the order it came.
-  const out = new Set(made);
+  // Directions are taken as the model writes them, and each starts the moment it is written. Each is owed a slot, and there is
+  // one more than the slots. So a direction's first pick lands the moment it is ready, except into a slot held by a picture still
+  // being made, since a picture is paid for when it is started. A further pick waits until every direction still out, or still to
+  // be written, keeps a slot, then lands in the order it came.
+  const out = new Set<Direction>();
   const waiting: { pick: Item; d: Direction; tool: string }[] = [];
+  let arrived = 0;
+  let thought = false;
   const pictured = (d: Direction) => d.format === 'image' || d.format === 'gallery';
+  const held = () => [...out].filter(pictured).length;
+  const owed = () => out.size + (thought ? 0 : Math.max(0, expected - arrived));
   const land = (d: Direction, items: Made[]) => {
     out.delete(d);
-    const held = [...out].filter(pictured).length;
     let landed = false;
     for (const { item: pick, tool } of items) {
-      const hung = !landed && room > held ? hang(pick, d, tool) : null;
+      const hung = !landed && room > held() ? hang(pick, d, tool) : null;
       if (!hung) waiting.push({ pick, d, tool });
       else if (hung.length > 0) {
         commands.push(...hung);
         landed = true;
       }
     }
-    while (waiting.length > 0 && room > out.size) {
+    while (waiting.length > 0 && room > owed()) {
       const next = waiting.shift()!;
       commands.push(...hang(next.pick, next.d, next.tool));
     }
     // Each direction is shown the moment it is ready, so a slow search never holds back a finished picture.
     flush();
   };
-  // A gallery makes only the pictures it could keep: one, and more only when there are slots to spare.
-  const spare = Math.max(0, room - made.length);
   // The run is over once its slots are full, so what it says it brought does not wait on work that can no longer land. With somewhere
-  // to deliver, it is also over when only pictures are still being made, or every slot left is held by one: a picture takes 10 to
-  // 20 s and is delivered when it is ready, and a find still out lands after it only if a picture fails.
+  // to deliver, it is also over when every slot left is held by a picture, or only pictures are still being made: a picture takes
+  // 10 to 20 s and is delivered when it is ready, and a find still out lands after it only if a picture fails.
   const over = () => {
-    const held = [...out].filter(pictured).length;
-    return out.size === 0 || room <= 0 || (input.deliver !== undefined && (held === out.size || room <= held));
+    if (!ready) return false;
+    if (room <= 0 || (input.deliver !== undefined && room <= held())) return true;
+    return thought && (out.size === 0 || (input.deliver !== undefined && held() === out.size));
   };
-  await new Promise<void>((done) => {
-    if (over()) done();
-    for (const d of made) {
-      const budget = d.format === 'gallery' ? Math.min(GALLERY_SIZE, imagesLeft, 1 + spare) : d.format === 'image' ? Math.min(1, imagesLeft) : 0;
-      imagesLeft -= budget;
-      void realize(ctx, d, budget, taken)
-        .catch((err) => {
-          ctx.note(ROLE, `"${oneLine(d.title, 60)}" could not be made (${message(err)})`);
-          return [] as Made[];
-        })
-        .then((items) => {
-          land(d, items);
-          if (over()) done();
+  let check = () => {};
+  const finished = new Promise<void>((done) => (check = () => over() && done()));
+  const accept = (d: Direction) => {
+    if (arrived >= expected || room <= 0) return;
+    arrived++;
+    if (d.format === 'note' || d.format === 'steps') return land(d, [{ item: writtenItem(ctx, d), tool: 'idea' }]);
+    // A picture is only made into a slot that no other picture holds.
+    if (pictured(d) && room <= held()) return;
+    // A gallery makes only the pictures it could keep: one, and more only when there are slots to spare.
+    const spare = Math.max(0, room - owed() - 1);
+    const budget = d.format === 'gallery' ? Math.min(GALLERY_SIZE, imagesLeft, 1 + spare) : d.format === 'image' ? Math.min(1, imagesLeft) : 0;
+    imagesLeft -= budget;
+    out.add(d);
+    void realize(ctx, d, budget, taken)
+      .catch((err) => {
+        ctx.note(ROLE, `"${oneLine(d.title, 60)}" could not be made (${message(err)})`);
+        return [] as Made[];
+      })
+      .then((items) => {
+        land(d, items);
+        check();
+      });
+  };
+
+  try {
+    await ctx.step(ROLE, label('Thinking of directions for', nameOf(item)), () =>
+      ideate(ctx, run, asked, (d) => {
+        void rated.then(() => {
+          accept(d);
+          check();
         });
-    }
-  });
+      }),
+    );
+  } catch (err) {
+    ctx.note(ROLE, `could not think of directions (${message(err)})${arrived > 0 ? '' : ', the picks stay as they are'}`);
+  }
+  await rated;
+  thought = true;
+  if (arrived === 0) {
+    ctx.note(ROLE, 'no directions came back, the picks stay as they are');
+    return commands;
+  }
+  check();
+  await finished;
   return commands;
 };
 
@@ -243,10 +262,25 @@ async function pictureFor(ctx: RoleContext, anchor: Node): Promise<string | unde
   return undefined;
 }
 
-async function ideate(ctx: RoleContext, run: Run, count: number): Promise<Direction[]> {
+/**
+ * Thinks of `count` directions and hands each to `arrive` as soon as the model has written it, in the order written, each once.
+ * The main model writes them at minimal effort: measured on three cards, as concrete and as varied as at low effort, in 12 to 15 s
+ * instead of 20 to 25, and read as they are written, the first is ready in about 4.
+ */
+async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Direction) => void): Promise<void> {
   const asked = run.need
     ? `The user asked for "${run.need}". Every direction must serve that request as it applies to this very thing, not the topic in general. Asked for "world building" on a picture, you build the world of that picture: who lives there, its places, its history, its rules. Asked for "examples from horror films", every direction is such an example.`
     : 'The user gave no explanation, so show them where this could go. Each direction leaves from something specific you can see or read in it and heads somewhere different.';
+  const seen = new Set<string>();
+  let offered = 0;
+  let read = 0;
+  const offer = (d: Direction) => {
+    const key = oneLine(d.title, 120).toLowerCase();
+    if (!key || seen.has(key) || offered >= count) return;
+    seen.add(key);
+    offered++;
+    arrive(d);
+  };
   const answer = await ctx.model.json({
     role: `${ROLE}.ideate`,
     system: SYSTEM,
@@ -290,18 +324,17 @@ async function ideate(ctx: RoleContext, run: Run, count: number): Promise<Direct
     ].join('\n'),
     schema: Ideas,
     images: run.picture ? [run.picture] : undefined,
-    effort: 'low',
+    effort: 'minimal',
+    onText: (soFar) => {
+      for (const raw of completeElements(soFar, 'directions').slice(read)) {
+        read++;
+        const d = Direction.safeParse(raw);
+        if (d.success) offer(d.data);
+      }
+    },
   });
+  for (const d of answer.directions) offer(d);
   if (answer.reading.trim()) ctx.note(ROLE, `reads it as: ${oneLine(answer.reading, 200)}`);
-  const seen = new Set<string>();
-  return answer.directions
-    .filter((d) => {
-      const key = oneLine(d.title, 120).toLowerCase();
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, count);
 }
 
 type Made = { item: Item; tool: string };
@@ -640,7 +673,9 @@ async function rate(ctx: RoleContext, run: Run, seen: ReadonlySet<string>, wante
       'why: a short phrase naming the connection.',
     ].join('\n'),
     schema: Ratings,
-    effort: 'low',
+    // Measured on three cards, the quick model rated as the main one did, no tie on either side of 0.8 apart, in 1.3 to 3.7 s
+    // instead of 9.7 to 15.7. A slower rating would hold back the first picks, which wait for it.
+    quick: true,
   }));
   const offered = new Set(candidates.map((c) => c.id));
   const showing = new Map(shown.map((n) => [n.itemId, n]));
