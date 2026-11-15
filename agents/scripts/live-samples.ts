@@ -3,7 +3,7 @@
 // laid down as the headset would play it, cut where the user speaks over it. Cards land as a Scout run's do (scripts/live-stage.ts).
 // Beside each file, a transcript with the time of every line, every card that landed and every label the orb showed.
 //   node --no-warnings --import tsx scripts/live-samples.ts --data <data dir> --out <dir> [--model …] [--voice marin] [--only vermeer]
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -26,6 +26,7 @@ const { values: flags } = parseArgs({
     voice: { type: 'string', default: 'marin' },
     only: { type: 'string' },
     scene: { type: 'string', default: '59b6b703' },
+    log: { type: 'string' },
   },
 });
 if (!flags.data || !flags.out) throw new Error('usage: live-samples.ts --data <dir> --out <dir> [--model …] [--voice …] [--only name]');
@@ -74,6 +75,7 @@ const RATE = 24000;
 const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 
 async function converse(c: Conversation): Promise<void> {
+  const t0 = performance.now();
   const dir = mkdtempSync(join(tmpdir(), 'mp-samples-'));
   mkdirSync(join(dir, 'assets'));
   copyFileSync(join(flags.data!, 'mindstorm.sqlite'), join(dir, 'mindstorm.sqlite'));
@@ -81,11 +83,10 @@ async function converse(c: Conversation): Promise<void> {
     port: 0, host: '127.0.0.1', dataDir: dir, clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(),
     roles: { ...fakeRoles, scout: staged }, token: 'samples',
     live: { open: openaiRealtime({ apiKey: key, model: flags.model! }), options: { model: flags.model!, voice: flags.voice!, turn: { kind: 'semantic' }, hearing: HEARING_MODEL, effort: 'minimal' }, webAnswer: openaiWebAnswer(fetch, { apiKey: key }) },
-    log: () => {},
+    log: (line) => flags.log && appendFileSync(flags.log, `${(performance.now() - t0).toFixed(0).padStart(6)} ${line}\n`),
   });
   const focus = [...server.mind.nodes.values()].find((n) => n.id.startsWith(flags.scene!));
   const scene = focus ? { focus: focus.id, treeId: focus.treeId, selection: [] } : { selection: [] };
-  const t0 = performance.now();
   const at = () => performance.now() - t0;
   const lines: { at: number; text: string }[] = [];
   const ws = new WebSocket(`${server.url.replace('http', 'ws')}/ws?token=samples`);
@@ -132,7 +133,8 @@ async function converse(c: Conversation): Promise<void> {
       while (at() < telling.from + ms) await sleep(20);
     }
     const from = at();
-    for (const r of momo) if (!Number.isNaN(r.from) && r.from < from && r.cut === undefined && r.from + (r.pcm.reduce((a, p) => a + p.length, 0) / 2 / RATE) * 1000 > from) r.cut = from;
+    // The headset stops what plays and drops what waits to play behind it.
+    for (const r of momo) if (!Number.isNaN(r.from) && r.cut === undefined && r.from + (r.pcm.reduce((a, p) => a + p.length, 0) / 2 / RATE) * 1000 > from) r.cut = Math.max(r.from, from);
     playedUntil = Math.min(playedUntil, from);
     user.push({ from, pcm, words: turn.words });
     live.send(JSON.stringify({ t: 'start', turn: k + 1, scene }));
@@ -167,7 +169,12 @@ async function converse(c: Conversation): Promise<void> {
   const file = join(flags.out!, `${c.name}-${flags.voice}`);
   writeFileSync(`${file}.wav`, wav(samples, RATE));
   for (const u of user) lines.push({ at: u.from, text: `You: ${u.words}` });
-  for (const r of momo) if (!Number.isNaN(r.from)) lines.push({ at: r.from, text: `Momo${r.kind === 'results' ? ' (telling what landed)' : ''}: ${r.cut !== undefined ? `${r.text} [cut off ${((r.cut - r.from) / 1000).toFixed(1)} s in, as the user spoke]` : r.text}` });
+  for (const r of momo) {
+    if (Number.isNaN(r.from)) continue;
+    const who = `Momo${r.kind === 'results' ? ' (telling what landed)' : ''}`;
+    if (r.cut === r.from) lines.push({ at: r.from, text: `(${who} had more ready, not heard since the user spoke: ${r.text})` });
+    else lines.push({ at: r.from, text: `${who}: ${r.cut !== undefined ? `${r.text} [cut off ${((r.cut - r.from) / 1000).toFixed(1)} s in, as the user spoke]` : r.text}` });
+  }
   lines.sort((a, b) => a.at - b.at);
   const transcript = [`# ${c.name}, ${flags.voice}, ${flags.model}`, c.about, '', ...lines.map((l) => `[${(l.at / 1000).toFixed(1).padStart(5)} s] ${l.text}`)].join('\n');
   writeFileSync(`${file}.txt`, `${transcript}\n`);

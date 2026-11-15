@@ -16,6 +16,8 @@ interface Row {
   answerMs: number | null;
   toolMs: number | null;
   responses: { purpose: string; text: string; firstAudioMs: number | null }[];
+  cards?: { atMs: number | null; title: string }[];
+  notes?: { atMs: number | null; text: string }[];
   dollars: { realtime: number; hearing: number; web: number };
 }
 
@@ -41,6 +43,13 @@ for (const file of process.argv.slice(2)) {
   const per = rows.map((r) => r.dollars.realtime + r.dollars.hearing + r.dollars.web);
   console.log(`cost a turn: median $${median(per).toFixed(4)}, mean $${(per.reduce((a, b) => a + b, 0) / per.length).toFixed(4)}, total $${per.reduce((a, b) => a + b, 0).toFixed(3)} (realtime $${rows.reduce((a, r) => a + r.dollars.realtime, 0).toFixed(3)}, hearing $${rows.reduce((a, r) => a + r.dollars.hearing, 0).toFixed(3)}, web $${rows.reduce((a, r) => a + r.dollars.web, 0).toFixed(3)})`);
   const words = rows.map((r) => r.responses.filter((x) => x.purpose !== 'results').map((x) => x.text).join(' ').split(/\s+/).filter(Boolean).length);
+  const told = rows.filter((r) => (r.cards ?? []).length > 0);
+  const mention = told.flatMap((r) => {
+    const card = r.cards![0]!.atMs;
+    const said = r.responses.find((x) => x.purpose === 'results' && x.firstAudioMs !== null);
+    return card !== null && said ? [said.firstAudioMs! - card] : [];
+  });
+  if (told.length) console.log(`first card landed to Momo's first word about it: ${spread(mention)} over ${told.length} runs that brought cards`);
   console.log(`words in the answer to a turn: ${spread(words.map((w) => w * 1000))}`.replace(/ s/g, ''));
   console.log('');
 }

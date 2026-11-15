@@ -2,7 +2,7 @@
 import type { Command } from '../src/core/domain.ts';
 import { AGENT, makeItem, makeNode, pickStatus, type Roles } from '../src/core/roles/types.ts';
 
-/** Cards that land as a Scout run's do: the first at 4 s, three more by 7 s, two by 20 s, a picture at 34 s. */
+/** Cards that land as a Scout run's do: the first at 4 s, three more by 7 s, two by 20 s; the run ends before its picture, as a real run may. */
 export const staged: Roles['scout'] = async (ctx, { anchor, need, deliver }) => {
   const node = ctx.mind.node(anchor);
   const topic = need ?? ctx.mind.itemOf(anchor).title;
@@ -17,8 +17,9 @@ export const staged: Roles['scout'] = async (ctx, { anchor, need, deliver }) => 
   ];
   const t0 = Date.now();
   for (const c of cards) {
-    await new Promise((r) => setTimeout(r, Math.max(0, c.at - (Date.now() - t0))));
+    // A picture made last lands after the run is over, so the run ends without it.
     if (c.at > 30000) break;
+    await new Promise((r) => setTimeout(r, Math.max(0, c.at - (Date.now() - t0))));
     const item = makeItem(ctx, { kind: c.kind, title: c.title, summary: c.summary, text: c.summary, data: { ...(c.by ? { by: c.by } : {}), ...(c.date ? { date: c.date } : {}), from: c.from }, origin: AGENT('scout', c.tool), source: { from: c.tool === 'idea' ? 'idea' : 'web' } });
     const commands: Command[] = [
       { type: 'addItem', item },

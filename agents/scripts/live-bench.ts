@@ -40,6 +40,7 @@ const { values: flags } = parseArgs({
     paused: { type: 'boolean', default: false },
     hiss: { type: 'string', default: '0' },
     'device-pause': { type: 'string', default: '0' },
+    pause: { type: 'string', default: '1800' },
   },
 });
 if (!flags.data || !flags.out) {
@@ -280,7 +281,7 @@ const server = await startServer({
   token: 'bench',
   live: {
     open,
-    options: { model: flags.model!, voice: flags.voice!, turn: flags.turn!.startsWith('server:') ? { kind: 'server', ms: Number(flags.turn!.slice(7)) } : { kind: 'semantic' }, hearing: HEARING_MODEL, effort: flags.effort as 'minimal' },
+    options: { model: flags.model!, voice: flags.voice!, turn: flags.turn!.startsWith('server:') ? { kind: 'server', ms: Number(flags.turn!.slice(7)) } : { kind: 'semantic' }, hearing: HEARING_MODEL, effort: flags.effort as 'minimal', pauseMs: Number(flags.pause) },
     webAnswer,
   },
   log: (line) => lines.push(`${Math.round(performance.now())} ${line}`),
@@ -293,7 +294,7 @@ try {
   for (const r of chosen) {
     taps = [];
     const row = await turn(server.url, server.token, r, scene);
-    appendFileSync(flags.out, `${JSON.stringify({ model: flags.model, voice: flags.voice, effort: flags.effort, turn: flags.turn, at: new Date().toISOString(), ...row })}\n`);
+    appendFileSync(flags.out, `${JSON.stringify({ model: flags.model, voice: flags.voice, effort: flags.effort, turn: flags.turn, pause: Number(flags.pause), at: new Date().toISOString(), ...row })}\n`);
     const said = (row.responses as { text: string }[]).map((x) => x.text).join(' | ');
     console.log(`${r.id.padEnd(4)} ${row.right ? 'right' : 'WRONG'} ${(row.chose as string[]).join('+').padEnd(18)} over ${row.overMs} first ${row.firstSoundMs}${row.answerMs ? ` answer ${row.answerMs}` : ''} $${JSON.stringify(row.dollars)}\n     ${said.slice(0, 300)}`);
   }
