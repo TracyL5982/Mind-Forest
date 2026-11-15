@@ -389,18 +389,25 @@ function attributed(shown: Shown, [words, speaker]: [number, number]): boolean {
 }
 
 /**
- * The word or mark that says what a term means, which ends the term: "is" of P10's "Parallax is…" and S19's "Apple pie is…", "describes"
- * of the P-probes' "Parallax describes…", "是" of
- * N5's "病毒性肺炎是…" and S20's "手指是…", "，" of "沉没成本，指的是…", "就是" of "复利就是…" and a colon or a dash. A bare "指" is the
- * second character of 手指 as often as it says what a term means, so it ends a term only as "指的是".
+ * The word or mark that says what a term means, which ends the term. Each English word is there for a test of the renderer's: "is" of
+ * "Parallax is…" and "Apple pie is…", "are" of "Dolly zooms are…", "means" of "Bokeh means…", "refers to" of "Parallax refers to…" and
+ * "describes" of the P-probes' "Parallax describes…". "是" ends N5's "病毒性肺炎是…" and S20's "手指是…", "，" ends "沉没成本，指的是…" and
+ * "就是" ends "复利就是…"; a colon or a dash ends any term. A bare "指" is the second character of 手指 as often as it says what a term
+ * means, so it ends a term only as "指的是".
  */
-const DEFINES = /^(?:\s*(?:[:：—–]|[,，])|\s(?:is|are|means|refers to|describes|denotes)\b|是|即|就是|指的是|意为|意思是|也叫|又称|叫做|称为)/iu;
-/** Whether a meaning opens with the whole term: all its subject before the first word or mark that says what it means, never a part of it. */
+const DEFINES = /^(?:\s*(?:[:：—–]|[,，])|\s(?:is|are|means|refers to|describes)\b|是|即|就是|指的是|意为|意思是|也叫|又称|叫做|称为)/iu;
+/** An article that opens a subject, which its term may leave out: "A dolly zoom is…" defines "dolly zoom". */
+const ARTICLE = /^(?:a|an|the)\s+/iu;
+/** The term a meaning defines, as it writes it: all its subject before the first word or mark that says what it means, without an article. */
+function subjectOf(meaning: string): string | undefined {
+  const written = meaning.trim();
+  for (let at = 1; at < written.length; at++) if (DEFINES.test(written.slice(at))) return written.slice(0, at).trim().replace(ARTICLE, '');
+  return undefined;
+}
+/** Whether a meaning opens with the whole term: its whole subject, which may leave out a leading article and nothing else, never a part of it. */
 function opens(term: string, meaning: string): boolean {
-  const [said, written] = [fold(term), fold(meaning)];
-  if (!said || !written.startsWith(said)) return false;
-  for (let at = 1; at < written.length; at++) if (DEFINES.test(written.slice(at))) return at === said.length;
-  return written === said;
+  const subject = subjectOf(meaning);
+  return subject !== undefined ? fold(subject) === fold(term).replace(ARTICLE, '') : fold(meaning) === fold(term);
 }
 
 /**
@@ -593,7 +600,7 @@ export const CHECKS: ContentChecks = {
     // line it opens, "Parallax: the shift…". A term on a line of its own may head the meaning of another: "Weather⏎Climate is…".
     frame: (p, text) =>
       opens(p.term, p.definition)
-        ? framed(p, text, [{ pieces: [entry(p.definition)] }])
+        ? framed(p, text, [{ pieces: [entry(p.definition)] }], (q) => ({ ...q, term: subjectOf(q.definition) ?? q.term }))
         : framed(p, text, [{ pieces: [{ slot: 'label', says: p.term }, entry(p.definition)] }]),
   },
   idea: { props: {} },

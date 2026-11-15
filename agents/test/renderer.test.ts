@@ -2300,6 +2300,16 @@ test('a figure\'s label is all its line writes before the separator and its valu
   assert.equal(drawn('Apple pie is a baked dessert of apples in pastry.', 'definition', { subject: 'Apple', passage: 'Apple pie is a baked dessert of apples in pastry.' }), 'part');
   assert.equal(drawn('手指是手掌末端的五个分支。', 'definition', { subject: '手', passage: '手指是手掌末端的五个分支。' }), 'part');
   assert.deepEqual(drawn('手指是手掌末端的五个分支。', 'definition', { subject: '手指', passage: '手指是手掌末端的五个分支。' }), { term: '手指', definition: '手指是手掌末端的五个分支。' });
+  const zoom = 'A dolly zoom is a shot in which the camera moves in as the lens zooms out.';
+  assert.deepEqual(drawn(zoom, 'definition', { subject: 'Dolly zoom', passage: zoom }), { term: 'dolly zoom', definition: zoom }, 'a term may leave out the article of its subject, and is drawn as written after it');
+  assert.equal(drawn(zoom, 'definition', { subject: 'zoom', passage: zoom }), 'part', 'and nothing else');
+  for (const [term, meaning] of [
+    ['Bokeh', 'Bokeh means the quality of the blur in the parts of a picture that are out of focus.'],
+    ['Parallax', 'Parallax refers to the apparent shift of an object against its background when the viewer moves.'],
+    ['Dolly zooms', 'Dolly zooms are shots in which the camera and the lens move against each other.'],
+  ]) {
+    assert.deepEqual(drawn(meaning!, 'definition', { subject: term, passage: meaning }), { term, definition: meaning }, meaning);
+  }
   // A list keeps the numbers the item writes, even 1, 2, 3; a steps card draws those itself.
   assert.deepEqual(drawn('1. B\n2. D\n3. A', 'list', { lines: ['B', 'D', 'A'] }), { items: ['1. B', '2. D', '3. A'] });
   assert.deepEqual(drawn('1、王芳\n2、李强\n3、张伟', 'list', { lines: ['王芳', '李强', '张伟'] }), { items: ['1、王芳', '2、李强', '3、张伟'] });
