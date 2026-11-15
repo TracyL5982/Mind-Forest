@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "agent/asking.h"
 #include "agent/client.h"
 #include "agent/presence_view.h"
 #include "agent/spots.h"
@@ -82,6 +83,10 @@ private:
     std::optional<std::string> dump;
     std::map<std::string, Planted> trees;           // by service tree id
     std::map<std::string, Thinking> thinking;       // by activity id
+    /// The open cards' rows asked about and still being searched for, so a row picked again is not asked again.
+    Asking asking;
+    /// The row a hand just picked answers at once, before the service does: it dims and comes back.
+    void acknowledge(int nodeID, int k);
     /// The service node last reported as open, so the service hears each time the open card changes.
     std::optional<std::string> focusSent;
     /// The open card's questions from the service: asked for once each time it opens, empty until they come.

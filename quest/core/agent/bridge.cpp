@@ -361,6 +361,7 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
 void Bridge::activity(const Activity& a) {
     if (a.state != Activity::State::start) {
         thinking.erase(a.id);
+        if (a.role == "scout" && a.nodeId) asking.ended(a.nodeId->value);
         return;
     }
     if (!a.nodeId) return;
@@ -763,10 +764,6 @@ bool Bridge::ask(int nodeID, int k) {
         type(nodeID);
         return true;
     }
-    if (row.key == "question" && offered) {
-        auto& q = offered->questions;
-        q.erase(std::remove(q.begin(), q.end(), row.question), q.end());
-    }
     if (row.key == "keep") {
         TreeNode& n = p->tree->nodes[nodeID];
         if (!n.kept) {
@@ -778,8 +775,31 @@ bool Bridge::ask(int nodeID, int k) {
         model.restyle();
         return true;
     }
+    if (!asking.begin(s->second, row.question, now)) {
+        logLine("[agent] still asking, so not again: " + row.question);
+        return true;
+    }
+    acknowledge(nodeID, k);
+    if (row.key == "question" && offered) {
+        auto& q = offered->questions;
+        q.erase(std::remove(q.begin(), q.end(), row.question), q.end());
+    }
     converse(nodeID, row.question);
     return true;
+}
+
+void Bridge::acknowledge(int nodeID, int k) {
+    const auto& c = model.card(nodeID);
+    if (!c) return;
+    for (const EntityRef& row : c->askHolder->children) {
+        auto pick = model.picks.find(row.get());
+        if (pick == model.picks.end() || pick->second.kind != OceanModel::Pick::Kind::ask || pick->second.question != k) continue;
+        Tween<float> alpha(0.35f);
+        alpha.go(1, model.time, 0.1, 0.45f, Ease::out);
+        row->opacity = 0.35f;
+        model.fades.push_back(OceanModel::Fade{row, alpha, false});
+        model.touch(model.time + 0.6);
+    }
 }
 
 bool Bridge::askMark(int nodeID, const Mark& mark) {

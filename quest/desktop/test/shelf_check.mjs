@@ -4,7 +4,7 @@
 //   launch 2   each cover hangs where it hung, the carried one where it was put; a navigate to a tree on the shelf
 //              unfolds it; a tree asked for by another client only hangs, and not at the standing tree's place; a tree
 //              asked for from the preview (-agentType) presses the standing one back to its place and stands; a tree
-//              deleted at the service drops its spot
+//              deleted at the service drops its spot; a question row picked three times while its search runs is asked once
 // The headset's own shelf file, seeded before the first launch, must be left as it was. The preview runs with
 // -agentVoice off and -mute, so nothing is heard. The fake service reads no keys file (MIND_PALACE_ENV is empty).
 // A small proxy between the preview and the service sends the navigate, which the fake service never does.
@@ -39,7 +39,8 @@ mkdirSync(previewData);
 cpSync(source, data, { recursive: true });
 rmSync(join(data, 'service.pid'), { force: true });
 writeFileSync(join(work, 'empty.env'), '');
-const token = randomBytes(12).toString('base64url');
+// Hex, so the token never starts with a dash, which the launch flags would read as a flag of its own.
+const token = randomBytes(12).toString('hex');
 const ownShelf = JSON.stringify({ version: 3, films: 0, trees: [], seeded: 'the headset keeps its own trees here' });
 writeFileSync(join(previewData, 'ocean-shelf.json'), ownShelf);
 
@@ -55,6 +56,11 @@ const freePort = () =>
   });
 
 const started = [];
+const stop = () => {
+  for (const child of started) if (child.exitCode === null) child.kill();
+};
+const clean = () => rmSync(work, { recursive: true, force: true, maxRetries: 5 });
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => (stop(), setTimeout(() => (clean(), process.exit(1)), 500)));
 const checks = [];
 const check = (ok, what) => {
   checks.push({ ok: Boolean(ok), what });
@@ -83,6 +89,7 @@ const newestFirst = [...before.trees].sort((a, b) => (a.createdAt < b.createdAt 
 // The proxy: the preview's socket and HTTP pass through it to the service; `inject` speaks to the preview as the service.
 const proxyPort = await freePort();
 let previewSocket = null;
+const fromPreview = [];
 const proxy = createServer((req, res) => {
   const upstream = request({ host: '127.0.0.1', port: servicePort, path: req.url, method: req.method, headers: req.headers }, (r) => {
     res.writeHead(r.statusCode, r.headers);
@@ -98,7 +105,11 @@ sockets.on('connection', (down, req) => {
   previewSocket = down;
   up.on('message', (m) => down.send(String(m)));
   up.on('open', () => queued.splice(0).forEach((m) => up.send(m)));
-  down.on('message', (m) => (up.readyState === WebSocket.OPEN ? up.send(String(m)) : queued.push(String(m))));
+  down.on('message', (m) => {
+    fromPreview.push({ when: Date.now(), message: JSON.parse(String(m)) });
+    if (up.readyState === WebSocket.OPEN) up.send(String(m));
+    else queued.push(String(m));
+  });
   down.on('close', () => up.close());
   up.on('close', () => down.close());
 });
@@ -158,7 +169,7 @@ try {
   // Launch 2.
   const gone = newestFirst[newestFirst.length - 1];
   const goTo = newestFirst[1];
-  const second = launch('launch2', 40, ['-agentType', 'start%20a%20tree%20about%20dolly%20zooms', '-agentTypeAt', '20']);
+  const second = launch('launch2', 40, ['-agentType', 'start%20a%20tree%20about%20dolly%20zooms', '-agentTypeAt', '20', '-askAt', '12', '-ask', '0', '-askTimes', '3']);
   const joined2 = await until(second.log, /^\[agent\] connected/);
   await later(4);
   const navigated = second.at();
@@ -186,6 +197,9 @@ try {
   const putAway = find(second.log, new RegExp(`^\\[ocean\\] put away: ${escape(goTo.title)}$`), asked?.at ?? 999);
   check(putAway && putAway.at - asked.at < 1, `and "${goTo.title}" pressed itself onto the shelf first (${putAway ? (putAway.at - asked.at).toFixed(2) + ' s after' : 'never'})`);
   check(find(second.log, new RegExp(`^\\[agent\\] tree "${escape(gone.title)}" was deleted at the service`), deleted), `"${gone.title}" was deleted at the service`);
+  const asks = fromPreview.filter((m) => m.message.t === 'ask' && m.when >= second.began);
+  const refused = second.log.filter((l) => /^\[agent\] still asking, so not again: /.test(l.line));
+  check(asks.length === 1 && refused.length === 2, `a row picked three times in 0.8 s while its search runs is asked once (${asks.length} sent, ${refused.length} held back: "${asks[0]?.message.need}")`);
 
   const spots2 = readSpots();
   const after = await state();
@@ -199,11 +213,11 @@ try {
   writeFileSync(join(shots, 'log-launch2.txt'), second.log.map((l) => `${l.at.toFixed(2).padStart(6)} ${l.line}`).join('\n'));
   writeFileSync(join(shots, 'spots.json'), JSON.stringify({ launch1: spots1, launch2: spots2, trees: after.trees.map((t) => ({ id: t.id, title: t.title, createdAt: t.createdAt })) }, null, 2));
 } finally {
-  for (const child of started) if (child.exitCode === null) child.kill();
   sockets.close();
   proxy.close();
+  stop();
   await later(0.5);
-  rmSync(work, { recursive: true, force: true });
+  clean();
 }
 const failed = checks.filter((c) => !c.ok).length;
 console.log(`${checks.length - failed} of ${checks.length} checks passed; pictures and logs in ${shots}`);

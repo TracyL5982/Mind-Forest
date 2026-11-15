@@ -359,9 +359,12 @@ void OceanModel::runFlags() {
     });
     at("zoomAt", [](OceanModel& m) { m.zoomIn(); });
     at("zoomAgainAt", [](OceanModel& m) { m.zoomIn(); });
-    at("askAt", [](OceanModel& m) {
-        if (std::optional<int> id = m.tree ? m.tree->focus() : std::nullopt) m.askGardener(*id, Flags::integer("ask"));
-    });
+    // NOTE(port): added for Quest. `-askTimes n` picks the row n times, 0.4 s apart, as an impatient hand would.
+    for (int k = 0; Flags::number("askAt") > 0 && k < std::max(1, Flags::integer("askTimes")); k++) {
+        after(Flags::number("askAt") + 0.4 * double(k), [this] {
+            if (std::optional<int> id = tree ? tree->focus() : std::nullopt) askGardener(*id, Flags::integer("ask"));
+        });
+    }
     // NOTE(port): added for Quest (core/cards). `-scrollAt t` drags the open card's panel by `-scrollBy` (a share of
     // how far it runs on, 1 if not given) as a hand would; `-holdAt t` holds a pinch still on its first words
     // for 0.6 s and then draws it across them, which marks them; `-tapAt t` pinches it without moving.
