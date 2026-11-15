@@ -553,10 +553,23 @@ interface Form {
 
 /** The entries of a list the model wrote, one to a line, without a bullet or a number it put in front, which the card draws itself. */
 const entries = (lines: string[]): string[] => [...new Set(lines.map((line) => oneLine(line, 300).replace(/^(?:[-*•·]|\d{1,2}[.)])\s+/, '')).filter(Boolean))];
-/** The cells of a row written with "|" between them, without the fence a row may have at either end. */
-const cellsOf = (row: string): string[] => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => oneLine(cell, 120));
+/** The cells of a row written with "|" or "｜" between them, without the fence a row may have at either end. */
+const cellsOf = (row: string): string[] => row.trim().replace(/^[|｜]/, '').replace(/[|｜]$/, '').split(/[|｜]/).map((cell) => oneLine(cell, 120));
+/** A script written without spaces, whose figures are written "上映：1982" and whose words a term runs straight into. */
+const SPACELESS = /[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}]/u;
 const unquoted = (words: string): string => oneLine(words, 600).replace(/^["'“”‘’「『]+|["'“”‘’」』]+$/g, '').trim();
 const atLeast = (have: number, least: number, what: string): string | undefined => (have < least ? `only ${have} of the ${least} ${what} it needs` : undefined);
+/** Whether a meaning opens with its term, after an article, as "A dolly zoom is…" does "dolly zoom": a word of a spaced script whole. */
+function opensWith(meaning: string, term: string): boolean {
+  const [said, word] = [meaning.toLowerCase().replace(/^(?:a|an|the)\s+/, ''), term.toLowerCase()];
+  return said.startsWith(word) && (SPACELESS.test(word) || !/[\p{L}\p{N}]/u.test(said.charAt(word.length)));
+}
+/** The heads of pros and cons in the script the idea is written in; any other is headed in English. Kana before Han, which Japanese also writes. */
+const SIDES: [RegExp, [string, string]][] = [
+  [/[\p{scx=Hira}\p{scx=Kana}]/u, ['メリット', 'デメリット']],
+  [/\p{scx=Hang}/u, ['장점', '단점']],
+  [/\p{scx=Han}/u, ['优点', '缺点']],
+];
 
 /** Each written format: what it is called in the run log, and how a direction's slots fill it. */
 const FORMS: Record<Written, { name: string; fill: (d: Direction) => Form }> = {
@@ -578,14 +591,15 @@ const FORMS: Record<Written, { name: string; fill: (d: Direction) => Form }> = {
   facts: {
     name: 'facts',
     fill: (d) => {
-      // A figure asked for as "label | value" sometimes comes as "label: value".
+      // A figure asked for as "label | value" sometimes comes as "label: value", or in Chinese "标签：值".
       const facts = entries(d.lines).map((line) => {
-        const [label = '', ...value] = line.includes('|') ? cellsOf(line) : line.split(/:\s+/);
-        return { label: label.trim(), value: value.join(line.includes('|') ? ' ' : ': ').trim() };
+        const barred = /[|｜]/.test(line);
+        const [label = '', ...value] = barred ? cellsOf(line) : line.split(/:\s+|：\s*/);
+        return { label: label.trim(), value: value.join(barred ? ' ' : ': ').trim() };
       });
       const whole = facts.filter((fact) => fact.label && fact.value);
       return {
-        lines: [d.body, ...facts.map(({ label, value }) => (value ? `${label}: ${value}` : label))],
+        lines: [d.body, ...facts.map(({ label, value }) => (value ? `${label}${SPACELESS.test(label + value) ? '：' : ': '}${value}` : label))],
         data: { facts: whole },
         lacks: whole.length < facts.length ? 'a figure without its label or value' : facts.length > 6 ? `${facts.length} figures, more than the 6 it holds` : atLeast(facts.length, 2, 'figures'),
       };
@@ -620,15 +634,18 @@ const FORMS: Record<Written, { name: string; fill: (d: Direction) => Form }> = {
     name: 'a definition',
     fill: (d) => {
       const [term, definition] = [oneLine(d.subject, 120), oneLine(d.passage, 800)];
-      return { lines: [d.body, term && definition ? `${term}: ${definition}` : term || definition], data: { term, definition }, lacks: !term ? 'no term' : !definition ? 'no meaning' : undefined };
+      // A meaning that opens with its term, "Parallax is…", says it already, and the card draws the term over it.
+      const said = term && definition && !opensWith(definition, term) ? `${term}: ${definition}` : definition || term;
+      return { lines: [d.body, said], data: { term, definition }, lacks: !term ? 'no term' : !definition ? 'no meaning' : undefined };
     },
   },
   proscons: {
     name: 'pros and cons',
     fill: (d) => {
       const [pros, cons] = [entries(d.pros).slice(0, 6), entries(d.cons).slice(0, 6)];
+      const [forHead, againstHead] = SIDES.find(([script]) => script.test([d.title, ...pros, ...cons].join(' ')))?.[1] ?? ['For', 'Against'];
       return {
-        lines: [d.body, ...(pros.length > 0 ? ['For', ...pros.map((point) => `- ${point}`)] : []), ...(cons.length > 0 ? ['Against', ...cons.map((point) => `- ${point}`)] : [])],
+        lines: [d.body, ...(pros.length > 0 ? [forHead, ...pros.map((point) => `- ${point}`)] : []), ...(cons.length > 0 ? [againstHead, ...cons.map((point) => `- ${point}`)] : [])],
         data: { pros, cons },
         lacks: atLeast(pros.length, 2, 'points for') ?? atLeast(cons.length, 2, 'points against'),
       };
@@ -645,8 +662,8 @@ const FORMS: Record<Written, { name: string; fill: (d: Direction) => Form }> = {
 
 /**
  * The item a written direction stands for: in the format the model chose when its slots fill that format's strict form and the
- * Renderer's rules draw the item so, which is the card it lands as. Otherwise it lands as plain text in its own words, which the rules
- * draw from its text alone, and the run log says why. Nothing when it has no words at all.
+ * Renderer's rules draw the item so, which is the card it lands as. Otherwise it lands in its own words with no structure, which the
+ * rules draw from its text alone, and the run log says what it lands as and why. Nothing when it has no words at all.
  */
 function writtenItem(ctx: RoleContext, d: Direction & { format: Written }): Item | undefined {
   const { name, fill } = FORMS[d.format];
@@ -659,16 +676,18 @@ function writtenItem(ctx: RoleContext, d: Direction & { format: Written }): Item
   }
   const make = (data: ItemData) =>
     makeItem(ctx, { ...common(d, 'idea'), kind: 'text', text, summary: oneLine(d.body.trim() || text, 400), data, source: { from: 'idea' } });
-  if (form.lacks) {
-    ctx.note(ROLE, `${title} lands as plain text, not ${name}: it has ${form.lacks}`);
-    return make({});
-  }
+  const drawn = (item: Item) => byRule(item, (id) => ctx.assets.url(id)).component;
+  // Its own words alone, which the rules draw from the text: as a note, or as a fact when they are one figure.
+  const plain = (why: string) => {
+    const item = make({});
+    const card = drawn(item);
+    ctx.note(ROLE, `${title} lands as ${card in FORMS ? FORMS[card as Written].name : `a ${card}`}, not ${name}: ${why}`);
+    return item;
+  };
+  if (form.lacks) return plain(`it has ${form.lacks}`);
   const item = make(form.data);
-  if (d.format === 'note') return item;
-  const card = byRule(item, (id) => ctx.assets.url(id)).component;
-  if (card === d.format) return item;
-  ctx.note(ROLE, `${title} lands as plain text, not ${name}: the card's check draws it as ${card === 'note' ? 'a note' : `a ${card}`}`);
-  return make({});
+  if (d.format === 'note' || drawn(item) === d.format) return item;
+  return plain("its card's check refused it");
 }
 
 /**
