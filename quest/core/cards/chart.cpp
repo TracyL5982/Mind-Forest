@@ -367,6 +367,13 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
         }
     }
     float tall = 12 + (unit.empty() ? 0 : unitTall + 6) + H * scale + (table.empty() ? 0 : 12 + tableTall) + 12;
+    // A page may end under the plot and between any two rows of the values, never inside one.
+    std::vector<float> breaks;
+    float row = 12 + (unit.empty() ? 0 : unitTall + 6) + H * scale + 12;
+    for (const Line& line : table) {
+        breaks.push_back(row);
+        row += 1 + 4 + line.tall + 4;
+    }
     Look look = sheet.look;
     look.fill = palette::sunk;
     look.ink2 = palette::ink2;
@@ -400,7 +407,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
             pen.words(row.value, x + inner - wide, top + 5, wide + 1, 1, t, palette::ink);
             top += 1 + 4 + row.tall + 4;
         }
-    });
+    }, breaks);
     if (!unit.empty()) sheet.said.push_back(unit);
     for (const Writing& w : p.writings) sheet.said.push_back(w.text);
     for (const Line& row : table) {
