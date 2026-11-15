@@ -191,3 +191,42 @@ void hideKeyboard();
 
 }  // namespace platform
 
+
+// MARK: - Sound
+// For talking to the agent: the microphone, and playing what the agent says. Nothing here runs on the frame
+// thread, and nothing calls back on it.
+
+namespace platform {
+
+/// The microphone, open.
+class Microphone {
+public:
+    virtual ~Microphone() = default;
+    /// Closes it. `heard` is not called once this has returned.
+    virtual void stop() = 0;
+};
+using MicrophoneRef = std::shared_ptr<Microphone>;
+
+/// What the microphone hears, on one thread of the host's.
+struct MicrophoneEvents {
+    /// 16 kHz mono samples in -1...1, in runs of any length.
+    std::function<void(const float* samples, size_t count)> heard;
+    /// Once, when it could not open or stopped by itself; `why` is for the log.
+    std::function<void(const std::string& why)> failed;
+};
+/// Opens the microphone. Where the user must allow it first (the Quest), sound starts once they have.
+MicrophoneRef openMicrophone(MicrophoneEvents events);
+
+/// A sound file playing.
+class Sound {
+public:
+    virtual ~Sound() = default;
+    /// Stops it; `done` follows, once.
+    virtual void stop() = 0;
+};
+using SoundRef = std::shared_ptr<Sound>;
+/// Plays a sound file (MP3 or WAV). `done` is called once, on a thread of the host's, when it ends, fails or is
+/// stopped: true when it played to its end.
+SoundRef playSound(const std::string& path, std::function<void(bool played)> done);
+
+}  // namespace platform

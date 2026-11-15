@@ -19,7 +19,7 @@ sources=(main.cpp platform_mac.mm net_mac.mm $CORE/base.cpp $CORE/json.cpp $CORE
 if [ "$1" = "--host-only" ]; then
   FLAGS="$FLAGS -DOCEAN_NO_SCENE"
 else
-  sources+=(canvas_mac.mm $CORE/canvas.cpp $CORE/ocean/*.cpp $CORE/agent/*.cpp)
+  sources+=(canvas_mac.mm sound_mac.mm $CORE/canvas.cpp $CORE/ocean/*.cpp $CORE/agent/*.cpp)
 fi
 [ "$1" = "--host-only" ] || sources+=($CORE/cards/*.cpp)
 objects=()
@@ -39,7 +39,7 @@ status=0
 for p in "${pids[@]}"; do wait $p || status=1; done
 [ $status = 0 ] || exit 1
 VOICE_LIB=""
-[ "$1" = "--host-only" ] || VOICE_LIB="-L$VOICE/mac -lsherpa-onnx-c-api -Wl,-rpath,$VOICE/mac"
+[ "$1" = "--host-only" ] || VOICE_LIB="-L$VOICE/mac -lsherpa-onnx-c-api -Wl,-rpath,$VOICE/mac -framework AVFoundation"
 xcrun clang++ "${objects[@]}" -o preview $GLFW_LIB $VOICE_LIB -framework OpenGL -framework Cocoa -framework IOKit \
   -framework CoreGraphics -framework CoreText -framework ImageIO -framework CoreFoundation -framework Foundation
 echo "built quest/desktop/preview"
