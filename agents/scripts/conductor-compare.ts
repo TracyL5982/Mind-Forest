@@ -48,6 +48,7 @@ const context = (model: ModelClient): RoleContext => ({
   newId: () => randomUUID(),
   now: () => new Date().toISOString(),
   note: (role, message) => console.log(`  note ${role}: ${message}`),
+  step: (_role, _label, body) => body(),
 });
 
 const card = (words: string): Id => {

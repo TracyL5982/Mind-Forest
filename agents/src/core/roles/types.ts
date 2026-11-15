@@ -43,8 +43,13 @@ export interface RoleContext {
   playback: () => Playback;
   newId: () => Id;
   now: () => string;
-  /** A line for the run log. Shown to the user as the agent's work state. */
+  /** A line for the run log. */
   note: (role: string, message: string) => void;
+  /**
+   * Runs one step of a role's work, shown live to the user as `label` while it lasts: at most seven words saying what is being
+   * done, true of this step ("Searching research papers for adaptive menus"). `detail` is longer text a client may show beside it.
+   */
+  step: <T>(role: string, label: string, body: () => Promise<T>, more?: { nodeId?: Id; detail?: string }) => Promise<T>;
 }
 
 /** One thing dropped into the mindstorm, before Intake has looked at it. */

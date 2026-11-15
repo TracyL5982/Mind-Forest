@@ -1,4 +1,5 @@
 import { announcement } from './announce.ts';
+import { label } from './brief.ts';
 import { CommandError, type ChangeSet, type Command, type Id, type Item, type Origin } from './domain.ts';
 import type { Assets, ModelClient, Store, Tools } from './ports.ts';
 import { admit, plainTitle } from './round.ts';
@@ -25,17 +26,25 @@ export interface Activity {
   id: Id;
   role: string;
   state: 'start' | 'done' | 'error';
+  /** What is being done, in at most seven words, for a client to show live. */
+  label: string;
+  /** Longer text about the step, such as what the user asked or why it failed. */
+  detail?: string;
+  /** The label, or on an error what went wrong. Kept for clients that read it from before `label`. */
   message: string;
   /** The node the work is about, so a client can show the work state in place. */
   nodeId?: Id;
 }
+
+/** `reply`: what the agent answers at once to what was said. `results`: what a piece of work brought, said when it is done. */
+export type SayKind = 'reply' | 'results';
 
 /** Everything the pipeline tells the outside world. A host forwards these to its clients. */
 export type Outbound =
   | { t: 'change'; set: ChangeSet }
   | { t: 'activity'; activity: Activity }
   | { t: 'note'; role: string; message: string }
-  | { t: 'say'; text: string }
+  | { t: 'say'; text: string; kind: SayKind }
   | { t: 'heard'; text: string; final: boolean }
   | { t: 'navigate'; nodeId?: Id; treeId?: Id }
   | { t: 'handoff'; handoff: Handoff }
@@ -101,6 +110,7 @@ export class Pipeline {
       newId: deps.newId,
       now: deps.now,
       note: (role, message) => deps.emit({ t: 'note', role, message }),
+      step: (role, label, body, more) => this.work(role, label, more?.nodeId, body, more?.detail),
     };
   }
 
@@ -121,7 +131,7 @@ export class Pipeline {
   async dump(dumps: RawDump[]): Promise<Filed> {
     const asked = askedForTree(dumps);
     if (asked.request && asked.dumps.length === 0) return this.makeTree(asked.request.title, asked.request.title ? [] : this.dropped);
-    return this.work('intake', `Reading ${dumps.length === 1 ? 'what you dropped' : `${dumps.length} things`}`, undefined, async () => {
+    return this.work('intake', dumps.length === 1 ? 'Reading what you dropped' : `Reading the ${dumps.length} things you dropped`, undefined, async () => {
       const items = await this.deps.roles.intake(this.ctx, asked.dumps);
       if (items.length === 0) return NOTHING;
       this.dropped = asked.request ? [] : items.map((i) => i.id);
@@ -142,14 +152,14 @@ export class Pipeline {
       return this.file(have, request);
     }
     if (!request.title) {
-      this.say('What should the tree be about?');
+      this.say('What should the tree be about?', 'reply');
       return NOTHING;
     }
     const named = mind
       .search(request.title, { limit: 10 })
       .find((hit) => mind.known(hit.id) && plainTitle(hit.item.title) === plainTitle(request.title));
     if (named) return this.file([named.item], request);
-    return this.work('intake', `Starting a tree on "${request.title}"`, undefined, async () => {
+    return this.work('intake', label('Starting a tree on', request.title), undefined, async () => {
       const items = await this.deps.roles.intake(this.ctx, [{ kind: 'text', text: request.title }]);
       return items.length === 0 ? NOTHING : this.file(items, request);
     });
@@ -242,8 +252,9 @@ export class Pipeline {
     }
   }
 
+  /** Makes an organizing change and says what was done, by voice or typed. */
   async organize(request: string, scope: Scope, focus?: Id): Promise<string> {
-    return this.work('organizer', 'Reorganizing', focus, async () => {
+    const summary = await this.work('organizer', 'Reorganizing your cards', focus, async () => {
       const { commands, summary } = await this.deps.roles.organizer(this.ctx, { request, scope, focus });
       if (commands.length > 0) {
         const set = this.apply(AGENT('organizer'), `Organize: ${request}`.slice(0, 120), commands);
@@ -251,7 +262,9 @@ export class Pipeline {
         this.afterContent(set);
       }
       return summary;
-    });
+    }, request);
+    this.say(summary, 'results');
+    return summary;
   }
 
   async handoff(scope: Scope, note?: string): Promise<Handoff> {
@@ -278,12 +291,12 @@ export class Pipeline {
     const run = ++this.voiceRun;
     this.acting = { text, run };
     try {
-      const { intent, say } = await this.work('conductor', 'Listening', scene.focus, () =>
+      const { intent, say } = await this.work('conductor', 'Working out what you mean', scene.focus, () =>
         this.deps.roles.conductor(this.ctx, { utterance: text, scene, history: this.history.slice(-6), dropped: this.dropped }),
-      );
+      text);
       if (run !== this.voiceRun) return;
       this.history.push({ who: 'user', text });
-      if (say) this.say(say);
+      if (say) this.say(say, 'reply');
       await this.dispatch(intent, scene);
     } catch (err) {
       this.fail('conductor', err);
@@ -304,11 +317,11 @@ export class Pipeline {
         else this.attend(undefined);
         return;
       case 'organize':
-        this.say(await this.organize(intent.request, intent.scope, scene.focus));
+        await this.organize(intent.request, intent.scope, scene.focus);
         return;
       case 'handoff': {
         const made = await this.handoff(intent.scope, intent.note || undefined);
-        this.say(`Your handoff is ready: ${made.name}.`);
+        this.say(`Your handoff is ready: ${made.name}.`, 'results');
         return;
       }
       case 'capture':
@@ -328,9 +341,10 @@ export class Pipeline {
     }
   }
 
-  private say(text: string): void {
+  /** The one place the agent speaks, so a voice can take every line from here. */
+  private say(text: string, kind: SayKind): void {
     this.history.push({ who: 'agent', text });
-    this.deps.emit({ t: 'say', text });
+    this.deps.emit({ t: 'say', text, kind });
   }
 
   private attend(on: Id | undefined): number {
@@ -344,7 +358,8 @@ export class Pipeline {
   private file(items: Item[], request?: TreeRequest): Promise<Filed> {
     const { mind } = this.deps;
     const named = items.length === 1 ? `"${items[0]!.title}"` : `${items.length} items`;
-    return this.work('filer', request ? `Starting a tree with ${named}` : `Finding a place for ${named}`, undefined, async () => {
+    const doing = items.length === 1 ? label(request ? 'Starting a tree with' : 'Finding a place for', items[0]!.title) : request ? `Starting a tree with ${items.length} things` : `Finding places for ${items.length} things`;
+    return this.work('filer', doing, undefined, async () => {
       const placing = await this.deps.roles.filer(this.ctx, items, request);
       const fresh = items.filter((item) => !mind.items.has(item.id)).map((item): Command => ({ type: 'addItem', item }));
       const set = this.apply(AGENT('filer'), request ? `Start a tree with ${named}` : `Add ${named}`, admit(mind, [...fresh, ...placing]));
@@ -387,7 +402,7 @@ export class Pipeline {
     const brought: Id[] = [];
     const title = mind.itemOf(anchor).title;
     try {
-      await this.work('scout', need ? `Looking for: ${need}` : `Finding more around "${title}"`, anchor, async () => {
+      await this.work('scout', label(need ? 'Looking into' : 'Finding more for', title), anchor, async () => {
         // The picks of one run arrive in several deliveries. They share a part, so one undo takes the whole run back.
         const part = this.deps.newId();
         const bring = (commands: Command[]) => {
@@ -399,7 +414,7 @@ export class Pipeline {
           this.afterContent(set);
         };
         bring(await this.deps.roles.scout(this.ctx, { anchor, need, history: this.history.slice(-6), deliver: bring }));
-      });
+      }, need);
     } catch (err) {
       this.fail('scout', err);
     }
@@ -407,7 +422,7 @@ export class Pipeline {
     const there = brought.filter((id) => mind.nodes.has(id));
     const stillHere = this.attention.seq === asked || this.attention.on === anchor;
     if (there.length > 0 && stillHere) this.deps.emit({ t: 'navigate', nodeId: anchor });
-    this.say(announcement(mind, anchor, there));
+    this.say(announcement(mind, anchor, there), 'results');
   }
 
   /** New or changed content goes to the Renderer, and the trees it touched get fresh digests. */
@@ -426,7 +441,7 @@ export class Pipeline {
     this.digest(set);
     if (nodeIds.length === 0) return;
     this.track(
-      this.work('renderer', 'Choosing how to show this', nodeIds[0], async () => {
+      this.work('renderer', `Laying out ${nodeIds.length === 1 ? 'a card' : `${nodeIds.length} cards`}`, nodeIds[0], async () => {
         const show = (commands: Command[]) => {
           if (commands.length > 0) this.apply(AGENT('renderer'), 'Choose formats', commands);
         };
@@ -478,15 +493,16 @@ export class Pipeline {
     this.deps.emit({ t: 'change', set });
   }
 
-  private async work<T>(role: string, message: string, nodeId: Id | undefined, body: () => Promise<T>): Promise<T> {
+  private async work<T>(role: string, label: string, nodeId: Id | undefined, body: () => Promise<T>, detail?: string): Promise<T> {
     const id = this.deps.newId();
-    this.deps.emit({ t: 'activity', activity: { id, role, state: 'start', message, nodeId } });
+    const about = { id, role, label, ...(detail ? { detail } : {}), nodeId };
+    this.deps.emit({ t: 'activity', activity: { ...about, state: 'start', message: label } });
     try {
       const result = await body();
-      this.deps.emit({ t: 'activity', activity: { id, role, state: 'done', message, nodeId } });
+      this.deps.emit({ t: 'activity', activity: { ...about, state: 'done', message: label } });
       return result;
     } catch (err) {
-      this.deps.emit({ t: 'activity', activity: { id, role, state: 'error', message: describe(err), nodeId } });
+      this.deps.emit({ t: 'activity', activity: { ...about, state: 'error', detail: describe(err), message: describe(err) } });
       throw err;
     }
   }

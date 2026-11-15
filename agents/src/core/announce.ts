@@ -1,13 +1,11 @@
 import type { Id, Item } from './domain.ts';
+import { briefly, wordCount } from './brief.ts';
 import type { Mindstorm } from './state.ts';
 
 /** About six seconds of speech. */
 const MOST_WORDS = 20;
 const NAME_WORDS = 6;
 const COUNT = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
-const SPACELESS = /[\p{scx=Han}\p{scx=Hira}\p{scx=Kana}\p{scx=Hang}\p{scx=Thai}]/u;
-/** Words a cut title must not end on. */
-const DANGLING = new Set(['a', 'an', 'the', 'of', 'for', 'about', 'and', 'or', 'to', 'in', 'on', 'with', 'at', 'by', 'from', 'as', 'into', 'vs']);
 
 /** A pick named aloud by the source it came from, when that says what it is. A film's poster or a book's cover is still a film or a book. */
 const FROM: Record<string, string> = {
@@ -41,43 +39,13 @@ function spokenKind(item: Item, tool: string): string {
   return TEXT_FROM[tool] ?? 'a note';
 }
 
-/** A word of a spaced language counts once, each character of a spaceless one once, since each is about a syllable. */
-function wordCount(text: string): number {
-  return text
-    .split(/\s+/)
-    .filter(Boolean)
-    .reduce((n, word) => n + Math.max(1, [...word].filter((c) => SPACELESS.test(c)).length), 0);
-}
-
-function clipWords(text: string, most: number): string {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (wordCount(text) <= most) return text;
-  const kept: string[] = [];
-  for (const word of words) {
-    if (wordCount([...kept, word].join(' ')) > most) {
-      if (kept.length === 0) kept.push([...word].slice(0, most).join(''));
-      break;
-    }
-    kept.push(word);
-  }
-  while (kept.length > 1 && DANGLING.has(kept.at(-1)!.toLowerCase())) kept.pop();
-  return kept.join(' ').replace(/[\s,;:.!?—–-]+$/u, '');
-}
-
-/** A title as it is said: without its subtitle when it has one, and never longer than `most` words. */
-function said(title: string, most: number): string {
-  const flat = title.replace(/\s+/g, ' ').trim().replace(/"/g, '');
-  const main = flat.split(/\s*(?::|\(|\|)\s*/)[0]!;
-  return clipWords(wordCount(main) >= 2 ? main : flat, most);
-}
-
 /**
  * What the agent says when a run the user asked for has delivered: how many picks came, under which card, and one or two of them by
  * what they are and their title, real material before written ideas. Plainly that nothing came, when nothing did.
  */
 export function announcement(mind: Mindstorm, anchor: Id, brought: Id[]): string {
   const card = mind.itemOf(anchor);
-  const name = said(card.title || card.summary || card.text || 'this card', NAME_WORDS);
+  const name = briefly(card.title || card.summary || card.text || 'this card', NAME_WORDS);
   if (brought.length === 0) return `I found nothing new for ${name}.`;
   const head = brought.length === 1 ? `One new thing under ${name}` : `${COUNT[brought.length] ?? brought.length} new things under ${name}`;
 
@@ -91,7 +59,7 @@ export function announcement(mind: Mindstorm, anchor: Id, brought: Id[]): string
   const [first, second] = named;
   if (!first) return `${head}.`;
   const room = MOST_WORDS - wordCount(head);
-  const quote = (n: { kind: string; title: string }, most: number) => `${n.kind} "${said(n.title, Math.max(2, most - wordCount(n.kind)))}"`;
+  const quote = (n: { kind: string; title: string }, most: number) => `${n.kind} "${briefly(n.title, Math.max(2, most - wordCount(n.kind)))}"`;
   if (second) {
     const both = `${quote(first, room)} and ${quote(second, room)}`;
     if (wordCount(both) <= room) return `${head}: ${both}.`;

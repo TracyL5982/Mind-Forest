@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { inLibrary, type Command, type Id, type Item, type ItemData, type Node } from '../domain.ts';
 import type { Found, Source } from '../ports.ts';
+import { label } from '../brief.ts';
 import { givesWay, KNOWN_MOST, LIBRARY_TOOL, MINDSTORM, newSlots, ROUND_MOST, sameness, treeKeys, urlKey } from '../round.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
@@ -61,7 +62,9 @@ interface Run {
  * It never takes a pick away. When the round could pass its cap, the picks already there are rated against what the user is asking
  * now, and that rating becomes their importance, so the pipeline lets the least related ones give way.
  */
-export const scout: Roles['scout'] = async (ctx, input) => {
+export const scout: Roles['scout'] = async (given, input) => {
+  // Every step of the run is shown on its card.
+  const ctx: RoleContext = { ...given, step: (role, label, body, more) => given.step(role, label, body, { nodeId: input.anchor, ...more }) };
   const anchor = ctx.mind.nodes.get(input.anchor);
   if (!anchor) {
     ctx.note(ROLE, `node ${input.anchor} is gone, nothing to scout for`);
@@ -84,7 +87,7 @@ export const scout: Roles['scout'] = async (ctx, input) => {
   let directions: Direction[];
   try {
     // Some searches find nothing that fits, so one direction more than the count is asked for.
-    directions = await ideate(ctx, run, wanted >= 3 ? wanted + 1 : wanted);
+    directions = await ctx.step(ROLE, label('Thinking of directions for', nameOf(item)), () => ideate(ctx, run, wanted >= 3 ? wanted + 1 : wanted));
   } catch (err) {
     ctx.note(ROLE, `could not think of directions (${message(err)}), the picks stay as they are`);
     return [];
@@ -334,7 +337,7 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
       const made = await Promise.all(
         wanted.map(async (image): Promise<Made | null> => {
           try {
-            const { asset } = await ctx.tools.images.generate(image.prompt);
+            const { asset } = await ctx.step(ROLE, label('Making a picture of', image.title || d.title), () => ctx.tools.images.generate(image.prompt), { detail: image.prompt });
             return {
               tool: 'image-gen',
               item: makeItem(ctx, {
@@ -379,7 +382,7 @@ async function realize(ctx: RoleContext, d: Direction, imageBudget: number, take
         const played = await choose(ctx, d, files, await gather(ctx, files, [wanted], taken), taken);
         if (played.length > 0) return played;
       }
-      for (const video of await ctx.tools.web.videos(wanted)) {
+      for (const video of await ctx.step(ROLE, label('Looking for a video of', wanted), () => ctx.tools.web.videos(wanted))) {
         if (taken.has(urlKey(video.url))) continue;
         taken.add(urlKey(video.url));
         // A client that cannot embed a player shows the still, so it is brought in like any other picture.
@@ -423,7 +426,7 @@ async function gather(ctx: RoleContext, source: Source, wanted: string[], taken:
   for (const each of queries) {
     if (fresh.length >= ENOUGH_FOUND) break;
     try {
-      for (const record of await ctx.tools.sources.search(source.id, each)) {
+      for (const record of await ctx.step(ROLE, label(`Searching ${sourceWords(source)} for`, each), () => ctx.tools.sources.search(source.id, each))) {
         if (record.media && !playable(ctx, record.media)) continue;
         if (!taken.has(urlKey(record.url)) && !fresh.some((f) => urlKey(f.url) === urlKey(record.url))) fresh.push(record);
       }
@@ -441,15 +444,21 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
     return [];
   }
   // Things to look at are brought in first, so the model chooses among them by sight and a missing picture is never shown.
+  const pictured = fresh.slice(0, VISUAL_SHOWN_TO_MODEL);
   const found = source.visual
-    ? (await Promise.all(fresh.slice(0, VISUAL_SHOWN_TO_MODEL).map(async (f) => ({ ...f, stored: f.image ? await ctx.tools.web.picture(f.image) : null })))).filter((f) => f.stored)
+    ? (
+        await ctx.step(ROLE, label(`Fetching ${pictured.length} pictures from`, sourceWords(source)), () =>
+          Promise.all(pictured.map(async (f) => ({ ...f, stored: f.image ? await ctx.tools.web.picture(f.image) : null }))),
+        )
+      ).filter((f) => f.stored)
     : fresh.slice(0, FOUND_SHOWN_TO_MODEL).map((f) => ({ ...f, stored: null }));
   if (found.length === 0) {
     ctx.note(ROLE, `${source.name} has nothing for "${query}", left out`);
     return [];
   }
   // A search matches words, so the model picks the records that carry the direction before any is shown.
-  const chosen = await curate(ctx, d, source, found, source.visual ? await dataUrls(ctx, found.map((f) => f.stored!.asset)) : undefined);
+  const pictures = source.visual ? await dataUrls(ctx, found.map((f) => f.stored!.asset)) : undefined;
+  const chosen = await ctx.step(ROLE, label(`Reading ${found.length} ${found.length === 1 ? 'result' : 'results'} from`, sourceWords(source)), () => curate(ctx, d, source, found, pictures));
   if (chosen.length === 0) ctx.note(ROLE, `none of the ${found.length} records ${source.name} returned for "${query}" fit, left out`);
   const made = await Promise.all(
     chosen.map(async ({ index, note, excerpt }): Promise<Made | null> => {
@@ -616,7 +625,7 @@ async function rate(ctx: RoleContext, run: Run, seen: ReadonlySet<string>, wante
   if (candidates.length + shown.length === 0) return { ties: [], relevance: new Map() };
 
   const line = (c: Item) => `- item ${c.id} "${oneLine(nameOf(c), 100)}": ${oneLine(c.summary || c.text, 240)}`;
-  const answer = await ctx.model.json({
+  const answer = await ctx.step(ROLE, 'Checking what you already have', () => ctx.model.json({
     role: `${ROLE}.rate`,
     system: SYSTEM,
     user: [
@@ -632,7 +641,7 @@ async function rate(ctx: RoleContext, run: Run, seen: ReadonlySet<string>, wante
     ].join('\n'),
     schema: Ratings,
     effort: 'low',
-  });
+  }));
   const offered = new Set(candidates.map((c) => c.id));
   const showing = new Map(shown.map((n) => [n.itemId, n]));
   const best = new Map<Id, { strength: number; why: string }>();
@@ -657,6 +666,13 @@ async function rate(ctx: RoleContext, run: Run, seen: ReadonlySet<string>, wante
     })
     .slice(0, KNOWN_MOST);
   return { ties, relevance };
+}
+
+/** A source as a label names it: a common noun in lower case ("research papers", "the web"), a name as it is ("Hacker News"). */
+function sourceWords(source: Source): string {
+  const [first, ...rest] = source.name.split(' ');
+  const common = rest.length > 0 ? rest.every((w) => w === w.toLowerCase()) : /^[A-Z][a-z]+s$/.test(source.name);
+  return common ? `${first!.charAt(0).toLowerCase()}${first!.slice(1)}${rest.length ? ` ${rest.join(' ')}` : ''}` : source.name;
 }
 
 function nameOf(item: Item): string {
