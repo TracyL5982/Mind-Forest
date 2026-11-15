@@ -293,7 +293,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         pipeline.userCommands(m.label, m.commands);
         return;
       case 'organize':
-        broadcast({ t: 'say', text: await pipeline.organize(m.request, m.scope, m.focus) });
+        await pipeline.organize(m.request, m.scope, m.focus);
         return;
       case 'handoff':
         await pipeline.handoff(m.scope, m.note);

@@ -95,6 +95,7 @@ export function kit(settings: Partial<Settings> = {}): Kit {
     newId,
     now,
     note: (role, message) => notes.push(`${role}: ${message}`),
+    step: (_role, _label, body) => body(),
   };
   const USER = { by: 'user' as const };
   const item: Kit['item'] = (fields) => ({

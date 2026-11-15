@@ -7,6 +7,11 @@ export interface MetaModelOptions {
   model?: string;
   /** The model for a request marked quick. */
   quickModel?: string;
+  /**
+   * How long a quick request may go unanswered before it is tried again. The quick model answers in 0.5 to 4 s. In three runs in a row
+   * one of its requests went unanswered until the 120 s limit, and the same request tried again answered in 1 to 2 s.
+   */
+  quickWaitMs?: number;
   imageModel?: string;
   voiceModel?: string;
   fetch?: typeof fetch;
@@ -49,7 +54,7 @@ export class MetaModel implements ModelClient {
         { role: 'system', content: req.system },
         { role: 'user', content },
       ],
-      reasoning: { effort: req.quick ? 'minimal' : (req.effort ?? 'low') },
+      reasoning: { effort: req.effort ?? (req.quick ? 'minimal' : 'low') },
       text: {
         format: {
           type: 'json_schema',
@@ -59,8 +64,8 @@ export class MetaModel implements ModelClient {
         },
       },
     };
-    const output = await this.responses('json', req.role, body);
-    const text = finalText(output);
+    const waitMs = req.quick ? (this.opts.quickWaitMs ?? 20_000) : undefined;
+    const text = req.onText ? await this.streamed(req.role, body, req.onText, waitMs) : finalText(await this.responses('json', req.role, body, waitMs));
     if (!text) throw new Unreadable(req.role, 'no text');
     let json: unknown;
     try {
@@ -164,13 +169,61 @@ export class MetaModel implements ModelClient {
     return transcriptOf(await res.json()).replace(/([.?!])\1+$/, '$1').trim();
   }
 
-  private async responses(kind: string, role: string, body: unknown): Promise<OutputItem[]> {
-    const json = (await this.post(kind, role, '/responses', body)) as { output?: OutputItem[]; status?: string };
+  /**
+   * One reply read as it is written, over server-sent events, its text handed to `onText` after each piece.
+   * It is tried again only while nothing has been handed on, since a second answer could differ from what was already acted on.
+   */
+  private async streamed(role: string, body: object, onText: (soFar: string) => void, waitMs = 120_000): Promise<string> {
+    const budget = this.opts.tokenBudget ?? 5_000_000;
+    if (this.spent >= budget) throw new Error(`${role}: token budget of ${budget} is used up; restart the service to reset it`);
+    const started = Date.now();
+    let lastError = '';
+    let handedOn = false;
+    for (let attempt = 0; attempt < 3 && !handedOn; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
+      try {
+        const res = await this.send(`${this.base}/responses`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.opts.apiKey}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+          body: JSON.stringify({ ...body, stream: true }),
+          signal: AbortSignal.timeout(waitMs),
+        });
+        if (!res.ok || !res.body) {
+          lastError = `${res.status} ${(await res.text()).slice(0, 400)}`;
+          if (res.status !== 429 && res.status < 500) break;
+          continue;
+        }
+        let text = '';
+        let tokens: number | undefined;
+        for await (const event of serverEvents(res.body)) {
+          // A message the model writes before its answer is replaced by the answer.
+          if (event.type === 'response.output_item.added' && event.item?.type === 'message') text = '';
+          if (event.type === 'response.output_text.delta' && event.delta) {
+            text += event.delta;
+            handedOn = true;
+            onText(text);
+          }
+          if (event.type === 'response.completed') tokens = event.response?.usage?.total_tokens;
+          if (event.type === 'response.failed' || event.type === 'error') throw new Error(`${role}: the reply failed: ${JSON.stringify(event).slice(0, 300)}`);
+        }
+        this.spent += tokens ?? 0;
+        this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: true, tokens });
+        return text;
+      } catch (err) {
+        lastError = String(err);
+      }
+    }
+    this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: false });
+    throw new Error(`${role}: model request failed: ${lastError}`);
+  }
+
+  private async responses(kind: string, role: string, body: unknown, waitMs?: number): Promise<OutputItem[]> {
+    const json = (await this.post(kind, role, '/responses', body, waitMs)) as { output?: OutputItem[]; status?: string };
     if (!Array.isArray(json.output)) throw new Error(`${role}: malformed response`);
     return json.output;
   }
 
-  private async post(kind: string, role: string, path: string, body: unknown): Promise<unknown> {
+  private async post(kind: string, role: string, path: string, body: unknown, waitMs = 120_000): Promise<unknown> {
     const budget = this.opts.tokenBudget ?? 5_000_000;
     if (this.spent >= budget) throw new Error(`${role}: token budget of ${budget} is used up; restart the service to reset it`);
     const started = Date.now();
@@ -183,7 +236,7 @@ export class MetaModel implements ModelClient {
           method: 'POST',
           headers: { Authorization: `Bearer ${this.opts.apiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(120_000),
+          signal: AbortSignal.timeout(waitMs),
         });
       } catch (err) {
         lastError = String(err);
@@ -204,6 +257,34 @@ export class MetaModel implements ModelClient {
 }
 
 type Json = Record<string, unknown>;
+
+interface StreamEvent {
+  type?: string;
+  delta?: string;
+  item?: { type?: string };
+  response?: { usage?: { total_tokens?: number } };
+}
+
+/** The events of a server-sent event stream, each its `data` parsed as JSON. */
+async function* serverEvents(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamEvent> {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
+    // A line may end in \r\n, and a read may end between the two.
+    buffer = (buffer + decoder.decode(chunk, { stream: true })).replace(/\r\n/g, '\n');
+    let cut: number;
+    while ((cut = buffer.indexOf('\n\n')) >= 0) {
+      const data = buffer.slice(0, cut).split('\n').filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).join('');
+      buffer = buffer.slice(cut + 2);
+      if (!data || data === '[DONE]') continue;
+      try {
+        yield JSON.parse(data) as StreamEvent;
+      } catch {
+        // A line that is not JSON carries nothing to read.
+      }
+    }
+  }
+}
 
 /**
  * Rewrites a JSON Schema into the API's strict subset: every object closed, every key required, optional keys nullable.

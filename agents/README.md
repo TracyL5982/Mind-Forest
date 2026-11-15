@@ -51,8 +51,8 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 | `MIND_PALACE_PORT` | 8787 | Port for HTTP and WebSocket. |
 | `MIND_PALACE_TOKEN` | generated, saved in `data/token` | The access key every client must send. |
 | `MIND_PALACE_DATA` | `agents/data` | Where the mindstorm and files are kept. |
-| `MUSE_LLM_MODEL` | `muse-spark-1.3` | The model for every role but the suggested questions. |
-| `MIND_PALACE_QUICK_MODEL` | `muse-ember-1.0` | The model for the suggested questions under an open card, which the user waits on. |
+| `MUSE_LLM_MODEL` | `muse-spark-1.3` | The model for thinking of directions (each started as it is written), each card's component, grouping siblings, and every role not on the quick model. |
+| `MIND_PALACE_QUICK_MODEL` | `muse-ember-1.0` | The model for what you wait on: the Conductor's reply, the suggested questions under an open card, rating ties to what you have, and choosing among what a search returned. |
 | `MIND_PALACE_TOKEN_BUDGET` | 5,000,000 | Tokens the service may spend before it refuses model calls. Restart to reset. |
 | `MIND_PALACE_ENV` | `~/.muse-garden.env` | The file keys are read from. |
 | `MIND_PALACE_MAPS` | unset, maps off | A map provider: `openstreetmap`. With it set, a place a note names is looked up on that provider's server, which sends the place's name off this machine, and place cards draw a map from its tiles. Unset, nothing about a place leaves the machine. Lookups are kept in `data/places.json`. |
@@ -75,7 +75,7 @@ You talk to one voice. Content roles decide what exists. The Renderer decides ho
 
 | Role | Job | File |
 |---|---|---|
-| Conductor | Hears each utterance with what you are looking at, and routes it: ask, more, navigate, organize, handoff, capture, tree, keep, undo. "Make a tree about …" and "start a tree on this" need no model call. | `src/core/roles/conductor.ts`, `src/core/tree-request.ts` |
+| Conductor | Hears each utterance with what you are looking at, and routes it: ask, more, navigate, organize, handoff, capture, tree, keep, undo. "Make a tree about …" and "start a tree on this" need no model call. When what you asked for lands, the agent says what came and brings the card into view. | `src/core/roles/conductor.ts`, `src/core/tree-request.ts` |
 | Intake | Turns a dump into items: text, links, pictures, video, files, and chat exports from ChatGPT, Claude, Muse or a pasted transcript. | `src/core/roles/intake.ts` |
 | Filer | Every dump joins the knowledge base. The Filer hangs an item under a card of a tree, as a pick, only when it plainly belongs there. It starts a tree only when the dump or the user asks for one. | `src/core/roles/filer.ts` |
 | Scout | Works out what a card is and what you are doing with it, then extends it in several different directions. Each comes back as content shown in place: a written idea, steps, a generated picture or set, a video that plays in the card, or real material found in a source that suits the subject. Sources: the web (the page is read and the passage shown), research papers, books (Apple Books), world data as charts, Hacker News threads, GitHub projects, Stack Overflow, museum collections, Are.na, podcasts, recipes, the Internet Archive (films that play as a file), and with their keys news (The Guardian), film and television (TMDB) and Europeana. It looks at a dropped picture itself. Never a bare link. Every round also draws on everything you already have (dumps, cards of other trees, the headset's library) and brings what is strongly tied, the strongest first, up to 8 of the 10 places around a card. Nothing repeats inside a tree. | `src/core/roles/scout.ts`, `src/core/round.ts`, `src/node/sources.ts` |
