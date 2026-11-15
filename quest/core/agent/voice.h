@@ -39,9 +39,10 @@ public:
     Voice(const Voice&) = delete;
     Voice& operator=(const Voice&) = delete;
 
-    /// Every connect: the name to listen for, whether the service reads replies aloud, and whether it has a live voice.
-    /// The first starts listening. /live is opened only while the last hello offered it.
-    void joined(const Settings& settings, bool serviceSpeaks, bool live);
+    /// Every connect: the name to listen for, whether the service reads replies aloud, whether it has a live voice, and
+    /// this connection's id, which /live names so that what Momo starts is this headset's own. The first starts listening.
+    /// /live is opened only while the last hello offered it, and again when the connection's id changes.
+    void joined(const Settings& settings, bool serviceSpeaks, bool live, const std::string& connection = "");
     void renamed(const std::string& name);
     /// A reply to speak. One that arrives while the user is recorded waits until the recording ends. While /live is
     /// ready the service voices it there, and this only logs it.
@@ -192,6 +193,7 @@ private:
     };
     std::variant<Shut, Connecting, Ready> link = Shut{};
     bool liveOffered = false;       // the last hello said the service has a live voice
+    std::string connection;         // the /ws connection's id, as the last hello gave it
     int sockets = 0;
     std::string liveWhy;            // why /live last closed, already logged
     int turns = 0;

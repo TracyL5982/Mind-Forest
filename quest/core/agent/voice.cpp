@@ -129,12 +129,12 @@ std::string lower(std::string s) {
     return s;
 }
 
-/// The service's /live socket, beside its /ws: ws://host:port/live?token=…
-std::string liveUrl(const Address& address) {
+/// The service's /live socket, beside its /ws: ws://host:port/live?token=…&connection=…
+std::string liveUrl(const Address& address, const std::string& connection) {
     std::string base = address.http;
     if (base.rfind("https:", 0) == 0) base = "wss:" + base.substr(6);
     else if (base.rfind("http:", 0) == 0) base = "ws:" + base.substr(5);
-    return base + "/live?token=" + queryEscape(address.token);
+    return base + "/live?token=" + queryEscape(address.token) + (connection.empty() ? "" : "&connection=" + queryEscape(connection));
 }
 
 /// 16-bit little-endian PCM, as /live carries the microphone.
@@ -247,9 +247,17 @@ std::optional<Listener::State> Voice::state() const {
 
 std::string Voice::name() const { return titled(spelled); }
 
-void Voice::joined(const Settings& settings, bool speaks, bool live) {
+void Voice::joined(const Settings& settings, bool speaks, bool live, const std::string& id) {
     serviceSpeaks = speaks;
     liveOffered = live;
+    if (id != connection) {
+        connection = id;
+        // /live names the old connection: what Momo starts there would be no one's. It opens again for this one.
+        bool open = !std::holds_alternative<Shut>(link);
+        if (auto* c = std::get_if<Connecting>(&link)) c->socket->close();
+        if (auto* r = std::get_if<Ready>(&link)) r->socket->close();
+        if (open) liveDown("the connection changed", clock);
+    }
     wanted = settings.agentName;
     // Work going on before a reconnect may have ended unseen.
     working.clear();
@@ -391,7 +399,7 @@ void Voice::send(Command command) {
 
 void Voice::say(const std::string& text) {
     if (std::holds_alternative<Ready>(link)) {
-        logLine("[voice] the live voice says it");
+        logLine("[voice] on the live voice Momo tells it in its own words");
         return;
     }
     if (!serviceSpeaks || muted) return;
@@ -658,7 +666,7 @@ void Voice::openLive(double now) {
         std::lock_guard<std::mutex> g(b->lock);
         b->live.push_back(FromLive{number, std::move(frame)});
     };
-    platform::SocketRef socket = platform::openSocket(liveUrl(client.address()), {
+    platform::SocketRef socket = platform::openSocket(liveUrl(client.address(), connection), {
         [] {},
         [deliver](const std::string& text) {
             std::optional<Json> j = Json::parse(text);

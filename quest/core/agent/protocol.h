@@ -225,6 +225,8 @@ struct Hello {
     Hearing hearing = Hearing::browser;
     /// Whether Momo's live voice answers on /live.
     bool live = false;
+    /// This connection's id, which /live names so that what Momo starts there is this connection's own.
+    std::string connection;
 };
 struct Change {
     ChangeSet set;

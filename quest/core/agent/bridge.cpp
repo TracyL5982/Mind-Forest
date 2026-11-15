@@ -126,7 +126,7 @@ void Bridge::frame(double t) {
         std::visit(overloaded{
                        [&](Synced& s) {
                            synced(s.delta);
-                           if (voice) voice->joined(s.settings, s.voice, s.live);
+                           if (voice) voice->joined(s.settings, s.voice, s.live, s.connection);
                        },
                        [&](Changed& c) {
                            if (Flags::has("agentLog")) {

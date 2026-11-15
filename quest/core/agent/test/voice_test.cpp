@@ -912,6 +912,27 @@ TEST(presenceMutedMakesNoSoundYetTakesTheTime) {
     CHECK_EQ(host.plays.size(), size_t(0));
 }
 
+TEST(liveNamesItsConnectionAndOpensAgainForANewOne) {
+    Talking t(Made{.live = false});
+    Settings settings;
+    t.voice.joined(settings, true, true, "c-1");
+    t.frame();
+    CHECK_EQ(host.sockets.size(), size_t(1));
+    if (host.sockets.empty()) return;
+    CHECK_EQ(host.sockets[0]->url, "ws://127.0.0.1:8790/live?token=tok&connection=c-1");
+    host.sockets[0]->events.opened();
+    t.serviceSays(R"({"t":"ready","rate":24000})");
+    t.voice.joined(settings, true, true, "c-1");
+    t.frame();
+    CHECK_EQ(host.sockets.size(), size_t(1));
+    t.voice.joined(settings, true, true, "c-2");
+    CHECK(host.sockets[0]->closed, "a reconnect's new connection closes /live, which named the old one");
+    t.frame();
+    CHECK_EQ(host.sockets.size(), size_t(2));
+    if (host.sockets.size() < 2) return;
+    CHECK_EQ(host.sockets[1]->url, "ws://127.0.0.1:8790/live?token=tok&connection=c-2");
+}
+
 TEST(liveOpensOnlyWhileTheHelloOffersIt) {
     Talking t(Made{.live = false});
     t.frame();

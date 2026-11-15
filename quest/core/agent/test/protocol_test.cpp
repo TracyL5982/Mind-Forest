@@ -229,9 +229,12 @@ TEST(optionalFieldsMayBeMissing) {
     CHECK(hello, "a hello without voice, hearing, live or undo reads: %s", kindOf(older).c_str());
     if (hello) CHECK(!hello->voice && hello->hearing == Hearing::browser && !hello->live && !hello->undo, "and has none of them");
 
-    Inbound hearing = parseInbound(edited(fixture("hello.json"), [](Json j) { return j.set("hearing", "service").set("voice", true).set("live", true); }));
+    if (hello) CHECK(hello->connection.empty(), "nor a connection's id");
+
+    Inbound hearing = parseInbound(edited(fixture("hello.json"), [](Json j) { return j.set("hearing", "service").set("voice", true).set("live", true).set("connection", "c-1"); }));
     auto* withHearing = std::get_if<Hello>(&hearing);
     CHECK(withHearing && withHearing->hearing == Hearing::service && withHearing->voice && withHearing->live, "hearing service, voice and live true");
+    CHECK(withHearing && withHearing->connection == "c-1", "the connection's id");
 
     Inbound labelled = parseInbound(R"({"t":"activity","activity":{"id":"a1","role":"scout","state":"start","message":"Looking for films with a dolly zoom in them","label":"Finding dolly zooms"}})");
     auto* withLabel = std::get_if<Activity>(&labelled);
