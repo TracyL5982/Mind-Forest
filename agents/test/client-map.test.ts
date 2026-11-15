@@ -33,15 +33,16 @@ test('a place card\'s map takes at most four tiles and the opened card\'s at mos
   const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let n = 0; n < 500; n++) {
     const centre = { lat: random() * 170 - 85, lon: random() * 360 - 180 };
-    assert.ok(layout({ centre, zoom: 12, width: 256, height: 112 }).tiles.length <= 4);
+    assert.ok(layout({ centre, zoom: 12, width: 210, height: 88 }).tiles.length <= 4);
     assert.ok(layout({ centre, zoom: 12, width: 348, height: 200 }).tiles.length <= 6);
   }
 });
 
-test('a place card is 112 px taller with a map, which it has only when its item holds a point on the earth', () => {
+test('a place card shows a 210 by 88 map under its name in place of its words, only when its item holds a point on the earth', () => {
   const card = (at?: unknown) => sizeOf({ view: { component: 'place', props: { name: 'Lisbon' } } }, { title: 'Lisbon', text: '', summary: 'Three days.', data: at === undefined ? {} : { at } });
 
-  assert.deepEqual(card(LISBON), [256, card()[1]! + 112]);
+  assert.deepEqual(card(LISBON), [210, 17 + 28 + 13 + 88], 'the border, 13 px and 2 to spare over the name, 13 px under it, and the map to the edges');
+  assert.deepEqual(card(), [210, 30 + 28 + 8 + 22], 'the padded frame, the name, and its words on one line');
   for (const wrong of [null, { lat: 91, lon: 0 }, { lat: 0, lon: -181 }, { lat: '38.7', lon: -9.1 }, { lat: Number.NaN, lon: 0 }, [38.7, -9.1]]) {
     assert.deepEqual(card(wrong), card(), JSON.stringify(wrong));
   }

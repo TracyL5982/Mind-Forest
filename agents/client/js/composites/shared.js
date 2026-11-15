@@ -2,6 +2,8 @@ import { TEXT_LETTER, wrap } from '../components/shared.js';
 
 export const PAD = 18;
 export const HEAD = 40;
+/** The line of the words an arrangement sets beside its cards, in the field's text size, `--lead-text` in style.css. */
+export const LINE = 17;
 
 /** Members side by side, tops aligned. Offsets are card centres from the block's top-left corner. */
 export function row(ids, sizes, { gap, left = PAD, top = HEAD }) {

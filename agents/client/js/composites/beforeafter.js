@@ -1,6 +1,6 @@
 import { h } from '../dom.js';
-import { TEXT, text } from '../components/shared.js';
-import { HEAD, PAD, linesOf, row } from './shared.js';
+import { text } from '../components/shared.js';
+import { HEAD, LINE, PAD, linesOf, row } from './shared.js';
 
 export const name = 'Before and after';
 
@@ -14,7 +14,7 @@ export function arrange(group, ids, sizes) {
   const { at, right, tall } = row(ids, sizes, { gap: STEP });
   const steps = ids.slice(1).map((id, i) => {
     const lines = linesOf(change(id), STEP - 2 * INSET);
-    const height = ARROW + lines * TEXT;
+    const height = ARROW + lines * LINE;
     // A step sits in the middle of the shorter of the two states it joins, and from the top when it is taller than that.
     const short = Math.min(sizes.get(ids[i])[1], sizes.get(id)[1]);
     return { id, lines, height, top: HEAD + Math.max(0, (short - height) / 2) };
@@ -25,6 +25,6 @@ export function arrange(group, ids, sizes) {
     marks: steps.map(({ id, lines, height, top }) =>
       h('div', { class: 'ba-step', style: { left: `${at.get(id).x - sizes.get(id)[0] / 2 - STEP}px`, top: `${top}px`, width: `${STEP}px`, height: `${height}px` } },
         h('div', { class: 'ba-arrow', text: '→' }),
-        lines > 0 && h('div', { class: 'arr-words ba-change', dir: 'auto', style: { height: `${lines * TEXT}px` }, text: change(id) }))),
+        lines > 0 && h('div', { class: 'arr-words ba-change', dir: 'auto', style: { height: `${lines * LINE}px` }, text: change(id) }))),
   };
 }

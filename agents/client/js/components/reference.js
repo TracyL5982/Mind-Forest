@@ -1,46 +1,39 @@
 import { h } from '../dom.js';
 import { chipSources } from '../chips.js';
-import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, kind, list, say, text, wrap, titleOf } from './shared.js';
+import { GAP, META, WIDTH, drawFace, kind, lay, list, say, text, titleRow, wordsIn } from './shared.js';
 import { wordsOf } from '../words.js';
 
-const WIDTH = 288;
-const COLUMN = WIDTH - SIDES;
-/** The line that names the kind and the year, with the rule under it. */
-const HEAD = 24;
+/** The rule under the kind and the year, and the room either side of it. */
+const RULE = 14;
 const KINDS = ['paper', 'book'];
 
 function plan(item, props) {
   const names = list(props.authors).map((name) => text(name).trim()).filter(Boolean);
-  const authors = names.length > 0 ? `${names.join(', ')}${props.more === true ? wordsOf(item).others : ''}` : '';
-  const venue = text(props.venue).trim();
   return {
-    authors, venue,
+    names,
+    authors: names.length > 0 ? `${names.join(', ')}${props.more === true ? wordsOf(item).others : ''}` : '',
+    venue: text(props.venue).trim(),
     label: wordsOf(item)[KINDS.includes(props.kind) ? props.kind : 'paper'],
     year: text(props.year).trim() || text(item.data?.date).trim(),
-    titleLines: wrap(titleOf(item), COLUMN, TITLE_LETTER, 3),
-    authorLines: authors ? wrap(authors, COLUMN, TEXT_LETTER, 2) : 0,
-    venueLines: venue ? wrap(venue, COLUMN, TEXT_LETTER, 2) : 0,
   };
 }
 
-export const shows = ['venue', 'date', 'authors'];
-
-export function size(item, props) {
-  const { titleLines, authorLines, venueLines } = plan(item, props);
-  return [WIDTH, FRAME + HEAD + 8 + titleLines * TITLE + (authorLines ? 6 + authorLines * TEXT : 0) + (venueLines ? 2 + venueLines * TEXT : 0)];
+/** A library card: its kind and year in meta over a rule, the title on up to two lines, and the first author. The venue is on the opened card. */
+function face(item, props) {
+  const { names, label, year } = plan(item, props);
+  const words = wordsOf(item);
+  return lay([
+    { tall: META + RULE, draw: () => head(label, year) },
+    titleRow(item, { most: 2 }),
+    names.length > 0 && { words: words.firstAuthor(names[0], names.length - 1, props.more === true), measure: 'meta', most: 1, gap: GAP, draw: wordsIn('reference-authors') },
+  ], { words });
 }
+
+export const size = (item, props) => [WIDTH, face(item, props).height];
 
 const head = (label, year) => h('div', { class: 'reference-head' }, kind(label), year && h('span', { class: 'reference-year', text: year }));
 
-export function draw(item, props) {
-  const { authors, venue, label, year, titleLines, authorLines, venueLines } = plan(item, props);
-  return [
-    head(label, year),
-    say('div', `card-title clamp-${titleLines}`, titleOf(item)),
-    authors && say('div', `reference-authors clamp-${authorLines}`, authors),
-    venue && say('div', `reference-venue clamp-${venueLines}`, venue),
-  ];
-}
+export const draw = (item, props) => drawFace(face(item, props));
 
 /**
  * The kind and the year, and under them the authors and the venue whole. A line the opened card's

@@ -6,7 +6,7 @@
  * Set MIND_PALACE_CHROMIUM to use another browser.
  */
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, type Locator, type Page } from 'playwright-core';
@@ -14,7 +14,7 @@ import type { Running } from '../src/node/server.ts';
 import { COMPONENT_IDS, STRUCTURED_IDS } from '../src/core/samples.ts';
 import { COMPOSITE_IDS } from '../src/core/views.ts';
 import { DEMO_MEMO, tones } from '../src/fake/model.ts';
-import { ASSEMBLED, CHIPPED, LONG_PLACE, PLACED, PNG, STRUCTURED, assembled, bootFake, browserPath, chipped, crowd, showcase, spills, stored, unknownShape } from './stage.ts';
+import { ASSEMBLED, CHIPPED, PLACED, PNG, STRUCTURED, assembled, bootFake, browserPath, chipped, crowd, faceFaults, showcase, stored, unknownShape } from './stage.ts';
 
 const shots = process.env.MIND_PALACE_SHOTS ? resolve(process.env.MIND_PALACE_SHOTS) : mkdtempSync(join(tmpdir(), 'mp-shots-'));
 mkdirSync(shots, { recursive: true });
@@ -128,7 +128,9 @@ async function main(): Promise<void> {
       await page.locator('.card[data-component="chart"] svg.chart rect.chart-bar').first().waitFor();
       assert.equal(await count(page, '.card[data-component="chart"] rect.chart-bar'), 4);
       assert.equal(await page.locator('.card[data-component="fact"] .fact-value').textContent(), '70%');
-      assert.equal(await count(page, '.card[data-component="steps"] ol li'), 3);
+      const stepsShown = await count(page, '.card[data-component="steps"] .step');
+      assert.ok(stepsShown >= 1, 'the steps card shows its first step whole');
+      if (stepsShown < 3) assert.equal(await page.locator('.card[data-component="steps"] .face-cue').innerText(), `${3 - stepsShown} more`, 'and its cue counts the steps it leaves to the opened card');
       assert.equal(await count(page, '.card[data-component="link"]'), 1);
       assert.deepEqual(await overlaps(page), []);
       await shot(page, 'desktop-2-tree-with-picks');
@@ -169,7 +171,7 @@ async function main(): Promise<void> {
       await panel.getByLabel('Title').fill('Seven in ten notice it');
       await panel.getByRole('button', { name: 'Save' }).click();
       await panel.getByRole('heading', { name: 'Seven in ten notice it' }).waitFor();
-      await until('the card to redraw', async () => (await fact.locator('.card-foot').textContent()) === 'Seven in ten notice it');
+      await until('the card to redraw', async () => (await fact.locator('.fact-foot').textContent()) === 'Seven in ten notice it');
     });
 
     await check('a second thought dropped on the page makes a second tree, and the first tree does not move', async () => {
@@ -258,18 +260,19 @@ async function main(): Promise<void> {
       await run.pipeline.idle();
     });
 
-    await check('a dropped recording is a card with its waveform, its length and its first words, plays when opened, and is found by a word spoken in it', async () => {
+    await check('a dropped recording is a card with its waveform and its length, plays when opened, and is found by a word spoken in it', async () => {
       await page.locator('#file-pick').setInputFiles({ name: 'garden-memo.wav', mimeType: 'audio/wav', buffer: Buffer.from(tones(20)) });
       const memo = page.locator('.card.is-kept[data-component="audio"]', { hasText: 'Garden notes for Thursday.' });
       await memo.waitFor();
       assert.equal(await memo.locator('.audio-length').textContent(), '0:20', 'the length the browser measured');
       assert.equal(await memo.locator('.audio-wave rect').count(), 48, 'one bar for each slice the browser measured');
-      assert.match((await memo.locator('.card-text').textContent())!, /^The tomatoes by the south wall/, 'the first words after the title');
+      assert.equal(await memo.locator('.card-text').count(), 0, 'its title takes two lines, which leave the face room for the strip and no line of the transcript');
+      assert.equal(await memo.locator('.face-cue').innerText(), 'More', 'so the cue says there is more');
       const item = [...run.mind.items.values()].find((one) => one.kind === 'audio')!;
       assert.equal(item.text, DEMO_MEMO);
       assert.ok(run.mind.search('compost').some((hit) => hit.id === item.id), 'found by a word spoken in it');
       await run.pipeline.idle();
-      assert.deepEqual(await spills(page), []);
+      assert.deepEqual(await faceFaults(page), []);
       await shot(page, 'desktop-4-recording');
 
       await memo.click();
@@ -357,7 +360,7 @@ async function main(): Promise<void> {
       assert.equal(await page.locator('.card[data-component="image"] img').first().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0), true, 'the uploaded picture loads');
       await page.locator('.tree-chip', { hasText: 'Every shape' }).click();
       assert.deepEqual(await overlaps(page), []);
-      assert.deepEqual(await spills(page), [], 'no card holds more than its footprint');
+      assert.deepEqual(await faceFaults(page), [], 'no card holds more than its footprint');
       await shot(page, 'desktop-8-every-shape');
       await page.getByRole('button', { name: 'Open 5' }).click();
       await until('the pile to open', async () => (await count(page, '.card.is-under')) === 0);
@@ -375,60 +378,27 @@ async function main(): Promise<void> {
       assert.deepEqual(run.mind.groups.get(`${ASSEMBLED.root}-layout`)!.members, [...ASSEMBLED.facets], 'the stand-in Renderer laid out every sibling by its facet');
       assert.equal(await page.locator(`.pane[data-group="${ASSEMBLED.column}"] .pane-head .kind`).textContent(), 'Cluster');
       assert.deepEqual(await overlaps(page), []);
-      assert.deepEqual(await spills(page), []);
+      assert.deepEqual(await faceFaults(page), []);
       await shot(page, 'desktop-assembled');
     });
 
-    await check('a card whose item holds a date, a place, people or an origin shows them as one line of chips', async () => {
+    await check('a card whose item holds a date, a place, people or an origin draws none of them on its face, and its opened card lists them all', async () => {
       const up = await desktop.request.post(`${run.url}/api/assets?name=still.png`, { headers: { Authorization: 'Bearer secret', 'Content-Type': 'image/png' }, data: Buffer.from(PNG) });
       assert.ok(run.pipeline.userCommands('Add cards with chips', chipped(((await up.json()) as { url: string }).url)));
       await page.locator('.tree-chip', { hasText: 'With chips' }).click();
       await settle(page);
       const card = (id: string) => page.locator(`.card[data-id="${id}"]`);
-      const chips = (id: string) => card(id).locator('.chip').allTextContents();
       const tall = (id: string) => card(id).evaluate((el: HTMLElement) => [parseFloat(el.style.width), parseFloat(el.style.height)]);
 
-      assert.deepEqual(await chips(CHIPPED.photo), ['12 May 1958', 'Bodega Bay']);
-      const [photo, plain] = [await tall(CHIPPED.photo), await tall(CHIPPED.plainPhoto)];
-      assert.deepEqual(photo, [plain[0], plain[1]! + 28], 'the photo with chips is taller by the chip line and no wider');
-      assert.equal(await card(CHIPPED.plainNote).locator('.chip-line').count(), 0, 'a card with nothing to say has no chip line');
-      assert.deepEqual(await chips(CHIPPED.link), ['2019'], 'a link does not repeat its site, as its origin or as its author');
+      assert.equal(await page.locator('.card[data-id^="chips-"] :is(.chip, .chip-line)').count(), 0, 'no small face draws a chip');
+      assert.deepEqual(await tall(CHIPPED.photo), await tall(CHIPPED.plainPhoto), 'a photo whose item holds sources is the size of one that holds none');
       assert.equal(await card(CHIPPED.museum).getAttribute('data-component'), 'artwork', 'a work a museum holds is drawn as an artwork');
-      assert.deepEqual(await card(CHIPPED.museum).locator('.artwork-by, .artwork-holder').allTextContents(), ['Utagawa Hiroshige, 1857', 'The Metropolitan Museum of Art']);
-      assert.deepEqual(await chips(CHIPPED.museum), [], 'and no chip repeats the date and the holder on its plate');
+      assert.equal(await card(CHIPPED.museum).locator('.artwork-by, .artwork-holder').count(), 0, 'whose maker, date and holder are on the opened card');
       assert.equal(await card(CHIPPED.paper).getAttribute('data-component'), 'reference', 'a paper is drawn as a reference');
-      assert.deepEqual(await card(CHIPPED.paper).locator('.reference-year, .reference-authors, .reference-venue').allTextContents(), ['2019', 'T. Screech, M. Forrer, H. Smith', 'Journal of Japanese Studies']);
-      assert.deepEqual(await chips(CHIPPED.paper), [], 'and no chip repeats its year, its authors or its journal');
-      const four = await chips(CHIPPED.four);
-      assert.deepEqual(four, ['Summer 1958', 'Bancroft Library'], 'the origin comes straight after the date, and what has no room is left to the opened card');
-      assert.equal(await card(CHIPPED.four).locator('.chip[data-kind="origin"]').getAttribute('title'), 'Origin: Bancroft Library');
-
-      const clipped = (el: HTMLElement) => el.scrollWidth > el.clientWidth && getComputedStyle(el).textOverflow === 'ellipsis';
-      const crew = card(CHIPPED.people).locator('.chip');
-      assert.equal(await crew.locator('.chip-text').textContent(), 'Ada Lovelace, Grace Hopper');
-      assert.equal(await crew.locator('.chip-count').textContent(), '+3');
-      assert.ok(await crew.locator('.chip-text').evaluate(clipped), 'five people on a note: the names are clipped with an ellipsis');
-      assert.ok(await crew.evaluate((el) => el.querySelector('.chip-count')!.getBoundingClientRect().right <= el.getBoundingClientRect().right), 'and the count is whole inside the chip');
-      const long = card(CHIPPED.longPlace).locator('.chip-text');
-      assert.equal(await long.textContent(), LONG_PLACE);
-      assert.ok(await long.evaluate(clipped), 'a long place is clipped with an ellipsis');
-      const dates = await page.locator('.card[data-id^="chips-"] .chip[data-kind="when"] .chip-text').evaluateAll((els) => els.filter((el) => el.scrollWidth > el.clientWidth).map((el) => el.textContent));
-      assert.deepEqual(dates, [], 'every date is whole');
-      const loose = await page.locator('.card[data-id^="chips-"] .chip').evaluateAll((els) => els.flatMap((el) => {
-        const chip = el as HTMLElement;
-        const line = chip.parentElement!;
-        const scale = line.getBoundingClientRect().width / line.offsetWidth;
-        const wide = chip.getBoundingClientRect().width / scale;
-        const text = chip.querySelector('.chip-text')!;
-        const past = chip.getBoundingClientRect().right > line.getBoundingClientRect().right + 0.5;
-        const short = text.scrollWidth > text.clientWidth && wide < parseFloat(chip.style.flexBasis) - 0.5;
-        return past || short ? [`${chip.textContent} is ${wide.toFixed(1)} px for a box of ${chip.style.flexBasis}`] : [];
-      }));
-      assert.deepEqual(loose, [], 'no chip runs past its line, and a clipped chip has at least its box');
-      const lines = await page.locator('.card[data-id^="chips-"] .chip-line').evaluateAll((els) => els.map((el) => (el as HTMLElement).offsetHeight));
-      assert.ok(lines.length >= 7 && lines.every((height) => height === 20), `every chip line is one line tall, got ${lines}`);
+      assert.equal(await card(CHIPPED.paper).locator('.reference-year').textContent(), '2019', 'with its year over its title');
+      assert.ok((await card(CHIPPED.paper).locator('.reference-authors').allTextContents()).every((line) => line === 'T. Screech and 2 others'), 'and its first author when the title leaves room for it');
       assert.deepEqual(await overlaps(page), []);
-      assert.deepEqual(await spills(page), []);
+      assert.deepEqual(await faceFaults(page), []);
 
       const box = (id: string) => card(id).evaluate((el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
       const top = await box(CHIPPED.pileTop);
@@ -455,9 +425,8 @@ async function main(): Promise<void> {
       await page.locator('#panel').getByRole('button', { name: 'Keep', exact: true }).click();
       await until('the card to be kept', async () => (await card(CHIPPED.four).getAttribute('aria-label'))!.startsWith('Card:'));
       await settle(page);
-      assert.deepEqual(await chips(CHIPPED.four), four, 'a kept pick still says where it came from');
-      assert.deepEqual(await tall(CHIPPED.four), size, 'and is the size it was as a pick');
-      assert.deepEqual(await facts.locator('dd[data-chip="origin"]').allTextContents(), ['Bancroft Library']);
+      assert.deepEqual(await tall(CHIPPED.four), size, 'a kept pick is the size it was as a pick');
+      assert.deepEqual(await facts.locator('dd[data-chip="origin"]').allTextContents(), ['Bancroft Library'], 'and its opened card still says where it came from');
       await page.keyboard.press('Escape');
     });
 
@@ -469,27 +438,29 @@ async function main(): Promise<void> {
       }, text);
       /** What to paste for each type, words its card then shows, and a part only that type draws, with how many of it. */
       const pasted: [string, string, string, string, number][] = [
-        ['facts', 'Tokyo Tower\nHeight = 333 m\nBuilt = 1958\nFloors = 2', '333 m', '.figure', 3],
-        ['table', 'Tier | Cost\nBasic | $5\nPlus | $12', 'Basic', '.table-cell.is-number:not(.is-head)', 2],
+        ['facts', 'Tokyo Tower\nHeight = 333 m\nBuilt = 1958\nFloors = 2', '333 m', '.figure', 2],
+        ['table', 'Tier | Cost\nBasic | $5\nPlus | $12', 'Tier · Cost', '.table-heads', 1],
         ['list', 'Packing\n[x] passport\n[ ] charger', 'passport', '.list-box', 2],
-        ['breakdown', 'Budget\nChart: Rent 50%, Food 30%, Other 20%', '50%', '.breakdown-bar', 3],
+        ['breakdown', 'Budget\nChart: Rent 50%, Food 30%, Other 20%', '50%', '.breakdown-split span', 3],
         ['qa', 'Q: Why is the sky blue?\nA: Air scatters short wavelengths the most.', 'Air scatters', '.qa-voice', 2],
         ['callout', 'Varnishing the table\nCaution: wet varnish scratches for a week.', 'wet varnish', '.callout.is-caution', 1],
-        ['excerpt', 'The house remembers.\n> Every stair keeps the weight of who climbed it.\nAt: Chapter 3', 'Every stair keeps', '.excerpt-where', 1],
+        ['excerpt', 'The house remembers.\n> Every stair keeps the weight of who climbed it.\nAt: Chapter 3', 'Every stair keeps', '.excerpt-from', 1],
         ['definition', 'Bokeh: the look of the parts of a picture that are out of focus', 'out of focus', '.definition-text', 1],
         ['idea', 'Build a treehouse', 'Build a treehouse', '.idea-spark', 1],
-        ['proscons', 'Buying the van\nPros:\n- room for the dog\n- cheap to insure\nCons:\n- slow uphill', 'slow uphill', '.proscons-mark', 3],
-        ['swatch', 'Palette: Rust #B7410E, Moss #8A9A5B', '#8A9A5B', '.swatch-block', 2],
+        ['proscons', 'Buying the van\nPros:\n- room for the dog\n- cheap to insure\nCons:\n- slow uphill', 'slow uphill', '.proscons-head', 2],
+        ['swatch', 'Palette: Rust #B7410E, Moss #8A9A5B', '#B7410E', '.swatch-block', 2],
         // With its list last, the rules would draw the list with the rest of the item over it; with its figures after the list, neither card of
         // its own shows the whole item, and the stand-in assembles a sheet.
-        ['sheet', 'Weekend in Porto\n\nWe took the early train on Friday and walked the river both days, and when it rained on Saturday we sat in the bookshop until it closed and nobody minded. Next time we go in May, before the crowds, and stay an extra night.\nBest:\n- the bridge at dusk\n- the tiled station\n- grilled sardines\nCost: €240\nNights: 2', 'grilled sardines', '.sheet-part', 3],
+        ['sheet', 'Weekend in Porto\n\nWe took the early train on Friday and walked the river both days, and when it rained on Saturday we sat in the bookshop until it closed and nobody minded. Next time we go in May, before the crowds, and stay an extra night.\nBest:\n- the bridge at dusk\n- the tiled station\n- grilled sardines\nCost: €240\nNights: 2', 'We took the early train', '.card-text', 1],
         // The place comes last, because a request is then asked about it.
         ['place', 'Lisbon\nWhere: Lisbon', 'Lisbon', '.place-pin', 1],
       ];
       await page.keyboard.press('Escape');
+      /** A face that shows other words than the opened card is checked for: the breakdown's label over its bar leaves no room for its largest part. */
+      const faceShows: Record<string, string> = { breakdown: 'Chart:' };
       for (const [type, text, shown, part, parts] of pasted) {
         await paste(text);
-        const made = page.locator(`.card.is-kept[data-component="${type}"]`, { hasText: shown }).last();
+        const made = page.locator(`.card.is-kept[data-component="${type}"]`, { hasText: faceShows[type] ?? shown }).last();
         await made.waitFor();
         assert.equal(await made.locator(part).count(), parts, `${type} draws ${parts} of ${part}`);
         // A paste the filer puts under an earlier card makes no tree to glide to, so each tree is visited until the card is on screen.
@@ -504,7 +475,8 @@ async function main(): Promise<void> {
         const printed = (await page.locator('#panel .panel-summary, #panel .panel-text').allInnerTexts()).join('\n');
         assert.ok(!printed.includes(shown), `an opened ${type} does not print "${shown}" again under its own form`);
         const opened = await page.locator('#panel .panel-scroll').innerText();
-        if (type === 'table' || type === 'callout' || type === 'sheet') assert.equal(opened.split(shown).length, 2, `an opened ${type} says "${shown}" once`);
+        if (type === 'callout' || type === 'sheet') assert.equal(opened.split(shown).length, 2, `an opened ${type} says "${shown}" once`);
+        if (type === 'table') assert.equal(opened.split('Basic').length, 2, 'an opened table says each cell once');
         if (type === 'sheet') {
           assert.equal(await made.locator('.card-title').innerText(), 'Weekend in Porto', 'the heading is the title of the sheet');
           assert.deepEqual(await page.locator('#panel .detail-figures dd').allInnerTexts(), ['€240', '2'], 'the opened sheet lists its figures');
@@ -520,9 +492,10 @@ async function main(): Promise<void> {
         await page.keyboard.press('Escape');
       }
       await run.pipeline.idle();
+      /** What to ask for, the start of the title its face shows on the lines it has, and a part only that type draws. */
       const asked: [string, string, string, string][] = [
-        ['artwork', 'find a museum painting of stairs', 'Stairwell, seen from above', '.artwork-mat img'],
-        ['reference', 'find a paper on the dolly zoom', 'Perceived depth under opposed zoom and camera motion', '.reference-head'],
+        ['artwork', 'find a museum painting of stairs', 'Stairwell, seen', '.artwork-mat img'],
+        ['reference', 'find a paper on the dolly zoom', 'Perceived depth', '.reference-head'],
       ];
       for (const [type, need, title, part] of asked) {
         await page.locator('.card.is-kept[data-component="place"]', { hasText: 'Lisbon' }).last().click();
@@ -531,16 +504,15 @@ async function main(): Promise<void> {
         const brought = page.locator(`.card.is-pick[data-component="${type}"]`, { hasText: title });
         await brought.waitFor();
         assert.equal(await brought.locator(part).count(), 1, `${type} draws ${part}`);
-        assert.deepEqual(await brought.locator('.chip').allTextContents(), [], `no chip repeats what the ${type} shows`);
         await run.pipeline.idle();
       }
       await until('the museum picture to load', () => page.locator('.card[data-component="artwork"] .artwork-mat img').last().evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0));
       await page.keyboard.press('Escape');
       await settle(page);
-      assert.deepEqual(await spills(page), []);
+      assert.deepEqual(await faceFaults(page), []);
     });
 
-    await check('a pasted explainer is drawn as an explorable whose card shows its first state and whose opened controls change what it shows', async () => {
+    await check('a pasted explainer is drawn as an explorable whose card counts its controls and whose opened controls change what it shows', async () => {
       const paste = (text: string) => page.evaluate((pasted) => {
         const data = new DataTransfer();
         data.setData('text/plain', pasted);
@@ -564,8 +536,8 @@ async function main(): Promise<void> {
       await page.keyboard.press('Escape');
 
       await paste('Field of view against focal length\nOn a full-frame camera the field of view is `2 * atan(18 / f) * 57.2958` degrees, for a focal length f in mm.\nAt 24 mm the field of view is 73.7°. At 50 mm it is 39.6°. At 200 mm it is 10.3°.');
-      const field = await open('focal length 24 mm');
-      assert.equal(await field.locator('.fact-value').innerText(), '73.7°', 'the card stands on the first value the item states');
+      const field = await open('Field of view against');
+      assert.equal(await field.locator('.face-cue').innerText(), '1 control', 'the card counts its controls, which the opened card holds');
       const figure = panel.locator('.explore-value .fact-value');
       const computed = panel.locator('.explore-computed');
       const range = panel.getByRole('slider', { name: 'focal length' });
@@ -582,8 +554,8 @@ async function main(): Promise<void> {
       await page.keyboard.press('Escape');
 
       await paste('Three ways to shoot a dolly zoom\nZoom only: the lens zooms in while the camera stays put, so the background grows with the subject.\nDolly only: the camera moves in on a fixed lens, so the subject grows and the background barely changes.\nBoth: the camera pulls back as the lens zooms in, so the subject holds its size and the background swells behind it.');
-      const dolly = await open('Dolly only');
-      assert.deepEqual(await dolly.locator('.explore-pill').allInnerTexts(), ['Zoom only', 'Dolly only', 'Both']);
+      const dolly = await open('Three ways to shoot');
+      assert.equal(await dolly.locator('.face-cue').innerText(), '1 control');
       const states = panel.getByRole('radio');
       assert.equal(await states.count(), 3);
       const shown = () => panel.locator('.explore-state-text:visible').allInnerTexts();
@@ -599,7 +571,7 @@ async function main(): Promise<void> {
       assert.equal(await panel.locator('.panel-text').count(), 0, 'the opened card prints no state\'s text again');
       await page.keyboard.press('Escape');
       await settle(page);
-      assert.deepEqual(await spills(page), []);
+      assert.deepEqual(await faceFaults(page), []);
     });
 
     await check('every card type in the registry can be sized, drawn and opened', async () => {
@@ -683,15 +655,48 @@ async function main(): Promise<void> {
         for (const type of COMPONENT_IDS) {
           assert.ok(stated.some((line) => new RegExp(`^${type} \\d+ by \\d+$`).test(line)), `${type} states its footprint`);
         }
-        for (const type of COMPONENT_IDS) {
-          const cards = view.locator(`#components .card[data-component="${type}"]`);
-          assert.ok((await cards.filter({ has: view.locator('.chip-line') }).count()) > 0, `${type} is shown with chips`);
-          assert.ok((await cards.filter({ hasNot: view.locator('.chip-line') }).count()) > 0, `${type} is shown without chips`);
-        }
-        assert.deepEqual(await spills(view), []);
+        for (const type of COMPONENT_IDS) assert.ok((await view.locator(`#components .card[data-component="${type}"]`).count()) > 0, `${type} is shown`);
+        const drawn = await view.locator('#components .card').evaluateAll((els) => els.map((el) => [(el as HTMLElement).offsetWidth, (el as HTMLElement).offsetHeight, el.querySelector<HTMLElement>('.card-face')!.offsetWidth, el.querySelector<HTMLElement>('.card-face')!.offsetHeight]));
+        assert.ok(drawn.every(([w, h, fw, fh]) => w === fw && h === fh), 'each face is drawn at the size its card was given');
+        assert.deepEqual(await faceFaults(view), []);
         const size = await view.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
         assert.equal(size[0], size[1], 'the page does not scroll sideways');
       }
+    });
+
+    await check('every sample in footprints.json draws a face at most 210 by 146, at the size it counted, with no text clipped, clamped or cut with an ellipsis', async () => {
+      // tsx names the functions it compiles with a helper the page does not have.
+      await page.addInitScript('window.__name = (f) => f');
+      await page.goto(`${run.url}/library.html`);
+      await page.locator('#composites .lib-entry').last().waitFor();
+      const { samples } = JSON.parse(readFileSync(join(import.meta.dirname, 'footprints.json'), 'utf8')) as { samples: { type: string; item: Record<string, unknown>; props: Record<string, unknown>; size: number[] }[] };
+      const sized = await page.evaluate(async (list) => {
+        const registry = '/js/components/index.js';
+        const { drawCard } = await import(registry);
+        document.body.replaceChildren();
+        return list.map((sample, i) => {
+          const node = { id: `sample-${i}`, status: 'kept', view: { component: sample.type, props: sample.props } };
+          const item = { title: '', text: '', summary: '', tags: [], data: {}, source: { from: 'paste' }, origin: { by: 'user' }, ...sample.item };
+          const card = document.createElement('div');
+          card.className = 'card is-kept';
+          card.dataset.component = sample.type;
+          card.dataset.said = JSON.stringify([sample.item, sample.props]);
+          card.setAttribute('aria-label', `sample ${i}`);
+          card.style.cssText = `position:relative;display:inline-block;margin:6px;width:${sample.size[0]}px;height:${sample.size[1]}px`;
+          const face = document.createElement('div');
+          face.className = 'card-face';
+          face.append(drawCard(node, item, { asset: () => '' }));
+          card.append(face);
+          document.body.append(card);
+          const rows = [...face.querySelectorAll<HTMLElement>('.face-row, .face-cue')];
+          const end = rows.length > 0 ? rows.at(-1)!.getBoundingClientRect().bottom - face.getBoundingClientRect().top : 0;
+          return { end, height: face.offsetHeight };
+        });
+      }, samples);
+      assert.ok(samples.length >= 300, `${samples.length} samples`);
+      assert.deepEqual(await faceFaults(page), []);
+      const off = sized.flatMap((face, i) => (face.end > face.height || face.end < face.height - 17 ? [`${samples[i]!.type} ${i} ends at ${face.end} in ${face.height}`] : []));
+      assert.deepEqual(off, [], 'the rows of every face end inside the face it counted, within its bottom padding of it, so the face draws at the size it counted');
     });
 
     await check('nothing was written to the console as an error', async () => {

@@ -306,21 +306,46 @@ export function crowd(total: number, { chips = false } = {}): Command[] {
 }
 
 
-/** Every part of a card that reaches past its face, text squeezed to fewer lines than it is allowed, or text wider than its box. */
-export function spills(page: Page): Promise<string[]> {
+/**
+ * What is wrong with each small face on the page, as the sizing rule states it: a face wider than 210 px or taller than 146, a
+ * part that reaches past its face, text clamped, clipped or cut with an ellipsis, a row whose parts reach past the height it was
+ * counted for, and read text set under 13.5 px or in italics. A card whose `data-said` holds the item and props it was drawn
+ * from also has every line that ends in an ellipsis checked against them, since only the item's own words may. A large size's
+ * glyphs stand a little past their line, so text is clipped only when it reaches past its box by more than that.
+ */
+export function faceFaults(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const found: string[] = [];
     for (const card of document.querySelectorAll<HTMLElement>('.card:not(.is-under):not(.is-buried)')) {
-      const face = card.querySelector('.card-face')!.getBoundingClientRect();
+      const faceEl = card.querySelector<HTMLElement>('.card-face')!;
+      const face = faceEl.getBoundingClientRect();
       const name = `${card.dataset.component} "${card.getAttribute('aria-label') ?? card.textContent!.slice(0, 30)}"`;
-      for (const el of card.querySelectorAll<HTMLElement>('.card-body *, .chip-line, .chip-line *')) {
+      if (faceEl.offsetWidth > 210 || faceEl.offsetHeight > 146) found.push(`${name}: is ${faceEl.offsetWidth} by ${faceEl.offsetHeight}`);
+      const said = card.dataset.said ?? null;
+      for (const el of card.querySelectorAll<HTMLElement>('.card-body *')) {
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) continue;
         const label = el.getAttribute('class') ?? el.tagName.toLowerCase();
+        const style = getComputedStyle(el);
         if (r.left < face.left - 1 || r.right > face.right + 1 || r.top < face.top - 1 || r.bottom > face.bottom + 1) found.push(`${name}: ${label} leaves the card`);
-        const lines = Number(/clamp-(\d+)/.exec(label)?.[1] ?? 0);
-        if (lines > 0 && el.clientHeight < Math.min(el.scrollHeight, lines * parseFloat(getComputedStyle(el).lineHeight)) - 1) found.push(`${name}: ${label} is squeezed below its ${lines} lines`);
-        else if (el instanceof HTMLElement && el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX === 'visible') found.push(`${name}: ${label} is wider than its box`);
+        if (style.webkitLineClamp && style.webkitLineClamp !== 'none') found.push(`${name}: ${label} is clamped`);
+        const own = [...el.childNodes].filter((child) => child.nodeType === 3 && child.textContent!.trim()).map((child) => child.textContent!).join('');
+        if (!own || el.closest('.map-credit, [aria-hidden="true"]')) continue;
+        const size = parseFloat(style.fontSize);
+        if (size < 13.5) found.push(`${name}: ${label} is set at ${style.fontSize}`);
+        if (style.fontStyle === 'italic') found.push(`${name}: ${label} is set in italics`);
+        const slack = Math.max(1, (size * 1.3 - (parseFloat(style.lineHeight) || size * 1.3)) / 2 + 1);
+        const clips = [style.overflowX, style.overflowY].some((overflow) => overflow !== 'visible');
+        if (el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1) found.push(`${name}: ${label} is wider than its box`);
+        else if (clips && el.clientHeight > 0 && el.scrollHeight > el.clientHeight + slack) found.push(`${name}: ${label} is clipped`);
+        if (style.textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth) found.push(`${name}: ${label} ends in an ellipsis`);
+        const end = el.textContent!.trimEnd();
+        if (said !== null && /(…|\.\.\.)$/.test(end) && !said.includes(end.slice(-8))) found.push(`${name}: ${label} ends in an ellipsis the item does not write`);
+      }
+      for (const row of card.querySelectorAll<HTMLElement>('.face-row')) {
+        const bottom = row.getBoundingClientRect().bottom;
+        const past = [...row.querySelectorAll<HTMLElement>('*')].filter((el) => el.getBoundingClientRect().bottom > bottom + 0.5 && getComputedStyle(el).position !== 'absolute');
+        if (past.length > 0) found.push(`${name}: ${past[0]!.getAttribute('class') ?? past[0]!.tagName.toLowerCase()} reaches ${Math.round(past[0]!.getBoundingClientRect().bottom - bottom)} px past the row it was counted for`);
       }
     }
     return found;

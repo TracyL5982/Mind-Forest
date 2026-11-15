@@ -1,13 +1,9 @@
 import { h, s, clamp } from '../dom.js';
-import { FRAME, SIDES, TEXT, TEXT_LETTER, TITLE, TITLE_LETTER, list, say, text, title, titleOf, wrap } from './shared.js';
+import { GAP, WIDTH, drawFace, lay, list, say, text, titleRow, wordsIn } from './shared.js';
 import { wordsOf } from '../words.js';
 
-const WIDTH = 272;
-const COLUMN = WIDTH - SIDES;
 /** The strip that holds the play mark, the waveform and the length, with the room above and below it. */
 const STRIP = 40;
-/** The gap `.card-body` leaves between its parts. */
-const GAP = 6;
 /** One bar of the waveform and the space after it, in the units of its view box, which is stretched to the room it has. */
 const BAR = 2;
 const STEP = 3;
@@ -38,22 +34,16 @@ function heard(item) {
   return heading && words.startsWith(`${heading} `) ? words.slice(heading.length + 1) : words;
 }
 
-function plan(item, props) {
-  const body = heard(item);
-  return {
-    body,
-    length: lengthOf(props),
-    titleLines: wrap(titleOf(item), COLUMN, TITLE_LETTER, 2),
-    bodyLines: body ? wrap(body, COLUMN, TEXT_LETTER, 3) : 0,
-  };
+/** The title on up to two lines, the strip, and the first words of the transcript on as many lines as the face has room for. */
+function face(item, props) {
+  return lay([
+    titleRow(item, { most: 2 }),
+    { tall: STRIP, gap: GAP, draw: () => strip(props, lengthOf(props)) },
+    { words: heard(item), gap: GAP, draw: wordsIn('card-text') },
+  ], { words: wordsOf(item) });
 }
 
-export const shows = [];
-
-export function size(item, props) {
-  const { titleLines, bodyLines } = plan(item, props);
-  return [WIDTH, FRAME + titleLines * TITLE + GAP + STRIP + (bodyLines ? GAP + bodyLines * TEXT : 0)];
-}
+export const size = (item, props) => [WIDTH, face(item, props).height];
 
 /** The loudness of each slice as a bar about the middle line, or a flat line when nobody measured it. */
 function wave(peaks, cls = '') {
@@ -71,14 +61,7 @@ const strip = (props, length) => h('div', { class: 'audio-strip' },
   wave(peaksOf(props)),
   length && h('span', { class: 'audio-length', text: length }));
 
-export function draw(item, props) {
-  const { body, length, titleLines, bodyLines } = plan(item, props);
-  return [
-    title(item, titleLines),
-    strip(props, length),
-    body && say('div', `card-text clamp-${bodyLines}`, body),
-  ];
-}
+export const draw = (item, props) => drawFace(face(item, props));
 
 /** The waveform fills as the recording plays, and a press on it plays from there. */
 function player(src, peaks, ctx) {

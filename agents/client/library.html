@@ -44,7 +44,8 @@
   <p>Solid cards are yours. Dashed amber cards are picks the librarian brought and you have not kept.</p>
   <p>Under each sample is its type name and its footprint in pixels, which is worked out from the content and never measured.</p>
   <p>The first twelve types are drawn from an item's kind and its words. The fourteen after them are drawn from structure the item carries, such as its facts, its rows, its entries or a catalogue's record, or from a passage of its words. A sheet is assembled from parts of those kinds when no one card covers the item, and an explorable has controls you change in the opened card. Each is shown from the sample the service gives it, then with other content, in Chinese, and at its extremes, some of them opened.</p>
-  <p>Any card can carry one line of chips under its content: a date, a place, people and, for what the agents brought, where it came from. A date is always whole, and a longer place, name or source is clipped inside its chip. Each type is shown once without chips and once with them. The line adds 28 pixels and nothing else changes.</p>
+  <p>Every small face is 210 pixels wide and at most 146 tall, the box a card takes on the headset at 1.5 m, where a pixel is a millimetre. It shows whole lines up to what its type holds, and when it leaves something out its last line is a cue that says what: More, 3 more, 12 rows. Nothing on a face is cut or ends in an ellipsis. The opened card holds everything and scrolls.</p>
+  <p>A date, a place, people and, for what the agents brought, where it came from are listed in full on the opened card, and never on the small face. Each type is opened with them.</p>
 </header>
 
 <div class="lib-h2">Components</div>
@@ -171,19 +172,19 @@ const films = Array.from({ length: 40 }, (_, i) => [String(1958 + i), ['Vertigo'
 const STRUCTURED_SAMPLES = [
   ['list', 'rules', 'Entries in no particular order. With a mark for each entry it is a checklist, and the tick boxes show the marks and take no click.', drawn('list')],
   ['facts', 'rules', 'Two to six figures about one thing, each with its label. A count stands for the facts the card leaves to the opened view.', drawn('facts')],
-  ['table', 'rules', 'Rows and columns. The card shows up to five columns and six rows and counts the rest, and the opened view has every cell.', drawn('table')],
+  ['table', 'rules', 'Rows and columns. The card names the heads and counts the rows, and the opened view has every cell.', drawn('table')],
   ['excerpt', 'rules', 'A passage of a longer source, such as a page the Scout picked, with where it is from beneath it.', drawn('excerpt')],
   ['idea', 'rules', 'A short thought you wrote out, set large with nothing beside it.', drawn('idea')],
   ['reference', 'rules', 'A paper or a book from a catalogue, set like a library card.', drawn('reference')],
   ['artwork', 'rules', 'A work a museum holds, shown whole on a mat over what the collection records.', drawn('artwork')],
-  ['breakdown', 'rules', 'The parts of one whole as bars, with each share written beside its bar.', drawn('breakdown')],
+  ['breakdown', 'rules', 'The parts of one whole. The card splits one bar into them and names the largest, and the opened view gives each part its bar with its share written beside it.', drawn('breakdown')],
   ['qa', 'rules', 'One question and its answer.', drawn('qa')],
   ['callout', 'model', 'A caveat or a remark set apart from the rest of a note. The words must be a whole passage of the card\'s own text.', drawn('callout')],
   ['definition', 'rules', 'A term and what it means, set like a dictionary entry.', drawn('definition')],
-  ['proscons', 'rules', 'The points for and the points against, side by side, each side under the heading its item gives it.', drawn('proscons')],
+  ['proscons', 'rules', 'The points for and the points against, each side under the heading its item gives it. The card shows the first point of each side and counts them all, and the opened view has every point.', drawn('proscons')],
   ['swatch', 'rules', 'Colours with their names and values.', drawn('swatch')],
   ['place', 'rules', 'A short note whose title is the name of a place, with its picture when it has one, and a map when the item knows where the place is.', drawn('place')],
-  ['sheet', 'model', 'A card assembled from two to four parts, for an item with more than one kind of thing worth seeing that no card of its own covers: its opening beside a few figures, a list, a small table or words someone said. Each part is drawn as the card of its kind draws it, under one title, each after the first under a hairline.', drawn('sheet')],
+  ['sheet', 'model', 'A card assembled from two to four parts, for an item with more than one kind of thing worth seeing that no card of its own covers: its opening beside a few figures, a list, a small table or words someone said. The card shows its title and its first part as the card of that kind does, and counts the others, and the opened view draws every part in order.', drawn('sheet')],
   ['explorable', 'model', 'A card you change to see how something works, for an item that relates quantities or contrasts states. A slider sets a quantity of a formula checked against the values the item states, and a toggle or a segmented control switches between states the item describes. The card shows the first state under a mark; open it to use the controls, and a result the item does not state is marked computed.', drawn('explorable')],
 ];
 
@@ -379,8 +380,8 @@ const VARIANTS = {
 };
 
 /**
- * What each type's sample item holds for its chips. A sample the agents brought is drawn as a
- * pick, and the image also as that pick once kept, since the origin chip stays with the item.
+ * What each type's sample item holds as its sources, which its opened card lists. A sample the
+ * agents brought is opened as a pick, since it names where it came from.
  */
 const CHIPS = {
   note: { data: { when: 'Spring 1958', where: 'Sonoma county, California' } },
@@ -413,10 +414,7 @@ const CHIPS = {
   explorable: { data: { when: 'Week 2', where: 'Studio 2' } },
 };
 
-/**
- * More samples of a type that are drawn in full: kept, as a pick, with chips and opened. A chip
- * is left out when the card already draws its words, as the people chip is beside Ines's words.
- */
+/** More samples of a type that are drawn in full: kept, as a pick, and opened with their sources. */
 const ROWS = {
   sheet: [
     [SHEETS[1], { data: { when: 'Last May', where: 'Porto', people: ['Ines'] } }],
@@ -427,19 +425,17 @@ const ROWS = {
     [EXPLORABLES[2], { data: { when: '周六上午', where: '西湖' } }],
   ].map(([{ item, props }, chips]) => [item.title, make('explorable', props, item), chips]),
 };
-const CHIP_LABEL = { pick: 'Pick with chips', kept: 'The same pick, kept' };
-
-function withChips(name, made, { data, brought } = CHIPS[name]) {
+/** The opened card of a sample whose item holds sources, which the opened card lists in full. */
+function withSources(made, { data, brought } = {}) {
   const item = { ...made.item, data: { ...made.item.data, ...data }, origin: { by: brought ? 'agent' : 'user' } };
-  return brought ? brought.map((status) => cell(CHIP_LABEL[status], staged({ node: made.node, item }, status))) : cell('With chips', staged({ node: made.node, item }, 'kept'));
+  return cell('Opened, with its sources', opened({ node: made.node, item }, brought ? 'pick' : 'kept'));
 }
 
 const componentsEl = document.getElementById('components');
-const full = (name, made, chips) => h('div', { class: 'lib-row' },
+const full = (name, made, chips = CHIPS[name]) => h('div', { class: 'lib-row' },
   cell('Kept', staged(made, 'kept')),
   cell('Pick', staged(made, 'pick')),
-  withChips(name, made, chips),
-  cell('Opened', opened(made)));
+  withSources(made, chips));
 for (const [name, by, when, made] of [...COMPONENT_SAMPLES, ...STRUCTURED_SAMPLES]) {
   componentsEl.append(h('section', { class: 'lib-entry' },
     h('div', { class: 'lib-name' }, h('h3', { text: name }), who(by)),
