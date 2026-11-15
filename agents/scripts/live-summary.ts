@@ -10,6 +10,9 @@ interface Row {
   expected: string[];
   chose: string[];
   right: boolean;
+  asked?: boolean;
+  started?: string[];
+  trees?: number;
   cutOff?: boolean;
   overMs: number | null;
   firstSoundMs: number | null;
@@ -36,6 +39,10 @@ for (const file of process.argv.slice(2)) {
   const nums = (xs: (number | null)[]) => xs.filter((x): x is number => typeof x === 'number');
   console.log(`## ${file.split('/').pop()} (${rows[0]?.model}, ${rows.length} requests)`);
   console.log(`right way: ${rows.filter((r) => r.right).length} of ${rows.length}`);
+  const groups = [...new Set(rows.map((r) => r.group))];
+  console.log(`by group: ${groups.map((g) => `${g} ${rows.filter((r) => r.group === g && r.right).length} of ${rows.filter((r) => r.group === g).length}`).join(', ')}`);
+  const asking = rows.filter((r) => r.expected.includes('ask'));
+  if (asking.length) console.log(`a question where one was expected: ${asking.filter((r) => r.asked && !r.started?.length).length} of ${asking.length}; trees started there: ${asking.reduce((n, r) => n + (r.trees ?? 0), 0)}`);
   for (const r of rows.filter((x) => !x.right)) console.log(`  wrong: ${r.id} expected ${r.expected.join('/')} chose ${r.chose.join('+')}: ${r.responses.map((x) => x.text).join(' | ').slice(0, 160)}`);
   console.log(`turn over after the end of speech: ${spread(nums(rows.map((r) => r.overMs)))}`);
   console.log(`first sound after the end of speech: ${spread(nums(rows.map((r) => r.firstSoundMs)))}, within 1.5 s in ${nums(rows.map((r) => r.firstSoundMs)).filter((x) => x <= 1500).length}`);

@@ -10,7 +10,7 @@ import type { DeviceFrame } from './protocol.ts';
  * microphone goes to the model, whose turn detection hears when the user is done; the model answers in its own words, from what it
  * knows, or through its tools (`core/voice-tools.ts`): a quick web answer, the user's saved cards, and the pipeline's moves, such as
  * new cards on the open card. As the cards of a run this device asked for land, the service tells the model in short notes, and it
- * walks the user through them. The frames are in docs/protocol.md; why it is built this way is in agents/DECISIONS.md (57 to 59, 61).
+ * walks the user through them. The frames are in docs/protocol.md; why it is built this way is in agents/DECISIONS.md (57 to 59, 61, 63).
  */
 
 export type SayKind = 'reply' | 'results';
@@ -163,6 +163,12 @@ Your goal is a good conversation: answer what the user asks, think with them, an
 # Language
 Speak the language the user just spoke. Card titles stay as written.
 
+# Trees and layers
+- A tree starts from one card and grows in layers: asking about a card adds the next layer of cards around it.
+- A tree is one line of thought. A new tree is a separate space, for a new subject.
+- Building on what is open, such as going deeper, a related angle, "more on this" or a new layer, is find_new on the open card. A separate subject, or a fresh space the user asks for, is start_tree.
+- When you can't tell which they want, ask one short question, such as "Add it as a new layer here, or start its own tree?", and start nothing until they answer. Asked for a new layer with no card open, ask which card.
+
 # Answering: choose one way
 1. From what you know: anything settled, such as who made what and when, what something is, how it works, why it happened, history, explanations, opinions, recommendations and small talk. Answer at once, with no tool. You know a lot: trust it, and say so when you are unsure of a detail.
 2. web_answer: only what changes or is new: news, this year's events and winners, what is on now, prices, opening hours, weather, schedules. Never for settled facts. First say a few natural words, varied ("Let me check that"), then call it. Tell only what its answer says, in your own words: keep its dates, numbers and hedges, and add none of your own. When it says something has not happened yet, is only planned or is uncertain, say so plainly.
@@ -171,7 +177,7 @@ Speak the language the user just spoke. Card titles stay as written.
 A question gets an answer, not cards: "who painted it?" is answered from what you know, never with find_new. A friend answers first and offers to dig in.
 
 # The other tools
-- start_tree: the user asks for a new tree.
+- start_tree: a separate tree, for a new subject or a fresh space the user asks for.
 - more_like_this: "more", "more like this", "keep going".
 - keep: "keep that", "keep them all", "keep the first two".
 - undo: "undo", "put it back".
@@ -184,7 +190,7 @@ Say a few words of your own as you call these ("Keeping that one", "Going up"). 
 # Notes from Mind Palace
 Messages in square brackets come from Mind Palace, not from the user.
 - [Where the user is] says what the user has open. "This" and "it" mean that card.
-- [Card landed], [More cards landed] and [All done] tell you what a search you started brought. Tell the user right away, like a friend pointing something out: the first card in a sentence or two, later ones in one short line ("two more: …"), and at the end a one-sentence wrap-up that says which you would look at first and offers one next step.
+- [Card landed], [More cards landed], [All done] and [Wrap up] tell you what a search you started brought. Tell the user right away, like a friend pointing something out: the first card in a sentence or two, later ones in one short line ("two more: …"), and at [All done] or [Wrap up] a one-sentence wrap-up that says which you would look at first and offers one next step.
 - Never mention the notes themselves ("the note says"): tell what landed as a friend would.
 - Say only what a note says about a card. Never add a fact, date, name or claim about a card that its note does not state, and never describe what a card looks like or shows beyond its note. Your own taste is fine when it is plainly an opinion ("sounds like a rabbit hole").
 - [From the agents] is a line from Mind Palace's other agents for the user. Say it briefly in your own words, and claim nothing it does not say.
@@ -258,12 +264,15 @@ const described = (c: CardNote) =>
  * together at most every `batchMs`; the run's end is a wrap-up with whatever was not told yet. A newer run on a card while one is
  * under way goes on as the same run: the pipeline drops the older one's later cards and says nothing at its end, so the run ends
  * when the last of its runs' steps does. Only a run's own step counts (`Activity.whole`): its parts name the card too, and a picture
- * still being made after the run is over lands as one more.
+ * still being made after the run is over lands as one more. While a part is still at work on the card, the wrap-up does not call the
+ * search finished: pictures landed 15 to 48 s after it in the user's session.
  */
 export class Narration {
   private runs: Run[] = [];
   /** Cards whose runs were told done, by name, for a card that lands after: a picture made after the run was over. */
   private finished = new Map<string, string>();
+  /** The parts of runs still at work, each with its card. */
+  private parts = new Map<string, string>();
   private lastTold = Number.NEGATIVE_INFINITY;
 
   constructor(private readonly batchMs = BATCH_MS) {}
@@ -291,8 +300,14 @@ export class Narration {
     run.waiting.push(card);
   }
 
-  /** A run's step ended. True when it was the last open on its card, so the run is over. */
+  /** A part of a run on `anchor` began: a search, or a picture being made, which may land after the run is over. */
+  part(step: string, anchor: string): void {
+    this.parts.set(step, anchor);
+  }
+
+  /** A run's step or one of its parts ended. True when it was the last of the run's own steps open on its card, so the run is over. */
   ended(step: string): boolean {
+    if (this.parts.delete(step)) return false;
     const run = this.runs.find((r) => r.steps.has(step) && !r.ended);
     if (!run) return false;
     run.steps.delete(step);
@@ -325,9 +340,16 @@ export class Narration {
       const total = run.told + untold.length;
       this.runs = this.runs.filter((r) => r !== run);
       this.finished.set(run.anchor, run.under);
-      if (total === 0) return `[All done] The search for "${run.under}" brought nothing new. Say so in a few words and offer another angle.`;
+      const working = [...this.parts.values()].includes(run.anchor);
+      const cards = `${total} new card${total === 1 ? '' : 's'}`;
+      if (total === 0) {
+        return working
+          ? `[Wrap up] Nothing from the search for "${run.under}" has landed yet. Say so in a few words.`
+          : `[All done] The search for "${run.under}" brought nothing new. Say so in a few words and offer another angle.`;
+      }
       const rest = untold.length > 0 ? ` Not told yet: ${untold.map(described).join('; ')}.` : '';
-      return `[All done] The search for "${run.under}" is finished: ${total} new card${total === 1 ? '' : 's'} in all.${rest} Wrap up in one or two short sentences: which you would look at first and why, and one next step to offer. Do not go through them one by one.`;
+      const said = working ? `[Wrap up] The search for "${run.under}" has brought ${cards}.` : `[All done] The search for "${run.under}" is finished: ${cards} in all.`;
+      return `${said}${rest} Wrap up in one or two short sentences: which you would look at first and why, and one next step to offer. Do not go through them one by one.`;
     }
     if (run.told === 0) {
       const first = run.waiting.shift()!;
@@ -510,6 +532,7 @@ export class LiveVoice {
       const a = message.activity;
       if (a.role !== 'scout') return;
       if (a.state === 'start' && a.nodeId && a.whole) this.narration.began(a.id, a.nodeId, this.deps.nameOf(a.nodeId));
+      else if (a.state === 'start' && a.nodeId) this.narration.part(a.id, a.nodeId);
       else if (a.state !== 'start' && this.narration.ended(a.id)) {
         if (this.runEnded) clearTimeout(this.runEnded);
         this.runEnded = setTimeout(() => (this.runEnded = null), 0);

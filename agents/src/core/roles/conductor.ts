@@ -184,13 +184,19 @@ Choose "kind":
 - "organize": any request to move, group, rename, merge, split, delete, tidy or add a note. Set request to the instruction made self-contained. Set scopeNodeIds or scopeTreeIds to what it is about. Leave both empty when it is about the selection or the focus.
 - "handoff": the user wants this packaged or exported for another agent or app. Set scopeTreeIds to the focus tree for "this tree" or "everything here". Leave both scope lists empty for "everything" or for the selection or focus. Set note to what the next agent should do, or leave it empty.
 - "capture": the user is dictating a thought to keep ("note to self", "remember that", or an idea stated with no question or command). Set text to the thought without the trigger words.
-- "tree": the user wants a new tree started, about a subject ("build me a tree around Hitchcock's films") or from what they just dropped or are looking at ("grow a tree out of this"). Set text to the subject in their words, or leave it empty when they mean this. Only when they ask for a tree; a topic alone is not a tree.
+- "tree": the user wants a separate tree started, for a new subject or a fresh space: about a subject ("build me a tree around Hitchcock's films") or from what they just dropped or are looking at ("grow a tree out of this"). Set text to the subject in their words, or leave it empty when they mean this. Only when they ask for a tree or a space of its own; a topic alone is not a tree.
 - "keep": the user wants to keep picks ("keep the second one"). Set keepNodeIds to ids from the unkept picks listed in the scene.
 - "undo": the user wants the last change reverted.
-- "reply": a greeting, thanks, or something that cannot be acted on.
+- "reply": a greeting, thanks, something that cannot be acted on, or one short question back when you cannot tell what the user wants.
+
+Trees and layers:
+- A tree starts from one card and grows in layers: asking about a card ("ask" or "more") adds the next layer of cards around it.
+- A tree is one line of thought. A new tree is a separate space, for a new subject.
+- Building on what is open, such as going deeper, a related angle, "more on this" or a new layer, is "ask" or "more" on the focus node. A separate subject, or a fresh space the user asks for, is "tree".
+- When you cannot tell which the user wants, use "reply" with say "Add it as a new layer here, or start its own tree?" and start nothing. Asked for a new layer with no focus node or selection, use "reply" and ask which card.
 
 What the user is looking at decides what they mean:
-- When there is a focus node or a selection, what the user says is about that node unless they clearly name something else. A stated want or topic ("I want to brainstorm world building", "let's think about the soundtrack", "characters") is an "ask" anchored on that node. It is never a "capture" and never a new thought of its own.
+- When there is a focus node or a selection, what the user says is about that node unless they clearly name something else. A stated want or topic that builds on it ("I want to brainstorm world building", "let's think about the soundtrack", "characters") is an "ask" anchored on that node. It is never a "capture" and never a new thought of its own.
 - For "ask", write need as what the user wants for that node, in their own words made complete: "world building for this aerial illustration of a car on a winding road", not just "world building".
 - Use "capture" only when nothing is in focus and nothing is selected, or when the user says outright to add, note or remember something.
 
@@ -217,13 +223,13 @@ function describe(ctx: RoleContext, input: { utterance: string; history: Turn[] 
 
   if (seen.focus) {
     const item = mind.itemOf(seen.focus.id);
-    const path = mind.path(seen.focus.id).map(title).join(' > ');
+    const path = mind.path(seen.focus.id);
     const children = mind.children(seen.focus.id);
     const kept = children.filter((n) => n.status === 'kept').slice(0, MAX_CHILDREN);
     out.push(
       `Focus node: ${seen.focus.id}: ${title(seen.focus)}` +
         `\nTree: ${seen.focus.treeId}: ${mind.tree(seen.focus.treeId).title}` +
-        `\nPath from the root: ${path}` +
+        `\nPath from the root: ${path.map(title).join(' > ')} (layer ${path.length})` +
         `\nKind: ${item.kind}, ${item.origin.by === 'user' ? 'dropped in by the user' : 'brought by an agent'}` +
         `\nSummary: ${clip(item.summary || item.text, 400) || '(none)'}` +
         `\nKept children:\n${list(kept.map(line))}`,

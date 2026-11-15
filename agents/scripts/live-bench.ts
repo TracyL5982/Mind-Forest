@@ -4,8 +4,9 @@
 // (its tool calls, or none) against the way written down for it, the time from the end of speech to Momo's first sound, for a web
 // question to the answer itself, everything Momo said and was told, and what the turn cost. Nothing is played aloud.
 // The roles are the stand-ins (no Meta model calls) unless --staged, which lands realistic cards over 35 s as the Scout does.
+// --set picks the requests: the 40 (`requests`), those said with a pause (`paused`), or tree or layer (`intent`).
 //   node --no-warnings --import tsx scripts/live-bench.ts --data <data dir> --out <file.jsonl> [--model gpt-realtime-2.1-mini]
-//     [--voice marin] [--effort minimal] [--clips <dir>] [--only k1,w2] [--settle 7000] [--staged]
+//     [--voice marin] [--effort minimal] [--clips <dir>] [--only k1,w2] [--settle 7000] [--staged] [--set intent]
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,7 +21,7 @@ import { startServer } from '../src/node/server.ts';
 import { HEARING_MODEL, openaiRealtime } from '../src/node/speech-openai.ts';
 import { ask } from '../src/node/web-answer.ts';
 import { down, samplesOf, speech, wav } from './live-audio.ts';
-import { PAUSED, REQUESTS, type Request } from './live-requests.ts';
+import { INTENT, PAUSED, REQUESTS, sceneAt, type Request } from './live-requests.ts';
 import { staged } from './live-stage.ts';
 
 const { values: flags } = parseArgs({
@@ -37,7 +38,7 @@ const { values: flags } = parseArgs({
     real: { type: 'boolean', default: false },
     scene: { type: 'string', default: '7d121822' },
     turn: { type: 'string', default: 'semantic' },
-    paused: { type: 'boolean', default: false },
+    set: { type: 'string', default: 'requests' },
     hiss: { type: 'string', default: '0' },
     'device-pause': { type: 'string', default: '0' },
     pause: { type: 'string', default: '1800' },
@@ -234,7 +235,15 @@ async function turn(base: string, token: string, r: Request, scene: object): Pro
     .map((t) => ({ at: t.at, text: ((t.e.item as { content: { text: string }[] }).content[0]?.text ?? '') }));
   const errors = mine.filter((t) => t.type === 'error').map((t) => JSON.stringify(t.e.error));
   const chose = calls.length > 0 ? calls.map((c) => c.name) : ['own'];
-  const right = r.ways.includes(chose[0] as never);
+  // What the calls did, as their outputs say: a call that started or did something, and a tree it started.
+  const did = outputs.flatMap((o) => {
+    const item = o.e.item as { call_id?: string; output?: string };
+    const out = JSON.parse(item.output ?? '{}') as { started?: boolean; done?: boolean; newTree?: string };
+    const name = calls.find((c) => c.call === item.call_id)?.name ?? '';
+    return out.started === true || out.done === true ? [{ name, tree: name === 'start_tree' || out.newTree !== undefined }] : [];
+  });
+  const asked = responses.some((x) => x.purpose !== 'results' && x.text.includes('?'));
+  const right = r.ways.includes(chose[0] as never) || (r.ways.includes('ask') && asked && did.length === 0);
   const realtimeDollars = responses.reduce((s, x) => s + x.dollars, 0);
   return {
     id: r.id,
@@ -243,6 +252,9 @@ async function turn(base: string, token: string, r: Request, scene: object): Pro
     expected: r.ways,
     chose,
     right,
+    asked,
+    started: did.map((d) => d.name),
+    trees: did.filter((d) => d.tree).length,
     heard: String(transcript?.e.transcript ?? ''),
     cutOff: Boolean(overAt && !endOfSpeech),
     endedByDevice,
@@ -299,12 +311,14 @@ const server = await startServer({
   log: (line) => lines.push(`${Math.round(performance.now())} ${line}`),
 });
 try {
-  const focus = [...server.mind.nodes.values()].find((n) => n.id.startsWith(flags.scene!));
-  const scene = focus ? { focus: focus.id, treeId: focus.treeId, selection: [] } : { selection: [] };
-  const set = flags.paused ? PAUSED : REQUESTS;
+  const sets: Record<string, Request[]> = { requests: REQUESTS, paused: PAUSED, intent: INTENT };
+  const set = sets[flags.set!];
+  if (!set) throw new Error(`no set "${flags.set}": ${Object.keys(sets).join(', ')}`);
   const chosen = flags.only ? set.filter((r) => flags.only!.split(',').includes(r.id)) : set;
   for (const r of chosen) {
     taps = [];
+    const scene = sceneAt(server.mind, r.where ?? { open: flags.scene! });
+    if (!scene) throw new Error(`${r.id} is said where the data has nothing: ${JSON.stringify(r.where ?? flags.scene)}`);
     const row = await turn(server.url, server.token, r, scene);
     appendFileSync(flags.out, `${JSON.stringify({ model: flags.model, voice: flags.voice, effort: flags.effort, turn: flags.turn, pause: Number(flags.pause), at: new Date().toISOString(), ...row })}\n`);
     const said = (row.responses as { text: string }[]).map((x) => x.text).join(' | ');
