@@ -1,3 +1,6 @@
+import { WebSocket } from 'ws';
+import type { OpenRealtime, RealtimeEvent } from './live.ts';
+
 export const SPEECH_VOICE = 'marin';
 const SPEECH_MODEL = 'gpt-4o-mini-tts';
 const MANNER = 'Warm, calm and unhurried, like a friend who knows a lot and is glad to share it. Natural pauses. Not salesy.';
@@ -54,5 +57,45 @@ export function openaiTranscribe(send: typeof fetch, opts: { apiKey: string; mod
     });
     if (!res.ok) throw new Error(`OpenAI transcription answered ${res.status}`);
     return (((await res.json()) as { text?: string }).text ?? '').trim();
+  };
+}
+
+/**
+ * A socket to OpenAI's realtime model for one live voice (`live.ts`). The key goes in a header, never in the address.
+ * Events sent before the socket opens are held until it does.
+ */
+export function openaiRealtime(opts: { apiKey: string; model: string }): OpenRealtime {
+  return (on) => {
+    const ws = new WebSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(opts.model)}`, { headers: { Authorization: `Bearer ${opts.apiKey}` } });
+    const held: string[] = [];
+    let ended = false;
+    const end = (why: string) => {
+      if (ended) return;
+      ended = true;
+      on.closed(why);
+    };
+    ws.on('open', () => {
+      for (const text of held.splice(0)) ws.send(text);
+    });
+    ws.on('message', (raw) => {
+      try {
+        on.event(JSON.parse(String(raw)) as RealtimeEvent);
+      } catch {
+        // Not an event: nothing to act on.
+      }
+    });
+    ws.on('error', (err) => end(`OpenAI realtime: ${err.message}`));
+    ws.on('close', (code, reason) => end(`OpenAI realtime closed (${code}${reason.length ? ` ${String(reason)}` : ''})`));
+    return {
+      send(event) {
+        const text = JSON.stringify(event);
+        if (ws.readyState === WebSocket.OPEN) ws.send(text);
+        else if (ws.readyState === WebSocket.CONNECTING) held.push(text);
+      },
+      close() {
+        ended = true;
+        ws.close();
+      },
+    };
   };
 }

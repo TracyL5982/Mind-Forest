@@ -11,7 +11,8 @@ import { Mindstorm } from '../core/state.ts';
 import { spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
 import { whereItWent, type Delivery, type Desk } from './contact.ts';
-import { ClientMessage, PROTOCOL_VERSION } from './protocol.ts';
+import { describeScene, LiveVoice, type LiveOptions, type OpenRealtime } from './live.ts';
+import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
 import type { Speak, Transcribe } from './speech-openai.ts';
 import { SqliteStore } from './store.ts';
 import { Telegram, type TelegramOptions } from './telegram.ts';
@@ -33,6 +34,8 @@ export interface ServerOptions {
   speak?: Speak;
   /** Turns recorded speech into text, told the card titles. When present the client records instead of using the browser's recognition. */
   transcribe?: Transcribe;
+  /** Momo's real-time voice on `/live`: the realtime model, and how it is set up. Without it `/live` is refused. */
+  live?: { open: OpenRealtime; options: LiveOptions };
   settings?: Partial<Settings>;
   /** The only folder a linked file may be served from. Defaults to the repository's `public/clips/full`. */
   films?: string;
@@ -82,6 +85,14 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     const files = said.length === 0 ? [] : said.map((p) => p.files).reduce((both, next) => both.filter((ext) => next.includes(ext)));
     return { embeds: said.every((p) => p.embeds), files };
   };
+  /** The devices on `/live`, each with its own voice. */
+  const voices = new Set<LiveVoice>();
+  /** What was said lately, for a voice that starts without the conversation. */
+  const recent: { who: 'user' | 'agent'; text: string }[] = [];
+  const remember = (who: 'user' | 'agent', text: string) => {
+    recent.push({ who, text });
+    if (recent.length > 6) recent.shift();
+  };
   const broadcast = (message: unknown) => {
     const text = JSON.stringify(message);
     for (const ws of sockets) if (ws.readyState === ws.OPEN) ws.send(text);
@@ -99,6 +110,13 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       return;
     }
     if (message.t === 'note') log(`[${message.role}] ${message.message}`);
+    if (message.t === 'heard' && message.final) remember('user', message.text);
+    if (message.t === 'say') {
+      remember('agent', message.text);
+      const kind = 'kind' in message && typeof message.kind === 'string' ? message.kind : undefined;
+      for (const voice of voices) voice.said(message.text, kind);
+    }
+    if (message.t === 'activity' && message.activity.role === 'conductor' && message.activity.state === 'error') for (const voice of voices) voice.actFailed();
     if (message.t === 'activity') log(`[${message.activity.role}] ${message.activity.state}: ${message.activity.message}`);
     broadcast(message.t === 'change' ? { ...message, undo: pipeline.undoLabel() } : message);
   };
@@ -227,14 +245,49 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   }
 
   const wss = new WebSocketServer({ noServer: true });
+  const liveWss = new WebSocketServer({ noServer: true });
   http.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    if (url.pathname !== '/ws' || !authorized(req, url)) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    const refuse = (status: string) => {
+      socket.write(`HTTP/1.1 ${status}\r\n\r\n`);
       socket.destroy();
-      return;
-    }
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+    };
+    if (!authorized(req, url)) return refuse('401 Unauthorized');
+    if (url.pathname === '/ws') return wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+    if (url.pathname === '/live' && opts.live) return liveWss.handleUpgrade(req, socket, head, (ws) => liveWss.emit('connection', ws, req));
+    refuse('404 Not Found');
+  });
+
+  liveWss.on('connection', (ws: WebSocket) => {
+    const live = opts.live!;
+    const voice = new LiveVoice(
+      {
+        open: live.open,
+        options: live.options,
+        utter: (text, scene) => pipeline.utter(text, scene, true),
+        context: (scene) => describeScene(mind, scene, recent),
+        name: () => spokenName(settings.agentName),
+        log,
+      },
+      (frame) => {
+        if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame));
+      },
+    );
+    voices.add(voice);
+    ws.on('close', () => {
+      voices.delete(voice);
+      voice.close();
+    });
+    ws.on('message', (raw) => {
+      let frame: DeviceFrame;
+      try {
+        frame = DeviceFrame.parse(JSON.parse(String(raw)));
+      } catch (err) {
+        log(`[live] a frame that is not one: ${String(err instanceof Error ? err.message : err).slice(0, 200)}`);
+        return;
+      }
+      voice.heard(frame);
+    });
   });
 
   wss.on('connection', (ws: WebSocket) => {
@@ -289,7 +342,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         pipeline.userCommands(m.label, m.commands);
         return;
       case 'organize':
-        broadcast({ t: 'say', text: await pipeline.organize(m.request, m.scope, m.focus) });
+        emit({ t: 'say', text: await pipeline.organize(m.request, m.scope, m.focus) });
         return;
       case 'handoff':
         await pipeline.handoff(m.scope, m.note);
@@ -315,7 +368,9 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     async close() {
       await telegram?.close();
       for (const ws of sockets) ws.terminate();
+      for (const ws of liveWss.clients) ws.terminate();
       wss.close();
+      liveWss.close();
       await new Promise<void>((done) => http.close(() => done()));
       store.close();
       rmSync(lock, { force: true });

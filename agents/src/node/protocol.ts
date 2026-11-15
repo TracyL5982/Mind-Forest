@@ -33,3 +33,12 @@ export const ClientMessage = z.discriminatedUnion('t', [
   }) }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
+
+/** Every frame a device may send on `/live`. Audio is base64 of 16-bit mono PCM at 16 kHz. */
+export const DeviceFrame = z.discriminatedUnion('t', [
+  z.object({ t: z.literal('start'), turn: z.number().int().min(1), scene: Scene }),
+  z.object({ t: z.literal('audio'), pcm: z.string().max(1 << 20) }),
+  z.object({ t: z.literal('end') }),
+  z.object({ t: z.literal('cancel') }),
+]);
+export type DeviceFrame = z.infer<typeof DeviceFrame>;

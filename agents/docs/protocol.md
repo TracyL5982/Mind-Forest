@@ -152,3 +152,29 @@ The user wakes the agent by saying "hey" or "hi" and its name, `settings.agentNa
 
 The service drops a leading wake phrase from `/api/transcribe` replies and from `utter` text: "hey" or "hi", then the name, in any case, with any punctuation around them and a space or hyphen allowed inside the name ("Hi, Mo-mo!"). "Hey Momo, undo that" is acted on as "Undo that". The phrase anywhere else, or another greeting ("hello Momo"), is left as it was.
 
+
+### The live voice: `/live`
+
+When the service has a live voice (an OpenAI key, and `MIND_PALACE_LIVE` is not `off`), a client can talk to Momo in real time on a second WebSocket, `/live?token=<token>`. Without one the upgrade is refused with 404, and the client uses the path above. The service holds one OpenAI realtime session per `/live` socket, opened at the first wake and closed after 5 quiet minutes or with the socket. The key stays in the service. Audio is base64 of 16-bit little-endian mono PCM, one JSON object per text frame.
+
+Service to client:
+
+| Frame | Meaning |
+|---|---|
+| `{t:'ready', rate}` | Sent on connect. Momo's voice comes at `rate` Hz (24000). |
+| `{t:'over', turn}` | The user's turn has been heard: Momo has begun to answer it, or decided to say nothing. Stop sending the microphone. |
+| `{t:'audio', id, pcm}` | Momo's voice, in order, to play as it comes. A new `id` is a new response. |
+| `{t:'text', id, text}` | All Momo has said so far in this response. |
+| `{t:'done', id, usage?}` | This response has no more audio. `usage` is OpenAI's token count. |
+| `{t:'failed', why}` | The session failed, and any turn in progress is over. The next `start` opens a new one. |
+
+Client to service:
+
+| Frame | Meaning |
+|---|---|
+| `{t:'start', turn, scene}` | The wake phrase was heard. Turn `turn` (1, 2, … per socket) follows as audio. It also stops whatever Momo is saying. |
+| `{t:'audio', pcm}` | The microphone at 16000 Hz, from a moment before the phrase until `over`. Nothing before the phrase. |
+| `{t:'end'}` | The client stopped sending before `over` (it sends a minute at most): take what was sent. |
+| `{t:'cancel'}` | Nothing was said after the phrase for 8 seconds: drop the turn. |
+
+The model hears the end of the turn itself. It answers in its own words and hands every request that changes the mindstorm to the pipeline as a final `utter` with the turn's scene. Every `say` is voiced on each `/live` socket: the first after a request is its result, and the rest, and every `say` with `kind: 'results'`, are news. While its `/live` socket is open a client does not speak `say` messages itself.
