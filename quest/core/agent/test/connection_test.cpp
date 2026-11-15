@@ -51,3 +51,15 @@ TEST(aRememberedFileThatCantBeReadIsLeftAlone) {
         CHECK(l.arguments == Arguments{"-demo"} && l.file == Launch::File::keep, "\"%s\" adds nothing", text);
     }
 }
+
+TEST(aTokenThatStartsWithADashIsStillTheToken) {
+    // The service's tokens are random base64url, so about one in eighty starts with a dash and a letter.
+    std::map<std::string, std::string> flags = Flags::parse({"-agent", "ws://127.0.0.1:8787", "-agentToken", "-Kq3xZ_token", "-cards"});
+    CHECK_EQ(flags["agentToken"], std::string("-Kq3xZ_token"));
+    CHECK(flags.count("cards") && !flags.count("Kq3xZ_token"), "the token is not read as a flag, and the flag after it still is");
+    Launch joined = launch({"-agent", "ws://127.0.0.1:8787", "-agentToken", "-Kq3xZ_token", "-cards"}, std::nullopt);
+    Launch library = launch({}, joined.text);
+    CHECK(holds(library.arguments, {"-agentToken", "-Kq3xZ_token"}), "it is remembered and given back as the token");
+    CHECK(Flags::parse(library.arguments)["agentToken"] == "-Kq3xZ_token", "and read back as the token");
+    CHECK(Flags::parse({"-walk", "-demo"})["walk"].empty() && Flags::parse({"-walk", "-demo"}).count("demo"), "a flag that takes no word is followed by the next flag, as before");
+}

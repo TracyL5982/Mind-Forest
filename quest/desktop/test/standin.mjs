@@ -64,8 +64,9 @@ export async function standIn(name, source) {
   cpSync(source, data, { recursive: true });
   rmSync(join(data, 'service.pid'), { force: true });
   writeFileSync(join(work, 'empty.env'), '');
-  // Hex, so the token never starts with a dash, which the launch flags would read as a flag of its own.
-  const token = randomBytes(12).toString('hex');
+  // It starts with a dash and a letter, as about one in eighty of the service's tokens does, so every run shows the launch
+  // flags still read it as the token.
+  const token = `-k${randomBytes(12).toString('hex')}`;
 
   const started = [];
   const stop = () => {
