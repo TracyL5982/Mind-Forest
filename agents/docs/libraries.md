@@ -615,6 +615,7 @@ The fallback. A title and a few lines of text.
 - **Chosen when** nothing else fits.
 - **Props.** `emphasis?`: one or more whole sentences or lines of the text to set apart, ending within its first 180 characters, or 90 in a script written without spaces. Only the model sets it.
 - **Drawn as** the title and the body, on the whole lines Each type gives them. With an emphasis the body is the item's own text, with the words marked where they stand. When the lines from its start do not reach them, the body starts where they start. The note never sets them apart over itself.
+- **The summary is held to the face.** Intake asks the model for one short sentence, about 30 to 45 characters in English or 22 to 33 in Chinese, and `fittedSummary` in `src/core/roles/intake/describe.ts` holds it to the lines a note's face gives it under its title, counted by this page's rule: `floor((146 - 30 - 24 * titleLines - 6) / 22)`, which is 3 under a title of 1 line and 2 under a title of 2. A longer summary keeps its first whole sentences that fit, else its first whole clause that fits and says something, three words or six Han characters, without the mark that ends the clause. When neither fits it is dropped, and the note shows the item's own first lines. It never ends in an ellipsis. A takeaway from a chat is held the same way. The opened card shows the item's text whole either way.
 - **Item holds.** `title`, and `text` or `summary`.
 
 ### quote
