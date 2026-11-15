@@ -126,6 +126,12 @@ struct Col {
     int height() const { return int(std::ceil(y)) + face::BOTTOM; }
 };
 
+/// A record's own picture at the face's left, `wide` by `tall` px from where the column stands, cut to fill and with round corners,
+/// with the column moved to its right: a book's cover, an episode's art. Returns the picture's foot, px, which the face must reach.
+float sidePicture(Col& c, const std::string& src, float wide, float tall);
+/// The same at the column's right, beside the lines under a bar: a film's poster on a link card.
+float sidePictureRight(Col& c, const std::string& src, float wide, float tall);
+
 /// The size `lay` gives a face, and its drawing with the same.
 template <class Lay>
 Footprint footprint(const Item& item, Lay lay) {

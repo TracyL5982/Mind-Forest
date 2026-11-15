@@ -55,23 +55,13 @@ void head(const Pen& pen, const std::string& kind, const std::string& year, floa
 
 
 /// A book's cover at the face's left, two by three as a cover stands, with the card's words beside it.
-constexpr int COVER_WIDE = 54, COVER_TALL = 81, COVER_GAP = 12;
+constexpr int COVER_WIDE = 54, COVER_TALL = 81;
 
 /// Its cover when it has one, then its kind and year over a rule, the title in two lines, and the first author, beside it.
 void lay(Col& c, const Item& item, const Json& props) {
     Plan p = plan(item, props);
     std::string cover = text(props["cover"]);
-    if (!cover.empty()) {
-        if (c.pen) {
-            CGRect box = c.pen->px(face::LEFT, face::TOP, COVER_WIDE, COVER_TALL);
-            c.pen->ctx.setFillColor(palette::media);
-            c.pen->ctx.fill(box);
-            c.pen->picture(cover, box, true, c.words);
-            c.pen->mask(box, 3 * c.pen->k, c.look.fill);
-        }
-        c.x = face::LEFT + COVER_WIDE + COVER_GAP;
-        c.width = face::COL - COVER_WIDE - COVER_GAP;
-    }
+    float foot = cover.empty() ? 0 : sidePicture(c, cover, COVER_WIDE, COVER_TALL);
     if (c.pen) head(*c.pen, p.label, p.year, c.x, c.y, c.width, true);
     // Beside a cover the column is narrow, so the rule sits closer and a name may take a second line.
     c.gap(face::META + (cover.empty() ? 14 : 8));
@@ -89,7 +79,7 @@ void lay(Col& c, const Item& item, const Json& props) {
         c.lines(first, Measure::meta, cover.empty() ? 1 : 2, palette::ink2);
     }
     if (c.more) c.cue(cueMore(c.words));
-    if (!cover.empty()) c.y = std::max(c.y, float(face::TOP + COVER_TALL));
+    c.y = std::max(c.y, foot);
 }
 
 Footprint size(const Item& item, const Json& props) {

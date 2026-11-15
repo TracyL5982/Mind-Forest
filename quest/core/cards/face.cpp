@@ -261,4 +261,29 @@ void Col::cue(const std::string& said) {
     y += face::CUE;
 }
 
+namespace {
+constexpr float SIDE_GAP = 12;
+void pictureAt(Col& c, const std::string& src, float x, float wide, float tall) {
+    if (!c.pen) return;
+    CGRect box = c.pen->px(x, c.y, wide, tall);
+    c.pen->ctx.setFillColor(palette::media);
+    c.pen->ctx.fill(box);
+    c.pen->picture(src, box, true, c.words);
+    c.pen->mask(box, 3 * c.pen->k, c.look.fill);
+}
+}  // namespace
+
+float sidePicture(Col& c, const std::string& src, float wide, float tall) {
+    pictureAt(c, src, c.x, wide, tall);
+    c.x += wide + SIDE_GAP;
+    c.width -= wide + SIDE_GAP;
+    return c.y + tall;
+}
+
+float sidePictureRight(Col& c, const std::string& src, float wide, float tall) {
+    pictureAt(c, src, c.x + c.width - wide, wide, tall);
+    c.width -= wide + SIDE_GAP;
+    return c.y + tall;
+}
+
 }  // namespace cards
