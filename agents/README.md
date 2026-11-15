@@ -61,9 +61,9 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 ## Check it
 
 ```bash
-npm test                 # 438 tests on scripted models and the client's card sizes, no network
+npm test                 # 433 tests on scripted models and the client's card sizes, no network
 npx tsc --noEmit
-node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 42 checks
+node --no-warnings --import tsx test/client.e2e.ts   # the web client in a real browser, 43 checks
 npm run scenario         # everything against the live model, 28 checks, about 160,000 tokens
 MIND_PALACE_DATA=<a copy of a data folder> node --no-warnings --import tsx scripts/mindstorm-check.ts "<a thought>" "<a subject>"
                          # drops a thought and asks for a tree on a copy of a mindstorm, and prints the round, live

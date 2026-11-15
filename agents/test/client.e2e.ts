@@ -223,7 +223,8 @@ async function main(): Promise<void> {
       assert.equal(before.length, 3);
       await shot(page, 'desktop-4b-questions');
       await offered.getByRole('button', { name: before[0] }).click();
-      await page.locator('.card', { hasText: `An essay on ${before[0]}` }).waitFor();
+      // A title the model writes is held to two card lines, so the essay on the question is found by its opening words.
+      await page.locator('.card', { hasText: `An essay on ${before[0]!.split(' ').slice(0, 2).join(' ')}` }).first().waitFor();
       await until('the new picks to join the old', async () => (await count(page, '.card.is-pick')) === 12);
       assert.deepEqual(await offered.getByRole('button').allTextContents(), before.slice(1), 'the asked question leaves the list');
     });
