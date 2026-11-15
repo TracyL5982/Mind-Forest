@@ -302,3 +302,18 @@ test('a tree asked for in other words is the model\'s call, and a topic alone wi
   assert.equal((await hear(k, "let's think about the soundtrack", { focus: f.dolly, selection: [] })).intent.kind, 'ask');
   assert.match(k.model.calls[0]!.detail, /Hitchcock/);
 });
+
+test('the Conductor asks the quick model, since the user is waiting on its reply', async () => {
+  const k = kit();
+  const f = film(k);
+  const asked: (boolean | undefined)[] = [];
+  k.model.on('conductor', (req) => {
+    asked.push(req.quick);
+    return { ...EMPTY, kind: 'ask', anchorId: f.dolly, need: 'examples from horror films', say: 'Looking for horror examples.' };
+  });
+
+  const got = await hear(k, 'I need examples from horror films', { focus: f.dolly, selection: [] });
+
+  assert.deepEqual(asked, [true]);
+  assert.deepEqual(got.intent, { kind: 'ask', anchor: f.dolly, need: 'examples from horror films' });
+});
