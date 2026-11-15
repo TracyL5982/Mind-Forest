@@ -847,8 +847,21 @@ The shorter lead-in is not kept. It is real at its part, 0.23 to 0.29 s, about 3
 | Median time; paired against 59's | 3.99 s | 4.39 s; -0.09 s | 4.38 s; +0.22 s | 4.53 s; +0.06 s, Vermeer 2 to 4 searches, up to 9.8 s |
 | Words, median and total of 15 | 41, 513 | 30, 492 | 27, 533 | 30, 460 |
 
-(b) and (c) were right no more often and missed the Vermeer show on now. (a) was right in 15 against 13, a margin three runs cannot separate from chance, and in the one voice run on it Momo's answers were 48 words at the median against 26 in 60's runs of today's code, every show dated; the user wants no more words from Momo.
+(b) and (c) were right no more often and missed the Vermeer show on now. (a) was right in 15 against 13, so it was tried through Momo's voice, where the user's bar is Momo's words: kept only if Momo says no more than 10% more words across the answers, with no more time-outs and right at least as often.
+
+- (a) through Momo's voice: `scripts/live-bench.ts` on `gpt-realtime-2.1`, the five requests, three runs a side alternating (with (a), without, and so on), the code otherwise the same on both sides. Momo's words are those of the turn's last response.
+
+| | With (a) | Without |
+|---|---|---|
+| Momo's words over the 15 answers (median) | 568 (39) | 486 (25): (a) is 16.9% more |
+| Per request: Booker, Rijksmuseum, NASA, Mauritshuis, Vermeer | 56, 159, 127, 75, 151 | 63, 159, 71, 68, 125 |
+| The web answer's words over the 15 (median) | 586 (48) | 486 (24) |
+| Right, of 15 | 13: the Vermeer show on now missed twice | 13: missed once, and once the Madrid show "planned to open on October 9", five weeks after it opened |
+| Time-outs | 0 | 1, a Vermeer call, asked again and answered |
+| End of speech to the answer heard, median | 8.74 s | 7.69 s |
+
+(a) fails on words: the NASA answers took in ESCAPADE's flybys and its 2025 launch, and "it's still only planned", and the Vermeer answers ran longer. It is not kept.
 
 **Not done.** A longer wait than 10 s for a web answer: not taken.
 
-**Measured with.** Throwaway scripts outside the repository that called `ask` with each set of instructions, keeping each response's citations, pages read and searches, and `scripts/live-bench.ts` for the voice runs. About $3.75 of OpenAI calls.
+**Measured with.** Throwaway scripts outside the repository that called `ask` with each set of instructions, keeping each response's citations, pages read and searches, and `scripts/live-bench.ts`, run from a copy whose web answer added (a) or not, for the voice runs. About $5.35 of OpenAI calls, $1.60 of them for the voice comparison.
