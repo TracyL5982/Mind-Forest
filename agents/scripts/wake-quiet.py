@@ -26,7 +26,7 @@ def run(job):
     kws = sherpa_onnx.KeywordSpotter(
         tokens=f'{model}/tokens.txt', encoder=f'{model}/encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx',
         decoder=f'{model}/decoder-epoch-12-avg-2-chunk-16-left-64.onnx', joiner=f'{model}/joiner-epoch-12-avg-2-chunk-16-left-64.int8.onnx',
-        keywords_file=keywords, num_threads=1, keywords_threshold=0.05, keywords_score=2.0, num_trailing_blanks=1)
+        keywords_file=keywords, num_threads=1, keywords_threshold=0.05, keywords_score=1.5, num_trailing_blanks=1)
     rng = np.random.default_rng(7)
     caught = dict.fromkeys(LEADS, 0)
     for clip in clips:

@@ -74,7 +74,10 @@ const TALK = [
   `Hi everyone, thanks for coming. This won't take long. The short version is that we are about two weeks behind, mostly because of the supplier, and we have a plan to catch up. I will go through it slide by slide, and please stop me if anything is unclear, I would rather answer questions now than in a month.`,
 ];
 
-/** Plain spoken prose from a Markdown document: headings, tables and code are reduced to words. */
+/**
+ * Plain spoken prose from a Markdown document: headings, tables and code are reduced to words.
+ * Sentences that name the agent are left out, since the documents now describe the phrase itself and talk must not hold it.
+ */
 function prose(markdown: string): string {
   return markdown
     .replace(/```[\s\S]*?```/g, ' ')
@@ -85,6 +88,9 @@ function prose(markdown: string): string {
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/[#*|>_]/g, ' ')
     .replace(/\s+/g, ' ')
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !/mo[\s-]*mo/i.test(sentence))
+    .join(' ')
     .trim();
 }
 

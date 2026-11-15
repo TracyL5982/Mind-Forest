@@ -953,7 +953,7 @@ async function wakeChecks(): Promise<void> {
           const piece = (loud) => Float32Array.from({ length: 1600 }, (_, i) => (loud ? loud * Math.sin(i / 3) : (Math.random() - 0.5) * 0.002));
           const feed = (count, loud) => { for (let i = 0; i < count; i++) audio.port1.postMessage(piece(loud)); };
           const ready = next('ready');
-          worker.postMessage({ t: 'start', name: 'Momo', tuning: { threshold: 0.05, boost: 2, highForHi: true }, audio: audio.port2 }, [audio.port2]);
+          worker.postMessage({ t: 'start', name: 'Momo', tuning: { threshold: 0.05, boost: 1.5, highForHi: true }, audio: audio.port2 }, [audio.port2]);
           await ready;
           worker.postMessage({ t: 'listen' });
           const woke = next('wake');
