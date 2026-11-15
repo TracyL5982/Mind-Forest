@@ -212,7 +212,7 @@ async function turn(base: string, token: string, r: Request, scene: object): Pro
       const done = mine.find((x) => x.type === 'response.done' && (x.e.response as { id: string }).id === id);
       const text = mine.filter((x) => x.type === 'response.output_audio_transcript.delta' && x.e.response_id === id).map((x) => String(x.e.delta)).join('');
       const usage = (done?.e.response as { usage?: Usage } | undefined)?.usage;
-      return { id, purpose, createdAt: t.at, firstAudioAt: audio?.at, text, status: (done?.e.response as { status?: string } | undefined)?.status, dollars: usage ? (cost(flags.model!, usage) ?? 0) : 0 };
+      return { id, purpose, createdAt: t.at, firstAudioAt: audio?.at, doneAt: done?.at, text, status: (done?.e.response as { status?: string } | undefined)?.status, dollars: usage ? (cost(flags.model!, usage) ?? 0) : 0 };
     });
   const web = calls.find((c) => c.name === 'web_answer');
   const webOutput = web ? outputs.find((o) => (o.e.item as { call_id?: string }).call_id === web.call) : undefined;
@@ -240,7 +240,7 @@ async function turn(base: string, token: string, r: Request, scene: object): Pro
     firstSoundMs: after(firstAudio),
     toolMs: web && webOutput ? Math.round(webOutput.at - web.at) : null,
     answerMs: after(answer?.firstAudioAt),
-    responses: responses.map((x) => ({ purpose: x.purpose, status: x.status, firstAudioMs: after(x.firstAudioAt), text: x.text })),
+    responses: responses.map((x) => ({ purpose: x.purpose, status: x.status, firstAudioMs: after(x.firstAudioAt), doneMs: after(x.doneAt), text: x.text })),
     calls: calls.map((c) => ({ name: c.name, args: c.args, atMs: after(c.at) })),
     notes: notes.map((n) => ({ atMs: after(n.at), text: n.text })),
     activities: activities.map((a) => ({ atMs: after(a.at), role: a.role, state: a.state, label: a.label })),

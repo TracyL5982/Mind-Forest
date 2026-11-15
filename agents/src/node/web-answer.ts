@@ -1,7 +1,7 @@
 /**
- * Momo's quick web answer: OpenAI's Responses API with its web search, no reasoning, a few spoken sentences back. Measured on 15 Nov
- * 2026 (scratchpad voice-plan/measure, 18 runs): first words 1.9 s and the whole answer 2.5 s at the median; `minimal` effort is
- * refused with web search, and `low` took 3.0 s and up to 7.7 s.
+ * Momo's quick web answer: OpenAI's Responses API with its web search at low reasoning, a few spoken sentences back. With no
+ * reasoning it answered sooner (2.5 s against 3.0 s at the median, 18 runs each, 15 Nov 2026) but twice dated a launch wrong, and
+ * Momo's lead-in covers the wait (DECISIONS 59); `minimal` effort is refused with web search.
  */
 
 export const WEB_MODEL = 'gpt-5.4-mini';
@@ -57,7 +57,7 @@ export async function ask(send: typeof fetch, opts: { apiKey: string; model?: st
       instructions: instructions(today),
       input: question,
       tools: [{ type: 'web_search' }],
-      reasoning: { effort: opts.effort || 'none' },
+      reasoning: { effort: opts.effort || 'low' },
     }),
     signal: AbortSignal.timeout(WAIT_MS),
   });
