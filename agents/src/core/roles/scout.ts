@@ -7,7 +7,7 @@ import { givesWay, KNOWN_MOST, LIBRARY_TOOL, MINDSTORM, newSlots, ROUND_MOST, sa
 import { fittedTitle } from '../fitted.ts';
 import { siteOf } from '../views.ts';
 import { toBase64 } from './intake/plain.ts';
-import { byRule } from './renderer.ts';
+import { byRule, Explore } from './renderer.ts';
 import { AGENT, idFrom, makeItem, makeNode, pickStatus, type RoleContext, type Roles, type Turn } from './types.ts';
 
 const ROLE = 'scout';
@@ -30,14 +30,14 @@ const FAST_MOST = 2;
 const VIDEO_LOOK = 'video';
 
 /** The formats the model writes out itself, each the card the Renderer's rules draw from the item's data. */
-const WRITTEN = ['note', 'steps', 'list', 'facts', 'quote', 'table', 'qa', 'definition', 'proscons'] as const;
+const WRITTEN = ['note', 'steps', 'list', 'facts', 'quote', 'table', 'qa', 'definition', 'proscons', 'callout', 'explorable'] as const;
 type Written = (typeof WRITTEN)[number];
 
 /**
  * One direction as the model writes it. Structured output wants every key present, so an empty string or list means "none".
  * A written format's contents go in a few slots every written format shares: `lines` are steps, list entries, "label | value"
- * figures or table rows, `pros` and `cons` the two sides, `subject` a question or a term, `passage` an answer, a meaning or words
- * someone said, and `by` who said them.
+ * figures or table rows, `pros` and `cons` the two sides, `subject` a question or a term, `passage` an answer, a meaning, a warning
+ * or words someone said, and `by` who said them. An explorable is written in the slots the Renderer's look call writes one in.
  */
 const Direction = z.object({
   angle: z.string(),
@@ -52,6 +52,10 @@ const Direction = z.object({
   subject: z.string(),
   passage: z.string(),
   by: z.string(),
+  controls: Explore.shape.controls,
+  formula: z.string(),
+  numbers: z.array(z.number()),
+  unit: z.string(),
   images: z.array(z.object({ title: z.string(), prompt: z.string() })),
   source: z.string(),
   lookups: z.array(z.string()),
@@ -436,7 +440,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
       '- title: about 26 characters in English or 18 in Chinese, so it stands whole on the two lines a small card gives a title; specific, no trailing period.',
       '- why: under eight words, shown on the thread that joins this card to the original. It names where this direction goes ("what the studies found").',
       '- tags: 2 to 4 short lowercase words.',
-      '- body, lines, pros, cons, subject, passage, by, images, source, lookups: as the format says. Leave the ones a format does not use empty.',
+      '- body, lines, pros, cons, subject, passage, by, controls, formula, numbers, unit, images, source, lookups: as the format says. Leave the ones a format does not use empty.',
       '',
       'Written formats, each the content itself, with names, numbers and specifics:',
       '- "note": body is two to four sentences of real substance: a concrete idea, a what-if, an objection, a piece of knowledge. Not a description of what the user already has, and not advice to explore something.',
@@ -448,6 +452,8 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
       '- "qa": subject is a question the user would want answered, and passage its answer in one to three sentences. body is one sentence of context, or empty.',
       '- "definition": subject is a term, and passage what it means in one or two sentences, without repeating the term. body is one sentence of context, or empty.',
       '- "proscons": pros and cons are two to four points each, for and against one choice, each a few words or one sentence. body is one sentence naming the choice.',
+      '- "callout": passage is a warning, a caveat or a pitfall the user must not miss, in one or two sentences. body is one sentence of context, or empty.',
+      '- "explorable": the idea shows how one thing changes with another, so the user learns by changing it. controls has one control. To contrast two to four states, its kind is "segmented", or "toggle" for two; label names what changes, states are the short names of the states, and texts one sentence for each state, in the same order. To relate quantities, its kind is "slider", with label, unit, name (a short name for the quantity, used in formula), min and max (the range worth exploring), and values (two to five values of it); formula gives the result from name, written with numbers, + - * / ^, brackets and min, max, round, sqrt, exp, ln, and nothing else; subject names the result, unit is its unit, and numbers is the result at each of the values, as the formula gives it. body is one sentence on what it shows.',
       '',
       'Other formats:',
       '- "image": images has one entry. Its prompt is a complete prompt for an image generator: subject, composition, style, palette, light. When it extends a picture the user dropped, carry over that picture\'s style and palette so it reads as the same world. body is one sentence saying what it shows.',
@@ -525,6 +531,10 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
       subject: '',
       passage: '',
       by: '',
+      controls: [],
+      formula: '',
+      numbers: [],
+      unit: '',
       images: [],
       source: video ? '' : source,
       lookups: [search],
@@ -552,7 +562,8 @@ interface Form {
   lacks?: string;
 }
 
-const entries = (lines: string[]): string[] => [...new Set(lines.map((line) => oneLine(line, 300)).filter(Boolean))];
+/** The entries of a list the model wrote, one to a line, without a bullet or a number it put in front, which the card draws itself. */
+const entries = (lines: string[]): string[] => [...new Set(lines.map((line) => oneLine(line, 300).replace(/^(?:[-*•·]|\d{1,2}[.)])\s+/, '')).filter(Boolean))];
 /** The cells of a row written with "|" between them, without the fence a row may have at either end. */
 const cellsOf = (row: string): string[] => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => oneLine(cell, 120));
 const unquoted = (words: string): string => oneLine(words, 600).replace(/^["'“”‘’「『]+|["'“”‘’」』]+$/g, '').trim();
@@ -578,9 +589,10 @@ const FORMS: Record<Written, { name: string; fill: (d: Direction) => Form }> = {
   facts: {
     name: 'facts',
     fill: (d) => {
+      // A figure asked for as "label | value" sometimes comes as "label: value".
       const facts = entries(d.lines).map((line) => {
-        const [label = '', ...value] = cellsOf(line);
-        return { label, value: value.join(' ').trim() };
+        const [label = '', ...value] = line.includes('|') ? cellsOf(line) : line.split(/:\s+/);
+        return { label: label.trim(), value: value.join(line.includes('|') ? ' ' : ': ').trim() };
       });
       const whole = facts.filter((fact) => fact.label && fact.value);
       return {
@@ -633,6 +645,45 @@ const FORMS: Record<Written, { name: string; fill: (d: Direction) => Form }> = {
       };
     },
   },
+  callout: {
+    name: 'a callout',
+    fill: (d) => {
+      const text = oneLine(d.passage, 600);
+      return { lines: [d.body, text], data: { callout: { text, tone: 'caution' } }, lacks: text ? undefined : 'no warning' };
+    },
+  },
+  explorable: {
+    name: 'an explorable',
+    fill: (d) => {
+      const [control] = d.controls;
+      if (!control || d.controls.length > 1) return { lines: [d.body], data: {}, lacks: `${d.controls.length} controls, where it takes one` };
+      const label = oneLine(control.label, 60);
+      if (control.kind === 'slider') {
+        // The item is each value and its result, one to a line, which the card's curve shows whole. A slider's card draws no lines over
+        // itself, so the body is only the item's summary.
+        const results = d.numbers;
+        const lines = control.values.map((value, n) => `${label} ${measured(value, control.unit)}: ${oneLine(d.subject, 60)} ${results[n] === undefined ? '' : measured(results[n]!, d.unit)}`.trim());
+        return {
+          lines,
+          data: { explorable: { controls: [control], formula: d.formula, subject: d.subject, unit: d.unit, numbers: results } },
+          lacks: atLeast(control.values.length, 2, 'values') ?? (results.length !== control.values.length ? `${results.length} results for its ${control.values.length} values` : !d.formula.trim() ? 'no formula' : undefined),
+        };
+      }
+      const states = control.states.map((name, n) => ({ name: oneLine(name, 40), text: oneLine(control.texts[n] ?? '', 300) }));
+      const lines = states.map(({ name, text }) => (text ? `${name}: ${text}` : name));
+      return {
+        lines: [d.body, label, ...lines],
+        data: { explorable: { controls: [{ ...control, kind: states.length === 2 ? 'toggle' : 'segmented', states: states.map((s) => s.name), texts: lines }], formula: '', subject: '', unit: '', numbers: [] } },
+        lacks: atLeast(states.length, 2, 'states') ?? (states.length > 4 ? `${states.length} states, more than the 4 it holds` : states.some((state) => !state.name || !state.text) ? 'a state without its name or its words' : undefined),
+      };
+    },
+  },
+};
+
+/** A number with its unit as a text writes it: a word after a space, a mark such as "%" against it. */
+const measured = (value: number, unit: string): string => {
+  const sign = unit.trim();
+  return !sign ? String(value) : /^\p{L}/u.test(sign) ? `${value} ${sign}` : `${value}${sign}`;
 };
 
 /**

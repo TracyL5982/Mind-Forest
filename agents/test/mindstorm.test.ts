@@ -42,7 +42,7 @@ function ideas(k: Kit): void {
     const count = Number(/Return exactly (\d+) directions/.exec(req.user)![1]);
     return {
       reading: '',
-      directions: Array.from({ length: count }, (_, i) => ({ angle: `angle ${run}.${i}`, format: 'note', title: `Idea ${run}.${i + 1}`, body: 'Something new.', why: `new ${run}`, tags: [], lines: [], pros: [], cons: [], subject: '', passage: '', by: '', images: [], source: '', lookups: [] })),
+      directions: Array.from({ length: count }, (_, i) => ({ angle: `angle ${run}.${i}`, format: 'note', title: `Idea ${run}.${i + 1}`, body: 'Something new.', why: `new ${run}`, tags: [], lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [], formula: '', numbers: [], unit: '', images: [], source: '', lookups: [] })),
     };
   });
 }
@@ -166,7 +166,7 @@ test('a subject that names something the user has makes that thing the root, and
     { title: 'Rear Window', by: 'Alfred Hitchcock', date: '1954', text: 'A photographer watches his neighbours.', url: 'https://films.example/rear-window' },
   ]);
   k.model
-    .on('scout.ideate', () => ({ reading: '', directions: [{ angle: 'the films', format: 'find', title: 'Hitchcock films', body: '', why: 'his other films', tags: [], lines: [], pros: [], cons: [], subject: '', passage: '', by: '', images: [], source: 'films', lookups: ['vertigo'] }] }))
+    .on('scout.ideate', () => ({ reading: '', directions: [{ angle: 'the films', format: 'find', title: 'Hitchcock films', body: '', why: 'his other films', tags: [], lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [], formula: '', numbers: [], unit: '', images: [], source: 'films', lookups: ['vertigo'] }] }))
     .on('scout.curate', () => ({ chosen: [1, 2].map((number) => ({ number, note: '', excerpt: '' })) }));
 
   pipeline.utter('make a tree about vertigo', { selection: [] }, true);

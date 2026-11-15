@@ -5,7 +5,7 @@ import { byRule } from '../src/core/roles/renderer.ts';
 import { scout } from '../src/core/roles/scout.ts';
 import { AGENT, kit, type Kit } from './kit.ts';
 
-const EMPTY = { lines: [], pros: [], cons: [], subject: '', passage: '', by: '', images: [], source: '', lookups: [] };
+const EMPTY = { lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [], formula: '', numbers: [], unit: '', images: [], source: '', lookups: [] };
 
 function written(format: string, title: string, fields: Record<string, unknown>) {
   return { angle: `angle of ${title}`, format, title, body: '', why: `toward ${title}`, tags: ['horror'], ...EMPTY, ...fields };
@@ -67,10 +67,46 @@ const SHAPES: { direction: ReturnType<typeof written>; card: string; props: Reco
     card: 'proscons',
     props: { pros: ['The threat is concrete', 'The payoff is earned'], cons: ['The mystery is gone', 'The effects can date'], heads: ['For', 'Against'], above: ['Whether the standoff shows its monster.'] },
   },
+  {
+    direction: written('callout', 'Never test with a match', { body: 'The blood test as staged in 1982.', passage: 'A naked flame near a petrol can on set burns the crew, not the Thing.' }),
+    card: 'callout',
+    props: { text: 'A naked flame near a petrol can on set burns the crew, not the Thing.', tone: 'caution', above: ['The blood test as staged in 1982.'] },
+  },
+  {
+    direction: written('explorable', 'The scene at three hours', {
+      body: 'The same corridor as the light goes.',
+      controls: [control({ kind: 'segmented', label: 'Light', states: ['Noon', 'Dusk', 'Night'], texts: ['Every corner is visible.', 'The far end is grey.', 'Only the torch beam shows.'] })],
+    }),
+    card: 'explorable',
+    props: {
+      controls: [{ kind: 'segmented', label: 'Light', states: [{ name: 'Noon', text: 'Noon: Every corner is visible.' }, { name: 'Dusk', text: 'Dusk: The far end is grey.' }, { name: 'Night', text: 'Night: Only the torch beam shows.' }] }],
+      output: { kind: 'text' },
+      above: ['The same corridor as the light goes.', 'Light'],
+    },
+  },
+  {
+    direction: written('explorable', 'How long the fuse burns', {
+      body: 'A fuse burns at a steady 2 cm a second.',
+      controls: [control({ kind: 'slider', label: 'Fuse length', name: 'length', unit: 'cm', min: 0, max: 40, values: [10, 20, 30] })],
+      formula: 'length / 2',
+      subject: 'Seconds to the blast',
+      unit: 's',
+      numbers: [5, 10, 15],
+    }),
+    card: 'explorable',
+    props: {
+      controls: [{ kind: 'slider', name: 'length', label: 'Fuse length', unit: 'cm', min: 0, max: 40, step: 1, values: [10, 20, 30] }],
+      output: { kind: 'chart', label: 'Seconds to the blast', unit: 's', formula: ['length', 2, '/'], values: [5, 10, 15] },
+    },
+  },
 ];
 
+function control(fields: Record<string, unknown>) {
+  return { kind: 'slider', label: '', states: [], texts: [], name: '', unit: '', min: 0, max: 0, values: [], ...fields };
+}
+
 for (const { direction, card, props } of SHAPES) {
-  test(`a ${card} the Scout writes lands as a ${card} card that shows every field it wrote`, async () => {
+  test(`${card} "${direction.title}" the Scout writes lands as its card, which shows every field it wrote`, async () => {
     const { k, items } = await landed(direction);
 
     assert.equal(items.length, 1);
@@ -100,6 +136,17 @@ const SHORT: { direction: ReturnType<typeof written>; says: RegExp; words: strin
   { direction: written('table', 'One row', { lines: ['Film | Threat', 'The Thing | A copy'] }), says: /not a table: it has only 1 of the 2 rows it needs/, words: ['The Thing'] },
   { direction: written('qa', 'No answer', { subject: 'Why does the test work?' }), says: /not a question and answer: it has no answer/, words: ['Why does the test work?'] },
   { direction: written('definition', 'No meaning', { subject: 'Mexican standoff' }), says: /not a definition: it has no meaning/, words: ['Mexican standoff'] },
+  { direction: written('callout', 'No warning', { body: 'Something to watch for.' }), says: /not a callout: it has no warning/, words: ['Something to watch for.'] },
+  {
+    direction: written('explorable', 'One state', { controls: [control({ kind: 'toggle', label: 'Light', states: ['Noon'], texts: ['Every corner is visible.'] })] }),
+    says: /not an explorable: it has only 1 of the 2 states it needs/,
+    words: ['Noon: Every corner is visible.'],
+  },
+  {
+    direction: written('explorable', 'Results missing', { controls: [control({ label: 'Fuse length', name: 'length', unit: 'cm', min: 0, max: 40, values: [10, 20] })], formula: 'length / 2', subject: 'Seconds', unit: 's', numbers: [5] }),
+    says: /not an explorable: it has 1 results for its 2 values/,
+    words: ['Fuse length 10 cm: Seconds 5 s', 'Fuse length 20 cm: Seconds'],
+  },
   { direction: written('proscons', 'One side', { pros: ['Concrete', 'Earned'], cons: ['Dated'] }), says: /not pros and cons: it has only 1 of the 2 points against it needs/, words: ['Concrete', 'Earned', 'Dated'] },
 ];
 
@@ -130,4 +177,24 @@ test('a written idea with no words at all lands nothing', async () => {
 
   assert.deepEqual(items, []);
   assert.ok(k.notes.some((n) => n.includes('"Nothing here" came with no words')));
+});
+
+test('a bullet or a number the model puts in front of an entry is the card\'s to draw, and a figure may come as "label: value"', async () => {
+  const listed = await landed(written('list', 'Rooms that trap', { lines: ['- The lab', '• The kennel', '* The storeroom'] }));
+  const stepped = await landed(written('steps', 'Stage it', { lines: ['1. Tie everyone to chairs', '2) Heat a wire', '3. Touch each sample'] }));
+  const figured = await landed(written('facts', 'The Thing in numbers', { lines: ['Released: 1982', 'Director: John Carpenter'] }));
+
+  assert.deepEqual(cardOf(listed.k, listed.items[0]!).props, { items: ['The lab', 'The kennel', 'The storeroom'] });
+  assert.deepEqual(cardOf(stepped.k, stepped.items[0]!).props, { steps: ['Tie everyone to chairs', 'Heat a wire', 'Touch each sample'] });
+  assert.deepEqual(cardOf(figured.k, figured.items[0]!).props, { facts: [{ label: 'Released', value: '1982' }, { label: 'Director', value: 'John Carpenter' }] });
+});
+
+test('an explorable whose formula does not give the results it states lands as plain text, and the log names the card the text gets', async () => {
+  const { k, items } = await landed(
+    written('explorable', 'A wrong formula', { controls: [control({ label: 'Fuse length', name: 'length', unit: 'cm', min: 0, max: 40, values: [10, 20, 30] })], formula: 'length * 2', subject: 'Seconds', unit: 's', numbers: [5, 10, 15] }),
+  );
+
+  assert.notEqual(cardOf(k, items[0]!).component, 'explorable');
+  assert.ok(items[0]!.text.includes('Fuse length 30 cm: Seconds 15 s'));
+  assert.ok(k.notes.some((n) => /"A wrong formula" lands as plain text, not an explorable: the card's check draws it as/.test(n)), k.notes.join('\n'));
 });

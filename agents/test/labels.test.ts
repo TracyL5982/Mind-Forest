@@ -8,7 +8,7 @@ import { kit } from './kit.ts';
 
 const PAPERS = { id: 'papers', name: 'Research papers', goodFor: 'What studies found.', query: 'Title words.', show: 1 };
 const WEB = { id: 'web', name: 'The web', goodFor: 'Anything current.', query: 'A web search.', show: 1 };
-const direction = (format: string, title: string, more: Record<string, unknown> = {}) => ({ angle: title, format, title, body: 'Something new.', why: 'new', tags: [], lines: [], pros: [], cons: [], subject: '', passage: '', by: '', images: [], source: '', lookups: [], ...more });
+const direction = (format: string, title: string, more: Record<string, unknown> = {}) => ({ angle: title, format, title, body: 'Something new.', why: 'new', tags: [], lines: [], pros: [], cons: [], subject: '', passage: '', by: '', controls: [], formula: '', numbers: [], unit: '', images: [], source: '', lookups: [], ...more });
 
 /** Every role the service runs, over a scripted model, with what each tells the clients kept in order. */
 function service() {
