@@ -15,6 +15,9 @@ interface Row {
   firstSoundMs: number | null;
   answerMs: number | null;
   toolMs: number | null;
+  outputMs?: number | null;
+  searched?: { ms: number; searches?: number; failed?: string }[];
+  calls?: { name: string; atMs: number | null }[];
   responses: { purpose: string; text: string; firstAudioMs: number | null }[];
   cards?: { atMs: number | null; title: string }[];
   notes?: { atMs: number | null; text: string }[];
@@ -40,6 +43,14 @@ for (const file of process.argv.slice(2)) {
   console.log(`known answers, first sound: ${spread(nums(knows.map((r) => r.firstSoundMs)))}`);
   const web = rows.filter((r) => r.chose.includes('web_answer'));
   console.log(`web: lead-in ${spread(nums(web.map((r) => r.firstSoundMs)))}; answer ${spread(nums(web.map((r) => r.answerMs)))}, within 5 s in ${nums(web.map((r) => r.answerMs)).filter((x) => x <= 5000).length}; the search ${spread(nums(web.map((r) => r.toolMs)))}`);
+  const timed = web.filter((r) => r.outputMs != null && r.answerMs != null && r.firstSoundMs != null);
+  if (timed.length) {
+    const callAt = (r: Row) => r.calls?.find((c) => c.name === 'web_answer')?.atMs ?? null;
+    const part = (f: (r: Row) => number | null) => spread(nums(timed.map(f)));
+    const failed = timed.flatMap((r) => r.searched ?? []).filter((s) => s.failed);
+    if (failed.length) console.log(`web searches that failed: ${failed.length} (${failed.map((s) => `${sec(s.ms)} s, ${s.failed}`).join('; ')})`);
+    console.log(`web, part by part: turn over ${part((r) => r.overMs)}; over to lead-in ${part((r) => (r.overMs === null ? null : r.firstSoundMs! - r.overMs))}; lead-in to the call ${part((r) => (callAt(r) === null ? null : callAt(r)! - r.firstSoundMs!))}; the search model ${part((r) => r.searched?.[0]?.ms ?? null)}; call to its answer handed over ${part((r) => r.toolMs)}; handed over to the answer's first sound ${part((r) => r.answerMs! - r.outputMs!)}`);
+  }
   const per = rows.map((r) => r.dollars.realtime + r.dollars.hearing + r.dollars.web);
   console.log(`cost a turn: median $${median(per).toFixed(4)}, mean $${(per.reduce((a, b) => a + b, 0) / per.length).toFixed(4)}, total $${per.reduce((a, b) => a + b, 0).toFixed(3)} (realtime $${rows.reduce((a, r) => a + r.dollars.realtime, 0).toFixed(3)}, hearing $${rows.reduce((a, r) => a + r.dollars.hearing, 0).toFixed(3)}, web $${rows.reduce((a, r) => a + r.dollars.web, 0).toFixed(3)})`);
   const words = rows.map((r) => r.responses.filter((x) => x.purpose !== 'results').map((x) => x.text).join(' ').split(/\s+/).filter(Boolean).length);

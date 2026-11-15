@@ -771,3 +771,45 @@ In sample conversations on the full model (`scripts/live-samples.ts`, cards land
 **Not done.** The Quest itself: its network, AudioTrack, the room and real voices. A wrap-up the user speaks over before it is heard is not said again. A follow-up after Momo asks something still needs "hey Momo", since nothing is heard without the name. Long talks past the realtime session's 32,000 tokens or 60 minutes are not handled. Momo's answers run longer than the one or two sentences asked for, about 40 words at the median.
 
 **Alternatives.** Mini, at less than half the cost, when its card talk is good enough: `MIND_PALACE_LIVE_MODEL=gpt-realtime-2.1-mini`. A faster turn at the cost of thinking pauses: `MIND_PALACE_LIVE_PAUSE=1200`. Speaking every card, or only the wrap-up: the plan's other two choices, not built.
+
+## 60. Live voice: a web answer waits mostly on the search model, and nothing tried cuts it measurably
+
+**Decision.** Momo's web answers stay as 59 left them: a lead-in, then `web_answer` at low effort, then the answer. Of everything tried, only a shorter lead-in moved its part, and that part is too small to show in the answer. `scripts/live-bench.ts` now records when each response began, how long the search model took and how many searches it made (or that it failed), and when its answer was handed to Momo; `scripts/live-summary.ts` prints a web answer part by part.
+
+**Why.** The user wants a question that needs the web answered quickly, and the plan's target is a lead-in within 1.5 s and the answer within 5 s. The answer's first words came 7.7 s after the end of speech at the median (59).
+
+**Where the time goes.** The eight web requests of `scripts/live-requests.ts`, said into files and never played, on `gpt-realtime-2.1`, two rounds alternating per request with the candidate below. Today's code, 16 turns:
+
+| Part | Median (range) | What sets it |
+|---|---|---|
+| End of speech to the turn being over | 1.65 s (0.68 to 2.00) | the turn detection, or the 1.8 s pause rule (59) |
+| Then to the lead-in's first sound | 0.72 s (0.55 to 0.89) | the realtime model |
+| Then to the `web_answer` call | 0.96 s (0.57 to 1.42) | the model writes the lead-in's audio before the call's arguments, so this grows with the lead-in (11 words at the median) |
+| The search model | 4.10 s (2.06 to 7.25) | OpenAI's web search and the model's thinking around it |
+| Its answer handed over to the answer's first sound | 0.68 s (0.55 to 0.91) | the realtime model |
+| End of speech to the answer's first sound | 8.06 s (5.77 to 10.32); run medians 8.06 and 8.34 s | |
+
+The search itself, streamed from the Responses API (16 calls of the same questions): 0.39 s to the response beginning, 0.49 s of thinking before the first search, 1.90 s searching, 0.46 s of thinking after, 0.45 s writing the answer. Six of the 16 bench answers made two searches, which is most of the spread. One of 32 searches ran past the 10 s limit and failed; Momo said so and asked again, and that answer came at 13.45 s. A call starts the search as soon as its arguments are complete (`response.function_call_arguments.done`); the response ends 6 to 26 ms later, so nothing waits on it.
+
+The parts after the turn is over and outside the search add up to about 2.4 s, so the 5 s target needs the search model to take about 1 s, against 3.4 to 4.1 s at the median in every run here.
+
+**Tried, one at a time.**
+
+| Candidate | How measured | Result |
+|---|---|---|
+| A lead-in of two to four words ("Let me look", "One sec, checking") | bench, 16 turns a side, alternating per request | lead-in 6 words against 11; lead-in to call 0.63 s against 0.96 s, 0.29 s sooner in a pair, 14 of 16; the call 0.23 s sooner, 12 of 16; the lead-in heard no sooner (+0.02 s, 8 of 16); the answer 7.72 s against 8.06 s, but +0.07 s in a pair, 7 of 16, because the search model moved by -2.41 to +2.97 s between the two runs of one request |
+| Calling `web_answer` before the lead-in | typed questions on the realtime model, 4 per variant | told to call first, it still spoke first in 3 of 4; the one that called first ended its response at the call with nothing said, and a lead-in asked for then was first heard 1.46 s after the response began, against 0.59 to 0.86 s; a call before the audio in the same response never happened |
+| Web search with `search_context_size: low` | search model alone, 8 pairs | 4.23 s against 3.53 s at the median; three searches in two answers |
+| `tool_choice: required`, `text.verbosity: low` | search model alone, 8 each | 3.21 s and 3.55 s against 3.38 s: within the spread |
+| `max_tool_calls: 1` | search model alone, 16 pairs | 3.68 s against 3.47 s; -0.23 s in a pair, 10 of 16, range -3.17 to +2.40 s; two searches were still counted in 6 of 16 |
+| Warming the connection before the call | 6 cold calls, 6 after a warm-up request | 478 ms to the response's headers cold against 527 ms warm: the 0.4 s is OpenAI's before the stream begins |
+
+Not built: streaming the search's answer into Momo's response, since writing the answer takes 0.45 s at the median and handing Momo its first sentence early saves at most about half of that; asking two searches at once and taking the first, since the quicker answer is the one that searched less, and those were the incomplete ones (the Vermeer question answered "nothing announced" while a Vermeer show was on).
+
+The shorter lead-in is not kept. It is real at its part, 0.23 to 0.29 s, about 3% of the wait, and no answer came measurably sooner in 16 pairs. Its lead-ins are no more varied: 6 of 16 open with its example "One sec, checking" and 9 with "Let me check", as all 16 of today's do.
+
+**Right answers.** The web answer is the same on both sides. Checked against the sources: the Booker winner and date (M. John Harrison, The End of Everything, 9 November 2026) in 4 of 4; the Mauritshuis on Mondays, 13:00 to 18:00, in 4 of 4; de Kooning at Work and Document Netherlands: New Energy until 17 January 2027 (the Rijksmuseum's pages); the Van Gogh Museum at €25, students €16, under 18 free; the Thyssen-Bornemisza's Vermeer show, 9 October 2026 to 10 January 2027, in the 2 answers that named it. Wrong: WORN's closing as 27 March 2027 in 1 of 4 (the Rijksmuseum gives 21 March, as in 59); "Sentinel-6B for November 16, 2026" in 1 of 4 NASA answers, a satellite that launched on 17 November 2025 (ESA), the year error 59 found with ESCAPADE. Incomplete: 2 of 4 Vermeer answers found no show on now. Not confirmed by any source found: the €26 price from 1 January 2027, CRS-25's 29 November date (one launch listing gives it as to be confirmed), the OpenAI news of 13 November, and the weather. In 30 of 32 answers Momo said no date its web answer did not give; the other 2 could not be checked, since the log keeps only 400 characters of a call's output.
+
+**What would reach 5 s.** None of these is taken here, since each trades what the user chose: web answers at effort none (`MIND_PALACE_WEB_EFFORT=none`, about 0.7 to 1 s sooner by 59, with dates wrong more often), ending turns after 1.2 or 1.5 s of quiet (`MIND_PALACE_LIVE_PAUSE`, cutting thinking pauses), or a quicker search than OpenAI's.
+
+**Measured with.** The bench with this commit's changes, run through a copy that swapped the lead-in's wording per turn, and three throwaway probes (the search model streamed, the realtime model's call order, a cold against a warm connection), kept outside the repository. About $3.30 of OpenAI calls: $1.60 for the bench, $1.38 for the search probes, $0.32 for the order probe.
