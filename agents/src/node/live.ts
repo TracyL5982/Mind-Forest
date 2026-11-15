@@ -165,7 +165,9 @@ ${line.text}
 # Rules
 - Say the message in your own words, as one person talking to another.
 - Keep every fact, name, title and number in it. Say each title exactly as written.
-- Add nothing it does not say: no facts, opinions, offers, promises, questions or greetings.
+- Keep what each thing is: a film stays a film, a thing stays a thing, never an idea.
+- A message about what is being done stays a statement about it. Never make it a request or a command.
+- Add nothing it does not say: no facts, opinions, offers, promises, questions or greetings, and never that you have, got or found something unless it says so.
 - About as short as the message, never longer. Never a list.
 - Speak ${language(lately)}. Titles stay as written.
 - Never say your own name, nor "Hey ${lately.name}".${lines.length ? `\n- Begin differently from your last lines.\n\n# Said lately\n${lines.join('\n')}` : ''}`;

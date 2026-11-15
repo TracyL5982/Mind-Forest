@@ -27,7 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   strongTie: 0.8,
   scoutOnDump: true,
   agentName: 'momo',
-  voiceStyle: 'own words',
+  voiceStyle: 'verbatim',
 };
 
 /** What the connected clients can play: player pages from other sites (embeds), and which file types. */
