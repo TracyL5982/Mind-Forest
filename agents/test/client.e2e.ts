@@ -178,7 +178,7 @@ async function main(): Promise<void> {
       await until('the card to redraw', async () => (await fact.locator('.card-foot').textContent()) === 'Seven in ten notice it');
     });
 
-    await check('a second thought dropped on the page makes a second tree, and the first tree does not move', async () => {
+    await check('a second thought dropped on the page makes a second tree, the first tree does not move, and the view goes to the new root once its round is told', async () => {
       const firstTree = await page.locator('.card[data-id]').evaluateAll((els) => els.map((el) => (el as HTMLElement).dataset.id!));
       const before = await places(page, firstTree);
       await page.evaluate(() => {
@@ -193,13 +193,18 @@ async function main(): Promise<void> {
       assert.deepEqual(await places(page, firstTree), before);
       assert.deepEqual(await overlaps(page), []);
       await shot(page, 'desktop-4-second-tree');
+      await page.locator('.card.is-root.is-selected', { hasText: 'Sourdough' }).waitFor();
+      await page.locator('#caption').getByText(/new things under Sourdough/).waitFor();
+      await page.keyboard.press('Escape');
     });
 
     await check("an opened card offers the librarian's questions about it, and picking one asks it", async () => {
+      // The view went to this root when its round was told, which already asked for its questions, so they may come at once.
+      await page.locator('.card.is-pick', { hasText: 'An essay on Sourdough' }).first().click();
       await page.locator('.card.is-root', { hasText: 'Sourdough' }).click();
       const offered = page.locator('#panel').getByRole('group', { name: 'Suggested questions' });
-      assert.equal(await offered.isVisible(), false, 'until the reply comes the card shows what it showed before, and none of the last card');
       await offered.getByRole('button', { name: /^Where does Sourdough/ }).waitFor();
+      assert.ok((await offered.getByRole('button').allTextContents()).every((q) => q.includes('Sourdough')), 'none of the last card');
       const before = await offered.getByRole('button').allTextContents();
       assert.equal(before.length, 3);
       await shot(page, 'desktop-4b-questions');
@@ -386,7 +391,7 @@ async function main(): Promise<void> {
       await shot(page, 'desktop-8-every-shape');
       await page.getByRole('button', { name: 'Open 5' }).click();
       await until('the pile to open', async () => (await count(page, '.card.is-under')) === 0);
-      await page.getByRole('button', { name: 'Close', exact: true }).click();
+      await page.locator('.pane-open', { hasText: 'Close' }).click();
       await until('the pile to close', async () => (await count(page, '.card.is-under')) === 4);
     });
 
@@ -862,7 +867,8 @@ async function wakeChecks(): Promise<void> {
         await until('the page hearing the speaker', async () => (await micStates()).includes('hearing'), 15000);
         await until('the recording posted', async () => posted.length === 1, 15000);
         await page.locator('#caption').getByText('Show me more like this.').waitFor();
-        await until('the reply heard and the page waiting again', async () => (await micStates()).join() === 'starting,waiting,hearing,working,waiting,speaking,waiting', 10000);
+        // The reply, then the line on what the run brought, which may cut the reply short with the stand-in agents' instant runs.
+        await until('the reply heard and the page waiting again', async () => /^starting,waiting,hearing,working,waiting,speaking(,waiting,speaking)?,waiting$/.test((await micStates()).join()), 25000);
         assert.deepEqual(acted, ['Show me more like this.']);
         assert.equal(posted[0]!.mime, 'audio/wav');
         assert.ok(posted[0]!.seconds > 2.4 && posted[0]!.seconds < 4.6, `the recording holds the phrase, the command and the pause: ${posted[0]!.seconds} s`);
@@ -885,7 +891,7 @@ async function wakeChecks(): Promise<void> {
         const sent = posted.at(-1)!;
         assert.ok(sent.quietFirst > 0 && sent.sounds <= 2, `the recording holds "Hey Momo" and what follows, not the talk before: ${JSON.stringify(sent)}`);
         assert.equal(acted.at(-1), 'Show me more like this.');
-        await until('the page waiting again', async () => (await mic()) === 'waiting', 10000);
+        await until('the page waiting again, the reply and the run\'s line read', async () => (await mic()) === 'waiting', 25000);
         assert.deepEqual(problems, []);
       } finally {
         await browser.close();

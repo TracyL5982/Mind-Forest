@@ -133,9 +133,11 @@ export const fakeRoles: Roles = {
     return { name: `handoff-${ctx.now().slice(0, 10)}`, title: trees.map((t) => t.title).join(', ') || 'the whole mindstorm', markdown, bundled: markdown, json: { format: 'mind-palace-handoff', version: 1, trees: trees.map((t) => t.title) }, assets: [] };
   },
 
-  async questions(_ctx, { card }) {
+  async questions(_ctx, { card, history }) {
     await new Promise((r) => setTimeout(r, 300));
     const topic = card.title.split(/\s+/).filter((word, i) => i > 0 || !/^(the|a|an)$/i.test(word)).slice(0, 2).join(' ');
-    return [`Where does ${topic} come from?`, `Who made ${topic} famous?`, `Show me ${topic} in a picture`];
+    // The real role reads the conversation and does not offer what was just asked.
+    const asked = new Set(history.filter((t) => t.who === 'user').map((t) => t.text));
+    return [`Where does ${topic} come from?`, `Who made ${topic} famous?`, `Show me ${topic} in a picture`].filter((q) => !asked.has(q));
   },
 };
