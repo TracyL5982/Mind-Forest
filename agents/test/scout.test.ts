@@ -1070,3 +1070,124 @@ test('a fast find whose choosing hangs holds none of the inventive cards back', 
   assert.ok(!landed.includes('books record 1'));
   assert.deepEqual(picked(k, anchor).map((i) => i.title), landed, 'the hung find takes no slot when it answers');
 });
+
+const note = (n: number) => direction('note', `Idea number ${n}`);
+const work4 = (n: number) => ({ ...work(n, `Painted dance ${n}`), url: `https://museum.example/dance/${n}`, image: `https://img.example/dance-${n}.jpg` });
+
+/**
+ * A film card, papers and books that each hold one record for the fast lane's search ("quick"), museums that hold a work with its
+ * picture, and searches of the museums that answer only when `museum` opens. The main model writes `directions` when `thinking` opens.
+ */
+function visualLanes(directions: unknown[], looks: unknown[], works: object[] = [work4(1)]) {
+  const k = kit();
+  const film = k.seedTree('Film', ['Dolly zoom']);
+  k.world.sources = [WEB, PAPERS, BOOKS, MUSEUMS];
+  for (const source of ['papers', 'books']) k.world.found.set(`${source}:quick`, [record(source, 1)]);
+  k.world.found.set('museums:quick', works as never);
+  k.world.found.set('museums:dance', [work4(7)] as never);
+  for (const w of [work4(1), work4(7)]) k.world.pictures.add(w.image);
+  const museum = gate();
+  const search = k.ctx.tools.sources.search;
+  k.ctx.tools.sources.search = async (id, query) => (id === 'museums' && (await museum.wait), search(id, query));
+  k.model.on('scout.looks', () => ({ looks })).on('scout.curate', () => ({ chosen: [{ number: 1, note: '', excerpt: '' }] }));
+  const thinking = gate();
+  const json = k.model.json.bind(k.model);
+  k.model.json = (async (req: Parameters<typeof json>[0]) => {
+    if (req.role !== 'scout.ideate') return json(req);
+    await thinking.wait;
+    return json(req);
+  }) as typeof k.model.json;
+  k.model.on('scout.ideate', () => ({ reading: '', directions }));
+  return { k, anchor: film.nodeIds[0]!, museum, thinking };
+}
+
+test('when the quick model looks at pictures too, the first fast card is whatever lands first and the second waits for the picture', async () => {
+  const { k, anchor, museum, thinking } = visualLanes([NOTE], [looked('papers', 'quick'), looked('books', 'quick'), looked('museums', 'quick')]);
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  await until(() => k.mind.picks(anchor).length === 1);
+  await settle();
+  assert.equal(k.mind.picks(anchor).length, 1, 'the second written find waits while the museum search is out');
+  assert.match(picked(k, anchor)[0]!.title, /^(papers|books) record 1$/, 'the first card is the first find back');
+  museum.open();
+  await until(() => k.mind.picks(anchor).length === 2);
+  assert.equal(picked(k, anchor)[1]!.title, 'Painted dance 1', 'the slot it waited for goes to the picture');
+  assert.equal(picked(k, anchor)[1]!.kind, 'image');
+  thinking.open();
+  apply(k, await run);
+});
+
+test("a fast look at pictures that finds nothing gives its slot to the find that waited for it", async () => {
+  const { k, anchor, museum, thinking } = visualLanes([NOTE], [looked('papers', 'quick'), looked('books', 'quick'), looked('museums', 'quick')], []);
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  await until(() => k.mind.picks(anchor).length === 1);
+  museum.open();
+  await until(() => k.mind.picks(anchor).length === 2);
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), ['books record 1', 'papers record 1']);
+  thinking.open();
+  apply(k, await run);
+});
+
+test('written ideas cannot take every slot while a find of pictures is out: the slot held for it goes to the picture', async () => {
+  const { k, anchor, museum, thinking } = visualLanes([note(1), note(2), note(3), note(4), note(5), direction('find', 'Dance in paint', { source: 'museums', lookups: ['dance'] })], []);
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  thinking.open();
+  await until(() => k.mind.picks(anchor).length === 4);
+  await settle();
+  assert.equal(k.mind.picks(anchor).length, 4, 'the fifth idea waits while the museum search is out');
+  museum.open();
+  apply(k, await run);
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['Idea number 1', 'Idea number 2', 'Idea number 3', 'Idea number 4', 'Painted dance 7']);
+});
+
+test('a find of pictures written after the inventive lane has its count of directions still runs, and lands in the slot held for it', async () => {
+  // The fast lane fills two of the five slots, so the inventive lane takes four of the six directions it writes.
+  const empty = ['papers', 'books'].map((source) => direction('find', `More from ${source}`, { source, lookups: ['none'] }));
+  const { k, anchor, museum, thinking } = visualLanes([note(1), note(2), ...empty, note(3), direction('find', 'Dance in paint', { source: 'museums', lookups: ['dance'] })], [looked('papers', 'quick'), looked('books', 'quick')]);
+  museum.open();
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  await until(() => k.mind.picks(anchor).length === 2);
+  thinking.open();
+  apply(k, await run);
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).slice(2), ['Idea number 1', 'Idea number 2', 'Painted dance 7']);
+});
+
+const PHOTOS = { id: 'photos', name: 'Unsplash', goodFor: 'Photographs.', query: 'Plain words.', show: 2, visual: true, hotlink: true };
+const photo = (n: number) => ({
+  title: `Harbour in fog ${n}`, by: `Photographer ${n}`, date: '2021', text: `Fog over the harbour, take ${n}.`, from: 'Unsplash',
+  url: `https://unsplash.example/photos/${n}`, image: `https://images.unsplash.example/photo-${n}?ixid=abc&w=640`,
+  credit: { text: `Photo by Photographer ${n} on Unsplash`, url: `https://unsplash.example/@p${n}` }, licence: 'Unsplash License',
+  report: `https://api.unsplash.example/photos/${n}/download?ixid=abc`,
+});
+
+test("a photo whose source forbids copies is looked at and shown from the source's own address, credited, and reported once it lands", async () => {
+  const k = kit();
+  const film = k.seedTree('Film', ['Dolly zoom']);
+  const anchor = film.nodeIds[0]!;
+  k.world.sources = [WEB, PHOTOS];
+  k.world.found.set('photos:fog harbour', [photo(1), photo(2), photo(3)]);
+  const shown: string[][] = [];
+  const json = k.model.json.bind(k.model);
+  k.model.json = (async (req: Parameters<typeof json>[0]) => (req.role === 'scout.curate' && shown.push(req.images ?? []), json(req))) as typeof k.model.json;
+  k.model
+    .on('scout.ideate', () => ({ reading: '', directions: [direction('find', 'Fog on the water', { source: 'photos', lookups: ['fog harbour'] })] }))
+    .on('scout.curate', () => ({ chosen: [{ number: 2, note: 'The fog flattens the harbour.', excerpt: '' }] }));
+
+  apply(k, await scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }));
+
+  assert.deepEqual(shown, [[photo(1).image, photo(2).image, photo(3).image]], 'the model is shown the source’s own addresses');
+  const [pick] = picked(k, anchor);
+  assert.equal(pick!.title, 'Harbour in fog 2');
+  assert.equal(k.assets.links.get(served(k, `/assets/${pick!.source.asset}`)), photo(2).image, 'the card’s picture is relayed from the source');
+  assert.equal(k.assets.files.size, 0, 'no copy of any photo is kept');
+  assert.match(pick!.text, /Photo by Photographer 2 on Unsplash, 2021$/);
+  assert.deepEqual(pick!.data.credit, photo(2).credit);
+  assert.equal(pick!.data.licence, 'Unsplash License');
+  assert.deepEqual(k.world.reported, [`photos: ${photo(2).report}`], 'only the photo that landed is reported');
+});

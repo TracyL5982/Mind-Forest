@@ -129,7 +129,7 @@ const tools: Tools = {
     picture: timed('picture', real.web.picture, (url) => url.slice(0, 60)),
     videos: timed('videos', real.web.videos, (q) => q),
   },
-  sources: { list: real.sources.list, search: timed('source', real.sources.search, (id, q) => `${id}: ${q}`) },
+  sources: { ...real.sources, search: timed('source', real.sources.search, (id, q) => `${id}: ${q}`) },
   images: { generate: timed('image', real.images.generate, (p) => p.slice(0, 50)) },
 };
 

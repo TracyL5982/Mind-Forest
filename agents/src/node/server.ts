@@ -130,7 +130,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     mind,
     roles: opts.roles,
     model: opts.model,
-    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder }),
+    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder, log: opts.log }),
     assets,
     store,
     settings,

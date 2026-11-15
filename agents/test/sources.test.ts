@@ -245,3 +245,100 @@ test('a book comes back as a book with every author, split from the one name App
   assert.deepEqual(book!.authors, ['Henry Louis Gates, Jr.', 'Cass R. Sunstein', 'Richard H. Thaler']);
   assert.equal(book!.by, 'Henry Louis Gates, Jr., Cass R. Sunstein & Richard H. Thaler');
 });
+
+/** One Commons file as the API's file search answers with it. */
+const commonsFile = (index: number, title: string, info: Record<string, unknown>, meta: Record<string, string>) => ({
+  index,
+  title,
+  imageinfo: [{
+    mime: 'image/jpeg', width: 3000, thumburl: `https://upload.example/thumb/${index}/500px.jpg`, descriptionurl: `https://commons.wikimedia.org/wiki/${encodeURIComponent(title)}`,
+    extmetadata: Object.fromEntries(Object.entries(meta).map(([k, value]) => [k, { value }])),
+    ...info,
+  }],
+});
+
+test('a Commons search brings each file as a picture with its author, licence and file page, and leaves out icons and drawings', async () => {
+  const agents: string[] = [];
+  const pages = [
+    commonsFile(2, 'File:Ghost dance.jpg', {}, {
+      ObjectName: 'The Ghost Dance of the Sioux',
+      Artist: '<a href="//commons.wikimedia.org/wiki/User:A">Amédée Forestier</a>',
+      DateTimeOriginal: '1891<div style="display: none;">date QS:P571,+1891</div>',
+      ImageDescription: '<i>The Ghost Dance</i> of the Sioux, an engraving.',
+      LicenseShortName: 'Public domain',
+    }),
+    commonsFile(1, 'File:Arapaho_Ghost_Dance,_1900.jpg', {}, { Artist: '<div class="fn">Unknown author<span style="display: none;">Unknown author</span></div>', DateTimeOriginal: 'photo 1900', LicenseShortName: 'CC BY-SA 4.0' }),
+    commonsFile(3, 'File:Flag icon.png', { mime: 'image/png', width: 120 }, {}),
+    commonsFile(4, 'File:Dance diagram.svg', { mime: 'image/svg+xml' }, {}),
+  ];
+  const send = (async (input: string | URL | Request, init?: RequestInit) => {
+    agents.push(new Headers(init?.headers).get('User-Agent') ?? '');
+    const at = new URL(String(input));
+    assert.equal(at.searchParams.get('gsrsearch'), 'Ghost Dance filetype:bitmap', 'only files that are pictures are searched');
+    return Response.json({ query: { pages } });
+  }) as typeof fetch;
+
+  const found = await makeSources({ send, model: new FakeModel(), read: async () => null }).search('commons', 'Ghost Dance');
+
+  assert.match(agents[0]!, /\(.*https?:\/\//, 'Wikimedia is told how to reach whoever runs the program');
+  assert.deepEqual(found.map((f) => [f.title, f.by, f.date, f.licence]), [
+    ['Arapaho Ghost Dance, 1900', 'Unknown author', '1900', 'CC BY-SA 4.0'],
+    ['The Ghost Dance of the Sioux', 'Amédée Forestier', '1891', 'Public domain'],
+  ]);
+  assert.deepEqual(found[1]!.credit, { text: 'Amédée Forestier, Public domain, via Wikimedia Commons', url: 'https://commons.wikimedia.org/wiki/File%3AGhost%20dance.jpg' });
+  assert.equal(found[1]!.url, found[1]!.credit!.url);
+  assert.equal(found[1]!.image, 'https://upload.example/thumb/2/500px.jpg');
+  assert.equal(found[1]!.text, 'The Ghost Dance of the Sioux, an engraving.');
+  assert.ok(makeSources({ send, model: new FakeModel(), read: async () => null }).list().find((s) => s.id === 'commons')?.visual, 'Commons is offered with no key, as pictures');
+});
+
+/** Unsplash over a scripted network that counts down its hourly allowance in the header it sends. */
+function unsplash(left = 40) {
+  const asked: { url: string; auth: string }[] = [];
+  const send = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    asked.push({ url, auth: new Headers(init?.headers).get('Authorization') ?? '' });
+    const headers = { 'x-ratelimit-remaining': String(left--) };
+    if (url.includes('/download')) return Response.json({ url: 'https://images.unsplash.com/photo-1' }, { headers });
+    return Response.json({
+      results: [{
+        id: 'p1', created_at: '2021-03-04T10:00:00Z', description: null, alt_description: 'fog over a harbour at dawn',
+        user: { name: 'Jeff Sheldon', username: 'ugmonk', links: { html: 'https://unsplash.com/@ugmonk' } },
+        urls: { raw: 'https://images.unsplash.com/photo-1?ixid=abc123', small: 'https://images.unsplash.com/photo-1?ixid=abc123&w=400' },
+        links: { html: 'https://unsplash.com/photos/p1', download_location: 'https://api.unsplash.com/photos/p1/download?ixid=abc123' },
+      }],
+    }, { headers });
+  }) as typeof fetch;
+  return { asked, sources: makeSources({ send, model: new FakeModel(), read: async () => null, keys: { UNSPLASH_ACCESS_KEY: 'key-1' } }) };
+}
+
+test('Unsplash is offered only with its key, and its photos keep its own addresses, credit the photographer and link back with where they came from', async () => {
+  assert.ok(!makeSources({ send: fetch, model: new FakeModel(), read: async () => null }).list().some((s) => s.id === 'photos'));
+  const { asked, sources } = unsplash();
+  const offered = sources.list().find((s) => s.id === 'photos');
+  assert.deepEqual([offered?.visual, offered?.hotlink], [true, true]);
+
+  const [photo] = await sources.search('photos', 'fog harbour');
+
+  assert.equal(asked[0]!.auth, 'Client-ID key-1', 'the key goes in a header, never in an address');
+  assert.ok(!asked[0]!.url.includes('key-1'));
+  const image = new URL(photo!.image!);
+  assert.equal(image.origin + image.pathname, 'https://images.unsplash.com/photo-1', "the picture is Unsplash's own address");
+  assert.equal(image.searchParams.get('ixid'), 'abc123', 'resized, it keeps the ixid Unsplash asks to be kept');
+  assert.equal(photo!.title, 'Fog over a harbour at dawn');
+  assert.deepEqual(photo!.credit, { text: 'Photo by Jeff Sheldon on Unsplash', url: 'https://unsplash.com/@ugmonk?utm_source=mind_palace&utm_medium=referral' });
+  assert.equal(photo!.url, 'https://unsplash.com/photos/p1?utm_source=mind_palace&utm_medium=referral');
+
+  await sources.report('photos', photo!);
+  await sources.report('photos', { ...photo!, report: 'https://elsewhere.example/steal' });
+
+  assert.deepEqual(asked.slice(1).map((a) => [a.url, a.auth]), [['https://api.unsplash.com/photos/p1/download?ixid=abc123', 'Client-ID key-1']], 'the download is reported to Unsplash alone');
+});
+
+test('Unsplash stops being offered when its hourly allowance comes down to the few kept for download reports', async () => {
+  const { sources } = unsplash(6);
+  await sources.search('photos', 'fog harbour');
+  assert.ok(sources.list().some((s) => s.id === 'photos'), 'six left: still offered');
+  await sources.search('photos', 'fog harbour');
+  assert.ok(!sources.list().some((s) => s.id === 'photos'), 'five left: kept for the reports');
+});

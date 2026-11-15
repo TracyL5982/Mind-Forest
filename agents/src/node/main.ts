@@ -75,7 +75,12 @@ const running = await startServer({
   model,
   roles,
   token: env.MIND_PALACE_TOKEN || undefined,
-  keys: { YOUTUBE_API_KEY: env.YOUTUBE_API_KEY, TMDB_API_KEY: env.TMDB_API_KEY, EUROPEANA_API_KEY: env.EUROPEANA_API_KEY, GUARDIAN_API_KEY: env.GUARDIAN_API_KEY, OPENAI_API_KEY: env.OPENAI_API_KEY, MIND_PALACE_SEARCH_MODEL: env.MIND_PALACE_SEARCH_MODEL },
+  keys: {
+    YOUTUBE_API_KEY: env.YOUTUBE_API_KEY, TMDB_API_KEY: env.TMDB_API_KEY, EUROPEANA_API_KEY: env.EUROPEANA_API_KEY, GUARDIAN_API_KEY: env.GUARDIAN_API_KEY,
+    UNSPLASH_ACCESS_KEY: env.UNSPLASH_ACCESS_KEY, OPENAI_API_KEY: env.OPENAI_API_KEY, MIND_PALACE_SEARCH_MODEL: env.MIND_PALACE_SEARCH_MODEL,
+    // Pictures are made on fal only when both are set; otherwise on the Meta API's muse-image-1.0.
+    FAL_KEY: env.FAL_KEY, MIND_PALACE_FAL_MODEL: env.MIND_PALACE_FAL_MODEL,
+  },
   speak: !fake && env.OPENAI_API_KEY ? openaiSpeech(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_VOICE_MODEL, voice: env.MIND_PALACE_VOICE }) : undefined,
   live:
     !fake && env.OPENAI_API_KEY && env.MIND_PALACE_LIVE !== 'off'

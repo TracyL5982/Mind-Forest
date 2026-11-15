@@ -50,3 +50,39 @@ test('a picture is kept only when it loads as a picture of some size, which leav
   for (const name of ['pixel.gif', 'page.html', 'gone.jpg']) assert.equal(await tools.picture(at(name)), null, name);
   assert.equal(assets.files.size, 1);
 });
+
+/** The picture maker over a scripted fal, with the keys given. */
+function painter(keys: Record<string, string | undefined>, fal: (body: Record<string, unknown>) => Response) {
+  const posted: { url: string; auth: string; body: Record<string, unknown> }[] = [];
+  const send = (async (input: string | URL | Request, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+    posted.push({ url: String(input), auth: new Headers(init?.headers).get('Authorization') ?? '', body });
+    return fal(body);
+  }) as typeof fetch;
+  const model = new FakeModel();
+  const assets = new MemoryAssets();
+  return { images: makeTools({ model, assets, fetch: send, keys }).images, model, assets, posted };
+}
+
+const JPEG = `data:image/jpeg;base64,${Buffer.from('a picture').toString('base64')}`;
+
+test('with a fal key and model, a picture is made on fal and stored as the picture fal sent back', async () => {
+  const { images, model, assets, posted } = painter({ FAL_KEY: 'fal-1', MIND_PALACE_FAL_MODEL: 'blackforestlabs/flux-3/klein/text-to-image' }, () => Response.json({ images: [{ url: JPEG }] }));
+
+  const { asset } = await images.generate('a lone dancer in an empty marble hall at night');
+
+  assert.deepEqual(posted.map((p) => [p.url, p.auth, p.body.prompt]), [['https://fal.run/blackforestlabs/flux-3/klein/text-to-image', 'Key fal-1', 'a lone dancer in an empty marble hall at night']]);
+  assert.equal(new TextDecoder().decode(assets.files.get(asset)!.bytes), 'a picture');
+  assert.equal(assets.files.get(asset)!.mime, 'image/jpeg');
+  assert.equal(model.calls.filter((c) => c.kind === 'image').length, 0, 'the Meta model makes nothing');
+});
+
+test('without the fal key, or when fal fails, the picture is made by the Meta model', async () => {
+  for (const keys of [{ MIND_PALACE_FAL_MODEL: 'blackforestlabs/flux-3/klein/text-to-image' }, { FAL_KEY: 'fal-1' }, { FAL_KEY: 'fal-1', MIND_PALACE_FAL_MODEL: 'blackforestlabs/flux-3/klein/text-to-image' }]) {
+    const { images, model, posted } = painter(keys, () => new Response('busy', { status: 503 }));
+    const { asset } = await images.generate('a circle of dancers');
+    assert.ok(asset, JSON.stringify(keys));
+    assert.equal(model.calls.filter((c) => c.kind === 'image').length, 1, JSON.stringify(keys));
+    assert.equal(posted.length, keys.FAL_KEY && keys.MIND_PALACE_FAL_MODEL ? 1 : 0, JSON.stringify(keys));
+  }
+});

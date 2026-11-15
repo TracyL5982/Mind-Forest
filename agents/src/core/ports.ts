@@ -78,6 +78,17 @@ export interface Source {
   show: number;
   /** Its records are things to look at, so one without a picture is not shown. */
   visual?: boolean;
+  /**
+   * Its terms say its pictures are shown from its own addresses and never copied, as Unsplash's do. The model looks at them there,
+   * and a card's picture is a linked asset that the service relays from that address each time it is shown.
+   */
+  hotlink?: boolean;
+}
+
+/** The attribution a source's terms ask for on a record, such as "Photo by Jeff Sheldon on Unsplash", and the page it links to. */
+export interface Credit {
+  text: string;
+  url?: string;
 }
 
 /** One record a source returned. */
@@ -114,6 +125,12 @@ export interface Found {
   authorsCut?: boolean;
   /** The journal, conference or repository a paper appeared in. */
   venue?: string;
+  /** Who to credit and under what licence, when the source asks for that to be shown with the record. */
+  credit?: Credit;
+  /** The licence the record may be reused under, as its source names it ("CC BY-SA 4.0", "Public domain"). */
+  licence?: string;
+  /** An address the source asks to be told at when the record is put in front of the user, as Unsplash counts a download. */
+  report?: string;
 }
 
 /** A video that can be played inside a client. */
@@ -148,6 +165,8 @@ export interface Tools {
     list(): Source[];
     /** Searches one source. An unknown source or a failed search gives an empty list or throws. */
     search(id: string, query: string): Promise<Found[]>;
+    /** Tells a record's source that the record is now in front of the user, when the record carries `report`. Never throws. */
+    report(id: string, record: Found): Promise<void>;
   };
   instagram: {
     /** The connected account's own recent posts. */

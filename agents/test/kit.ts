@@ -37,6 +37,8 @@ export interface FakeWorld {
   /** Picture addresses that can be downloaded. */
   pictures: Set<string>;
   videos: Map<string, Playable>;
+  /** What each record's source was told when the record landed, as `<source id>: <its report address>`. */
+  reported: string[];
 }
 
 export interface Kit {
@@ -62,7 +64,7 @@ export function kit(settings: Partial<Settings> = {}): Kit {
   const mind = new Mindstorm({ now, newId });
   const model = new FakeModel();
   const assets = new MemoryAssets();
-  const world: FakeWorld = { pages: new Map(), posts: [], web: [], sources: [], found: new Map(), pictures: new Set(), videos: new Map() };
+  const world: FakeWorld = { pages: new Map(), posts: [], web: [], sources: [], found: new Map(), pictures: new Set(), videos: new Map(), reported: [] };
   const notes: string[] = [];
   const playback: Playback = { embeds: true, files: [] };
   const tools: Tools = {
@@ -75,7 +77,11 @@ export function kit(settings: Partial<Settings> = {}): Kit {
       picture: async (url) => (world.pictures.has(url) ? { asset: (await assets.put(new Uint8Array([1]), 'image/jpeg', 'found')).id } : null),
       videos: async () => world.web.flatMap((hit) => world.videos.get(hit.url) ?? []),
     },
-    sources: { list: () => world.sources, search: async (id, query) => world.found.get(`${id}:${query}`) ?? [] },
+    sources: {
+      list: () => world.sources,
+      search: async (id, query) => world.found.get(`${id}:${query}`) ?? [],
+      report: async (id, record) => void world.reported.push(`${id}: ${record.report}`),
+    },
     instagram: { recent: async (limit = 10) => world.posts.slice(0, limit) },
     images: {
       generate: async (prompt) => {

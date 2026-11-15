@@ -1,4 +1,4 @@
-import type { Found, ModelClient, Page, Source } from '../core/ports.ts';
+import type { Found, ModelClient, Page, Source, Tools } from '../core/ports.ts';
 import { openaiSearch } from './search-openai.ts';
 
 type Send = typeof fetch;
@@ -14,9 +14,23 @@ export interface SourceOptions {
 
 interface Adapter extends Source {
   search(query: string): Promise<Found[]>;
+  /** True while the source must not be asked, so it is not offered. */
+  resting?(): boolean;
+  report?(record: Found): Promise<void>;
 }
 
 const AGENT_NAME = 'MindPalace/0.1 (local prototype)';
+/** Wikimedia asks every program to name itself with a way to reach whoever runs it. */
+const COMMONS_AGENT = 'MindPalace/0.1 (local prototype; https://github.com/kaifengwu001/MindLibrarianDemo)';
+/** A thumbnail width Wikimedia keeps ready, near the 420 to 620 texture px a card's picture takes on the headset. */
+const COMMONS_WIDTH = 500;
+/** Narrower files are icons, flags and logos. */
+const COMMONS_SMALLEST = 400;
+const UNSPLASH_WIDTH = 640;
+const UNSPLASH_RESERVE = 5;
+const HOUR = 3_600_000;
+/** Unsplash asks that every link back to it says where it came from. */
+const withUtm = (url: string): string => `${url}${url.includes('?') ? '&' : '?'}utm_source=mind_palace&utm_medium=referral`;
 const PER_SEARCH = 6;
 /** The Internet Archive's MP4 copies, the ones every browser and the headset play first. "MPEG4" may be an original in an older codec. */
 const ARCHIVE_FORMATS = ['h.264', '512Kb MPEG4', 'h.264 IA', 'MPEG4'];
@@ -38,9 +52,10 @@ function hostOf(url: string): string {
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', hellip: '…', mdash: ', ', ndash: '-', rsquo: "'", lsquo: "'", rdquo: '"', ldquo: '"' };
 
-/** Markup from an API reduced to the words a person would read. */
+/** Markup from an API reduced to the words a person would read. Anything the markup hides, as Commons hides a second copy of a name, is left out. */
 export function plain(html: string): string {
   return html
+    .replace(/<(span|div)\b[^>]*display:\s*none[^>]*>[\s\S]*?<\/\1>/gi, '')
     .replace(/<\s*(br|\/p|\/li|\/div)\s*\/?>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&#x([0-9a-f]+);/gi, (_m, hex) => String.fromCodePoint(parseInt(hex, 16)))
@@ -51,11 +66,11 @@ export function plain(html: string): string {
     .trim();
 }
 
-export function makeSources(opts: SourceOptions): { list(): Source[]; search(id: string, query: string): Promise<Found[]> } {
+export function makeSources(opts: SourceOptions): Tools['sources'] {
   const { send } = opts;
 
-  async function ask<T = Json>(url: string): Promise<T> {
-    const res = await send(url, { headers: { 'User-Agent': AGENT_NAME, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) });
+  async function ask<T = Json>(url: string, agent = AGENT_NAME): Promise<T> {
+    const res = await send(url, { headers: { 'User-Agent': agent, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) });
     if (!res.ok) throw new Error(`${res.status}`);
     return (await res.json()) as T;
   }
@@ -464,8 +479,94 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
         ...(photograph(r) ? {} : { kind: 'artwork' as const }),
         title: plain(one(r.title)), by: /^https?:/.test(one(r.dcCreator)) ? '' : one(r.dcCreator), date: one(r.year),
         text: plain(one(r.dcDescription)).slice(0, 600), from: one(r.dataProvider) || 'Europeana', ...(one(r.dataProvider) ? { holder: one(r.dataProvider) } : {}),
-        url: str(r.guid).split('?')[0]!, image: one(r.edmIsShownBy) || one(r.edmPreview),
+        // Its preview, which Europeana serves at card size. The original is often many megabytes on the holder's own server: fetching it
+        // took 5.7 s for eight searches' worth (1.2 to 9.1 s) and half of them never came.
+        url: str(r.guid).split('?')[0]!, image: one(r.edmPreview) || one(r.edmIsShownBy),
       }));
+    },
+  };
+
+  // ---- free pictures. Commons needs no key; Unsplash's terms ask for its own addresses, its photographer's credit and a download report.
+
+  const commons: Adapter = {
+    id: 'commons',
+    name: 'Wikimedia Commons',
+    goodFor: 'Historical photographs, paintings, engravings, maps, posters and pictures of named places, buildings, objects, people and events, free to reuse. Strong on history and on anything with a name.',
+    query: 'Two to four plain words naming the thing, place, person or event, with a year or period when it helps ("Ghost Dance 1890", "Weimar dance hall", "Hagia Sophia interior").',
+    show: 2,
+    visual: true,
+    async search(query) {
+      const params = new URLSearchParams({
+        action: 'query', format: 'json', formatversion: '2', generator: 'search', gsrsearch: `${query} filetype:bitmap`, gsrnamespace: '6', gsrlimit: '10',
+        prop: 'imageinfo', iiprop: 'url|size|mime|extmetadata', iiurlwidth: String(COMMONS_WIDTH), iiextmetadatalanguage: 'en',
+        iiextmetadatafilter: 'ObjectName|Artist|DateTimeOriginal|ImageDescription|LicenseShortName',
+      });
+      const json = await ask(`https://commons.wikimedia.org/w/api.php?${params}`, COMMONS_AGENT);
+      return list(json.query?.pages)
+        .sort((a, b) => Number(a.index) - Number(b.index))
+        .flatMap((page): Found[] => {
+          const info = list(page.imageinfo)[0] ?? {};
+          const meta = (name: string) => plain(str(info.extmetadata?.[name]?.value));
+          if (!/^image\/(jpeg|png|webp)$/.test(str(info.mime)) || !str(info.thumburl) || Number(info.width) < COMMONS_SMALLEST) return [];
+          const by = meta('Artist').slice(0, 120);
+          const licence = meta('LicenseShortName');
+          const url = str(info.descriptionurl);
+          return [{
+            title: meta('ObjectName') || str(page.title).replace(/^File:/, '').replace(/\.[a-z]{3,4}$/i, '').replace(/_/g, ' '),
+            by, date: /(?<!\d)(1\d{3}|20\d{2})(?!\d)/.exec(meta('DateTimeOriginal'))?.[1] ?? '',
+            text: meta('ImageDescription').slice(0, 600), from: 'Wikimedia Commons', url, image: str(info.thumburl),
+            // The form Commons gives a reuser: the author, the licence, and where it came from.
+            credit: { text: `${by || 'Unknown author'}, ${licence || 'licence on the file page'}, via Wikimedia Commons`, url },
+            ...(licence ? { licence } : {}),
+          }];
+        });
+    },
+  };
+
+  const unsplashKey = opts.keys?.UNSPLASH_ACCESS_KEY;
+  // A new Unsplash app may make 50 requests an hour; the last few are kept for the download reports its terms require.
+  let unsplashRestsUntil = 0;
+  async function unsplash(url: string): Promise<Json> {
+    const res = await send(url, { headers: { Authorization: `Client-ID ${unsplashKey}`, 'Accept-Version': 'v1', 'User-Agent': AGENT_NAME }, signal: AbortSignal.timeout(10_000) });
+    const left = Number(res.headers.get('x-ratelimit-remaining') ?? Number.NaN);
+    if ((Number.isFinite(left) && left <= UNSPLASH_RESERVE) || res.status === 403 || res.status === 429) unsplashRestsUntil = Date.now() + HOUR;
+    if (!res.ok) throw new Error(`Unsplash answered ${res.status}`);
+    return (await res.json()) as Json;
+  }
+  const photos: Adapter = {
+    id: 'photos',
+    name: 'Unsplash',
+    goodFor: 'Contemporary photographs: places, landscapes, cities, interiors, objects, materials, textures, food, people at work, weather and moods. Weak on history, on named people and on artworks.',
+    query: 'One to three plain words for what is in the picture ("fog harbour", "terrazzo floor", "night market").',
+    show: 2,
+    visual: true,
+    hotlink: true,
+    resting: () => Date.now() < unsplashRestsUntil,
+    async search(query) {
+      const json = await unsplash(`https://api.unsplash.com/search/photos?query=${q(query)}&per_page=10&content_filter=high`);
+      return list(json.results).flatMap((p): Found[] => {
+        const raw = URL.parse(str(p.urls?.raw));
+        const page = str(p.links?.html);
+        if (!raw || !/^https:\/\/images\.unsplash\.com\//.test(raw.href) || !page) return [];
+        // Unsplash's own address at the size a card shows, keeping its ixid as its terms ask.
+        for (const [k, v] of Object.entries({ w: String(UNSPLASH_WIDTH), fit: 'max', q: '80', fm: 'jpg' })) raw.searchParams.set(k, v);
+        const name = str(p.user?.name) || str(p.user?.username);
+        const said = [...new Set([str(p.description), str(p.alt_description)].filter(Boolean))];
+        const profile = str(p.user?.links?.html);
+        return [{
+          title: (said[0] ?? '').replace(/^\p{Ll}/u, (c) => c.toUpperCase()).slice(0, 120) || `Photo by ${name}`,
+          by: name, date: str(p.created_at).slice(0, 4), text: said.join('\n'), from: 'Unsplash',
+          url: withUtm(page), image: raw.href,
+          credit: { text: `Photo by ${name} on Unsplash`, ...(profile ? { url: withUtm(profile) } : {}) },
+          licence: 'Unsplash License',
+          ...(str(p.links?.download_location) ? { report: str(p.links.download_location) } : {}),
+        }];
+      });
+    },
+    async report(record) {
+      // The key goes only to Unsplash's own API.
+      if (!record.report || !/^https:\/\/api\.unsplash\.com\//.test(record.report)) return;
+      await unsplash(record.report);
     },
   };
 
@@ -485,16 +586,22 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     },
   };
 
-  const adapters: Adapter[] = [web, papers, books, data, discussions, code, answers, museums, boards, podcasts, recipes, archive, ...(guardianKey ? [news] : []), ...(tmdbKey ? [films] : []), ...(europeanaKey ? [heritage] : [])];
+  const adapters: Adapter[] = [
+    web, papers, books, data, discussions, code, answers, museums, commons, boards, podcasts, recipes, archive,
+    ...(guardianKey ? [news] : []), ...(tmdbKey ? [films] : []), ...(europeanaKey ? [heritage] : []), ...(unsplashKey ? [photos] : []),
+  ];
   const byId = new Map(adapters.map((a) => [a.id, a]));
 
   return {
-    list: () => adapters.map(({ search: _search, ...info }) => info),
+    list: () => adapters.filter((a) => !a.resting?.()).map(({ search: _search, resting: _resting, report: _report, ...info }) => info),
     async search(id, query) {
       const adapter = byId.get(id);
       if (!adapter || !query.trim()) return [];
       const found = await adapter.search(query.trim());
       return found.filter((f) => f.title && /^https?:\/\//.test(f.url));
+    },
+    async report(id, record) {
+      await byId.get(id)?.report?.(record).catch(() => undefined);
     },
   };
 }

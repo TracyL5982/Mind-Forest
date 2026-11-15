@@ -12,6 +12,40 @@ export interface ToolOptions {
   fetch?: typeof fetch;
   /** Given only when maps are on. */
   geocoder?: Geocoder;
+  log?: (line: string) => void;
+}
+
+/**
+ * The fal picture models this service can ask, by endpoint, each with the body it takes for a 4:3 picture returned inside the reply.
+ * FLUX.3 Klein is fal's fast one at $0.009 a 1K picture, FLUX 3 its quality one at $0.048, and Muse Image the model the Meta API
+ * makes today, at $0.01 (fal's model pages, read 15 November 2026).
+ */
+export const FAL_MODELS: Record<string, (prompt: string) => Record<string, unknown>> = {
+  // The Scout writes a whole prompt already, so the model's own expansion of it is turned off.
+  'blackforestlabs/flux-3/klein/text-to-image': (prompt) => ({ prompt, image_size: 'landscape_4_3', enable_prompt_expansion: false, output_format: 'jpeg', sync_mode: true }),
+  'blackforestlabs/flux-3/text-to-image': (prompt) => ({ prompt, aspect_ratio: '4:3', resolution: '1k', output_format: 'jpeg', sync_mode: true }),
+  'meta/muse-image/text-to-image': (prompt) => ({ prompt, aspect_ratio: '4:3', output_format: 'jpeg', sync_mode: true }),
+};
+
+/** One picture from fal's direct endpoint, which answers on the same connection with the picture inside the reply. */
+export async function falPicture(send: typeof fetch, key: string, model: string, prompt: string): Promise<{ bytes: Uint8Array; mime: string }> {
+  const body = FAL_MODELS[model];
+  if (!body) throw new Error(`no fal model "${model}" is known; known: ${Object.keys(FAL_MODELS).join(', ')}`);
+  const res = await send(`https://fal.run/${model}`, {
+    method: 'POST',
+    headers: { Authorization: `Key ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body(prompt)),
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) throw new Error(`fal answered ${res.status} ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { images?: { url?: string; content_type?: string }[] };
+  const url = json.images?.[0]?.url ?? '';
+  const inline = /^data:([^;,]+);base64,(.*)$/s.exec(url);
+  if (inline) return { mime: inline[1]!, bytes: Uint8Array.from(Buffer.from(inline[2]!, 'base64')) };
+  if (!/^https:\/\//.test(url)) throw new Error('fal returned no picture');
+  const picture = await send(url, { signal: AbortSignal.timeout(20_000) });
+  if (!picture.ok) throw new Error(`fal's picture could not be fetched: ${picture.status}`);
+  return { mime: picture.headers.get('content-type') ?? json.images?.[0]?.content_type ?? 'image/jpeg', bytes: new Uint8Array(await picture.arrayBuffer()) };
 }
 
 const CodeReply = z.object({ title: z.string(), language: z.string(), source: z.string() });
@@ -54,7 +88,18 @@ export function makeTools(opts: ToolOptions): Tools {
     },
     images: {
       async generate(prompt) {
-        const made = await opts.model.image({ role: 'tool.image', prompt });
+        const fal = opts.keys?.FAL_KEY && opts.keys.MIND_PALACE_FAL_MODEL ? { key: opts.keys.FAL_KEY, model: opts.keys.MIND_PALACE_FAL_MODEL } : null;
+        let made: { bytes: Uint8Array; mime: string } | undefined;
+        if (fal) {
+          const started = Date.now();
+          try {
+            made = await falPicture(send, fal.key, fal.model, prompt);
+            opts.log?.(`  model image tool.image ok ${Date.now() - started}ms, fal ${fal.model}`);
+          } catch (err) {
+            opts.log?.(`  model image tool.image FAILED ${Date.now() - started}ms, fal ${fal.model} (${err instanceof Error ? err.message : String(err)}), made with the Meta model instead`);
+          }
+        }
+        made ??= await opts.model.image({ role: 'tool.image', prompt });
         return { asset: (await opts.assets.put(made.bytes, made.mime, 'generated')).id };
       },
     },
