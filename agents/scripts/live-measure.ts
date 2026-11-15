@@ -1,7 +1,9 @@
 // Measures Momo's live voice against a running service, as a headset would use it: each clip (16 kHz mono 16-bit WAV,
 // beginning with "Hey Momo") is streamed to /live in tenth-of-a-second pieces at the pace it was spoken, then quiet until
 // the service says the turn is over. For each turn it reports the time from the end of the speech to the turn being over
-// and to Momo's first sound, what Momo said, what the pipeline heard and said, and what the responses cost.
+// (the sent tone), to the final transcript, to the pipeline's reply, to the first sound of that reply and of any results line,
+// what Momo said, what the pipeline heard and said, and what Momo's responses cost (the transcription's cost is in the
+// service's log).
 //   node --no-warnings --import tsx scripts/live-measure.ts <http://host:port> <token> <model> <clip.wav>...
 import { readFileSync } from 'node:fs';
 import { WebSocket } from 'ws';
@@ -39,11 +41,11 @@ const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
 const live = new WebSocket(`${base.replace(/^http/, 'ws')}/live?token=${encodeURIComponent(token)}`);
 const ws = new WebSocket(`${base.replace(/^http/, 'ws')}/ws?token=${encodeURIComponent(token)}`);
 const frames: { at: number; frame: VoiceFrame }[] = [];
-const pipeline: { at: number; t: string; text: string }[] = [];
+const pipeline: { at: number; t: string; text: string; kind?: string }[] = [];
 live.on('message', (raw) => frames.push({ at: performance.now(), frame: JSON.parse(String(raw)) as VoiceFrame }));
 ws.on('message', (raw) => {
-  const m = JSON.parse(String(raw)) as { t: string; text?: string; final?: boolean };
-  if ((m.t === 'heard' && m.final) || m.t === 'say') pipeline.push({ at: performance.now(), t: m.t, text: m.text ?? '' });
+  const m = JSON.parse(String(raw)) as { t: string; text?: string; final?: boolean; kind?: string };
+  if ((m.t === 'heard' && m.final) || m.t === 'say') pipeline.push({ at: performance.now(), t: m.t, text: m.text ?? '', kind: m.kind });
 });
 await Promise.all([new Promise((ok) => live.on('open', ok)), new Promise((ok) => ws.on('open', ok))]);
 while (!frames.some((f) => f.frame.t === 'ready')) await sleep(10);
@@ -82,10 +84,17 @@ for (const [k, clip] of clips.entries()) {
     if (open.every((id) => done.has(id)) && performance.now() - last > SETTLE_MS) break;
   }
   const mine = frames.slice(from);
+  const after = (at: number | undefined) => (!endOfSpeech ? 'cut off' : at ? Math.round(at - endOfSpeech) : 'none');
   const overAt = mine.find((f) => f.frame.t === 'over')?.at;
-  const firstSound = mine.find((f) => f.frame.t === 'audio')?.at;
+  const finalAt = mine.find((f) => f.frame.t === 'heard' && f.frame.final)?.at;
   const said = new Map<string, string>();
-  for (const f of mine) if (f.frame.t === 'text') said.set(f.frame.id, f.frame.text);
+  const kinds = new Map<string, string>();
+  for (const f of mine) if (f.frame.t === 'text') {
+    said.set(f.frame.id, f.frame.text);
+    kinds.set(f.frame.id, f.frame.kind);
+  }
+  const firstOf = (kind: string) => mine.find((f) => f.frame.t === 'audio' && kinds.get(f.frame.id) === kind)?.at;
+  const replyAt = pipeline.slice(heardFrom).find((p) => p.t === 'say')?.at;
   const usage = mine.flatMap((f) => (f.frame.t === 'done' && f.frame.usage ? [f.frame.usage as Usage] : []));
   const dollars = usage.reduce((sum, u) => sum + (cost(model, u) ?? 0), 0);
   const audioOut = usage.reduce((sum, u) => sum + (u.output_token_details?.audio_tokens ?? 0), 0);
@@ -94,8 +103,11 @@ for (const [k, clip] of clips.entries()) {
     turn,
     clip: clip.split('/').pop()!,
     // A turn the model ended before the clip's last word was cut off: its timings say nothing about the end of speech.
-    overMs: !endOfSpeech ? 'cut off' : overAt ? Math.round(overAt - endOfSpeech) : 'none',
-    firstSoundMs: !endOfSpeech ? 'cut off' : firstSound ? Math.round(firstSound - endOfSpeech) : 'none',
+    overMs: after(overAt),
+    transcriptMs: after(finalAt),
+    pipelineSaidMs: after(replyAt),
+    firstSoundMs: after(firstOf('reply')),
+    resultsSoundMs: after(firstOf('results')),
     responses: usage.length,
     audioOutTokens: audioOut,
     dollars: Number(dollars.toFixed(5)),

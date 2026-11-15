@@ -291,9 +291,12 @@ export class LiveVoice {
     }
   }
 
-  /** A line the pipeline said. Without a kind, the first after the user's utterance is its reply and any other is news. */
+  /**
+   * A line the pipeline said. Without a kind, the first after the user's utterance is its reply, as is the first after the user spoke
+   * over a turn still waiting for one, and any other is news.
+   */
   said(text: string, kind?: SayKind): void {
-    const k = kind ?? (this.owed ? 'reply' : 'results');
+    const k = kind ?? (this.owed || this.stale ? 'reply' : 'results');
     if (k === 'reply' && this.stale) {
       this.deps.log(`[live] not said, since the user spoke over the turn it answers: ${text}`);
       return;

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
+import type { Activity } from '../src/core/pipeline.ts';
 import type { Scene, VoiceStyle } from '../src/core/roles/types.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
@@ -54,6 +55,8 @@ const pcm = (samples: number[]) => {
   return b.toString('base64');
 };
 const tick = () => new Promise((ok) => setTimeout(ok, 0));
+/** A step of the Conductor's, as the pipeline reports it. */
+const conductor = (id: string, state: Activity['state']) => ({ id, role: 'conductor', state, message: 'Working out what you mean', label: 'Working out what you mean' }) as Activity;
 
 function voice(opts: { owedMs?: number } = {}) {
   const model = new Scripted();
@@ -191,19 +194,19 @@ test('the name alone, or nothing said after it, asks the pipeline nothing, and t
 test('a Conductor that fails, or ends with nothing to say, tells the device no reply is coming; one that replies does not', async () => {
   const { v, of, turn } = voice();
   turn(1, ['Do the thing.']);
-  v.activity({ id: 'c1', role: 'conductor', state: 'start', message: 'Listening' });
-  v.activity({ id: 'c1', role: 'conductor', state: 'error', message: 'down' });
+  v.activity(conductor('c1', 'start'));
+  v.activity(conductor('c1', 'error'));
   assert.deepEqual(of('quiet'), [{ t: 'quiet', turn: 1 }]);
 
   turn(2, ['Go back to the start.']);
-  v.activity({ id: 'c2', role: 'conductor', state: 'start', message: 'Listening' });
-  v.activity({ id: 'c2', role: 'conductor', state: 'done', message: 'Listening' });
+  v.activity(conductor('c2', 'start'));
+  v.activity(conductor('c2', 'done'));
   await tick();
   assert.deepEqual(of('quiet').at(-1), { t: 'quiet', turn: 2 });
 
   turn(3, ['More.']);
-  v.activity({ id: 'c3', role: 'conductor', state: 'start', message: 'Listening' });
-  v.activity({ id: 'c3', role: 'conductor', state: 'done', message: 'Listening' });
+  v.activity(conductor('c3', 'start'));
+  v.activity(conductor('c3', 'done'));
   v.said('Here is more.', 'reply');
   await tick();
   assert.equal(of('quiet').length, 2, 'a reply is coming for turn 3');
@@ -233,15 +236,18 @@ test('the name while Momo speaks cancels the response, and the model is told onl
   assert.match(model.asked().at(-1)!.instructions, /Kept\./, "the cancelled response's late events are not taken for the new line");
 });
 
-test("a reply to a turn the user spoke over is not said, and the next turn's is", () => {
-  const { v, model, turn } = voice();
-  turn(1, ['Find old maps.']);
-  v.heard({ t: 'start', turn: 2, scene: SCENE });
-  v.said('Looking for old maps.', 'reply');
-  model.hears('item-2', ['Actually, find sea charts.']);
-  v.said('Looking for sea charts.', 'reply');
-  assert.deepEqual(model.asked().map((r) => /Looking for (.*)\./.exec(r.instructions)![1]), ['sea charts']);
-});
+for (const kind of ['reply', undefined] as const) {
+  test(`a reply to a turn the user spoke over is not said, and the next turn's is (${kind ? 'with' : 'without'} a kind)`, () => {
+    const { v, model, turn } = voice();
+    turn(1, ['Find old maps.']);
+    v.heard({ t: 'start', turn: 2, scene: SCENE });
+    v.said('Looking for old maps.', kind);
+    model.hears('item-2', ['Actually, find sea charts.']);
+    v.said('Looking for sea charts.', kind);
+    assert.deepEqual(model.asked().map((r) => /Looking for (.*)\./.exec(r.instructions)![1]), ['sea charts']);
+  });
+}
+
 
 test('the device stopping at its longest commits what it sent, and the model still makes no response of its own', () => {
   const { v, model } = voice();
