@@ -89,7 +89,8 @@ interface Run {
  * now, and that rating becomes their importance, so the pipeline lets the least related ones give way.
  * Two lanes write its directions. In the fast lane the quick model names a few catalogues and what to search in each, in under
  * a second, so its cards land within seconds. The inventive lane, the main model, thinks for 13 to 19 s before its first
- * direction. They share the run's slots, and the fast lane never fills more than two of them or half.
+ * direction. They share the run's slots, and the fast lane never fills more than two of them or half, and keeps none once the
+ * inventive lane has a card ready.
  */
 export const scout: Roles['scout'] = async (given, input) => {
   // Every step of the run is shown on its card.
@@ -165,6 +166,17 @@ export const scout: Roles['scout'] = async (given, input) => {
   // out, or still to be written, keeps a slot, then lands in the order it came.
   const fast: Lane = { writing: true, arrived: 0, filled: 0 };
   const inventive: Lane = { writing: true, arrived: 0, filled: 0 };
+  // The fast lane is there to win a race. Once the inventive lane has a card ready it has lost: it keeps no slot, its choice of
+  // where to look is given up, and a find of its still out lands only into a slot nobody else claims.
+  let fastMost = FAST_MOST;
+  let lose = () => {};
+  const beaten = new Promise<Direction[]>((give) => {
+    lose = () => {
+      fastMost = Math.min(fastMost, fast.filled);
+      fast.writing = false;
+      give([]);
+    };
+  });
   const lanes = new Map<Direction, Lane>();
   const out = new Set<Direction>();
   const waiting: Waiting[] = [];
@@ -174,7 +186,7 @@ export const scout: Roles['scout'] = async (given, input) => {
   const kept = () => (inventive.writing && !pictureTaken && imagesLeft > 0 ? 1 : 0);
   const held = () => making() + kept();
   // The fast lane fills at most two slots and never half, so the inventive lane always keeps the most.
-  const fastShare = () => Math.min(FAST_MOST, Math.floor(slots / 2));
+  const fastShare = () => Math.min(fastMost, Math.floor(slots / 2));
   // What it may still fill: its whole share while it is choosing, then no more than its finds still out could bring.
   const fastOwed = () => {
     const stillOut = [...out].filter((d) => lanes.get(d) === fast).length;
@@ -201,6 +213,7 @@ export const scout: Roles['scout'] = async (given, input) => {
   const land = (d: Direction, items: Made[]) => {
     const lane = lanes.get(d)!;
     out.delete(d);
+    if (lane === inventive && items.length > 0) lose();
     let landed = false;
     let first = lane === inventive || fast.filled < fastShare();
     for (const { item: pick, tool } of items) {
@@ -265,7 +278,10 @@ export const scout: Roles['scout'] = async (given, input) => {
   // The fast lane starts at once and searches while the main model thinks. Its finds land once the ties are rated.
   void (async () => {
     try {
-      for (const d of await ctx.step(ROLE, 'Choosing where to look first', () => firstLooks(ctx, run))) {
+      const looks = await ctx.step(ROLE, 'Choosing where to look first', () => Promise.race([firstLooks(ctx, run), beaten]));
+      if (!fast.writing) ctx.note(ROLE, 'does not look first: the inventive cards were ready before the quick model chose where to look');
+      else if (looks.length > 0) ctx.note(ROLE, `looks first in ${looks.map((d) => `${d.source || 'videos'} for "${d.lookups[0]}" (${oneLine(d.why, 60)})`).join(', ')}`);
+      for (const d of fast.writing ? looks : []) {
         fast.arrived++;
         start(d, fast, 0);
       }
@@ -461,7 +477,7 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
   });
   const known = new Set(catalogues.map((src) => src.id));
   const used = new Set<string>();
-  const looks = answer.looks.flatMap((look): Direction[] => {
+  return answer.looks.flatMap((look): Direction[] => {
     const source = look.source.trim();
     const search = oneLine(look.search, 120);
     if (!search || used.has(source) || (source !== VIDEO_LOOK && !known.has(source))) return [];
@@ -481,8 +497,6 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
       lookups: [search],
     }];
   }).slice(0, FAST_LOOKS);
-  if (looks.length > 0) ctx.note(ROLE, `looks first in ${looks.map((d) => `${d.source || 'videos'} for "${d.lookups[0]}" (${oneLine(d.why, 60)})`).join(', ')}`);
-  return looks;
 }
 
 type Made = { item: Item; tool: string };

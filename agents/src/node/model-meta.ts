@@ -8,8 +8,9 @@ export interface MetaModelOptions {
   /** The model for a request marked quick. */
   quickModel?: string;
   /**
-   * How long a quick request may go unanswered before it is tried again. The quick model answers in 0.5 to 4 s. In three runs in a row
-   * one of its requests went unanswered until the 120 s limit, and the same request tried again answered in 1 to 2 s.
+   * How long a quick request may go unanswered before it is tried again. In three runs in a row one of its requests went unanswered
+   * until the 120 s limit, and the same request tried again answered in 1 to 2 s. Of 175 quick requests answered in 24 runs of the
+   * service, all but two answered within 4.6 s, and those two in 11.6 and 14.7 s. The user waits on each, and a first card is due within 12 s.
    */
   quickWaitMs?: number;
   imageModel?: string;
@@ -64,7 +65,7 @@ export class MetaModel implements ModelClient {
         },
       },
     };
-    const waitMs = req.quick ? (this.opts.quickWaitMs ?? 20_000) : undefined;
+    const waitMs = req.quick ? (this.opts.quickWaitMs ?? 6_000) : undefined;
     const text = req.onText ? await this.streamed(req.role, body, req.onText, waitMs) : finalText(await this.responses('json', req.role, body, waitMs));
     if (!text) throw new Unreadable(req.role, 'no text');
     let json: unknown;
