@@ -36,6 +36,16 @@ public:
         return {r * std::sin(a), p.y, 1 / curve - r * std::cos(a)};
     }
 
+    /// Where a point of a piece is drawn: on the straight line across its column, between where the column's
+    /// edges are bent to. Every piece is cut at those edges, so pieces that lie over each other are drawn
+    /// exactly as far apart as they lie flat, however the card is bent and wherever a piece's own edges fall.
+    static Vec3 drawn(Vec3 p, float curve) {
+        if (!(curve > 1e-5f)) return p;
+        float from = std::floor(p.x / column) * column, t = (p.x - from) / column;
+        Vec3 a = bent({from, p.y, p.z}, curve), b = bent({from + column, p.y, p.z}, curve);
+        return a + (b - a) * t;
+    }
+
     /// And back: where on the flat card a point on (or over) the bent one belongs.
     static Vec3 flat(Vec3 p, float curve) {
         if (!(curve > 1e-5f)) return p;
@@ -52,6 +62,7 @@ private:
     /// One drawn piece.
     struct Part {
         std::weak_ptr<Entity> entity;
+        MeshRef flat;                       // the flat mesh it was given, cut again whenever it lies differently along the card
         std::vector<Vec3> points;           // flat, in its own space, cut into columns; three to a triangle
         std::vector<Vec3> across;           // the same points in the card's space
         Mat3 back;                          // a move in the card's space, as one in its own

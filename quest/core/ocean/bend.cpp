@@ -86,18 +86,26 @@ std::shared_ptr<Bend::Part> Bend::draw(const EntityRef& e, const MeshRef& mesh, 
         // New here, or given a new flat mesh since.
         parts.erase(key);
         if (!(curve > 0)) return nullptr;
-        std::optional<Cut> cut = Bend::cut(mesh, matrix);
-        if (!cut) return nullptr;
-        auto p = std::make_shared<Part>();
-        p->entity = e;
-        p->points = std::move(cut->points);
-        p->uvs = std::move(cut->uvs);
-        bool video = e->model && !e->model->materials.empty() && e->model->materials.front().kind == Material::Kind::video;
-        if (!video) p->low = lowMesh(p->uvs);
-        parts[key] = p;
-        part = p;
+        part = std::make_shared<Part>();
+        part->entity = e;
+        part->flat = mesh;
+        parts[key] = part;
     }
     if (part->matrix != matrix || part->across.empty()) {
+        // Cut again wherever it now lies along the card (a face that grows as the card opens), so its columns stay the card's.
+        auto along = [](const Mat4& m) { return std::array<float, 4>{m.columns[0].x, m.columns[1].x, m.columns[2].x, m.columns[3].x}; };
+        if (part->across.empty() || along(part->matrix) != along(matrix)) {
+            std::optional<Cut> cut = Bend::cut(part->flat, matrix);
+            if (!cut) {
+                parts.erase(key);
+                return nullptr;
+            }
+            part->points = std::move(cut->points);
+            part->uvs = std::move(cut->uvs);
+            bool video = e->model && !e->model->materials.empty() && e->model->materials.front().kind == Material::Kind::video;
+            if (!video) part->low = lowMesh(part->uvs);
+            part->shown = nullptr;
+        }
         part->matrix = matrix;
         part->across.resize(part->points.size());
         for (size_t i = 0; i < part->points.size(); i++) {
@@ -124,7 +132,7 @@ void Bend::place(Part& part, float curve, bool exactly) {
         low->withUnsafeMutableBytes<Vertex>([&](Vertex* v, int) {
             for (int i = 0; i < count; i++) {
                 Vec3 p = part.across[i];
-                v[i].position = part.points[i] + part.back * (bent(p, curve) - p);
+                v[i].position = part.points[i] + part.back * (drawn(p, curve) - p);
             }
         });
         if (!part.shown) {
@@ -147,7 +155,7 @@ void Bend::place(Part& part, float curve, bool exactly) {
         std::vector<Vec3> positions(static_cast<size_t>(count));
         for (int i = 0; i < count; i++) {
             Vec3 p = part.across[i];
-            positions[i] = part.points[i] + part.back * (bent(p, curve) - p);
+            positions[i] = part.points[i] + part.back * (drawn(p, curve) - p);
         }
         std::vector<uint32_t> indices(static_cast<size_t>(count));
         for (int i = 0; i < count; i++) indices[i] = uint32_t(i);

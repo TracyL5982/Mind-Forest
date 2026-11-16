@@ -876,7 +876,7 @@ void OceanModel::drawInk(CardView& c, Ink& ink) {
                 const float across[4] = {-1, -core, core, 1}, there[4] = {0, alpha, alpha, 0};
                 for (int k = 0; k < 4; k++) {
                     Vec2 at = p + side * across[k];
-                    Vec3 on = fromCard.point(Bend::bent(toCard.point({at.x, at.y, 0}), c.curve));
+                    Vec3 on = fromCard.point(Bend::drawn(toCard.point({at.x, at.y, 0}), c.curve));
                     v[nv++] = LinkVertex{on, Vec2(accent.x, accent.y), Vec2(accent.z, there[k])};
                 }
             };
