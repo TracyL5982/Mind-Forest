@@ -12,7 +12,7 @@ import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/l
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
 import { LiveVoice, type LiveDeps, type VoiceFrame } from '../src/node/live.ts';
 import { SEARCH_DOLLARS } from '../src/node/search-openai.ts';
-import { wavMs } from '../src/node/speech-openai.ts';
+import { questWavMs } from '../src/node/speech-openai.ts';
 import { chargedPictures, startServer } from '../src/node/server.ts';
 import { makeSources } from '../src/node/sources.ts';
 import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
@@ -452,24 +452,37 @@ test('a made picture is charged at the price of one, and none is made while the 
   assert.equal(chargedPictures(tools, undefined), tools, 'the Mac makes pictures as before');
 });
 
-test('a recording counts by what a decoder plays, so a forged byte rate counts in full, and hosted transcription takes only a small WAV', { timeout: 20000 }, async () => {
-  assert.equal(Math.round(wavMs(recording(60_000))!), 60_000);
-  assert.equal(Math.round(wavMs(recording(60_000, 0xffffffff))!), 60_000, 'the byte-rate field is not read');
-  assert.equal(wavMs(new Uint8Array(100)), null);
-  const odd = recording(1000);
-  new DataView(odd.buffer).setUint32(24, 1, true);
-  assert.equal(wavMs(odd), null, 'a sample rate no voice is recorded at');
+test("hosted transcription takes only the Quest's own WAV header, and counts it by its length", { timeout: 20000 }, async () => {
+  const view = (wav: Uint8Array) => new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+  assert.equal(questWavMs(recording(10_000)), 10_000, 'the Quest at 10 s');
+  assert.equal(questWavMs(recording(60_000)), 60_000, 'and at 60 s');
+  const empty = recording(60_000);
+  view(empty).setUint32(40, 0, true);
+  view(empty).setUint32(4, 36, true);
+  assert.equal(questWavMs(empty), 60_000, 'a data size of 0 counts what follows the header');
+  assert.equal(questWavMs(recording(60_000, 0xffffffff)), null, 'a forged byte rate');
+  const rate = recording(1000);
+  view(rate).setUint32(24, 8000, true);
+  assert.equal(questWavMs(rate), null, 'another sample rate');
+  const twoFmt = new Uint8Array([...recording(0).subarray(0, 36), ...recording(0).subarray(12, 36), ...recording(1000).subarray(36)]);
+  assert.equal(questWavMs(twoFmt), null, 'two fmt chunks');
+  const extra = new Uint8Array([...recording(0).subarray(0, 36), ...new TextEncoder().encode('LIST'), 4, 0, 0, 0, 1, 2, 3, 4, ...recording(1000).subarray(36)]);
+  assert.equal(questWavMs(extra), null, 'a chunk before the data');
+  assert.equal(questWavMs(new Uint8Array(100)), null);
 
   const transcribe = async () => 'hello';
   const dataDir = mkdtempSync(join(tmpdir(), 'mp-hosted-'));
   const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
   const hosted = await startHosted({ port: 0, host: '127.0.0.1', dataDir, appKey: KEY, adminToken: ADMIN, ledger, shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, transcribe }, log: () => {} });
   const post = (body: Uint8Array<ArrayBuffer>, type = 'audio/wav') => fetch(`${hosted.url}/api/transcribe`, { method: 'POST', headers: { Authorization: `Bearer ${KEY}.${A}`, 'Content-Type': type }, body });
-  assert.equal((await post(recording(60_000, 0xffffffff))).status, 200);
-  assert.equal(ledger.status().devices[A]?.voiceMinutes, 1, 'a forged minute is a minute');
+  assert.equal((await post(empty)).status, 200);
+  assert.equal(ledger.status().devices[A]?.voiceMinutes, 1, 'a minute with a data size of 0 is a minute');
+  for (const [wav, what] of [[recording(1000, 0xffffffff), 'a forged byte rate'], [rate, 'another rate'], [twoFmt, 'two fmt chunks'], [extra, 'an extra chunk']] as const) {
+    assert.equal((await post(new Uint8Array(wav))).status, 415, what);
+  }
   assert.equal((await post(recording(1000), 'audio/webm')).status, 415, 'only WAV');
-  assert.equal((await post(new Uint8Array(1000))).status, 415, 'a body that is not a WAV');
   assert.equal((await post(recording(70_000))).status, 413, 'over about a minute');
+  assert.equal(ledger.status().devices[A]?.voiceMinutes, 1, 'nothing refused was counted');
   await hosted.close();
 });
 

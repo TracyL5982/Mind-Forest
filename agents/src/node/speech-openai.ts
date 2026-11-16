@@ -20,31 +20,20 @@ export function spokenMs(text: string): number {
 }
 
 /**
- * How long a PCM WAV recording is, from the fields a decoder plays it by: its sample rate, channels and bits per sample, and the
- * size of its data. The header's own byte rate is not read, since a decoder does not use it and a client may write anything there.
- * Null for anything that is not a PCM WAV a voice recording could be.
+ * How long a recording from the Quest is, or null for anything else. Only the header the Quest's own `wavFile` writes is taken
+ * (quest/core/agent/listener.cpp): 44 bytes of RIFF, WAVE, a 16-byte fmt of PCM, mono, 16 kHz, 32000 bytes a second, 2-byte blocks
+ * of 16 bits, then data. Its length is what follows the header at 32000 bytes a second, whatever the RIFF and data sizes say, since
+ * a decoder plays a file with a data size of 0, or with a second fmt, in ways a cleverer reading would count as nothing.
  */
-export function wavMs(audio: Uint8Array): number | null {
+export function questWavMs(audio: Uint8Array): number | null {
+  if (audio.length < 44) return null;
   const view = new DataView(audio.buffer, audio.byteOffset, audio.byteLength);
   const tag = (at: number) => String.fromCharCode(...audio.subarray(at, at + 4));
-  if (audio.length < 44 || tag(0) !== 'RIFF' || tag(8) !== 'WAVE') return null;
-  let format: { channels: number; rate: number; bits: number } | null = null;
-  for (let at = 12; at + 8 <= audio.length; ) {
-    const size = view.getUint32(at + 4, true);
-    if (tag(at) === 'fmt ' && size >= 16 && at + 24 <= audio.length) {
-      const pcm = view.getUint16(at + 8, true);
-      format = { channels: view.getUint16(at + 10, true), rate: view.getUint32(at + 12, true), bits: view.getUint16(at + 22, true) };
-      if ((pcm !== 1 && pcm !== 3) || format.channels < 1 || format.channels > 2 || format.rate < 8000 || format.rate > 48000 || ![8, 16, 24, 32].includes(format.bits)) return null;
-    }
-    if (tag(at) === 'data') {
-      if (!format) return null;
-      // A data size past the end, as a recording streamed before its length was known writes, counts what is there.
-      const bytes = Math.min(size, audio.length - (at + 8));
-      return (bytes / (format.rate * format.channels * (format.bits / 8))) * 1000;
-    }
-    at += 8 + size + (size % 2);
-  }
-  return null;
+  const quest =
+    tag(0) === 'RIFF' && tag(8) === 'WAVE' && tag(12) === 'fmt ' && view.getUint32(16, true) === 16 &&
+    view.getUint16(20, true) === 1 && view.getUint16(22, true) === 1 && view.getUint32(24, true) === 16000 &&
+    view.getUint32(28, true) === 32000 && view.getUint16(32, true) === 2 && view.getUint16(34, true) === 16 && tag(36) === 'data';
+  return quest ? ((audio.length - 44) / 32000) * 1000 : null;
 }
 
 /**

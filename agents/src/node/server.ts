@@ -16,7 +16,7 @@ import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '.
 import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
-import { HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, spokenMs, wavMs, type Speak, type Transcribe } from './speech-openai.ts';
+import { HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
 import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
 import { Telegram, type TelegramOptions } from './telegram.ts';
@@ -87,7 +87,7 @@ export interface Space {
 const SEARCHING = new Set(['find_new', 'more_like_this', 'start_tree']);
 /** `/live` sockets one metered space keeps: a headset reconnecting while its old socket lingers. A newer one closes the oldest. */
 const LIVE_PER_SPACE = 2;
-/** What a metered space takes on /api/transcribe: a WAV, as the Quest sends, of about a minute of 16 kHz mono at most. */
+/** What a metered space takes on /api/transcribe: the Quest's own WAV, of about a minute at most. */
 const RECORDING_BYTES = 2_000_000;
 
 export interface Running {
@@ -293,8 +293,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       if (meter && mime.split(';')[0]!.trim().toLowerCase() !== 'audio/wav') return json(res, 415, { error: 'a recording here is audio/wav' });
       const audio = await body(req, meter ? RECORDING_BYTES : 25 * 1024 * 1024);
       if (meter) {
-        const ms = wavMs(audio);
-        if (ms === null) return json(res, 415, { error: 'a recording here is PCM WAV, mono or stereo, at 8 to 48 kHz' });
+        const ms = questWavMs(audio);
+        if (ms === null) return json(res, 415, { error: "a recording here is the Quest's own WAV: 16 kHz mono 16-bit PCM" });
         meter.used('voiceMs', ms);
         meter.spent((ms / 60_000) * HEARING_DOLLARS_PER_MINUTE);
       }
