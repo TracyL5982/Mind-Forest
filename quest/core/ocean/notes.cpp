@@ -78,6 +78,9 @@ std::map<std::string, NoteLayout> Art::layouts;
 
 /// A picture kept in the app (any file among its resources), by name.
 ImageRef Art::picture(const std::string& name) const {
+    // NOTE(port): added for Quest. "gesture:<name>" is no file: it is the empty stage on a lesson's card in
+    // the welcome tree, where the guide plays that gesture (oceanmodel_guide.cpp).
+    if (name.rfind("gesture:", 0) == 0) return nullptr;
     auto hit = pictures.find(name);
     if (hit != pictures.end()) return hit->second;
     // `name.split(separator: ".", maxSplits: 1)`: the name, and its extension if it has one.
@@ -144,13 +147,35 @@ std::optional<Piece> Art::noteSmall(const OceanNote& note, const std::shared_ptr
         Font kindFont = font(Size::micro, Font::Weight::bold), titleFont = font(Size::label, Font::Weight::medium);
         float padX = px(pad.x), padY = px(pad.y), limit = px(0.25f);
         std::string kind = note.kind() == OceanNote::Kind::video ? "VIDEO" : "IMAGE";
+        // NOTE(port): added for Quest: a lesson of the welcome tree is named by its step, not as an image.
+        if (note.id.rfind("welcome", 0) == 0) kind = uppercased(note.kicker);
         CGSize kindSize = label(kind, CGPoint::zero(), kindFont, ::ink(note.tone), ::color(note.tone), padX, padY, INFINITY, false);
         CGSize title = label(note.headline, CGPoint::zero(), titleFont, Color::white(), ink, padX, padY, limit - kindSize.width, false);
         float full = std::max(w, kindSize.width + title.width);
         float tall = h + px(0.006f) + std::max(kindSize.height, title.height);
         Vec2 offset{(full - w) / 2 / ppm, -((tall - h) / 2 / ppm)};
         return piece("note-s:" + note.id, full, tall, offset, [&](Canvas&, CGSize) {
-            drawPicture(note, CGRect{0, 0, w, h});
+            // NOTE(port): added for Quest. A lesson of the welcome tree, closed, is the number of its step, large,
+            // on a plain ground (the marking lesson too, whose open card is a picture): the walk's cards are
+            // told from the pictures round them at a glance.
+            bool lesson = note.id.rfind("welcome", 0) == 0;
+            if (lesson) {
+                setFill(Color::hex(0x20252E));
+                UIRectFill(CGRect{0, 0, w, h});
+            } else {
+                drawPicture(note, CGRect{0, 0, w, h});
+            }
+            if (lesson) {
+                std::string number;
+                for (char ch : note.kicker) {
+                    if (ch >= '0' && ch <= '9') number += ch;
+                    else if (!number.empty()) break;
+                }
+                Font big = font(0.05f, Font::Weight::semibold);
+                TextAttributes look = attributes(big, Color::white(1, 0.92f));
+                CGSize took = stringSize(number, look);
+                drawString(number, CGPoint{(w - took.width) / 2, (h - std::ceil(big.lineHeight())) / 2}, look);
+            }
             if (note.kind() == OceanNote::Kind::video) {
                 // A play mark, so a video never reads as a still.
                 float d = px(0.026f);

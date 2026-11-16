@@ -45,10 +45,12 @@ void CardView::apply(double now, const Stage::Spot& spot, float boost, float cur
     position = source + (treePoint - source) * e + drag.value(now);
     root->position = position;
     root->orientation = spot.orientation();
+    if (sourceTurn && e < 1) root->orientation = slerp(*sourceTurn, spot.orientation(), smoothstep(0, 0.7f, e));      // NOTE(port): see `sourceTurn`
     right = spot.right;
     up = spot.up;
     normal = spot.normal;
     float s = grown(now) * boost;
+    if (sourceTurn) s = sourceScale + (scale.value(now) * boost - sourceScale) * std::min(e, 1.f);
     root->scale = Vec3::repeating(std::max(s, 0.001f));
     float step = stepMix.value(now);
     half = extent(now) * (boost / 2);
@@ -60,6 +62,10 @@ void CardView::apply(double now, const Stage::Spot& spot, float boost, float cur
     }
 
     float seen = a * smoothstep(0, 0.25f, e) * fade;
+    if (sourceTurn) {
+        seen = a * (1 + (fade - 1) * smoothstep(0, 0.5f, e));
+        if (e >= 1) sourceTurn.reset();
+    }
     if (std::fabs(seen - shownAlpha) > 0.004f) {
         shownAlpha = seen;
         if (seen > 0.996f) root->opacity.reset(); else root->opacity = seen;

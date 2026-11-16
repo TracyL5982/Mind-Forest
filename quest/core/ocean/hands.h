@@ -14,8 +14,8 @@
 ///   Moved sideways or up and down instead, it carries the tree with it.
 ///   Whichever way it first moves is what it does until it opens.
 /// - A flat hand swept sideways, like a knife, cuts the thread it crosses.
-/// - A clap front to back, one hand nearer and one farther along your line of
-///   sight, presses the tree flat.
+/// - The palms put together, fingers up, and held for a second presses the tree flat.
+///   (On visionOS: a clap front to back, one hand nearer and one farther along your line of sight.)
 ///
 /// NOTE(port): on the Quest the hands come from the host (platform::hand), which reads OpenXR
 /// hand tracking; the Mac preview has stand-ins.
@@ -76,10 +76,14 @@ public:
     static constexpr float fistKeepGrasp = 0.6f;        // a fist already made is kept above this reading
     static constexpr float fistKeepReach = 1.2f;        // and within this reach
     static constexpr float pinchClosed = 0.017f;        // m between thumb and index when they pinch
-    static constexpr float bladeSpeed = 1.1f;           // m/s the fingertips must move to cut
-    static constexpr float clapArm = 0.2f;              // m apart, in depth, before a clap can start
-    static constexpr float clapClose = 0.075f;          // m apart when it lands
-    static constexpr double clapWindow = 0.7;           // s from armed to landed
+    // NOTE(port): 1.1 in the Swift. A slice only marks a thread now, and a second one cuts it, so it can be easier to make.
+    static constexpr float bladeSpeed = 0.8f;           // m/s the fingertips must move to cut
+    // NOTE(port): changed for Quest. The Swift's clap is front to back and lands at once (armed 0.2 m
+    // apart in depth, landed under 0.075 m within 0.7 s), which hands passing each other set off. Here the
+    // palms are put together, fingers up, as in prayer, and held so for a second.
+    static constexpr float clapClose = 0.085f;          // m between the middles of the palms when they are together
+    static constexpr double clapHold = 1.0;             // s they are held so
+    static constexpr float clapUp = 0.03f;              // m each middle fingertip is above its wrist as they come together: fingers up
 
     // NOTE(port): no ARKitSession and no HandTrackingProvider: the host tracks the hands and
     // gives both each frame, already in world space (platform::hand).
@@ -118,7 +122,9 @@ private:
         float pinch = 1;                        // m between thumb tip and index tip
     };
     Hand left, right;
-    std::optional<double> clapArmedAt;
+    std::optional<double> clapSince;                    // since when the palms have been together
+    double clapSeen = 0.0;                              // when they were last seen so
+    Vec3 clapAt = Vec3::zero();
     double clapUntil = 0.0;
     float frame = 1.0f / 90;
 
@@ -166,6 +172,23 @@ public:
         float base = 0;             // the depth it last stepped a layer at
     };
     std::vector<Grab> grabs() const;
+
+    // NOTE(port): added for Quest, for the blade drawn on a flat hand (handglow.h).
+    /// A hand held flat, every finger out and together: the knife.
+    struct Blade {
+        int hand = 0;               // 0 left, 1 right
+        Vec3 tip;                   // the middle fingertip
+        Vec3 palm;
+    };
+    std::vector<Blade> blades() const;
+
+    // NOTE(port): added for Quest, for the ring drawn round palms held together (handglow.h).
+    /// The palms are together and being held: where, and how much of the second has passed.
+    struct Held {
+        Vec3 at;
+        float progress = 0;
+    };
+    std::optional<Held> held() const;
 
     /// Pinches for the next moment are not taps.
     void hold(double seconds = 0.5);

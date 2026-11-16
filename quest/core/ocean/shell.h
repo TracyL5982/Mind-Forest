@@ -40,6 +40,7 @@ private:
     std::vector<float> grown;                   // how large each picture is now
     std::optional<Vec3> aim;                    // where the growing is centred: it trails the head
     int stirring = 0;                           // pictures still on their way to a size
+    std::vector<uint8_t> swollen;               // NOTE(port): added for Quest's sound: the pieces whose swelling has been told of (`swelled`)
     std::set<int> out;
     std::optional<Material> material;
     // NOTE(port): `dust` in the Swift, beside the static `dust` (how many specks). C++ can't have both under one name.
@@ -50,13 +51,21 @@ private:
 
 public:
     float shift = 0;
+    // NOTE(port): added for Quest, whose ocean is heard (the Swift app has no sounds): the pieces that
+    // began to swell in the last `look`, for a glint each, and where the swelling is centred.
+    std::vector<int> swelled;
+    std::optional<Vec3> aimed() const { return aim; }
 
     static constexpr float speckWidth = 0.085f; // m: a film at 1, 4.2 m off, about 1.2 degrees
-    // Each of these can be tried at launch: `-oceanRest 0.5 -gazeZoom 1.2 -gazeCone 30 -gazeEase 3`.
+    // Each of these can be tried at launch: `-oceanRest 0.5 -gazeZoom 1.2 -gazeCone 30 -gazeCore 0.4 -gazeEase 3`.
     static float small() { static const float v = asked("oceanRest").value_or(0.4f); return v; }    // how large a piece rests
-    static float large() { static const float v = asked("gazeZoom").value_or(1.4f); return v; }     // and how large where your head points
+    // NOTE(port): changed for Quest, as Kai asked on 2026-11-15: the growth leans to the middle. The piece dead
+    // ahead grows to 2.1 (half again the Swift's 1.4) and the growth falls away from there to the cone's edge,
+    // which is where it was; the Swift grows everything in the inner 40% of the cone to 1.4 alike.
+    // `-gazeCore 0.4 -gazeZoom 1.4` is the Swift's shape.
+    static float large() { static const float v = asked("gazeZoom").value_or(2.1f); return v; }     // and how large where your head points
     static float cone() { static const float v = asked("gazeCone").value_or(20); return v; }        // degrees across: the part of the view that grows
-    static constexpr float core = 0.4f;         // the share of the cone, from its middle, that grows all the way
+    static float core() { static const float v = asked("gazeCore").value_or(0); return v; }         // the share of the cone, from its middle, that grows all the way
     // As calm as the lens was tuned in the headset: the middle trails the head, and a piece takes its time.
     static constexpr float trail = 4;           // 1/s: how closely the middle follows the head
     static constexpr float sweep = 50;          // degrees a second, at most

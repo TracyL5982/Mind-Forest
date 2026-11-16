@@ -66,8 +66,25 @@ object CanvasRenderer {
     // (Text is measured on the frame thread while pictures are drawn on another: this is shared between them.)
     private val typefaces = java.util.concurrent.ConcurrentHashMap<Int, Typeface>()
 
-    /** The system font at one of Font::Weight's four: 0 regular, 1 medium, 2 semibold, 3 bold. */
+    /** Where the media's fonts are (set by the activity before anything is drawn). */
+    @JvmStatic
+    var fontsDir: String = ""
+
+    /**
+     * The system font at one of Font::Weight's four: 0 regular, 1 medium, 2 semibold, 3 bold. And 4 and 5,
+     * which are not weights but another face: Fraunces and its italic, from their files among the media,
+     * for the lettering after the walk. Without the files, the system's own serif.
+     */
     private fun typeface(weight: Int): Typeface = typefaces.getOrPut(weight) {
+        if (weight == 4 || weight == 5) {
+            val italic = weight == 5
+            val file = java.io.File(fontsDir, if (italic) "Fraunces_72pt_Soft-LightItalic.ttf" else "Fraunces_72pt_Soft-Light.ttf")
+            return@getOrPut try {
+                if (file.exists()) Typeface.createFromFile(file) else Typeface.create(Typeface.SERIF, if (italic) Typeface.ITALIC else Typeface.NORMAL)
+            } catch (e: Exception) {
+                Typeface.create(Typeface.SERIF, if (italic) Typeface.ITALIC else Typeface.NORMAL)
+            }
+        }
         val w = when (weight) {
             1 -> 500
             2 -> 600

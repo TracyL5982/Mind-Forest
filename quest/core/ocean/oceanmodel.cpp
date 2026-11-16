@@ -66,7 +66,9 @@ void OceanModel::start() {
 
 void OceanModel::build() {
     if (!art || !catalog || !library) return;
-    stage = Stage(platform::head());
+    // NOTE(port): changed for Quest: `stage = Stage(head: tracker.transform())` in the Swift, which stands
+    // the scene wherever the head is and faces. Here it is seated at the desk in front of you (oceanmodel_desk.cpp).
+    sit();
     shell = std::make_shared<Shell>(stage, art, library->clips, catalog->works, dustMaterial);
     root_->addChild(shell->root);
     for (size_t i = 0; i < shell->specks.size(); i++) picks[shell->specks[i].get()] = Pick::speck(int(i));
@@ -96,6 +98,7 @@ void OceanModel::build() {
     hologram = Hologram::make(lineMaterial);
     handGlow = HandGlow::make(lineMaterial);
     if (handGlow) root_->addChild(handGlow->entity);
+    startGuide();
     if (hologram) {
         seat(hologram->entity);
         hologram->entity->isEnabled = false;
@@ -104,8 +107,12 @@ void OceanModel::build() {
     if (std::optional<Piece> piece = art->tray("To image generation")) {
         EntityRef tray = art->quad(*piece);
         tray->position = trayPoint() + stage.u * 0.012f;
-        tray->orientation = stage.facing(trayPoint());
+        // NOTE(port): changed for Quest: `stage.facing(trayPoint())` at full size in the Swift. It lies on
+        // the desk here, nearer, so it is smaller and square to the desk's edge.
+        tray->orientation = deskFacing(trayPoint());
+        tray->scale = Vec3::repeating(trayScale);
         root_->addChild(tray);
+        trayEntity = tray;
     }
 
     loadShelf(catalog);
@@ -118,12 +125,14 @@ void OceanModel::build() {
     runFlags();
 }
 
-/// The small tree stands low to the left and within reach: it is worked by hand.
+/// The small tree stands on the desk, right in front of you and within reach: it is worked by hand.
 void OceanModel::seat(const EntityRef& entity) {
     // `-deckUp 1` stands it higher and further off, where the simulator's view can see it.
     bool seen = Flags::has("deckUp");
-    // Well down and to the left, out of the way of a hand reaching for the tree: about 32 cm left, 33 cm ahead, 39 cm below the eyes.
-    Vec3 p = seen ? stage.point(-27, -16, 0.62f) : stage.point(-44, -40, 0.6f);
+    // NOTE(port): changed for Quest, at Kai's request (2026-11-15): on the desk, right in front of you.
+    // The Swift stands it well down and to the left, out of the way of a hand reaching for the tree
+    // (`stage.point(-44, -40, 0.6)`: about 32 cm left, 33 cm ahead, 39 cm below the eyes).
+    Vec3 p = seen ? stage.point(-27, -16, 0.62f) : desk.at(0, treeBack());
     entity->position = p;
     // Upright, as a tree stands, and turned toward where you sit.
     entity->orientation = stage.upright(p).orientation;
@@ -151,12 +160,23 @@ void OceanModel::update(float dt) {
     feelHologram();
     if (hologram) hologram->update(now, dt);
     layHologramLabel(now);
+    // NOTE(port): added for Quest. While the scene is being brought along (oceanmodel_desk.cpp) the hands
+    // jump with the room: nothing is read from them for that moment.
+    bool still = now < handsStillUntil, wasQuiet = hands->quiet;
+    if (still) hands->quiet = true;
     for (const Hands::Event& event : hands->update(stage.origin, stage.f, dt)) handle(event);
+    if (still) hands->quiet = wasQuiet;
+    watchSeat(dt);
+    watchForest();
+    veilNow = veil_.value(now);
     noteHands();
     screen->update();
     lookAtOcean(dt);
     followPan(dt);
+    layTools();
+    updateCut(now, dt);
     drawHandGlow(now, dt);
+    updateGuide(now, dt);
     updateSound(now);
     shelveWaiting();
 
@@ -207,6 +227,7 @@ void OceanModel::update(float dt) {
         parts[0] += t1 - t0; parts[1] += t2 - t1; parts[2] += t3 - t2;
         runFades(now);
         for (const MoverRef& m : movers) apply(*m, now);
+        tendForest(now);
         movers.erase(std::remove_if(movers.begin(), movers.end(), [&](const MoverRef& m) {
             if (!(now >= m->removeAt)) return false;
             m->entity->removeFromParent();
@@ -362,6 +383,11 @@ void OceanModel::layout(double now) {
             if (radius > 0.1f && width * width / (8 * radius) > flatWithin) curve = c.grown(now) * boost / radius;
         }
         c.lift = lift;
+        // `-bendLog`: twice a second, the open card's bend beside its sheet's, to check the one against the other.
+        if (Flags::has("bendLog") && current && c.id == *current && int(now * 2) != int((now - 0.012) * 2)) {
+            logLine(fmt("[bend] card %d: zoom %.2f, scale %.3f, width %.3f m, card curve %.4f -> world radius %.3f m; sheet radius %.3f m (focus %.3f), lift %.3f, raise %.3f",
+                        c.id, z, c.grown(now) * boost, c.extent(now).x * boost, curve, curve > 0 ? c.grown(now) * boost / curve : 0.f, sheet.curve > 0 ? 1 / sheet.curve : 0.f, stage.focus, lift, sheet.raise));
+        }
         return Placed{sheet.at(shown.at, lift), boost, curve, Stage::opacity(behind)};
     };
     for (const auto& [id, c] : cards) {
@@ -637,9 +663,13 @@ void OceanModel::refreshHologram(const Tree& tree) {
             out.push_back(node);
         }
     }
-    if (!hologram->entity->isEnabled) {
+    if (!hologram->entity->isEnabled || holoHiding) {
+        // NOTE(port): changed for Quest: `fadeIn(hologram.entity, delay: 0.2, over: 0.5)` in the Swift. When
+        // the tree was opened from its cover, the small tree shows as the cover's tree arrives in its place.
+        holoHiding = false;
         hologram->entity->isEnabled = true;
-        fadeIn(hologram->entity, 0.2, 0.5f);
+        fades.erase(std::remove_if(fades.begin(), fades.end(), [&](const Fade& f) { return f.entity == hologram->entity; }), fades.end());
+        fadeIn(hologram->entity, std::max(0.2, holoShowAt - time), 0.5f);
     }
     hologram->set(out, layers, tree.standDepth(), time);
 }
@@ -742,6 +772,7 @@ void OceanModel::leaveHologram() {
 /// else to the group most lately asked there.
 void OceanModel::jump(int layer) {
     if (!(tree && !pressing && layer != tree->standDepth())) return;
+    guideDid("jump");
     if (layer >= 0 && layer < int(tree->route.size())) {
         goTo(tree->route[layer]);
     } else {
@@ -971,7 +1002,7 @@ void OceanModel::drawHandGlow(double now, float dt) {
         }
     }
 
-    if (std::optional<std::string> demo = Flags::string("glowDemo")) {
+    if (std::optional<std::string> demo = Flags::string("glowDemo"); demo && *demo != "blade" && *demo != "hold") {
         // A hand that isn't there: where a right hand would be, doing each thing in turn.
         Vec3 at = stage.origin + stage.f * 0.42f + stage.r * 0.14f - stage.u * 0.22f;
         float t = float(std::fmod(now, 6.0));

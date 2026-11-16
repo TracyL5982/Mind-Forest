@@ -63,6 +63,35 @@ void OceanModel::makeCard(const TreeNode& n, double delay) {
         c->emerge.go(1, time, delay, Pace::pop, Ease::arrive);
     }
     Look look = style(n, tree);
+    // NOTE(port): added for Quest. Out of its picture on the cover the tree was, which stands where the
+    // cover left it: the card takes the picture's place as it is, and rises from there to its layer. It
+    // grows as it travels, so it takes the long settle. (A card that does not show lets its picture go.)
+    bool rises = false;
+    if (auto lift = rising.find(n.id); lift != rising.end()) {
+        Rising r = lift->second;
+        rising.erase(lift);
+        if (look.alpha > 0.5f && !(r.ref == n.ref && look.label <= 0.5f)) {
+            // A card that does not look like its picture (a note; an earlier step, shown as its number and
+            // name) comes up out of the picture's place as the picture goes: one gives way to the other.
+            c->source = r.at;
+            c->emerge.set(0);
+            c->emerge.go(1, time, delay, 0.9f, Ease::travel);
+            EntityRef thumb = r.thumb;
+            after(delay, [this, thumb] { fadeOut(thumb, 0.3f); });
+        } else if (look.alpha > 0.5f) {
+            rises = true;
+            c->source = r.at;
+            // (A card that arrives open is that much larger than its small face: it starts the picture's size all the same.)
+            c->sourceScale = r.width / (b.small.x * (look.open > 0.5f ? c->growth() : 1));
+            c->sourceTurn = r.turn;
+            c->emerge.set(0);
+            c->emerge.go(1, time, delay, 0.9f, Ease::travel);
+            EntityRef thumb = r.thumb;
+            after(delay, [thumb] { thumb->removeFromParent(); });
+        } else {
+            fadeOut(r.thumb, 0.3f);
+        }
+    }
     c->scale.set(look.scale);
     c->alpha.set(look.alpha);
     c->openMix.set(look.open);
@@ -98,6 +127,13 @@ void OceanModel::makeCard(const TreeNode& n, double delay) {
             c->smallHolder->addChild(ghost);
             ghosts[n.id] = ghost;
         }
+    }
+    // Its picture is wanted the moment it takes the cover's picture's place, a beat from now: it goes to
+    // the head of the queue, which makes a couple of cards a frame (and waits for a work's file to be
+    // unpacked in the background). Made here and now, eight of them cost the frame the tree opens on.
+    if (rises && !c->built) {
+        buildQueue.erase(std::remove(buildQueue.begin(), buildQueue.end(), n.id), buildQueue.end());
+        buildQueue.insert(buildQueue.begin(), n.id);
     }
     touch(c->settles() + 0.4);          // and the moment after it lands, when its thread runs out to it
 }
@@ -297,7 +333,9 @@ void OceanModel::buildRows(CardView& c) {
         }
     }
     std::vector<std::pair<std::string, Pick>> questions;
-    if (marks.count(c.id)) questions.push_back({"More on what you marked", Pick::askMark(c.id)});
+    // (Not on a lesson of the welcome tree: what is marked there is practice, not a question.)
+    bool lesson = c.ref.kind == Ref::Kind::note && c.ref.id.rfind("welcome", 0) == 0;
+    if (marks.count(c.id) && !lesson) questions.push_back({"More on what you marked", Pick::askMark(c.id)});
     for (size_t k = 0; k < c.asks.size(); k++) questions.push_back({c.asks[k].question, Pick::ask(c.id, int(k))});
     if (!questions.empty()) {
         float gap = rows.empty() ? 0 : 0.012f;

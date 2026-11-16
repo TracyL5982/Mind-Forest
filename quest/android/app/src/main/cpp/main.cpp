@@ -20,6 +20,8 @@
 //   -rasterTest          before any session: draw 200 pictures on the background thread beside 2000 text measures, and log how it went
 //   -syncRaster          draw every picture on the frame thread, as before pictures could arrive later (to compare)
 //   -slowRaster <ms>     hold each picture back this long, to see how waiting looks
+//   -noRoom              do not read the room (the headset's scene model): the scene sits at an assumed desk
+//   -scanRoom            if the headset knows nothing of the room, show its Space Setup so it can be scanned
 #include <EGL/egl.h>
 #include <GLES3/gl32.h>
 #include <GLES2/gl2ext.h>
@@ -47,11 +49,14 @@
 #include "jni_bridge.h"
 #include "perf.h"
 #include "render.h"
+#include "room_android.h"
 
 namespace {
 
 std::thread frameThread;
 std::atomic<bool> quitting{false};
+/// Set from the activity's thread when the user has answered whether the app may see the room.
+std::atomic<bool> roomPermissionChanged{false};
 
 typedef void (*MultiviewFn)(GLenum, GLenum, GLuint, GLint, GLint, GLsizei);
 typedef void (*MultisampleMultiviewFn)(GLenum, GLenum, GLuint, GLint, GLsizei, GLint, GLsizei);
@@ -183,12 +188,27 @@ void run() {
     };
     bool extHands = want(XR_EXT_HAND_TRACKING_EXTENSION_NAME);
     bool extAim = extHands && want(XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME);
+    // Only to write the system's hand model out for the guide's hands to be made from (`-dumpHandMesh`).
+    bool extHandMesh = extHands && Flags::has("dumpHandMesh") && want(XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME);
     bool extPassthrough = want(XR_FB_PASSTHROUGH_EXTENSION_NAME);
     bool extRate = want(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME);
     bool extPerf = want(XR_EXT_PERFORMANCE_SETTINGS_EXTENSION_NAME);
     bool extThreads = want(XR_KHR_ANDROID_THREAD_SETTINGS_EXTENSION_NAME);
     bool extLocalFloor = want(XR_EXT_LOCAL_FLOOR_EXTENSION_NAME);
     bool extHandInteraction = extHands && want(XR_EXT_HAND_INTERACTION_EXTENSION_NAME);
+    // The room: Meta's scene model. All of its extensions or none.
+    bool extRoom = !Flags::has("noRoom");
+    for (const char* name : Room::extensions()) extRoom = extRoom && has(name);
+    if (extRoom) {
+        for (const char* name : Room::extensions()) enabled.push_back(name);
+    }
+    {
+        std::string offered = "[xr] scene extensions offered:";
+        for (const auto& e : available) {
+            if (strstr(e.extensionName, "scene") || strstr(e.extensionName, "spatial") || strstr(e.extensionName, "plane")) offered += std::string(" ") + e.extensionName;
+        }
+        logLine(offered);
+    }
     bool extFoveation = has(XR_FB_FOVEATION_EXTENSION_NAME) && has(XR_FB_FOVEATION_CONFIGURATION_EXTENSION_NAME) &&
                         has(XR_FB_SWAPCHAIN_UPDATE_STATE_EXTENSION_NAME);
     if (extFoveation) {
@@ -264,6 +284,15 @@ void run() {
         view.poseInReferenceSpace.orientation.w = 1;
         xrCreateReferenceSpace(session, &view, &viewSpace);
     }
+
+    Room room;
+    room.start(instance, session, extRoom);
+    bool roomAsked = false, captureAsked = false;
+    double roomWaitFrom = 0;
+    // The table the scene is fixed to, and where its anchor was when the scene was last laid by it.
+    int held = 0;
+    bool heldKnown = false;
+    Mat4 heldPose;
 
     // MARK: Eye buffers: one array texture, both eyes drawn in one pass
 
@@ -402,6 +431,58 @@ void run() {
                 ok(create(session, &info, &trackers[i]), "hand tracker");
             }
             host::handsSupported = trackers[0] != XR_NULL_HANDLE && trackers[1] != XR_NULL_HANDLE;
+        }
+    }
+    // `-dumpHandMesh`: the headset's own model of each hand (its shape, its joints as they are when the
+    // model was made, and how much each joint moves each point), written to out/hand-left.bin and
+    // out/hand-right.bin. tools/hand_mesh.py turns them into what the guide's hands are drawn from.
+    if (extHandMesh) {
+        PFN_xrGetHandMeshFB getMesh = nullptr;
+        xrGetInstanceProcAddr(instance, "xrGetHandMeshFB", (PFN_xrVoidFunction*)&getMesh);
+        for (int i = 0; i < 2 && getMesh && trackers[i] != XR_NULL_HANDLE; i++) {
+            XrHandTrackingMeshFB mesh{XR_TYPE_HAND_TRACKING_MESH_FB};
+            if (!ok(getMesh(trackers[i], &mesh), "hand mesh size")) continue;
+            std::vector<XrPosef> poses(mesh.jointCountOutput);
+            std::vector<float> radii(mesh.jointCountOutput);
+            std::vector<XrHandJointEXT> parents(mesh.jointCountOutput);
+            std::vector<XrVector3f> positions(mesh.vertexCountOutput), normals(mesh.vertexCountOutput);
+            std::vector<XrVector2f> uvs(mesh.vertexCountOutput);
+            std::vector<XrVector4sFB> blendIndices(mesh.vertexCountOutput);
+            std::vector<XrVector4f> blendWeights(mesh.vertexCountOutput);
+            std::vector<int16_t> indices(mesh.indexCountOutput);
+            mesh.jointCapacityInput = mesh.jointCountOutput;
+            mesh.jointBindPoses = poses.data();
+            mesh.jointRadii = radii.data();
+            mesh.jointParents = parents.data();
+            mesh.vertexCapacityInput = mesh.vertexCountOutput;
+            mesh.vertexPositions = positions.data();
+            mesh.vertexNormals = normals.data();
+            mesh.vertexUVs = uvs.data();
+            mesh.vertexBlendIndices = blendIndices.data();
+            mesh.vertexBlendWeights = blendWeights.data();
+            mesh.indexCapacityInput = mesh.indexCountOutput;
+            mesh.indices = indices.data();
+            if (!ok(getMesh(trackers[i], &mesh), "hand mesh")) continue;
+            std::string path = host::outDir + (i == 0 ? "/hand-left.bin" : "/hand-right.bin");
+            if (FILE* f = fopen(path.c_str(), "wb")) {
+                uint32_t head[4] = {0x48534D48, mesh.jointCountOutput, mesh.vertexCountOutput, mesh.indexCountOutput};
+                fwrite(head, sizeof(head), 1, f);
+                fwrite(poses.data(), sizeof(XrPosef), poses.size(), f);
+                fwrite(radii.data(), sizeof(float), radii.size(), f);
+                for (XrHandJointEXT p : parents) {
+                    int32_t parent = int32_t(p);
+                    fwrite(&parent, sizeof(parent), 1, f);
+                }
+                fwrite(positions.data(), sizeof(XrVector3f), positions.size(), f);
+                fwrite(normals.data(), sizeof(XrVector3f), normals.size(), f);
+                fwrite(uvs.data(), sizeof(XrVector2f), uvs.size(), f);
+                fwrite(blendIndices.data(), sizeof(XrVector4sFB), blendIndices.size(), f);
+                fwrite(blendWeights.data(), sizeof(XrVector4f), blendWeights.size(), f);
+                fwrite(indices.data(), sizeof(int16_t), indices.size(), f);
+                fclose(f);
+                logLine(fmt("[xr] hand mesh %d: %u joints, %u vertices, %u indices -> %s", i, mesh.jointCountOutput, mesh.vertexCountOutput,
+                            mesh.indexCountOutput, path.c_str()));
+            }
         }
     }
     // The system's own reading of a closed hand (the hand interaction profile's grasp), for the fist:
@@ -567,6 +648,12 @@ void run() {
                 }
             } else if (event.type == XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING) {
                 ended = true;
+            } else if (event.type == XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING) {
+                // The user recentred the headset: the scene is told, and comes to where they are.
+                logLine("[xr] the headset was recentred");
+                host::recentred = true;
+            } else {
+                room.handle(event);
             }
             event = {XR_TYPE_EVENT_DATA_BUFFER};
         }
@@ -594,11 +681,91 @@ void run() {
             xrLocateViews(session, &locate, &viewState, 2, &n, views);
         }
         bool posed = (viewState.viewStateFlags & XR_VIEW_STATE_POSITION_VALID_BIT) && (viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT);
+
+        // The room. It is read once the session runs, again when the scene asks or the user has just
+        // allowed it, and its tables are placed every frame (a handful of calls).
+        if (!roomAsked || host::readRoomAsked || roomPermissionChanged.exchange(false)) {
+            roomAsked = true;
+            host::readRoomAsked = false;
+            room.read();
+        }
+        room.locate(appSpace, frame.predictedDisplayTime);
+        // The scene is kept fixed to the table it sits at: when the headset shifts its own bearings
+        // (it has found itself again, or was recentred), that table's anchor moves in the app space,
+        // and the scene's space is moved the same way. Only a turn about the vertical and a move.
+        if (host::heldTable != held) {
+            held = host::heldTable;
+            heldKnown = false;
+        }
+        if (const Room::Found* table = held ? room.table(held) : nullptr; table && table->placed) {
+            if (!heldKnown) {
+                heldPose = table->pose;
+                heldKnown = true;
+            } else {
+                Vec3 was = heldPose.direction({0, 0, -1}), is = table->pose.direction({0, 0, -1});
+                float turn = std::atan2(was.x, was.z) - std::atan2(is.x, is.z);
+                turn = std::atan2(std::sin(turn), std::cos(turn));
+                float moved = distance(heldPose.position(), table->pose.position());
+                if (moved > 0.004f || std::fabs(turn) > 0.0035f) {
+                    Quat q = Quat::angleAxis(-turn, {0, 1, 0});
+                    Mat4 shift = Mat4::trs(table->pose.position() - q.act(heldPose.position()), q, {1, 1, 1});
+                    host::sceneFromRoom = host::sceneFromRoom * shift.inverse();
+                    if (moved > 0.05f || std::fabs(turn) > 0.03f) {
+                        logLine(fmt("[room] the headset's bearings shifted %.2f m and %.1f degrees: the scene stays at its table", double(moved),
+                                    double(turn * 180 / M_PI)));
+                    }
+                    heldPose = table->pose;
+                }
+            }
+        }
+        const Mat4 lay = host::sceneFromRoom;
+        const Quat layTurn(Mat3(lay.columns[0].xyz(), lay.columns[1].xyz(), lay.columns[2].xyz()));
+        host::tables.clear();
+        for (const Room::Found& f : room.tables()) {
+            if (!f.placed) continue;
+            platform::Table t = f.top;
+            t.center = lay.point(t.center);
+            t.a = lay.direction(t.a);
+            t.b = lay.direction(t.b);
+            host::tables.push_back(t);
+        }
         {
             XrSpaceLocation location{XR_TYPE_SPACE_LOCATION};
             xrLocateSpace(viewSpace, appSpace, frame.predictedDisplayTime, &location);
             bool valid = (location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) && (location.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT);
-            if (valid) host::head = poseMatrix(location.pose);
+            if (valid) host::head = lay * poseMatrix(location.pose);
+        }
+        // Whether the app may see the room is asked of the user once somebody is there to answer: the
+        // session has the focus and a hand has been held up for a second (see MainActivity.askForRoom).
+        // The system's own pointer is the sign of that: a headset lying on a desk still reports hands,
+        // where it last saw them, but aims no ray from them.
+        static bool roomPermissionAsked = false;
+        static double handUpSince = 0;
+        bool handUp = host::hands[0].aimValid || host::hands[1].aimValid;
+        if (!handUp) handUpSince = 0; else if (handUpSince == 0) handUpSince = mediaTime();
+        if (extRoom && !roomPermissionAsked && started && state == XR_SESSION_STATE_FOCUSED && handUp && mediaTime() - handUpSince > 1 &&
+            mediaTime() - runBegan > 1.5) {
+            roomPermissionAsked = true;
+            jclass cls = env->GetObjectClass(jni::activity());
+            jmethodID ask = env->GetMethodID(cls, "askForRoom", "()V");
+            if (ask) env->CallVoidMethod(jni::activity(), ask);
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            env->DeleteLocalRef(cls);
+        }
+        // The scene waits for the first reading of the room before it sits down, but not for long.
+        if (host::head && roomWaitFrom == 0) roomWaitFrom = mediaTime();
+        if (!host::roomSettled) {
+            bool placed = true;
+            for (const Room::Found& f : room.tables()) placed = placed && f.placed;
+            bool late = roomWaitFrom > 0 && mediaTime() - roomWaitFrom > 2.0;
+            if ((room.settled() && (placed || late)) || late) {
+                host::roomSettled = true;
+                logLine(fmt("[room] settled after %.2f s with %zu tables", roomWaitFrom > 0 ? mediaTime() - roomWaitFrom : 0.0, host::tables.size()));
+                if (Flags::has("scanRoom") && room.settled() && room.tables().empty() && !captureAsked) {
+                    captureAsked = true;
+                    room.capture();
+                }
+            }
         }
         for (int i = 0; i < 2; i++) {
             platform::Hand& hand = host::hands[i];
@@ -623,16 +790,16 @@ void run() {
             for (int j = 0; j < XR_HAND_JOINT_COUNT_EXT; j++) {
                 if (joints[j].locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) any = true;
                 const XrPosef& p = joints[j].pose;
-                hand.joints[j] = {p.position.x, p.position.y, p.position.z};
-                hand.rotations[j] = Quat{p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w};
+                hand.joints[j] = lay.point({p.position.x, p.position.y, p.position.z});
+                hand.rotations[j] = layTurn * Quat{p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w};
             }
             hand.tracked = any;
             if (extAim && any) {
                 hand.aimValid = (aim.status & XR_HAND_TRACKING_AIM_VALID_BIT_FB) != 0;
                 hand.systemGesture = (aim.status & (XR_HAND_TRACKING_AIM_SYSTEM_GESTURE_BIT_FB | XR_HAND_TRACKING_AIM_MENU_PRESSED_BIT_FB)) != 0;
-                hand.aimOrigin = {aim.aimPose.position.x, aim.aimPose.position.y, aim.aimPose.position.z};
+                hand.aimOrigin = lay.point({aim.aimPose.position.x, aim.aimPose.position.y, aim.aimPose.position.z});
                 Quat q{aim.aimPose.orientation.x, aim.aimPose.orientation.y, aim.aimPose.orientation.z, aim.aimPose.orientation.w};
-                hand.aimDirection = q.act({0, 0, -1});
+                hand.aimDirection = lay.direction(q.act({0, 0, -1}));
                 hand.pinchStrength = aim.pinchStrengthIndex;
             }
         }
@@ -675,7 +842,7 @@ void run() {
         for (const std::string& a : atlases) {
             if (!a.empty() && !platform::imageReady(a, 0)) atlasesReady = false;
         }
-        if (!started && host::head && atlasesReady) {
+        if (!started && host::head && atlasesReady && host::roomSettled) {
             double began = mediaTime();
             scene->start();
             started = true;
@@ -745,7 +912,8 @@ void run() {
             Views eyes;
             eyes.count = 2;
             for (int i = 0; i < 2; i++) {
-                eyes.view[i] = poseMatrix(views[i].pose).inverse();
+                // (Through where the scene's space lies now: the scene may have moved it in its update.)
+                eyes.view[i] = (host::sceneFromRoom * poseMatrix(views[i].pose)).inverse();
                 eyes.projection[i] = projection(views[i].fov, 0.05f, 60);
             }
             if (host::head) {
@@ -762,6 +930,7 @@ void run() {
             glClearColor(0, 0, 0, passthroughLayer != XR_NULL_HANDLE ? dim : 1);
             glDepthMask(GL_TRUE);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            renderer.veil = started ? scene->veil() : 1;
             if (started) renderer.draw(world, eyes, elapsed);
             const GLenum discard[] = {GL_DEPTH_ATTACHMENT};
             glInvalidateFramebuffer(GL_DRAW_FRAMEBUFFER, 1, discard);
@@ -880,6 +1049,12 @@ JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_MainActivity_nativeStart(JN
     logLine(line);
     quitting = false;
     frameThread = std::thread(run);
+}
+
+/// The user has answered whether the app may see the room (MainActivity): read it again.
+JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_MainActivity_nativeRoomPermission(JNIEnv*, jobject, jboolean granted) {
+    logLine(granted ? "[room] the app may see the room" : "[room] the app may not see the room: it sits at an assumed desk");
+    if (granted) roomPermissionChanged = true;
 }
 
 JNIEXPORT void JNICALL Java_com_kaifengwu_mindpalace_MainActivity_nativeStop(JNIEnv*, jobject) {

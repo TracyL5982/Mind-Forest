@@ -11,6 +11,11 @@
     <!-- The room stays in view, as on Vision Pro (mixed immersion). -->
     <uses-feature android:name="com.oculus.feature.PASSTHROUGH" android:required="true" />
 
+    <!-- The room: the scene sits at the desk in front of you if the headset knows one (its scene model,
+         made in Space Setup). USE_SCENE is asked of the user when the app first runs. -->
+    <uses-permission android:name="com.oculus.permission.USE_ANCHOR_API" />
+    <uses-permission android:name="com.oculus.permission.USE_SCENE" />
+
     <uses-permission android:name="org.khronos.openxr.permission.OPENXR" />
     <uses-permission android:name="org.khronos.openxr.permission.OPENXR_SYSTEM" />
     <queries>

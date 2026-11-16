@@ -64,4 +64,8 @@ sync_dir "$REPO_ROOT/public/clips" clips
 sync_dir "$REPO_ROOT/public/works" works
 sync_dir "$SMALL" works-small
 [ -f "$SOUNDS/manifest.json" ] && sync_dir "$SOUNDS" sounds
+# The headset's own hand model, for the guide's hands (written once with `-dumpHandMesh`, see tools/hand_mesh.py).
+[ -f "$REPO_ROOT/media-src/quest/hands/hand-right.bin" ] && sync_dir "$REPO_ROOT/media-src/quest/hands" hands
+# The greeting's lettering (Fraunces 72pt Soft Light and its italic, SIL Open Font License; copied from the Mac's own fonts).
+[ -d "$REPO_ROOT/media-src/quest/fonts" ] && sync_dir "$REPO_ROOT/media-src/quest/fonts" fonts
 adb shell "du -sh $DEVICE_FILES/media"

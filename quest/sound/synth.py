@@ -35,6 +35,8 @@ def hz(note):
 
 # D Lydian: D E F# G# A B C#. The ladder the small tree and the cards play on.
 LADDER = ["D4", "E4", "F#4", "A4", "B4", "C#5", "D5", "E5", "F#5", "G#5", "A5", "B5"]
+# The ocean's glints: the same key two octaves up, without the fourth (glint_00 … glint_09).
+GLINTS = ["D6", "E6", "F#6", "A6", "B6", "C#7", "D7", "E7", "F#7", "A7"]
 
 # One chord per layer, the root layer lowest. Each is a stack of fifths (no
 # third: neither major nor minor, so it asks rather than states), moved one
@@ -254,9 +256,11 @@ LOOPS = {}       # name -> loop length in seconds
 PAGE_ONLY = set()
 
 
-def add(name, x, gain, about, wet=0.35, loop=None):
+def add(name, x, gain, about, wet=0.35, loop=None, longest=None):
     if loop is None:
         x = trim(room(x, wet))
+        # (`longest`: a sound heard many times a second can't each ring for seconds.)
+        if longest and len(x) > int(longest * SR): x = fade(x[: int(longest * SR)], 0.0, longest * 0.4)
     else:
         LOOPS[name] = loop
     x = x / np.abs(x).max() * 0.7
@@ -329,7 +333,17 @@ def build():
                         * (lambda fr: (1 / (1 + (fr / 500) ** 2)) * (fr > 60))(np.fft.rfftfreq(int(16 * SR), 1 / SR))[:, None], int(16 * SR), axis=0)
     swell = 0.6 + 0.4 * np.sin(2 * np.pi * t_(16.0) / 16.0)
     wind = wind / np.abs(wind).max() * swell[:, None]
-    add("ocean_bed", bed / np.abs(bed).max() + 0.25 * wind, 0.22, "The ocean at rest: a held fifth and a little wind, always on, very low", loop=16.0)
+    # (Well under everything, 8 dB below where it began: heard all the time, it wore. What changes is the glints.)
+    add("ocean_bed", bed / np.abs(bed).max() + 0.25 * wind, 0.09, "The ocean at rest: a held fifth and a little wind, always on, very low", loop=16.0)
+
+    # A piece of the ocean swells as the head comes to it: a glint. Many a second while you look round,
+    # none while you look at one place. High, short and far off, on the notes any two of which agree.
+    for i, n in enumerate(GLINTS):
+        f = hz(n)
+        g = chime(f, 1.1, 1.0, "glass", soft=0.004, bright=0.7)
+        g = place(g, chime(f * 2, 0.7, 0.22, "glass", soft=0.004, bright=0.5), 0.018)
+        # (The ear is keener toward 3 kHz: the higher ones are made quieter, to sound alike.)
+        add(f"glint_{i:02d}", g, round(0.11 * (hz(GLINTS[0]) / f) ** 0.3, 3), f"A piece of the ocean swells where the head points ({n})", wet=0.5, longest=1.3)
 
     stir = air(2.6, 300, 2400, 1.0, 1.0)
     stir = place(stir, chime(hz("E6"), 1.6, 0.10, "glass", -0.4), 0.9)
@@ -481,7 +495,7 @@ def write_app(out):
     for name in names:
         wavfile.write(os.path.join(out, name + ".wav"), SR, pcm(SOUNDS[name][0]))
     with open(os.path.join(out, "manifest.json"), "w") as f:
-        json.dump({"key": "D Lydian", "ladder": LADDER, "layers": LAYERS, "sounds": {n: info(n) for n in names}}, f, indent=1)
+        json.dump({"key": "D Lydian", "ladder": LADDER, "glints": GLINTS, "layers": LAYERS, "sounds": {n: info(n) for n in names}}, f, indent=1)
     total = sum(os.path.getsize(os.path.join(out, n + ".wav")) for n in names)
     print(f"{len(names)} sounds, {total / 1e6:.0f} MB, in {out}")
 

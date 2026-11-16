@@ -45,6 +45,9 @@ public:
     };
     Stats stats;
 
+    /// How much of the finished picture shows, 0…1: below 1, everything drawn is faded together in one
+    /// pass at the end (nothing is re-sorted or drawn differently for it). The hosts set it from PalaceScene::veil.
+    float veil = 1;
     /// How brightly a `.highlight` hover lights its entity at full strength 1.
     float highlightGain = 0.10f;
     /// Draw small opaque pictures that share a texture in one call (`-noBatch` turns it off, to compare).
@@ -63,6 +66,7 @@ private:
         unsigned id = 0;
         int model = -1, viewProj = -1, tint = -1, useTexture = -1, tex = -1, opacity = -1, threshold = -1;
         int hover = -1, opaque = -1, time = -1, shift = -1, center = -1, uvMatrix = -1, loading = -1;
+        int eye = -1, swell = -1, look = -1;
     };
     struct Item {
         const Entity* entity;
@@ -90,12 +94,13 @@ private:
     };
     std::vector<Batch> batches;
     bool multiview = false;
-    Program unlit, line, dust, glow, video;
+    Program unlit, line, dust, glow, video, ghost;
     std::vector<Item> opaque, transparent;
     double uploadSpentMs = 0;
     double frameTime = 0;
     /// Whether a picture still waiting may be sent this frame; false means leave what uses it undrawn for now.
     bool mayUpload() const { return stats.textureUploads == 0 || uploadSpentMs < uploadBudgetMs; }
+    unsigned veilVao = 0, veilVbo = 0;
     unsigned timerQuery = 0;
     bool timerPending = false, timerSupported = false;
 

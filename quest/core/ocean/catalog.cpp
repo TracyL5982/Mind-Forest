@@ -502,6 +502,8 @@ float Catalog::aspect(const OceanNote& note) const {
 
 /// The picture on an open image or video note, m.
 Vec2 Catalog::pictureSize(const OceanNote& note) const {
+    // NOTE(port): added for Quest: a lesson of the welcome tree is a larger card, with room for a gesture to play on it.
+    if (note.id.rfind("welcome", 0) == 0) return Metrics::film(Metrics::lessonWidth, Metrics::lessonStage, aspect(note));
     return Metrics::film(Metrics::openNoteWidth, 0.262f, aspect(note));
 }
 
@@ -512,7 +514,7 @@ Vec2 Catalog::openSize(const OceanNote& note) const {
     case OceanNote::Kind::chart: return {Metrics::openNoteWidth, 0.372f};
     case OceanNote::Kind::link: return {Metrics::openNoteWidth, 0.218f};
     case OceanNote::Kind::image:
-    case OceanNote::Kind::video: return {Metrics::openNoteWidth, pictureSize(note).y + 0.146f};
+    case OceanNote::Kind::video: return {note.id.rfind("welcome", 0) == 0 ? Metrics::lessonWidth : Metrics::openNoteWidth, pictureSize(note).y + 0.146f};
     }
     return {Metrics::openNoteWidth, 0.27f};
 }
@@ -887,6 +889,8 @@ std::vector<Catalog::Tied> Catalog::nearby(const Ref& ref, const std::set<Ref>& 
 /// is one. There is always a question: no card is a dead end.
 std::vector<Ask> Catalog::asks(const Ref& ref, std::optional<int> previous) const {
     std::vector<Ask> out;
+    // NOTE(port): added for Quest: a lesson of the welcome tree is there to be done, not asked about.
+    if (ref.kind == Ref::Kind::note && ref.id.rfind("welcome", 0) == 0) return out;
     switch (ref.kind) {
     case Ref::Kind::film:
     case Ref::Kind::work: {

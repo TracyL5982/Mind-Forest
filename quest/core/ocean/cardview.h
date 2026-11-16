@@ -73,6 +73,11 @@ public:
     float lift = 0;                     // m off that sheet
     Vec3 source = Vec3::zero();         // where it comes from, and goes back to
     float sourceScale = 0.2f;
+    // NOTE(port): added for Quest. A card that rises out of a picture on a put-away tree's cover takes
+    // that picture's place: it is there whole from its first moment (not faded in as it leaves), exactly
+    // the picture's size, and turned as the picture was, coming round to its layer on the way. Unset
+    // again once it has arrived.
+    std::optional<Quat> sourceTurn;
     double bornAt = 0.0;
     double goneAt = std::numeric_limits<double>::infinity();
     std::optional<int> home;            // its film's or work's place in the ocean

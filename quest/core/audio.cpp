@@ -190,7 +190,7 @@ void level(const std::string& name, float level, float over) {
     if (found == byName.end()) return;
     Slot& slot = *slots[size_t(found->second)];
     if (!slot.loop) return;
-    level = std::min(1.f, std::max(0.f, level));
+    level = std::min(2.f, std::max(0.f, level));
     if (std::fabs(slot.asked - level) < 0.004f && slot.askedOver == over) return;
     slot.asked = level;
     slot.askedOver = over;

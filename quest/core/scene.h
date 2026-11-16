@@ -184,6 +184,11 @@ struct Material {
         dust,           // DustMaterial.usda: specks moved in the vertex shader; parameters "Shift", "Center"
         hoverGlow,      // HoverGlowMaterial.usda: warm light, opacity = uv0.x * how strongly it is hovered
         video,          // VideoMaterial(avPlayer:)
+        // NOTE(port): Quest only (the guide's hands). A shape drawn as a line drawing: its edge a line of even
+        // weight, the rest barely there, and what is in front of it covering what is behind. The normal is in
+        // uv0 (x, y) and uv1.x; uv1.y is how much of that point is there. Parameters "Line" (the edge's
+        // weight, m), "Fill" (how much the body is filled) and "Glow" (how much light gathers toward its edge).
+        ghost,
     };
     Kind kind = Kind::unlit;
 
@@ -232,6 +237,13 @@ struct Material {
     static Material hoverGlow() {
         Material m;
         m.kind = Kind::hoverGlow;
+        m.transparent = true;
+        return m;
+    }
+    static Material ghost(Color color = {}) {
+        Material m;
+        m.kind = Kind::ghost;
+        m.color = color;
         m.transparent = true;
         return m;
     }
@@ -369,6 +381,9 @@ public:
     virtual void pointerLanded(int hand, const EntityRef& entity) {}
     /// How much the room around is dimmed, 0...1 (visionOS: preferredSurroundingsEffect); 0 leaves it alone.
     virtual float surroundingsDim() { return 0; }
+    /// Quest only: how much of the whole scene shows, 1 as a rule; it goes to 0 and back while the scene
+    /// is brought to where the user now is. The renderer fades the finished picture (Renderer::veil).
+    virtual float veil() { return 1; }
 };
 
 /// GPU objects whose owners have gone, for the renderer to free at the start

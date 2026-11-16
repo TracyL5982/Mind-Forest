@@ -23,6 +23,9 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
     // A cover's tree is taller for its width than the one at your hand, so that a tree of two layers is still a tree.
     float foot = layers == 1 ? 0.045f : 0.03f;
     float rise = std::min(0.055f, 0.17f / float(std::max(layers - 1, 1)));
+    plan.layers = layers;
+    plan.treeFoot = foot;
+    plan.treeRise = rise;
     auto spot = [&](Vec2 p, int layer) -> Vec3 {
         Vec3 q = Hologram::spot(p, layer, layers);
         q.y = foot + float(layer) * rise;
@@ -107,7 +110,7 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
         if (a.score != b.score) return a.score > b.score;
         return -a.node->id > -b.node->id;
     });
-    const std::array<Vec3, 5>& slots = coverSlots;
+    const auto& slots = coverSlots;
     std::vector<int> free;
     for (int i = 0; i < int(slots.size()); i++) free.push_back(i);
     std::vector<Ref> seen;
@@ -129,6 +132,7 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
         free.erase(std::remove(free.begin(), free.end(), k), free.end());
         Vec3 slot = slots[k];
         float w = plan.thumbs.empty() ? 0.24f : 0.19f;
+        if (plan.thumbs.size() >= usualPictures) w = 0.15f;         // NOTE(port): the three added for Quest are smaller
         Vec2 size;
         if (c.ref.kind == Ref::Kind::work) {
             size = Metrics::work(w * w * 0.6f, c.aspect, w * 1.15f, w * 1.05f);
@@ -144,16 +148,26 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
 /// from eye level: the tree stands upright, as a tree does, and its
 /// pictures and its name are tipped to face you. Returns the cover,
 /// what on it is tipped, and the box it is picked by.
-std::optional<OceanModel::Cover> OceanModel::makeCover(const Tree& tree, float el) {
+std::optional<OceanModel::Cover> OceanModel::makeCover(const Tree& tree, float el, bool planted) {
     if (!art || !catalog) return std::nullopt;
     CoverPlan plan = coverPlan(tree);
     EntityRef holder = Entity::make();
     std::vector<EntityRef> tilts;
+    EntityRef tree3d, name;                     // NOTE(port): kept for Quest, with `pictures` (see `Cover`)
+    std::vector<Shape> shapes;
+    Vec2 nameSize = Vec2::zero();
+    {
+        // The trunk, to as high as its last layer.
+        float high = (plan.treeFoot + float(plan.layers - 1) * plan.treeRise) * coverTree + 0.04f;
+        shapes.push_back(Shape::generateBox({0.16f, high, 0.16f}).offsetBy(Vec3{0, plan.foot + high / 2, 0}));
+    }
+    std::vector<CoverPicture> pictures;
     if (lineMaterial) {
         if (EntityRef branches = Hologram::still(plan.nodes, 1.9f, *lineMaterial)) {
             branches->scale = Vec3::repeating(coverTree);
             branches->position = {0, plan.foot, 0};
             holder->addChild(branches);
+            tree3d = branches;
         }
     }
     float wide = 0.24f;
@@ -179,19 +193,43 @@ std::optional<OceanModel::Cover> OceanModel::makeCover(const Tree& tree, float e
         e->position = thumb.at;
         holder->addChild(e);
         tilts.push_back(e);
+        pictures.push_back(CoverPicture{thumb.id, thumb.ref, e, thumb.size.x, thumb.at, thumb.size.y});
         wide = std::max(wide, std::fabs(thumb.at.x) + thumb.size.x / 2);
     }
     float low = plan.foot;
     if (std::optional<Piece> piece = art->coverCaption(tree.title, tree.maker, tree.sent)) {
         EntityRef caption = art->quad(*piece);
         caption->position = {0, plan.foot - 0.04f - piece->size.y / 2, 0.03f};
+        // NOTE(port): added for Quest. A tree that stands on the desk has its name in front of its foot,
+        // as a plant has its label, and nothing under the desk's top.
+        if (planted) caption->position = {0, plan.foot + piece->size.y / 2 + 0.01f, 0.1f};
         holder->addChild(caption);
         tilts.push_back(caption);
+        name = caption;
+        nameSize = piece->size;
         wide = std::max(wide, piece->size.x / 2);
-        low = plan.foot - 0.04f - piece->size.y;
+        low = planted ? plan.foot : plan.foot - 0.04f - piece->size.y;
     }
     tip(tilts, el);
-    return Cover{holder, tilts, Cover::Box{Vec3{0, (plan.top + low) / 2, 0}, Vec3{2 * wide, plan.top - low, 0.16f}}};
+    Cover cover{holder, tilts, Cover::Box{Vec3{0, (plan.top + low) / 2, 0}, Vec3{2 * wide, plan.top - low, planted ? 0.3f : 0.16f}}, plan.foot};
+    cover.shapes = shapes;
+    cover.nameSize = nameSize;
+    if (planted && lineMaterial) {
+        // Each tree's ground is raked its own way, the same way every time.
+        uint32_t seed = uint32_t(std::hash<std::string>()(tree.title)) ^ uint32_t(tree.nodes.size() * 131);
+        if (std::shared_ptr<Gravel> gravel = Gravel::make(*lineMaterial, seed)) {
+            gravel->entity->position = {0, plan.foot + 0.004f, 0};
+            holder->addChild(gravel->entity);
+            cover.gravel = gravel;
+        }
+    }
+    cover.branches = tree3d;
+    cover.caption = name;
+    cover.pictures = pictures;
+    cover.layers = plan.layers;
+    cover.treeFoot = plan.treeFoot;
+    cover.treeRise = plan.treeRise;
+    return cover;
 }
 
 /// Tips a cover's pictures and its name toward eyes `el` degrees below them.
@@ -207,6 +245,7 @@ void OceanModel::pressTree(bool send) {
     // (The Swift's `guard let tree`: the tree is held here, and by what is put off below, after the model lets it go.)
     TreeRef tree = this->tree;
     pressing = true;
+    guideDid("press");
     marking = std::nullopt;
     clearPeek();
     screen->hide();
@@ -250,13 +289,16 @@ void OceanModel::pressTree(bool send) {
     Vec3 at = front.center + front.normal * 0.02f;
     std::optional<Vec2> spot = standingSpot;
     standingSpot = std::nullopt;
-    after(double(Pace::press) - 0.04, [this, tree, front, at, spot, send, quiet] {
+    std::optional<Vec2> plot = standingPlot;       // NOTE(port): added for Quest: its place on the desk goes with it
+    standingPlot = std::nullopt;
+    after(double(Pace::press) - 0.04, [this, tree, front, at, spot, plot, send, quiet] {
         if (!quiet) sound(send ? "send" : "put_away", 1, 0.2);
         // The live cards give way to the one card they've become.
         std::map<int, CardRef> old = std::move(cards);
         cards.clear();
         buildQueue.clear();
         marks.clear();
+        inks.clear();
         for (const auto& [id, c] : old) {
             for (const Entity* e : c->extras) picks.erase(e);
             c->alpha.go(0, time, 0.1f);
@@ -289,15 +331,17 @@ void OceanModel::pressTree(bool send) {
             trayCount += 1;
             m->position.go(slot, time, 0.16, 0.4f, Ease::inOut);
             m->scale.go(0.2f, time, 0.16, 0.4f, Ease::inOut);
-            after(0.6, [this, holder, tree, slot, spot] {
-                holder->orientation = stage.facing(slot);
-                shelve(tree, slot, nullptr, spot);
+            after(0.6, [this, holder, tree, slot, spot, plot] {
+                holder->orientation = deskFacing(slot);
+                shelve(tree, slot, nullptr, spot, plot);
             });
             logLine("[ocean] sent: " + tree->title);
         } else {
-            m->removeAt = time + 0.16 + 0.42;
-            m->alpha.go(0, time, 0.5, 0.08f, Ease::out);
-            shelve(tree, at, m, spot);
+            // NOTE(port): changed for Quest: the Swift's flight to the shelf takes 0.42 s (`removeAt` 0.16 + 0.42,
+            // gone from 0.5). Down to the desk it shrinks to a quarter on the way, which wants the long settle (see `shelve`).
+            m->removeAt = time + 0.16 + 0.8;
+            m->alpha.go(0, time, 0.16 + 0.58, 0.08f, Ease::out);
+            shelve(tree, at, m, spot, plot);
             logLine("[ocean] put away: " + tree->title);
         }
         rebuildStrip();
@@ -321,54 +365,151 @@ Vec2 OceanModel::freeSpot() const {
 /// Hangs a pressed tree's cover on the shelf, above the tree. It stays
 /// where it was last put. `hand` is the card already in flight, which
 /// this one meets.
-void OceanModel::shelve(const TreeRef& tree, std::optional<Vec3> from, const MoverRef& hand, std::optional<Vec2> known) {
+void OceanModel::shelve(const TreeRef& tree, std::optional<Vec3> from, const MoverRef& hand, std::optional<Vec2> known, std::optional<Vec2> stood) {
+    // NOTE(port): added for Quest. There is only ever one welcome tree among the kept ones: the walk taken
+    // again (by the next person, or from the gesture sheet) replaces the one put away before.
+    if (tree && tree->walk()) {
+        for (auto i = shelf.begin(); i != shelf.end();) {
+            if (i->tree && i->tree->walk()) {
+                picks.erase(i->mover->entity.get());
+                i->mover->entity->inputTarget = false;
+                fadeOut(i->mover->entity, 0.4f);
+                i = shelf.erase(i);
+            } else {
+                ++i;
+            }
+        }
+    }
     Vec2 spot = known ? *known : freeSpot();
-    std::optional<Cover> made = makeCover(*tree, spot.y);
+    // NOTE(port): changed for Quest, at Kai's request (2026-11-15). The Swift hangs a cover far off and
+    // high, `spot` degrees round you (`makeCover(for: tree, el: spot.y)` at `shelfPoint(spot)`, at
+    // `coverRest` of its size). Here it grows from the desk, behind the small tree, among the others
+    // (oceanmodel_desk.cpp); `spot` is still kept, for the file.
+    // (The desk is taken to be large: a place is good wherever it is, so long as it is far enough off.)
+    bool on = stood && farEnough(*stood);
+    // (A place kept from another day, when the desk and what stood on it were different, may now be in another tree's way.)
+    for (const Shelved& cover : shelf) {
+        if (on && Forest::crowd(desk, stage.origin, cover.plot, *stood)) on = false;
+    }
+    Vec2 plot = on ? *stood : freePlot();
+    // On the desk while no tree is open; with one open (or on its way), straight to the ocean's floor, small.
+    bool down = wantDown();
+    std::optional<Cover> made = makeCover(*tree, restEl(plot, down), true);
     if (!made) return;
-    Vec3 p = shelfPoint(spot);
+    Vec3 p = restPoint(plot, made->foot, down);
     EntityRef holder = made->entity;
     holder->orientation = stage.upright(p).orientation;
-    holder->collision = {Shape::generateBox(made->box.size).offsetBy(made->box.center)};
-    holder->inputTarget = true;
-    holder->hover = Art::hover();
+    // NOTE(port): changed for Quest: one box round the whole cover in the Swift (`made.box`), which far off
+    // and small is what a look can find. Here the trees are large and stand one behind another.
+    holder->collision = made->shapes;
+    for (const CoverPicture& picture : made->pictures) {
+        Vec3 at{picture.at.x * huddleUp, picture.at.y, picture.at.z};
+        holder->collision.push_back(Shape::generateBox({picture.width * huddleUp, picture.height * huddleUp, 0.06f}).offsetBy(at));
+    }
+    if (made->caption) {
+        Vec2 plate = made->nameSize * huddleUp;
+        holder->collision.push_back(Shape::generateBox({plate.x, plate.y, 0.04f}).offsetBy(Vec3{0, made->foot + plate.y / 2 + 0.01f, 0.03f + 0.07f * huddleUp}));
+    }
+    holder->inputTarget = !down;
+    holder->hover = down ? Hover::none() : Art::hover();
+    for (size_t k = usualPictures; down && k < made->pictures.size(); k++) made->pictures[k].entity->opacity = 0.f;
     root_->addChild(holder);
     int uid = nextUID;
     nextUID += 1;
     picks[holder.get()] = Pick::shelf(uid);
-    float rest = coverRest;
+    float rest = down ? Forest::scale() : Forest::grown();      // NOTE(port): `coverRest` in the Swift (see above)
     MoverRef m = std::make_shared<Mover>(holder, from ? *from : p, !from ? rest : (!hand ? 0.2f : 1.f));
     if (from) {
         double delay = !hand ? 0.0 : 0.16;
-        m->position.go(p, time, delay, 0.42f, Ease::inOut);
-        m->scale.go(rest, time, delay, 0.42f, Ease::inOut);
+        // NOTE(port): changed for Quest: 0.42 s and `.inOut` in the Swift. It shrinks to a quarter as it
+        // comes down: a departure, clear travel and a long soft arrival, or it lurches.
+        float fly = 0.72f;
+        m->position.go(p, time, delay, fly, Ease::travel);
+        m->scale.go(rest, time, delay, fly, Ease::travel);
         if (hand) {
+            // NOTE(port): changed for Quest. In the Swift the card in flight (`hand`) and this cover fly the
+            // same way and one is swapped for the other near the end; as its tweens are written the card
+            // in flight never shows, so the cover appears at its place out of nothing. Here this cover
+            // makes the whole trip itself: it takes the pressed card's place as the cards fade, turned and
+            // tipped as that was, and comes round to its own facing on the way down.
+            hand->alpha.set(0);
+            hand->removeAt = time;
             m->alpha.set(0);
-            m->alpha.go(1, time, 0.5, 0.08f, Ease::out);
-            hand->position.go(p, time, delay, 0.42f, Ease::inOut);
-            hand->scale.go(rest, time, delay, 0.42f, Ease::inOut);
+            m->alpha.go(1, time, 0.1f);
+            holder->orientation = hand->entity->orientation;
+            tip(made->tilts, 0);
+            coverLandsAt = time + delay + double(fly);
         }
-        touch(time + delay + 0.6);
+        touch(time + delay + double(fly) + 0.2);
     }
     movers.push_back(m);
-    shelf.push_back(Shelved{uid, tree, m, made->tilts, spot});
+    Shelved kept{uid, tree, m, made->tilts, spot, plot, made->foot};
+    kept.branches = made->branches;
+    kept.caption = made->caption;
+    kept.pictures = made->pictures;
+    kept.layers = made->layers;
+    kept.treeFoot = made->treeFoot;
+    kept.treeRise = made->treeRise;
+    kept.el.set(restEl(plot, down));
+    kept.gravel = made->gravel;
+    kept.nameSize = made->nameSize;
+    kept.huddle.set(down ? huddleDown : huddleUp);
+    if (from && kept.gravel) {
+        // Its rings spread over the ground it comes to, as it arrives: a stone into water.
+        kept.ripple.set(0);
+        kept.ripple.go(1, time, (!hand ? 0.0 : 0.16) + 0.5, 1.2f, Ease::out);
+        kept.gravel->show(0);
+        touch(time + 2.1);
+    }
+    if (from && hand) {
+        // The pressed card's pictures are where its cards were: they draw in to the trunk on the way down.
+        kept.huddle.set(1);
+        kept.huddle.go(down ? huddleDown : huddleUp, time, 0.16, 0.72f, Ease::travel);
+        kept.el.set(0);
+        kept.el.go(restEl(plot, down), time, 0.16, 0.72f, Ease::travel);
+        kept.turnFrom = hand->entity->orientation;
+        kept.turnTo = stage.upright(p).orientation;
+        kept.turnStart = time + 0.16;
+        kept.turnOver = 0.72f;
+    }
+    layPictures(kept.pictures, kept.huddle.value(time));
+    layName(kept.caption, kept.nameSize, kept.foot, kept.huddle.value(time));
+    shelf.push_back(kept);
+    rakeForest();
     if (shelfLoaded) shelfDirty = true;
 }
 
 /// A cover carried by hand: it follows, at arm's length, around you.
-std::optional<Vec2> OceanModel::carry(int uid, Vec3 d) {
+std::optional<Vec2> OceanModel::carry(int uid, Vec3 from, Vec3 d) {
     auto s = std::find_if(shelf.begin(), shelf.end(), [&](const Shelved& cover) { return cover.uid == uid; });
     if (s == shelf.end()) return std::nullopt;
-    // A hand moves a little; the cover, far off, moves by the same angle.
-    float arm = 0.55f;
-    float az = s->spot.x + std::atan2(dot(d, stage.r), arm) * 180 / floatPi;
-    float el = s->spot.y + std::atan2(dot(d, stage.u), arm) * 180 / floatPi;
-    Vec2 spot{std::min(100.f, std::max(-100.f, az)), std::min(52.f, std::max(14.f, el))};
-    Vec3 p = shelfPoint(spot);
+    // NOTE(port): changed for Quest (see oceanmodel.h). The Swift: "A hand moves a little; the cover, far
+    // off, moves by the same angle", `spot` being degrees round you. Here the tree slides over the desk's
+    // top and stays under the pinched point as the eyes see it: both ends of the hand's move are carried
+    // along the line of sight down onto the desk.
+    std::optional<Mat4> head = platform::head();
+    Vec3 eye = head ? head->position() : stage.origin;
+    float over = eye.y - desk.front.y;
+    auto onDesk = [&](Vec3 q) -> std::optional<Vec2> {
+        float down = eye.y - q.y;
+        if (!(down > 0.03f && over > 0.03f)) return std::nullopt;
+        return desk.plot(eye + (q - eye) * (over / down));
+    };
+    std::optional<Vec2> a = onDesk(from), b = onDesk(from + d);
+    Vec2 plot = s->plot;
+    if (a && b) {
+        plot = s->plot + (*b - *a);
+        plot = {std::min(Forest::wide + 0.8f, std::max(-Forest::wide - 0.8f, plot.x)), std::min(forestNear() + Forest::deep + 0.8f, std::max(0.03f, plot.y))};
+        // No nearer than a tree may stand: held off at that distance, on its own line from you.
+        Vec2 e = desk.plot(stage.origin);
+        if (!farEnough(plot)) plot = e + normalize(plot - e + Vec2{0, 1e-4f}) * 1.5f;
+    }
+    Vec3 p = plantPoint(plot, s->foot);
     s->mover->position.set(p);
     s->mover->entity->orientation = stage.upright(p).orientation;
-    tip(s->tilts, spot.y);
+    tip(s->tilts, plantEl(plot));
     touch(time + 0.2);
-    return spot;
+    return plot;
 }
 
 void OceanModel::unfold(int uid) {
@@ -380,17 +521,62 @@ void OceanModel::unfold(int uid) {
     s.mover->entity->inputTarget = false;
     clearPeek();
     whenClear([this, s] {
-        // The cover comes forward and opens into its tree.
-        Stage::Page front = stage.page(0);
-        Vec3 to = front.center - front.normal * 0.4f;
-        s.mover->position.go(to, time, 0.3f, Ease::out);
-        s.mover->scale.go(1, time, 0.3f, Ease::out);
-        s.mover->alpha.go(0, time, 0.12, 0.18f, Ease::out);
-        s.mover->removeAt = time + 0.32;
-        touch(time + 0.4);
-        after(0.1, [this, s] {
-            standingSpot = s.spot;
-            stand(s.tree);
+        // NOTE(port): changed for Quest, at Kai's request (2026-11-15). In the Swift "the cover comes forward
+        // and opens into its tree": it flies to the layer you work on, grows to full size and fades over
+        // 0.3 s, and the tree stands 0.1 s in. Here the cover's tree goes to the front of the desk, where
+        // the small tree stands, and becomes it; its pictures stay where they are for a beat and then rise,
+        // one after another, each into its card on the layers; its name goes. (The others sink: `watchForest`.)
+        double now = time;
+        Vec3 seatAt = desk.at(0, treeBack());
+        float small = 1 / coverTree;                    // its tree in the small tree's own measure
+        float squash = Hologram::rise(s.layers) / std::max(s.treeRise, 1e-4f);
+        // So that level for level its tree ends where the small tree's is.
+        Vec3 to = seatAt + stage.u * (Hologram::foot - s.treeFoot * squash - s.foot * small);
+        float over = 0.9f;          // (0.75 at first; the forest stands twice as far off now, and the way is longer)
+        s.mover->position.go(to, now, over, Ease::travel);
+        s.mover->scale.go(small, now, over, Ease::travel);
+        s.mover->alpha.go(0, now, double(over) - 0.2, 0.32f, Ease::out);       // it gives way to the small tree over the last of the way
+        s.mover->removeAt = now + double(over) + 0.16;
+        Becoming b;
+        b.mover = s.mover;
+        b.branches = s.branches;
+        b.from = s.mover->entity->orientation;
+        b.to = stage.upright(seatAt).orientation;
+        b.start = now;
+        b.over = over;
+        b.squash.go(squash, now, over, Ease::travel);
+        becoming = b;
+        holoShowAt = now + double(over) - 0.3;
+        if (s.caption) fadeOut(s.caption, 0.2f);
+        if (s.gravel) fadeOut(s.gravel->entity, 0.3f);
+        rakeForest();           // (a tree whose rings stopped short of this one's has the ground to itself again)
+        // Its pictures are let go of where they stand, as they stand.
+        for (auto& [id, r] : rising) r.thumb->removeFromParent();
+        rising.clear();
+        int order = 0;
+        for (const CoverPicture& p : s.pictures) {
+            Vec3 at = p.entity->transformMatrix(nullptr).position();
+            Quat turn = s.mover->entity->orientation * p.entity->orientation;
+            float size = s.mover->entity->scale.x * p.entity->scale.x;
+            bool shown = !(p.entity->opacity && *p.entity->opacity < 0.5f);
+            p.entity->removeFromParent();
+            if (!shown || Flags::has("noRise")) continue;       // `-noRise`: the pictures just go, to compare what the rising costs
+            // (A work's card draws from the work's own file: it is asked for now, to be there when the card is made.)
+            if (p.ref.kind == Ref::Kind::work && art && catalog) art->smallReady(catalog->works[p.ref.index]);
+            p.entity->position = at;
+            p.entity->orientation = turn;
+            p.entity->scale = Vec3::repeating(size);
+            root_->addChild(p.entity);
+            rising[p.id] = Rising{p.entity, at, turn, p.width * size, p.ref, order++};
+        }
+        touch(now + double(over) + 1.6);
+        standingSpot = s.spot;
+        standingPlot = s.plot;
+        stand(s.tree);
+        // Any picture no card came for (its card is folded away) goes quietly.
+        after(2.2, [this] {
+            for (auto& [id, r] : rising) fadeOut(r.thumb, 0.3f);
+            rising.clear();
         });
     });
 }
@@ -401,6 +587,8 @@ void OceanModel::unfold(int uid) {
 std::optional<OceanModel::ShelfFile::Item> OceanModel::ShelfFile::Item::from(const Json& j) {
     Item item;
     if (!j.isObject() || !decode::value(j["tree"], item.tree) || !decode::vec2(j["spot"], item.spot)) return std::nullopt;
+    Vec2 plot;
+    if (decode::vec2(j["plot"], plot)) item.plot = plot;
     return item;
 }
 
@@ -408,6 +596,7 @@ Json OceanModel::ShelfFile::Item::json() const {
     Json j = Json::object();
     j.set("tree", tree.json());
     j.set("spot", Json::list({Json(spot.x), Json(spot.y)}));
+    if (plot) j.set("plot", Json::list({Json(plot->x), Json(plot->y)}));
     return j;
 }
 
@@ -455,7 +644,19 @@ void OceanModel::loadShelf(const std::shared_ptr<Catalog>& catalog) {
         // again: a tree that holds works from another choice of them can't stand, the rest can.
         bool sameWorks = file->works == catalog->worksKey;
         int dropped = 0;
+        // NOTE(port): added for Quest: of the welcome trees a file may hold from before there was only ever one, the last is kept.
+        auto welcome = [](const ShelfFile::Item& item) {
+            for (const TreeNode& n : item.tree.nodes) {
+                if (n.ref.kind == Ref::Kind::note && n.ref.id == "welcome") return true;
+            }
+            return false;
+        };
+        const ShelfFile::Item* lastWelcome = nullptr;
         for (const ShelfFile::Item& item : file->trees) {
+            if (welcome(item)) lastWelcome = &item;
+        }
+        for (const ShelfFile::Item& item : file->trees) {
+            if (welcome(item) && &item != lastWelcome) continue;
             bool holdsWorks = false;
             for (const TreeNode& n : item.tree.nodes) {
                 if (n.ref.kind == Ref::Kind::work) holdsWorks = true;
@@ -485,7 +686,7 @@ void OceanModel::shelveWaiting() {
     size_t before = shelf.size();
     bool loaded = shelfLoaded;
     shelfLoaded = false;        // hanging what was read is not a change to write back
-    if (TreeRef t = Tree::make(item.tree, catalog)) shelve(t, std::nullopt, nullptr, item.spot);
+    if (TreeRef t = Tree::make(item.tree, catalog)) shelve(t, std::nullopt, nullptr, item.spot, item.plot);
     shelfLoaded = loaded;
     // It is older than every one hung before it this way: it goes in front of them, so the shelf keeps the file's order.
     if (shelf.size() > before) std::rotate(shelf.begin(), shelf.end() - 1, shelf.end());
@@ -498,8 +699,8 @@ void OceanModel::saveShelf() {
     std::string url = shelfURL();
     if (url.empty() || !catalog) return;
     std::vector<ShelfFile::Item> items = shelfWaiting;     // (none, by the time anything is written: see `update`)
-    for (const Shelved& cover : shelf) items.push_back(ShelfFile::Item{cover.tree->saved(), cover.spot});
-    if (tree && standingSpot) items.push_back(ShelfFile::Item{tree->saved(), *standingSpot});
+    for (const Shelved& cover : shelf) items.push_back(ShelfFile::Item{cover.tree->saved(), cover.spot, cover.plot});
+    if (tree && standingSpot) items.push_back(ShelfFile::Item{tree->saved(), *standingSpot, standingPlot});
     std::string data = ShelfFile(int(catalog->clips.size()), catalog->worksKey, items).json().dump();
     platform::writeFile(url, data);
 }
@@ -514,7 +715,8 @@ void OceanModel::saveShelf() {
 /// other comes.
 void OceanModel::rebuildStrip() {
     if (!art || !catalog) return;
-    if ((!tree || pressing) && hologram && hologram->entity->isEnabled) hologram->entity->isEnabled = false;
+    // NOTE(port): changed for Quest: `isEnabled = false` at once in the Swift; here it fades (nothing pops).
+    if (!tree || pressing) hideHologram();
     if (tree && !pressing) refreshHologram(*tree);
     std::string key = pressing ? "pressing" : (tree ? tree->title + "|" + label(tree->maker) : "briefs");
     if (key == stripKey) return;
@@ -542,7 +744,9 @@ void OceanModel::rebuildStrip() {
     };
     if (!tree || pressing) {
         if (tree) return;
-        holder->position = stage.point(0, -19, 1.25f);
+        // NOTE(port): changed for Quest: `stage.point(0, -19, 1.25)` in the Swift. The forest on the desk
+        // now stands in that part of the view, so the briefs stand as far above -19 degrees as clears its tops.
+        holder->position = stage.point(0, briefsEl(), 1.25f);
         holder->orientation = stage.facing(holder->position);
         // One left edge for the heading and every brief under it.
         std::vector<std::optional<Piece>> briefs;
@@ -554,11 +758,23 @@ void OceanModel::rebuildStrip() {
         float left = -widest.value_or(0.3f) / 2;
         add(art->heading("Ask the gardener", Tone::question), left, 0.078f, std::nullopt);
         for (size_t i = 0; i < briefs.size(); i++) add(briefs[i], left, 0.032f - float(i) * 0.052f, Pick::brief(int(i)));
-        fadeIn(holder, 0.1, 0.3f);
+        // NOTE(port): added for Quest: every gesture, a pinch away (oceanmodel_guide.cpp).
+        if (teach.on) {
+            add(art->line("Gestures", Art::Size::label, Font::Weight::medium, Color::white(1, 0.8f), Art::ink, Art::buttonPad), left,
+                0.032f - float(briefs.size()) * 0.052f - 0.004f, Pick::guide(103));
+        }
+        // NOTE(port): changed for Quest: `delay: 0.1` in the Swift. A cover on its way down to the desk
+        // passes through where the briefs stand: they come once it has landed.
+        fadeIn(holder, std::max(0.1, coverLandsAt - 0.1 - time), 0.3f);
         return;
     }
-    holder->position = stage.point(29, -27, 1.02f);
-    holder->orientation = stage.facing(holder->position);
+    // NOTE(port): changed for Quest: `stage.point(29, -27, 1.02)` in the Swift, low and near to the right.
+    // Here it stands on the desk, to the right of the small tree, a quarter nearer than it was and so a
+    // fifth smaller.
+    Vec2 on = controlsPlot();
+    holder->position = desk.at(on.x, on.y, 0.06f);
+    holder->orientation = deskFacing(holder->position);
+    holder->scale = Vec3::repeating(0.8f);
     float left = -0.16f;
     add(art->line(tree->title + " · " + label(tree->maker), Art::Size::label, Font::Weight::medium, Color::white(1, 0.8f)), left, 0.024f, std::nullopt);
     float x = left;
@@ -567,6 +783,8 @@ void OceanModel::rebuildStrip() {
     // (On the Quest a button is to press the tree as surely as the clap does. This one already
     // does: a pinch on it is `pressTree(send: true)`, the very call the clap makes in `handle`.
     // So nothing is added to the strip.)
-    add(art->line("Send to image generation", Art::Size::label, Font::Weight::semibold, Color::white(), Art::hot, Art::buttonPad), x, -0.018f, Pick::send());
+    x += add(art->line("Send to image generation", Art::Size::label, Font::Weight::semibold, Color::white(), Art::hot, Art::buttonPad), x, -0.018f, Pick::send()) + 0.01f;
+    // NOTE(port): added for Quest: every gesture, a pinch away (oceanmodel_guide.cpp).
+    if (teach.on) add(art->line("Gestures", Art::Size::label, Font::Weight::medium, Color::white(1, 0.8f), Art::ink, Art::buttonPad), x, -0.018f, Pick::guide(103));
     fadeIn(holder, 0.15, 0.3f);
 }

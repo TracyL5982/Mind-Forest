@@ -32,6 +32,18 @@ const std::vector<int> chordNotes[5] = {
 constexpr int levelNotes[10] = {0, 1, 2, 3, 4, 6, 7, 8, 10, 11};
 /// How many layers have a chord of their own; any deeper one has the last's.
 constexpr int layerChords = 14;
+/// How many glints there are (glint_00 …), low to high.
+constexpr int glints = 10;
+
+/// A number from 0 to 1 that is the same for the same `n`, and unlike its neighbours'.
+float scattered(uint32_t n) {
+    n = (n ^ 61) ^ (n >> 16);
+    n *= 9;
+    n ^= n >> 4;
+    n *= 0x27d4eb2d;
+    n ^= n >> 15;
+    return float(n & 0xffff) / 65535.f;
+}
 
 }  // namespace
 
@@ -72,7 +84,8 @@ void OceanModel::soundLevel(int level) {
 void OceanModel::updateSound(double now) {
     if (!audio::on()) return;
     // The ocean is always there, and draws back under a film's own sound.
-    audio::level("ocean_bed", screenNode ? 0.3f : 1, 1.5f);
+    audio::level("ocean_bed", (screenNode ? 0.3f : 1) * bedLevel(), 1.5f);
+    soundGlints(now);
     audio::level("think", now >= thinkFrom && now < thinkUntil ? 1 : 0, 0.2f);
 
     // The layer you stand on changed, however it did (a card asked about, a fist, the small tree,
@@ -121,6 +134,51 @@ void OceanModel::updateSound(double now) {
     } else {
         levelSounded = std::nullopt;
     }
+}
+
+void OceanModel::soundGlints(double now) {
+    if (!shell) return;
+    // Far more pieces swell than should be heard (some twenty a second in the slowest look round).
+    // One is heard for every few degrees the look travels, so a slow look is a glint now and then
+    // and a quick one a run of them, never a rattle; and a look that rests is quiet, but for one
+    // or two that were still on their way.
+    std::optional<Vec3> aim = shell->aimed();
+    if (aim && glintAim) glintTravel += std::acos(std::min(1.f, std::max(-1.f, dot(*aim, *glintAim)))) * 180 / floatPi;
+    glintAim = aim;
+    glintTravel = std::min(glintTravel, glintNeed * 2.5f);
+    for (int i : shell->swelled) {
+        if (glintsWaiting.size() >= 6) glintsWaiting.erase(glintsWaiting.begin());
+        glintsWaiting.push_back(i);
+    }
+    if (glintsWaiting.empty() || now < glintAt || glintTravel < glintNeed) return;
+    // The latest to swell: the one nearest where the look now is.
+    int i = glintsWaiting.back();
+    glintsWaiting.pop_back();
+    uint32_t turn = glintCount++;
+    glintTravel -= glintNeed;
+    glintNeed = 3 + 3 * scattered(turn * 2 + 1);
+    glintAt = now + 0.06 + 0.09 * double(scattered(turn * 2 + 1));
+
+    // A piece has a note of its own, so a stretch of the water has its own run of them.
+    int note = int(scattered(uint32_t(i) * 7919u) * float(glints)) % glints;
+    if (note == glintNote) note = (note + 3) % glints;
+    glintNote = note;
+
+    // Farther pieces are fainter. To the left or right as it lies from the middle of the look: far
+    // more than it truly is (the whole of what swells is a few degrees across), so that a look
+    // that travels right is heard to.
+    std::optional<Mat4> head = platform::head();
+    Vec3 eye = head ? head->position() : stage.origin;
+    Vec3 to = shell->homes[size_t(i)] - eye;
+    float dist = length(to), pan = 0;
+    if (aim && dist > 1e-3f) {
+        Vec3 right = cross(*aim, Vec3(0, 1, 0));
+        if (length(right) > 1e-3f) pan = std::min(1.f, std::max(-1.f, dot(to, normalize(right)) / dist / 0.1f)) * 0.6f;
+    }
+    float gain = glitter() * (0.5f + 0.5f * scattered(turn * 2)) * std::min(1.2f, std::max(0.45f, std::sqrt(4.2f / std::max(dist, 0.5f))));
+    // The ocean is further from mind while a tree stands over it, and further still under a film.
+    if (screenNode) gain *= 0.25f; else if (tree) gain *= 0.55f;
+    audio::play(fmt("glint_%02d", note), gain, 0, pan);
 }
 
 /// A ray comes to rest on something that can be picked: the lightest touch. Not on the ocean's

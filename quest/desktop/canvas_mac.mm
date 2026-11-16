@@ -24,6 +24,7 @@
 
 #include "base.h"
 #include "canvas.h"
+#include "platform.h"
 
 #include <mutex>
 
@@ -40,8 +41,28 @@ CTFontRef systemFont(const Font& font) {
     auto key = std::make_pair(font.pointSize, int(font.weight));
     auto it = known.find(key);
     if (it != known.end()) return it->second;
-    CTFontRef made = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, font.pointSize, nullptr);
-    if (made && font.weight != Font::Weight::regular) {
+    // (`display`: Fraunces, from its file among the media, the same file the headset reads. Without it, a serif of the Mac's own.)
+    bool display = font.weight == Font::Weight::display || font.weight == Font::Weight::displayItalic;
+    CTFontRef made = nullptr;
+    if (display) {
+        bool italic = font.weight == Font::Weight::displayItalic;
+        std::string path = platform::resourcePath(italic ? "fonts/Fraunces_72pt_Soft-LightItalic.ttf" : "fonts/Fraunces_72pt_Soft-Light.ttf");
+        if (!path.empty()) {
+            CFStringRef name = CFStringCreateWithCString(nullptr, path.c_str(), kCFStringEncodingUTF8);
+            CFURLRef url = CFURLCreateWithFileSystemPath(nullptr, name, kCFURLPOSIXPathStyle, false);
+            CGDataProviderRef provider = CGDataProviderCreateWithURL(url);
+            CGFontRef face = provider ? CGFontCreateWithDataProvider(provider) : nullptr;
+            if (face) made = CTFontCreateWithGraphicsFont(face, font.pointSize, nullptr, nullptr);
+            if (face) CGFontRelease(face);
+            if (provider) CGDataProviderRelease(provider);
+            CFRelease(url);
+            CFRelease(name);
+        }
+        if (!made) made = CTFontCreateWithName(italic ? CFSTR("IowanOldStyle-Italic") : CFSTR("IowanOldStyle-Roman"), font.pointSize, nullptr);
+    } else {
+        made = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, font.pointSize, nullptr);
+    }
+    if (made && font.weight != Font::Weight::regular && !display) {
         // The same font, asked for again by its weight (UIFont.Weight's own numbers).
         CGFloat weight = rawValue(font.weight);
         CFNumberRef number = CFNumberCreate(nullptr, kCFNumberCGFloatType, &weight);

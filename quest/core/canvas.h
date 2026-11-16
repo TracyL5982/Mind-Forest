@@ -132,7 +132,10 @@ struct FontMetrics {
 /// UIFont: only the system font, by size and weight.
 struct Font {
     /// UIFont.Weight
-    enum class Weight { regular, medium, semibold, bold };
+    // NOTE(port): `display` and `displayItalic` are added for Quest: not weights but another face, Fraunces
+    // (72pt Soft Light, and its italic), for the lettering that greets you after the walk. Its two files are
+    // kept with the media (fonts/); without them the platform's own serif stands in.
+    enum class Weight { regular, medium, semibold, bold, display, displayItalic };
     float pointSize = 12;
     Weight weight = Weight::regular;
 
@@ -150,6 +153,8 @@ inline float rawValue(Font::Weight w) {
     case Font::Weight::medium: return 0.23f;
     case Font::Weight::semibold: return 0.3f;
     case Font::Weight::bold: return 0.4f;
+    case Font::Weight::display: return 0;
+    case Font::Weight::displayItalic: return 0;
     }
     return 0;
 }

@@ -26,6 +26,9 @@ constexpr float openFilmMaxHeight = 0.32f;
 constexpr float filmCaption = 0.116f;       // the panel under an open film
 constexpr float smallNoteWidth = 0.21f;
 constexpr float openNoteWidth = 0.46f;
+// NOTE(port): added for Quest: a lesson's card in the welcome tree, and the stage on it where its gesture plays.
+constexpr float lessonWidth = 0.56f;
+constexpr float lessonStage = 0.34f;
 constexpr float chipHeight = 0.03f;
 constexpr float chipGap = 0.038f;
 
@@ -227,6 +230,11 @@ public:
 
     /// How far a group is drawn in: open, its cards stand at their full distance round the open card.
     float spread(int head) const { return focused && current == head ? 1 : Branching::closed; }
+
+    // NOTE(port): added for Quest. The welcome tree is a walk (oceanmodel_guide.cpp), and every step of it
+    // should look like the last: a card taken comes to the middle of its layer (any other tree's keeps most
+    // of where it stood), and what a card brings has set places, the next card on its right.
+    bool walk() const;
 
 private:
     Vec2 home(const TreeNode& n, const TreeNode& host) const;
