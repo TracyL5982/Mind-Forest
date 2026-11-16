@@ -37,8 +37,11 @@
 #include "shapes.h"
 #include "grid.h"
 #include "threads.h"
+#include "desk.h"
+#include "gravel.h"
 #include "hologram.h"
 #include "handglow.h"
+#include "guide.h"
 #include "bend.h"
 #include "shell.h"
 #include "cardview.h"
@@ -243,6 +246,76 @@ private:
         std::string words;
     };
     std::optional<Marking> marking;
+    // NOTE(port): added for Quest. A drag on the open card no longer marks it by itself: gone into, the card
+    // shows what it can be marked with (a stretch of its video, part of its picture, some of its words) as
+    // buttons over it, and a drag marks with the one picked. A mark can be taken off again.
+    // NOTE(port): changed for Quest (2026-11-15, Kai): three icons at the picture's top right corner. The pen:
+    // while it is on, a drag on the card marks it, as what was under where the drag began would have it (a
+    // picture is drawn on, words are highlighted, a video's stretch is taken). The eraser takes the mark off.
+    // Send asks about what is marked.
+    bool penOn = false;
+    EntityRef tools;                                    // the buttons over it
+    std::vector<const Entity*> toolPicks;
+    std::string toolsKey;
+    float toolsTall = 0;                                // how tall their column is, m
+    static constexpr float toolSize = 0.1f;             // one of them, m across (they keep this size as the card grows)
+    static constexpr float toolGap = 0.014f;
+    // NOTE(port): each has a tag, in the labels' own flat form, that comes out to its right while a hand's ray
+    // rests on it and says what it is for: Comment, Erase, Send to Momo.
+    struct ToolTag {
+        EntityRef button, tag;
+        float wide = 0;
+    };
+    std::vector<ToolTag> toolTags;
+    float toolOut[3] = {0, 0, 0};                       // how far out each tag is, 0…1 (kept while the buttons are made again)
+    double toolsMadeAt = 0, toolsLast = 0;
+    // NOTE(port): added for Quest. A picture is marked as with a marker: the tool in hand, a pinch held and
+    // moved draws on it freely, stroke after stroke, in the accent. What is marked (what the gardener is
+    // asked about) is the part of the picture the strokes cover between them.
+    struct Ink {
+        std::vector<std::vector<Vec2>> strokes;         // each a line on the card's open face, m from its middle
+        LowLevelMeshRef mesh;
+        EntityRef entity;
+        float curve = 0;                                // the card's bend it was last drawn to
+    };
+    std::map<int, Ink> inks;
+    /// Draws a card's strokes.
+    void drawInk(CardView& c, Ink& ink);
+    /// What a card can be marked with.
+    std::vector<Mark::Kind> markKinds(const CardView& c) const;
+    /// How long the card's video is, s.
+    double markDuration(const CardView& c) const;
+    /// Keeps the buttons over the card gone into as they should be: there, gone, lit.
+    void layTools();
+    /// A pinch on one of them: a tool taken up or put down (0 words, 1 a stretch of video, 2 part of a picture), or the mark removed (3).
+    void pickTool(int id, int what);
+    void clearMark(int id);
+
+    // MARK: - Cutting (oceanmodel_cut.cpp)
+
+    // NOTE(port): added for Quest. A thread is not cut at once. A slice of the flat hand, or a pinch on
+    // the thread, marks it for cutting: it turns to the accent and "Cut" stands on it for a few seconds.
+    // A second slice across it, or a pinch on "Cut", cuts it; anything else lets it be.
+    struct CutArmed {
+        int child = 0;                  // the card the thread runs to
+        Vec3 at;                        // where on it
+        double until = 0;
+        EntityRef chip;
+    };
+    std::optional<CutArmed> cutArmed;
+    std::map<int, EntityRef> threadHits;                // what a hand's ray finds a thread by, by the card it runs to
+    int threadHitsTick = 0;
+    float bladeGlow[2] = {0, 0};                        // how much each hand shows as a blade
+    Hands::Blade bladeLast[2];
+    /// The points along the thread that runs to `child`; empty if none is drawn.
+    std::vector<Vec3> threadLine(int child) const;
+    /// The thread a flat hand points at, as you see it, and where on it.
+    std::optional<std::pair<int, Vec3>> threadAimed(Vec3 tip, Vec3 along) const;
+    void layThreadHits();
+    void armCut(int child, Vec3 at);
+    void disarmCut();
+    void confirmCut();
+    void updateCut(double now, float dt);
 
     // Everything else that moves: the peeked film, pressed trees, the shelf.
     class Mover {
@@ -266,22 +339,186 @@ private:
     std::optional<Peek> peek;                           // a film or a work, by its place among the pieces
     std::vector<int> fullPictures;                      // cards showing a work from its own file, oldest first
 
+    // NOTE(port): added for Quest: a picture on a cover, and the card it stands for.
+    struct CoverPicture {
+        int id;                             // the card
+        Ref ref;                            // the film or the work
+        EntityRef entity;
+        float width;                        // m, in the cover's own measure
+        Vec3 at;                            // where it floats, m from the cover's middle, before it is drawn in to the trunk
+        float height = 0;
+    };
+    // NOTE(port): added for Quest, at Kai's word (2026-11-15): on a tree that stands on the desk the
+    // pictures are 0.65 of the size the Swift gives them and as much nearer the trunk ("too large, and
+    // they don't huddle close enough to the tree"); on one that lies on the ocean's floor, 0.75.
+    static constexpr float huddleUp = 0.65f;
+    static constexpr float huddleDown = 0.75f;
     struct Shelved {
         int uid;
         TreeRef tree;
         MoverRef mover;
         std::vector<EntityRef> tilts;       // its pictures and its name, tipped to face you
         Vec2 spot;                          // degrees right of ahead, and up
+        // NOTE(port): added for Quest. A tree put away stands on the desk (oceanmodel_desk.cpp): where on
+        // it (Desk::plot), and how far its cover's middle is above its foot, in the cover's own measure.
+        Vec2 plot = Vec2::zero();
+        float foot = 0;
+        // Its parts, for when it opens (see `unfold`): the tree of light, the name, each picture and the
+        // card it stands for; how its tree is drawn; and how far its pictures are tipped, on its way
+        // between the desk and the ocean's floor.
+        EntityRef branches, caption;
+        std::vector<CoverPicture> pictures;
+        int layers = 1;
+        float treeFoot = 0.03f, treeRise = 0.055f;
+        Tween<float> el{0.f};
+        // How far its pictures are drawn in to the trunk and how small (1: as the cover was made), and the
+        // rings on the ground round its foot.
+        Tween<float> huddle{1.f};
+        std::shared_ptr<Gravel> gravel;
+        // How far its rings have spread from its foot (0 none … 1 all), and when they are to spread
+        // again: they draw back in before it leaves a place and spread when it has come to the next.
+        Tween<float> ripple{1.f};
+        double rippleAgainAt = 0;
+        // Ground other trees' rings have, for when its own are next raked: one tree is raked a frame
+        // (about a millisecond on the headset), not the whole forest in the frame a tree opens.
+        std::vector<Gravel::Cut> cuts;
+        bool rakeDue = false;
+        Vec2 nameSize = Vec2::zero();       // its name's plate, m in the cover's own measure: it is made smaller with the pictures
+        // Coming down from the layer it was pressed on, it turns from that layer's facing to its own.
+        Quat turnFrom, turnTo;
+        double turnStart = 0;
+        float turnOver = 0;
     };
     std::vector<Shelved> shelf;
     int nextUID = 0;
     int trayCount = 0;
     std::optional<Vec2> standingSpot;                   // where the standing tree's cover hung, if it had one
+    std::optional<Vec2> standingPlot;                   // NOTE(port): added for Quest: and where it stood on the desk
     bool shelfDirty = false;
     bool shelfLoaded = false;
 
     EntityRef strip = Entity::make();
     std::string stripKey;
+
+    // MARK: The desk (oceanmodel_desk.cpp)
+    // NOTE(port): added for Quest; nothing of it is in the Swift. The scene is seated at a desk: the
+    // table the headset knows in front of you, squared to its near edge, or one assumed where a desk
+    // usually is (desk.h). The small tree stands on it right in front of you, the trees put away
+    // behind it as a forest, what can be done with the standing tree to the right. The scene's own
+    // space never changes (`stage` is made once): when you have turned or moved away it can be
+    // brought to where you are now, which the host does by laying the scene's space somewhere else
+    // in the room (platform::carryScene).
+    Desk desk;
+    std::vector<Vec2> plots;                            // where trees put away may stand on it, the best first
+    EntityRef trayEntity;
+    /// Chooses where the scene sits, from the head and the tables the headset knows. Once, in `build`.
+    void sit();
+    /// How far back from the desk's near edge the small tree stands, m.
+    float treeBack() const;
+    Vec2 controlsPlot() const;
+    Vec2 trayPlot() const;
+    /// How high the gardener's briefs stand, in degrees up from eye level: clear of the forest's tops.
+    float briefsEl() const;
+    /// Square to the desk's edge and tipped up to the eyes: how a label that stands on the desk at `p` is turned.
+    Quat deskFacing(Vec3 p) const;
+    /// How much smaller the tray is on the desk than where the Swift hangs it, further off.
+    static constexpr float trayScale = 0.7f;
+    /// Works out the forest's places for the desk as it is now.
+    void plantForest();
+    /// Where a tree put away stands with its foot on the desk at `plot`: the place of its cover's middle.
+    Vec3 plantPoint(Vec2 plot, float foot) const;
+    /// How far below a cover the eyes are, as `tip` wants it (degrees; negative, the eyes being above).
+    float plantEl(Vec2 plot) const;
+    /// The first of the forest's places with no tree near it.
+    Vec2 freePlot() const;
+    /// Stands everything that belongs on the desk where the desk now is.
+    void layDesk();
+
+    // The forest's two states. While no tree is open the trees put away stand on the desk, a little
+    // larger and with more of their pictures. When one opens (or a new one is started) the others
+    // shrink and sink to the ocean's floor, out of the way and out of the hand rays' reach; they rise
+    // again when the open one is put away. The one that opens goes to where the small tree stands and
+    // becomes it, and its pictures rise to their cards' places on the layers.
+    bool forestDown = false;
+    bool standPending = false;                          // a tree is making way for another: the forest stays down between the two
+    // NOTE(port): and while the greeting after the walk has the room (oceanmodel_guide.cpp): it stands alone, and
+    // the kept trees come up to the desk when it goes.
+    bool wantDown() const { return tree != nullptr || standPending || teach.home != nullptr || teach.homeDue; }
+    /// How far back from the desk's near edge the forest begins.
+    /// (Its nearest trees stand a metre ahead of the eyes: twice as far as at first, at Kai's word on
+    /// 2026-11-15. On an ordinary desk that is past its far edge, at the desk's height.)
+    /// (Then a metre and a half, with trees a metre tall: "assume we have a pretty big desk".)
+    float forestNear() const { return std::max(0.3f, 1.5f + desk.plot(stage.origin).y); }
+    /// Whether a place is as far from the eyes as a tree must stand (a place kept from an earlier day, or one a hand carries a tree to, may not be).
+    bool farEnough(Vec2 plot) const { return distance(plot, desk.plot(stage.origin)) >= 1.45f; }
+    /// Where a put-away tree's cover rests, and how its pictures are tipped there (see `tip`): on the desk, or on the floor under its place.
+    Vec3 restPoint(Vec2 plot, float foot, bool down) const;
+    float restEl(Vec2 plot, bool down) const;
+    void settle(Shelved& s, bool down, double delay);
+    /// Each frame: sinks or raises the forest when a tree has come to stand or has gone.
+    void watchForest();
+    /// Each frame something moves: the opening tree's turn and squash, and the tips of covers on their way.
+    void tendForest(double now);
+    /// Puts a cover's pictures where they float when drawn in by `k` (see `huddleUp`).
+    static void layPictures(const std::vector<CoverPicture>& pictures, float k);
+    /// And its name with them: as much smaller, still standing on the ground before the tree's foot.
+    static void layName(const EntityRef& caption, Vec2 size, float foot, float k);
+    /// Rakes every tree's rings (gravel.h) for where the trees stand, or are on their way to: where two
+    /// trees' rings would cross, the further tree's stop short of the nearer one's.
+    void rakeForest();
+    /// How many of a cover's pictures still show on the ocean's floor.
+    static constexpr size_t usualPictures = 5;
+    /// A picture left standing where its cover was, until its card takes its place and rises.
+    struct Rising {
+        EntityRef thumb;
+        Vec3 at;
+        Quat turn;
+        float width;                    // m, as it stands
+        Ref ref;
+        int order;                      // which lifts off first
+    };
+    std::map<int, Rising> rising;
+    /// The cover on its way to becoming the small tree: it turns to face as the small tree does, and
+    /// its tree is squashed to the small tree's height, so the one gives way to the other in place.
+    struct Becoming {
+        MoverRef mover;
+        EntityRef branches;
+        Tween<float> squash{1.f};
+        Quat from, to;
+        double start = 0;
+        float over = 0.75f;
+    };
+    std::optional<Becoming> becoming;
+    double holoShowAt = 0;                              // when the small tree is to begin to show
+    double coverLandsAt = 0;                            // when the cover now coming down to the desk is there
+    bool holoHiding = false;
+    void hideHologram();
+    /// Brings something to an opacity over a moment, and leaves it there.
+    void fadeTo(const EntityRef& e, float to, double delay, float over);
+    /// Brings the whole scene to where you are now: it fades, is laid there, and comes back.
+    void reseat(const std::string& why);
+    bool reseating = false;
+    Tween<float> veil_{1.f};                            // how much of the whole scene shows while it is carried
+    float veilNow = 1;
+    float veil() override { return veilNow; }
+    double handsStillUntil = 0.0;                       // the hands jump with the scene: nothing is read from them until then
+    double seatedAt = 0.0;
+    /// Watches for the user having turned or moved away, and offers to bring everything along.
+    void watchSeat(float dt);
+    struct SeatPrompt {
+        EntityRef entity;
+        std::vector<const Entity*> picks;
+        double unseenSince = -1;                        // since when it has been out of view
+        MoverRef mover;                                 // it comes up a little as it appears
+        bool held = false;                              // shown by `-seatPromptAt`: it stays though you never left
+    };
+    std::optional<SeatPrompt> seatPrompt;
+    double awaySince = -1, backSince = -1;
+    bool seatDeclined = false;                          // "leave it" was answered: not asked again until you have been back
+    void showSeatPrompt(bool held = false);
+    void hideSeatPrompt();
+    /// Launch flags: `-noDesk` (never a real table), `-noSeatPrompt`, `-reseatAt <s>`, `-seatPromptAt <s>`.
+    static bool noDesk() { static const bool v = Flags::has("noDesk"); return v; }
     /// The whole tree, small and within reach: where you are in it, and the way to any other layer.
     std::shared_ptr<Hologram> hologram;
     // NOTE(port): added for Quest (handglow.h): light on the hands themselves, saying what a fist or a
@@ -290,8 +527,175 @@ private:
     int holoHand = -1;
     std::optional<int> holoLit;
     void drawHandGlow(double now, float dt);
+
+    // MARK: - The guide: what teaches the hands (oceanmodel_guide.cpp)
+
+    // NOTE(port): added for Quest; there is nothing like it in the Swift.
+    /// A gesture a ghost hand teaches: whether it is known, how often it has been shown and left
+    /// unlearned, since when its moment has been here, and until when it is left alone.
+    struct GuideLesson {
+        std::string id;
+        double wait = 10;
+        bool learned = false;
+        int shown = 0;
+        double readySince = -1, restUntil = 0;
+    };
+    /// A few words standing by something.
+    struct GuidePin {
+        EntityRef entity;
+        int times = 0;
+        double wantedSince = -1;
+        bool done = false;
+    };
+    struct Teach {
+        bool on = false;
+        bool welcomed = false;              // the welcome has been left
+        bool asked = false;                 // a card has been asked about, once
+        std::shared_ptr<GuidePainter> painter;      // the one ghost hand: the welcome's, a lesson's or the sheet's
+        std::shared_ptr<GuidePainter> marker;       // what the walk points with: lines only, in the room's own space
+        EntityRef holder;                   // what it and its words hang from just now
+        std::vector<const Entity*> picks;   // the buttons on it
+        int mode = 0;                       // 0 nothing shows, 1 the welcome, 2 a lesson, 3 the sheet
+        int lesson = -1;
+        int sheetRow = 0;
+        double began = 0;                   // when what shows came up
+        double quietUntil = 0;              // no lesson before this
+        double welcomeAt = 1.5;
+        double handsGone = -1;              // since when no hand has been seen (the welcome asks for them)
+        bool askedForHands = false;
+        float carried = 0;                  // how far the tree has been carried by hand, in all, m
+        double zoomedSince = -1;
+        std::vector<GuideLesson> lessons;
+        std::map<std::string, GuidePin> pins;
+        // The welcome tree's walk (oceanmodel_guide.cpp).
+        int tour = -1;                      // the lesson the walk has got to; -1 when there is no walk
+        int tourBeat = 0;                   // how far through that lesson: pulling is two (pull, then push back)
+        bool tourTook = false;              // a card was pinched this frame: the walk is wherever that card is
+        int tourAdvanceFor = -1;            // the lesson that is finished and about to be left, and when
+        double tourAdvanceAt = 0;
+        double tourLast = 0;                // when the walk was last looked at
+        float tourMarks = 0;                // how much what it points with shows
+        EntityRef tourCaption;              // the line over the tree: where the walk is, and the one thing to do now
+        std::string tourCaptionSaid, tourCaptionWords;
+        Vec3 tourCaptionAt = Vec3::zero();
+        EntityRef tourSpotPin;              // words by the place shown for "pinch empty space"
+        std::string tourSpotSaid;
+        EntityRef tourOffPanel;             // off the walk: said so, with the way back and the way out
+        std::vector<const Entity*> tourOffPicks;
+        int tourOffFor = -1;                // the lesson it offers the way back to; -1 when it is not up
+        // The card after the walk: how to begin.
+        EntityRef home;
+        EntityRef homeTags[3];              // its numbers again, in the room, by the three things themselves
+        std::vector<const Entity*> homePicks;
+        bool homeDue = false;               // the walk is over: the card comes once nothing stands
+        bool homeSeen = false;              // it has been shown and left
+        double homeAfter = 0;
+        double homeTagsUntil = 0;           // the numbers in the room outlast the card by a little
+        bool tourStood = false;             // its tree has stood
+        bool tourDone[8] = {};              // which lessons the viewer has done
+        int tourLessonWas = -2;             // the lesson in focus last frame, and since when it has been
+        double tourLessonAt = 0;
+        int tourTickFor = -1;               // the lesson just done, whose card shows a tick the next time it is looked at
+        double tourTick = -1;               // since when it has (-1: not yet)
+        float tourCarried = 0;              // how far the tree has been carried on the walk, m
+        int tourShown = -1;                 // where the ghost hand is: on lesson n's card; 100 + n on a card of its own; -1 nowhere
+        double tourBegan = 0;               // when it was put there
+        std::string tourKey;                // what a card of its own says under it
+        EntityRef tourPin, tourNextPin, tourHandsPin;       // the pins: at a button that does the same, at the next card, and for hands
+        std::string tourPinSaid, tourNextSaid, tourHandsSaid;
+        double tourHandsGone = -1;          // since when no hand has been seen
+        double tourWalkAt = 0;              // `-guideStep`: when the next card is taken
+        bool scripted = false;              // the run is driven by flags: the welcome tree does not come by itself
+        bool demoStarted = false;
+        std::optional<std::string> demo;    // `-guideDemo`
+        double demoT = -1;                  // `-guideT`
+    };
+    Teach teach;
+    std::string guideURL();
+    void loadGuide();
+    void saveGuide();
+    void startGuide();
+    EntityRef guideHolder(float right, float down, float far);
+    float guideWords(const EntityRef& holder, const std::optional<Piece>& piece, float x, float y, bool centred = false, int action = -1);
+    void guideHand(const EntityRef& holder, Vec3 at, float size, float turned = 0);
+    Vec3 guideBacking(const EntityRef& holder, Vec3 at, float size, float under, float opacity = 0.97f, float atLeast = 0);
+    void hideGuide(float over = 0.2f);
+    EntityRef lessonHolder(const std::string& id, float& size, float& tip);
+    void showLesson(int index);
+    bool onWelcomeTree() const;
+    void addWelcomeNotes();
+    void startTour();
+    int tourLesson() const;
+    CardRef tourCard(int lesson) const;
+    std::string tourLine() const;
+    Quat guideFacing(Vec3 p) const;
+    void tourShow(int shown);
+    void tourCaption(const std::string& chip, const std::string& words, std::optional<Vec3> at);
+    EntityRef guideTag(const std::string& chip, const std::string& words, float size);
+    void tourOff(std::optional<Vec3> at);
+    void showHome();
+    void closeHome();
+    void clearHomeTags();
+    void updateHome(double now);
+    std::optional<int> tourNode(int lesson) const;
+    bool tourPinchedOpen();
+    void tourPin(EntityRef& pin, std::string& said, const std::string& words, std::optional<Vec3> at, float size = 0, const EntityRef& on = nullptr);
+    void updateTour(double now, Vec3 eye);
+    void tourDid(const std::string& did, float amount);
+    void endTour(const char* why);
+    void showSheet(int row);
+    void guideAct(int action);
+    bool guideReady(const GuideLesson& lesson) const;
+    void guideDid(const char* what, float amount = 1);
+    /// A place just over the open card, for a few words about it; none if no card is open.
+    std::optional<Vec3> overOpenCard() const;
+    void guidePin(const char* id, const char* words, bool wanted, Vec3 at, double wait, int most);
+    void updateGuide(double now, float dt);
     bool pointerHidden(int hand) override { return holoTouching && hand == holoHand; }
-    void aimed(int hand, const EntityRef& entity, Vec3 point) override { aims[size_t(hand & 1)] = Aim{entity, point}; }
+
+    // MARK: Sound (oceanmodel_sound.cpp)
+    // NOTE(port): added for Quest: the visionOS app has no sounds of its own yet. The sounds are made
+    // by quest/sound/synth.py and played by core/audio.h; what follows says when. Everything is in one
+    // key. A layer has a chord, struck as you arrive on it; a single thing (a card that arrives, a
+    // level of the small tree) has a single note. The head moving sounds one thing only: the
+    // pieces of the ocean that swell where it points glint, as Kai asked on 2026-11-15.
+    /// A sound, once: `gain` on top of its own, `after` seconds from now.
+    void sound(const char* name, float gain = 1, double after = 0);
+    /// The same, heard from where `at` is: a little to the left or the right. (`sound(_:at:)`)
+    void soundAt(const char* name, Vec3 at, float gain = 1, double after = 0);
+    /// A layer's chord, struck upward on coming nearer and downward on stepping back.
+    void soundLayer(int layer, bool forward, double after = 0);
+    /// One note for each card the gardener brings, up the chord of the layer they come to.
+    void soundNotes(int count, double delay);
+    /// The note of a level of the small tree: its layer's root, a step higher for each level.
+    void soundLevel(int level);
+    /// What sounds for as long as something lasts: the ocean under everything, the gardener
+    /// thinking, the next layer's chord as a fist nears its gate; and what is noticed by watching
+    /// (the layer changed, a hand closed or opened, a finger moved on the small tree).
+    void updateSound(double now);
+    /// The ocean's pieces that have just swelled where the head points: a glint each, a few a second at most.
+    void soundGlints(double now);
+    /// `-oceanBed <0…2>`: how loud the ocean's held sound is, of what it is made at. `-glitter <0…3>`: the glints.
+    static float bedLevel() { static const float v = Flags::has("oceanBed") ? float(Flags::number("oceanBed")) : 1; return v; }
+    static float glitter() { static const float v = Flags::has("glitter") ? float(Flags::number("glitter")) : 1; return v; }
+    std::vector<int> glintsWaiting;                     // pieces that have swelled and not yet been heard
+    double glintAt = 0;                                 // when the next may be
+    std::optional<Vec3> glintAim;                       // where the look was a frame ago
+    float glintTravel = 0, glintNeed = 4;               // degrees the look has travelled since the last glint, and how many the next waits for
+    uint32_t glintCount = 0;
+    int glintNote = -1;
+    void pointerLanded(int hand, const EntityRef& entity) override;
+    const Tree* soundTree = nullptr;                    // the tree whose layer was last heard
+    int soundDepth = 0;
+    double soundLayerAfter = 0;                         // the next layer chord waits this long (a card is still on its way up)
+    double thinkFrom = 0, thinkUntil = 0;
+    double stirSounded = -100, landSounded = -100;
+    const Entity* landedLast[2] = {nullptr, nullptr};   // the last two things a ray's arrival sounded on
+    std::vector<HandGlow::Grab> fistsDrawn;             // the closed hands the gauge was last drawn for (`drawHandGlow`)
+    bool fistSounding[2] = {false, false};
+    std::string swelling;                               // the layer chord that is held now, for a fist nearing its gate
+    std::optional<int> levelSounded;                    // the small tree's level last heard
+    bool quietPress = false;                            // the tree is pressed only to make way for another
     // NOTE(port): added for Quest. The tree follows a carrying fist with some weight (see `panBy`):
     // where the fist has asked it to be, and whether it is still on its way there.
     Vec2 panAsked = Vec2::zero();
@@ -319,9 +723,9 @@ private:
     std::optional<int> zoomedFor;
     std::optional<float> magnifyBase;
     struct Pick {
-        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink, pencil };
+        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink, reseat, stay, guide, tool, thread, cut };
         Kind kind = Kind::background;
-        int index = 0;                      // card, ask, askMark, openLink, pencil: the card; speck: the piece; brief: which one; shelf: the cover's uid
+        int index = 0;                      // card, ask, askMark, openLink: the card; speck: the piece; brief: which one; shelf: the cover's uid
         int question = 0;                   // ask: which of the card's questions
 
         static Pick card(int id) { return {Kind::card, id, 0}; }
@@ -335,7 +739,12 @@ private:
         static Pick ask(int id, int question) { return {Kind::ask, id, question}; }
         static Pick askMark(int id) { return {Kind::askMark, id, 0}; }
         static Pick openLink(int id) { return {Kind::openLink, id, 0}; }
-        static Pick pencil(int id) { return {Kind::pencil, id, 0}; }
+        static Pick reseat() { return {Kind::reseat, 0, 0}; }
+        static Pick stay() { return {Kind::stay, 0, 0}; }
+        static Pick guide(int action) { return {Kind::guide, action, 0}; }
+        static Pick tool(int id, int what) { return {Kind::tool, id, what}; }
+        static Pick thread(int child) { return {Kind::thread, child, 0}; }
+        static Pick cut(int child) { return {Kind::cut, child, 0}; }
     };
     // (Keyed by the entity's address: ObjectIdentifier.)
     std::map<const Entity*, Pick> picks;
@@ -348,15 +757,18 @@ private:
         bool cancelled;
         std::vector<int> riders;
         // NOTE(port): added for Quest (core/cards). Under `-cards` a pinch on the open card scrolls it, or, held still
-        // first, asks for more like it, or with the edit pencil on highlights or draws on it: when it began, where it is
-        // now, and what it was claimed for. A claimed pinch is never a tap.
-        enum class Claim { open, scroll, highlight, draw, spent };
+        // first, asks for more like it, or with the pen up marks it: a highlight or a line the service keeps (`edit`), or a
+        // mark of the headset's own (`mark`). When it began, where it is now, and what it was claimed for. A claimed pinch
+        // is never a tap.
+        enum class Claim { open, scroll, edit, mark, spent };
         double began = 0;
         Vec3 at = Vec3::zero();
         Claim claim = Claim::open;
         /// Scrolling: the offset, px, and the point on the face, m, where the scroll was claimed.
         float scrollFrom = 0;
         Vec2 scrollAt = Vec2::zero();
+        bool lifted = false;                // NOTE(port): added for Quest: what is held has come away from its place (its sound has played)
+        float reach = 0;                    // NOTE(port): added for Quest: the furthest it has been from where it began, m (see `pinchEnded`)
     };
     std::optional<Press> press;
     double time = 0.0;
@@ -413,10 +825,11 @@ public:
 private:
     void build();
 
-    /// The small tree stands low to the left and within reach: it is worked by hand.
+    /// The small tree stands on the desk, right in front of you and within reach: it is worked by hand.
     void seat(const EntityRef& entity);
 
-    Vec3 trayPoint() const { return stage.point(46, -22, 1.3f); }
+    // NOTE(port): changed for Quest: `stage.point(46, -22, 1.3)` in the Swift; here the tray lies on the desk, to the right.
+    Vec3 trayPoint() const { Vec2 p = trayPlot(); return desk.at(p.x, p.y); }
 
     // MARK: - Frame
 
@@ -781,24 +1194,20 @@ private:
     /// When the card has finished growing and the layer has stopped gliding.
     double settledAt(const CardView& c) const;
     /// Each frame: the ring round a pinch held still on the open card fills, and once it is full the hold counts: it asks
-    /// for more like the card, or with the pencil on begins a highlight on words or a line anywhere else.
+    /// for more like the card. Not while the pen is up, when a drag marks the card.
     void holdPress();
     /// How long a pinch is held still before it counts, s, once the card has settled.
     static constexpr double holdFor = 0.4;
 
-    // NOTE(port): added for Quest (core/cards). The edit pencil on a service card (oceanmodel_edits.cpp).
-    /// The card the pencil was turned on for. It is on only while that card is open, and is let go once it closes.
-    std::optional<int> pencilFor;
-    bool pencilOn() const { return pencilFor && tree && tree->focus() == pencilFor; }
-    void togglePencil(int id);
-    /// Where each hand's ray rests, for the line under the pencil.
-    struct Aim {
-        EntityRef entity;
-        Vec3 point;
-    };
-    std::array<Aim, 2> aims;
-    std::optional<Vec2> aimByFlag;      // `-aimAt`: a point on the open face, in place of the hands
-    /// A highlight or a line being drawn: begun by a hold, carried by the drag, kept when the pinch lets go.
+    // NOTE(port): added for Quest (core/cards). What the pen marks on a service card, kept with the card by the service
+    /// (oceanmodel_edits.cpp). With the pen up, a drag on the card gone into begins one: a highlight on words, a line
+    /// anywhere else; a video's stretch is the headset's own mark (`markBegin`). What it was claimed for.
+    Press::Claim beginMark(CardView& c, Vec2 at);
+    /// Whether the card has anything marked on it: a highlight or a line the service keeps, or a mark of the headset's own.
+    bool marked(int id) const;
+    /// What is marked on a service card, in words, for Send: its highlights, what is drawn on it, a video's stretch.
+    std::string markedPart(const CardView& c) const;
+    /// A highlight or a line being drawn: begun by the drag, carried by it, kept when the pinch lets go.
     struct Drawing {
         int card;
         CardEdit edit;
@@ -807,9 +1216,9 @@ private:
     };
     std::optional<Drawing> drawing;
     std::optional<int> editsOpen;       // the open card the log last said the edits of
-    /// Each frame: the pencil and the line under it on the open card, and the pencil let go once its card closes.
+    /// Each frame: says when an open card shows its edits.
     void editFrame();
-    /// Builds the pencil, its line, the ring and the edit meshes on a service card as it opens.
+    /// Builds the ring and the edit meshes on a service card as it opens.
     void buildEdits(CardView& c);
     /// The edits a card shows, as the service keeps them, drawn again when they change.
     void setEdits(int id, const std::vector<CardEdit>& edits);
@@ -821,9 +1230,7 @@ private:
     std::optional<CGPoint> onContent(const CardView& c, Vec2 at, bool inWindowOnly = true) const;
     /// The run of words under a point of the content, or -1.
     int runAt(CardView& c, CGPoint p);
-    /// The edit a short pinch at a point of the open face would take off.
-    std::optional<std::string> editAt(CardView& c, Vec2 at);
-    /// The pencil's long pinch: a highlight of the word under it, or a line from there.
+    /// The pen's drag: a highlight of the words under it, or a line from there.
     void beginEdit(CardView& c, Vec2 at);
     void moveEdit(CardView& c, Vec2 at);
     /// Keeps it with the card, if it came to anything.
@@ -857,7 +1264,7 @@ private:
 
     /// Starts a mark where a drag on the open card began: on its picture
     /// (a stretch of a video, or part of a still) or on its words. (`markBegin(_:at:)`)
-    void markBegin(int id, Vec2 a);
+    void markBegin(int id, Vec2 a, std::optional<Mark::Kind> only = std::nullopt);
 
     /// Carries the mark on to where the hand is now, and shows it. (`markMove(to:)`)
     void markMove(Vec2 b);
@@ -895,6 +1302,9 @@ private:
         std::vector<Thumb> thumbs;
         float foot = 0;                 // m from the cover's middle down to the tree's foot
         float top = 0;                  // m from the cover's middle up to its highest picture
+        // NOTE(port): added for Quest: how its tree is drawn, in the small tree's measure (see `Becoming`).
+        int layers = 1;
+        float treeFoot = 0.03f, treeRise = 0.055f;
     };
 
 public:
@@ -905,8 +1315,13 @@ public:
 private:
     /// Where pictures float round a cover's tree: m right of the trunk, how far up the cover
     /// (0 its foot … 1 its top), and m toward you. The first is the top left, then round.
-    static constexpr std::array<Vec3, 5> coverSlots{Vec3{-0.30f, 0.80f, 0.05f}, Vec3{0.31f, 0.58f, -0.04f}, Vec3{-0.33f, 0.30f, -0.06f},
-                                                    Vec3{0.29f, 0.10f, 0.06f}, Vec3{0.06f, 1.12f, -0.07f}};
+    //
+    // NOTE(port): changed for Quest, at Kai's request (2026-11-15): three more, further out, for a tree
+    // that stands on the desk with no tree open ("more content thumbnails in this state"). The Swift has
+    // the first five; here too only those show while a cover lies on the ocean's floor (`usualPictures`).
+    static constexpr std::array<Vec3, 8> coverSlots{Vec3{-0.30f, 0.80f, 0.05f}, Vec3{0.31f, 0.58f, -0.04f}, Vec3{-0.33f, 0.30f, -0.06f},
+                                                    Vec3{0.29f, 0.10f, 0.06f}, Vec3{0.06f, 1.12f, -0.07f},
+                                                    Vec3{-0.47f, 0.56f, -0.02f}, Vec3{0.47f, 0.33f, 0.03f}, Vec3{0.46f, 0.86f, -0.03f}};
 
     /// What a tree's cover shows. The pictures are of the cards that matter
     /// most: a step of the path before any other card, a later layer before
@@ -925,12 +1340,27 @@ private:
         EntityRef entity;
         std::vector<EntityRef> tilts;
         Box box;
+        float foot = 0;             // NOTE(port): added for Quest: m from its middle down to the tree's foot (`plan.foot`)
+        // What a planted cover is picked by: its trunk, each of its pictures and its name, each a box of
+        // its own, so that a hand ray goes between them to the trees that stand behind. (Here its trunk
+        // and its name; `shelve` adds the pictures, where they are once drawn in.)
+        std::vector<Shape> shapes;
+        std::shared_ptr<Gravel> gravel;
+        Vec2 nameSize = Vec2::zero();
+        // (and its parts, as `Shelved` keeps them)
+        EntityRef branches, caption;
+        std::vector<CoverPicture> pictures;
+        int layers = 1;
+        float treeFoot = 0.03f, treeRise = 0.055f;
     };
     /// Builds a tree's cover. `el` is how high it hangs, in degrees up
     /// from eye level: the tree stands upright, as a tree does, and its
     /// pictures and its name are tipped to face you. Returns the cover,
     /// what on it is tipped, and the box it is picked by.
-    std::optional<Cover> makeCover(const Tree& tree, float el);
+    ///
+    /// NOTE(port): `planted` is added for Quest: the cover is to stand on the desk, so its name lies in
+    /// front of the tree's foot instead of hanging under it, and nothing of it reaches below the foot.
+    std::optional<Cover> makeCover(const Tree& tree, float el, bool planted = false);
 
     /// Tips a cover's pictures and its name toward eyes `el` degrees below them.
     static void tip(const std::vector<EntityRef>& entities, float el);
@@ -949,10 +1379,17 @@ private:
     /// Hangs a pressed tree's cover on the shelf, above the tree. It stays
     /// where it was last put. `hand` is the card already in flight, which
     /// this one meets. (`shelve(_:from:hand:spot:)`)
-    void shelve(const TreeRef& tree, std::optional<Vec3> from, const MoverRef& hand = nullptr, std::optional<Vec2> known = std::nullopt);
+    ///
+    /// NOTE(port): changed for Quest: it is stood on the desk, among the others (`plot`: where, if it had a place).
+    void shelve(const TreeRef& tree, std::optional<Vec3> from, const MoverRef& hand = nullptr, std::optional<Vec2> known = std::nullopt,
+                std::optional<Vec2> plot = std::nullopt);
 
     /// A cover carried by hand: it follows, at arm's length, around you. (`carry(_:by:)`)
-    std::optional<Vec2> carry(int uid, Vec3 d);
+    ///
+    /// NOTE(port): changed for Quest. A tree put away stands on the desk, so a hand slides it across the
+    /// desk's top: `from` is where the pinch landed and `d` how far the pinched point has moved since, and
+    /// what is returned is its new place on the desk (Desk::plot), not degrees round you.
+    std::optional<Vec2> carry(int uid, Vec3 from, Vec3 d);
 
     void unfold(int uid);
 
@@ -961,6 +1398,7 @@ private:
         struct Item {
             Tree::Saved tree;
             Vec2 spot;
+            std::optional<Vec2> plot;       // NOTE(port): added for Quest: where it stands on the desk (key "plot"; left out when not known)
             static std::optional<Item> from(const Json& j);
             Json json() const;
         };
@@ -1028,7 +1466,7 @@ private:
 
     /// The thread a blade crosses, as you see it: both are flattened onto
     /// your view, and the first thread the blade's stroke passes over is cut.
-    std::optional<int> threadCrossed(Vec3 from, Vec3 to) const;
+    std::optional<int> threadCrossed(Vec3 from, Vec3 to, Vec3* at = nullptr) const;
 
     // MARK: - Launch flags, for running it without hands
 

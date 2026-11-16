@@ -134,3 +134,102 @@ test('a handoff lists the words highlighted on each card', async () => {
     assert.equal(md.split('highlighted by the user').length - 1, 1, 'only the card with highlights says so');
   }
 });
+
+test('a card keeps one video stretch: a new one replaces it in one change, and a stretch past the video or ending first is refused', async () => {
+  const { run, dataDir } = await boot();
+  const c = await connect(run);
+  await c.until((m) => m.t === 'hello');
+  run.pipeline.userCommands('Add a film', [
+    { type: 'addItem', item: { id: 'item-film', kind: 'video', title: 'Vertigo staircase', text: '', summary: '', tags: [], data: { sound: { seconds: 40 } }, origin: { by: 'user' }, source: { from: 'drop', capturedAt: '2026-11-15T00:00:00.000Z' }, archived: false, revision: 0 } },
+  ]);
+  run.pipeline.userCommands('Start a tree', [
+    {
+      type: 'createTree',
+      tree: { id: 'tree-film', title: 'Vertigo', rootId: 'node-film', digest: '', createdAt: '2026-11-15T00:00:00.000Z' },
+      root: { id: 'node-film', treeId: 'tree-film', itemId: 'item-film', parent: null, status: 'kept', why: '', importance: 1, origin: { by: 'user' }, view: { component: 'note', props: {}, by: 'renderer' }, order: 0 },
+    },
+  ]);
+  await run.pipeline.idle();
+
+  const line: Edit = { id: 'l1', kind: 'stroke', points: [0.1, 0.1, 0.2, 0.2] };
+  const first: Edit = { id: 's1', kind: 'stretch', from: 12, to: 20 };
+  const second: Edit = { id: 's2', kind: 'stretch', from: 25.5, to: 31 };
+  const send = (lbl: string, edit: unknown) => c.ws.send(JSON.stringify({ t: 'commands', label: lbl, commands: [{ type: 'addEdit', id: 'node-film', edit }] }));
+  send('Draw', line);
+  await c.until((m) => label(m) === 'Draw');
+  send('Mark a stretch', first);
+  await c.until((m) => label(m) === 'Mark a stretch');
+  assert.deepEqual(run.mind.node('node-film').edits, [line, first], 'the stretch is kept beside the line');
+  send('Mark another stretch', second);
+  await c.until((m) => label(m) === 'Mark another stretch');
+  assert.deepEqual(run.mind.node('node-film').edits, [line, second], 'a new stretch takes the old one\'s place');
+
+  // (The schema refuses the first as a bad message; the second is a command the state refuses, said in a note.)
+  send('Backwards', { id: 's3', kind: 'stretch', from: 20, to: 12 });
+  await c.until((m) => m.t === 'error' && /a stretch ends after it begins/.test(String(m.message)));
+  send('Past the end', { id: 's3', kind: 'stretch', from: 30, to: 45 });
+  await c.until((m) => m.t === 'note' && /past the video's 40 s/.test(String(m.message)));
+  assert.deepEqual(run.mind.node('node-film').edits, [line, second], 'a stretch that ends before it begins, or past the video, is refused');
+
+  c.ws.send(JSON.stringify({ t: 'undo' }));
+  await c.until((m) => m.t === 'change' && (m.set as { undoes?: string }).undoes !== undefined);
+  assert.deepEqual(run.mind.node('node-film').edits, [line, first], 'one undo brings the old stretch back');
+
+  c.ws.close();
+  await run.close();
+  const again = await boot(dataDir);
+  const d = await connect(again.run);
+  const hello = await d.until((m) => m.t === 'hello');
+  const sent = (hello.snapshot as { nodes: { id: string; edits?: Edit[] }[] }).nodes.find((n) => n.id === 'node-film');
+  assert.deepEqual(sent?.edits, [line, first], 'the stretch comes back after a restart, and reaches a client that joins');
+  d.ws.close();
+  await again.run.close();
+});
+
+test('the eraser\'s one press takes every mark off a card in one change, and one undo brings them all back', async () => {
+  const { run } = await boot();
+  const c = await connect(run);
+  await c.until((m) => m.t === 'hello');
+  run.pipeline.userCommands('Add a note', [
+    { type: 'addItem', item: { id: 'item-n', kind: 'text', title: 'Glazes', text: 'Slow oil glazes over a dead-colour layer.', summary: '', tags: [], data: {}, origin: { by: 'user' }, source: { from: 'paste', capturedAt: '2026-11-15T00:00:00.000Z' }, archived: false, revision: 0 } },
+  ]);
+  run.pipeline.userCommands('Start a tree', [
+    {
+      type: 'createTree',
+      tree: { id: 'tree-n', title: 'Glazes', rootId: 'node-n', digest: '', createdAt: '2026-11-15T00:00:00.000Z' },
+      root: { id: 'node-n', treeId: 'tree-n', itemId: 'item-n', parent: null, status: 'kept', why: '', importance: 1, origin: { by: 'user' }, view: { component: 'note', props: {}, by: 'renderer' }, order: 0 },
+    },
+  ]);
+  await run.pipeline.idle();
+  const marks: Edit[] = [
+    { id: 'h1', kind: 'highlight', quote: 'Slow oil glazes', at: 0 },
+    { id: 'l1', kind: 'stroke', points: [0.1, 0.1, 0.2, 0.2] },
+    { id: 'h2', kind: 'highlight', quote: 'dead-colour layer', at: 23 },
+  ];
+  for (const edit of marks) {
+    c.ws.send(JSON.stringify({ t: 'commands', label: `Mark ${edit.id}`, commands: [{ type: 'addEdit', id: 'node-n', edit }] }));
+    await c.until((m) => label(m) === `Mark ${edit.id}`);
+  }
+  c.ws.send(JSON.stringify({ t: 'commands', label: 'Erase the marks', commands: marks.map((e) => ({ type: 'removeEdit', id: 'node-n', editId: e.id })) }));
+  const erased = await c.until((m) => label(m) === 'Erase the marks');
+  assert.equal('edits' in run.mind.node('node-n'), false, 'every mark is off the card');
+  assert.equal(erased.undo, 'Erase the marks', 'as one change');
+  c.ws.send(JSON.stringify({ t: 'undo' }));
+  await c.until((m) => m.t === 'change' && (m.set as { undoes?: string }).undoes !== undefined);
+  assert.deepEqual(run.mind.node('node-n').edits, marks, 'one undo brings them all back, in their order');
+  c.ws.close();
+  await run.close();
+});
+
+test('a handoff names the stretch of a video the user marked', async () => {
+  const k = kit();
+  k.model.on('packager', () => ({ brief: 'A brief.', nextPrompt: 'Go on.', openQuestions: [] }));
+  const film = k.seedTree('Film', ['Dolly zoom', 'Vertigo staircase']);
+  const [dolly] = film.nodeIds as [string];
+  k.mind.apply({ origin: { by: 'user' }, label: 'Mark a stretch', commands: [{ type: 'addEdit', id: dolly, edit: { id: 's1', kind: 'stretch', from: 12, to: 20.4 } }] });
+  const out = await packager(k.ctx, { scope: { treeIds: [film.treeId], nodeIds: [] } });
+  const node = (out.json as HandoffJson).trees[0]!.root;
+  assert.deepEqual(node.stretch, { from: 12, to: 20.4 }, 'the JSON keeps the stretch in seconds');
+  assert.equal(node.children[0]!.stretch, null, 'a card with none has null');
+  for (const md of [out.markdown, out.bundled]) assert.match(md, /- marked by the user: the stretch from 0:12 to 0:20\n/);
+});

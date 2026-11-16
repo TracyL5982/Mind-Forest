@@ -52,7 +52,7 @@ object Sound {
         synchronized(this) { asking = handle to source }
         microphoneAsking(handle)
         Handler(Looper.getMainLooper()).postDelayed({
-            if (synchronized(this) { asking?.first == handle }) activity.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), ASK)
+            if (synchronized(this) { asking?.first == handle }) (activity as MainActivity).askPermission(Manifest.permission.RECORD_AUDIO, ASK)
         }, REASON_FIRST)
     }
 

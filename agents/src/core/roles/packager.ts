@@ -58,6 +58,8 @@ export interface HandoffNode {
   from: string;
   /** The words the user highlighted on the card, oldest first. */
   highlights: string[];
+  /** The stretch of the card's video the user marked, seconds from its start, or null. */
+  stretch: { from: number; to: number } | null;
   children: HandoffNode[];
 }
 
@@ -136,8 +138,21 @@ function nest(ctx: RoleContext, node: Node): HandoffNode {
     data: item.data,
     from: item.source.from,
     highlights: (node.edits ?? []).flatMap((e) => (e.kind === 'highlight' ? [e.quote] : [])),
+    stretch: stretchOf(node),
     children: ctx.mind.children(node.id).map((child) => nest(ctx, child)),
   };
+}
+
+function stretchOf(node: Node): HandoffNode['stretch'] {
+  const s = (node.edits ?? []).find((e) => e.kind === 'stretch');
+  return s ? { from: s.from, to: s.to } : null;
+}
+
+/** Seconds as a video's clock shows them: 0:12, 1:05:09. */
+export function clock(seconds: number): string {
+  const s = Math.round(seconds);
+  const mmss = `${Math.floor((s % 3600) / 60)}:${String(s % 60).padStart(2, '0')}`;
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${mmss.padStart(5, '0')}` : mmss;
 }
 
 function flatten(node: HandoffNode): HandoffNode[] {
@@ -210,6 +225,7 @@ function nodeMarkdown(node: HandoffNode, depth: number, files: Files): string[] 
     lines.push(`${sub}- highlighted by the user:`);
     for (const words of node.highlights) lines.push(`${sub}  - "${oneLine(words, MAX_HIGHLIGHT)}"`);
   }
+  if (node.stretch) lines.push(`${sub}- marked by the user: the stretch from ${clock(node.stretch.from)} to ${clock(node.stretch.to)}`);
   const messages = Messages.safeParse(node.data.messages);
   if (messages.success && messages.data.length > 0) {
     lines.push(`${sub}- messages:`);

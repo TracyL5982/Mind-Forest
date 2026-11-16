@@ -73,7 +73,7 @@ std::vector<Hands::Event> Hands::update(Vec3 origin, Vec3 f, float dt) {
         }
         left.fistSince = std::nullopt; left.fistBase = std::nullopt; left.fistAt = std::nullopt; left.fistWay = 0;
         right.fistSince = std::nullopt; right.fistBase = std::nullopt; right.fistAt = std::nullopt; right.fistWay = 0;
-        clapArmedAt = std::nullopt;
+        clapSince = std::nullopt;
         left.lastTip = left.tracked ? std::optional<Vec3>(left.tip) : std::nullopt;
         right.lastTip = right.tracked ? std::optional<Vec3>(right.tip) : std::nullopt;
         return events;
@@ -150,8 +150,23 @@ void Hands::fist(Hand& hand, Vec3 origin, Vec3 f, double now, std::vector<Event>
     if (!(hand.fistSince && now - *hand.fistSince > 0.12)) return;
     if (!(hand.fistAt && hand.fistAxes)) {
         // Ahead and right as they are where the hand is: the tree wraps around you.
+        // NOTE(port): changed for Quest. "Where the hand is" is where it is seen against the canvas: the line
+        // from the eyes through the hand is followed out to the layer you work on (1.5 m round where the scene
+        // was set up), and the frame is the canvas's own there. From the middle of the scene this is what it
+        // was before; leaning in, or sitting a little off the middle, the gauge still lies flat to the canvas
+        // behind it instead of turning away from it. `-fistFrame hand` is the old way.
         Vec3 v = hand.wrist - origin;
         Vec3 r = normalize(cross(f, Vec3{0, 1, 0}));
+        static const bool byHand = Flags::string("fistFrame").value_or("") == "hand";
+        if (std::optional<Mat4> head = byHand ? std::nullopt : platform::head()) {
+            Vec3 e = head->position() - origin, d = hand.wrist - head->position();
+            e.y = 0;
+            d.y = 0;
+            // |e + t d| = R, the root ahead of the eyes.
+            const float R = 1.5f;
+            float A = dot(d, d), B = 2 * dot(e, d), C = dot(e, e) - R * R, disc = B * B - 4 * A * C;
+            if (A > 1e-6f && disc > 0 && C < 0) v = e + d * ((-B + std::sqrt(disc)) / (2 * A));
+        }
         float az = std::atan2(dot(v, r), dot(v, f));
         hand.fistAt = hand.wrist;
         hand.fistAxes = Axes{f * std::cos(az) + r * std::sin(az), r * std::cos(az) - f * std::sin(az)};
@@ -207,27 +222,35 @@ void Hands::cutLanded() {
 }
 
 void Hands::clap(Vec3 f, double now, std::vector<Event>& events) {
-    if (!(left.tracked && right.tracked && !left.fist && !right.fist && now > clapUntil)) {
-        clapArmedAt = std::nullopt;
-        return;
-    }
-    Vec3 between = right.palm - left.palm;
-    float gap = length(between);
-    float inDepth = std::fabs(dot(between, f));
-    // Armed while the hands are apart mostly along the line of sight.
-    if (gap > clapArm && inDepth > 0.75f * gap) {
-        clapArmedAt = now;
-    } else if (clapArmedAt) {
-        double armed = *clapArmedAt;
-        if (now - armed > clapWindow) {
-            clapArmedAt = std::nullopt;
-        } else if (gap < clapClose) {
-            clapArmedAt = std::nullopt;
-            clapUntil = now + 1.2;
-            busyUntil = now + 0.5;
+    // NOTE(port): changed for Quest (see `clapClose` in hands.h): palms together and held, not a clap that lands.
+    bool both = left.tracked && right.tracked && !left.fist && !right.fist && now > clapUntil;
+    // They must come together with the fingers up; once together, the headset sees little of either
+    // hand's fingers, so only the palms are asked to stay.
+    bool up = both && left.tip.y - left.wrist.y > clapUp && right.tip.y - right.wrist.y > clapUp;
+    bool together = both && distance(left.palm, right.palm) < clapClose && (clapSince || up);
+    if (together) {
+        if (!clapSince) clapSince = now;
+        clapSeen = now;
+        clapAt = (left.palm + right.palm) * 0.5f;
+        busyUntil = now + 0.4;
+        if (now - *clapSince >= clapHold) {
+            clapSince = std::nullopt;
+            clapUntil = now + 1.5;
+            busyUntil = now + 0.6;
             events.push_back(Event::clap());
         }
+    } else if (clapSince && now - clapSeen > 0.2) {
+        // (A moment's loss of the hands does not start the count over; longer than that does.)
+        clapSince = std::nullopt;
     }
+}
+
+std::optional<Hands::Held> Hands::held() const {
+    if (!clapSince || quiet) return std::nullopt;
+    Held h;
+    h.at = clapAt;
+    h.progress = float(std::min(1.0, std::max(0.0, (mediaTime() - *clapSince) / clapHold)));
+    return h;
 }
 
 // NOTE(port): added for Quest (see hands.h).
@@ -250,6 +273,22 @@ std::vector<Hands::Grab> Hands::grabs() const {
         g.depth = dot(d, h.fistAxes->ahead);
         g.base = h.fistBase.value_or(0);
         out.push_back(g);
+    }
+    return out;
+}
+
+// NOTE(port): added for Quest (see hands.h).
+std::vector<Hands::Blade> Hands::blades() const {
+    std::vector<Blade> out;
+    if (quiet) return out;
+    for (int k = 0; k < 2; k++) {
+        const Hand& h = k == 0 ? left : right;
+        if (!(h.tracked && h.flat && !h.fist)) continue;
+        Blade b;
+        b.hand = k;
+        b.tip = h.tip;
+        b.palm = h.palm;
+        out.push_back(b);
     }
     return out;
 }

@@ -17,13 +17,17 @@ The Quest 3 has no eye tracking, so:
   it did under the eyes, or on the glass blob under a group, so it is seen in the plane of the cards
   (a pinch on the glass still does what a pinch on nothing does). A pinched card follows the ray once
   it has swung more than 1.2 degrees (less than that is a tap); `-dragBy hand` has it follow the hand's
-  own movement, as on visionOS. Two hands pinching magnify.
-- **The custom gestures are the same code**: a fist pulled, pushed or carried, the flat-hand knife, the
-  front-to-back clap, fingers on the small tree. The knife and the clap have no system equivalent and
+  own movement, as on visionOS. Two hands pinching do nothing more than two pinches (see below).
+- **The custom gestures are the same code** but for the clap (see below): a fist pulled, pushed or carried,
+  the flat-hand knife, fingers on the small tree. The knife and the clap have no system equivalent and
   are read from OpenXR's hand joints. A fist needs both the system's "grasp" reading at 0.9 or more and
   every fingertip curled to within 1.05 hand lengths of the wrist (the system alone calls a half-closed
   hand in the lap a fist); once made it holds until the hand clearly opens. The numbers are in
   `core/ocean/hands.h`.
+- **A fist's frame** (which way is "into the canvas" for the gauge and for pull and push) is the canvas's
+  own where the hand is seen against it: the line from the eyes through the hand, followed out to the layer
+  you work on. From the middle of the scene that is the hand's own bearing, as before; leaning in or sitting
+  off the middle, the gauge still lies flat to the canvas behind it. `-fistFrame hand` is the old way.
 - **Light on the hands** (`core/ocean/handglow.*`, Quest only), in the small tree's language of soft
   lines, rings and orbs. Round a closed hand, a gauge that goes where the fist goes. Its rings lie flat
   to the canvas and its gates stand along the line into it, because that is the frame the tree is
@@ -48,12 +52,13 @@ The Quest 3 has no eye tracking, so:
 
 ## Joining the agent service
 
-The agents (`agents/`, a service on the Mac) can grow the ocean's trees: your mindstorm's trees stand and
-hang on the shelf, a pinch on a card opens it and the Scout's picks come up round it with dashed threads,
-a pinch on a pick keeps it, the knife deletes, and a clap sends the tree on as a handoff. Under an open card stand at most
-three suggested questions as pills; a pinch held still on it, while a ring fills round the pinch, asks for more like it; and
-its edit pencil, just outside its top right corner, turns a long pinch into highlighting words or drawing on the card, which
-the service keeps with it (core/cards/README.md). The plan and
+The agents (`agents/`, a service on the Mac) can grow the ocean's trees: your mindstorm's trees stand in the desk's
+forest, a pinch on a card opens it and the Scout's picks come up round it with dashed threads, a pinch on a pick keeps
+it, and the knife deletes. Palms together closes a tree; it is handed off by voice ("hand this off"). Under an open
+card stand at most three suggested questions as pills, and a pinch held still on it, while a ring fills round the pinch,
+asks for more like it. Gone into, the card has Kai's pen, eraser and Send: with the pen up a drag highlights words or
+draws on the card, which the service keeps with it, the eraser takes the newest mark off, and Send asks Momo about what
+is marked (core/cards/README.md). The plan and
 its state are in [agent-plan.md](agent-plan.md).
 
 This build installs beside the app already on the headset, as "Mind Palace Ocean (agents)", because it is
@@ -71,10 +76,10 @@ pinches the first new pick n times, for runs with no hands; `-agentLog` logs eve
 A launch with `-agent` is remembered, with its token and `-cards`, in the app's own storage
 (`agent-connection.json`), and a launch with no `-agent`, such as one from the app library, joins with them;
 `-agentForget` (or `quest/tools/agent.sh forget`) forgets them, and the app starts as it was. The Mac preview joins
-only with flags. Joined, the service's trees keep the shelf's rules: at launch nothing stands and every tree hangs as
-a cover where it hung last time (`agent-shelf.json`); a tree asked for on the headset stands, the standing one
-pressed onto the shelf first; one asked for on the web page or Telegram only hangs. The headset's own covers stay in
-their file, out of view, until it is started without the service. With the scripted service (`npm run dev:fake`)
+only with flags. Joined, the service's trees keep the forest's rules (Where it sits): at launch nothing stands and every
+tree is put away on the desk where it stood last time (its plot, in `agent-shelf.json`); a tree asked for on the headset
+stands, the standing one put away first; one asked for on the web page or Telegram is only put away. The headset's own
+trees stay in their file, out of view, until it is started without the service. With the scripted service (`npm run dev:fake`)
 nothing costs money.
 
 Talking to it works as in the web client. The headset listens on the device for "hey Momo" or "hi Momo" (the
@@ -119,12 +124,88 @@ keyword spotter, which `tools/fetch-voice.sh` fetches into `quest/vendor/` (the 
 tests it on spoken clips.
 
 When the service moves the view (`navigate`, as for "go back to the start"), the headset brings the card into view
-as hands would: it stands the card's tree, taking it off the shelf and putting away the one that stood, then opens
+as hands would: it stands the card's tree, taking it off the desk and putting away the one that stood, then opens
 the card on its layer, standing that layer first if it is not the one in view. A navigate to a tree stands it at its
 root. It waits while you are recorded or Momo's reply is on its way or playing (at most 20 s), so the view moves after
 the sentence, not during it. A pinch on a card whose parent has led no layer yet stands the parent's layer the same way
 before the card opens. `node quest/desktop/test/navigate_check.mjs` runs the preview against a stand-in service
 and checks this from its log.
+
+## Where it sits
+
+On visionOS the scene stands wherever the head was and faced at launch, and stays. On the Quest it is
+seated at a desk and can be brought along (`core/ocean/desk.*`, `oceanmodel_desk.cpp`; none of it is in
+the Swift).
+
+- **The room.** Meta's MR Utility Kit exists for Unity, Unreal and the Spatial SDK only, so this app
+  reads the scene model it is built on directly, through OpenXR (`XR_FB_scene`,
+  `XR_FB_spatial_entity_query`; `android/.../room_android.*`). Only tables are kept. The room has to have
+  been scanned once in the headset (Settings > Environment setup > Space setup), and the app has to be
+  allowed to see it: the headset asks the first time a hand is held up in the app, not at launch, so a
+  run with the headset lying on a desk is never held up by the question. Until then, or without a
+  scan, there are no tables and everything below falls back. `-scanRoom` opens Space Setup from the app
+  when the room is unknown; `-noRoom` never reads it.
+- **The desk.** A table counts as the desk you sit at when one of its edges is in front of you no more
+  than 75 cm ahead, you face it within 35 degrees of square, and its top is 22 cm to 1.05 m below the
+  eyes (`-deskReach <m>`, `-deskSquare <degrees>`). Then the whole scene is squared to that edge rather
+  than to the head, centred on you. Otherwise the scene faces the way you face and a desk is assumed:
+  its top as far below the eyes as a 73 cm desk is (42 to 60 cm), its edge 28 cm ahead, 1.4 m by 75 cm.
+  Either way there is a desk, and the things at hand stand on it:
+  - the small tree, right in front of you, about 36 cm ahead of the eyes;
+  - the trees put away, as a wood round you, each with its name in front of its foot. They stand at
+    the desk's height (the desk is taken to be large: on an ordinary one they stand past its edges),
+    none nearer than 1.5 m, in rings: two before you, 22 degrees to left and right, one further back
+    between them, two at your sides, then on outward to 5 m; thirteen places, each trunk on its own
+    line of sight. A tree is picked by its trunk, its pictures or its name, not by a box round the whole of
+    it, so a hand ray passes between those to the trees behind. A tree can be slid over the desk by hand and stays where it is put (kept in the
+    shelf file as `plot`);
+  - what can be done with the standing tree, to the right of the small tree, square to the edge; the
+    tray further right and back.
+  The gardener's briefs stand where visionOS has them, before the forest's feet.
+- **The forest has two states**, so that the desk is free while a tree is worked on:
+  - *No tree open:* every tree put away stands there, about a metre tall (1.7 times its cover's own
+    measure, `-forestGrown`) and with up to eight of its pictures round it. The pictures, and the
+    tree's name, are 0.65 of the size the cover gives them and as much nearer the trunk, so a tree is
+    about 1.2 m across.
+  - *Round each tree's foot*, standing or sunk, rings lie on the ground as gravel is raked round a
+    stone in a dry garden (枯山水): they set the tree off from the ocean behind it (`core/ocean/gravel.*`).
+    They are marks, not circles, and stand between a tree's rings and a ripple. Eleven rings, none a
+    true circle and all out of true together, unevenly spaced and wider apart further out, in three
+    line weights: every third a heavy line in long strokes; the ones between fine and broken into
+    round-ended dashes a few centimetres long; the last a fine, nearly whole edge. Small stones lie
+    close round the foot, and a faint pool of light under it all. Each tree is raked its own way.
+    Where two trees stand close, the nearer one's rings are whole and the further one's run up to its
+    edge and end there. The rings draw in to the foot before a tree leaves its place and spread out
+    from it again, over 1.2 s, once it has come to rest.
+  - *A tree opens:* its tree of light goes to the front of the desk, where the small tree stands, and
+    becomes it (turned and squashed on the way so the two agree level for level, one fading into the
+    other in place). Its pictures stay where they were for a beat, then lift off one after another,
+    60 ms apart, each already the card it stands for, and rise to that card's place on the layers. Its
+    name goes, and its rings. The other trees shrink to half (`-forestScale`, five pictures, at 0.75)
+    and sink to the ocean's floor, half as far off again along their own line of sight and no nearer
+    than 3.3 m, past the foot of the layer you work on and clear of what stands on the desk, where a
+    hand ray does not pick them. A new tree started from a brief or from
+    the ocean sinks them all the same way.
+  - *The tree is put away or sent:* it presses into its cover on the layer, and that cover itself
+    comes down to its place on the desk, shrinking and turning as it comes, while the others rise
+    again and grow. The small tree fades out; the briefs come back once the cover has landed.
+  Anything that moves the whole forest glides over a second; the opening tree and the cover travel
+  with a soft start and a long settle; nothing appears or goes in one frame.
+  `preview-shots/forest-rings.png` shows six moments of it at this size (`forest-open-close.png` is
+  the first, small version). `-noRise` opens a tree without the rising pictures, to compare timings.
+- **Kept to the desk.** The scene's own space never changes; the host lays it over the room
+  (`platform::carryScene`). While it sits at a real table it follows that table's anchor, so it stays
+  on the desk when the headset corrects its own bearings.
+- **Bringing it along.** When you have been more than 85 cm from where you sat, 40 cm higher or lower,
+  or turned more than 75 degrees away for a few seconds, a small card comes up where you look:
+  a dark card with a lit edge, about 30 cm wide: "You moved away" (or "You turned away") as a
+  headline, "Reset the space here?" under it, and "Reset" and "Not now". It rises a little into place
+  as it appears, and is heard. Resetting fades the whole scene out, seats it where you are
+  now (at the desk there, if there is one) and fades it back; nothing in it changes. Recentring the
+  headset does the same without asking. `-noSeatPrompt` turns the card off; `-reseatAt <s>` and
+  `-seatPromptAt <s>` do each at a set time.
+- **In the Mac preview** `-deskAhead 0.3` puts a table in the room (`-deskTurn`, `-deskBelow`,
+  `-deskWide`, `-deskDeep`, `-deskAside`), and `-yaw`, `-moveX`, `-moveZ` with `-moveAt <s>` move the head away.
 
 ## Build and run
 
@@ -154,7 +235,7 @@ quest/tools/run.sh --log
 ```
 
 The host adds its own: `-hz`, `-scale`, `-msaa`, `-ffr`, `-cpuLevel`, `-gpuLevel`, `-cull`, `-noBatch`,
-`-uploadBudget`, `-perf`, `-quitAfter`, `-shotAt`, `-shotEvery`, `-testScene` (described at the top of
+`-uploadBudget`, `-perf`, `-quitAfter`, `-shotAt`, `-shotEvery`, `-testScene`, `-noRoom`, `-scanRoom` (described at the top of
 `android/app/src/main/cpp/main.cpp`).
 
 ## The judging build
@@ -176,10 +257,16 @@ quest/tools/judge.sh --install   # and install it on the headset on the cable
   again after 1, 2, 4 and 8 s, then every 15 s.
 - **The microphone.** The first time, Momo's caption says "Allow the microphone to talk to Momo", and the system asks
   1.5 s later. Refused, the caption says "No microphone, so type or pick to ask Momo" for 10 s, and typing and picking
-  work as before. Nothing else is asked: passthrough and hands need no permission while the app runs.
-- **The media** (about 700 MB) is inside the APK, stored uncompressed under `assets/media` with the list of it
+  work as before.
+- **The room.** As in every build, the first time a hand is held up the system asks whether the app may see the room,
+  so the scene sits at the real desk (Where it sits). Refused, it sits at an assumed desk. The two questions never meet:
+  one asked while the other is up waits for its answer (`MainActivity.askPermission`), since Android cancels a second
+  request outright. Passthrough and hands need no permission while the app runs.
+- **The media** (about 780 MB) is inside the APK, stored uncompressed under `assets/media` with the list of it
   (`index.txt`), and read from there: pictures by `ImageDecoder` from the APK, films by `MediaPlayer` from the APK's
-  own file, text through the NDK's asset manager. Nothing is copied out at first launch.
+  own file, text and sounds through the NDK's asset manager, Fraunces by `Typeface.createFromAsset`. Besides the
+  library's media it carries the app's own, from `media-src/quest`: the sounds (about 80 MB), the guide's hand model
+  and the greeting's two fonts with their notice. Nothing is copied out at first launch.
 - **Signing.** Release-signed with `~/.mind-palace/keys/judge.jks`, its passwords in `keys/judge.properties` beside it.
   A later APK installs over this one only if it is signed with the same key, so keep both. Raise `version` in
   `judging.properties` for each APK handed out.
@@ -263,6 +350,190 @@ and what must run there is spread over frames:
 `-syncRaster` puts picture drawing back on the frame thread to compare; `-slowRaster <ms>` delays each
 picture so the waiting look can be seen; `-rasterTest` checks the background path on the headset before
 any session starts.
+
+## Sound
+
+The visionOS app has no sounds of its own yet; these are the Quest's (and the Mac preview's).
+
+- **The sounds** are synthesized by `quest/sound/synth.py` (numpy, scipy): about 80 wav files, 80 MB, all in
+  one key (D Lydian) so anything that overlaps agrees. Each layer has a chord, a stack of fifths that
+  climbs a step per layer; single things (a card that arrives, a level of the small tree) have single notes.
+  They are in git, in `media-src/quest/sounds`, so a clone has them without numpy or scipy.
+  `tools/push_media.sh` makes them again only when the script is not the one they were last made by (its
+  hash is kept in `sound/made-by.sha`; the script gives the same files every time), and sends them with
+  the rest of the media. Without them the app runs silent.
+- **The mixer** is `core/audio.*`: one-shot voices and loops whose level can be eased, mixed on the audio
+  thread without locks. `android/.../audio_android.cpp` plays it through AAudio while the session runs;
+  `desktop/audio_mac.cpp` through the Mac's output.
+- **When each is heard** is in `core/ocean/oceanmodel_sound.cpp` and at the place each thing happens
+  (`sound("take")` in `take`). The layer's chord is struck whenever the layer you stand on changes, by any
+  means: upward on coming nearer, downward on stepping back. While a fist nears a layer's gate, that
+  layer's chord is held and swells with the gauge's arc. The ocean's bed draws back under a film's sound.
+- **The ocean** has a held sound under everything, kept very low, and glints: a piece that swells where
+  the head points rings a short high note of its own (`Shell::swelled`, `soundGlints`). One is heard for
+  every few degrees the look travels, so a slow look round is a glint now and then, a quick one a run of
+  them, and a head held still none. They are fainter while a tree stands, and fainter still under a film.
+- **Flags:** `-mute` or `-noSound` for none, `-sound <0…1>` for how loud (0.8), `-soundLog` to log each sound
+  as it is asked for; `-oceanBed <0…2>` and `-glitter <0…3>` for how loud the ocean's held sound and its
+  glints are, of what they are made at. In the preview, `-soundOut <file.wav>` (with `-shot`) writes what would have been heard.
+- **To listen to them one by one:** `sketches/sound/index.html` (not in git), fed by
+  `python3 quest/sound/synth.py --page sketches/sound`.
+
+## The guide
+
+(The reasons, and the standards behind them, are on the design board, `sketches/onboarding/index.html`, not in git.)
+
+- **The welcome tree**, once: on a first launch a tree stands by itself, "Welcome to Mind Forest". It is an
+  ordinary tree whose cards are the lessons, seven of them, one a layer: pinch a card, grab to pan, grab
+  to pull or push, pinch and hold to move, mark part of a picture, choose a layer on the small tree,
+  palms together to close. The cards are notes made in code (`addWelcomeNotes`), larger than other notes,
+  each with a few pictures round it so that its layer is a real one. The walk (`updateTour`) is always
+  at some lesson and that lesson at some beat, and it never leaves you with nothing to read:
+  - **One line over the tree** says the one thing to do now, large, with where the walk is before it
+    ("3 of 7 · Close your hand and pull it toward you"). It changes with each beat, not each card.
+  - **What to act on is pointed at**, in the accent: a line round it that breathes and rings out, and
+    arrowheads running to it along a path (`drawMarks`). The next card from the first; either way under
+    the card for panning; a picture and a dashed place to put it for moving; the picture, then its tools,
+    then a dashed round on the face for marking; the small tree, with the way down to it; Put away.
+  - **The open lesson plays its gesture on its own face.** Closed, every lesson is its number on a plain
+    ground, always on the right of the open one.
+  - **Beats.** Pulling is two (pull; then "Now push it away to come back", with pull and push playing on
+    the layer pulled back to). Marking is four (go in; take up the pen; draw; come back out), the last
+    three said along the foot of the picture on the card itself.
+  - **Done, then the next card.** A lesson done is a chime, a tick where its gesture played and "Done.
+    Pinch card 4 to go on", with that card ringed and arrowheads running to it. Pinching it is the next
+    lesson (as it is at any time: that is the skip, and it is said so after 14 s on a lesson not done).
+    Left alone for 15 s the walk takes the card itself (`-guideAutoAfter <s>`); after the small tree, which
+    leaves you on another layer where the next card is not to be seen, it does so after 4 s.
+  - **The way out of the marked picture** ("Pinch empty space to come back out") has a place shown for it:
+    a ring just off the card's right edge, "Pinch here", and arrowheads running to it from the words.
+  - **Off the walk.** A picture or a film followed instead of a lesson: over what opened, "You have left
+    the walk", with Back to step N and Skip the tutorial; the lesson's own card, where it shows, is ringed
+    as well. Skipping ends the walk and leaves the tree as it is; what was not done is shown later in its
+    place, by the ghost hand.
+  - **Nothing empties the view.** A lesson's card is not gone into (a pinch on the open first card, or on
+    one that is done, moves on instead), and a pinch that misses does not close the open lesson.
+  - Putting the tree away, by hand or by button, ends the walk at any point; palms together on this tree
+    only puts it away, and only one welcome tree is ever kept among the trees put away (the walk taken
+    again replaces it). With no hands seen for 5 s it asks for them.
+- **After the walk** (done, put away early or skipped), once nothing stands: a greeting, as a headset
+  greets you after its own setting up (`showHome`). "Welcome to Mind Forest" in Fraunces, white and
+  large, standing free in the room on no card, a word at a time; under it and much smaller, "Start
+  exploring now by" in Fraunces italic and the three ways to begin, each with its number (pinching a tree,
+  pinching an item, talking to Momo), and a Start exploring button. It has the room to itself: the kept
+  trees stay down on the ocean's floor and the questions wait. It goes at its button or as soon as
+  something is begun; the trees then come up to the desk, the questions appear, and the three numbers
+  stand in the room by a tree, over the ocean and at the questions for 14 s. Shown once (`home` in
+  `ocean-guide.txt`).
+  The face is that of Muse's Garden's title, as Kai asked: Fraunces 72pt Soft Light and its italic (SIL
+  Open Font License), two more of `Font::Weight` (`display`, `displayItalic`). Their files are in git with the
+  rest of the app's own media: `media-src/quest/fonts/`, sent by
+  `tools/push_media.sh` to `media/fonts/` on the headset. The Mac preview reads the same files. Without
+  them the platform's own serif stands in. "Momo" is Kai's word (2026-11-15); this build has no Momo yet,
+  so its number stands at the questions still headed "Ask the gardener".
+- **A ghost hand in context**, on a small card (half the size it first had, its ground half see-through,
+  only the gesture's name under it: as Kai asked on 2026-11-15, it took too much room and ran into what
+  stood near it), for what was skipped or is not on the tour: grab to pull or push (once a
+  second layer exists), grab to pan (after the first step), marking (a card gone into for 6 s), the small
+  tree (at three layers, shown over the tree itself), cutting (at eight cards). Each waits 10 s for you
+  to do it yourself, plays three times and rests, comes back once a minute later, and is retired for good
+  the first time you do the thing. A closed hand of your own sends the grab ones away at once: the gauge
+  round it takes over. None comes during the welcome tree's walk.
+- **A few words by things** that need no new gesture: by the ocean, under a lifted piece, and over the open
+  card ("Pinch a card round it to follow it", "Pinch this card again to go in"); and when a card has been
+  gone into for 12 s ("Pinch empty space to step back").
+- **Gestures**, a button beside the briefs and beside the tree's own controls: every gesture's name in a
+  column and the one picked playing beside them, with Take the tour (the welcome tree again) and Start the guide over.
+- **The hand** is the headset's own model of a hand, posed by bending its joints (`core/ocean/guidehand.*`,
+  the nine gestures in `guidegestures.cpp`) and drawn as a line: `Material::Kind::ghost` draws a shape
+  three times over, unseen for depth, faintly for its body, and swollen and inside out for an edge of
+  even weight. What the hands act on is drawn in the line material, as the small tree is.
+  The model is in git (`media-src/quest/hands/`), and `tools/push_media.sh` sends it with the rest of the
+  media. To take it from a headset again: `tools/run.sh -- -dumpHandMesh -quitAfter 8` writes it there and
+  `adb pull …/files/out/hand-right.bin media-src/quest/hands/` fetches it. Without it the guide is off.
+- **What has been learned** is kept in `ocean-guide.txt` beside the shelf's file.
+- **Flags:** `-noGuide`; `-freshGuide` forgets what was learned (the welcome tree stands again);
+  `-guideWelcomed` starts past it; `-guideDemo tour|sheet|<gesture>` (pinch, carry, layers, drag, hold, mark,
+  tree, clap, cut) shows one thing at once and keeps it up, `-guideT <s>` holds it at that second of its
+  loop; with `-guideDemo tour`, `-guideStep <n>` walks to the nth lesson by itself (a card every 3.6 s),
+  `-guideDone` keeps a lesson as it is just after it is done, `-guideBeat <n>` sets the beat,
+  `-guideSkipAfter <s>` how soon the skip is offered, `-guideAutoAfter <s>` how long a done lesson waits
+  for a pinch, and `-guideOff <s>` follows a picture off the walk at that second. `-guideDemo home` is the
+  greeting after the walk (`-guideHomeClose <s>` leaves it).
+
+## What the hands do differently from visionOS
+
+- **A card has two sizes**, as it opens and gone into: a pinch on the open card each way. There is no
+  size between, and no zoom with both hands (without gaze nothing says what two pinches are spreading).
+- **Marking is by pen.** Gone into, a card has three icons down from its picture's top right corner, just
+  outside it (`layTools`, `pickTool` in `oceanmodel_tree.cpp`; they keep their own size, 10 cm, as the
+  card grows). While a hand's ray rests on one, a flat tag as tall as the button comes out to its right
+  and says what it is for: Comment, Erase, Send to Momo (`-toolHover <0…2>` holds one out). The pen: a pinch takes it up or puts it down, and while it is up (shown in the accent) a drag on
+  the card marks it as what lay under where the drag began would have it: a picture is drawn on, words
+  are highlighted, a video's stretch is taken (its bar shows when the pen is taken up; a marked stretch
+  has a handle at each end, which a later drag takes it by). With the pen down a drag does nothing (on a
+  card drawn as one of the agent's, `-cards`, it scrolls the card). The eraser takes the mark off. Send,
+  light once something is marked, asks about it (`askMark`). On a card of the agent service's the pen's
+  highlights and lines are kept by the service, the eraser takes off the newest, and Send asks Momo
+  (core/cards/README.md).
+  The pen's icon is the app's own, the one the marking gesture's diagram draws (a pen at a slant and the
+  mark under its nib), and in hand it lights in the accent as it does there; the eraser and send are
+  Lucide's (ISC). All are kept as the lines of their strokes in `core/ocean/icons.h`, which
+  `tools/icons.py <a copy of lucide-react>` writes.
+- **A tap is a pinch that never went anywhere** (`pinchEnded`): judged by the furthest the hand got from
+  where it began, not by where it ended. A line drawn round something comes back to its start, and used
+  to be taken for a tap on the card, which closed it the moment the drawing was done.
+- **A picture is marked with a marker.** With the pen up, a pinch held and moved draws on the
+  picture freely, a little steadied, stroke after stroke (`drawInk`: one mesh of soft-edged bands in the
+  accent on the card's face). What is marked, and what the gardener is asked about, is the part of the
+  picture the strokes cover between them; a dab too short to be a stroke is taken off again.
+- **Cutting takes two steps** (`oceanmodel_cut.cpp`). A flat hand shows as a blade of light, and the
+  thread it points at lights in the accent. A slice across a thread, or a pinch on one, marks it for
+  cutting: "Cut" stands on it for five seconds while a ring runs down. A second slice across it, or a
+  pinch on Cut, cuts it; a pinch on nothing, or waiting, lets it be. The slice itself is easier to make
+  than on visionOS (0.8 m/s, not 1.1), since it no longer cuts by itself.
+- **The clap is palms together, held** (`Hands::clap`): fingers up as they meet, palms within 8.5 cm of
+  each other for one second, while a ring round the hands fills (`HandGlow::Hold`). Hands that only pass
+  each other no longer press the tree. Joined to the agent service it only closes the tree, on every
+  tree: a tree is handed off by voice. Not yet tried on a head: how the headset reads two hands pressed
+  together is the thing to check first.
+- **Marker strokes follow the card's curve**: each point is bent as the card's own pieces are, and bent
+  again whenever the card's bend changes (going in, coming back).
+- `-toolAt <s>` with `-tool pen|eraser|send` (and `-toolAt2` with `-tool2`, on to 4), `-armCutAt <s>`, `-cutAt <s>`,
+  `-glowDemo blade|hold` do these without hands; `-bendLog` writes the open card's bend radius beside its sheet's twice a second.
+## Notes from the agents merge (15 Nov)
+
+For Kai: what merging this branch into the agents work (tracy/agents) changed or left open in yours.
+
+- **The greeting's Momo line.** The third way to begin still says "Talking to Momo, pinch a question to begin", as
+  you wrote it. In the agents build you talk to Momo by saying "hey Momo" (or "hi Momo"); a pinched question is
+  sent to Momo too, so the line is not wrong, only not the whole of it. It is yours to change.
+- **Momo and the desk.** Momo floats at a fixed place from the head, about 28 degrees below the eye line and
+  1.25 m out (`core/agent/presence_look.h`). Looking down at the desk, that is where the gardener's questions and
+  the Gestures button stand, and in the Mac preview Momo covers them. Not yet seen on a headset. If it covers them
+  there too, Momo can be raised to 18 to 20 degrees below the eye line.
+- **Palms together closes, everywhere.** Joined to the service, palms together closes the tree on every tree,
+  the service's too, and never sends it on. A tree is handed off by voice only ("hand this off"), and the strip's
+  "Send to image generation" is not shown while joined. A handoff gesture or button may come later. Without
+  the service, your clap is as you made it.
+- **The pen, the eraser and Send are wired to the service.** On a card of the agent service's, the pen's
+  highlights (a drag from words) and lines (a drag from anywhere else) are the service's own edits, kept with
+  the card (`addEdit`, agents/docs/protocol.md, Edits on a card): they come back on any headset and "undo" takes
+  the last back. They are drawn as the agents' cards draw them, amber behind words and a white line, not your
+  marker. A video's stretch stays your mark, on the headset only. The eraser takes off the newest edit
+  (`removeEdit`). Send asks Momo "Tell me more about this part: …", naming the highlighted words, "the part I
+  drew on" and a stretch by its times; the card leads a new layer and Momo answers. With the pen down, a pinch
+  held still on the open card asks for more like it, and a drag scrolls the card. On your own trees all three
+  work as you made them. The Gestures sheet has a row for the pinch held still, and the marking gesture draws
+  all three buttons where the card has them (agents/DECISIONS.md 66).
+- **The forest keeps the service's trees.** They stand in your forest and keep their plot between launches in
+  `agent-shelf.json` (version 2), as your trees keep theirs in the shelf file.
+- **The room and the microphone are both asked,** in every build: the room at your moment, the first time a
+  hand is up, and the microphone with Momo's reason first. One asked while the other is up waits for its
+  answer (`MainActivity.askPermission`).
+- **The app's own media is in the judging APK:** the sounds, your hand model and the two Fraunces files, read from
+  inside it. Fraunces is now `Font::Design::display` with its own face bit, not two more weights, which the
+  agents' serif bit had taken.
 
 ## Looking at it on the Mac
 

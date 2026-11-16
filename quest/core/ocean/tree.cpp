@@ -176,6 +176,11 @@ int Tree::standDepth() const {
     return it == route.end() ? 0 : int(it - route.begin());
 }
 
+bool Tree::walk() const {
+    const TreeNode* first = find(nodes, root);
+    return first && first->ref.kind == Ref::Kind::note && first->ref.id == "welcome";
+}
+
 Vec2 Tree::home(const TreeNode& n, const TreeNode& host) const { return orZero(lifted, host.id) + n.xy * spread(host.id); }
 
 /// Where a card shows, given the layer you work on.
@@ -586,6 +591,14 @@ std::vector<int> Tree::grow(int id) {
     for (int i = 0; i < take; i++) {
         slots.push_back(free[size_t(take >= int(near.size()) ? i : int((float(i) + 0.5f) * float(near.size()) / float(take)))]);
     }
+    // NOTE(port): added for Quest. On the welcome tree the way on is always in the same place, on the right
+    // and a little up (it is the first thing a lesson's card links to), and the pictures stand clear of it.
+    if (walk() && take > 0) {
+        static const int others[3][3] = {{4, 4, 4}, {3, 5, 5}, {3, 5, 8}};
+        int rest = std::min(take - 1, 3);
+        slots = {0};
+        for (int k = 0; k < rest; k++) slots.push_back(others[rest - 1][k]);
+    }
     struct Around {
         std::string why;
         Vec2 xy;
@@ -824,7 +837,7 @@ void Tree::relayout() {
             for (const TreeNode& h : heads) {
                 const TreeNode* host = h.parent ? find(nodes, *h.parent) : nullptr;
                 if (!host) continue;
-                groups.push_back(Group{h, boxes(h, top), home(h, *host) * (1 - Branching::gather())});
+                groups.push_back(Group{h, boxes(h, top), home(h, *host) * (walk() ? 0 : 1 - Branching::gather())});
             }
             part(groups);
             for (const Group& group : groups) lifted[group.node.id] = group.at;

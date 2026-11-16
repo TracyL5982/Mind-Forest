@@ -93,6 +93,37 @@ const Hand& hand(int which);
 /// Whether this machine tracks hands at all (HandTrackingProvider.isSupported).
 bool handTrackingSupported();
 
+// MARK: - The room (Quest only: nothing in the Swift)
+
+// The scene keeps its own space: it is built once, round where the eyes were
+// and the way they faced, and never rebuilt. The host lays that space over the
+// room, and can lay it somewhere else (`carryScene`). The head, the hands and
+// the tables below are always given in the scene's space.
+
+/// A table the headset knows in the room (Meta's scene model, label TABLE):
+/// its top, as a level rectangle.
+struct Table {
+    int id = 0;                     // the same table has the same id for as long as the app runs
+    Vec3 center;                    // the middle of its top
+    Vec3 a, b;                      // level, at right angles: along its two sides
+    float halfA = 0, halfB = 0;     // m: half its size along each
+};
+/// The tables known right now: none until the room has been read, and none where it never can be
+/// (no room set up on the headset, the permission refused, the Mac preview without `-desk`).
+const std::vector<Table>& tables();
+/// False while the first reading of the room is still on its way: the scene waits a moment for it.
+bool roomSettled();
+/// Reads the room again; what it finds is in `tables()` a moment later.
+void readRoom();
+/// Lays the scene somewhere else in the room: from now on the head, the hands and the tables are
+/// given as `t` times where they were. `t` turns about the vertical and moves, nothing else.
+void carryScene(const Mat4& t);
+/// Keeps the scene fixed to this table from now on, should the headset shift its own bearings
+/// under it (0: to none, the scene rides on the headset's own bearings).
+void holdTo(int table);
+/// True once, after the user has recentred the headset (held its menu button).
+bool recentred();
+
 // MARK: - Video
 
 }  // namespace platform

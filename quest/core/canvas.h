@@ -135,7 +135,9 @@ struct Font {
     enum class Weight { regular, medium, semibold, bold };
     /// Added for Quest: the agent's cards are set as the web client sets them, a few lines in a serif
     /// ('Iowan Old Style', Georgia), some in italics, and code fixed-width. The ported sources only ever ask for `system`.
-    enum class Design { system, serif, mono };
+    /// `display` is Fraunces (72pt Soft Light, and its italic), for the lettering that greets you after the walk. Its two
+    /// files are kept with the media (fonts/); without them the platform's own serif stands in.
+    enum class Design { system, serif, mono, display };
     float pointSize = 12;
     Weight weight = Weight::regular;
     Design design = Design::system;
@@ -145,6 +147,7 @@ struct Font {
     static Font serifFont(float ofSize, Weight weight = Weight::regular, bool italic = false) {
         return {ofSize, weight, Design::serif, italic};
     }
+    static Font displayFont(float ofSize, bool italic = false) { return {ofSize, Weight::regular, Design::display, italic}; }
     /// ascender - descender + leading: what one line of it takes when nothing says otherwise.
     float lineHeight() const;
     FontMetrics metrics() const;
@@ -154,13 +157,13 @@ inline bool operator==(const Font& a, const Font& b) {
 }
 
 /// How a font's face is told to the host, beside its size: the weight (0…3), plus 4 for the serif, 8 for
-/// italics and 16 for fixed width. The system font's four weights are their own numbers, as they were before there was more.
+/// italics, 16 for fixed width and 32 for the display face. The system font's four weights are their own numbers, as they were before there was more.
 inline int faceCode(const Font& font) {
     return int(font.weight) | (font.design == Font::Design::serif ? 4 : 0) | (font.italic ? 8 : 0) |
-           (font.design == Font::Design::mono ? 16 : 0);
+           (font.design == Font::Design::mono ? 16 : 0) | (font.design == Font::Design::display ? 32 : 0);
 }
 inline Font fontOfFace(float size, int code) {
-    Font::Design design = (code & 16) ? Font::Design::mono : (code & 4) ? Font::Design::serif : Font::Design::system;
+    Font::Design design = (code & 32) ? Font::Design::display : (code & 16) ? Font::Design::mono : (code & 4) ? Font::Design::serif : Font::Design::system;
     return {size, Font::Weight(code & 3), design, (code & 8) != 0};
 }
 

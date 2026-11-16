@@ -1,5 +1,5 @@
-// NOTE(port): added for Quest (core/cards). The edit pencil on an open card of the agent service's, and what it draws:
-// highlights behind words and lines over the rest, kept with the card by the service (agents/docs/protocol.md, Edits).
+// NOTE(port): added for Quest (core/cards). What the pen (`layTools`) marks on an open card of the agent service's: highlights
+// behind words and lines over the rest, kept with the card by the service (agents/docs/protocol.md, Edits).
 //
 // A highlight is words of one run of the content's text, found again by its words and which of their appearances it is.
 // A line is points 0 to 1 across and down the whole content, however far it is scrolled. Both are drawn where the
@@ -20,16 +20,12 @@ constexpr Color amber = Color::hex(0xF2C27A);
 constexpr float highlightOpacity = 0.4f;
 /// A line is 2 of the web's px wide, px on the content.
 constexpr float lineWide = 2 * cards::ocean::openScale;
-/// How near a short pinch must land to an edit to take it off, px on the content: 1.1 cm.
-constexpr float eraseReach = 22;
 /// The least move that adds a point to a line, px on the content.
 constexpr float pointStep = 4;
 /// Most points in a line, as the service keeps them (agents/src/core/domain.ts, STROKE_POINTS).
 constexpr size_t mostPoints = 512;
 /// Most edits on one card (MAX_EDITS).
 constexpr size_t mostEdits = 100;
-/// The pencil's size and where it stands, m: just outside the card's top right corner.
-constexpr float pencilSize = 0.034f, pencilGap = 0.012f;
 
 /// How many times `q` stands in `in`, not overlapping, starting before `before`.
 int appearances(const std::u16string& in, const std::u16string& q, size_t before = std::u16string::npos) {
@@ -49,12 +45,6 @@ std::optional<std::pair<CGPoint, CGPoint>> within(CGPoint a, CGPoint b, float lo
     return std::make_pair(a.y < lo ? at(lo) : a, b.y > hi ? at(hi) : b);
 }
 
-float toSegment(CGPoint p, CGPoint a, CGPoint b) {
-    float dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
-    float t = d2 > 0 ? std::clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / d2, 0.f, 1.f) : 0;
-    return std::hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
-}
-
 std::string newEditId() {
     static std::mt19937 random{std::random_device{}()};
     static unsigned made = 0;
@@ -65,33 +55,10 @@ const char* noun(const CardEdit& e) { return e.kind == CardEdit::Kind::highlight
 
 }  // namespace
 
-void OceanModel::togglePencil(int id) {
-    if (!(tree && tree->focus() == id)) return;
-    pencilFor = pencilOn() ? std::nullopt : std::optional<int>(id);
-    logLine(std::string("[cards] the pencil is ") + (pencilFor ? "on" : "off"));
-}
-
 void OceanModel::buildEdits(CardView& c) {
     if (!(art && c.openPanel && agentBridge && agentBridge->editable(c.id))) return;
     // Their pictures are drawn in the background: each is asked for now, so it is there the moment it shows.
     for (int step = 0; step <= Art::holdSteps; step++) art->holdRing(step);
-    for (const char* words : {"Long pinch to highlight", "Long pinch to draw"}) art->hint(words);
-    art->pencil(true);
-    Vec2 half = c.openBody / 2;
-    if (std::optional<Piece> piece = art->pencil(false)) {
-        c.pencil = art->quad(*piece);
-        c.pencil->position = {half.x + pencilGap + pencilSize / 2, half.y - pencilSize / 2, 0.002f};
-        c.pencil->collision = {Shape::generateBox({pencilSize + 0.006f, pencilSize + 0.006f, 0.01f})};
-        c.pencil->inputTarget = true;
-        c.pencil->hover = Art::hover();
-        picks[c.pencil.get()] = Pick::pencil(c.id);
-        c.extras.push_back(c.pencil.get());
-        c.openHolder->addChild(c.pencil);
-        c.pencilShown = false;
-    }
-    c.hint = Entity::make();
-    c.hint->position = {half.x + pencilGap, half.y - pencilSize - 0.006f, 0.002f};
-    c.openHolder->addChild(c.hint);
     if (std::optional<Piece> piece = art->holdRing(0)) {
         c.holdRing = art->quad(*piece);
         c.holdRing->isEnabled = false;
@@ -112,47 +79,53 @@ void OceanModel::buildEdits(CardView& c) {
 
 void OceanModel::editFrame() {
     std::optional<int> focus = tree ? tree->focus() : std::nullopt;
-    if (pencilFor && focus != pencilFor) {
-        pencilFor.reset();
-        drawing.reset();
-        logLine("[cards] the pencil is off: its card closed");
-    }
+    if (drawing && focus != drawing->card) drawing.reset();
     CardRef c = focus ? card(*focus) : nullptr;
-    if (!(c && c->pencil && art)) return;
-    if (editsOpen != focus) {
-        editsOpen = focus;
-        if (!c->edits.empty()) logLine(fmt("[cards] opened with %d edits: %s", int(c->edits.size()), catalog ? catalog->title(c->ref).c_str() : "a card"));
+    if (!(c && c->highlights) || editsOpen == focus) return;
+    editsOpen = focus;
+    if (!c->edits.empty()) logLine(fmt("[cards] opened with %d edits: %s", int(c->edits.size()), catalog ? catalog->title(c->ref).c_str() : "a card"));
+}
+
+OceanModel::Press::Claim OceanModel::beginMark(CardView& c, Vec2 at) {
+    std::vector<Mark::Kind> kinds = markKinds(c);
+    PictureFrame picture = pictureFrame(c);
+    bool onFilm = std::find(kinds.begin(), kinds.end(), Mark::Kind::time) != kinds.end() &&
+                  std::fabs(at.x - picture.center.x) <= picture.size.x / 2 && std::fabs(at.y - picture.center.y) <= picture.size.y / 2;
+    if (c.highlights && !onFilm) {
+        beginEdit(c, at);
+        if (!drawing) return Press::Claim::spent;
+        sound("mark_begin");
+        return Press::Claim::edit;
     }
-    bool on = pencilOn();
-    if (c->pencilShown != on) {
-        if (std::optional<Piece> piece = art->pencil(on)) art->shade(c->pencil, piece->texture, 0);
-        c->pencilShown = on;
-        c->changed();
-        touch(time + 0.2);
+    // A video's stretch on a service card, and every mark on a card of the headset's own, is Kai's mark (`markBegin`).
+    markBegin(c.id, at, c.highlights ? std::optional<Mark::Kind>(Mark::Kind::time) : std::nullopt);
+    if (!marking) return Press::Claim::spent;
+    sound("mark_begin");
+    return Press::Claim::mark;
+}
+
+bool OceanModel::marked(int id) const {
+    if (marks.count(id)) return true;
+    auto c = cards.find(id);
+    return c != cards.end() && c->second && !c->second->edits.empty();
+}
+
+std::string OceanModel::markedPart(const CardView& c) const {
+    std::string quotes;
+    bool drawn = false;
+    for (const CardEdit& e : c.edits) {
+        if (e.kind == CardEdit::Kind::stroke) drawn = true;
+        else if (quotes.size() < 600) quotes += (quotes.empty() ? "\"" : "; \"") + e.quote + "\"";
     }
-    std::string words;
-    if (on) {
-        std::optional<Vec2> at = aimByFlag;
-        for (const Aim& aim : aims) {
-            if (at || !aim.entity) continue;
-            std::optional<Pick> p = pick(aim.entity);
-            if (p && p->kind == Pick::Kind::card && p->index == c->id) at = onCard(*c, aim.point);
-        }
-        std::optional<CGPoint> p = at ? onContent(*c, *at) : std::nullopt;
-        words = p && runAt(*c, *p) >= 0 ? "Long pinch to highlight" : "Long pinch to draw";
+    std::vector<std::string> parts;
+    if (!quotes.empty()) parts.push_back(quotes);
+    if (drawn) parts.push_back("the part I drew on");
+    if (auto m = marks.find(c.id); m != marks.end() && m->second.kind == Mark::Kind::time) {
+        parts.push_back("the stretch from " + Catalog::clock(m->second.from) + " to " + Catalog::clock(m->second.to));
     }
-    if (words == c->hintWords) return;
-    c->hintWords = words;
-    std::vector<EntityRef> children = c->hint->children;
-    for (const EntityRef& child : children) child->removeFromParent();
-    if (std::optional<Piece> piece = words.empty() ? std::nullopt : art->hint(words)) {
-        EntityRef e = art->quad(*piece);
-        e->position = {piece->size.x / 2, -piece->size.y / 2, 0};
-        c->hint->addChild(e);
-        logLine("[cards] under the pencil: " + words);
-    }
-    c->changed();
-    touch(time + 0.2);
+    std::string out;
+    for (const std::string& p : parts) out += (out.empty() ? "" : "; ") + p;
+    return out;
 }
 
 const std::vector<std::shared_ptr<TextBlock>>& OceanModel::contentRuns(CardView& c) {
@@ -265,32 +238,10 @@ void OceanModel::drawEdits(CardView& c) {
 
 void OceanModel::setEdits(int id, const std::vector<CardEdit>& edits) {
     CardRef c = card(id);
-    if (!(c && c->pencil) || c->edits == edits) return;
+    if (!(c && c->highlights) || c->edits == edits) return;
     c->edits = edits;
     drawEdits(*c);
     logLine(fmt("[cards] %d edits on %s", int(edits.size()), catalog ? catalog->title(c->ref).c_str() : "a card"));
-}
-
-std::optional<std::string> OceanModel::editAt(CardView& c, Vec2 at) {
-    std::optional<CGPoint> p = onContent(c, at);
-    if (!p) return std::nullopt;
-    const std::vector<std::shared_ptr<TextBlock>>& runs = contentRuns(c);
-    for (auto e = c.edits.rbegin(); e != c.edits.rend(); ++e) {
-        if (e->kind == CardEdit::Kind::highlight) {
-            std::optional<std::pair<size_t, int>> where = locate(runs, *e);
-            if (!where) continue;
-            for (const CGRect& r : runs[where->first]->rects(where->second, int(utf16(e->quote).size()))) {
-                if (r.insetBy(-6, -6).contains(*p)) return e->id;
-            }
-            continue;
-        }
-        for (size_t i = 0; i + 1 < e->points.size(); i++) {
-            CGPoint a{e->points[i].x * c.content.frame.width, e->points[i].y * c.content.tall};
-            CGPoint b{e->points[i + 1].x * c.content.frame.width, e->points[i + 1].y * c.content.tall};
-            if (toSegment(*p, a, b) <= eraseReach) return e->id;
-        }
-    }
-    return std::nullopt;
 }
 
 void OceanModel::beginEdit(CardView& c, Vec2 at) {
@@ -307,7 +258,7 @@ void OceanModel::beginEdit(CardView& c, Vec2 at) {
         drawing = Drawing{c.id, CardEdit{.id = newEditId(), .kind = CardEdit::Kind::stroke, .points = {point}}};
         drawEdits(c);
     }
-    logLine(std::string("[cards] the pencil begins ") + noun(drawing->edit));
+    logLine(std::string("[cards] the pen begins ") + noun(drawing->edit));
 }
 
 void OceanModel::moveEdit(CardView& c, Vec2 at) {
@@ -344,6 +295,7 @@ void OceanModel::endEdit(CardView& c) {
         if (agentBridge) agentBridge->edited(c.id, made);
         if (made.kind == CardEdit::Kind::highlight) logLine("[cards] highlighted \"" + made.quote + "\"");
         else logLine(fmt("[cards] drew a line of %d points", int(made.points.size())));
+        sound("mark_made");
     }
     drawEdits(c);
 }

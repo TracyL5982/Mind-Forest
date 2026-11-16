@@ -2,9 +2,9 @@
 // Made at launch only with `-agent <address>`; without it the ocean is exactly as it was.
 //
 // Each service tree is a `Tree` with `grows` off, so its cards come from the service, never from the
-// catalog. Its trees keep the shelf's rules: at launch nothing stands and every tree hangs as a cover, the newest
-// first, where it hung last time (spots.h). A tree this headset asks for stands as a tree the user starts always has,
-// the standing one pressed onto the shelf first; one asked for anywhere else only hangs. A service item
+// catalog. Its trees keep the forest's rules: at launch nothing stands and every tree is put away on the desk, the
+// newest first, where it stood last time (plots.h). A tree this headset asks for stands as a tree the user starts always
+// has, the standing one put away first; one asked for anywhere else is only put away. A service item
 // is a note in the catalog ("agent-<item id>"), or the film or work itself when it is from the
 // headset's own library. A pick is a node that is not kept: its thread is dashed until a pinch keeps it.
 #pragma once
@@ -19,7 +19,7 @@
 #include "agent/asking.h"
 #include "agent/client.h"
 #include "agent/presence_view.h"
-#include "agent/spots.h"
+#include "agent/plots.h"
 #include "agent/voice.h"
 #include "ocean/catalog.h"
 #include "ocean/tree.h"
@@ -53,7 +53,10 @@ public:
     /// A long pinch on the open card: more like it, through the service's `more`, as Momo's "more like this" asks. The card
     /// leads a layer of its own (kept, if it was a suggestion), and when it has highlights the request leans on them.
     void moreLike(int nodeID);
-    /// Whether a card is the service's, so it has the edit pencil and keeps its edits.
+    /// Send on a service card gone into, with something marked on it (`part`, in words): "Tell me more about this part", a
+    /// conversation about the card, as a picked question is.
+    void tellMore(int nodeID, const std::string& part);
+    /// Whether a card is the service's, so the pen's marks on it are kept with it.
     bool editable(int nodeID);
     /// The highlights and lines the service keeps on a card, as the scene draws them.
     std::vector<CardEdit> edits(int nodeID);
@@ -62,9 +65,7 @@ public:
     void erased(int nodeID, const std::string& editId);
     /// A branch was cut with the flat of the hand; `gone` is what left with it.
     void pruned(int nodeID, const std::vector<TreeNode>& gone);
-    /// The tree was pressed by a clap: sent on, or put away.
-    void pressed(const Tree& tree, bool send);
-    /// Writes down where the covers of this service's trees hang, in place of the headset's own shelf file.
+    /// Writes down where this service's trees stand on the desk, in place of the headset's own shelf file.
     void saveShelf();
 
 private:
@@ -106,8 +107,8 @@ private:
     bool keyboardTest = false;
     /// `-agentType <words> -agentTypeAt <s>`: the words are asked then, as typed on the headset, for runs with no keyboard.
     std::optional<double> typeAt;
-    /// Where each of this service's trees' covers hangs, by service tree id: read at launch, written with the shelf.
-    Spots spots;
+    /// Where each of this service's trees stands on the desk, by service tree id: read at launch, written with the shelf.
+    Plots plots;
     double now = 0;
 
     void synced(const Delta& delta);
