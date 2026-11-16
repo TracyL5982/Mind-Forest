@@ -12,7 +12,7 @@ import type { LiveOptions } from './live.ts';
 import { HEARING_MODEL, openaiRealtime, openaiSpeech, openaiTranscribe, SPEECH_VOICE } from './speech-openai.ts';
 import { openaiWebAnswer } from './web-answer.ts';
 import { MAX_DEVICES, NEW_DEVICES_PER_HOUR, PICTURE_DOLLARS, startHosted, telegramAlert } from './hosted/hosted.ts';
-import { DEFAULT_LIMITS, forDevice, Ledger } from './hosted/ledger.ts';
+import { forDevice, Ledger, limitsFrom } from './hosted/ledger.ts';
 import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareCost } from './hosted/overflow.ts';
 import { openInstagram } from './instagram.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
@@ -31,16 +31,7 @@ const log = (line: string) => console.log(line);
 const ledger = hosted
   ? new Ledger({
       file: join(dataDir, 'ledger.json'),
-      limits: {
-        voiceMinutes: number('MIND_PALACE_LIMIT_VOICE_MINUTES', DEFAULT_LIMITS.voiceMinutes),
-        searches: number('MIND_PALACE_LIMIT_SEARCHES', DEFAULT_LIMITS.searches),
-        webAnswers: number('MIND_PALACE_LIMIT_WEB_ANSWERS', DEFAULT_LIMITS.webAnswers),
-        // Unset or 0, no cap.
-        dollarsPerDay: number('MIND_PALACE_CAP_DOLLARS', 0) || DEFAULT_LIMITS.dollarsPerDay,
-        deviceDollars: number('MIND_PALACE_LIMIT_DEVICE_DOLLARS', DEFAULT_LIMITS.deviceDollars),
-        deviceTokens: number('MIND_PALACE_LIMIT_DEVICE_TOKENS', DEFAULT_LIMITS.deviceTokens),
-        tokensPerDay: number('MIND_PALACE_TOKEN_BUDGET', DEFAULT_LIMITS.tokensPerDay),
-      },
+      limits: limitsFrom(env),
       metaDollarsPerMillion: number('MIND_PALACE_META_PRICE', 0),
       alert:
         env.TELEGRAM_BOT_TOKEN && env.MIND_PALACE_ALERT_CHAT
@@ -203,6 +194,8 @@ if (ledger) {
     storeLimit: number('MIND_PALACE_STORE_MB_PER_DEVICE', 20) * 1e6,
     madeLimit: number('MIND_PALACE_FILES_MB_PER_DEVICE', 60) * 1e6,
     record,
+    // deploy/deploy.sh says which: judging, with fly.toml's limits, or testing, with deploy/testing.env's.
+    mode: env.MIND_PALACE_LIMITS_MODE || 'judging',
     log,
   });
   // A redeploy stops the machine with a signal: the day's counts are written before it goes.

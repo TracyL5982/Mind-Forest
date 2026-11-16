@@ -142,7 +142,7 @@ One service for many headsets, on Fly.io in San Jose. Each headset gets its own 
 | Starter trees | `npm run starter -- --from <copy of a data folder>`: the 3 trees with the most kept cards. `--list` ranks them; `--tree <id>` picks them. |
 | First deploy | `deploy/setup.sh`: the app, its volume, the secrets, then the service. |
 | Secrets | `deploy/secrets.sh`: keys through `loadEnv`, piped into `fly secrets import`, never printed. The Instagram account is never sent. |
-| Redeploy | `deploy/deploy.sh`: typecheck, the hosted test, `fly deploy --remote-only`, a health check. |
+| Redeploy | `deploy/deploy.sh`: typecheck, the hosted test, `fly deploy --remote-only`, a health check, with fly.toml's judging limits. `deploy/deploy.sh testing` deploys with no per-headset daily limits (`deploy/testing.env`), and `deploy/deploy.sh judging` goes back. `/admin` says which (`mode`) and gives every limit. |
 | Roll back | `deploy/rollback.sh` lists the images; `deploy/rollback.sh <image>` runs one again. |
 | Back up | `deploy/backup.sh`: a volume snapshot on Fly and a copy in `~/.mind-palace/backups`. |
 | Status, off, on | `deploy/admin.sh status`, `deploy/admin.sh off`, `deploy/admin.sh on`. |

@@ -970,3 +970,18 @@ test('by default the service takes 10 new devices an hour and 20 in all, near th
     await hosted.close();
   }
 });
+
+test("/admin says which limits are on, judging or testing, and every limit's value", { timeout: 20000 }, async () => {
+  const judging = await host();
+  const testing = await host({ voiceMinutes: null, searches: null, webAnswers: null, deviceDollars: null, deviceTokens: null }, { mode: 'testing' });
+  try {
+    const [j, t] = [await admin(judging.hosted), await admin(testing.hosted)];
+    assert.equal(j.mode, 'judging');
+    assert.deepEqual(j.limits, { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: 'none', deviceDollars: 23, deviceTokens: 9_000_000, tokensPerDay: 180_000_000 });
+    assert.equal(t.mode, 'testing');
+    assert.deepEqual(t.limits, { voiceMinutes: 'none', searches: 'none', webAnswers: 'none', dollarsPerDay: 'none', deviceDollars: 'none', deviceTokens: 'none', tokensPerDay: 180_000_000 });
+  } finally {
+    await judging.hosted.close();
+    await testing.hosted.close();
+  }
+});

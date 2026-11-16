@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { DEFAULT_LIMITS, Ledger, type Limits } from '../src/node/hosted/ledger.ts';
+import { DEFAULT_LIMITS, Ledger, limitsFrom, type Limits } from '../src/node/hosted/ledger.ts';
 
 const A = 'device-aaaaaaaaaaaa';
 const B = 'device-bbbbbbbbbbbb';
@@ -54,4 +54,32 @@ test("a device past its share is stopped alone, with no cap", () => {
   assert.equal(ledger.held(A), 'share');
   assert.equal(ledger.refusal(B, 'searches'), null);
   assert.equal(ledger.held(B), null);
+});
+
+/** deploy/testing.env as the service's environment would hold it, over no other setting. */
+function testingEnv(): Record<string, string> {
+  const file = readFileSync(join(import.meta.dirname, '../deploy/testing.env'), 'utf8');
+  return Object.fromEntries(file.split('\n').filter((line) => line.trim() && !line.startsWith('#')).map((line) => line.split('=') as [string, string]));
+}
+
+test('with the testing mode, nothing is refused for voice, searches, web answers or the shares, and the token budget stays', () => {
+  const limits = limitsFrom(testingEnv());
+  assert.deepEqual([limits.voiceMinutes, limits.searches, limits.webAnswers, limits.deviceDollars, limits.deviceTokens], [null, null, null, null, null]);
+  assert.equal(limits.tokensPerDay, DEFAULT_LIMITS.tokensPerDay);
+  const { ledger } = ledgerAt(limits);
+  ledger.used(A, 'voiceMs', 600 * 60_000);
+  ledger.used(A, 'searches', 1000);
+  ledger.used(A, 'webAnswers', 1000);
+  ledger.spend(500, A);
+  ledger.metaTokens(50_000_000, A);
+  for (const kind of ['voiceMs', 'searches', 'webAnswers'] as const) assert.equal(ledger.refusal(A, kind), null, `no ${kind} limit`);
+  assert.equal(ledger.held(A), null, 'no share');
+  ledger.metaTokens(limits.tokensPerDay, B);
+  assert.equal(ledger.held(B), 'budget', 'the daily token budget is on in both modes');
+});
+
+test('a limit not set keeps its judging value, 0 switches it off, and a setting that is no number stops the service', () => {
+  assert.deepEqual(limitsFrom({}), DEFAULT_LIMITS);
+  assert.deepEqual(limitsFrom({ MIND_PALACE_LIMIT_SEARCHES: '0', MIND_PALACE_LIMIT_VOICE_MINUTES: '45' }), { ...DEFAULT_LIMITS, searches: null, voiceMinutes: 45 });
+  assert.throws(() => limitsFrom({ MIND_PALACE_LIMIT_DEVICE_DOLLARS: 'twenty' }), /MIND_PALACE_LIMIT_DEVICE_DOLLARS is "twenty"/);
 });

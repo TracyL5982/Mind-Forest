@@ -74,6 +74,8 @@ export interface HostedOptions {
   madeLimit?: number;
   /** What is free on the volume, in bytes. Defaults to the file system's own count. */
   freeBytes?: () => number;
+  /** Which limits the service was deployed with, for `/admin`: `judging`, or `testing` with no per-device daily limits. */
+  mode?: string;
   /** A line in Momo's voice as 16-bit mono PCM at the live voice's rate, for a refusal said without the realtime model. */
   record?: (text: string) => Promise<Uint8Array>;
   log: (line: string) => void;
@@ -231,6 +233,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     return {
       ok: true,
       protocol: PROTOCOL_VERSION,
+      mode: opts.mode ?? 'judging',
       uptimeS: Math.round((Date.now() - started) / 1000),
       spaces: known.size,
       maxDevices,

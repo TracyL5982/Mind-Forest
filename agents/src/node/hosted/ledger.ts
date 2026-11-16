@@ -4,17 +4,20 @@ import { dirname } from 'node:path';
 import { z } from 'zod';
 import type { Metered } from '../server.ts';
 
-/** What one device may do in a day, and what the whole service may spend in one. */
+/**
+ * What one device may do in a day, and what the whole service may spend in one. A per-device limit of null is off: the testing
+ * mode, while the team tests (deploy/testing.env). The token budget is always on.
+ */
 export interface Limits {
-  voiceMinutes: number;
-  searches: number;
-  webAnswers: number;
+  voiceMinutes: number | null;
+  searches: number | null;
+  webAnswers: number | null;
   /** What the whole service may spend in a day, or null for no cap: the user's choice for judging, bounded by the shares instead. */
   dollarsPerDay: number | null;
   /** One device's share of the day's spend, so one judge cannot spend the cap for everyone. */
-  deviceDollars: number;
+  deviceDollars: number | null;
   /** One device's share of Meta's tokens in a day, which have no price and so would never reach the cap. */
-  deviceTokens: number;
+  deviceTokens: number | null;
   /** Meta's tokens the whole service may use in a day, a guard against a runaway loop, counted again each day as the shares are. */
   tokensPerDay: number;
 }
@@ -27,6 +30,34 @@ export interface Limits {
  * fly.toml's 60M token budget. The working is in reports/ws37.md of the judging program.
  */
 export const DEFAULT_LIMITS: Limits = { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: null, deviceDollars: 23, deviceTokens: 9_000_000, tokensPerDay: 180_000_000 };
+
+/**
+ * The limits as the service's environment sets them. A per-device limit set to 0 is off; one not set keeps its judging value, so a
+ * setting left out never switches a limit off. The cap is off unset or at 0 (the user's decision), and a value that is no number
+ * stops the service at start rather than switching anything off.
+ */
+export function limitsFrom(env: Record<string, string | undefined>): Limits {
+  const given = (name: string): number | undefined => {
+    const raw = env[name]?.trim();
+    if (!raw) return undefined;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) throw new Error(`${name} is "${raw}", not a number of 0 or more`);
+    return value;
+  };
+  const limit = (name: string, judging: number | null): number | null => {
+    const value = given(name);
+    return value === undefined ? judging : value > 0 ? value : null;
+  };
+  return {
+    voiceMinutes: limit('MIND_PALACE_LIMIT_VOICE_MINUTES', DEFAULT_LIMITS.voiceMinutes),
+    searches: limit('MIND_PALACE_LIMIT_SEARCHES', DEFAULT_LIMITS.searches),
+    webAnswers: limit('MIND_PALACE_LIMIT_WEB_ANSWERS', DEFAULT_LIMITS.webAnswers),
+    dollarsPerDay: given('MIND_PALACE_CAP_DOLLARS') || null,
+    deviceDollars: limit('MIND_PALACE_LIMIT_DEVICE_DOLLARS', DEFAULT_LIMITS.deviceDollars),
+    deviceTokens: limit('MIND_PALACE_LIMIT_DEVICE_TOKENS', DEFAULT_LIMITS.deviceTokens),
+    tokensPerDay: given('MIND_PALACE_TOKEN_BUDGET') || DEFAULT_LIMITS.tokensPerDay,
+  };
+}
 
 /** The device whose work this is, for the model's calls, which the whole service shares: its tokens and spend are counted to it. */
 export const forDevice = new AsyncLocalStorage<string>();
@@ -110,8 +141,9 @@ export class Ledger {
     const held = this.held(device);
     if (held) return held;
     const used = this.today().devices[device]?.[kind] ?? 0;
-    const limit = { voiceMs: this.opts.limits.voiceMinutes * 60_000, searches: this.opts.limits.searches, webAnswers: this.opts.limits.webAnswers }[kind];
-    return used >= limit ? kind : null;
+    const { voiceMinutes, searches, webAnswers } = this.opts.limits;
+    const limit = { voiceMs: voiceMinutes === null ? null : voiceMinutes * 60_000, searches, webAnswers }[kind];
+    return limit !== null && used >= limit ? kind : null;
   }
 
   /** Why this device's model calls are refused now, or null: the off switch, the day's cap, or the device's share of it. */
@@ -121,7 +153,8 @@ export class Ledger {
 
   private shareUsed(device: string): boolean {
     const usage = this.today().devices[device];
-    return Boolean(usage && (usage.dollars >= this.opts.limits.deviceDollars || usage.tokens >= this.opts.limits.deviceTokens));
+    const { deviceDollars, deviceTokens } = this.opts.limits;
+    return Boolean(usage && ((deviceDollars !== null && usage.dollars >= deviceDollars) || (deviceTokens !== null && usage.tokens >= deviceTokens)));
   }
 
   /** Whether the service does no costly work at all now: switched off, the day's cap spent, or the day's tokens used. */
@@ -186,7 +219,7 @@ export class Ledger {
       cap: this.opts.limits.dollarsPerDay ?? 'none',
       metaTokens: day.metaTokens,
       overflows: day.overflows,
-      limits: this.opts.limits,
+      limits: Object.fromEntries(Object.entries(this.opts.limits).map(([name, value]) => [name, value ?? 'none'])),
       devices: Object.fromEntries(
         Object.entries(day.devices).map(([id, u]) => [id, { voiceMinutes: Number((u.voiceMs / 60_000).toFixed(3)), searches: u.searches, webAnswers: u.webAnswers, dollars: Number(u.dollars.toFixed(4)), tokens: u.tokens }]),
       ),
