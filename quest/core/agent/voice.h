@@ -8,9 +8,10 @@
 // it at once (`start`). The conversation closes once nobody has talked for 8 seconds. Without /live, or while it is
 // closed, everything is as above.
 //
-// It also says what it is doing, for Momo's presence in the scene (`presence`). It makes two sounds of its own besides
-// the chime: a short tone as the user's turn is sent, and a quiet loop while Momo thinks, until the first sound of the
-// answer. `-mute` silences all of them, and Momo's voice.
+// It also says what it is doing, for Momo's presence in the scene (`presence`). Momo has three sounds of its own: the
+// chime as the name is heard, a short tone as the user's turn is sent, and a quiet loop while Momo thinks, until the
+// first sound of the answer. They are synth.py's (momo_chime, momo_sent, momo_thinking), in the ocean's key, and play
+// through its mixer (audio.h). `-mute` silences all of them, and Momo's voice.
 //
 // The microphone, or `-wakeClip <file.wav>` in its place, feeds the listener on the host's sound thread. The frame
 // thread asks things of the listener through a queue, applied by whichever thread holds the listener next, and hears
@@ -156,8 +157,6 @@ private:
         std::vector<int> played;
         std::vector<FromLive> live;
         std::vector<int> streamsPlayed;
-        std::vector<std::pair<int, bool>> loopsEnded;   // the loop's number, and whether it played to its end
-        int chimesEnded = 0;
         bool microphoneFailed = false;
         bool microphoneRefused = false;
         bool microphoneAsking = false;
@@ -249,8 +248,7 @@ private:
     };
     std::optional<Sounding> sounding;
     int players = 0;
-    std::string chimePath;          // the file the waking chime plays from
-    std::string sentPath, loopPath;
+    double chimeEnds = -1;          // when the chime playing ends, on the frame clock
     double busyLogged = 0;
     double clock = 0;               // the last frame's
     double lineAt = -1;             // when the reply that has not begun to sound came, or -1
@@ -273,12 +271,9 @@ private:
     struct Thinking {
         double since = 0;
         bool endsWithWork = false;
-        platform::SoundRef loop;
-        int number = 0;             // the loop's, so the end of one stopped is let go
     };
     using Turn = std::variant<Idle, Listening, Open, Sent, Thinking>;
     Turn turn = Idle{};
-    int loops = 0;
     /// The live turn whose words the presence shows, from `heard`; 0 for none.
     int wordsOf = 0;
     /// The agents at work, for their lines and Momo's monocle.
@@ -292,7 +287,8 @@ private:
     void endThinking();
     /// The turn is sent and its answer has not begun.
     bool awaiting() const { return std::holds_alternative<Sent>(turn) || std::holds_alternative<Thinking>(turn); }
-    void startLoop(Thinking& t);
+    /// One of Momo's own sounds, unless muted.
+    void own(const char* name);
     /// Plays a sound file, unless muted.
     platform::SoundRef play(const std::string& path, std::function<void(bool)> done);
     /// The presence, from the turn, Momo's voice and the work in progress.

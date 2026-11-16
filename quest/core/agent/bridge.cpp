@@ -205,6 +205,7 @@ void Bridge::frame(double t) {
         voice->frame(now);
         showPresence();
     }
+    model.conversing = voice && voice->presence().conversing();
     goOn();
     reportFocus();
     if (offered) {

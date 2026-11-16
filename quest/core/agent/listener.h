@@ -167,14 +167,6 @@ private:
     void settle();
 };
 
-/// Two short rising notes, played when the name is heard: the web client's chime (agents/client/js/wake.js).
-std::vector<float> chime();
-/// Two soft falling notes, under a fifth of a second, played when the user's turn is sent.
-std::vector<float> sentTone();
-/// Two quiet low notes and a rest, played over and over while Momo thinks. It begins and ends in silence, so it
-/// repeats without a seam.
-std::vector<float> thinkingLoop();
-
 /// A 16 kHz mono 16-bit WAV file.
 std::string wavFile(const std::vector<float>& samples);
 /// The samples of a 16 kHz mono 16-bit PCM WAV file, or nullopt for any other.

@@ -34,6 +34,9 @@ constexpr int levelNotes[10] = {0, 1, 2, 3, 4, 6, 7, 8, 10, 11};
 constexpr int layerChords = 14;
 /// How many glints there are (glint_00 …), low to high.
 constexpr int glints = 10;
+/// How loud the bed, the layer chords and the glints are while Momo listens, thinks or speaks, so the user and Momo are
+/// heard over them: about 9 dB down.
+constexpr float conversationDip = 0.35f;
 
 /// A number from 0 to 1 that is the same for the same `n`, and unlike its neighbours'.
 float scattered(uint32_t n) {
@@ -61,7 +64,7 @@ void OceanModel::soundAt(const char* name, Vec3 at, float gain, double after) {
 
 void OceanModel::soundLayer(int layer, bool forward, double after) {
     int k = std::min(std::max(layer, 0), layerChords - 1);
-    audio::play(fmt(forward ? "layer_up_%d" : "layer_down_%d", k), 1, after);
+    audio::play(fmt(forward ? "layer_up_%d" : "layer_down_%d", k), conversing ? conversationDip : 1, after);
 }
 
 void OceanModel::soundNotes(int count, double delay) {
@@ -83,8 +86,8 @@ void OceanModel::soundLevel(int level) {
 
 void OceanModel::updateSound(double now) {
     if (!audio::on()) return;
-    // The ocean is always there, and draws back under a film's own sound.
-    audio::level("ocean_bed", (screenNode ? 0.3f : 1) * bedLevel(), 1.5f);
+    // The ocean is always there, and draws back under a film's own sound, and quickly while Momo and the user talk.
+    audio::level("ocean_bed", (screenNode ? 0.3f : 1) * (conversing ? conversationDip : 1) * bedLevel(), conversing ? 0.3f : 1.5f);
     soundGlints(now);
     audio::level("think", now >= thinkFrom && now < thinkUntil ? 1 : 0, 0.2f);
 
@@ -118,7 +121,7 @@ void OceanModel::updateSound(double now) {
         heldLevel = std::pow(std::min(1.f, std::fabs(moved)), 1.6f);
     }
     if (!swelling.empty() && swelling != held) audio::level(swelling, 0, 0.3f);
-    if (!held.empty()) audio::level(held, heldLevel, 0.06f);
+    if (!held.empty()) audio::level(held, heldLevel * (conversing ? conversationDip : 1), 0.06f);
     swelling = held;
     for (int h = 0; h < 2; h++) {
         if (fists[h] == fistSounding[h]) continue;
@@ -178,6 +181,7 @@ void OceanModel::soundGlints(double now) {
     float gain = glitter() * (0.5f + 0.5f * scattered(turn * 2)) * std::min(1.2f, std::max(0.45f, std::sqrt(4.2f / std::max(dist, 0.5f))));
     // The ocean is further from mind while a tree stands over it, and further still under a film.
     if (screenNode) gain *= 0.25f; else if (tree) gain *= 0.55f;
+    if (conversing) gain *= conversationDip;
     audio::play(fmt("glint_%02d", note), gain, 0, pan);
 }
 

@@ -8,6 +8,7 @@
 #include <thread>
 
 #include "async.h"
+#include "audio.h"
 #include "base.h"
 #include "json.h"
 
@@ -222,7 +223,7 @@ Voice::Voice(Client& client, std::function<Scene()> scene, std::optional<std::st
 Voice::~Voice() {
     if (microphone) microphone->stop();
     if (sound) sound->stop();
-    if (auto* t = std::get_if<Thinking>(&turn); t && t->loop) t->loop->stop();
+    if (std::holds_alternative<Thinking>(turn) && !muted) audio::level("momo_thinking", 0);
     if (sounding) sounding->player->stop();
     if (auto* c = std::get_if<Connecting>(&link)) c->socket->close();
     if (auto* r = std::get_if<Ready>(&link)) r->socket->close();
@@ -273,9 +274,6 @@ void Voice::start() {
         return;
     }
     modelDir = tokens.substr(0, tokens.rfind('/'));
-    chimePath = platform::dataDirectory() + "/agent-chime.wav";
-    sentPath = platform::dataDirectory() + "/agent-sent.wav";
-    loopPath = platform::dataDirectory() + "/agent-thinking.wav";
     struct Made {
         std::shared_ptr<const Vocabulary> vocabulary;
         std::unique_ptr<Spotter> spotter;
@@ -283,13 +281,10 @@ void Voice::start() {
         std::string why;
     };
     auto made = std::make_shared<Made>();
-    std::string dir = modelDir, name = wanted, chimeFile = chimePath, sentFile = sentPath, loopFile = loopPath;
+    std::string dir = modelDir, name = wanted;
     std::optional<std::string> clipFile = clip;
     Async::run(
-        [made, dir, name, chimeFile, sentFile, loopFile, clipFile] {
-            platform::writeFile(chimeFile, wavFile(chime()));
-            platform::writeFile(sentFile, wavFile(sentTone()));
-            platform::writeFile(loopFile, wavFile(thinkingLoop()));
+        [made, dir, name, clipFile] {
             if (clipFile) {
                 std::optional<std::string> bytes = platform::readFile(*clipFile);
                 made->clip = bytes ? readWav(*bytes) : std::nullopt;
@@ -474,14 +469,10 @@ void Voice::frame(double now) {
         std::visit(overloaded{
                        [&](Listener::Woke& w) {
                            logLine("[voice] heard " + w.keyword);
-                           std::weak_ptr<Inbox> box = inbox;
-                           if (play(chimePath, [box](bool) {
-                                   if (auto b = box.lock()) {
-                                       std::lock_guard<std::mutex> g(b->lock);
-                                       b->chimesEnded++;
-                                   }
-                               })) {
+                           if (!muted && audio::on()) {
+                               audio::play("momo_chime");
                                send(ChimeStarted{});
+                               chimeEnds = clock + audio::seconds("momo_chime");
                            }
                            turnTo(Listening{});
                        },
@@ -528,8 +519,6 @@ void Voice::frame(double now) {
     std::vector<int> played;
     std::vector<FromLive> fromLive;
     std::vector<int> streamsPlayed;
-    std::vector<std::pair<int, bool>> loopsEnded;
-    int chimesEnded = 0;
     bool failed = false, refused = false, asking = false;
     {
         std::lock_guard<std::mutex> g(inbox->lock);
@@ -538,14 +527,15 @@ void Voice::frame(double now) {
         played.swap(inbox->played);
         fromLive.swap(inbox->live);
         streamsPlayed.swap(inbox->streamsPlayed);
-        loopsEnded.swap(inbox->loopsEnded);
-        std::swap(chimesEnded, inbox->chimesEnded);
         std::swap(failed, inbox->microphoneFailed);
         std::swap(refused, inbox->microphoneRefused);
         std::swap(asking, inbox->microphoneAsking);
     }
     if (asking) askingForMicrophone = true;
-    for (int i = 0; i < chimesEnded; i++) send(ChimeEnded{});
+    if (chimeEnds >= 0 && now >= chimeEnds) {
+        chimeEnds = -1;
+        send(ChimeEnded{});
+    }
     if (refused) {
         // Asked again, the headset would ask the user again: it stops listening, and replies are still spoken.
         logLine("[voice] the microphone is not allowed, so the headset does not listen");
@@ -646,10 +636,6 @@ void Voice::frame(double now) {
             spoken.clear();
         }
         logLine("[voice] done speaking");
-    }
-    for (auto [number, played] : loopsEnded) {
-        auto* t = std::get_if<Thinking>(&turn);
-        if (t && t->number == number && played) startLoop(*t);
     }
     if (auto* sent = std::get_if<Sent>(&turn); sent && now - sent->at >= sentFor) {
         Thinking next;
@@ -894,7 +880,7 @@ platform::SoundRef Voice::play(const std::string& path, std::function<void(bool)
 }
 
 void Voice::turnTo(Turn next) {
-    if (auto* t = std::get_if<Thinking>(&turn); t && t->loop) t->loop->stop();
+    bool wasThinking = std::holds_alternative<Thinking>(turn);
     turn = std::move(next);
     if (std::holds_alternative<Listening>(turn) || std::holds_alternative<Open>(turn)) {
         shown.userText.clear();
@@ -903,19 +889,13 @@ void Voice::turnTo(Turn next) {
     }
     // The last turn's words, should they come late, are not the next one's.
     if (std::holds_alternative<Open>(turn)) wordsOf = 0;
-    if (std::holds_alternative<Sent>(turn)) play(sentPath, [](bool) {});
-    if (auto* t = std::get_if<Thinking>(&turn)) startLoop(*t);
+    if (std::holds_alternative<Sent>(turn)) own("momo_sent");
+    bool thinking = std::holds_alternative<Thinking>(turn);
+    if (thinking != wasThinking && !muted) audio::level("momo_thinking", thinking ? 1 : 0, thinking ? 0.1f : 0.15f);
 }
 
-void Voice::startLoop(Thinking& t) {
-    std::weak_ptr<Inbox> box = inbox;
-    int number = t.number = ++loops;
-    t.loop = play(loopPath, [box, number](bool played) {
-        if (auto b = box.lock()) {
-            std::lock_guard<std::mutex> g(b->lock);
-            b->loopsEnded.emplace_back(number, played);
-        }
-    });
+void Voice::own(const char* name) {
+    if (!muted) audio::play(name);
 }
 
 void Voice::endThinking() {

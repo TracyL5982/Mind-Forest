@@ -689,6 +689,7 @@ private:
     int soundDepth = 0;
     double soundLayerAfter = 0;                         // the next layer chord waits this long (a card is still on its way up)
     double thinkFrom = 0, thinkUntil = 0;
+    bool conversing = false;                            // AGENT: Momo listens, thinks or speaks, and the ocean draws back
     double stirSounded = -100, landSounded = -100;
     const Entity* landedLast[2] = {nullptr, nullptr};   // the last two things a ray's arrival sounded on
     std::vector<HandGlow::Grab> fistsDrawn;             // the closed hands the gauge was last drawn for (`drawHandGlow`)

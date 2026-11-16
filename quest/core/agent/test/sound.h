@@ -4,6 +4,7 @@
 #include "support.h"
 
 #include "../listener.h"
+#include "json.h"
 
 namespace check {
 
@@ -28,6 +29,27 @@ inline std::unique_ptr<agent::Spotter> spotterFor(const std::string& name) {
 }
 
 constexpr size_t second = agent::Listener::rate;
+
+inline const std::filesystem::path sounds = std::filesystem::path(__FILE__).parent_path() / "../../../../media-src/quest/sounds";
+
+/// One of the app's own sounds (synth.py's, 48 kHz stereo 16 bit) as it leaves the speaker, at its manifest gain and the
+/// mixer's 0.8, and as the microphone hears it: 16 kHz mono, every third sample of its left side.
+inline std::vector<float> ownSound(const std::string& name) {
+    std::optional<Json> manifest = Json::parse(bytesOf(sounds / "manifest.json"));
+    double gain = manifest ? (*manifest)["sounds"][name]["gain"].number(0) : 0;
+    std::string wav = bytesOf(sounds / (name + ".wav"));
+    std::vector<float> out;
+    size_t data = wav.find("data");
+    if (gain <= 0 || data == std::string::npos) {
+        std::fprintf(stderr, "    no sound %s\n", name.c_str());
+        return out;
+    }
+    for (size_t at = data + 8; at + 4 <= wav.size(); at += 12) {
+        int16_t left = int16_t(uint16_t(uint8_t(wav[at])) | uint16_t(uint8_t(wav[at + 1])) << 8);
+        out.push_back(float(left / 32768.0 * gain * 0.8));
+    }
+    return out;
+}
 
 /// Sound as a test builds it, with a faint hiss under all of it as a microphone has.
 struct Sound {

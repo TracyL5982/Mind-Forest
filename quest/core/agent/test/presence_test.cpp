@@ -248,6 +248,13 @@ TEST(theHintShowsAtFirstAndAfterAWakeWithNothingSaid) {
     CHECK(resting(c).size() == 1 && resting(c)[0]->text == "Say “Hey Momo”", "woken with nothing said, the hint comes back");
 }
 
+TEST(theOceanDrawsBackWhileMomoListensThinksOrSpeaks) {
+    for (S state : {S::listening, S::open, S::sent, S::thinking, S::responding}) {
+        CHECK(say(state).conversing(), "conversing in state %d", int(state));
+    }
+    for (S state : {S::off, S::waiting, S::working}) CHECK(!say(state).conversing(), "not in state %d", int(state));
+}
+
 TEST(theOpenConversationShowsListeningUnderTheReplyAndClosingBringsTheHint) {
     Caption c = caption();
     run(c, say(S::listening, "Why?"), 0.3);
