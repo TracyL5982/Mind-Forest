@@ -866,6 +866,147 @@ The shorter lead-in is not kept. It is real at its part, 0.23 to 0.29 s, about 3
 
 **Measured with.** Throwaway scripts outside the repository that called `ask` with each set of instructions, keeping each response's citations, pages read and searches, and `scripts/live-bench.ts`, run from a copy whose web answer added (a) or not, for the voice runs. About $5.35 of OpenAI calls, $1.60 of them for the voice comparison.
 
+## 63. Scout: every search brings something to look at, unless nothing about it can be seen
+
+**Decision.**
+- **Two sources of pictures.**
+  - Wikimedia Commons (`commons`) needs no key. Its file search brings each file's picture, title, author, licence and file page. The credit goes on the item in the form Commons gives a reuser, "Amédée Forestier, Public domain, via Wikimedia Commons": in its text, and in `data.credit` and `data.licence`.
+  - Unsplash (`photos`) joins when `UNSPLASH_ACCESS_KEY` is set. Its terms are followed as set out below.
+- **Europeana's preview.** It is fetched in place of the holder's original.
+- **A held slot for something to look at.** Each lane holds a slot for its first thing to look at: a find in a source of pictures, a video, or a picture made.
+  - **The fast lane.** It holds one of its two slots for its look at pictures, once its first card is in, so the first card is still whatever lands first.
+  - **The inventive lane.** It holds one slot until it has shown something to look at: while its first find of pictures is out, and while the model may still write one. That find is taken even past the lane's count of directions.
+  - **A made picture.** It holds its own slot, as before, but never takes the hold from a find: a made picture lands after the line, and a find before it.
+- **The prompts.** Both models are asked for something to look at whenever the subject can be seen. The main model leaves pictures out only when nothing about the subject can be seen, and then says why in its reading. Sources of pictures are marked "(pictures)" in both lists.
+- **Pictures in by 2.5 s.** The reading goes ahead with the pictures fetched within 2.5 s, and the rest are left out.
+- **Deadlines.** Every source search has one: 15 s, and 45 s for the web, which reads its pages.
+- **OpenAlex.** Its requests start at least 110 ms apart across the process.
+- **Made pictures.** With `FAL_KEY` they are made on fal's Muse Image (`meta/muse-image/text-to-image`). The Meta API's muse-image-1.0 is the fallback when fal fails or has no key. `MIND_PALACE_FAL_MODEL` names another fal model, or `off`.
+
+**Why.** The user: "sometimes the searches only come back with text, I would love more variations in search results if possible, there need to at least be some visual stuff ... prefer mix of media, unless one media/form definitely serves the purpose better." In the headset session of 15 November, 4 searches landed 19 cards before Momo's wrap-ups. Only 3 were things to look at, and the user already had 2 of them. None of the 6 museum or heritage searches landed a card. All 4 made pictures came after the wrap-up, 15 to 48 s late. The causes:
+- The fast lane took its first two finds, and text catalogues answer before a search that fetches eight pictures.
+- Written ideas land the moment they are written, and are written first.
+- Pictures were optional in the prompt.
+- A made picture is started last.
+
+**Unsplash's terms, as followed** (its API guidelines and the hotlinking, download and attribution articles, read 15 November 2026):
+- **Hotlinked.** A card's picture is Unsplash's own address (`urls.raw` resized to 640 px, keeping its `ixid`), held as a linked asset that the service relays each time the card is shown. No copy is stored.
+  - The Meta model refused Unsplash's addresses (400 `media_url_not_fetchable` in 4 of 4 readings in WS35's runs), and so chose from the words alone.
+  - The model is now shown each photo's `urls.small` (400 px), fetched for the reading and kept nowhere (`web.look`).
+- **Credit.** Every photo is credited "Photo by <name> on Unsplash", with the photographer's profile as the credit's link. Every link back to Unsplash carries `utm_source=mind_palace&utm_medium=referral`.
+- **Downloads.** When a photo lands as a card, the service calls its `download_location` with the key. Only addresses on api.unsplash.com get the key.
+- **The rate limit.** A new app has 50 requests an hour, and an approved one 1,000; only api.unsplash.com requests count. Once `X-Ratelimit-Remaining` is down to 5, or on a 403 or 429, Unsplash is not offered for an hour, so the last few requests stay for the download reports.
+- **The key.** It goes in the `Authorization: Client-ID` header, never in an address, and stays in the service.
+
+**Commons.**
+- Wikimedia asks a program to name itself with a contact, so its requests carry the repository's address.
+- Thumbnails are 500 px wide. That is a size Wikimedia keeps ready, near the 420 to 620 texture px a card's picture takes on the headset.
+- Only bitmaps are searched (`filetype:bitmap`). Files under 400 px wide are left out, since they are icons and flags.
+
+**Measured, the picture searches.** `scratchpad/ws33/bin/picture-timing.mts` runs the Scout's own find path for one scripted direction per search: the search, fetching the pictures, and the quick model's reading. Eight subjects, one run each (4 for Unsplash), on 15 November, on a slow network: another workstream measured 136 KB/s from one CDN that day.
+
+| Source | Search | Fetch | Read | Fetch's share |
+|---|---|---|---|---|
+| Museums | 0.60 s (0.48 to 1.38) | 0.87 s (0.74 to 1.16) | 2.30 s (1.64 to 3.61), 7,300 tokens | 23% |
+| Europeana, the original | 0.36 s | 5.7 s (1.2 to 9.1), and 28 of 41 pictures came | | most |
+| Europeana, its preview | 0.42 s (0.29 to 0.79) | 0.94 s (0.54 to 1.16), 41 of 41 | 1.72 s (1.11 to 3.38) | 28% |
+| Commons | 0.27 s (0.09 to 1.04) | 0.22 s (0.17 to 0.55) | 1.87 s (1.35 to 3.22), 3,500 tokens | 8% |
+| Unsplash, looked at from its small copy | 0.56 s | 0.98 s | 1.84 s (1 run) | |
+
+Once Europeana is read from its preview, fetching is no longer most of any search, so the count of pictures shown stays at eight and nothing is fetched while the model reads. The reading is the bound now. It is slowest for the museums, whose pictures are 843 to 960 px, against Commons' 500. In the bench below, the same stages had these medians on this branch:
+- Commons: 0.4 s search, 0.3 s fetch, 2.0 s read.
+- The museums: 0.7, 1.2 and 3.0 s.
+- Unsplash: 0.3, 0.2 and 2.6 s.
+- Are.na: 1.0, 0.5 and 2.0 s.
+
+**Measured, the runs.** `scratchpad/ws33/bin/service-runs.mts` ran each request through the real service. Each copy started on its own port, from a copy of `agents/data` as it stood when the request was made, with Telegram and live voice off. Times are from the request to what the client received. The line is the run's end, which is when Momo is told to wrap up.
+- **The requests.** The ten requests of 56 were asked on their cards. The user's 4 from the session were asked as they were made: a new tree and a new layer as a round with no request, and the two row questions with their words.
+- **The sides.** One run a side, alternating, 20 s apart, with which side went first alternating by request. Before was c5127d2; after was bb759e1 with pictures on fal.
+- **Seeable or not.** Set before any run: 11 of the 14 can be seen. The three that cannot are what studies found on mixed initiative, whether Clippy was the first generative UI, and ideas for a short story.
+- **A visual card** is one drawn as a picture, an artwork or a video. No request was refused for the rate.
+
+| Search | Visual before the line, before | after | First visual, before | after | First card, before | after |
+|---|---|---|---|---|---|---|
+| Something interesting to look at (generative UI) | 0 | 1 | 37.2 s | 4.3 s | 3.1 s | 3.2 s |
+| Something interesting about Dutch art | 0 | 2 | 25.8 | 7.8 | 3.8 | 2.7 |
+| Standoffs in horror films | 0 | 1 | 25.8 | 4.6 | 3.5 | 3.0 |
+| The world of this picture | 2 | 2 | 4.8 | 5.0 | 4.8 | 5.0 |
+| What studies found (not seeable) | 0 | 1 | | 5.4 | 3.1 | 5.4 |
+| How Kubrick made his films feel cold | 2 | 3 | 1.1 | 1.3 | 1.1 | 1.3 |
+| Where else the grid idea was used | 1 | 2 | 4.9 | 4.8 | 4.0 | 3.9 |
+| Is this really true? (not seeable) | 1 | 0 | 3.8 | 38.4 | 3.2 | 4.9 |
+| How this scene was made | 1 | 1 | 3.7 | 4.0 | 3.7 | 3.1 |
+| Ideas for a short story (not seeable) | 2 | 2 | 1.6 | 2.0 | 1.6 | 2.0 |
+| A new tree: people who dance when they shouldn't | 1 | 2 | 1.7 | 3.5 | 1.7 | 3.5 |
+| Why was the Ghost Dance banned? | 0 | 3 | 40.7 | 1.5 | 3.0 | 1.5 |
+| A new layer: the Ghost Dance painting | 2 | 3 | 3.4 | 2.9 | 1.8 | 1.3 |
+| How Weimar police targeted dance halls | 0 | 2 | 47.1 | 4.8 | 3.3 | 4.5 |
+
+| | Before | After |
+|---|---|---|
+| Seeable searches with a visual card before the line | 6 of 11 | 11 of 11 |
+| First card | 3.2 s (1.1 to 4.8) | 3.1 s (1.3 to 5.4) |
+| First visual card, of the searches with one before the line | 3.5 s (1.1 to 4.9), 8 searches | 4.3 s (1.3 to 7.8), 13 searches |
+| The line | 15.5 s (11.5 to 21.9) | 16.2 s (12.9 to 22.3) |
+| Cards before the line, text and visual | 51 and 12 | 42 and 25 |
+| Visual cards before the line by source | museums 2, heritage 1, boards 1, library 4 of all | Commons 8, Are.na 6, museums 3, Unsplash 1 |
+| Model requests a run | 10 | 10 |
+| Spend, 14 runs | $0.87 | $0.66, and $0.05 on fal |
+
+Medians, with the range. One run a side, so a single request's difference is within the spread: what studies found was 2.3 s slower to its first card, and the new tree 1.8 s slower. The bar set before the runs was a visual card before the line in 9 of 10 seeable searches, and the first card no more than 1 s slower. Both are met.
+
+**A first bench, an hour earlier, on b8c5452.** It ran on a worse network. Two of the main model's calls ran into their 120 s limit, on this side, and searches timed out at 10 s on both sides. It found what the second round fixed:
+- In Dutch art, the slot held for a find of pictures passed to a picture being made. A written find then took the last slot, and the run ended before its museum find landed.
+- One picture held a reading 12 s.
+- A museum search never answered, and since a direction still out keeps a run open, that run never said what it brought.
+
+Even so, it had a visual card before the line in 9 of 11 seeable searches against 5 of 11.
+
+**Blind readers.** Two readers mark, on the rerun's cards shuffled under letters (`scratchpad/ws33/blind/sheet.md`), the visual cards that do not fit and any search where text alone would clearly have been better. Their counts are pending.
+
+**Made pictures.** `scratchpad/ws33/bin/fal-pictures.mts` made the session's 4 prompts and 6 earlier ones with each candidate, in turns. Each candidate was timed once a prompt, and two blind readers (Sonnet and Opus) ranked the four pictures of each prompt, with the letters shuffled.
+
+| | Time, median (range) | Price a picture | Mean rank, reader 1 and 2 | Ranked first | Ranked last | Above today's |
+|---|---|---|---|---|---|---|
+| fal Muse Image | 22.8 s (11.1 to 47.6) | $0.01 | 1.6 and 1.6 | 10 of 20 | 0 | 16 of 20 |
+| Meta API muse-image-1.0 (today's) | 22.0 s (9.9 to 37.7) | about $0.03 (its image tokens) | 2.2 and 2.3 | 3 | 1 | |
+| fal FLUX 3 | 29.8 s (15.8 to 53.9) | $0.048 | 2.6 and 2.1 | 6 | 1 | 8 of 20 |
+| fal FLUX.3 Klein | 6.2 s (1.6 to 17.1) | $0.009 | 3.6 and 4.0 | 1 | 18 | 1 of 20 |
+
+- **Klein.** It is the only fast one, and it fails on quality. The readers named its faults: "the wrong chair (a grid cube)", "no cutaway at all", "dancers wear what looks like European folk dress".
+- **fal's Muse Image.** It is ranked better than today's by both readers, at the same speed and a third of the price, so made pictures move to it.
+- **The shape.** The Meta API is asked for no size and returns portrait pictures (1280 by 1920), while fal's was asked for 4:3. Reader 1 faulted one of today's as "a close portrait that barely shows a courtroom". So part of the lead may be the shape and not the host. Asking the Meta API for 4:3 was not tried.
+- **The rerun.** In it, 3 of 8 fal calls failed at once ("fetch failed") and were made on the Meta API instead.
+- **The wrap-up.** No candidate makes a picture land before it. A picture is written last, and a run ends once only pictures are being made. In both benches every made picture started at the line, and so landed after it, at 17.0 s median before and 18.7 s after. Only a picture started earlier could land before the line, and that would hold the line for it.
+
+**OpenAlex.** In a load test of ten judges at once on the hosted server, OpenAlex answered 429 thirteen times, and each time the Scout fell back to the web. Its rate-limit page (updated 3 November 2026) allows 10 requests a second without a key, so requests now start at least 110 ms apart across the process. A 429 waits its `Retry-After`, at most 5 s, and is asked once more. No address or email is sent with them (`test/sources.test.ts`: 12 searches at once, no more than 10 started in any second, the refused one answered).
+
+**What bounds it.** The first visual card mostly comes from the fast lane's look at pictures. It waits on the quick model choosing where to look (about 1.3 s), the search (0.3 to 0.7 s), fetching the pictures (0.3 to 1.2 s) and the reading (2 to 3 s): 4.3 s at the median. The reading is the largest part, and it grows with the pictures' size.
+
+**Tests.** `test/scout.test.ts` covers:
+- the fast lane's held slot, and its release when the look finds nothing;
+- written ideas not taking the held slot;
+- a find of pictures taken past the count;
+- the hold kept while a picture is made;
+- the 2.5 s cutoff;
+- an Unsplash photo looked at from a copy kept nowhere, hotlinked, credited and reported only when it lands.
+
+`test/sources.test.ts` covers Commons, Unsplash's terms and its hourly limit, the search deadline, and OpenAlex's pace; `test/tools.test.ts` covers fal and `web.look`. Each Scout test fails on the code before it. A fuzz of 1,000 random runs of both lanes with sources of pictures (`scratchpad/ws33/verify/lanes-fuzz.ts`) found no run over its slots, no record twice, and none that did not end.
+
+**Not done.**
+- **The credit on the headset.** It is in the item's text and data, but the headset's picture card shows the caption on its face. Drawing the credit there is headset work.
+- **An Unsplash card as the anchor.** Its picture is a link the service relays, so the main model is not shown it.
+- **Museum pictures at Commons' size.** That would cut the reading's tokens about in half. Not tried.
+- **The blind readers' counts.** Pending.
+
+**Alternatives.**
+- **Fetch the pictures while the model reads the titles.** Fetching is 8 to 28% of a search once Europeana is read from its preview.
+- **Hold the slot for a made picture over a find.** A made picture lands after the line.
+- **Klein, or FLUX 3.** Above.
+- **Stop the line waiting for a stalled search.** The search's deadline does that at the boundary, where the stall is.
+
+**Cost.** The first bench $1.67, the rerun $1.53, the probes and the reading checks about $0.2, and about $0.50 of OpenAI web searches that an early probe sent to the web rescue by mistake, about $3.9 in all for models. The fal measurement and the rerun's fal pictures cost about $0.72.
+
 ## 64. Scout: the accounts the user chose on Instagram are a library on this machine, read in the background and searched in milliseconds
 
 **Decision.** With `META_IG_TOKEN`, `META_IG_USER_ID` and a list of accounts (`MIND_PALACE_INSTAGRAM_LIST`, by default `~/.mind-palace/instagram-following.md`, outside the repository since it names the user's account and who they follow), the service keeps a library in `data/instagram/` (`src/node/instagram.ts`), and the Scout has one more source of pictures, `instagram`, whose catalogue line reads "Posts from accounts you follow:" and the list's categories. Without the list or the connection, or until the library holds a post, it is not offered.
