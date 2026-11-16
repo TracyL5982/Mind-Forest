@@ -17,10 +17,13 @@ export interface Limits {
 }
 
 /**
- * The device shares are a tenth of the day's cap and of the process's token budget (fly.toml's 60M), so ten judges can each use
- * their whole share. Provisional: to be set from the 10-judge load test's spend and tokens per judge.
+ * A device's shares stop only a device past its own limits. $23 is the most one device can spend in a day inside them, rounded up:
+ * 60 voice minutes on the full realtime model ($8.06), 30 Scout runs with their pictures, OpenAI web searches and the whole run
+ * overflowed to OpenAI ($13.12), and 30 web answers ($1.44): $22.62. 9M tokens is about twice the most a device uses on Meta's model inside
+ * them: 30 Scout runs at 120,000 tokens, with typical turns, organizing, questions and drops besides (4.5M), and under a quarter of
+ * fly.toml's 60M token budget. The working is in reports/ws37.md of the judging program.
  */
-export const DEFAULT_LIMITS: Limits = { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: 30, deviceDollars: 3, deviceTokens: 6_000_000 };
+export const DEFAULT_LIMITS: Limits = { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: 30, deviceDollars: 23, deviceTokens: 9_000_000 };
 
 /** The device whose work this is, for the model's calls, which the whole service shares: its tokens and spend are counted to it. */
 export const forDevice = new AsyncLocalStorage<string>();
@@ -32,7 +35,7 @@ export type Refusal = 'off' | 'cap' | 'share' | Metered;
 export const LINES: Record<Refusal, string> = {
   off: 'Mind Palace is paused for a little while. Your trees are safe, so try again soon.',
   cap: "Mind Palace has done all it can for today. Your trees are safe; come back tomorrow.",
-  share: "I've done all the thinking I can for you today. Your trees are all here to browse; come back tomorrow.",
+  share: "This headset has reached today's limit, so I can't do more for it until tomorrow. Your trees are all here to browse.",
   voiceMs: "That's all the talking I can do today. Your trees are still here to browse.",
   searches: "That's today's searches used up. I can still talk, and your trees are all here.",
   webAnswers: "I can't look things up on the web any more today, but I can tell you what I know.",

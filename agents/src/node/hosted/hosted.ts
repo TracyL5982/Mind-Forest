@@ -8,7 +8,7 @@ import { openSpace, type Meter, type ServerOptions, type Space } from '../server
 import type { InstagramLibrary, InstagramReader } from '../instagram.ts';
 import { publicFetch } from '../public-fetch.ts';
 import { BOT_API } from '../telegram.ts';
-import { LINES, type Ledger } from './ledger.ts';
+import { forDevice, LINES, type Ledger } from './ledger.ts';
 import { DeviceModel } from './overflow.ts';
 
 /** A device names itself with an id it made on first launch. */
@@ -338,8 +338,12 @@ export function upgradeWhenOpen(
  * that is never made.
  */
 export function spaceOptions(opts: Pick<HostedOptions, 'shared' | 'dataDir' | 'appKey' | 'following' | 'storeLimit'>, device: string): Omit<ServerOptions, 'port' | 'host'> {
+  const live = opts.shared.live;
+  const answer = live?.webAnswer;
   return {
     ...opts.shared,
+    // A web answer runs as this device's work, so what it costs is counted to the device's share (`forDevice`).
+    ...(live && answer ? { live: { ...live, webAnswer: (question: string) => forDevice.run(device, () => answer(question)) } } : {}),
     telegram: undefined,
     instagram: undefined,
     library: opts.following?.library,

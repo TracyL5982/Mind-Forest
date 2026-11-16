@@ -912,3 +912,11 @@ test("each device has a share of the day's tokens and spend, so one judge cannot
     await hosted.close();
   }
 });
+
+test("a space's web answers run as its device's work, so their spend is counted to the device", async () => {
+  const seen: (string | undefined)[] = [];
+  const live = { open: (() => ({ send: () => {}, close: () => {} })) as LiveDeps['open'], options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' }, webAnswer: async () => (seen.push(forDevice.getStore()), 'An answer.') };
+  const options = spaceOptions({ shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, live }, dataDir: '/data', appKey: KEY }, A);
+  assert.equal(await options.live!.webAnswer!('When is low tide?'), 'An answer.');
+  assert.deepEqual(seen, [A]);
+});
