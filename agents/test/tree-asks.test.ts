@@ -34,6 +34,8 @@ test('a thought, a link and a request for a new tree ask nothing, and only a mes
   }
   assert.equal(mayAsk('could I get that lenses tree packaged up for Claude'), true);
   assert.equal(mayAsk('export the one on heat pumps'), true);
+  assert.equal(mayAsk('could I get my bread stuff packaged up for Claude'), true);
+  assert.equal(mayAsk('I want to hand the Kubrick stuff over to ChatGPT'), true);
   assert.equal(mayAsk('Solar panels pay back in nine years'), false, 'no word of trees or handoffs');
   assert.equal(mayAsk('make a tree about Kubrick'), false, 'a new tree is a drop');
   assert.equal(mayAsk('Read this on decision trees https://example.com/a'), false, 'a link is a drop');

@@ -50,7 +50,7 @@ const FIND: RegExp[] = [
   new RegExp(String.raw`^${POLITE}do\s+i\s+have\s+(?:a|any)\s+trees?\s+(?:about|on|for|with)\s+(.+?)${TAIL}$`, 'i'),
 ];
 /** A message with none of these words asks nothing of the trees, so it is a drop and the model is never asked. */
-const CUE = /\b(?:trees?|hand(?:ing|ed)?[\s-]?offs?|hand\s+\w+\s+over|export|package)\b/i;
+const CUE = /\b(?:trees?|hand(?:ing|ed)?[\s-]?offs?|hand(?:ing|ed)?\s+(?:\S+\s+){0,4}over|export(?:ed|ing)?|packag(?:e|ed|ing))\b/i;
 const MAX_ASK_CHARS = 200;
 
 /** What a message asks by plain rules, at no model call, or null when the rules do not say. */

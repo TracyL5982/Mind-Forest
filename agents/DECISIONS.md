@@ -1089,3 +1089,15 @@ It searched Instagram more often by no more than ten runs a side can show, and i
 **Decision.** Kai's welcome tree teaches "palms together to close", and the user chose that meaning everywhere. On the headset, palms held together for a second close the tree you are in and put it away, on the service's trees too. They no longer send a handoff (the headset's `handoff` message for the tree, from the clap, is gone with `Bridge::pressed`). A tree is handed off by voice ("hand this off"), which the service already understands. While joined to the service the tree's strip has no "Send to image generation" button, which reached the same handoff. Without the service, Kai's own app is as he made it.
 
 **Why.** One gesture should mean one thing, and the walk teaches this one as closing. A handoff gesture or button may come later.
+
+## 68. Telegram: trees are asked for in plain words, and judges pair a second bot with a code from the headset
+
+**Decision.** A paired chat lists, finds and hands off a tree in plain words (`src/node/tree-asks.ts`, `src/node/talk.ts`). Plain rules read the usual phrasings at no model call. The quick model reads a message only when it is short and names trees or a handoff, and matches words to a tree only when no tree's name holds them. On the hosted service, judges reach their headset through a second bot that the server alone reads (`src/node/hosted/judges.ts`), paired by a six-digit code that Momo says when asked "connect my Telegram".
+
+**Why.**
+- A drop must stay cheap and never be mistaken for a question, so the model is asked only behind a cue ("tree", "handoff", "export", "package"), and "make a tree about …" stays a drop.
+- Telegram lets one program read a bot. The owner's Mac reads theirs, so judges need another, and one poller routes every chat by its pairing. A space never holds a bot of its own.
+- The code is six digits because Momo says it aloud and a judge types it on a phone: digits survive both. Five wrong codes in ten minutes stop a chat's codes being read, so the million codes cannot be tried through.
+- A chat's message goes through the same `Desk` as the owner's, and the desk refuses what a headset's own message would be refused, so no limit has a second copy to keep in step.
+
+**Not built.** The headset draws no code or QR of its own: the judge hears the code and reads it in Momo's caption. `POST /api/telegram/pair` already returns `{link, bot, code}` for a sheet that shows them.
