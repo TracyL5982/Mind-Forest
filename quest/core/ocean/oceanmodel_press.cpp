@@ -397,6 +397,7 @@ void OceanModel::shelve(const TreeRef& tree, std::optional<Vec3> from, const Mov
         if (on && Forest::crowd(desk, stage.origin, cover.plot, *stood)) on = false;
     }
     Vec2 plot = on ? *stood : freePlot();
+    logLine(fmt("[ocean] on the desk: %s at %.3f, %.3f, ", tree->title.c_str(), double(plot.x), double(plot.y)) + (on ? "its own place" : "a free place"));
     // On the desk while no tree is open; with one open (or on its way), straight to the ocean's floor, small.
     bool down = wantDown();
     std::optional<Cover> made = makeCover(*tree, restEl(plot, down), true);
@@ -705,7 +706,7 @@ void OceanModel::shelveWaiting() {
 void OceanModel::saveShelf() {
     shelfDirty = false;
     // AGENT: joined to the agent service, the shelf holds the service's trees, which the service keeps; the bridge writes
-    // down where their covers hang (core/agent/spots.h), and the headset's own shelf file is left as it was.
+    // down where they stand on the desk (core/agent/plots.h), and the headset's own shelf file is left as it was.
     if (agentBridge) {
         agentBridge->saveShelf();
         return;

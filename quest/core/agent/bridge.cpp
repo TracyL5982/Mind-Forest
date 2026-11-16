@@ -74,8 +74,8 @@ constexpr double standsWithin = 5;
 /// How long a navigate waits for speaking to end: longer than a reply, so a voice that never says it ended cannot hold it.
 constexpr double speechWithin = 20;
 
-/// Where the covers of the service's trees hang between launches: beside the headset's own shelf file, never in it.
-std::string spotsFile() {
+/// Where the service's trees stand between launches: beside the headset's own shelf file, never in it.
+std::string plotsFile() {
     std::string folder = platform::dataDirectory();
     return folder.empty() ? "" : folder + "/agent-shelf.json";
 }
@@ -112,8 +112,8 @@ Bridge::Bridge(OceanModel& model, Address address, std::shared_ptr<Transport> tr
       keyboardTest(Flags::has("keyboardTest")) {
     if (Flags::string("agentVoice").value_or("on") != "off") voice = std::make_unique<Voice>(client, [this] { return scene(); }, Flags::string("wakeClip"), Flags::has("mute"));
     if (Flags::string("agentType") && Flags::number("agentTypeAt") > 0) typeAt = Flags::number("agentTypeAt");
-    std::string file = spotsFile();
-    if (!file.empty()) spots = ShelfSpots::parse(platform::readFile(file).value_or("")).services[client.address().http];
+    std::string file = plotsFile();
+    if (!file.empty()) plots = ShelfPlots::parse(platform::readFile(file).value_or("")).services[client.address().http];
 }
 
 void Bridge::frame(double t) {
@@ -217,8 +217,8 @@ void Bridge::synced(const Delta& delta) {
     logLine(fmt("[agent] connected: %d trees, %d cards", int(client.mirror().trees().size()), int(client.mirror().nodes().size())));
     // The headset shows no player from another site, and its player takes these files (Android's MediaPlayer).
     client.send(Outbound::client(Media{false, {"mp4", "m4a", "mp3"}}));
-    // A tree deleted at the service while the headset was away leaves no spot behind.
-    for (auto s = spots.begin(); s != spots.end();) s = client.mirror().tree(TreeId{s->first}) ? std::next(s) : spots.erase(s);
+    // A tree deleted at the service while the headset was away leaves no plot behind.
+    for (auto s = plots.begin(); s != plots.end();) s = client.mirror().tree(TreeId{s->first}) ? std::next(s) : plots.erase(s);
     changed(delta, false, false);
     if (dump) {
         client.send(Outbound::dump({Dump::text(*dump)}));
@@ -237,7 +237,7 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
         // A standing tree stays up until it is put away; a cover stays on the shelf. Neither is fed again.
         logLine("[agent] tree \"" + gone.title + "\" was deleted at the service");
         trees.erase(p);
-        spots.erase(gone.id.value);
+        plots.erase(gone.id.value);
         model.shelfDirty = true;
     }
 
@@ -247,22 +247,23 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
             if (Planted* p = plant(*info)) planted.emplace_back(p, info);
         }
     }
-    // The newest first, as the headset hangs its own covers at launch. A tree this headset asked for stands as a tree the
-    // user starts always has, once the standing one has pressed itself onto the shelf. Every other new tree, and every
-    // tree there at launch, hangs as a cover where it hung last time, or else at the first place no remembered one holds.
+    // The newest first, as the headset puts its own trees away at launch. A tree this headset asked for stands as a tree
+    // the user starts always has, once the standing one has been put away. Every other new tree, and every tree there at
+    // launch, is put away on the desk where it stood last time, or else at the first place no remembered one holds.
     std::stable_sort(planted.begin(), planted.end(), [](const auto& a, const auto& b) { return a.second->createdAt > b.second->createdAt; });
     std::shared_ptr<Tree> stands = yours && !planted.empty() ? planted.front().first->tree : nullptr;
     for (bool remembered : {true, false}) {
         for (const auto& [p, info] : planted) {
-            auto spot = spots.find(info->id.value);
-            if (p->tree == stands || (spot != spots.end()) != remembered) continue;
-            model.shelve(p->tree, std::nullopt, nullptr, remembered ? std::optional<Vec2>(spot->second) : std::nullopt);
+            auto plot = plots.find(info->id.value);
+            if (p->tree == stands || (plot != plots.end()) != remembered) continue;
+            model.shelve(p->tree, std::nullopt, nullptr, std::nullopt, remembered ? std::optional<Vec2>(plot->second) : std::nullopt);
         }
     }
     if (stands) {
         logLine("[agent] \"" + stands->title + "\" was asked for here, so it stands");
         model.whenClear([this, stands] {
             model.standingSpot = std::nullopt;
+            model.standingPlot = std::nullopt;
             model.stand(stands);
         });
     }
@@ -909,15 +910,15 @@ void Bridge::saveShelf() {
     for (const auto& [id, p] : trees) {
         auto cover = std::find_if(model.shelf.begin(), model.shelf.end(), [&](const OceanModel::Shelved& s) { return s.tree == p.tree; });
         if (cover != model.shelf.end()) {
-            spots[id] = cover->spot;
-        } else if (standing(p) && model.standingSpot) {
-            spots[id] = *model.standingSpot;
+            plots[id] = cover->plot;
+        } else if (standing(p) && model.standingPlot) {
+            plots[id] = *model.standingPlot;
         }
     }
-    std::string file = spotsFile();
+    std::string file = plotsFile();
     if (file.empty()) return;
-    ShelfSpots kept = ShelfSpots::parse(platform::readFile(file).value_or(""));
-    kept.services[client.address().http] = spots;
+    ShelfPlots kept = ShelfPlots::parse(platform::readFile(file).value_or(""));
+    kept.services[client.address().http] = plots;
     platform::writeFile(file, kept.text());
 }
 

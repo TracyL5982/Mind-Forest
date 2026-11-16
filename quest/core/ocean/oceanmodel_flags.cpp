@@ -660,7 +660,8 @@ void OceanModel::carryCoverByFlag(int i, Vec3 d) {
     if (i < 0 || i >= int(shelf.size())) return;
     EntityRef on = shelf[size_t(i)].mover->entity;
     Vec3 start = on->position;
-    logLine("[ocean] carrying the cover of " + shelf[size_t(i)].tree->title + " by flag");
+    logLine("[ocean] carrying the cover of " + shelf[size_t(i)].tree->title + " by flag" +
+            fmt(", from %.3f, %.3f", double(shelf[size_t(i)].plot.x), double(shelf[size_t(i)].plot.y)));
     pinchChanged(on, start, start);
     const int steps = 12;
     for (int k = 1; k <= steps; k++) {
