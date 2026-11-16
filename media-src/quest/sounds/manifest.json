@@ -586,6 +586,22 @@
    "about": "A finger comes over the small tree",
    "gain": 0.3,
    "seconds": 3.53
+  },
+  "momo_chime": {
+   "about": "Momo heard its name and listens",
+   "gain": 0.35,
+   "seconds": 0.28
+  },
+  "momo_sent": {
+   "about": "What the user said goes to Momo (the chime turned over, softer)",
+   "gain": 0.25,
+   "seconds": 0.18
+  },
+  "momo_thinking": {
+   "about": "Momo is thinking (loops until it speaks)",
+   "gain": 0.08,
+   "seconds": 2.0,
+   "loop": 2.0
   }
  }
 }
