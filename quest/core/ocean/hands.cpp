@@ -71,8 +71,16 @@ std::vector<Hands::Event> Hands::update(Vec3 origin, Vec3 f, float dt) {
         for (int k = 0; k < 2; k++) {
             if ((k == 0 ? left : right).fistWay == 2) events.push_back(Event::panEnded(Vec2::zero()));
         }
-        left.fistSince = std::nullopt; left.fistBase = std::nullopt; left.fistAt = std::nullopt; left.fistWay = 0;
-        right.fistSince = std::nullopt; right.fistBase = std::nullopt; right.fistAt = std::nullopt; right.fistWay = 0;
+        for (Hand* h : {&left, &right}) {
+            h->fistSince = std::nullopt;
+            h->fistBase = std::nullopt;
+            h->fistAt = std::nullopt;
+            h->fistWay = 0;
+            h->fistLocked = false;
+            h->flatSince = std::nullopt;
+            h->out = false;
+            h->trail.clear();
+        }
         clapSince = std::nullopt;
         left.lastTip = left.tracked ? std::optional<Vec3>(left.tip) : std::nullopt;
         right.lastTip = right.tracked ? std::optional<Vec3>(right.tip) : std::nullopt;
@@ -80,8 +88,8 @@ std::vector<Hands::Event> Hands::update(Vec3 origin, Vec3 f, float dt) {
     }
     fist(left, origin, f, now, events);
     fist(right, origin, f, now, events);
-    blade(left, now, events);
-    blade(right, now, events);
+    blade(left, right, now, events);
+    blade(right, left, now, events);
     clap(f, now, events);
     left.lastTip = left.tracked ? std::optional<Vec3>(left.tip) : std::nullopt;
     right.lastTip = right.tracked ? std::optional<Vec3>(right.tip) : std::nullopt;
@@ -93,6 +101,7 @@ void Hands::read(const platform::Hand& anchor, Hand& hand, double now) {
         hand.tracked = false;
         hand.fist = false;
         hand.flat = false;
+        hand.aim = std::nullopt;
         return;
     }
     // Every joint as the system places it, seen or not: the fingertips of a fist are hidden
@@ -131,7 +140,51 @@ void Hands::read(const platform::Hand& anchor, Hand& hand, double now) {
     }
     if (hand.fist) hand.fistLast = now;
     // Flat: every finger out, and held together.
-    hand.flat = std::all_of(reach.begin(), reach.end(), [](float r) { return r > openReach; }) && distance(index, little) < 0.9f * size;
+    // NOTE(port): changed for Quest (2026-11-15, see `knifeStraight` in hands.h). That alone is most open hands,
+    // so the knife asks for more: each finger straight from its knuckle to its tip and in line with the hand,
+    // the hand on its edge (the palm facing neither up nor down, neither at you nor away), and the thumb
+    // nowhere near a pinch. A knife already held keeps to looser measures, so it does not flicker.
+    bool wasFlat = hand.flat;
+    // Out of the palm or out of its back, whichever hand this is: only how it lies is asked.
+    Vec3 normal = cross(at(platform::Joint::indexProximal) - wrist, at(platform::Joint::littleProximal) - wrist);
+    normal = length(normal) > 1e-6f ? normalize(normal) : Vec3{0, 1, 0};
+    hand.back = normal;
+    // `straight`: the least straight finger. `bent`: how far the most bent one leaves the palm's own plane at its knuckle.
+    float straight = 1, bent = 0;
+    for (platform::Joint knuckle : {platform::Joint::indexProximal, platform::Joint::middleProximal, platform::Joint::ringProximal, platform::Joint::littleProximal}) {
+        int k = int(knuckle);
+        Vec3 a = anchor.joints[k], b = anchor.joints[k + 1], c = anchor.joints[k + 2], e = anchor.joints[k + 3];
+        float bones = distance(a, b) + distance(b, c) + distance(c, e), al = distance(a, e);
+        straight = std::min(straight, bones > 1e-4f ? al / bones : 0);
+        bent = std::max(bent, al > 1e-4f ? std::fabs(dot(e - a, normal)) / al : 1);
+    }
+    float together = distance(index, little) / size;
+    std::optional<Mat4> head = platform::head();
+    Vec3 look = head ? hand.palm - head->position() : Vec3{0, 0, -1};
+    look = length(look) > 1e-4f ? normalize(look) : Vec3{0, 0, -1};
+    float lying = std::fabs(normal.y), facing = std::fabs(dot(normal, look));
+    hand.flat = std::all_of(reach.begin(), reach.end(), [](float r) { return r > openReach; }) &&
+                straight > (wasFlat ? knifeStraightKeep : knifeStraight) && bent < (wasFlat ? knifeBentKeep : knifeBent) &&
+                together < (wasFlat ? knifeTogetherKeep : knifeTogether) && lying < (wasFlat ? knifeEdgeKeep : knifeEdge) &&
+                facing < (wasFlat ? knifeFacingKeep : knifeFacing) && hand.pinch > (wasFlat ? knifeApart * 0.6f : knifeApart);
+    // The way a blade on this hand points: from the wrist through the middle fingertip, a little steadied.
+    Vec3 edge = middle - wrist;
+    edge = length(edge) > 1e-4f ? normalize(edge) : Vec3{0, 0, -1};
+    if (hand.aim) {
+        Vec3 eased = *hand.aim + (edge - *hand.aim) * (1 - std::exp(-frame / knifeSteady));
+        edge = length(eased) > 1e-4f ? normalize(eased) : edge;
+    }
+    hand.aim = edge;
+    hand.point = middle + edge * knifeReach;
+    // `-knifeLog`: what each hand reads, once a second, for tuning these in the headset.
+    static const bool logging = Flags::has("knifeLog");
+    static double logged[2] = {0, 0};
+    int which = &hand == &right ? 1 : 0;
+    if (logging && now - logged[which] > 1) {
+        logged[which] = now;
+        logLine(fmt("[hands] %s knife %s: straight %.3f, bent %.2f, together %.2f, lying %.2f, facing %.2f, pinch %.3f", which ? "right" : "left",
+                    hand.flat ? "yes" : "no", double(straight), double(bent), double(together), double(lying), double(facing), double(hand.pinch)));
+    }
     hand.lastSeen = now;
 }
 
@@ -142,6 +195,7 @@ void Hands::fist(Hand& hand, Vec3 origin, Vec3 f, double now, std::vector<Event>
         hand.fistBase = std::nullopt;
         hand.fistAt = std::nullopt;
         hand.fistWay = 0;
+        hand.fistLocked = false;
         return;
     }
     busyUntil = now + 0.4;
@@ -149,29 +203,21 @@ void Hands::fist(Hand& hand, Vec3 origin, Vec3 f, double now, std::vector<Event>
     // Held a moment first, so a hand closing in passing does nothing.
     if (!(hand.fistSince && now - *hand.fistSince > 0.12)) return;
     if (!(hand.fistAt && hand.fistAxes)) {
-        // Ahead and right as they are where the hand is: the tree wraps around you.
-        // NOTE(port): changed for Quest. "Where the hand is" is where it is seen against the canvas: the line
-        // from the eyes through the hand is followed out to the layer you work on (1.5 m round where the scene
-        // was set up), and the frame is the canvas's own there. From the middle of the scene this is what it
-        // was before; leaning in, or sitting a little off the middle, the gauge still lies flat to the canvas
-        // behind it instead of turning away from it. `-fistFrame hand` is the old way.
+        // NOTE(port): changed for Quest (2026-11-15). The frame is set once, here, and both things a fist does
+        // are read in it: the shortest line from the fist to the surface in front of it is the normal axis, and
+        // the tree is carried in the plane across that line. The scene says what that surface is (`surface`);
+        // without it, ahead and right are as they are where the hand is, as in the Swift.
         Vec3 v = hand.wrist - origin;
         Vec3 r = normalize(cross(f, Vec3{0, 1, 0}));
-        static const bool byHand = Flags::string("fistFrame").value_or("") == "hand";
-        if (std::optional<Mat4> head = byHand ? std::nullopt : platform::head()) {
-            Vec3 e = head->position() - origin, d = hand.wrist - head->position();
-            e.y = 0;
-            d.y = 0;
-            // |e + t d| = R, the root ahead of the eyes.
-            const float R = 1.5f;
-            float A = dot(d, d), B = 2 * dot(e, d), C = dot(e, e) - R * R, disc = B * B - 4 * A * C;
-            if (A > 1e-6f && disc > 0 && C < 0) v = e + d * ((-B + std::sqrt(disc)) / (2 * A));
-        }
         float az = std::atan2(dot(v, r), dot(v, f));
+        Axes axes{f * std::cos(az) + r * std::sin(az), r * std::cos(az) - f * std::sin(az), Vec3{0, 1, 0}};
+        if (std::optional<Surface> s = surface ? surface(hand.wrist) : std::nullopt) axes = Axes{s->normal, s->right, s->up};
         hand.fistAt = hand.wrist;
-        hand.fistAxes = Axes{f * std::cos(az) + r * std::sin(az), r * std::cos(az) - f * std::sin(az)};
+        hand.fistAxes = axes;
         hand.fistWay = 0;
+        hand.fistLocked = false;
         hand.carried = Vec2::zero();
+        hand.carriedFrom = Vec2::zero();
         hand.speed = Vec2::zero();
         return;
     }
@@ -179,46 +225,101 @@ void Hands::fist(Hand& hand, Vec3 origin, Vec3 f, double now, std::vector<Event>
     Axes axes = *hand.fistAxes;
     Vec3 d = hand.wrist - start;
     float depth = dot(d, axes.ahead);
-    Vec2 across{dot(d, axes.right), d.y};
-    if (hand.fistWay == 0) {
-        // Whichever way it goes first is what this fist does.
-        if (std::fabs(depth) > fistLock && std::fabs(depth) > length(across)) {
-            hand.fistWay = 1;
-            hand.fistBase = 0;
-        } else if (length(across) > fistLock) {
-            hand.fistWay = 2;
-            hand.carried = across;
+    Vec2 across{dot(d, axes.right), dot(d, axes.up)};
+    if (!hand.fistLocked) {
+        // Which of the two the whole movement so far is. Along the normal axis it is between layers, across it
+        // the tree is carried; in the buffer between, it stays what it was.
+        float deep = std::fabs(depth), flat = length(across), far = std::sqrt(deep * deep + flat * flat);
+        int lean = 0;
+        if (far > fistLock) {
+            lean = deep > flat * pushLean ? 1 : deep < flat * panLean ? 2 : 0;
+            if (lean == 0 && hand.fistWay == 0 && far > fistSure) lean = deep > flat ? 1 : 2;
         }
-        return;
+        if (lean != 0 && lean != hand.fistWay) {
+            // It was a push after all: the tree goes back to where the carry began, and that carry is not counted.
+            if (hand.fistWay == 2 && length(hand.carried - hand.carriedFrom) > 1e-5f) events.push_back(Event::panUndone(hand.carriedFrom - hand.carried));
+            hand.fistWay = lean;
+            if (lean == 2) {
+                hand.carriedFrom = across;
+                hand.carried = across;
+                hand.speed = Vec2::zero();
+            } else {
+                hand.fistBase = 0;
+            }
+        }
     }
+    if (hand.fistWay == 0) return;
     if (hand.fistWay == 2) {
         Vec2 step = across - hand.carried;
         hand.carried = across;
         hand.speed = hand.speed * 0.7f + (step / frame) * 0.3f;
         if (length(step) > 1e-5f) events.push_back(Event::pan(step));
+        // This far across from where it closed, it is a carry until the hand opens.
+        if (length(across) > panCommit) hand.fistLocked = true;
         return;
     }
     float moved = depth - hand.fistBase.value_or(0);
     if (std::fabs(moved) > layerPull) {
-        // Pulled toward you: the layer behind comes forward.
+        // Pulled toward you: the layer behind comes forward. A layer stepped, it steps layers until the hand opens.
         events.push_back(Event::layer(moved < 0 ? 1 : -1));
         hand.fistBase = depth;
+        hand.fistLocked = true;
     }
 }
 
-void Hands::blade(Hand& hand, double now, std::vector<Event>& events) {
-    if (!(hand.tracked && hand.flat && hand.lastTip && now > hand.cutUntil)) return;
-    Vec3 last = *hand.lastTip;
-    if (!(distance(hand.tip, last) / frame > bladeSpeed)) return;
+void Hands::blade(Hand& hand, const Hand& other, double now, std::vector<Event>& events) {
+    // The pose, held, and the other hand not at it (palms coming together are not knives).
+    bool pose = hand.tracked && hand.flat && !hand.fist && !(other.tracked && distance(other.palm, hand.palm) < knifeAlone);
+    if (pose) {
+        if (!hand.flatSince) hand.flatSince = now;
+        hand.flatLast = now;
+        if (now - *hand.flatSince >= knifeDwell) hand.out = true;
+    } else if (!(hand.out && hand.tracked && !hand.fist && now - hand.flatLast < knifeGrace)) {
+        hand.flatSince = std::nullopt;
+        hand.out = false;
+        hand.spent = false;
+        hand.restSince = std::nullopt;
+        hand.trail.clear();
+    }
+    hand.mark = std::nullopt;
+    if (!hand.out) return;
+    // The blade points, and what cuts is the place on the surface it points at.
+    if (target && hand.aim) hand.mark = target(hand.tip, *hand.aim);
+    if (!hand.mark) {
+        hand.trail.clear();
+        return;
+    }
+    // A stroke is judged over that place's travel this last moment, not one frame of it: a single frame's
+    // jump in the tracking is a stroke's speed by itself.
+    hand.trail.push_back({now, *hand.mark});
+    while (hand.trail.size() > 1 && now - hand.trail[1].at >= strokeSpan) hand.trail.erase(hand.trail.begin());
+    const Hand::Was& from = hand.trail.front();
+    double took = now - from.at;
+    if (!(took > strokeSpan * 0.6)) return;
+    float speed = distance(*hand.mark, from.mark) / float(took);
+    if (hand.spent) {
+        // One stroke, one cut (see `cutPause` in hands.h): it has to come to rest before it can cut again.
+        if (speed < strokeRest) {
+            if (!hand.restSince) hand.restSince = now;
+            if (now - *hand.restSince >= strokeRestFor) hand.spent = false;
+        } else {
+            hand.restSince = std::nullopt;
+        }
+    }
+    if (hand.spent || !(now > hand.cutUntil)) return;
+    if (!(speed > bladeSpeed)) return;
     busyUntil = now + 0.4;
-    events.push_back(Event::cut(last, hand.tip));
+    events.push_back(Event::cut(from.mark, *hand.mark));
 }
 
 /// Told that a cut landed, so one swing cuts one thread.
 void Hands::cutLanded() {
-    double until = mediaTime() + 0.6;
-    left.cutUntil = until;
-    right.cutUntil = until;
+    double until = mediaTime() + cutPause;
+    for (Hand* h : {&left, &right}) {
+        h->cutUntil = until;
+        h->spent = h->out;
+        h->restSince = std::nullopt;
+    }
 }
 
 void Hands::clap(Vec3 f, double now, std::vector<Event>& events) {
@@ -269,9 +370,11 @@ std::vector<Hands::Grab> Hands::grabs() const {
         g.offset = d;
         g.ahead = h.fistAxes->ahead;
         g.right = h.fistAxes->right;
-        g.carried = h.fistWay == 2 ? h.carried : Vec2{dot(d, h.fistAxes->right), d.y};
+        g.up = h.fistAxes->up;
+        g.carried = h.fistWay == 2 ? h.carried - h.carriedFrom : Vec2{dot(d, h.fistAxes->right), dot(d, h.fistAxes->up)};
         g.depth = dot(d, h.fistAxes->ahead);
         g.base = h.fistBase.value_or(0);
+        g.locked = h.fistLocked;
         out.push_back(g);
     }
     return out;
@@ -283,11 +386,16 @@ std::vector<Hands::Blade> Hands::blades() const {
     if (quiet) return out;
     for (int k = 0; k < 2; k++) {
         const Hand& h = k == 0 ? left : right;
-        if (!(h.tracked && h.flat && !h.fist)) continue;
+        if (!(h.tracked && !h.fist && (h.out || h.flatSince))) continue;
         Blade b;
         b.hand = k;
         b.tip = h.tip;
         b.palm = h.palm;
+        b.point = h.point;
+        b.along = h.aim.value_or(Vec3{0, 0, -1});
+        b.mark = h.mark;
+        b.out = h.out;
+        b.ready = h.out ? 1 : float(std::min(1.0, (mediaTime() - *h.flatSince) / knifeDwell));
         out.push_back(b);
     }
     return out;

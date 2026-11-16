@@ -595,9 +595,12 @@ std::vector<int> Tree::grow(int id) {
     // and a little up (it is the first thing a lesson's card links to), and the pictures stand clear of it.
     if (walk() && take > 0) {
         static const int others[3][3] = {{4, 4, 4}, {3, 5, 5}, {3, 5, 8}};
-        int rest = std::min(take - 1, 3);
+        // (More than three: what Momo can do, on the layer its answer makes. They take the left and the foot of
+        // the card in order, and the way on keeps the right to itself.)
+        static const int many[6] = {2, 3, 4, 5, 6, 7};
+        int rest = std::min(take - 1, 6);
         slots = {0};
-        for (int k = 0; k < rest; k++) slots.push_back(others[rest - 1][k]);
+        for (int k = 0; k < rest; k++) slots.push_back(rest <= 3 ? others[rest - 1][k] : many[k]);
     }
     struct Around {
         std::string why;

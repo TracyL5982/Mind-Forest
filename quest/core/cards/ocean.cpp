@@ -88,6 +88,10 @@ std::optional<Piece> face(Art& art, const std::string& noteID, const std::string
 void hold(const std::shared_ptr<const Catalog>& catalog) { held() = catalog; }
 
 std::optional<std::string> cardOf(const Ref& ref) {
+    // GUIDE: the welcome walk's own cards (its lessons, and what Momo answers with there: core/ocean/oceanmodel_guide.cpp)
+    // keep the ocean's drawing. A lesson's card is a stage a gesture plays on, at a size of its own, and the walk
+    // points at places on it; drawn as a card of the agent's it was a small card saying "Picture unavailable".
+    if (ref.kind == Ref::Kind::note && (ref.id.rfind("welcome", 0) == 0 || ref.id.rfind("momo-", 0) == 0)) return std::nullopt;
     std::string id = ref.kind == Ref::Kind::note ? ref.id : ref.key();
     if (has(id)) return id;
     std::shared_ptr<const Catalog> catalog = held().lock();

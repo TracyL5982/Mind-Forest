@@ -24,15 +24,31 @@ The Quest 3 has no eye tracking, so:
   every fingertip curled to within 1.05 hand lengths of the wrist (the system alone calls a half-closed
   hand in the lap a fist); once made it holds until the hand clearly opens. The numbers are in
   `core/ocean/hands.h`.
-- **A fist's frame** (which way is "into the canvas" for the gauge and for pull and push) is the canvas's
-  own where the hand is seen against it: the line from the eyes through the hand, followed out to the layer
-  you work on. From the middle of the scene that is the hand's own bearing, as before; leaning in or sitting
-  off the middle, the gauge still lies flat to the canvas behind it. `-fistFrame hand` is the old way.
+- **A fist is read in one frame, and can be either thing until it commits** (`Hands::fist`, 15 Nov, late). The
+  frame is set once as the fist closes: the normal of the layer you work on, at the place on it straight
+  ahead of the fist the way you face, is the normal axis (pull and push), and the plane across it is where
+  the tree is carried (`OceanModel::fistSurface`). Which of the two the fist is doing follows the whole
+  movement since it closed: steeper than 52 degrees to that plane it is between layers, flatter than 38 it
+  carries, and in the buffer between it stays what it was (a fist still nothing by 6 cm takes the nearer).
+  It can change its mind: a carry that turns out to be a push is taken back (`panUndone`; the tree returns
+  and the guide does not count it). It commits 9 cm across from where it closed, or at the first layer
+  stepped, and from then on it is that until the hand opens. The Swift decides for good at 3.5 cm, which a
+  first centimetre the wrong way got wrong for the whole gesture.
+  Kai's words were "a perpendicular line to the nearest topmost surface". Every surface a fist acts on lies
+  on the layer you work on, so that layer is the surface; but from inside a sheet 1.5 m off all round, the
+  mathematically nearest place on it is nearly arbitrary (for a fist beside the body it is far off to the
+  side, centimetres nearer than straight ahead), so the place is the one ahead of the fist. `-fistFrame
+  nearest` takes the nearest instead, `-fistFrame eye` the place the fist is seen against (earlier that day), and
+  `-fistFrame hand` is the Swift's. Not yet tried on a head.
+  `desktop/test/hands_check.sh` runs made-up hands through it: pushes on and off the axis, carries, a change
+  of mind each way, both commits, and the knife's pose and stroke.
 - **Light on the hands** (`core/ocean/handglow.*`, Quest only), in the small tree's language of soft
   lines, rings and orbs. Round a closed hand, a gauge that goes where the fist goes. Its rings lie flat
   to the canvas and its gates stand along the line into it, because that is the frame the tree is
   carried and stepped in whichever way the fist is turned; a small plate in the middle tips with the
-  fist itself. A ring fills as the fist nears the distance that commits it; carrying the tree, a tail
+  fist itself. While it can still be either, the normal axis shows through where the fist closed, a small
+  gate a little way along it each way (it goes once a carry has committed). A ring fills as the fist nears
+  the distance at which it is first read; carrying the tree, a tail
   runs from where the fist closed to the fist, marked every 5 cm; between layers, gates slide through
   the fist's ring, an arc on the gate ahead filling until the step (a gate with no layer behind it is
   dashed). On the small tree only the index finger counts: that
@@ -384,13 +400,13 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
 (The reasons, and the standards behind them, are on the design board, `sketches/onboarding/index.html`, not in git.)
 
 - **The welcome tree**, once: on a first launch a tree stands by itself, "Welcome to Mind Forest". It is an
-  ordinary tree whose cards are the lessons, seven of them, one a layer: pinch a card, grab to pan, grab
-  to pull or push, pinch and hold to move, mark part of a picture, choose a layer on the small tree,
-  palms together to close. The cards are notes made in code (`addWelcomeNotes`), larger than other notes,
+  ordinary tree whose cards are the lessons, eight of them, one a layer: pinch a card, grab to pan, grab
+  to pull or push, pinch and hold to move, ask Momo, show Momo part of a picture, choose a layer on the
+  small tree, palms together to close. The cards are notes made in code (`addWelcomeNotes`), larger than other notes,
   each with a few pictures round it so that its layer is a real one. The walk (`updateTour`) is always
   at some lesson and that lesson at some beat, and it never leaves you with nothing to read:
   - **One line over the tree** says the one thing to do now, large, with where the walk is before it
-    ("3 of 7 · Close your hand and pull it toward you"). It changes with each beat, not each card.
+    ("3 of 8 · Close your hand and pull it toward you"). It changes with each beat, not each card.
   - **What to act on is pointed at**, in the accent: a line round it that breathes and rings out, and
     arrowheads running to it along a path (`drawMarks`). The next card from the first; either way under
     the card for panning; a picture and a dashed place to put it for moving; the picture, then its tools,
@@ -398,15 +414,51 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
   - **The open lesson plays its gesture on its own face.** Closed, every lesson is its number on a plain
     ground, always on the right of the open one.
   - **Beats.** Pulling is two (pull; then "Now push it away to come back", with pull and push playing on
-    the layer pulled back to). Marking is four (go in; take up the pen; draw; come back out), the last
-    three said along the foot of the picture on the card itself.
+    the layer pulled back to). The picture is five (go in; take up the pen; draw; pinch Send, which is
+    ringed; say a word about it), the last four said along the foot of the picture on the card itself.
   - **Done, then the next card.** A lesson done is a chime, a tick where its gesture played and "Done.
     Pinch card 4 to go on", with that card ringed and arrowheads running to it. Pinching it is the next
     lesson (as it is at any time: that is the skip, and it is said so after 14 s on a lesson not done).
     Left alone for 15 s the walk takes the card itself (`-guideAutoAfter <s>`); after the small tree, which
     leaves you on another layer where the next card is not to be seen, it does so after 4 s.
-  - **The way out of the marked picture** ("Pinch empty space to come back out") has a place shown for it:
-    a ring just off the card's right edge, "Pinch here", and arrowheads running to it from the words.
+  - **Two lessons are done by talking to Momo** (15 Nov, once Momo was in the build; `tourTalk`). The
+    fifth: say "Hi Momo, what can you do for me?", and Momo answers with a layer, "Here is what I can do",
+    a card for each of five things to ask for in words that work (start a tree, find new things, look in
+    what you saved, more like this, hand it off). The sixth: draw round part of a picture, pinch Send,
+    then say what you want to know; Momo answers with a layer, "From your sketch", that quotes what was
+    said. A talking lesson's own card has no next card beside it: the way on is from the layer Momo
+    answered with, which is that lesson's too (`TourStep::result`).
+    The cards of both layers are the walk's own (`addWelcomeNotes`, `tourMarkNote`), so the walk goes the
+    same way with the service or without it, and the sketch's layer is a stand-in that says so: the
+    walk's picture is not one Momo knows. What is real is the listening. While a lesson waits for
+    words, Momo's ears are lent to the walk (`agent::Voice::Tutor`, the only change to the agents' code:
+    `core/agent/voice.*`, `Bridge::talk`): the name and then the words come to the walk, turns are
+    recorded and transcribed and never streamed to /live, and the service is not told, since it might
+    stand a tree of its own in the walk's place.
+    Nobody is left waiting. A line over the lesson says how it is going, and where speaking cannot work,
+    or has failed twice, or 32 s have gone by, a button under it, "Go on without speaking", does what the
+    words would have done:
+    - Momo is not in this copy, or is joined and not listening yet (the service has not answered); the
+      microphone was refused, is being asked for, or is not on;
+    - nothing is said for 14 s ("Say it out loud, and begin with “Hi Momo”");
+    - the name and nothing after it ("Say it all in one go");
+    - something else is asked (fifth lesson only: for the sketch any words are taken). It is quoted
+      back: Momo heard “…”. Keep that for after the walk: now ask what it can do.
+    What counts as asking what Momo can do is loose (`asksWhatItCan`), since a transcript is seldom
+    word for word. Outside these two lessons Momo is Momo: a tree asked for then replaces the welcome
+    tree, the walk ends, and the greeting follows.
+    Under `-cards` (how a joined copy and the judging build run) the walk's own cards keep the ocean's
+    drawing (`cards::ocean::cardOf`): as cards of the agent's, a lesson was a small card saying "Picture
+    unavailable" with no stage for its gesture.
+    `tools/judging.sh [-- flags]` joins a developer copy on the headset to the hosted judging service from
+    `~/.mind-palace/judging.properties`, with a token made as the judging build makes its own, printing
+    neither key nor token; `tools/judging.sh preview -- …` does the same for the Mac preview. That is how
+    the fifth lesson was run against the real service (16 Nov, preview, spoken clips through `-wakeClip`:
+    "start a tree on trains" turned back, "what can you do for me?" answered).
+    `desktop/test/walk_talk_check.mjs` runs the fifth lesson through the real listening against a
+    stand-in service. In the preview: `-guideHear ready|starting|asking|refused|off|none`,
+    `-guideWokeAt <s>`, `-guideSayAt <s> -guideSay <words_with_underscores>`.
+    Not yet tried on a head, nor against the real service.
   - **Off the walk.** A picture or a film followed instead of a lesson: over what opened, "You have left
     the walk", with Back to step N and Skip the tutorial; the lesson's own card, where it shows, is ringed
     as well. Skipping ends the walk and leaves the tree as it is; what was not done is shown later in its
@@ -487,11 +539,33 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
   picture freely, a little steadied, stroke after stroke (`drawInk`: one mesh of soft-edged bands in the
   accent on the card's face). What is marked, and what the gardener is asked about, is the part of the
   picture the strokes cover between them; a dab too short to be a stroke is taken off again.
-- **Cutting takes two steps** (`oceanmodel_cut.cpp`). A flat hand shows as a blade of light, and the
-  thread it points at lights in the accent. A slice across a thread, or a pinch on one, marks it for
-  cutting: "Cut" stands on it for five seconds while a ring runs down. A second slice across it, or a
-  pinch on Cut, cuts it; a pinch on nothing, or waiting, lets it be. The slice itself is easier to make
-  than on visionOS (0.8 m/s, not 1.1), since it no longer cuts by itself.
+- **The knife is a pose that is made and held** (`Hands::read`, `Hands::blade`, 15 Nov, late). Any open hand
+  with its fingers together used to be one, so a blade showed beside the pointer of nearly every hand.
+  Now: every finger straight from knuckle to tip and in the palm's plane, the fingers together, the hand
+  on its edge (the palm facing neither up nor down, neither at you nor away), no pinch coming, the other
+  hand not within 22 cm, all held for 0.45 s (each measure was asked a little more of after Kai wore the
+  first set: it could "still be a little bit harder to make"). A ring closes round the middle fingertip over that time;
+  then the blade is out, with a sound, and that hand's pointer is put away (`pointerHidden`), so there is
+  one line on the hand. It holds through 0.18 s of lost pose, since a fast stroke blurs the fingers.
+  `-knifeLog` prints what each hand reads once a second, for tuning the numbers in `hands.h` on a head.
+  Not yet tried on one: if the pose proves too hard to make, those are the numbers to loosen.
+- **The blade points, and shows where it cuts** (`HandGlow::blade`, `Hands::blade`, `oceanmodel_cut.cpp`).
+  It is one line in the accent, the way the hand points (wrist through middle fingertip, steadied over
+  40 ms): from the heel of the hand, brightest just past the fingertips, and on, thinner, all the way to
+  the layer. Where it lands there is a mark on the layer (a ring with four ticks), and that place is what
+  cuts; a stroke leaves a quarter-second trail there, and the thread within four degrees of the mark
+  lights. A stroke is the mark's travel on the layer over 60 ms at 2 m/s or more (a hand turning about 95
+  degrees a second; one frame's jump in the tracking was a stroke before), and it cuts the thread it is
+  seen to pass over, carried only a little past its ends. `-glowDemo blade` shows it without a hand.
+  One stroke makes one cut: after a cut lands nothing cuts for 0.8 s, and then not until the mark has come
+  to rest (under 0.5 m/s for 0.2 s), so a hand that shakes or tracking that jitters cannot make the second
+  cut that confirms.
+  (The first version put the mark where the blade's end was seen against the layer from the eyes. In the
+  headset the line then pointed above its own mark, the hand being below the eyes: Kai, 15 Nov.)
+- **Cutting takes two steps** (`oceanmodel_cut.cpp`). A slice across a thread, or a pinch on one, marks
+  it for cutting: "Cut again to confirm" stands on it for five seconds while a ring runs down. A second
+  slice across it, or a pinch on those words, cuts it; a pinch on nothing, or waiting, lets it be. The slice itself is easier to
+  make than on visionOS (0.8 m/s, not 1.1), since it no longer cuts by itself.
 - **The clap is palms together, held** (`Hands::clap`): fingers up as they meet, palms within 8.5 cm of
   each other for one second, while a ring round the hands fills (`HandGlow::Hold`). Hands that only pass
   each other no longer press the tree. Joined to the agent service it only closes the tree, on every

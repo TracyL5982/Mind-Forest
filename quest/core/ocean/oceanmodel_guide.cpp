@@ -15,13 +15,16 @@
 // - It never blocks: everything works while it plays.
 #include "oceanmodel.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 
+#include "agent/bridge.h"
 #include "guide.h"
 
 namespace {
 // What a pinch on one of the guide's own buttons asks for; 0…8 are the sheet's rows.
-enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108 };
+enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109 };
 // The gestures a ghost hand teaches, in the order they are needed, and how long each waits once its moment has come.
 struct Plan {
     const char* id;
@@ -45,6 +48,9 @@ struct TourStep {
     int pictures;
     float stage;        // how large its gesture plays on its card, of life size: as large as the stage has room for
     const char* say;    // the one thing to do now, said large over the tree
+    // The note Momo answers with, where the lesson is one of talking to Momo: it makes a layer of its own, which
+    // is that lesson's too, and the way on is from there (the lesson's own card has no next card beside it).
+    const char* result = "";
 };
 const TourStep tourSteps[] = {
     {"welcome", "pinch", "Welcome to Mind Forest",
@@ -55,15 +61,21 @@ const TourStep tourSteps[] = {
      "Close your hand and pull it toward you: the layer behind comes back. Push it away to return here.", "step", "tree", "Or choose a layer here  ↓", 1, 0.68f, "Close your hand and pull it toward you"},
     {"welcome-move", "drag", "Pinch and hold to move",
      "Pinch a picture beside this card, keep it pinched, and put it somewhere else. It stays where you leave it.", "move", "", "", 3, 0.92f, "Pinch a picture, hold, and carry it"},
-    {"welcome-mark", "mark", "Mark part of a picture",
-     "Pinch this card again to go in, pick Draw on it beside the picture, and draw round something.", "mark", "", "", 1, 0.68f, "Pinch this picture to go in"},
+    // NOTE: the two steps with Momo were added on 2026-11-15, once Momo was in the build (Kai: "weave momo
+    // interactions into the onboarding"): asking it aloud what it can do, and sending it a sketch with a word about it.
+    {"welcome-momo", "say", "Ask Momo",
+     "Momo is the gardener's voice. Say its name first, then what you want. Begin by asking what it can do for you.", "momo", "", "", 0, 0.8f,
+     "Say “Hi Momo, what can you do for me?”", "momo-can"},
+    {"welcome-mark", "mark", "Show Momo part of a picture",
+     "Pinch this card again to go in, take up the pen and draw round something. Then send it to Momo, and say what you want to know.", "mark", "", "", 0, 0.68f,
+     "Pinch this picture to go in", "momo-mark"},
     {"welcome-tree", "tree", "Choose a layer on the small tree",
      "Low on your left stands this tree in little. Slide a finger along it and pinch to jump to a layer.", "jump", "tree", "Slide a finger along it, pinch to jump", 1, 0.86f, "Reach for the small tree, low on your left"},
     {"welcome-close", "clap", "Palms together to close",
      "Hold your palms together for a second: the tree is pressed flat and put away. Its buttons do the same.", "press", "strip", "Or pinch Put away", 0, 0.6f, "Hold your palms together for a second"},
 };
 const int tourCount = int(sizeof(tourSteps) / sizeof(tourSteps[0]));
-const int pullStep = 2, moveStep = 3, markStep = 4, treeStep = 5, closeStep = 6;
+const int pullStep = 2, moveStep = 3, momoStep = 4, markStep = 5, treeStep = 6, closeStep = 7;
 const char* tourTitle = "Welcome to Mind Forest";
 // NOTE(port): halved, and the card behind it made half see-through, as Kai asked on 2026-11-15: at 0.7 a lesson
 // that came up while you were idle took too much of the view, drew the eye and ran into what stood near it.
@@ -86,6 +98,52 @@ void drawDone(float t, guide::Frame& f) {
     f.path(points, 0.004f, guide::white, 0.95f);
 }
 const guide::Gesture doneGesture{"done", drawDone, doneSeconds, "", ""};
+
+// Talking to Momo, on its lesson's card: no hand in it. A voice (a row of bars that rise and fall) on the left,
+// Momo on the right as a point of light that answers to its name with a ring; the words cross to it; and what
+// comes back is cards, coming up from it one after another: a layer.
+void drawSay(float t, guide::Frame& f) {
+    const Vec3 X{1, 0, 0}, Y{0, 1, 0};
+    const float whole = 6.4f;
+    f.fade = guide::span(t, 0, 0.4f) * (1 - guide::span(t, whole - 0.5f, whole));
+    Vec3 voice{-0.15f, -0.075f, -0.05f}, momo{0.07f, -0.075f, -0.05f};
+    float speaking = guide::span(t, 0.7f, 1.0f) * (1 - guide::span(t, 3.0f, 3.3f));
+    float named = guide::span(t, 1.1f, 1.3f);                                // "Hi Momo": it wakes
+    float heard = guide::span(t, 3.1f, 3.5f);
+    // The voice: seven bars, never still while it speaks.
+    for (int k = 0; k < 7; k++) {
+        float x = (float(k) - 3) * 0.019f;
+        float tall = 0.009f + speaking * (0.022f + 0.026f * std::fabs(std::sin(t * (5.3f + 0.9f * float(k)) + float(k) * 1.7f)));
+        f.line(voice + Vec3{x, -tall, 0}, voice + Vec3{x, tall, 0}, 0.0052f, guide::white, 0.35f + 0.55f * speaking);
+    }
+    // Its words, on their way across.
+    Vec3 from = voice + Vec3{0.08f, 0, 0}, to = momo - Vec3{0.055f, 0, 0};
+    for (int k = 0; k < 3; k++) {
+        float u = std::fmod(t * 0.9f + float(k) / 3, 1.f);
+        f.orb(from + (to - from) * u, 0.0055f, guide::white, 0.8f * speaking * std::sin(u * floatPi));
+    }
+    // Momo: awake at its name, and brighter once it has heard.
+    float glow = 0.35f + 0.4f * named + 0.25f * heard;
+    f.orb(momo, 0.032f, guide::warm, 0.35f * glow);
+    f.orb(momo, 0.017f, guide::warm, glow);
+    f.ring(momo, X, Y, 0.042f, 0.0026f, guide::warm, 0.3f + 0.5f * named);
+    if (t > 1.1f && t < 3.3f) {
+        float u = std::fmod(t - 1.1f, 1.1f) / 1.1f;
+        f.ring(momo, X, Y, 0.042f + 0.045f * guide::arrive(u), 0.0022f, guide::warm, 0.6f * (1 - u));
+    }
+    // What comes back: a layer of cards, up and out from it.
+    const Vec3 at[4] = {{-0.075f, 0.065f, -0.05f}, {0.03f, 0.095f, -0.05f}, {0.135f, 0.085f, -0.05f}, {0.205f, 0.01f, -0.05f}};
+    for (int k = 0; k < 4; k++) {
+        float u = guide::arrive(guide::span(t, 3.6f + 0.22f * float(k), 4.3f + 0.22f * float(k)));
+        if (u < 0.01f) continue;
+        Vec3 p = momo + (at[k] - momo) * u, way = normalize(at[k] - momo);
+        f.line(momo + way * 0.05f, p - way * (0.03f * u), 0.0018f, guide::white, 0.3f * u);
+        f.card(p, X, Y, 0.075f * u, 0.048f * u, 0.006f, 0.002f, guide::white, 0.85f * u, 0.07f * u);
+    }
+}
+const guide::Gesture sayGesture{"say", drawSay, 6.4f, "", ""};
+/// A gesture of the walk's by its name: one of the hand's (guidegestures.cpp), or the walk's own.
+const guide::Gesture* tourGesture(const std::string& id) { return id == "say" ? &sayGesture : guide::gesture(id); }
 
 // What the walk points with, in the room's own space: a line round the thing to act on, which breathes
 // and rings out; arrowheads running along a path to its end; a dashed line for "about here".
@@ -406,7 +464,8 @@ void OceanModel::addWelcomeNotes() {
         auto link = [&](const std::string& to, const char* why) {
             links += fmt("%s{\"to\": \"%s\", \"why\": \"%s\"}", links.empty() ? "" : ", ", to.c_str(), why);
         };
-        if (k + 1 < tourCount) link(std::string("note:") + tourSteps[k + 1].note, k == 0 ? "Start here" : "Next");
+        // (A lesson of talking to Momo has no next card beside it: the way on is from the layer Momo answers with.)
+        if (k + 1 < tourCount && !step.result[0]) link(std::string("note:") + tourSteps[k + 1].note, k == 0 ? "Start here" : "Next");
         for (int n = 0; n < step.pictures && works > 0; n++) {
             used += 1;
             link(fmt("work:%d", (works * (2 * used - 1)) / 23 % works), std::string(step.gesture) == "drag" ? "Pick me up" : "A picture");
@@ -433,6 +492,66 @@ void OceanModel::addWelcomeNotes() {
         }
         catalog->notes[step.note] = *note;
     }
+    // What Momo answers with on the walk: cards like any it makes, but written here, so that the walk goes the
+    // same way with the service or without it. First, what it can do: a card for each, in words that work
+    // (they are among the requests Momo's voice is measured on, agents/scripts/live-requests.ts).
+    struct Can {
+        const char* id;
+        const char* why;
+        const char* headline;
+        const char* say;
+        const char* summary;
+    };
+    const Can cans[] = {
+        {"momo-can-tree", "Begin", "Start a tree", "Start a tree on Hitchcock's camera tricks.", "A new tree grows from what you have saved and what Momo finds."},
+        {"momo-can-find", "Find", "Find new things", "Bring me some pictures of Delft.", "Museums, films, papers and the web, brought round the card that is open."},
+        {"momo-can-saved", "Recall", "Look in what you saved", "Do I have anything about Kubrick?", "Momo answers aloud from what is already yours."},
+        {"momo-can-more", "More", "More like this", "Show me more like this.", "About the open card. Narrow it as you like: more, but older."},
+        {"momo-can-hand", "Pass on", "Hand it off", "Hand this off to my coding agent.", "The tree becomes one file another agent can work from."},
+    };
+    auto make = [&](const std::string& text, const char* id) {
+        std::optional<Json> json = Json::parse(text);
+        std::optional<OceanNote> note = json ? OceanNote::from(*json) : std::nullopt;
+        if (note) catalog->notes[id] = *note;
+        else logLine(fmt("[guide] the walk's card %s could not be made", id));
+    };
+    std::string canLinks = fmt("{\"to\": \"note:%s\", \"why\": \"Next\"}", tourSteps[momoStep + 1].note);
+    for (const Can& can : cans) {
+        make(fmt("{\"id\": \"%s\", \"kicker\": \"Ask Momo\", \"tone\": \"note\", \"headline\": \"%s\", \"highlight\": \"“Hi Momo. %s”\", "
+                 "\"summary\": \"%s\", \"tags\": [], \"links\": []}", can.id, can.headline, can.say, can.summary), can.id);
+        canLinks += fmt(", {\"to\": \"note:%s\", \"why\": \"%s\"}", can.id, can.why);
+    }
+    make(fmt("{\"id\": \"momo-can\", \"kicker\": \"Momo\", \"tone\": \"note\", \"headline\": \"Here is what I can do\", "
+             "\"highlight\": \"Say “Hi Momo” first, wherever you are.\", "
+             "\"summary\": \"Each card round this one is something to ask for, in words that work. The walk goes on at card %d.\", "
+             "\"tags\": [], \"links\": [%s]}", momoStep + 2, canLinks.c_str()), "momo-can");
+    // And what it makes of a sketch: here a stand-in, since the walk's picture is not one Momo knows. It is made
+    // again with what was said (`tourAnswer`); the pictures beside it stand for what Momo would bring.
+    teach.tourMarkLinks = fmt("{\"to\": \"note:%s\", \"why\": \"Next\"}", tourSteps[markStep + 1].note);
+    for (int n = 0; n < 3 && works > 0; n++) {
+        used += 1;
+        teach.tourMarkLinks += fmt(", {\"to\": \"work:%d\", \"why\": \"Like it\"}", (works * (2 * used - 1)) / 23 % works);
+    }
+}
+
+/// The card Momo answers a sketch with, on the walk: made (again) with what was said about it.
+void OceanModel::tourMarkNote(const std::string& words) {
+    if (!catalog) return;
+    // (Into a note's own text: nothing in it that would end a string.)
+    std::string said;
+    for (char ch : words) {
+        if (ch != '"' && ch != '\\' && (unsigned char)ch >= 0x20) said += ch;
+    }
+    if (said.size() > 90) said = said.substr(0, 90) + "…";
+    std::string text = fmt("{\"id\": \"momo-mark\", \"kicker\": \"Momo\", \"tone\": \"note\", \"headline\": \"From your sketch\", "
+                           "\"highlight\": \"%s\", "
+                           "\"summary\": \"On your own trees Momo answers a sketch with a layer like this one: what the part is, and things like it. "
+                           "Here these pictures stand in for it. The walk goes on at card %d.\", \"tags\": [], \"links\": [%s]}",
+                           said.empty() ? "Sent without a word." : ("You said: “" + said + "”").c_str(), markStep + 2, teach.tourMarkLinks.c_str());
+    std::optional<Json> json = Json::parse(text);
+    std::optional<OceanNote> note = json ? OceanNote::from(*json) : std::nullopt;
+    if (note) catalog->notes["momo-mark"] = *note;
+    else logLine("[guide] the walk's card momo-mark could not be made");
 }
 
 /// Stands the welcome tree. From there the tree is the walk (`updateTour`).
@@ -459,6 +578,8 @@ void OceanModel::startTour() {
     teach.tourAdvanceFor = -1;
     teach.tourLessonAt = time;
     for (bool& done : teach.tourDone) done = false;
+    teach.tourSent = false;
+    tourMarkNote("");
     teach.tourWalkAt = time + 4.5;
     saveGuide();
     logLine("[guide] the welcome tree stands");
@@ -470,14 +591,37 @@ int OceanModel::tourLesson() const {
     const TreeNode* node = find(*tree, *tree->focus());
     if (!node || node->ref.kind != Ref::Kind::note) return -1;
     for (int k = 0; k < tourCount; k++) {
-        if (node->ref.id == tourSteps[k].note) return k;
+        if (node->ref.id == tourSteps[k].note || (tourSteps[k].result[0] && node->ref.id == tourSteps[k].result)) return k;
     }
     return -1;
+}
+
+bool OceanModel::tourOnResult() const {
+    if (!tree || !tree->focus()) return false;
+    const TreeNode* node = find(*tree, *tree->focus());
+    if (!node || node->ref.kind != Ref::Kind::note) return false;
+    for (int k = 0; k < tourCount; k++) {
+        if (tourSteps[k].result[0] && node->ref.id == tourSteps[k].result) return true;
+    }
+    return false;
+}
+
+std::optional<int> OceanModel::tourResultNode(int lesson) const {
+    if (!tree || lesson < 0 || lesson >= tourCount || !tourSteps[lesson].result[0]) return std::nullopt;
+    for (const auto& [id, node] : tree->nodes) {
+        if (node.ref.kind == Ref::Kind::note && node.ref.id == tourSteps[lesson].result) return id;
+    }
+    return std::nullopt;
 }
 
 /// The card of a lesson, if it is in the tree.
 OceanModel::CardRef OceanModel::tourCard(int lesson) const {
     if (!tree || lesson < 0 || lesson >= tourCount) return nullptr;
+    // The layer Momo made for a lesson is that lesson's too: while it is the one in focus, its card is the lesson's.
+    if (tourOnResult() && tourLesson() == lesson) {
+        auto found = cards.find(*tree->focus());
+        return found == cards.end() ? nullptr : found->second;
+    }
     for (const auto& [id, node] : tree->nodes) {
         if (node.ref.kind != Ref::Kind::note || node.ref.id != tourSteps[lesson].note) continue;
         auto found = cards.find(id);
@@ -489,7 +633,8 @@ OceanModel::CardRef OceanModel::tourCard(int lesson) const {
 /// The marking lesson, once its card is gone into, is three things one after another: what to do now, said
 /// on the card itself. (Nothing floats over a card gone into: it is being worked on.)
 std::string OceanModel::tourLine() const {
-    if (teach.tourDone[markStep]) return "Marked. Pinch empty space to come back out";
+    if (teach.tourSent) return "Sent. Say “Hi Momo”, then what you want to know about it";
+    if (teach.tourDone[markStep]) return "Marked. Now pinch Send, the third button";
     if (!penOn) return "Pinch the pen, at the top right";
     return "Pinch, hold, and draw round the face";
 }
@@ -674,7 +819,7 @@ std::optional<int> OceanModel::tourNode(int lesson) const {
 bool OceanModel::tourPinchedOpen() {
     if (teach.tour < 0 || !onWelcomeTree()) return false;
     int lesson = tourLesson();
-    if (lesson < 0 || lesson == markStep) return false;
+    if (lesson < 0 || (lesson == markStep && !tourOnResult())) return false;
     bool onward = lesson == 0 || teach.tourAdvanceFor == lesson;
     if (std::optional<int> next = onward ? tourNode(lesson + 1) : std::nullopt) take(*next);
     return true;
@@ -718,6 +863,12 @@ void OceanModel::updateTour(double now, Vec3 eye) {
             take(*next);
             return;
         }
+        // (A lesson of talking to Momo: its answer is brought, as if it had been asked for.)
+        if (tourSteps[lesson].result[0] && !tourOnResult()) {
+            teach.tourWalkAt = now + 3.6;
+            tourAnswer(lesson, lesson == markStep ? "What is she holding?" : "");
+            return;
+        }
     }
     if (teach.demo && Flags::has("guideBeat")) teach.tourBeat = Flags::integer("guideBeat");
     // `-guideOff <s>`: at that second, follows a picture off the walk, as a stray pinch would.
@@ -737,7 +888,9 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     bool finished = teach.tourDone[at];
     if (at == 0) finished = false;                                              // (its doing is the taking of the next card)
     if (at == pullStep) finished = teach.tourBeat >= 1 && here && !(teach.demo && Flags::has("guideBeat"));
-    if (at == markStep) finished = teach.tourDone[markStep] && !zoomed;
+    // (A lesson of talking to Momo is done on the layer Momo answered with.)
+    bool result = tourOnResult();
+    if (tourSteps[at].result[0]) finished = here && result;
     if (at == closeStep) finished = false;                                      // (putting the tree away ends the walk)
     if (holdDone && teach.demo && at > 0) finished = true;
     if (finished && teach.tourAdvanceFor != at) {
@@ -752,7 +905,7 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     // Where the ghost hand belongs: on the open lesson's own face. (Marking's card is the picture to be marked:
     // its gesture plays on a card beside you until the picture is gone into.)
     int want = -1;
-    if (zoomed) want = -1;
+    if (zoomed || result) want = -1;
     else if (lesson == markStep) want = teach.tourDone[markStep] ? -1 : 100 + markStep;
     else if (lesson >= 0 && lesson != markStep && at == pullStep && teach.tourBeat >= 1 && !here) want = 200 + lesson;
     else if (lesson >= 0) want = lesson;
@@ -772,7 +925,7 @@ void OceanModel::updateTour(double now, Vec3 eye) {
         }
         if (ticking) {
             teach.painter->draw(doneGesture, float(teach.demoT >= 0 ? teach.demoT : now - teach.tourTick), eye);
-        } else if (const guide::Gesture* g = guide::gesture(tourSteps[teach.tourShown >= 200 ? pullStep : teach.tourShown % 100].gesture)) {
+        } else if (const guide::Gesture* g = tourGesture(tourSteps[teach.tourShown >= 200 ? pullStep : teach.tourShown % 100].gesture)) {
             teach.painter->draw(*g, float(teach.demoT >= 0 ? teach.demoT : std::fmod(now - teach.tourBegan, double(g->seconds))), eye);
         }
     }
@@ -824,7 +977,7 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     // What the line over the tree says, and what is pointed at.
     signs.clear();
     std::string words, pinWords, spotWords;
-    std::optional<Vec3> pinAt, spotAt, offAt;
+    std::optional<Vec3> pinAt, spotAt, offAt, talkAt;
     float pinSize = 0;
     EntityRef pinOn;
     bool toNext = false;
@@ -839,22 +992,21 @@ void OceanModel::updateTour(double now, Vec3 eye) {
             pinSize = Art::Size::lead;
             pinOn = marking->openHolder;
             pinAt = Vec3{picture.center.x, picture.center.y - picture.size.y / 2 + 0.026f, 0.008f};
-            if (teach.tourDone[markStep]) {
-                // The way out is anywhere that is not the card: a place for it is shown, just off the card's
-                // right edge at the height of the words, and the way there from them.
-                Vec2 spot{openHalf.x + 0.17f, middle.y - size.y / 2 + 0.026f * openSize};
-                std::vector<Vec3> round;
-                for (int k = 0; k < 36; k++) {
-                    float a = float(k) * 2 * floatPi / 36;
-                    round.push_back(marking->point(spot + Vec2{std::cos(a), std::sin(a)} * 0.075f, 0.02f));
-                }
-                signs.rounds.push_back(round);
+            if (teach.tourSent) {
+                // Sent: what is waited for now is said aloud, and there is nothing to point at. What the walk
+                // has to say about it (and the way on without speaking) stands just over the words.
+                // (Well off the card: it is flat and the card is not, so its ends would otherwise go in behind the card's curve.)
+                talkAt = marking->point({middle.x, middle.y - size.y / 2 + 0.026f * openSize + 0.085f}, 0.13f);
+            } else if (teach.tourDone[markStep] && tools && tools->parent) {
+                // Round Send (the last of the three at the picture's top right corner), and the way up to it from the words.
+                Vec2 corner = Vec2{tools->position.x, tools->position.y} * openSize;
+                Vec2 send = corner + Vec2{toolSize / 2, -toolsTall + toolSize / 2};
+                signs.rounds.push_back(roundOn(*marking, send, {toolSize + 0.034f, toolSize + 0.034f}, 0.02f));
                 std::vector<Vec3> way;
-                Vec2 from{middle.x + 0.44f, spot.y}, to{spot.x - 0.09f, spot.y};
-                for (int k = 0; k <= 10; k++) way.push_back(marking->point(from + (to - from) * (float(k) / 10), 0.02f));
-                if (to.x - from.x > 0.1f) signs.flows.push_back(way);
-                spotWords = "Pinch here";
-                spotAt = marking->point(spot + Vec2{0.02f, 0.13f}, 0.05f);
+                Vec2 from{middle.x + 0.36f, middle.y - size.y / 2 + 0.026f * openSize}, turn{send.x, from.y}, to{send.x, corner.y - toolsTall - 0.05f};
+                for (int k = 0; k <= 4; k++) way.push_back(marking->point(from + (turn - from) * (float(k) / 4), 0.02f));
+                for (int k = 1; k <= 10; k++) way.push_back(marking->point(turn + (to - turn) * (float(k) / 10), 0.02f));
+                if (turn.x - from.x > 0.03f) signs.flows.push_back(way);
             } else if (!penOn && tools && tools->parent) {
                 // Round the pen (the first of the three at the picture's top right corner), and the way up to it from the words.
                 Vec2 corner = Vec2{tools->position.x, tools->position.y} * openSize;
@@ -901,6 +1053,9 @@ void OceanModel::updateTour(double now, Vec3 eye) {
         words = lesson < at ? fmt("Step %d is ahead: push your closed hand away", at + 1) : fmt("Back to the walk: pinch card %d", at + 1);
     } else {
         words = tourSteps[at].say;
+        // (Come back out of the picture before it was sent, or before a word was said about it.)
+        if (at == markStep && teach.tourSent) words = "Say “Hi Momo”, then what you want to know about it";
+        else if (at == markStep && teach.tourDone[markStep]) words = "Pinch the picture to go back in, then Send";
         if (at == 0) {
             toNext = true;
         } else if (at == 1) {
@@ -926,7 +1081,7 @@ void OceanModel::updateTour(double now, Vec3 eye) {
                 signs.dashes.push_back(spot);
                 break;
             }
-        } else if (at == markStep) {
+        } else if (at == markStep && !teach.tourSent) {
             signs.rounds.push_back(roundOn(*open, {0, 0}, openHalf * 2 + Vec2{0.05f, 0.05f}, 0.02f));
         } else if (at == treeStep && hologram && hologram->entity->isEnabledInHierarchy()) {
             // The small tree is out of the way on purpose: a round about it, and the way down to it from the card.
@@ -994,6 +1149,14 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     tourPin(teach.tourSpotPin, teach.tourSpotSaid, spotAt ? spotWords : "", spotAt, 0.034f);
     tourOff(offAt);
 
+    // Talking to Momo: while a lesson waits for words, Momo's ears are the walk's, and what the walk has to say
+    // about what it heard, or why it hears nothing, stands over the line (inside a picture gone into, over its words).
+    bool talking = here && !result && !passing && lesson == at && ((at == momoStep && open && !zoomed) || (at == markStep && teach.tourSent));
+    if (talking && !talkAt && over) talkAt = inRoom(*over) + stage.u * 0.084f;
+    teach.talkPanelScale = zoomed ? 1.8f : 1;
+    tourTalk(at, talking, now, talkAt);
+    if (teach.tour < 0 || tourOnResult() != result) return;      // (it was answered: the tree has moved on under all this)
+
     // What is pointed with, drawn: gone while a hand of your own is at work (its own light is what to watch then).
     if (teach.marker) {
         bool any = !(signs.rounds.empty() && signs.dashes.empty() && signs.flows.empty()) && !(busy && !zoomed);
@@ -1042,10 +1205,229 @@ void OceanModel::tourDid(const std::string& did, float amount) {
     if (did == "press") endTour(teach.tourDone[closeStep] ? "the tree was put away" : "the tree was put away early");
 }
 
+// MARK: - Talking to Momo
+//
+// Two of the walk's lessons are done by speaking: "Hi Momo, what can you do for me?", and a word about a sketch
+// that was sent. Each ends in a layer Momo answers with. The cards of that layer are the walk's own (see
+// `addWelcomeNotes`), so the walk goes the same way joined to the service or not; what is real is the listening:
+// while a lesson waits for words, Momo's ears are lent to the walk (`agent::Voice::Tutor`), which hears the name
+// and then what was said, and the service is not told (it might otherwise stand a tree of its own in the walk's place).
+//
+// Nobody is left waiting. Whatever goes wrong is said in a line over the lesson, and where speaking cannot work,
+// or has not worked twice, "Go on without speaking" stands under it and does what the words would have done:
+// - Momo is not in this copy, its microphone was refused, is still being asked for, or is not on;
+// - nothing is said for a while; the name is said and nothing after it;
+// - something else is asked (for the first lesson: anything that does not ask what Momo can do). It is quoted
+//   back, with what to ask instead. For the sketch, anything said is a word about it, and is taken.
+
+namespace {
+/// Whether what was said asks what Momo can do, loosely: a transcript is seldom word for word.
+bool asksWhatItCan(const std::string& said) {
+    std::string low;
+    for (char ch : said) low += char(std::tolower((unsigned char)ch));
+    for (const char* part : {"what can you", "can you do", "what do you do", "what you can do", "what could you", "what are you", "who are you",
+                             "help me", "can you help", "what can momo", "what does momo", "what is this"}) {
+        if (low.find(part) != std::string::npos) return true;
+    }
+    return false;
+}
+}
+
+int OceanModel::tourHearing() const {
+    // `-guideHear ready|starting|asking|refused|off|none`: as if Momo's ears were so, for a look at each in the preview.
+    if (teach.demo && Flags::has("guideHear")) {
+        std::string as = Flags::string("guideHear").value_or("ready");
+        return as == "ready" ? 0 : as == "starting" ? 1 : as == "asking" ? 2 : as == "refused" ? 3 : as == "off" ? 4 : 5;
+    }
+    agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr;
+    if (!voice) return 5;
+    switch (voice->hearing()) {
+    case agent::Voice::Hearing::ready: return 0;
+    case agent::Voice::Hearing::starting: return 1;
+    case agent::Voice::Hearing::asking: return 2;
+    case agent::Voice::Hearing::refused: return 3;
+    case agent::Voice::Hearing::off: return 4;
+    }
+    return 4;
+}
+
+void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec3> at) {
+    agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr;
+    int want = wanted ? lesson : -1;
+    if (want != teach.talkFor) {
+        teach.talkFor = want;
+        teach.talkSince = now;
+        teach.talkWoke = -1;
+        teach.talkMisses = 0;
+        teach.talkNote.clear();
+        teach.talkHeard.clear();
+        if (voice && want >= 0) {
+            voice->tutor(agent::Voice::Tutor{[this] { teach.talkHeard.push_back({true, ""}); },
+                                             [this](const std::string& words) { teach.talkHeard.push_back({false, words}); }});
+        } else if (voice) {
+            voice->tutor(std::nullopt);
+        }
+        if (want >= 0) logLine(fmt("[guide] lesson %d waits for words: Momo's ears are %d", want + 1, tourHearing()));
+    }
+    if (want < 0) {
+        tourTalkPanel("", false, std::nullopt);
+        return;
+    }
+    // `-guideWokeAt <s>`, `-guideSayAt <s> -guideSay <words_with_underscores>`: as if heard, in the preview.
+    static bool woken = false, spoken = false;
+    if (teach.demo && Flags::has("guideWokeAt") && !woken && now >= Flags::number("guideWokeAt")) {
+        woken = true;
+        teach.talkHeard.push_back({true, ""});
+    }
+    if (teach.demo && Flags::has("guideSayAt") && !spoken && now >= Flags::number("guideSayAt")) {
+        spoken = true;
+        std::string words = Flags::string("guideSay").value_or("");
+        std::replace(words.begin(), words.end(), '_', ' ');
+        teach.talkHeard.push_back({false, words});
+    }
+    std::vector<std::pair<bool, std::string>> heard;
+    heard.swap(teach.talkHeard);
+    for (const auto& [name, words] : heard) {
+        if (name) {
+            teach.talkWoke = now;
+            teach.talkNote = "Momo is listening…";
+            continue;
+        }
+        teach.talkWoke = -1;
+        size_t first = words.find_first_not_of(" \t\n"), last = words.find_last_not_of(" \t\n");
+        std::string said = first == std::string::npos ? "" : words.substr(first, last - first + 1);
+        if (said.empty()) {
+            teach.talkMisses += 1;
+            teach.talkNote = "Momo heard its name, then nothing. Say it all in one go";
+            logLine("[guide] the name, and nothing after it");
+            continue;
+        }
+        if (lesson == momoStep && !asksWhatItCan(said)) {
+            teach.talkMisses += 1;
+            std::string quoted = said.size() > 34 ? said.substr(0, 32) + "…" : said;
+            teach.talkNote = "Momo heard “" + quoted + "”. Keep that for after the walk: now ask what it can do";
+            logLine("[guide] something else was asked: " + said);
+            continue;
+        }
+        tourAnswer(lesson, said);
+        return;
+    }
+    // Why nothing is heard, if nothing can be; otherwise what the last turn came to, or after a while a nudge.
+    int hear = tourHearing();
+    double waited = now - teach.talkSince;
+    std::string note = teach.talkNote;
+    bool pill = teach.talkMisses >= 2;
+    if (hear == 5) {
+        note = "Momo is not connected in this copy";
+        pill = true;
+    } else if (hear == 3) {
+        note = "The microphone is not allowed, so Momo cannot hear you";
+        pill = true;
+    } else if (hear == 2) {
+        note = "Allow the microphone, so that Momo can hear you";
+        pill = waited > 12;
+    } else if (hear == 1 && waited > 6) {
+        // (Joined, and not listening yet: the service has not answered, or the listener is still loading.)
+        note = "Momo is not ready to listen yet";
+        pill = true;
+    } else if (hear == 4) {
+        note = "Momo cannot hear you: its microphone is not on";
+        pill = true;
+    } else if (hear == 0) {
+        if (teach.talkWoke >= 0 && now - teach.talkWoke > 20) {
+            // (The name was heard and nothing ever came of it.)
+            teach.talkWoke = -1;
+            teach.talkNote.clear();
+            note.clear();
+        }
+        if (note.empty() && waited > 14) note = "Say it out loud, and begin with “Hi Momo”";
+        if (waited > 32) pill = true;
+    } else {
+        note.clear();
+    }
+    tourTalkPanel(note, pill, at);
+}
+
+/// What the walk says about the words it waits for, over the lesson: a line, and under it (where speaking
+/// cannot work, or has not) the way on without it.
+void OceanModel::tourTalkPanel(const std::string& words, bool pill, std::optional<Vec3> at) {
+    std::string key = at && !words.empty() ? words + (pill ? "\n+" : "") : "";
+    if (key != teach.talkPanelSaid) {
+        for (const Entity* e : teach.talkPicks) picks.erase(e);
+        teach.talkPicks.clear();
+        if (teach.talkPanel) {
+            for (const EntityRef& child : teach.talkPanel->children) child->inputTarget = false;
+            fadeOut(teach.talkPanel, 0.2f);
+        }
+        teach.talkPanel = nullptr;
+        teach.talkPanelSaid = key;
+        // (A size under the line it stands over, which says what to do; this says how it is going.)
+        std::optional<Piece> line = !key.empty() && art ? art->line(words, 0.02f, Font::Weight::medium, Color::white(), Art::ink, Art::buttonPad) : std::nullopt;
+        std::optional<Piece> go = line && pill ? art->pill("Go on without speaking", 0.019f) : std::nullopt;
+        teach.talkPanelLift = go ? go->size.y + 0.012f : 0;
+        if (line) {
+            EntityRef holder = Entity::make();
+            EntityRef said = art->quad(*line);
+            holder->addChild(said);
+            if (go) {
+                EntityRef e = art->quad(*go);
+                e->position = {0, -line->size.y / 2 - 0.012f - go->size.y / 2, 0};
+                e->collision = {Shape::generateBox({go->size.x, go->size.y + 0.008f, 0.01f})};
+                e->inputTarget = true;
+                e->hover = Art::hover();
+                picks[e.get()] = Pick::guide(Act::tourSay);
+                teach.talkPicks.push_back(e.get());
+                holder->addChild(e);
+            }
+            root_->addChild(holder);
+            fadeIn(holder, 0, 0.3f);
+            teach.talkPanel = holder;
+        }
+    }
+    if (teach.talkPanel && at) {
+        // (Its button is under its words: with one, it stands that much higher.)
+        Vec3 p = *at + stage.u * (teach.talkPanelLift * teach.talkPanelScale);
+        teach.talkPanel->scale = Vec3::repeating(teach.talkPanelScale);
+        teach.talkPanel->position = p;
+        teach.talkPanel->orientation = guideFacing(p);
+    }
+}
+
+/// The words came (or were done without): Momo answers, and its answer makes the lesson's layer.
+void OceanModel::tourAnswer(int lesson, const std::string& words) {
+    if (!catalog || !tree || lesson < 0 || lesson >= tourCount || !tourSteps[lesson].result[0]) return;
+    logLine(fmt("[guide] lesson %d answered%s", lesson + 1, words.empty() ? " without a word" : (": " + words).c_str()));
+    if (lesson == markStep) tourMarkNote(words);
+    auto note = catalog->notes.find(tourSteps[lesson].result);
+    if (note == catalog->notes.end()) return;
+    teach.tourSent = false;
+    teach.talkNote.clear();
+    tourTalkPanel("", false, std::nullopt);
+    if (lesson == momoStep) tourDid("momo", 1);
+    // Momo says so itself, where it has a voice.
+    if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) {
+        voice->tell(lesson == momoStep ? "Here is what I can do for you. Each card is something to ask me for." : "Here is a layer from your sketch.");
+    }
+    sound("ask");
+    soundLayerAfter = 0.3;
+    bring(note->second, lesson == momoStep ? "You asked Momo" : "You showed Momo");
+}
+
+/// Send, pinched inside the walk's picture: the marked part goes to Momo, and a word about it is waited for.
+void OceanModel::tourSend() {
+    if (teach.tourSent) return;
+    teach.tourSent = true;
+    sound("send");
+    logLine("[guide] the sketch is sent to Momo");
+}
+
 void OceanModel::endTour(const char* why) {
     if (teach.tour < 0) return;
     teach.tour = -1;
     teach.tourStood = false;
+    // Momo's ears are its own again.
+    tourTalk(-1, false, time, std::nullopt);
+    teach.tourSent = false;
     if (teach.mode == 4) hideGuide(0.3f);
     teach.painter->entity->removeFromParent();
     teach.painter->clear();
@@ -1276,7 +1658,16 @@ void OceanModel::guideAct(int action) {
         break;
     case Act::tourBack:
         // Back to the lesson the walk had got to.
-        if (std::optional<int> back = teach.tour >= 0 ? tourNode(teach.tour) : std::nullopt) take(*back);
+        // (To the layer Momo answered with, where the lesson has one already: the way on is from there.)
+        if (teach.tour >= 0) {
+            std::optional<int> back = tourResultNode(teach.tour);
+            if (!back) back = tourNode(teach.tour);
+            if (back) take(*back);
+        }
+        break;
+    case Act::tourSay:
+        // "Go on without speaking": what the words would have done.
+        if (teach.talkFor >= 0) tourAnswer(teach.talkFor, "");
         break;
     case Act::tourSkip:
     case Act::tourEnd:

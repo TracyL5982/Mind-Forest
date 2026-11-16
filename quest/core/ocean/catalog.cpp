@@ -903,6 +903,8 @@ std::vector<Ask> Catalog::asks(const Ref& ref, std::optional<int> previous) cons
     std::vector<Ask> out;
     // NOTE(port): added for Quest: a lesson of the welcome tree is there to be done, not asked about.
     if (ref.kind == Ref::Kind::note && ref.id.rfind("welcome", 0) == 0) return out;
+    // (Nor are the cards Momo answers with on the walk: they are the walk's own, written in oceanmodel_guide.cpp.)
+    if (ref.kind == Ref::Kind::note && ref.id.rfind("momo-", 0) == 0) return out;
     switch (ref.kind) {
     case Ref::Kind::film:
     case Ref::Kind::work: {

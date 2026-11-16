@@ -280,6 +280,11 @@ void OceanModel::handle(const Hands::Event& event) {
         panBy(event.move);
         guideDid("carry", length(event.move));
         break;
+    case Hands::Event::Kind::panUndone:
+        // NOTE(port): added for Quest (hands.h): the carry turned out to be a push. The tree goes back, and the guide does not count it.
+        logLine(fmt("[ocean] fist: a carry of %.0f mm taken back, it was a push", double(length(event.move)) * 1000));
+        panBy(event.move);
+        break;
     case Hands::Event::Kind::panEnded:
         panRelease(event.move);
         break;
@@ -319,7 +324,10 @@ std::optional<int> OceanModel::threadCrossed(Vec3 from, Vec3 to, Vec3* at) const
     std::optional<Vec2> a = seen(from), b = seen(to);
     if (!a || !b) return std::nullopt;
     // The stroke, carried a little past the hand both ways.
-    Vec2 a2 = *a - (*b - *a) * 0.5f, b2 = *b + (*b - *a) * 1.5f;
+    // NOTE(port): changed for Quest (2026-11-15): the Swift carries it half its length back and one and a half on,
+    // from one frame's travel. A stroke here is 60 ms of the blade's point, three times as long, and the place
+    // it cuts is shown on the sheet, so it is carried only a little: it cuts where it is seen to pass.
+    Vec2 a2 = *a - (*b - *a) * 0.15f, b2 = *b + (*b - *a) * 0.5f;
     auto crosses = [&](Vec2 p, Vec2 q) -> bool {
         auto side = [](Vec2 u, Vec2 v, Vec2 w) -> float { return (v.x - u.x) * (w.y - u.y) - (v.y - u.y) * (w.x - u.x); };
         return side(a2, b2, p) * side(a2, b2, q) < 0 && side(p, q, a2) * side(p, q, b2) < 0;

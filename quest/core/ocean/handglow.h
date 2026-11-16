@@ -31,7 +31,9 @@ public:
         Vec3 centre;                // the middle of the fist now
         Quat turn;                  // how the hand is turned: +Z back toward the wrist, +Y out of the back of the hand (OpenXR's palm)
         Vec3 offset;                // how far the hand is from where it closed
-        Vec3 ahead, right;          // away from you and to the right, where the hand is
+        Vec3 ahead, right;          // the normal axis into the surface in front of the fist, and to the right across it
+        Vec3 up{0, 1, 0};
+        bool locked = false;        // it has committed: it cannot become the other until the hand opens
         Vec2 carried;               // how far it has carried the tree, right and up, m
         float depth = 0;            // how far it is from where it closed, along `ahead`, m
         float base = 0;             // the depth it last stepped a layer at
@@ -49,10 +51,19 @@ public:
         Vec3 axis;                  // for the lead: the point on the tree's trunk at the finger's height
     };
 
-    /// A hand held flat: the knife. A line of light runs out of its fingers.
+    /// A hand held as a knife. Out, a blade in the accent runs from the heel of the hand, the way the hand
+    /// points, all the way to the layer; where it lands there is a mark, which is what cuts, and the trail of a stroke.
     struct Blade {
         Vec3 tip, palm;
-        float shown = 1;
+        Vec3 point;                 // where the blade is at its brightest, a little past the fingertip
+        Vec3 along{0, 0, -1};       // the way it points
+        float shown = 1;            // 0…1: the blade is out
+        float forming = 0;          // 0…1 while the pose is held and the blade is not yet out
+        float fresh = 0;            // 1 as it comes out, falling to 0: it rings out once
+        bool marked = false;
+        Vec3 mark;                  // where on the layer it points
+        std::vector<Vec3> trail;    // where it has been there, oldest first
+        std::vector<float> trailAge;        // 0 just now … 1 about to go
     };
     /// A thread in the accent: one a blade points at or a ray rests on (`lit`), or one marked for
     /// cutting (`armed`, with how much of its time is `left`, shown as a ring running down at `at`).
@@ -99,6 +110,7 @@ private:
         Vec3 centre;                // where it is now, and how it is turned: followed closely, without the hand's shiver
         Quat turn;
         float moved = 0;            // between layers: how far past the last step it shows, easing after a step
+        float open = 1;             // 1 while it can still become the other, easing to 0 once it has committed
         bool placed = false;
     };
     Held held[2];

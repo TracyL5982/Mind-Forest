@@ -294,12 +294,12 @@ static void cut(float t, Frame& f) {
     f.path(thread(from, to, 0.02f, 0, 0.5f - 0.42f * part), 0.0016f + 0.0014f * marked, mix(cool, hot, marked), 0.85f * (1 - 0.6f * part));
     f.path(thread(from, to, 0.02f, 0.5f + 0.42f * part, 1), 0.0016f + 0.0014f * marked, mix(cool, hot, marked), 0.85f * (1 - gone));
     Vec3 middle = thread(a + Vec3{0.05f, 0, 0}, b0 + Vec3{-0.0375f, 0, 0}, 0.02f, 0.5f, 0.5f)[0];
-    // While it is marked: the place, a ring round it running down, and "Cut" standing under it.
+    // While it is marked: the place, a ring round it running down, and "Cut again to confirm" standing under it (a wider tag than "Cut" had).
     if (marked > 0.01f) {
         f.orb(middle, 0.008f, hot, 0.95f * marked);
         f.ring(middle, X, Y, 0.022f, 0.0016f, hot, 0.4f * marked);
         f.arc(middle, X, Y, 0.022f, tau / 4, tau / 4 - (1 - span(t, first, first + 5)) * tau, 0.0036f, white, 0.9f * marked);
-        f.card(middle + Vec3{0, -0.045f, 0.01f}, X, Y, 0.05f, 0.024f, 0.005f, 0.0014f, hot, 0.95f * marked, 0.5f * marked);
+        f.card(middle + Vec3{0, -0.045f, 0.01f}, X, Y, 0.088f, 0.024f, 0.005f, 0.0014f, hot, 0.95f * marked, 0.5f * marked);
     }
     float flat = snap(span(t, 0.7f, 1.05f)) - snap(span(t, 5.3f, 5.7f));
     // A short draw back, then the stroke; back again, and the stroke a second time.
@@ -423,7 +423,7 @@ const std::vector<Gesture>& gestures() {
         {"mark", draw::mark, 6.8f, "Mark part of a card", "Go in, take up the pen, draw. Send asks Momo."},
         {"tree", draw::tree, 6.0f, "Choose a layer on the small tree", "Slide a finger along it, then pinch."},
         {"clap", draw::clap, 5.4f, "Palms together, and hold", "A second like this closes the tree."},
-        {"cut", draw::cut, 7.4f, "Flat hand: slice a thread", "Once to mark it, again to cut."},
+        {"cut", draw::cut, 7.4f, "Flat hand: slice a thread", "Hold it straight, on its edge. Once to mark, again to cut."},
     };
     return all;
 }

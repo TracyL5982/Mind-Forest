@@ -76,6 +76,20 @@ public:
     std::string name() const;
     /// The reply being spoken, while one is.
     const std::string& saying() const { return spoken; }
+
+    // GUIDE: added for the welcome walk's two steps with Momo (core/ocean/oceanmodel_guide.cpp). While a tutor is
+    // set, what the user says after the name goes to it and not to the service, and turns are recorded and
+    // transcribed, never streamed to /live: there Momo would act on the words before the walk had seen them.
+    struct Tutor {
+        std::function<void()> woke;                             // the name was heard
+        std::function<void(const std::string& words)> said;     // what followed it; empty when nothing could be made of it
+    };
+    void tutor(std::optional<Tutor> t);
+    /// Whether it can hear, and if not why: for the walk to say so.
+    enum class Hearing { ready, starting, asking, refused, off };
+    Hearing hearing() const;
+    /// A line of the walk's own, spoken as Momo's through the service's voice when it has one. Nothing is shown.
+    void tell(const std::string& text);
     /// A reply has come from the service and has not begun to sound yet: Momo is about to speak. At most `lineWait`.
     bool lineComing() const { return lineAt >= 0 && clock - lineAt < lineWait; }
     static constexpr double lineWait = 5;
@@ -277,6 +291,7 @@ private:
     };
     using Turn = std::variant<Idle, Listening, Sent, Thinking>;
     Turn turn = Idle{};
+    std::optional<Tutor> tutoring;      // GUIDE
     int loops = 0;
     /// The live turn whose words the presence shows, from `heard`; 0 for none.
     int wordsOf = 0;

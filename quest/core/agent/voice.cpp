@@ -242,6 +242,31 @@ std::optional<Listener::State> Voice::state() const {
 
 std::string Voice::name() const { return titled(spelled); }
 
+// GUIDE (voice.h): the welcome walk's ear.
+void Voice::tutor(std::optional<Tutor> t) {
+    bool was = tutoring.has_value();
+    tutoring = std::move(t);
+    if (was == tutoring.has_value() || !std::holds_alternative<Ready>(link)) return;
+    send(SetMode{tutoring ? Listener::Mode::record : Listener::Mode::stream});
+}
+
+Voice::Hearing Voice::hearing() const {
+    if (microphoneRefusedAt >= 0) return Hearing::refused;
+    if (askingForMicrophone) return Hearing::asking;
+    if (!ears) return started ? Hearing::off : Hearing::starting;
+    return ears->live ? Hearing::ready : Hearing::starting;
+}
+
+void Voice::tell(const std::string& text) {
+    if (!serviceSpeaks || muted) return;
+    pending = text;
+    if (ears) send(AskToSpeak{});
+    else {
+        speak(text);
+        pending.reset();
+    }
+}
+
 void Voice::joined(const Settings& settings, bool speaks, bool live, const std::string& id) {
     serviceSpeaks = speaks;
     liveOffered = live;
@@ -326,7 +351,7 @@ void Voice::start() {
             spelled = keywordLines(name, *vocabulary) ? name : "momo";
             ears = std::make_shared<Ears>(std::move(made->spotter));
             // /live can be ready before the listener's model has loaded, and what was sent then had no ears to reach.
-            if (std::holds_alternative<Ready>(link)) send(SetMode{Listener::Mode::stream});
+            if (std::holds_alternative<Ready>(link) && !tutoring) send(SetMode{Listener::Mode::stream});
             if (made->clip) {
                 std::weak_ptr<Ears> weak = ears;
                 platform::MicrophoneEvents events;
@@ -491,6 +516,7 @@ void Voice::frame(double now) {
                                send(ChimeStarted{});
                            }
                            turnTo(Listening{});
+                           if (tutoring && tutoring->woke) tutoring->woke();        // GUIDE
                            if (w.streaming) beginTurn();
                        },
                        [&](Listener::Streamed& piece) {
@@ -513,6 +539,7 @@ void Voice::frame(double now) {
                        [&](Listener::NothingSaid&) {
                            logLine("[voice] nothing was said after the name");
                            turnTo(Idle{});
+                           if (tutoring && tutoring->said) tutoring->said("");      // GUIDE
                            if (!streaming) return;
                            sendLive(Json::object().set("t", "cancel"));
                            streaming.reset();
@@ -581,6 +608,17 @@ void Voice::frame(double now) {
         size_t first = text.find_first_not_of(" \t\n"), last = text.find_last_not_of(" \t\n");
         text = first == std::string::npos ? "" : text.substr(first, last - first + 1);
         bool sent = false;
+        if (tutoring) {
+            // GUIDE: the walk's turn. Its words are the walk's to answer, and the service is not told.
+            if (!t.ok) logLine("[voice] the recording could not be turned into text (" + t.why + ")");
+            else logLine("[voice] said to the walk: " + text);
+            shown.userText = text;
+            shown.userFinal = true;
+            endThinking();
+            send(Done{});
+            if (tutoring->said) tutoring->said(t.ok ? text : "");
+            continue;
+        }
         if (!t.ok) logLine("[voice] the recording could not be turned into text (" + t.why + ")");
         else if (text.empty()) logLine("[voice] nothing was heard after the name");
         else if (!client.send(Outbound::utter(text, true, scene()))) logLine("[voice] not connected, so \"" + text + "\" was not sent");
@@ -728,7 +766,7 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                        int rate = r.rate > 0 ? r.rate : 24000;
                        link = Ready{c->socket, c->number, rate};
                        liveWhy.clear();
-                       send(SetMode{Listener::Mode::stream});
+                       if (!tutoring) send(SetMode{Listener::Mode::stream});     // GUIDE: the walk hears turns itself
                        logLine(fmt("[voice] Momo's live voice is on (%d Hz)", rate));
                    },
                    [&](LiveClosed& c) { liveDown(c.why, now); },

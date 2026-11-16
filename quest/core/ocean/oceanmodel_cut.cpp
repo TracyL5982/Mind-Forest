@@ -1,11 +1,15 @@
 // Not a port: there is nothing like it in the visionOS app, where a flat hand swept across a thread
 // cuts it at once. That was hard to find, easy to do by accident and impossible to see coming, so here:
 //
-// - A flat hand shows as a blade (handglow.h), and the thread it points at lights: you can see that the
-//   gesture is read, and what it would cut.
-// - The first slice across a thread only marks it for cutting: it turns to the accent, and "Cut" stands
+// - A hand held as a knife (hands.h: straight, together, on its edge, for a moment) shows as a blade
+//   (handglow.h) in the accent, and its pointer is put away: one line on the hand, and no doubt which.
+//   The blade points, and the place on the layer it points at is what cuts: its line runs all the way
+//   there, to a mark on the layer, and a stroke leaves a trail there; the thread the mark is at lights.
+//   (At first the mark was where the blade's end was seen against the layer, from the eyes. In the headset
+//   the line then pointed above its own mark, since the hand is below the eyes: Kai, 2026-11-15.)
+// - The first slice across a thread only marks it for cutting: it turns to the accent, and "Cut again to confirm" stands
 //   on it while a ring round the place runs down (five seconds).
-// - A second slice across it, or a pinch on "Cut", cuts it. A pinch on nothing, or waiting, lets it be.
+// - A second slice across it, or a pinch on those words, cuts it. A pinch on nothing, or waiting, lets it be.
 // - A pinch on a thread marks it the same way, so nothing here needs the flat hand at all.
 #include "oceanmodel.h"
 
@@ -23,9 +27,9 @@ std::vector<Vec3> OceanModel::threadLine(int child) const {
     return {};
 }
 
-/// The thread a flat hand points at, as you see it: the one whose line passes nearest the point a little
-/// beyond the fingertips, if any passes near. Returns the card it runs to and the place on it.
-std::optional<std::pair<int, Vec3>> OceanModel::threadAimed(Vec3 tip, Vec3 along) const {
+/// The thread a blade's mark is at, as you see it: the one whose line passes nearest it, if any passes
+/// near. Returns the card it runs to and the place on it.
+std::optional<std::pair<int, Vec3>> OceanModel::threadAimed(Vec3 point) const {
     std::optional<Mat4> head = platform::head();
     Vec3 eye = head ? head->position() : stage.origin;
     auto seen = [&](Vec3 p) -> std::optional<Vec2> {
@@ -33,10 +37,12 @@ std::optional<std::pair<int, Vec3>> OceanModel::threadAimed(Vec3 tip, Vec3 along
         float z = dot(v, stage.f);
         return z > 0.05f ? std::optional<Vec2>(Vec2{dot(v, stage.r), dot(v, stage.u)} / z) : std::nullopt;
     };
-    std::optional<Vec2> aim = seen(tip + along * 0.05f);
+    std::optional<Vec2> aim = seen(point);
     if (!aim) return std::nullopt;
     std::optional<std::pair<int, Vec3>> best;
-    float nearest = 0.11f;          // about six degrees: further than that it points at nothing
+    // NOTE: six degrees while the hand only pointed somewhere near. The point's place is shown now, so a thread
+    // lights when the point is nearly on it.
+    float nearest = 0.065f;         // about four degrees: further than that it is at nothing
     for (const Drawn& item : drawn) {
         if (!(item.child > 0)) continue;
         std::vector<Vec3> line = Threads::points(item.thread, stage.origin);
@@ -95,11 +101,12 @@ void OceanModel::layThreadHits() {
     }
 }
 
-/// Marks a thread for cutting: "Cut" stands on it for a few seconds.
+/// Marks a thread for cutting: "Cut again to confirm" stands on it for a few seconds. (It said only "Cut",
+/// which did not say that the thread was not cut yet, or what would cut it: Kai, 2026-11-15.)
 void OceanModel::armCut(int child, Vec3 at) {
     if (!tree || pressing || !art) return;
     disarmCut();
-    std::optional<Piece> piece = art->line("Cut", Art::Size::label, Font::Weight::semibold, Color::white(), Art::hot, Art::buttonPad);
+    std::optional<Piece> piece = art->line("Cut again to confirm", Art::Size::label, Font::Weight::semibold, Color::white(), Art::hot, Art::buttonPad);
     if (!piece) return;
     std::optional<Mat4> head = platform::head();
     Vec3 eye = head ? head->position() : stage.origin;
@@ -154,38 +161,75 @@ void OceanModel::updateCut(double now, float dt) {
     if (cutArmed && (now > cutArmed->until || !tree || pressing || threadLine(cutArmed->child).empty())) disarmCut();
 
     std::vector<Hands::Blade> flat = tree && !pressing ? hands->blades() : std::vector<Hands::Blade>();
-    // `-glowDemo blade` shows a blade without a hand: low on the right, pointing up at the tree.
+    std::optional<Mat4> head = platform::head();
+    Vec3 eye = head ? head->position() : stage.origin;
+    // `-glowDemo blade` shows a blade without a hand: low on the right, coming out and then stroking across a thread.
     if (Flags::string("glowDemo") == std::optional<std::string>("blade") && tree && !pressing) {
         // (At the last thread drawn, which is on the layer you work on.)
         std::vector<Vec3> line;
         for (const Drawn& item : drawn) {
             if (item.child > 0) line = Threads::points(item.thread, stage.origin);
         }
-        std::optional<Mat4> head = platform::head();
-        Vec3 eye = head ? head->position() : stage.origin;
         Vec3 to = line.empty() ? stage.point(4, -6, 1.5f) : line[line.size() / 2];
+        float t = float(std::fmod(time, 5.0));
+        // Held a moment as it comes out, then back and forth across the thread.
+        float sway = t < 1.2f ? -1 : -std::cos((t - 1.2f) * 2.4f);
         Hands::Blade b;
         b.hand = 1;
-        b.palm = eye + (to - eye) * 0.36f + stage.r * 0.07f - stage.u * 0.09f;
-        b.tip = b.palm + normalize(eye + (to - eye) * 0.5f - b.palm) * 0.11f;
+        b.palm = eye + (to - eye) * 0.36f + stage.r * (0.07f + 0.035f * sway) - stage.u * (0.09f - 0.02f * sway);
+        // (Pointing at the thread, and across it and back.)
+        b.tip = b.palm + normalize(to + stage.r * (0.06f * sway) + stage.u * (0.16f * sway) - b.palm) * 0.11f;
+        b.along = normalize(b.tip - b.palm);
+        b.point = b.tip + b.along * Hands::knifeReach;
+        b.mark = onSheet(b.tip, b.tip + b.along);
+        b.ready = std::min(1.f, t / 0.6f);
+        b.out = t >= 0.6f;
         flat.push_back(b);
     }
     std::optional<std::pair<int, Vec3>> aimed;
-    Vec3 aimedFrom = Vec3::zero();
     for (int k = 0; k < 2; k++) {
         const Hands::Blade* found = nullptr;
         for (const Hands::Blade& b : flat) {
             if (b.hand == k) found = &b;
         }
-        bladeGlow[k] += ((found ? 1.f : 0.f) - bladeGlow[k]) * std::min(1.f, 10 * dt);
-        if (found) bladeLast[k] = *found;
-        if (bladeGlow[k] < 0.02f) continue;
-        handGlow->blades.push_back(HandGlow::Blade{bladeLast[k].tip, bladeLast[k].palm, bladeGlow[k]});
-        if (found && !aimed) {
-            Vec3 along = found->tip - found->palm;
-            if (length(along) > 1e-4f) aimed = threadAimed(found->tip, normalize(along));
-            aimedFrom = found->tip;
+        bool out = found && found->out;
+        if (out && !bladeOut[k]) {
+            // It comes out: said once, where the hand is.
+            bladeOutAt[k] = now;
+            soundAt("hover", found->point);
+            logLine(fmt("[ocean] knife: out on the %s hand", k == 0 ? "left" : "right"));
         }
+        bladeOut[k] = out;
+        bladeGlow[k] += ((out ? 1.f : 0.f) - bladeGlow[k]) * std::min(1.f, (out ? 16 : 9) * dt);
+        if (found) bladeLast[k] = *found;
+        float forming = found && !out ? found->ready : 0;
+        // Where its point has been on the layer: kept a quarter of a second, for the trail a stroke leaves.
+        std::vector<BladeMark>& trail = bladeTrail[k];
+        while (!trail.empty() && now - trail.front().at > 0.28) trail.erase(trail.begin());
+        std::optional<Vec3> mark = out ? found->mark : std::nullopt;
+        if (mark && (trail.empty() || distance(trail.back().on, *mark) > 0.004f)) trail.push_back({now, *mark});
+        if (bladeGlow[k] < 0.02f && forming < 0.02f) {
+            if (!out) trail.clear();
+            continue;
+        }
+        HandGlow::Blade g;
+        g.tip = bladeLast[k].tip;
+        g.palm = bladeLast[k].palm;
+        g.point = bladeLast[k].point;
+        g.along = bladeLast[k].along;
+        g.shown = bladeGlow[k];
+        g.forming = forming;
+        g.fresh = float(std::min(1.0, std::max(0.0, 1 - (now - bladeOutAt[k]) / 0.45)));
+        if (mark) {
+            g.marked = true;
+            g.mark = *mark;
+        }
+        for (const BladeMark& m : trail) {
+            g.trail.push_back(m.on);
+            g.trailAge.push_back(float((now - m.at) / 0.28));
+        }
+        handGlow->blades.push_back(g);
+        if (mark && !aimed) aimed = threadAimed(*mark);
     }
     int armed = cutArmed ? cutArmed->child : -1;
     if (aimed && aimed->first != armed) {
@@ -193,8 +237,6 @@ void OceanModel::updateCut(double now, float dt) {
         c.line = threadLine(aimed->first);
         c.at = aimed->second;
         c.lit = 1;
-        c.leader = true;
-        c.from = aimedFrom;
         handGlow->cuts.push_back(c);
     }
     for (const auto& [child, e] : threadHits) {

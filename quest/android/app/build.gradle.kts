@@ -115,7 +115,9 @@ androidComponents {
 
 // A judging build that would not join, could not be signed or carries no media stops here, saying what is missing.
 gradle.taskGraph.whenReady {
-    if (allTasks.none { it.project == project && it.name.contains("Judge") }) return@whenReady
+    // (Not `preJudgeBuild`: the release build runs it too, since the two share one native build, and a machine
+    // without the judging files must still be able to build the app for its own headset.)
+    if (allTasks.none { it.project == project && it.name.contains("Judge") && it.name != "preJudgeBuild" }) return@whenReady
     val server = judging.getProperty("server", "")
     val key = judging.getProperty("appKey", "")
     val missing = listOfNotNull(

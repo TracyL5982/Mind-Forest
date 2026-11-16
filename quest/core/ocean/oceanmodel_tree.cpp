@@ -803,7 +803,10 @@ void OceanModel::pickTool(int id, int what) {
         // card it is a conversation with Momo about the marked part, which leads a layer.
         if (!marked(id)) return;
         penOn = false;
-        if (c && c->ref.kind == Ref::Kind::note && c->ref.id.rfind("welcome", 0) == 0) stepOut();
+        // (On the walk it goes to Momo, whose answer the walk makes: `tourSend`.)
+        if (c && c->ref.kind == Ref::Kind::note && c->ref.id.rfind("welcome", 0) == 0) {
+            if (teach.tour >= 0 && onWelcomeTree()) tourSend(); else stepOut();
+        }
         else if (c && agentBridge && agentBridge->editable(id)) agentBridge->tellMore(id, markedPart(*c));
         else askMark(id);
         return;
