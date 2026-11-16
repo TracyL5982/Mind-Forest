@@ -248,6 +248,25 @@ TEST(theHintShowsAtFirstAndAfterAWakeWithNothingSaid) {
     CHECK(resting(c).size() == 1 && resting(c)[0]->text == "Say “Hey Momo”", "woken with nothing said, the hint comes back");
 }
 
+TEST(theOpenConversationShowsListeningUnderTheReplyAndClosingBringsTheHint) {
+    Caption c = caption();
+    run(c, say(S::listening, "Why?"), 0.3);
+    run(c, say(S::responding, "Why?", "Because the room stretches."), 1);
+    run(c, say(S::open), 0.5);
+    auto rest = resting(c);
+    CHECK(rest.size() == 2 && rest[0]->who == Speaker::momo && rest[1]->text == "Listening…", "the reply's last line over Listening…");
+    run(c, say(S::open), 7.5);
+    rest = resting(c);
+    CHECK(rest.size() == 1 && rest[0]->text == "Listening…", "Listening… while the conversation stays open");
+    run(c, say(S::listening, "And Jaws?", "", false), 0.6);
+    CHECK(shown(c, "And Jaws?") && !shown(c, "Listening…"), "the user's words take Listening…'s place, as in a turn");
+    run(c, say(S::responding, "And Jaws?", "The beach stretches."), 1);
+    run(c, say(S::open), 8);
+    run(c, say(S::waiting), 0.5);
+    rest = resting(c);
+    CHECK(rest.size() == 1 && rest[0]->text == "Say “Hey Momo”", "closed, the hint says how to open it again");
+}
+
 TEST(theNextTurnPushesTheLastReplyUpAndOut) {
     Caption c = caption();
     run(c, say(S::listening, "Why?"), 0.3);

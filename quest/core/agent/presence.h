@@ -18,7 +18,8 @@ struct AgentLine {
 };
 
 struct Presence {
-    enum class State { off, waiting, listening, sent, thinking, responding, working };
+    /// `open`: between turns the conversation is open, and Momo hears the user without its name.
+    enum class State { off, waiting, listening, open, sent, thinking, responding, working };
     State state = State::off;
     std::string userText;
     bool userFinal = false;

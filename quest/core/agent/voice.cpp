@@ -79,7 +79,7 @@ private:
                            [&](Respell& r) { retired.push_back(listener->respell(std::move(r.spotter))); },
                            [&](SetMode& m) { listener->setMode(m.mode); },
                            [&](TurnOver&) { listener->turnOver(); },
-                           [&](ReplyStreams& r) { listener->replyStreams(r.interruptible); },
+                           [&](ReplyStreams&) { listener->replyStreams(); },
                        },
                        c);
         }
@@ -121,13 +121,6 @@ private:
     std::atomic<bool> stopped{false};
     std::thread thread;
 };
-
-std::string lower(std::string s) {
-    for (char& c : s) {
-        if (c >= 'A' && c <= 'Z') c = char(c - 'A' + 'a');
-    }
-    return s;
-}
 
 /// The service's /live socket, beside its /ws: ws://host:port/live?token=…&connection=…
 std::string liveUrl(const Address& address, const std::string& connection) {
@@ -491,7 +484,14 @@ void Voice::frame(double now) {
                                send(ChimeStarted{});
                            }
                            turnTo(Listening{});
-                           if (w.streaming) beginTurn();
+                       },
+                       [&](Listener::Began&) {
+                           turnTo(Listening{});
+                           beginTurn();
+                       },
+                       [&](Listener::Closed&) {
+                           logLine("[voice] nobody talked for 8 s, so the conversation is over");
+                           if (std::holds_alternative<Listening>(turn) || std::holds_alternative<Open>(turn)) turnTo(Idle{});
                        },
                        [&](Listener::Streamed& piece) {
                            if (!streaming) return;
@@ -513,9 +513,6 @@ void Voice::frame(double now) {
                        [&](Listener::NothingSaid&) {
                            logLine("[voice] nothing was said after the name");
                            turnTo(Idle{});
-                           if (!streaming) return;
-                           sendLive(Json::object().set("t", "cancel"));
-                           streaming.reset();
                        },
                        [&](Listener::Speak&) {
                            if (!pending) return;
@@ -669,6 +666,9 @@ void Voice::frame(double now) {
         openLive(now);
     }
     if (sounding || sound) lineAt = -1;
+    bool open = state() == Listener::State::open, speaks = sounding || sound;
+    if (std::holds_alternative<Idle>(turn) && open && !speaks) turnTo(Open{});
+    else if (std::holds_alternative<Open>(turn) && (!open || speaks)) turnTo(Idle{});
     show();
     if (Flags::has("agentLog") && busy.heard - busyLogged >= 60) {
         busyLogged = busy.heard;
@@ -756,7 +756,7 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                    },
                    [&](LiveAudio& a) {
                        if (streaming || !std::holds_alternative<Ready>(link)) return;
-                       if (awaiting()) turnTo(Idle{});
+                       if (!std::holds_alternative<Idle>(turn)) turnTo(Idle{});
                        LiveReply& r = liveReply(a.id);
                        if (!r.player && sounding) {
                            r.held.insert(r.held.end(), a.pcm.begin(), a.pcm.end());
@@ -781,10 +781,6 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                            shown.userText.clear();
                            shown.userFinal = false;
                        }
-                       bool interruptible = lower(t.text).find(lower(spelled)) == std::string::npos;
-                       if (interruptible == r.interruptible) return;
-                       r.interruptible = interruptible;
-                       if (sounding && sounding->number == r.player) send(ReplyStreams{interruptible});
                    },
                    [&](LiveDone& d) {
                        if (streaming || !live || live->id != d.id) return;
@@ -805,7 +801,7 @@ void Voice::heardLive(LiveFrame& frame, double now) {
 
 void Voice::beginTurn() {
     if (!std::holds_alternative<Ready>(link)) {
-        logLine("[voice] the live voice closed as the name was heard, so nothing is sent");
+        logLine("[voice] the live voice closed as the user began talking, so nothing is sent");
         send(TurnOver{});
         turnTo(Idle{});
         return;
@@ -857,7 +853,7 @@ bool Voice::startPlayer(LiveReply& r) {
     sounding->rate = ready->rate;
     sounding->text = r.text;
     shown.momoText.clear();
-    send(ReplyStreams{r.interruptible});
+    send(ReplyStreams{});
     if (!r.held.empty()) sounding->write(r.held.data(), r.held.size());
     r.held.clear();
     if (r.finished) player->finish();
@@ -900,11 +896,13 @@ platform::SoundRef Voice::play(const std::string& path, std::function<void(bool)
 void Voice::turnTo(Turn next) {
     if (auto* t = std::get_if<Thinking>(&turn); t && t->loop) t->loop->stop();
     turn = std::move(next);
-    if (std::holds_alternative<Listening>(turn)) {
+    if (std::holds_alternative<Listening>(turn) || std::holds_alternative<Open>(turn)) {
         shown.userText.clear();
         shown.userFinal = false;
         shown.momoText.clear();
     }
+    // The last turn's words, should they come late, are not the next one's.
+    if (std::holds_alternative<Open>(turn)) wordsOf = 0;
     if (std::holds_alternative<Sent>(turn)) play(sentPath, [](bool) {});
     if (auto* t = std::get_if<Thinking>(&turn)) startLoop(*t);
 }
@@ -950,13 +948,14 @@ void Voice::show() {
     bool speaks = sounding || sound;
     shown.state = std::visit(overloaded{
                                  [](const Listening&) { return S::listening; },
+                                 [](const Open&) { return S::open; },
                                  [](const Sent&) { return S::sent; },
                                  [](const Thinking&) { return S::thinking; },
                                  [&](const Idle&) { return speaks ? S::responding : crew.working() ? S::working : state() ? S::waiting : S::off; },
                              },
                              turn);
     shown.level = 0;
-    if (shown.state == S::listening && ears) shown.level = levelOf(ears->loudness);
+    if ((shown.state == S::listening || shown.state == S::open) && ears) shown.level = levelOf(ears->loudness);
     if (shown.state == S::responding && sounding) {
         size_t at = size_t(sounding->played * 50);
         if (at < sounding->loudness.size()) shown.level = levelOf(sounding->loudness[at]);

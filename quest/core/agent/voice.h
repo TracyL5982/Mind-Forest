@@ -2,9 +2,10 @@
 // transcribed by the service (POST /api/transcribe) and sent as an `utter`, and the agent's replies (`say`) are heard
 // through the service's voice (GET /api/speak). Nothing it hears leaves the headset unless it began with the name.
 //
-// When the service has a live voice (hello's `live`, and its /live socket), the words go another way: after the
-// name the microphone streams to the service until it says the turn is over, and Momo's voice streams back and plays as it
-// arrives. "Hey Momo" while Momo speaks stops it, unless what it is saying names itself. Without /live, or while it is
+// When the service has a live voice (hello's `live`, and its /live socket), the words go another way: the name opens a
+// conversation, and while it is open whatever the user says streams to the service as a turn, until the service says the
+// turn is over, with no name needed. Momo's voice streams back and plays as it arrives, and the user talking over it stops
+// it at once (`start`). The conversation closes once nobody has talked for 8 seconds. Without /live, or while it is
 // closed, everything is as above.
 //
 // It also says what it is doing, for Momo's presence in the scene (`presence`). It makes two sounds of its own besides
@@ -93,9 +94,7 @@ private:
         Listener::Mode mode;
     };
     struct TurnOver {};
-    struct ReplyStreams {
-        bool interruptible = false;
-    };
+    struct ReplyStreams {};
     using Command = std::variant<Done, AskToSpeak, ReplyEnded, ChimeStarted, ChimeEnded, Respell, SetMode, TurnOver, ReplyStreams>;
     /// The listener and what crosses to it: the sound thread hears; the frame thread sends commands and takes events.
     struct Ears;
@@ -210,12 +209,11 @@ private:
     std::optional<int> streaming;
     double lastWord = 0;            // when the turn's last word was heard, on `mediaTime`'s clock; 0 before one
     std::optional<double> answering;  // a turn is over and Momo's first sound for it has not come: its last word
-    /// The response Momo is giving on /live, for the label and for whether it may be interrupted.
+    /// The response Momo is giving on /live, for the label.
     struct LiveReply {
         std::string id;
         std::string text;
         int player = 0;             // the number of the player its first sound started; 0 before it
-        bool interruptible = true;  // whether "hey Momo" stops it: not while what it says names itself
         /// Its sound while an earlier reply still plays out, so the two are heard one after the other.
         std::vector<int16_t> held;
         bool finished = false;      // all of it came while it was held
@@ -257,10 +255,13 @@ private:
     double clock = 0;               // the last frame's
     double lineAt = -1;             // when the reply that has not begun to sound came, or -1
 
-    /// The user's turn, as Momo's presence shows it: from the name to the first sound of Momo's answer. Outside a
-    /// turn the presence is read from whether Momo's voice sounds and from the work in progress.
+    /// The user's turn, as Momo's presence shows it: from the name, or the first words in an open conversation, to the
+    /// first sound of Momo's answer. Outside a turn the presence is read from whether Momo's voice sounds and from the
+    /// work in progress.
     struct Idle {};
     struct Listening {};
+    /// Between turns, the conversation is open and nothing sounds: Momo hears the user without its name.
+    struct Open {};
     /// The turn is sent and its tone plays; after `sentFor` Momo thinks. `endsWithWork`: no answer will be heard,
     /// so thinking also ends when the work starts. `settled`: what ends thinking came while it was sent.
     struct Sent {
@@ -275,7 +276,7 @@ private:
         platform::SoundRef loop;
         int number = 0;             // the loop's, so the end of one stopped is let go
     };
-    using Turn = std::variant<Idle, Listening, Sent, Thinking>;
+    using Turn = std::variant<Idle, Listening, Open, Sent, Thinking>;
     Turn turn = Idle{};
     int loops = 0;
     /// The live turn whose words the presence shows, from `heard`; 0 for none.
@@ -307,7 +308,7 @@ private:
     void liveDown(const std::string& why, double now);
     bool sendLive(const Json& frame);
     void heardLive(LiveFrame& frame, double now);
-    /// The user said the name: a new turn streams, and what Momo is saying stops.
+    /// The user began talking: a new turn streams, and what Momo is saying stops.
     void beginTurn();
     void endTurn();
     /// Stops the live reply at once; its end, when the host reports it, is let go.
