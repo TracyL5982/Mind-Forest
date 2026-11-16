@@ -11,7 +11,8 @@ import { DEFAULT_SETTINGS, type Handoff, type Playback, type Roles, type Setting
 import { Mindstorm } from '../core/state.ts';
 import { spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
-import { whereItWent, type Delivery, type Desk } from './contact.ts';
+import { Declined, whereItWent, type Channel, type Delivery, type Desk } from './contact.ts';
+import { matchTrees, modelAsk, treeLines } from './tree-asks.ts';
 import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '../core/voice-tools.ts';
 import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
 import type { Maps } from './geocoder.ts';
@@ -64,6 +65,8 @@ export interface ServerOptions {
   films?: string;
   /** Mind Palace as a Telegram contact, reached with this bot's token. */
   telegram?: Omit<TelegramOptions, 'desk' | 'file' | 'log'>;
+  /** Hosted mode: this space's contact, made round its desk, in place of a bot of its own. */
+  contact?: (desk: Desk) => Channel;
   /** Hosted mode: what this space's device may still do today, and where its use and spend are counted. */
   meter?: Meter;
   /** Hosted mode: the largest file one upload may be, and what this space's uploads may come to in all, in bytes. */
@@ -242,14 +245,50 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   });
   pipeline.resume();
 
-  const desk: Desk = {
-    dump: async (dumps) => whereItWent(mind, await pipeline.dump(dumps)),
-    keep: async (bytes, mime, name) => (await assets.put(bytes, mime, name)).id,
-    transcribe: opts.transcribe && (async (audio, mime) =>
-      withoutWakePhrase(await opts.transcribe!(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, null) }), settings.agentName).trim()),
-    latest: () => latestHandoff(handoffDir),
+  /** What a contact's message may not do here now, as a client's may not: write with no room left, or cost while costly work is stopped. */
+  const admit = () => {
+    const why = noRoom() ?? meter?.paused();
+    if (why) throw new Declined(why);
   };
-  const telegram = opts.telegram ? new Telegram({ ...opts.telegram, desk, file: join(opts.dataDir, 'telegram.json'), log }) : null;
+  const fits = (bytes: number): string | null => {
+    const volume = opts.volumeFull?.();
+    if (volume || !opts.uploads) return volume ?? null;
+    return bytes > opts.uploads.file ? tooBig(opts.uploads.file) : bytes > opts.uploads.total - uploaded.bytes ? FULL : null;
+  };
+  const hear = opts.transcribe;
+  const desk: Desk = {
+    dump: async (dumps) => {
+      admit();
+      return whereItWent(mind, await pipeline.dump(dumps));
+    },
+    fits,
+    keep: async (bytes, mime, name) => {
+      const why = fits(bytes.length);
+      if (why) throw new Declined(why);
+      const { id } = await assets.put(bytes, mime, name);
+      if (opts.uploads) keepUploaded(bytes.length);
+      return id;
+    },
+    transcribe: hear && (async (audio, mime, seconds) => {
+      const why = meter?.refused('voiceMs');
+      if (why) throw new Declined(why);
+      // A recording whose length the contact did not say is counted as speech at Telegram's voice-note rate, about 4 KB a second.
+      const ms = (seconds ?? audio.length / 4000) * 1000;
+      meter?.used('voiceMs', ms);
+      meter?.spent((ms / 60_000) * HEARING_DOLLARS_PER_MINUTE);
+      return withoutWakePhrase(await hear(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, null) }), settings.agentName).trim();
+    }),
+    latest: () => latestHandoff(handoffDir),
+    trees: () => treeLines(mind),
+    ask: (text) => modelAsk(opts.model, text),
+    match: (words) => matchTrees(mind, opts.model, words),
+    handoff: async (treeId) => {
+      admit();
+      await pipeline.handoff({ treeIds: [treeId], nodeIds: [] });
+    },
+  };
+  const own = opts.telegram ? new Telegram({ ...opts.telegram, desk, file: join(opts.dataDir, 'telegram.json'), log }) : null;
+  const telegram: Channel | null = opts.contact?.(desk) ?? own;
   const contact = () => ({ available: telegram !== null, ...(telegram?.status() ?? { ready: false, paired: null }) });
 
   async function bundle(handoff: Handoff): Promise<{ name: string; url: string; markdown: string; files: string[] }> {
@@ -355,9 +394,9 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (req.method === 'GET' && path === '/api/state') return json(res, 200, { snapshot: mind.snapshot(), settings, maps });
     if (req.method === 'GET' && path === '/api/telegram') return json(res, 200, contact());
     if (req.method === 'POST' && path === '/api/telegram/pair') {
-      if (!telegram) return json(res, 404, { error: 'TELEGRAM_BOT_TOKEN is not set' });
-      const link = telegram.pair();
-      return link ? json(res, 200, { link }) : json(res, 503, { error: 'Telegram has not answered yet' });
+      if (!telegram) return json(res, 404, { error: 'this service has no Telegram bot' });
+      const invite = telegram.pair();
+      return invite ? json(res, 200, invite) : json(res, 503, { error: 'Telegram has not answered yet' });
     }
     if (req.method === 'POST' && path === '/api/telegram/unpair') {
       telegram?.unpair();
@@ -619,7 +658,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     }
   }
 
-  telegram?.start();
+  own?.start();
   return {
     token,
     pipeline,

@@ -1,7 +1,8 @@
-import type { Item } from '../core/domain.ts';
+import type { Id, Item } from '../core/domain.ts';
 import type { Filed } from '../core/pipeline.ts';
 import type { RawDump } from '../core/roles/types.ts';
 import type { Mindstorm } from '../core/state.ts';
+import type { Ask, TreeLine } from './tree-asks.ts';
 
 /** A handoff as a contact sends it: one Markdown file that travels alone. */
 export interface Delivery {
@@ -12,16 +13,48 @@ export interface Delivery {
   markdown: string;
 }
 
-/** What a contact asks of the service. */
+/** The service declines what was asked, for a reason the person is told in these words: no room left, or the day's limit reached. */
+export class Declined extends Error {}
+
+/** A file a message carries, before it is fetched. */
+export interface Attachment {
+  id: string;
+  size?: number;
+  mime: string;
+  name: string;
+  /** How long a recording plays, when the contact says. */
+  seconds?: number;
+}
+
+/** What one message from a contact is. */
+export type Arrival =
+  | { kind: 'start'; code: string }
+  | { kind: 'unpair' }
+  | { kind: 'text'; text: string }
+  | { kind: 'file'; file: Attachment; caption: string }
+  | { kind: 'voice'; file: Attachment }
+  | { kind: 'other' };
+
+/** What a contact asks of the service. Each of these rejects with `Declined` when the service has a reason to tell the person. */
 export interface Desk {
   /** What the paired person sent, read as a drop on the web page is. Resolves once Intake has filed it, with the words that say where it went. */
   dump(dumps: RawDump[]): Promise<string>;
+  /** Why a file of this size cannot be kept, before it is fetched, or null when it can. */
+  fits(bytes: number): string | null;
   /** Keeps a file that arrived, as an upload does, and returns its asset id. */
   keep(bytes: Uint8Array, mime: string, name: string): Promise<string>;
-  /** Speech to text. Absent when the service has no way to hear. */
-  transcribe?: (audio: Uint8Array, mime: string) => Promise<string>;
+  /** Speech to text, of a recording `seconds` long when that is known. Absent when the service has no way to hear. */
+  transcribe?: (audio: Uint8Array, mime: string, seconds?: number) => Promise<string>;
   /** The latest handoff the service made, to send again. */
   latest(): Delivery | null;
+  /** The trees, the newest first. */
+  trees(): TreeLine[];
+  /** What a message that plain rules did not read asks of the trees, or null when it is a drop. */
+  ask(text: string): Promise<Ask | null>;
+  /** The trees a few words mean, by name first, then by what is in them, best first. */
+  match(words: string): Promise<TreeLine[]>;
+  /** Makes one tree's handoff. The file reaches the paired person as every handoff does, through `Channel.deliver`. */
+  handoff(treeId: Id): Promise<void>;
 }
 
 export interface ContactStatus {
@@ -31,14 +64,21 @@ export interface ContactStatus {
   paired: string | null;
 }
 
+/** How a person pairs: a link to open, the contact's name there, and a short code to send it instead when there is one. */
+export interface Invite {
+  link: string;
+  bot: string;
+  code?: string;
+}
+
 /**
  * A way the person who owns the mindstorm reaches it from any phone or computer, such as a chat app.
  * What arrives goes to a `Desk`; every handoff the service makes is delivered back.
  */
 export interface Channel {
   status(): ContactStatus;
-  /** A link that pairs whoever opens it, once, for ten minutes. Null while the contact is not ready. */
-  pair(): string | null;
+  /** A way to pair that works once, for ten minutes. Null while the contact is not ready. */
+  pair(): Invite | null;
   unpair(): void;
   /** Sends a handoff to the paired person. Never rejects; does nothing when no one is paired. */
   deliver(handoff: Delivery): Promise<void>;
