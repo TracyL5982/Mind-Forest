@@ -12,7 +12,7 @@ import type { Roles } from '../src/core/roles/types.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { MIN_FREE_BYTES, PICTURE_DOLLARS, SET_BYTES, spaceOptions, startHosted, telegramAlert, upgradeWhenOpen, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
-import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
+import { DEFAULT_LIMITS, forDevice, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
 import { LiveVoice, type LiveDeps, type VoiceFrame } from '../src/node/live.ts';
 import { SEARCH_DOLLARS } from '../src/node/search-openai.ts';
@@ -868,5 +868,47 @@ test("a hosted space reads a page or picture only from a public address, never t
     ws?.close();
     await hosted.close();
     server.close();
+  }
+});
+
+test("each device has a share of the day's tokens and spend, so one judge cannot stop the others, and a judge's words are a few thousand characters", { timeout: 30000 }, async () => {
+  let count: (tokens: number) => void = () => {};
+  const base = new FakeModel();
+  // As main.ts counts Meta's tokens: told after each call, to the device whose work the call is.
+  const model: ModelClient = { json: (req) => base.json(req), search: async (req) => (count(3000), base.search(req)), image: (req) => base.image(req), transcribe: (req) => base.transcribe(req) };
+  const scouted: string[] = [];
+  const roles: Roles = {
+    ...fakeRoles,
+    async scout(ctx, { need }) {
+      await ctx.model.search({ role: 'scout', query: need ?? 'more' });
+      scouted.push(need ?? '');
+      return [];
+    },
+  };
+  const { hosted, ledger } = await host({ deviceTokens: 5000 }, { shared: { clientDir: '', model, roles } });
+  count = (tokens) => ledger.metaTokens(tokens, forDevice.getStore());
+  const sockets: WebSocket[] = [];
+  try {
+    const [a, b] = await Promise.all([connect(hosted, `${KEY}.${A}`), connect(hosted, `${KEY}.${B}`)]);
+    sockets.push(a.ws, b.ws);
+    const rootA = treesOf(await a.until((m) => m.t === 'hello'))[0]!.rootId;
+    const rootB = treesOf(await b.until((m) => m.t === 'hello'))[0]!.rootId;
+    for (const need of ['harbours', 'lighthouses']) {
+      a.ws.send(JSON.stringify({ t: 'ask', nodeId: rootA, need }));
+      await holds(() => scouted.includes(need));
+    }
+    a.ws.send(JSON.stringify({ t: 'ask', nodeId: rootA, need: 'one more' }));
+    await soon(a.until((m) => m.t === 'say' && m.text === LINES.share));
+    b.ws.send(JSON.stringify({ t: 'ask', nodeId: rootB, need: 'tide pools' }));
+    await holds(() => scouted.includes('tide pools'));
+    assert.deepEqual(scouted, ['harbours', 'lighthouses', 'tide pools'], "A's share stopped A alone");
+    const devices = ledger.status().devices;
+    assert.deepEqual([devices[A]?.tokens, devices[B]?.tokens], [6000, 3000], 'tokens are counted to the device whose work they were');
+
+    a.ws.send(JSON.stringify({ t: 'utter', text: 'x'.repeat(4001), final: true, scene: { selection: [] } }));
+    assert.match(String((await soon(a.until((m) => m.t === 'error'))).message), /too_big|at most 4000|<=4000/i, 'words past 4000 characters are refused');
+  } finally {
+    for (const ws of sockets) ws.close();
+    await hosted.close();
   }
 });

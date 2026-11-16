@@ -9,6 +9,7 @@ import type { InstagramLibrary, InstagramReader } from '../instagram.ts';
 import { publicFetch } from '../public-fetch.ts';
 import { BOT_API } from '../telegram.ts';
 import { LINES, type Ledger } from './ledger.ts';
+import { DeviceModel } from './overflow.ts';
 
 /** A device names itself with an id it made on first launch. */
 const DEVICE = /^[A-Za-z0-9_-]{16,64}$/;
@@ -156,7 +157,11 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       known.add(device);
       note(`[spaces] new space for ${short(device)}${opts.starter && existsSync(opts.starter) ? ', from the starter trees' : ''}`);
     }
-    const space = openSpace({ ...spaceOptions(opts, device), volumeFull, meter: meterOf(device), uploads, log: (line) => note(`[${short(device)}] ${line}`) });
+    const model = new DeviceModel(opts.shared.model, device, () => {
+      const why = ledger.held(device);
+      return why ? LINES[why] : null;
+    });
+    const space = openSpace({ ...spaceOptions(opts, device), model, volumeFull, meter: meterOf(device), uploads, log: (line) => note(`[${short(device)}] ${line}`) });
     open.set(device, { space, last: Date.now() });
     space.catch((err) => {
       open.delete(device);

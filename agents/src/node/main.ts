@@ -12,7 +12,7 @@ import type { LiveOptions } from './live.ts';
 import { HEARING_MODEL, openaiRealtime, openaiSpeech, openaiTranscribe, SPEECH_VOICE } from './speech-openai.ts';
 import { openaiWebAnswer } from './web-answer.ts';
 import { PICTURE_DOLLARS, startHosted, telegramAlert } from './hosted/hosted.ts';
-import { DEFAULT_LIMITS, Ledger } from './hosted/ledger.ts';
+import { DEFAULT_LIMITS, forDevice, Ledger } from './hosted/ledger.ts';
 import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareCost } from './hosted/overflow.ts';
 import { openInstagram } from './instagram.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
@@ -36,6 +36,8 @@ const ledger = hosted
         searches: number('MIND_PALACE_LIMIT_SEARCHES', DEFAULT_LIMITS.searches),
         webAnswers: number('MIND_PALACE_LIMIT_WEB_ANSWERS', DEFAULT_LIMITS.webAnswers),
         dollarsPerDay: number('MIND_PALACE_CAP_DOLLARS', DEFAULT_LIMITS.dollarsPerDay),
+        deviceDollars: number('MIND_PALACE_LIMIT_DEVICE_DOLLARS', DEFAULT_LIMITS.deviceDollars),
+        deviceTokens: number('MIND_PALACE_LIMIT_DEVICE_TOKENS', DEFAULT_LIMITS.deviceTokens),
       },
       metaDollarsPerMillion: number('MIND_PALACE_META_PRICE', 0),
       alert:
@@ -62,7 +64,7 @@ if (fake) {
     quickModel: env.MIND_PALACE_QUICK_MODEL || undefined,
     tokenBudget: env.MIND_PALACE_TOKEN_BUDGET ? Number(env.MIND_PALACE_TOKEN_BUDGET) : undefined,
     onCall: (c) => {
-      ledger?.metaTokens(c.tokens ?? 0);
+      ledger?.metaTokens(c.tokens ?? 0, forDevice.getStore());
       console.log(
         `  model ${c.kind} ${c.role} ${c.ok ? 'ok' : 'FAILED'} ${c.ms}ms${c.tokens ? ` ${c.tokens} tokens` : ''}` +
           `${c.model ? `, ${[c.model, c.effort].filter(Boolean).join(' ')}` : ''}${c.tries && c.tries > 1 ? `, ${c.tries} tries` : ''}` +
@@ -81,7 +83,7 @@ if (fake) {
       efforts: SPARE_EFFORTS,
       onCall: (c) => {
         const dollars = spareCost(c.model, c.usage);
-        ledger?.spend(dollars);
+        ledger?.spend(dollars, forDevice.getStore());
         log(`  overflow ${c.kind} ${c.role} ${c.ok ? 'ok' : 'FAILED'} ${c.ms}ms on ${c.model ?? '?'}${c.tokens ? `, ${c.tokens} tokens` : ''}, $${dollars.toFixed(4)}`);
       },
     });
@@ -89,7 +91,7 @@ if (fake) {
       meta,
       spare,
       search: async (req) => {
-        ledger?.spend(SEARCH_DOLLARS);
+        ledger?.spend(SEARCH_DOLLARS, forDevice.getStore());
         return openaiSearch(fetch, { apiKey, model: SPARE_QUICK_MODEL }, req);
       },
       overflowed: (role, kind) => {
@@ -149,7 +151,7 @@ const shared = {
       ? {
           open: openaiRealtime({ apiKey: env.OPENAI_API_KEY, model: liveModel }),
           options: liveOptions,
-          webAnswer: openaiWebAnswer(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_WEB_MODEL || undefined, effort: env.MIND_PALACE_WEB_EFFORT || undefined, log, spent: (dollars) => ledger?.spend(dollars) }),
+          webAnswer: openaiWebAnswer(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_WEB_MODEL || undefined, effort: env.MIND_PALACE_WEB_EFFORT || undefined, log, spent: (dollars) => ledger?.spend(dollars, forDevice.getStore()) }),
         }
       : undefined,
   transcribe: !fake && env.OPENAI_API_KEY ? openaiTranscribe(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_HEARING_MODEL }) : undefined,

@@ -1,5 +1,6 @@
 import type { JsonRequest, ModelClient, Priority, WebResult } from '../../core/ports.ts';
 import type { Usage } from '../model-meta.ts';
+import { forDevice } from './ledger.ts';
 
 /**
  * OpenAI's models for the Scout while Meta's rate window is full. The main model writes the Scout's directions, where the quick and
@@ -96,5 +97,35 @@ export class Paused implements ModelClient {
   private guard<T>(call: () => Promise<T>): Promise<T> {
     const why = this.why();
     return why ? Promise.reject(new Error(why)) : call();
+  }
+}
+
+/** One device's way to the shared model: each call is made as the device's work (`forDevice`), and refused while `why` says so. */
+export class DeviceModel implements ModelClient {
+  constructor(
+    private readonly model: ModelClient,
+    private readonly device: string,
+    private readonly why: () => string | null,
+  ) {}
+
+  json<T>(req: JsonRequest<T>): Promise<T> {
+    return this.guard(() => this.model.json(req));
+  }
+
+  search(req: { role: string; query: string; max?: number; prefer?: string }) {
+    return this.guard(() => this.model.search(req));
+  }
+
+  image(req: { role: string; prompt: string }) {
+    return this.guard(() => this.model.image(req));
+  }
+
+  transcribe(req: { audio: Uint8Array; mime: string }) {
+    return this.guard(() => this.model.transcribe(req));
+  }
+
+  private guard<T>(call: () => Promise<T>): Promise<T> {
+    const why = this.why();
+    return why ? Promise.reject(new Error(why)) : forDevice.run(this.device, call);
   }
 }

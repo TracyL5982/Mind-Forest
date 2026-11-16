@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { z } from 'zod';
@@ -9,17 +10,29 @@ export interface Limits {
   searches: number;
   webAnswers: number;
   dollarsPerDay: number;
+  /** One device's share of the day's spend, so one judge cannot spend the cap for everyone. */
+  deviceDollars: number;
+  /** One device's share of Meta's tokens in a day, which have no price and so would never reach the cap. */
+  deviceTokens: number;
 }
 
-export const DEFAULT_LIMITS: Limits = { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: 30 };
+/**
+ * The device shares are a tenth of the day's cap and of the process's token budget (fly.toml's 60M), so ten judges can each use
+ * their whole share. Provisional: to be set from the 10-judge load test's spend and tokens per judge.
+ */
+export const DEFAULT_LIMITS: Limits = { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: 30, deviceDollars: 3, deviceTokens: 6_000_000 };
 
-/** Why work is refused, in the order it is checked: the off switch, the day's spend, then the device's own limit. */
-export type Refusal = 'off' | 'cap' | Metered;
+/** The device whose work this is, for the model's calls, which the whole service shares: its tokens and spend are counted to it. */
+export const forDevice = new AsyncLocalStorage<string>();
+
+/** Why work is refused, in the order it is checked: the off switch, the day's spend, the device's share of it, then its own limit. */
+export type Refusal = 'off' | 'cap' | 'share' | Metered;
 
 /** What Momo says for each refusal. */
 export const LINES: Record<Refusal, string> = {
   off: 'Mind Palace is paused for a little while. Your trees are safe, so try again soon.',
   cap: "Mind Palace has done all it can for today. Your trees are safe; come back tomorrow.",
+  share: "I've done all the thinking I can for you today. Your trees are all here to browse; come back tomorrow.",
   voiceMs: "That's all the talking I can do today. Your trees are still here to browse.",
   searches: "That's today's searches used up. I can still talk, and your trees are all here.",
   webAnswers: "I can't look things up on the web any more today, but I can tell you what I know.",
@@ -28,7 +41,7 @@ export const LINES: Record<Refusal, string> = {
 /** Spend alerts, as shares of the day's cap. */
 const ALERTS = [0.5, 1];
 
-const Usage = z.object({ voiceMs: z.number().default(0), searches: z.number().default(0), webAnswers: z.number().default(0), dollars: z.number().default(0) });
+const Usage = z.object({ voiceMs: z.number().default(0), searches: z.number().default(0), webAnswers: z.number().default(0), dollars: z.number().default(0), tokens: z.number().default(0) });
 type Usage = z.infer<typeof Usage>;
 
 const Saved = z.object({
@@ -83,9 +96,20 @@ export class Ledger {
     const day = this.today();
     if (day.off) return 'off';
     if (day.dollars >= this.opts.limits.dollarsPerDay) return 'cap';
+    if (this.shareUsed(device)) return 'share';
     const used = day.devices[device]?.[kind] ?? 0;
     const limit = { voiceMs: this.opts.limits.voiceMinutes * 60_000, searches: this.opts.limits.searches, webAnswers: this.opts.limits.webAnswers }[kind];
     return used >= limit ? kind : null;
+  }
+
+  /** Why this device's model calls are refused now, or null: the off switch, the day's cap, or the device's share of it. */
+  held(device: string): Refusal | null {
+    return this.paused() ?? (this.shareUsed(device) ? 'share' : null);
+  }
+
+  private shareUsed(device: string): boolean {
+    const usage = this.today().devices[device];
+    return Boolean(usage && (usage.dollars >= this.opts.limits.deviceDollars || usage.tokens >= this.opts.limits.deviceTokens));
   }
 
   /** Whether the service does no costly work at all now: switched off, or the day's cap is spent. */
@@ -117,9 +141,11 @@ export class Ledger {
     }
   }
 
-  metaTokens(tokens: number): void {
-    this.today().metaTokens += tokens;
-    this.spend((tokens * (this.opts.metaDollarsPerMillion ?? 0)) / 1e6);
+  metaTokens(tokens: number, device?: string): void {
+    const day = this.today();
+    day.metaTokens += tokens;
+    if (device) (day.devices[device] ??= Usage.parse({})).tokens += tokens;
+    this.spend((tokens * (this.opts.metaDollarsPerMillion ?? 0)) / 1e6, device);
     this.changed();
   }
 
@@ -146,7 +172,7 @@ export class Ledger {
       overflows: day.overflows,
       limits: this.opts.limits,
       devices: Object.fromEntries(
-        Object.entries(day.devices).map(([id, u]) => [id, { voiceMinutes: Number((u.voiceMs / 60_000).toFixed(3)), searches: u.searches, webAnswers: u.webAnswers, dollars: Number(u.dollars.toFixed(4)) }]),
+        Object.entries(day.devices).map(([id, u]) => [id, { voiceMinutes: Number((u.voiceMs / 60_000).toFixed(3)), searches: u.searches, webAnswers: u.webAnswers, dollars: Number(u.dollars.toFixed(4)), tokens: u.tokens }]),
       ),
     };
   }
