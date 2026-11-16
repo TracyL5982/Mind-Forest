@@ -27,6 +27,12 @@ export const FAL_MODELS: Record<string, (prompt: string) => Record<string, unkno
   'meta/muse-image/text-to-image': (prompt) => ({ prompt, aspect_ratio: '4:3', output_format: 'jpeg', sync_mode: true }),
 };
 
+/**
+ * The model pictures are made on when FAL_KEY is set. Two blind readers ranked its pictures first in 10 of 20 and above the Meta
+ * API's in 16 of 20, at about the same speed (DECISIONS 63). MIND_PALACE_FAL_MODEL names another of the above, or `off`.
+ */
+export const FAL_DEFAULT = 'meta/muse-image/text-to-image';
+
 /** One picture from fal's direct endpoint, which answers on the same connection with the picture inside the reply. */
 export async function falPicture(send: typeof fetch, key: string, model: string, prompt: string): Promise<{ bytes: Uint8Array; mime: string }> {
   const body = FAL_MODELS[model];
@@ -95,7 +101,8 @@ export function makeTools(opts: ToolOptions): Tools {
     },
     images: {
       async generate(prompt) {
-        const fal = opts.keys?.FAL_KEY && opts.keys.MIND_PALACE_FAL_MODEL ? { key: opts.keys.FAL_KEY, model: opts.keys.MIND_PALACE_FAL_MODEL } : null;
+        const model = opts.keys?.MIND_PALACE_FAL_MODEL || FAL_DEFAULT;
+        const fal = opts.keys?.FAL_KEY && model !== 'off' ? { key: opts.keys.FAL_KEY, model } : null;
         let made: { bytes: Uint8Array; mime: string } | undefined;
         if (fal) {
           const started = Date.now();

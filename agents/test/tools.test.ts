@@ -66,24 +66,29 @@ function painter(keys: Record<string, string | undefined>, fal: (body: Record<st
 
 const JPEG = `data:image/jpeg;base64,${Buffer.from('a picture').toString('base64')}`;
 
-test('with a fal key and model, a picture is made on fal and stored as the picture fal sent back', async () => {
-  const { images, model, assets, posted } = painter({ FAL_KEY: 'fal-1', MIND_PALACE_FAL_MODEL: 'blackforestlabs/flux-3/klein/text-to-image' }, () => Response.json({ images: [{ url: JPEG }] }));
+test("with a fal key, a picture is made on fal's Muse Image, or the fal model named, and stored as the picture fal sent back", async () => {
+  for (const [keys, endpoint] of [
+    [{ FAL_KEY: 'fal-1' }, 'meta/muse-image/text-to-image'],
+    [{ FAL_KEY: 'fal-1', MIND_PALACE_FAL_MODEL: 'blackforestlabs/flux-3/klein/text-to-image' }, 'blackforestlabs/flux-3/klein/text-to-image'],
+  ] as const) {
+    const { images, model, assets, posted } = painter(keys, () => Response.json({ images: [{ url: JPEG }] }));
 
-  const { asset } = await images.generate('a lone dancer in an empty marble hall at night');
+    const { asset } = await images.generate('a lone dancer in an empty marble hall at night');
 
-  assert.deepEqual(posted.map((p) => [p.url, p.auth, p.body.prompt]), [['https://fal.run/blackforestlabs/flux-3/klein/text-to-image', 'Key fal-1', 'a lone dancer in an empty marble hall at night']]);
-  assert.equal(new TextDecoder().decode(assets.files.get(asset)!.bytes), 'a picture');
-  assert.equal(assets.files.get(asset)!.mime, 'image/jpeg');
-  assert.equal(model.calls.filter((c) => c.kind === 'image').length, 0, 'the Meta model makes nothing');
+    assert.deepEqual(posted.map((p) => [p.url, p.auth, p.body.prompt]), [[`https://fal.run/${endpoint}`, 'Key fal-1', 'a lone dancer in an empty marble hall at night']]);
+    assert.equal(new TextDecoder().decode(assets.files.get(asset)!.bytes), 'a picture');
+    assert.equal(assets.files.get(asset)!.mime, 'image/jpeg');
+    assert.equal(model.calls.filter((c) => c.kind === 'image').length, 0, 'the Meta model makes nothing');
+  }
 });
 
-test('without the fal key, or when fal fails, the picture is made by the Meta model', async () => {
-  for (const keys of [{ MIND_PALACE_FAL_MODEL: 'blackforestlabs/flux-3/klein/text-to-image' }, { FAL_KEY: 'fal-1' }, { FAL_KEY: 'fal-1', MIND_PALACE_FAL_MODEL: 'blackforestlabs/flux-3/klein/text-to-image' }]) {
+test('without the fal key, turned off, or when fal fails, the picture is made by the Meta model', async () => {
+  for (const keys of [{ MIND_PALACE_FAL_MODEL: 'blackforestlabs/flux-3/klein/text-to-image' }, { FAL_KEY: 'fal-1', MIND_PALACE_FAL_MODEL: 'off' }, { FAL_KEY: 'fal-1' }] as Record<string, string>[]) {
     const { images, model, posted } = painter(keys, () => new Response('busy', { status: 503 }));
     const { asset } = await images.generate('a circle of dancers');
     assert.ok(asset, JSON.stringify(keys));
     assert.equal(model.calls.filter((c) => c.kind === 'image').length, 1, JSON.stringify(keys));
-    assert.equal(posted.length, keys.FAL_KEY && keys.MIND_PALACE_FAL_MODEL ? 1 : 0, JSON.stringify(keys));
+    assert.equal(posted.length, keys.FAL_KEY && keys.MIND_PALACE_FAL_MODEL !== 'off' ? 1 : 0, JSON.stringify(keys));
   }
 });
 

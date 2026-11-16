@@ -32,6 +32,26 @@ const HOUR = 3_600_000;
 /** Unsplash asks that every link back to it says where it came from. */
 const withUtm = (url: string): string => `${url}${url.includes('?') ? '&' : '?'}utm_source=mind_palace&utm_medium=referral`;
 const PER_SEARCH = 6;
+/**
+ * A search with no answer by then is given up, so one stalled holder never keeps a run from ending. In the first bench of DECISIONS
+ * 63 a museum search never answered, and its run never said what it brought. The web reads its pages, so it is given longer.
+ */
+const SEARCH_DEADLINE_MS = 15_000;
+const WEB_DEADLINE_MS = 45_000;
+/**
+ * OpenAlex allows 10 requests a second without a key (its rate-limit page, read 15 November 2026), shared by every search in this
+ * process, so they start at least this far apart. Ten judges at once got 13 refusals without it.
+ */
+const OPENALEX_GAP_MS = 110;
+let openAlexNext = 0;
+const sleep = (ms: number) => new Promise((done) => setTimeout(done, ms));
+/** Waits for this process's next turn at OpenAlex. */
+async function openAlexTurn(): Promise<void> {
+  const now = Date.now();
+  const at = Math.max(now, openAlexNext);
+  openAlexNext = at + OPENALEX_GAP_MS;
+  if (at > now) await sleep(at - now);
+}
 /** The Internet Archive's MP4 copies, the ones every browser and the headset play first. "MPEG4" may be an original in an older codec. */
 const ARCHIVE_FORMATS = ['h.264', '512Kb MPEG4', 'h.264 IA', 'MPEG4'];
 const WEB_PREFERENCE =
@@ -170,7 +190,21 @@ export function makeSources(opts: SourceOptions): Tools['sources'] {
     query: 'Three to six words a paper on this would have in its title or abstract.',
     show: 2,
     async search(query) {
-      const json = await ask(`https://api.openalex.org/works?search=${q(query)}&filter=cited_by_count:>10&per-page=8&select=id,doi,title,type,publication_year,authorships,is_authors_truncated,primary_location,abstract_inverted_index,cited_by_count`);
+      const url = `https://api.openalex.org/works?search=${q(query)}&filter=cited_by_count:>10&per-page=8&select=id,doi,title,type,publication_year,authorships,is_authors_truncated,primary_location,abstract_inverted_index,cited_by_count`;
+      let json: Json = {};
+      for (let tries = 1; ; tries++) {
+        await openAlexTurn();
+        const res = await send(url, { headers: { 'User-Agent': AGENT_NAME, Accept: 'application/json' }, signal: AbortSignal.timeout(10_000) });
+        // A refusal for the pace costs nothing, and its Retry-After says how long to wait; it is asked once more.
+        if (res.status === 429 && tries === 1) {
+          const said = Number(res.headers.get('retry-after') ?? 1);
+          await sleep(Math.min(5_000, 1_000 * (Number.isFinite(said) && said >= 0 ? said : 1)));
+          continue;
+        }
+        if (!res.ok) throw new Error(`${res.status}`);
+        json = (await res.json()) as Json;
+        break;
+      }
       return list(json.results).map((w): Found => {
         const words: string[] = [];
         for (const [word, places] of Object.entries((w.abstract_inverted_index ?? {}) as Record<string, number[]>)) for (const at of places) words[at] = word;
@@ -599,8 +633,15 @@ export function makeSources(opts: SourceOptions): Tools['sources'] {
     async search(id, query) {
       const adapter = byId.get(id);
       if (!adapter || !query.trim()) return [];
-      const found = await adapter.search(query.trim());
-      return found.filter((f) => f.title && /^https?:\/\//.test(f.url));
+      const ms = adapter.id === 'web' ? WEB_DEADLINE_MS : SEARCH_DEADLINE_MS;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<never>((_ok, fail) => (timer = setTimeout(() => fail(new Error(`no answer in ${ms / 1000} s`)), ms)));
+      try {
+        const found = await Promise.race([adapter.search(query.trim()), late]);
+        return found.filter((f) => f.title && /^https?:\/\//.test(f.url));
+      } finally {
+        clearTimeout(timer);
+      }
     },
     async report(id, record) {
       await byId.get(id)?.report?.(record).catch(() => undefined);

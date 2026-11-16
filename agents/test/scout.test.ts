@@ -1194,3 +1194,44 @@ test("a photo whose source forbids copies is looked at from a copy kept nowhere,
   assert.equal(pick!.data.licence, 'Unsplash License');
   assert.deepEqual(k.world.reported, [`photos: ${photo(2).report}`], 'only the photo that landed is reported');
 });
+
+test('a find of pictures keeps its held slot while a picture is being made, so faster written finds cannot end the run before it', async () => {
+  const finds = ['papers', 'books'].map((source) => direction('find', `More from ${source}`, { source, lookups: ['quick'] }));
+  const { k, anchor, museum, thinking } = visualLanes([note(1), note(2), direction('find', 'Dance in paint', { source: 'museums', lookups: ['dance'] }), IMAGE, ...finds], []);
+  const painting = gate();
+  const generate = k.ctx.tools.images.generate;
+  k.ctx.tools.images.generate = async (prompt) => (await painting.wait, generate(prompt));
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  thinking.open();
+  await until(() => k.mind.picks(anchor).length === 3);
+  await settle();
+  assert.equal(k.mind.picks(anchor).length, 3, 'one written find lands, and the other waits behind the museum search and the picture');
+  museum.open();
+  apply(k, await run);
+  painting.open();
+  await until(() => k.mind.picks(anchor).length === 5);
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['Idea number 1', 'Idea number 2', 'papers record 1', 'Painted dance 7', IMAGE.title]);
+});
+
+test('the reading does not wait for a picture that is slow to come: the records whose pictures are in by the cutoff are read without it', async () => {
+  const k = kit();
+  const film = k.seedTree('Film', ['Dolly zoom']);
+  const anchor = film.nodeIds[0]!;
+  k.world.sources = [WEB, MUSEUMS];
+  k.world.found.set('museums:spiral staircase', WORKS);
+  for (const w of WORKS) k.world.pictures.add(w.image);
+  const picture = k.ctx.tools.web.picture;
+  k.ctx.tools.web.picture = (url) => (url === WORKS[2]!.image ? new Promise(() => {}) : picture(url));
+  k.model.on('scout.ideate', () => ({ reading: '', directions: [ARTWORK] })).on('scout.curate', () => ({ chosen: [{ number: 1, note: '', excerpt: '' }] }));
+  const started = Date.now();
+
+  apply(k, await scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) }));
+
+  const asked = k.model.calls.find((c) => c.role === 'scout.curate')!.detail;
+  assert.match(asked, /^2\. "Teapot with spiral handle"/m);
+  assert.doesNotMatch(asked, /The Long Descent/, 'the record whose picture never came is not offered');
+  assert.ok(Date.now() - started < 4000, `the run ended ${Date.now() - started} ms in`);
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), ['Stairwell, Berlin']);
+});

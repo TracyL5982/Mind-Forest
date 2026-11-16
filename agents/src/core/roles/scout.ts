@@ -15,6 +15,11 @@ const MAX_GENERATED_IMAGES = 4;
 const GALLERY_SIZE = 3;
 const FOUND_SHOWN_TO_MODEL = 10;
 const VISUAL_SHOWN_TO_MODEL = 8;
+/**
+ * Pictures of a search not fetched by then are left out, so one slow holder never holds the reading back. The probe fetched eight
+ * in 0.2 to 1.2 s, once 2.6 s; in the first bench one straggler held eight for 12 s, on a slow network.
+ */
+const PICTURES_WAIT_MS = 2500;
 const SEARCHES_PER_FIND = 3;
 const ENOUGH_FOUND = 6;
 const THIN_POOL = 3;
@@ -216,11 +221,13 @@ export const scout: Roles['scout'] = async (given, input) => {
   let pictureTaken = false;
   const making = () => [...out].filter(pictured).length;
   const seeing = (lane: Lane) => [...out].some((d) => lanes.get(d) === lane && visual(d));
-  // Until the inventive lane has shown something to look at, one slot is held for its first, found or made: while the model may
-  // still write one, and while one is out. A picture being made holds its own slot already.
-  const awaited = () => (inventive.shown === 0 && making() === 0 && (inventive.writing || seeing(inventive)) ? 1 : 0);
+  const finding = () => [...out].some((d) => lanes.get(d) === inventive && visual(d) && !pictured(d));
+  // Until the inventive lane has shown something to look at, one slot is held for its first: while a find of pictures or a video is
+  // out, and while the model may still write one, unless a picture being made holds its own slot. A find keeps the slot even then,
+  // since a made picture takes 15 to 48 s and lands after the line, and a find lands before it.
+  const awaited = () => (inventive.shown === 0 && (finding() || (inventive.writing && making() === 0)) ? 1 : 0);
   // The held slot, while what will fill it is not written yet.
-  const kept = () => (awaited() && !seeing(inventive) ? 1 : 0);
+  const kept = () => (awaited() && !finding() ? 1 : 0);
   const held = () => making() + awaited();
   // The fast lane fills at most two slots and never half, so the inventive lane always keeps the most.
   const fastShare = () => Math.min(fastMost, Math.floor(slots / 2));
@@ -302,8 +309,8 @@ export const scout: Roles['scout'] = async (given, input) => {
       // A picture is only made into a slot that no other picture holds.
       if (room <= making()) return;
       pictureTaken = true;
-    } else if (visual(d) && kept()) {
-      // The first thing to look at is taken for the slot held for it, even once the count of directions is full.
+    } else if (visual(d) && inventive.shown === 0 && !finding() && room > making()) {
+      // The first find of something to look at is taken for the slot held for it, even once the count of directions is full.
       inventive.arrived++;
     } else {
       if (inventive.arrived >= inventiveExpected()) return;
@@ -850,15 +857,16 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
     ? fresh.slice(0, FOUND_SHOWN_TO_MODEL).map((f) => ({ ...f, stored: null, seen: null }))
     : (
         await ctx.step(ROLE, label(`Fetching ${pictured.length} pictures from`, sourceWords(source)), () =>
-          Promise.all(
+          inTime(
             pictured.map(async (f) =>
               !f.image ? { ...f, stored: null, seen: null }
               : source.hotlink ? { ...f, stored: null, seen: await ctx.tools.web.look(f.preview ?? f.image) }
               : { ...f, stored: await ctx.tools.web.picture(f.image), seen: null },
             ),
+            PICTURES_WAIT_MS,
           ),
         )
-      ).filter((f) => f.stored || f.seen);
+      ).flatMap((f) => (f && (f.stored || f.seen) ? [f] : []));
   if (found.length === 0) {
     ctx.note(ROLE, `${source.name} has nothing for "${query}", left out`);
     return [];
@@ -976,6 +984,25 @@ async function curate(ctx: RoleContext, d: Direction, source: Source, found: Fou
     ctx.note(ROLE, `could not choose among what ${source.name} returned (${message(err)}), left out`);
     return [];
   }
+}
+
+/** What each job brought by `ms`, in order, and undefined for one still out then or failed. Never waits past `ms`. */
+function inTime<T>(jobs: Promise<T>[], ms: number): Promise<(T | undefined)[]> {
+  const got: (T | undefined)[] = jobs.map(() => undefined);
+  let left = jobs.length;
+  return new Promise((done) => {
+    if (left === 0) return done(got);
+    const timer = setTimeout(() => done([...got]), ms);
+    jobs.forEach((job, i) =>
+      job
+        .then((value) => void (got[i] = value), () => undefined)
+        .finally(() => {
+          if (--left > 0) return;
+          clearTimeout(timer);
+          done([...got]);
+        }),
+    );
+  });
 }
 
 const squash = (text: string): string => text.replace(/\s+/g, ' ').trim().toLowerCase();

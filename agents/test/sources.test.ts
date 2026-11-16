@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import type { ModelClient, Page, WebResult } from '../src/core/ports.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { makeSources, plain } from '../src/node/sources.ts';
@@ -342,4 +342,40 @@ test('Unsplash stops being offered when its hourly allowance comes down to the f
   assert.ok(sources.list().some((s) => s.id === 'photos'), 'six left: still offered');
   await sources.search('photos', 'fog harbour');
   assert.ok(!sources.list().some((s) => s.id === 'photos'), 'five left: kept for the reports');
+});
+
+test('a source that never answers is given up at its deadline, so a run can end', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const send = (() => new Promise<Response>(() => {})) as typeof fetch;
+    const searching = makeSources({ send, model: new FakeModel(), read: async () => null }).search('museums', 'Mondrian composition');
+    const settled = searching.then(() => 'answered', (err: Error) => err.message);
+    mock.timers.tick(14_999);
+    await Promise.resolve();
+    mock.timers.tick(1);
+    assert.equal(await settled, 'no answer in 15 s');
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('OpenAlex is asked at most 10 times a second from the whole process, and a refusal for the pace is asked again', async () => {
+  const started: number[] = [];
+  let refused = false;
+  const send = (async () => {
+    started.push(Date.now());
+    if (!refused) {
+      refused = true;
+      return new Response('', { status: 429, headers: { 'retry-after': '0' } });
+    }
+    return Response.json({ results: [openAlexWork({ type: 'article' })] });
+  }) as typeof fetch;
+  const sources = makeSources({ send, model: new FakeModel(), read: async () => null });
+
+  const answers = await Promise.all(Array.from({ length: 12 }, (_v, n) => sources.search('papers', `query ${n}`)));
+
+  assert.ok(answers.every((found) => found.length === 1), 'every search is answered, the refused one too');
+  assert.equal(started.length, 13);
+  const busiest = Math.max(...started.map((t) => started.filter((u) => u >= t && u < t + 1000).length));
+  assert.ok(busiest <= 10, `${busiest} requests started within one second`);
 });
