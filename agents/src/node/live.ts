@@ -136,6 +136,8 @@ export interface LiveDeps {
   spoken: (turn: Turn) => void;
   /** A step of Momo's own, shown as the pipeline's steps are. */
   activity: (a: Activity) => void;
+  /** What a response or a transcription cost, in dollars, as it is known. */
+  spent?: (dollars: number) => void;
   log: (line: string) => void;
   now?: () => number;
   idleMs?: number;
@@ -532,12 +534,16 @@ export class LiveVoice {
     this.drain();
   }
 
-  /** The device left. */
+  /**
+   * The device left, or the service cut the session for a limit. Nothing of a turn or an answer is kept, as when the session is lost,
+   * so the next session does not cancel its own first answer for one asked of this one.
+   */
   close(): void {
     for (const timer of [this.idle, this.wake, this.expected?.timer, this.runEnded]) if (timer) clearTimeout(timer);
     this.idle = this.wake = this.expected = this.runEnded = null;
     this.session?.close();
     this.session = null;
+    this.forget();
   }
 
   private transcription(scene: Scene): Record<string, unknown> {
@@ -642,6 +648,7 @@ export class LiveVoice {
         const text = String(e.transcript ?? '').trim();
         const usage = e.usage as Usage | undefined;
         const dollars = usage ? cost(this.deps.options.hearing, usage) : null;
+        if (dollars !== null) this.deps.spent?.(dollars);
         this.deps.log(`[live] turn ${t.turn} written down ${now - t.over} ms after it was over: ${text}${dollars === null ? '' : ` ($${dollars.toFixed(5)})`}`);
         const whole = this.wordsOf(t.turn, text);
         if (this.words.turn === t.turn) this.words.text = whole;
@@ -736,6 +743,7 @@ export class LiveVoice {
         for (const out of response.output ?? []) if (out.type === 'function_call' && out.call_id) this.called(out.call_id, out.name ?? '', out.arguments ?? '');
         this.speaking = null;
         const dollars = response.usage ? cost(this.deps.options.model, response.usage) : null;
+        if (dollars !== null) this.deps.spent?.(dollars);
         this.deps.log(`[live] ${m.purpose.kind} ${response.status}${m.calls.size ? ` with ${[...m.calls].map((c) => this.names.get(c) ?? '?').join(', ')}` : ''}: ${m.text}${dollars === null ? '' : ` ($${dollars.toFixed(4)})`}`);
         if (m.text || m.heard) this.device({ t: 'done', id: m.id, ...(response.usage ? { usage: response.usage } : {}) });
         if (m.text.trim() && response.status === 'completed') this.deps.spoken({ who: 'agent', text: m.text.trim() });
@@ -894,6 +902,12 @@ export class LiveVoice {
     this.deps.log(`[live] session closed: ${why}`);
     this.session = null;
     const busy = Boolean(this.hearing) || this.transcribing.size > 0 || Boolean(this.speaking) || Boolean(this.asked) || Boolean(this.expected);
+    this.forget();
+    if (busy) this.device({ t: 'failed', why });
+  }
+
+  /** What a session's turns and answers left behind. */
+  private forget(): void {
     if (this.expected) clearTimeout(this.expected.timer);
     this.hearing = this.speaking = this.asked = this.expected = this.answering = null;
     this.transcribing.clear();
@@ -901,7 +915,6 @@ export class LiveVoice {
     this.refused = null;
     this.cancelling = 0;
     this.cancelExpected = false;
-    if (busy) this.device({ t: 'failed', why });
   }
 
   /** Something happened: the session stays open until nothing has for a while. */

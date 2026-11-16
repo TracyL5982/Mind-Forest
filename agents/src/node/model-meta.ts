@@ -25,7 +25,17 @@ export interface MetaModelOptions {
    * Called after every request, for the run log and the cost tally, with the model and effort asked for, the tries it took and how
    * long it was held for the rate window, and whether it was given up for want of room in time.
    */
-  onCall?: (call: { kind: string; role: string; ms: number; ok: boolean; tokens?: number; model?: string; effort?: string; tries?: number; heldMs?: number; gaveUp?: boolean }) => void;
+  onCall?: (call: { kind: string; role: string; ms: number; ok: boolean; tokens?: number; usage?: Usage; model?: string; effort?: string; tries?: number; heldMs?: number; gaveUp?: boolean }) => void;
+  /** Another host's name for an effort, such as OpenAI's `none` for `minimal`. */
+  efforts?: Partial<Record<string, string>>;
+}
+
+/** A reply's token counts, as the Responses protocol reports them. */
+export interface Usage {
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  input_tokens_details?: { cached_tokens?: number };
 }
 
 interface OutputItem {
@@ -63,7 +73,7 @@ export class MetaModel implements ModelClient {
         { role: 'system', content: req.system },
         { role: 'user', content },
       ],
-      reasoning: { effort: req.effort ?? (req.quick ? 'minimal' : 'low') },
+      reasoning: { effort: this.effort(req.effort ?? (req.quick ? 'minimal' : 'low')) },
       text: {
         format: {
           type: 'json_schema',
@@ -88,6 +98,15 @@ export class MetaModel implements ModelClient {
     const parsed = req.schema.safeParse(dropNulls(json));
     if (!parsed.success) throw new Unreadable(req.role, parsed.error.issues);
     return parsed.data;
+  }
+
+  /** Whether the key's rate window would let a request of this kind out now. */
+  free(priority: Priority): boolean {
+    return this.window.free(priority);
+  }
+
+  private effort(asked: string): string {
+    return this.opts.efforts?.[asked] ?? asked;
   }
 
   async search(req: { role: string; query: string; max?: number; prefer?: string }): Promise<WebResult[]> {
@@ -200,10 +219,10 @@ export class MetaModel implements ModelClient {
           method: 'POST',
           headers: { Authorization: `Bearer ${this.opts.apiKey}`, 'Content-Type': 'application/json', Accept: 'text/event-stream' },
           body: JSON.stringify({ ...body, stream: true }),
-        }, waitMs, call, async (res): Promise<{ status: number; error: string } | { text: string; tokens?: number }> => {
+        }, waitMs, call, async (res): Promise<{ status: number; error: string } | { text: string; usage?: Usage }> => {
           if (!res.ok || !res.body) return { status: res.status, error: `${res.status} ${(await res.text()).slice(0, 400)}` };
           let text = '';
-          let tokens: number | undefined;
+          let usage: Usage | undefined;
           for await (const event of serverEvents(res.body)) {
             // A message the model writes before its answer is replaced by the answer.
             if (event.type === 'response.output_item.added' && event.item?.type === 'message') text = '';
@@ -212,18 +231,18 @@ export class MetaModel implements ModelClient {
               handedOn = true;
               onText(text);
             }
-            if (event.type === 'response.completed') tokens = event.response?.usage?.total_tokens;
+            if (event.type === 'response.completed') usage = event.response?.usage;
             if (event.type === 'response.failed' || event.type === 'error') throw new Error(`${role}: the reply failed: ${JSON.stringify(event).slice(0, 300)}`);
           }
-          return { text, tokens };
+          return { text, usage };
         });
         if ('error' in got) {
           lastError = got.error;
           if (got.status < 500) break;
           continue;
         }
-        this.spent += got.tokens ?? 0;
-        this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: true, tokens: got.tokens, ...asked, ...call });
+        this.spent += got.usage?.total_tokens ?? 0;
+        this.opts.onCall?.({ kind: 'json', role, ms: Date.now() - started, ok: true, tokens: got.usage?.total_tokens, usage: got.usage, ...asked, ...call });
         return got.text;
       } catch (err) {
         lastError = String(err);
@@ -262,9 +281,9 @@ export class MetaModel implements ModelClient {
         continue;
       }
       if (got.ok) {
-        const json = JSON.parse(got.text) as { usage?: { total_tokens?: number } };
+        const json = JSON.parse(got.text) as { usage?: Usage };
         this.spent += json.usage?.total_tokens ?? 0;
-        this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: true, tokens: json.usage?.total_tokens, ...asked, ...call });
+        this.opts.onCall?.({ kind, role, ms: Date.now() - started, ok: true, tokens: json.usage?.total_tokens, usage: json.usage, ...asked, ...call });
         return json;
       }
       lastError = `${got.status} ${got.text.slice(0, 400)}`;
@@ -320,7 +339,7 @@ interface StreamEvent {
   type?: string;
   delta?: string;
   item?: { type?: string };
-  response?: { usage?: { total_tokens?: number } };
+  response?: { usage?: Usage };
 }
 
 /** The events of a server-sent event stream, each its `data` parsed as JSON. */

@@ -15,7 +15,10 @@
     "dev:fake": "node --no-warnings --import tsx src/node/main.ts --fake",
     "fetch-wake": "node --no-warnings --import tsx scripts/fetch-wake.ts",
     "import-library": "node --no-warnings --import tsx scripts/import-library.ts",
-    "saved-trees": "node --no-warnings --import tsx scripts/saved-trees.ts"
+    "saved-trees": "node --no-warnings --import tsx scripts/saved-trees.ts",
+    "starter": "node --no-warnings --import tsx scripts/starter.ts",
+    "judges": "node --no-warnings --import tsx scripts/judges.ts",
+    "start:hosted": "MIND_PALACE_HOSTED=1 node --no-warnings --import tsx src/node/main.ts"
   },
   "dependencies": {
     "ws": "^8.23.0",

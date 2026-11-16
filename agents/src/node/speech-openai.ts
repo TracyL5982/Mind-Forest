@@ -10,15 +10,44 @@ export type Speak = (text: string, signal: AbortSignal) => Promise<ReadableStrea
 /** How long OpenAI may take to start answering before a reply is given up, so a stalled reply does not keep a client's microphone waiting. */
 const FIRST_BYTE_MS = 15000;
 
-/** Spoken replies from OpenAI's speech model, as MP3 that arrives while it is made, so playback starts early. */
-export function openaiSpeech(send: typeof fetch, opts: { apiKey: string; model?: string; voice?: string; firstByteMs?: number }): Speak {
+/** Dollars per minute of audio, OpenAI's own estimates for gpt-4o-mini-tts and gpt-4o-transcribe, as listed in 2025 and not read again. */
+export const SPEECH_DOLLARS_PER_MINUTE = 0.015;
+export const HEARING_DOLLARS_PER_MINUTE = 0.006;
+
+/** How long a reply takes to say: about 14 characters a second at a calm pace (150 words a minute). An estimate. */
+export function spokenMs(text: string): number {
+  return (text.length / 14) * 1000;
+}
+
+/**
+ * How long a recording from the Quest is, or null for anything else. Only the header the Quest's own `wavFile` writes is taken
+ * (quest/core/agent/listener.cpp): 44 bytes of RIFF, WAVE, a 16-byte fmt of PCM, mono, 16 kHz, 32000 bytes a second, 2-byte blocks
+ * of 16 bits, then data. Its length is what follows the header at 32000 bytes a second, whatever the RIFF and data sizes say, since
+ * a decoder plays a file with a data size of 0, or with a second fmt, in ways a cleverer reading would count as nothing.
+ */
+export function questWavMs(audio: Uint8Array): number | null {
+  if (audio.length < 44) return null;
+  const view = new DataView(audio.buffer, audio.byteOffset, audio.byteLength);
+  const tag = (at: number) => String.fromCharCode(...audio.subarray(at, at + 4));
+  const quest =
+    tag(0) === 'RIFF' && tag(8) === 'WAVE' && tag(12) === 'fmt ' && view.getUint32(16, true) === 16 &&
+    view.getUint16(20, true) === 1 && view.getUint16(22, true) === 1 && view.getUint32(24, true) === 16000 &&
+    view.getUint32(28, true) === 32000 && view.getUint16(32, true) === 2 && view.getUint16(34, true) === 16 && tag(36) === 'data';
+  return quest ? ((audio.length - 44) / 32000) * 1000 : null;
+}
+
+/**
+ * Spoken replies from OpenAI's speech model, as MP3 that arrives while it is made, so playback starts early. `pcm` is 16-bit mono
+ * at 24 kHz instead, the live voice's own format.
+ */
+export function openaiSpeech(send: typeof fetch, opts: { apiKey: string; model?: string; voice?: string; firstByteMs?: number; format?: 'mp3' | 'pcm' }): Speak {
   return async (text, signal) => {
     const late = new AbortController();
     const timer = setTimeout(() => late.abort(new Error('OpenAI speech did not answer in time')), opts.firstByteMs ?? FIRST_BYTE_MS);
     const res = await send('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: { Authorization: `Bearer ${opts.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: opts.model || SPEECH_MODEL, voice: opts.voice || SPEECH_VOICE, input: text, instructions: MANNER, response_format: 'mp3' }),
+      body: JSON.stringify({ model: opts.model || SPEECH_MODEL, voice: opts.voice || SPEECH_VOICE, input: text, instructions: MANNER, response_format: opts.format ?? 'mp3' }),
       signal: AbortSignal.any([signal, late.signal]),
     }).finally(() => clearTimeout(timer));
     if (!res.ok || !res.body) throw new Error(`OpenAI speech answered ${res.status}`);

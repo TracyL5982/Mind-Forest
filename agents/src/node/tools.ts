@@ -12,6 +12,8 @@ export interface ToolOptions {
   fetch?: typeof fetch;
   /** Given only when maps are on. */
   geocoder?: Geocoder;
+  /** Told what a priced call cost, in dollars, for the hosted service's daily cap. */
+  spent?: (dollars: number) => void;
 }
 
 const CodeReply = z.object({ title: z.string(), language: z.string(), source: z.string() });
@@ -30,7 +32,7 @@ export function makeTools(opts: ToolOptions): Tools {
         return (await Promise.all(hits.map((hit) => playable(send, hit.url)))).flatMap((v) => v ?? []);
       },
     },
-    sources: makeSources({ send, model: opts.model, read: (url) => readPage(send, url), keys: opts.keys }),
+    sources: makeSources({ send, model: opts.model, read: (url) => readPage(send, url), keys: opts.keys, spent: opts.spent }),
     instagram: {
       async recent(limit = 12): Promise<SocialPost[]> {
         if (!opts.instagram) return [];

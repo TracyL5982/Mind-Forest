@@ -6,6 +6,9 @@ interface Output {
   content?: { text?: string; annotations?: { url?: string; title?: string }[] }[];
 }
 
+/** What one search costs, in dollars: a search call and a short list at gpt-5.4-mini's prices. An estimate, as web-answer.ts prices its own. */
+export const SEARCH_DOLLARS = 0.012;
+
 const bare = (url: string): string => url.replace(/[?&]utm_[^#]*/, '').replace(/[/#?]+$/, '');
 
 /**

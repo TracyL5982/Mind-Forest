@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { once } from 'node:events';
+import { createWriteStream, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { finished } from 'node:stream/promises';
 import { join, resolve, sep } from 'node:path';
 import type { Assets } from '../core/ports.ts';
 
@@ -59,6 +61,31 @@ export class DiskAssets implements Assets {
     writeFileSync(join(this.dir, id), bytes);
     this.write(id, { mime: bare(mime), name });
     return { id };
+  }
+
+  /** A file written to disk as it arrives, never held whole. Past `limit` bytes it is removed, and `tooLarge()` is thrown. */
+  async putStream(body: AsyncIterable<Uint8Array>, mime: string, name: string | undefined, limit: number, tooLarge: () => Error): Promise<{ id: string; size: number }> {
+    const id = newId(mime, name);
+    const file = join(this.dir, id);
+    const out = createWriteStream(file);
+    let size = 0;
+    try {
+      for await (const chunk of body) {
+        size += chunk.length;
+        if (size > limit) throw tooLarge();
+        if (!out.write(chunk)) await once(out, 'drain');
+      }
+      out.end();
+      await finished(out);
+    } catch (err) {
+      // The stream opens its file on its own time, so it is removed once the stream has closed, or it would come back empty.
+      out.destroy();
+      await finished(out).catch(() => {});
+      rmSync(file, { force: true });
+      throw err;
+    }
+    this.write(id, { mime: bare(mime), name });
+    return { id, size };
   }
 
   async link(from: string, mime: string, name?: string): Promise<{ id: string }> {

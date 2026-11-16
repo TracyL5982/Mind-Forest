@@ -1,11 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
-import { Readable } from 'node:stream';
+import { Readable, type Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { ModelClient } from '../core/ports.ts';
+import type { ModelClient, Tools } from '../core/ports.ts';
 import { Pipeline, type Outbound } from '../core/pipeline.ts';
 import { DEFAULT_SETTINGS, type Handoff, type Playback, type Roles, type Settings } from '../core/roles/types.ts';
 import { Mindstorm } from '../core/state.ts';
@@ -13,10 +13,10 @@ import { spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
 import { whereItWent, type Delivery, type Desk } from './contact.ts';
 import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '../core/voice-tools.ts';
-import { LiveVoice, type LiveOptions, type OpenRealtime } from './live.ts';
+import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
-import type { Speak, Transcribe } from './speech-openai.ts';
+import { HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
 import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
 import { Telegram, type TelegramOptions } from './telegram.ts';
@@ -47,8 +47,48 @@ export interface ServerOptions {
   films?: string;
   /** Mind Palace as a Telegram contact, reached with this bot's token. */
   telegram?: Omit<TelegramOptions, 'desk' | 'file' | 'log'>;
+  /** Hosted mode: what this space's device may still do today, and where its use and spend are counted. */
+  meter?: Meter;
+  /** Hosted mode: the largest file one upload may be, and what this space's uploads may come to in all, in bytes. */
+  uploads?: { file: number; total: number };
   log?: (line: string) => void;
 }
+
+/** What a device's day is counted in: minutes of voice with Momo both ways, Scout runs, and Momo's web answers. */
+export type Metered = 'voiceMs' | 'searches' | 'webAnswers';
+
+export interface Meter {
+  /** The short line Momo says when this kind of work is refused now, or null when it may go ahead. */
+  refused(kind: Metered): string | null;
+  used(kind: Metered, amount: number): void;
+  spent(dollars: number): void;
+  /** The line Momo says while all costly work is stopped (switched off, or over the day's cap), or null. */
+  paused(): string | null;
+  /** A picture was made, on whichever model made it: counted at the price of one. */
+  pictured(): void;
+  /** A line said in Momo's voice, as 16-bit mono PCM at the live voice's rate, when it can be made. */
+  recorded(text: string): Promise<Uint8Array | null>;
+}
+
+/** One device's mindstorm, pipeline and voice, answering the requests a listener hands it. */
+export interface Space {
+  token: string;
+  pipeline: Pipeline;
+  mind: Mindstorm;
+  /** Answers one request. The caller has checked nothing. */
+  serve(req: IncomingMessage, res: ServerResponse): Promise<void>;
+  upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void;
+  /** Sockets open on it now. */
+  online(): number;
+  close(): Promise<void>;
+}
+
+/** The voice tools that start a Scout run. */
+const SEARCHING = new Set(['find_new', 'more_like_this', 'start_tree']);
+/** `/live` sockets one metered space keeps: a headset reconnecting while its old socket lingers. A newer one closes the oldest. */
+const LIVE_PER_SPACE = 2;
+/** What a metered space takes on /api/transcribe: the Quest's own WAV, of about a minute at most. */
+const RECORDING_BYTES = 2_000_000;
 
 export interface Running {
   url: string;
@@ -72,13 +112,48 @@ const TYPES: Record<string, string> = {
 };
 
 export async function startServer(opts: ServerOptions): Promise<Running> {
+  const space = await openSpace(opts);
+  const http: Server = createServer((req, res) => void space.serve(req, res));
+  http.on('upgrade', (req, socket, head) => space.upgrade(req, socket, head));
+  await new Promise<void>((ready) => http.listen(opts.port, opts.host, ready));
+  // Another process writing this data folder while the service runs would corrupt it. `npm run import-library` checks for this file.
+  const lock = join(opts.dataDir, 'service.pid');
+  writeFileSync(lock, String(process.pid));
+  const address = http.address();
+  const port = typeof address === 'object' && address ? address.port : opts.port;
+  return {
+    url: `http://${opts.host === '0.0.0.0' ? 'localhost' : opts.host}:${port}`,
+    token: space.token,
+    pipeline: space.pipeline,
+    mind: space.mind,
+    async close() {
+      await space.close();
+      await new Promise<void>((done) => http.close(() => done()));
+      rmSync(lock, { force: true });
+    },
+  };
+}
+
+export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Promise<Space> {
   const log = opts.log ?? (() => {});
+  const meter = opts.meter;
   mkdirSync(opts.dataDir, { recursive: true });
   const token = opts.token ?? savedToken(join(opts.dataDir, 'token'));
   const store = new SqliteStore(join(opts.dataDir, 'mindstorm.sqlite'));
   const assets = new DiskAssets(join(opts.dataDir, 'assets'), '', opts.films);
   const handoffDir = join(opts.dataDir, 'handoffs');
   mkdirSync(handoffDir, { recursive: true });
+  /** What this space's uploads come to, kept beside them so a restart does not forget it. Only counted when `uploads` caps it. */
+  const uploadedFile = join(opts.dataDir, 'uploads.json');
+  const uploaded = readUploaded(uploadedFile);
+  /** One upload at a time, so what one takes of the room is known before the next starts. */
+  let uploading = false;
+  const keepUploaded = (bytes: number) => {
+    uploaded.bytes += bytes;
+    uploaded.files += 1;
+    writeFileSync(`${uploadedFile}.tmp`, JSON.stringify(uploaded));
+    renameSync(`${uploadedFile}.tmp`, uploadedFile);
+  };
 
   const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID() });
   mind.load(store.all());
@@ -128,9 +203,9 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
 
   const pipeline = new Pipeline({
     mind,
-    roles: opts.roles,
+    roles: meter ? metered(opts.roles, meter) : opts.roles,
     model: opts.model,
-    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder }),
+    tools: chargedPictures(makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)) }), meter),
     assets,
     store,
     settings,
@@ -172,13 +247,13 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     return [header, url.searchParams.get('token'), cookie].some((given) => given !== undefined && given !== null && equal(given, token));
   };
 
-  const http: Server = createServer((req, res) => {
-    void route(req, res).catch((err) => {
+  const serve = (req: IncomingMessage, res: ServerResponse): Promise<void> =>
+    route(req, res).catch((err) => {
+      if (err instanceof TooLarge && !res.headersSent) return json(res, 413, { error: err.message });
       log(`http error: ${String(err)}`);
       if (!res.headersSent) json(res, 500, { error: String(err instanceof Error ? err.message : err) });
       else res.end();
     });
-  });
 
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -188,6 +263,23 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     if (guarded && !authorized(req, url)) return json(res, 401, { error: 'missing or wrong token' });
     if (guarded) res.setHeader('Set-Cookie', `mp_token=${token}; Path=/; HttpOnly; SameSite=Lax`);
 
+    if (req.method === 'POST' && path === '/api/assets' && opts.uploads) {
+      if (uploading) return json(res, 429, { error: 'one upload at a time' });
+      const limit = opts.uploads.file;
+      const room = opts.uploads.total - uploaded.bytes;
+      const declared = Number(req.headers['content-length'] ?? 0) || 0;
+      if (declared > limit) return json(res, 413, { error: tooBig(limit) });
+      if (declared > room) return json(res, 413, { error: FULL });
+      uploading = true;
+      try {
+        const mime = req.headers['content-type'] ?? 'application/octet-stream';
+        const { id, size } = await assets.putStream(req, mime, url.searchParams.get('name') ?? undefined, Math.min(limit, room), () => new TooLarge(room < limit ? FULL : tooBig(limit)));
+        keepUploaded(size);
+        return json(res, 200, { id, url: assets.url(id), mime: mime.split(';')[0] });
+      } finally {
+        uploading = false;
+      }
+    }
     if (req.method === 'POST' && path === '/api/assets') {
       const bytes = await body(req, MAX_UPLOAD);
       const mime = req.headers['content-type'] ?? 'application/octet-stream';
@@ -195,16 +287,30 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       return json(res, 200, { id, url: assets.url(id), mime: mime.split(';')[0] });
     }
     if (req.method === 'POST' && path === '/api/transcribe') {
-      const audio = await body(req, 25 * 1024 * 1024);
+      const why = meter?.refused('voiceMs');
+      if (why) return json(res, 429, { error: why });
       const mime = req.headers['content-type'] ?? 'audio/wav';
+      if (meter && mime.split(';')[0]!.trim().toLowerCase() !== 'audio/wav') return json(res, 415, { error: 'a recording here is audio/wav' });
+      const audio = await body(req, meter ? RECORDING_BYTES : 25 * 1024 * 1024);
+      if (meter) {
+        const ms = questWavMs(audio);
+        if (ms === null) return json(res, 415, { error: "a recording here is the Quest's own WAV: 16 kHz mono 16-bit PCM" });
+        meter.used('voiceMs', ms);
+        meter.spent((ms / 60_000) * HEARING_DOLLARS_PER_MINUTE);
+      }
       const heard = opts.transcribe
         ? await opts.transcribe(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, url.searchParams.get('tree')) })
         : await opts.model.transcribe({ audio, mime });
       return json(res, 200, { text: withoutWakePhrase(heard, settings.agentName).trim() });
     }
     if (req.method === 'GET' && path === '/api/speak') {
+      const why = meter?.refused('voiceMs');
+      if (why) return json(res, 429, { error: why });
       const text = (url.searchParams.get('text') ?? '').slice(0, MAX_SPOKEN).trim();
       if (!opts.speak || !text) return json(res, 404, { error: 'no voice' });
+      const ms = spokenMs(text);
+      meter?.used('voiceMs', ms);
+      meter?.spent((ms / 60_000) * SPEECH_DOLLARS_PER_MINUTE);
       const stop = new AbortController();
       res.on('close', () => stop.abort());
       const audio = await opts.speak(text, stop.signal);
@@ -252,7 +358,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
 
   const wss = new WebSocketServer({ noServer: true });
   const liveWss = new WebSocketServer({ noServer: true });
-  http.on('upgrade', (req, socket, head) => {
+  const upgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const refuse = (status: string) => {
       socket.write(`HTTP/1.1 ${status}\r\n\r\n`);
@@ -262,12 +368,45 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     if (url.pathname === '/ws') return wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
     if (url.pathname === '/live' && opts.live) return liveWss.handleUpgrade(req, socket, head, (ws) => liveWss.emit('connection', ws, req));
     refuse('404 Not Found');
-  });
+  };
+
+  /** Each connection's `/live` socket, for a line said in Momo's recorded voice there. */
+  const liveOf = new Map<WebSocket, WebSocket>();
+  let lines = 0;
+  /** A refusal Momo says on the device's `/live` socket from a recording, so a refused device costs no realtime model. */
+  const sayRecorded = async (live: WebSocket, text: string) => {
+    const id = `line-${++lines}`;
+    const send = (frame: VoiceFrame) => live.readyState === live.OPEN && live.send(JSON.stringify(frame));
+    send({ t: 'text', id, text, kind: 'reply' });
+    const pcm = await meter?.recorded(text).catch(() => null);
+    const piece = (RATE / 10) * 2;
+    if (pcm) for (let at = 0; at < pcm.length; at += piece) send({ t: 'audio', id, pcm: Buffer.from(pcm.subarray(at, at + piece)).toString('base64') });
+    send({ t: 'done', id });
+  };
+  /** A refusal told to the connection that asked: in Momo's recorded voice when it has `/live`, else as a reply it reads aloud. */
+  const decline = (ws: WebSocket, text: string) => {
+    log(`[limits] refused: ${text}`);
+    const live = liveOf.get(ws);
+    if (live) void sayRecorded(live, text);
+    else ws.send(JSON.stringify({ t: 'say', text, kind: 'reply', yours: true }));
+  };
 
   liveWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const live = opts.live!;
+    // Terminated, not closed: a closing socket still delivers what arrives while it waits for the device's reply.
+    if (meter) for (const old of [...liveWss.clients].slice(0, Math.max(0, liveWss.clients.size - LIVE_PER_SPACE))) old.terminate();
     /** The device's own connection, as its hello named it: what Momo starts is that connection's, and Momo hears of its work. */
     const own = connections.get(new URL(req.url ?? '/', 'http://localhost').searchParams.get('connection') ?? '');
+    const webAnswer: typeof live.webAnswer = live.webAnswer && meter
+      ? async (question) => {
+          const why = meter.refused('webAnswers');
+          if (why) throw new Error(why);
+          meter.used('webAnswers', 1);
+          return live.webAnswer!(question);
+        }
+      : live.webAnswer;
+    /** Audio is counted as 16-bit mono: the device's at 16 kHz, Momo's at the live voice's rate. */
+    const counted = (pcm: string, rate: number) => meter?.used('voiceMs', ((pcm.length * 3) / 4 / 2 / rate) * 1000);
     const voice: LiveVoice = new LiveVoice(
       {
         open: live.open,
@@ -275,7 +414,11 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         name: () => spokenName(settings.agentName),
         words: (scene) => likelyWords(mind, scene.treeId ?? null),
         tools: toolSpecs,
-        call: (name, args, scene, said) => asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer: live.webAnswer, said })),
+        call: (name, args, scene, said) => {
+          const why = SEARCHING.has(name) ? meter?.refused('searches') : null;
+          if (why) return Promise.resolve({ error: why });
+          return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said }));
+        },
         label: toolLabel,
         where: (scene) => whereNote(pipeline.ctx, scene),
         cards: (set) => landedCards(mind, set),
@@ -286,24 +429,79 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
           log(`[momo] ${activity.state}: ${activity.label}`);
           if (own && own.readyState === own.OPEN) own.send(JSON.stringify({ t: 'activity', activity }));
         },
+        spent: (dollars) => meter?.spent(dollars),
         log,
       },
       (frame) => {
+        if (frame.t === 'audio') {
+          counted(frame.pcm, RATE);
+          const why = meter?.refused('voiceMs');
+          if (why) return cut(why, frame.id);
+        }
         if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame));
       },
     );
-    if (own) voices.set(own, voice);
+    if (own) {
+      voices.set(own, voice);
+      liveOf.set(own, ws);
+    }
     ws.on('close', () => {
       if (own && voices.get(own) === voice) voices.delete(own);
+      if (own && liveOf.get(own) === ws) liveOf.delete(own);
       voice.close();
     });
+    /** The turn being refused: its audio goes nowhere, and it is over at once. */
+    let refusedTurn: number | null = null;
+    /** The turn the device is in, from its `start` to its `end`. */
+    let turn: number | null = null;
+    let cutting = false;
+    /**
+     * The voice limit, the cap or the off switch came in the middle of a turn or an answer: the turn is over, the answer ends, the
+     * realtime session closes so nothing more costs, and Momo says why from a recording. The next `start` opens a session again if allowed.
+     */
+    const cut = (why: string, answer?: string) => {
+      if (cutting) return;
+      cutting = true;
+      log(`[limits] refused in the middle of a turn: ${why}`);
+      const send = (frame: VoiceFrame) => ws.readyState === ws.OPEN && ws.send(JSON.stringify(frame));
+      if (turn !== null) {
+        send({ t: 'over', turn });
+        refusedTurn = turn;
+      }
+      if (answer) send({ t: 'done', id: answer });
+      setImmediate(() => voice.close());
+      void sayRecorded(ws, why);
+    };
     ws.on('message', (raw) => {
       let frame: DeviceFrame;
       try {
         frame = DeviceFrame.parse(JSON.parse(String(raw)));
-      } catch (err) {
-        log(`[live] a frame that is not one: ${String(err instanceof Error ? err.message : err).slice(0, 200)}`);
+      } catch {
+        // The error would quote the frame, and a frame may be the user's voice.
+        log(`[live] a frame that is not one (${String(raw).length} bytes)`);
         return;
+      }
+      if (frame.t === 'start') {
+        const why = meter?.refused('voiceMs');
+        refusedTurn = why ? frame.turn : null;
+        turn = frame.turn;
+        cutting = false;
+        if (why) {
+          log(`[limits] refused: ${why}`);
+          if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ t: 'over', turn: frame.turn } satisfies VoiceFrame));
+          void sayRecorded(ws, why);
+          return;
+        }
+      }
+      if (frame.t === 'end' || frame.t === 'cancel') turn = null;
+      if (refusedTurn !== null) {
+        if (frame.t === 'end' || frame.t === 'cancel') refusedTurn = null;
+        return;
+      }
+      if (frame.t === 'audio') {
+        counted(frame.pcm, 16000);
+        const why = meter?.refused('voiceMs');
+        if (why) return cut(why);
       }
       voice.heard(frame);
     });
@@ -319,6 +517,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
       plays.delete(ws);
       connections.delete(connection);
       voices.delete(ws);
+      liveOf.delete(ws);
     });
     ws.on('message', (raw) => {
       let message: ClientMessage;
@@ -350,11 +549,12 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
         ws.send(JSON.stringify({ t: 'questions', nodeId: m.nodeId, questions: await pipeline.questions(m.nodeId) }));
         return;
       case 'ask':
-        await pipeline.ask(m.nodeId, m.need);
+      case 'more': {
+        const why = meter?.refused('searches');
+        if (why) return decline(ws, why);
+        await (m.t === 'ask' ? pipeline.ask(m.nodeId, m.need) : pipeline.more(m.nodeId, m.need));
         return;
-      case 'more':
-        await pipeline.more(m.nodeId, m.need);
-        return;
+      }
       case 'keep':
         pipeline.keep(m.nodeIds);
         return;
@@ -376,27 +576,54 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     }
   }
 
-  await new Promise<void>((ready) => http.listen(opts.port, opts.host, ready));
-  // Another process writing this data folder while the service runs would corrupt it. `npm run import-library` checks for this file.
-  const lock = join(opts.dataDir, 'service.pid');
-  writeFileSync(lock, String(process.pid));
   telegram?.start();
-  const address = http.address();
-  const port = typeof address === 'object' && address ? address.port : opts.port;
   return {
-    url: `http://${opts.host === '0.0.0.0' ? 'localhost' : opts.host}:${port}`,
     token,
     pipeline,
     mind,
+    serve,
+    upgrade,
+    online: () => sockets.size + liveWss.clients.size,
     async close() {
       await telegram?.close();
       for (const ws of sockets) ws.terminate();
       for (const ws of liveWss.clients) ws.terminate();
       wss.close();
       liveWss.close();
-      await new Promise<void>((done) => http.close(() => done()));
       store.close();
-      rmSync(lock, { force: true });
+    },
+  };
+}
+
+/**
+ * Every made picture charged, and none made while the service is paused, whichever model the tools make it on (fal's, or the Meta
+ * model's as its fallback), so a picture still being made for a run under way when the switch flips costs nothing.
+ */
+export function chargedPictures(tools: Tools, meter: Meter | undefined): Tools {
+  if (!meter) return tools;
+  return {
+    ...tools,
+    images: {
+      async generate(prompt) {
+        const why = meter.paused();
+        if (why) throw new Error(why);
+        const made = await tools.images.generate(prompt);
+        meter.pictured();
+        return made;
+      },
+    },
+  };
+}
+
+/** The Scout counted against the device's searches, and refused once they are used up. */
+function metered(roles: Roles, meter: Meter): Roles {
+  return {
+    ...roles,
+    scout: (ctx, req) => {
+      const why = meter.refused('searches');
+      if (why) return Promise.reject(new Error(why));
+      meter.used('searches', 1);
+      return roles.scout(ctx, req);
     },
   };
 }
@@ -431,12 +658,29 @@ function json(res: ServerResponse, status: number, value: unknown): void {
   res.end(JSON.stringify(value));
 }
 
-async function body(req: IncomingMessage, limit: number): Promise<Uint8Array> {
+const FULL = 'this headset has used all its room for files';
+const tooBig = (limit: number) => `a file may be at most ${Math.round(limit / 1e6)} MB here`;
+
+/** What a space's uploads come to. A file that does not parse, as after a crash in the middle of writing it, counts as none. */
+function readUploaded(file: string): { bytes: number; files: number } {
+  try {
+    const saved = JSON.parse(readFileSync(file, 'utf8')) as { bytes?: unknown; files?: unknown };
+    if (typeof saved.bytes === 'number' && typeof saved.files === 'number') return { bytes: saved.bytes, files: saved.files };
+  } catch {
+    // No file yet, or a damaged one.
+  }
+  return { bytes: 0, files: 0 };
+}
+
+/** A request body over its limit, answered with 413. */
+class TooLarge extends Error {}
+
+async function body(req: IncomingMessage, limit: number, tooLarge = tooBig(limit)): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > limit) throw new Error('upload too large');
+    if (size > limit) throw new TooLarge(tooLarge);
     chunks.push(chunk as Buffer);
   }
   return new Uint8Array(Buffer.concat(chunks));
