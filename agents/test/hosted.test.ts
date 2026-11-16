@@ -7,7 +7,7 @@ import { WebSocket } from 'ws';
 import type { JsonRequest, ModelClient, Priority, Tools } from '../src/core/ports.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { PICTURE_DOLLARS, startHosted, telegramAlert, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
+import { PICTURE_DOLLARS, spaceOptions, startHosted, telegramAlert, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
 import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
 import { LiveVoice, type LiveDeps, type VoiceFrame } from '../src/node/live.ts';
@@ -602,4 +602,17 @@ test("a device's commands and drops stop once its mindstorm is at its limit, and
   c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'x'.repeat(1_200_000) }] }));
   assert.equal(await closed, 1009, 'a message over 1 MB closes the socket');
   await hosted.close();
+});
+
+test("a judge's space gets none of the user's own accounts: no Instagram token or user id, no Telegram, and the one shared library", () => {
+  const library = new InstagramLibrary(mkdtempSync(join(tmpdir(), 'mp-library-')), { accounts: [], categories: [] });
+  const shared = { clientDir: '/web', model: new FakeModel(), roles: fakeRoles, instagram: { token: 'ig-token', userId: '17841400000', list: '/list.md', read: true }, telegram: { token: 'bot' } } as HostedOptions['shared'];
+  const options = spaceOptions({ shared, dataDir: '/data', appKey: KEY, following: { library } }, A);
+  assert.equal(options.instagram, undefined, 'no token or user id, and so none of their own posts');
+  assert.equal(options.telegram, undefined);
+  assert.equal(options.library, library);
+  const given = JSON.stringify({ ...options, model: null, roles: null, library: null });
+  assert.ok(!given.includes('ig-token') && !given.includes('17841400000'), 'the token and user id are nowhere in what the space gets');
+  assert.equal(options.dataDir, join('/data', 'spaces', A));
+  assert.equal(options.clientDir, join('/data', 'no-web-page'));
 });

@@ -31,7 +31,7 @@ export interface HostedOptions {
   /** For `/admin`: the status, and the off switch. */
   adminToken: string;
   ledger: Ledger;
-  /** What every space shares: the model with its one rate window, the roles, the voice, the keys, the maps. */
+  /** What every space shares: the model with its one rate window, the roles, the voice, the keys, the maps. Its Instagram account, if any, is not passed on (`spaceOptions`). */
   shared: Omit<ServerOptions, 'port' | 'host' | 'dataDir' | 'token' | 'telegram' | 'meter' | 'log'>;
   /** A space with no socket open closes after this long, and opens again on its next request. */
   idleMs?: number;
@@ -133,22 +133,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       known.add(device);
       note(`[spaces] new space for ${short(device)}${opts.starter && existsSync(opts.starter) ? ', from the starter trees' : ''}`);
     }
-    // The user's Mac reads their bot, and two readers of one bot take each other's messages: no space here ever reads it.
-    // The web page is off: a space's static files come from a folder that is never made.
-    const space = openSpace({
-      ...opts.shared,
-      telegram: undefined,
-      // A space keeps the user's own account for its recent posts, but never the list: it searches the shared library instead.
-      instagram: opts.shared.instagram && { token: opts.shared.instagram.token, userId: opts.shared.instagram.userId },
-      library: opts.following?.library,
-      storeLimit: opts.storeLimit ?? 20e6,
-      clientDir: join(opts.dataDir, 'no-web-page'),
-      dataDir: dir,
-      token: `${opts.appKey}.${device}`,
-      meter: meterOf(device),
-      uploads,
-      log: (line) => note(`[${short(device)}] ${line}`),
-    });
+    const space = openSpace({ ...spaceOptions(opts, device), meter: meterOf(device), uploads, log: (line) => note(`[${short(device)}] ${line}`) });
     open.set(device, { space, last: Date.now() });
     space.catch((err) => {
       open.delete(device);
@@ -296,6 +281,25 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       http.closeAllConnections();
       await new Promise<void>((done) => http.close(() => done()));
     },
+  };
+}
+
+/**
+ * What a device's space is opened with: the shared parts, less what a judge's space must never have. No Telegram, since the user's
+ * Mac reads their bot and two readers take each other's messages. No Instagram account of the user's, neither its token nor their own
+ * posts: a space searches the one shared library, whose reader alone holds the account. No web page: static files come from a folder
+ * that is never made.
+ */
+export function spaceOptions(opts: Pick<HostedOptions, 'shared' | 'dataDir' | 'appKey' | 'following' | 'storeLimit'>, device: string): Omit<ServerOptions, 'port' | 'host'> {
+  return {
+    ...opts.shared,
+    telegram: undefined,
+    instagram: undefined,
+    library: opts.following?.library,
+    storeLimit: opts.storeLimit ?? 20e6,
+    clientDir: join(opts.dataDir, 'no-web-page'),
+    dataDir: join(opts.dataDir, 'spaces', device),
+    token: `${opts.appKey}.${device}`,
   };
 }
 
