@@ -18,7 +18,7 @@ struct SoundClass {
     SoundClass() {
         JNIEnv* e = jni::env();
         cls = jni::findClass("com/kaifengwu/mindpalace/Sound");
-        openMicrophone = e->GetStaticMethodID(cls, "openMicrophone", "(Landroid/app/Activity;JZ)V");
+        openMicrophone = e->GetStaticMethodID(cls, "openMicrophone", "(Landroid/app/Activity;JZZ)V");
         closeMicrophone = e->GetStaticMethodID(cls, "closeMicrophone", "(J)V");
         play = e->GetStaticMethodID(cls, "play", "(Landroid/app/Activity;Ljava/lang/String;J)V");
         stop = e->GetStaticMethodID(cls, "stop", "(Landroid/app/Activity;J)V");
@@ -94,9 +94,10 @@ MicrophoneRef openMicrophone(MicrophoneEvents events) {
         std::lock_guard<std::mutex> g(registry);
         microphones[handle] = std::move(events);
     }
-    bool communication = Flags::string("micSource").value_or("") == "communication";
-    jni::env()->CallStaticVoidMethod(sound().cls, sound().openMicrophone, jni::activity(), jlong(handle), jboolean(communication));
-    logLine(std::string("[voice] microphone: ") + (communication ? "VOICE_COMMUNICATION" : "VOICE_RECOGNITION"));
+    bool recognition = Flags::string("micSource").value_or("") == "recognition";
+    bool callMode = Flags::has("callMode");
+    jni::env()->CallStaticVoidMethod(sound().cls, sound().openMicrophone, jni::activity(), jlong(handle), jboolean(recognition), jboolean(callMode));
+    logLine(std::string("[voice] microphone: ") + (recognition ? "VOICE_RECOGNITION" : "VOICE_COMMUNICATION") + (callMode ? ", in call mode" : ""));
     return std::make_shared<AndroidMicrophone>(handle);
 }
 
