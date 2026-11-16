@@ -31,6 +31,10 @@ public:
     /// whenever each was cut. At rest a face's columns are the card's. At full
     /// zoom a column is 7.5 cm of the world, and its flat face is then half a
     /// millimetre off the arc at most.
+    // NOTE(port): changed for Quest. The Swift cuts a piece once, at the card's columns, and bends each point onto
+    // the arc: a panel drawn again after its face grew, or a piece's own edge inside a column, then lies behind
+    // the piece under it, which shows through in stripes. Here columns grow with their face, and `drawn` puts
+    // every point on its column's chord.
     static constexpr float column = 0.025f;
 
     /// How wide the columns of a piece placed in the card by `matrix` lie along the card.

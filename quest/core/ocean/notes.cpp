@@ -424,6 +424,8 @@ constexpr float glowOut = 0.02f, glowIn = 0.012f;
 /// moved out by `offsets[i]` (in, where it is negative), turning each corner about that corner's own centre,
 /// so all the way round it stays as far from the card's edge; its points carry `uvs[i]`. Each ring is joined
 /// to the next.
+// NOTE(port): changed for Quest. The Swift's glow is one picture of a soft square, stretched to fit, and its gaze
+// rim turns about the card's corner points: both are square where a card's corners are round.
 MeshRef bands(Vec2 size, float radius, const std::vector<float>& offsets, const std::vector<Vec2>& uvs) {
     constexpr int arc = 12;                         // pieces of each corner's quarter turn
     float hx = size.x / 2, hy = size.y / 2;
