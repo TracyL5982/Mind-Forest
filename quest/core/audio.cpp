@@ -25,6 +25,7 @@ struct Clip {
 struct Slot {
     std::string name;
     float gain = 1;
+    double seconds = 0;
     bool loop = false;
     std::atomic<const Clip*> clip{nullptr};     // set once, by the reading thread; never freed
     // The frame thread's: what was last asked of a loop.
@@ -135,6 +136,7 @@ void start() {
         auto slot = std::make_unique<Slot>();
         slot->name = name;
         slot->gain = float(info["gain"].number(1));
+        slot->seconds = info["seconds"].number(0);
         slot->loop = info.has("loop");
         byName[name] = int(slots.size());
         slots.push_back(std::move(slot));
@@ -182,6 +184,12 @@ void play(const std::string& name, float gain, double after, float pan) {
     // `-soundLog`: each sound as it is asked for, to check a run against.
     static const bool log = Flags::has("soundLog");
     if (log) logLine(fmt("[sound] %s%s", name.c_str(), after > 0 ? fmt(" in %.2f s", after).c_str() : ""));
+}
+
+double seconds(const std::string& name) {
+    if (!on()) return 0;
+    auto found = byName.find(name);
+    return found == byName.end() ? 0 : slots[size_t(found->second)]->seconds;
 }
 
 void level(const std::string& name, float level, float over) {

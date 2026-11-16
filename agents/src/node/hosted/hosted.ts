@@ -1,12 +1,16 @@
 import { timingSafeEqual } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statfsSync } from 'node:fs';
+import { createServer, STATUS_CODES, type IncomingMessage, type ServerResponse } from 'node:http';
 import { join, posix } from 'node:path';
+import type { Duplex } from 'node:stream';
 import { PROTOCOL_VERSION } from '../protocol.ts';
 import { openSpace, type Meter, type ServerOptions, type Space } from '../server.ts';
 import type { InstagramLibrary, InstagramReader } from '../instagram.ts';
+import { publicFetch } from '../public-fetch.ts';
 import { BOT_API } from '../telegram.ts';
-import { LINES, type Ledger } from './ledger.ts';
+import { forDevice, LINES, type Ledger } from './ledger.ts';
+import { JudgeTelegram, type JudgeBotOptions } from './judges.ts';
+import { DeviceModel } from './overflow.ts';
 
 /** A device names itself with an id it made on first launch. */
 const DEVICE = /^[A-Za-z0-9_-]{16,64}$/;
@@ -18,6 +22,26 @@ const ERRORS_KEPT = 30;
  * 15 Nov 2026). The Meta API's own muse-image-1.0, the fallback, has no listed price and is counted the same.
  */
 export const PICTURE_DOLLARS = 0.01;
+
+/**
+ * Most one change may store in a space. A text dump at the 1 MB message limit stores about 2.0 MB, its words in the commands and
+ * again in the item, and a 1 MB `commands` message on a card at EDIT_BYTES stores the card before and after besides. A change past
+ * this is refused, so a device's mindstorm passes its store limit by at most this much.
+ */
+export const SET_BYTES = 2_500_000;
+
+/**
+ * Spaces in all, and new ones an hour: near the number of judges (about 10), since the app's key is in the APK and a device names
+ * itself, so one person can make many devices, each with its own share of the day's cap.
+ */
+export const MAX_DEVICES = 20;
+export const NEW_DEVICES_PER_HOUR = 10;
+
+/** Below this much free on the volume, which every space and the ledger share, nothing new is written: no upload, change or space. */
+export const MIN_FREE_BYTES = 300e6;
+/** A space fetches a page or a picture from an address it was given only on the public internet: never this machine or Fly's network. */
+const PUBLIC_ONLY = publicFetch();
+const VOLUME_FULL = 'The service is nearly out of room, so nothing more can be added for now. Everything here still opens.';
 
 export interface HostedOptions {
   port: number;
@@ -31,7 +55,7 @@ export interface HostedOptions {
   /** For `/admin`: the status, and the off switch. */
   adminToken: string;
   ledger: Ledger;
-  /** What every space shares: the model with its one rate window, the roles, the voice, the keys, the maps. */
+  /** What every space shares: the model with its one rate window, the roles, the voice, the keys, the maps. Its Instagram account, if any, is not passed on (`spaceOptions`). */
   shared: Omit<ServerOptions, 'port' | 'host' | 'dataDir' | 'token' | 'telegram' | 'meter' | 'log'>;
   /** A space with no socket open closes after this long, and opens again on its next request. */
   idleMs?: number;
@@ -45,8 +69,16 @@ export interface HostedOptions {
   pictureDollars?: number;
   /** The user's Instagram accounts, opened once: every space searches this one library, and only its reader, if any, reads Instagram. */
   following?: { library: InstagramLibrary; reader?: InstagramReader };
-  /** What one device's mindstorm may come to on disk, in bytes, before its own commands and drops are refused. */
+  /** What one device's mindstorm and handoffs may come to on disk, in bytes, before every message that writes is refused. */
   storeLimit?: number;
+  /** What the files the service keeps for one device may come to, in bytes: pictures fetched, made or copied in. Uploads are apart. */
+  madeLimit?: number;
+  /** What is free on the volume, in bytes. Defaults to the file system's own count. */
+  freeBytes?: () => number;
+  /** Which limits the service was deployed with, for `/admin`: `judging`, or `testing` with no per-device daily limits. */
+  mode?: string;
+  /** The judges' own Telegram bot, which this service alone reads. Without it no space has Telegram. */
+  judgeBot?: Omit<JudgeBotOptions, 'log'>;
   /** A line in Momo's voice as 16-bit mono PCM at the live voice's rate, for a refusal said without the realtime model. */
   record?: (text: string) => Promise<Uint8Array>;
   log: (line: string) => void;
@@ -72,12 +104,17 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
   const open = new Map<string, { space: Promise<Space>; last: number }>();
   const closing = new Map<string, Promise<void>>();
   const idleMs = opts.idleMs ?? 20 * 60_000;
-  const maxDevices = opts.maxDevices ?? 60;
-  const newPerHour = opts.newPerHour ?? 30;
+  const maxDevices = opts.maxDevices ?? MAX_DEVICES;
+  const newPerHour = opts.newPerHour ?? NEW_DEVICES_PER_HOUR;
   const uploads = opts.uploads ?? { file: 25e6, total: 40e6 };
   /** When each device of the last hour was made. */
   const born: number[] = [];
   const started = Date.now();
+  const freeBytes = opts.freeBytes ?? (() => {
+    const fs = statfsSync(opts.dataDir);
+    return fs.bavail * fs.bsize;
+  });
+  const volumeFull = () => (freeBytes() < MIN_FREE_BYTES ? VOLUME_FULL : null);
 
   const errors: string[] = [];
   let errorCount = 0;
@@ -112,9 +149,18 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       const why = ledger.paused();
       return why ? LINES[why] : null;
     },
+    held: () => {
+      const why = ledger.held(device);
+      return why ? LINES[why] : null;
+    },
     pictured: () => ledger.spend(opts.pictureDollars ?? PICTURE_DOLLARS, device),
     recorded,
   });
+
+  /** A chat's message opens only the space of a device that has one: Telegram never makes a device. */
+  const judges = opts.judgeBot
+    ? new JudgeTelegram({ ...opts.judgeBot, file: join(opts.dataDir, 'judge-telegram.json'), log: note, open: async (device) => known.has(device) && !('error' in (await spaceOf(device))) })
+    : null;
 
   async function spaceOf(device: string): Promise<Space | { status: number; error: string }> {
     await closing.get(device);
@@ -125,6 +171,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     }
     const dir = join(spacesDir, device);
     if (!known.has(device)) {
+      if (volumeFull()) return { status: 507, error: VOLUME_FULL };
       if (known.size >= maxDevices) return { status: 403, error: 'this service has all the headsets it can take' };
       while (born.length > 0 && born[0]! < Date.now() - 3_600_000) born.shift();
       if (born.length >= newPerHour) return { status: 429, error: 'too many new headsets this hour; try again later' };
@@ -133,22 +180,11 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       known.add(device);
       note(`[spaces] new space for ${short(device)}${opts.starter && existsSync(opts.starter) ? ', from the starter trees' : ''}`);
     }
-    // The user's Mac reads their bot, and two readers of one bot take each other's messages: no space here ever reads it.
-    // The web page is off: a space's static files come from a folder that is never made.
-    const space = openSpace({
-      ...opts.shared,
-      telegram: undefined,
-      // A space keeps the user's own account for its recent posts, but never the list: it searches the shared library instead.
-      instagram: opts.shared.instagram && { token: opts.shared.instagram.token, userId: opts.shared.instagram.userId },
-      library: opts.following?.library,
-      storeLimit: opts.storeLimit ?? 20e6,
-      clientDir: join(opts.dataDir, 'no-web-page'),
-      dataDir: dir,
-      token: `${opts.appKey}.${device}`,
-      meter: meterOf(device),
-      uploads,
-      log: (line) => note(`[${short(device)}] ${line}`),
+    const model = new DeviceModel(opts.shared.model, device, () => {
+      const why = ledger.held(device);
+      return why ? LINES[why] : null;
     });
+    const space = openSpace({ ...spaceOptions(opts, device), model, volumeFull, meter: meterOf(device), uploads, contact: judges?.channel(device), log: (line) => note(`[${short(device)}] ${line}`) });
     open.set(device, { space, last: Date.now() });
     space.catch((err) => {
       open.delete(device);
@@ -167,6 +203,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       await space.pipeline.idle();
       await space.close();
     }
+    judges?.forget(device);
     rmSync(join(spacesDir, device), { recursive: true, force: true });
     known.delete(device);
   }
@@ -209,12 +246,14 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     return {
       ok: true,
       protocol: PROTOCOL_VERSION,
+      mode: opts.mode ?? 'judging',
       uptimeS: Math.round((Date.now() - started) / 1000),
       spaces: known.size,
       maxDevices,
       newThisHour: born.filter((at) => at >= Date.now() - 3_600_000).length,
       newPerHour,
       known: [...known],
+      telegram: judges?.status() ?? null,
       instagram: opts.following ? { posts: opts.following.library.size(), reading: Boolean(opts.following.reader) } : null,
       devicesOnline: spaces.filter((s) => s.online > 0).length,
       open: spaces,
@@ -267,27 +306,18 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       else res.end();
     });
   });
-  http.on('upgrade', (req, socket, head) => {
-    const refuse = (status: string) => {
-      socket.write(`HTTP/1.1 ${status}\r\n\r\n`);
-      socket.destroy();
-    };
-    const device = deviceOf(req, new URL(req.url ?? '/', 'http://localhost'));
-    if (!device) return refuse('401 Unauthorized');
-    void spaceOf(device).then(
-      (space) => ('error' in space ? refuse(space.status === 429 ? '429 Too Many Requests' : '403 Forbidden') : space.upgrade(req, socket, head)),
-      () => refuse('500 Internal Server Error'),
-    );
-  });
+  http.on('upgrade', upgradeWhenOpen((req) => deviceOf(req, new URL(req.url ?? '/', 'http://localhost')), spaceOf, log));
 
   await new Promise<void>((ready) => http.listen(opts.port, opts.host, ready));
   const address = http.address();
   const port = typeof address === 'object' && address ? address.port : opts.port;
+  judges?.start();
   return {
     url: `http://${opts.host === '0.0.0.0' ? 'localhost' : opts.host}:${port}`,
     open: () => [...open.keys()],
     async close() {
       clearInterval(sweep);
+      await judges?.close();
       opts.following?.reader?.stop();
       await Promise.all([...closing.values()]);
       for (const [, entry] of open) await (await entry.space.catch(() => null))?.close();
@@ -296,6 +326,63 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       http.closeAllConnections();
       await new Promise<void>((done) => http.close(() => done()));
     },
+  };
+}
+
+/**
+ * Hands a socket's upgrade to its device's space once the space is open, which can take a while when it is closing first. Node takes
+ * its own error listener off the socket before an upgrade, so one is put on for the wait, and taken off just before the space has the
+ * socket, as the ws README does for an upgrade handled later: a socket reset in the wait would otherwise end the process.
+ */
+export function upgradeWhenOpen(
+  deviceOf: (req: IncomingMessage) => string | null,
+  spaceOf: (device: string) => Promise<Space | { status: number; error: string }>,
+  log: (line: string) => void,
+): (req: IncomingMessage, socket: Duplex, head: Buffer) => void {
+  return (req, socket, head) => {
+    const heard = (err: Error) => log(`[hosted] a socket went while its space opened: ${err.message}`);
+    socket.on('error', heard);
+    const refuse = (status: string) => {
+      socket.write(`HTTP/1.1 ${status}\r\n\r\n`);
+      socket.destroy();
+    };
+    const device = deviceOf(req);
+    if (!device) return refuse('401 Unauthorized');
+    void spaceOf(device).then(
+      (space) => {
+        if ('error' in space) return refuse(`${space.status} ${STATUS_CODES[space.status]}`);
+        socket.removeListener('error', heard);
+        space.upgrade(req, socket, head);
+      },
+      () => refuse('500 Internal Server Error'),
+    );
+  };
+}
+
+/**
+ * What a device's space is opened with: the shared parts, less what a judge's space must never have. No Telegram bot of its own,
+ * since the user's Mac reads their bot and two readers take each other's messages: a space's Telegram is the judges' bot, which
+ * `startHosted` gives it as its contact. No Instagram account of the user's, neither its token nor their own
+ * posts: a space searches the one shared library, whose reader alone holds the account. No web page: static files come from a folder
+ * that is never made.
+ */
+export function spaceOptions(opts: Pick<HostedOptions, 'shared' | 'dataDir' | 'appKey' | 'following' | 'storeLimit' | 'madeLimit'>, device: string): Omit<ServerOptions, 'port' | 'host'> {
+  const live = opts.shared.live;
+  const answer = live?.webAnswer;
+  return {
+    ...opts.shared,
+    // A web answer runs as this device's work, so what it costs is counted to the device's share (`forDevice`).
+    ...(live && answer ? { live: { ...live, webAnswer: (question: string) => forDevice.run(device, () => answer(question)) } } : {}),
+    telegram: undefined,
+    instagram: undefined,
+    library: opts.following?.library,
+    storeLimit: opts.storeLimit ?? 20e6,
+    madeLimit: opts.madeLimit ?? 60e6,
+    setBytes: SET_BYTES,
+    fetchPage: PUBLIC_ONLY,
+    clientDir: join(opts.dataDir, 'no-web-page'),
+    dataDir: join(opts.dataDir, 'spaces', device),
+    token: `${opts.appKey}.${device}`,
   };
 }
 

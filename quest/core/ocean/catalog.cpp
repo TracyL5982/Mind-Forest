@@ -502,7 +502,6 @@ float Catalog::aspect(const OceanNote& note) const {
 
 /// The picture on an open image or video note, m.
 Vec2 Catalog::pictureSize(const OceanNote& note) const {
-    if (note.id.rfind("welcome", 0) == 0) return Metrics::film(Metrics::lessonWidth, Metrics::lessonStage, aspect(note));
     return pictureSize(aspect(note));
 }
 
@@ -512,11 +511,7 @@ Vec2 Catalog::pictureSize(float aspect) {
 
 /// An open note, m. Its width never changes; its height goes with what it carries.
 Vec2 Catalog::openSize(const OceanNote& note) const {
-    // NOTE(port): added for Quest: a lesson of the welcome tree is a larger card, with room for a gesture to play on it.
-    OceanNote::Kind kind = note.kind();
-    bool picture = kind == OceanNote::Kind::image || kind == OceanNote::Kind::video;
-    if (picture && note.id.rfind("welcome", 0) == 0) return {Metrics::lessonWidth, pictureSize(note).y + 0.146f};
-    return openSize(kind, note.diagram.has_value(), aspect(note));
+    return openSize(note.kind(), note.diagram.has_value(), aspect(note));
 }
 
 // NOTE(port): the Swift's `openSize(_:)` from its switch on, for a kind of note: a card opens as one (core/cards).

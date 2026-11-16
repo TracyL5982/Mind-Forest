@@ -203,11 +203,13 @@ void OceanModel::buildSmall(CardView& c) {
     }
     std::optional<Piece> piece;
     EntityRef holder = c.smallHolder;
+    float radius = 0;                   // its face's round corners, m; the ocean's own pieces are square
     // NOTE(port): added for Quest. A piece drawn as a card shows the pictures it has, and its open frame and
     // panel are made with its small face, so they are there before the card can open (core/cards).
     if (std::optional<std::string> card = cards::ocean::cardOf(c.ref)) {
         cardPictures(*card);
         piece = cards::ocean::small(*art, *card);
+        radius = cards::ocean::smallRadius(*card).value_or(0);
         cards::ocean::open(*art, *card);
         cards::ocean::panel(*art, *card);
         // A card still composing is drawn in a holder of its own, so it can ease to its finished card's size, and
@@ -248,8 +250,8 @@ void OceanModel::buildSmall(CardView& c) {
         c.shade = [art = art.get()](const EntityRef& quad, const TextureRef& texture, float dim) { art->shade(quad, texture, dim); };
     }
     if (c.shimmer) holder->addChild(c.shimmer);
-    c.addGlow(art->glow(c.smallBody), holder);
-    if (EntityRef rim = art->gazeRim(c.smallBody, gazeMaterial)) holder->addChild(rim);
+    c.addGlow(art->glow(c.smallBody, radius), holder);
+    if (EntityRef rim = art->gazeRim(c.smallBody, gazeMaterial, radius)) holder->addChild(rim);
 }
 
 // NOTE(port): added for Quest (core/cards), with `settleCard` and `composeFrame`.
@@ -415,8 +417,8 @@ void OceanModel::buildOpen(CardView& c, const TreeNode& node) {
         c.scrollBar = art->swatch(Color::white(), {cards::ocean::INDICATOR_WIDE * cards::ocean::openScale / Art::ppm, cards::ocean::INDICATOR_UNIT}, 0.4f);
         cards::ocean::showIndicator(c.scrollBar, *card);
         c.openHolder->addChild(c.scrollBar);
-        c.addGlow(art->glow(c.openBody), c.openHolder);
-        if (EntityRef rim = art->gazeRim(c.openBody, gazeMaterial)) c.openHolder->addChild(rim);
+        c.addGlow(art->glow(c.openBody, cards::ocean::openRadius), c.openHolder);
+        if (EntityRef rim = art->gazeRim(c.openBody, gazeMaterial, cards::ocean::openRadius)) c.openHolder->addChild(rim);
     } else switch (c.ref.kind) {
     case Ref::Kind::film: {
         const Clip& clip = catalog->clips[c.ref.index];

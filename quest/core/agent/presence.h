@@ -18,7 +18,8 @@ struct AgentLine {
 };
 
 struct Presence {
-    enum class State { off, waiting, listening, sent, thinking, responding, working };
+    /// `open`: between turns the conversation is open, and Momo hears the user without its name.
+    enum class State { off, waiting, listening, open, sent, thinking, responding, working };
     State state = State::off;
     std::string userText;
     bool userFinal = false;
@@ -30,6 +31,11 @@ struct Presence {
     /// showing too: the service can't be reached, or why the headset asks for the microphone.
     std::string notice;
 
+    /// The conversation goes on: Momo listens, thinks or speaks. The ocean's own sounds draw back under it.
+    bool conversing() const {
+        return state == State::listening || state == State::open || state == State::sent || state == State::thinking ||
+               state == State::responding;
+    }
     /// Some agent is at work: Momo wears its monocle.
     bool searching() const {
         for (const AgentLine& a : agents) {

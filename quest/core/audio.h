@@ -27,6 +27,8 @@ bool on();
 /// Plays a sound once. `gain` is on top of the sound's own; `after` is
 /// seconds from now; `pan` is -1 (left) … 1 (right).
 void play(const std::string& name, float gain = 1, double after = 0, float pan = 0);
+/// How long a sound lasts, s, as the manifest says: 0 for one it does not name.
+double seconds(const std::string& name);
 /// How loud a loop is, 0 (silent, and stopped) … 1 (as it was made; up to 2 can be asked): it goes there over
 /// about `over` seconds. A loop starts from its beginning when it is
 /// raised from nothing. Asking for the level it already has costs nothing.

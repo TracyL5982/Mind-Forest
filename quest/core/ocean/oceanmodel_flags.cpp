@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <tuple>
 
 #include "../cards/gallery.h"
 #include "../cards/ocean.h"
@@ -500,6 +501,19 @@ void OceanModel::runFlags() {
         m.pinchByFlag({a, b}, 0.6, 0.5);
     });
     at("tapAt", [](OceanModel& m) { m.pinchByFlag({{0, 0}, {0, 0}}, 0.1, 0); });
+    // `-acrossPictureAt t` drags across the open card's picture, from 0.2 to 0.55 of its width, as a hand marking a stretch
+    // of a video or drawing on a picture does with the pen up; `-acrossPictureAgainAt t` from 0.7 to 0.9, too far from the
+    // first to take it by an end.
+    for (const auto& [name, from, to] : {std::tuple{"acrossPictureAt", 0.2f, 0.55f}, std::tuple{"acrossPictureAgainAt", 0.7f, 0.9f}}) {
+        float a = from, b = to;
+        at(name, [a, b](OceanModel& m) {
+            CardRef c = m.tree && m.tree->focus() ? m.card(*m.tree->focus()) : nullptr;
+            if (!c) return;
+            PictureFrame p = m.pictureFrame(*c);
+            float left = p.center.x - p.size.x / 2;
+            m.pinchByFlag({{left + p.size.x * a, p.center.y}, {left + p.size.x * b, p.center.y}}, 0, 0.6);
+        });
+    }
     auto open = [](OceanModel& m) { return m.tree && m.tree->focus() ? m.card(*m.tree->focus()) : nullptr; };
     // A point of the open face over words, or over none, in the window as it stands.
     auto spot = [](OceanModel& m, CardView& c, bool words) -> std::optional<Vec2> {

@@ -37,6 +37,33 @@ export function questWavMs(audio: Uint8Array): number | null {
 }
 
 /**
+ * How long an Ogg Opus recording plays, in ms, read from the file itself: the last page's granule position, which counts samples at
+ * 48 kHz whatever rate was recorded. Null when no Ogg page is found. A file can lie here as a sender can about its length, so what
+ * is charged is never less than its size allows (`heardMs`).
+ */
+export function oggOpusMs(audio: Uint8Array): number | null {
+  for (let at = audio.length - 27; at >= 0; at--) {
+    if (audio[at] !== 0x4f || audio[at + 1] !== 0x67 || audio[at + 2] !== 0x67 || audio[at + 3] !== 0x53 || audio[at + 4] !== 0) continue;
+    const granule = new DataView(audio.buffer, audio.byteOffset + at + 6, 8).getBigUint64(0, true);
+    // All ones marks a page on which no packet ends.
+    if (granule === 0xffff_ffff_ffff_ffffn) continue;
+    return Number(granule) / 48;
+  }
+  return null;
+}
+
+/** A voice note's bytes a second at Telegram's usual rate for speech, about 32 kbit/s: no note is counted as shorter than its size at this rate. */
+const VOICE_NOTE_BYTES_PER_SECOND = 4000;
+
+/**
+ * The length a recording from a chat app is charged at, in ms: the longest of what its sender said, what the file says of itself,
+ * and what its size comes to as a voice note. The sender's word alone is theirs to choose.
+ */
+export function heardMs(audio: Uint8Array, statedSeconds?: number): number {
+  return Math.max((statedSeconds ?? 0) * 1000, oggOpusMs(audio) ?? 0, (audio.length / VOICE_NOTE_BYTES_PER_SECOND) * 1000);
+}
+
+/**
  * Spoken replies from OpenAI's speech model, as MP3 that arrives while it is made, so playback starts early. `pcm` is 16-bit mono
  * at 24 kHz instead, the live voice's own format.
  */

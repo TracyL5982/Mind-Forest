@@ -1,9 +1,11 @@
 import {
   Command,
   CommandError,
+  EDIT_BYTES,
   inLibrary,
   MAX_EDITS,
   Sound,
+  storedBytes,
   type ChangeSet,
   type EntityName,
   type EntityOf,
@@ -32,6 +34,11 @@ export interface Draft {
 export interface MindstormOptions {
   now: () => string;
   newId: () => Id;
+  /**
+   * Most bytes one change set may keep, its commands and patches as JSON. A change past it is refused whole and changes nothing.
+   * Unset, any size: the user's own service. A hosted space sets it, since its store limit is checked before each change.
+   */
+  setBytes?: number;
 }
 
 type Maps = { [E in EntityName]: Map<Id, EntityOf<E>> };
@@ -241,8 +248,15 @@ export class Mindstorm {
   private commit(draft: Draft, undoing: Pick<ChangeSet, 'undoes' | 'alsoUndoes'>, body: () => void): ChangeSet {
     if (this.working) throw new CommandError('invalid', 'apply is not re-entrant');
     this.working = [];
+    let patches: Patch[];
     try {
       body();
+      patches = squash(this.working);
+      const limit = this.opts.setBytes;
+      if (limit !== undefined) {
+        const bytes = storedBytes({ commands: draft.commands, patches });
+        if (bytes > limit) throw new CommandError('invalid', `one change keeps at most ${mb(limit)}, and this one would keep ${mb(bytes)}`);
+      }
     } catch (err) {
       const made = this.working;
       this.working = [];
@@ -250,7 +264,6 @@ export class Mindstorm {
       this.working = null;
       throw err;
     }
-    const patches = squash(this.working);
     this.working = null;
     const counts = patches.length > 0 || undoing.undoes !== undefined;
     const set: ChangeSet = {
@@ -388,6 +401,7 @@ export class Mindstorm {
         const stretch = c.edit.kind === 'stretch';
         const edits = [...(n.edits ?? []).filter((e) => e.id !== c.edit.id && !(stretch && e.kind === 'stretch')), c.edit];
         if (edits.length > MAX_EDITS) throw new CommandError('invalid', `a card keeps at most ${MAX_EDITS} edits`);
+        if (storedBytes(edits) > EDIT_BYTES) throw new CommandError('invalid', `a card's edits come to at most ${EDIT_BYTES / 1024} KB`);
         this.put('node', { ...n, edits });
         return;
       }
@@ -504,6 +518,8 @@ function bucket(map: Map<Id, Set<Id>>, key: Id): Set<Id> {
 function defined<T extends object>(obj: T): Partial<T> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
+
+const mb = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
 
 /** One patch per entity, from its first `before` to its last `after`, in first-touched order. */
 function squash(patches: Patch[]): Patch[] {

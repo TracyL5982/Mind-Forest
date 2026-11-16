@@ -86,18 +86,31 @@ std::shared_ptr<Bend::Part> Bend::draw(const EntityRef& e, const MeshRef& mesh, 
         // New here, or given a new flat mesh since.
         parts.erase(key);
         if (!(curve > 0)) return nullptr;
-        std::optional<Cut> cut = Bend::cut(mesh, matrix);
-        if (!cut) return nullptr;
-        auto p = std::make_shared<Part>();
-        p->entity = e;
-        p->points = std::move(cut->points);
-        p->uvs = std::move(cut->uvs);
-        bool video = e->model && !e->model->materials.empty() && e->model->materials.front().kind == Material::Kind::video;
-        if (!video) p->low = lowMesh(p->uvs);
-        parts[key] = p;
-        part = p;
+        part = std::make_shared<Part>();
+        part->entity = e;
+        part->flat = mesh;
+        parts[key] = part;
     }
     if (part->matrix != matrix || part->across.empty()) {
+        // Its columns grow with it about the card's middle (a face opening), and it is cut again only when they move in it.
+        float stretch = std::fabs(matrix.columns[0].x) > 1e-6f ? matrix.columns[0].x : 1;
+        std::array<float, 3> lines{matrix.columns[1].x / stretch, matrix.columns[2].x / stretch, matrix.columns[3].x / stretch};
+        bool moved = false;
+        for (size_t i = 0; i < lines.size(); i++) moved = moved || std::fabs(lines[i] - part->lines[i]) > 1e-6f;
+        part->width = width(matrix);
+        if (part->across.empty() || moved) {
+            std::optional<Cut> cut = Bend::cut(part->flat, matrix, part->width);
+            if (!cut) {
+                parts.erase(key);
+                return nullptr;
+            }
+            part->lines = lines;
+            part->points = std::move(cut->points);
+            part->uvs = std::move(cut->uvs);
+            bool video = e->model && !e->model->materials.empty() && e->model->materials.front().kind == Material::Kind::video;
+            if (!video) part->low = lowMesh(part->uvs);
+            part->shown = nullptr;
+        }
         part->matrix = matrix;
         part->across.resize(part->points.size());
         for (size_t i = 0; i < part->points.size(); i++) {
@@ -124,7 +137,7 @@ void Bend::place(Part& part, float curve, bool exactly) {
         low->withUnsafeMutableBytes<Vertex>([&](Vertex* v, int) {
             for (int i = 0; i < count; i++) {
                 Vec3 p = part.across[i];
-                v[i].position = part.points[i] + part.back * (bent(p, curve) - p);
+                v[i].position = part.points[i] + part.back * (drawn(p, curve, part.width) - p);
             }
         });
         if (!part.shown) {
@@ -147,7 +160,7 @@ void Bend::place(Part& part, float curve, bool exactly) {
         std::vector<Vec3> positions(static_cast<size_t>(count));
         for (int i = 0; i < count; i++) {
             Vec3 p = part.across[i];
-            positions[i] = part.points[i] + part.back * (bent(p, curve) - p);
+            positions[i] = part.points[i] + part.back * (drawn(p, curve, part.width) - p);
         }
         std::vector<uint32_t> indices(static_cast<size_t>(count));
         for (int i = 0; i < count; i++) indices[i] = uint32_t(i);
@@ -179,7 +192,7 @@ LowLevelMeshRef Bend::lowMesh(const std::vector<Vec2>& uvs) {
     return mesh;
 }
 
-std::optional<Bend::Cut> Bend::cut(const MeshRef& mesh, const Mat4& matrix) {
+std::optional<Bend::Cut> Bend::cut(const MeshRef& mesh, const Mat4& matrix, float width) {
     struct Corner {
         Vec3 p;
         Vec2 t;
@@ -223,12 +236,12 @@ std::optional<Bend::Cut> Bend::cut(const MeshRef& mesh, const Mat4& matrix) {
             k += 3;
             float least = std::min(triangle[0].x, std::min(triangle[1].x, triangle[2].x));
             float most = std::max(triangle[0].x, std::max(triangle[1].x, triangle[2].x));
-            int first = int(std::floor(least / column)), last = int(std::floor(most / column));
+            int first = int(std::floor(least / width)), last = int(std::floor(most / width));
             if (!(last - first < 600)) continue;
             for (int strip = first; strip <= last; strip++) {
                 std::vector<Corner> poly(std::begin(triangle), std::end(triangle));
                 if (first != last) {
-                    poly = keep(keep(poly, float(strip) * column, true), float(strip + 1) * column, false);
+                    poly = keep(keep(poly, float(strip) * width, true), float(strip + 1) * width, false);
                 }
                 if (!(poly.size() >= 3)) continue;
                 for (size_t j = 1; j < poly.size() - 1; j++) {

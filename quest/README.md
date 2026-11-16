@@ -73,8 +73,8 @@ forest, a pinch on a card opens it and the Scout's picks come up round it with d
 it, and the knife deletes. Palms together closes a tree; it is handed off by voice ("hand this off"). Under an open
 card stand at most three suggested questions as pills, and a pinch held still on it, while a ring fills round the pinch,
 asks for more like it. Gone into, the card has Kai's pen, eraser and Send: with the pen up a drag highlights words or
-draws on the card, which the service keeps with it, the eraser takes the newest mark off, and Send asks Momo about what
-is marked (core/cards/README.md). The plan and
+draws on the card, or along a video marks a stretch of it, which the service keeps with the card; one press of the
+eraser takes every mark off, and Send asks Momo about all of them together (core/cards/README.md). The plan and
 its state are in [agent-plan.md](agent-plan.md).
 
 This build installs beside the app already on the headset, as "Mind Palace Ocean (agents)", because it is
@@ -99,7 +99,8 @@ trees stay in their file, out of view, until it is started without the service. 
 nothing costs money.
 
 Talking to it works as in the web client. The headset listens on the device for "hey Momo" or "hi Momo" (the
-service's agent name), and nothing it hears leaves the headset unless it began with the name. After the name it
+service's agent name), and nothing it hears leaves the headset unless it began with the name, or came in the
+conversation the name opened (below). After the name it
 chimes and records until you pause for 1.2 s; the service transcribes that and acts on it, and its reply is spoken
 when the service has a voice. Momo sits low in front of you, drawn as in CurioCity (ClandestineOperation's
 `AgentVisual`, with the values its scene gives it): three rings of Perlin noise in cyan, magenta and yellow, added into
@@ -121,21 +122,30 @@ and agents, without the service. The first time, the headset
 asks to use the microphone; refused, it does
 not ask again until the app starts again, and replies are still spoken. A microphone that stops is opened again after
 1, 2, 4, 8, then every 15 s. When the service has a live voice (hello's `live`), the headset opens its `/live`
-socket, named for its own connection (hello's `connection`), and the words go another way: after the name the
-microphone streams to the service until it says your turn is over, and Momo answers you itself, in its own voice,
-which streams back and plays as it arrives: from what it knows, a quick web answer, your saved cards, or by starting
-new cards, which it then tells you about as they land, with no say of the pipeline's needed. Saying "hey Momo" while Momo speaks stops it and
-starts a new turn, except while what it is saying names itself. The log says how long after your last word the turn
-ended and Momo answered. Without `/live`, or while it is closed (it is tried again every 5 s while hello offers it),
+socket, named for its own connection (hello's `connection`), and the words go another way: the name opens a
+conversation. While it is open you talk with no name: whatever you say streams to the service as a turn until it says
+your turn is over, and Momo answers you itself, in its own voice, which streams back and plays as it arrives: from what
+it knows, a quick web answer, your saved cards, or by starting new cards, which it then tells you about as they land,
+with no say of the pipeline's needed. Talking over Momo stops it at once and starts a new turn (`start`, the service's
+hush and truncate): a turn begins once 3 of the last 4 tenths of a second were words, so a cough or a knock does not.
+Momo's voice keeps the conversation open, and opens it again. It closes once nobody, neither you nor Momo, has talked
+for 8 s; then the caption says `Say “Hey Momo”` again. While it is open between turns the caption says `Listening…`
+under Momo's last words and the ring follows your voice. Momo's own voice is kept out of what the headset hears by the
+platform's echo cancelling: the microphone reads Android's VOICE_COMMUNICATION source with AcousticEchoCanceler on, and
+the log says which it got. `-echoCheck <reply.wav>` measures it with no service: a recorded reply plays 10 times while
+you stay quiet (each turn begun is a false barge-in), then 10 times you talk over it (each logs how long after your
+first word Momo stopped). The log says how long after your last word the turn ended and Momo answered. Without `/live`, or while it is closed (it is tried again every 5 s while hello offers it),
 everything is as above. The voice says what it is doing and the orb shows it: waiting, listening from the name,
 sent for 0.4 s as your turn ends, thinking until the first sound of Momo's answer (or word that none is coming, at
-most 20 s), responding while Momo speaks, working while the agent works after it, then waiting. Besides the chime the
-headset makes two sounds of its own: a short falling tone as your turn is sent, and a quiet loop while Momo thinks.
-Nothing sounds while the agent works. A question picked or typed under a card is sent and thought about the same way,
+most 20 s), responding while Momo speaks, open while the conversation is, working while the agent works after it,
+then waiting. Momo has three sounds of its own, made by `quest/sound/synth.py` in the ocean's key and played through
+its mixer: the chime, a short falling tone as your turn is sent, and a quiet loop while Momo thinks. Nothing sounds
+while the agent works. A question picked or typed under a card is sent and thought about the same way,
 until Momo answers or the work starts. `-mute` silences every sound the app makes, Momo's voice too, and the orb still
 follows the voice it would have heard. `-agentVoice off`
 turns it off; `-wakeClip <file.wav>` (16 kHz mono 16-bit) is heard in place of the microphone; `-micSource
-communication` reads Android's echo-cancelled source instead of the recognizer's. The listener is sherpa-onnx's
+recognition` reads the recognizer's source, with no echo cancelling, and `-callMode` puts the app in Android's call
+mode while the microphone is open, both to compare on the headset. The listener is sherpa-onnx's
 keyword spotter, which `tools/fetch-voice.sh` fetches into `quest/vendor/` (the builds run it); `core/agent/test/run.sh`
 tests it on spoken clips.
 
@@ -384,7 +394,10 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
 - **When each is heard** is in `core/ocean/oceanmodel_sound.cpp` and at the place each thing happens
   (`sound("take")` in `take`). The layer's chord is struck whenever the layer you stand on changes, by any
   means: upward on coming nearer, downward on stepping back. While a fist nears a layer's gate, that
-  layer's chord is held and swells with the gauge's arc. The ocean's bed draws back under a film's sound.
+  layer's chord is held and swells with the gauge's arc. The ocean's bed draws back under a film's sound. While Momo
+  listens, thinks or speaks, the bed, the layer chords and the glints play about 9 dB down (`conversationDip`).
+- **Momo's own** are `momo_chime`, `momo_sent` and `momo_thinking` (a loop), made by `momo()` in synth.py from its
+  own random numbers, so the ocean's sounds stay as they were; `core/agent/voice.cpp` plays them.
 - **The ocean** has a held sound under everything, kept very low, and glints: a piece that swells where
   the head points rings a short high note of its own (`Shell::swelled`, `soundGlints`). One is heard for
   every few degrees the look travels, so a slow look round is a glint now and then, a quick one a run of
@@ -402,8 +415,9 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
 - **The welcome tree**, once: on a first launch a tree stands by itself, "Welcome to Mind Forest". It is an
   ordinary tree whose cards are the lessons, eight of them, one a layer: pinch a card, grab to pan, grab
   to pull or push, pinch and hold to move, ask Momo, show Momo part of a picture, choose a layer on the
-  small tree, palms together to close. The cards are notes made in code (`addWelcomeNotes`), larger than other notes,
-  each with a few pictures round it so that its layer is a real one. The walk (`updateTour`) is always
+  small tree, palms together to close. The cards are notes made in code (`addWelcomeNotes`), each drawn as a premade
+  card of the card library (`core/cards/lesson.cpp`) in the look of the others, with or without `-cards`,
+  and each with a few pictures round it so that its layer is a real one. The walk (`updateTour`) is always
   at some lesson and that lesson at some beat, and it never leaves you with nothing to read:
   - **One line over the tree** says the one thing to do now, large, with where the walk is before it
     ("3 of 8 · Close your hand and pull it toward you"). It changes with each beat, not each card.
@@ -411,14 +425,19 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
     arrowheads running to it along a path (`drawMarks`). The next card from the first; either way under
     the card for panning; a picture and a dashed place to put it for moving; the picture, then its tools,
     then a dashed round on the face for marking; the small tree, with the way down to it; Put away.
-  - **The open lesson plays its gesture on its own face.** Closed, every lesson is its number on a plain
-    ground, always on the right of the open one.
+  - **The open lesson plays its gesture on its own face.** Opened, a lesson's card is its step as the
+    badge ("Step 3 of 7"), the lesson's name, the stage where the hand plays the gesture (for marking, the
+    picture to mark), and what to do in the lesson's own words. The hand is at its full size (`stage` in
+    the lessons' table), in the middle of a stage 35 cm tall (`lessonStageTall`) that holds all it draws;
+    the card is as tall as that and the words, taller than the library's cards, and never scrolls.
+    Closed, every lesson is its number on a plain ground over its name, always on the right of the open one.
   - **Beats.** Pulling is two (pull; then "Now push it away to come back", with pull and push playing on
     the layer pulled back to). The picture is five (go in; take up the pen; draw; pinch Send, which is
     ringed; say a word about it), the last four said along the foot of the picture on the card itself.
-  - **Done, then the next card.** A lesson done is a chime, a tick where its gesture played and "Done.
-    Pinch card 4 to go on", with that card ringed and arrowheads running to it. Pinching it is the next
-    lesson (as it is at any time: that is the skip, and it is said so after 14 s on a lesson not done).
+  - **Done, then the next card.** A lesson done is a chime, a tick where its gesture played (it stays
+    there while the card is shown) and "Done. Pinch card 4 to go on", with that card ringed and
+    arrowheads running to it. Pinching it is the next lesson (as it is at any time: that is the skip,
+    and it is said so after 14 s on a lesson not done).
     Left alone for 15 s the walk takes the card itself (`-guideAutoAfter <s>`); after the small tree, which
     leaves you on another layer where the next card is not to be seen, it does so after 4 s.
   - **Two lessons are done by talking to Momo** (15 Nov, once Momo was in the build; `tourTalk`). The
@@ -526,8 +545,8 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
   has a handle at each end, which a later drag takes it by). With the pen down a drag does nothing (on a
   card drawn as one of the agent's, `-cards`, it scrolls the card). The eraser takes the mark off. Send,
   light once something is marked, asks about it (`askMark`). On a card of the agent service's the pen's
-  highlights and lines are kept by the service, the eraser takes off the newest, and Send asks Momo
-  (core/cards/README.md).
+  highlights, lines and stretch are kept by the service, one press of the eraser takes them all off, and Send
+  asks Momo about them together (core/cards/README.md).
   The pen's icon is the app's own, the one the marking gesture's diagram draws (a pen at a slant and the
   mark under its nib), and in hand it lights in the accent as it does there; the eraser and send are
   Lucide's (ISC). All are kept as the lines of their strokes in `core/ocean/icons.h`, which
@@ -594,9 +613,11 @@ For Kai: what merging this branch into the agents work (tracy/agents) changed or
   highlights (a drag from words) and lines (a drag from anywhere else) are the service's own edits, kept with
   the card (`addEdit`, agents/docs/protocol.md, Edits on a card): they come back on any headset and "undo" takes
   the last back. They are drawn as the agents' cards draw them, amber behind words and a white line, not your
-  marker. A video's stretch stays your mark, on the headset only. The eraser takes off the newest edit
-  (`removeEdit`). Send asks Momo "Tell me more about this part: …", naming the highlighted words, "the part I
-  drew on" and a stretch by its times; the card leads a new layer and Momo answers. With the pen down, a pinch
+  marker. A card keeps up to 100. A video's stretch is drawn as your mark and kept by the service too, one a
+  card: a new stretch takes the old one's place, and one undo brings the old one back. The eraser works as
+  yours does: one press takes every mark off, as one change that one undo brings back. Send asks Momo about all
+  the card's marks together ("Tell me more about these parts: …"), naming the highlighted words, the lines and
+  the stretch by its times; the card leads a new layer and Momo answers. With the pen down, a pinch
   held still on the open card asks for more like it, and a drag scrolls the card. On your own trees all three
   work as you made them. The Gestures sheet has a row for the pinch held still, and the marking gesture draws
   all three buttons where the card has them (agents/DECISIONS.md 66).

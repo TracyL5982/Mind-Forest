@@ -102,3 +102,73 @@ test('a picture looked at for the model comes back as data and is kept nowhere',
   assert.equal(await tools.look(at('pixel.gif')), null);
   assert.equal(assets.files.size, 0);
 });
+
+test('a page or a picture is read only up to its cap, and the rest is never fetched', async () => {
+  const { createServer } = await import('node:http');
+  const sent = { page: 0, picture: 0 };
+  const total = 30_000_000;
+  const server = createServer((req, res) => {
+    const kind = req.url === '/picture.jpg' ? 'picture' : 'page';
+    res.writeHead(200, { 'content-type': kind === 'picture' ? 'image/jpeg' : 'text/html' });
+    const chunk = Buffer.alloc(64 * 1024, kind === 'page' ? 'a' : 0);
+    let stopped = false;
+    res.on('close', () => (stopped = true));
+    const more = () => {
+      while (!stopped && sent[kind] < total) {
+        sent[kind] += chunk.length;
+        if (!res.write(chunk)) return void res.once('drain', more);
+      }
+      if (!stopped) res.end();
+    };
+    more();
+  });
+  await new Promise<void>((ready) => server.listen(0, '127.0.0.1', ready));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  try {
+    const web = makeTools({ model: new FakeModel(), assets: new MemoryAssets() }).web;
+    const page = await web.read(`${base}/page`);
+    assert.ok(page, 'the page is read from what came before the cap');
+    assert.equal(await web.picture(`${base}/picture.jpg`), null, 'a picture past 8 MB is not kept');
+    await new Promise((done) => setTimeout(done, 100));
+    assert.ok(sent.page < 12_000_000, `the page's sender stopped early (${sent.page} bytes of ${total})`);
+    assert.ok(sent.picture < 18_000_000, `the picture's sender stopped early (${sent.picture} bytes of ${total})`);
+  } finally {
+    server.close();
+  }
+});
+
+test("with the headset's files full, a found picture comes back as nothing, so a dropped link keeps its card without it", async () => {
+  const { DiskAssets } = await import('../src/node/assets.ts');
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = join(mkdtempSync(join(tmpdir(), 'mp-full-')), 'assets');
+  const send = (async () => new Response(new Uint8Array(5_000), { headers: { 'content-type': 'image/jpeg' } })) as unknown as typeof fetch;
+  const web = makeTools({ model: new FakeModel(), assets: new DiskAssets(dir, '', dir, 6_000), fetch: send }).web;
+  assert.ok(await web.picture('https://example.com/first.jpg'), 'the first is kept');
+  assert.equal(await web.picture('https://example.com/second.jpg'), null, 'the second has no room, and is nothing rather than a failure');
+});
+
+test("with the headset's files full, no picture is made, so none is paid for and thrown away", async () => {
+  const { DiskAssets } = await import('../src/node/assets.ts');
+  const { chargedPictures } = await import('../src/node/server.ts');
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = join(mkdtempSync(join(tmpdir(), 'mp-full-')), 'assets');
+  const assets = new DiskAssets(dir, '', dir, 1_500_000);
+  await assets.put(new Uint8Array(900_000), 'image/jpeg', 'earlier.jpg');
+  const asked: string[] = [];
+  const send = (async (url: string) => {
+    asked.push(String(url));
+    return String(url).startsWith('https://fal.run/')
+      ? new Response(JSON.stringify({ images: [{ url: 'https://fal.media/made.jpg', content_type: 'image/jpeg' }] }), { headers: { 'content-type': 'application/json' } })
+      : new Response(new Uint8Array(700_000), { headers: { 'content-type': 'image/jpeg' } });
+  }) as unknown as typeof fetch;
+  let charged = 0;
+  const meter = { refused: () => null, used: () => {}, spent: () => {}, paused: () => null, held: () => null, pictured: () => void charged++, recorded: async () => null };
+  const tools = chargedPictures(makeTools({ model: new FakeModel(), assets, fetch: send, keys: { FAL_KEY: 'key' } }), meter);
+  await assert.rejects(tools.images.generate('a lighthouse at dusk'), /no room to keep another picture/);
+  assert.deepEqual(asked, [], 'fal was never asked');
+  assert.equal(charged, 0);
+});

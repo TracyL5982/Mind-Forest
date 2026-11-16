@@ -3,21 +3,27 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } fro
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { createServer, type IncomingMessage } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { PassThrough } from 'node:stream';
 import { WebSocket } from 'ws';
-import type { JsonRequest, ModelClient, Priority, Tools } from '../src/core/ports.ts';
+import type { Found, JsonRequest, ModelClient, Priority, Tools } from '../src/core/ports.ts';
+import type { Roles } from '../src/core/roles/types.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { PICTURE_DOLLARS, startHosted, telegramAlert, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
-import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
+import { MIN_FREE_BYTES, PICTURE_DOLLARS, SET_BYTES, spaceOptions, startHosted, telegramAlert, upgradeWhenOpen, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
+import { DEFAULT_LIMITS, forDevice, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
 import { LiveVoice, type LiveDeps, type VoiceFrame } from '../src/node/live.ts';
 import { SEARCH_DOLLARS } from '../src/node/search-openai.ts';
 import { questWavMs } from '../src/node/speech-openai.ts';
-import { chargedPictures, startServer } from '../src/node/server.ts';
+import { chargedPictures, startServer, type Space } from '../src/node/server.ts';
 import { makeSources } from '../src/node/sources.ts';
 import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 import { MemoryAssets } from './kit.ts';
-import { followingIn, InstagramLibrary, parseList } from '../src/node/instagram.ts';
+import { SqliteStore } from '../src/node/store.ts';
+import { EDIT_BYTES, storedBytes, type Command } from '../src/core/domain.ts';
+import { followingIn, InstagramLibrary, openInstagram, parseList } from '../src/node/instagram.ts';
 
 interface Msg {
   t: string;
@@ -100,6 +106,18 @@ function recording(ms: number, byteRate = 32000): Uint8Array<ArrayBuffer> {
   view.setUint32(40, data, true);
   return wav;
 }
+
+/** The promise, or a failure after `ms`, so a test that waits for a reply that never comes fails instead of holding the run open. */
+const soon = <T,>(promise: Promise<T>, ms = 8000): Promise<T> =>
+  Promise.race([promise, new Promise<never>((_done, fail) => setTimeout(() => fail(new Error(`nothing came in ${ms} ms`)), ms).unref())]);
+
+/** Resolves once `check` holds, looked at every 10 ms, or fails after `ms`. */
+const holds = (check: () => unknown, ms = 8000): Promise<void> =>
+  new Promise((done, fail) => {
+    const by = Date.now() + ms;
+    const look = (): void => void (check() ? done() : Date.now() > by ? fail(new Error(`it did not hold in ${ms} ms`)) : setTimeout(look, 10).unref());
+    look();
+  });
 
 const treesOf = (hello: Msg) => (hello.snapshot as { trees: { id: string; title: string; rootId: string }[] }).trees;
 const admin = (hosted: Hosted, query = '', method = 'GET') => fetch(`${hosted.url}/admin${query}`, { method, headers: { Authorization: `Bearer ${ADMIN}` } }).then((r) => r.json() as Promise<Record<string, unknown>>);
@@ -247,7 +265,7 @@ test("the voice stops at the device's minutes: the turn is over at once and Momo
   await again.hosted.close();
 });
 
-test('the day starts again at midnight Pacific with the off switch kept, and spend alerts come once at half and at the cap', () => {
+test('the day starts again at midnight Pacific with the off switch kept, and a cap, when one is set, refuses costly work and is told once', () => {
   const dir = mkdtempSync(join(tmpdir(), 'mp-ledger-'));
   let now = new Date('2026-11-15T20:00:00Z');
   const alerts: string[] = [];
@@ -259,10 +277,11 @@ test('the day starts again at midnight Pacific with the off switch kept, and spe
   ledger.spend(4);
   ledger.spend(2);
   ledger.spend(1);
-  assert.equal(alerts.length, 1);
-  assert.match(alerts[0]!, /passed 50% of the \$10 cap/);
+  assert.equal(alerts.length, 0, 'under $25, nothing is told');
   ledger.spend(3.5);
-  assert.equal(alerts.length, 2);
+  ledger.spend(1);
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0]!, /reached the \$10 cap/);
   assert.equal(ledger.refusal(B, 'webAnswers'), 'cap');
   ledger.setOff(true);
   ledger.flush();
@@ -443,6 +462,7 @@ test('a made picture is charged at the price of one, and none is made while the 
     spent: (d: number) => ledger.spend(d, A),
     paused: () => (ledger.paused() ? LINES.off : null),
     pictured: () => ledger.spend(PICTURE_DOLLARS, A),
+    held: () => null,
     recorded: async () => null,
   };
   const charged = chargedPictures(tools, meter);
@@ -570,15 +590,15 @@ test("every hosted space searches one Instagram library through its own view, an
   writeFileSync(listFile, '# Accounts\n\n## Art (1)\n\n### Prints (1)\n\n- @ink_and_paper — Ink and Paper — Illustration studio — https://www.instagram.com/ink_and_paper/\n');
   const libDir = mkdtempSync(join(tmpdir(), 'mp-library-'));
   const library = new InstagramLibrary(libDir, parseList(readFileSync(listFile, 'utf8')));
-  library.keep(library.accounts[0]!, { state: 'read', at: new Date().toISOString(), posts: [{ id: 'p1', caption: 'A risograph print of the harbour', type: 'image', at: '2026-11-14T10:00:00Z', url: 'https://www.instagram.com/p/p1/' }] });
-  writeFileSync(library.picture('p1'), new Uint8Array([0xff, 0xd8, 0xff]));
+  library.keep(library.accounts[0]!, { state: 'read', at: new Date().toISOString(), posts: [{ id: '17900000000000001', caption: 'A risograph print of the harbour', type: 'image', at: '2026-11-14T10:00:00Z', url: 'https://www.instagram.com/p/17900000000000001/' }] });
+  writeFileSync(library.picture('17900000000000001'), new Uint8Array([0xff, 0xd8, 0xff]));
 
   const a = new MemoryAssets();
   const b = new MemoryAssets();
   const [inA, inB] = [followingIn(library, a), followingIn(library, b)];
   const [foundA] = await inA.search('risograph harbour');
   const [foundB] = await inB.search('risograph');
-  assert.equal(foundA?.url, 'https://www.instagram.com/p/p1/');
+  assert.equal(foundA?.url, 'https://www.instagram.com/p/17900000000000001/');
   assert.ok(a.files.has(foundA!.asset!) && b.files.has(foundB!.asset!), "each space's copy of the picture is in its own assets");
   assert.equal((await inA.search('risograph'))[0]!.asset, foundA!.asset, 'and is not copied again');
 
@@ -602,4 +622,367 @@ test("a device's commands and drops stop once its mindstorm is at its limit, and
   c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'x'.repeat(1_200_000) }] }));
   assert.equal(await closed, 1009, 'a message over 1 MB closes the socket');
   await hosted.close();
+});
+
+test("a judge's space gets none of the user's own accounts: no Instagram token or user id, no Telegram, and the one shared library", () => {
+  const library = new InstagramLibrary(mkdtempSync(join(tmpdir(), 'mp-library-')), { accounts: [], categories: [] });
+  const shared = { clientDir: '/web', model: new FakeModel(), roles: fakeRoles, instagram: { token: 'ig-token', userId: '17841400000', list: '/list.md', read: true }, telegram: { token: 'bot' } } as HostedOptions['shared'];
+  const options = spaceOptions({ shared, dataDir: '/data', appKey: KEY, following: { library } }, A);
+  assert.equal(options.instagram, undefined, 'no token or user id, and so none of their own posts');
+  assert.equal(options.telegram, undefined);
+  assert.equal(options.library, library);
+  const given = JSON.stringify({ ...options, model: null, roles: null, library: null });
+  assert.ok(!given.includes('ig-token') && !given.includes('17841400000'), 'the token and user id are nowhere in what the space gets');
+  assert.equal(options.dataDir, join('/data', 'spaces', A));
+  assert.equal(options.clientDir, join('/data', 'no-web-page'));
+});
+
+test('with no Instagram account on the server, the library opens from the list alone, never calls Instagram, and a space finds its posts and pictures', { timeout: 20000 }, async () => {
+  const listFile = join(mkdtempSync(join(tmpdir(), 'mp-list-')), 'following.md');
+  writeFileSync(listFile, '# Accounts\n\n## Art (1)\n\n### Prints (1)\n\n- @ink_and_paper — Ink and Paper — Illustration studio — https://www.instagram.com/ink_and_paper/\n');
+  const libDir = mkdtempSync(join(tmpdir(), 'mp-library-'));
+  const copied = new InstagramLibrary(libDir, parseList(readFileSync(listFile, 'utf8')));
+  copied.keep(copied.accounts[0]!, { state: 'read', at: new Date().toISOString(), posts: [{ id: '17900000000000001', caption: 'A risograph print of the harbour', type: 'image', at: '2026-11-14T10:00:00Z', url: 'https://www.instagram.com/p/17900000000000001/' }] });
+  writeFileSync(copied.picture('17900000000000001'), new Uint8Array([0xff, 0xd8, 0xff]));
+
+  const realFetch = globalThis.fetch;
+  const instagramCalls: string[] = [];
+  globalThis.fetch = (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url.includes('facebook.com') || url.includes('instagram.com')) instagramCalls.push(url);
+    return realFetch(input, init);
+  };
+  let hosted: Hosted | undefined;
+  let ws: WebSocket | undefined;
+  try {
+    const lines: string[] = [];
+    const following = openInstagram({ list: listFile, dir: libDir, read: true, log: (line) => lines.push(line) });
+    assert.ok(following, 'the library opens with no token or user id');
+    assert.equal(following.reader, undefined, 'and has no reader, though reading was asked for');
+    assert.equal(lines.length, 1);
+    assert.match(lines[0]!, /1 posts kept, reading asked for but there is no META_IG_TOKEN and META_IG_USER_ID, so nothing is read/);
+
+    let found: Found | undefined;
+    let picture: string | undefined;
+    const roles: Roles = {
+      ...fakeRoles,
+      async scout(ctx, { need }) {
+        [found] = await ctx.tools.sources.search('instagram', need ?? '');
+        picture = found?.asset && ctx.assets.url(found.asset);
+        return [];
+      },
+    };
+    ({ hosted } = await host({}, { shared: { clientDir: '', model: new FakeModel(), roles }, following: { library: following.library } }));
+    const c = await connect(hosted, `${KEY}.${A}`);
+    ws = c.ws;
+    const root = treesOf(await c.until((m) => m.t === 'hello'))[0]!.rootId;
+    c.ws.send(JSON.stringify({ t: 'ask', nodeId: root, need: 'risograph harbour' }));
+    const scouted = await c.until((m) => m.t === 'activity' && (m.activity as { role: string; state: string }).role === 'scout' && (m.activity as { state: string }).state !== 'start');
+    assert.equal((scouted.activity as { state: string }).state, 'done');
+    assert.equal(found?.url, 'https://www.instagram.com/p/17900000000000001/', "the space found the account's post");
+    const served = new URL(picture!, hosted.url);
+    served.searchParams.set('token', `${KEY}.${A}`);
+    const got = await fetch(served);
+    assert.equal(got.status, 200, "its picture is in the space's own assets");
+    assert.deepEqual([...new Uint8Array(await got.arrayBuffer())], [0xff, 0xd8, 0xff]);
+    assert.deepEqual((await admin(hosted)).instagram, { posts: 1, reading: false });
+    assert.deepEqual(instagramCalls, [], 'Instagram was never called');
+  } finally {
+    ws?.close();
+    await hosted?.close();
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("one message stores at most SET_BYTES however many large cards it touches, and a card's edits stop at EDIT_BYTES", { timeout: 30000 }, async () => {
+  const { hosted, dataDir } = await host();
+  let ws: WebSocket | undefined;
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    ws = c.ws;
+    await c.until((m) => m.t === 'hello');
+    const at = '2026-11-15T00:00:00.000Z';
+    const cards = [1, 2, 3, 4];
+    const send = (label: string, commands: Command[]) => c.ws.send(JSON.stringify({ t: 'commands', label, commands }));
+    const kept = (label: string) => soon(c.until((m) => m.t === 'change' && (m.set as { label: string }).label === label));
+    const refused = (pattern: RegExp) => soon(c.until((m) => m.t === 'note' && pattern.test(String(m.message))));
+    send('Four cards', cards.flatMap((n): Command[] => [
+      { type: 'addItem', item: { id: `item-${n}`, kind: 'text', title: `Card ${n}`, text: 'A card to draw on.', summary: '', tags: [], data: {}, origin: { by: 'user' }, source: { from: 'paste', capturedAt: at }, archived: false, revision: 0 } },
+      { type: 'createTree', tree: { id: `tree-${n}`, title: `Card ${n}`, rootId: `node-${n}`, digest: '', createdAt: at }, root: { id: `node-${n}`, treeId: `tree-${n}`, itemId: `item-${n}`, parent: null, status: 'kept', why: '', importance: 1, origin: { by: 'user' }, view: { component: 'note', props: {}, by: 'renderer' }, order: 0 } },
+    ]));
+    await kept('Four cards');
+
+    // Lines at full precision rather than the headset's four places, as a script would send them: about 17 bytes a number.
+    const line = (id: string) => ({ id, kind: 'stroke' as const, points: Array.from({ length: 1024 }, (_v, i) => (i % 997) / 1000 + 0.000123456789012) });
+    const fit = Math.floor((EDIT_BYTES - 1) / (storedBytes(line('e-1-00')) + 1));
+    for (const n of cards) {
+      send(`Draw on ${n}`, Array.from({ length: fit }, (_v, k) => ({ type: 'addEdit', id: `node-${n}`, edit: line(`e-${n}-${k}`) })));
+      await kept(`Draw on ${n}`);
+    }
+    send('One line too many', [{ type: 'addEdit', id: 'node-1', edit: line('e-1-over') }]);
+    await refused(/a card's edits come to at most 512 KB/);
+
+    send('Rub out a line on four cards', cards.map((n) => ({ type: 'removeEdit', id: `node-${n}`, editId: `e-${n}-0` })));
+    await refused(/one change keeps at most 2\.5 MB, and this one would keep [4-9]\.\d MB/);
+    send('Rub out a line on two cards', [1, 2].map((n) => ({ type: 'removeEdit', id: `node-${n}`, editId: `e-${n}-0` })));
+    await kept('Rub out a line on two cards');
+
+    const nodes = (await fetch(`${hosted.url}/api/state?token=${KEY}.${A}`).then((r) => r.json()) as { snapshot: { nodes: { id: string; edits?: unknown[] }[] } }).snapshot.nodes;
+    const edits = (id: string) => nodes.find((node) => node.id === id)?.edits?.length;
+    assert.deepEqual(cards.map((n) => edits(`node-${n}`)), [fit - 1, fit - 1, fit, fit], 'the refused change changed nothing, and the one kept took a line from two cards');
+    const store = new SqliteStore(join(dataDir, 'spaces', A, 'mindstorm.sqlite'));
+    const largest = Math.max(...store.all().map((set) => storedBytes(set)));
+    store.close();
+    assert.ok(largest <= SET_BYTES, `no change stored more than SET_BYTES (the largest was ${largest} bytes)`);
+  } finally {
+    ws?.close();
+    await hosted.close();
+  }
+});
+
+test("a socket that fails while its space opens is heard, and the space then has the socket with only its own listeners", async () => {
+  const lines: string[] = [];
+  let open!: (space: Space) => void;
+  const opening = new Promise<Space>((done) => (open = done));
+  const handle = upgradeWhenOpen(() => A, () => opening, (line) => lines.push(line));
+  const socket = new PassThrough();
+  const own = socket.listenerCount('error');
+  handle({ url: `/ws?token=${KEY}.${A}`, headers: {} } as IncomingMessage, socket, Buffer.alloc(0));
+  socket.emit('error', new Error('read ECONNRESET'));
+  assert.ok(lines.some((line) => line.includes('ECONNRESET')), 'the error was heard while the space opened');
+  let listeners = -1;
+  open({ upgrade: (_req: IncomingMessage, taken: PassThrough) => (listeners = taken.listenerCount('error')) } as unknown as Space);
+  await opening;
+  await new Promise((done) => setImmediate(done));
+  assert.equal(listeners, own, "the wait's listener is gone when the space takes the socket");
+});
+
+test('once a space is at its store limit every message that writes is refused, the voice tools that write too, and handoff zips count', { timeout: 30000 }, async () => {
+  let heard: ((event: Record<string, unknown>) => void) | undefined;
+  const open: LiveDeps['open'] = (on) => {
+    heard = on.event as (event: Record<string, unknown>) => void;
+    return { send: () => {}, close: () => {} };
+  };
+  const live = { open, options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } };
+  const { hosted, dataDir, lines } = await host({}, { shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, live }, storeLimit: 5e6 });
+  const sockets: WebSocket[] = [];
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    sockets.push(c.ws);
+    const hello = await c.until((m) => m.t === 'hello');
+    const root = treesOf(hello)[0]!.rootId;
+    const fulls = () => c.seen.filter((m) => m.t === 'say' && String(m.text).includes('is full')).length;
+    c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Under the limit, a note is kept' }] }));
+    await soon(c.until((m) => m.t === 'change'));
+    assert.equal(fulls(), 0);
+
+    writeFileSync(join(dataDir, 'spaces', A, 'handoffs', 'earlier.zip'), new Uint8Array(5e6));
+    const writes = [
+      { t: 'dump', dumps: [{ kind: 'text', text: 'one more note' }] },
+      { t: 'utter', text: 'start a tree on lighthouses', final: true, scene: { focus: root, selection: [] } },
+      { t: 'ask', nodeId: root, need: 'a museum work' },
+      { t: 'more', nodeId: root },
+      { t: 'keep', nodeIds: [root] },
+      { t: 'undo' },
+      { t: 'commands', label: 'Rename', commands: [{ type: 'renameTree', id: treesOf(hello)[0]!.id, title: 'Renamed' }] },
+      { t: 'organize', request: 'group these', scope: { treeIds: [], nodeIds: [root] } },
+      { t: 'handoff', scope: { treeIds: [], nodeIds: [root] } },
+    ];
+    for (const message of writes) c.ws.send(JSON.stringify(message));
+    await soon(c.until(() => fulls() === writes.length));
+    c.ws.send(JSON.stringify({ t: 'focus', nodeId: root }));
+    c.ws.send(JSON.stringify({ t: 'questions', nodeId: root }));
+    await soon(c.until((m) => m.t === 'questions'));
+    assert.equal(fulls(), writes.length, 'what only reads still works');
+
+    const voice = await connect(hosted, `${KEY}.${A}`, `/live?connection=${hello.connection as string}`);
+    sockets.push(voice.ws);
+    await voice.until((m) => m.t === 'ready');
+    voice.ws.send(JSON.stringify({ t: 'start', turn: 1, scene: { selection: [] } }));
+    voice.ws.send(JSON.stringify({ t: 'audio', pcm: Buffer.alloc(3200).toString('base64') }));
+    await holds(() => heard);
+    heard!({ type: 'response.created', response: { id: 'r1', metadata: { purpose: 'reply' } } });
+    heard!({ type: 'response.output_item.added', response_id: 'r1', item: { type: 'function_call', call_id: 'c1', name: 'save_note' } });
+    heard!({ type: 'response.function_call_arguments.done', response_id: 'r1', call_id: 'c1', arguments: JSON.stringify({ text: 'remember the harbour' }) });
+    heard!({ type: 'response.done', response: { id: 'r1', status: 'completed' } });
+    const answered = () => lines.find((line) => line.includes('[live] save_note('));
+    await holds(answered);
+    assert.match(answered()!, /"error":"This headset's mind palace is full/, "Momo's note is refused too");
+  } finally {
+    for (const ws of sockets) ws.close();
+    await hosted.close();
+  }
+});
+
+test('with the volume nearly full, nothing new is written and no new space is made, while health and reads go on', { timeout: 20000 }, async () => {
+  let free = 10 * MIN_FREE_BYTES;
+  const { hosted } = await host({}, { freeBytes: () => free });
+  let ws: WebSocket | undefined;
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    ws = c.ws;
+    await c.until((m) => m.t === 'hello');
+    free = MIN_FREE_BYTES - 1;
+    c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'a note with no room for it' }] }));
+    await soon(c.until((m) => m.t === 'say' && String(m.text).includes('nearly out of room')));
+    const upload = await fetch(`${hosted.url}/api/assets?name=note.txt`, { method: 'POST', headers: { Authorization: `Bearer ${KEY}.${A}`, 'Content-Type': 'text/plain' }, body: 'hello' });
+    assert.equal(upload.status, 507);
+    assert.match(((await upload.json()) as { error: string }).error, /nearly out of room/);
+    assert.equal((await fetch(`${hosted.url}/api/state?token=${KEY}.${B}`)).status, 507, 'no new space');
+    await assert.rejects(connect(hosted, `${KEY}.${B}`), /507/);
+    assert.equal((await fetch(`${hosted.url}/api/health`)).status, 200);
+    assert.equal((await fetch(`${hosted.url}/api/state?token=${KEY}.${A}`)).status, 200, 'a space that is there still opens');
+    free = 10 * MIN_FREE_BYTES;
+    assert.equal((await fetch(`${hosted.url}/api/state?token=${KEY}.${B}`)).status, 200, 'and with room again, a new one is made');
+  } finally {
+    ws?.close();
+    await hosted.close();
+  }
+});
+
+test("a hosted space reads a page or picture, or relays a linked file, only from a public address, never this machine's", { timeout: 20000 }, async () => {
+  const asked: string[] = [];
+  const server = createServer((req, res) => void (asked.push(req.url ?? ''), res.writeHead(200, { 'content-type': 'text/html' }).end('<title>Inside</title>')));
+  await new Promise<void>((ready) => server.listen(0, '127.0.0.1', ready));
+  const inside = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  let read: unknown = 'not yet';
+  let picture: unknown = 'not yet';
+  let linked = '';
+  const roles: Roles = {
+    ...fakeRoles,
+    async scout(ctx) {
+      read = await ctx.tools.web.read(`${inside}/page`);
+      picture = await ctx.tools.web.picture(`${inside}/picture.jpg`);
+      linked = (await ctx.assets.link(`${inside}/episode.mp3`, 'audio/mpeg')).id;
+      return [];
+    },
+  };
+  const { hosted } = await host({}, { shared: { clientDir: '', model: new FakeModel(), roles } });
+  let ws: WebSocket | undefined;
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    ws = c.ws;
+    const root = treesOf(await c.until((m) => m.t === 'hello'))[0]!.rootId;
+    c.ws.send(JSON.stringify({ t: 'ask', nodeId: root, need: 'the page' }));
+    await holds(() => read !== 'not yet' && picture !== 'not yet' && linked !== '');
+    assert.equal(read, null);
+    assert.equal(picture, null);
+    assert.equal((await fetch(`${hosted.url}/assets/${linked}?token=${KEY}.${A}`)).status, 502, "a linked file on this machine is not relayed");
+    assert.deepEqual(asked, [], 'the service never asked this machine');
+  } finally {
+    ws?.close();
+    await hosted.close();
+    server.close();
+  }
+});
+
+test("each device has a share of the day's tokens and spend, so one judge cannot stop the others, and a judge's words are a few thousand characters", { timeout: 30000 }, async () => {
+  let count: (tokens: number) => void = () => {};
+  const base = new FakeModel();
+  // As main.ts counts Meta's tokens: told after each call, to the device whose work the call is.
+  const model: ModelClient = { json: (req) => base.json(req), search: async (req) => (count(3000), base.search(req)), image: (req) => base.image(req), transcribe: (req) => base.transcribe(req) };
+  const scouted: string[] = [];
+  const roles: Roles = {
+    ...fakeRoles,
+    async scout(ctx, { need }) {
+      await ctx.model.search({ role: 'scout', query: need ?? 'more' });
+      scouted.push(need ?? '');
+      return [];
+    },
+  };
+  const { hosted, ledger } = await host({ deviceTokens: 5000 }, { shared: { clientDir: '', model, roles } });
+  count = (tokens) => ledger.metaTokens(tokens, forDevice.getStore());
+  const sockets: WebSocket[] = [];
+  try {
+    const [a, b] = await Promise.all([connect(hosted, `${KEY}.${A}`), connect(hosted, `${KEY}.${B}`)]);
+    sockets.push(a.ws, b.ws);
+    const rootA = treesOf(await a.until((m) => m.t === 'hello'))[0]!.rootId;
+    const rootB = treesOf(await b.until((m) => m.t === 'hello'))[0]!.rootId;
+    for (const need of ['harbours', 'lighthouses']) {
+      a.ws.send(JSON.stringify({ t: 'ask', nodeId: rootA, need }));
+      await holds(() => scouted.includes(need));
+    }
+    a.ws.send(JSON.stringify({ t: 'ask', nodeId: rootA, need: 'one more' }));
+    await soon(a.until((m) => m.t === 'say' && m.text === LINES.share));
+    b.ws.send(JSON.stringify({ t: 'ask', nodeId: rootB, need: 'tide pools' }));
+    await holds(() => scouted.includes('tide pools'));
+    assert.deepEqual(scouted, ['harbours', 'lighthouses', 'tide pools'], "A's share stopped A alone");
+    const devices = ledger.status().devices;
+    assert.deepEqual([devices[A]?.tokens, devices[B]?.tokens], [6000, 3000], 'tokens are counted to the device whose work they were');
+
+    a.ws.send(JSON.stringify({ t: 'utter', text: 'x'.repeat(4001), final: true, scene: { selection: [] } }));
+    assert.match(String((await soon(a.until((m) => m.t === 'error'))).message), /too_big|at most 4000|<=4000/i, 'words past 4000 characters are refused');
+  } finally {
+    for (const ws of sockets) ws.close();
+    await hosted.close();
+  }
+});
+
+test("a space's web answers run as its device's work, so their spend is counted to the device", async () => {
+  const seen: (string | undefined)[] = [];
+  const live = { open: (() => ({ send: () => {}, close: () => {} })) as LiveDeps['open'], options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' }, webAnswer: async () => (seen.push(forDevice.getStore()), 'An answer.') };
+  const options = spaceOptions({ shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, live }, dataDir: '/data', appKey: KEY }, A);
+  assert.equal(await options.live!.webAnswer!('When is low tide?'), 'An answer.');
+  assert.deepEqual(seen, [A]);
+});
+
+test("the files the service keeps for a device count toward a limit of their own, and its uploads do not", { timeout: 30000 }, async () => {
+  const kept: string[] = [];
+  const roles: Roles = {
+    ...fakeRoles,
+    async scout(ctx, { need }) {
+      await ctx.assets.put(new Uint8Array(600_000), 'image/jpeg', `${need}.jpg`).then(
+        () => kept.push(`kept ${need}`),
+        (err: Error) => kept.push(`refused ${need}: ${err.message}`),
+      );
+      return [];
+    },
+  };
+  const { hosted } = await host({}, { shared: { clientDir: '', model: new FakeModel(), roles }, madeLimit: 1_000_000 });
+  let ws: WebSocket | undefined;
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    ws = c.ws;
+    const root = treesOf(await c.until((m) => m.t === 'hello'))[0]!.rootId;
+    const ask = async (need: string) => {
+      c.ws.send(JSON.stringify({ t: 'ask', nodeId: root, need }));
+      await holds(() => kept.some((line) => line.includes(` ${need}`)));
+    };
+    await ask('harbour');
+    const upload = await fetch(`${hosted.url}/api/assets?name=scan.bin`, { method: 'POST', headers: { Authorization: `Bearer ${KEY}.${A}`, 'Content-Type': 'application/octet-stream' }, body: new Uint8Array(1_500_000) });
+    assert.equal(upload.status, 200, 'an upload is not one of the files the service keeps');
+    await ask('lighthouse');
+    assert.deepEqual(kept, ['kept harbour', "refused lighthouse: no room to keep lighthouse.jpg: this headset's files come to 1 MB at most"]);
+  } finally {
+    ws?.close();
+    await hosted.close();
+  }
+});
+
+test('by default the service takes 10 new devices an hour and 20 in all, near the number of judges', { timeout: 60000 }, async () => {
+  const { hosted } = await host();
+  const device = (n: number) => `device-${String(n).padStart(12, '0')}`;
+  try {
+    const made = [];
+    for (let n = 1; n <= 11; n++) made.push((await fetch(`${hosted.url}/api/state?token=${KEY}.${device(n)}`)).status);
+    assert.deepEqual(made, [...Array(10).fill(200), 429], 'the eleventh new device in an hour is refused');
+    assert.deepEqual([(await admin(hosted)).maxDevices, (await admin(hosted)).newPerHour], [20, 10]);
+  } finally {
+    await hosted.close();
+  }
+});
+
+test("/admin says which limits are on, judging or testing, and every limit's value", { timeout: 20000 }, async () => {
+  const judging = await host();
+  const testing = await host({ voiceMinutes: null, searches: null, webAnswers: null, deviceDollars: null, deviceTokens: null }, { mode: 'testing' });
+  try {
+    const [j, t] = [await admin(judging.hosted), await admin(testing.hosted)];
+    assert.equal(j.mode, 'judging');
+    assert.deepEqual(j.limits, { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: 'none', deviceDollars: 23, deviceTokens: 9_000_000, tokensPerDay: 180_000_000 });
+    assert.equal(t.mode, 'testing');
+    assert.deepEqual(t.limits, { voiceMinutes: 'none', searches: 'none', webAnswers: 'none', dollarsPerDay: 'none', deviceDollars: 'none', deviceTokens: 'none', tokensPerDay: 180_000_000 });
+  } finally {
+    await judging.hosted.close();
+    await testing.hosted.close();
+  }
 });

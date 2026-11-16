@@ -4,7 +4,6 @@
 
 #include "../ocean/catalog.h"
 #include "media.h"
-#include "pieces.h"
 
 namespace cards::ocean {
 
@@ -58,6 +57,11 @@ const Shown* shownOf(const std::string& noteID) {
                                                  : Vec2{Metrics::openNoteWidth, OPEN_TALL * openScale / Art::ppm};
     s.viewTall = s.open.y * Art::ppm / openScale;
     if (kind->opens == Kind::Opens::picture) s.pictureTall = Catalog::pictureSize(aspect).y * Art::ppm / openScale;
+    // A card the app makes itself opens as tall as its whole panel: laid out in no frame at all, it runs as far as it goes.
+    if (std::optional<Opened> whole = kind->premade ? cards::opened(noteID, openScale, 0, s.pictureTall) : std::nullopt) {
+        s.viewTall = whole->contentTall / openScale;
+        s.open = {Metrics::openNoteWidth, whole->contentTall / Art::ppm};
+    }
     return &s;
 }
 
@@ -88,18 +92,22 @@ std::optional<Piece> face(Art& art, const std::string& noteID, const std::string
 void hold(const std::shared_ptr<const Catalog>& catalog) { held() = catalog; }
 
 std::optional<std::string> cardOf(const Ref& ref) {
-    // GUIDE: the welcome walk's own cards (its lessons, and what Momo answers with there: core/ocean/oceanmodel_guide.cpp)
-    // keep the ocean's drawing. A lesson's card is a stage a gesture plays on, at a size of its own, and the walk
-    // points at places on it; drawn as a card of the agent's it was a small card saying "Picture unavailable".
-    if (ref.kind == Ref::Kind::note && (ref.id.rfind("welcome", 0) == 0 || ref.id.rfind("momo-", 0) == 0)) return std::nullopt;
+    // GUIDE: what Momo answers with on the welcome walk (core/ocean/oceanmodel_guide.cpp, notes named "momo-…") keeps
+    // the ocean's own drawing: as a card made from a note it would say it came from the user's library, which it did not.
+    // (The walk's lessons are cards of this library's own: lesson.cpp.)
+    if (ref.kind == Ref::Kind::note && ref.id.rfind("momo-", 0) == 0) return std::nullopt;
     std::string id = ref.kind == Ref::Kind::note ? ref.id : ref.key();
     if (has(id)) return id;
     std::shared_ptr<const Catalog> catalog = held().lock();
     std::optional<OceanCard> card = catalog ? oceanCard(*catalog, ref) : std::nullopt;
     if (!card) return std::nullopt;
-    put(card->id, card->view, card->item);
-    pieces()[card->id] = *card;
+    hold(*card);
     return card->id;
+}
+
+void hold(const OceanCard& card) {
+    put(card.id, card.view, card.item);
+    pieces()[card.id] = card;
 }
 
 bool composing(const std::string& noteID) {
@@ -140,6 +148,11 @@ std::optional<Piece> frame(Art& art, const std::string& noteID) {
 std::optional<Vec2> openSize(const std::string& noteID) {
     const Shown* s = shownOf(noteID);
     return s ? std::optional(s->open) : std::nullopt;
+}
+
+std::optional<float> smallRadius(const std::string& noteID) {
+    const Kind* kind = kindOf(noteID);
+    return kind ? std::optional(kind->radius * smallScale / Art::ppm) : std::nullopt;
 }
 
 std::optional<Piece> corners(Art& art, Vec2 size) {

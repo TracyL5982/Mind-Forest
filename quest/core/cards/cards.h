@@ -53,6 +53,8 @@ struct Drawn {
     CGSize size;
     std::function<void(Canvas&)> draw;
 };
+/// The round corners of the opened card's frame, web px.
+constexpr float OPEN_RADIUS = 20;
 /// The opened card: a frame of a fixed size, and the whole panel (panel.js) drawn once, which shows through
 /// a window in the frame and scrolls there.
 struct Opened {

@@ -7,7 +7,8 @@ import { packager } from '../src/core/roles/packager.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running, type ServerOptions } from '../src/node/server.ts';
-import { ADA, BOT_TOKEN as TOKEN, EVE, FakeBot, type Person } from './fake-bot.ts';
+import { makeItem, makeNode } from '../src/core/roles/types.ts';
+import { ADA, BOT_TOKEN as TOKEN, EVE, FakeBot, type Person, type Sent } from './fake-bot.ts';
 
 /** Everything a test opened, closed after it whether it passed or not, so a failure does not leave the run waiting. */
 const opened: { close(): Promise<void> }[] = [];
@@ -322,4 +323,164 @@ test('the bot token is in no log line, reply or saved file, whatever fails', asy
   assert.deepEqual(bot.sent.filter((s) => s.text.includes(TOKEN)), []);
   assert.ok(!readFileSync(join(b.dataDir, 'telegram.json'), 'utf8').includes(TOKEN.split(':')[1]!), 'the token is not saved with the pairing');
   await bot.close();
+});
+
+/** A tree of the user's own, its first title the root card, as a drop that asked for a tree leaves it. */
+function grow(run: Running, title: string, cards: string[]): string {
+  const ctx = run.pipeline.ctx;
+  const USER = { by: 'user' as const };
+  const treeId = ctx.newId();
+  const made = cards.map((card) => makeItem(ctx, { kind: 'text', title: card, text: card, origin: USER, source: { from: 'paste' } }));
+  const root = makeNode(ctx, made[0]!, { treeId, parent: null, status: 'kept', why: '', origin: USER });
+  run.mind.apply({
+    origin: USER,
+    label: `seed ${title}`,
+    commands: [
+      ...made.map((item) => ({ type: 'addItem' as const, item })),
+      { type: 'createTree', tree: { id: treeId, title, rootId: root.id, digest: `About ${title.toLowerCase()}`, createdAt: new Date(Date.UTC(2026, 0, 1 + run.mind.trees.size)).toISOString() }, root },
+      ...made.slice(1).map((item) => ({ type: 'addNode' as const, node: makeNode(ctx, item, { treeId, parent: root.id, status: 'kept', why: '', origin: USER }) })),
+    ],
+  });
+  return treeId;
+}
+
+/** What the bot sent after the `after`th thing, once it has sent `count` more. */
+async function next(bot: FakeBot, after: number, count: number): Promise<Sent[]> {
+  await bot.until(() => bot.sent.length >= after + count);
+  return bot.sent.slice(after, after + count);
+}
+
+test('"list my trees" names the trees newest first with a line each, and a number then sends that tree\'s handoff', async () => {
+  const bot = await stand();
+  const model = new FakeModel();
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+
+  bot.push(ADA, { text: 'list my trees' });
+  assert.match((await bot.reply(ADA.id, /no trees yet/)).text, /^You have no trees yet\. Send “make a tree about …”/);
+
+  grow(b.run, 'Film', ['Camera moves', 'Dolly zoom']);
+  grow(b.run, 'Solar panels at home', ['Payback', 'Inverters', 'Roof angle']);
+  let sent = bot.sent.length;
+  bot.push(ADA, { text: 'What trees do I have?' });
+  assert.equal(
+    (await next(bot, sent, 1))[0]!.text,
+    'Your trees, newest first:\n1. Solar panels at home: 3 cards. About solar panels at home\n2. Film: 2 cards. About film\nReply with a number for a tree’s handoff.',
+  );
+
+  sent = bot.sent.length;
+  bot.push(ADA, { text: '2' });
+  const [packing, ready, file] = await next(bot, sent, 3);
+  assert.equal(packing!.text, 'Packing “Film”…', 'the answer comes at once, before the file');
+  assert.equal(ready!.text.split('\n')[0], 'Handoff ready: Film');
+  assert.equal(file!.method, 'sendDocument');
+  assert.match(file!.text, /## Film\n- Camera moves\n {2}- Dolly zoom/);
+  assert.deepEqual(model.calls, [], 'none of this asked the model');
+  assert.equal(items(b.run).length, 5, 'asking added nothing');
+
+  sent = bot.sent.length;
+  bot.push(ADA, { text: '2' });
+  assert.match((await next(bot, sent, 1))[0]!.text, /^Added “/, 'with no list open, a number is a thought again');
+});
+
+test('"hand off <name>" sends the one tree the name means; several are offered to choose from; none says so and lists the trees', async () => {
+  const bot = await stand();
+  const model = new FakeModel().on('contact.match', () => ({ matches: [] }));
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+  grow(b.run, 'Film', ['Camera moves']);
+  grow(b.run, 'Solar system', ['Jupiter']);
+  grow(b.run, 'Solar panels at home', ['Payback']);
+
+  let sent = bot.sent.length;
+  bot.push(ADA, { text: 'Hand off the film tree' });
+  const [packing, ready] = await next(bot, sent, 3);
+  assert.equal(packing!.text, 'Packing “Film”…');
+  assert.equal(ready!.text.split('\n')[0], 'Handoff ready: Film');
+  assert.equal(model.calls.length, 0, 'a name that is one tree needs no model');
+
+  sent = bot.sent.length;
+  bot.push(ADA, { text: 'send me the handoff for solar' });
+  assert.equal(
+    (await next(bot, sent, 1))[0]!.text,
+    'Which one?\n1. Solar panels at home: 1 card. About solar panels at home\n2. Solar system: 1 card. About solar system\nReply with a number.',
+  );
+  sent = bot.sent.length;
+  bot.push(ADA, { text: 'solar system' });
+  assert.equal((await next(bot, sent, 3))[1]!.text.split('\n')[0], 'Handoff ready: Solar system', 'a name picks from the offer as a number does');
+
+  sent = bot.sent.length;
+  bot.push(ADA, { text: 'hand off gardening' });
+  assert.match((await next(bot, sent, 1))[0]!.text, /^No tree matches “gardening”\. Your trees, newest first:\n1\. Solar panels at home/);
+  assert.deepEqual(model.calls.map((c) => c.role), ['contact.match'], 'words no name holds went to the model');
+
+  const before = bot.sent.length;
+  bot.push(ADA, { text: '/handoff' });
+  const [again, document] = await next(bot, before, 2);
+  assert.match(again!.text, /^Handoff ready: /);
+  assert.deepEqual([document!.method, /^## (.+)$/m.exec(document!.text)?.[1]], ['sendDocument', 'Solar system'], '/handoff with no name still sends the latest');
+});
+
+test('"find the tree about …" matches by what is in a tree through the model, and "yes" then sends its handoff', async () => {
+  const bot = await stand();
+  const model = new FakeModel().on('contact.match', (req) => ({ matches: [Number(/^(\d+)\. Home energy/m.exec(req.user)![1])] }));
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+  grow(b.run, 'Film', ['Camera moves']);
+  grow(b.run, 'Home energy', ['Heat pumps', 'Inverters']);
+
+  let sent = bot.sent.length;
+  bot.push(ADA, { text: 'find the tree about heat pumps' });
+  assert.equal((await next(bot, sent, 1))[0]!.text, 'Found:\n1. Home energy: 2 cards. About home energy\nReply with “yes” or 1 for its handoff.');
+  assert.deepEqual(model.calls.map((c) => c.role), ['contact.match']);
+
+  sent = bot.sent.length;
+  bot.push(ADA, { text: 'Yes' });
+  const [packing, ready] = await next(bot, sent, 3);
+  assert.equal(packing!.text, 'Packing “Home energy”…');
+  assert.equal(ready!.text.split('\n')[0], 'Handoff ready: Home energy');
+});
+
+test('words the rules do not read are read by the model when they name trees or a handoff, and a thought is still a thought', async () => {
+  const bot = await stand();
+  const model = new FakeModel()
+    .describing()
+    .on('contact.ask', (req) => (/packaged up/.test(req.user) ? { kind: 'handoff', words: 'film' } : { kind: 'none', words: '' }));
+  const b = await boot(bot, { model, roles: { ...fakeRoles } });
+  await pair(b, bot);
+  grow(b.run, 'Film', ['Camera moves']);
+
+  let sent = bot.sent.length;
+  bot.push(ADA, { text: 'could I get my film tree packaged up for Claude' });
+  assert.equal((await next(bot, sent, 3))[0]!.text, 'Packing “Film”…');
+  assert.deepEqual(model.calls.map((c) => c.role), ['contact.ask']);
+
+  sent = bot.sent.length;
+  const count = items(b.run).length;
+  bot.push(ADA, { text: 'Decision trees are overrated' });
+  assert.match((await next(bot, sent, 1))[0]!.text, /^Added “/, 'the model said it asks nothing, so it is dropped');
+  bot.push(ADA, { text: 'Sourdough needs a long cold proof' });
+  await bot.until(() => items(b.run).length === count + 2);
+  assert.equal(model.calls.filter((c) => c.role === 'contact.ask').length, 2, 'a thought with no word of trees or handoffs never asks the model');
+});
+
+test('a voice note that asks for a tree\'s handoff gets it, and /unpair from the chat ends the pairing', async () => {
+  const bot = await stand();
+  const b = await boot(bot, { transcribe: async () => 'Hand off the film tree.' });
+  await pair(b, bot);
+  grow(b.run, 'Film', ['Camera moves']);
+
+  let sent = bot.sent.length;
+  bot.file('memo', new Uint8Array([1, 2, 3]));
+  bot.push(ADA, { voice: { file_id: 'memo', duration: 2 } });
+  assert.equal((await next(bot, sent, 3))[0]!.text, 'Packing “Film”…');
+  assert.equal(items(b.run).length, 1, 'the recording was not kept as a drop');
+
+  sent = bot.sent.length;
+  bot.push(ADA, { text: '/unpair' });
+  assert.match((await next(bot, sent, 1))[0]!.text, /^Unpaired\./);
+  assert.equal((await status(b.run)).paired, null);
+  await bot.read(bot.push(ADA, { text: 'list my trees' }));
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(bot.sent.length, sent + 1, 'an unpaired chat is not answered');
 });

@@ -11,8 +11,9 @@ import { startServer } from './server.ts';
 import type { LiveOptions } from './live.ts';
 import { HEARING_MODEL, openaiRealtime, openaiSpeech, openaiTranscribe, SPEECH_VOICE } from './speech-openai.ts';
 import { openaiWebAnswer } from './web-answer.ts';
-import { PICTURE_DOLLARS, startHosted, telegramAlert } from './hosted/hosted.ts';
-import { DEFAULT_LIMITS, Ledger } from './hosted/ledger.ts';
+import { MAX_DEVICES, NEW_DEVICES_PER_HOUR, PICTURE_DOLLARS, startHosted, telegramAlert } from './hosted/hosted.ts';
+import { judgeBotToken } from './hosted/judges.ts';
+import { forDevice, Ledger, limitsFrom } from './hosted/ledger.ts';
 import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareCost } from './hosted/overflow.ts';
 import { openInstagram } from './instagram.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
@@ -31,12 +32,7 @@ const log = (line: string) => console.log(line);
 const ledger = hosted
   ? new Ledger({
       file: join(dataDir, 'ledger.json'),
-      limits: {
-        voiceMinutes: number('MIND_PALACE_LIMIT_VOICE_MINUTES', DEFAULT_LIMITS.voiceMinutes),
-        searches: number('MIND_PALACE_LIMIT_SEARCHES', DEFAULT_LIMITS.searches),
-        webAnswers: number('MIND_PALACE_LIMIT_WEB_ANSWERS', DEFAULT_LIMITS.webAnswers),
-        dollarsPerDay: number('MIND_PALACE_CAP_DOLLARS', DEFAULT_LIMITS.dollarsPerDay),
-      },
+      limits: limitsFrom(env),
       metaDollarsPerMillion: number('MIND_PALACE_META_PRICE', 0),
       alert:
         env.TELEGRAM_BOT_TOKEN && env.MIND_PALACE_ALERT_CHAT
@@ -60,9 +56,10 @@ if (fake) {
     baseUrl: env.MUSE_LLM_BASE_URL || undefined,
     model: env.MUSE_LLM_MODEL || undefined,
     quickModel: env.MIND_PALACE_QUICK_MODEL || undefined,
-    tokenBudget: env.MIND_PALACE_TOKEN_BUDGET ? Number(env.MIND_PALACE_TOKEN_BUDGET) : undefined,
+    // Hosted, the budget is the ledger's, counted again each day; on the Mac it lasts as long as the process.
+    tokenBudget: hosted ? Number.POSITIVE_INFINITY : env.MIND_PALACE_TOKEN_BUDGET ? Number(env.MIND_PALACE_TOKEN_BUDGET) : undefined,
     onCall: (c) => {
-      ledger?.metaTokens(c.tokens ?? 0);
+      ledger?.metaTokens(c.tokens ?? 0, forDevice.getStore());
       console.log(
         `  model ${c.kind} ${c.role} ${c.ok ? 'ok' : 'FAILED'} ${c.ms}ms${c.tokens ? ` ${c.tokens} tokens` : ''}` +
           `${c.model ? `, ${[c.model, c.effort].filter(Boolean).join(' ')}` : ''}${c.tries && c.tries > 1 ? `, ${c.tries} tries` : ''}` +
@@ -81,7 +78,7 @@ if (fake) {
       efforts: SPARE_EFFORTS,
       onCall: (c) => {
         const dollars = spareCost(c.model, c.usage);
-        ledger?.spend(dollars);
+        ledger?.spend(dollars, forDevice.getStore());
         log(`  overflow ${c.kind} ${c.role} ${c.ok ? 'ok' : 'FAILED'} ${c.ms}ms on ${c.model ?? '?'}${c.tokens ? `, ${c.tokens} tokens` : ''}, $${dollars.toFixed(4)}`);
       },
     });
@@ -89,7 +86,7 @@ if (fake) {
       meta,
       spare,
       search: async (req) => {
-        ledger?.spend(SEARCH_DOLLARS);
+        ledger?.spend(SEARCH_DOLLARS, forDevice.getStore());
         return openaiSearch(fetch, { apiKey, model: SPARE_QUICK_MODEL }, req);
       },
       overflowed: (role, kind) => {
@@ -104,7 +101,7 @@ if (ledger) {
   const inner = model;
   model = new Paused(inner, () => {
     const why = ledger.paused();
-    return why ? `the service is ${why === 'off' ? 'switched off' : "over today's spend cap"}` : null;
+    return why ? `the service is ${why === 'off' ? 'switched off' : why === 'budget' ? "over today's token budget" : "over today's spend cap"}` : null;
   });
 }
 
@@ -130,6 +127,8 @@ try {
   console.error(err instanceof Error ? err.message : String(err));
   process.exit(1);
 }
+// The accounts the user chose, outside the repository since the list names them.
+const instagramList = env.MIND_PALACE_INSTAGRAM_LIST || join(homedir(), '.mind-palace', 'instagram-following.md');
 
 const shared = {
   clientDir: join(root, 'client'),
@@ -147,19 +146,14 @@ const shared = {
       ? {
           open: openaiRealtime({ apiKey: env.OPENAI_API_KEY, model: liveModel }),
           options: liveOptions,
-          webAnswer: openaiWebAnswer(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_WEB_MODEL || undefined, effort: env.MIND_PALACE_WEB_EFFORT || undefined, log, spent: (dollars) => ledger?.spend(dollars) }),
+          webAnswer: openaiWebAnswer(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_WEB_MODEL || undefined, effort: env.MIND_PALACE_WEB_EFFORT || undefined, log, spent: (dollars) => ledger?.spend(dollars, forDevice.getStore()) }),
         }
       : undefined,
   transcribe: !fake && env.OPENAI_API_KEY ? openaiTranscribe(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_HEARING_MODEL }) : undefined,
-  // The accounts the user chose, outside the repository since the list names them. MIND_PALACE_INSTAGRAM_READ=off searches what is kept without reading Instagram.
+  // MIND_PALACE_INSTAGRAM_READ=off searches what is kept without reading Instagram.
   instagram:
     env.META_IG_TOKEN && env.META_IG_USER_ID
-      ? {
-          token: env.META_IG_TOKEN,
-          userId: env.META_IG_USER_ID,
-          list: env.MIND_PALACE_INSTAGRAM_LIST || join(homedir(), '.mind-palace', 'instagram-following.md'),
-          read: env.MIND_PALACE_INSTAGRAM_READ !== 'off',
-        }
+      ? { token: env.META_IG_TOKEN, userId: env.META_IG_USER_ID, list: instagramList, read: env.MIND_PALACE_INSTAGRAM_READ !== 'off' }
       : undefined,
   maps,
 };
@@ -179,13 +173,12 @@ if (ledger) {
           return new Uint8Array(await new Response(await speak(text, AbortSignal.timeout(20_000))).arrayBuffer());
         }
       : undefined;
-  // One library of the user's Instagram accounts for every space, on the volume. Its pictures are made small with macOS's `sips`,
-  // which a Linux server lacks, so the server reads Instagram only with MIND_PALACE_INSTAGRAM_READ=on; deploy/instagram.sh copies
-  // the Mac's library there instead.
-  const ig = shared.instagram;
-  const following = ig?.list
-    ? (openInstagram({ connection: ig, list: ig.list, dir: join(dataDir, 'instagram'), read: env.MIND_PALACE_INSTAGRAM_READ === 'on', log }) ?? undefined)
-    : undefined;
+  // One library of the user's Instagram accounts for every space, on the volume, opened from the list alone: the server needs no
+  // Instagram account. Its pictures are made small with macOS's `sips`, which a Linux server lacks, so deploy/instagram.sh copies the
+  // Mac's library there, and the server reads Instagram only with MIND_PALACE_INSTAGRAM_READ=on and an account.
+  const following = openInstagram({ connection: shared.instagram, list: instagramList, dir: join(dataDir, 'instagram'), read: env.MIND_PALACE_INSTAGRAM_READ === 'on', log }) ?? undefined;
+  // The judges' own bot, which only this service reads. The owner's bot is never read here: their Mac reads it.
+  const judgeToken = fake ? undefined : judgeBotToken(env, log);
   const service = await startHosted({
     port,
     host,
@@ -196,20 +189,24 @@ if (ledger) {
     ledger,
     shared,
     idleMs: number('MIND_PALACE_IDLE_MINUTES', 20) * 60_000,
-    maxDevices: number('MIND_PALACE_MAX_DEVICES', 60),
-    newPerHour: number('MIND_PALACE_NEW_DEVICES_PER_HOUR', 30),
+    maxDevices: number('MIND_PALACE_MAX_DEVICES', MAX_DEVICES),
+    newPerHour: number('MIND_PALACE_NEW_DEVICES_PER_HOUR', NEW_DEVICES_PER_HOUR),
     pictureDollars: number('MIND_PALACE_PICTURE_DOLLARS', PICTURE_DOLLARS),
     uploads: { file: number('MIND_PALACE_UPLOAD_MB', 25) * 1e6, total: number('MIND_PALACE_UPLOAD_MB_PER_DEVICE', 40) * 1e6 },
     following,
     storeLimit: number('MIND_PALACE_STORE_MB_PER_DEVICE', 20) * 1e6,
+    madeLimit: number('MIND_PALACE_FILES_MB_PER_DEVICE', 60) * 1e6,
     record,
+    judgeBot: judgeToken ? { token: judgeToken } : undefined,
+    // deploy/deploy.sh says which: judging, with fly.toml's limits, or testing, with deploy/testing.env's.
+    mode: env.MIND_PALACE_LIMITS_MODE || 'judging',
     log,
   });
   // A redeploy stops the machine with a signal: the day's counts are written before it goes.
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => void service.close().finally(() => process.exit(0)));
   console.log(`Mind Palace agents, hosted${fake ? ' (fake roles, no model)' : ''}: a space per device under ${join(dataDir, 'spaces')}`);
   console.log(`  listening ${service.url}, limits ${JSON.stringify(ledger.limits)}`);
-  console.log(`  telegram  ${env.TELEGRAM_BOT_TOKEN && env.MIND_PALACE_ALERT_CHAT ? 'alerts only, no reading' : 'off'}`);
+  console.log(`  telegram  the owner's bot: ${env.TELEGRAM_BOT_TOKEN && env.MIND_PALACE_ALERT_CHAT ? 'alerts only, never read' : 'off'}; the judges' bot: ${judgeToken ? 'read, a chat per headset' : 'off (MIND_PALACE_JUDGE_BOT_TOKEN is not set)'}`);
 } else {
   const running = await startServer({
     ...shared,

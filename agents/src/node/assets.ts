@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
-import { createWriteStream, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createWriteStream, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { finished } from 'node:stream/promises';
 import { join, resolve, sep } from 'node:path';
 import type { Assets } from '../core/ports.ts';
@@ -35,6 +35,8 @@ interface Meta {
   name?: string;
   /** A linked asset's bytes: the absolute path of a file on this host, or a remote address. */
   from?: string;
+  /** Kept by the service itself (`put`): a picture it fetched, made or copied in, not an upload. */
+  made?: true;
 }
 
 /** The headset's films, played from the repository. The only folder a linked file may be in. */
@@ -48,18 +50,36 @@ export type Stored = { mime: string } & ({ bytes: Uint8Array } | { file: string;
  * A linked file must be inside `files`, checked when it is linked and again when it is served, so an edited record cannot reach the rest of the disk.
  */
 export class DiskAssets implements Assets {
+  private madeBytes = 0;
+
+  /** With `madeLimit`, the files the service keeps here itself come to at most that many bytes; a `put` past it is refused. */
   constructor(
     private readonly dir: string,
     private readonly baseUrl = '',
     private readonly files = LIBRARY_FILMS,
+    private readonly madeLimit?: number,
   ) {
     mkdirSync(dir, { recursive: true });
+    if (madeLimit !== undefined) this.madeBytes = this.madeOnDisk();
+  }
+
+  /** The bytes of the files the service kept here itself. Uploads are not among them: they have a limit of their own. */
+  made(): number {
+    return this.madeBytes;
+  }
+
+  room(bytes: number): boolean {
+    return this.madeLimit === undefined || this.madeBytes + bytes <= this.madeLimit;
   }
 
   async put(bytes: Uint8Array, mime: string, name?: string): Promise<{ id: string }> {
+    if (!this.room(bytes.length)) {
+      throw new Error(`no room to keep ${name ?? 'a file'}: this headset's files come to ${(this.madeLimit! / 1e6).toFixed(0)} MB at most`);
+    }
     const id = newId(mime, name);
     writeFileSync(join(this.dir, id), bytes);
-    this.write(id, { mime: bare(mime), name });
+    this.write(id, { mime: bare(mime), name, made: true });
+    this.madeBytes += bytes.length;
     return { id };
   }
 
@@ -130,6 +150,20 @@ export class DiskAssets implements Assets {
     } catch {
       return false;
     }
+  }
+
+  private madeOnDisk(): number {
+    let bytes = 0;
+    for (const name of readdirSync(this.dir)) {
+      const id = name.endsWith('.json') ? name.slice(0, -'.json'.length) : '';
+      if (!this.read(id)?.made) continue;
+      try {
+        bytes += statSync(join(this.dir, id)).size;
+      } catch {
+        // Its record without its file: nothing is kept.
+      }
+    }
+    return bytes;
   }
 
   private read(id: string): Meta | null {

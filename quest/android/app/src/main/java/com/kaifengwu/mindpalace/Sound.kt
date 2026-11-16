@@ -5,13 +5,16 @@ import android.app.Activity
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
+import android.util.Log
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -20,9 +23,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  * MediaPlayer, and streamed speech through an AudioTrack fed from its own thread. `handle` says which native object an
  * event is for.
  *
- * The microphone reads from VOICE_RECOGNITION, the source meant for a recognizer: no echo cancelling or noise
- * suppression that could blur the name, and the listener does not listen while a reply plays, so the agent's own
- * voice is not heard. `-micSource communication` reads VOICE_COMMUNICATION instead, to compare on the headset.
+ * The microphone reads from VOICE_COMMUNICATION, with the platform's echo canceller on it when there is one: the user
+ * may talk over Momo, so Momo's own voice must be taken out of what is heard. `-micSource recognition` reads
+ * VOICE_RECOGNITION instead, the source meant for a recognizer, with no echo cancelling, to compare on the headset.
+ * `-callMode` also puts the app in the platform's call mode while the microphone is open, which on some devices is
+ * what turns echo cancelling on.
  */
 object Sound {
     private const val ASK = 41
@@ -43,8 +48,9 @@ object Sound {
     private var asking: Pair<Long, Int>? = null
 
     @JvmStatic
-    fun openMicrophone(activity: Activity, handle: Long, communication: Boolean) {
-        val source = if (communication) MediaRecorder.AudioSource.VOICE_COMMUNICATION else MediaRecorder.AudioSource.VOICE_RECOGNITION
+    fun openMicrophone(activity: Activity, handle: Long, recognition: Boolean, callMode: Boolean) {
+        val source = if (recognition) MediaRecorder.AudioSource.VOICE_RECOGNITION else MediaRecorder.AudioSource.VOICE_COMMUNICATION
+        if (callMode) activity.getSystemService(AudioManager::class.java).mode = AudioManager.MODE_IN_COMMUNICATION
         if (activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             start(handle, source)
             return
@@ -81,6 +87,18 @@ object Sound {
                 microphoneFailed(handle, "AudioRecord did not start".toByteArray(Charsets.UTF_8))
                 return@Thread
             }
+            val canceller = if (source == MediaRecorder.AudioSource.VOICE_COMMUNICATION && AcousticEchoCanceler.isAvailable()) {
+                AcousticEchoCanceler.create(record.audioSessionId)?.also { it.enabled = true }
+            } else {
+                null
+            }
+            val cancelling = when {
+                source != MediaRecorder.AudioSource.VOICE_COMMUNICATION -> "off (VOICE_RECOGNITION)"
+                !AcousticEchoCanceler.isAvailable() -> "the platform's own, if any: AcousticEchoCanceler is not available"
+                canceller == null -> "the platform's own, if any: AcousticEchoCanceler could not be made"
+                else -> "AcousticEchoCanceler " + if (canceller.enabled) "on" else "would not turn on"
+            }
+            Log.i("ocean", "[voice] echo cancelling: $cancelling")
             record.startRecording()
             val piece = ShortArray(RATE / 10)
             while (running.get()) {
@@ -93,6 +111,7 @@ object Sound {
                 }
             }
             record.stop()
+            canceller?.release()
             record.release()
         }, "microphone")
         synchronized(this) { mics[handle] = Mic(running, thread) }

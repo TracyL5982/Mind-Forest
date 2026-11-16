@@ -18,7 +18,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <map>
 
+#include "../cards/ocean.h"
 #include "agent/bridge.h"
 #include "guide.h"
 
@@ -36,7 +38,8 @@ const Plan plans[] = {{"layers", 10}, {"carry", 10}, {"mark", 6}, {"tree", 10}, 
 // `gesture` on its own face, says what to do in its own words, and is done when the viewer has done `did`
 // (what `guideDid` is told). The next lesson's card stands beside it: pinching that moves on, done or not.
 // `alt` says where a button does the same as the gesture, for a pin to point at it. `pictures` is how many
-// pictures come with the card, to make its layer a real one and to have something to pick up.
+// pictures come with the card, to make its layer a real one and to have something to pick up. The card is
+// drawn as the card library draws its own (core/cards/lesson.cpp): `headline` its title, `summary` under it.
 struct TourStep {
     const char* note;
     const char* gesture;
@@ -82,17 +85,52 @@ const char* tourTitle = "Welcome to Mind Forest";
 const float lessonSize = 0.35f;     // of life size
 const float lessonGround = 0.5f;    // how solid the card behind an idle lesson is
 const float lessonLine = 0.0024f;   // the hand's line at that size, m (drawn small, it wants more weight)
+// NOTE(port): added for Quest: the stage on a lesson's card is as wide as the card's panel and this tall, m: all
+// that any lesson draws there at its `stage` size fits inside it, seen from where you stand.
+const float lessonStageTall = 0.35f;
 
-// A lesson done: for a moment a ring closes and a tick is drawn where its gesture played.
-const float doneSeconds = 1.7f;
+// The middle of all that a gesture draws over its loop, of life size: a lesson's card plays it there, in the middle
+// of its stage, and the tick of a lesson done goes there too (`doneAt`).
+Vec3 drawnMiddle(const guide::Gesture& g) {
+    static std::map<std::string, Vec3> known;
+    if (auto hit = known.find(g.id); hit != known.end()) return hit->second;
+    const std::vector<float>& there = guide::modelThere();
+    Vec2 lo{1e9f, 1e9f}, hi{-1e9f, -1e9f};
+    auto take = [&](Vec3 p) {
+        lo = vmin(lo, Vec2{p.x, p.y});
+        hi = vmax(hi, Vec2{p.x, p.y});
+    };
+    guide::Frame f;
+    for (int n = 0; n < 120; n++) {
+        f.clear();
+        g.draw(g.seconds * float(n) / 120, f);
+        for (const guide::Frame::Hand& h : f.hands) {
+            if (h.alpha < 0.05f) continue;
+            for (size_t i = 0; i < h.positions.size(); i++) {
+                if (i >= there.size() || there[i] > 0.3f) take(h.positions[i]);
+            }
+        }
+        for (const guide::Frame::Stroke& s : f.strokes) {
+            for (size_t i = 0; i < s.points.size(); i++) {
+                if (i >= s.alphas.size() || s.alphas[i] > 0.05f) take(s.points[i]);
+            }
+        }
+    }
+    Vec3 middle = hi.x >= lo.x ? Vec3{(lo.x + hi.x) / 2, (lo.y + hi.y) / 2, 0} : Vec3::zero();
+    known[g.id] = middle;
+    return middle;
+}
+
+// A lesson done: a ring closes and a tick is drawn where its gesture played. They stay while its card is shown.
+const float doneSeconds = 0.75f;
+Vec3 doneAt;
 void drawDone(float t, guide::Frame& f) {
     const Vec3 X{1, 0, 0}, Y{0, 1, 0};
-    f.fade = 1 - guide::span(t, 1.35f, doneSeconds);
     float round = guide::travel(guide::span(t, 0, 0.5f)), tick = guide::travel(guide::span(t, 0.3f, 0.75f));
-    f.arc(Vec3::zero(), X, Y, 0.062f, floatPi / 2, floatPi / 2 - round * 2 * floatPi, 0.003f, guide::white, 0.9f);
+    f.arc(doneAt, X, Y, 0.062f, floatPi / 2, floatPi / 2 - round * 2 * floatPi, 0.003f, guide::white, 0.9f);
     if (tick < 0.01f) return;
     // Down to its corner, then up and out: the first stroke is two fifths of it.
-    Vec3 a{-0.027f, 0.002f, 0}, b{-0.008f, -0.019f, 0}, c{0.029f, 0.023f, 0};
+    Vec3 a = doneAt + Vec3{-0.027f, 0.002f, 0}, b = doneAt + Vec3{-0.008f, -0.019f, 0}, c = doneAt + Vec3{0.029f, 0.023f, 0};
     std::vector<Vec3> points{a, a + (b - a) * std::min(1.f, tick / 0.4f)};
     if (tick > 0.4f) points.push_back(b + (c - b) * ((tick - 0.4f) / 0.6f));
     f.path(points, 0.004f, guide::white, 0.95f);
@@ -491,6 +529,16 @@ void OceanModel::addWelcomeNotes() {
             continue;
         }
         catalog->notes[step.note] = *note;
+        // Drawn as the card library draws its own, with or without `-cards`: on its stage the guide plays its gesture,
+        // or it is the picture to mark.
+        bool picture = k == markStep && toMark >= 0;
+        Json props = Json::object(), view = Json::object(), item = Json::object();
+        props.set("step", k + 1).set("badge", fmt("Step %d of %d", k + 1, tourCount));
+        if (picture) props.set("src", fmt("work:%d", toMark)).set("aspect", aspect);
+        else props.set("tall", lessonStageTall * Art::ppm / cards::ocean::openScale);
+        view.set("component", "lesson").set("props", props);
+        item.set("title", step.headline).set("summary", step.summary);
+        cards::ocean::hold(cards::OceanCard{step.note, view, item, picture ? std::optional(aspect) : std::nullopt});
     }
     // What Momo answers with on the walk: cards like any it makes, but written here, so that the walk goes the
     // same way with the service or without it. First, what it can do: a card for each, in words that work
@@ -652,7 +700,7 @@ void OceanModel::tourShow(int shown) {
     if (shown < 0) return;
     const TourStep& step = tourSteps[shown >= 200 ? pullStep : shown % 100];
     if (shown < 100 || shown >= 200) {
-        // On its own card: over the stage at the top of it, standing off it toward you, as large as there is room for.
+        // On its own card: in the middle of the stage at the top of it, standing off it toward you, at its `stage` size.
         CardRef c = tourCard(shown % 100);
         if (!c || !c->openBuilt) {
             teach.tourShown = -1;
@@ -660,7 +708,9 @@ void OceanModel::tourShow(int shown) {
         }
         PictureFrame picture = pictureFrame(*c);
         const float size = step.stage;
-        teach.painter->entity->position = {picture.center.x, picture.center.y + 0.04f * size, 0.2f * size + 0.014f};
+        const guide::Gesture* gesture = tourGesture(step.gesture);
+        doneAt = gesture ? drawnMiddle(*gesture) : Vec3::zero();
+        teach.painter->entity->position = Vec3{picture.center.x, picture.center.y, 0.2f * size + 0.014f} - doneAt * size;
         teach.painter->entity->orientation = Quat::identity();
         teach.painter->entity->scale = Vec3::repeating(size);
         teach.painter->setLine(0.0017f);
@@ -915,14 +965,9 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     }
     if (want != teach.tourShown) tourShow(want);
     if (teach.tourShown >= 0) {
-        // A lesson just done: the tick, the first time its card is looked at after.
+        // A lesson just done: the tick, drawn the first time its card is looked at after, and kept there.
         bool ticking = teach.tourShown == teach.tourTickFor;
         if (ticking && teach.tourTick < 0) teach.tourTick = now;
-        if (ticking && now - teach.tourTick >= double(doneSeconds) && !holdDone) {
-            teach.tourTickFor = -1;
-            teach.tourBegan = now;
-            ticking = false;
-        }
         if (ticking) {
             teach.painter->draw(doneGesture, float(teach.demoT >= 0 ? teach.demoT : now - teach.tourTick), eye);
         } else if (const guide::Gesture* g = tourGesture(tourSteps[teach.tourShown >= 200 ? pullStep : teach.tourShown % 100].gesture)) {
@@ -1795,10 +1840,10 @@ std::optional<Vec3> OceanModel::overOpenCard() const {
     auto found = cards.find(*tree->focus());
     if (found == cards.end() || !found->second || !found->second->openBuilt) return std::nullopt;
     const CardView& c = *found->second;
-    PictureFrame picture = pictureFrame(c);
     Mat4 world = c.openHolder->transformMatrix(nullptr);
     float size = std::max(0.05f, length(world.columns[0].xyz()));
-    return world.point({picture.center.x, picture.center.y + picture.size.y / 2 + 0.03f / size, 0.012f / size});
+    // Over the card's top edge, clear of its title (a card of the card library's has it over its picture).
+    return world.point({0, c.openBody.y / 2 + 0.03f / size, 0.012f / size});
 }
 
 // MARK: - Each frame

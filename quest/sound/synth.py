@@ -476,6 +476,32 @@ def build():
         PAGE_ONLY.add(f"timbre_{name}")
 
 
+def momo():
+    """The voice agent's three sounds. All on the fourth F#-B, which agrees with every layer chord and the bed, struck on the mallet."""
+    global rng
+    # Its own draws: Kai's sounds above and these never move each other.
+    kai, rng = rng, np.random.default_rng(41)
+
+    # (The listener takes no words while the chime plays: under 0.3 s.)
+    heard = chime(hz("F#5"), 0.9, 0.9, "mallet", -0.15)
+    heard = place(heard, chime(hz("B5"), 0.9, 1.0, "mallet", 0.15), 0.09)
+    add("momo_chime", heard, 0.35, "Momo heard its name and listens", wet=0.3, longest=0.28)
+
+    sent = chime(hz("B5"), 0.6, 0.8, "mallet", 0.1)
+    sent = place(sent, chime(hz("F#5"), 0.7, 0.9, "mallet", -0.1), 0.07)
+    add("momo_sent", sent, 0.25, "What the user said goes to Momo (the chime turned over, softer)", wet=0.3, longest=0.18)
+
+    # Two slow breaths on the same fourth, then a rest. Silent at both ends, so it repeats without a seam.
+    n = 2.0
+    breath = np.zeros((int(n * SR), 2))
+    breath = place(breath, pad([hz("F#4")], 0.8, 0.4, 0.4, 1200), 0.1)
+    breath = place(breath, pad([hz("B4")], 0.9, 0.45, 0.45, 1200), 0.6)
+    end = int((n - 0.08) * SR)
+    think = np.concatenate([fade(room(breath, 0.3, 0.0)[:end], 0.0, 0.4), np.zeros((len(breath) - end, 2))])
+    add("momo_thinking", think, 0.08, "Momo is thinking (loops until it speaks)", loop=n)
+    rng = kai
+
+
 def pcm(x):
     return (np.clip(x, -1, 1) * 32767).astype(np.int16)
 
@@ -527,5 +553,6 @@ if __name__ == "__main__":
     ap.add_argument("--page", help="where the audition page's mp3 files and sounds.js go")
     args = ap.parse_args()
     build()
+    momo()
     if args.out or not args.page: write_app(args.out or os.path.join(repo, "media-src", "quest", "sounds"))
     if args.page: write_page(args.page)

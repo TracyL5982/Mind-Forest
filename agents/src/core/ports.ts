@@ -203,6 +203,8 @@ export interface Geocoder {
 
 export interface Assets {
   put(bytes: Uint8Array, mime: string, name?: string): Promise<{ id: string }>;
+  /** Whether `bytes` more of the service's own files can be kept here. Absent, there is always room. */
+  room?(bytes: number): boolean;
   /**
    * An asset whose bytes stay where they are, a remote address or a file on the host, streamed through the service when asked for.
    * For playable media too large to copy. Never called with an address a client supplied.

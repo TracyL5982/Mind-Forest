@@ -12,6 +12,8 @@ export interface ToolOptions {
   /** Keys for sources that need one, by the name they have in the env file. A source without its key is left out. */
   keys?: Record<string, string | undefined>;
   fetch?: typeof fetch;
+  /** How a page or a picture named by a dump, a search or the model is fetched; `fetch` unless given. Hosted mode reaches only public addresses. */
+  fetchPage?: typeof fetch;
   /** Given only when maps are on. */
   geocoder?: Geocoder;
   /** Told what a priced call cost, in dollars, for the hosted service's daily cap. */
@@ -62,16 +64,20 @@ const CodeReply = z.object({ title: z.string(), language: z.string(), source: z.
 
 export function makeTools(opts: ToolOptions): Tools {
   const send = opts.fetch ?? fetch.bind(globalThis);
+  const page = opts.fetchPage ?? send;
   return {
     web: {
       search: (query, max) => opts.model.search({ role: 'tool.web', query, max }),
-      read: (url) => readPage(send, url),
+      read: (url) => readPage(page, url),
+      // With the headset's files full, a picture is nothing, as one that cannot be fetched is: a dropped link keeps its card without it.
       picture: async (url) => {
-        const got = await fetchPicture(send, url);
-        return got ? { asset: (await opts.assets.put(got.bytes, got.mime, 'found')).id } : null;
+        if (opts.assets.room?.(MIN_PICTURE_BYTES) === false) return null;
+        const got = await fetchPicture(page, url);
+        if (!got || opts.assets.room?.(got.bytes.length) === false) return null;
+        return { asset: (await opts.assets.put(got.bytes, got.mime, 'found')).id };
       },
       async look(url) {
-        const got = await fetchPicture(send, url);
+        const got = await fetchPicture(page, url);
         return got ? `data:${got.mime};base64,${Buffer.from(got.bytes).toString('base64')}` : null;
       },
       async videos(query) {
@@ -81,7 +87,7 @@ export function makeTools(opts: ToolOptions): Tools {
         return (await Promise.all(hits.map((hit) => playable(send, hit.url)))).flatMap((v) => v ?? []);
       },
     },
-    sources: makeSources({ send, model: opts.model, read: (url) => readPage(send, url), keys: opts.keys, spent: opts.spent, following: opts.following }),
+    sources: makeSources({ send, model: opts.model, read: (url) => readPage(page, url), keys: opts.keys, spent: opts.spent, following: opts.following }),
     instagram: {
       async recent(limit = 12): Promise<SocialPost[]> {
         if (!opts.instagram) return [];
@@ -105,6 +111,8 @@ export function makeTools(opts: ToolOptions): Tools {
     },
     images: {
       async generate(prompt) {
+        // Not made when it could not be kept, so a picture is never paid for and thrown away.
+        if (opts.assets.room?.(MADE_PICTURE_BYTES) === false) throw new Error("no room to keep another picture for this headset");
         const model = opts.keys?.MIND_PALACE_FAL_MODEL || FAL_DEFAULT;
         const fal = opts.keys?.FAL_KEY && model !== 'off' ? { key: opts.keys.FAL_KEY, model } : null;
         let made: { bytes: Uint8Array; mime: string } | undefined;
@@ -141,15 +149,17 @@ export function makeTools(opts: ToolOptions): Tools {
 const AGENT_NAME = 'MindPalace/0.1 (local prototype)';
 
 const MIN_PICTURE_BYTES = 4_000;
+/** Room a made picture needs: a 1K JPEG, a few hundred KB. */
+const MADE_PICTURE_BYTES = 1_000_000;
 const MAX_PICTURE_BYTES = 8_000_000;
 
 async function fetchPicture(send: typeof fetch, url: string): Promise<{ bytes: Uint8Array; mime: string } | null> {
   try {
     const res = await send(url, { headers: { 'User-Agent': AGENT_NAME, Accept: 'image/*' }, redirect: 'follow', signal: AbortSignal.timeout(12_000) });
     const mime = (res.headers.get('content-type') ?? '').split(';')[0]!.trim();
-    if (!res.ok || !/^image\/(jpeg|png|webp|gif)$/.test(mime)) return null;
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.length < MIN_PICTURE_BYTES || bytes.length > MAX_PICTURE_BYTES) return null;
+    if (!res.ok || !/^image\/(jpeg|png|webp|gif)$/.test(mime) || Number(res.headers.get('content-length')) > MAX_PICTURE_BYTES) return null;
+    const { bytes, whole } = await capped(res, MAX_PICTURE_BYTES);
+    if (!whole || bytes.length < MIN_PICTURE_BYTES) return null;
     return { bytes, mime };
   } catch {
     return null;
@@ -196,7 +206,7 @@ async function readPage(send: typeof fetch, url: string): Promise<Page | null> {
     });
     const type = res.headers.get('content-type') ?? '';
     if (!res.ok || !/text\/|xml|json/.test(type)) return null;
-    const html = new TextDecoder().decode((await res.arrayBuffer()).slice(0, MAX_PAGE_BYTES));
+    const html = new TextDecoder().decode((await capped(res, MAX_PAGE_BYTES)).bytes);
     const meta = (name: string) =>
       decode(
         new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]*content=["']([^"']*)["']`, 'i').exec(html)?.[1] ??
@@ -217,6 +227,35 @@ async function readPage(send: typeof fetch, url: string): Promise<Page | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * A response's body read only up to `max` bytes, the rest never fetched: a body sent without end, to each of a drop's fifty links,
+ * would otherwise be held whole until the timeout. `whole` says whether that was all of it.
+ */
+async function capped(res: Response, max: number): Promise<{ bytes: Uint8Array; whole: boolean }> {
+  const reader = res.body?.getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  let whole = true;
+  for (;;) {
+    const read = reader ? await reader.read() : { done: true as const, value: undefined };
+    if (read.done) break;
+    parts.push(read.value);
+    size += read.value.length;
+    if (size > max) {
+      whole = false;
+      await reader!.cancel().catch(() => {});
+      break;
+    }
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const part of parts) {
+    bytes.set(part, at);
+    at += part.length;
+  }
+  return { bytes: bytes.subarray(0, Math.min(size, max)), whole };
 }
 
 /** `address` read against the page at `base`, or undefined when it is no web address. A picture is only ever fetched from the web. */
