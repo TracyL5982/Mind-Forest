@@ -78,6 +78,17 @@ export interface Source {
   show: number;
   /** Its records are things to look at, so one without a picture is not shown. */
   visual?: boolean;
+  /**
+   * Its terms say its pictures are shown from its own addresses and never copied, as Unsplash's do. The model looks at them there,
+   * and a card's picture is a linked asset that the service relays from that address each time it is shown.
+   */
+  hotlink?: boolean;
+}
+
+/** The attribution a source's terms ask for on a record, such as "Photo by Jeff Sheldon on Unsplash", and the page it links to. */
+export interface Credit {
+  text: string;
+  url?: string;
 }
 
 /** One record a source returned. */
@@ -92,6 +103,8 @@ export interface Found {
   /** The collection or channel it came from, when that is narrower than the source. */
   from?: string;
   image?: string;
+  /** A smaller copy of `image` for the model to look at, when the source serves one. */
+  preview?: string;
   /** A recording that plays in place, such as a podcast episode or a film. */
   media?: string;
   /** How long `media` plays, in seconds, when the source says. */
@@ -114,6 +127,12 @@ export interface Found {
   authorsCut?: boolean;
   /** The journal, conference or repository a paper appeared in. */
   venue?: string;
+  /** Who to credit and under what licence, when the source asks for that to be shown with the record. */
+  credit?: Credit;
+  /** The licence the record may be reused under, as its source names it ("CC BY-SA 4.0", "Public domain"). */
+  licence?: string;
+  /** An address the source asks to be told at when the record is put in front of the user, as Unsplash counts a download. */
+  report?: string;
 }
 
 /** A video that can be played inside a client. */
@@ -141,6 +160,8 @@ export interface Tools {
     read(url: string): Promise<Page | null>;
     /** Downloads a picture and stores it, so a client shows it in place. Null when the address holds no usable picture. */
     picture(url: string): Promise<{ asset: string } | null>;
+    /** Downloads a picture for the model to look at, as a data URL, and keeps no copy. Null when the address holds no usable picture. */
+    look(url: string): Promise<string | null>;
     /** Videos for a search that can be played in place, best first. */
     videos(query: string): Promise<Playable[]>;
   };
@@ -148,6 +169,8 @@ export interface Tools {
     list(): Source[];
     /** Searches one source. An unknown source or a failed search gives an empty list or throws. */
     search(id: string, query: string): Promise<Found[]>;
+    /** Tells a record's source that the record is now in front of the user, when the record carries `report`. Never throws. */
+    report(id: string, record: Found): Promise<void>;
   };
   instagram: {
     /** The connected account's own recent posts. */

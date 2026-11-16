@@ -205,7 +205,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     mind,
     roles: meter ? metered(opts.roles, meter) : opts.roles,
     model: opts.model,
-    tools: chargedPictures(makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)) }), meter),
+    tools: chargedPictures(makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)), log: opts.log }), meter),
     assets,
     store,
     settings,

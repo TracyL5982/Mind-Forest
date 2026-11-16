@@ -15,6 +15,11 @@ const MAX_GENERATED_IMAGES = 4;
 const GALLERY_SIZE = 3;
 const FOUND_SHOWN_TO_MODEL = 10;
 const VISUAL_SHOWN_TO_MODEL = 8;
+/**
+ * Pictures of a search not fetched by then are left out, so one slow holder never holds the reading back. The probe fetched eight
+ * in 0.2 to 1.2 s, once 2.6 s; in the first bench one straggler held eight for 12 s, on a slow network.
+ */
+const PICTURES_WAIT_MS = 2500;
 const SEARCHES_PER_FIND = 3;
 const ENOUGH_FOUND = 6;
 const THIN_POOL = 3;
@@ -79,14 +84,15 @@ interface Lane {
   arrived: number;
   /** Its picks landed. */
   filled: number;
+  /** Its picks landed that are things to look at: a found or made picture, or a video. */
+  shown: number;
 }
 
 interface Waiting {
-  pick: Item;
+  made: Made;
   d: Direction;
-  tool: string;
   lane: Lane;
-  /** Its direction's first pick, held back only for a slot kept for a picture or the fast lane, so it lands before any second pick. */
+  /** Its direction's first pick, held back only for a slot held for a picture, for a thing to look at or for the fast lane, so it lands before any second pick. */
   first: boolean;
 }
 
@@ -112,7 +118,9 @@ interface Run {
  * Two lanes write its directions. In the fast lane the quick model names a few catalogues and what to search in each, in under
  * a second, so its cards land within seconds. The inventive lane, the main model, thinks for 13 to 19 s before its first
  * direction. They share the run's slots, and the fast lane never fills more than two of them or half, and keeps none once the
- * inventive lane has a card ready.
+ * inventive lane has a card ready. Each lane holds a slot for its first thing to look at: the fast lane one of its two, once its
+ * first card is in, and the inventive lane one of its own, so written ideas, which land the moment they are written, never take
+ * every slot first.
  */
 export const scout: Roles['scout'] = async (given, input) => {
   // Every step of the run is shown on its card.
@@ -146,11 +154,18 @@ export const scout: Roles['scout'] = async (given, input) => {
   // A source can return several records and a set several pictures, so the new content is counted per pick, up to what was asked for.
   let slots = 0;
   let room = 0;
-  const hang = (pick: Item, d: Direction, tool: string, lane: Lane): Command[] => {
+  // Read once, so a source that stops being offered mid-run, as Unsplash does near its hourly limit, does not change what counts as one.
+  const lookable = new Set(ctx.tools.sources.list().filter((src) => src.visual).map((src) => src.id));
+  const pictured = (d: Direction) => d.format === 'image' || d.format === 'gallery';
+  /** A direction that brings something to look at: a picture made, a video, or a find in a source whose records are pictures. */
+  const visual = (d: Direction) => pictured(d) || d.format === 'video' || (d.format === 'find' && lookable.has(d.source.trim()));
+  const hang = ({ item: pick, tool, landed }: Made, d: Direction, lane: Lane): Command[] => {
     const keys = sameness(pick);
     if (room <= 0 || keys.some((key) => seen.has(key))) return [];
     room--;
     lane.filled++;
+    if (visual(d)) lane.shown++;
+    landed?.();
     for (const key of keys) seen.add(key);
     const why = oneLine(d.why, 80) || oneLine(d.angle, 80) || (need || reading ? `for "${oneLine(need || reading, 60)}"` : `from ${oneLine(nameOf(item), 60)}`);
     // Made for what the user asked just now, so nothing in the round is more related to it.
@@ -184,11 +199,11 @@ export const scout: Roles['scout'] = async (given, input) => {
   const taken = knownUrls(ctx);
   // Directions are taken as they are written, and each starts the moment it is written. Each is owed a slot, and the inventive
   // lane is taken for one more than the slots it may fill. So a direction's first pick lands the moment it is ready, except into a
-  // slot held by a picture, or kept for the fast lane's finds still out or for a picture the inventive lane may still write,
-  // since it writes pictures last and a picture is paid for when it is started. A further pick waits until every direction still
-  // out, or still to be written, keeps a slot, then lands in the order it came.
-  const fast: Lane = { writing: true, arrived: 0, filled: 0 };
-  const inventive: Lane = { writing: true, arrived: 0, filled: 0 };
+  // slot held by a picture, kept for the fast lane's finds still out, or held for the inventive lane's first thing to look at,
+  // since written ideas land the moment they are written and would otherwise take every slot first. A further pick waits until
+  // every direction still out, or still to be written, keeps a slot, then lands in the order it came.
+  const fast: Lane = { writing: true, arrived: 0, filled: 0, shown: 0 };
+  const inventive: Lane = { writing: true, arrived: 0, filled: 0, shown: 0 };
   // The fast lane is there to win a race. Once the inventive lane has a card ready it has lost: it keeps no slot, its choice of
   // where to look is given up, and a find of its still out lands only into a slot nobody else claims.
   let fastMost = FAST_MOST;
@@ -204,12 +219,20 @@ export const scout: Roles['scout'] = async (given, input) => {
   const out = new Set<Direction>();
   const waiting: Waiting[] = [];
   let pictureTaken = false;
-  const pictured = (d: Direction) => d.format === 'image' || d.format === 'gallery';
   const making = () => [...out].filter(pictured).length;
-  const kept = () => (inventive.writing && !pictureTaken && imagesLeft > 0 ? 1 : 0);
-  const held = () => making() + kept();
+  const seeing = (lane: Lane) => [...out].some((d) => lanes.get(d) === lane && visual(d));
+  const finding = () => [...out].some((d) => lanes.get(d) === inventive && visual(d) && !pictured(d));
+  // Until the inventive lane has shown something to look at, one slot is held for its first: while a find of pictures or a video is
+  // out, and while the model may still write one, unless a picture being made holds its own slot. A find keeps the slot even then,
+  // since a made picture takes 15 to 48 s and lands after the line, and a find lands before it.
+  const awaited = () => (inventive.shown === 0 && (finding() || (inventive.writing && making() === 0)) ? 1 : 0);
+  // The held slot, while what will fill it is not written yet.
+  const kept = () => (awaited() && !finding() ? 1 : 0);
+  const held = () => making() + awaited();
   // The fast lane fills at most two slots and never half, so the inventive lane always keeps the most.
   const fastShare = () => Math.min(fastMost, Math.floor(slots / 2));
+  // Once its first card is in, a fast look at something to see keeps one of the lane's slots until it lands or comes back empty.
+  const fastHold = () => (fast.shown === 0 && seeing(fast) ? 1 : 0);
   // What it may still fill: its whole share while it is choosing, then no more than its finds still out could bring.
   const fastOwed = () => {
     const stillOut = [...out].filter((d) => lanes.get(d) === fast).length;
@@ -222,14 +245,17 @@ export const scout: Roles['scout'] = async (given, input) => {
   };
   const owed = () =>
     out.size + kept() + (fast.writing ? FAST_LOOKS : 0) + (inventive.writing ? Math.max(0, inventiveExpected() - inventive.arrived) : 0);
-  const mayLand = (lane: Lane) => (lane === fast ? fast.filled < fastShare() && room > held() : room - fastOwed() > held());
+  const mayLand = (lane: Lane, d: Direction) =>
+    lane === fast
+      ? fast.filled < (visual(d) ? fastShare() : Math.max(1, fastShare() - fastHold())) && room > held()
+      : room - fastOwed() > held() - (visual(d) ? awaited() : 0);
   const take = (w: Waiting) => {
     waiting.splice(waiting.indexOf(w), 1);
-    commands.push(...hang(w.pick, w.d, w.tool, w.lane));
+    commands.push(...hang(w.made, w.d, w.lane));
   };
   // Each direction is shown the moment it is ready, so a slow search never holds back a finished picture.
   const drain = () => {
-    for (const w of waiting.filter((w) => w.first)) if (mayLand(w.lane)) take(w);
+    for (const w of waiting.filter((w) => w.first)) if (mayLand(w.lane, w.d)) take(w);
     while (waiting.length > 0 && room > owed()) take(waiting[0]!);
     flush();
   };
@@ -239,14 +265,14 @@ export const scout: Roles['scout'] = async (given, input) => {
     if (lane === inventive && items.length > 0) lose();
     let landed = false;
     let first = lane === inventive || fast.filled < fastShare();
-    for (const { item: pick, tool } of items) {
-      if (!landed && mayLand(lane)) {
-        const hung = hang(pick, d, tool, lane);
+    for (const made of items) {
+      if (!landed && mayLand(lane, d)) {
+        const hung = hang(made, d, lane);
         commands.push(...hung);
         landed = hung.length > 0;
         continue;
       }
-      waiting.push({ pick, d, tool, lane, first: first && !landed });
+      waiting.push({ made, d, lane, first: first && !landed });
       first = false;
     }
     drain();
@@ -283,6 +309,9 @@ export const scout: Roles['scout'] = async (given, input) => {
       // A picture is only made into a slot that no other picture holds.
       if (room <= making()) return;
       pictureTaken = true;
+    } else if (visual(d) && inventive.shown === 0 && !finding() && room > making()) {
+      // The first find of something to look at is taken for the slot held for it, even once the count of directions is full.
+      inventive.arrived++;
     } else {
       if (inventive.arrived >= inventiveExpected()) return;
       inventive.arrived++;
@@ -429,7 +458,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
       '',
       asked,
       '',
-      'First, in reading, say in one sentence what kind of thing this is, what field it belongs to, and what the user is most likely doing with it. Let that decide the angles, the formats and the sources. A startup idea wants evidence, numbers, people who tried it and what they learned. A research question wants studies and counter-evidence. A picture wants things to look at. A trip wants places and practicalities.',
+      'First, in reading, say in one sentence what kind of thing this is, what field it belongs to, and what the user is most likely doing with it. Let that decide the angles, the formats and the sources. A startup idea wants evidence, numbers, people who tried it and what they learned. A research question wants studies and counter-evidence. A picture wants things to look at. A trip wants places and practicalities. If nothing about it can be seen, say so in reading and why.',
       '',
       `Return exactly ${count} directions.`,
       'Diversity rules:',
@@ -440,7 +469,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
         : count === 3
           ? '- Mix the formats: at least one "find" and at least one written idea.'
           : '- Prefer different formats.',
-      '- Use "image" or "gallery" when seeing something new helps: the user has a picture or a visual subject, or asked to see something. Then include at least one. For a subject that is not visual, leave them out.',
+      '- At least one direction brings something to look at: a "find" in a source whose records are pictures, a "video", or an "image" or "gallery". Most subjects have something to see: the people, places, objects, works, events or look of it. Leave all of them out only when nothing about the subject can be seen.',
       '- Write the written ideas first, since each lands the moment it is written, and any "image" or "gallery" direction last, after the others.',
       '',
       'For each direction:',
@@ -471,7 +500,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
       '- "video": when watching teaches more than reading: a technique shown by hand, a performance, a process, a place in motion, a talk worth hearing. lookups has one search phrase, the way you would type it into a video site. body is one sentence on what to watch for.',
       '',
       'Sources for "find":',
-      ...ctx.tools.sources.list().map((src) => `- ${src.id}: ${src.name}. ${src.goodFor} Search: ${src.query}`),
+      ...ctx.tools.sources.list().map(sourceLine),
     ].join('\n'),
     schema: Ideas,
     images: run.picture ? [run.picture] : undefined,
@@ -504,6 +533,7 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
       run.brief,
       '',
       'The user is waiting for the first cards, and a slower search will bring more later. Name two or three of the catalogues below that are likely to hold a strong record for what the user asked, as it applies to this very thing. Each a different catalogue.',
+      'When the subject can be seen (its people, places, objects, works, events or look), make one of them a catalogue of pictures or a video, so the user has something to look at.',
       'For each:',
       '- source: its id as listed.',
       '- search: what to type into its search box, as its line says. It names the subject itself, never the words of the request ("something interesting", "help me") and never a question. Each extra word removes results.',
@@ -512,7 +542,7 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
       '- tags: 2 to 4 short lowercase words.',
       '',
       'Catalogues:',
-      ...catalogues.map((src) => `- ${src.id}: ${src.name}. ${src.goodFor} Search: ${src.query}`),
+      ...catalogues.map(sourceLine),
       `- ${VIDEO_LOOK}: A video that plays in the card, when watching teaches more than reading. Search: a short phrase, as you would type it into a video site.`,
     ].join('\n'),
     schema: Looks,
@@ -542,7 +572,8 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
   }).slice(0, FAST_LOOKS);
 }
 
-type Made = { item: Item; tool: string };
+/** An item a direction made, and what to tell its source once it lands, when the source asks to be told. */
+type Made = { item: Item; tool: string; landed?: () => void };
 
 function common(d: Direction, tool: string) {
   return {
@@ -819,21 +850,29 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
     ctx.note(ROLE, `${source.name} could not be reached (${failed}), "${oneLine(d.title, 60)}" left out`);
     return [];
   }
-  // Things to look at are brought in first, so the model chooses among them by sight and a missing picture is never shown.
+  // Things to look at are brought in first, so the model chooses among them by sight and a missing picture is never shown. A
+  // source whose pictures may not be copied is looked at from a copy kept nowhere, and only the ones chosen are linked.
   const pictured = fresh.slice(0, VISUAL_SHOWN_TO_MODEL);
-  const found = source.visual
-    ? (
+  const found = !source.visual
+    ? fresh.slice(0, FOUND_SHOWN_TO_MODEL).map((f) => ({ ...f, stored: null, seen: null }))
+    : (
         await ctx.step(ROLE, label(`Fetching ${pictured.length} pictures from`, sourceWords(source)), () =>
-          Promise.all(pictured.map(async (f) => ({ ...f, stored: f.image ? await ctx.tools.web.picture(f.image) : null }))),
+          inTime(
+            pictured.map(async (f) =>
+              !f.image ? { ...f, stored: null, seen: null }
+              : source.hotlink ? { ...f, stored: null, seen: await ctx.tools.web.look(f.preview ?? f.image) }
+              : { ...f, stored: await ctx.tools.web.picture(f.image), seen: null },
+            ),
+            PICTURES_WAIT_MS,
+          ),
         )
-      ).filter((f) => f.stored)
-    : fresh.slice(0, FOUND_SHOWN_TO_MODEL).map((f) => ({ ...f, stored: null }));
+      ).flatMap((f) => (f && (f.stored || f.seen) ? [f] : []));
   if (found.length === 0) {
     ctx.note(ROLE, `${source.name} has nothing for "${query}", left out`);
     return [];
   }
   // A search matches words, so the model picks the records that carry the direction before any is shown.
-  const pictures = source.visual ? await dataUrls(ctx, found.map((f) => f.stored!.asset)) : undefined;
+  const pictures = !source.visual ? undefined : source.hotlink ? found.map((f) => f.seen!) : await dataUrls(ctx, found.map((f) => f.stored!.asset));
   const chosen = await ctx.step(ROLE, label(`Reading ${found.length} ${found.length === 1 ? 'result' : 'results'} from`, sourceWords(source)), () => curate(ctx, d, source, found, most, pictures));
   if (chosen.length === 0) ctx.note(ROLE, `none of the ${found.length} records ${source.name} returned for "${query}" fit, left out`);
   const made = await Promise.all(
@@ -841,13 +880,16 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
       const record = found[index]!;
       if (taken.has(urlKey(record.url))) return null;
       taken.add(urlKey(record.url));
-      const picture = record.stored ?? (record.image ? await ctx.tools.web.picture(record.image) : null);
+      const picture =
+        record.stored ?? (!record.image ? null : source.hotlink ? { asset: (await ctx.assets.link(record.image, 'image/jpeg')).id } : await ctx.tools.web.picture(record.image));
       // A recording plays from the service, which streams it from its source, so a client only ever fetches from the service.
       const mime = record.media ? mediaType(record.media) : '';
       const media = record.media ? await ctx.assets.link(record.media, mime) : null;
-      const label = [...new Set([record.by, record.date, record.from ?? source.name].filter(Boolean))].join(', ');
+      // A source that asks for its own credit line gets it in place of who made it and where it was found.
+      const label = record.credit ? [record.credit.text, record.date].filter(Boolean).join(', ') : [...new Set([record.by, record.date, record.from ?? source.name].filter(Boolean))].join(', ');
       const passage = excerpt || clipText(record.text, EXCERPT);
       return {
+        ...(record.report ? { landed: () => void ctx.tools.sources.report(source.id, record) } : {}),
         tool: source.id,
         item: makeItem(ctx, {
           ...common(d, source.id),
@@ -877,6 +919,8 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
 /** What a source's catalogue says about a record, as `item.data` keys a card can draw. */
 export function catalogued(record: Found): ItemData {
   return {
+    ...(record.credit ? { credit: record.credit } : {}),
+    ...(record.licence ? { licence: record.licence } : {}),
     ...(record.kind ? { kind: record.kind } : {}),
     ...(record.medium ? { medium: record.medium } : {}),
     ...(record.holder ? { holder: record.holder } : {}),
@@ -940,6 +984,25 @@ async function curate(ctx: RoleContext, d: Direction, source: Source, found: Fou
     ctx.note(ROLE, `could not choose among what ${source.name} returned (${message(err)}), left out`);
     return [];
   }
+}
+
+/** What each job brought by `ms`, in order, and undefined for one still out then or failed. Never waits past `ms`. */
+function inTime<T>(jobs: Promise<T>[], ms: number): Promise<(T | undefined)[]> {
+  const got: (T | undefined)[] = jobs.map(() => undefined);
+  let left = jobs.length;
+  return new Promise((done) => {
+    if (left === 0) return done(got);
+    const timer = setTimeout(() => done([...got]), ms);
+    jobs.forEach((job, i) =>
+      job
+        .then((value) => void (got[i] = value), () => undefined)
+        .finally(() => {
+          if (--left > 0) return;
+          clearTimeout(timer);
+          done([...got]);
+        }),
+    );
+  });
 }
 
 const squash = (text: string): string => text.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -1060,6 +1123,9 @@ function lookupsOf(ctx: RoleContext, d: Direction, source: Source): string[] {
   ctx.note(ROLE, `"${oneLine(d.title, 60)}" came with no searches; searching ${source.name} for "${query}"`);
   return [query];
 }
+
+/** A source as the model is offered it, with whether its records are pictures. */
+const sourceLine = (src: Source): string => `- ${src.id}: ${src.name}${src.visual ? ' (pictures)' : ''}. ${src.goodFor} Search: ${src.query}`;
 
 /** A source as a label names it: a common noun in lower case ("research papers", "the web"), a name as it is ("Hacker News"). */
 function sourceWords(source: Source): string {
