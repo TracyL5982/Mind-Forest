@@ -57,8 +57,8 @@ forest, a pinch on a card opens it and the Scout's picks come up round it with d
 it, and the knife deletes. Palms together closes a tree; it is handed off by voice ("hand this off"). Under an open
 card stand at most three suggested questions as pills, and a pinch held still on it, while a ring fills round the pinch,
 asks for more like it. Gone into, the card has Kai's pen, eraser and Send: with the pen up a drag highlights words or
-draws on the card, which the service keeps with it, the eraser takes the newest mark off, and Send asks Momo about what
-is marked (core/cards/README.md). The plan and
+draws on the card, or along a video marks a stretch of it, which the service keeps with the card; one press of the
+eraser takes every mark off, and Send asks Momo about all of them together (core/cards/README.md). The plan and
 its state are in [agent-plan.md](agent-plan.md).
 
 This build installs beside the app already on the headset, as "Mind Palace Ocean (agents)", because it is
@@ -474,8 +474,8 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
   has a handle at each end, which a later drag takes it by). With the pen down a drag does nothing (on a
   card drawn as one of the agent's, `-cards`, it scrolls the card). The eraser takes the mark off. Send,
   light once something is marked, asks about it (`askMark`). On a card of the agent service's the pen's
-  highlights and lines are kept by the service, the eraser takes off the newest, and Send asks Momo
-  (core/cards/README.md).
+  highlights, lines and stretch are kept by the service, one press of the eraser takes them all off, and Send
+  asks Momo about them together (core/cards/README.md).
   The pen's icon is the app's own, the one the marking gesture's diagram draws (a pen at a slant and the
   mark under its nib), and in hand it lights in the accent as it does there; the eraser and send are
   Lucide's (ISC). All are kept as the lines of their strokes in `core/ocean/icons.h`, which
