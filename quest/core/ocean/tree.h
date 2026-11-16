@@ -26,7 +26,8 @@ constexpr float openFilmMaxHeight = 0.32f;
 constexpr float filmCaption = 0.116f;       // the panel under an open film
 constexpr float smallNoteWidth = 0.21f;
 constexpr float openNoteWidth = 0.46f;
-// NOTE(port): added for Quest: a lesson's card in the welcome tree, and the stage on it where its gesture plays.
+// NOTE(port): added for Quest: the stage a lesson of the welcome tree plays its gesture on, as its gesture's size
+// is given (oceanmodel_guide.cpp, `TourStep::stage`); the stage on its card has these proportions.
 constexpr float lessonWidth = 0.56f;
 constexpr float lessonStage = 0.34f;
 constexpr float chipHeight = 0.03f;

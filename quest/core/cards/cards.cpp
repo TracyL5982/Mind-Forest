@@ -160,6 +160,8 @@ constexpr float INSET_X = 3, INSET_Y = 10;
 constexpr float LEAST = 140;
 /// The tallest panel a card draws, px: ten views or so, within what one texture holds.
 constexpr float LONGEST = 3200;
+/// The room under the panel's last part, px.
+constexpr float FOOT = 16;
 
 /// The web's panel (panel.js) laid out top to bottom, its badge first.
 Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
@@ -170,7 +172,7 @@ Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
     bool pick = e.node.pick;
 
     // `.panel-head`: the badge.
-    std::string badge = pick ? "Pick from the librarian" : e.node.root ? "Start of a tree" : "Kept";
+    std::string badge = kind.premade ? text(e.view.props["badge"]) : pick ? "Pick from the librarian" : e.node.root ? "Start of a tree" : "Kept";
     float badgeWidth = std::ceil(widthOf(badge, setting::badge, k)) + 22, badgeTall = 16.8f + 10;
     sheet.y = 1 + 10 + badgeTall + 6 + 4;
     sheet.blocks.push_back(Block{0, sheet.y, [=](const Pen& pen, float y) {
@@ -187,7 +189,7 @@ Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
     // An in-progress card shows none of its item's words until it is finished, opened or not.
     if (std::string(kind.name) == "composing") {
         kind.detail(sheet, item, e.view.props);
-        return Laid{k, viewTall, pictureTall, std::move(sheet.blocks), std::move(sheet.runs), sheet.picture, std::min(sheet.y + 16, LONGEST)};
+        return Laid{k, viewTall, pictureTall, std::move(sheet.blocks), std::move(sheet.runs), sheet.picture, std::min(sheet.y + FOOT, LONGEST)};
     }
     std::string title = item.titleOrUntitled();
     sheet.paragraph(title, setting::heading, palette::ink);
@@ -203,6 +205,7 @@ Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
     // to show one, than a view.
     float under = viewTall - INSET_Y - sheet.y - Sheet::gap;
     sheet.most = std::min(pictureTall, under >= LEAST ? under : viewTall - 2 * INSET_Y);
+    sheet.fits = viewTall - INSET_Y - FOOT;
     // The item's own lines over its structure, in order, and the heads row over a structure of two columns.
     for (const Over& line : oversOf(e.view.props)) {
         sheet.paragraph(line.words, line.head ? setting::bodyHead : setting::body, palette::ink);
@@ -270,6 +273,8 @@ Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
             breaks);
     }
 
+    if (kind.premade) return Laid{k, viewTall, pictureTall, std::move(sheet.blocks), std::move(sheet.runs), sheet.picture, std::min(sheet.y + FOOT, LONGEST)};
+
     // `.facts`: a rule, then label and value in two columns.
     std::string made;
     if (!origin) facts.push_back({"From", cameFrom(item, made)});
@@ -306,7 +311,7 @@ Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
         },
         breaks);
 
-    return Laid{k, viewTall, pictureTall, std::move(sheet.blocks), std::move(sheet.runs), sheet.picture, std::min(sheet.y + 16, LONGEST)};
+    return Laid{k, viewTall, pictureTall, std::move(sheet.blocks), std::move(sheet.runs), sheet.picture, std::min(sheet.y + FOOT, LONGEST)};
 }
 
 Opened open(const std::string& noteID, const Entry& e) {

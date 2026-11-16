@@ -17,6 +17,7 @@
 
 #include <cmath>
 
+#include "../cards/ocean.h"
 #include "guide.h"
 
 namespace {
@@ -33,12 +34,13 @@ const Plan plans[] = {{"layers", 10}, {"carry", 10}, {"mark", 6}, {"tree", 10}, 
 // `gesture` on its own face, says what to do in its own words, and is done when the viewer has done `did`
 // (what `guideDid` is told). The next lesson's card stands beside it: pinching that moves on, done or not.
 // `alt` says where a button does the same as the gesture, for a pin to point at it. `pictures` is how many
-// pictures come with the card, to make its layer a real one and to have something to pick up.
+// pictures come with the card, to make its layer a real one and to have something to pick up. The card is
+// drawn as the card library draws its own (core/cards/lesson.cpp): `headline` its title, `line` under it.
 struct TourStep {
     const char* note;
     const char* gesture;
     const char* headline;
-    const char* summary;
+    const char* line;
     const char* did;
     const char* alt;
     const char* altWords;
@@ -48,19 +50,19 @@ struct TourStep {
 };
 const TourStep tourSteps[] = {
     {"welcome", "pinch", "Welcome to Mind Forest",
-     "Around you is everything the gardener remembers; a tree is the part in play. Point at the next card and pinch.", "ask", "", "", 2, 0.92f, "Point at card 2 and pinch it"},
+     "Point at the next card and pinch it.", "ask", "", "", 2, 0.92f, "Point at card 2 and pinch it"},
     {"welcome-pan", "carry", "Grab to pan",
-     "Your pinch asked a question and its answer made this layer. Close your hand and move it: the tree comes too.", "carry", "", "", 2, 0.72f, "Close your hand and move it sideways"},
+     "Close your hand and move it: the tree comes too.", "carry", "", "", 2, 0.72f, "Close your hand and move it sideways"},
     {"welcome-pull", "layers", "Grab to pull or push",
-     "Close your hand and pull it toward you: the layer behind comes back. Push it away to return here.", "step", "tree", "Or choose a layer here  ↓", 1, 0.68f, "Close your hand and pull it toward you"},
+     "Pull your closed hand in; push it away to return.", "step", "tree", "Or choose a layer here  ↓", 1, 0.68f, "Close your hand and pull it toward you"},
     {"welcome-move", "drag", "Pinch and hold to move",
-     "Pinch a picture beside this card, keep it pinched, and put it somewhere else. It stays where you leave it.", "move", "", "", 3, 0.92f, "Pinch a picture, hold, and carry it"},
+     "Pinch a picture, hold, and put it somewhere else.", "move", "", "", 3, 0.92f, "Pinch a picture, hold, and carry it"},
     {"welcome-mark", "mark", "Mark part of a picture",
-     "Pinch this card again to go in, pick Draw on it beside the picture, and draw round something.", "mark", "", "", 1, 0.68f, "Pinch this picture to go in"},
+     "Go in, take up the pen, and draw round something.", "mark", "", "", 1, 0.68f, "Pinch this picture to go in"},
     {"welcome-tree", "tree", "Choose a layer on the small tree",
-     "Low on your left stands this tree in little. Slide a finger along it and pinch to jump to a layer.", "jump", "tree", "Slide a finger along it, pinch to jump", 1, 0.86f, "Reach for the small tree, low on your left"},
+     "Slide a finger along it and pinch to jump there.", "jump", "tree", "Slide a finger along it, pinch to jump", 1, 0.86f, "Reach for the small tree, low on your left"},
     {"welcome-close", "clap", "Palms together to close",
-     "Hold your palms together for a second: the tree is pressed flat and put away. Its buttons do the same.", "press", "strip", "Or pinch Put away", 0, 0.6f, "Hold your palms together for a second"},
+     "Hold them together a second: the tree is put away.", "press", "strip", "Or pinch Put away", 0, 0.6f, "Hold your palms together for a second"},
 };
 const int tourCount = int(sizeof(tourSteps) / sizeof(tourSteps[0]));
 const int pullStep = 2, moveStep = 3, markStep = 4, treeStep = 5, closeStep = 6;
@@ -424,7 +426,7 @@ void OceanModel::addWelcomeNotes() {
         }
         std::string text = fmt("{\"id\": \"%s\", \"kicker\": \"Step %d of %d\", \"tone\": \"note\", \"headline\": \"%s\", \"highlight\": \"\", "
                                "\"summary\": \"%s\", \"tags\": [], \"links\": [%s], \"image\": \"%s\", \"aspect\": %.3f}",
-                               step.note, k + 1, tourCount, step.headline, step.summary, links.c_str(), image.c_str(), double(aspect));
+                               step.note, k + 1, tourCount, step.headline, step.line, links.c_str(), image.c_str(), double(aspect));
         std::optional<Json> json = Json::parse(text);
         std::optional<OceanNote> note = json ? OceanNote::from(*json) : std::nullopt;
         if (!note) {
@@ -432,6 +434,15 @@ void OceanModel::addWelcomeNotes() {
             continue;
         }
         catalog->notes[step.note] = *note;
+        // Drawn as the card library draws its own, with or without `-cards`: on its stage the guide plays its gesture,
+        // or it is the picture to mark.
+        bool picture = k == markStep && toMark >= 0;
+        Json props = Json::object(), view = Json::object(), item = Json::object();
+        props.set("step", k + 1).set("badge", fmt("Step %d of %d", k + 1, tourCount)).set("aspect", aspect);
+        if (picture) props.set("src", fmt("work:%d", toMark));
+        view.set("component", "lesson").set("props", props);
+        item.set("title", step.headline).set("summary", step.line);
+        cards::ocean::hold(cards::OceanCard{step.note, view, item, picture ? std::optional(aspect) : std::nullopt});
     }
 }
 
@@ -513,8 +524,9 @@ void OceanModel::tourShow(int shown) {
             teach.tourShown = -1;
             return;
         }
+        // (`stage` is of life size on a stage as large as Metrics' lesson: on the card's own, it is as much smaller.)
         PictureFrame picture = pictureFrame(*c);
-        const float size = step.stage;
+        const float size = step.stage * std::min(picture.size.x / Metrics::lessonWidth, picture.size.y / Metrics::lessonStage);
         teach.painter->entity->position = {picture.center.x, picture.center.y + 0.04f * size, 0.2f * size + 0.014f};
         teach.painter->entity->orientation = Quat::identity();
         teach.painter->entity->scale = Vec3::repeating(size);
@@ -1404,10 +1416,10 @@ std::optional<Vec3> OceanModel::overOpenCard() const {
     auto found = cards.find(*tree->focus());
     if (found == cards.end() || !found->second || !found->second->openBuilt) return std::nullopt;
     const CardView& c = *found->second;
-    PictureFrame picture = pictureFrame(c);
     Mat4 world = c.openHolder->transformMatrix(nullptr);
     float size = std::max(0.05f, length(world.columns[0].xyz()));
-    return world.point({picture.center.x, picture.center.y + picture.size.y / 2 + 0.03f / size, 0.012f / size});
+    // Over the card's top edge, clear of its title (a card of the card library's has it over its picture).
+    return world.point({0, c.openBody.y / 2 + 0.03f / size, 0.012f / size});
 }
 
 // MARK: - Each frame
