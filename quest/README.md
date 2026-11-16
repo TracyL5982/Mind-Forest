@@ -52,12 +52,13 @@ The Quest 3 has no eye tracking, so:
 
 ## Joining the agent service
 
-The agents (`agents/`, a service on the Mac) can grow the ocean's trees: your mindstorm's trees stand and
-hang on the shelf, a pinch on a card opens it and the Scout's picks come up round it with dashed threads,
-a pinch on a pick keeps it, the knife deletes, and a clap sends the tree on as a handoff. Under an open card stand at most
-three suggested questions as pills; a pinch held still on it, while a ring fills round the pinch, asks for more like it; and
-its edit pencil, just outside its top right corner, turns a long pinch into highlighting words or drawing on the card, which
-the service keeps with it (core/cards/README.md). The plan and
+The agents (`agents/`, a service on the Mac) can grow the ocean's trees: your mindstorm's trees stand in the desk's
+forest, a pinch on a card opens it and the Scout's picks come up round it with dashed threads, a pinch on a pick keeps
+it, and the knife deletes. Palms together closes a tree; it is handed off by voice ("hand this off"). Under an open
+card stand at most three suggested questions as pills, and a pinch held still on it, while a ring fills round the pinch,
+asks for more like it. Gone into, the card has Kai's pen, eraser and Send: with the pen up a drag highlights words or
+draws on the card, or along a video marks a stretch of it, which the service keeps with the card; one press of the
+eraser takes every mark off, and Send asks Momo about all of them together (core/cards/README.md). The plan and
 its state are in [agent-plan.md](agent-plan.md).
 
 This build installs beside the app already on the headset, as "Mind Palace Ocean (agents)", because it is
@@ -75,10 +76,10 @@ pinches the first new pick n times, for runs with no hands; `-agentLog` logs eve
 A launch with `-agent` is remembered, with its token and `-cards`, in the app's own storage
 (`agent-connection.json`), and a launch with no `-agent`, such as one from the app library, joins with them;
 `-agentForget` (or `quest/tools/agent.sh forget`) forgets them, and the app starts as it was. The Mac preview joins
-only with flags. Joined, the service's trees keep the shelf's rules: at launch nothing stands and every tree hangs as
-a cover where it hung last time (`agent-shelf.json`); a tree asked for on the headset stands, the standing one
-pressed onto the shelf first; one asked for on the web page or Telegram only hangs. The headset's own covers stay in
-their file, out of view, until it is started without the service. With the scripted service (`npm run dev:fake`)
+only with flags. Joined, the service's trees keep the forest's rules (Where it sits): at launch nothing stands and every
+tree is put away on the desk where it stood last time (its plot, in `agent-shelf.json`); a tree asked for on the headset
+stands, the standing one put away first; one asked for on the web page or Telegram is only put away. The headset's own
+trees stay in their file, out of view, until it is started without the service. With the scripted service (`npm run dev:fake`)
 nothing costs money.
 
 Talking to it works as in the web client. The headset listens on the device for "hey Momo" or "hi Momo" (the
@@ -123,7 +124,7 @@ keyword spotter, which `tools/fetch-voice.sh` fetches into `quest/vendor/` (the 
 tests it on spoken clips.
 
 When the service moves the view (`navigate`, as for "go back to the start"), the headset brings the card into view
-as hands would: it stands the card's tree, taking it off the shelf and putting away the one that stood, then opens
+as hands would: it stands the card's tree, taking it off the desk and putting away the one that stood, then opens
 the card on its layer, standing that layer first if it is not the one in view. A navigate to a tree stands it at its
 root. It waits while you are recorded or Momo's reply is on its way or playing (at most 20 s), so the view moves after
 the sentence, not during it. A pinch on a card whose parent has led no layer yet stands the parent's layer the same way
@@ -444,7 +445,7 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
 - **Gestures**, a button beside the briefs and beside the tree's own controls: every gesture's name in a
   column and the one picked playing beside them, with Take the tour (the welcome tree again) and Start the guide over.
 - **The hand** is the headset's own model of a hand, posed by bending its joints (`core/ocean/guidehand.*`,
-  the eight gestures in `guidegestures.cpp`) and drawn as a line: `Material::Kind::ghost` draws a shape
+  the nine gestures in `guidegestures.cpp`) and drawn as a line: `Material::Kind::ghost` draws a shape
   three times over, unseen for depth, faintly for its body, and swollen and inside out for an edge of
   even weight. What the hands act on is drawn in the line material, as the small tree is.
   The model is in git (`media-src/quest/hands/`), and `tools/push_media.sh` sends it with the rest of the
@@ -452,7 +453,7 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
   `adb pull …/files/out/hand-right.bin media-src/quest/hands/` fetches it. Without it the guide is off.
 - **What has been learned** is kept in `ocean-guide.txt` beside the shelf's file.
 - **Flags:** `-noGuide`; `-freshGuide` forgets what was learned (the welcome tree stands again);
-  `-guideWelcomed` starts past it; `-guideDemo tour|sheet|<gesture>` (pinch, carry, layers, drag, mark,
+  `-guideWelcomed` starts past it; `-guideDemo tour|sheet|<gesture>` (pinch, carry, layers, drag, hold, mark,
   tree, clap, cut) shows one thing at once and keeps it up, `-guideT <s>` holds it at that second of its
   loop; with `-guideDemo tour`, `-guideStep <n>` walks to the nth lesson by itself (a card every 3.6 s),
   `-guideDone` keeps a lesson as it is just after it is done, `-guideBeat <n>` sets the beat,
@@ -470,8 +471,11 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
   and says what it is for: Comment, Erase, Send to Momo (`-toolHover <0…2>` holds one out). The pen: a pinch takes it up or puts it down, and while it is up (shown in the accent) a drag on
   the card marks it as what lay under where the drag began would have it: a picture is drawn on, words
   are highlighted, a video's stretch is taken (its bar shows when the pen is taken up; a marked stretch
-  has a handle at each end, which a later drag takes it by). With the pen down a drag does nothing. The
-  eraser takes the mark off. Send, light once something is marked, asks about it (`askMark`).
+  has a handle at each end, which a later drag takes it by). With the pen down a drag does nothing (on a
+  card drawn as one of the agent's, `-cards`, it scrolls the card). The eraser takes the mark off. Send,
+  light once something is marked, asks about it (`askMark`). On a card of the agent service's the pen's
+  highlights, lines and stretch are kept by the service, one press of the eraser takes them all off, and Send
+  asks Momo about them together (core/cards/README.md).
   The pen's icon is the app's own, the one the marking gesture's diagram draws (a pen at a slant and the
   mark under its nib), and in hand it lights in the accent as it does there; the eraser and send are
   Lucide's (ISC). All are kept as the lines of their strokes in `core/ocean/icons.h`, which
@@ -490,12 +494,48 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
   than on visionOS (0.8 m/s, not 1.1), since it no longer cuts by itself.
 - **The clap is palms together, held** (`Hands::clap`): fingers up as they meet, palms within 8.5 cm of
   each other for one second, while a ring round the hands fills (`HandGlow::Hold`). Hands that only pass
-  each other no longer press the tree. Not yet tried on a head: how the headset reads two hands pressed
+  each other no longer press the tree. Joined to the agent service it only closes the tree, on every
+  tree: a tree is handed off by voice. Not yet tried on a head: how the headset reads two hands pressed
   together is the thing to check first.
 - **Marker strokes follow the card's curve**: each point is bent as the card's own pieces are, and bent
   again whenever the card's bend changes (going in, coming back).
-- `-toolAt <s>` with `-tool words|time|region`, `-armCutAt <s>`, `-cutAt <s>`, `-glowDemo blade|hold` do
-  these without hands; `-bendLog` writes the open card's bend radius beside its sheet's twice a second.
+- `-toolAt <s>` with `-tool pen|eraser|send` (and `-toolAt2` with `-tool2`, on to 4), `-armCutAt <s>`, `-cutAt <s>`,
+  `-glowDemo blade|hold` do these without hands; `-bendLog` writes the open card's bend radius beside its sheet's twice a second.
+## Notes from the agents merge (15 Nov)
+
+For Kai: what merging this branch into the agents work (tracy/agents) changed or left open in yours.
+
+- **The greeting's Momo line.** The third way to begin still says "Talking to Momo, pinch a question to begin", as
+  you wrote it. In the agents build you talk to Momo by saying "hey Momo" (or "hi Momo"); a pinched question is
+  sent to Momo too, so the line is not wrong, only not the whole of it. It is yours to change.
+- **Momo and the desk.** Momo floats at a fixed place from the head, about 28 degrees below the eye line and
+  1.25 m out (`core/agent/presence_look.h`). Looking down at the desk, that is where the gardener's questions and
+  the Gestures button stand, and in the Mac preview Momo covers them. Not yet seen on a headset. If it covers them
+  there too, Momo can be raised to 18 to 20 degrees below the eye line.
+- **Palms together closes, everywhere.** Joined to the service, palms together closes the tree on every tree,
+  the service's too, and never sends it on. A tree is handed off by voice only ("hand this off"), and the strip's
+  "Send to image generation" is not shown while joined. A handoff gesture or button may come later. Without
+  the service, your clap is as you made it.
+- **The pen, the eraser and Send are wired to the service.** On a card of the agent service's, the pen's
+  highlights (a drag from words) and lines (a drag from anywhere else) are the service's own edits, kept with
+  the card (`addEdit`, agents/docs/protocol.md, Edits on a card): they come back on any headset and "undo" takes
+  the last back. They are drawn as the agents' cards draw them, amber behind words and a white line, not your
+  marker. A card keeps up to 100. A video's stretch is drawn as your mark and kept by the service too, one a
+  card: a new stretch takes the old one's place, and one undo brings the old one back. The eraser works as
+  yours does: one press takes every mark off, as one change that one undo brings back. Send asks Momo about all
+  the card's marks together ("Tell me more about these parts: …"), naming the highlighted words, the lines and
+  the stretch by its times; the card leads a new layer and Momo answers. With the pen down, a pinch
+  held still on the open card asks for more like it, and a drag scrolls the card. On your own trees all three
+  work as you made them. The Gestures sheet has a row for the pinch held still, and the marking gesture draws
+  all three buttons where the card has them (agents/DECISIONS.md 66).
+- **The forest keeps the service's trees.** They stand in your forest and keep their plot between launches in
+  `agent-shelf.json` (version 2), as your trees keep theirs in the shelf file.
+- **The room and the microphone are both asked,** in every build: the room at your moment, the first time a
+  hand is up, and the microphone with Momo's reason first. One asked while the other is up waits for its
+  answer (`MainActivity.askPermission`).
+- **The app's own media is in the judging APK:** the sounds, your hand model and the two Fraunces files, read from
+  inside it. Fraunces is now `Font::Design::display` with its own face bit, not two more weights, which the
+  agents' serif bit had taken.
 
 ## Looking at it on the Mac
 

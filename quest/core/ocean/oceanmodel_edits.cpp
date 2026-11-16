@@ -51,7 +51,7 @@ std::string newEditId() {
     return fmt("e%08x%04x", unsigned(random()), ++made & 0xffff);
 }
 
-const char* noun(const CardEdit& e) { return e.kind == CardEdit::Kind::highlight ? "a highlight" : "a line"; }
+const char* noun(const CardEdit& e) { return e.kind == CardEdit::Kind::highlight ? "a highlight" : e.kind == CardEdit::Kind::stretch ? "a stretch" : "a line"; }
 
 }  // namespace
 
@@ -75,6 +75,7 @@ void OceanModel::buildEdits(CardView& c) {
     }
     c.edits = agentBridge->edits(c.id);
     drawEdits(c);
+    syncStretch(c);
 }
 
 void OceanModel::editFrame() {
@@ -98,6 +99,10 @@ OceanModel::Press::Claim OceanModel::beginMark(CardView& c, Vec2 at) {
         return Press::Claim::edit;
     }
     // A video's stretch on a service card, and every mark on a card of the headset's own, is Kai's mark (`markBegin`).
+    // A new stretch takes the old one's place, so only a card without one can be full.
+    bool full = c.highlights && c.edits.size() >= mostEdits &&
+                std::none_of(c.edits.begin(), c.edits.end(), [](const CardEdit& e) { return e.kind == CardEdit::Kind::stretch; });
+    if (full) return Press::Claim::spent;
     markBegin(c.id, at, c.highlights ? std::optional<Mark::Kind>(Mark::Kind::time) : std::nullopt);
     if (!marking) return Press::Claim::spent;
     sound("mark_begin");
@@ -110,22 +115,75 @@ bool OceanModel::marked(int id) const {
     return c != cards.end() && c->second && !c->second->edits.empty();
 }
 
-std::string OceanModel::markedPart(const CardView& c) const {
+std::string OceanModel::tellMoreAbout(const CardView& c) const {
     std::string quotes;
-    bool drawn = false;
+    int marked = 0, lines = 0;
+    std::optional<CardEdit> stretch;
     for (const CardEdit& e : c.edits) {
-        if (e.kind == CardEdit::Kind::stroke) drawn = true;
+        marked++;
+        if (e.kind == CardEdit::Kind::stroke) lines++;
+        else if (e.kind == CardEdit::Kind::stretch) stretch = e;
         else if (quotes.size() < 600) quotes += (quotes.empty() ? "\"" : "; \"") + e.quote + "\"";
     }
     std::vector<std::string> parts;
     if (!quotes.empty()) parts.push_back(quotes);
-    if (drawn) parts.push_back("the part I drew on");
-    if (auto m = marks.find(c.id); m != marks.end() && m->second.kind == Mark::Kind::time) {
-        parts.push_back("the stretch from " + Catalog::clock(m->second.from) + " to " + Catalog::clock(m->second.to));
-    }
-    std::string out;
-    for (const std::string& p : parts) out += (out.empty() ? "" : "; ") + p;
+    if (lines > 0) parts.push_back(lines == 1 ? "the part I drew on" : "the parts I drew on");
+    if (stretch) parts.push_back("the stretch from " + Catalog::clock(stretch->from) + " to " + Catalog::clock(stretch->to));
+    if (parts.empty()) return "";
+    std::string out = marked == 1 ? "Tell me more about this part: " : "Tell me more about these parts: ";
+    for (size_t i = 0; i < parts.size(); i++) out += (i ? "; " : "") + parts[i];
     return out;
+}
+
+void OceanModel::keepStretch(CardView& c, const Mark& made) {
+    // A card keeps one stretch: the service puts the new one in the old one's place, in one change.
+    c.edits.erase(std::remove_if(c.edits.begin(), c.edits.end(), [](const CardEdit& e) { return e.kind == CardEdit::Kind::stretch; }), c.edits.end());
+    // To hundredths of a second, as the service keeps it, so what it sends back changes nothing here.
+    auto hundredths = [](double v) { return std::round(v * 100) / 100; };
+    CardEdit kept{.id = newEditId(), .kind = CardEdit::Kind::stretch, .from = hundredths(made.from), .to = hundredths(made.to)};
+    marks[c.id] = Mark::time(kept.from, kept.to);
+    c.edits.push_back(kept);
+    if (agentBridge) agentBridge->edited(c.id, kept);
+    logLine("[cards] marked the stretch from " + Catalog::clock(kept.from) + " to " + Catalog::clock(kept.to));
+}
+
+void OceanModel::syncStretch(CardView& c) {
+    auto s = std::find_if(c.edits.begin(), c.edits.end(), [](const CardEdit& e) { return e.kind == CardEdit::Kind::stretch; });
+    auto had = marks.find(c.id);
+    if (s == c.edits.end()) {
+        if (had == marks.end()) return;
+        marks.erase(had);
+        if (c.markHolder) c.markHolder->removeFromParent();
+        c.markHolder = nullptr;
+        if (screenNode == c.id) screen->loop(std::nullopt);
+        c.changed();
+        logLine("[cards] the card's stretch is gone");
+        return;
+    }
+    bool moved = had == marks.end() || had->second.from != s->from || had->second.to != s->to;
+    marks[c.id] = Mark::time(s->from, s->to);
+    if (moved) {
+        if (screenNode == c.id) screen->loop(Screen::Span{s->from, s->to});
+        logLine("[cards] the card shows the stretch from " + Catalog::clock(s->from) + " to " + Catalog::clock(s->to));
+    }
+    PictureFrame picture = pictureFrame(c);
+    double duration = markDuration(c);
+    float left = picture.center.x - picture.size.x / 2;
+    auto x = [&](double t) { return left + float(std::clamp(t / duration, 0.0, 1.0)) * picture.size.x; };
+    drawStretch(c, x(s->from), x(s->to), true, s->from, s->to);
+}
+
+void OceanModel::eraseAll(CardView& c) {
+    std::vector<std::string> ids;
+    for (const CardEdit& e : c.edits) ids.push_back(e.id);
+    if (ids.empty()) return;
+    c.edits.clear();
+    if (agentBridge) agentBridge->erasedAll(c.id, ids);
+    drawEdits(c);
+    syncStretch(c);
+    sound("step_out", 0.6f);
+    touch(time + 0.4);
+    logLine(fmt("[cards] erased %d marks", int(ids.size())));
 }
 
 const std::vector<std::shared_ptr<TextBlock>>& OceanModel::contentRuns(CardView& c) {
@@ -200,6 +258,7 @@ void OceanModel::drawEdits(CardView& c) {
         }
     } amberMesh, whiteMesh;
     for (const CardEdit& e : shown) {
+        if (e.kind == CardEdit::Kind::stretch) continue;
         if (e.kind == CardEdit::Kind::highlight) {
             std::optional<std::pair<size_t, int>> where = locate(runs, e);
             if (!where) continue;
@@ -241,6 +300,7 @@ void OceanModel::setEdits(int id, const std::vector<CardEdit>& edits) {
     if (!(c && c->highlights) || c->edits == edits) return;
     c->edits = edits;
     drawEdits(*c);
+    syncStretch(*c);
     logLine(fmt("[cards] %d edits on %s", int(edits.size()), catalog ? catalog->title(c->ref).c_str() : "a card"));
 }
 
@@ -297,14 +357,5 @@ void OceanModel::endEdit(CardView& c) {
         else logLine(fmt("[cards] drew a line of %d points", int(made.points.size())));
         sound("mark_made");
     }
-    drawEdits(c);
-}
-
-void OceanModel::eraseEdit(CardView& c, const std::string& editId) {
-    auto e = std::find_if(c.edits.begin(), c.edits.end(), [&](const CardEdit& one) { return one.id == editId; });
-    if (e == c.edits.end()) return;
-    logLine(std::string("[cards] erased ") + noun(*e));
-    c.edits.erase(e);
-    if (agentBridge) agentBridge->erased(c.id, editId);
     drawEdits(c);
 }

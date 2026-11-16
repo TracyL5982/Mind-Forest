@@ -3,6 +3,7 @@ import {
   CommandError,
   inLibrary,
   MAX_EDITS,
+  Sound,
   type ChangeSet,
   type EntityName,
   type EntityOf,
@@ -379,7 +380,13 @@ export class Mindstorm {
         return;
       case 'addEdit': {
         const n = this.node(c.id);
-        const edits = [...(n.edits ?? []).filter((e) => e.id !== c.edit.id), c.edit];
+        if (c.edit.kind === 'stretch') {
+          const seconds = Sound.safeParse(this.item(n.itemId).data.sound).data?.seconds;
+          if (seconds !== undefined && c.edit.to > seconds + 0.5) throw new CommandError('invalid', `the stretch ends past the video's ${seconds} s`);
+        }
+        // A card keeps one stretch: a new one takes the old one's place in the same change, so one undo brings the old back.
+        const stretch = c.edit.kind === 'stretch';
+        const edits = [...(n.edits ?? []).filter((e) => e.id !== c.edit.id && !(stretch && e.kind === 'stretch')), c.edit];
         if (edits.length > MAX_EDITS) throw new CommandError('invalid', `a card keeps at most ${MAX_EDITS} edits`);
         this.put('node', { ...n, edits });
         return;

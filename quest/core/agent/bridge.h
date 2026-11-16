@@ -53,16 +53,17 @@ public:
     /// A long pinch on the open card: more like it, through the service's `more`, as Momo's "more like this" asks. The card
     /// leads a layer of its own (kept, if it was a suggestion), and when it has highlights the request leans on them.
     void moreLike(int nodeID);
-    /// Send on a service card gone into, with something marked on it (`part`, in words): "Tell me more about this part", a
+    /// Send on a service card gone into, with something marked on it: `question` ("Tell me more about these parts: …"), a
     /// conversation about the card, as a picked question is.
-    void tellMore(int nodeID, const std::string& part);
+    void tellMore(int nodeID, const std::string& question);
     /// Whether a card is the service's, so the pen's marks on it are kept with it.
     bool editable(int nodeID);
     /// The highlights and lines the service keeps on a card, as the scene draws them.
     std::vector<CardEdit> edits(int nodeID);
-    /// One was made, or taken off, on the headset: kept by the service, which undoes it as it undoes any change.
+    /// One was made on the headset, or all of a card's taken off at once (the eraser): kept by the service as one change,
+    /// which it undoes as it undoes any.
     void edited(int nodeID, const CardEdit& edit);
-    void erased(int nodeID, const std::string& editId);
+    void erasedAll(int nodeID, const std::vector<std::string>& editIds);
     /// A branch was cut with the flat of the hand; `gone` is what left with it.
     void pruned(int nodeID, const std::vector<TreeNode>& gone);
     /// Writes down where this service's trees stand on the desk, in place of the headset's own shelf file.

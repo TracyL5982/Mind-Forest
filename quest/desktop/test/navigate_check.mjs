@@ -7,8 +7,8 @@
 //   1.5 s after the utter a reply, and with it a navigate to a card of the first tree
 //   12 s after the utter  navigate to a card that is not there
 //   14 s after the utter  a reply whose sound never comes, and with it a navigate, which goes after 20 s anyway
-// Each card gone to must open on its parent's layer, a tree's root on its own. The preview runs with -mute, but the
-// voice's chime on the name still plays aloud once: -mute does not reach the voice's sounds yet.
+// Each card gone to must open on its parent's layer, a tree's root on its own. The preview runs with -mute, which
+// plays the voice's chime and every other sound at no volume, so nothing is heard.
 //
 //   quest/desktop/build.sh && node quest/desktop/test/navigate_check.mjs [--shots <folder>] [--port <port>]
 import { spawn } from 'node:child_process';

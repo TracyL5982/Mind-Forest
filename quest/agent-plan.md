@@ -81,10 +81,10 @@ Each one ends in a check. Labels: **Now** starts at once, in parallel. **After t
 |---|---|---|
 | Pinch a card | `take` | `keep` if it is a pick, then `focus` |
 | Pick a question under the open card | `askGardener` | `ask` with the question as `need`, or `more` for "what else is like this" |
-| Mark part of a card and ask | `askMark` | `ask` with the mark described in `need` |
+| Mark part of a card with the pen | `beginMark`, `endEdit` | `commands` with one `addEdit` (the eraser: `removeEdit`) |
+| Send on the card gone into | `pickTool`, `Bridge::tellMore` | `ask` with "Tell me more about this part: …" as `need` |
 | Cut with the flat hand | `prune` | `commands` with one `deleteNode` |
-| Clap, to send | `pressTree(true)` | `handoff` for that tree |
-| Clap, to put away | `pressTree(false)` | nothing: the service keeps the tree |
+| Palms together | `pressTree(false)` | nothing: the service keeps the tree. A handoff is asked for by voice (DECISIONS 67) |
 
 - The word "thinking" over a card follows `activity` for its node. Cards that arrive in a change set come up one after another through `arrive`. A change set whose origin is the user's own is applied without the arrival animation.
 - Flags: `-agent <address>`, `-agentToken <token>`, `-agentDump "words"` (drop words in once connected, for runs with no hands), `-agentListen <seconds>` (record once, for voice runs before the gesture exists). Without `-agent` the app is exactly as it is today.
