@@ -5,3 +5,5 @@ data-scenario/
 *.log
 client/vendor/
 starter/
+data-demo/
+data-demo-fake/

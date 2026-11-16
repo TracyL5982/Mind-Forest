@@ -4,3 +4,5 @@ library/clips/*.jpg filter=lfs diff=lfs merge=lfs -text
 # Museum works (library/works, built by library/tools/works): the pictures and the atlas in Git LFS.
 library/works/full/*.heic filter=lfs diff=lfs merge=lfs -text
 library/works/*.jpg filter=lfs diff=lfs merge=lfs -text
+# The walkthrough demo (agents/demo): its pictures and its one film in Git LFS.
+agents/demo/media/** filter=lfs diff=lfs merge=lfs -text

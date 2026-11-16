@@ -16,6 +16,7 @@ import { forDevice, Ledger, limitsFrom } from './hosted/ledger.ts';
 import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareCost } from './hosted/overflow.ts';
 import { openInstagram } from './instagram.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
+import { loadScript } from '../demo/script.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -24,7 +25,13 @@ const args = new Set(process.argv.slice(2));
 const fake = args.has('--fake');
 /** One service for many headsets: a space per device, limits, an off switch, and no Telegram reading (see agents/README.md). */
 const hosted = env.MIND_PALACE_HOSTED === '1';
-const dataDir = env.MIND_PALACE_DATA ?? join(root, fake ? 'data-fake' : 'data');
+/**
+ * The demo: one prepared tree played round by round, with a page to go to any round (agents/demo/README.md). It keeps its own
+ * data folder, so the user's mindstorm is not touched. With `--fake` it runs with no model and no voice, to try the page.
+ */
+const demo = args.has('--demo');
+const demoDir = env.MIND_PALACE_DEMO ?? join(root, 'demo');
+const dataDir = env.MIND_PALACE_DATA ?? join(root, demo ? (fake ? 'data-demo-fake' : 'data-demo') : fake ? 'data-fake' : 'data');
 const number = (name: string, fallback: number) => (env[name]?.trim() ? Number(env[name]) : fallback);
 const log = (line: string) => console.log(line);
 
@@ -211,10 +218,16 @@ if (ledger) {
     dataDir,
     token: env.MIND_PALACE_TOKEN || undefined,
     // One program at a time may read a bot's messages, so the offline stand-in leaves the bot to the real service.
-    telegram: !fake && env.TELEGRAM_BOT_TOKEN ? { token: env.TELEGRAM_BOT_TOKEN } : undefined,
+    // The demo is a stage, not the user's own space: nothing sent to the bot lands in it.
+    telegram: !fake && !demo && env.TELEGRAM_BOT_TOKEN ? { token: env.TELEGRAM_BOT_TOKEN } : undefined,
+    ...(demo ? { demo: { script: loadScript(join(demoDir, 'script.json')), mediaDir: join(demoDir, 'media') } } : {}),
     log,
   });
-  console.log(`Mind Palace agents${fake ? ' (fake roles, no model)' : ''}`);
+  console.log(`Mind Palace agents${fake ? ' (fake roles, no model)' : ''}${demo ? ', the demo' : ''}`);
+  if (demo) {
+    console.log(`  demo   ${running.url}/demo#token=${running.token}   <- the page that goes to any round`);
+    console.log(`  voice  ${shared.live ? 'Momo is live' : 'OFF: Momo cannot hear or speak without OPENAI_API_KEY in ~/.muse-garden.env'}`);
+  }
   console.log(`  open   ${running.url}/#token=${running.token}`);
   console.log(`  socket ${running.url.replace('http', 'ws')}/ws?token=${running.token}`);
 }
