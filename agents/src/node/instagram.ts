@@ -84,8 +84,11 @@ export function parseList(markdown: string): Listed {
 
 // ---- the library on disk
 
+/** Instagram's own id for a post: digits only, since it names the post's picture file. */
+const POST_ID = /^\d+$/;
+
 const KeptPost = z.object({
-  id: z.string(),
+  id: z.string().regex(POST_ID),
   caption: z.string(),
   type: z.enum(['image', 'video', 'album']),
   /** When it was posted, as an ISO time. */
@@ -362,7 +365,7 @@ function seen(data: unknown): Seen[] {
     const picture = String((type === 'video' ? m.thumbnail_url : m.media_url) ?? '');
     const at = new Date(String(m.timestamp ?? '').replace(/([+-]\d\d)(\d\d)$/, '$1:$2'));
     const url = String(m.permalink ?? '');
-    if (!type || typeof m.id !== 'string' || !/^https:\/\//.test(picture) || !/^https:\/\/www\.instagram\.com\//.test(url) || Number.isNaN(at.getTime())) return [];
+    if (!type || typeof m.id !== 'string' || !POST_ID.test(m.id) || !/^https:\/\//.test(picture) || !/^https:\/\/www\.instagram\.com\//.test(url) || Number.isNaN(at.getTime())) return [];
     return [{ id: m.id, caption: typeof m.caption === 'string' ? m.caption : '', type, at: at.toISOString(), url, picture }];
   });
 }

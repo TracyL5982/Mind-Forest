@@ -587,15 +587,15 @@ test("every hosted space searches one Instagram library through its own view, an
   writeFileSync(listFile, '# Accounts\n\n## Art (1)\n\n### Prints (1)\n\n- @ink_and_paper — Ink and Paper — Illustration studio — https://www.instagram.com/ink_and_paper/\n');
   const libDir = mkdtempSync(join(tmpdir(), 'mp-library-'));
   const library = new InstagramLibrary(libDir, parseList(readFileSync(listFile, 'utf8')));
-  library.keep(library.accounts[0]!, { state: 'read', at: new Date().toISOString(), posts: [{ id: 'p1', caption: 'A risograph print of the harbour', type: 'image', at: '2026-11-14T10:00:00Z', url: 'https://www.instagram.com/p/p1/' }] });
-  writeFileSync(library.picture('p1'), new Uint8Array([0xff, 0xd8, 0xff]));
+  library.keep(library.accounts[0]!, { state: 'read', at: new Date().toISOString(), posts: [{ id: '17900000000000001', caption: 'A risograph print of the harbour', type: 'image', at: '2026-11-14T10:00:00Z', url: 'https://www.instagram.com/p/17900000000000001/' }] });
+  writeFileSync(library.picture('17900000000000001'), new Uint8Array([0xff, 0xd8, 0xff]));
 
   const a = new MemoryAssets();
   const b = new MemoryAssets();
   const [inA, inB] = [followingIn(library, a), followingIn(library, b)];
   const [foundA] = await inA.search('risograph harbour');
   const [foundB] = await inB.search('risograph');
-  assert.equal(foundA?.url, 'https://www.instagram.com/p/p1/');
+  assert.equal(foundA?.url, 'https://www.instagram.com/p/17900000000000001/');
   assert.ok(a.files.has(foundA!.asset!) && b.files.has(foundB!.asset!), "each space's copy of the picture is in its own assets");
   assert.equal((await inA.search('risograph'))[0]!.asset, foundA!.asset, 'and is not copied again');
 
@@ -639,8 +639,8 @@ test('with no Instagram account on the server, the library opens from the list a
   writeFileSync(listFile, '# Accounts\n\n## Art (1)\n\n### Prints (1)\n\n- @ink_and_paper — Ink and Paper — Illustration studio — https://www.instagram.com/ink_and_paper/\n');
   const libDir = mkdtempSync(join(tmpdir(), 'mp-library-'));
   const copied = new InstagramLibrary(libDir, parseList(readFileSync(listFile, 'utf8')));
-  copied.keep(copied.accounts[0]!, { state: 'read', at: new Date().toISOString(), posts: [{ id: 'p1', caption: 'A risograph print of the harbour', type: 'image', at: '2026-11-14T10:00:00Z', url: 'https://www.instagram.com/p/p1/' }] });
-  writeFileSync(copied.picture('p1'), new Uint8Array([0xff, 0xd8, 0xff]));
+  copied.keep(copied.accounts[0]!, { state: 'read', at: new Date().toISOString(), posts: [{ id: '17900000000000001', caption: 'A risograph print of the harbour', type: 'image', at: '2026-11-14T10:00:00Z', url: 'https://www.instagram.com/p/17900000000000001/' }] });
+  writeFileSync(copied.picture('17900000000000001'), new Uint8Array([0xff, 0xd8, 0xff]));
 
   const realFetch = globalThis.fetch;
   const instagramCalls: string[] = [];
@@ -676,7 +676,7 @@ test('with no Instagram account on the server, the library opens from the list a
     c.ws.send(JSON.stringify({ t: 'ask', nodeId: root, need: 'risograph harbour' }));
     const scouted = await c.until((m) => m.t === 'activity' && (m.activity as { role: string; state: string }).role === 'scout' && (m.activity as { state: string }).state !== 'start');
     assert.equal((scouted.activity as { state: string }).state, 'done');
-    assert.equal(found?.url, 'https://www.instagram.com/p/p1/', "the space found the account's post");
+    assert.equal(found?.url, 'https://www.instagram.com/p/17900000000000001/', "the space found the account's post");
     const served = new URL(picture!, hosted.url);
     served.searchParams.set('token', `${KEY}.${A}`);
     const got = await fetch(served);

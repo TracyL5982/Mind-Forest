@@ -122,6 +122,18 @@ function instagram(accounts: Record<string, unknown>, usage = '{"call_count":4,"
 const shrink: Shrink = async (pictures) => pictures.map((bytes) => new Uint8Array([...bytes, 9]));
 const CONNECTION = { token: 'token', userId: '17840000' };
 
+test("a post whose id is not Instagram's digits is neither kept from a read nor taken from the library's files", async () => {
+  const { dir, library: lib } = library();
+  const { send } = instagram({ floorwork: graph([['1', 'Rehearsal for the spring piece', 'IMAGE'], ['../escape', 'A post named to step out of the pictures folder', 'IMAGE']]) });
+  const outcome = await new InstagramReader({ library: lib, connection: CONNECTION, send, shrink }).read(account('floorwork'));
+  assert.equal(outcome.posts, 1);
+  assert.deepEqual(readdirSync(join(dir, 'pictures')), ['1.jpg'], 'only the digits id named a picture');
+
+  const reading = { state: 'read', at: new Date().toISOString(), posts: [{ id: '../x', caption: 'Rehearsal', type: 'image', at: '2026-11-14T10:00:00.000Z', url: 'https://www.instagram.com/p/x/' }] };
+  writeFileSync(join(dir, 'accounts', 'floorwork.json'), JSON.stringify(reading));
+  assert.equal(new InstagramLibrary(dir, parseList(LIST)).reading('floorwork'), undefined, 'a kept file with such an id is not taken');
+});
+
 test('reading an account keeps its posts and a small copy of each picture, a video by its thumbnail', async () => {
   const { dir, library: lib } = library();
   const { send, asked } = instagram({ floorwork: graph([['1', 'Rehearsal for the spring piece #contemporarydance', 'VIDEO'], ['2', 'New season, new floor', 'CAROUSEL_ALBUM']]) });
@@ -183,9 +195,9 @@ test('a library opened again on the same folder holds what was read before', asy
 async function filled() {
   const made = library();
   const { send } = instagram({
-    floorwork: graph([['d1', 'Rehearsal in the new studio'], ['d2', 'Opening night'], ['d3', 'Tour dates are out']]),
-    ink_and_paper: graph([['i1', 'A risograph print of the harbour at dawn #risograph'], ['i2', 'Sketchbook pages from the train']]),
-    'concrete.lines': graph([['c1', 'Our new library in Porto, a movement of light on concrete'], ['c2', 'Model of the tower #architecture']]),
+    floorwork: graph([['101', 'Rehearsal in the new studio'], ['102', 'Opening night'], ['103', 'Tour dates are out']]),
+    ink_and_paper: graph([['201', 'A risograph print of the harbour at dawn #risograph'], ['202', 'Sketchbook pages from the train']]),
+    'concrete.lines': graph([['301', 'Our new library in Porto, a movement of light on concrete'], ['302', 'Model of the tower #architecture']]),
   });
   const reader = new InstagramReader({ library: made.library, connection: CONNECTION, send, shrink });
   for (const handle of ['floorwork', 'ink_and_paper', 'concrete.lines']) await reader.read(account(handle));
@@ -195,7 +207,7 @@ async function filled() {
 test('a search finds posts by their caption, hashtags and account, and a category named first', async () => {
   const { library: lib } = await filled();
 
-  assert.deepEqual((await lib.search('risograph harbour')).map((f) => f.url), ['https://www.instagram.com/p/i1/']);
+  assert.deepEqual((await lib.search('risograph harbour')).map((f) => f.url), ['https://www.instagram.com/p/201/']);
   assert.deepEqual((await lib.search('Concrete Lines')).map((f) => f.by), ['@concrete.lines', '@concrete.lines']);
   const movement = (await lib.search('movement')).map((f) => f.by);
   assert.deepEqual(movement.slice(0, 2), ['@floorwork', '@floorwork'], 'the account listed under Movement comes first, though its captions never say movement');
@@ -209,7 +221,7 @@ test('a search hands back each post with its picture already stored, so nothing 
 
   const [post] = await lib.search('risograph');
 
-  assert.deepEqual({ ...post, asset: undefined }, { title: 'Ink and Paper', by: '@ink_and_paper', date: '2026-11-14', text: 'A risograph print of the harbour at dawn #risograph', from: 'Instagram', url: 'https://www.instagram.com/p/i1/', asset: undefined });
+  assert.deepEqual({ ...post, asset: undefined }, { title: 'Ink and Paper', by: '@ink_and_paper', date: '2026-11-14', text: 'A risograph print of the harbour at dawn #risograph', from: 'Instagram', url: 'https://www.instagram.com/p/201/', asset: undefined });
   assert.deepEqual([...(await assets.get(post!.asset!))!.bytes], [1, 2, 3, 9]);
   assert.equal((await lib.search('risograph'))[0]!.asset, post!.asset, 'a post found again is not copied again');
 });
