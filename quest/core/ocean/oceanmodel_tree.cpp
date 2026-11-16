@@ -257,7 +257,6 @@ void OceanModel::askMark(int nodeID) {
     Mark mark = found->second;
     CardRef c = card(nodeID);
     if (!c || pressing) return;
-    if (agentBridge && agentBridge->askMark(nodeID, mark)) return;     // AGENT
     std::optional<OceanNote> note = catalog->answer(mark, c->ref, tree->held());
     if (!note) return;
     logLine("[ocean] asked about a mark: " + described(mark));

@@ -333,6 +333,119 @@ std::optional<Piece> Art::row(const std::string& words) {
     return line(words, Size::label, Font::Weight::medium, Color::white(), Art::ink, Vec2{0.008f, 0.0055f});
 }
 
+namespace {
+
+/// A rectangle with round corners as the canvas's current path.
+void roundedPath(Canvas& ctx, CGRect r, float radius) {
+    radius = std::max(0.f, std::min(radius, std::min(r.width(), r.height()) / 2));
+    const float corners[4][3] = {{r.maxX() - radius, r.minY() + radius, -90},
+                                 {r.maxX() - radius, r.maxY() - radius, 0},
+                                 {r.minX() + radius, r.maxY() - radius, 90},
+                                 {r.minX() + radius, r.minY() + radius, 180}};
+    bool first = true;
+    for (const auto& c : corners) {
+        for (int i = 0; i <= 10; i++) {
+            float a = (c[2] + 9.f * float(i)) * float(M_PI) / 180;
+            CGPoint p{c[0] + radius * std::cos(a), c[1] + radius * std::sin(a)};
+            if (first) ctx.move(p); else ctx.addLine(p);
+            first = false;
+        }
+    }
+    ctx.closePath();
+}
+
+/// An arc of a circle as the canvas's current path, `turn` of the way round clockwise from the top.
+void arcPath(Canvas& ctx, CGPoint centre, float radius, float turn) {
+    int steps = std::max(2, int(std::ceil(96 * turn)));
+    for (int i = 0; i <= steps; i++) {
+        float a = (-0.25f + turn * float(i) / float(steps)) * 2 * float(M_PI);
+        CGPoint p{centre.x + radius * std::cos(a), centre.y + radius * std::sin(a)};
+        if (i == 0) ctx.move(p); else ctx.addLine(p);
+    }
+}
+
+}  // namespace
+
+std::optional<Piece> Art::pill(const std::string& words, float most) {
+    Font f = font(Size::label, Font::Weight::medium);
+    float padX = px(0.011f), padY = px(0.0062f), line = std::ceil(f.lineHeight());
+    float room = std::max(px(most) - 2 * padX, line);
+    float w = std::min(std::ceil(width(words, f)) + 1, room);
+    float h = text(words, CGRect{0, 0, room, 2 * line}, f, Color::white(), line, 0, false);
+    float W = w + 2 * padX, H = h + 2 * padY;
+    return piece(fmt("pill:%g:", double(room)) + words, W, H, [&](Canvas& ctx, CGSize) {
+        float edge = px(0.0008f);
+        roundedPath(ctx, CGRect{edge / 2, edge / 2, W - edge, H - edge}, (line + 2 * padY) / 2);
+        ctx.setFillColor(ink);
+        ctx.fillPath();
+        roundedPath(ctx, CGRect{edge / 2, edge / 2, W - edge, H - edge}, (line + 2 * padY) / 2);
+        ctx.setStrokeColor(Color::white(1, 0.28f));
+        ctx.setLineWidth(edge);
+        ctx.strokePath();
+        text(words, CGRect{padX, padY, w, h}, f, Color::white(), line);
+    });
+}
+
+std::optional<Piece> Art::pencil(bool on) {
+    float d = px(0.034f), line = px(0.0016f);
+    return piece(on ? "pencil:on" : "pencil:off", d, d, [&](Canvas& ctx, CGSize) {
+        CGRect disc{line, line, d - 2 * line, d - 2 * line};
+        ctx.setFillColor(on ? Color::white() : ink.withAlphaComponent(0.7f));
+        ctx.fillEllipse(disc);
+        ctx.setStrokeColor(Color::white(1, on ? 1 : 0.9f));
+        ctx.setLineWidth(line);
+        ctx.strokeEllipse(disc);
+        // The pencil lies corner to corner, its point at the lower left: a body, a cut-off end, a point.
+        float l = 0.56f * d, t = 0.15f * d, tip = 0.17f * d, cap = 0.11f * d;
+        float a = 0.75f * float(M_PI);
+        auto at = [&](float x, float y) { return CGPoint{d / 2 + x * std::cos(a) - y * std::sin(a), d / 2 + x * std::sin(a) + y * std::cos(a)}; };
+        Color glyph = on ? ink : Color::white();
+        ctx.setFillColor(glyph);
+        ctx.move(at(-l / 2 + cap, -t / 2));
+        ctx.addLine(at(l / 2 - tip, -t / 2));
+        ctx.addLine(at(l / 2, 0));
+        ctx.addLine(at(l / 2 - tip, t / 2));
+        ctx.addLine(at(-l / 2 + cap, t / 2));
+        ctx.closePath();
+        ctx.fillPath();
+        ctx.move(at(-l / 2, -t / 2));
+        ctx.addLine(at(-l / 2 + cap - line, -t / 2));
+        ctx.addLine(at(-l / 2 + cap - line, t / 2));
+        ctx.addLine(at(-l / 2, t / 2));
+        ctx.closePath();
+        ctx.fillPath();
+    });
+}
+
+std::optional<Piece> Art::hint(const std::string& words) {
+    Font f = font(Size::micro, Font::Weight::medium);
+    f.italic = true;
+    float padX = px(0.006f), padY = px(0.003f), line = std::ceil(f.lineHeight());
+    float w = std::ceil(width(words, f)) + 1, W = w + 2 * padX, H = line + 2 * padY;
+    return piece("hint:" + words, W, H, [&](Canvas& ctx, CGSize) {
+        roundedPath(ctx, CGRect{0, 0, W, H}, H / 2);
+        ctx.setFillColor(ink.withAlphaComponent(0.72f));
+        ctx.fillPath();
+        drawString(words, CGPoint{padX, padY}, attributes(f, Color::white(0.82f)));
+    });
+}
+
+std::optional<Piece> Art::holdRing(int step) {
+    step = std::clamp(step, 0, holdSteps);
+    float d = px(0.036f), wide = px(0.0032f), r = d / 2 - wide;
+    return piece(fmt("hold-ring:%d", step), d, d, [&](Canvas& ctx, CGSize) {
+        ctx.setLineCap(Canvas::LineCap::round);
+        ctx.setLineWidth(wide);
+        ctx.setStrokeColor(Color::white(1, 0.35f));
+        arcPath(ctx, CGPoint{d / 2, d / 2}, r, 1);
+        ctx.strokePath();
+        if (step == 0) return;
+        ctx.setStrokeColor(Color::hex(0xF2C27A));
+        arcPath(ctx, CGPoint{d / 2, d / 2}, r, float(step) / holdSteps);
+        ctx.strokePath();
+    });
+}
+
 /// An empty frame with a label: where a pressed tree lands on its way out.
 std::optional<Piece> Art::tray(const std::string& words) {
     float w = px(0.2f), h = px(0.165f);

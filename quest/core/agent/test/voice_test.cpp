@@ -474,6 +474,49 @@ TEST(voiceStopsListeningWhenTheMicrophoneIsRefused) {
     CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(1));
 }
 
+TEST(theMicrophonesReasonShowsWhileTheUserIsAsked) {
+    Talking t(true);
+    CHECK(t.voice.presence().notice.empty(), "nothing to say before the headset asks");
+    host.microphone.asking();
+    t.frame();
+    CHECK_EQ(t.voice.presence().notice, std::string("Allow the microphone to talk to Momo"));
+    t.hear(Sound().quiet(0.3));
+    CHECK(t.voice.presence().notice.empty(), "allowed, sound comes and the line goes");
+}
+
+TEST(aRefusedMicrophoneSaysHowToAskMomoWithoutIt) {
+    Talking t(true);
+    host.microphone.asking();
+    t.frame();
+    host.microphone.denied();
+    t.frame();
+    CHECK_EQ(t.voice.presence().notice, std::string("No microphone, so type or pick to ask Momo"));
+    t.frame(Voice::refusalShown + 0.1);
+    CHECK(t.voice.presence().notice.empty(), "it goes after %g s", Voice::refusalShown);
+    t.voice.asked("What else did Vermeer paint?");
+    t.frame();
+    CHECK(t.shows() == Presence::State::sent, "a question picked or typed is still sent and thought about");
+    t.voice.say("He painted few.");
+    t.frame();
+    CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(1));
+}
+
+TEST(momoSaysWhileTheServiceCantBeReached) {
+    Talking t(true);
+    t.frame();
+    CHECK(t.voice.presence().notice.empty(), "joined, nothing to say");
+    t.transport->socket->events.closed("the service restarted");
+    t.client.drain();
+    t.frame();
+    CHECK_EQ(t.voice.presence().notice, std::string("Can’t reach Momo, retrying"));
+    t.client.tick(100 + Client::retryDelays[0]);
+    t.transport->socket->events.opened();
+    t.transport->socket->events.text(sessionTexts().front());
+    t.client.drain();
+    t.frame();
+    CHECK(t.voice.presence().notice.empty(), "back, the line goes");
+}
+
 TEST(base64IsRfc4648) {
     const char* cases[][2] = {{"", ""}, {"f", "Zg=="}, {"fo", "Zm8="}, {"foo", "Zm9v"}, {"foob", "Zm9vYg=="}, {"fooba", "Zm9vYmE="}, {"foobar", "Zm9vYmFy"}};
     for (const auto& c : cases) {
@@ -765,6 +808,7 @@ TEST(presenceFollowsALiveTurn) {
     CHECK(t.shows() == S::thinking, "a spoken turn thinks on while work starts, until Momo answers");
     t.serviceSays(audioFrame("r1", aSecondOfVoice()));
     CHECK(t.shows() == S::responding, "responding at the first sound of the reply");
+    CHECK(t.voice.presence().searching(), "and the Scout is still at work while Momo speaks: the monocle stays on");
     CHECK(host.plays[3].sound->stopped, "the loop stops at once");
     t.serviceSays(R"({"t":"text","id":"r1","text":"Here are three older films with one."})");
     t.frame(0.5);
@@ -778,10 +822,10 @@ TEST(presenceFollowsALiveTurn) {
     t.frame();
     CHECK(t.shows() == S::working, "working once Momo is done, while the work goes on");
     CHECK_EQ(t.voice.presence().momoText, "Here are three older films with one.");
-    CHECK_EQ(t.voice.presence().doing, "Looking for films with a slow…");
+    CHECK(t.voice.presence().agents == std::vector<AgentLine>({{"scout", "Scout", "Looking for films with a slow…", false}}), "the Scout's line");
     t.voice.activity(started("a2", "Reading three articles about it", "Reading 3 articles"));
     t.frame(1);
-    CHECK_EQ(t.voice.presence().doing, "Reading 3 articles");
+    CHECK(t.voice.presence().agents == std::vector<AgentLine>({{"scout", "Scout", "Reading 3 articles", false}}), "its newest step");
     size_t plays = host.plays.size(), players = host.players.size();
     t.frame(5);
     CHECK_EQ(host.plays.size(), plays);
@@ -790,6 +834,9 @@ TEST(presenceFollowsALiveTurn) {
     t.voice.activity(ended("a1"));
     t.frame();
     CHECK(t.shows() == S::waiting, "waiting once the work is done");
+    CHECK(t.voice.presence().agents == std::vector<AgentLine>({{"scout", "Scout", "", true}}), "the Scout finished working");
+    t.frame(Crew::finishedFor);
+    CHECK(t.voice.presence().agents.empty(), "and its line gone 3 s later");
     CHECK_EQ(host.plays.size(), plays);
     t.serviceSays(R"({"t":"text","id":"r2","text":"I found two more.","kind":"results"})");
     CHECK_EQ(t.voice.presence().userText, "");
@@ -883,7 +930,7 @@ TEST(presenceARowPickIsSentThenThinksUntilTheWorkStarts) {
     t.voice.activity(started("a1", "Looking for dolly zooms", "Finding dolly zooms"));
     t.frame();
     CHECK(t.shows() == S::working, "working once the work starts");
-    CHECK_EQ(t.voice.presence().doing, "Finding dolly zooms");
+    CHECK(t.voice.presence().agents.size() == 1 && t.voice.presence().agents[0].step == "Finding dolly zooms", "the Scout's line");
     CHECK(host.plays.size() == 2 && host.plays[1].sound->stopped, "the loop stopped");
 
     t.voice.activity(ended("a1"));

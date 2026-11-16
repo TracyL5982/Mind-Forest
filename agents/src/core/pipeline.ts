@@ -1,6 +1,6 @@
 import { announcement } from './announce.ts';
 import { label } from './brief.ts';
-import { CommandError, type ChangeSet, type Command, type Id, type Item, type Origin, type Patch } from './domain.ts';
+import { CommandError, type ChangeSet, type Command, type Id, type Item, type Node, type Origin, type Patch } from './domain.ts';
 import type { Assets, ModelClient, Store, Tools } from './ports.ts';
 import { admit, plainTitle } from './round.ts';
 import { treeRequest } from './tree-request.ts';
@@ -244,7 +244,7 @@ export class Pipeline {
     this.apply(USER, ids.length === 1 ? 'Keep a pick' : `Keep ${ids.length} picks`, ids.map((id) => ({ type: 'keepPick', id })));
   }
 
-  /** Direct manipulation from a client: drag to move, edit text, delete. */
+  /** Direct manipulation from a client: drag to move, edit text, delete, highlight and draw on a card. */
   userCommands(label: string, commands: Command[]): ChangeSet | null {
     const set = this.apply(USER, label, commands);
     if (set) this.afterContent(set);
@@ -451,8 +451,9 @@ export class Pipeline {
     this.say(announcement(mind, anchor, there), 'results');
   }
 
-  /** New or changed content goes to the Renderer, and the trees it touched get fresh digests. */
+  /** New or changed content goes to the Renderer, and the trees it touched get fresh digests. A card's edits are neither. */
   private afterContent(set: ChangeSet): void {
+    if (set.patches.every(onlyEdits)) return;
     const mind = this.deps.mind;
     const nodeIds = [
       ...new Set(
@@ -557,6 +558,14 @@ export class Pipeline {
 }
 
 /** Formats and digests follow from content. They are not something a user thinks of undoing. */
+/** Whether a patch changes nothing of a node but the user's highlights and drawings on its card. */
+function onlyEdits(p: Patch): boolean {
+  if (p.entity !== 'node' || !p.before || !p.after) return false;
+  const { edits: _before, ...before } = p.before as Node;
+  const { edits: _after, ...after } = p.after as Node;
+  return JSON.stringify(before) === JSON.stringify(after);
+}
+
 function isHousekeeping(set: ChangeSet): boolean {
   return set.origin.role === 'renderer' || set.origin.role === 'archivist';
 }

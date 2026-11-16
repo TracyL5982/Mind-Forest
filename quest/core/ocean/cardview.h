@@ -1,5 +1,6 @@
 // Port of visionos/MindPalace/Ocean/CardView.swift.
 #pragma once
+#include <algorithm>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -19,6 +20,22 @@
 
 /// NOTE(port): added for Quest. How far the open face stands in front of the small one, m (see the constructor).
 constexpr float openLift = 0.0015f;
+
+/// NOTE(port): added for Quest (core/cards). What the user marked on a card with the edit pencil, as the scene draws it.
+struct CardEdit {
+    enum class Kind { highlight, stroke };
+    std::string id;
+    Kind kind = Kind::highlight;
+    /// A highlight: the words, and which of their appearances on the card's content it is, 0 the first.
+    std::string quote;
+    int occurrence = 0;
+    /// A line: its points in order, each 0 to 1 across and down the card's whole content, however far it is scrolled.
+    std::vector<Vec2> points;
+    bool operator==(const CardEdit& o) const {
+        return id == o.id && kind == o.kind && quote == o.quote && occurrence == o.occurrence && points.size() == o.points.size() &&
+               std::equal(points.begin(), points.end(), o.points.begin(), [](Vec2 a, Vec2 b) { return a.x == b.x && a.y == b.y; });
+    }
+};
 
 /// One node of the standing tree as it appears: a small card that can grow,
 /// in place, into its open form. Its origin is the middle of its picture (or
@@ -80,12 +97,32 @@ public:
     double goneAt = std::numeric_limits<double>::infinity();
     std::optional<int> home;            // its film's or work's place in the ocean
     EntityRef picture;                  // an open work's picture
-    // NOTE(port): added for Quest (core/cards). An open card's frame; the panel that scrolls in its window,
-    // and the bar that says where; and, while a pinch held still has armed a mark, what it will mark.
+    // NOTE(port): added for Quest (core/cards). An open card's frame; the panel that scrolls in its window, and the bar
+    // that says where. The service's cards also have the edit pencil outside its top right corner, with the line under it
+    // that says what a long pinch will do, and the ring round a pinch held still; and the user's edits, kept with the card,
+    // drawn as one see-through amber mesh behind the words and one white mesh of lines, both cut to the window.
     EntityRef openFace;
     EntityRef openPanel;
     EntityRef scrollBar;
-    EntityRef armHolder;
+    EntityRef pencil;
+    bool pencilShown = false;
+    EntityRef hint;
+    std::string hintWords;
+    EntityRef holdRing;
+    int holdShown = -1;
+    std::vector<CardEdit> edits;
+    EntityRef highlights;
+    EntityRef lines;
+    /// The content's text, laid out once each time the card is drawn anew (`runsDrawn`, its generation): what a
+    /// highlight is found in. And where the content lies, px: the frame, the window in it, and how tall the whole content is.
+    std::vector<std::shared_ptr<TextBlock>> runs;
+    int runsDrawn = -1;
+    struct Content {
+        CGSize frame;
+        CGRect window;
+        float tall = 0;
+    };
+    Content content;
     // NOTE(port): added for Quest (core/cards). A card whose look the agents are still choosing: the holder its small
     // face is drawn in, the soft light that runs across it, and, once its finished card has come, how it eases to
     // that card's size under it (OceanModel::settleCard).

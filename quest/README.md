@@ -50,7 +50,10 @@ The Quest 3 has no eye tracking, so:
 
 The agents (`agents/`, a service on the Mac) can grow the ocean's trees: your mindstorm's trees stand and
 hang on the shelf, a pinch on a card opens it and the Scout's picks come up round it with dashed threads,
-a pinch on a pick keeps it, the knife deletes, and a clap sends the tree on as a handoff. The plan and
+a pinch on a pick keeps it, the knife deletes, and a clap sends the tree on as a handoff. Under an open card stand at most
+three suggested questions as pills; a pinch held still on it, while a ring fills round the pinch, asks for more like it; and
+its edit pencil, just outside its top right corner, turns a long pinch into highlighting words or drawing on the card, which
+the service keeps with it (core/cards/README.md). The plan and
 its state are in [agent-plan.md](agent-plan.md).
 
 This build installs beside the app already on the headset, as "Mind Palace Ocean (agents)", because it is
@@ -77,12 +80,23 @@ nothing costs money.
 Talking to it works as in the web client. The headset listens on the device for "hey Momo" or "hi Momo" (the
 service's agent name), and nothing it hears leaves the headset unless it began with the name. After the name it
 chimes and records until you pause for 1.2 s; the service transcribes that and acts on it, and its reply is spoken
-when the service has a voice. Momo is a soft glowing orb low in front of you, with the words beside it: yours in
-white as the voice hears them, then `Thinking…`, then Momo's reply in amber as it is spoken, then, while the agent
-works, a few words in grey italics on what it is doing. The orb breathes with the voice it hears, gathers in as what
-you said is sent, has lights circling it while it thinks, and ripples and points to the card while it works. It stays
-where it is while you look about and glides round once you have turned away from it;
-`-presenceDemo` plays every state on a 34 s loop with made-up words, without the service. The first time, the headset
+when the service has a voice. Momo sits low in front of you, drawn as in CurioCity (ClandestineOperation's
+`AgentVisual`, with the values its scene gives it): three rings of Perlin noise in cyan, magenta and yellow, added into
+one white ring as wide as two lines of its words, with two tall white eyes that blink and dart. The words are beside
+it: yours in white as the voice hears them, then `Thinking…`, then Momo's reply in amber as it is spoken. The ring
+wobbles with your voice as you speak, and with Momo's as it speaks, when it also parts into coloured fringes. From the
+moment your turn is sent until Momo answers, three bubbles form at its upper right: each swells up small at the base,
+and as the next forms it eases the others one place out, growing, until the first is the largest at the far end, all
+settled by 1.1 s; then each circles its own place, so the three turn through a line and a triangle. Once begun they
+stay until they have settled, then fade gently, and Momo's voice never waits for them; any agents' lines stand above
+them meanwhile. While any
+agent works, Momo wears a monocle, in fine lines round the eye on your left, and its eyes glance about, and above
+the words a small line for each agent at work says what it is doing (`Scout · Searching museum collections for dancing
+people`, Momo's own web searches as `Momo (librarian) · …`); when an agent's last step ends its line says `finished
+working` for 3 s and goes. A picture still being made keeps the Scout's line and the monocle until it lands. Nothing
+else marks the agent's work: no word or light on the cards. Momo stays where it is while you look about and glides
+round once you have turned away from it; `-presenceDemo` plays every state and look on a 38 s loop with made-up words
+and agents, without the service. The first time, the headset
 asks to use the microphone; refused, it does
 not ask again until the app starts again, and replies are still spoken. A microphone that stops is opened again after
 1, 2, 4, 8, then every 15 s. When the service has a live voice (hello's `live`), the headset opens its `/live`
@@ -142,6 +156,33 @@ quest/tools/run.sh --log
 The host adds its own: `-hz`, `-scale`, `-msaa`, `-ffr`, `-cpuLevel`, `-gpuLevel`, `-cull`, `-noBatch`,
 `-uploadBudget`, `-perf`, `-quitAfter`, `-shotAt`, `-shotEvery`, `-testScene` (described at the top of
 `android/app/src/main/cpp/main.cpp`).
+
+## The judging build
+
+One APK a judge installs and opens, with nothing else to do: "Mind Palace" (`com.kaifengwu.mindpalace.ocean.judge`),
+installed beside the two apps above and replacing neither.
+
+```bash
+quest/tools/judge.sh             # build it and check its id, name, signature and the media inside
+quest/tools/judge.sh --install   # and install it on the headset on the cable
+```
+
+- **Its service.** It joins the service named in `~/.mind-palace/judging.properties` (`server=https://…`, `appKey=…`) by
+  itself, with the cards, and never reads or keeps `agent-connection.json`. Started with `-agent`, it joins that one, as
+  given, for that launch only. Its token is `<appKey>.<device id>`, sent wherever a token goes (`?token=` and the
+  Bearer header): the id is 32 hex digits made on its first launch and kept in its own files (`device-id`), so the
+  hosted service keeps each headset's mindstorm apart. Developer builds send their token as before.
+- **When it can't reach the service**, Momo shows with "Can’t reach Momo, retrying" in its caption, and the app tries
+  again after 1, 2, 4 and 8 s, then every 15 s.
+- **The microphone.** The first time, Momo's caption says "Allow the microphone to talk to Momo", and the system asks
+  1.5 s later. Refused, the caption says "No microphone, so type or pick to ask Momo" for 10 s, and typing and picking
+  work as before. Nothing else is asked: passthrough and hands need no permission while the app runs.
+- **The media** (about 700 MB) is inside the APK, stored uncompressed under `assets/media` with the list of it
+  (`index.txt`), and read from there: pictures by `ImageDecoder` from the APK, films by `MediaPlayer` from the APK's
+  own file, text through the NDK's asset manager. Nothing is copied out at first launch.
+- **Signing.** Release-signed with `~/.mind-palace/keys/judge.jks`, its passwords in `keys/judge.properties` beside it.
+  A later APK installs over this one only if it is signed with the same key, so keep both. Raise `version` in
+  `judging.properties` for each APK handed out.
 
 ## Measuring performance
 

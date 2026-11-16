@@ -47,6 +47,13 @@ export class RateWindow {
     });
   }
 
+  /** Whether a request of this kind would be let out now, with none held before it. */
+  free(priority: Priority): boolean {
+    const now = Date.now();
+    this.prune(now);
+    return ORDER.slice(0, ORDER.indexOf(priority) + 1).every((p) => this.held[p].length === 0) && this.room(priority, now);
+  }
+
   /** What a reply says is left of the window. */
   read(res: { status: number; headers: Headers }): void {
     const now = Date.now();

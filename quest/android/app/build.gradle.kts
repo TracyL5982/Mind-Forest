@@ -1,7 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+// The judging build (quest/tools/judge.sh): its own app beside the two on the user's headset, release-signed with the key
+// in ~/.mind-palace/keys, joining its own service by itself, with the media inside the APK. What it needs is outside the
+// repo: judging.properties (server=https://…, appKey=…, version=<n>) and keys/judge.jks with keys/judge.properties.
+val mindPalace = File(System.getProperty("user.home"), ".mind-palace")
+fun properties(file: File) = Properties().apply { if (file.exists()) file.inputStream().use { load(it) } }
+val judging = properties(File(mindPalace, "judging.properties"))
+val judgeKey = properties(File(mindPalace, "keys/judge.properties"))
+val judgeMedia = file("build/judge-media")
 
 android {
     namespace = "com.kaifengwu.mindpalace"
@@ -21,12 +32,23 @@ android {
         versionCode = 1
         versionName = "0.1"
         ndk { abiFilters += "arm64-v8a" }
+        buildConfigField("String", "SERVER", "\"\"")
+        buildConfigField("String", "APP_KEY", "\"\"")
         externalNativeBuild {
             cmake {
                 arguments += listOf("-DANDROID_STL=c++_shared")
                 // ./gradlew installDebug -PoceanScene=OFF builds the host with its test scene only.
                 arguments += "-DOCEAN_SCENE=" + ((project.findProperty("oceanScene") as String?) ?: "ON")
             }
+        }
+    }
+
+    signingConfigs {
+        create("judge") {
+            storeFile = File(mindPalace, "keys/judge.jks")
+            storePassword = judgeKey.getProperty("storePassword")
+            keyAlias = judgeKey.getProperty("keyAlias")
+            keyPassword = judgeKey.getProperty("keyPassword")
         }
     }
 
@@ -43,6 +65,15 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             externalNativeBuild { cmake { arguments += "-DCMAKE_BUILD_TYPE=Release" } }
         }
+        create("judge") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".judge"
+            signingConfig = signingConfigs.getByName("judge")
+            manifestPlaceholders["appLabel"] = "Mind Palace"
+            externalNativeBuild { cmake { arguments += "-DCMAKE_BUILD_TYPE=Release" } }
+            buildConfigField("String", "SERVER", "\"${judging.getProperty("server", "")}\"")
+            buildConfigField("String", "APP_KEY", "\"${judging.getProperty("appKey", "")}\"")
+        }
     }
 
     externalNativeBuild {
@@ -52,16 +83,49 @@ android {
         }
     }
 
-    buildFeatures { prefab = true }
+    buildFeatures {
+        prefab = true
+        buildConfig = true
+    }
 
     // The keyword model the headset listens with (quest/tools/fetch-voice.sh puts it there).
     sourceSets["main"].assets.srcDir("../../vendor/sherpa-onnx/assets")
+    // The judging build's media, which judge.sh lays out in build/judge-media/media with its index.txt.
+    sourceSets["judge"].assets.srcDir(judgeMedia)
+    // Stored, not deflated: a film is played from where it lies in the APK, and the rest is compressed already.
+    androidResources { noCompress += listOf("mp4", "jpg", "heic", "json") }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("judge")) { variant ->
+        val version = judging.getProperty("version", "1").toInt()
+        variant.outputs.forEach {
+            it.versionCode.set(version)
+            it.versionName.set("$version (judging)")
+        }
+    }
+}
+
+// A judging build that would not join, could not be signed or carries no media stops here, saying what is missing.
+gradle.taskGraph.whenReady {
+    if (allTasks.none { it.project == project && it.name.contains("Judge") }) return@whenReady
+    val server = judging.getProperty("server", "")
+    val key = judging.getProperty("appKey", "")
+    val missing = listOfNotNull(
+        "server=https://… in ${mindPalace}/judging.properties".takeUnless { server.matches(Regex("https://[A-Za-z0-9.-]+(:[0-9]+)?/?")) },
+        "appKey=… (letters, digits, - and _) in ${mindPalace}/judging.properties".takeUnless { key.matches(Regex("[A-Za-z0-9_-]+")) },
+        "the key ${mindPalace}/keys/judge.jks".takeUnless { File(mindPalace, "keys/judge.jks").exists() },
+        "storePassword, keyAlias and keyPassword in ${mindPalace}/keys/judge.properties"
+            .takeUnless { listOf("storePassword", "keyAlias", "keyPassword").all { !judgeKey.getProperty(it).isNullOrEmpty() } },
+        "the media in $judgeMedia (quest/tools/judge.sh lays it out)".takeUnless { File(judgeMedia, "media/index.txt").exists() },
+    )
+    if (missing.isNotEmpty()) throw GradleException("The judging build needs:\n  " + missing.joinToString("\n  "))
 }
 
 dependencies {

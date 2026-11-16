@@ -212,12 +212,6 @@ void showPanel(const EntityRef& quad, const std::string& noteID) {
     }
 }
 
-std::optional<Vec2> window(const std::string& noteID) {
-    std::optional<Opened> o = opened(noteID);
-    if (!o) return std::nullopt;
-    return Vec2{(o->size.height / 2 - o->window.maxY()) / Art::ppm, (o->size.height / 2 - o->window.minY()) / Art::ppm};
-}
-
 void showIndicator(const EntityRef& bar, const std::string& noteID) {
     std::optional<Opened> o = opened(noteID);
     if (!(bar && o)) return;

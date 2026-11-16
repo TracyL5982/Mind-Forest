@@ -104,6 +104,43 @@ export type View = z.infer<typeof View>;
 export const NodeStatus = z.enum(['kept', 'pick']);
 export type NodeStatus = z.infer<typeof NodeStatus>;
 
+/** Words the user highlighted on a card. */
+export const Highlight = z.object({
+  id: Id,
+  kind: z.literal('highlight'),
+  /** The words, as the card shows them. */
+  quote: z.string().min(1).max(2000),
+  /** Where they start in the item's `text`, in UTF-16 units, when they are in it: `text.slice(at, at + quote.length) === quote`. */
+  at: z.number().int().nonnegative().optional(),
+});
+export type Highlight = z.infer<typeof Highlight>;
+
+/** Most points in one drawn line. */
+export const STROKE_POINTS = 512;
+
+/** A line the user drew on a card. */
+export const Stroke = z.object({
+  id: Id,
+  kind: z.literal('stroke'),
+  /**
+   * Its points in order, x then y, each 0 to 1 across and down the opened card's content, the whole of it however far it is scrolled,
+   * so the line stays on what it was drawn over when the card is drawn at another size.
+   */
+  points: z
+    .array(z.number().min(0).max(1))
+    .min(4)
+    .max(2 * STROKE_POINTS)
+    .refine((p) => p.length % 2 === 0, 'points come in pairs, x then y'),
+});
+export type Stroke = z.infer<typeof Stroke>;
+
+/** What the user marked on a card with the edit pencil. */
+export const Edit = z.discriminatedUnion('kind', [Highlight, Stroke]);
+export type Edit = z.infer<typeof Edit>;
+
+/** Most edits one card keeps. */
+export const MAX_EDITS = 100;
+
 export const Node = z.object({
   id: Id,
   treeId: Id,
@@ -116,6 +153,8 @@ export const Node = z.object({
   view: View,
   /** Position among siblings. */
   order: z.number(),
+  /** The user's highlights and drawings on the card, oldest first. Absent when there are none. */
+  edits: z.array(Edit).max(MAX_EDITS).optional(),
 });
 export type Node = z.infer<typeof Node>;
 
@@ -175,6 +214,10 @@ export const Command = z.discriminatedUnion('type', [
   z.object({ type: z.literal('keepPick'), id: Id }),
   z.object({ type: z.literal('setWhy'), id: Id, why: z.string(), importance: z.number().min(0).max(1).optional() }),
   z.object({ type: z.literal('setView'), id: Id, view: View }),
+  /** Adds an edit to the node's card, or puts it in place of the one with its id. */
+  z.object({ type: z.literal('addEdit'), id: Id, edit: Edit }),
+  /** Takes an edit off the node's card. One that is not there changes nothing. */
+  z.object({ type: z.literal('removeEdit'), id: Id, editId: Id }),
   z.object({ type: z.literal('setGroup'), group: Group }),
   z.object({ type: z.literal('removeGroup'), id: Id }),
   z.object({ type: z.literal('link'), link: Link }),

@@ -1,6 +1,8 @@
 // What the Quest host's own files share: where things are on the device,
 // and the head and hands the OpenXR loop read this frame.
 #pragma once
+#include <jni.h>
+
 #include <optional>
 #include <string>
 
@@ -8,6 +10,9 @@
 
 namespace host {
 extern std::string mediaDir;        // the visionOS bundle's resources, pushed by tools/push_media.sh
+/// The APK's own assets. The judging build carries the media there (assets/media, listed in its index.txt), and a
+/// resource is then read from the APK as "apk:media/<name>" in place of a file in mediaDir.
+void useAssets(JNIEnv* env, jobject assets);
 extern std::string dataDir;         // the app's own files
 extern std::string outDir;          // what a run leaves for the Mac to pull: perf logs
 extern std::optional<Mat4> head;

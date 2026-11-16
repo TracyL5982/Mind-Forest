@@ -69,9 +69,6 @@ std::string percentDecoded(const std::string& s) {
     return out;
 }
 
-/// Seconds between showings of "Thinking…" while the service still works on a card (each showing lasts a little longer).
-constexpr double thinkAgain = 2.2;
-
 /// How long a navigate waits for its tree to stand before it is let go: a cover opens into its tree in about a second.
 constexpr double standsWithin = 5;
 /// How long a navigate waits for speaking to end: longer than a reply, so a voice that never says it ended cannot hold it.
@@ -214,13 +211,6 @@ void Bridge::frame(double t) {
         std::optional<int> open = standingTree ? standingTree->tree->focus() : std::nullopt;
         if (!open || !standingTree->service.count(*open) || standingTree->service[*open] != offered->nodeId) offered.reset();
     }
-    for (auto& [id, t] : thinking) {
-        if (now - t.shown < thinkAgain) continue;
-        auto p = trees.find(t.tree);
-        if (p == trees.end() || !standing(p->second) || !model.card(t.node)) continue;
-        model.think(t.node, float(thinkAgain + 0.4));
-        t.shown = now;
-    }
 }
 
 void Bridge::synced(const Delta& delta) {
@@ -326,6 +316,8 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
         touched = touched || standing(*p);
         const Item* item = mirror.item(n->itemId);
         if (item && paint(*item, *n) && standing(*p)) redraw(p->local[id.value]);
+        // An edit made here, on another headset, or taken back by an undo.
+        if (standing(*p)) model.setEdits(p->local[id.value], sceneEdits(*n));
     }
 
     for (auto& [p, ids] : arrived) {
@@ -369,19 +361,10 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
 
 void Bridge::activity(const Activity& a) {
     if (a.state != Activity::State::start) {
-        thinking.erase(a.id);
         asking.ended(a.id);
         return;
     }
-    if (!a.nodeId) return;
-    if (a.role == "scout" && a.detail) asking.searching(a.id, a.nodeId->value, *a.detail);
-    for (auto& [key, p] : trees) {
-        auto local = p.local.find(a.nodeId->value);
-        if (local != p.local.end()) {
-            thinking[a.id] = Thinking{key, local->second, -thinkAgain};
-            return;
-        }
-    }
+    if (a.nodeId && a.role == "scout" && a.detail) asking.searching(a.id, a.nodeId->value, *a.detail);
 }
 
 Bridge::Planted* Bridge::plant(const TreeInfo& info) {
@@ -593,7 +576,7 @@ void Bridge::rows(const TreeNode& node, std::vector<Ask>& asks) {
         asks.push_back(Ask{"more", "What else is like this?"});
         asks.push_back(Ask{"deeper", "Tell me more about this"});
     }
-    for (const std::string& q : offered->questions) asks.push_back(Ask{"question", q});
+    for (size_t k = 0; k < offered->questions.size() && k < mostQuestions; k++) asks.push_back(Ask{"question", offered->questions[k]});
     asks.push_back(Ask{"type", "Type your own question…"});
 }
 
@@ -637,22 +620,25 @@ void Bridge::type(int nodeID) {
     logLine("[agent] typing a question");
 }
 
+void Bridge::lead(Planted& p, int nodeID) {
+    TreeNode& n = p.tree->nodes[nodeID];
+    if (!n.kept) {
+        client.send(Outbound::keep({NodeId{p.service[nodeID]}}));
+        n.kept = true;
+        logLine("[agent] kept " + model.catalog->title(n.ref));
+    }
+    if (!n.head) {
+        Tree::Change moved = p.tree->focus(nodeID);
+        model.arrive(moved.added);
+        model.restyle();
+    }
+}
+
 void Bridge::converse(int nodeID, const std::string& question) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
     if (!p || !p->service.count(nodeID)) return;
     NodeId id{p->service[nodeID]};
-    TreeNode& n = p->tree->nodes[nodeID];
-    if (!n.kept) {
-        client.send(Outbound::keep({id}));
-        n.kept = true;
-        logLine("[agent] kept " + model.catalog->title(n.ref));
-    }
-    // A conversation about the card: it now leads a layer of its own, where what the service brings for it stands.
-    if (!n.head) {
-        Tree::Change moved = p->tree->focus(nodeID);
-        model.arrive(moved.added);
-        model.restyle();
-    }
+    lead(*p, nodeID);
     if (client.send(Outbound::ask(id, question)) && voice) voice->asked(question);
     logLine("[agent] asked: " + question);
 }
@@ -674,17 +660,8 @@ void Bridge::showPresence() {
         if (!model.art || !model.lineMaterial) return;
         presenceView = std::make_unique<PresenceView>(model.art, *model.lineMaterial, model.root_);
     }
-    presence = voice->presence();
-    for (const auto& [id, t] : thinking) {
-        auto p = trees.find(t.tree);
-        if (presence.state == Presence::State::working && p != trees.end() && standing(p->second)) presence.workingOn = t.node;
-    }
-    std::optional<Vec3> at;
-    if (presence.workingOn) {
-        if (const auto& c = model.card(*presence.workingOn)) at = c->root->transformMatrix(nullptr).position();
-    }
     Mat4 head = platform::head().value_or(Mat4::trs(model.stage.origin, Quat::identity(), {1, 1, 1}));
-    presenceView->frame(presence, voice->name(), at, head, now);
+    presenceView->frame(voice->presence(), voice->name(), head, now);
 }
 
 bool Bridge::speaking() const {
@@ -810,15 +787,97 @@ void Bridge::acknowledge(int nodeID, int k) {
     }
 }
 
-bool Bridge::askMark(int nodeID, const Mark& mark) {
+void Bridge::moreLike(int nodeID) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
-    if (!p) return false;
-    auto s = p->service.find(nodeID);
-    if (s == p->service.end()) return true;
-    std::string need = "About this part of it: " + OceanModel::described(mark);
-    if (client.send(Outbound::ask(NodeId{s->second}, need)) && voice) voice->asked(need);
-    logLine("[agent] asked about a mark: " + OceanModel::described(mark));
-    return true;
+    if (!p || !p->service.count(nodeID)) return;
+    NodeId id{p->service[nodeID]};
+    std::string marked;
+    if (const Node* n = client.mirror().node(id)) {
+        for (const Edit& e : n->edits) {
+            if (e.kind == Edit::Kind::highlight && marked.size() < 600) marked += (marked.empty() ? "\"" : "; \"") + e.quote + "\"";
+        }
+    }
+    std::optional<std::string> need;
+    if (!marked.empty()) need = "More like this, especially what I highlighted: " + marked;
+    lead(*p, nodeID);
+    if (client.send(Outbound::more(id, need)) && voice) voice->asked(need ? "More like this, especially what I highlighted" : "More like this");
+    logLine("[agent] more like this" + (need ? ": " + *need : std::string(", with nothing highlighted")));
+}
+
+namespace {
+
+/// Which of the appearances of `quote` in `text` starts at `at` (UTF-16 units), or 0 when it is not there.
+int appearanceAt(const std::string& text, const std::string& quote, std::optional<int> at) {
+    std::u16string in = utf16(text), q = utf16(quote);
+    if (!at || q.empty() || in.compare(size_t(std::max(0, *at)), q.size(), q) != 0) return 0;
+    int n = 0;
+    for (size_t found = in.find(q); found != std::u16string::npos && found < size_t(*at); found = in.find(q, found + q.size())) n++;
+    return n;
+}
+
+/// Where the `occurrence`th appearance of `quote` starts in `text` (UTF-16 units), if it has that many.
+std::optional<int> whereIn(const std::string& text, const std::string& quote, int occurrence) {
+    std::u16string in = utf16(text), q = utf16(quote);
+    int n = 0;
+    for (size_t found = in.find(q); !q.empty() && found != std::u16string::npos; found = in.find(q, found + q.size())) {
+        if (n++ == occurrence) return int(found);
+    }
+    return std::nullopt;
+}
+
+}  // namespace
+
+bool Bridge::editable(int nodeID) {
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    return p && p->service.count(nodeID);
+}
+
+std::vector<CardEdit> Bridge::sceneEdits(const Node& node) {
+    const Item* item = client.mirror().item(node.itemId);
+    std::vector<CardEdit> out;
+    for (const Edit& e : node.edits) {
+        if (e.kind == Edit::Kind::highlight) {
+            out.push_back(CardEdit{.id = e.id, .kind = CardEdit::Kind::highlight, .quote = e.quote,
+                                   .occurrence = item ? appearanceAt(item->text, e.quote, e.at) : 0});
+        } else {
+            CardEdit line{.id = e.id, .kind = CardEdit::Kind::stroke};
+            for (const auto& [x, y] : e.points) line.points.push_back(Vec2{x, y});
+            out.push_back(std::move(line));
+        }
+    }
+    return out;
+}
+
+std::vector<CardEdit> Bridge::edits(int nodeID) {
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    const Node* n = p && p->service.count(nodeID) ? client.mirror().node(NodeId{p->service[nodeID]}) : nullptr;
+    return n ? sceneEdits(*n) : std::vector<CardEdit>{};
+}
+
+void Bridge::edited(int nodeID, const CardEdit& made) {
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    if (!p || !p->service.count(nodeID)) return;
+    NodeId id{p->service[nodeID]};
+    Edit e{.id = made.id};
+    if (made.kind == CardEdit::Kind::highlight) {
+        const Node* n = client.mirror().node(id);
+        const Item* item = n ? client.mirror().item(n->itemId) : nullptr;
+        e.quote = made.quote;
+        e.at = item ? whereIn(item->text, made.quote, made.occurrence) : std::nullopt;
+    } else {
+        e.kind = Edit::Kind::stroke;
+        for (Vec2 v : made.points) e.points.emplace_back(v.x, v.y);
+    }
+    client.send(Outbound::commands(e.kind == Edit::Kind::highlight ? "Highlight words" : "Draw a line", {Command::addEdit(id, e)}));
+}
+
+void Bridge::erased(int nodeID, const std::string& editId) {
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    if (!p || !p->service.count(nodeID)) return;
+    NodeId id{p->service[nodeID]};
+    const Node* n = client.mirror().node(id);
+    bool line = n && std::any_of(n->edits.begin(), n->edits.end(), [&](const Edit& e) { return e.id == editId && e.kind == Edit::Kind::stroke; });
+    client.send(Outbound::commands(line ? "Erase a line" : "Erase a highlight", {Command::removeEdit(id, editId)}));
 }
 
 void Bridge::pruned(int nodeID, const std::vector<TreeNode>& gone) {

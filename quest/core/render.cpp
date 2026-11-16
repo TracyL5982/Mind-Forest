@@ -114,11 +114,12 @@ void main() {
 
 static const char* kLineFragment = R"(
 uniform float uOpacity;
+uniform float uAdditive;
 in vec4 vColor;
 out vec4 frag;
 void main() {
     float a = clamp(vColor.a, 0.0, 1.0) * uOpacity;
-    frag = vec4(vColor.rgb * a, a);
+    frag = vec4(vColor.rgb * a, a * (1.0 - uAdditive));
 }
 )";
 
@@ -248,6 +249,7 @@ Renderer::Program Renderer::build(const char* name, const char* vertex, const ch
     p.center = glGetUniformLocation(p.id, "uCenter");
     p.uvMatrix = glGetUniformLocation(p.id, "uUVMatrix");
     p.loading = glGetUniformLocation(p.id, "uLoading");
+    p.additive = glGetUniformLocation(p.id, "uAdditive");
     return p;
 }
 
@@ -676,6 +678,7 @@ void Renderer::submit(const Item& item, const Views& views, double time, const M
     glUniformMatrix4fv(p->viewProj, 2, GL_FALSE, viewProj[0].data());
     glUniformMatrix4fv(p->model, 1, GL_FALSE, item.world.data());
     if (p->opacity >= 0) glUniform1f(p->opacity, (m.transparent ? m.opacity : 1) * item.opacity * item.appear);
+    if (p->additive >= 0) glUniform1f(p->additive, m.additive ? 1 : 0);
     if (p->opaque >= 0) glUniform1i(p->opaque, see && !placeholder ? 0 : 1);
     if (p->loading >= 0) glUniform1f(p->loading, placeholder ? std::max(0.02f, item.waiting) : 0);
     if (placeholder && p->opaque >= 0) glUniform1i(p->opaque, 0);

@@ -188,23 +188,6 @@ std::string revealed(const std::string& text, double share) {
     return space == std::string::npos ? "" : text.substr(0, space);
 }
 
-/// What the presence says the agent is doing: the activity's label, or the first six words of its message.
-std::string doingOf(const Activity& a) {
-    if (a.label && !a.label->empty()) return *a.label;
-    std::string out;
-    int words = 0;
-    size_t at = 0;
-    while (at < a.message.size()) {
-        size_t begin = a.message.find_first_not_of(' ', at);
-        if (begin == std::string::npos) break;
-        size_t end = std::min(a.message.find(' ', begin), a.message.size());
-        if (words == 6) return out + "…";
-        out += (words++ ? " " : "") + a.message.substr(begin, end - begin);
-        at = end;
-    }
-    return out;
-}
-
 std::string titled(const std::string& name) {
     std::string out = name;
     bool start = true;
@@ -272,7 +255,7 @@ void Voice::joined(const Settings& settings, bool speaks, bool live, const std::
     }
     wanted = settings.agentName;
     // Work going on before a reconnect may have ended unseen.
-    working.clear();
+    crew = Crew{};
     if (live) {
         if (auto* shut = std::get_if<Shut>(&link)) shut->retryAt = 0;
     } else {
@@ -379,6 +362,12 @@ void Voice::openMicrophone() {
             if (auto b = box.lock()) {
                 std::lock_guard<std::mutex> g(b->lock);
                 b->microphoneRefused = true;
+            }
+        },
+        [box] {
+            if (auto b = box.lock()) {
+                std::lock_guard<std::mutex> g(b->lock);
+                b->microphoneAsking = true;
             }
         },
     });
@@ -544,7 +533,7 @@ void Voice::frame(double now) {
     std::vector<int> streamsPlayed;
     std::vector<std::pair<int, bool>> loopsEnded;
     int chimesEnded = 0;
-    bool failed = false, refused = false;
+    bool failed = false, refused = false, asking = false;
     {
         std::lock_guard<std::mutex> g(inbox->lock);
         transcripts.swap(inbox->transcripts);
@@ -556,11 +545,15 @@ void Voice::frame(double now) {
         std::swap(chimesEnded, inbox->chimesEnded);
         std::swap(failed, inbox->microphoneFailed);
         std::swap(refused, inbox->microphoneRefused);
+        std::swap(asking, inbox->microphoneAsking);
     }
+    if (asking) askingForMicrophone = true;
     for (int i = 0; i < chimesEnded; i++) send(ChimeEnded{});
     if (refused) {
         // Asked again, the headset would ask the user again: it stops listening, and replies are still spoken.
         logLine("[voice] the microphone is not allowed, so the headset does not listen");
+        askingForMicrophone = false;
+        microphoneRefusedAt = now;
         if (microphone) microphone->stop();
         microphone.reset();
         ears.reset();
@@ -579,7 +572,10 @@ void Voice::frame(double now) {
         reopenAt = -1;
         openMicrophone();
     }
-    if (ears && microphone && ears->live) microphoneFailures = 0;
+    if (ears && microphone && ears->live) {
+        microphoneFailures = 0;
+        askingForMicrophone = false;
+    }
     for (const Transcript& t : transcripts) {
         std::string text = t.text;
         size_t first = text.find_first_not_of(" \t\n"), last = text.find_last_not_of(" \t\n");
@@ -938,9 +934,8 @@ void Voice::asked(const std::string& question) {
 }
 
 void Voice::activity(const Activity& a) {
-    std::erase_if(working, [&](const Activity& w) { return w.id == a.id; });
+    crew.activity(a, clock);
     if (a.state != Activity::State::start) return;
-    working.push_back(a);
     bool endsWithWork = std::visit(overloaded{
                                        [](const Sent& s) { return s.endsWithWork; },
                                        [](const Thinking& t) { return t.endsWithWork; },
@@ -957,7 +952,7 @@ void Voice::show() {
                                  [](const Listening&) { return S::listening; },
                                  [](const Sent&) { return S::sent; },
                                  [](const Thinking&) { return S::thinking; },
-                                 [&](const Idle&) { return speaks ? S::responding : !working.empty() ? S::working : state() ? S::waiting : S::off; },
+                                 [&](const Idle&) { return speaks ? S::responding : crew.working() ? S::working : state() ? S::waiting : S::off; },
                              },
                              turn);
     shown.level = 0;
@@ -970,7 +965,12 @@ void Voice::show() {
         std::string words = revealed(sounding->text, heard);
         if (words.size() > shown.momoText.size()) shown.momoText = words;
     }
-    shown.doing = working.empty() ? "" : doingOf(working.back());
+    crew.update(clock);
+    shown.agents = crew.lines(name());
+    shown.notice.clear();
+    if (client.unreachable()) shown.notice = "Can’t reach " + name() + ", retrying";
+    else if (askingForMicrophone) shown.notice = "Allow the microphone to talk to " + name();
+    else if (microphoneRefusedAt >= 0 && clock < microphoneRefusedAt + refusalShown) shown.notice = "No microphone, so type or pick to ask " + name();
 }
 
 Voice::LiveReply& Voice::liveReply(const std::string& id) {

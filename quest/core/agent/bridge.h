@@ -25,6 +25,7 @@
 #include "ocean/tree.h"
 
 class OceanModel;
+struct CardEdit;
 
 namespace agent {
 
@@ -40,15 +41,25 @@ public:
     /// its parent's group stands (it may not, for a card whose parent has led no layer yet). True when it did; otherwise
     /// the scene does what it always did (going back to a card's own layer).
     bool opens(int nodeID);
-    /// The rows under an open card of a service tree: "Keep this" for a suggestion, then what can be asked about it (the
-    /// questions the service wrote for the card and the conversation, once they come), then typing your own.
+    /// The rows under an open card of a service tree: "Keep this" for a suggestion, then what can be asked about it (at most
+    /// three of the questions the service wrote for the card and the conversation, once they come), then typing your own.
     void rows(const TreeNode& node, std::vector<Ask>& asks);
+    /// The most of the service's questions an open card offers.
+    static constexpr size_t mostQuestions = 3;
     /// One of the open card's rows was picked. A question is a conversation about the card: the card starts a layer
     /// (keeping it, if it was a suggestion) and the service brings related suggestions round it. True when the
     /// service takes it (the tree is the service's).
     bool ask(int nodeID, int k);
-    /// The marked part of the open card was asked about. True when the service takes it.
-    bool askMark(int nodeID, const Mark& mark);
+    /// A long pinch on the open card: more like it, through the service's `more`, as Momo's "more like this" asks. The card
+    /// leads a layer of its own (kept, if it was a suggestion), and when it has highlights the request leans on them.
+    void moreLike(int nodeID);
+    /// Whether a card is the service's, so it has the edit pencil and keeps its edits.
+    bool editable(int nodeID);
+    /// The highlights and lines the service keeps on a card, as the scene draws them.
+    std::vector<CardEdit> edits(int nodeID);
+    /// One was made, or taken off, on the headset: kept by the service, which undoes it as it undoes any change.
+    void edited(int nodeID, const CardEdit& edit);
+    void erased(int nodeID, const std::string& editId);
     /// A branch was cut with the flat of the hand; `gone` is what left with it.
     void pruned(int nodeID, const std::vector<TreeNode>& gone);
     /// The tree was pressed by a clap: sent on, or put away.
@@ -63,26 +74,17 @@ private:
         std::map<std::string, int> local;           // service node id -> TreeNode id
         std::map<int, std::string> service;         // TreeNode id -> service node id
     };
-    /// A service activity on a card, shown as the scene's "Thinking…" until it is done.
-    struct Thinking {
-        std::string tree;
-        int node;
-        double shown;
-    };
-
     OceanModel& model;
     Client client;
     /// Talking to the agent: on with `-agent`, unless `-agentVoice off`.
     std::unique_ptr<Voice> voice;
-    /// Momo low in front of you: an orb that shows what the voice is doing, with the words said beside it.
+    /// Momo low in front of you, showing what the voice and the agents are doing, with the words said beside it.
     std::unique_ptr<PresenceView> presenceView;
-    Presence presence;
     void showPresence();
     /// Where the user is, for what they say: the standing tree and its open card.
     Scene scene();
     std::optional<std::string> dump;
     std::map<std::string, Planted> trees;           // by service tree id
-    std::map<std::string, Thinking> thinking;       // by activity id
     /// The open cards' rows asked about and still being searched for, so a row picked again is not asked again.
     Asking asking;
     /// The row a hand just picked answers at once, before the service does: it dims and comes back.
@@ -128,6 +130,10 @@ private:
     /// A conversation about a card: it leads a layer of its own (kept, if it was a suggestion), and the question goes
     /// to the service, which brings related suggestions round it.
     void converse(int nodeID, const std::string& question);
+    /// A card the user asks about leads a layer of its own, kept if it was a suggestion, where what the service brings stands.
+    void lead(Planted& p, int nodeID);
+    /// A service node's edits as the scene draws them.
+    std::vector<CardEdit> sceneEdits(const Node& node);
     /// What was typed on the system keyboard, waiting for the frame thread: the text, and whether it was sent.
     struct Typed {
         std::mutex lock;

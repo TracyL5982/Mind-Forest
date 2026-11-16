@@ -7,6 +7,7 @@ const MAX_OWN_TEXT = 3000;
 const MAX_AGENT_TEXT = 600;
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_TEXT = 500;
+const MAX_HIGHLIGHT = 500;
 const MAX_OUTLINE = 150;
 
 export const PackagerReply = z.object({
@@ -55,6 +56,8 @@ export interface HandoffNode {
   data: Item['data'];
   /** How the item arrived, for example paste, web or voice. */
   from: string;
+  /** The words the user highlighted on the card, oldest first. */
+  highlights: string[];
   children: HandoffNode[];
 }
 
@@ -132,6 +135,7 @@ function nest(ctx: RoleContext, node: Node): HandoffNode {
     tags: item.tags,
     data: item.data,
     from: item.source.from,
+    highlights: (node.edits ?? []).flatMap((e) => (e.kind === 'highlight' ? [e.quote] : [])),
     children: ctx.mind.children(node.id).map((child) => nest(ctx, child)),
   };
 }
@@ -201,6 +205,10 @@ function nodeMarkdown(node: HandoffNode, depth: number, files: Files): string[] 
   if (node.asset) lines.push(`${sub}- ${fileLine(node, files)}`);
   if (node.text && node.text !== node.summary && node.text !== node.title) {
     lines.push(`${sub}- text${node.textTrimmed ? ' (trimmed, the original is longer)' : ''}:`, '', ...quote(node.text, `${sub}  `), '');
+  }
+  if (node.highlights.length > 0) {
+    lines.push(`${sub}- highlighted by the user:`);
+    for (const words of node.highlights) lines.push(`${sub}  - "${oneLine(words, MAX_HIGHLIGHT)}"`);
   }
   const messages = Messages.safeParse(node.data.messages);
   if (messages.success && messages.data.length > 0) {

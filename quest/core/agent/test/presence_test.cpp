@@ -1,5 +1,5 @@
-// Momo's presence apart from drawing it: where the orb rests as the head turns, how it answers each state, and which
-// words show beside it. Each is driven frame by frame at the headset's 90 frames a second.
+// Momo's presence apart from drawing it: where Momo rests as the head turns, how it looks in each state, which words
+// show beside it, and the agents' lines above them. Each is driven frame by frame at the headset's 90 frames a second.
 #include "support.h"
 
 #include <cmath>
@@ -40,12 +40,6 @@ Presence say(S state, std::string user = "", std::string momo = "", bool final =
     p.userFinal = final;
     p.momoText = std::move(momo);
     p.level = level;
-    return p;
-}
-
-Presence doing(std::string what, std::string momo = "Because.") {
-    Presence p = say(S::working, "", std::move(momo));
-    p.doing = std::move(what);
     return p;
 }
 
@@ -269,56 +263,23 @@ TEST(theNextTurnPushesTheLastReplyUpAndOut) {
     CHECK(!old || (old->toOpacity == 0 && old->y > rest[0]->y), "the reply's line rises out above them");
 }
 
-TEST(workingSaysWhatTheAgentIsDoingUnderMomosLastWords) {
+TEST(aNoticeTakesTheWordsPlaceAndShowsMomoEvenWhenOff) {
     Caption c = caption();
     run(c, say(S::listening, "Why?"), 0.3);
-    run(c, say(S::responding, "Why?", "Because."), 1);
-    run(c, doing("Searching films"), 1);
+    Presence p = say(S::thinking, "Why?");
+    p.notice = "Can’t reach Momo";
+    run(c, p, 0.5);
     auto rest = resting(c);
-    CHECK(rest.size() == 2 && rest[0]->text == "Because." && rest[1]->text == "Searching films", "Momo's words over what it is doing");
-    CHECK(rest.size() == 2 && rest[1]->who == Speaker::status, "what it is doing is set as status, not speech");
-    run(c, doing("Searching films"), Caption::linger);
-    rest = resting(c);
-    CHECK(rest.size() == 1 && rest[0]->text == "Searching films", "once Momo's words have stayed their while, only what it is doing");
-}
-
-TEST(whatTheAgentIsDoingRollsToTheNextWithoutTheTwoStandingTogether) {
-    Caption c = caption();
-    run(c, say(S::listening, "Why?"), 0.3);
-    run(c, say(S::responding, "Why?", "Because."), 1);
-    run(c, doing("Searching films"), 1);
-    const Caption::Line* above = shown(c, "Because.");
-    float aboveY = above ? above->y : 0;
-    bool together = false, crossed = false, intoAbove = false;
-    float risen = 0;
-    for (int f = 0; f < 90; f++) {
-        run(c, doing("Reading 3 articles"), frame);
-        const Caption::Line* was = shown(c, "Searching films");
-        const Caption::Line* now = shown(c, "Reading 3 articles");
-        if (was && now && was->opacity > 0.05f && now->opacity > 0.05f) {
-            crossed = true;
-            together = together || std::fabs(was->y - now->y) < 0.25f;
-        }
-        if (was && was->opacity > 0.05f) intoAbove = intoAbove || aboveY - was->y < 0.6f;
-        if (was && now) risen = std::max(risen, was->y - now->toY);
-    }
-    CHECK(crossed, "the two cross-fade, the new coming in as the old goes");
-    CHECK(!together, "but never on the same line");
-    CHECK(!intoAbove, "nor does the old one reach Momo's line above it");
-    CHECK(risen > 0.15f, "the old one lifts as it goes: %.2f lines", double(risen));
-    CHECK(!shown(c, "Searching films"), "and is gone");
-    auto rest = resting(c);
-    CHECK(rest.size() == 2 && rest[1]->text == "Reading 3 articles", "the new one rests where the old one was");
-}
-
-TEST(whatTheAgentIsDoingIsOneLineCutShort) {
-    Caption c = caption();
-    run(c, say(S::listening, "Why?"), 0.3);
-    run(c, doing("Searching every film that has used a dolly zoom", ""), 1);
-    auto rest = resting(c);
-    CHECK(rest.size() == 1, "%zu lines", rest.size());
-    CHECK(rest.size() == 1 && rest[0]->text == "Searching every…", "cut short: \"%s\"", rest.empty() ? "" : rest[0]->text.c_str());
-    CHECK(rest.size() == 1 && rest[0]->width <= 0.2f + 1e-4f, "within a line");
+    CHECK(rest.size() == 1 && rest[0]->text == "Can’t reach Momo" && rest[0]->who == Speaker::status, "the notice alone");
+    run(c, say(S::thinking, "Why?"), 0.5);
+    CHECK(!shown(c, "Can’t reach Momo") || shown(c, "Can’t reach Momo")->toOpacity == 0, "gone with the notice");
+    Face f;
+    Presence away = say(S::off);
+    away.notice = "Can’t reach Momo";
+    for (int i = 0; i < 180; i++) f.update(away, frame);
+    CHECK(f.look().shown > 0.99f, "Momo shows to say it: %.2f", double(f.look().shown));
+    for (int i = 0; i < 180; i++) f.update(say(S::off), frame);
+    CHECK(f.look().shown < 0.01f, "and goes after: %.2f", double(f.look().shown));
 }
 
 TEST(offTakesEveryWordAway) {
@@ -329,51 +290,238 @@ TEST(offTakesEveryWordAway) {
     CHECK(c.lines().empty(), "%zu lines left", c.lines().size());
 }
 
-TEST(theOrbSwellsWithTheVoiceItAnswersOnly) {
-    Glow g;
-    double now = 0;
-    auto step = [&](const Presence& p, float seconds) {
-        for (float t = 0; t < seconds; t += frame) g.update(p, now += frame, frame);
-    };
-    step(say(S::waiting, "", "", true, 0.8f), 1);
-    CHECK(g.look().voice < 0.05f, "waiting, the room's noise does not move it: %.2f", double(g.look().voice));
-    step(say(S::listening, "", "", true, 0.8f), 0.3);
-    CHECK(g.look().voice > 0.5f, "listening, it swells with the voice: %.2f", double(g.look().voice));
-    step(say(S::listening, "", "", true, 0), 0.05f);
-    CHECK(g.look().voice > 0.4f, "and falls away slowly, not flickering: %.2f", double(g.look().voice));
-    step(say(S::listening, "", "", true, 0), 1);
-    CHECK(g.look().voice < 0.05f, "quiet again: %.2f", double(g.look().voice));
-    step(say(S::listening), 1.5f);
-    CHECK(g.look().warmth < 0.1f, "listening, it takes the user's white: %.2f", double(g.look().warmth));
-    step(say(S::responding, "", "", true, 0.7f), 1.5f);
-    CHECK(g.look().warmth > 0.9f && g.look().voice > 0.5f, "speaking, Momo's amber, swelling with its voice");
+TEST(workingSaysNothingInTheWordsBesideMomo) {
+    Caption c = caption();
+    run(c, say(S::listening, "Why?"), 0.3);
+    run(c, say(S::responding, "Why?", "Because."), 1);
+    Presence p = say(S::working, "", "Because.");
+    p.agents = {AgentLine{"scout", "Scout", "Searching films", false}};
+    run(c, p, 1);
+    auto rest = resting(c);
+    CHECK(rest.size() == 2 && rest[0]->text == "Why?" && rest[1]->text == "Because.", "the turn's words, and only those");
+    run(c, p, Caption::linger);
+    CHECK(resting(c).empty(), "then nothing: what the agents do is on their own lines");
 }
 
-TEST(workingTheOrbRipplesGentlyAndDoesNotTakeTheThinkingLights) {
-    Glow g;
-    double now = 0;
-    for (float t = 0; t < 2; t += frame) g.update(say(S::thinking), now += frame, frame);
-    CHECK(g.look().shimmer > 0.9f && g.look().ripple < 0.05f, "thinking: lights circle it");
-    for (float t = 0; t < 2.5f; t += frame) g.update(doing("Reading"), now += frame, frame);
-    CHECK(g.look().ripple > 0.9f && g.look().shimmer < 0.05f, "working: rings go out from it, and no lights circle it");
+namespace {
+
+Presence searching(S state, float level = 0) {
+    Presence p = say(state, "", "", true, level);
+    p.agents = {AgentLine{"scout", "Scout", "Searching films", false}};
+    return p;
 }
 
-TEST(sendingGathersTheOrbOnceAndOffFadesIt) {
-    Glow g;
-    double now = 0;
-    for (float t = 0; t < 1; t += frame) g.update(say(S::listening), now += frame, frame);
-    g.update(say(S::sent), now += frame, frame);
-    CHECK(g.look().gather >= 0 && g.look().gather < 0.05f, "it starts to gather: %.2f", double(g.look().gather));
-    float last = g.look().gather;
-    bool rising = true;
-    for (float t = 0; t < Glow::gathering - 0.05f; t += frame) {
-        g.update(say(t < 0.2f ? S::sent : S::thinking), now += frame, frame);
-        rising = rising && g.look().gather > last;
-        last = g.look().gather;
+void run(Face& f, const Presence& p, float seconds) {
+    for (float t = 0; t < seconds; t += frame) f.update(p, frame);
+}
+
+}  // namespace
+
+TEST(quietMomoIsAWhiteRingAndItsOwnVoicePartsItIntoColour) {
+    Face f;
+    run(f, say(S::waiting), 2);
+    CHECK(f.look().divergence < 1e-4f && std::fabs(f.look().distortion - Face::quietDistortion) < 1e-3f,
+          "waiting: the three rings as one, white, gently bent (%.3f, %.2f)", double(f.look().divergence), double(f.look().distortion));
+    run(f, say(S::waiting, "", "", true, 0.9f), 1);
+    CHECK(f.look().voice < 0.01f, "the room's noise does not move it: %.2f", double(f.look().voice));
+    run(f, say(S::listening, "", "", true, 0.9f), 0.5f);
+    CHECK(f.look().distortion > 5 && f.look().scale > 1.1f, "listening, the ring moves with the user's voice: %.2f", double(f.look().distortion));
+    CHECK(f.look().divergence < 0.05f, "and stays white: %.3f", double(f.look().divergence));
+    run(f, say(S::responding, "", "", true, 0.9f), 0.5f);
+    CHECK(f.look().divergence > 1, "Momo's own voice parts it into colour: %.2f", double(f.look().divergence));
+    run(f, say(S::responding, "", "", true, 0), 1.f / 18);
+    CHECK(f.look().voice > 0.5f, "and falls away slower than it rose (%.2f), as AgentSphere's envelope does", double(f.look().voice));
+    run(f, say(S::responding), 1.5f);
+    CHECK(f.look().voice < 0.01f && f.look().divergence < 0.01f, "quiet again, white again");
+}
+
+TEST(momoBlinksAsCurioCitysDoes) {
+    Face f;
+    std::vector<float> starts, shut;
+    bool closed = false;
+    float t = 0;
+    for (; t < 60; t += frame) {
+        f.update(say(S::waiting), frame);
+        bool now = f.look().openness < 0.5f;
+        if (now && !closed) starts.push_back(t);
+        if (now) shut.push_back(t);
+        closed = now;
     }
-    CHECK(rising, "through to the end, even once thinking");
-    for (float t = 0; t < 0.2f; t += frame) g.update(say(S::thinking), now += frame, frame);
-    CHECK(g.look().gather < 0, "and only once");
-    for (float t = 0; t < 2; t += frame) g.update(say(S::off), now += frame, frame);
-    CHECK(g.look().shown < 0.01f, "off, it is gone: %.3f", double(g.look().shown));
+    CHECK(starts.size() >= 13 && starts.size() <= 33, "%zu blinks in a minute, one every 1.8 to 4 s", starts.size());
+    bool spaced = true;
+    for (size_t i = 1; i < starts.size(); i++) spaced = spaced && starts[i] - starts[i - 1] >= Face::blinkMin && starts[i] - starts[i - 1] <= Face::blinkMax + 0.2f;
+    CHECK(spaced, "each 1.8 to 4 s after the last");
+    CHECK(shut.size() <= starts.size() * 7, "each shut for less than its 0.1 s: %zu frames for %zu blinks", shut.size(), starts.size());
+}
+
+TEST(searchingMomoWearsAMonocleAndGlancesAboutWiderAndSlowerThanItDarts) {
+    // How far the eyes go, how long each move of theirs takes (s, the median), and how often they cross from side to side.
+    auto watch = [](const Presence& p, float& widest, float& moving, int& sides) {
+        Face f;
+        widest = 0;
+        sides = 0;
+        int side = 0, frames = 0;
+        std::vector<float> moves;
+        Vec2 was;
+        for (float t = 0; t < 30; t += frame) {
+            f.update(p, frame);
+            widest = std::max(widest, std::fabs(f.look().gaze.x));
+            bool now = length(f.look().gaze - was) / frame > 0.5f;
+            if (now) frames++;
+            if (!now && frames > 0) moves.push_back(float(frames) * frame), frames = 0;
+            was = f.look().gaze;
+            int at = f.look().gaze.x < -0.12f ? -1 : f.look().gaze.x > 0.12f ? 1 : 0;
+            if (at != 0 && at != side) sides++;
+            if (at != 0) side = at;
+        }
+        std::sort(moves.begin(), moves.end());
+        moving = moves.empty() ? 0 : moves[moves.size() / 2];
+    };
+    float idleWidest, idleMoving, wideWidest, wideMoving;
+    int idleSides, searchSides;
+    watch(say(S::waiting), idleWidest, idleMoving, idleSides);
+    watch(searching(S::working), wideWidest, wideMoving, searchSides);
+    CHECK(idleWidest <= Face::dartAmount + 1e-3f, "idle, the eyes dart no further than CurioCity's %.2f cm: %.2f", double(Face::dartAmount), double(idleWidest));
+    CHECK(wideWidest > idleWidest, "searching, they glance wider: %.2f against %.2f cm", double(wideWidest), double(idleWidest));
+    CHECK(wideMoving > 2 * idleMoving, "and slower: a glance takes %.2f s, a dart %.2f s", double(wideMoving), double(idleMoving));
+    CHECK(searchSides >= 15, "from side to side, %d times in 30 s", searchSides);
+
+    Face f;
+    run(f, searching(S::working), 0.8f);
+    CHECK(f.look().monocle > 0.95f && f.glancing(), "the monocle is on while an agent works: %.2f", double(f.look().monocle));
+    Presence done = say(S::waiting);
+    done.agents = {AgentLine{"scout", "Scout", "", true}};
+    run(f, done, 0.8f);
+    CHECK(f.look().monocle < 0.05f && !f.glancing(), "and off once the work is finished, while its line still says so");
+}
+
+TEST(theLooksTakePrecedenceAsPlanned) {
+    Face f;
+    run(f, say(S::listening), 0.5f);
+    run(f, say(S::sent), 0.4f);
+    CHECK(f.look().dots > 0.9f, "the thinking dots come as the turn is sent: %.2f", double(f.look().dots));
+    run(f, searching(S::thinking), 1);
+    CHECK(f.look().dots > 0.99f && f.look().monocle > 0.95f, "thinking while an agent works: the dots show with the monocle");
+    CHECK(f.look().rising > 1.3f, "the dots kept their beat from where they were: %.2f s", double(f.look().rising));
+    run(f, searching(S::responding, 0.8f), 0.35f);
+    CHECK(f.look().dots < 0.05f, "they fade as Momo starts speaking: %.2f", double(f.look().dots));
+    CHECK(f.look().monocle > 0.95f && f.look().divergence > 0.5f, "speaking keeps the monocle on while an agent works");
+    run(f, say(S::responding, "", "", true, 0.8f), 0.8f);
+    CHECK(f.look().monocle < 0.05f && f.look().divergence > 0.5f, "and with no agent at work, speaking alone");
+    run(f, say(S::thinking), 0.1f);
+    CHECK(f.look().rising < 0.2f, "a new thought's dots come from the start: %.2f s", double(f.look().rising));
+    run(f, say(S::off), 2);
+    CHECK(f.look().shown < 0.01f && f.look().dots < 0.01f, "off, Momo is gone");
+    run(f, say(S::listening), 0.5f);
+    run(f, say(S::sent), 0.2f);
+    run(f, say(S::responding, "", "", true, 0.8f), Face::dotsAtLeast - f.look().rising - 0.02f);
+    CHECK(f.look().dots > 0.95f && Face::dot(2, f.look().rising).radius > 0,
+          "Momo answering 0.2 s after the turn is sent: the bubbles stay until all three have settled (%.2f)", double(f.look().dots));
+    run(f, say(S::responding, "", "", true, 0.8f), 0.6f);
+    CHECK(f.look().dots < 0.05f, "then fade: %.2f", double(f.look().dots));
+}
+
+TEST(thinkingBubblesFormOneByOneEasingTheOthersOutThenCircle) {
+    auto d = [](int j, float t) { return Face::dot(j, t); };
+    float width = 2 * Face::radius;
+    CHECK(d(0, 0).radius == 0 && d(1, 0.3f).radius == 0 && d(2, 0.65f).radius == 0, "none before its turn");
+    CHECK(d(0, 0.15f).radius > 0 && d(0, 0.15f).radius < 0.24f && length(d(0, 0.15f).at - d(2, 1.1f).at) < 0.01f,
+          "the first swells up at the base");
+    Vec2 base = d(2, 1.1f).at, middle = d(1, 1.1f).at, end = d(0, 1.1f).at;
+    Face::Dot first = d(0, 0.55f), second = d(1, 0.55f);
+    CHECK(second.radius > 0 && length(second.at - base) < 0.01f, "the second swells up at the base");
+    CHECK(first.at.y > base.y + 0.2f && first.at.y < middle.y - 0.2f && first.radius > 0.24f && first.radius < 0.36f,
+          "easing the first out toward the middle place, growing as it goes");
+    Face::Dot third = d(2, 0.9f);
+    CHECK(third.radius > 0 && d(1, 0.9f).at.y > base.y + 0.2f && d(0, 0.9f).at.y > middle.y + 0.2f, "the third eases both out");
+    CHECK(std::fabs(2 * d(0, 1.1f).radius / width - 0.25f) < 0.005f && std::fabs(2 * d(1, 1.1f).radius / width - 0.18f) < 0.005f &&
+              std::fabs(2 * d(2, 1.1f).radius / width - 0.12f) < 0.005f && Face::dotsAtLeast <= 1.11f,
+          "settled by %.2f s: the first the largest, at the far end; 0.25, 0.18 and 0.12 of Momo's width, as drawn", double(Face::dotsAtLeast));
+    CHECK(length(base) < length(middle) && length(middle) < length(end) && base.x > 0 && end.y > base.y, "a trail up and right from Momo's upper right");
+
+    // Forming, they float: never faster than gliding a place in its time, eased, and never shrinking but a hair.
+    float fastest = 0, shrank = 0, most = 0;
+    for (int j = 0; j < 3; j++) {
+        Face::Dot was = d(j, 0);
+        for (float t = 0.01f; t <= Face::dotsAtLeast; t += 0.01f) {
+            Face::Dot now = d(j, t);
+            fastest = std::max(fastest, length(now.at - was.at) / 0.01f);
+            shrank = std::max(shrank, was.radius - now.radius);
+            if (j == 2) most = std::max(most, now.radius);
+            was = now;
+        }
+    }
+    CHECK(fastest < 8, "floating, not shot: %.1f cm/s at most", double(fastest));
+    CHECK(shrank < 0.005f && most < 0.24f * 1.02f, "swelling with at most a hair past its size: %.3f cm back", double(shrank));
+
+    float bent = 0, straight = 1e9f, wandered = 0;
+    bool clear = true;
+    for (float t = 2; t < 2 + Face::dotTurn; t += 0.01f) {
+        Vec2 p[3];
+        for (int j = 0; j < 3; j++) {
+            Face::Dot u = d(j, t);
+            p[j] = u.at;
+            wandered = std::max(wandered, length(u.at - d(j, Face::dotsAtLeast).at));
+            // Clear of Momo's ring, even bent its furthest, and of the words beside it, and the same each turn.
+            clear = clear && length(u.at) - u.radius > Face::radius * 1.15f && (u.at.x + u.radius < Face::radius * 1.5f || u.at.y - u.radius > Face::radius) &&
+                    u.at.y + u.radius <= Face::bubblesTop && length(d(j, t + Face::dotTurn).at - u.at) < 1e-3f;
+        }
+        Vec2 along = p[0] - p[2];
+        float off = std::fabs(along.x * (p[1].y - p[2].y) - along.y * (p[1].x - p[2].x)) / length(along);
+        bent = std::max(bent, off);
+        straight = std::min(straight, off);
+    }
+    CHECK(bent > 0.4f, "settled, they turn through a triangle: the middle one %.2f cm off the line of the others", double(bent));
+    CHECK(straight < 0.05f, "and through a line: %.3f cm", double(straight));
+    CHECK(wandered < 0.5f, "each about its own place, and only three: %.2f cm at most", double(wandered));
+    CHECK(clear, "clear of Momo and its words, below where the agents' lines are lifted to, the same each turn");
+}
+
+namespace {
+
+Roster roster() {
+    return Roster([](const std::string& s) { return 0.003f * float(s.size()); }, 0.2f);
+}
+
+void run(Roster& r, const std::vector<AgentLine>& agents, float seconds) {
+    for (float t = 0; t < seconds; t += frame) r.update(agents, frame);
+}
+
+const Roster::Line* line(const Roster& r, const std::string& role) {
+    for (const Roster::Line& l : r.lines()) {
+        if (l.role == role) return &l;
+    }
+    return nullptr;
+}
+
+}  // namespace
+
+TEST(eachAgentAtWorkHasALineTheFirstLowestCutToOneLine) {
+    Roster r = roster();
+    run(r, {{"momo", "Momo (librarian)", "Searching the web for the Booker winner", false},
+            {"scout", "Scout", "Searching museum collections for dancing people at night in Weimar", false},
+            {"renderer", "Renderer", "", true}},
+        1);
+    CHECK_EQ(r.resting(), 3);
+    const Roster::Line *momo = line(r, "momo"), *scout = line(r, "scout"), *renderer = line(r, "renderer");
+    if (!momo || !scout || !renderer) return;
+    CHECK_EQ(momo->text, std::string("Momo (librarian) · Searching the web for the Booker winner"));
+    CHECK(momo->toY == 0 && scout->toY == 1 && renderer->toY == 2, "in the order they began, the first lowest");
+    CHECK_EQ(scout->text, std::string("Scout · Searching museum collections for dancing people at…"));
+    CHECK(scout->width <= 0.2f, "within one line: %.3f m", double(scout->width));
+    CHECK_EQ(scout->text.substr(0, scout->name), std::string("Scout"));
+    CHECK_EQ(renderer->text, std::string("Renderer · finished working"));
+}
+
+TEST(aLineThatGoesFadesAndTheLinesAboveTakeItsPlace) {
+    Roster r = roster();
+    AgentLine momo{"momo", "Momo (librarian)", "", true}, scout{"scout", "Scout", "Searching", false};
+    run(r, {momo, scout}, 1);
+    run(r, {scout}, 0.1f);
+    const Roster::Line* going = line(r, "momo");
+    CHECK(going && going->opacity < 0.5f, "the finished line fades quickly");
+    run(r, {scout}, 0.6f);
+    CHECK(!line(r, "momo"), "and is gone");
+    const Roster::Line* rest = line(r, "scout");
+    CHECK(rest && std::fabs(rest->y) < 0.02f && rest->opacity > 0.95f, "the Scout's line has come down into its place");
 }

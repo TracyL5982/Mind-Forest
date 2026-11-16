@@ -199,6 +199,8 @@ struct Material {
     /// `m.faceCulling = .none` -> cull = false.
     bool cull = true;
     bool writesDepth = true;
+    /// Kind::line only: its light is added to what is behind and covers none of it, so overlapping colours sum toward white.
+    bool additive = false;
     /// ShaderGraphMaterial.setParameter(name:value:): a float is stored in x.
     std::map<std::string, Vec4> parameters;
     /// For Kind::video.
@@ -366,6 +368,8 @@ public:
     /// Quest only: whether a hand's ray and dot should not be drawn or used right now (0 left, 1 right),
     /// because that hand is doing something its fingers do themselves.
     virtual bool pointerHidden(int /*hand*/) { return false; }
+    /// Each frame, what each hand's ray rests on (null for nothing) and where, in world space: what the hand points at.
+    virtual void aimed(int /*hand*/, const EntityRef& /*entity*/, Vec3 /*point*/) {}
     /// How much the room around is dimmed, 0...1 (visionOS: preferredSurroundingsEffect); 0 leaves it alone.
     virtual float surroundingsDim() { return 0; }
 };

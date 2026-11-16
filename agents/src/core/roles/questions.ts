@@ -4,7 +4,7 @@ import type { Mindstorm } from '../state.ts';
 import type { CardBrief, Roles, Turn } from './types.ts';
 
 const ROLE = 'questions';
-const MOST = 4;
+const MOST = 3;
 const MAX_WORDS = 10;
 const MAX_CHARS = 64;
 const MAX_UNDER = 10;
@@ -17,7 +17,7 @@ const Reply = z.object({ questions: z.array(z.string()) });
 
 const SYSTEM = `You write the suggestions shown under a card the user has just opened in Mind Palace, a spatial brainstorming app. Pressing one asks the agent, which then brings content for the card: written ideas, steps, generated pictures, videos, or real material from the web, papers, books, museums and other sources.
 
-Write 2 to 4 things the user is likely to want to ask next about this card.
+Write 2 or 3 things the user is likely to want to ask next about this card.
 - Each is under 8 words, in the user's own voice: a question ("How did Hitchcock use the dolly zoom?") or a short request ("Show me a dolly zoom on film").
 - Each only makes sense for this card. Name a person, a work, a place, a part or an idea from it.
 - Each goes a different way: deeper into one part, a comparison with something else, how to apply it to what the user seems to be doing, a picture or a video of it, who made or studied it.

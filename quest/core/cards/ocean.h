@@ -64,8 +64,6 @@ float overflow(const std::string& noteID);
 float scroll(const std::string& noteID);
 /// Scrolls it, held between its top and its end. True when it moved.
 bool scrollTo(const std::string& noteID, float offset);
-/// The window's foot and top on the frame, m from its middle.
-std::optional<Vec2> window(const std::string& noteID);
 /// Places and sizes the thin bar at the frame's edge that says where the view is, and hides it while the panel fits.
 void showIndicator(const EntityRef& bar, const std::string& noteID);
 /// The round corners of an opened card's picture, `size` m, to lay over a film that plays on it: the

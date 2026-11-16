@@ -1,0 +1,51 @@
+# One always-on machine in San Jose for the judges' headsets. Deploy with deploy/deploy.sh; see deploy/README.md.
+app = "mind-palace-judging"
+primary_region = "sjc"
+# The service writes the day's counts on SIGINT before it stops.
+kill_signal = "SIGINT"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  MIND_PALACE_LIMIT_VOICE_MINUTES = "60"
+  MIND_PALACE_LIMIT_SEARCHES = "30"
+  MIND_PALACE_LIMIT_WEB_ANSWERS = "30"
+  MIND_PALACE_CAP_DOLLARS = "30"
+  MIND_PALACE_IDLE_MINUTES = "20"
+  MIND_PALACE_MAX_DEVICES = "60"
+  MIND_PALACE_NEW_DEVICES_PER_HOUR = "30"
+  # One file, and what one headset's files may come to: 60 headsets at 40 MB stay inside the 3 GB volume.
+  MIND_PALACE_UPLOAD_MB = "25"
+  MIND_PALACE_UPLOAD_MB_PER_DEVICE = "40"
+  # Per process, a guard against a runaway loop; the day's spend cap is the real limit. The Mac's default of 5M would run out in a day.
+  MIND_PALACE_TOKEN_BUDGET = "60000000"
+
+[[mounts]]
+  source = "mind_palace_data"
+  destination = "/data"
+  initial_size = "3gb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 400
+    hard_limit = 500
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval = "15s"
+    timeout = "5s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 2
+  memory = "2gb"

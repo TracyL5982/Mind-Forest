@@ -865,3 +865,63 @@ The shorter lead-in is not kept. It is real at its part, 0.23 to 0.29 s, about 3
 **Not done.** A longer wait than 10 s for a web answer: not taken.
 
 **Measured with.** Throwaway scripts outside the repository that called `ask` with each set of instructions, keeping each response's citations, pages read and searches, and `scripts/live-bench.ts`, run from a copy whose web answer added (a) or not, for the voice runs. About $5.35 of OpenAI calls, $1.60 of them for the voice comparison.
+
+## 64. Scout: the accounts the user chose on Instagram are a library on this machine, read in the background and searched in milliseconds
+
+**Decision.** With `META_IG_TOKEN`, `META_IG_USER_ID` and a list of accounts (`MIND_PALACE_INSTAGRAM_LIST`, by default `~/.mind-palace/instagram-following.md`, outside the repository since it names the user's account and who they follow), the service keeps a library in `data/instagram/` (`src/node/instagram.ts`), and the Scout has one more source of pictures, `instagram`, whose catalogue line reads "Posts from accounts you follow:" and the list's categories. Without the list or the connection, or until the library holds a post, it is not offered.
+
+- **Reading.** Business Discovery, one call per account for its newest 25 posts (caption, type, time, permalink, and the picture's address: an album's first picture, a video's thumbnail). Accounts never read come first, the list's categories taken in turn so the first posts already span them; then each account about two days after its last read, spread over the two days once every account has been read. The wait after each answer follows the highest share Instagram reports in `X-App-Usage` or `X-Business-Use-Case-Usage`: 15 s under 50%, 40 s under 75%, 2 min under 90%, 15 min above, and any wait Instagram names. An account Instagram cannot read ("Cannot find User", as for a personal account) is kept as such and tried again in two days; a limit reached or a refused token holds every read; any other failure tries the account again in an hour.
+- **Pictures.** Each post's picture is fetched once, four at a time, and kept as a 640 px JPEG at quality 60, `pictures/<post id>.jpg`, made with `sips` as the headset's library makes its pictures. A post whose picture cannot be fetched or made is left out, and its account is read again in an hour. Pictures of posts an account no longer shows are deleted. Each account's read is one file, `accounts/<handle>.json`, written whole and renamed into place, so a read that stops halfway leaves the last whole one and a repeat converges.
+- **Searching.** In memory, with the BM25 index the mindstorm search uses (`src/core/search.ts`): the account's name as the title, hashtags and the account's categories as tags, the caption and the list's description of the account as the body. When the words name some of the list's categories, posts of accounts in those categories come first. At most two posts of one account, eight in all, each with its picture copied into the service's assets, so the Scout fetches nothing (`Found.asset`; the Scout fetches only the pictures a record does not carry). A card is the picture, titled with the account's name, credited `@handle, date, Instagram`, and opens the post.
+
+**Why.** The user wants more pictures and more variety in what searches bring, from accounts they chose, without searches getting slower. Instagram has no search of other people's posts, and reading 231 accounts during a search would take minutes and use up the hour's limit, so reading happens ahead and a search is a local lookup.
+
+**Measured, live.** 30 accounts at most during the build: 28 of the list's, the categories in turn, and two probes.
+
+| | |
+|---|---|
+| Readable | 27 of 28; 1 "Cannot find User" |
+| Posts | 25 an account; 228 albums, 353 videos, 94 pictures of 675 |
+| Time a call | 0.5 to 2.7 s, about 1 s typical; the same call with each album's children took 5.6 s |
+| Usage | `X-App-Usage` rose from 3% to 22% over the 28 calls at 15 s apart, about 0.7% a call; `total_time` led (26%) with `call_count` at 15%. Own-media calls answer with `X-Business-Use-Case-Usage` instead |
+| Captions worth searching (five words or more besides hashtags and mentions) | 625 of 675, 92.6%; the thinnest category 62% |
+| Picture, 640 px | 75 KB at quality 82 (675 pictures), 53 KB at quality 60 against 79 KB at 82 for the same 3 accounts read again |
+| Search | 3 to 16 ms for 675 posts, the 8 picture copies included; ranking alone at most 1.0 ms at the median and 3.4 ms at worst over 5,775 posts (the 675 repeated, 20 runs a query) |
+
+**The first full fill, inferred.** At about 0.7% a call, the first 70 calls take about 18 minutes before usage reaches 50%; the rest at one call every 40 s, which holds usage near 63%, take about 1.8 hours: about 2 to 2.5 hours for 231 accounts, plus picture downloads. About 5,800 posts and 290 MB of pictures. After that, about 5 calls an hour.
+
+**Alternatives.**
+- Quality 82, the headset library's: 447 MB, with no difference seen at card size against 60 on a photograph with sky and lettering.
+- 512 px: 257 MB at quality 70, but a 4:5 post would be 410 px wide, under the 420 to 620 px a card's picture takes.
+- Describing every picture with the quick model so thin captions can be searched: not measured, since 92.6% of captions are worth searching.
+- Fetching every picture of an account at once: with the network at 136 KB/s, all 25 ran past 15 s and none was kept.
+
+**The Scout, five requests in the list's fields** (dance, illustration, architecture, mixed reality, food), one run each, `scripts/scout-probe.ts` on a copy of the mindstorm and the 28 accounts' 675 posts. Instagram was searched in 1 of 5, the dance request, by both lanes; 1 Instagram card landed of the 25 cards, and it fits (a battle as it happens, two dancers facing off before a filming crowd); the inventive lane's choice from it did not find a place. In the other four the Scout chose other sources, Unsplash and Are.na for the concrete buildings and Unsplash and recipes for the side dishes, though the library holds posts that fit both. The library answers when asked; the Scout seldom asks it. In 4 of 4 Unsplash readings the model could not fetch Unsplash's pictures (`media_url_not_fetchable`) and chose from the records' words alone; Instagram's are handed to it as data. About 83,000 tokens and 5 made pictures, about $0.15.
+
+**Tried and not kept.** A source line that tells the Scout the user chose these accounts: "Posts from accounts the user follows on Instagram, in: <the categories>. The user chose these accounts, so for a request in one of these fields it is often the best place to look. Their own recent pictures with their captions." The same five requests, run with it, then without, then with it, against the run above as the first without:
+
+| | As kept | With the user's choice said |
+|---|---|---|
+| Runs that searched Instagram | 2 of 10, both the dance request | 4 of 10: dance, illustration, mixed reality twice |
+| Instagram cards | 3, all fit (two battle moments, a crew's staging) | 2: one fits (a museum's post on an ocean lithograph, for drawing the sea), one loosely (an immersive data museum, for mixed reality apps) |
+| Cards to look at | 23 of 50 | 26 of 50 |
+
+It searched Instagram more often by no more than ten runs a side can show, and its cards fit less often, so it is not kept. It searched Instagram only for subjects in the list's fields; all five requests were in them, so whether it would reach for Instagram outside them is not measured. Both mixed reality searches show a limit of the library: no category is named by "mixed reality" (its category's name shares no word with it), "mixed" matches "mix", and the 28 accounts read hold one of its category's accounts, so a food magazine's posts came first; the model chose none of them once and the loose fit once. A full library holds that category's twelve accounts, whose own captions are likelier to say mixed reality. Keeping only posts that match half the words or a named category would not have changed a card: it empties the three-word search, whose posts the model already left out, and keeps the two-word one. About 233,000 tokens and 11 made pictures, about $0.39.
+
+**Not done.** A picture copied into the assets for a search is copied once per run of the service, so a post found after every restart is copied again, as the museums' fetched pictures are.
+
+**Measured with.** `scripts/instagram.ts` (`read`, `report` and `search` on a data folder), the service's own reader and library, against a scratch data folder; one-off probes for the headers, the album children and the sizes, kept outside the repository; `scripts/scout-probe.ts` for the Scout.
+
+## 65. Open cards: three pills, a long pinch for more like the card, and an edit pencil whose edits the card keeps
+
+**Decision.** The Questions role writes at most three suggestions (`MOST` 3), and the headset shows at most three of a card's, so a card that kept four from before shows three. Under an open card on the headset every row is a rounded pill as wide as its words, up to the card's width, one to a line, with no heading. A pinch held still for 0.4 s on the open card, as before, is a long pinch, and a ring fills round the pinch while it is held. With the pencil off it asks for more like the card: the service's `more` for that node, the path Momo's `more_like_this` takes, after the card is kept and leads a layer of its own, as a picked question does; when the card has highlights, `need` is "More like this, especially what I highlighted: "…"". The old long pinch, which armed a mark and asked "About this part of it", is gone, with `Bridge::askMark`. A service card has an edit pencil just outside its top right corner, outlined when off, filled when on, off once the card closes. With it on, a long pinch on words and a drag highlights them in amber behind the words, a long pinch elsewhere and a drag draws a white line, a short pinch on either takes it off, and a long pinch never asks for anything. A pinch-drag scrolls in both modes. A small italic line under the pencil says what a long pinch will do where the hand points.
+
+**The data.** Edits are kept on the node, `node.edits`, oldest first, at most 100, and absent when there are none (`Edit` in `src/core/domain.ts`, agents/docs/protocol.md, Edits on a card). A highlight is `{id, kind: 'highlight', quote, at?}`: the words as the card shows them, and where they start in the item's `text` in UTF-16 units when they are in it. A line is `{id, kind: 'stroke', points}`: two to 512 points, x then y, each 0 to 1 across and down the opened card's whole content, however far it is scrolled, so it stays on what it was drawn over at any size. The headset finds a highlight again by its words and which of their appearances it is, counted in the item's text when `at` is there. Two commands keep them, `addEdit` (which replaces an edit of the same id) and `removeEdit` (which changes nothing for an edit that is not there), so `undo` takes back the last edit and a client may send either twice.
+
+**Why on the node and not the item.** A card's look is final until its item changes: an edited item sends the card back to the Renderer, and its siblings' arrangement to the model. An edit on the item would lay the card out again for a highlight. A drawing also lies on a card face, which the node's view draws, and the same item in two trees is two cards. A set that changes nothing but edits goes to neither the Renderer nor the digests, as it is made and as it is undone (`onlyEdits` in `src/core/pipeline.ts`).
+
+**Regions of a picture.** Not a kind. In the approved gestures a long pinch on a picture draws, so nothing would make a region; a line over the picture is how it is marked.
+
+**Handoffs.** Each node in `handoff.json` has `highlights`, the quotes, and the Markdown lists them under "highlighted by the user". Lines are not in a handoff.
+
+**Measured with.** `test/edits.test.ts` (kept, sent, survives a restart, reaches a client that joins, one undo takes back the last, odd or off-card points refused, erasing what is not there sends nothing, a handoff lists the highlights); `quest/core/agent/test/run.sh` (edits read, the commands checked against the service's schema); `quest/desktop/test/cards_edit_check.mjs`, the preview against the fake service, 20 checks, all passed in each of 4 runs of its final form. Each step is looked for from the log line that says its flag ran, because the preview's clock falls behind the wall's while it takes pictures.

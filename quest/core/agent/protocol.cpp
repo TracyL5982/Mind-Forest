@@ -1,5 +1,6 @@
 #include "protocol.h"
 
+#include <algorithm>
 #include <cmath>
 #include <functional>
 #include <initializer_list>
@@ -188,6 +189,32 @@ public:
         return v;
     }
 
+    /// Absent is empty.
+    template <class T>
+    std::vector<T> optionalList(const char* key, std::optional<T> (*read)(const Json&, Why&)) {
+        return json_[key].isNull() ? std::vector<T>{} : list(key, read);
+    }
+
+    /// Points as pairs, x then y, each 0 to 1.
+    std::vector<std::pair<float, float>> points(const char* key) {
+        std::vector<std::pair<float, float>> out;
+        const Json& v = json_[key];
+        if (!v.isArray() || v.size() < 4 || v.size() % 2 != 0) {
+            fail(key, v.isArray() ? "not two points or more, x then y" : v.isNull() ? "missing" : "not a list");
+            return out;
+        }
+        for (size_t i = 0; i + 1 < v.size(); i += 2) {
+            const Json& x = v[i];
+            const Json& y = v[i + 1];
+            if (!(x.isNumber() && y.isNumber() && x.number() >= 0 && x.number() <= 1 && y.number() >= 0 && y.number() <= 1)) {
+                fail(key, "holds something that is not a number from 0 to 1");
+                return {};
+            }
+            out.emplace_back(float(x.number()), float(y.number()));
+        }
+        return out;
+    }
+
     template <class T>
     std::vector<T> list(const char* key, std::optional<T> (*read)(const Json&, Why&)) {
         std::vector<T> out;
@@ -281,6 +308,19 @@ std::optional<View> readView(const Json& j, Why& why) {
                    });
 }
 
+std::optional<Edit> readEdit(const Json& j, Why& why) {
+    Fields f(j, why);
+    Edit e{.id = f.string("id"), .kind = f.choice<Edit::Kind>("kind", {{"highlight", Edit::Kind::highlight}, {"stroke", Edit::Kind::stroke}})};
+    if (!f.ok()) return std::nullopt;
+    if (e.kind == Edit::Kind::highlight) {
+        e.quote = f.string("quote");
+        if (j["at"].isNumber()) e.at = int(f.whole("at"));
+    } else {
+        e.points = f.points("points");
+    }
+    return done(f, std::move(e));
+}
+
 std::optional<Node> readNode(const Json& j, Why& why) {
     Fields f(j, why);
     return done(f, Node{
@@ -294,6 +334,7 @@ std::optional<Node> readNode(const Json& j, Why& why) {
                        .origin = f.nested("origin", readOrigin),
                        .view = f.nested("view", readView),
                        .order = f.number("order"),
+                       .edits = f.optionalList("edits", readEdit),
                    });
 }
 
@@ -558,6 +599,25 @@ Command Command::renameTree(const TreeId& id, const std::string& title) {
 }
 
 Command Command::deleteTree(const TreeId& id) { return Command(Json::object().set("type", "deleteTree").set("id", id.value)); }
+
+Command Command::addEdit(const NodeId& id, const Edit& edit) {
+    Json e = Json::object().set("id", edit.id);
+    if (edit.kind == Edit::Kind::highlight) {
+        e.set("kind", "highlight").set("quote", edit.quote);
+        if (edit.at) e.set("at", *edit.at);
+    } else {
+        Json points = Json::list();
+        // Four places: a tenth of a millimetre on the widest card.
+        auto rounded = [](float v) { return std::round(double(std::clamp(v, 0.f, 1.f)) * 1e4) / 1e4; };
+        for (const auto& [x, y] : edit.points) points.push(rounded(x)).push(rounded(y));
+        e.set("kind", "stroke").set("points", std::move(points));
+    }
+    return Command(Json::object().set("type", "addEdit").set("id", id.value).set("edit", std::move(e)));
+}
+
+Command Command::removeEdit(const NodeId& id, const std::string& editId) {
+    return Command(Json::object().set("type", "removeEdit").set("id", id.value).set("editId", editId));
+}
 
 Outbound Outbound::dump(const std::vector<Dump>& dumps) {
     Json list = Json::list();
