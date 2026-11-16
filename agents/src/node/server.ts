@@ -17,7 +17,7 @@ import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '.
 import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
-import { HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
+import { HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, heardMs, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
 import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
 import { Telegram, type TelegramOptions } from './telegram.ts';
@@ -84,6 +84,8 @@ export interface Meter {
   spent(dollars: number): void;
   /** The line Momo says while all costly work is stopped (switched off, or over the day's cap), or null. */
   paused(): string | null;
+  /** The line Momo says while this device's own model calls are refused: all of `paused`, or the device past its share of the day. */
+  held(): string | null;
   /** A picture was made, on whichever model made it: counted at the price of one. */
   pictured(): void;
   /** A line said in Momo's voice, as 16-bit mono PCM at the live voice's rate, when it can be made. */
@@ -247,9 +249,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
 
   /** What a contact's message may not do here now, as a client's may not: write with no room left, or cost while costly work is stopped. */
   const admit = () => {
-    const why = noRoom() ?? meter?.paused();
+    const why = noRoom() ?? meter?.held();
     if (why) throw new Declined(why);
   };
+  /** A metered space writes out a recording no larger than the headset's own, so one note is one small paid call. */
+  const hearable = (bytes: number): string | null => (meter && bytes > RECORDING_BYTES ? NOTE_TOO_LONG : null);
   const fits = (bytes: number): string | null => {
     const volume = opts.volumeFull?.();
     if (volume || !opts.uploads) return volume ?? null;
@@ -269,11 +273,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       if (opts.uploads) keepUploaded(bytes.length);
       return id;
     },
+    hearable,
     transcribe: hear && (async (audio, mime, seconds) => {
-      const why = meter?.refused('voiceMs');
+      const why = hearable(audio.length) ?? meter?.refused('voiceMs');
       if (why) throw new Declined(why);
-      // A recording whose length the contact did not say is counted as speech at Telegram's voice-note rate, about 4 KB a second.
-      const ms = (seconds ?? audio.length / 4000) * 1000;
+      const ms = heardMs(audio, seconds);
       meter?.used('voiceMs', ms);
       meter?.spent((ms / 60_000) * HEARING_DOLLARS_PER_MINUTE);
       return withoutWakePhrase(await hear(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, null) }), settings.agentName).trim();
@@ -742,6 +746,7 @@ function json(res: ServerResponse, status: number, value: unknown): void {
 }
 
 const FULL = 'this headset has used all its room for files';
+const NOTE_TOO_LONG = 'That voice note is too long to write out here. Send one of up to a minute or so.';
 const STORE_FULL = "This headset's mind palace is full, so nothing more can be added here.";
 const tooBig = (limit: number) => `a file may be at most ${Math.round(limit / 1e6)} MB here`;
 

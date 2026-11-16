@@ -43,7 +43,9 @@ export interface Desk {
   fits(bytes: number): string | null;
   /** Keeps a file that arrived, as an upload does, and returns its asset id. */
   keep(bytes: Uint8Array, mime: string, name: string): Promise<string>;
-  /** Speech to text, of a recording `seconds` long when that is known. Absent when the service has no way to hear. */
+  /** Why a recording of this size cannot be written out, or null when it can. */
+  hearable(bytes: number): string | null;
+  /** Speech to text, of a recording its sender says is `seconds` long. Absent when the service has no way to hear. */
   transcribe?: (audio: Uint8Array, mime: string, seconds?: number) => Promise<string>;
   /** The latest handoff the service made, to send again. */
   latest(): Delivery | null;

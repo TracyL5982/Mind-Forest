@@ -462,6 +462,7 @@ test('a made picture is charged at the price of one, and none is made while the 
     spent: (d: number) => ledger.spend(d, A),
     paused: () => (ledger.paused() ? LINES.off : null),
     pictured: () => ledger.spend(PICTURE_DOLLARS, A),
+    held: () => null,
     recorded: async () => null,
   };
   const charged = chargedPictures(tools, meter);

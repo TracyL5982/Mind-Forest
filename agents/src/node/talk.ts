@@ -94,7 +94,10 @@ export class Talk {
         return say(await desk.dump([{ kind: 'asset', asset, mime: arrival.file.mime, name: arrival.file.name }, ...dumpsOf(arrival.caption)]));
       }
       case 'voice': {
-        const bytes = await this.fetch(desk, arrival.file);
+        // A voice note is written out, not kept, so the room for files does not decide it: only its own size does.
+        const why = desk.transcribe && arrival.file.size !== undefined ? desk.hearable(arrival.file.size) : null;
+        if (why) return say(why);
+        const bytes = await this.wire.fetch(arrival.file);
         if (!bytes) return say(this.lines.tooBig);
         const heard = await this.hear(desk, bytes, arrival.file);
         if (heard.text) return this.words(chat, desk, heard.text);

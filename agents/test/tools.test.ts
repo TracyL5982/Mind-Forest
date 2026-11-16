@@ -166,7 +166,7 @@ test("with the headset's files full, no picture is made, so none is paid for and
       : new Response(new Uint8Array(700_000), { headers: { 'content-type': 'image/jpeg' } });
   }) as unknown as typeof fetch;
   let charged = 0;
-  const meter = { refused: () => null, used: () => {}, spent: () => {}, paused: () => null, pictured: () => void charged++, recorded: async () => null };
+  const meter = { refused: () => null, used: () => {}, spent: () => {}, paused: () => null, held: () => null, pictured: () => void charged++, recorded: async () => null };
   const tools = chargedPictures(makeTools({ model: new FakeModel(), assets, fetch: send, keys: { FAL_KEY: 'key' } }), meter);
   await assert.rejects(tools.images.generate('a lighthouse at dusk'), /no room to keep another picture/);
   assert.deepEqual(asked, [], 'fal was never asked');

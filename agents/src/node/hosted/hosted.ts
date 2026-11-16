@@ -149,6 +149,10 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       const why = ledger.paused();
       return why ? LINES[why] : null;
     },
+    held: () => {
+      const why = ledger.held(device);
+      return why ? LINES[why] : null;
+    },
     pictured: () => ledger.spend(opts.pictureDollars ?? PICTURE_DOLLARS, device),
     recorded,
   });

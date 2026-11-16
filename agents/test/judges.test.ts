@@ -11,6 +11,7 @@ import { judgeBotToken } from '../src/node/hosted/judges.ts';
 import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Paused } from '../src/node/hosted/overflow.ts';
 import { startServer } from '../src/node/server.ts';
+import { heardMs, oggOpusMs } from '../src/node/speech-openai.ts';
 import { ADA, BOT_TOKEN, EVE, FakeBot, type Person, type Sent } from './fake-bot.ts';
 
 const KEY = 'app-key';
@@ -248,4 +249,64 @@ test("the judges' bot is never the owner's: a judges' token that is the owner's 
   assert.deepEqual(await (await call(s.hosted, A, '/api/telegram')).json(), { available: false, ready: false, paired: null });
   assert.equal((await call(s.hosted, A, '/api/telegram/pair', 'POST')).status, 404);
   assert.deepEqual(s.bot.calls, [], 'with no judges\' bot the service reaches Telegram for nothing');
+});
+
+/** An Ogg file of `bytes` whose last page says it plays `seconds`, as a voice note's does. */
+function ogg(seconds: number, bytes = 64): Uint8Array {
+  const file = new Uint8Array(bytes);
+  const page = bytes - 27;
+  file.set([0x4f, 0x67, 0x67, 0x53, 0], page);
+  new DataView(file.buffer).setBigUint64(page + 6, BigInt(seconds * 48000), true);
+  return file;
+}
+
+test('a voice note is charged by the length the file has, not the one its sender says, and one over 2 MB is never written out', { timeout: 30000 }, async () => {
+  assert.equal(oggOpusMs(ogg(60)), 60_000);
+  assert.equal(oggOpusMs(new Uint8Array(100)), null);
+  assert.equal(heardMs(ogg(60), 1), 60_000, 'the file says more than the sender');
+  assert.equal(heardMs(ogg(1), 90), 90_000, 'the sender says more than the file');
+  assert.equal(heardMs(ogg(1, 400_000), 1), 100_000, 'a file that says little is still counted by its size');
+
+  let heard = 0;
+  const transcribe = async () => (heard++, 'list my trees');
+  // No room for files at all: a voice note is written out, not kept, so it is heard all the same.
+  const s = await host({ voiceMinutes: 10 }, { uploads: { file: 5, total: 5 }, shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, transcribe } });
+  await pair(s, A, ADA);
+  s.bot.file('minute', ogg(60));
+  assert.match((await ask(s, ADA, { voice: { file_id: 'minute', duration: 1, file_size: 64 } }))[0]!.text, /^Your trees, newest first:/);
+  assert.equal(s.ledger.status().devices[A]?.voiceMinutes, 1, 'a note that claims 1 s and measures 60 s is charged 60 s');
+  assert.equal(s.ledger.status().devices[A]?.dollars, 0.006);
+
+  s.bot.file('long', ogg(1, 2_000_001));
+  assert.match((await ask(s, ADA, { voice: { file_id: 'long', duration: 1, file_size: 2_000_001 } }))[0]!.text, /^That voice note is too long/);
+  assert.ok(!s.bot.calls.some((c) => c.method === 'getFile' && c.body.file_id === 'long'), 'a note known to be too large is not fetched');
+  assert.match((await ask(s, ADA, { voice: { file_id: 'long', duration: 1 } }))[0]!.text, /^That voice note is too long/, 'nor written out when its size was not said');
+  assert.equal(heard, 1, 'no paid call was made for either');
+  assert.equal(s.ledger.status().devices[A]?.voiceMinutes, 1, 'and nothing more was charged');
+});
+
+test("a device past its share of the day hears Momo's limit line on Telegram", { timeout: 20000 }, async () => {
+  const s = await host({ deviceTokens: 100 });
+  await pair(s, A, ADA);
+  s.ledger.metaTokens(100, A);
+  const before = await titles(s.hosted, A);
+  assert.equal((await ask(s, ADA, { text: 'one more thought' }))[0]!.text, LINES.share);
+  assert.equal((await ask(s, ADA, { text: 'hand off the sourdough tree' }, 2))[1]!.text, LINES.share);
+  assert.deepEqual(await titles(s.hosted, A), before);
+});
+
+test('fifty wrong codes from many chats in ten minutes pause pairing for five, with one log line', { timeout: 30000 }, async () => {
+  const s = await host();
+  const good = await invite(s, A);
+  const wrong = good.code === '000000' ? '111111' : '000000';
+  for (let chat = 0; chat < 10; chat++) {
+    const who = { id: 5000 + chat, first_name: `Guess ${chat}` } as unknown as Person;
+    for (let n = 0; n < 5; n++) assert.match((await ask(s, who, { text: wrong }))[0]!.text, /^That code did not work\./);
+  }
+  assert.match((await ask(s, ADA, { text: good.code }))[0]!.text, /^Pairing is paused for a few minutes\./, 'even a good code is not read while paused');
+  assert.equal(s.lines.filter((line) => /50 wrong pairing codes/.test(line)).length, 1);
+  assert.equal(((await (await call(s.hosted, A, '/api/telegram')).json()) as { paired: string | null }).paired, null);
+
+  s.clock.now += 5 * 60_000 + 1;
+  assert.match((await ask(s, ADA, { text: good.code }))[0]!.text, /^Paired with your headset\./, 'the code, still within its ten minutes, pairs once the pause is over');
 });

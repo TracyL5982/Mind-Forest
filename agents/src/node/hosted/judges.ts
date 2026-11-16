@@ -32,8 +32,12 @@ const WINDOW_MS = 10 * 60 * 1000;
 const WRONG_CODES = 5;
 /** Replies one unpaired chat gets in ten minutes, so the bot cannot be made to send without end. */
 const STRANGER_REPLIES = 6;
-/** Chats counted at once. Past this the oldest count is dropped. */
+/** Chats counted at once. Past this, counts that have run out are cleared; if none have, a new chat is not counted and gets no reply. */
 const MAX_COUNTED = 2000;
+/** Wrong codes from every chat together in ten minutes before no code is read for a while: many accounts cannot share out the guessing. */
+const WRONG_CODES_IN_ALL = 50;
+const PAUSE_MS = 5 * 60 * 1000;
+const PAIRING_PAUSED = 'Pairing is paused for a few minutes. Try your code again shortly.';
 
 /**
  * Telegram for the judges' headsets, through one bot that only the hosted service reads. A headset asks for a short code, its
@@ -50,6 +54,9 @@ export class JudgeTelegram {
   private readonly codes = new Map<string, { device: string; expires: number }>();
   private readonly wrong = new Map<number, number[]>();
   private readonly strangers = new Map<number, number[]>();
+  /** When each wrong code of the last ten minutes came, from any chat. */
+  private wrongInAll: number[] = [];
+  private pausedUntil = 0;
 
   constructor(private readonly opts: Options) {
     this.now = opts.now ?? Date.now;
@@ -116,11 +123,12 @@ export class JudgeTelegram {
     const chat = message.chat.id;
     const arrival = read(message);
     const code = arrival.kind === 'start' ? arrival.code : arrival.kind === 'text' ? codeIn(arrival.text) : '';
-    if (code && this.redeem(code, chat, message.from)) return this.bot.say(chat, PAIRED);
+    const paused = this.now() < this.pausedUntil;
+    if (code && !paused && this.redeem(code, chat, message.from)) return this.bot.say(chat, PAIRED);
 
     const paired = this.kept.value.chats[String(chat)];
     if (!paired || paired.userId !== message.from.id) {
-      if (allowed(this.strangers, chat, STRANGER_REPLIES, this.now())) await this.bot.say(chat, code ? WRONG_CODE : STRANGER);
+      if (allowed(this.strangers, chat, STRANGER_REPLIES, this.now())) await this.bot.say(chat, !code ? STRANGER : paused ? PAIRING_PAUSED : WRONG_CODE);
       return;
     }
     if (arrival.kind === 'unpair') {
@@ -140,6 +148,12 @@ export class JudgeTelegram {
     const live = this.codes.get(code.replace(/\D/g, ''));
     if (!live || now > live.expires) {
       allowed(this.wrong, chat, WRONG_CODES, now);
+      this.wrongInAll = [...this.wrongInAll.filter((at) => at > now - WINDOW_MS), now];
+      if (this.wrongInAll.length >= WRONG_CODES_IN_ALL) {
+        this.pausedUntil = now + PAUSE_MS;
+        this.wrongInAll = [];
+        this.opts.log(`[telegram] ${WRONG_CODES_IN_ALL} wrong pairing codes in ten minutes, so no code is read for ${PAUSE_MS / 60_000} minutes`);
+      }
       return false;
     }
     this.codes.delete(code.replace(/\D/g, ''));
@@ -181,16 +195,18 @@ function codeIn(text: string): string {
   return code ? `${code[1]}${code[2]}` : '';
 }
 
-/** Counts one more for the chat now, and says whether it is still within `most` in the last ten minutes. */
+/**
+ * Counts one more for the chat now, and says whether it is still within `most` in the last ten minutes. A chat's count is never
+ * dropped while it holds: with too many chats counted, a chat not yet counted is refused instead.
+ */
 function allowed(counts: Map<number, number[]>, chat: number, most: number, now: number): boolean {
   const recent = (counts.get(chat) ?? []).filter((at) => at > now - WINDOW_MS);
-  counts.delete(chat);
-  if (recent.length >= most) {
-    counts.set(chat, recent);
-    return false;
+  if (recent.length >= most) return false;
+  if (!counts.has(chat) && counts.size >= MAX_COUNTED) {
+    for (const [other, times] of counts) if (times.every((at) => at <= now - WINDOW_MS)) counts.delete(other);
+    if (counts.size >= MAX_COUNTED) return false;
   }
   counts.set(chat, [...recent, now]);
-  if (counts.size > MAX_COUNTED) counts.delete(counts.keys().next().value!);
   return true;
 }
 
