@@ -24,8 +24,8 @@ export const flag = (name, fallback) => {
 export const later = (seconds) => new Promise((r) => setTimeout(r, seconds * 1000));
 export const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export const find = (log, pattern, after = 0) => log.find((l) => l.at >= after && pattern.test(l.line));
-export const until = async (log, pattern, after = 0) => {
-  for (let i = 0; i < 300; i++) {
+export const until = async (log, pattern, after = 0, seconds = 30) => {
+  for (let i = 0; i < seconds * 10; i++) {
     const hit = find(log, pattern, after);
     if (hit) return hit;
     await later(0.1);

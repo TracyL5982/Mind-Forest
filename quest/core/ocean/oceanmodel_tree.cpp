@@ -519,30 +519,7 @@ void OceanModel::markMove(Vec2 b) {
         float x0 = std::min(std::max(std::min(m.from.x, b.x), lo.x), hi.x), x1 = std::min(std::max(std::max(m.from.x, b.x), lo.x), hi.x);
         double t0 = double((x0 - lo.x) / picture.size.x) * duration, t1 = double((x1 - lo.x) / picture.size.x) * duration;
         m.made = t1 - t0 >= 0.5 ? std::optional<Mark>(Mark::time(t0, t1)) : std::nullopt;
-        clear();
-        // NOTE(port): changed for Quest: the bar is half as thick again, and each end of the stretch has a
-        // handle, which is what a later drag takes it by (`markBegin`).
-        float y = lo.y + 0.014f;
-        EntityRef track = art->swatch(Color::white(0, 1), {picture.size.x, 0.012f}, 0.6f);
-        track->position = {picture.center.x, y, 0};
-        holder->addChild(track);
-        EntityRef span = art->swatch(Art::hot, {std::max(x1 - x0, 0.003f), 0.012f});
-        span->position = {(x0 + x1) / 2, y, 0.001f};
-        holder->addChild(span);
-        for (float x : {x0, x1}) {
-            EntityRef handle = art->swatch(Color::white(), {0.004f, 0.026f});
-            handle->position = {x, y, 0.002f};
-            holder->addChild(handle);
-        }
-        if (m.made) {
-            if (std::optional<Piece> piece = art->line(Catalog::clock(t0) + " – " + Catalog::clock(t1), Art::Size::micro, Font::Weight::semibold,
-                                                       Color::white(), Art::hot)) {
-                EntityRef label = art->quad(*piece);
-                label->position = {std::min(std::max((x0 + x1) / 2, lo.x + piece->size.x / 2), hi.x - piece->size.x / 2),
-                                   y + 0.013f + 0.006f + piece->size.y / 2, 0.001f};
-                holder->addChild(label);
-            }
-        }
+        drawStretch(c, x0, x1, m.made.has_value(), t0, t1);
         break;
     }
     case MarkKind::Kind::region: {
@@ -602,6 +579,47 @@ void OceanModel::markMove(Vec2 b) {
     touch(time + 0.2);
 }
 
+/// A stretch's bar along the foot of the card's picture, from `x0` to `x1` (m on the face), and its times over it once
+/// it is long enough to be made (`made`).
+void OceanModel::drawStretch(CardView& c, float x0, float x1, bool made, double t0, double t1) {
+    if (!art) return;
+    PictureFrame picture = pictureFrame(c);
+    Vec2 lo = picture.center - picture.size / 2, hi = picture.center + picture.size / 2;
+    if (!c.markHolder) {
+        EntityRef e = Entity::make();
+        e->position = {0, 0, 0.004f};
+        c.openHolder->addChild(e);
+        c.markHolder = e;
+    }
+    EntityRef holder = c.markHolder;
+    std::vector<EntityRef> children = holder->children;
+    for (const EntityRef& child : children) child->removeFromParent();
+    // NOTE(port): changed for Quest: the bar is half as thick again, and each end of the stretch has a
+    // handle, which is what a later drag takes it by (`markBegin`).
+    float y = lo.y + 0.014f;
+    EntityRef track = art->swatch(Color::white(0, 1), {picture.size.x, 0.012f}, 0.6f);
+    track->position = {picture.center.x, y, 0};
+    holder->addChild(track);
+    EntityRef span = art->swatch(Art::hot, {std::max(x1 - x0, 0.003f), 0.012f});
+    span->position = {(x0 + x1) / 2, y, 0.001f};
+    holder->addChild(span);
+    for (float x : {x0, x1}) {
+        EntityRef handle = art->swatch(Color::white(), {0.004f, 0.026f});
+        handle->position = {x, y, 0.002f};
+        holder->addChild(handle);
+    }
+    if (made) {
+        if (std::optional<Piece> piece = art->line(Catalog::clock(t0) + " – " + Catalog::clock(t1), Art::Size::micro, Font::Weight::semibold,
+                                                   Color::white(), Art::hot)) {
+            EntityRef label = art->quad(*piece);
+            label->position = {std::min(std::max((x0 + x1) / 2, lo.x + piece->size.x / 2), hi.x - piece->size.x / 2),
+                               y + 0.013f + 0.006f + piece->size.y / 2, 0.001f};
+            holder->addChild(label);
+        }
+    }
+    c.changed();
+}
+
 /// The hand let go: the mark stays on the card, and can be asked about.
 void OceanModel::markEnd() {
     if (!marking) return;
@@ -631,6 +649,8 @@ void OceanModel::markEnd() {
     Mark made = *m.made;
     marks[m.id] = made;
     sound("mark_made");
+    // NOTE(port): added for Quest (core/cards): a service card keeps its video's stretch with the service.
+    if (made.kind == Mark::Kind::time && c.highlights) keepStretch(c, made);
     if (made.kind == Mark::Kind::time && screenNode == m.id) screen->loop(Screen::Span{made.from, made.to});
     buildRows(c);
     if (tree) {
@@ -792,9 +812,9 @@ void OceanModel::pickTool(int id, int what) {
     if (!(tree && tree->focus() == id)) return;
     CardRef c = card(id);
     if (what == 1) {
-        // The eraser. NOTE(port): added for Quest (core/cards): on a service card it takes off the newest highlight or
-        // line, at the service too, one a pinch; then a video's stretch.
-        if (c && !c->edits.empty()) eraseEdit(*c, c->edits.back().id); else clearMark(id);
+        // The eraser. NOTE(port): added for Quest (core/cards): on a service card it takes every mark off, at the service
+        // too, as one change that one undo brings back.
+        if (c && c->highlights) eraseAll(*c); else clearMark(id);
         return;
     }
     if (what == 2) {
@@ -804,7 +824,7 @@ void OceanModel::pickTool(int id, int what) {
         if (!marked(id)) return;
         penOn = false;
         if (c && c->ref.kind == Ref::Kind::note && c->ref.id.rfind("welcome", 0) == 0) stepOut();
-        else if (c && agentBridge && agentBridge->editable(id)) agentBridge->tellMore(id, markedPart(*c));
+        else if (c && agentBridge && agentBridge->editable(id)) agentBridge->tellMore(id, tellMoreAbout(*c));
         else askMark(id);
         return;
     }
