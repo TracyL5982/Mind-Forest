@@ -9,7 +9,7 @@ import type { Mindstorm } from './state.ts';
 /**
  * Momo's tools in a live conversation: each a function the realtime model may call, run on the service and answered at once. Those
  * that act call the pipeline as the Conductor's intents do (`Pipeline.perform`); work that goes on (a Scout run, an organize, a
- * handoff) is started and told later. Why it is built this way is in agents/DECISIONS.md (59, 61).
+ * handoff) is started and told later. Why it is built this way is in agents/DECISIONS.md (59, 61, 63).
  */
 
 /** What a call is answered with: told to the model as JSON. */
@@ -150,8 +150,9 @@ export const TOOLS: Record<string, Tool> = {
 
   find_new: {
     description:
-      'Bring new cards on a topic into the user\'s mindstorm: things to look at, examples, references, pictures, films. Use it when the user asks to find, show or ' +
-      'explore something, or wants material rather than an answer. It works on the card the user has open. For a plain question, answer instead.',
+      'Add a new layer of cards around the open card: things to look at, examples, references, pictures, films. Use it when the user asks to find, show or ' +
+      'explore something, wants material rather than an answer, or builds on the open card: going deeper, a related angle, more on it, a new layer. ' +
+      'With nothing open, it starts a tree on the subject. For a plain question, answer instead.',
     parameters: object(
       { subject: str('What to find, as a short self-contained phrase.'), angle: str('Optional: a narrower angle, such as "only paintings" or "less famous ones". Empty for none.') },
       ['subject', 'angle'],
@@ -162,10 +163,10 @@ export const TOOLS: Record<string, Tool> = {
       const subject = text(args, 'subject');
       const angle = text(args, 'angle');
       const reading = angle ? `${subject}, ${angle}` : subject;
+      if (!subject && !seen.selection[0] && !seen.focus) return { started: false, why: 'No card is open. Ask which card to build on, or what to look for.' };
       const named = treeNamed(ctx, subject);
       const anchor = seen.anchor ?? (named ? ctx.mind.tree(named).rootId : undefined);
       if (!anchor) {
-        if (!subject) return { started: false, why: 'Nothing is open and no subject was given. Ask what to look for.' };
         performed(deps, { kind: 'tree', subject, itemIds: [] });
         return { started: true, newTree: subject, note: STARTED };
       }
@@ -177,7 +178,9 @@ export const TOOLS: Record<string, Tool> = {
   },
 
   start_tree: {
-    description: 'Start a new tree, about a subject ("start a tree on Hitchcock") or grown from the card the user has open ("make a tree from this", subject empty).',
+    description:
+      'Start a separate tree, for a new subject or when the user wants a fresh space: about a subject ("start a tree on Hitchcock"), or grown from the card the ' +
+      'user has open ("make this its own tree", subject empty). Never to build on the open card: a new layer there is find_new.',
     parameters: object({ subject: str('What the tree is about, in the user\'s words. Empty for the card they have open.') }, ['subject']),
     run: (args, deps) => {
       const ctx = deps.pipeline.ctx;
@@ -315,23 +318,38 @@ export function toolLabel(name: string, rawArgs: string): string | undefined {
   }
 }
 
-/** Where the user is, told to Momo when it changes: the open card, its tree and the suggestions round it. */
+/** How many of the user's other trees Momo is told the names of, the newest first. */
+const OTHER_TREES = 4;
+
+/**
+ * Where the user is, told to Momo when it changes: the open card, its layer and the cards above it back to its tree's first, the
+ * suggestions round it, and the names of the user's other trees.
+ */
 export function whereNote(ctx: RoleContext, scene: Scene): string {
   const { mind } = ctx;
   const seen = see(ctx, scene);
+  const others = [...mind.trees.values()]
+    .filter((t) => t.id !== seen.treeId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, OTHER_TREES)
+    .map((t) => `"${t.title}"`);
+  const trees = others.length > 0 ? `\n${seen.treeId ? 'Their other trees' : 'Their trees'}: ${others.join(', ')}.` : '';
   if (!seen.focus) {
-    if (seen.treeId) return `The user is in the tree "${mind.tree(seen.treeId).title}" with no card open.`;
-    return 'The user has no tree or card open.';
+    if (seen.treeId) return `The user is in the tree "${mind.tree(seen.treeId).title}" with no card open.${trees}`;
+    return `The user has no tree or card open.${trees}`;
   }
   const item = mind.itemOf(seen.focus.id);
-  const lines = [`The user has open the card "${nameOf(item)}" (${spokenKind(item, seen.focus.origin.tool ?? '')}) in the tree "${mind.tree(seen.focus.treeId).title}".`];
+  const tree = `the tree "${mind.tree(seen.focus.treeId).title}"`;
+  const above = mind.path(seen.focus.id).slice(0, -1).map((n) => `"${nameOf(mind.itemOf(n.id))}", then `);
+  const at = above.length === 0 ? `the first card of ${tree} (layer 1)` : `on layer ${above.length + 1} of ${tree}: ${above.join('')}this card`;
+  const lines = [`The user has open the card "${nameOf(item)}" (${spokenKind(item, seen.focus.origin.tool ?? '')}), ${at}.`];
   const says = clip((item.summary || item.text).replace(/\s+/g, ' ').trim(), 240);
   if (says && says !== item.title) lines.push(`It says: ${says}`);
   const picks = seen.picksOf ? mind.picks(seen.picksOf).slice(0, 6) : [];
   if (picks.length > 0) lines.push(`Suggestions round it, not yet kept: ${picks.map((n, i) => `${i + 1}. ${nameOf(mind.itemOf(n.id))}`).join('; ')}.`);
   const kept = mind.children(seen.focus.id).filter((n) => n.status === 'kept').slice(0, 6);
   if (kept.length > 0) lines.push(`Kept under it: ${kept.map((n) => nameOf(mind.itemOf(n.id))).join('; ')}.`);
-  return lines.join('\n');
+  return lines.join('\n') + trees;
 }
 
 /** A card that landed, as Momo is told of it: only what the card states. */

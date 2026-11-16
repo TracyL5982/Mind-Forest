@@ -318,8 +318,39 @@ test('a newer run on a card Momo is walking through goes on as one run: the olde
   clock.now += 4000;
   v.observed(scout('newer', 'done'));
   v.observed({ t: 'say', text: 'One new thing under Night stairs.', kind: 'results' });
-  assert.match(model.told().at(-1)!, /^\[All done\] The search for "Night stairs" is finished: 1 new card in all\./, 'the wrap-up comes as the run ends, though its picture is still being made');
+  const wrap = model.told().at(-1)!;
+  assert.match(wrap, /^\[Wrap up\] The search for "Night stairs" has brought 1 new card\. Wrap up in one or two short sentences/, 'the wrap-up comes as the run ends, though its picture is still being made');
+  assert.doesNotMatch(wrap, /finished|All done/, 'a search whose picture is still being made is not called finished');
   assert.ok(!model.told().some((t) => t.includes('One new thing')));
+  model.begins('r2', 'results');
+  model.ends('r2');
+  clock.now += 20_000;
+  v.observed(scout('picture', 'done', 'n1', false));
+  v.observed(landed('Rye loaf at dawn'));
+  assert.match(model.told().at(-1)!, /^\[More cards landed\] Under "Night stairs", 1 more: a picture "Rye loaf at dawn"/, 'the late picture is told as one more');
+});
+
+test('the wrap-up calls a search finished only when none of its parts is still at work on its card, such as a picture being made', () => {
+  const n = new Narration(6000);
+  n.began('run', 'n1', 'Night stairs');
+  n.part('search', 'n1');
+  n.part('picture', 'n1');
+  n.part('elsewhere', 'n2');
+  n.landed(card('Rye loaf'));
+  assert.match(n.next(0)!, /^\[Card landed\]/);
+  assert.equal(n.ended('search'), false, 'a part ending ends no run');
+  assert.equal(n.ended('run'), true);
+  assert.match(n.next(10_000)!, /^\[Wrap up\] The search for "Night stairs" has brought 1 new card\./);
+  n.ended('picture');
+  n.began('again', 'n1', 'Night stairs');
+  n.landed(card('Bell tower'));
+  assert.match(n.next(20_000)!, /^\[Card landed\]/);
+  n.ended('again');
+  assert.match(n.next(30_000)!, /^\[All done\] The search for "Night stairs" is finished: 1 new card in all\./, "a part on another card is not this search's");
+  n.began('third', 'n3', 'Kiln');
+  n.part('slow picture', 'n3');
+  n.ended('third');
+  assert.match(n.next(40_000)!, /^\[Wrap up\] Nothing from the search for "Kiln" has landed yet\. Say so in a few words\.$/, 'nothing landed yet, and a picture is still being made');
 });
 
 test("a run on a card deleted while it ran, which the pipeline closes with no line, does not swallow the next line from the agents", async () => {

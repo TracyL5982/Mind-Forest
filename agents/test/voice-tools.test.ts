@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
-import type { Roles } from '../src/core/roles/types.ts';
-import { landedCards, runTool, shapeOf, toolLabel, toolSpecs, whereNote } from '../src/core/voice-tools.ts';
+import type { Roles, Scene } from '../src/core/roles/types.ts';
+import { landedCards, nameOf, runTool, shapeOf, toolLabel, toolSpecs, whereNote } from '../src/core/voice-tools.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer } from '../src/node/server.ts';
@@ -153,8 +153,8 @@ test('web_answer hands on the web answer, or says the web is not reachable', asy
 test('Momo is told where the user is and of each card that lands, in what the card states', async () => {
   const w = await world();
   try {
-    assert.match(whereNote(w.run.pipeline.ctx, { focus: w.root, treeId: w.tree.id, selection: [] }), /^The user has open the card "Sourdough rises slowly in winter" \(a note\) in the tree "[^"]+"\.\nSuggestions round it, not yet kept: 1\. /);
-    assert.equal(whereNote(w.run.pipeline.ctx, { selection: [] }), 'The user has no tree or card open.');
+    assert.match(whereNote(w.run.pipeline.ctx, { focus: w.root, treeId: w.tree.id, selection: [] }), /^The user has open the card "Sourdough rises slowly in winter" \(a note\), the first card of the tree "[^"]+" \(layer 1\)\.\nSuggestions round it, not yet kept: 1\. /);
+    assert.equal(whereNote(w.run.pipeline.ctx, { selection: [] }), `The user has no tree or card open.\nTheir trees: "${w.tree.title}".`);
     const sets = w.run.mind.changes().filter((s) => s.origin.role === 'scout');
     const cards = landedCards(w.run.mind, sets[0]!);
     assert.ok(cards.length > 0);
@@ -162,6 +162,51 @@ test('Momo is told where the user is and of each card that lands, in what the ca
     assert.equal(cards[0]!.under, 'Sourdough rises slowly in winter');
     assert.ok(cards[0]!.title && cards[0]!.kind && cards[0]!.why);
     assert.deepEqual(landedCards(w.run.mind, w.run.mind.changes()[0]!), [], 'only the Scout lands cards');
+  } finally {
+    await w.close();
+  }
+});
+
+test("Momo is told where the open card sits: its layer, the cards above it back to its tree's first, and the names of a few other trees, the newest first", async () => {
+  const w = await world();
+  try {
+    for (const subject of ['Rye', 'Barley', 'Spelt', 'Einkorn', 'Emmer']) await w.call('start_tree', { subject });
+    // Asked for a painting, the stand-in Scout brings a museum work, which the tree does not hold yet.
+    await w.call('find_new', { subject: 'old ovens', angle: '' }, w.pick.id, undefined, async () => 'Find me a painting of old ovens.');
+    const deep = w.run.mind.picks(w.pick.id)[0]!;
+    const at = (scene: Scene) => whereNote(w.run.pipeline.ctx, scene);
+    const trees = '"Emmer", "Einkorn", "Spelt", "Barley"';
+    const tree = `the tree "${w.tree.title}"`;
+    const first = '"Sourdough rises slowly in winter"';
+    assert.ok(at({ focus: w.pick.id, treeId: w.tree.id, selection: [] }).includes(`, on layer 2 of ${tree}: ${first}, then this card.`));
+    const below = at({ focus: deep.id, treeId: w.tree.id, selection: [] });
+    assert.ok(below.includes(`, on layer 3 of ${tree}: ${first}, then "${nameOf(w.run.mind.itemOf(w.pick.id))}", then this card.`), below);
+    assert.ok(below.endsWith(`\nTheir other trees: ${trees}.`), 'four at most, the newest first, the open one left out');
+    assert.equal(at({ treeId: w.tree.id, selection: [] }), `The user is in ${tree} with no card open.\nTheir other trees: ${trees}.`);
+    assert.equal(at({ selection: [] }), `The user has no tree or card open.\nTheir trees: ${trees}.`);
+  } finally {
+    await w.close();
+  }
+});
+
+test('find_new with no card open asks which card unless the user named a subject, which builds on the open tree or, with nothing open, starts one', async () => {
+  const w = await world();
+  try {
+    const find = (subject: string, scene: Scene) => runTool('find_new', JSON.stringify({ subject, angle: '' }), { pipeline: w.run.pipeline, scene });
+    const trees = w.run.mind.trees.size;
+    const picks = w.run.mind.picks(w.root).length;
+    for (const scene of [{ treeId: w.tree.id, selection: [] }, { selection: [] }]) {
+      const out = await find('', scene);
+      assert.equal(out.started, false);
+      assert.match(String(out.why), /which card/);
+    }
+    await w.run.pipeline.idle();
+    assert.equal(w.run.mind.trees.size, trees, 'no tree started');
+    assert.equal(w.run.mind.picks(w.root).length, picks, 'no layer added');
+    assert.equal((await find('rye', { treeId: w.tree.id, selection: [] })).on, 'Sourdough rises slowly in winter', "a subject with the tree open builds on its first card");
+    assert.equal((await find('Dutch ceramics', { selection: [] })).newTree, 'Dutch ceramics');
+    await w.run.pipeline.idle();
+    assert.ok([...w.run.mind.trees.values()].some((t) => t.title === 'Dutch ceramics'));
   } finally {
     await w.close();
   }

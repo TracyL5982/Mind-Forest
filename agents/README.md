@@ -78,7 +78,10 @@ MIND_PALACE_DATA=<a copy of a data folder> node --no-warnings --import tsx scrip
                          # drops a thought and asks for a tree on a copy of a mindstorm, and prints the round, live
 node --no-warnings --import tsx scripts/live-bench.ts --data <a copy of a data folder> --out <file.jsonl>
                          # Momo's live voice on the 40 requests of scripts/live-requests.ts, said into files, never played:
-                         # which way it answered, how soon it was first heard, what it cost; about $0.65 on mini
+                         # which way it answered, how soon it was first heard, what it cost; about $0.65 on mini, $1.45 on the full model;
+                         # --set intent: the 30 tree-or-layer requests, each said where it is set (a card open, a tree, nothing)
+node --no-warnings --import tsx scripts/typed-bench.ts --data <a copy of a data folder> --runs 3
+                         # the same 30 typed, through the Conductor, on the Meta key: right of N per group, the questions asked back
 node --no-warnings --import tsx scripts/live-summary.ts <file.jsonl>   # the same against the voice plan's targets
 node --no-warnings --import tsx scripts/live-samples.ts --data <a copy of a data folder> --out <dir> --voice marin
                          # three sample conversations with Momo as audio files and transcripts, never played
