@@ -101,6 +101,22 @@ test('a device needs the app key; two devices get separate spaces, each starting
   assert.equal(status.devicesOnline, 2);
   a.ws.close();
   b.ws.close();
+  const remove = (device: string) => fetch(`${hosted.url}/admin/spaces/${device}`, { method: 'DELETE', headers: { Authorization: `Bearer ${ADMIN}` } });
+  const gone = await remove(B);
+  assert.equal(gone.status, 200);
+  assert.equal(((await gone.json()) as { spaces: number }).spaces, 1);
+  assert.ok(!existsSync(join(dataDir, 'spaces', B)), "a deleted space's folder is gone");
+  assert.equal((await remove(B)).status, 404);
+  assert.equal((await fetch(`${hosted.url}/admin/spaces/${A}`, { method: 'DELETE' })).status, 401, 'deleting needs the admin token');
+  await hosted.close();
+});
+
+test('with an empty starter a new space starts with no tree', { timeout: 20000 }, async () => {
+  const empty = mkdtempSync(join(tmpdir(), 'mp-empty-'));
+  const { hosted } = await host({}, { starter: empty });
+  const c = await connect(hosted, `${KEY}.${A}`);
+  assert.deepEqual(treesOf(await c.until((m) => m.t === 'hello')), []);
+  c.ws.close();
   await hosted.close();
 });
 

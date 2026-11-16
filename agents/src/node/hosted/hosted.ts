@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { join } from 'node:path';
 import { PROTOCOL_VERSION } from '../protocol.ts';
@@ -114,6 +114,20 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     return space;
   }
 
+  /** A space and its folder gone, as for a load test's devices. A request after this starts the device afresh. */
+  async function forget(device: string): Promise<void> {
+    await closing.get(device);
+    const entry = open.get(device);
+    open.delete(device);
+    const space = await entry?.space.catch(() => null);
+    if (space) {
+      await space.pipeline.idle();
+      await space.close();
+    }
+    rmSync(join(spacesDir, device), { recursive: true, force: true });
+    known.delete(device);
+  }
+
   const sweep = setInterval(() => {
     for (const [device, entry] of open) {
       void entry.space.then((space) => {
@@ -165,9 +179,17 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, protocol: PROTOCOL_VERSION });
-    if (url.pathname === '/admin') {
+    if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
       const given = req.headers.authorization?.replace(/^Bearer\s+/i, '') ?? '';
       if (!equal(given, opts.adminToken)) return json(res, 401, { error: 'missing or wrong admin token' });
+      const deleting = /^\/admin\/spaces\/([^/]+)$/.exec(url.pathname)?.[1];
+      if (req.method === 'DELETE' && deleting) {
+        if (!DEVICE.test(deleting) || !known.has(deleting)) return json(res, 404, { error: 'no such space' });
+        await forget(deleting);
+        note(`[admin] deleted the space of ${short(deleting)}`);
+        return json(res, 200, await status());
+      }
+      if (url.pathname !== '/admin') return json(res, 404, { error: 'not found' });
       if (req.method === 'POST') {
         const off = url.searchParams.get('off');
         if (off !== '1' && off !== '0') return json(res, 400, { error: 'POST /admin?off=1 switches costly work off, ?off=0 on again' });
