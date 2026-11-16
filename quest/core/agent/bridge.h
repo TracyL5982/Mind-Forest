@@ -65,8 +65,6 @@ public:
     void erased(int nodeID, const std::string& editId);
     /// A branch was cut with the flat of the hand; `gone` is what left with it.
     void pruned(int nodeID, const std::vector<TreeNode>& gone);
-    /// The tree was pressed by a clap: sent on, or put away.
-    void pressed(const Tree& tree, bool send);
     /// Writes down where this service's trees stand on the desk, in place of the headset's own shelf file.
     void saveShelf();
 

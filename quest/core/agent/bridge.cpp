@@ -922,14 +922,4 @@ void Bridge::saveShelf() {
     platform::writeFile(file, kept.text());
 }
 
-void Bridge::pressed(const Tree& tree, bool send) {
-    if (!send) return;
-    for (auto& [key, p] : trees) {
-        if (p.tree.get() != &tree) continue;
-        client.send(Outbound::handoff(Scope{{TreeId{key}}, {}}));
-        logLine("[agent] sent on: " + tree.title);
-        return;
-    }
-}
-
 }  // namespace agent

@@ -134,15 +134,45 @@ static void drag(float t, Frame& f) {
     pulse(f, to + Vec3{0.012f, -0.008f, 0}, X, Y, 0.009f, 0.036f, t - 3.0f, 0.45f, warm);
 }
 
+// MARK: - Pinch and hold still on the open card: more like it, a layer of its own
+
+// NOTE(port): added for Quest (the agents merge): the long pinch on an open card of the service's, which asks for more
+// like it (OceanModel::holdPress). A ring fills round the pinch while it is held still; full, new cards come up round it.
+static void hold(float t, Frame& f) {
+    f.fade = shown(t, 6.0f);
+    Vec3 c{-0.04f, 0.07f, -0.16f};
+    float close = snap(span(t, 0.9f, 1.15f)) - snap(span(t, 3.4f, 3.7f));
+    float fill = span(t, 1.3f, 2.5f);
+    float grown = arrive(span(t, 2.6f, 3.6f));
+    f.card(c, X, Y, 0.15f, 0.1f, 0.008f, 0.0016f, mix(white, warm, 0.6f), 0.9f, 0.08f);
+    Vec3 dot = c + Vec3{0.02f, -0.01f, 0};
+    HandParts hand = f.hand(false, mixPose(poses::rest, poses::pinch, close), Vec3{0.1f, -0.165f, 0.07f}, held(false, 10, -46, 0, 62));
+    ray(f, hand, dot, 1);
+    f.orb(hand.pinch, 0.013f, warm, 0.95f * close);
+    float ring = close * (1 - soft(span(t, 2.5f, 2.8f)));
+    f.ring(dot, X, Y, 0.018f, 0.0016f, cool, 0.45f * ring);
+    if (fill > 0) f.arc(dot, X, Y, 0.018f, floatPi / 2 - tau * fill, floatPi / 2, 0.0028f, warm, 0.95f * ring);
+    pulse(f, dot, X, Y, 0.018f, 0.06f, t - 2.5f, 0.5f, warm);
+    // What the service brings: three cards round it, each on a dashed thread.
+    const Vec3 round[3] = {{-0.13f, 0.075f, 0}, {0.135f, 0.06f, 0}, {0.0f, -0.105f, 0}};
+    for (const Vec3& off : round) {
+        if (grown <= 0.01f) break;
+        Vec3 at = c + off * (0.55f + 0.45f * grown);
+        f.dashed(c, at, 0.006f, 0.0011f, cool, 0.55f * grown);
+        f.card(at, X, Y, 0.07f * grown, 0.047f * grown, 0.005f, 0.0013f, white, 0.75f * grown, 0.05f * grown);
+    }
+}
+
 // MARK: - A tool picked over the card gone into, and a drag that marks part of it
 
 static void mark(float t, Frame& f) {
     f.fade = shown(t, 6.8f);
-    // A card gone into: its picture, and beside it the marker to draw on it with.
+    // A card gone into: its picture, and down from its top right corner the pen, the eraser and Send.
+    // NOTE(port): changed for Quest (the agents merge): all three, where the card has them (`layTools`).
     Vec3 c{0.0f, 0.045f, -0.14f};
     float w = 0.25f, h = 0.165f;
     f.card(c, X, Y, w, h, 0.01f, 0.0016f, white, 0.8f, 0.06f);
-    Vec3 tool = c + Vec3{-w / 2 - 0.034f, 0.02f, 0};
+    Vec3 tool = c + Vec3{w / 2 + 0.026f, h / 2 - 0.018f, 0};
     // First the marker is picked: a pinch on it, and it lights.
     float toTool = travel(span(t, 0.6f, 1.3f)), toCard = travel(span(t, 2.0f, 2.8f));
     float pick = snap(span(t, 1.45f, 1.65f)) - snap(span(t, 1.8f, 2.0f));
@@ -156,6 +186,16 @@ static void mark(float t, Frame& f) {
     f.line(pen(0.006f, 0.0027f), pen(0.006f, -0.0027f), 0.0011f, ink, 0.8f);
     f.line(pen(0.018f, 0.0027f), pen(0.018f, -0.0027f), 0.0011f, ink, 0.8f);
     f.path({tool + Vec3{-0.012f, -0.0115f, 0}, tool + Vec3{-0.007f, -0.0128f, 0}, tool + Vec3{-0.001f, -0.0112f, 0}, tool + Vec3{0.005f, -0.0125f, 0}}, 0.0018f, ink, 0.95f);
+    // Under it the eraser and Send, faint until something is marked.
+    float marked = soft(span(t, 4.4f, 4.9f));
+    float glyph = 0.45f + 0.5f * marked;
+    Vec3 eraser = tool + Vec3{0, -0.044f, 0}, send = tool + Vec3{0, -0.088f, 0};
+    f.card(eraser, X, Y, 0.036f, 0.036f, 0.007f, 0.0014f, white, 0.4f + 0.3f * marked, 0.04f);
+    f.path({eraser + Vec3{-0.01f, -0.003f, 0}, eraser + Vec3{0.001f, 0.009f, 0}, eraser + Vec3{0.01f, 0.001f, 0}, eraser + Vec3{-0.001f, -0.011f, 0}}, 0.0012f, white, glyph, true);
+    f.line(eraser + Vec3{-0.0045f, 0.003f, 0}, eraser + Vec3{0.0045f, -0.005f, 0}, 0.0011f, white, glyph);
+    f.card(send, X, Y, 0.036f, 0.036f, 0.007f, 0.0014f, white, 0.4f + 0.5f * marked, 0.04f + 0.4f * marked);
+    f.path({send + Vec3{-0.011f, -0.001f, 0}, send + Vec3{0.011f, 0.009f, 0}, send + Vec3{0.002f, -0.011f, 0}}, 0.0012f, white, glyph, true);
+    f.line(send + Vec3{0.011f, 0.009f, 0}, send + Vec3{-0.001f, -0.002f, 0}, 0.0011f, white, glyph);
     // Then it is drawn with, freely: round part of the picture as a hand goes, not quite a circle and on past where it began.
     Vec3 middle = c + Vec3{-0.01f, 0.004f, 0};
     auto round = [&](float u) {
@@ -177,7 +217,7 @@ static void mark(float t, Frame& f) {
     Vec3 drift = dot - round(0);
     float drawing = go > 0 ? 1.f : 0.f;
     HandParts hand = f.hand(false, mixPose(poses::rest, poses::pinch, close),
-                            Vec3{0.075f, -0.19f, 0.08f} + Vec3{0.02f * toCard - 0.05f * toTool * (1 - toCard) + 0.5f * drift.x * drawing, 0.5f * drift.y * drawing, 0},
+                            Vec3{0.075f, -0.19f, 0.08f} + Vec3{0.02f * toCard + 0.03f * toTool * (1 - toCard) + 0.5f * drift.x * drawing, 0.5f * drift.y * drawing, 0},
                             held(false, 8, -46, 0, 62));
     ray(f, hand, dot, 1);
     f.orb(hand.pinch, 0.013f, warm, 0.95f * close);
@@ -379,9 +419,10 @@ const std::vector<Gesture>& gestures() {
         {"carry", draw::carry, 5.6f, "Grab to pan", "Close your hand and move it. The tree comes along."},
         {"layers", draw::layers, 7.4f, "Grab to pull or push", "Pull toward you to bring back the layer behind."},
         {"drag", draw::drag, 5.4f, "Pinch and hold to move", "A card stays where you put it."},
-        {"mark", draw::mark, 6.8f, "Mark part of a card", "Go in, pick the marker, then draw."},
+        {"hold", draw::hold, 6.0f, "Pinch and hold a card", "Hold still till the ring fills: more like it."},
+        {"mark", draw::mark, 6.8f, "Mark part of a card", "Go in, take up the pen, draw. Send asks Momo."},
         {"tree", draw::tree, 6.0f, "Choose a layer on the small tree", "Slide a finger along it, then pinch."},
-        {"clap", draw::clap, 5.4f, "Palms together, and hold", "A second like this closes the tree and sends it on."},
+        {"clap", draw::clap, 5.4f, "Palms together, and hold", "A second like this closes the tree."},
         {"cut", draw::cut, 7.4f, "Flat hand: slice a thread", "Once to mark it, again to cut."},
     };
     return all;

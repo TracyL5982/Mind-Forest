@@ -138,7 +138,7 @@ struct Frame {
 // MARK: - The gestures
 
 struct Gesture {
-    const char* id;                         // "pinch", "layers", "carry", "spread", "mark", "tree", "cut", "clap", "drag"
+    const char* id;                         // "pinch", "layers", "carry", "spread", "hold", "mark", "tree", "cut", "clap", "drag"
     void (*draw)(float t, Frame& f);        // at `t` seconds of its loop
     float seconds;                          // how long its loop is
     const char* title;                      // four or five words

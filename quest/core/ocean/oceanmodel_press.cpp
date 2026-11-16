@@ -258,7 +258,6 @@ void OceanModel::pressTree(bool send) {
     sound("press", quiet ? 0.45f : 1);
     double now = time;
     if (send) tree->sent = true;
-    if (agentBridge) agentBridge->pressed(*tree, send);     // AGENT
     // The cards whose pictures the cover shows go to where those float; the rest give way.
     CoverPlan plan = coverPlan(*tree);
     std::vector<int> ids;
@@ -797,8 +796,11 @@ void OceanModel::rebuildStrip() {
     x += add(art->line("Put away", Art::Size::label, Font::Weight::medium, Color::white(), Art::ink, Art::buttonPad), x, -0.018f, Pick::putAway()) + 0.01f;
     // (On the Quest a button is to press the tree as surely as the clap does. This one already
     // does: a pinch on it is `pressTree(send: true)`, the very call the clap makes in `handle`.
-    // So nothing is added to the strip.)
-    x += add(art->line("Send to image generation", Art::Size::label, Font::Weight::semibold, Color::white(), Art::hot, Art::buttonPad), x, -0.018f, Pick::send()) + 0.01f;
+    // So nothing is added to the strip.) AGENT: joined to the service, nothing is sent by hand: a tree is handed off by
+    // voice, so the button is not there.
+    if (!agentBridge) {
+        x += add(art->line("Send to image generation", Art::Size::label, Font::Weight::semibold, Color::white(), Art::hot, Art::buttonPad), x, -0.018f, Pick::send()) + 0.01f;
+    }
     // NOTE(port): added for Quest: every gesture, a pinch away (oceanmodel_guide.cpp).
     if (teach.on) add(art->line("Gestures", Art::Size::label, Font::Weight::medium, Color::white(1, 0.8f), Art::ink, Art::buttonPad), x, -0.018f, Pick::guide(103));
     fadeIn(holder, 0.15, 0.3f);

@@ -285,8 +285,9 @@ void OceanModel::handle(const Hands::Event& event) {
         break;
     case Hands::Event::Kind::clap:
         logLine("[ocean] clap");
-        // (The welcome tree is only put away: there is nothing in it to send on.)
-        pressTree(!onWelcomeTree());
+        // (The welcome tree is only put away: there is nothing in it to send on.) AGENT: joined to the service, palms
+        // together only closes, on every tree: a tree is handed off by voice ("hand this off").
+        pressTree(!onWelcomeTree() && !agentBridge);
         break;
     case Hands::Event::Kind::cut:
         // NOTE(port): changed for Quest: the first slice across a thread marks it for cutting, the second cuts it (oceanmodel_cut.cpp).
