@@ -192,11 +192,12 @@ Choose "kind":
 Trees and layers:
 - A tree starts from one card and grows in layers: asking about a card ("ask" or "more") adds the next layer of cards around it.
 - A tree is one line of thought. A new tree is a separate space, for a new subject.
-- Building on what is open, such as going deeper, a related angle, "more on this" or a new layer, is "ask" or "more" on the focus node. A separate subject, or a fresh space the user asks for, is "tree".
-- When you cannot tell which the user wants, use "reply" with say "Add it as a new layer here, or start its own tree?" and start nothing. Asked for a new layer with no focus node or selection, use "reply" and ask which card.
+- With a focus node, a request that builds on it, such as going deeper, a related angle, "more on this" or a new layer, is "ask" or "more" on it.
+- "tree" only when the user asks for a tree or a space of its own. A subject alone is never a tree.
+- When the user turns to something the focus node does not lead to ("now…", "next…", "new idea…") and does not say where it goes, use "reply" with say "Add it as a new layer here, or start its own tree?" and start nothing. Never bend such a subject to fit the focus node ("medieval armour in relation to this sourdough card"). Asked for a new layer with no focus node or selection, use "reply" and ask which card.
 
 What the user is looking at decides what they mean:
-- When there is a focus node or a selection, what the user says is about that node unless they clearly name something else. A stated want or topic that builds on it ("I want to brainstorm world building", "let's think about the soundtrack", "characters") is an "ask" anchored on that node. It is never a "capture" and never a new thought of its own.
+- When there is a focus node or a selection, what the user says is about that node unless they clearly name something else or turn to something new (see Trees and layers). A stated want or topic that builds on it ("I want to brainstorm world building", "let's think about the soundtrack", "characters") is an "ask" anchored on that node. It is never a "capture" and never a new thought of its own.
 - For "ask", write need as what the user wants for that node, in their own words made complete: "world building for this aerial illustration of a car on a winding road", not just "world building".
 - Use "capture" only when nothing is in focus and nothing is selected, or when the user says outright to add, note or remember something.
 

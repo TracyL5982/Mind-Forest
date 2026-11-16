@@ -179,8 +179,8 @@ export const TOOLS: Record<string, Tool> = {
 
   start_tree: {
     description:
-      'Start a separate tree, for a new subject or when the user wants a fresh space: about a subject ("start a tree on Hitchcock"), or grown from the card the ' +
-      'user has open ("make this its own tree", subject empty). Never to build on the open card: a new layer there is find_new.',
+      'Start a separate tree, only when the user asks for a tree or a space of its own: about a subject ("start a tree on Hitchcock"), or grown from the card ' +
+      'the user has open ("make this its own tree", subject empty). A subject alone is no reason; building on the open card is find_new.',
     parameters: object({ subject: str('What the tree is about, in the user\'s words. Empty for the card they have open.') }, ['subject']),
     run: (args, deps) => {
       const ctx = deps.pipeline.ctx;
