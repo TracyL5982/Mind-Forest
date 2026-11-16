@@ -399,8 +399,9 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
 - **The welcome tree**, once: on a first launch a tree stands by itself, "Welcome to Mind Forest". It is an
   ordinary tree whose cards are the lessons, seven of them, one a layer: pinch a card, grab to pan, grab
   to pull or push, pinch and hold to move, mark part of a picture, choose a layer on the small tree,
-  palms together to close. The cards are notes made in code (`addWelcomeNotes`), larger than other notes,
-  each with a few pictures round it so that its layer is a real one. The walk (`updateTour`) is always
+  palms together to close. The cards are notes made in code (`addWelcomeNotes`), each drawn as a premade
+  card of the card library (`core/cards/lesson.cpp`) in the look of the others, with or without `-cards`,
+  and each with a few pictures round it so that its layer is a real one. The walk (`updateTour`) is always
   at some lesson and that lesson at some beat, and it never leaves you with nothing to read:
   - **One line over the tree** says the one thing to do now, large, with where the walk is before it
     ("3 of 7 · Close your hand and pull it toward you"). It changes with each beat, not each card.
@@ -408,14 +409,19 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
     arrowheads running to it along a path (`drawMarks`). The next card from the first; either way under
     the card for panning; a picture and a dashed place to put it for moving; the picture, then its tools,
     then a dashed round on the face for marking; the small tree, with the way down to it; Put away.
-  - **The open lesson plays its gesture on its own face.** Closed, every lesson is its number on a plain
-    ground, always on the right of the open one.
+  - **The open lesson plays its gesture on its own face.** Opened, a lesson's card is its step as the
+    badge ("Step 3 of 7"), the lesson's name, the stage where the hand plays the gesture (for marking, the
+    picture to mark), and what to do in the lesson's own words. The hand is at its full size (`stage` in
+    the lessons' table), in the middle of a stage 35 cm tall (`lessonStageTall`) that holds all it draws;
+    the card is as tall as that and the words, taller than the library's cards, and never scrolls.
+    Closed, every lesson is its number on a plain ground over its name, always on the right of the open one.
   - **Beats.** Pulling is two (pull; then "Now push it away to come back", with pull and push playing on
     the layer pulled back to). Marking is four (go in; take up the pen; draw; come back out), the last
     three said along the foot of the picture on the card itself.
-  - **Done, then the next card.** A lesson done is a chime, a tick where its gesture played and "Done.
-    Pinch card 4 to go on", with that card ringed and arrowheads running to it. Pinching it is the next
-    lesson (as it is at any time: that is the skip, and it is said so after 14 s on a lesson not done).
+  - **Done, then the next card.** A lesson done is a chime, a tick where its gesture played (it stays
+    there while the card is shown) and "Done. Pinch card 4 to go on", with that card ringed and
+    arrowheads running to it. Pinching it is the next lesson (as it is at any time: that is the skip,
+    and it is said so after 14 s on a lesson not done).
     Left alone for 15 s the walk takes the card itself (`-guideAutoAfter <s>`); after the small tree, which
     leaves you on another layer where the next card is not to be seen, it does so after 4 s.
   - **The way out of the marked picture** ("Pinch empty space to come back out") has a place shown for it:

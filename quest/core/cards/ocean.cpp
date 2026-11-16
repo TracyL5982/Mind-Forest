@@ -4,7 +4,6 @@
 
 #include "../ocean/catalog.h"
 #include "media.h"
-#include "pieces.h"
 
 namespace cards::ocean {
 
@@ -58,6 +57,11 @@ const Shown* shownOf(const std::string& noteID) {
                                                  : Vec2{Metrics::openNoteWidth, OPEN_TALL * openScale / Art::ppm};
     s.viewTall = s.open.y * Art::ppm / openScale;
     if (kind->opens == Kind::Opens::picture) s.pictureTall = Catalog::pictureSize(aspect).y * Art::ppm / openScale;
+    // A card the app makes itself opens as tall as its whole panel: laid out in no frame at all, it runs as far as it goes.
+    if (std::optional<Opened> whole = kind->premade ? cards::opened(noteID, openScale, 0, s.pictureTall) : std::nullopt) {
+        s.viewTall = whole->contentTall / openScale;
+        s.open = {Metrics::openNoteWidth, whole->contentTall / Art::ppm};
+    }
     return &s;
 }
 
@@ -93,9 +97,13 @@ std::optional<std::string> cardOf(const Ref& ref) {
     std::shared_ptr<const Catalog> catalog = held().lock();
     std::optional<OceanCard> card = catalog ? oceanCard(*catalog, ref) : std::nullopt;
     if (!card) return std::nullopt;
-    put(card->id, card->view, card->item);
-    pieces()[card->id] = *card;
+    hold(*card);
     return card->id;
+}
+
+void hold(const OceanCard& card) {
+    put(card.id, card.view, card.item);
+    pieces()[card.id] = card;
 }
 
 bool composing(const std::string& noteID) {

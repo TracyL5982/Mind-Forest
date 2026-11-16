@@ -598,7 +598,7 @@ private:
         bool tourDone[8] = {};              // which lessons the viewer has done
         int tourLessonWas = -2;             // the lesson in focus last frame, and since when it has been
         double tourLessonAt = 0;
-        int tourTickFor = -1;               // the lesson just done, whose card shows a tick the next time it is looked at
+        int tourTickFor = -1;               // the lesson just done, whose card shows a tick from the next time it is looked at
         double tourTick = -1;               // since when it has (-1: not yet)
         float tourCarried = 0;              // how far the tree has been carried on the walk, m
         int tourShown = -1;                 // where the ghost hand is: on lesson n's card; 100 + n on a card of its own; -1 nowhere

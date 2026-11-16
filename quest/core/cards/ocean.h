@@ -17,6 +17,7 @@
 
 #include "../ocean/art.h"
 #include "cards.h"
+#include "pieces.h"
 
 namespace cards::ocean {
 
@@ -33,9 +34,12 @@ constexpr float INDICATOR_WIDE = 4, INDICATOR_EDGE = 4, INDICATOR_END = 12;
 
 /// Draws the notes, films and works of `catalog` as cards from now on (`-cards`).
 void hold(const std::shared_ptr<const Catalog>& catalog);
-/// The note a piece's card is put for, made now if the held catalog draws the piece as a card; nothing for a
-/// piece without one. A note's own id, or a film's or a work's `Ref::key`.
+/// The note a piece's card is put for: one held already (`hold`), or one made now if the held catalog draws the
+/// piece as a card; nothing for a piece without one. A note's own id, or a film's or a work's `Ref::key`.
 std::optional<std::string> cardOf(const Ref& ref);
+/// Draws `card` for the note `card.id` from now on: a held piece's card, or one the app makes itself (a lesson of
+/// the welcome tree), which is drawn with or without `-cards`.
+void hold(const OceanCard& card);
 /// Puts a held piece's card again with what the tree says of the node that shows it. True when what it
 /// draws changed. Its sizes stay: they never depend on the node.
 bool seat(const std::string& noteID, const Node& node);
