@@ -3,12 +3,14 @@
  * Usage: tsx scripts/scout-probe.ts "<words from a card title>" ["what the user asks for"]
  *    or: tsx scripts/scout-probe.ts "new:<a thought to drop in>" ["what the user asks for"]
  */
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_SETTINGS, makeItem, makeNode, type RoleContext } from '../src/core/roles/types.ts';
 import { scout } from '../src/core/roles/scout.ts';
 import { Mindstorm } from '../src/core/state.ts';
 import { DiskAssets } from '../src/node/assets.ts';
 import { loadEnv } from '../src/node/env.ts';
+import { openInstagram } from '../src/node/instagram.ts';
 import { MetaModel } from '../src/node/model-meta.ts';
 import { SqliteStore } from '../src/node/store.ts';
 import { makeTools } from '../src/node/tools.ts';
@@ -33,6 +35,18 @@ if (process.env.SHOW_CHOICES) {
   }) as typeof model.json;
 }
 const assets = new DiskAssets(join(dataDir, 'assets'));
+// The Instagram library the data folder holds, searched as the service searches it, and never read from Instagram here.
+const following =
+  env.META_IG_TOKEN && env.META_IG_USER_ID
+    ? openInstagram({
+        connection: { token: env.META_IG_TOKEN, userId: env.META_IG_USER_ID },
+        list: env.MIND_PALACE_INSTAGRAM_LIST || join(homedir(), '.mind-palace', 'instagram-following.md'),
+        dir: join(dataDir, 'instagram'),
+        assets,
+        read: false,
+        log: (line) => console.log(line),
+      })?.library
+    : undefined;
 let n = 0;
 const newId = () => `probe-${++n}`;
 const now = () => new Date().toISOString();
@@ -41,7 +55,7 @@ mind.load(new SqliteStore(join(dataDir, 'mindstorm.sqlite')).all());
 
 const ctx: RoleContext = {
   mind, model, assets, newId, now,
-  tools: makeTools({ model, assets, keys: env }),
+  tools: makeTools({ model, assets, keys: env, following }),
   settings: { ...DEFAULT_SETTINGS },
   // NO_EMBEDS=1 stands for a headset connected: videos are looked for as files that play directly.
   playback: () => ({ embeds: !process.env.NO_EMBEDS, files: [] }),

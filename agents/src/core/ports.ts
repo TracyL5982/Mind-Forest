@@ -105,6 +105,8 @@ export interface Found {
   image?: string;
   /** A smaller copy of `image` for the model to look at, when the source serves one. */
   preview?: string;
+  /** Its picture, already stored with the service, so nothing is fetched to show it. */
+  asset?: string;
   /** A recording that plays in place, such as a podcast episode or a film. */
   media?: string;
   /** How long `media` plays, in seconds, when the source says. */

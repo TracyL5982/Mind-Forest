@@ -96,7 +96,8 @@ export interface LibraryFiles {
 
 /** Turns pictures a browser may not show into JPEGs. A picture that could not be made is missing from the answer. */
 export interface Pictures {
-  jpeg(paths: string[], longest: number): Promise<Map<string, Uint8Array>>;
+  /** `quality` from 1 to 100, 82 when not given. */
+  jpeg(paths: string[], longest: number, quality?: number): Promise<Map<string, Uint8Array>>;
   /** One rectangle of a picture, `[x, y, width, height]` in its pixels. */
   crop(path: string, box: [number, number, number, number]): Promise<Uint8Array | null>;
 }
@@ -379,12 +380,12 @@ const BATCH = 100;
 
 /** HEIC to JPEG and crops with macOS's own `sips`, several at once. Elsewhere every picture is missing. */
 export const sipsPictures: Pictures = {
-  async jpeg(paths, longest) {
+  async jpeg(paths, longest, quality = 82) {
     const out = mkdtempSync(join(tmpdir(), 'library-'));
     try {
       const batches = Array.from({ length: Math.ceil(paths.length / BATCH) }, (_v, i) => paths.slice(i * BATCH, (i + 1) * BATCH));
       await inTurn(batches, 8, async (batch) => {
-        await run('sips', ['-Z', String(longest), '-s', 'format', 'jpeg', '-s', 'formatOptions', '82', ...batch, '--out', out]).catch(() => null);
+        await run('sips', ['-Z', String(longest), '-s', 'format', 'jpeg', '-s', 'formatOptions', String(quality), ...batch, '--out', out]).catch(() => null);
       });
       const made = new Map<string, Uint8Array>();
       for (const path of paths) {

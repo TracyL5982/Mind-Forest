@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ModelClient } from '../core/ports.ts';
@@ -149,7 +150,16 @@ const shared = {
         }
       : undefined,
   transcribe: !fake && env.OPENAI_API_KEY ? openaiTranscribe(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_HEARING_MODEL }) : undefined,
-  instagram: env.META_IG_TOKEN && env.META_IG_USER_ID ? { token: env.META_IG_TOKEN, userId: env.META_IG_USER_ID } : undefined,
+  // The accounts the user chose, outside the repository since the list names them. MIND_PALACE_INSTAGRAM_READ=off searches what is kept without reading Instagram.
+  instagram:
+    env.META_IG_TOKEN && env.META_IG_USER_ID
+      ? {
+          token: env.META_IG_TOKEN,
+          userId: env.META_IG_USER_ID,
+          list: env.MIND_PALACE_INSTAGRAM_LIST || join(homedir(), '.mind-palace', 'instagram-following.md'),
+          read: env.MIND_PALACE_INSTAGRAM_READ !== 'off',
+        }
+      : undefined,
   maps,
 };
 const port = Number(env.MIND_PALACE_PORT ?? 8787);

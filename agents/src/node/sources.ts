@@ -12,6 +12,17 @@ export interface SourceOptions {
   keys?: Record<string, string | undefined>;
   /** Told what a priced call cost, in dollars. */
   spent?: (dollars: number) => void;
+  /** The user's chosen Instagram accounts. Without them, Instagram is not offered. */
+  following?: Following;
+}
+
+/** The user's chosen Instagram accounts, read ahead into a library on this machine, so a search of them is a lookup there. */
+export interface Following {
+  readonly categories: readonly string[];
+  /** How many posts it holds. Until it holds one, Instagram is not offered. */
+  size(): number;
+  /** The posts that match, best first, each with its picture already stored as an asset. */
+  search(query: string): Promise<Found[]>;
 }
 
 interface Adapter extends Source {
@@ -609,6 +620,22 @@ export function makeSources(opts: SourceOptions): Tools['sources'] {
     },
   };
 
+  // ---- posts from the accounts the user follows, kept on this machine
+
+  const following = opts.following;
+  const instagram: Adapter | null = following
+    ? {
+        id: 'instagram',
+        name: 'Instagram',
+        goodFor: `Posts from accounts you follow: ${following.categories.join(', ')}. Their own pictures with their captions.`,
+        query: 'One to three plain words for what the posts would show or say ("contemporary dance", "risograph print", "ramen"), or the name of one of its categories.',
+        show: 2,
+        visual: true,
+        resting: () => following.size() === 0,
+        search: (query) => following.search(query),
+      }
+    : null;
+
   const guardianKey = opts.keys?.GUARDIAN_API_KEY;
   const news: Adapter = {
     id: 'news',
@@ -628,6 +655,7 @@ export function makeSources(opts: SourceOptions): Tools['sources'] {
   const adapters: Adapter[] = [
     web, papers, books, data, discussions, code, answers, museums, commons, boards, podcasts, recipes, archive,
     ...(guardianKey ? [news] : []), ...(tmdbKey ? [films] : []), ...(europeanaKey ? [heritage] : []), ...(unsplashKey ? [photos] : []),
+    ...(instagram ? [instagram] : []),
   ];
   const byId = new Map(adapters.map((a) => [a.id, a]));
 

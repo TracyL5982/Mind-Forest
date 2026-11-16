@@ -855,18 +855,17 @@ async function choose(ctx: RoleContext, d: Direction, source: Source, { fresh, q
   const pictured = fresh.slice(0, VISUAL_SHOWN_TO_MODEL);
   const found = !source.visual
     ? fresh.slice(0, FOUND_SHOWN_TO_MODEL).map((f) => ({ ...f, stored: null, seen: null }))
-    : (
-        await ctx.step(ROLE, label(`Fetching ${pictured.length} pictures from`, sourceWords(source)), () =>
-          inTime(
-            pictured.map(async (f) =>
-              !f.image ? { ...f, stored: null, seen: null }
-              : source.hotlink ? { ...f, stored: null, seen: await ctx.tools.web.look(f.preview ?? f.image) }
-              : { ...f, stored: await ctx.tools.web.picture(f.image), seen: null },
-            ),
-            PICTURES_WAIT_MS,
-          ),
-        )
-      ).flatMap((f) => (f && (f.stored || f.seen) ? [f] : []));
+    : await (async () => {
+        // A record whose picture the service already keeps (an Instagram post) is used as it is, and nothing is fetched for it.
+        const one = async (f: Found) =>
+          f.asset ? { ...f, stored: { asset: f.asset }, seen: null }
+          : !f.image ? { ...f, stored: null, seen: null }
+          : source.hotlink ? { ...f, stored: null, seen: await ctx.tools.web.look(f.preview ?? f.image) }
+          : { ...f, stored: await ctx.tools.web.picture(f.image), seen: null };
+        const fetching = pictured.filter((f) => !f.asset && f.image).length;
+        const all = () => inTime(pictured.map(one), PICTURES_WAIT_MS);
+        return fetching > 0 ? await ctx.step(ROLE, label(`Fetching ${fetching} pictures from`, sourceWords(source)), all) : await all();
+      })().then((all) => all.flatMap((f) => (f && (f.stored || f.seen) ? [f] : [])));
   if (found.length === 0) {
     ctx.note(ROLE, `${source.name} has nothing for "${query}", left out`);
     return [];
