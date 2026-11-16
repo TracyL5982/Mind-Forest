@@ -244,8 +244,10 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
 - **The sounds** are synthesized by `quest/sound/synth.py` (numpy, scipy): about 80 wav files, 80 MB, all in
   one key (D Lydian) so anything that overlaps agrees. Each layer has a chord, a stack of fifths that
   climbs a step per layer; single things (a card that arrives, a level of the small tree) have single notes.
-  `tools/push_media.sh` makes them into `media-src/quest/sounds` whenever the script is newer, and sends
-  them with the rest of the media. Without them the app runs silent.
+  They are in git, in `media-src/quest/sounds`, so a clone has them without numpy or scipy.
+  `tools/push_media.sh` makes them again only when the script is not the one they were last made by (its
+  hash is kept in `sound/made-by.sha`; the script gives the same files every time), and sends them with
+  the rest of the media. Without them the app runs silent.
 - **The mixer** is `core/audio.*`: one-shot voices and loops whose level can be eased, mixed on the audio
   thread without locks. `android/.../audio_android.cpp` plays it through AAudio while the session runs;
   `desktop/audio_mac.cpp` through the Mac's output.
@@ -310,8 +312,8 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
   stand in the room by a tree, over the ocean and at the questions for 14 s. Shown once (`home` in
   `ocean-guide.txt`).
   The face is that of Muse's Garden's title, as Kai asked: Fraunces 72pt Soft Light and its italic (SIL
-  Open Font License), two more of `Font::Weight` (`display`, `displayItalic`). Their files are with the
-  media, not in git: `media-src/quest/fonts/`, copied from the Mac's own fonts, sent by
+  Open Font License), two more of `Font::Weight` (`display`, `displayItalic`). Their files are in git with the
+  rest of the app's own media: `media-src/quest/fonts/`, sent by
   `tools/push_media.sh` to `media/fonts/` on the headset. The Mac preview reads the same files. Without
   them the platform's own serif stands in. "Momo" is Kai's word (2026-11-15); this build has no Momo yet,
   so its number stands at the questions still headed "Ask the gardener".
@@ -332,9 +334,9 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
   the eight gestures in `guidegestures.cpp`) and drawn as a line: `Material::Kind::ghost` draws a shape
   three times over, unseen for depth, faintly for its body, and swollen and inside out for an edge of
   even weight. What the hands act on is drawn in the line material, as the small tree is.
-  The model is not in git: `tools/run.sh -- -dumpHandMesh -quitAfter 8` writes it on the headset,
-  `adb pull …/files/out/hand-right.bin media-src/quest/hands/` fetches it, and `tools/push_media.sh`
-  sends it back with the rest of the media. Without it the guide is off.
+  The model is in git (`media-src/quest/hands/`), and `tools/push_media.sh` sends it with the rest of the
+  media. To take it from a headset again: `tools/run.sh -- -dumpHandMesh -quitAfter 8` writes it there and
+  `adb pull …/files/out/hand-right.bin media-src/quest/hands/` fetches it. Without it the guide is off.
 - **What has been learned** is kept in `ocean-guide.txt` beside the shelf's file.
 - **Flags:** `-noGuide`; `-freshGuide` forgets what was learned (the welcome tree stands again);
   `-guideWelcomed` starts past it; `-guideDemo tour|sheet|<gesture>` (pinch, carry, layers, drag, mark,

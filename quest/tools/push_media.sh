@@ -31,7 +31,7 @@ sync_dir() {
 
 # Small copies of the works' pictures (512 px JPEG, about 25 MB for 750), for cards a few centimetres wide:
 # unpacking a 1600 px HEIC takes the headset about 55 ms, a small JPEG a few. Made once, beside the other
-# caches in media-src (which git ignores); a later run only makes what is missing.
+# caches in media-src (git ignores this one); a later run only makes what is missing.
 SMALL="$REPO_ROOT/media-src/quest/works-small"
 mkdir -p "$SMALL"
 made=0
@@ -47,12 +47,20 @@ if [ -s "$SMALL/.todo" ]; then
 fi
 rm -f "$SMALL/.todo"
 
-# The app's own sounds (about 80 MB of wav), made by quest/sound/synth.py beside the other caches in
-# media-src: made again whenever the script is newer than what it last made. Needs numpy and scipy.
+# The app's own sounds (about 80 MB of wav, in git), made by quest/sound/synth.py: made again only when the
+# script is not the one they were last made by (its hash is kept in quest/sound/made-by.sha; a file's date
+# says nothing in a fresh clone). Needs numpy and scipy.
 SOUNDS="$REPO_ROOT/media-src/quest/sounds"
-if [ ! -f "$SOUNDS/manifest.json" ] || [ "$REPO_ROOT/quest/sound/synth.py" -nt "$SOUNDS/manifest.json" ]; then
+SYNTH="$REPO_ROOT/quest/sound/synth.py"
+STAMP="$REPO_ROOT/quest/sound/made-by.sha"
+synth_now=$(shasum -a 256 "$SYNTH" | cut -d' ' -f1)
+if [ ! -f "$SOUNDS/manifest.json" ] || [ "$(cat "$STAMP" 2>/dev/null)" != "$synth_now" ]; then
   echo "sounds: making them"
-  python3 "$REPO_ROOT/quest/sound/synth.py" --out "$SOUNDS" || echo "sounds: could not be made (python3 with numpy and scipy is needed); the app runs silent without them"
+  if python3 "$SYNTH" --out "$SOUNDS"; then
+    echo "$synth_now" > "$STAMP"
+  else
+    echo "sounds: could not be made (python3 with numpy and scipy is needed); the ones already there are sent as they are"
+  fi
 fi
 
 adb push "$REPO_ROOT/visionos/MindPalace/Resources/ocean.json" $DEVICE_FILES/media/ocean.json | tail -1
@@ -64,8 +72,8 @@ sync_dir "$REPO_ROOT/public/clips" clips
 sync_dir "$REPO_ROOT/public/works" works
 sync_dir "$SMALL" works-small
 [ -f "$SOUNDS/manifest.json" ] && sync_dir "$SOUNDS" sounds
-# The headset's own hand model, for the guide's hands (written once with `-dumpHandMesh`, see tools/hand_mesh.py).
+# The headset's own hand model, for the guide's hands (in git; written once with `-dumpHandMesh`, see tools/hand_mesh.py).
 [ -f "$REPO_ROOT/media-src/quest/hands/hand-right.bin" ] && sync_dir "$REPO_ROOT/media-src/quest/hands" hands
-# The greeting's lettering (Fraunces 72pt Soft Light and its italic, SIL Open Font License; copied from the Mac's own fonts).
+# The greeting's lettering (Fraunces 72pt Soft Light and its italic, SIL Open Font License; in git).
 [ -d "$REPO_ROOT/media-src/quest/fonts" ] && sync_dir "$REPO_ROOT/media-src/quest/fonts" fonts
 adb shell "du -sh $DEVICE_FILES/media"
