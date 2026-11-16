@@ -132,8 +132,9 @@ One service for many headsets, on Fly.io in San Jose. Each headset gets its own 
 - **Limits.** A device gets 60 minutes of voice with Momo (both ways), 30 searches and 30 web answers a day, and the service stops costly work at $30 a day. The day is Pacific time. The counts are in `/data/ledger.json`, so a redeploy keeps them. fly.toml sets each limit. The spend counts what the service measures in dollars: the realtime voice, its transcription, web answers, and the overflow to OpenAI. Meta's tokens have no listed price, so they count as $0 unless `MIND_PALACE_META_PRICE` gives dollars per million.
 - **Overflow.** While Meta's minute is full, the Scout's calls go to OpenAI instead of waiting: gpt-5.4 for its directions, gpt-5.4-mini for its quick calls and searches (`src/node/hosted/overflow.ts`). Each one is logged as `[overflow]`. `MIND_PALACE_OVERFLOW=off` turns it off.
 - **Every check reads the path decoded and normalized**, as a space does, and speech, transcription and the voice are metered inside their handlers, so no spelling of a path gets past a limit.
+- **Instagram.** The service opens one library of the user's accounts, in `/data/instagram`, and every space searches it through a view of its own, each picture copied into that space's assets. No space opens or reads its own. The server does not read Instagram itself, since its pictures are made small with macOS's `sips`: `deploy/instagram.sh` copies the list and the Mac's library to the volume, never into git or the image, and restarts the machine.
 - **Idle spaces** close after 20 quiet minutes and open again on the next request.
-- **Against a script with the app's key.** At most 60 spaces, and 30 new devices an hour. A file upload is at most 25 MB, and one device's uploads 40 MB in all. A device keeps two `/live` sockets; a third closes the oldest. The voice limit, the cap and the off switch are checked on every piece of audio, so a turn or an answer under way stops too.
+- **Against a script with the app's key.** At most 60 spaces, and 30 new devices an hour. A file upload is at most 25 MB, and one device's uploads 40 MB in all. A device's own commands and drops stop once its mindstorm is 20 MB on disk, and a socket message is at most 1 MB. A device keeps two `/live` sockets; a third closes the oldest. The voice limit, the cap and the off switch are checked on every piece of audio, so a turn or an answer under way stops too.
 - **Status and the off switch.** `GET /admin` with `Authorization: Bearer <admin token>` gives every device by its full id, the devices online, the day's spend and use, and the recent errors. `POST /admin?off=1` stops all costly work, and `?off=0` starts it again. Trees stay browsable while it is off. `DELETE /admin/spaces/<device>` deletes a space and its folder.
 
 | Step | Command, from `agents/` |
@@ -145,6 +146,7 @@ One service for many headsets, on Fly.io in San Jose. Each headset gets its own 
 | Roll back | `deploy/rollback.sh` lists the images; `deploy/rollback.sh <image>` runs one again. |
 | Back up | `deploy/backup.sh`: a volume snapshot on Fly and a copy in `~/.mind-palace/backups`. |
 | Status, off, on | `deploy/admin.sh status`, `deploy/admin.sh off`, `deploy/admin.sh on`. |
+| Instagram | `deploy/instagram.sh`: the list and the Mac's library onto the volume, then a restart. |
 | Load test | `npm run judges -- --url <service> --judges 10`: N voice-free sessions that open, ask, search and open a card. |
 
 To run it locally in hosted mode: `MIND_PALACE_HOSTED=1 MIND_PALACE_APP_KEY=k MIND_PALACE_ADMIN_TOKEN=a MIND_PALACE_DATA=<scratch folder> MIND_PALACE_PORT=8899 npm run dev:fake`.

@@ -14,6 +14,7 @@ import { openaiWebAnswer } from './web-answer.ts';
 import { PICTURE_DOLLARS, startHosted, telegramAlert } from './hosted/hosted.ts';
 import { DEFAULT_LIMITS, Ledger } from './hosted/ledger.ts';
 import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareCost } from './hosted/overflow.ts';
+import { openInstagram } from './instagram.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -178,6 +179,13 @@ if (ledger) {
           return new Uint8Array(await new Response(await speak(text, AbortSignal.timeout(20_000))).arrayBuffer());
         }
       : undefined;
+  // One library of the user's Instagram accounts for every space, on the volume. Its pictures are made small with macOS's `sips`,
+  // which a Linux server lacks, so the server reads Instagram only with MIND_PALACE_INSTAGRAM_READ=on; deploy/instagram.sh copies
+  // the Mac's library there instead.
+  const ig = shared.instagram;
+  const following = ig?.list
+    ? (openInstagram({ connection: ig, list: ig.list, dir: join(dataDir, 'instagram'), read: env.MIND_PALACE_INSTAGRAM_READ === 'on', log }) ?? undefined)
+    : undefined;
   const service = await startHosted({
     port,
     host,
@@ -192,6 +200,8 @@ if (ledger) {
     newPerHour: number('MIND_PALACE_NEW_DEVICES_PER_HOUR', 30),
     pictureDollars: number('MIND_PALACE_PICTURE_DOLLARS', PICTURE_DOLLARS),
     uploads: { file: number('MIND_PALACE_UPLOAD_MB', 25) * 1e6, total: number('MIND_PALACE_UPLOAD_MB_PER_DEVICE', 40) * 1e6 },
+    following,
+    storeLimit: number('MIND_PALACE_STORE_MB_PER_DEVICE', 20) * 1e6,
     record,
     log,
   });

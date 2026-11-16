@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { join, posix } from 'node:path';
 import { PROTOCOL_VERSION } from '../protocol.ts';
 import { openSpace, type Meter, type ServerOptions, type Space } from '../server.ts';
+import type { InstagramLibrary, InstagramReader } from '../instagram.ts';
 import { BOT_API } from '../telegram.ts';
 import { LINES, type Ledger } from './ledger.ts';
 
@@ -42,6 +43,10 @@ export interface HostedOptions {
   uploads?: { file: number; total: number };
   /** What a made picture costs, in dollars; another fal model than the default is priced otherwise. */
   pictureDollars?: number;
+  /** The user's Instagram accounts, opened once: every space searches this one library, and only its reader, if any, reads Instagram. */
+  following?: { library: InstagramLibrary; reader?: InstagramReader };
+  /** What one device's mindstorm may come to on disk, in bytes, before its own commands and drops are refused. */
+  storeLimit?: number;
   /** A line in Momo's voice as 16-bit mono PCM at the live voice's rate, for a refusal said without the realtime model. */
   record?: (text: string) => Promise<Uint8Array>;
   log: (line: string) => void;
@@ -133,6 +138,10 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     const space = openSpace({
       ...opts.shared,
       telegram: undefined,
+      // A space keeps the user's own account for its recent posts, but never the list: it searches the shared library instead.
+      instagram: opts.shared.instagram && { token: opts.shared.instagram.token, userId: opts.shared.instagram.userId },
+      library: opts.following?.library,
+      storeLimit: opts.storeLimit ?? 20e6,
       clientDir: join(opts.dataDir, 'no-web-page'),
       dataDir: dir,
       token: `${opts.appKey}.${device}`,
@@ -206,6 +215,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       newThisHour: born.filter((at) => at >= Date.now() - 3_600_000).length,
       newPerHour,
       known: [...known],
+      instagram: opts.following ? { posts: opts.following.library.size(), reading: Boolean(opts.following.reader) } : null,
       devicesOnline: spaces.filter((s) => s.online > 0).length,
       open: spaces,
       ...ledger.status(),
@@ -278,6 +288,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     open: () => [...open.keys()],
     async close() {
       clearInterval(sweep);
+      opts.following?.reader?.stop();
       await Promise.all([...closing.values()]);
       for (const [, entry] of open) await (await entry.space.catch(() => null))?.close();
       open.clear();

@@ -116,13 +116,13 @@ export class InstagramLibrary {
   private readonly readings = new Map<string, Reading>();
   private readonly entries = new Map<string, Entry>();
   private readonly index = new SearchIndex();
-  /** Each post's picture as an asset, once a search has handed it out, so a post found again is not copied again. */
-  private readonly copies = new Map<string, string>();
+  /** Searches into the assets the library was opened with, when it was opened with some. */
+  private readonly own: { search(query: string): Promise<Found[]> } | null;
 
   constructor(
     readonly dir: string,
     listed: Listed,
-    private readonly assets: Assets,
+    assets?: Assets,
   ) {
     this.accounts = listed.accounts;
     this.categories = listed.categories;
@@ -135,6 +135,7 @@ export class InstagramLibrary {
         // Never read, or its file is not one this library wrote: the account is read again.
       }
     }
+    this.own = assets ? followingIn(this, assets) : null;
   }
 
   /** How many posts it holds. */
@@ -173,13 +174,7 @@ export class InstagramLibrary {
    * list's categories, posts of accounts in those categories come first.
    */
   async search(query: string): Promise<Found[]> {
-    const found: Found[] = [];
-    for (const { post, account } of this.rank(query)) {
-      const asset = await this.copy(post);
-      if (!asset) continue;
-      found.push({ title: account.name, by: `@${account.handle}`, date: post.at.slice(0, 10), text: post.caption.slice(0, CAPTION_SHOWN), from: 'Instagram', url: post.url, asset });
-    }
-    return found;
+    return this.own ? this.own.search(query) : [];
   }
 
   rank(query: string): Entry[] {
@@ -215,21 +210,42 @@ export class InstagramLibrary {
     }
   }
 
-  private async copy(post: Post): Promise<string | null> {
-    const known = this.copies.get(post.id);
+  private file(handle: string): string {
+    return join(this.dir, 'accounts', `${handle}.json`);
+  }
+}
+
+/**
+ * One space's view of a library: its posts, each picture copied into that space's own assets the first time a search there hands it
+ * out, and not copied again. A hosted service opens one library and reads Instagram in that one place; every space searches it
+ * through a view of its own.
+ */
+export function followingIn(library: InstagramLibrary, assets: Assets): { categories: readonly string[]; size(): number; search(query: string): Promise<Found[]> } {
+  const copies = new Map<string, string>();
+  const copy = async (post: Post): Promise<string | null> => {
+    const known = copies.get(post.id);
     if (known) return known;
     try {
-      const { id } = await this.assets.put(new Uint8Array(readFileSync(this.picture(post.id))), 'image/jpeg', `instagram-${post.id}.jpg`);
-      this.copies.set(post.id, id);
+      const { id } = await assets.put(new Uint8Array(readFileSync(library.picture(post.id))), 'image/jpeg', `instagram-${post.id}.jpg`);
+      copies.set(post.id, id);
       return id;
     } catch {
       return null;
     }
-  }
-
-  private file(handle: string): string {
-    return join(this.dir, 'accounts', `${handle}.json`);
-  }
+  };
+  return {
+    categories: library.categories,
+    size: () => library.size(),
+    async search(query) {
+      const found: Found[] = [];
+      for (const { post, account } of library.rank(query)) {
+        const asset = await copy(post);
+        if (!asset) continue;
+        found.push({ title: account.name, by: `@${account.handle}`, date: post.at.slice(0, 10), text: post.caption.slice(0, CAPTION_SHOWN), from: 'Instagram', url: post.url, asset });
+      }
+      return found;
+    },
+  };
 }
 
 const hashtags = (caption: string): string[] => [...caption.matchAll(/#([\p{L}\p{N}_]+)/gu)].map((m) => m[1]!.toLowerCase());
@@ -526,7 +542,7 @@ export function said({ answer, usage, ms, posts, fetched, bytes }: Outcome): str
 }
 
 /** The library, and its reader unless reading is off. Null without a list, which leaves Instagram out of the Scout's sources. */
-export function openInstagram(o: { connection: Connection; list: string; dir: string; assets: Assets; read: boolean; log: (line: string) => void }): { library: InstagramLibrary; reader?: InstagramReader } | null {
+export function openInstagram(o: { connection: Connection; list: string; dir: string; assets?: Assets; read: boolean; log: (line: string) => void }): { library: InstagramLibrary; reader?: InstagramReader } | null {
   let listed: Listed;
   try {
     listed = parseList(readFileSync(o.list, 'utf8'));

@@ -20,7 +20,7 @@ import { HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, spokenMs, questW
 import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
 import { Telegram, type TelegramOptions } from './telegram.ts';
-import { openInstagram } from './instagram.ts';
+import { followingIn, openInstagram, type InstagramLibrary } from './instagram.ts';
 import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
 
@@ -38,6 +38,10 @@ export interface ServerOptions {
    * `read: false` searches what the library holds without reading Instagram.
    */
   instagram?: { token: string; userId: string; list?: string; read?: boolean };
+  /** The user's Instagram accounts, opened once and shared: this space searches them through a view of its own and reads nothing. */
+  library?: InstagramLibrary;
+  /** Hosted mode: past this many bytes of mindstorm on disk, the device's own commands and drops are refused. */
+  storeLimit?: number;
   keys?: Record<string, string | undefined>;
   /** Reads a reply aloud. Without it the client uses the browser's own voice. */
   speak?: Speak;
@@ -160,9 +164,10 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     renameSync(`${uploadedFile}.tmp`, uploadedFile);
   };
   const instagram = opts.instagram;
-  const following = instagram?.list
+  const opened = !opts.library && instagram?.list
     ? openInstagram({ connection: instagram, list: instagram.list, dir: join(opts.dataDir, 'instagram'), assets, read: instagram.read !== false, log })
     : null;
+  const following = opts.library ? followingIn(opts.library, assets) : opened?.library;
 
   const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID() });
   mind.load(store.all());
@@ -214,7 +219,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     mind,
     roles: meter ? metered(opts.roles, meter) : opts.roles,
     model: opts.model,
-    tools: chargedPictures(makeTools({ model: opts.model, assets, instagram: opts.instagram, following: following?.library, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)), log: opts.log }), meter),
+    tools: chargedPictures(makeTools({ model: opts.model, assets, instagram: opts.instagram, following, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)), log: opts.log }), meter),
     assets,
     store,
     settings,
@@ -365,8 +370,15 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     json(res, 404, { error: 'not found' });
   }
 
-  const wss = new WebSocketServer({ noServer: true });
-  const liveWss = new WebSocketServer({ noServer: true });
+  // In hosted mode a message is small: a client's commands and drops, and on /live 100 ms of audio (a frame's own limit is 1 MiB).
+  const wss = new WebSocketServer({ noServer: true, ...(meter ? { maxPayload: 1_000_000 } : {}) });
+  const liveWss = new WebSocketServer({ noServer: true, ...(meter ? { maxPayload: 1_500_000 } : {}) });
+  const storeFull = (): boolean => {
+    if (opts.storeLimit === undefined) return false;
+    const size = (file: string) => (existsSync(file) ? statSync(file).size : 0);
+    const db = join(opts.dataDir, 'mindstorm.sqlite');
+    return size(db) + size(`${db}-wal`) > opts.storeLimit;
+  };
   const upgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const refuse = (status: string) => {
@@ -401,6 +413,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   };
 
   liveWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    // A frame over the size limit, or one that breaks the protocol, closes the socket; unheard, the error would end the process.
+    ws.on('error', (err) => log(`[live] socket closed: ${err.message}`));
     const live = opts.live!;
     // Terminated, not closed: a closing socket still delivers what arrives while it waits for the device's reply.
     if (meter) for (const old of [...liveWss.clients].slice(0, Math.max(0, liveWss.clients.size - LIVE_PER_SPACE))) old.terminate();
@@ -517,6 +531,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   });
 
   wss.on('connection', (ws: WebSocket) => {
+    ws.on('error', (err) => log(`[ws] socket closed: ${err.message}`));
     sockets.add(ws);
     const connection = randomUUID();
     connections.set(connection, ws);
@@ -546,6 +561,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         plays.set(ws, m.media);
         return;
       case 'dump':
+        if (storeFull()) return decline(ws, STORE_FULL);
         await pipeline.dump(m.dumps);
         return;
       case 'utter':
@@ -571,6 +587,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         pipeline.undo(m.id);
         return;
       case 'commands':
+        if (storeFull()) return decline(ws, STORE_FULL);
         pipeline.userCommands(m.label, m.commands);
         return;
       case 'organize':
@@ -594,7 +611,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     upgrade,
     online: () => sockets.size + liveWss.clients.size,
     async close() {
-      following?.reader?.stop();
+      opened?.reader?.stop();
       await telegram?.close();
       for (const ws of sockets) ws.terminate();
       for (const ws of liveWss.clients) ws.terminate();
@@ -669,6 +686,7 @@ function json(res: ServerResponse, status: number, value: unknown): void {
 }
 
 const FULL = 'this headset has used all its room for files';
+const STORE_FULL = "This headset's mind palace is full, so nothing more can be added here.";
 const tooBig = (limit: number) => `a file may be at most ${Math.round(limit / 1e6)} MB here`;
 
 /** What a space's uploads come to. A file that does not parse, as after a crash in the middle of writing it, counts as none. */
