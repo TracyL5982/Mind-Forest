@@ -150,9 +150,9 @@ async function fetchPicture(send: typeof fetch, url: string): Promise<{ bytes: U
   try {
     const res = await send(url, { headers: { 'User-Agent': AGENT_NAME, Accept: 'image/*' }, redirect: 'follow', signal: AbortSignal.timeout(12_000) });
     const mime = (res.headers.get('content-type') ?? '').split(';')[0]!.trim();
-    if (!res.ok || !/^image\/(jpeg|png|webp|gif)$/.test(mime)) return null;
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.length < MIN_PICTURE_BYTES || bytes.length > MAX_PICTURE_BYTES) return null;
+    if (!res.ok || !/^image\/(jpeg|png|webp|gif)$/.test(mime) || Number(res.headers.get('content-length')) > MAX_PICTURE_BYTES) return null;
+    const { bytes, whole } = await capped(res, MAX_PICTURE_BYTES);
+    if (!whole || bytes.length < MIN_PICTURE_BYTES) return null;
     return { bytes, mime };
   } catch {
     return null;
@@ -199,7 +199,7 @@ async function readPage(send: typeof fetch, url: string): Promise<Page | null> {
     });
     const type = res.headers.get('content-type') ?? '';
     if (!res.ok || !/text\/|xml|json/.test(type)) return null;
-    const html = new TextDecoder().decode((await res.arrayBuffer()).slice(0, MAX_PAGE_BYTES));
+    const html = new TextDecoder().decode((await capped(res, MAX_PAGE_BYTES)).bytes);
     const meta = (name: string) =>
       decode(
         new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]*content=["']([^"']*)["']`, 'i').exec(html)?.[1] ??
@@ -220,6 +220,35 @@ async function readPage(send: typeof fetch, url: string): Promise<Page | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * A response's body read only up to `max` bytes, the rest never fetched: a body sent without end, to each of a drop's fifty links,
+ * would otherwise be held whole until the timeout. `whole` says whether that was all of it.
+ */
+async function capped(res: Response, max: number): Promise<{ bytes: Uint8Array; whole: boolean }> {
+  const reader = res.body?.getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  let whole = true;
+  for (;;) {
+    const read = reader ? await reader.read() : { done: true as const, value: undefined };
+    if (read.done) break;
+    parts.push(read.value);
+    size += read.value.length;
+    if (size > max) {
+      whole = false;
+      await reader!.cancel().catch(() => {});
+      break;
+    }
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const part of parts) {
+    bytes.set(part, at);
+    at += part.length;
+  }
+  return { bytes: bytes.subarray(0, Math.min(size, max)), whole };
 }
 
 /** `address` read against the page at `base`, or undefined when it is no web address. A picture is only ever fetched from the web. */

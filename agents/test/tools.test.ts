@@ -102,3 +102,37 @@ test('a picture looked at for the model comes back as data and is kept nowhere',
   assert.equal(await tools.look(at('pixel.gif')), null);
   assert.equal(assets.files.size, 0);
 });
+
+test('a page or a picture is read only up to its cap, and the rest is never fetched', async () => {
+  const { createServer } = await import('node:http');
+  const sent = { page: 0, picture: 0 };
+  const total = 30_000_000;
+  const server = createServer((req, res) => {
+    const kind = req.url === '/picture.jpg' ? 'picture' : 'page';
+    res.writeHead(200, { 'content-type': kind === 'picture' ? 'image/jpeg' : 'text/html' });
+    const chunk = Buffer.alloc(64 * 1024, kind === 'page' ? 'a' : 0);
+    let stopped = false;
+    res.on('close', () => (stopped = true));
+    const more = () => {
+      while (!stopped && sent[kind] < total) {
+        sent[kind] += chunk.length;
+        if (!res.write(chunk)) return void res.once('drain', more);
+      }
+      if (!stopped) res.end();
+    };
+    more();
+  });
+  await new Promise<void>((ready) => server.listen(0, '127.0.0.1', ready));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  try {
+    const web = makeTools({ model: new FakeModel(), assets: new MemoryAssets() }).web;
+    const page = await web.read(`${base}/page`);
+    assert.ok(page, 'the page is read from what came before the cap');
+    assert.equal(await web.picture(`${base}/picture.jpg`), null, 'a picture past 8 MB is not kept');
+    await new Promise((done) => setTimeout(done, 100));
+    assert.ok(sent.page < 12_000_000, `the page's sender stopped early (${sent.page} bytes of ${total})`);
+    assert.ok(sent.picture < 18_000_000, `the picture's sender stopped early (${sent.picture} bytes of ${total})`);
+  } finally {
+    server.close();
+  }
+});
