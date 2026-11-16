@@ -325,7 +325,7 @@ Opened open(const std::string& noteID, const Entry& e) {
         Look panel;
         panel.fill = palette::glass;
         panel.edge = palette::line;
-        panel.radius = 20;
+        panel.radius = OPEN_RADIUS;
         pen.face(width, height, panel);
         pen.edge(width, height, panel);
     };

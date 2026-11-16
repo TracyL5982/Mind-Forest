@@ -309,6 +309,7 @@ TEST(aComposingViewReadsAsComposing) {
 TEST(aCardsEditsReadInOrderAndAreNoneWhenAbsent) {
     Json highlight = Json::object().set("id", "e1").set("kind", "highlight").set("quote", "the room stretches").set("at", 61);
     Json stroke = Json::object().set("id", "e2").set("kind", "stroke").set("points", Json::list({0.1, 0.2, 0.15, 0.25}));
+    Json stretch = Json::object().set("id", "e4").set("kind", "stretch").set("from", 12).set("to", 20.5);
     auto withEdits = [](Json edits) {
         Json j = raw(fixture("hello.json"));
         Json snapshot = j["snapshot"];
@@ -319,21 +320,26 @@ TEST(aCardsEditsReadInOrderAndAreNoneWhenAbsent) {
         for (size_t i = 1; i < nodes.size(); i++) list.push(nodes[i]);
         return parseInbound(j.set("snapshot", snapshot.set("nodes", list)).dump());
     };
-    Inbound read = withEdits(Json::list({highlight, stroke}));
+    Inbound read = withEdits(Json::list({highlight, stroke, stretch}));
     auto* hello = std::get_if<Hello>(&read);
     CHECK(hello, "a node with edits reads: %s", kindOf(read).c_str());
     if (hello) {
         const std::vector<Edit>& edits = hello->snapshot.nodes.front().edits;
-        CHECK_EQ(edits.size(), size_t(2));
-        if (edits.size() == 2) {
+        CHECK_EQ(edits.size(), size_t(3));
+        if (edits.size() == 3) {
             CHECK(edits[0].kind == Edit::Kind::highlight && edits[0].id == "e1" && edits[0].quote == "the room stretches" && edits[0].at == 61, "the highlight");
             CHECK(edits[1].kind == Edit::Kind::stroke && edits[1].points.size() == 2 && edits[1].points[1].second == 0.25f, "the line, two points");
+            CHECK(edits[2].kind == Edit::Kind::stretch && edits[2].from == 12 && edits[2].to == 20.5, "the video's stretch, in seconds");
         }
         CHECK(hello->snapshot.nodes.back().edits.empty(), "a node without edits has none");
     }
     Inbound odd = withEdits(Json::list({Json::object().set("id", "e3").set("kind", "stroke").set("points", Json::list({0.1, 0.2, 1.5, 0.2}))}));
     auto* bad = std::get_if<Malformed>(&odd);
     CHECK(bad && bad->why.find("edits[0].points") != std::string::npos, "a point off the card is malformed: %s", bad ? bad->why.c_str() : kindOf(odd).c_str());
+    Inbound backwards = withEdits(Json::list({Json::object().set("id", "e5").set("kind", "stretch").set("from", 20).set("to", 12)}));
+    auto* refused = std::get_if<Malformed>(&backwards);
+    CHECK(refused && refused->why.find("edits[0].to") != std::string::npos, "a stretch that ends before it begins is malformed: %s",
+          refused ? refused->why.c_str() : kindOf(backwards).c_str());
 }
 
 TEST(theOtherMessagesRead) {
@@ -408,6 +414,10 @@ std::vector<std::pair<Outbound, std::string>> outboundCases() {
         {Outbound::commands("Draw", {Command::addEdit(n1, Edit{.id = "e3", .kind = Edit::Kind::stroke, .points = {{0.1f, 0.25f}, {0.123456f, 1.2f}}})}),
          R"({"commands":[{"edit":{"id":"e3","kind":"stroke","points":[0.1,0.25,0.1235,1]},"id":"n1","type":"addEdit"}],"label":"Draw","t":"commands"})"},
         {Outbound::commands("Erase", {Command::removeEdit(n1, "e3")}), R"({"commands":[{"editId":"e3","id":"n1","type":"removeEdit"}],"label":"Erase","t":"commands"})"},
+        {Outbound::commands("Mark a stretch", {Command::addEdit(n1, Edit{.id = "e4", .kind = Edit::Kind::stretch, .from = 12.004, .to = 20.456})}),
+         R"({"commands":[{"edit":{"from":12,"id":"e4","kind":"stretch","to":20.46},"id":"n1","type":"addEdit"}],"label":"Mark a stretch","t":"commands"})"},
+        {Outbound::commands("Erase the marks", {Command::removeEdit(n1, "e1"), Command::removeEdit(n1, "e4")}),
+         R"({"commands":[{"editId":"e1","id":"n1","type":"removeEdit"},{"editId":"e4","id":"n1","type":"removeEdit"}],"label":"Erase the marks","t":"commands"})"},
         {Outbound::organize("tidy this", Scope{.treeIds = {t1}}), R"({"request":"tidy this","scope":{"nodeIds":[],"treeIds":["t1"]},"t":"organize"})"},
         {Outbound::organize("tidy", Scope{.nodeIds = {n1}}, n1), R"({"focus":"n1","request":"tidy","scope":{"nodeIds":["n1"],"treeIds":[]},"t":"organize"})"},
         {Outbound::handoff(Scope{}), R"({"scope":{"nodeIds":[],"treeIds":[]},"t":"handoff"})"},

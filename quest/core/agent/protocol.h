@@ -92,9 +92,9 @@ struct View {
     bool operator==(const View&) const = default;
 };
 
-/// What the user marked on a card with the pen: words highlighted, or a line drawn.
+/// What the user marked on a card with the pen: words highlighted, a line drawn, or a stretch of its video.
 struct Edit {
-    enum class Kind { highlight, stroke };
+    enum class Kind { highlight, stroke, stretch };
     std::string id;
     Kind kind = Kind::highlight;
     /// A highlight: the words as the card shows them, and where they start in the item's text (UTF-16 units) when they are in it.
@@ -102,6 +102,8 @@ struct Edit {
     std::optional<int> at;
     /// A line: its points in order, each 0 to 1 across and down the opened card's content, the whole of it as it scrolls.
     std::vector<std::pair<float, float>> points;
+    /// A stretch: seconds from the video's start, `from` before `to`. A card keeps one.
+    double from = 0, to = 0;
     bool operator==(const Edit&) const = default;
 };
 
@@ -121,7 +123,7 @@ struct Node {
     View view;
     /// Position among siblings.
     double order = 0;
-    /// The user's highlights and lines on the card, oldest first.
+    /// The user's highlights, lines and video stretch on the card, oldest first.
     std::vector<Edit> edits;
     bool operator==(const Node&) const = default;
 };

@@ -24,16 +24,41 @@
 /// for a card that has never bent, nor for a face of it that is not showing.
 class Bend {
 public:
-    /// Pieces are cut into columns this wide before they are bent. At full
-    /// zoom a column is 7.5 cm of the world, and its flat face is then half
-    /// a millimetre off the arc at most.
+    /// Pieces are cut into columns this wide before they are bent, in a piece's
+    /// own units along the card, counted from the card's middle. A face that
+    /// grows about the middle (a card opening) grows its columns with it, so the
+    /// pieces of one face keep their lines in common at every size, however and
+    /// whenever each was cut. At rest a face's columns are the card's. At full
+    /// zoom a column is 7.5 cm of the world, and its flat face is then half a
+    /// millimetre off the arc at most.
+    // NOTE(port): changed for Quest. The Swift cuts a piece once, at the card's columns, and bends each point onto
+    // the arc: a panel drawn again after its face grew, or a piece's own edge inside a column, then lies behind
+    // the piece under it, which shows through in stripes. Here columns grow with their face, and `drawn` puts
+    // every point on its column's chord.
     static constexpr float column = 0.025f;
+
+    /// How wide the columns of a piece placed in the card by `matrix` lie along the card.
+    static float width(const Mat4& matrix) {
+        float stretch = std::fabs(matrix.columns[0].x);
+        return stretch > 1e-6f ? stretch * column : column;
+    }
 
     /// Where a point of the flat card is once the card is bent.
     static Vec3 bent(Vec3 p, float curve) {
         if (!(curve > 1e-5f)) return p;
         float r = 1 / curve - p.z, a = p.x * curve;
         return {r * std::sin(a), p.y, 1 / curve - r * std::cos(a)};
+    }
+
+    /// Where a point of a piece whose columns are `width` wide is drawn: on the straight line across its column,
+    /// between where the column's edges are bent to. Every piece is cut at those edges, so pieces that lie over
+    /// each other are drawn exactly as far apart as they lie flat, however the card is bent and wherever a
+    /// piece's own edges fall.
+    static Vec3 drawn(Vec3 p, float curve, float width) {
+        if (!(curve > 1e-5f)) return p;
+        float from = std::floor(p.x / width) * width, t = (p.x - from) / width;
+        Vec3 a = bent({from, p.y, p.z}, curve), b = bent({from + width, p.y, p.z}, curve);
+        return a + (b - a) * t;
     }
 
     /// And back: where on the flat card a point on (or over) the bent one belongs.
@@ -52,6 +77,9 @@ private:
     /// One drawn piece.
     struct Part {
         std::weak_ptr<Entity> entity;
+        MeshRef flat;                       // the flat mesh it was given, cut again when its columns move in it
+        std::array<float, 3> lines{};       // where its columns lie in its own space: its line along the card, over its stretch
+        float width = column;               // how wide they lie along the card now
         std::vector<Vec3> points;           // flat, in its own space, cut into columns; three to a triangle
         std::vector<Vec3> across;           // the same points in the card's space
         Mat3 back;                          // a move in the card's space, as one in its own
@@ -129,10 +157,10 @@ private:
         std::vector<Vec2> uvs;
     };
 
-    /// A flat mesh's triangles, cut along the lines between columns (which
-    /// are the same lines for every piece of a card, so pieces that lie over
-    /// each other bend alike).
-    static std::optional<Cut> cut(const MeshRef& mesh, const Mat4& matrix);
+    /// A flat mesh's triangles, cut along the lines between columns `width`
+    /// wide (which are the same lines for every piece of a face, so pieces
+    /// that lie over each other bend alike).
+    static std::optional<Cut> cut(const MeshRef& mesh, const Mat4& matrix, float width);
 
     // MARK: - What a look or a pinch lands on
 

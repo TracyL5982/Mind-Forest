@@ -806,10 +806,9 @@ void Bridge::moreLike(int nodeID) {
     logLine("[agent] more like this" + (need ? ": " + *need : std::string(", with nothing highlighted")));
 }
 
-void Bridge::tellMore(int nodeID, const std::string& part) {
+void Bridge::tellMore(int nodeID, const std::string& question) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
-    if (!p || !p->service.count(nodeID) || part.empty()) return;
-    std::string question = "Tell me more about this part: " + part;
+    if (!p || !p->service.count(nodeID) || question.empty()) return;
     if (!asking.begin(p->service[nodeID], question, now)) {
         logLine("[agent] still asking, so not again: " + question);
         return;
@@ -852,6 +851,8 @@ std::vector<CardEdit> Bridge::sceneEdits(const Node& node) {
         if (e.kind == Edit::Kind::highlight) {
             out.push_back(CardEdit{.id = e.id, .kind = CardEdit::Kind::highlight, .quote = e.quote,
                                    .occurrence = item ? appearanceAt(item->text, e.quote, e.at) : 0});
+        } else if (e.kind == Edit::Kind::stretch) {
+            out.push_back(CardEdit{.id = e.id, .kind = CardEdit::Kind::stretch, .from = e.from, .to = e.to});
         } else {
             CardEdit line{.id = e.id, .kind = CardEdit::Kind::stroke};
             for (const auto& [x, y] : e.points) line.points.push_back(Vec2{x, y});
@@ -877,20 +878,25 @@ void Bridge::edited(int nodeID, const CardEdit& made) {
         const Item* item = n ? client.mirror().item(n->itemId) : nullptr;
         e.quote = made.quote;
         e.at = item ? whereIn(item->text, made.quote, made.occurrence) : std::nullopt;
+    } else if (made.kind == CardEdit::Kind::stretch) {
+        e.kind = Edit::Kind::stretch;
+        e.from = made.from;
+        e.to = made.to;
     } else {
         e.kind = Edit::Kind::stroke;
         for (Vec2 v : made.points) e.points.emplace_back(v.x, v.y);
     }
-    client.send(Outbound::commands(e.kind == Edit::Kind::highlight ? "Highlight words" : "Draw a line", {Command::addEdit(id, e)}));
+    const char* label = e.kind == Edit::Kind::highlight ? "Highlight words" : e.kind == Edit::Kind::stretch ? "Mark a stretch" : "Draw a line";
+    client.send(Outbound::commands(label, {Command::addEdit(id, e)}));
 }
 
-void Bridge::erased(int nodeID, const std::string& editId) {
+void Bridge::erasedAll(int nodeID, const std::vector<std::string>& editIds) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
-    if (!p || !p->service.count(nodeID)) return;
+    if (!p || !p->service.count(nodeID) || editIds.empty()) return;
     NodeId id{p->service[nodeID]};
-    const Node* n = client.mirror().node(id);
-    bool line = n && std::any_of(n->edits.begin(), n->edits.end(), [&](const Edit& e) { return e.id == editId && e.kind == Edit::Kind::stroke; });
-    client.send(Outbound::commands(line ? "Erase a line" : "Erase a highlight", {Command::removeEdit(id, editId)}));
+    std::vector<Command> commands;
+    for (const std::string& editId : editIds) commands.push_back(Command::removeEdit(id, editId));
+    client.send(Outbound::commands(editIds.size() == 1 ? "Erase a mark" : "Erase the marks", std::move(commands)));
 }
 
 void Bridge::pruned(int nodeID, const std::vector<TreeNode>& gone) {
