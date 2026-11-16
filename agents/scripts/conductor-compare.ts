@@ -1,7 +1,7 @@
 /**
  * Routes the same utterances through the Conductor on the main model and on the quick model, alternating, and prints each one's
  * intent, reply, time and tokens, then the medians and every disagreement. Nothing is written to the mindstorm.
- * Usage: MIND_PALACE_DATA=<a copy of agents/data> tsx scripts/conductor-compare.ts [runs per side, default 2] [out.json]
+ * Usage: MIND_PALACE_DATA=<a copy of agents/data> tsx scripts/conductor-compare.ts [runs per side, default 2] [out.json] [ms between calls, default 0]
  * The cases name cards by their titles in the user's mindstorm, so a copy of other data needs other cases.
  */
 import { randomUUID } from 'node:crypto';
@@ -22,6 +22,7 @@ const env = loadEnv();
 const dataDir = env.MIND_PALACE_DATA ?? join(import.meta.dirname, '../data');
 const runs = Number(process.argv[2] ?? 2);
 const out = process.argv[3];
+const pace = Number(process.argv[4] ?? 0);
 
 type Usage = { model: string; input: number; output: number; reasoning: number };
 let usage: Usage[] = [];
@@ -80,7 +81,7 @@ const cases: Case[] = [
   { expect: 'keep', utterance: 'Keep the second and the fourth ones', scene: at(genui) },
   { expect: 'undo', utterance: 'Actually take back what you just did', scene: at(genui), history: [{ who: 'user', text: 'rename this card to Generative interfaces' }, { who: 'agent', text: 'On it.' }] },
   { expect: 'tree', utterance: "I'd love a whole new tree mapping out Hitchcock's films", scene: nowhere },
-  { expect: 'tree', utterance: 'Grow a tree out of this one', scene: at(card('json-render')) },
+  { expect: 'tree', utterance: 'Grow a tree out of this one', scene: at(card('Wall Drawing #63')) },
   { expect: 'reply', utterance: "Thanks Momo, that's great", scene: at(genui), history: found },
   { expect: 'reply', utterance: 'Hello, are you there?', scene: nowhere },
   { expect: 'ask', utterance: '帮我找一些关于生成式界面的有趣例子', scene: at(genui) },
@@ -115,6 +116,7 @@ for (const [n, c] of cases.entries()) {
     // Each run alternates which side goes first, so drift and warm connections favour neither.
     const order: ('main' | 'quick')[] = (n + r) % 2 === 0 ? ['main', 'quick'] : ['quick', 'main'];
     for (const side of order) {
+      if (pace) await new Promise((ok) => setTimeout(ok, pace));
       usage = [];
       const started = performance.now();
       const got = await conductor(sides[side], { utterance: c.utterance, scene: c.scene, history: c.history ?? [] });

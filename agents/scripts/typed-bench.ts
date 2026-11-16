@@ -26,12 +26,16 @@ if (!flags.data) {
 }
 const env = loadEnv();
 let calls = 0;
+let failed = 0;
 const model = new MetaModel({
   apiKey: env.MODEL_API_KEY ?? '',
   baseUrl: env.MUSE_LLM_BASE_URL || undefined,
   model: env.MUSE_LLM_MODEL || undefined,
   quickModel: env.MIND_PALACE_QUICK_MODEL || undefined,
-  onCall: () => calls++,
+  onCall: (c) => {
+    calls++;
+    if (!c.ok) console.log(`  FAILED model call (${++failed} so far), ${c.ms} ms`);
+  },
 });
 const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID() });
 const saved = new SqliteStore(join(flags.data, 'mindstorm.sqlite'));
@@ -81,5 +85,5 @@ for (let run = 1; run <= runs; run++) {
 }
 const unsure = rows.filter((x) => x.group === 'layer or tree' || x.group === 'no card');
 console.log(`asked back where a question was expected: ${unsure.filter((x) => x.kind === 'reply' && x.say.includes('?')).length} of ${unsure.length}; trees started there: ${unsure.filter((x) => x.kind === 'tree').length}`);
-console.log(`model calls: ${calls}`);
+console.log(`model calls: ${calls}, ${failed} failed`);
 for (const x of rows.filter((y) => !y.right)) console.log(`  wrong: run ${x.run} ${x.id} ${x.kind} ${x.target} | "${x.say}"`);
