@@ -82,7 +82,8 @@ their file, out of view, until it is started without the service. With the scrip
 nothing costs money.
 
 Talking to it works as in the web client. The headset listens on the device for "hey Momo" or "hi Momo" (the
-service's agent name), and nothing it hears leaves the headset unless it began with the name. After the name it
+service's agent name), and nothing it hears leaves the headset unless it began with the name, or came in the
+conversation the name opened (below). After the name it
 chimes and records until you pause for 1.2 s; the service transcribes that and acts on it, and its reply is spoken
 when the service has a voice. Momo sits low in front of you, drawn as in CurioCity (ClandestineOperation's
 `AgentVisual`, with the values its scene gives it): three rings of Perlin noise in cyan, magenta and yellow, added into
@@ -104,21 +105,30 @@ and agents, without the service. The first time, the headset
 asks to use the microphone; refused, it does
 not ask again until the app starts again, and replies are still spoken. A microphone that stops is opened again after
 1, 2, 4, 8, then every 15 s. When the service has a live voice (hello's `live`), the headset opens its `/live`
-socket, named for its own connection (hello's `connection`), and the words go another way: after the name the
-microphone streams to the service until it says your turn is over, and Momo answers you itself, in its own voice,
-which streams back and plays as it arrives: from what it knows, a quick web answer, your saved cards, or by starting
-new cards, which it then tells you about as they land, with no say of the pipeline's needed. Saying "hey Momo" while Momo speaks stops it and
-starts a new turn, except while what it is saying names itself. The log says how long after your last word the turn
-ended and Momo answered. Without `/live`, or while it is closed (it is tried again every 5 s while hello offers it),
+socket, named for its own connection (hello's `connection`), and the words go another way: the name opens a
+conversation. While it is open you talk with no name: whatever you say streams to the service as a turn until it says
+your turn is over, and Momo answers you itself, in its own voice, which streams back and plays as it arrives: from what
+it knows, a quick web answer, your saved cards, or by starting new cards, which it then tells you about as they land,
+with no say of the pipeline's needed. Talking over Momo stops it at once and starts a new turn (`start`, the service's
+hush and truncate): a turn begins once 3 of the last 4 tenths of a second were words, so a cough or a knock does not.
+Momo's voice keeps the conversation open, and opens it again. It closes once nobody, neither you nor Momo, has talked
+for 8 s; then the caption says `Say “Hey Momo”` again. While it is open between turns the caption says `Listening…`
+under Momo's last words and the ring follows your voice. Momo's own voice is kept out of what the headset hears by the
+platform's echo cancelling: the microphone reads Android's VOICE_COMMUNICATION source with AcousticEchoCanceler on, and
+the log says which it got. `-echoCheck <reply.wav>` measures it with no service: a recorded reply plays 10 times while
+you stay quiet (each turn begun is a false barge-in), then 10 times you talk over it (each logs how long after your
+first word Momo stopped). The log says how long after your last word the turn ended and Momo answered. Without `/live`, or while it is closed (it is tried again every 5 s while hello offers it),
 everything is as above. The voice says what it is doing and the orb shows it: waiting, listening from the name,
 sent for 0.4 s as your turn ends, thinking until the first sound of Momo's answer (or word that none is coming, at
-most 20 s), responding while Momo speaks, working while the agent works after it, then waiting. Besides the chime the
-headset makes two sounds of its own: a short falling tone as your turn is sent, and a quiet loop while Momo thinks.
-Nothing sounds while the agent works. A question picked or typed under a card is sent and thought about the same way,
+most 20 s), responding while Momo speaks, open while the conversation is, working while the agent works after it,
+then waiting. Momo has three sounds of its own, made by `quest/sound/synth.py` in the ocean's key and played through
+its mixer: the chime, a short falling tone as your turn is sent, and a quiet loop while Momo thinks. Nothing sounds
+while the agent works. A question picked or typed under a card is sent and thought about the same way,
 until Momo answers or the work starts. `-mute` silences every sound the app makes, Momo's voice too, and the orb still
 follows the voice it would have heard. `-agentVoice off`
 turns it off; `-wakeClip <file.wav>` (16 kHz mono 16-bit) is heard in place of the microphone; `-micSource
-communication` reads Android's echo-cancelled source instead of the recognizer's. The listener is sherpa-onnx's
+recognition` reads the recognizer's source, with no echo cancelling, and `-callMode` puts the app in Android's call
+mode while the microphone is open, both to compare on the headset. The listener is sherpa-onnx's
 keyword spotter, which `tools/fetch-voice.sh` fetches into `quest/vendor/` (the builds run it); `core/agent/test/run.sh`
 tests it on spoken clips.
 
@@ -367,7 +377,10 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
 - **When each is heard** is in `core/ocean/oceanmodel_sound.cpp` and at the place each thing happens
   (`sound("take")` in `take`). The layer's chord is struck whenever the layer you stand on changes, by any
   means: upward on coming nearer, downward on stepping back. While a fist nears a layer's gate, that
-  layer's chord is held and swells with the gauge's arc. The ocean's bed draws back under a film's sound.
+  layer's chord is held and swells with the gauge's arc. The ocean's bed draws back under a film's sound. While Momo
+  listens, thinks or speaks, the bed, the layer chords and the glints play about 9 dB down (`conversationDip`).
+- **Momo's own** are `momo_chime`, `momo_sent` and `momo_thinking` (a loop), made by `momo()` in synth.py from its
+  own random numbers, so the ocean's sounds stay as they were; `core/agent/voice.cpp` plays them.
 - **The ocean** has a held sound under everything, kept very low, and glints: a piece that swells where
   the head points rings a short high note of its own (`Shell::swelled`, `soundGlints`). One is heard for
   every few degrees the look travels, so a slow look round is a glint now and then, a quick one a run of
