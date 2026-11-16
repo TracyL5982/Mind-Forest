@@ -98,6 +98,29 @@ int main() {
             check(c > 0.9f * Card::lift, line);
         }
     }
+    // The panel drawn again while the card is still opening, in front of the frame then and once the card is open.
+    for (float curve : {0.67f, 2.02f, 6.f}) {
+        Card card;
+        Bend bend;
+        card.face->scale = Vec3::repeating(1 / 2.03f);
+        bend.update(card.root, curve, true);
+        card.face->scale = Vec3::repeating(0.7f);
+        bend.update(card.root, curve, true);
+        card.redrawPanel();
+        bend.forget(card.panel);
+        bend.update(card.root, curve, true);
+        float during = clearance(card.frame, card.frameSize.x, card.panel, card.panelSize.x, card.root, curve) / 0.7f;
+        for (float s : {0.85f, 1.f}) {
+            card.face->scale = Vec3::repeating(s);
+            bend.update(card.root, curve, true);
+        }
+        bend.update(card.root, curve, false);
+        float after = clearance(card.frame, card.frameSize.x, card.panel, card.panelSize.x, card.root, curve);
+        char line[200];
+        std::snprintf(line, sizeof line, "panel drawn again while opening, curve %.2f: it stands %.3f mm in front of the frame at least then, at the face's scale, and %.3f mm once open",
+                      double(curve), double(during * 1000), double(after * 1000));
+        check(during > 0.9f * Card::lift && after > 0.9f * Card::lift, line);
+    }
     // A piece whose edge falls inside a column lies on the same surface as one that spans it.
     for (float curve : {0.67f, 2.02f, 6.f}) {
         Card card;
