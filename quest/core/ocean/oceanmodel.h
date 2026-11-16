@@ -75,6 +75,7 @@
 // reach the scene's insides as friends.
 namespace agent {
 class Bridge;
+class EchoCheck;
 class PresenceDemo;
 }
 
@@ -82,8 +83,10 @@ class OceanModel : public PalaceScene {
 public:
     friend class agent::Bridge;
     friend class agent::PresenceDemo;
+    friend class agent::EchoCheck;
     std::shared_ptr<agent::Bridge> agentBridge;     // AGENT: only with -agent
     std::shared_ptr<agent::PresenceDemo> presenceDemo;     // AGENT: only with -presenceDemo
+    std::shared_ptr<agent::EchoCheck> echoCheck;     // AGENT: only with -echoCheck
     // NOTE(port): `root` in the Swift. PalaceScene asks for it as a function, so the field takes an underscore.
     EntityRef root_ = Entity::make();
     EntityRef root() override { return root_; }
