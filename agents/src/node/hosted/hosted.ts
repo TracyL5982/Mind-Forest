@@ -105,7 +105,8 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       known.add(device);
       note(`[spaces] new space for ${short(device)}${opts.starter && existsSync(opts.starter) ? ', from the starter trees' : ''}`);
     }
-    const space = openSpace({ ...opts.shared, dataDir: dir, token: `${opts.appKey}.${device}`, meter: meterOf(device), log: (line) => note(`[${short(device)}] ${line}`) });
+    // The user's Mac reads their bot, and two readers of one bot take each other's messages: no space here ever reads it.
+    const space = openSpace({ ...opts.shared, telegram: undefined, dataDir: dir, token: `${opts.appKey}.${device}`, meter: meterOf(device), log: (line) => note(`[${short(device)}] ${line}`) });
     open.set(device, { space, last: Date.now() });
     space.catch((err) => {
       open.delete(device);

@@ -7,11 +7,12 @@ import { WebSocket } from 'ws';
 import type { JsonRequest, ModelClient, Priority } from '../src/core/ports.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { startHosted, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
+import { startHosted, telegramAlert, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
 import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
 import type { LiveDeps, VoiceFrame } from '../src/node/live.ts';
 import { startServer } from '../src/node/server.ts';
+import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 
 interface Msg {
   t: string;
@@ -288,4 +289,22 @@ test('an idle space closes, and opens again with its trees on its next request',
   assert.equal((await state()).snapshot.trees.length, 1, 'reopened with the starter tree');
   assert.deepEqual(hosted.open(), [A]);
   await hosted.close();
+});
+
+test("the hosted service never reads the user's bot, even when handed it, and its alert only sends", { timeout: 20000 }, async () => {
+  const bot = await new FakeBot().start();
+  const dataDir = mkdtempSync(join(tmpdir(), 'mp-hosted-'));
+  const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
+  const shared = { clientDir: '', model: new FakeModel(), roles: fakeRoles, telegram: { token: BOT_TOKEN, api: bot.url, pollSeconds: 1 } } as HostedOptions['shared'];
+  const hosted = await startHosted({ port: 0, host: '127.0.0.1', dataDir, appKey: KEY, adminToken: ADMIN, ledger, shared, log: () => {} });
+  const c = await connect(hosted, `${KEY}.${A}`);
+  await c.until((m) => m.t === 'hello');
+  assert.equal(((await fetch(`${hosted.url}/api/telegram?token=${KEY}.${A}`).then((r) => r.json())) as { available: boolean }).available, false);
+  telegramAlert({ token: BOT_TOKEN, chatId: String(ADA.id), api: bot.url, log: () => {} })('spend passed 50%');
+  await bot.reply(ADA.id, /spend passed 50%/);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.deepEqual(bot.calls.map((call) => call.method), ['sendMessage'], 'no getMe and no getUpdates, only the alert');
+  c.ws.close();
+  await hosted.close();
+  await bot.close();
 });
