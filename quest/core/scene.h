@@ -199,6 +199,8 @@ struct Material {
     /// `m.faceCulling = .none` -> cull = false.
     bool cull = true;
     bool writesDepth = true;
+    /// Kind::line only: its light is added to what is behind and covers none of it, so overlapping colours sum toward white.
+    bool additive = false;
     /// ShaderGraphMaterial.setParameter(name:value:): a float is stored in x.
     std::map<std::string, Vec4> parameters;
     /// For Kind::video.

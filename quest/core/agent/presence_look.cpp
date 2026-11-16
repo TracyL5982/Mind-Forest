@@ -85,45 +85,132 @@ Quat Follow::orientation() const {
     return Quat(Mat3(x, cross(z, x), z));
 }
 
-// MARK: - Glow
+// MARK: - Face
 
-namespace {
+Face::Face(uint32_t seed) : seed(seed ? seed : 1) {
+    nextBlink = random(blinkMin, blinkMax);
+    nextDart = random(dartMin, dartMax);
+}
 
-/// What the orb settles into in each state, in the order of `Presence::State`.
-struct Pose {
-    float shown, glow, size, warmth, shimmer, breath, ripple, hears;
-};
-constexpr Pose poses[] = {
-    /* off */        {0, 0.0f, 0.8f, 1, 0, 0, 0, 0},
-    /* waiting */    {1, 0.28f, 0.78f, 1, 0, 0, 0, 0},
-    /* listening */  {1, 0.8f, 1.0f, 0, 0, 0, 0, 1},
-    /* sent */       {1, 0.95f, 0.85f, 0.5f, 0, 0, 0, 0},
-    /* thinking */   {1, 0.62f, 0.9f, 1, 1, 0, 0, 0},
-    /* responding */ {1, 0.85f, 1.0f, 1, 0, 0, 0, 1},
-    /* working */    {1, 0.45f, 0.84f, 1, 0, 1, 1, 0},
-};
+Face::Dot Face::dot(int j, float rising) {
+    // Their three places, as the user drew them against Momo: 0.12, 0.18 and 0.25 of its width across, in a trail going
+    // up and right from just outside its upper right, the smallest nearest.
+    static constexpr float home[3][2] = {{2.08f, 2.9f}, {3.3f, 4.0f}, {4.7f, 5.14f}};
+    static constexpr float radii[3] = {0.24f, 0.36f, 0.5f};
+    constexpr float orbit = 0.45f;
+    auto place = [](int p) { return Vec2{home[p][0], home[p][1]}; };
+    // Eased gently in and out, at most about half again its mean speed, so a bubble floats off and settles rather than
+    // being shot.
+    auto glide = [](float t) { return t <= 0 ? 0.f : t >= 1 ? 1.f : 0.5f - 0.5f * std::cos(pi * t); };
+    Dot d{place(0), 0};
+    float age = rising - dotPopEvery * float(j);
+    if (age <= 0) return d;
+    // It swells up from nothing at the base, easing out, a hair past its size.
+    float t = std::min(1.f, age / dotSwell);
+    constexpr float past = 0.6f;
+    d.radius = radii[0] * (1 + (past + 1) * std::pow(t - 1, 3.f) + past * std::pow(t - 1, 2.f));
+    // Each bubble formed after it eases it one place out, growing to that place's size; overlapping pushes add.
+    for (int p = 1; p <= 2 - j; p++) {
+        float e = glide((rising - dotPopEvery * float(j + p)) / dotGlide);
+        d.at += (place(p) - place(p - 1)) * e;
+        d.radius += (radii[p] - radii[p - 1]) * e;
+    }
+    // Once all three have settled, each circles its own place, a third of a turn behind the one before, so the three
+    // turn through a line and a triangle and back as they go.
+    float since = rising - dotsAtLeast;
+    if (since <= 0) return d;
+    int k = 2 - j;
+    float swing = orbit * std::min(1.f, since / 0.6f);
+    float a = 2 * pi * since / dotTurn - float(k) * 2 * pi / 3 - pi / 2;
+    d.at += Vec2{std::cos(a), std::sin(a)} * swing;
+    return d;
+}
 
-}  // namespace
+float Face::random(float lo, float hi) {
+    // A small generator of its own, so a face blinks the same way each run and the tests can count on it.
+    seed ^= seed << 13;
+    seed ^= seed >> 17;
+    seed ^= seed << 5;
+    return lo + float(seed & 0xFFFFFF) / float(0x1000000) * std::max(0.f, hi - lo);
+}
 
-void Glow::update(const Presence& p, double now, float dt) {
-    const Pose& to = poses[int(p.state)];
-    if (p.state == Presence::State::sent && last != Presence::State::sent) sentAt = now;
-    last = p.state;
+void Face::update(const Presence& p, float dt) {
+    using S = Presence::State;
     if (!(dt > 0)) return;
-    ease(look_.shown, to.shown, to.shown > look_.shown ? 0.25f : 0.35f, dt);
-    ease(look_.glow, to.glow, 0.22f, dt);
-    ease(look_.size, to.size, 0.22f, dt);
-    ease(look_.warmth, to.warmth, 0.35f, dt);
-    ease(look_.shimmer, to.shimmer, 0.4f, dt);
-    ease(look_.breath, to.breath, 0.6f, dt);
-    ease(look_.ripple, to.ripple, 0.6f, dt);
-    ease(hears, to.hears, 0.12f, dt);
-    // A voice rises at once and falls away slowly, as a meter does, so the orb swells with each word and does not flicker.
-    float heard = clamp(p.level, 0, 1);
-    ease(level, heard, heard > level ? 0.04f : 0.2f, dt);
-    look_.voice = level * hears;
-    double since = now - sentAt;
-    look_.gather = since >= 0 && since < gathering ? float(since / gathering) : -1;
+    clock += dt;
+    Look& l = look_;
+    ease(l.shown, p.state == S::off ? 0.f : 1.f, p.state == S::off ? 0.35f : 0.25f, dt);
+
+    // AgentSphere: the level follows the voice up fast and down slower, so the rings breathe and do not flicker. Listening
+    // it is the user's voice, which moves the ring; speaking, Momo's, which also parts it into colour.
+    bool hears = p.state == S::listening || p.state == S::responding;
+    float heard = hears ? clamp(p.level, 0, 1) : 0;
+    float k = heard > l.voice ? attack : release;
+    l.voice += (heard - l.voice) * std::min(1.f, k * dt);
+    ease(colour, p.state == S::responding ? 1.f : 0.f, 0.15f, dt);
+    // AgentRing.update.
+    l.time = std::fmod(l.time + (quietSpeed + (loudSpeed - quietSpeed) * l.voice) * dt, 256.f);
+    l.distortion = quietDistortion + (loudDistortion - quietDistortion) * l.voice;
+    l.divergence = colour * std::pow(l.voice, std::max(0.01f, divergenceExponent)) * divergence;
+    l.scale += (1 + speakPulse * l.voice - l.scale) * std::min(1.f, 12 * dt);
+
+    // AgentRing.updateEyes: a blink closes and opens the eyes, then waits a while.
+    l.openness = 1;
+    if (blinkStart >= 0) {
+        float t = (clock - blinkStart) / std::max(0.01f, blinkDuration);
+        if (t >= 1) {
+            blinkStart = -1;
+        } else {
+            l.openness = std::max(0.f, 1 - std::sin(pi * t));
+        }
+    } else if (clock >= nextBlink) {
+        blinkStart = clock;
+        nextBlink = clock + blinkDuration + random(blinkMin, blinkMax);
+    }
+
+    // Searching, the eyes look about: from side to side, a little up or down, easing there more slowly than a dart.
+    // Otherwise they dart now and then, as in CurioCity, and hold, and come back.
+    bool wasSearching = searching;
+    searching = p.searching();
+    if (searching != wasSearching) {
+        target = {};
+        centred = true;
+        slow = true;
+        nextDart = searching ? clock : clock + random(dartMin, dartMax);
+    }
+    if (searching) {
+        if (clock >= nextDart) {
+            side = -side;
+            target = {side * (side < 0 ? glanceToMonocle : glanceAmount) * random(0.75f, 1), glanceAmount * random(-0.3f, 0.35f)};
+            nextDart = clock + random(glanceMin, glanceMax);
+        }
+        l.gaze += (target - l.gaze) * std::min(1.f, glanceEase * dt);
+    } else {
+        if (clock >= nextDart) {
+            if (centred) {
+                float a = random(0, 2 * pi), r = (0.4f + random(0, 0.6f)) * dartAmount;
+                target = {std::cos(a) * r, std::sin(a) * r * 0.6f};
+                centred = false;
+                slow = false;
+                nextDart = clock + std::max(0.05f, dartHold);
+            } else {
+                target = {};
+                centred = true;
+                nextDart = clock + random(dartMin, dartMax);
+            }
+        }
+        // Back from a glance as slowly as it went; a dart is quick, as a saccade is.
+        l.gaze += (target - l.gaze) * std::min(1.f, (slow ? glanceEase : 25) * dt);
+    }
+    ease(l.monocle, searching ? 1.f : 0.f, 0.18f, dt);
+
+    // Thinking, from the moment the turn is sent until Momo answers or the work begins, the dots come and turn. Once
+    // begun they stay until all three are in, so a quick answer never cuts them off, then fade, turning as they go.
+    bool thinks = p.state == S::thinking || (dotsWhenSent && p.state == S::sent);
+    if (thinks && l.dots < 0.02f) l.rising = 0;
+    bool on = thinks || (l.dots > 0.02f && l.rising < dotsAtLeast);
+    if (on || l.dots > 0.003f) l.rising += dt;
+    ease(l.dots, on ? 1.f : 0.f, on ? 0.12f : dotsFade / 2, dt);
 }
 
 // MARK: - Caption
@@ -147,8 +234,7 @@ Speaker Caption::speaker(Part part) {
     case Part::momo: return Speaker::momo;
     case Part::hint:
     case Part::listening:
-    case Part::thinking:
-    case Part::doing: return Speaker::status;
+    case Part::thinking: return Speaker::status;
     }
     return Speaker::status;
 }
@@ -187,7 +273,7 @@ void Caption::wrap() {
         }
         std::string line;
         float w = 0;
-        int index = r.part == Part::doing ? doings % 4096 : 0;
+        int index = 0;
         auto put = [&] {
             if (line.empty()) return;
             int key = (turn << 16) | (int(r.part) << 12) | std::min(index, 4095);
@@ -201,21 +287,6 @@ void Caption::wrap() {
             w += (line.empty() ? 0 : space) + wordWidth(words[i], who);
             line += (line.empty() ? "" : " ") + words[i];
         };
-        if (r.part == Part::doing) {
-            // What the agent is doing is a few words, never a paragraph: one line, cut short where it must be.
-            bool whole = true;
-            for (size_t i = 0; i < words.size() && whole; i++) whole = fits(i, most) && (add(i), true);
-            if (!whole) {
-                line.clear();
-                w = 0;
-                float ellipsis = wordWidth("…", who);
-                for (size_t i = 0; i < words.size() && fits(i, most - ellipsis); i++) add(i);
-                line += "…";
-                w += ellipsis;
-            }
-            put();
-            continue;
-        }
         for (size_t i = 0; i < words.size(); i++) {
             if (!fits(i, most)) put();
             add(i);
@@ -229,7 +300,6 @@ float Caption::tone(const Entry& e) const {
     case Part::hint: return 0.75f;
     case Part::listening: return 0.9f;
     case Part::thinking: return 1;
-    case Part::doing: return 1;
     case Part::user: return e.current && !userFinal ? 0.8f : 1;
     case Part::momo: return 1;
     }
@@ -252,10 +322,6 @@ void Caption::update(const Presence& p, const std::string& name, double now, flo
     }
     userFinal = p.userFinal;
     if (!p.momoText.empty() && p.momoText != momo) momo = p.momoText;
-    if (p.doing != doing) {
-        doing = p.doing;
-        doings++;
-    }
     if (state == S::off || (!history.empty() && now > historyUntil)) history.clear();
     if (name != hintName) {
         hintName = name;
@@ -276,11 +342,7 @@ void Caption::update(const Presence& p, const std::string& name, double now, flo
     case S::off: break;
     case S::waiting:
     case S::working:
-        if (state == S::working && !doing.empty()) {
-            // Momo's last words stay above what it is doing until they have stayed their while.
-            if (turnShows && !momo.empty()) add(Part::momo, momo);
-            add(Part::doing, doing);
-        } else if (turnShows) {
+        if (turnShows) {
             if (!user.empty()) add(Part::user, user);
             if (!momo.empty()) add(Part::momo, momo);
         } else if (state == S::waiting && hintEarned) {
@@ -344,29 +406,22 @@ void Caption::place(float dt) {
         found->seen = true;
         found->gone = false;
     }
-    // One thing the agent is doing gives way to the next by rolling: the old lifts a little and fades as the new rises
-    // in from under it once the old is half gone, so the two pass and never stand on the same line, nor the old on the
-    // line above. Any other line waits for the one whose place it takes to be gone.
-    auto rolls = [](const Line& a, const Line& b) { return a.part == Part::doing && b.part == Part::doing; };
+    // A line waits for the one whose place it takes to be gone.
     auto inTheWay = [&](const Line& l) {
-        return std::any_of(lines_.begin(), lines_.end(), [&](const Line& o) {
-            return !o.seen && o.opacity > (rolls(o, l) ? 0.5f : 0.03f) && std::fabs(o.y - l.toY) < 0.6f;
-        });
+        return std::any_of(lines_.begin(), lines_.end(), [&](const Line& o) { return !o.seen && o.opacity > 0.03f && std::fabs(o.y - l.toY) < 0.6f; });
     };
     for (size_t i = old; i < lines_.size(); i++) lines_[i].yields = inTheWay(lines_[i]);
     for (Line& l : lines_) {
         if (!l.seen) {
             l.toOpacity = 0;
-            if (!l.gone && l.part == Part::doing) l.toY += 0.25f;
             l.gone = true;
         }
         if (!(dt > 0)) continue;
-        l.y = damp(l.y, l.toY, l.ySpeed, l.part == Part::doing ? 0.24f : 0.16f, 20, dt);
+        l.y = damp(l.y, l.toY, l.ySpeed, 0.16f, 20, dt);
         if (l.yields && inTheWay(l)) continue;
         l.yields = false;
-        // A line that is gone, or replaced, goes quickly, so the one in its place is not kept waiting; what the agent
-        // is doing comes and goes gently.
-        float tau = l.part == Part::doing ? (l.gone ? 0.1f : 0.2f) : l.toOpacity > l.opacity ? 0.1f : l.seen ? 0.12f : 0.05f;
+        // A line that is gone, or replaced, goes quickly, so the one in its place is not kept waiting.
+        float tau = l.toOpacity > l.opacity ? 0.1f : l.seen ? 0.12f : 0.05f;
         ease(l.opacity, l.toOpacity, tau, dt);
     }
     lines_.erase(std::remove_if(lines_.begin(), lines_.end(), [](const Line& l) { return l.toOpacity == 0 && l.opacity < 0.01f; }),
@@ -383,6 +438,69 @@ float Caption::width() const {
 
 int Caption::resting() const {
     return int(std::count_if(lines_.begin(), lines_.end(), [](const Line& l) { return l.toOpacity > 0; }));
+}
+
+// MARK: - Roster
+
+Roster::Roster(Measure width, float most) : measure(std::move(width)), most(most) {}
+
+void Roster::write(Line& line, const AgentLine& agent) const {
+    line.from = agent;
+    std::string name = agent.name + " · ";
+    std::string step = agent.finished ? finished : agent.step;
+    line.name = agent.name.size();
+    line.text = name + step;
+    line.width = measure(line.text);
+    if (line.width <= most) return;
+    // One line, cut short at a word, where it must be.
+    std::string kept = step;
+    while (!kept.empty()) {
+        size_t space = kept.find_last_of(' ');
+        kept = space == std::string::npos ? "" : kept.substr(0, space);
+        line.text = name + kept + "…";
+        line.width = measure(line.text);
+        if (line.width <= most) return;
+    }
+}
+
+void Roster::update(const std::vector<AgentLine>& agents, float dt) {
+    for (Line& l : lines_) l.toOpacity = 0;
+    for (size_t i = 0; i < agents.size(); i++) {
+        const AgentLine& a = agents[i];
+        auto found = std::find_if(lines_.begin(), lines_.end(), [&](const Line& l) { return l.role == a.role; });
+        if (found == lines_.end()) {
+            Line l;
+            l.role = a.role;
+            write(l, a);
+            // It rises into its place as it comes.
+            l.y = float(i) - 0.45f;
+            lines_.push_back(std::move(l));
+            found = lines_.end() - 1;
+        } else if (!(found->from == a)) {
+            write(*found, a);
+        }
+        found->toY = float(i);
+        found->toOpacity = 1;
+    }
+    if (!(dt > 0)) return;
+    for (Line& l : lines_) {
+        l.y = damp(l.y, l.toY, l.ySpeed, 0.2f, 20, dt);
+        // A line that goes, goes quickly, so the lines above can take its place without the two standing together.
+        ease(l.opacity, l.toOpacity, l.toOpacity > l.opacity ? 0.15f : 0.07f, dt);
+    }
+    std::erase_if(lines_, [](const Line& l) { return l.toOpacity == 0 && l.opacity < 0.01f; });
+}
+
+int Roster::resting() const {
+    return int(std::count_if(lines_.begin(), lines_.end(), [](const Line& l) { return l.toOpacity > 0; }));
+}
+
+float Roster::width() const {
+    float w = 0;
+    for (const Line& l : lines_) {
+        if (l.toOpacity > 0) w = std::max(w, l.width);
+    }
+    return w;
 }
 
 }  // namespace agent

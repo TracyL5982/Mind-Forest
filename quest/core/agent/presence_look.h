@@ -1,6 +1,6 @@
-// How Momo's presence moves, apart from drawing it (presence_view.h draws it): where the orb rests as the head turns,
-// how the orb looks in each state, and which lines of words show beside it and how they come and go. Nothing here
-// touches the scene, so the tests drive it frame by frame.
+// How Momo's presence moves, apart from drawing it (presence_view.h draws it): where Momo rests as the head turns, how
+// it looks in each state, which lines of words show beside it, and the agents' lines above them, and how they come and
+// go. Nothing here touches the scene, so the tests drive it frame by frame.
 #pragma once
 #include <cstdint>
 #include <functional>
@@ -52,42 +52,103 @@ private:
     bool coming = false;    // on its way to rest in front again
 };
 
-/// How the orb looks. Each state has a pose it settles into, so every change of state is a smooth one.
-class Glow {
+/// How Momo looks, apart from drawing it (presence_view.cpp draws it): CurioCity's Momo, from ClandestineOperation's
+/// Assets/Scripts/AgentVisual (AgentRing, AgentNoiseDisc) and AgentSphere, with the values its Scene.scene gives them.
+/// Three hollow rings, cyan, magenta and yellow, each bent by Perlin noise, add up to one white ring, with two white
+/// eyes in the middle that blink and dart. A voice makes the rings wobble further and faster, and Momo's own voice
+/// draws them apart into coloured fringes. Two looks are Momo's own: thinking, three bubbles form at its upper right,
+/// each new one swelling at the base and easing the others out, growing, then all three circle as they hang there;
+/// while any agent works it wears a monocle, and its eyes glance about, slower and wider than they dart.
+class Face {
 public:
-    static constexpr float gathering = 0.55f;   // s the orb takes to gather in as a turn is sent
+    // CurioCity's, in its centimetres, on its ring of 2 cm (the view scales them to Momo's size).
+    static constexpr float radius = 2;                  // the ring's outer radius
+    static constexpr float innerFraction = 0.2f;        // the band's width, of the radius
+    static constexpr int points = 32;                   // round each rim
+    static constexpr float noiseScale = 1;
+    static constexpr float zGap = 0.1f;                 // between the three rings
+    static constexpr float colorIntensity = 0.8f;
+    static constexpr float quietDistortion = 1.5f, loudDistortion = 6;
+    static constexpr float quietSpeed = 0.15f, loudSpeed = 12;      // noise time a second
+    static constexpr float divergence = 1.6f, divergenceExponent = 1.5f;
+    static constexpr float eyeSize = 0.08f;             // half the width
+    static constexpr float eyeAspect = 5;               // height to width
+    static constexpr float eyeDistance = 0.8f, eyeHeight = 0.19f, eyeForward = 1;
+    static constexpr float blinkMin = 1.8f, blinkMax = 4, blinkDuration = 0.1f;
+    static constexpr float dartMin = 3, dartMax = 6, dartHold = 1.8f, dartAmount = 0.5f;
+    static constexpr float attack = 18, release = 6;    // AgentSphere's envelope: how fast it follows a voice up, and down
+    static constexpr float speakPulse = 0.18f;          // AgentSphere: it swells this much at full voice
+    // Momo's own.
+    static constexpr float glanceMin = 0.9f, glanceMax = 1.6f;  // s between glances while searching
+    static constexpr float glanceAmount = 0.55f;        // as far as the eyes go to either side, past where darts mostly go
+    static constexpr float glanceToMonocle = 0.22f;     // and toward the monocle's side, so it stays between the ring and the other eye
+    static constexpr float glanceEase = 6;              // a second: slower than a dart's 25
+    // The monocle frames the eye on the viewer's left with room round it, set a little outward so it clears the other
+    // eye, in fine lines: on the headset at 1.25 m its outline is about a pixel, the eye two.
+    static constexpr float monocleRadius = 0.74f;
+    static constexpr float monocleShift = 0.12f;
+    static constexpr float monocleLine = 0.06f, cordLine = 0.045f;
+
+    /// A thinking bubble: where it is, cm from Momo's middle, and how big.
+    struct Dot {
+        Vec2 at;
+        float radius = 0;           // 0 before it has formed
+    };
+    // When the bubbles come and how long they stay. They start as the turn is sent, form one after another, and once
+    // begun stay until all three have settled, then fade gently; Momo's voice never waits for them.
+    static constexpr bool dotsWhenSent = true;          // false: only once thinking, Voice::sentFor after the turn is sent
+    static constexpr float dotPopEvery = 0.35f;         // s from one bubble beginning to form to the next
+    static constexpr float dotSwell = 0.3f;             // s a new bubble takes to swell up at the base
+    static constexpr float dotGlide = 0.4f;             // s a bubble takes to glide one place out
+    static constexpr float dotsAtLeast = 2 * dotPopEvery + dotGlide;    // s they show once begun: until all have settled
+    static constexpr float dotsFade = 0.2f;             // s, about, they take to fade
+    static constexpr float dotTurn = 2.0f;              // s each bubble takes to circle its place, once settled
+    static constexpr float bubblesTop = 6.2f;           // cm above Momo's middle the highest reaches
+    /// Bubble `j`, 0 the first to form (which ends farthest and largest), `rising` s after the first began.
+    static Dot dot(int j, float rising);
 
     struct Look {
-        float shown = 0;        // 0 gone … 1
-        float glow = 0;         // brightness
-        float size = 0.8f;      // of its full size
-        float warmth = 1;       // 0 the user's white, 1 Momo's amber
-        float shimmer = 0;      // thinking: lights circling it
-        float breath = 0;       // working: a slow rise and fall
-        float ripple = 0;       // working: soft rings going out from it
-        float voice = 0;        // the voice it answers to, smoothed, as far as this state answers it
-        float gather = -1;      // 0…1 through gathering in, -1 when not
+        float shown = 0;            // 0 gone … 1
+        float voice = 0;            // the voice it answers to, through AgentSphere's envelope, 0…1
+        float time = 0;             // the rings' noise time
+        float distortion = quietDistortion;
+        float divergence = 0;       // how far apart the three rings' noise times are: their colour
+        float scale = 1;            // it swells with a voice
+        float openness = 1;         // the eyes: 1 open, 0 shut
+        Vec2 gaze;                  // where the eyes have gone, cm
+        float monocle = 0;          // 0 off … 1 on
+        float dots = 0;             // the thinking dots: 0 gone … 1
+        float rising = 0;           // s since they began to come
     };
 
-    void update(const Presence& p, double now, float dt);
+    explicit Face(uint32_t seed = 7);
+    void update(const Presence& p, float dt);
     const Look& look() const { return look_; }
+    /// Its eyes glance about, not dart: some agent is at work.
+    bool glancing() const { return searching; }
 
 private:
     Look look_;
-    float level = 0;
-    float hears = 0;
-    Presence::State last = Presence::State::off;
-    double sentAt = -10;
+    uint32_t seed;
+    float clock = 0;
+    float colour = 0;               // how far the voice is Momo's: only its own voice parts the rings into colour
+    float nextBlink = 0, blinkStart = -1;
+    float nextDart = 0;
+    bool centred = true;
+    Vec2 target;
+    bool searching = false;
+    bool slow = false;              // the eyes are on their way back from glancing about
+    float side = 1;
+    float random(float lo, float hi);
 };
 
-/// Whose a line of words is: the user's words, Momo's, or a word on what is happening (the hint, "Listening…",
-/// "Thinking…", what the agent is doing), each set in a style of its own.
-enum class Speaker { user, momo, status };
+/// Whose a line of words is: the user's words, Momo's, a word on what is happening (the hint, "Listening…",
+/// "Thinking…"), or an agent's line above them, each set in a style of its own.
+enum class Speaker { user, momo, status, agent };
 
-/// The words beside the orb: what the user says while they say it, then "Thinking…", then Momo's words as they are
-/// spoken, then, while the agent works, a few words on what it is doing. They wrap to a width; the last two lines rest
-/// beside the orb, the upper one fainter, and an older line rises and fades as a new one comes. A turn's words stay a
-/// while after it ends, then fade. What the agent is doing is one line, which rolls up and out as the next rolls in.
+/// The words beside Momo: what the user says while they say it, then "Thinking…", then Momo's words as they are
+/// spoken. They wrap to a width; the last two lines rest beside Momo, the upper one fainter, and an older line rises and
+/// fades as a new one comes. A turn's words stay a while after it ends, then fade.
 class Caption {
 public:
     static constexpr int rows = 2;              // lines at rest
@@ -95,7 +156,7 @@ public:
     static constexpr double hintFor = 10;       // s the hint stays
     static constexpr float upper = 0.6f;        // how much of itself the upper line shows
 
-    enum class Part { hint, listening, user, thinking, momo, doing };
+    enum class Part { hint, listening, user, thinking, momo };
 
     struct Line {
         int key;            // a line of a turn keeps its key while its words change
@@ -144,8 +205,7 @@ private:
 
     Presence::State state = Presence::State::off;
     int turn = 0;
-    std::string user, momo, hint, hintName, doing;
-    int doings = 0;                         // what the agent has been doing, one by one: each its own line
+    std::string user, momo, hint, hintName;
     bool userFinal = false;
     double quietSince = -1e9;               // when the last turn ended
     std::optional<double> hintFrom;
@@ -163,6 +223,44 @@ private:
     static Speaker speaker(Part part);
     float tone(const Entry& e) const;
     void place(float dt);
+};
+
+/// The agents' lines above Momo's words, apart from drawing them: one for each agent at work, "Scout · Searching museum
+/// collections for dancing people", the one that began first lowest, each cut to one line. A line fades in as it
+/// rises into its place, says "finished working" once its agent is done, and fades as it goes, the lines above it
+/// sliding down into its place.
+class Roster {
+public:
+    static constexpr const char* finished = "finished working";
+
+    struct Line {
+        std::string role;           // whose: a line keeps it while its words change
+        std::string text;           // "Scout · Searching museum collections for…"
+        size_t name = 0;            // how much of `text` is the agent's name
+        float width = 0;            // m, as measured
+        float y = 0;                // in lines, up from the lowest
+        float opacity = 0;
+        float toY = 0, toOpacity = 0, ySpeed = 0;
+        AgentLine from;             // what it says, as the voice gave it
+    };
+
+    using Measure = std::function<float(const std::string&)>;
+    /// `width` measures a line as it will be drawn, m; `most` is the widest a line may be.
+    Roster(Measure width, float most);
+    void update(const std::vector<AgentLine>& agents, float dt);
+    /// Every line that shows or is fading.
+    const std::vector<Line>& lines() const { return lines_; }
+    /// How many lines are wanted: what the lines take up, once they have come and gone.
+    int resting() const;
+    /// The widest of the lines wanted, m.
+    float width() const;
+
+private:
+    Measure measure;
+    float most;
+    std::vector<Line> lines_;
+
+    void write(Line& line, const AgentLine& agent) const;
 };
 
 }  // namespace agent

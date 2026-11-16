@@ -63,26 +63,17 @@ private:
         std::map<std::string, int> local;           // service node id -> TreeNode id
         std::map<int, std::string> service;         // TreeNode id -> service node id
     };
-    /// A service activity on a card, shown as the scene's "Thinking…" until it is done.
-    struct Thinking {
-        std::string tree;
-        int node;
-        double shown;
-    };
-
     OceanModel& model;
     Client client;
     /// Talking to the agent: on with `-agent`, unless `-agentVoice off`.
     std::unique_ptr<Voice> voice;
-    /// Momo low in front of you: an orb that shows what the voice is doing, with the words said beside it.
+    /// Momo low in front of you, showing what the voice and the agents are doing, with the words said beside it.
     std::unique_ptr<PresenceView> presenceView;
-    Presence presence;
     void showPresence();
     /// Where the user is, for what they say: the standing tree and its open card.
     Scene scene();
     std::optional<std::string> dump;
     std::map<std::string, Planted> trees;           // by service tree id
-    std::map<std::string, Thinking> thinking;       // by activity id
     /// The open cards' rows asked about and still being searched for, so a row picked again is not asked again.
     Asking asking;
     /// The row a hand just picked answers at once, before the service does: it dims and comes back.
