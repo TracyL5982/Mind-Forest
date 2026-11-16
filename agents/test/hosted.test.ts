@@ -838,18 +838,20 @@ test('with the volume nearly full, nothing new is written and no new space is ma
   }
 });
 
-test("a hosted space reads a page or picture only from a public address, never this machine's", { timeout: 20000 }, async () => {
+test("a hosted space reads a page or picture, or relays a linked file, only from a public address, never this machine's", { timeout: 20000 }, async () => {
   const asked: string[] = [];
   const server = createServer((req, res) => void (asked.push(req.url ?? ''), res.writeHead(200, { 'content-type': 'text/html' }).end('<title>Inside</title>')));
   await new Promise<void>((ready) => server.listen(0, '127.0.0.1', ready));
   const inside = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   let read: unknown = 'not yet';
   let picture: unknown = 'not yet';
+  let linked = '';
   const roles: Roles = {
     ...fakeRoles,
     async scout(ctx) {
       read = await ctx.tools.web.read(`${inside}/page`);
       picture = await ctx.tools.web.picture(`${inside}/picture.jpg`);
+      linked = (await ctx.assets.link(`${inside}/episode.mp3`, 'audio/mpeg')).id;
       return [];
     },
   };
@@ -860,9 +862,10 @@ test("a hosted space reads a page or picture only from a public address, never t
     ws = c.ws;
     const root = treesOf(await c.until((m) => m.t === 'hello'))[0]!.rootId;
     c.ws.send(JSON.stringify({ t: 'ask', nodeId: root, need: 'the page' }));
-    await holds(() => read !== 'not yet' && picture !== 'not yet');
+    await holds(() => read !== 'not yet' && picture !== 'not yet' && linked !== '');
     assert.equal(read, null);
     assert.equal(picture, null);
+    assert.equal((await fetch(`${hosted.url}/assets/${linked}?token=${KEY}.${A}`)).status, 502, "a linked file on this machine is not relayed");
     assert.deepEqual(asked, [], 'the service never asked this machine');
   } finally {
     ws?.close();

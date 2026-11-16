@@ -366,7 +366,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (req.method === 'GET' && path.startsWith('/assets/')) {
       const stored = assets.open(path.slice('/assets/'.length));
       if (!stored) return json(res, 404, { error: 'no such asset' });
-      if ('url' in stored) return relay(req, res, stored.url, stored.mime);
+      if ('url' in stored) return relay(req, res, stored.url, stored.mime, opts.fetchPage ?? fetch);
       if ('bytes' in stored) return ranged(req, res, stored.mime, stored.bytes.length, (start, end) => res.end(stored.bytes.subarray(start, end + 1)));
       return ranged(req, res, stored.mime, stored.size, (start, end) => void createReadStream(stored.file, { start, end }).on('error', () => res.destroy()).pipe(res));
     }
@@ -752,12 +752,13 @@ function ranged(req: IncomingMessage, res: ServerResponse, mime: string, size: n
 }
 
 /** A linked remote file, streamed through the service so a client only ever fetches from it. The client's byte range goes to the source. */
-async function relay(req: IncomingMessage, res: ServerResponse, url: string, mime: string): Promise<void> {
+/** A linked asset's remote bytes, streamed as they come, fetched with `send`: in hosted mode only from a public address. */
+async function relay(req: IncomingMessage, res: ServerResponse, url: string, mime: string, send: typeof fetch): Promise<void> {
   const stop = new AbortController();
   res.on('close', () => stop.abort());
   let upstream: Response;
   try {
-    upstream = await fetch(url, {
+    upstream = await send(url, {
       headers: { 'User-Agent': 'MindPalace/0.1 (local prototype)', ...(req.headers.range ? { Range: req.headers.range } : {}) },
       redirect: 'follow',
       signal: stop.signal,
