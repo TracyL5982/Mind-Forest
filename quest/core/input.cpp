@@ -213,6 +213,11 @@ Input::Pointer Input::read(int which) const {
     return p;
 }
 
+void Input::setFront(EntityRef root, std::function<void(const EntityRef&)> pressed) {
+    frontRoot = std::move(root);
+    frontPressed = std::move(pressed);
+}
+
 void Input::update(const EntityRef& root, const std::optional<Mat4>& head, float dt) {
     static const double fixedGain = Flags::number("dragGain");
     // A pinched card follows the system's ray, which the headset steadies itself; `-dragBy hand` has it
@@ -242,11 +247,25 @@ void Input::update(const EntityRef& root, const std::optional<Mat4>& head, float
                 h.surfacePoint = h.pointer.origin + h.pointer.direction * t;
             }
         }
+        // The host's own panel, if the ray reaches it before anything of the scene's.
+        h.front = nullptr;
+        if (h.pointer.valid && frontRoot && holder != i) {
+            Hit front = cast(frontRoot, h.pointer.origin, h.pointer.direction);
+            if (front.entity && (!h.hit.entity || front.distance <= h.hit.distance)) {
+                h.front = front.entity;
+                h.hit = Hit{};
+                h.onSurface = true;
+                h.surfaceDistance = front.distance;
+                h.surfacePoint = front.point;
+            }
+        }
     }
 
     for (int i = 0; i < 2; i++) {
         HandState& h = hands[i];
-        if (h.pinching && !was[i]) {
+        if (h.pinching && !was[i] && h.front) {
+            if (frontPressed) frontPressed(h.front);
+        } else if (h.pinching && !was[i]) {
             if (holder < 0) {
                 if (h.hit.entity) {
                     holder = i;
@@ -305,10 +324,14 @@ void Input::update(const EntityRef& root, const std::optional<Mat4>& head, float
     EntityRef aimed[2];
     for (int i = 0; i < 2; i++) aimed[i] = holder == i ? held : hands[i].hit.entity;
     EntityRef owners[2] = {aimed[0] ? hoverOwner(aimed[0]) : nullptr, aimed[1] ? hoverOwner(aimed[1]) : nullptr};
+    for (int i = 0; i < 2; i++) {
+        if (hands[i].front) owners[i] = hands[i].front;
+    }
     hover(owners[0], owners[1], dt);
     for (int i = 0; i < 2; i++) {
-        if (owners[i] && owners[i].get() != landed[i]) scene->pointerLanded(i, owners[i]);
-        landed[i] = owners[i].get();
+        // (The scene is told only of its own things.)
+        if (owners[i] && owners[i].get() != landed[i] && !hands[i].front) scene->pointerLanded(i, owners[i]);
+        landed[i] = hands[i].front ? nullptr : owners[i].get();
     }
     for (auto& h : hands) showCursor(h, head, dt);
 }

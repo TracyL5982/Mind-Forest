@@ -10,6 +10,7 @@
 // - Hover: the entity a ray rests on is hovered; the renderer
 //   draws the effect from `Entity::hovered`.
 #pragma once
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -34,6 +35,10 @@ public:
     EntityRef visuals() const { return overlay; }
     /// For the Mac preview and tests: drive a hand's pointer directly this frame.
     void set(int hand, const Pointer& pointer);
+    /// Something of the host's own that takes pinches before the scene does (the filming panel): a ray
+    /// that rests on one of its input targets is not the scene's, the dot rests there, and a pinch
+    /// landing on it calls `pressed` with that target instead of going to the scene.
+    void setFront(EntityRef root, std::function<void(const EntityRef&)> pressed);
 
     /// In a few words, what a hand's ray and pinch are doing, for the log.
     std::string describe(int hand) const;
@@ -71,11 +76,14 @@ private:
         bool onSurface = false;
         Vec3 surfacePoint;
         float surfaceDistance = 0;
+        EntityRef front;            // the host's own thing the ray rests on, if any
         EntityRef dot, ray;
         LowLevelMeshRef rayMesh;
         float shown = 0;
     };
     PalaceScene* scene;
+    EntityRef frontRoot;
+    std::function<void(const EntityRef&)> frontPressed;
     const Entity* landed[2] = {nullptr, nullptr};     // what each hand's ray last rested on
     HandState hands[2];
     EntityRef overlay;

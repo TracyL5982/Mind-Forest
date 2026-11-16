@@ -22,6 +22,7 @@
 //   -slowRaster <ms>     hold each picture back this long, to see how waiting looks
 //   -noRoom              do not read the room (the headset's scene model): the scene sits at an assumed desk
 //   -scanRoom            if the headset knows nothing of the room, show its Space Setup so it can be scanned
+//   -film, -take         filming: find the filming sheet and record takes (filming_android.h, quest/film/README.md)
 #include <EGL/egl.h>
 #include <GLES3/gl32.h>
 #include <GLES2/gl2ext.h>
@@ -48,6 +49,7 @@
 #include "audio.h"
 #include "base.h"
 #include "canvas.h"
+#include "filming_android.h"
 #include "host.h"
 #include "input.h"
 #include "jni_bridge.h"
@@ -207,6 +209,13 @@ void run() {
     if (extRoom) {
         for (const char* name : Room::extensions()) enabled.push_back(name);
     }
+    // Filming (`-film`): the sheet is found by marker tracking, and a take's frames are timed on the system's own clock.
+    bool extSheet = Filming::wanted();
+    for (const char* name : Filming::sheetExtensions()) extSheet = extSheet && has(name);
+    if (extSheet) {
+        for (const char* name : Filming::sheetExtensions()) enabled.push_back(name);
+    }
+    bool extClock = Filming::wanted() && want("XR_KHR_convert_timespec_time");
     {
         std::string offered = "[xr] scene extensions offered:";
         for (const auto& e : available) {
@@ -292,6 +301,8 @@ void run() {
 
     Room room;
     room.start(instance, session, extRoom);
+    Filming filming;
+    filming.start(instance, system, session, extSheet, extClock);
     bool roomAsked = false, captureAsked = false;
     double roomWaitFrom = 0;
     // The table the scene is fixed to, and where its anchor was when the scene was last laid by it.
@@ -581,6 +592,11 @@ void run() {
     EntityRef world = Entity::make();
     world->addChild(scene->root());
     world->addChild(input.visuals());
+    if (filming.visuals()) world->addChild(filming.visuals());
+    if (filming.front()) {
+        world->addChild(filming.front());
+        input.setFront(filming.front(), [&](const EntityRef& entity) { filming.pressed(entity); });
+    }
     Perf perf;
     if (Flags::has("perf")) perf.open(host::outDir + "/perf.csv");
     bool logFps = Flags::has("perf") || Flags::has("fps");
@@ -708,6 +724,7 @@ void run() {
             room.read();
         }
         room.locate(appSpace, frame.predictedDisplayTime);
+        filming.locate(appSpace, frame.predictedDisplayTime);
         // The scene is kept fixed to the table it sits at: when the headset shifts its own bearings
         // (it has found itself again, or was recentred), that table's anchor moves in the app space,
         // and the scene's space is moved the same way. Only a turn about the vertical and a move.
@@ -761,7 +778,7 @@ void run() {
         static double handUpSince = 0;
         bool handUp = host::hands[0].aimValid || host::hands[1].aimValid;
         if (!handUp) handUpSince = 0; else if (handUpSince == 0) handUpSince = mediaTime();
-        if (extRoom && !roomPermissionAsked && started && state == XR_SESSION_STATE_FOCUSED && handUp && mediaTime() - handUpSince > 1 &&
+        if ((extRoom || filming.needsPermission()) && !roomPermissionAsked && started && state == XR_SESSION_STATE_FOCUSED && handUp && mediaTime() - handUpSince > 1 &&
             mediaTime() - runBegan > 1.5) {
             roomPermissionAsked = true;
             jclass cls = env->GetObjectClass(jni::activity());
@@ -953,6 +970,8 @@ void run() {
             const GLenum discard[] = {GL_DEPTH_ATTACHMENT};
             glInvalidateFramebuffer(GL_DRAW_FRAMEBUFFER, 1, discard);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+            // A filming take, if one is on: what was just drawn is written down.
+            filming.frame(renderer, started, elapsed, dim, frame.predictedDisplayTime);
 
             bool shoot = (shotAt > 0 && elapsed >= shotAt && shots == 0) || (shotEvery > 0 && elapsed >= shotEvery * (shots + 1));
             if (shoot && started) {
@@ -1031,6 +1050,7 @@ void run() {
     }
 
     perf.close();
+    filming.stop(renderer);
     hostaudio::stop();
     scene.reset();
     if (session != XR_NULL_HANDLE) xrDestroySession(session);

@@ -215,7 +215,7 @@ namespace {
 /// A film that never has a frame: cards show their still.
 class NoVideo : public VideoPlayer {
 public:
-    void load(const std::string&) override {}
+    void load(const std::string& path) override { source = path; }
     void play() override { on = true; }
     void pause() override { on = false; }
     void seek(double s) override { at = s; }

@@ -19,6 +19,11 @@
 //   is on with it; the right hand is still the mouse. `-lapHandAt <s>` lays it there only from that second.
 // - `-lookAt <s> -lookPitch <degrees>` tips the head to that pitch at that second (after `-pitch`); `-lookBackAt <s>`
 //   tips it back to `-pitch`.
+// - `-take <folder>` records a filming take (core/take.h) of the run, with a sync sound half a second in and
+//   another a second before a picture run ends; `-sheet <x>,<y>,<z>,<degrees>` lays a filming sheet flat in the
+//   room for it. `-film <take.bin> …` draws a take again from a camera, and `-takeInfo <take.bin>` says what
+//   one holds (film.cpp). `-filmPanel` shows the headset's filming panel (core/ocean/filmpanel.h): with it, `-take`
+//   records only between a pinch on Record and one on Stop, and the sheet is locked by its own button.
 #define GL_SILENCE_DEPRECATION
 #define GLFW_INCLUDE_GLCOREARB
 #include <GLFW/glfw3.h>
@@ -38,6 +43,14 @@
 #include "input.h"
 #include "perf.h"
 #include "render.h"
+#include "take.h"
+#ifndef OCEAN_NO_SCENE
+#include "ocean/filmpanel.h"
+#endif
+
+int runFilm(const std::string& takeFile);
+int takeInfo(const std::string& takeFile);
+int takeCameras(const std::string& takeFile, const std::string& folder);
 
 #ifndef REPO_ROOT
 #define REPO_ROOT "."
@@ -107,6 +120,9 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; i++) args.push_back(argv[i]);
     Flags::set(args);
     host::repoRoot = Flags::string("repo").value_or(REPO_ROOT);
+    if (auto file = Flags::string("takeInfo")) return takeInfo(*file);
+    if (auto file = Flags::string("takeCameras")) return takeCameras(*file, Flags::string("to").value_or("."));
+    auto filming = Flags::string("film");
 
     int width = 1280, height = 900;
     for (size_t i = 0; i + 2 < args.size(); i++) {
@@ -121,7 +137,7 @@ int main(int argc, char** argv) {
     int shots = 0;
     auto frames = Flags::string("frames");
     double framesFrom = Flags::number("framesFrom"), framesTo = Flags::number("framesTo") > 0 ? Flags::number("framesTo") : framesFrom + 1;
-    bool offscreen = shot || frames;
+    bool offscreen = shot || frames || filming;
 
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -140,6 +156,11 @@ int main(int argc, char** argv) {
     glfwMakeContextCurrent(window);
     glfwSwapInterval(offscreen ? 0 : 1);
     glfwSetScrollCallback(window, [](GLFWwindow*, double, double dy) { scrolled += dy; });
+    if (filming) {
+        int result = runFilm(*filming);
+        glfwTerminate();
+        return result;
+    }
 
     // The scene stands where the head faces when it starts, so the head starts facing ahead and is
     // turned by `-yaw` / `-pitch` once the scene has started (below).
@@ -175,6 +196,33 @@ int main(int argc, char** argv) {
     std::vector<float> heard;
     double heardUntil = 0;
     if (!shot && !soundOut) hostaudio::start();
+
+    // A filming take of this run, and the sheet a camera would place itself by.
+    take::Recorder recorder;
+    std::optional<Mat4> sheetInRoom;
+    if (auto at = Flags::string("sheet")) {
+        float x = 0, y = 0.75f, z = -0.6f, degrees = 0;
+        sscanf(at->c_str(), "%f,%f,%f,%f", &x, &y, &z, &degrees);
+        // Flat, face up: its top edge away from where the room faces, turned about the vertical.
+        Quat turn = Quat::angleAxis(-degrees * float(M_PI) / 180, {0, 1, 0});
+        Vec3 top = turn.act({0, 0, -1}), out{0, 1, 0};
+        sheetInRoom = Mat4(Vec4(cross(top, out), 0), Vec4(top, 0), Vec4(out, 0), Vec4(Vec3{x, y, z}, 1));
+    }
+    const char* aboutTake = "\"host\":\"mac preview\",\"clock\":\"the app's own time\"";
+    bool withPanel = Flags::has("filmPanel");
+    if (auto folder = Flags::string("take"); folder && !withPanel) renderer.keepDrawn = recorder.begin(*folder, aboutTake);
+    int synced = 0;
+    double takeBegan = 0;
+    bool sheetLocked = !withPanel;
+#ifndef OCEAN_NO_SCENE
+    // The filming panel, as the headset has it: the mouse's pinch on its buttons does what a hand's would.
+    FilmPanel panel;
+    FilmPanel::Press press = FilmPanel::Press::none;
+    if (withPanel) {
+        world->addChild(panel.root());
+        input.setFront(panel.root(), [&](const EntityRef& e) { press = panel.pressed(e); });
+    }
+#endif
 
     Perf perf;
     bool logFps = Flags::has("fps") || Flags::has("perf");
@@ -273,6 +321,29 @@ int main(int argc, char** argv) {
         static const bool lap = Flags::has("lapHand");
         if (lap) layLapHand(elapsed >= Flags::number("lapHandAt") && frameCount >= 3);
         input.update(scene->root(), host::head, dt);
+#ifndef OCEAN_NO_SCENE
+        if (withPanel) {
+            if (press == FilmPanel::Press::lock && sheetInRoom && !(sheetLocked && recorder.on())) sheetLocked = !sheetLocked;
+            if (press == FilmPanel::Press::record) {
+                if (recorder.on()) {
+                    recorder.end();
+                    renderer.keepDrawn = false;
+                } else if (auto folder = Flags::string("take")) {
+                    renderer.keepDrawn = recorder.begin(*folder, aboutTake);
+                    takeBegan = elapsed;
+                    synced = 0;
+                }
+            }
+            press = FilmPanel::Press::none;
+            FilmPanel::State state;
+            state.sheetSeen = state.sheetSteady = sheetInRoom.has_value();
+            state.sheetLocked = sheetLocked && sheetInRoom;
+            state.sheetAway = 0.4f;
+            state.recording = recorder.on();
+            state.recorded = recorder.on() ? elapsed - takeBegan : 0;
+            panel.update(state, host::head, dt);
+        }
+#endif
         if (scrolled != 0) {
             magnify *= float(std::pow(1.08, scrolled));
             scrolled = 0;
@@ -327,6 +398,24 @@ int main(int argc, char** argv) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         renderer.veil = scene->veil();
         renderer.draw(world, views, elapsed);
+        if (recorder.on()) {
+            if ((synced == 0 && elapsed >= takeBegan + 0.5) || (synced == 1 && shot && elapsed >= shotAt - 1)) {
+                synced++;
+                audio::sync();
+                recorder.sync(elapsed);
+            }
+            take::Moment moment;
+            moment.time = moment.appTime = elapsed;
+            moment.veil = renderer.veil;
+            moment.dim = scene->surroundingsDim();
+            moment.head = host::head;
+            if (sheetInRoom && sheetLocked) moment.sheet = host::sceneFromRoom * *sheetInRoom;
+            for (int h = 0; h < 2; h++) {
+                moment.handTracked[h] = host::hands[h].tracked;
+                for (int j = 0; j < int(platform::Joint::count); j++) moment.joints[h][j] = host::hands[h].joints[j];
+            }
+            recorder.frame(renderer, moment);
+        }
 
         Perf::Frame frame;
         frame.time = elapsed;
@@ -362,6 +451,7 @@ int main(int argc, char** argv) {
         glfwSwapBuffers(window);
     }
     hostaudio::stop();
+    if (recorder.on()) recorder.end();
     if (soundOut) {
         // 16 bit stereo wav.
         std::vector<int16_t> pcm(heard.size());

@@ -11,6 +11,8 @@
 // and calls `render` from its audio thread; nothing in `render` waits on
 // the frame thread, takes a lock or asks for memory.
 #pragma once
+#include <cstdint>
+#include <optional>
 #include <string>
 
 namespace audio {
@@ -37,6 +39,17 @@ void level(const std::string& name, float level, float over = 0.1f);
 /// For the host's audio thread: the next `frames` frames, interleaved
 /// stereo, -1…1.
 void render(float* out, int frames);
+
+/// A filming take's sync sound (take.h): one rising sweep, 1.5 to 6 kHz over 0.4 s, always the same,
+/// which quest/film/sync.py finds in a camera's sound to a fraction of a millisecond. It plays
+/// whether or not there are other sounds, and `-mute` and `-sound` leave it as it is.
+void sync();
+/// For the host: how many frames `render` has made so far, and the count at which the last sync
+/// sound began (-1 until one has).
+int64_t rendered();
+int64_t syncBegan();
+/// The sweep's shape, which sync.py repeats: its length in seconds and its two ends in Hz.
+constexpr double syncSeconds = 0.4, syncFrom = 1500, syncTo = 6000;
 /// For the log: how many sounds have been played, how many are sounding,
 /// the loudest sample so far, and how many were dropped.
 std::string describe();
@@ -49,4 +62,7 @@ namespace hostaudio {
 void start();
 /// Closes it. Safe to call when it is not open.
 void stop();
+/// When the frame that `audio::rendered()` counted as `count` reaches the speaker, in seconds of
+/// CLOCK_MONOTONIC; nullopt where the host cannot say (the Mac preview), or cannot say yet.
+std::optional<double> heardAt(int64_t count);
 }

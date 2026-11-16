@@ -446,6 +446,7 @@ void Renderer::upload(Mesh* m) {
     }
     m->verticesDirty = false;
     m->indicesDirty = false;
+    m->revision++;
 }
 
 // MARK: - The frame
@@ -457,7 +458,7 @@ static bool isTransparent(const Material& m, float opacity) {
 
 void Renderer::collect(const Entity* e, const Mat4& parent, float opacity, const Hover* hover, float hovered, const Views& views) {
     if (!e->isEnabled) return;
-    Mat4 world = parent * Mat4::trs(e->position, e->orientation, e->scale);
+    Mat4 world = e->replayWorld ? *e->replayWorld : parent * Mat4::trs(e->position, e->orientation, e->scale);
     if (e->opacity) opacity *= std::min(1.f, std::max(0.f, *e->opacity));
     if (e->hover.kind != Hover::Kind::none) {
         hover = &e->hover;
@@ -510,6 +511,11 @@ void Renderer::collect(const Entity* e, const Mat4& parent, float opacity, const
                     }
                 }
             }
+            // (A take played back: the placeholder showed, so it shows again.)
+            if (e->replayLoading > 0) {
+                item.waiting = e->replayLoading;
+                see = true;
+            }
             if (drawn) (material.onTop ? above : material.overOnTop ? over : see ? transparent : opaque).push_back(item);
         }
     }
@@ -520,7 +526,7 @@ bool Renderer::gather(const Item& item) {
     const Material& m = *item.material;
     if (m.kind != Material::Kind::unlit || item.mesh->isLowLevel() || item.mesh->positions.size() > 32) return false;
     if (item.hover && item.hover->kind == Hover::Kind::highlight && item.hovered > 0.004f) return false;
-    if (m.opacityThreshold > 0) return false;
+    if (m.opacityThreshold > 0 || item.entity->replayLoading > 0) return false;
     Texture* texture = m.texture.get();
     if (texture && ((texture->pending && !texture->pending->ready.load()) || texture->fadeFrom > 0)) return false;
     Batch* batch = nullptr;
@@ -551,7 +557,28 @@ bool Renderer::gather(const Item& item) {
     }
     for (uint32_t i : mesh.indices) batch->indices.push_back(base + i);
     batch->count++;
+    if (keepDrawn) keep(item, texture, 0);
     return true;
+}
+
+void Renderer::keep(const Item& item, Texture* texture, float loading) {
+    drawn.push_back({item.entity, item.mesh, item.material, item.world, item.opacity * item.appear, item.hovered, item.hover, loading,
+                     texture, item.order});
+}
+
+bool Renderer::read(Texture* t, int first, int rows, uint8_t* rgba) {
+    if (!t || !t->gl || t->external || t->width <= 0 || first < 0 || rows <= 0 || first + rows > t->height) return false;
+    if (!readFramebuffer) glGenFramebuffers(1, &readFramebuffer);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, readFramebuffer);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t->gl, 0);
+    bool whole = glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    if (whole) {
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glReadPixels(0, first, t->width, rows, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+    }
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    return whole;
 }
 
 void Renderer::drawBatches(const Mat4* viewProj) {
@@ -636,6 +663,7 @@ void Renderer::draw(const EntityRef& root, const Views& views, double time) {
     transparent.clear();
     above.clear();
     over.clear();
+    drawn.clear();
     frameTime = mediaTime();
     if (root) collect(root.get(), Mat4::identity(), 1, nullptr, 0, views);
     if (batching) {
@@ -765,7 +793,12 @@ void Renderer::submit(const Item& item, const Views& views, double time, const M
             }
         }
     }
+    if (item.entity->replayLoading > 0) {
+        placeholder = true;
+        texture = nullptr;
+    }
     upload(item.mesh);
+    if (keepDrawn) keep(item, texture, placeholder ? std::max(0.02f, item.waiting) : 0);
 
     glUseProgram(p->id);
     glUniformMatrix4fv(p->viewProj, 2, GL_FALSE, viewProj[0].data());

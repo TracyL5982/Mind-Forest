@@ -23,6 +23,11 @@ std::vector<unsigned>& deadVertexArrays() {
 }
 }
 
+uint32_t nextSerial() {
+    static std::atomic<uint32_t> last{0};
+    return ++last;
+}
+
 // MARK: - Pictures still on their way
 
 namespace {

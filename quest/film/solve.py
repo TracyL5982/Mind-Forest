@@ -1,0 +1,308 @@
+"""Where the camera was, from the filming sheet in its footage.
+
+Every frame is searched for the sheet's marks (sheet.py). Their corners are known on the sheet, so
+where they land in the picture says where the camera stood against the sheet. Nothing else is
+needed from the camera: ordinary footage will do.
+
+What it cannot do: a frame where the sheet is out of view, hidden or too small has no place. A
+short gap is bridged from the frames on both sides; a long one is left without the scene.
+
+A camera on a tripod is noticed (it never moves) and given one place for the whole take, the mean
+of every frame's: that is steadier than any single frame. A camera in the hand is followed frame by
+frame and smoothed a little, and will still swim slightly against the scene, more the further the
+scene is from the sheet: the sheet is small in the picture, and a hair's turn of it is centimetres
+two metres away.
+
+The lens: its focal length is worked out from the footage itself when the sheet is seen from
+enough different sides (a hand-held take, or a short clip made for it: `film.py lens`), and must
+be given (`--lens`, `--fov`) for a tripod take, where one view cannot tell a long lens far away
+from a short one near.
+"""
+import json
+import subprocess
+
+import cv2
+import numpy as np
+
+import sheet as sheets
+
+
+def probe(footage):
+    """The footage's size as shown (turned upright), frame rate, length and how its colours are stored."""
+    command = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+               "stream=width,height,r_frame_rate,avg_frame_rate,nb_frames,duration,color_transfer:stream_side_data=rotation:format=duration",
+               "-of", "json", footage]
+    info = json.loads(subprocess.run(command, capture_output=True, text=True).stdout)
+    stream = info["streams"][0]
+    width, height = int(stream["width"]), int(stream["height"])
+    for side in stream.get("side_data_list", []):
+        if abs(int(side.get("rotation", 0))) % 180 == 90:
+            width, height = height, width
+    num, den = stream.get("avg_frame_rate", stream["r_frame_rate"]).split("/")
+    fps = float(num) / float(den) if float(den) else 30.0
+    # A rate a hair off a round one is the round one.
+    for common in (24, 25, 30, 48, 50, 60, 120):
+        if abs(fps - common) < 0.02:
+            fps = float(common)
+    duration = float(stream.get("duration") or info["format"]["duration"])
+    return {"width": width, "height": height, "fps": fps, "duration": duration, "transfer": stream.get("color_transfer", "")}
+
+
+def frames_command(footage, fps, pixels, first=None, count=None, size=None):
+    """The ffmpeg that gives the footage's frames one after another at a steady `fps`.
+
+    The same frames whoever asks: the solver (grey) and the film's drawing (rgba) must agree on which
+    frame is which, so both come through here.
+    """
+    command = ["ffmpeg", "-v", "error"]
+    if first:
+        command += ["-ss", "%.6f" % (first / fps)]
+    # (`size`: the frames made smaller, for a quick rough film.)
+    look = "fps=%s" % repr(fps) + (",scale=%d:%d" % size if size else "")
+    command += ["-i", footage, "-an", "-vf", look, "-f", "rawvideo", "-pix_fmt", pixels]
+    if count:
+        command += ["-frames:v", str(count)]
+    return command + ["-"]
+
+
+class Detector:
+    def __init__(self, layout):
+        self.layout = layout
+        self.corners = {m["id"]: np.array([[x, y, 0.0] for x, y in m["corners"]], np.float64) for m in layout["marks"]}
+        parameters = cv2.aruco.DetectorParameters()
+        parameters.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_NONE
+        # Each corner is then settled where the mark's edges cross, in the full picture: steadier than hunting for the corner itself.
+        fine = cv2.aruco.DetectorParameters()
+        fine.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_CONTOUR
+        self.fine = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, layout["dictionary"])), fine)
+        self.detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(getattr(cv2.aruco, layout["dictionary"])), parameters)
+
+    def find(self, grey):
+        """The sheet's corners seen in a frame: (points on the sheet, points in the picture), or None."""
+        height, width = grey.shape
+        # Looked for in a smaller copy, then each corner settled in the full picture.
+        shrink = max(1.0, width / 1920.0)
+        small = cv2.resize(grey, (int(width / shrink), int(height / shrink)), interpolation=cv2.INTER_AREA) if shrink > 1 else grey
+        found, ids, _ = self.detector.detectMarkers(small)
+        if ids is None:
+            return None
+        on_sheet, in_picture = [], []
+        for quad, ident in zip(found, ids.flatten()):
+            if int(ident) not in self.corners:
+                continue
+            points = (quad.reshape(4, 2) * shrink).astype(np.float32)
+            side = float(np.mean(np.linalg.norm(points - np.roll(points, 1, axis=0), axis=1)))
+            if side < 14:
+                continue
+            # The mark again, alone, in a piece of the full picture cut round it.
+            margin = side * 0.45
+            left, top = max(0, int(points[:, 0].min() - margin)), max(0, int(points[:, 1].min() - margin))
+            right, bottom = min(width, int(points[:, 0].max() + margin) + 1), min(height, int(points[:, 1].max() + margin) + 1)
+            again, again_ids, _ = self.fine.detectMarkers(np.ascontiguousarray(grey[top:bottom, left:right]))
+            if again_ids is None or int(ident) not in again_ids.flatten():
+                continue
+            quad = again[list(again_ids.flatten()).index(int(ident))].reshape(4, 2)
+            on_sheet.append(self.corners[int(ident)])
+            in_picture.append(quad.astype(np.float64) + [left, top])
+        if not on_sheet:
+            return None
+        return np.concatenate(on_sheet), np.concatenate(in_picture)
+
+
+def detect(footage, layout, info, progress=None, first=None, count=None):
+    """Every frame's sighting of the sheet (or None), in order."""
+    width, height = info["width"], info["height"]
+    detector = Detector(layout)
+    pipe = subprocess.Popen(frames_command(footage, info["fps"], "gray", first, count), stdout=subprocess.PIPE)
+    size = width * height
+    seen = []
+    while True:
+        data = pipe.stdout.read(size)
+        if len(data) < size:
+            break
+        seen.append(detector.find(np.frombuffer(data, np.uint8).reshape(height, width)))
+        if progress and len(seen) % 150 == 0:
+            progress(len(seen))
+    pipe.wait()
+    return seen
+
+
+def lens_from(seen, info, guess=None):
+    """The focal length, in pixels, that best explains the sightings, and how sure that is.
+
+    Returns (f, relative uncertainty, pixels off) or None when there is too little to go on.
+    """
+    good = [s for s in seen if s is not None and len(s[0]) >= 12]
+    if len(good) < 8:
+        return None
+    step = max(1, len(good) // 60)
+    good = good[::step][:80]
+    width, height = info["width"], info["height"]
+    f0 = guess or 0.8 * max(width, height)
+    matrix = np.array([[f0, 0, width / 2], [0, f0, height / 2], [0, 0, 1]], np.float64)
+    flags = (cv2.CALIB_USE_INTRINSIC_GUESS | cv2.CALIB_FIX_PRINCIPAL_POINT | cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_ZERO_TANGENT_DIST |
+             cv2.CALIB_FIX_K1 | cv2.CALIB_FIX_K2 | cv2.CALIB_FIX_K3)
+    try:
+        result = cv2.calibrateCameraExtended([s[0].astype(np.float32) for s in good], [s[1].astype(np.float32) for s in good],
+                                             (width, height), matrix, None, flags=flags)
+    except cv2.error:
+        return None
+    error, matrix, deviations = result[0], result[1], result[5]
+    f = float(matrix[0, 0])
+    spread = float(deviations[0, 0]) / f if f > 0 else 1.0
+    if not (0.3 * max(width, height) < f < 5 * max(width, height)):
+        return None
+    return f, spread, float(error)
+
+
+def place(seen, f, info):
+    """Each frame's camera against the sheet: a 4 x 4 (OpenCV's camera: x right, y down, z ahead) taking sheet points to the camera's, or None."""
+    width, height = info["width"], info["height"]
+    matrix = np.array([[f, 0, width / 2], [0, f, height / 2], [0, 0, 1]], np.float64)
+    placed, errors = [], []
+    before = None
+    for sighting in seen:
+        if sighting is None:
+            placed.append(None)
+            errors.append(None)
+            continue
+        on_sheet, in_picture = sighting
+        try:
+            count, turns, moves, misses = cv2.solvePnPGeneric(on_sheet, in_picture, matrix, None, flags=cv2.SOLVEPNP_IPPE)
+        except cv2.error:
+            count = 0
+        if not count:
+            placed.append(None)
+            errors.append(None)
+            continue
+        # A flat target seen nearly square-on has two answers that fit almost alike: the one nearer the frame before is kept.
+        choice = 0
+        if count > 1 and before is not None and float(misses[1]) < 2.5 * float(misses[0]) + 0.3:
+            def turned(k):
+                r, _ = cv2.Rodrigues(turns[k])
+                return np.arccos(np.clip((np.trace(r @ before[:3, :3].T) - 1) / 2, -1, 1))
+            choice = 0 if turned(0) <= turned(1) else 1
+        turn, move = cv2.solvePnPRefineLM(on_sheet, in_picture, matrix, None, turns[choice], moves[choice])
+        projected, _ = cv2.projectPoints(on_sheet, turn, move, matrix, None)
+        miss = float(np.sqrt(np.mean(np.sum((projected.reshape(-1, 2) - in_picture) ** 2, axis=1))))
+        r, _ = cv2.Rodrigues(turn)
+        pose = np.eye(4)
+        pose[:3, :3] = r
+        pose[:3, 3] = move.flatten()
+        # Too far out to be the sheet (a wrong mark, a smeared frame): 0.15% of the picture's width.
+        if miss > 0.0015 * width + 1.0 or move.flatten()[2] <= 0:
+            placed.append(None)
+            errors.append(miss)
+            continue
+        placed.append(pose)
+        errors.append(miss)
+        before = pose
+    return placed, errors
+
+
+def _quaternion(r):
+    w = np.sqrt(max(0.0, 1 + r[0, 0] + r[1, 1] + r[2, 2])) / 2
+    x = np.sqrt(max(0.0, 1 + r[0, 0] - r[1, 1] - r[2, 2])) / 2
+    y = np.sqrt(max(0.0, 1 - r[0, 0] + r[1, 1] - r[2, 2])) / 2
+    z = np.sqrt(max(0.0, 1 - r[0, 0] - r[1, 1] + r[2, 2])) / 2
+    x = np.copysign(x, r[2, 1] - r[1, 2])
+    y = np.copysign(y, r[0, 2] - r[2, 0])
+    z = np.copysign(z, r[1, 0] - r[0, 1])
+    return np.array([w, x, y, z])
+
+
+def _rotation(q):
+    w, x, y, z = q / np.linalg.norm(q)
+    return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                     [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                     [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
+
+
+def settle(placed, fps, smooth=2.0, still=None, bridge=0.5):
+    """The camera's path made fit to draw from: each frame's camera in the sheet's frame (4 x 4, sheet from camera), or None.
+
+    `still`: True for a tripod, False for a hand, None to tell from the path. Returns (path, what was done).
+    """
+    n = len(placed)
+    known = [i for i, p in enumerate(placed) if p is not None]
+    if not known:
+        return [None] * n, {"placed": 0, "frames": n}
+    where = np.full((n, 3), np.nan)
+    how = np.full((n, 4), np.nan)
+    last = None
+    for i in known:
+        inverse = np.linalg.inv(placed[i])
+        where[i] = inverse[:3, 3]
+        q = _quaternion(inverse[:3, :3])
+        if last is not None and np.dot(q, last) < 0:
+            q = -q
+        how[i] = q
+        last = q
+    spot = np.median(where[known], axis=0)
+    away = np.linalg.norm(where[known] - spot, axis=1)
+    mean = how[known].mean(axis=0)
+    mean /= np.linalg.norm(mean)
+    turned = np.degrees(2 * np.arccos(np.clip(np.abs(how[known] @ mean), -1, 1)))
+    distance = float(np.linalg.norm(spot))
+    note = {"placed": len(known), "frames": n, "distance": distance, "moved": float(np.percentile(away, 95)), "turned": float(np.percentile(turned, 95))}
+    if still is None:
+        still = note["moved"] < 0.006 * max(distance, 0.3) and note["turned"] < 0.35
+    note["still"] = bool(still)
+    path = [None] * n
+    if still:
+        # One place for the whole take: the middle of where the frames put it, leaving the wildest out.
+        keep = [k for k, a, t in zip(known, away, turned) if a <= np.percentile(away, 80) and t <= np.percentile(turned, 80)] or known
+        q = how[keep].mean(axis=0)
+        pose = np.eye(4)
+        pose[:3, :3] = _rotation(q)
+        pose[:3, 3] = where[keep].mean(axis=0)
+        return [pose.copy() for _ in range(n)], note
+    # Gaps: short ones bridged straight across, long ones left.
+    limit = int(round(bridge * fps))
+    filled = np.zeros(n, bool)
+    filled[known] = True
+    bridged = 0
+    for a, b in zip(known[:-1], known[1:]):
+        if 1 < b - a <= limit + 1:
+            for i in range(a + 1, b):
+                t = (i - a) / (b - a)
+                where[i] = (1 - t) * where[a] + t * where[b]
+                q = (1 - t) * how[a] + t * how[b]
+                how[i] = q / np.linalg.norm(q)
+                filled[i] = True
+                bridged += 1
+    note["bridged"] = bridged
+    # Smoothed a little, within each unbroken run: a bell `smooth` frames wide.
+    if smooth > 0:
+        reach = int(np.ceil(smooth * 3))
+        weights = np.exp(-0.5 * (np.arange(-reach, reach + 1) / smooth) ** 2)
+        smooth_where, smooth_how = where.copy(), how.copy()
+        for i in np.nonzero(filled)[0]:
+            lo, hi = max(0, i - reach), min(n, i + reach + 1)
+            # (Only as far as the run goes on both sides, and evenly: an uneven window would drag a moving camera back.)
+            left = right = 0
+            while i - left - 1 >= lo and filled[i - left - 1]:
+                left += 1
+            while i + right + 1 < hi and filled[i + right + 1]:
+                right += 1
+            k = min(left, right)
+            w = weights[reach - k:reach + k + 1]
+            smooth_where[i] = (where[i - k:i + k + 1] * w[:, None]).sum(axis=0) / w.sum()
+            q = (how[i - k:i + k + 1] * w[:, None]).sum(axis=0)
+            smooth_how[i] = q / np.linalg.norm(q)
+        where, how = smooth_where, smooth_how
+    for i in np.nonzero(filled)[0]:
+        pose = np.eye(4)
+        pose[:3, :3] = _rotation(how[i])
+        pose[:3, 3] = where[i]
+        path[i] = pose
+    note["unplaced"] = int(n - filled.sum())
+    return path, note
+
+
+def for_drawing(sheet_from_camera):
+    """OpenCV's camera looks along +z with y down; the renderer's looks along -z with y up. Sixteen numbers, row by row."""
+    if sheet_from_camera is None:
+        return None
+    flip = np.diag([1.0, -1.0, -1.0, 1.0])
+    return [round(float(v), 7) for v in (sheet_from_camera @ flip).flatten()]

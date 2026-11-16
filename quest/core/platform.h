@@ -161,6 +161,10 @@ public:
     virtual bool ready() = 0;
     /// The frame to draw; the host keeps it current.
     virtual TextureRef texture() = 0;
+    /// The file it was last given (each host's `load` keeps it), and a number of its own: what a
+    /// filming take (take.h) writes down so the same film can be shown when the take is drawn again.
+    std::string source;
+    uint32_t serial = nextSerial();
 };
 using VideoPlayerRef = std::shared_ptr<VideoPlayer>;
 

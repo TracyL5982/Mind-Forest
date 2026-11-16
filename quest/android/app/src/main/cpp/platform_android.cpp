@@ -311,6 +311,7 @@ public:
         players.erase(std::remove(players.begin(), players.end(), this), players.end());
     }
     void load(const std::string& path) override {
+        source = path;
         JNIEnv* e = jni::env();
         jstring jpath = e->NewStringUTF(path.c_str());
         e->CallVoidMethod(surface, videoClass().load, jpath);

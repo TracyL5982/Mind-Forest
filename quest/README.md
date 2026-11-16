@@ -162,6 +162,11 @@ quest/desktop/preview -walk 3 -shot /tmp/walk.png -shotAt 6
 
 The preview joins a service only with flags: `-agent <address> -agentToken <token>`.
 
+## Filming
+
+A third-person shot of someone using the app (an ordinary camera's footage with the scene drawn into it from where
+the camera stood) is made from a take the app records with `-film`: see [film/README.md](film/README.md).
+
 ## How the code is organised
 
 | Path | What it holds |

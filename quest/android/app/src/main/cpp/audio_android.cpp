@@ -3,6 +3,9 @@
 // is MediaPlayer's (Media.kt).
 #include <aaudio/AAudio.h>
 
+#include <time.h>
+
+#include <atomic>
 #include <mutex>
 #include <thread>
 
@@ -15,8 +18,11 @@ namespace {
 std::mutex guard;
 AAudioStream* stream = nullptr;
 bool wanted = false;
+/// How far the stream's own count of frames is ahead of the mixer's (a stream opened again starts from nothing).
+std::atomic<int64_t> streamAhead{0};
 
-aaudio_data_callback_result_t onData(AAudioStream*, void*, void* data, int32_t frames) {
+aaudio_data_callback_result_t onData(AAudioStream* s, void*, void* data, int32_t frames) {
+    streamAhead.store(AAudioStream_getFramesWritten(s) - audio::rendered(), std::memory_order_relaxed);
     audio::render(static_cast<float*>(data), frames);
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
 }
@@ -79,6 +85,16 @@ void stop() {
     AAudioStream_requestStop(stream);
     AAudioStream_close(stream);
     stream = nullptr;
+}
+
+std::optional<double> heardAt(int64_t count) {
+    std::lock_guard<std::mutex> lock(guard);
+    if (!stream) return std::nullopt;
+    // A frame the device has already played, and when: the one asked about is so many frames from it.
+    int64_t position = 0, nanoseconds = 0;
+    if (AAudioStream_getTimestamp(stream, CLOCK_MONOTONIC, &position, &nanoseconds) != AAUDIO_OK) return std::nullopt;
+    int64_t frame = count + streamAhead.load(std::memory_order_relaxed);
+    return double(nanoseconds) / 1e9 + double(frame - position) / AAudioStream_getSampleRate(stream);
 }
 
 }  // namespace hostaudio

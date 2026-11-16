@@ -70,6 +70,13 @@ uint32_t born = 0;
 std::atomic<int> played{0}, dropped{0}, sounding{0};
 std::atomic<float> loudest{0};
 
+// The sync sound: made once on the frame thread, played by the audio thread from the frame after it is asked for.
+std::vector<float> sweep;
+std::atomic<bool> syncAsked{false};
+std::atomic<int64_t> renderedFrames{0}, syncBeganAt{-1};
+int syncAt = -1;                    // the audio thread's: the next sample of the sweep, or -1
+void mix(float* out, int frames);
+
 void push(const Command& c) {
     uint32_t head = queueHead.load(std::memory_order_relaxed);
     if (head - queueTail.load(std::memory_order_acquire) >= queueSize) {
@@ -210,9 +217,48 @@ void level(const std::string& name, float level, float over) {
     push(c);
 }
 
+void sync() {
+    if (sweep.empty()) {
+        int n = int(syncSeconds * sampleRate), edge = int(0.02 * sampleRate);
+        sweep.resize(size_t(n));
+        for (int i = 0; i < n; i++) {
+            double t = double(i) / sampleRate;
+            double phase = 2 * M_PI * (syncFrom * t + (syncTo - syncFrom) * t * t / (2 * syncSeconds));
+            // Its two ends are eased over 20 ms, so it neither clicks in nor out.
+            double ease = i < edge ? 0.5 - 0.5 * std::cos(M_PI * i / edge) : i >= n - edge ? 0.5 - 0.5 * std::cos(M_PI * (n - 1 - i) / edge) : 1;
+            sweep[size_t(i)] = float(0.5 * ease * std::sin(phase));
+        }
+    }
+    syncAsked.store(true, std::memory_order_release);
+}
+
+int64_t rendered() { return renderedFrames.load(std::memory_order_acquire); }
+int64_t syncBegan() { return syncBeganAt.load(std::memory_order_acquire); }
+
 void render(float* out, int frames) {
     std::memset(out, 0, size_t(frames) * 2 * sizeof(float));
-    if (!ready.load(std::memory_order_acquire)) return;
+    if (ready.load(std::memory_order_acquire)) mix(out, frames);
+    // The sync sound goes on top of everything, after the mix has been kept from clipping, so its shape is exact.
+    int64_t count = renderedFrames.load(std::memory_order_relaxed);
+    if (syncAsked.exchange(false, std::memory_order_acq_rel)) {
+        syncAt = 0;
+        syncBeganAt.store(count, std::memory_order_release);
+    }
+    if (syncAt >= 0) {
+        int n = std::min(frames, int(sweep.size()) - syncAt);
+        for (int k = 0; k < n; k++) {
+            float s = sweep[size_t(syncAt + k)];
+            out[k * 2] = std::min(1.f, std::max(-1.f, out[k * 2] * 0.5f + s));
+            out[k * 2 + 1] = std::min(1.f, std::max(-1.f, out[k * 2 + 1] * 0.5f + s));
+        }
+        syncAt += n;
+        if (syncAt >= int(sweep.size())) syncAt = -1;
+    }
+    renderedFrames.store(count + frames, std::memory_order_release);
+}
+
+namespace {
+void mix(float* out, int frames) {
 
     for (uint32_t tail = queueTail.load(std::memory_order_relaxed); tail != queueHead.load(std::memory_order_acquire);) {
         const Command& c = queue[tail & (queueSize - 1)];
@@ -293,6 +339,7 @@ void render(float* out, int frames) {
     if (peak > loudest.load(std::memory_order_relaxed)) loudest.store(peak, std::memory_order_relaxed);
     sounding.store(active, std::memory_order_relaxed);
 }
+}  // namespace
 
 std::string describe() {
     if (!on()) return "no sound";

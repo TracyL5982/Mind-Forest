@@ -55,4 +55,6 @@ void stop() {
     unit = nullptr;
 }
 
+std::optional<double> heardAt(int64_t) { return std::nullopt; }
+
 }  // namespace hostaudio

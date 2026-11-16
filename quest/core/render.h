@@ -44,6 +44,26 @@ public:
     };
     Stats stats;
 
+    /// For a filming take (take.h): with `keepDrawn` set, `drawn` holds every model the last `draw`
+    /// put on screen, as it was put there: where, how see-through, with which picture.
+    struct Drawn {
+        const Entity* entity;
+        Mesh* mesh;
+        const Material* material;
+        Mat4 world;
+        float opacity;          // the entity's own and its picture's fading in, not the material's
+        float hovered;
+        const Hover* hover;
+        float loading;          // above 0: the placeholder was drawn in its picture's place, this strongly
+        Texture* texture;       // the picture that was drawn, or a video's frame; null for none
+        int order;              // its place in the tree, which settles what is drawn first among equals
+    };
+    bool keepDrawn = false;
+    std::vector<Drawn> drawn;
+    /// Some rows of a picture back from the GPU, as it was sent (row 0 is its top): `rows` rows from
+    /// `first`, into `rgba` (four bytes a pixel). False for a picture that is not there, or a video's frame.
+    bool read(Texture* texture, int first, int rows, uint8_t* rgba);
+
     /// How much of the finished picture shows, 0…1: below 1, everything drawn is faded together in one
     /// pass at the end (nothing is re-sorted or drawn differently for it). The hosts set it from PalaceScene::veil.
     float veil = 1;
@@ -100,6 +120,7 @@ private:
     /// Whether a picture still waiting may be sent this frame; false means leave what uses it undrawn for now.
     bool mayUpload() const { return stats.textureUploads == 0 || uploadSpentMs < uploadBudgetMs; }
     unsigned veilVao = 0, veilVbo = 0;
+    unsigned readFramebuffer = 0;
     unsigned timerQuery = 0;
     bool timerPending = false, timerSupported = false;
 
@@ -108,6 +129,7 @@ private:
     void upload(Mesh* mesh);
     void upload(Texture* texture);
     void submit(const Item& item, const Views& views, double time, const Mat4* viewProj);
+    void keep(const Item& item, Texture* texture, float loading);
     void freeDead();
     bool gather(const Item& item);
     void drawBatches(const Mat4* viewProj);

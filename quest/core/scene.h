@@ -45,6 +45,10 @@ struct Color {
     }
 };
 
+/// A number no other texture, mesh, entity or video player made in this run has: what a filming take
+/// (take.h) knows each by, since an address is used again once its owner has gone.
+uint32_t nextSerial();
+
 // MARK: - Images and textures
 
 /// A picture in memory: 8-bit RGBA, premultiplied, row 0 at the top (as
@@ -84,6 +88,7 @@ public:
     bool external = false;
     /// For a video frame: the 4x4 that takes mesh uv to texture uv, column-major.
     float uvTransform[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    uint32_t serial = nextSerial();
 };
 using TextureRef = std::shared_ptr<Texture>;
 
@@ -114,6 +119,10 @@ public:
     unsigned vao = 0, vbo = 0, ibo = 0;
     int uploadedVertexBytes = 0, uploadedIndexCount = 0;
     bool verticesDirty = true, indicesDirty = true;
+    /// Renderer's: one more each time it sends this mesh's vertices or indices to the GPU again, so a
+    /// filming take knows when to write it down again.
+    uint32_t revision = 0;
+    uint32_t serial = nextSerial();
     virtual bool isLowLevel() const { return false; }
 };
 using MeshRef = std::shared_ptr<Mesh>;
@@ -356,6 +365,15 @@ public:
 
     /// Renderer's and the input system's: how strongly a hand ray rests on it, 0...1.
     float hovered = 0;
+
+    /// Drawn for the person in the headset, but left out of a filming take (take.h), with everything under
+    /// it: the filming panel, the sheet's outline.
+    bool unfilmed = false;
+    /// Only in a filming take played back (take.h): where it is in the world, whatever it hangs under,
+    /// and how strongly the placeholder showed if its picture had not arrived when it was drawn.
+    std::optional<Mat4> replayWorld;
+    float replayLoading = 0;
+    uint32_t serial = nextSerial();
 
 private:
     Entity() = default;
