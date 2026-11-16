@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -10,8 +10,9 @@ import { fakeRoles } from '../src/fake/roles.ts';
 import { PICTURE_DOLLARS, startHosted, telegramAlert, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
 import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
-import type { LiveDeps, VoiceFrame } from '../src/node/live.ts';
+import { LiveVoice, type LiveDeps, type VoiceFrame } from '../src/node/live.ts';
 import { SEARCH_DOLLARS } from '../src/node/search-openai.ts';
+import { wavMs } from '../src/node/speech-openai.ts';
 import { chargedPictures, startServer } from '../src/node/server.ts';
 import { makeSources } from '../src/node/sources.ts';
 import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
@@ -74,6 +75,28 @@ function connect(hosted: Hosted, token: string, path = '/ws'): Promise<{ ws: Web
     ws.on('open', () => resolve({ ws, seen, until }));
     ws.on('error', reject);
   });
+}
+
+/** A PCM WAV of `ms` of 16 kHz mono 16-bit silence, as the Quest records; `byteRate` writes another value in the header's own field. */
+function recording(ms: number, byteRate = 32000): Uint8Array<ArrayBuffer> {
+  const data = Math.round(ms * 32);
+  const wav = new Uint8Array(44 + data);
+  const view = new DataView(wav.buffer);
+  const tag = (at: number, text: string) => [...text].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
+  tag(0, 'RIFF');
+  view.setUint32(4, 36 + data, true);
+  tag(8, 'WAVE');
+  tag(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, 16000, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  tag(36, 'data');
+  view.setUint32(40, data, true);
+  return wav;
 }
 
 const treesOf = (hello: Msg) => (hello.snapshot as { trees: { id: string; title: string; rootId: string }[] }).trees;
@@ -319,11 +342,7 @@ test('speech and transcription are refused while off by any spelling of their pa
   const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
   const hosted = await startHosted({ port: 0, host: '127.0.0.1', dataDir, appKey: KEY, adminToken: ADMIN, ledger, shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, speak, transcribe }, log: () => {} });
   const auth = { Authorization: `Bearer ${KEY}.${A}` };
-  const second = new Uint8Array(44 + 32000);
-  const header = new DataView(second.buffer);
-  header.setUint32(0, 0x52494646, false);
-  header.setUint32(28, 32000, true);
-  const wav = { method: 'POST', headers: { ...auth, 'Content-Type': 'audio/wav' }, body: second };
+  const wav = { method: 'POST', headers: { ...auth, 'Content-Type': 'audio/wav' }, body: recording(1000) };
 
   ledger.setOff(true);
   for (const path of ['/api/speak', '/api/%73peak', '/api/%2573peak', '/api/./speak', '/assets/../api/speak']) {
@@ -385,7 +404,7 @@ test('a device keeps two voice sockets, and the off switch in the middle of a tu
   const closed = new Promise<number>((done) => first.ws.on('close', (code) => done(code)));
   await connect(hosted, `${KEY}.${A}`, path);
   const live = await connect(hosted, `${KEY}.${A}`, path);
-  assert.equal(await closed, 4000, 'the oldest of three closes');
+  assert.ok((await closed) > 0, 'the oldest of three is cut off');
 
   await live.until((m) => m.t === 'ready');
   live.ws.send(JSON.stringify({ t: 'start', turn: 1, scene: { selection: [] } }));
@@ -431,4 +450,102 @@ test('a made picture is charged at the price of one, and none is made while the 
   await assert.rejects(charged.images.generate('another'), new RegExp(LINES.off.slice(0, 20)));
   assert.deepEqual(made, ['a lighthouse']);
   assert.equal(chargedPictures(tools, undefined), tools, 'the Mac makes pictures as before');
+});
+
+test('a recording counts by what a decoder plays, so a forged byte rate counts in full, and hosted transcription takes only a small WAV', { timeout: 20000 }, async () => {
+  assert.equal(Math.round(wavMs(recording(60_000))!), 60_000);
+  assert.equal(Math.round(wavMs(recording(60_000, 0xffffffff))!), 60_000, 'the byte-rate field is not read');
+  assert.equal(wavMs(new Uint8Array(100)), null);
+  const odd = recording(1000);
+  new DataView(odd.buffer).setUint32(24, 1, true);
+  assert.equal(wavMs(odd), null, 'a sample rate no voice is recorded at');
+
+  const transcribe = async () => 'hello';
+  const dataDir = mkdtempSync(join(tmpdir(), 'mp-hosted-'));
+  const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
+  const hosted = await startHosted({ port: 0, host: '127.0.0.1', dataDir, appKey: KEY, adminToken: ADMIN, ledger, shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, transcribe }, log: () => {} });
+  const post = (body: Uint8Array<ArrayBuffer>, type = 'audio/wav') => fetch(`${hosted.url}/api/transcribe`, { method: 'POST', headers: { Authorization: `Bearer ${KEY}.${A}`, 'Content-Type': type }, body });
+  assert.equal((await post(recording(60_000, 0xffffffff))).status, 200);
+  assert.equal(ledger.status().devices[A]?.voiceMinutes, 1, 'a forged minute is a minute');
+  assert.equal((await post(recording(1000), 'audio/webm')).status, 415, 'only WAV');
+  assert.equal((await post(new Uint8Array(1000))).status, 415, 'a body that is not a WAV');
+  assert.equal((await post(recording(70_000))).status, 413, 'over about a minute');
+  await hosted.close();
+});
+
+test('uploads at once from one device take no more than its room, and stream to disk', { timeout: 20000 }, async () => {
+  const { hosted, dataDir } = await host({}, { uploads: { file: 1000, total: 2000 } });
+  const files = () => readdirSync(join(dataDir, 'spaces', A, 'assets')).filter((f) => !f.endsWith('.json')).length;
+  assert.equal((await fetch(`${hosted.url}/api/state?token=${KEY}.${A}`)).status, 200);
+  const before = files();
+  const streamed = () =>
+    fetch(`${hosted.url}/api/assets?name=f.bin`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${KEY}.${A}` },
+      body: new ReadableStream({ start: (c) => (c.enqueue(new Uint8Array(900)), c.close()) }),
+      duplex: 'half',
+    } as RequestInit);
+  const statuses = await Promise.all(Array.from({ length: 10 }, streamed));
+  const stored = files() - before;
+  assert.ok(stored >= 1 && stored <= 2, `${stored} files stored`);
+  assert.equal(statuses.filter((r) => r.status === 200).length, stored);
+  assert.ok(statuses.every((r) => [200, 413, 429].includes(r.status)));
+  const room = JSON.parse(readFileSync(join(dataDir, 'spaces', A, 'uploads.json'), 'utf8')) as { bytes: number };
+  assert.ok(room.bytes <= 2000);
+  const over = await fetch(`${hosted.url}/api/assets?name=g.bin`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KEY}.${A}` },
+    body: new ReadableStream({ start: (c) => (c.enqueue(new Uint8Array(600)), c.enqueue(new Uint8Array(600)), c.close()) }),
+    duplex: 'half',
+  } as RequestInit);
+  assert.equal(over.status, 413, 'a body with no size given is stopped at the limit as it arrives');
+  assert.equal(files() - before, stored, 'and nothing of it is kept');
+  await hosted.close();
+});
+
+test('a damaged uploads.json counts as no uploads, and the space still opens', { timeout: 20000 }, async () => {
+  const { hosted, dataDir } = await host({}, { uploads: { file: 1000, total: 2000 } });
+  assert.equal((await fetch(`${hosted.url}/api/state?token=${KEY}.${A}`)).status, 200);
+  await hosted.close();
+  writeFileSync(join(dataDir, 'spaces', A, 'uploads.json'), '{"bytes": 12');
+  const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
+  const again = await startHosted({ port: 0, host: '127.0.0.1', dataDir, appKey: KEY, adminToken: ADMIN, ledger, shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles }, uploads: { file: 1000, total: 2000 }, log: () => {} });
+  assert.equal((await fetch(`${again.url}/api/state?token=${KEY}.${A}`)).status, 200);
+  await again.close();
+});
+
+test("after a cut, the live voice's next session answers its first turn instead of cancelling it", () => {
+  const sessions: { sent: { type: string }[]; event: (e: { type: string; [k: string]: unknown }) => void }[] = [];
+  const voice = new LiveVoice(
+    {
+      open: (on) => {
+        const s = { sent: [] as { type: string }[], event: on.event };
+        sessions.push(s);
+        return { send: (e) => void s.sent.push(e), close: () => {} };
+      },
+      options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' }, hearing: 'gpt-4o-transcribe' },
+      name: () => 'Momo',
+      words: () => '',
+      tools: () => [],
+      call: async () => ({}),
+      label: () => undefined,
+      where: () => 'Nothing is open.',
+      cards: () => [],
+      nameOf: () => 'this card',
+      spoken: () => {},
+      activity: () => {},
+      log: () => {},
+      idleMs: 60_000,
+    },
+    () => {},
+  );
+  voice.heard({ t: 'start', turn: 1, scene: { selection: [] } });
+  voice.heard({ t: 'end' });
+  assert.ok(sessions[0]!.sent.some((e) => e.type === 'response.create'), 'an answer was asked for');
+  voice.close();
+  voice.heard({ t: 'start', turn: 2, scene: { selection: [] } });
+  voice.heard({ t: 'end' });
+  sessions[1]!.event({ type: 'response.created', response: { id: 'r2', metadata: { purpose: 'reply' } } });
+  assert.deepEqual(sessions[1]!.sent.filter((e) => e.type === 'response.cancel'), [], "the new session's first answer stands");
+  voice.close();
 });

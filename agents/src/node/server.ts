@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { Readable, type Duplex } from 'node:stream';
@@ -16,7 +16,7 @@ import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '.
 import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
-import { HEARING_DOLLARS_PER_MINUTE, heardMs, SPEECH_DOLLARS_PER_MINUTE, spokenMs, type Speak, type Transcribe } from './speech-openai.ts';
+import { HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, spokenMs, wavMs, type Speak, type Transcribe } from './speech-openai.ts';
 import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
 import { Telegram, type TelegramOptions } from './telegram.ts';
@@ -87,6 +87,8 @@ export interface Space {
 const SEARCHING = new Set(['find_new', 'more_like_this', 'start_tree']);
 /** `/live` sockets one metered space keeps: a headset reconnecting while its old socket lingers. A newer one closes the oldest. */
 const LIVE_PER_SPACE = 2;
+/** What a metered space takes on /api/transcribe: a WAV, as the Quest sends, of about a minute of 16 kHz mono at most. */
+const RECORDING_BYTES = 2_000_000;
 
 export interface Running {
   url: string;
@@ -143,11 +145,14 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   mkdirSync(handoffDir, { recursive: true });
   /** What this space's uploads come to, kept beside them so a restart does not forget it. Only counted when `uploads` caps it. */
   const uploadedFile = join(opts.dataDir, 'uploads.json');
-  const uploaded: { bytes: number; files: number } = existsSync(uploadedFile) ? JSON.parse(readFileSync(uploadedFile, 'utf8')) : { bytes: 0, files: 0 };
+  const uploaded = readUploaded(uploadedFile);
+  /** One upload at a time, so what one takes of the room is known before the next starts. */
+  let uploading = false;
   const keepUploaded = (bytes: number) => {
     uploaded.bytes += bytes;
     uploaded.files += 1;
-    writeFileSync(uploadedFile, JSON.stringify(uploaded));
+    writeFileSync(`${uploadedFile}.tmp`, JSON.stringify(uploaded));
+    renameSync(`${uploadedFile}.tmp`, uploadedFile);
   };
 
   const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID() });
@@ -258,26 +263,41 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (guarded && !authorized(req, url)) return json(res, 401, { error: 'missing or wrong token' });
     if (guarded) res.setHeader('Set-Cookie', `mp_token=${token}; Path=/; HttpOnly; SameSite=Lax`);
 
-    if (req.method === 'POST' && path === '/api/assets') {
-      const limit = opts.uploads?.file ?? MAX_UPLOAD;
+    if (req.method === 'POST' && path === '/api/assets' && opts.uploads) {
+      if (uploading) return json(res, 429, { error: 'one upload at a time' });
+      const limit = opts.uploads.file;
+      const room = opts.uploads.total - uploaded.bytes;
       const declared = Number(req.headers['content-length'] ?? 0) || 0;
-      const roomLeft = opts.uploads ? opts.uploads.total - uploaded.bytes : Infinity;
-      if (declared > limit) return json(res, 413, { error: `a file may be at most ${Math.round(limit / 1e6)} MB here` });
-      if (declared > roomLeft) return json(res, 413, { error: FULL });
-      const bytes = await body(req, Math.min(limit, roomLeft), roomLeft < limit ? FULL : undefined);
+      if (declared > limit) return json(res, 413, { error: tooBig(limit) });
+      if (declared > room) return json(res, 413, { error: FULL });
+      uploading = true;
+      try {
+        const mime = req.headers['content-type'] ?? 'application/octet-stream';
+        const { id, size } = await assets.putStream(req, mime, url.searchParams.get('name') ?? undefined, Math.min(limit, room), () => new TooLarge(room < limit ? FULL : tooBig(limit)));
+        keepUploaded(size);
+        return json(res, 200, { id, url: assets.url(id), mime: mime.split(';')[0] });
+      } finally {
+        uploading = false;
+      }
+    }
+    if (req.method === 'POST' && path === '/api/assets') {
+      const bytes = await body(req, MAX_UPLOAD);
       const mime = req.headers['content-type'] ?? 'application/octet-stream';
       const { id } = await assets.put(bytes, mime, url.searchParams.get('name') ?? undefined);
-      if (opts.uploads) keepUploaded(bytes.length);
       return json(res, 200, { id, url: assets.url(id), mime: mime.split(';')[0] });
     }
     if (req.method === 'POST' && path === '/api/transcribe') {
       const why = meter?.refused('voiceMs');
       if (why) return json(res, 429, { error: why });
-      const audio = await body(req, 25 * 1024 * 1024);
       const mime = req.headers['content-type'] ?? 'audio/wav';
-      const ms = heardMs(audio, mime);
-      meter?.used('voiceMs', ms);
-      meter?.spent((ms / 60_000) * HEARING_DOLLARS_PER_MINUTE);
+      if (meter && mime.split(';')[0]!.trim().toLowerCase() !== 'audio/wav') return json(res, 415, { error: 'a recording here is audio/wav' });
+      const audio = await body(req, meter ? RECORDING_BYTES : 25 * 1024 * 1024);
+      if (meter) {
+        const ms = wavMs(audio);
+        if (ms === null) return json(res, 415, { error: 'a recording here is PCM WAV, mono or stereo, at 8 to 48 kHz' });
+        meter.used('voiceMs', ms);
+        meter.spent((ms / 60_000) * HEARING_DOLLARS_PER_MINUTE);
+      }
       const heard = opts.transcribe
         ? await opts.transcribe(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, url.searchParams.get('tree')) })
         : await opts.model.transcribe({ audio, mime });
@@ -373,7 +393,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
 
   liveWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const live = opts.live!;
-    if (meter) for (const old of [...liveWss.clients].slice(0, Math.max(0, liveWss.clients.size - LIVE_PER_SPACE))) old.close(4000, 'a newer voice connection replaced this one');
+    // Terminated, not closed: a closing socket still delivers what arrives while it waits for the device's reply.
+    if (meter) for (const old of [...liveWss.clients].slice(0, Math.max(0, liveWss.clients.size - LIVE_PER_SPACE))) old.terminate();
     /** The device's own connection, as its hello named it: what Momo starts is that connection's, and Momo hears of its work. */
     const own = connections.get(new URL(req.url ?? '/', 'http://localhost').searchParams.get('connection') ?? '');
     const webAnswer: typeof live.webAnswer = live.webAnswer && meter
@@ -638,11 +659,23 @@ function json(res: ServerResponse, status: number, value: unknown): void {
 }
 
 const FULL = 'this headset has used all its room for files';
+const tooBig = (limit: number) => `a file may be at most ${Math.round(limit / 1e6)} MB here`;
+
+/** What a space's uploads come to. A file that does not parse, as after a crash in the middle of writing it, counts as none. */
+function readUploaded(file: string): { bytes: number; files: number } {
+  try {
+    const saved = JSON.parse(readFileSync(file, 'utf8')) as { bytes?: unknown; files?: unknown };
+    if (typeof saved.bytes === 'number' && typeof saved.files === 'number') return { bytes: saved.bytes, files: saved.files };
+  } catch {
+    // No file yet, or a damaged one.
+  }
+  return { bytes: 0, files: 0 };
+}
 
 /** A request body over its limit, answered with 413. */
 class TooLarge extends Error {}
 
-async function body(req: IncomingMessage, limit: number, tooLarge = `a file may be at most ${Math.round(limit / 1e6)} MB here`): Promise<Uint8Array> {
+async function body(req: IncomingMessage, limit: number, tooLarge = tooBig(limit)): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {

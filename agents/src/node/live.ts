@@ -534,12 +534,16 @@ export class LiveVoice {
     this.drain();
   }
 
-  /** The device left. */
+  /**
+   * The device left, or the service cut the session for a limit. Nothing of a turn or an answer is kept, as when the session is lost,
+   * so the next session does not cancel its own first answer for one asked of this one.
+   */
   close(): void {
     for (const timer of [this.idle, this.wake, this.expected?.timer, this.runEnded]) if (timer) clearTimeout(timer);
     this.idle = this.wake = this.expected = this.runEnded = null;
     this.session?.close();
     this.session = null;
+    this.forget();
   }
 
   private transcription(scene: Scene): Record<string, unknown> {
@@ -898,6 +902,12 @@ export class LiveVoice {
     this.deps.log(`[live] session closed: ${why}`);
     this.session = null;
     const busy = Boolean(this.hearing) || this.transcribing.size > 0 || Boolean(this.speaking) || Boolean(this.asked) || Boolean(this.expected);
+    this.forget();
+    if (busy) this.device({ t: 'failed', why });
+  }
+
+  /** What a session's turns and answers left behind. */
+  private forget(): void {
     if (this.expected) clearTimeout(this.expected.timer);
     this.hearing = this.speaking = this.asked = this.expected = this.answering = null;
     this.transcribing.clear();
@@ -905,7 +915,6 @@ export class LiveVoice {
     this.refused = null;
     this.cancelling = 0;
     this.cancelExpected = false;
-    if (busy) this.device({ t: 'failed', why });
   }
 
   /** Something happened: the session stays open until nothing has for a while. */
