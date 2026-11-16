@@ -9,4 +9,4 @@ media-src/quest/*
 !media-src/quest/fonts/
 !media-src/quest/hands/
 !media-src/quest/sounds/
-quest/vendor/
+quest/vendor
