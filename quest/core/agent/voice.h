@@ -66,6 +66,8 @@ public:
     static constexpr double sentFor = 0.4;
     /// Seconds Momo thinks at most, should nothing ever end it.
     static constexpr double longestThought = 20;
+    /// Seconds the caption says how to ask Momo without the microphone, once the user refuses it.
+    static constexpr double refusalShown = 10;
 
     /// nullopt while it does not listen: until the model is ready and sound comes, while the microphone is down, and
     /// for good once the user refuses it.
@@ -159,6 +161,7 @@ private:
         int chimesEnded = 0;
         bool microphoneFailed = false;
         bool microphoneRefused = false;
+        bool microphoneAsking = false;
     };
 
     Client& client;
@@ -168,6 +171,8 @@ private:
     std::shared_ptr<Ears> ears;
     std::shared_ptr<Inbox> inbox = std::make_shared<Inbox>();
     platform::MicrophoneRef microphone;
+    bool askingForMicrophone = false;   // the user is asked to allow it and has not answered
+    double microphoneRefusedAt = -1;
     int microphoneFailures = 0;     // in a row, since sound last came
     double reopenAt = -1;
     std::shared_ptr<const Vocabulary> vocabulary;

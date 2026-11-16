@@ -1,5 +1,6 @@
 // platform.h on the Quest: files on the device, pictures and video through
 // Android (Media.kt), head and hands from the OpenXR loop (main.cpp).
+#include <android/asset_manager_jni.h>
 #include <android/bitmap.h>
 #include <GLES3/gl32.h>
 #include <GLES2/gl2ext.h>
@@ -8,6 +9,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <unordered_set>
 #include <vector>
 
 #include "base.h"
@@ -15,12 +17,36 @@
 #include "jni_bridge.h"
 #include "platform.h"
 
+namespace {
+
+const std::string inApk = "apk:";
+AAssetManager* assets = nullptr;
+/// The media the APK carries, by name ("clips/full/x.mp4"), from its assets/media/index.txt. Empty when it carries none.
+std::unordered_set<std::string> bundled;
+
+}  // namespace
+
 namespace host {
 std::string mediaDir, dataDir, outDir;
 std::optional<Mat4> head;
 platform::Hand hands[2];
 bool handsSupported = false;
+
+void useAssets(JNIEnv* env, jobject manager) {
+    // MainActivity keeps the AssetManager for the life of the process; the global reference keeps it here too.
+    assets = AAssetManager_fromJava(env, env->NewGlobalRef(manager));
+    AAsset* index = assets ? AAssetManager_open(assets, "media/index.txt", AASSET_MODE_BUFFER) : nullptr;
+    if (!index) return;
+    std::string text(static_cast<const char*>(AAsset_getBuffer(index)), size_t(AAsset_getLength(index)));
+    AAsset_close(index);
+    for (size_t at = 0; at < text.size();) {
+        size_t end = std::min(text.find('\n', at), text.size());
+        if (end > at) bundled.insert(text.substr(at, end - at));
+        at = end + 1;
+    }
+    logLine(fmt("[host] %zu media files inside the APK", bundled.size()));
 }
+}  // namespace host
 
 namespace platform {
 
@@ -28,12 +54,22 @@ namespace platform {
 
 std::string resourcePath(const std::string& name) {
     // The keyword model comes inside the APK, and MainActivity copies it to the app's own files.
-    std::string path = (name.rfind("kws/", 0) == 0 ? host::dataDir : host::mediaDir) + "/" + name;
+    bool kws = name.rfind("kws/", 0) == 0;
+    if (!kws && !bundled.empty()) return bundled.count(name) ? inApk + "media/" + name : "";
+    std::string path = (kws ? host::dataDir : host::mediaDir) + "/" + name;
     struct stat st;
     return stat(path.c_str(), &st) == 0 ? path : "";
 }
 
 std::optional<std::string> readFile(const std::string& path) {
+    if (path.rfind(inApk, 0) == 0) {
+        AAsset* asset = assets ? AAssetManager_open(assets, path.c_str() + inApk.size(), AASSET_MODE_STREAMING) : nullptr;
+        if (!asset) return std::nullopt;
+        std::string out(size_t(AAsset_getLength64(asset)), '\0');
+        bool whole = AAsset_read(asset, out.data(), out.size()) == int(out.size());
+        AAsset_close(asset);
+        return whole ? std::optional<std::string>(std::move(out)) : std::nullopt;
+    }
     FILE* f = fopen(path.c_str(), "rb");
     if (!f) return std::nullopt;
     std::string out;
@@ -56,7 +92,7 @@ bool writeFile(const std::string& path, const std::string& contents) {
 std::optional<std::string> readText(const std::string& name) {
     std::string path = resourcePath(name);
     if (path.empty()) {
-        logLine("[ocean] resource missing: " + name + " (run quest/tools/push_media.sh)");
+        logLine("[ocean] resource missing: " + name + (bundled.empty() ? " (run quest/tools/push_media.sh)" : " (not inside the APK)"));
         return std::nullopt;
     }
     return readFile(path);

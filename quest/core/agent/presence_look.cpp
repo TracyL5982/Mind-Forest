@@ -139,7 +139,8 @@ void Face::update(const Presence& p, float dt) {
     if (!(dt > 0)) return;
     clock += dt;
     Look& l = look_;
-    ease(l.shown, p.state == S::off ? 0.f : 1.f, p.state == S::off ? 0.35f : 0.25f, dt);
+    bool away = p.state == S::off && p.notice.empty();
+    ease(l.shown, away ? 0.f : 1.f, away ? 0.35f : 0.25f, dt);
 
     // AgentSphere: the level follows the voice up fast and down slower, so the rings breathe and do not flicker. Listening
     // it is the user's voice, which moves the ring; speaking, Momo's, which also parts it into colour.
@@ -234,7 +235,8 @@ Speaker Caption::speaker(Part part) {
     case Part::momo: return Speaker::momo;
     case Part::hint:
     case Part::listening:
-    case Part::thinking: return Speaker::status;
+    case Part::thinking:
+    case Part::notice: return Speaker::status;
     }
     return Speaker::status;
 }
@@ -302,6 +304,7 @@ float Caption::tone(const Entry& e) const {
     case Part::thinking: return 1;
     case Part::user: return e.current && !userFinal ? 0.8f : 1;
     case Part::momo: return 1;
+    case Part::notice: return 0.9f;
     }
     return 1;
 }
@@ -338,7 +341,8 @@ void Caption::update(const Presence& p, const std::string& name, double now, flo
     auto add = [&](Part part, const std::string& text) { want[count++] = {part, &text}; };
     bool turnShows = now < quietSince + linger && (!user.empty() || !momo.empty());
     bool hinting = false;
-    switch (state) {
+    if (!p.notice.empty()) add(Part::notice, p.notice);
+    else switch (state) {
     case S::off: break;
     case S::waiting:
     case S::working:

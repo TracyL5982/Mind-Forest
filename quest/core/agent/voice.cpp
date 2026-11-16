@@ -364,6 +364,12 @@ void Voice::openMicrophone() {
                 b->microphoneRefused = true;
             }
         },
+        [box] {
+            if (auto b = box.lock()) {
+                std::lock_guard<std::mutex> g(b->lock);
+                b->microphoneAsking = true;
+            }
+        },
     });
 }
 
@@ -527,7 +533,7 @@ void Voice::frame(double now) {
     std::vector<int> streamsPlayed;
     std::vector<std::pair<int, bool>> loopsEnded;
     int chimesEnded = 0;
-    bool failed = false, refused = false;
+    bool failed = false, refused = false, asking = false;
     {
         std::lock_guard<std::mutex> g(inbox->lock);
         transcripts.swap(inbox->transcripts);
@@ -539,11 +545,15 @@ void Voice::frame(double now) {
         std::swap(chimesEnded, inbox->chimesEnded);
         std::swap(failed, inbox->microphoneFailed);
         std::swap(refused, inbox->microphoneRefused);
+        std::swap(asking, inbox->microphoneAsking);
     }
+    if (asking) askingForMicrophone = true;
     for (int i = 0; i < chimesEnded; i++) send(ChimeEnded{});
     if (refused) {
         // Asked again, the headset would ask the user again: it stops listening, and replies are still spoken.
         logLine("[voice] the microphone is not allowed, so the headset does not listen");
+        askingForMicrophone = false;
+        microphoneRefusedAt = now;
         if (microphone) microphone->stop();
         microphone.reset();
         ears.reset();
@@ -562,7 +572,10 @@ void Voice::frame(double now) {
         reopenAt = -1;
         openMicrophone();
     }
-    if (ears && microphone && ears->live) microphoneFailures = 0;
+    if (ears && microphone && ears->live) {
+        microphoneFailures = 0;
+        askingForMicrophone = false;
+    }
     for (const Transcript& t : transcripts) {
         std::string text = t.text;
         size_t first = text.find_first_not_of(" \t\n"), last = text.find_last_not_of(" \t\n");
@@ -954,6 +967,10 @@ void Voice::show() {
     }
     crew.update(clock);
     shown.agents = crew.lines(name());
+    shown.notice.clear();
+    if (client.unreachable()) shown.notice = "Can’t reach " + name() + ", retrying";
+    else if (askingForMicrophone) shown.notice = "Allow the microphone to talk to " + name();
+    else if (microphoneRefusedAt >= 0 && clock < microphoneRefusedAt + refusalShown) shown.notice = "No microphone, so type or pick to ask " + name();
 }
 
 Voice::LiveReply& Voice::liveReply(const std::string& id) {

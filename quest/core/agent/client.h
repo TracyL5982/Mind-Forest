@@ -109,6 +109,8 @@ public:
 
     /// Connecting lasts until the socket's first hello is applied.
     State state() const;
+    /// A try has failed and none has been joined since: the service can't be reached, and the client keeps trying.
+    bool unreachable() const { return failures_ > 0; }
     const Mirror& mirror() const { return mirror_; }
     const Address& address() const { return address_; }
 

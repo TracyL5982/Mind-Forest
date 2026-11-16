@@ -1,5 +1,6 @@
 package com.kaifengwu.mindpalace
 
+import android.content.res.AssetManager
 import android.graphics.Bitmap
 import android.graphics.ColorSpace
 import android.graphics.ImageDecoder
@@ -16,6 +17,10 @@ import kotlin.math.roundToInt
 
 /** Pictures, decoded by Android (JPEG, PNG and HEIC alike). Called from the native frame thread. */
 object Media {
+    /** A path that is a file inside the APK, as platform_android.cpp gives the judging build's media: "apk:media/…". */
+    const val IN_APK = "apk:"
+    lateinit var assets: AssetManager
+
     /**
      * A picture file as an ARGB_8888 bitmap in sRGB, no larger than
      * `maxPixel` on its longer side when that is above zero. Null if it
@@ -24,7 +29,7 @@ object Media {
     @JvmStatic
     fun decodeImage(path: String, maxPixel: Int): Bitmap? {
         return try {
-            val source = ImageDecoder.createSource(File(path))
+            val source = if (path.startsWith(IN_APK)) ImageDecoder.createSource(assets, path.substring(IN_APK.length)) else ImageDecoder.createSource(File(path))
             val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                 decoder.setTargetColorSpace(ColorSpace.get(ColorSpace.Named.SRGB))
@@ -88,7 +93,9 @@ class VideoSurface(textureName: Int) {
             val p = MediaPlayer()
             try {
                 p.setSurface(surface)
-                p.setDataSource(path)
+                // Inside the APK a film is stored uncompressed (app/build.gradle.kts), so it can be played from where it lies.
+                if (path.startsWith(Media.IN_APK)) Media.assets.openFd(path.substring(Media.IN_APK.length)).use { p.setDataSource(it) }
+                else p.setDataSource(path)
                 p.setOnPreparedListener { mp ->
                     worker.execute {
                         if (player !== mp) return@execute

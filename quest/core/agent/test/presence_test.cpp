@@ -263,6 +263,25 @@ TEST(theNextTurnPushesTheLastReplyUpAndOut) {
     CHECK(!old || (old->toOpacity == 0 && old->y > rest[0]->y), "the reply's line rises out above them");
 }
 
+TEST(aNoticeTakesTheWordsPlaceAndShowsMomoEvenWhenOff) {
+    Caption c = caption();
+    run(c, say(S::listening, "Why?"), 0.3);
+    Presence p = say(S::thinking, "Why?");
+    p.notice = "Can’t reach Momo";
+    run(c, p, 0.5);
+    auto rest = resting(c);
+    CHECK(rest.size() == 1 && rest[0]->text == "Can’t reach Momo" && rest[0]->who == Speaker::status, "the notice alone");
+    run(c, say(S::thinking, "Why?"), 0.5);
+    CHECK(!shown(c, "Can’t reach Momo") || shown(c, "Can’t reach Momo")->toOpacity == 0, "gone with the notice");
+    Face f;
+    Presence away = say(S::off);
+    away.notice = "Can’t reach Momo";
+    for (int i = 0; i < 180; i++) f.update(away, frame);
+    CHECK(f.look().shown > 0.99f, "Momo shows to say it: %.2f", double(f.look().shown));
+    for (int i = 0; i < 180; i++) f.update(say(S::off), frame);
+    CHECK(f.look().shown < 0.01f, "and goes after: %.2f", double(f.look().shown));
+}
+
 TEST(offTakesEveryWordAway) {
     Caption c = caption();
     run(c, say(S::listening, "Why?"), 0.3);
