@@ -1255,3 +1255,32 @@ test('the reading does not wait for a picture that is slow to come: the records 
   assert.ok(Date.now() - started < 4000, `the run ended ${Date.now() - started} ms in`);
   assert.deepEqual(picked(k, anchor).map((i) => i.title), ['Stairwell, Berlin']);
 });
+
+test('when the quick model says the request is not about something to see, the fast lane holds no slot for its picture', async () => {
+  const looks = [looked('papers', 'quick'), looked('books', 'quick'), looked('museums', 'quick')];
+  const { k, anchor, museum, thinking } = visualLanes([NOTE], looks);
+  k.model.on('scout.looks', () => ({ seeable: false, looks }));
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  await until(() => k.mind.picks(anchor).length === 2);
+
+  assert.deepEqual(picked(k, anchor).map((i) => i.title).sort(), ['books record 1', 'papers record 1'], 'both written finds land while the museum search is out');
+  museum.open();
+  thinking.open();
+  apply(k, await run);
+});
+
+test('when the main model says the request is not about something to see, written ideas may take the slot that was held, and nothing waits for a picture', async () => {
+  const directions = [note(1), note(2), note(3), note(4), note(5), direction('find', 'Dance in paint', { source: 'museums', lookups: ['dance'] })];
+  const { k, anchor, museum, thinking } = visualLanes(directions, []);
+  k.model.on('scout.ideate', () => ({ reading: '', seeable: false, directions }));
+
+  const run = scout(k.ctx, { anchor, deliver: (commands) => apply(k, commands) });
+  thinking.open();
+  const ended = await Promise.race([run.then((rest) => (apply(k, rest), 'ended')), settle(200).then(() => 'still waiting')]);
+  museum.open();
+  await run;
+
+  assert.equal(ended, 'ended', 'the line does not wait for the museum search');
+  assert.deepEqual(picked(k, anchor).map((i) => i.title), [1, 2, 3, 4, 5].map((n) => `Idea number ${n}`));
+});
