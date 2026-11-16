@@ -100,8 +100,24 @@ export class Paused implements ModelClient {
   }
 }
 
-/** One device's way to the shared model: each call is made as the device's work (`forDevice`), and refused while `why` says so. */
+/**
+ * Most of one device's model calls under way at once. One Scout run had 5 at its busiest (the scripted Scout with eight directions,
+ * every call held 300 ms, one run), so a search never waits, and two at once wait a little. It keeps one device from filling the
+ * shared rate window: the window is one queue for every device, and a device's share is checked before a call but counted after it.
+ */
+export const DEVICE_CALLS = 8;
+/** Most of one device's calls waiting for one under way to end. Past them a call is refused at once. */
+export const DEVICE_WAITING = 32;
+const TOO_MANY = 'Too much is being asked at once on this headset. Give it a moment and try again.';
+
+/**
+ * One device's way to the shared model: each call is made as the device's work (`forDevice`), at most DEVICE_CALLS at once, and
+ * refused while `why` says so, looked at as each call starts, so calls that waited stop once the device's share is spent.
+ */
 export class DeviceModel implements ModelClient {
+  private running = 0;
+  private readonly waiting: (() => void)[] = [];
+
   constructor(
     private readonly model: ModelClient,
     private readonly device: string,
@@ -124,8 +140,19 @@ export class DeviceModel implements ModelClient {
     return this.guard(() => this.model.transcribe(req));
   }
 
-  private guard<T>(call: () => Promise<T>): Promise<T> {
-    const why = this.why();
-    return why ? Promise.reject(new Error(why)) : forDevice.run(this.device, call);
+  private async guard<T>(call: () => Promise<T>): Promise<T> {
+    if (this.running < DEVICE_CALLS) this.running++;
+    else if (this.waiting.length >= DEVICE_WAITING) throw new Error(TOO_MANY);
+    else await new Promise<void>((go) => this.waiting.push(go));
+    try {
+      const why = this.why();
+      if (why) throw new Error(why);
+      return await forDevice.run(this.device, call);
+    } finally {
+      // The place goes straight to the next call waiting, so `running` counts it still.
+      const next = this.waiting.shift();
+      if (next) next();
+      else this.running--;
+    }
   }
 }
