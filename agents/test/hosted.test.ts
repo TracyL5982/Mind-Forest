@@ -3,18 +3,20 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } fro
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import type { IncomingMessage } from 'node:http';
+import { PassThrough } from 'node:stream';
 import { WebSocket } from 'ws';
 import type { Found, JsonRequest, ModelClient, Priority, Tools } from '../src/core/ports.ts';
 import type { Roles } from '../src/core/roles/types.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { PICTURE_DOLLARS, SET_BYTES, spaceOptions, startHosted, telegramAlert, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
+import { PICTURE_DOLLARS, SET_BYTES, spaceOptions, startHosted, telegramAlert, upgradeWhenOpen, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
 import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
 import { LiveVoice, type LiveDeps, type VoiceFrame } from '../src/node/live.ts';
 import { SEARCH_DOLLARS } from '../src/node/search-openai.ts';
 import { questWavMs } from '../src/node/speech-openai.ts';
-import { chargedPictures, startServer } from '../src/node/server.ts';
+import { chargedPictures, startServer, type Space } from '../src/node/server.ts';
 import { makeSources } from '../src/node/sources.ts';
 import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 import { MemoryAssets } from './kit.ts';
@@ -725,4 +727,21 @@ test("one message stores at most SET_BYTES however many large cards it touches, 
     ws?.close();
     await hosted.close();
   }
+});
+
+test("a socket that fails while its space opens is heard, and the space then has the socket with only its own listeners", async () => {
+  const lines: string[] = [];
+  let open!: (space: Space) => void;
+  const opening = new Promise<Space>((done) => (open = done));
+  const handle = upgradeWhenOpen(() => A, () => opening, (line) => lines.push(line));
+  const socket = new PassThrough();
+  const own = socket.listenerCount('error');
+  handle({ url: `/ws?token=${KEY}.${A}`, headers: {} } as IncomingMessage, socket, Buffer.alloc(0));
+  socket.emit('error', new Error('read ECONNRESET'));
+  assert.ok(lines.some((line) => line.includes('ECONNRESET')), 'the error was heard while the space opened');
+  let listeners = -1;
+  open({ upgrade: (_req: IncomingMessage, taken: PassThrough) => (listeners = taken.listenerCount('error')) } as unknown as Space);
+  await opening;
+  await new Promise((done) => setImmediate(done));
+  assert.equal(listeners, own, "the wait's listener is gone when the space takes the socket");
 });

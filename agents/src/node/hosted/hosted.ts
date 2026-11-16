@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { join, posix } from 'node:path';
+import type { Duplex } from 'node:stream';
 import { PROTOCOL_VERSION } from '../protocol.ts';
 import { openSpace, type Meter, type ServerOptions, type Space } from '../server.ts';
 import type { InstagramLibrary, InstagramReader } from '../instagram.ts';
@@ -259,18 +260,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       else res.end();
     });
   });
-  http.on('upgrade', (req, socket, head) => {
-    const refuse = (status: string) => {
-      socket.write(`HTTP/1.1 ${status}\r\n\r\n`);
-      socket.destroy();
-    };
-    const device = deviceOf(req, new URL(req.url ?? '/', 'http://localhost'));
-    if (!device) return refuse('401 Unauthorized');
-    void spaceOf(device).then(
-      (space) => ('error' in space ? refuse(space.status === 429 ? '429 Too Many Requests' : '403 Forbidden') : space.upgrade(req, socket, head)),
-      () => refuse('500 Internal Server Error'),
-    );
-  });
+  http.on('upgrade', upgradeWhenOpen((req) => deviceOf(req, new URL(req.url ?? '/', 'http://localhost')), spaceOf, log));
 
   await new Promise<void>((ready) => http.listen(opts.port, opts.host, ready));
   const address = http.address();
@@ -288,6 +278,36 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       http.closeAllConnections();
       await new Promise<void>((done) => http.close(() => done()));
     },
+  };
+}
+
+/**
+ * Hands a socket's upgrade to its device's space once the space is open, which can take a while when it is closing first. Node takes
+ * its own error listener off the socket before an upgrade, so one is put on for the wait, and taken off just before the space has the
+ * socket, as the ws README does for an upgrade handled later: a socket reset in the wait would otherwise end the process.
+ */
+export function upgradeWhenOpen(
+  deviceOf: (req: IncomingMessage) => string | null,
+  spaceOf: (device: string) => Promise<Space | { status: number; error: string }>,
+  log: (line: string) => void,
+): (req: IncomingMessage, socket: Duplex, head: Buffer) => void {
+  return (req, socket, head) => {
+    const heard = (err: Error) => log(`[hosted] a socket went while its space opened: ${err.message}`);
+    socket.on('error', heard);
+    const refuse = (status: string) => {
+      socket.write(`HTTP/1.1 ${status}\r\n\r\n`);
+      socket.destroy();
+    };
+    const device = deviceOf(req);
+    if (!device) return refuse('401 Unauthorized');
+    void spaceOf(device).then(
+      (space) => {
+        if ('error' in space) return refuse(space.status === 429 ? '429 Too Many Requests' : '403 Forbidden');
+        socket.removeListener('error', heard);
+        space.upgrade(req, socket, head);
+      },
+      () => refuse('500 Internal Server Error'),
+    );
   };
 }
 
