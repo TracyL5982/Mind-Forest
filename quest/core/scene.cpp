@@ -7,17 +7,19 @@
 #include "base.h"
 
 namespace gpu {
+// (Never destroyed: a texture or mesh kept in a static, such as Art::glowMaterial, is let go while the
+// program exits, after a list made later than it would already be gone, and would write into freed memory.)
 std::vector<unsigned>& deadTextures() {
-    static std::vector<unsigned> v;
-    return v;
+    static std::vector<unsigned>* v = new std::vector<unsigned>;
+    return *v;
 }
 std::vector<unsigned>& deadBuffers() {
-    static std::vector<unsigned> v;
-    return v;
+    static std::vector<unsigned>* v = new std::vector<unsigned>;
+    return *v;
 }
 std::vector<unsigned>& deadVertexArrays() {
-    static std::vector<unsigned> v;
-    return v;
+    static std::vector<unsigned>* v = new std::vector<unsigned>;
+    return *v;
 }
 }
 

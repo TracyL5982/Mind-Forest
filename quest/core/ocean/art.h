@@ -227,6 +227,19 @@ public:
     /// number and a few words, large enough to read from there. The same
     /// number-and-name the step cards carry.
     std::optional<Piece> stepLabel(int n, const std::string& words);
+    // NOTE(port): added for Quest (the guide, oceanmodel_guide.cpp). What greets you after the welcome tree's
+    // walk stands free in the room, on no ground of its own: `lettering`, a word in the display face (Fraunces),
+    // white and large; `plain`, a line in `face` (its size is `size`), white (or dimmed), likewise on nothing; and `way`, one of the
+    // ways to begin: its number on a disc of the accent beside its name, and a line under them. Each is `size`
+    // metres of type and is made coarse enough to be large (`ppm` pixels a metre). Then a button: words on a
+    // rounded ground.
+    std::optional<Piece> lettering(const std::string& word, float size, float ppm = 900);
+    std::optional<Piece> plain(const std::string& words, float size, Font face, float alpha = 1, float ppm = 1200);
+    std::optional<Piece> way(int number, const std::string& name, const std::string& note, float size, float ppm = 1200);
+    std::optional<Piece> pill(const std::string& words, float size, Color ground = hot);
+    // NOTE(port): added for Quest. A button that is an icon (icons.h: "marker", "eraser", "send") on a rounded
+    // square `size` metres across, the icon in `mark` on `ground`.
+    std::optional<Piece> iconButton(const std::string& icon, float size, Color ground, Color mark);
 
     /// Any one-line flat label.
     std::optional<Piece> line(const std::string& words, float size, Font::Weight weight = Font::Weight::medium, Color fg = Color::white(),
@@ -243,7 +256,7 @@ public:
 
     // NOTE(port): added for Quest (core/cards): the open card's pills, its edit pencil, and the ring round a pinch held still.
     /// What can be picked under an open card, as a rounded pill as wide as its words, at most `most` m, in two lines at most.
-    std::optional<Piece> pill(const std::string& words, float most);
+    std::optional<Piece> questionPill(const std::string& words, float most);
     /// The open card's edit pencil: a round button with a pencil in it, outlined when off, filled when on.
     std::optional<Piece> pencil(bool on);
     /// A word on what a long pinch will do, in small italics.

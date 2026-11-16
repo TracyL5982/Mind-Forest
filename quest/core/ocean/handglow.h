@@ -49,6 +49,32 @@ public:
         Vec3 axis;                  // for the lead: the point on the tree's trunk at the finger's height
     };
 
+    /// A hand held flat: the knife. A line of light runs out of its fingers.
+    struct Blade {
+        Vec3 tip, palm;
+        float shown = 1;
+    };
+    /// A thread in the accent: one a blade points at or a ray rests on (`lit`), or one marked for
+    /// cutting (`armed`, with how much of its time is `left`, shown as a ring running down at `at`).
+    struct Cut {
+        std::vector<Vec3> line;
+        Vec3 at;
+        float lit = 0;
+        float armed = 0;
+        float left = 1;
+        bool leader = false;        // a line of dashes from `from` (the blade's tip) to `at`
+        Vec3 from;
+    };
+    /// Palms held together: a ring round them that fills over the second they are held.
+    struct Hold {
+        Vec3 at;
+        float progress = 0;
+    };
+    /// Set before `draw`, each frame (oceanmodel_cut.cpp).
+    std::vector<Blade> blades;
+    std::vector<Cut> cuts;
+    std::optional<Hold> hold;
+
     static std::shared_ptr<HandGlow> make(const std::optional<Material>& material);
     EntityRef entity;
 
@@ -82,5 +108,7 @@ private:
     bool blank = true;
 
     void gauge(Pen& pen, const Held& h, double now) const;
+    void blade(Pen& pen, const Blade& b) const;
+    void cut(Pen& pen, const Cut& c) const;
     void orbs(Pen& pen, const std::vector<Finger>& fingers, float shown, double now) const;
 };

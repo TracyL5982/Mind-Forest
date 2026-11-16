@@ -66,11 +66,18 @@ object CanvasRenderer {
     // (Text is measured on the frame thread while pictures are drawn on another: this is shared between them.)
     private val typefaces = java.util.concurrent.ConcurrentHashMap<Int, Typeface>()
 
+    /** Where the media's fonts are (set by the activity before anything is drawn). */
+    @JvmStatic
+    var fontsDir: String = ""
+
     /**
      * A font by its face code (faceCode in canvas.h): one of Font::Weight's four in the low two bits
-     * (0 regular, 1 medium, 2 semibold, 3 bold), 4 for the serif, 8 for italics, 16 for fixed width.
+     * (0 regular, 1 medium, 2 semibold, 3 bold), 4 for the serif, 8 for italics, 16 for fixed width, and
+     * 32 for the display face: Fraunces and its italic, for the lettering after the walk, from the pushed
+     * media or, in the judging build, from inside the APK. Without the files, the system's own serif.
      */
     private fun typeface(face: Int): Typeface = typefaces.getOrPut(face) {
+        if (face and 32 != 0) return@getOrPut fraunces(face and 8 != 0)
         val w = when (face and 3) {
             1 -> 500
             2 -> 600
@@ -79,6 +86,16 @@ object CanvasRenderer {
         }
         val family = if (face and 16 != 0) Typeface.MONOSPACE else if (face and 4 != 0) Typeface.SERIF else Typeface.DEFAULT
         Typeface.create(family, w, face and 8 != 0)
+    }
+
+    private fun fraunces(italic: Boolean): Typeface {
+        val name = if (italic) "Fraunces_72pt_Soft-LightItalic.ttf" else "Fraunces_72pt_Soft-Light.ttf"
+        val file = java.io.File(fontsDir, name)
+        return try {
+            if (file.exists()) Typeface.createFromFile(file) else Typeface.createFromAsset(Media.assets, "media/fonts/$name")
+        } catch (e: Exception) {
+            Typeface.create(Typeface.SERIF, if (italic) Typeface.ITALIC else Typeface.NORMAL)
+        }
     }
 
     /**

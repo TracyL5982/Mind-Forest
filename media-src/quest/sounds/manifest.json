@@ -1,0 +1,591 @@
+{
+ "key": "D Lydian",
+ "ladder": [
+  "D4",
+  "E4",
+  "F#4",
+  "A4",
+  "B4",
+  "C#5",
+  "D5",
+  "E5",
+  "F#5",
+  "G#5",
+  "A5",
+  "B5"
+ ],
+ "glints": [
+  "D6",
+  "E6",
+  "F#6",
+  "A6",
+  "B6",
+  "C#7",
+  "D7",
+  "E7",
+  "F#7",
+  "A7"
+ ],
+ "layers": [
+  [
+   "D2",
+   "A2",
+   "E3",
+   "A3",
+   "E4"
+  ],
+  [
+   "E2",
+   "B2",
+   "F#3",
+   "B3",
+   "F#4"
+  ],
+  [
+   "F#2",
+   "C#3",
+   "G#3",
+   "C#4",
+   "G#4"
+  ],
+  [
+   "A2",
+   "E3",
+   "B3",
+   "E4",
+   "B4"
+  ],
+  [
+   "B2",
+   "F#3",
+   "C#4",
+   "F#4",
+   "C#5"
+  ],
+  [
+   "D3",
+   "A3",
+   "E4",
+   "A4",
+   "E5"
+  ],
+  [
+   "E3",
+   "B3",
+   "F#4",
+   "B4",
+   "F#5"
+  ],
+  [
+   "F#3",
+   "C#4",
+   "G#4",
+   "C#5",
+   "G#5"
+  ],
+  [
+   "A3",
+   "E4",
+   "B4",
+   "E5"
+  ],
+  [
+   "B3",
+   "F#4",
+   "C#5",
+   "F#5"
+  ],
+  [
+   "D4",
+   "A4",
+   "E5",
+   "A5"
+  ],
+  [
+   "E4",
+   "B4",
+   "F#5",
+   "B5"
+  ],
+  [
+   "F#4",
+   "C#5",
+   "G#5",
+   "C#6"
+  ],
+  [
+   "A4",
+   "E5",
+   "B5",
+   "E6"
+  ]
+ ],
+ "sounds": {
+  "note_00": {
+   "about": "One note of the ladder (D4)",
+   "gain": 0.55,
+   "seconds": 4.75
+  },
+  "note_01": {
+   "about": "One note of the ladder (E4)",
+   "gain": 0.55,
+   "seconds": 4.92
+  },
+  "note_02": {
+   "about": "One note of the ladder (F#4)",
+   "gain": 0.55,
+   "seconds": 4.73
+  },
+  "note_03": {
+   "about": "One note of the ladder (A4)",
+   "gain": 0.55,
+   "seconds": 4.34
+  },
+  "note_04": {
+   "about": "One note of the ladder (B4)",
+   "gain": 0.55,
+   "seconds": 4.33
+  },
+  "note_05": {
+   "about": "One note of the ladder (C#5)",
+   "gain": 0.55,
+   "seconds": 3.88
+  },
+  "note_06": {
+   "about": "One note of the ladder (D5)",
+   "gain": 0.55,
+   "seconds": 4.18
+  },
+  "note_07": {
+   "about": "One note of the ladder (E5)",
+   "gain": 0.55,
+   "seconds": 3.96
+  },
+  "note_08": {
+   "about": "One note of the ladder (F#5)",
+   "gain": 0.55,
+   "seconds": 4.22
+  },
+  "note_09": {
+   "about": "One note of the ladder (G#5)",
+   "gain": 0.55,
+   "seconds": 3.96
+  },
+  "note_10": {
+   "about": "One note of the ladder (A5)",
+   "gain": 0.55,
+   "seconds": 3.93
+  },
+  "note_11": {
+   "about": "One note of the ladder (B5)",
+   "gain": 0.55,
+   "seconds": 3.87
+  },
+  "layer_up_0": {
+   "about": "Arriving on layer 1 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 6.57
+  },
+  "layer_down_0": {
+   "about": "Arriving on layer 1 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 7.01
+  },
+  "layer_pad_0": {
+   "about": "Layer 1's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_1": {
+   "about": "Arriving on layer 2 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 6.37
+  },
+  "layer_down_1": {
+   "about": "Arriving on layer 2 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 6.49
+  },
+  "layer_pad_1": {
+   "about": "Layer 2's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_2": {
+   "about": "Arriving on layer 3 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 6.47
+  },
+  "layer_down_2": {
+   "about": "Arriving on layer 3 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 6.77
+  },
+  "layer_pad_2": {
+   "about": "Layer 3's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_3": {
+   "about": "Arriving on layer 4 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 6.55
+  },
+  "layer_down_3": {
+   "about": "Arriving on layer 4 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 6.33
+  },
+  "layer_pad_3": {
+   "about": "Layer 4's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_4": {
+   "about": "Arriving on layer 5 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 6.27
+  },
+  "layer_down_4": {
+   "about": "Arriving on layer 5 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 6.65
+  },
+  "layer_pad_4": {
+   "about": "Layer 5's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_5": {
+   "about": "Arriving on layer 6 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 6.04
+  },
+  "layer_down_5": {
+   "about": "Arriving on layer 6 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 6.42
+  },
+  "layer_pad_5": {
+   "about": "Layer 6's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_6": {
+   "about": "Arriving on layer 7 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 6.06
+  },
+  "layer_down_6": {
+   "about": "Arriving on layer 7 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 6.6
+  },
+  "layer_pad_6": {
+   "about": "Layer 7's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_7": {
+   "about": "Arriving on layer 8 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 5.84
+  },
+  "layer_down_7": {
+   "about": "Arriving on layer 8 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 6.26
+  },
+  "layer_pad_7": {
+   "about": "Layer 8's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_8": {
+   "about": "Arriving on layer 9 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 5.8
+  },
+  "layer_down_8": {
+   "about": "Arriving on layer 9 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 6.02
+  },
+  "layer_pad_8": {
+   "about": "Layer 9's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_9": {
+   "about": "Arriving on layer 10 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 5.83
+  },
+  "layer_down_9": {
+   "about": "Arriving on layer 10 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 6.07
+  },
+  "layer_pad_9": {
+   "about": "Layer 10's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_10": {
+   "about": "Arriving on layer 11 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 5.82
+  },
+  "layer_down_10": {
+   "about": "Arriving on layer 11 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 5.54
+  },
+  "layer_pad_10": {
+   "about": "Layer 11's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_11": {
+   "about": "Arriving on layer 12 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 5.37
+  },
+  "layer_down_11": {
+   "about": "Arriving on layer 12 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 5.66
+  },
+  "layer_pad_11": {
+   "about": "Layer 12's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_12": {
+   "about": "Arriving on layer 13 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 5.47
+  },
+  "layer_down_12": {
+   "about": "Arriving on layer 13 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 5.46
+  },
+  "layer_pad_12": {
+   "about": "Layer 13's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "layer_up_13": {
+   "about": "Arriving on layer 14 from behind it (pushed forward)",
+   "gain": 0.8,
+   "seconds": 4.97
+  },
+  "layer_down_13": {
+   "about": "Arriving on layer 14 from in front (pulled back)",
+   "gain": 0.8,
+   "seconds": 4.94
+  },
+  "layer_pad_13": {
+   "about": "Layer 14's chord held: swells as a fist nears its gate",
+   "gain": 0.5,
+   "seconds": 6.0,
+   "loop": 6.0
+  },
+  "ocean_bed": {
+   "about": "The ocean at rest: a held fifth and a little wind, always on, very low",
+   "gain": 0.09,
+   "seconds": 16.0,
+   "loop": 16.0
+  },
+  "glint_00": {
+   "about": "A piece of the ocean swells where the head points (D6)",
+   "gain": 0.11,
+   "seconds": 1.3
+  },
+  "glint_01": {
+   "about": "A piece of the ocean swells where the head points (E6)",
+   "gain": 0.106,
+   "seconds": 1.3
+  },
+  "glint_02": {
+   "about": "A piece of the ocean swells where the head points (F#6)",
+   "gain": 0.103,
+   "seconds": 1.3
+  },
+  "glint_03": {
+   "about": "A piece of the ocean swells where the head points (A6)",
+   "gain": 0.097,
+   "seconds": 1.3
+  },
+  "glint_04": {
+   "about": "A piece of the ocean swells where the head points (B6)",
+   "gain": 0.094,
+   "seconds": 1.3
+  },
+  "glint_05": {
+   "about": "A piece of the ocean swells where the head points (C#7)",
+   "gain": 0.091,
+   "seconds": 1.3
+  },
+  "glint_06": {
+   "about": "A piece of the ocean swells where the head points (D7)",
+   "gain": 0.089,
+   "seconds": 1.3
+  },
+  "glint_07": {
+   "about": "A piece of the ocean swells where the head points (E7)",
+   "gain": 0.086,
+   "seconds": 1.3
+  },
+  "glint_08": {
+   "about": "A piece of the ocean swells where the head points (F#7)",
+   "gain": 0.083,
+   "seconds": 1.3
+  },
+  "glint_09": {
+   "about": "A piece of the ocean swells where the head points (A7)",
+   "gain": 0.079,
+   "seconds": 1.3
+  },
+  "stir": {
+   "about": "The ocean stirs into a new arrangement",
+   "gain": 0.35,
+   "seconds": 4.92
+  },
+  "peek": {
+   "about": "A piece of the ocean comes up to be looked at",
+   "gain": 0.5,
+   "seconds": 3.97
+  },
+  "peek_return": {
+   "about": "The piece goes back down",
+   "gain": 0.4,
+   "seconds": 4.03
+  },
+  "bring_in": {
+   "about": "The piece joins the tree",
+   "gain": 0.6,
+   "seconds": 3.94
+  },
+  "stand": {
+   "about": "A tree stands up out of the ocean (a brief, a saved tree, the first film)",
+   "gain": 0.8,
+   "seconds": 6.39
+  },
+  "press": {
+   "about": "The clap: the tree is pressed flat into one card",
+   "gain": 0.8,
+   "seconds": 5.42
+  },
+  "send": {
+   "about": "The pressed card leaves for the tray (sent)",
+   "gain": 0.65,
+   "seconds": 4.38
+  },
+  "put_away": {
+   "about": "The pressed card goes to the shelf (put away)",
+   "gain": 0.65,
+   "seconds": 5.65
+  },
+  "hover": {
+   "about": "The pointer comes to rest on something you can pick",
+   "gain": 0.12,
+   "seconds": 2.53
+  },
+  "take": {
+   "about": "A card is asked about: it rises to the next layer and opens",
+   "gain": 0.6,
+   "seconds": 4.5
+  },
+  "think": {
+   "about": "The gardener is thinking (loops until the answer comes)",
+   "gain": 0.28,
+   "seconds": 4.0,
+   "loop": 4.0
+  },
+  "step_out": {
+   "about": "A pinch on nothing: the open card closes",
+   "gain": 0.5,
+   "seconds": 4.52
+  },
+  "zoom_in": {
+   "about": "Into the open card",
+   "gain": 0.45,
+   "seconds": 3.58
+  },
+  "zoom_out": {
+   "about": "Back out of the open card",
+   "gain": 0.45,
+   "seconds": 4.35
+  },
+  "lift": {
+   "about": "A card or a cover is picked up to be carried",
+   "gain": 0.25,
+   "seconds": 2.65
+  },
+  "place": {
+   "about": "It is set down where you put it",
+   "gain": 0.45,
+   "seconds": 3.72
+  },
+  "mark_begin": {
+   "about": "A mark starts on the open card (words, a stretch of video, part of a picture)",
+   "gain": 0.22,
+   "seconds": 2.55
+  },
+  "mark_made": {
+   "about": "The mark is made",
+   "gain": 0.4,
+   "seconds": 3.27
+  },
+  "ask": {
+   "about": "A question is put to the gardener (a row under the card, or about a mark)",
+   "gain": 0.55,
+   "seconds": 4.18
+  },
+  "answer": {
+   "about": "The gardener's answer starts to arrive (then one ladder note per card)",
+   "gain": 0.5,
+   "seconds": 4.45
+  },
+  "link": {
+   "about": "A link is opened outside the app",
+   "gain": 0.25,
+   "seconds": 2.74
+  },
+  "cut": {
+   "about": "A thread is cut with the flat of the hand: the branch falls back into the water",
+   "gain": 0.6,
+   "seconds": 4.41
+  },
+  "grab": {
+   "about": "A hand closes on the tree (the gauge appears on the fist)",
+   "gain": 0.4,
+   "seconds": 4.36
+  },
+  "release": {
+   "about": "The hand opens: the tree coasts a little and stops",
+   "gain": 0.3,
+   "seconds": 3.81
+  },
+  "holo_wake": {
+   "about": "A finger comes over the small tree",
+   "gain": 0.3,
+   "seconds": 3.53
+  }
+ }
+}

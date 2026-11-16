@@ -24,6 +24,7 @@
 
 #include "base.h"
 #include "canvas.h"
+#include "platform.h"
 
 #include <mutex>
 
@@ -40,22 +41,40 @@ CTFontRef systemFont(const Font& font) {
     auto key = std::make_pair(font.pointSize, faceCode(font));
     auto it = known.find(key);
     if (it != known.end()) return it->second;
+    // (`display`: Fraunces, from its file among the media, the same file the headset reads. Without it, a serif of the Mac's own.)
+    bool display = font.design == Font::Design::display;
     CTFontRef made = nullptr;
-    if (font.design == Font::Design::serif) {
+    if (display) {
+        bool italic = font.italic;
+        std::string path = platform::resourcePath(italic ? "fonts/Fraunces_72pt_Soft-LightItalic.ttf" : "fonts/Fraunces_72pt_Soft-Light.ttf");
+        if (!path.empty()) {
+            CFStringRef name = CFStringCreateWithCString(nullptr, path.c_str(), kCFStringEncodingUTF8);
+            CFURLRef url = CFURLCreateWithFileSystemPath(nullptr, name, kCFURLPOSIXPathStyle, false);
+            CGDataProviderRef provider = CGDataProviderCreateWithURL(url);
+            CGFontRef face = provider ? CGFontCreateWithDataProvider(provider) : nullptr;
+            if (face) made = CTFontCreateWithGraphicsFont(face, font.pointSize, nullptr, nullptr);
+            if (face) CGFontRelease(face);
+            if (provider) CGDataProviderRelease(provider);
+            CFRelease(url);
+            CFRelease(name);
+        }
+        if (!made) made = CTFontCreateWithName(italic ? CFSTR("IowanOldStyle-Italic") : CFSTR("IowanOldStyle-Roman"), font.pointSize, nullptr);
+    } else if (font.design == Font::Design::serif) {
         // The web client's serif: Iowan Old Style, else Georgia.
         for (CFStringRef name : {CFSTR("Iowan Old Style"), CFSTR("Georgia")}) {
             if ((made = CTFontCreateWithName(name, font.pointSize, nullptr))) break;
         }
+    } else if (font.design == Font::Design::mono) {
+        made = CTFontCreateUIFontForLanguage(kCTFontUIFontUserFixedPitch, font.pointSize, nullptr);
     }
-    if (font.design == Font::Design::mono) made = CTFontCreateUIFontForLanguage(kCTFontUIFontUserFixedPitch, font.pointSize, nullptr);
     if (!made) made = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, font.pointSize, nullptr);
-    if (made && font.italic) {
+    if (made && font.italic && !display) {
         if (CTFontRef slanted = CTFontCreateCopyWithSymbolicTraits(made, font.pointSize, nullptr, kCTFontItalicTrait, kCTFontItalicTrait)) {
             CFRelease(made);
             made = slanted;
         }
     }
-    if (made && font.weight != Font::Weight::regular) {
+    if (made && font.weight != Font::Weight::regular && !display) {
         // The same font, asked for again by its weight (UIFont.Weight's own numbers).
         CGFloat weight = rawValue(font.weight);
         CFNumberRef number = CFNumberCreate(nullptr, kCFNumberCGFloatType, &weight);

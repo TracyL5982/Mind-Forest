@@ -33,6 +33,9 @@ class MainActivity : Activity() {
         args: Array<String>, mediaDir: String, assets: AssetManager, dataDir: String, outDir: String, server: String, appKey: String
     )
     private external fun nativeStop()
+    private external fun nativeRoomPermission(granted: Boolean)
+
+    private val scenePermission = "com.oculus.permission.USE_SCENE"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +44,7 @@ class MainActivity : Activity() {
         val media = File(external, "media")
         val out = File(external, "out").apply { mkdirs() }
         copyListenerModel()
+        CanvasRenderer.fontsDir = File(media, "fonts").absolutePath
         Media.assets = assets
         nativeStart(args.toTypedArray(), media.absolutePath, assets, filesDir.absolutePath, out.absolutePath, BuildConfig.SERVER, BuildConfig.APP_KEY)
     }
@@ -57,9 +61,26 @@ class MainActivity : Activity() {
         stamp.writeText(build)
     }
 
+    /**
+     * Called from native code, once, when someone is wearing the headset (a hand has been seen): asks
+     * whether the app may see the room (the headset's scene model), which is the user's to share. Until
+     * it is allowed the scene sits at an assumed desk; when it is, the native side reads the room.
+     * It is not asked at launch: the system's dialog holds the app back until it is answered, and a
+     * headset lying on a desk for an automated run has nobody to answer it.
+     */
+    @Suppress("unused")
+    fun askForRoom() {
+        runOnUiThread {
+            if (checkSelfPermission(scenePermission) != PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(scenePermission), 1)
+        }
+    }
+
+    /** The microphone's answer goes to Sound (its own request code); the room's to the native side. */
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         Sound.answered(requestCode, grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+        val at = permissions.indexOf(scenePermission)
+        if (at >= 0 && at < grantResults.size) nativeRoomPermission(grantResults[at] == PackageManager.PERMISSION_GRANTED)
     }
 
     /** Called from native code when a run is over (`-quitAfter`). */

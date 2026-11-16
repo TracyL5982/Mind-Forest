@@ -195,6 +195,7 @@ void Shell::buildPieces(const Stage& stage, const std::shared_ptr<Art>& art, con
         full.push_back(size);
         ups.push_back(e->orientation.act(Vec3(0, 1, 0)));
         grown.push_back(small());
+        swollen.push_back(0);
         // Easier to pick than it is to see, as far as its neighbors leave room.
         Vec3 box = crowd ? Vec3(0.15f * far, 0.14f * far, 0.02f) : Vec3(0.2f * far, 0.16f * far, 0.02f);
         e->collision = {Shape::generateBox(box)};
@@ -209,6 +210,7 @@ void Shell::buildPieces(const Stage& stage, const std::shared_ptr<Art>& art, con
 }
 
 void Shell::look(Vec3 eye, std::optional<Vec3> forward, float dt) {
+    swelled.clear();
     if (forward) {
         if (!aim) {
             aim = *forward;
@@ -231,7 +233,7 @@ void Shell::look(Vec3 eye, std::optional<Vec3> forward, float dt) {
     if (!(stirring > 0)) return;
     // (The launch flags, read once for the loop below.)
     const float small = Shell::small(), large = Shell::large();
-    float half = cone() / 2 * float(M_PI) / 180;
+    float half = cone() / 2 * float(M_PI) / 180, core = Shell::core();
     float edge = std::cos(half), k = 1 - std::exp(-ease() * dt);
     int moving = 0;
     for (size_t i = 0; i < faces.size(); i++) {
@@ -251,6 +253,17 @@ void Shell::look(Vec3 eye, std::optional<Vec3> forward, float dt) {
         if (std::fabs(target - g) < 0.004f) g = target; else moving += 1;
         if (!(g != grown[i])) continue;
         grown[i] = g;
+        // NOTE(port): added for Quest's sound. A piece is told of once as it swells past a third of the
+        // way, and not again until it has all but gone back: a head held still tells of nothing.
+        float share = (g - small) / std::max(large - small, 1e-3f);
+        if (!swollen[i]) {
+            if (share > 0.3f && target > g && !out.count(int(i))) {
+                swollen[i] = 1;
+                swelled.push_back(int(i));
+            }
+        } else if (share < 0.12f) {
+            swollen[i] = 0;
+        }
         faces[i]->setTransform(Transform{Vec3::repeating(g), Quat(), Vec3(0, (g - small) * full[i].y / 2, 0)});
     }
     stirring = moving;

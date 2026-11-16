@@ -31,6 +31,12 @@ std::string mediaDir, dataDir, outDir;
 std::optional<Mat4> head;
 platform::Hand hands[2];
 bool handsSupported = false;
+Mat4 sceneFromRoom;
+std::vector<platform::Table> tables;
+bool roomSettled = false;
+bool readRoomAsked = false;
+int heldTable = 0;
+bool recentred = false;
 
 void useAssets(JNIEnv* env, jobject manager) {
     // MainActivity keeps the AssetManager for the life of the process; the global reference keeps it here too.
@@ -99,6 +105,40 @@ std::optional<std::string> readText(const std::string& name) {
 }
 
 std::string dataDirectory() { return host::dataDir; }
+
+// MARK: - The room
+
+const std::vector<Table>& tables() { return host::tables; }
+bool roomSettled() { return host::roomSettled; }
+void readRoom() { host::readRoomAsked = true; }
+
+void carryScene(const Mat4& t) {
+    host::sceneFromRoom = t * host::sceneFromRoom;
+    // What was read this frame is carried along at once, so the rest of the frame agrees with itself.
+    Quat turn(Mat3(t.columns[0].xyz(), t.columns[1].xyz(), t.columns[2].xyz()));
+    if (host::head) host::head = t * *host::head;
+    for (Hand& hand : host::hands) {
+        for (int j = 0; j < int(Joint::count); j++) {
+            hand.joints[j] = t.point(hand.joints[j]);
+            hand.rotations[j] = turn * hand.rotations[j];
+        }
+        hand.aimOrigin = t.point(hand.aimOrigin);
+        hand.aimDirection = t.direction(hand.aimDirection);
+    }
+    for (Table& table : host::tables) {
+        table.center = t.point(table.center);
+        table.a = t.direction(table.a);
+        table.b = t.direction(table.b);
+    }
+}
+
+void holdTo(int table) { host::heldTable = table; }
+
+bool recentred() {
+    bool was = host::recentred;
+    host::recentred = false;
+    return was;
+}
 
 void openURL(const std::string& url) {
     JNIEnv* e = jni::env();

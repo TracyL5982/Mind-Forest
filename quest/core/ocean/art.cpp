@@ -1,5 +1,6 @@
 // Port of visionos/MindPalace/Ocean/Art.swift. (Notes.swift is notes.cpp, Works.swift is works.cpp.)
 #include "art.h"
+#include "icons.h"
 
 #include <algorithm>
 #include <numeric>
@@ -290,6 +291,105 @@ std::optional<Piece> Art::stepLabel(int n, const std::string& words) {
     });
 }
 
+// MARK: The welcome card (Quest)
+
+namespace {
+/// A rectangle with rounded corners, as a path (the canvas has lines and ovals: the corners are short lines).
+UIBezierPath rounded(CGRect r, float radius) {
+    UIBezierPath path;
+    const float corners[4][3] = {{1, 1, 0}, {-1, 1, 90}, {-1, -1, 180}, {1, -1, 270}};
+    bool first = true;
+    for (const auto& [sx, sy, from] : corners) {
+        for (int k = 0; k <= 10; k++) {
+            float a = (from + float(k) * 9) * floatPi / 180;
+            CGPoint p{r.midX() + sx * (r.size.width / 2 - radius) + std::cos(a) * radius, r.midY() + sy * (r.size.height / 2 - radius) + std::sin(a) * radius};
+            if (first) path.move(p); else path.addLine(p);
+            first = false;
+        }
+    }
+    path.close();
+    return path;
+}
+}
+
+std::optional<Piece> Art::lettering(const std::string& word, float size, float ppm) {
+    // As a title is set in Fraunces at this size: light, a little tight, in a white with some warmth in it.
+    Font f = Font::displayFont(size * ppm);
+    TextAttributes look = attributes(f, Color::hex(0xFBF8EE), -0.028f * size * ppm);
+    // (Room all round for what swings out past the letters' own boxes.)
+    float pad = std::round(size * ppm * 0.3f), w = stringSize(word, look).width + 2 * pad, h = std::ceil(f.lineHeight()) + 2 * pad;
+    return piece("lettering:" + word + fmt(":%g:%g", double(size), double(ppm)), w, h, ppm, [&](Canvas&, CGSize) {
+        drawString(word, CGPoint{pad, pad}, look);
+    });
+}
+
+std::optional<Piece> Art::plain(const std::string& words, float size, Font face, float alpha, float ppm) {
+    Font f = face;
+    f.pointSize = size * ppm;
+    TextAttributes look = attributes(f, Color::white(1, alpha));
+    float w = stringSize(words, look).width, h = std::ceil(f.lineHeight());
+    return piece("plain:" + words + fmt(":%g:%d:%g", double(size), faceCode(face), double(alpha)), w, h, ppm, [&](Canvas&, CGSize) {
+        drawString(words, CGPoint{0, 0}, look);
+    });
+}
+
+std::optional<Piece> Art::way(int number, const std::string& name, const std::string& note, float size, float ppm) {
+    auto P = [&](float m) { return std::round(m * ppm); };
+    Font nameFont = Font::systemFont(size * ppm, Font::Weight::semibold), noteFont = Font::systemFont(size * 0.72f * ppm, Font::Weight::medium);
+    Font numberFont = Font::systemFont(size * 0.74f * ppm, Font::Weight::bold);
+    TextAttributes nameLook = attributes(nameFont, Color::white()), noteLook = attributes(noteFont, Color::white(1, 0.78f));
+    TextAttributes numberLook = attributes(numberFont, Color::white());
+    std::string digit = std::to_string(number);
+    float disc = P(size * 1.5f), gap = P(size * 0.5f), nameH = std::ceil(nameFont.lineHeight()), noteH = std::ceil(noteFont.lineHeight());
+    float nameW = stringSize(name, nameLook).width, noteW = stringSize(note, noteLook).width;
+    // The number and the name are one line, set in the middle; the line under them is in the middle too.
+    float head = disc + gap + nameW, w = std::max(head, noteW), between = P(size * 0.38f), h = disc + between + noteH;
+    return piece("way:" + name + note + fmt(":%d:%g", number, double(size)), w, h, ppm, [&](Canvas&, CGSize) {
+        float left = (w - head) / 2;
+        setFill(hot);
+        UIBezierPath::ovalIn(CGRect{left, 0, disc, disc}).fill();
+        drawString(digit, CGPoint{left + (disc - stringSize(digit, numberLook).width) / 2, (disc - std::ceil(numberFont.lineHeight())) / 2}, numberLook);
+        drawString(name, CGPoint{left + disc + gap, (disc - nameH) / 2}, nameLook);
+        drawString(note, CGPoint{(w - noteW) / 2, disc + between}, noteLook);
+    });
+}
+
+std::optional<Piece> Art::pill(const std::string& words, float size, Color ground) {
+    Font f = font(size, Font::Weight::semibold);
+    TextAttributes look = attributes(f, Color::white());
+    float h = std::ceil(f.lineHeight()) + 2 * px(size * 0.62f), w = stringSize(words, look).width + 2 * px(size * 1.5f);
+    return piece("pill:" + words + fmt(":%g:%d", double(size), int(ground.r * 255)), w, h, [&](Canvas&, CGSize) {
+        setFill(ground);
+        rounded(CGRect{0, 0, w, h}, h / 2).fill();
+        drawString(words, CGPoint{(w - stringSize(words, look).width) / 2, (h - std::ceil(f.lineHeight())) / 2}, look);
+    });
+}
+
+std::optional<Piece> Art::iconButton(const std::string& icon, float size, Color ground, Color mark) {
+    const std::vector<icons::Line>& lines = icon == "marker" ? icons::marker() : icon == "pencil" ? icons::pencil() : icon == "eraser" ? icons::eraser() : icons::send();
+    float w = px(size);
+    std::string key = "icon:" + icon + fmt(":%g:%d,%d,%d:%d,%d", double(size), int(ground.r * 255), int(ground.g * 255), int(ground.b * 255), int(mark.r * 255), int(mark.a * 100));
+    return piece(key, w, w, [&](Canvas& ctx, CGSize) {
+        setFill(ground);
+        rounded(CGRect{0, 0, w, w}, w * 0.24f).fill();
+        // The icon is 24 units square with a stroke of 2: here it takes three fifths of the button, as the pen
+        // does in the diagram it comes from.
+        float unit = w * 0.6f / 24, left = (w - 24 * unit) / 2;
+        ctx.setStrokeColor(mark);
+        ctx.setLineWidth(2 * unit);
+        ctx.setLineCap(Canvas::LineCap::round);
+        ctx.setLineJoin(Canvas::LineJoin::round);
+        for (const icons::Line& line : lines) {
+            for (size_t i = 0; i + 1 < line.xy.size(); i += 2) {
+                CGPoint p{left + line.xy[i] * unit, left + line.xy[i + 1] * unit};
+                if (i == 0) ctx.move(p); else ctx.addLine(p);
+            }
+            if (line.closed) ctx.closePath();
+            ctx.strokePath();
+        }
+    });
+}
+
 /// Any one-line flat label.
 std::optional<Piece> Art::line(const std::string& words, float size, Font::Weight weight, Color fg, Color bg, Vec2 pad) {
     Font f = font(size, weight);
@@ -366,7 +466,7 @@ void arcPath(Canvas& ctx, CGPoint centre, float radius, float turn) {
 
 }  // namespace
 
-std::optional<Piece> Art::pill(const std::string& words, float most) {
+std::optional<Piece> Art::questionPill(const std::string& words, float most) {
     Font f = font(Size::label, Font::Weight::medium);
     float padX = px(0.011f), padY = px(0.0062f), line = std::ceil(f.lineHeight());
     float room = std::max(px(most) - 2 * padX, line);
