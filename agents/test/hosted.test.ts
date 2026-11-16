@@ -265,7 +265,7 @@ test("the voice stops at the device's minutes: the turn is over at once and Momo
   await again.hosted.close();
 });
 
-test('the day starts again at midnight Pacific with the off switch kept, and spend alerts come once at half and at the cap', () => {
+test('the day starts again at midnight Pacific with the off switch kept, and a cap, when one is set, refuses costly work and is told once', () => {
   const dir = mkdtempSync(join(tmpdir(), 'mp-ledger-'));
   let now = new Date('2026-11-15T20:00:00Z');
   const alerts: string[] = [];
@@ -277,10 +277,11 @@ test('the day starts again at midnight Pacific with the off switch kept, and spe
   ledger.spend(4);
   ledger.spend(2);
   ledger.spend(1);
-  assert.equal(alerts.length, 1);
-  assert.match(alerts[0]!, /passed 50% of the \$10 cap/);
+  assert.equal(alerts.length, 0, 'under $25, nothing is told');
   ledger.spend(3.5);
-  assert.equal(alerts.length, 2);
+  ledger.spend(1);
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0]!, /reached the \$10 cap/);
   assert.equal(ledger.refusal(B, 'webAnswers'), 'cap');
   ledger.setOff(true);
   ledger.flush();

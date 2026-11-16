@@ -35,7 +35,8 @@ const ledger = hosted
         voiceMinutes: number('MIND_PALACE_LIMIT_VOICE_MINUTES', DEFAULT_LIMITS.voiceMinutes),
         searches: number('MIND_PALACE_LIMIT_SEARCHES', DEFAULT_LIMITS.searches),
         webAnswers: number('MIND_PALACE_LIMIT_WEB_ANSWERS', DEFAULT_LIMITS.webAnswers),
-        dollarsPerDay: number('MIND_PALACE_CAP_DOLLARS', DEFAULT_LIMITS.dollarsPerDay),
+        // Unset or 0, no cap.
+        dollarsPerDay: number('MIND_PALACE_CAP_DOLLARS', 0) || DEFAULT_LIMITS.dollarsPerDay,
         deviceDollars: number('MIND_PALACE_LIMIT_DEVICE_DOLLARS', DEFAULT_LIMITS.deviceDollars),
         deviceTokens: number('MIND_PALACE_LIMIT_DEVICE_TOKENS', DEFAULT_LIMITS.deviceTokens),
         tokensPerDay: number('MIND_PALACE_TOKEN_BUDGET', DEFAULT_LIMITS.tokensPerDay),

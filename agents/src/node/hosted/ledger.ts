@@ -9,7 +9,8 @@ export interface Limits {
   voiceMinutes: number;
   searches: number;
   webAnswers: number;
-  dollarsPerDay: number;
+  /** What the whole service may spend in a day, or null for no cap: the user's choice for judging, bounded by the shares instead. */
+  dollarsPerDay: number | null;
   /** One device's share of the day's spend, so one judge cannot spend the cap for everyone. */
   deviceDollars: number;
   /** One device's share of Meta's tokens in a day, which have no price and so would never reach the cap. */
@@ -25,7 +26,7 @@ export interface Limits {
  * them: 30 Scout runs at 120,000 tokens, with typical turns, organizing, questions and drops besides (4.5M), and under a quarter of
  * fly.toml's 60M token budget. The working is in reports/ws37.md of the judging program.
  */
-export const DEFAULT_LIMITS: Limits = { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: 30, deviceDollars: 23, deviceTokens: 9_000_000, tokensPerDay: 60_000_000 };
+export const DEFAULT_LIMITS: Limits = { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: null, deviceDollars: 23, deviceTokens: 9_000_000, tokensPerDay: 60_000_000 };
 
 /** The device whose work this is, for the model's calls, which the whole service shares: its tokens and spend are counted to it. */
 export const forDevice = new AsyncLocalStorage<string>();
@@ -47,8 +48,10 @@ export const LINES: Record<Refusal, string> = {
   webAnswers: "I can't look things up on the web any more today, but I can tell you what I know.",
 };
 
-/** Spend alerts, as shares of the day's cap. */
-const ALERTS = [0.5, 1];
+/** The day's spend at which the user's Telegram chat hears of it, with or without a cap: $25, $50, $100, then every $100. */
+export function alertsPassed(dollars: number): number[] {
+  return [25, 50, ...Array.from({ length: Math.floor(dollars / 100) }, (_v, n) => (n + 1) * 100)].filter((at) => at <= dollars);
+}
 
 const Usage = z.object({ voiceMs: z.number().default(0), searches: z.number().default(0), webAnswers: z.number().default(0), dollars: z.number().default(0), tokens: z.number().default(0) });
 type Usage = z.infer<typeof Usage>;
@@ -61,7 +64,9 @@ const Saved = z.object({
   /** Meta's tokens, which have no listed price; counted at `metaDollarsPerMillion`. */
   metaTokens: z.number().default(0),
   overflows: z.number().default(0),
+  /** The amounts the chat has heard of today, and whether it heard that the cap was reached. */
   alerted: z.array(z.number()).default([]),
+  capAlerted: z.boolean().default(false),
   devices: z.record(z.string(), Usage).default({}),
 });
 type Saved = z.infer<typeof Saved>;
@@ -75,7 +80,7 @@ export interface LedgerOptions {
   /** What Meta's tokens cost, in dollars per million. Unlisted, so 0 unless told. */
   metaDollarsPerMillion?: number;
   now?: () => Date;
-  /** Told when the day's spend passes half the cap and the whole of it. */
+  /** Told when the day's spend passes each amount of `alertsPassed`, and when it reaches the cap, if there is one. */
   alert?: (text: string) => void;
 }
 
@@ -123,7 +128,8 @@ export class Ledger {
   paused(): Refusal | null {
     const day = this.today();
     if (day.off) return 'off';
-    if (day.dollars >= this.opts.limits.dollarsPerDay) return 'cap';
+    const cap = this.opts.limits.dollarsPerDay;
+    if (cap !== null && day.dollars >= cap) return 'cap';
     return day.metaTokens >= this.opts.limits.tokensPerDay ? 'budget' : null;
   }
 
@@ -139,14 +145,15 @@ export class Ledger {
     day.dollars += dollars;
     if (device) (day.devices[device] ??= Usage.parse({})).dollars += dollars;
     this.changed();
+    const fresh = alertsPassed(day.dollars).filter((at) => !day.alerted.includes(at));
+    if (fresh.length > 0) {
+      day.alerted.push(...fresh);
+      this.opts.alert?.(`Mind Palace judging: today's spend passed $${fresh.at(-1)} ($${day.dollars.toFixed(2)}).`);
+    }
     const cap = this.opts.limits.dollarsPerDay;
-    for (const share of ALERTS) {
-      if (day.dollars < share * cap || day.alerted.includes(share)) continue;
-      day.alerted.push(share);
-      this.opts.alert?.(
-        `Mind Palace judging: today's spend passed ${share * 100}% of the $${cap} cap ($${day.dollars.toFixed(2)}).` +
-          (share >= 1 ? ' Costly work is refused until midnight Pacific; raise MIND_PALACE_CAP_DOLLARS and redeploy to lift it.' : ''),
-      );
+    if (cap !== null && day.dollars >= cap && !day.capAlerted) {
+      day.capAlerted = true;
+      this.opts.alert?.(`Mind Palace judging: today's spend reached the $${cap} cap. Costly work is refused until midnight Pacific; raise MIND_PALACE_CAP_DOLLARS, or set it to 0 for no cap, and redeploy to lift it.`);
     }
   }
 
@@ -176,7 +183,7 @@ export class Ledger {
       off: day.off,
       paused: this.paused(),
       spentToday: Number(day.dollars.toFixed(4)),
-      cap: this.opts.limits.dollarsPerDay,
+      cap: this.opts.limits.dollarsPerDay ?? 'none',
       metaTokens: day.metaTokens,
       overflows: day.overflows,
       limits: this.opts.limits,

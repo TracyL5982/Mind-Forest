@@ -12,7 +12,9 @@ kill_timeout = "30s"
   MIND_PALACE_LIMIT_VOICE_MINUTES = "60"
   MIND_PALACE_LIMIT_SEARCHES = "30"
   MIND_PALACE_LIMIT_WEB_ANSWERS = "30"
-  MIND_PALACE_CAP_DOLLARS = "30"
+  # No total cap, the user's decision for judging: the bounds are each headset's limits and shares, at most 20 headsets, and the off
+  # switch, so at worst 20 x $23 = $460 a day. Telegram hears at $25, $50, $100 and every $100 after. A number here sets a cap.
+  MIND_PALACE_CAP_DOLLARS = "0"
   # One headset's share of the day's spend and of Meta's tokens: the most it can use inside its own limits ($23), and about twice
   # that in tokens (9M), so a share stops only a script past them (src/node/hosted/ledger.ts, DEFAULT_LIMITS).
   MIND_PALACE_LIMIT_DEVICE_DOLLARS = "23"

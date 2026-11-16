@@ -26,3 +26,32 @@ test("Meta's tokens for the whole service are a day's budget: past it no costly 
   assert.equal(ledger.paused(), null, 'a new day in San Francisco, without a restart');
   assert.equal(ledger.refusal(A, 'searches'), null);
 });
+
+test("with no cap nothing is ever refused for the day's spend, and the status says none", () => {
+  const { ledger } = ledgerAt({ dollarsPerDay: null, deviceDollars: 1e9 });
+  for (let n = 0; n < 100; n++) ledger.spend(50, n % 2 ? A : B);
+  assert.equal(ledger.paused(), null);
+  assert.equal(ledger.refusal(A, 'searches'), null);
+  assert.equal(ledger.held(B), null);
+  assert.equal(ledger.status().cap, 'none');
+  assert.equal(ledger.status().spentToday, 5000);
+});
+
+test("the chat hears when the day's spend passes $25, $50, $100 and every $100 after, each once", () => {
+  const alerts: string[] = [];
+  const { ledger } = ledgerAt({ dollarsPerDay: null }, alerts);
+  // The day comes to 24, 26, 36, 56, 106, 107, 257, 347, then 597, which passes $400 and $500 in one spend.
+  for (const dollars of [24, 2, 10, 20, 50, 1, 150, 90, 250]) ledger.spend(dollars);
+  assert.deepEqual(alerts.map((a) => /passed \$(\d+)/.exec(a)?.[1]), ['25', '50', '100', '200', '300', '500'], 'two amounts passed at once are told as the higher');
+  ledger.spend(1);
+  assert.equal(alerts.length, 6, 'an amount already told is not told again');
+});
+
+test("a device past its share is stopped alone, with no cap", () => {
+  const { ledger } = ledgerAt({ dollarsPerDay: null, deviceDollars: 23 });
+  ledger.spend(23, A);
+  assert.equal(ledger.refusal(A, 'searches'), 'share');
+  assert.equal(ledger.held(A), 'share');
+  assert.equal(ledger.refusal(B, 'searches'), null);
+  assert.equal(ledger.held(B), null);
+});
