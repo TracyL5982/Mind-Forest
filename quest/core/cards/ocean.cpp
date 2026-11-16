@@ -138,6 +138,11 @@ std::optional<Vec2> openSize(const std::string& noteID) {
     return s ? std::optional(s->open) : std::nullopt;
 }
 
+std::optional<float> smallRadius(const std::string& noteID) {
+    const Kind* kind = kindOf(noteID);
+    return kind ? std::optional(kind->radius * smallScale / Art::ppm) : std::nullopt;
+}
+
 std::optional<Piece> corners(Art& art, Vec2 size) {
     float w = std::round(size.x * Art::ppm), h = std::round(size.y * Art::ppm);
     return art.piece(fmt("card-corners:%gx%g", double(w), double(h)), w, h, [&](Canvas& ctx, CGSize) {

@@ -416,39 +416,71 @@ EntityRef Art::swatch(Color color, Vec2 size, float opacity) const {
 
 // MARK: Glow
 
-std::optional<Material> Art::glowMaterial;
+namespace {
+/// How far a glow reaches out from the card's edge, and in under it, m.
+constexpr float glowOut = 0.02f, glowIn = 0.012f;
 
-/// One small picture of a soft rectangle of light, stretched to fit any
-/// card: bright along the card's edge, gone within two centimeters.
-std::optional<Material> Art::glowLook() const {
-    if (glowMaterial) return glowMaterial;
-    const int n = 128, edge = 40;                   // the card's edge lies 40 px in from each side
-    std::vector<uint8_t> pixels(size_t(n * n * 4), 0);
-    for (int y = 0; y < n; y++) {
-        for (int x = 0; x < n; x++) {
-            // How far this pixel is outside the edge rectangle (negative: inside it).
-            float dx = std::max(float(edge - x), float(x - (n - 1 - edge))), dy = std::max(float(edge - y), float(y - (n - 1 - edge)));
-            float outside = std::max(dx, dy) > 0 ? std::sqrt(std::max(dx, 0.f) * std::max(dx, 0.f) + std::max(dy, 0.f) * std::max(dy, 0.f))
-                                                 : std::max(dx, dy);
-            // Falls away quickly outward, and at once inward (the card covers that part anyway).
-            float spread = outside >= 0 ? 15 : 5;
-            float a = 0.42f * std::exp(-(outside * outside) / (2 * spread * spread));
-            size_t i = size_t((y * n + x) * 4);
-            pixels[i] = uint8_t(255 * a);           // premultiplied: a warm white
-            pixels[i + 1] = uint8_t(238 * a);
-            pixels[i + 2] = uint8_t(205 * a);
-            pixels[i + 3] = uint8_t(255 * a);
+/// Bands of light round a card whose face is `size` with corners of `radius`. Ring `i` is the card's outline
+/// moved out by `offsets[i]` (in, where it is negative), turning each corner about that corner's own centre,
+/// so all the way round it stays as far from the card's edge; its points carry `uvs[i]`. Each ring is joined
+/// to the next.
+MeshRef bands(Vec2 size, float radius, const std::vector<float>& offsets, const std::vector<Vec2>& uvs) {
+    constexpr int arc = 12;                         // pieces of each corner's quarter turn
+    float hx = size.x / 2, hy = size.y / 2;
+    radius = std::clamp(radius, 0.f, std::min(hx, hy));
+    const float signs[4][2] = {{1, 1}, {-1, 1}, {-1, -1}, {1, -1}};
+    int around = 4 * (arc + 1);                     // points in one ring
+    std::vector<Vec3> positions;
+    std::vector<Vec2> coordinates;
+    for (size_t r = 0; r < offsets.size(); r++) {
+        // Moved in further than the corner is round, a ring's corners are sharp, at the moved edges' meeting.
+        float turn = std::max(0.f, radius + offsets[r]), centre = radius - std::min(0.f, radius + offsets[r]);
+        for (int c = 0; c < 4; c++) {
+            for (int k = 0; k <= arc; k++) {
+                float a = (float(c) + float(k) / arc) * float(M_PI) / 2;
+                positions.push_back({signs[c][0] * (hx - centre) + std::cos(a) * turn, signs[c][1] * (hy - centre) + std::sin(a) * turn, 0});
+                coordinates.push_back(uvs[r]);
+            }
         }
     }
-    // NOTE(port): the CGImage made from these bytes is an Image holding them: the same layout, premultiplied RGBA.
+    std::vector<uint32_t> index;
+    for (int r = 0; r + 1 < int(offsets.size()); r++) {
+        for (int k = 0; k < around; k++) {
+            uint32_t a = uint32_t(r * around + k), b = uint32_t(r * around + (k + 1) % around);
+            uint32_t c = a + uint32_t(around), d = b + uint32_t(around);
+            index.insert(index.end(), {a, c, d, a, d, b});
+        }
+    }
+    return Mesh::generate(std::move(positions), std::move(coordinates), std::move(index));
+}
+}  // namespace
+
+std::optional<Material> Art::glowMaterial;
+
+std::optional<Material> Art::glowLook() {
+    if (glowMaterial) return glowMaterial;
+    // Across the band, u 0 at its outer edge and 1 at its inner one. The light falls away over about
+    // a centimetre outward, to nothing at the band's edge, and at once inward (the card covers that part anyway).
+    const int n = 128;
+    const float outward = 0.0075f, inward = 0.0025f, end = std::exp(-glowOut * glowOut / (2 * outward * outward));
+    std::vector<uint8_t> pixels(size_t(n * 4), 0);
+    for (int i = 0; i < n; i++) {
+        float d = glowOut - (float(i) + 0.5f) / n * (glowOut + glowIn);        // how far outside the card's edge
+        float a = d >= 0 ? 0.42f * std::max(0.f, std::exp(-d * d / (2 * outward * outward)) - end) / (1 - end)
+                         : 0.42f * std::exp(-d * d / (2 * inward * inward));
+        size_t p = size_t(i * 4);
+        pixels[p] = uint8_t(std::lround(255 * a));      // premultiplied: a warm white
+        pixels[p + 1] = uint8_t(std::lround(238 * a));
+        pixels[p + 2] = uint8_t(std::lround(205 * a));
+        pixels[p + 3] = uint8_t(std::lround(255 * a));
+    }
     auto image = std::make_shared<Image>();
     image->width = n;
-    image->height = n;
+    image->height = 1;
     image->rgba = std::move(pixels);
     TextureRef texture = Texture::make(image);
     if (!texture) return std::nullopt;
     Material m = Material::unlit(Color::white());
-    m.color = Color::white();
     m.texture = texture;
     m.transparent = true;
     m.opacity = 1.0f;
@@ -456,75 +488,21 @@ std::optional<Material> Art::glowLook() const {
     return m;
 }
 
-/// A soft edge of light for a card whose face is `size`. Its corners
-/// keep their shape whatever the card's proportions: only the
-/// stretches between them are stretched.
-EntityRef Art::glow(Vec2 size) const {
+EntityRef Art::glow(Vec2 size, float radius) {
     std::optional<Material> look = glowLook();
     if (!look) return nullptr;
-    float out = 0.02f, inward = 0.012f;             // 40 px of the picture outside the edge, 24 inside
-    float hx = size.x / 2, hy = size.y / 2;
-    std::vector<float> xs = {-hx - out, -hx + inward, hx - inward, hx + out};
-    std::vector<float> ys = {-hy - out, -hy + inward, hy - inward, hy + out};
-    std::vector<float> us = {0, 0.5f, 0.5f, 1};
-    std::vector<Vec3> positions;
-    std::vector<Vec2> uvs;
-    for (int j = 0; j < 4; j++) {
-        for (int i = 0; i < 4; i++) {
-            positions.push_back({xs[size_t(i)], ys[size_t(j)], 0});
-            uvs.push_back({us[size_t(i)], us[size_t(j)]});
-        }
-    }
-    std::vector<uint32_t> index;
-    for (int j = 0; j < 3; j++) {
-        for (int i = 0; i < 3; i++) {
-            if (i == 1 && j == 1) continue;         // nothing in the middle: the card is there
-            uint32_t a = uint32_t(j * 4 + i);
-            index.insert(index.end(), {a, a + 1, a + 5, a, a + 5, a + 4});
-        }
-    }
-    MeshRef mesh = Mesh::generate(positions, uvs, index);
+    // The band's inner edge, its outer edge, and between them the card's edge, so the light is brightest exactly there.
+    MeshRef mesh = bands(size, radius, {-glowIn, 0, glowOut}, {{1, 0.5f}, {glowOut / (glowOut + glowIn), 0.5f}, {0, 0.5f}});
     if (!mesh) return nullptr;
     return Entity::make(mesh, {*look});
 }
 
-/// The light that comes up around a card while it is looked at: a band
-/// from the card's edge outward, strongest at the edge. Nothing lies over
-/// the card itself, so what it shows stays clear.
-EntityRef Art::gazeRim(Vec2 size, const std::optional<Material>& material) const {
+EntityRef Art::gazeRim(Vec2 size, const std::optional<Material>& material, float radius) {
     if (!material) return nullptr;
     // Rings around the card, each a little further out and fainter: the first on the
-    // card's edge, the last three centimeters out. At the corners they turn in an arc
-    // about the card's corner, so the light is round there, and it falls off fast at
-    // first and then slowly, the way a glow does.
-    struct Ring {
-        float out, light;
-    };
-    std::vector<Ring> rings = {{0, 0.95f}, {0.006f, 0.6f}, {0.013f, 0.32f}, {0.021f, 0.12f}, {0.03f, 0}};
-    int arc = 8;                                    // pieces of each corner's quarter turn
-    float hx = size.x / 2, hy = size.y / 2;
-    std::vector<std::pair<Vec2, float>> corners = {{{hx, hy}, 0}, {{-hx, hy}, float(M_PI) / 2}, {{-hx, -hy}, float(M_PI)}, {{hx, -hy}, 3 * float(M_PI) / 2}};
-    int around = int(corners.size()) * (arc + 1);   // points in one ring
-    std::vector<Vec3> positions;
-    std::vector<Vec2> uvs;
-    for (const Ring& ring : rings) {
-        for (const auto& [corner, from] : corners) {
-            for (int k = 0; k <= arc; k++) {
-                float a = from + float(k) / float(arc) * float(M_PI) / 2;
-                positions.push_back({corner.x + std::cos(a) * ring.out, corner.y + std::sin(a) * ring.out, 0});
-                uvs.push_back({ring.light, 0});
-            }
-        }
-    }
-    std::vector<uint32_t> index;
-    for (int r = 0; r < int(rings.size()) - 1; r++) {
-        for (int k = 0; k < around; k++) {
-            uint32_t a = uint32_t(r * around + k), b = uint32_t(r * around + (k + 1) % around);
-            uint32_t c = a + uint32_t(around), d = b + uint32_t(around);
-            index.insert(index.end(), {a, c, d, a, d, b});
-        }
-    }
-    MeshRef mesh = Mesh::generate(positions, uvs, index);
+    // card's edge, the last three centimeters out. It falls off fast at first and then
+    // slowly, the way a glow does.
+    MeshRef mesh = bands(size, radius, {0, 0.006f, 0.013f, 0.021f, 0.03f}, {{0.95f, 0}, {0.6f, 0}, {0.32f, 0}, {0.12f, 0}, {0, 0}});
     if (!mesh) return nullptr;
     EntityRef e = Entity::make(mesh, {*material});
     e->position.z = -0.002f;

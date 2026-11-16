@@ -50,6 +50,10 @@ std::optional<Piece> small(Art& art, const std::string& noteID);
 std::optional<Piece> frame(Art& art, const std::string& noteID);
 /// A note's card opened, m: its frame.
 std::optional<Vec2> openSize(const std::string& noteID);
+/// The round corners of a note's card small, m.
+std::optional<float> smallRadius(const std::string& noteID);
+/// And of every card opened, its frame's, m.
+constexpr float openRadius = OPEN_RADIUS * openScale / Art::ppm;
 /// Where the parts of the panel in view sit, at the scroll it stands at: the words a hand can mark and its picture.
 std::optional<NoteLayout> layout(const std::string& noteID);
 /// The frame's picture.
