@@ -804,6 +804,17 @@ void Bridge::moreLike(int nodeID) {
     logLine("[agent] more like this" + (need ? ": " + *need : std::string(", with nothing highlighted")));
 }
 
+void Bridge::tellMore(int nodeID, const std::string& part) {
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    if (!p || !p->service.count(nodeID) || part.empty()) return;
+    std::string question = "Tell me more about this part: " + part;
+    if (!asking.begin(p->service[nodeID], question, now)) {
+        logLine("[agent] still asking, so not again: " + question);
+        return;
+    }
+    converse(nodeID, question);
+}
+
 namespace {
 
 /// Which of the appearances of `quote` in `text` starts at `at` (UTF-16 units), or 0 when it is not there.

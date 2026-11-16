@@ -21,7 +21,7 @@
 /// NOTE(port): added for Quest. How far the open face stands in front of the small one, m (see the constructor).
 constexpr float openLift = 0.0015f;
 
-/// NOTE(port): added for Quest (core/cards). What the user marked on a card with the edit pencil, as the scene draws it.
+/// NOTE(port): added for Quest (core/cards). What the user marked on a service card with the pen, as the scene draws it.
 struct CardEdit {
     enum class Kind { highlight, stroke };
     std::string id;
@@ -103,16 +103,12 @@ public:
     std::optional<int> home;            // its film's or work's place in the ocean
     EntityRef picture;                  // an open work's picture
     // NOTE(port): added for Quest (core/cards). An open card's frame; the panel that scrolls in its window, and the bar
-    // that says where. The service's cards also have the edit pencil outside its top right corner, with the line under it
-    // that says what a long pinch will do, and the ring round a pinch held still; and the user's edits, kept with the card,
-    // drawn as one see-through amber mesh behind the words and one white mesh of lines, both cut to the window.
+    // that says where. The service's cards also have the ring round a pinch held still, and the user's edits, made with the
+    // pen and kept with the card, drawn as one see-through amber mesh behind the words and one white mesh of lines, both
+    // cut to the window.
     EntityRef openFace;
     EntityRef openPanel;
     EntityRef scrollBar;
-    EntityRef pencil;
-    bool pencilShown = false;
-    EntityRef hint;
-    std::string hintWords;
     EntityRef holdRing;
     int holdShown = -1;
     std::vector<CardEdit> edits;

@@ -925,3 +925,19 @@ It searched Instagram more often by no more than ten runs a side can show, and i
 **Handoffs.** Each node in `handoff.json` has `highlights`, the quotes, and the Markdown lists them under "highlighted by the user". Lines are not in a handoff.
 
 **Measured with.** `test/edits.test.ts` (kept, sent, survives a restart, reaches a client that joins, one undo takes back the last, odd or off-card points refused, erasing what is not there sends nothing, a handoff lists the highlights); `quest/core/agent/test/run.sh` (edits read, the commands checked against the service's schema); `quest/desktop/test/cards_edit_check.mjs`, the preview against the fake service, 20 checks, all passed in each of 4 runs of its final form. Each step is looked for from the log line that says its flag ran, because the preview's clock falls behind the wall's while it takes pictures.
+
+## 66. Open cards: Kai's pen, eraser and Send take the edit pencil's place (amends 65)
+
+**Decision.** Merging Kai's quest-port work brought a second way to mark a card. The user chose Kai's: three buttons on a card you have gone into, everywhere, wired to the service. The edit pencil outside the card's top right corner is gone, with its help line ("Long pinch to highlight", "Long pinch to draw") and its "on" mode.
+
+**What stays from 65.** At most three question pills under an open card. A pinch-drag scrolls the card when no tool is up. A pinch held still asks for more like the card, leaning on its highlights, and the card leads a layer of its own. Edits are kept by the service with the card, as `node.edits`, through `addEdit` and `removeEdit`: they come back on any headset, "undo" takes back the last, and handoffs list the highlights. The data is unchanged.
+
+**Kai's buttons.** You go into an open card by pinching it again. The pen ("Comment"), the eraser ("Erase") and "Send to Momo" then stand down the right edge of its picture, and each shows its name while you point at it.
+- **The pen.** A pinch takes it up or puts it down. While it is up, a drag on the card marks it and does not scroll: a drag that starts on words highlights them, and one that starts anywhere else draws a line. Both are saved with `addEdit`, as 65's are. A drag along a video takes a stretch of it, as Kai built; the service has no edit for a stretch, so it stays on the headset. While the pen is up, a pinch held still does nothing. With the pen down, a drag scrolls. The pen is put down when you leave the card.
+- **The eraser.** Each pinch takes off the newest highlight or line (`removeEdit`), then a video's stretch.
+- **Send.** Once something is marked, Send asks "tell me more about this part": the service's `ask` with `need` "Tell me more about this part: "…"", naming the highlighted words, "the part I drew on" for lines, and a stretch by its times ("the stretch from 0:12 to 0:20"). Sending is asking, so it is a conversation about the card, as a picked question is: the card is kept and leads a new layer, and Momo answers. With nothing marked, Send does nothing.
+- **The long pinch.** With the pen down, a pinch held still on the open card still asks for more like it, as in 65.
+
+**Why.** Labelled buttons are easier to find than a long pinch, and Kai's guide already teaches them. The marks keep 65's data, so nothing the service or the web client holds changes.
+
+**Measured with.** `quest/desktop/test/cards_edit_check.mjs`, rewritten for the buttons: 20 checks against the fake service (at most 3 pills; with the pen up a drag highlights, draws, and never scrolls; nothing is asked while the pen is up; the eraser takes off the newest edit at the service; the pen is put down when the card is left; reopened, the card shows its edits; with the pen down a drag scrolls and a long pinch asks for more, leaning on the highlight; Send asks about the marked part; a second preview shows the edits and an undo there takes a line off).

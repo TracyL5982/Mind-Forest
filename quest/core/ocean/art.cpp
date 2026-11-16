@@ -486,50 +486,6 @@ std::optional<Piece> Art::questionPill(const std::string& words, float most) {
     });
 }
 
-std::optional<Piece> Art::pencil(bool on) {
-    float d = px(0.034f), line = px(0.0016f);
-    return piece(on ? "pencil:on" : "pencil:off", d, d, [&](Canvas& ctx, CGSize) {
-        CGRect disc{line, line, d - 2 * line, d - 2 * line};
-        ctx.setFillColor(on ? Color::white() : ink.withAlphaComponent(0.7f));
-        ctx.fillEllipse(disc);
-        ctx.setStrokeColor(Color::white(1, on ? 1 : 0.9f));
-        ctx.setLineWidth(line);
-        ctx.strokeEllipse(disc);
-        // The pencil lies corner to corner, its point at the lower left: a body, a cut-off end, a point.
-        float l = 0.56f * d, t = 0.15f * d, tip = 0.17f * d, cap = 0.11f * d;
-        float a = 0.75f * float(M_PI);
-        auto at = [&](float x, float y) { return CGPoint{d / 2 + x * std::cos(a) - y * std::sin(a), d / 2 + x * std::sin(a) + y * std::cos(a)}; };
-        Color glyph = on ? ink : Color::white();
-        ctx.setFillColor(glyph);
-        ctx.move(at(-l / 2 + cap, -t / 2));
-        ctx.addLine(at(l / 2 - tip, -t / 2));
-        ctx.addLine(at(l / 2, 0));
-        ctx.addLine(at(l / 2 - tip, t / 2));
-        ctx.addLine(at(-l / 2 + cap, t / 2));
-        ctx.closePath();
-        ctx.fillPath();
-        ctx.move(at(-l / 2, -t / 2));
-        ctx.addLine(at(-l / 2 + cap - line, -t / 2));
-        ctx.addLine(at(-l / 2 + cap - line, t / 2));
-        ctx.addLine(at(-l / 2, t / 2));
-        ctx.closePath();
-        ctx.fillPath();
-    });
-}
-
-std::optional<Piece> Art::hint(const std::string& words) {
-    Font f = font(Size::micro, Font::Weight::medium);
-    f.italic = true;
-    float padX = px(0.006f), padY = px(0.003f), line = std::ceil(f.lineHeight());
-    float w = std::ceil(width(words, f)) + 1, W = w + 2 * padX, H = line + 2 * padY;
-    return piece("hint:" + words, W, H, [&](Canvas& ctx, CGSize) {
-        roundedPath(ctx, CGRect{0, 0, W, H}, H / 2);
-        ctx.setFillColor(ink.withAlphaComponent(0.72f));
-        ctx.fillPath();
-        drawString(words, CGPoint{padX, padY}, attributes(f, Color::white(0.82f)));
-    });
-}
-
 std::optional<Piece> Art::holdRing(int step) {
     step = std::clamp(step, 0, holdSteps);
     float d = px(0.036f), wide = px(0.0032f), r = d / 2 - wide;

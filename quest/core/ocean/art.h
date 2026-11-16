@@ -254,13 +254,9 @@ public:
     /// One line under an open card that can be picked: a question for the gardener, or something to do.
     std::optional<Piece> row(const std::string& words);
 
-    // NOTE(port): added for Quest (core/cards): the open card's pills, its edit pencil, and the ring round a pinch held still.
+    // NOTE(port): added for Quest (core/cards): the open card's pills, and the ring round a pinch held still.
     /// What can be picked under an open card, as a rounded pill as wide as its words, at most `most` m, in two lines at most.
     std::optional<Piece> questionPill(const std::string& words, float most);
-    /// The open card's edit pencil: a round button with a pencil in it, outlined when off, filled when on.
-    std::optional<Piece> pencil(bool on);
-    /// A word on what a long pinch will do, in small italics.
-    std::optional<Piece> hint(const std::string& words);
     /// The ring round a pinch held still, filled `step` of `holdSteps` clockwise from the top.
     static constexpr int holdSteps = 24;
     std::optional<Piece> holdRing(int step);

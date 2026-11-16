@@ -41,13 +41,13 @@ Everything the user drops becomes an item, and every item is part of the user's 
 
 ## Edits on a card
 
-With the headset's edit pencil the user highlights words on an open card and draws lines on it. They are kept with the card, as `node.edits`, oldest first, so they come back when the card opens again, after a restart, and on another device. A node with none has no `edits` field.
+With the headset's pen the user highlights words on an open card and draws lines on it. They are kept with the card, as `node.edits`, oldest first, so they come back when the card opens again, after a restart, and on another device. A node with none has no `edits` field.
 
 - **A highlight** is `{id, kind: 'highlight', quote, at?}`. `quote` is the highlighted words as the card shows them. `at` is where they start in the item's `text`, in UTF-16 units as JavaScript counts them, when they are in it: `text.slice(at, at + quote.length) === quote`. Words the card shows from elsewhere, such as a list entry or the title, have no `at`. A client finds a highlight again by its words, and by `at` when the same words appear more than once.
 - **A line** is `{id, kind: 'stroke', points}`. `points` is x then y for each point in order, two to 512 points, each 0 to 1 across and down the opened card's whole content, however far it is scrolled. So a line stays on what it was drawn over when the card is drawn at another size.
 - A card keeps at most 100 edits. An edit's `id` is made by the client that draws it, unique on its card.
 - A client sends edits as `commands`: `{type: 'addEdit', id: <node id>, edit}` adds one, or puts it in place of the one with its id, and `{type: 'removeEdit', id: <node id>, editId}` takes one off. Each is one undoable change, so `undo` takes back the last edit. Taking off an edit that is not there changes nothing and sends no `change`. An edit changes no card's look and asks no agent for anything.
-- What is highlighted is listed in a handoff (docs/handoff-format.md). Asking for more like a card with highlights says so: the headset's long pinch sends `more` with `need` "More like this, especially what I highlighted: "…"".
+- What is highlighted is listed in a handoff (docs/handoff-format.md). Asking for more like a card with highlights says so: the headset's long pinch sends `more` with `need` "More like this, especially what I highlighted: "…"". The headset's Send asks about what is marked: `ask` with `need` "Tell me more about this part: "…"", naming the highlights, "the part I drew on" for lines, and a video's stretch by its times ("the stretch from 0:12 to 0:20"), which the headset keeps itself.
 
 ## Rounds
 

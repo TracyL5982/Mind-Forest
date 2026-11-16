@@ -134,7 +134,7 @@ export const Stroke = z.object({
 });
 export type Stroke = z.infer<typeof Stroke>;
 
-/** What the user marked on a card with the edit pencil. */
+/** What the user marked on a card with the headset's pen. */
 export const Edit = z.discriminatedUnion('kind', [Highlight, Stroke]);
 export type Edit = z.infer<typeof Edit>;
 

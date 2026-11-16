@@ -691,8 +691,11 @@ void OceanModel::layTools() {
     CardRef c = focus && zoom.target() > 0.5f ? card(*focus) : nullptr;
     if (c && !c->openBuilt) c = nullptr;
     if (c && markKinds(*c).empty()) c = nullptr;
-    if (!c) penOn = false;
-    std::string key = c ? fmt("%d|%d|%d", *focus, penOn ? 1 : 0, int(marks.count(*focus))) : "";
+    if (!c && penOn) {
+        penOn = false;
+        logLine("[ocean] the pen is put down: its card was left");
+    }
+    std::string key = c ? fmt("%d|%d|%d", *focus, penOn ? 1 : 0, marked(*focus) ? 1 : 0) : "";
     if (key != toolsKey && art) {
         toolsKey = key;
         for (const Entity* e : toolPicks) picks.erase(e);
@@ -710,7 +713,7 @@ void OceanModel::layTools() {
             // the accent as it does there; send turns light once there is something to send; what cannot be
             // used yet is faint.
             EntityRef holder = Entity::make();
-            bool marked = marks.count(*focus) > 0;
+            bool marked = this->marked(*focus);
             const Color rest = Color::hex(0x20252E);
             auto add = [&](const char* icon, int what, Color ground, Color mark, const char* says) {
                 std::optional<Piece> piece = art->iconButton(icon, toolSize, ground, mark);
@@ -789,16 +792,20 @@ void OceanModel::pickTool(int id, int what) {
     if (!(tree && tree->focus() == id)) return;
     CardRef c = card(id);
     if (what == 1) {
-        // The eraser.
-        clearMark(id);
+        // The eraser. NOTE(port): added for Quest (core/cards): on a service card it takes off the newest highlight or
+        // line, at the service too, one a pinch; then a video's stretch.
+        if (c && !c->edits.empty()) eraseEdit(*c, c->edits.back().id); else clearMark(id);
         return;
     }
     if (what == 2) {
         // Send: what is marked is asked about. (A lesson of the welcome tree has nobody to ask: it is come
-        // back out of, which is what its lesson waits for.)
-        if (marks.count(id) == 0) return;
+        // back out of, which is what its lesson waits for.) NOTE(port): added for Quest (core/cards): on a service
+        // card it is a conversation with Momo about the marked part, which leads a layer.
+        if (!marked(id)) return;
         penOn = false;
-        if (c && c->ref.kind == Ref::Kind::note && c->ref.id.rfind("welcome", 0) == 0) stepOut(); else askMark(id);
+        if (c && c->ref.kind == Ref::Kind::note && c->ref.id.rfind("welcome", 0) == 0) stepOut();
+        else if (c && agentBridge && agentBridge->editable(id)) agentBridge->tellMore(id, markedPart(*c));
+        else askMark(id);
         return;
     }
     // The pen: taken up, or put down.

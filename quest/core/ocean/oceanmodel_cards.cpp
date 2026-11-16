@@ -523,7 +523,9 @@ void OceanModel::buildRows(CardView& c) {
     std::vector<std::pair<std::string, Pick>> questions;
     // (Not on a lesson of the welcome tree: what is marked there is practice, not a question.)
     bool lesson = c.ref.kind == Ref::Kind::note && c.ref.id.rfind("welcome", 0) == 0;
-    if (marks.count(c.id) && !lesson) questions.push_back({"More on what you marked", Pick::askMark(c.id)});
+    // (Nor on a service card, whose pen's Send asks about what is marked, and whose pills are the service's three.)
+    bool service = agentBridge && agentBridge->editable(c.id);
+    if (marks.count(c.id) && !lesson && !service) questions.push_back({"More on what you marked", Pick::askMark(c.id)});
     for (size_t k = 0; k < c.asks.size(); k++) questions.push_back({c.asks[k].question, Pick::ask(c.id, int(k))});
     if (cardGestures) {
         // NOTE(port): added for Quest (core/cards). Under `-cards` what can be asked stands as pills, one to a line, each as
@@ -655,23 +657,16 @@ void OceanModel::holdPress() {
     CardRef c = cardGestures && tree && tree->focus() ? card(*tree->focus()) : nullptr;
     if (!(c && c->holdRing && art)) return;
     int step = -1;
-    if (c->openBuilt && press && !press->cancelled && press->claim == Press::Claim::open && press->pick.kind == Pick::Kind::card &&
+    if (c->openBuilt && !penOn && press && !press->cancelled && press->claim == Press::Claim::open && press->pick.kind == Pick::Kind::card &&
         press->pick.index == c->id && length(press->at - press->start) <= 0.02f) {
         double settled = settledAt(*c), held = time - std::max(press->began, settled);
         // A quick pinch, a tap, never shows it.
         if (time >= settled && held >= 0.08) step = std::min(Art::holdSteps, int(held / holdFor * Art::holdSteps));
         if (time >= settled && held >= holdFor) {
             step = -1;
-            Vec2 at = onCard(*c, press->start);
-            if (pencilOn()) {
-                beginEdit(*c, at);
-                press->claim = drawing ? (drawing->edit.kind == CardEdit::Kind::highlight ? Press::Claim::highlight : Press::Claim::draw)
-                                       : Press::Claim::spent;
-            } else {
-                press->claim = Press::Claim::spent;
-                logLine("[cards] a long pinch: more like " + (catalog ? catalog->title(c->ref) : std::string("this card")));
-                agentBridge->moreLike(c->id);
-            }
+            press->claim = Press::Claim::spent;
+            logLine("[cards] a long pinch: more like " + (catalog ? catalog->title(c->ref) : std::string("this card")));
+            agentBridge->moreLike(c->id);
         }
     }
     if (step == c->holdShown) return;

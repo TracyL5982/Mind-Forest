@@ -53,7 +53,10 @@ public:
     /// A long pinch on the open card: more like it, through the service's `more`, as Momo's "more like this" asks. The card
     /// leads a layer of its own (kept, if it was a suggestion), and when it has highlights the request leans on them.
     void moreLike(int nodeID);
-    /// Whether a card is the service's, so it has the edit pencil and keeps its edits.
+    /// Send on a service card gone into, with something marked on it (`part`, in words): "Tell me more about this part", a
+    /// conversation about the card, as a picked question is.
+    void tellMore(int nodeID, const std::string& part);
+    /// Whether a card is the service's, so the pen's marks on it are kept with it.
     bool editable(int nodeID);
     /// The highlights and lines the service keeps on a card, as the scene draws them.
     std::vector<CardEdit> edits(int nodeID);
