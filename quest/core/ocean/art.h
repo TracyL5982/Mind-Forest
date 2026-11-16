@@ -71,8 +71,14 @@ public:
     struct Words {
         std::string text;
         std::vector<CGRect> rects;
+        /// NOTE(port): added for Quest. Where `text` starts in the block's string, in UTF-16 units.
+        int at = 0;
     };
     std::optional<Words> words(CGPoint a, CGPoint b) const;
+
+    /// NOTE(port): added for Quest (core/cards). The rectangles that cover a run of the block's string (UTF-16 units)
+    /// line by line, in pixels on the note: where a highlight kept with the card is drawn again.
+    std::vector<CGRect> rects(int at, int length) const;
 };
 
 /// Where everything sits on an open note, in pixels from its top-left.
@@ -234,6 +240,17 @@ public:
 
     /// One line under an open card that can be picked: a question for the gardener, or something to do.
     std::optional<Piece> row(const std::string& words);
+
+    // NOTE(port): added for Quest (core/cards): the open card's pills, its edit pencil, and the ring round a pinch held still.
+    /// What can be picked under an open card, as a rounded pill as wide as its words, at most `most` m, in two lines at most.
+    std::optional<Piece> pill(const std::string& words, float most);
+    /// The open card's edit pencil: a round button with a pencil in it, outlined when off, filled when on.
+    std::optional<Piece> pencil(bool on);
+    /// A word on what a long pinch will do, in small italics.
+    std::optional<Piece> hint(const std::string& words);
+    /// The ring round a pinch held still, filled `step` of `holdSteps` clockwise from the top.
+    static constexpr int holdSteps = 24;
+    std::optional<Piece> holdRing(int step);
 
     /// An empty frame with a label: where a pressed tree lands on its way out.
     std::optional<Piece> tray(const std::string& words);

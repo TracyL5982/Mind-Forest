@@ -306,6 +306,36 @@ TEST(aComposingViewReadsAsComposing) {
     if (hello) CHECK(hello->snapshot.nodes.front().view.composing && !hello->snapshot.nodes.front().view.component.empty(), "composing: true, beside the rules' card");
 }
 
+TEST(aCardsEditsReadInOrderAndAreNoneWhenAbsent) {
+    Json highlight = Json::object().set("id", "e1").set("kind", "highlight").set("quote", "the room stretches").set("at", 61);
+    Json stroke = Json::object().set("id", "e2").set("kind", "stroke").set("points", Json::list({0.1, 0.2, 0.15, 0.25}));
+    auto withEdits = [](Json edits) {
+        Json j = raw(fixture("hello.json"));
+        Json snapshot = j["snapshot"];
+        Json nodes = snapshot["nodes"];
+        Json first = nodes[0];
+        Json list = Json::list();
+        list.push(first.set("edits", edits));
+        for (size_t i = 1; i < nodes.size(); i++) list.push(nodes[i]);
+        return parseInbound(j.set("snapshot", snapshot.set("nodes", list)).dump());
+    };
+    Inbound read = withEdits(Json::list({highlight, stroke}));
+    auto* hello = std::get_if<Hello>(&read);
+    CHECK(hello, "a node with edits reads: %s", kindOf(read).c_str());
+    if (hello) {
+        const std::vector<Edit>& edits = hello->snapshot.nodes.front().edits;
+        CHECK_EQ(edits.size(), size_t(2));
+        if (edits.size() == 2) {
+            CHECK(edits[0].kind == Edit::Kind::highlight && edits[0].id == "e1" && edits[0].quote == "the room stretches" && edits[0].at == 61, "the highlight");
+            CHECK(edits[1].kind == Edit::Kind::stroke && edits[1].points.size() == 2 && edits[1].points[1].second == 0.25f, "the line, two points");
+        }
+        CHECK(hello->snapshot.nodes.back().edits.empty(), "a node without edits has none");
+    }
+    Inbound odd = withEdits(Json::list({Json::object().set("id", "e3").set("kind", "stroke").set("points", Json::list({0.1, 0.2, 1.5, 0.2}))}));
+    auto* bad = std::get_if<Malformed>(&odd);
+    CHECK(bad && bad->why.find("edits[0].points") != std::string::npos, "a point off the card is malformed: %s", bad ? bad->why.c_str() : kindOf(odd).c_str());
+}
+
 TEST(theOtherMessagesRead) {
     for (const std::string& text : sessionTexts()) {
         Json r = raw(text);
@@ -371,6 +401,13 @@ std::vector<std::pair<Outbound, std::string>> outboundCases() {
                                           Command::deleteTree(t2)}),
          R"({"commands":[{"id":"n1","parent":"n2","type":"moveNode"},{"id":"n1","order":2.5,"parent":"n2","treeId":"t2","type":"moveNode"},)"
          R"({"id":"t1","title":"Zooms","type":"renameTree"},{"id":"t2","type":"deleteTree"}],"label":"Rearrange","t":"commands"})"},
+        {Outbound::commands("Highlight", {Command::addEdit(n1, Edit{.id = "e1", .kind = Edit::Kind::highlight, .quote = "the lens zooms in", .at = 30}),
+                                          Command::addEdit(n1, Edit{.id = "e2", .kind = Edit::Kind::highlight, .quote = "dread"})}),
+         R"({"commands":[{"edit":{"at":30,"id":"e1","kind":"highlight","quote":"the lens zooms in"},"id":"n1","type":"addEdit"},)"
+         R"({"edit":{"id":"e2","kind":"highlight","quote":"dread"},"id":"n1","type":"addEdit"}],"label":"Highlight","t":"commands"})"},
+        {Outbound::commands("Draw", {Command::addEdit(n1, Edit{.id = "e3", .kind = Edit::Kind::stroke, .points = {{0.1f, 0.25f}, {0.123456f, 1.2f}}})}),
+         R"({"commands":[{"edit":{"id":"e3","kind":"stroke","points":[0.1,0.25,0.1235,1]},"id":"n1","type":"addEdit"}],"label":"Draw","t":"commands"})"},
+        {Outbound::commands("Erase", {Command::removeEdit(n1, "e3")}), R"({"commands":[{"editId":"e3","id":"n1","type":"removeEdit"}],"label":"Erase","t":"commands"})"},
         {Outbound::organize("tidy this", Scope{.treeIds = {t1}}), R"({"request":"tidy this","scope":{"nodeIds":[],"treeIds":["t1"]},"t":"organize"})"},
         {Outbound::organize("tidy", Scope{.nodeIds = {n1}}, n1), R"({"focus":"n1","request":"tidy","scope":{"nodeIds":["n1"],"treeIds":[]},"t":"organize"})"},
         {Outbound::handoff(Scope{}), R"({"scope":{"nodeIds":[],"treeIds":[]},"t":"handoff"})"},

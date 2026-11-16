@@ -291,6 +291,7 @@ private:
     std::optional<int> holoLit;
     void drawHandGlow(double now, float dt);
     bool pointerHidden(int hand) override { return holoTouching && hand == holoHand; }
+    void aimed(int hand, const EntityRef& entity, Vec3 point) override { aims[size_t(hand & 1)] = Aim{entity, point}; }
     // NOTE(port): added for Quest. The tree follows a carrying fist with some weight (see `panBy`):
     // where the fist has asked it to be, and whether it is still on its way there.
     Vec2 panAsked = Vec2::zero();
@@ -318,9 +319,9 @@ private:
     std::optional<int> zoomedFor;
     std::optional<float> magnifyBase;
     struct Pick {
-        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink };
+        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink, pencil };
         Kind kind = Kind::background;
-        int index = 0;                      // card, ask, askMark, openLink: the card; speck: the piece; brief: which one; shelf: the cover's uid
+        int index = 0;                      // card, ask, askMark, openLink, pencil: the card; speck: the piece; brief: which one; shelf: the cover's uid
         int question = 0;                   // ask: which of the card's questions
 
         static Pick card(int id) { return {Kind::card, id, 0}; }
@@ -334,6 +335,7 @@ private:
         static Pick ask(int id, int question) { return {Kind::ask, id, question}; }
         static Pick askMark(int id) { return {Kind::askMark, id, 0}; }
         static Pick openLink(int id) { return {Kind::openLink, id, 0}; }
+        static Pick pencil(int id) { return {Kind::pencil, id, 0}; }
     };
     // (Keyed by the entity's address: ObjectIdentifier.)
     std::map<const Entity*, Pick> picks;
@@ -345,13 +347,12 @@ private:
         Vec3 start;
         bool cancelled;
         std::vector<int> riders;
-        // NOTE(port): added for Quest (core/cards). Under `-cards` a pinch on the open card scrolls it or, held
-        // still first, marks it: when it began, where it is now, whether the hold has armed a mark, and what
-        // the drag was claimed for. A claimed drag is never a tap.
-        enum class Claim { open, scroll, mark, spent };
+        // NOTE(port): added for Quest (core/cards). Under `-cards` a pinch on the open card scrolls it, or, held still
+        // first, asks for more like it, or with the edit pencil on highlights or draws on it: when it began, where it is
+        // now, and what it was claimed for. A claimed pinch is never a tap.
+        enum class Claim { open, scroll, highlight, draw, spent };
         double began = 0;
         Vec3 at = Vec3::zero();
-        bool armed = false;
         Claim claim = Claim::open;
         /// Scrolling: the offset, px, and the point on the face, m, where the scroll was claimed.
         float scrollFrom = 0;
@@ -773,23 +774,65 @@ private:
 
     void openLink(int nodeID);
 
-    // NOTE(port): added for Quest (core/cards). An open card's panel scrolls inside its frame, and a pinch held
-    // still arms a mark first (`-cards`).
+    // NOTE(port): added for Quest (core/cards). An open card's panel scrolls inside its frame (`-cards`).
     /// Scrolls an open card's panel to `offset` px from its top, held to its range, and moves what is shown on it.
     void scrollCard(CardView& c, float offset);
     void solid(const EntityRef& quad);
     /// When the card has finished growing and the layer has stopped gliding.
     double settledAt(const CardView& c) const;
-    /// Arms a mark at `a` on the open face when it lies on words or the picture: the word takes the mark's
-    /// stroke, the picture an outline. False, and nothing shown, anywhere else.
-    bool arm(CardView& c, Vec2 a);
-    void disarm(CardView& c);
-    /// Checks each frame whether the pinch on the open card has been held still long enough to arm.
+    /// Each frame: the ring round a pinch held still on the open card fills, and once it is full the hold counts: it asks
+    /// for more like the card, or with the pencil on begins a highlight on words or a line anywhere else.
     void holdPress();
+    /// How long a pinch is held still before it counts, s, once the card has settled.
+    static constexpr double holdFor = 0.4;
+
+    // NOTE(port): added for Quest (core/cards). The edit pencil on a service card (oceanmodel_edits.cpp).
+    /// The card the pencil was turned on for. It is on only while that card is open, and is let go once it closes.
+    std::optional<int> pencilFor;
+    bool pencilOn() const { return pencilFor && tree && tree->focus() == pencilFor; }
+    void togglePencil(int id);
+    /// Where each hand's ray rests, for the line under the pencil.
+    struct Aim {
+        EntityRef entity;
+        Vec3 point;
+    };
+    std::array<Aim, 2> aims;
+    std::optional<Vec2> aimByFlag;      // `-aimAt`: a point on the open face, in place of the hands
+    /// A highlight or a line being drawn: begun by a hold, carried by the drag, kept when the pinch lets go.
+    struct Drawing {
+        int card;
+        CardEdit edit;
+        int run = -1;                   // a highlight: which of the content's runs it is in
+        CGPoint from;                   // a highlight: where the hold was, px on the content
+    };
+    std::optional<Drawing> drawing;
+    std::optional<int> editsOpen;       // the open card the log last said the edits of
+    /// Each frame: the pencil and the line under it on the open card, and the pencil let go once its card closes.
+    void editFrame();
+    /// Builds the pencil, its line, the ring and the edit meshes on a service card as it opens.
+    void buildEdits(CardView& c);
+    /// The edits a card shows, as the service keeps them, drawn again when they change.
+    void setEdits(int id, const std::vector<CardEdit>& edits);
+    /// Draws a card's edits, and the one being drawn, where the content now stands in its window.
+    void drawEdits(CardView& c);
+    /// Lays the content's text out for finding words in it, once each time the card is drawn.
+    const std::vector<std::shared_ptr<TextBlock>>& contentRuns(CardView& c);
+    /// A point of the open face, m from its middle, as a point on the card's whole content, px, and whether it is in the window.
+    std::optional<CGPoint> onContent(const CardView& c, Vec2 at, bool inWindowOnly = true) const;
+    /// The run of words under a point of the content, or -1.
+    int runAt(CardView& c, CGPoint p);
+    /// The edit a short pinch at a point of the open face would take off.
+    std::optional<std::string> editAt(CardView& c, Vec2 at);
+    /// The pencil's long pinch: a highlight of the word under it, or a line from there.
+    void beginEdit(CardView& c, Vec2 at);
+    void moveEdit(CardView& c, Vec2 at);
+    /// Keeps it with the card, if it came to anything.
+    void endEdit(CardView& c);
+    void eraseEdit(CardView& c, const std::string& editId);
     /// A point of a card's open face in the world, for pinches made by flag.
     Vec3 facePoint(const CardView& c, Vec2 at) const;
-    /// Pinches the open card by flag, as a hand would: held `hold` s at `from`, then drawn to `to` over `over` s.
-    void pinchByFlag(Vec2 from, Vec2 to, double hold, double over);
+    /// Pinches the open card by flag, as a hand would: held `hold` s at the path's start, then drawn along it over `over` s.
+    void pinchByFlag(const std::vector<Vec2>& path, double hold, double over);
     bool cardGestures = false;
 
     void moveLayer(int direction);

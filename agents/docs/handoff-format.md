@@ -34,7 +34,7 @@ The Markdown file has these sections, in this order:
 
 1. **Title and brief.** One paragraph says what the file is and what the user was exploring. If the user gave an instruction for the receiving agent, the instruction follows as a block quote.
 2. **What to do next.** A prompt for the receiving agent.
-3. **Outline.** One `###` heading for each tree, then the tree as a nested list. A bold list entry is a node. The node line gives the title, the label, the kind, and the node id. The plain entries under a node are its fields: `why it is here`, `summary`, `url`, `file`, `text`, and `messages`. A field appears only when the node has it.
+3. **Outline.** One `###` heading for each tree, then the tree as a nested list. A bold list entry is a node. The node line gives the title, the label, the kind, and the node id. The plain entries under a node are its fields: `why it is here`, `summary`, `url`, `file`, `text`, `highlighted by the user`, and `messages`. A field appears only when the node has it. `highlighted by the user` lists the words the user highlighted on the card, each quoted on a line of its own, oldest first.
 4. **Connections.** The links between two nodes that are both in the handoff, each with its reason.
 5. **Open questions.** Three to six questions that the material raises. The file has no such section when the model call fails.
 6. **Sources.** Every URL in the handoff, listed once, with the title of the first node that uses the URL.
@@ -94,6 +94,7 @@ interface HandoffNode {
 	tags: string[];
 	data: Record<string, unknown>;
 	from: string;                 // how the item arrived, such as 'paste', 'web', or 'voice'
+	highlights: string[];         // the words the user highlighted on the card, oldest first; empty when none
 	children: HandoffNode[];
 }
 ```
