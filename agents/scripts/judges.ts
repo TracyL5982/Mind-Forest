@@ -24,6 +24,7 @@ const { values } = parseArgs({
     need: { type: 'string', default: 'something surprising to look at about this' },
     'wait-s': { type: 'string', default: '120' },
     keep: { type: 'boolean', default: false },
+    'settle-s': { type: 'string', default: '60' },
   },
 });
 const home = join(homedir(), '.mind-palace');
@@ -182,6 +183,8 @@ if (adminToken) {
   console.log(`service: overflows ${status.overflows}, spent today $${status.spentToday}, Meta tokens ${status.metaTokens}, spaces ${status.spaces}, errors ${errors.count}`);
   for (const line of errors.last) console.log(`  ${line}`);
   if (!values.keep) {
+    // A picture the Scout is still making lands after its run has ended, and would find its space gone.
+    await new Promise((r) => setTimeout(r, Number(values['settle-s']) * 1000));
     const deleted = await Promise.all(results.map(async (r) => (await admin(`/admin/spaces/${r.device}`, 'DELETE')).status));
     console.log(`deleted ${deleted.filter((s) => s === 200).length} of ${count} judges' spaces`);
   }
