@@ -96,7 +96,10 @@ private:
     };
     struct TurnOver {};
     struct ReplyStreams {};
-    using Command = std::variant<Done, AskToSpeak, ReplyEnded, ChimeStarted, ChimeEnded, Respell, SetMode, TurnOver, ReplyStreams>;
+    struct MomoThinks {
+        bool thinking = false;
+    };
+    using Command = std::variant<Done, AskToSpeak, ReplyEnded, ChimeStarted, ChimeEnded, Respell, SetMode, TurnOver, ReplyStreams, MomoThinks>;
     /// The listener and what crosses to it: the sound thread hears; the frame thread sends commands and takes events.
     struct Ears;
     struct Transcript {
@@ -252,6 +255,7 @@ private:
     double busyLogged = 0;
     double clock = 0;               // the last frame's
     double lineAt = -1;             // when the reply that has not begun to sound came, or -1
+    bool thinkingTold = false;      // what the listener was last told of Momo thinking
 
     /// The user's turn, as Momo's presence shows it: from the name, or the first words in an open conversation, to the
     /// first sound of Momo's answer. Outside a turn the presence is read from whether Momo's voice sounds and from the

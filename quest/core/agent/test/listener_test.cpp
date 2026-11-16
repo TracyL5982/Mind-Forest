@@ -355,6 +355,26 @@ TEST(listenerClosesEightSecondsAfterMomoStopsTalking) {
     }
 }
 
+TEST(listenerKeepsTheConversationOpenWhileMomoThinks) {
+    Listener listener(spotterFor("momo"));
+    listener.setMode(Listener::Mode::stream);
+    Sound asked;
+    asked.quiet(1).say("command").quiet(1);
+    asked.samples.resize((asked.size() / Listener::pieceLength + 1) * Listener::pieceLength, 0.f);
+    hearAll(listener, asked);
+    listener.turnOver();
+    listener.momoThinks(true);
+    CHECK_EQ(only<Listener::Closed>(hearAll(listener, Sound().quiet(12))).size(), size_t(0));
+    CHECK(listener.state() == Listener::State::open, "open 12 s on while Momo thinks");
+    listener.momoThinks(false);
+    auto closed = only<Listener::Closed>(hearAll(listener, Sound().quiet(10)));
+    CHECK_EQ(closed.size(), size_t(1));
+    if (!closed.empty()) {
+        double at = double(closed[0].second) / second;
+        CHECK(at >= 7.9 && at <= 8.2, "closed %.2f s after Momo stopped thinking", at);
+    }
+}
+
 TEST(listenerBeginsATurnWhenTheUserTalksOverMomo) {
     Listener listener(spotterFor("momo"));
     listener.setMode(Listener::Mode::stream);

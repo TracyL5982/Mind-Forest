@@ -81,6 +81,7 @@ private:
                            [&](SetMode& m) { listener->setMode(m.mode); },
                            [&](TurnOver&) { listener->turnOver(); },
                            [&](ReplyStreams&) { listener->replyStreams(); },
+                           [&](MomoThinks& m) { listener->momoThinks(m.thinking); },
                        },
                        c);
         }
@@ -653,6 +654,13 @@ void Voice::frame(double now) {
     }
     if (sounding || sound) lineAt = -1;
     bool open = state() == Listener::State::open, speaks = sounding || sound;
+    // Momo thinking (at most `longestThought`), or a reply come and not yet sounding (at most `lineWait`), keeps the
+    // conversation open as its voice does.
+    bool thinks = !speaks && (awaiting() || lineComing());
+    if (ears && thinks != thinkingTold) {
+        thinkingTold = thinks;
+        send(MomoThinks{thinks});
+    }
     if (std::holds_alternative<Idle>(turn) && open && !speaks) turnTo(Open{});
     else if (std::holds_alternative<Open>(turn) && (!open || speaks)) turnTo(Idle{});
     show();

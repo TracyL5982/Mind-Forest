@@ -86,6 +86,9 @@ public:
     void replyStreams();
     /// The reply ended, or could not play.
     void replyEnded();
+    /// Momo thinks, or its reply is on its way, or neither any more. While it does, the open conversation stays open as
+    /// if Momo were talking, so the user may still talk without the name.
+    void momoThinks(bool thinking);
     /// The chime that says the name was heard started, or ended. Sound is still heard while it plays and for 300 ms
     /// after, but is not taken for words.
     void chimeStarted();
@@ -142,6 +145,7 @@ private:
     std::variant<Between, Recording, Open, Streaming, Working> phase = Between{};
     Mode mode = Mode::record;
     Own reply;
+    bool thinking = false;          // Momo thinks, or its reply is on its way
     Own chiming;
     bool replyHeld = false;         // a reply asked to play while the user was recorded
     /// Whether it was spotting after the last change, so a fresh stream starts each time spotting starts again.

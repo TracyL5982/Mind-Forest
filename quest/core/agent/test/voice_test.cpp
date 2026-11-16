@@ -739,6 +739,23 @@ TEST(liveReadyLeavesSayingToTheService) {
     CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(1));
 }
 
+TEST(liveThinkingKeepsTheConversationOpen) {
+    Talking t(true);
+    t.askLive();
+    t.frame(0.5);
+    CHECK(t.shows() == Presence::State::thinking, "thinking");
+    t.hear(Sound().quiet(12));
+    CHECK(t.voice.state() == Listener::State::open, "the conversation stays open while Momo thinks, 12 s on");
+    t.hear(Sound().say("more").quiet(1));
+    CHECK_EQ(t.liveSent("start").size(), size_t(2));
+    t.serviceSays(R"({"t":"over","turn":2})");
+    t.frame(0.5);
+    t.serviceSays(R"({"t":"quiet","turn":2})");
+    CHECK(t.shows() == Presence::State::open, "no answer is coming");
+    t.hear(Sound().quiet(8.5));
+    CHECK(t.voice.state() == Listener::State::waiting, "then the 8 s count runs, and the conversation closes");
+}
+
 TEST(liveListensAgainOnceAReplyPlaysOutUnderAWordlessOne) {
     Talking t(true);
     t.askLive();

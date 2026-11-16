@@ -166,7 +166,8 @@ void Listener::wake(const Spotter::Found& found, std::vector<Event>& events) {
     events.push_back(Woke{found.keyword});
 }
 
-/// Nothing goes out until a turn begins. Momo's voice, playing or fading, counts as someone talking.
+/// Nothing goes out until a turn begins. Momo's voice, playing or fading, counts as someone talking, and so does Momo
+/// thinking or its reply being on its way.
 void Listener::open(const Piece& piece, std::vector<Event>& events) {
     Open& o = std::get<Open>(phase);
     float quietest = quietestHeard();
@@ -179,7 +180,7 @@ void Listener::open(const Piece& piece, std::vector<Event>& events) {
         begin(std::move(o.held), quietest, events);
         return;
     }
-    o.quiet = words || reply.kind != Own::Kind::none ? 0 : o.quiet + 1;
+    o.quiet = words || thinking || reply.kind != Own::Kind::none ? 0 : o.quiet + 1;
     if (o.quiet < conversationQuiet) return;
     phase = Between{};
     settle();
@@ -286,6 +287,8 @@ void Listener::replyEnded() {
     reply = Own{Own::Kind::echo, 0};
     settle();
 }
+
+void Listener::momoThinks(bool t) { thinking = t; }
 
 void Listener::chimeStarted() { chiming = Own{Own::Kind::playing, 0}; }
 
