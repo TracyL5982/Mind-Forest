@@ -33,8 +33,9 @@ kill_timeout = "30s"
   MIND_PALACE_FILES_MB_PER_DEVICE = "60"
   # The user's Instagram accounts and the library read from them, copied from the Mac by deploy/instagram.sh, never in the image.
   MIND_PALACE_INSTAGRAM_LIST = "/data/instagram-following.md"
-  # Meta's tokens for the whole service in a day, a guard against a runaway loop, counted again at midnight Pacific with the shares.
-  MIND_PALACE_TOKEN_BUDGET = "60000000"
+  # Meta's tokens for the whole service in a day, a guard against a runaway loop, counted again at midnight Pacific with the shares:
+  # 20 headsets x their 9M share, so headsets within their shares never stop the others. Meta's tokens cost $0.
+  MIND_PALACE_TOKEN_BUDGET = "180000000"
 
 [[mounts]]
   source = "mind_palace_data"

@@ -26,7 +26,7 @@ export interface Limits {
  * them: 30 Scout runs at 120,000 tokens, with typical turns, organizing, questions and drops besides (4.5M), and under a quarter of
  * fly.toml's 60M token budget. The working is in reports/ws37.md of the judging program.
  */
-export const DEFAULT_LIMITS: Limits = { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: null, deviceDollars: 23, deviceTokens: 9_000_000, tokensPerDay: 60_000_000 };
+export const DEFAULT_LIMITS: Limits = { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: null, deviceDollars: 23, deviceTokens: 9_000_000, tokensPerDay: 180_000_000 };
 
 /** The device whose work this is, for the model's calls, which the whole service shares: its tokens and spend are counted to it. */
 export const forDevice = new AsyncLocalStorage<string>();
