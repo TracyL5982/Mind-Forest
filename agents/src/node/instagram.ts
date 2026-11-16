@@ -541,8 +541,11 @@ export function said({ answer, usage, ms, posts, fetched, bytes }: Outcome): str
   return `${answer.kind === 'unreadable' ? 'cannot be read' : 'failed, tried again in an hour'} (${answer.why}), ${tail}`;
 }
 
-/** The library, and its reader unless reading is off. Null without a list, which leaves Instagram out of the Scout's sources. */
-export function openInstagram(o: { connection: Connection; list: string; dir: string; assets?: Assets; read: boolean; log: (line: string) => void }): { library: InstagramLibrary; reader?: InstagramReader } | null {
+/**
+ * The library, and its reader when reading is on and there is a connection. Without one, the library is searched as it is kept and
+ * Instagram is never called. Null without a list, which leaves Instagram out of the Scout's sources.
+ */
+export function openInstagram(o: { connection?: Connection; list: string; dir: string; assets?: Assets; read: boolean; log: (line: string) => void }): { library: InstagramLibrary; reader?: InstagramReader } | null {
   let listed: Listed;
   try {
     listed = parseList(readFileSync(o.list, 'utf8'));
@@ -555,8 +558,9 @@ export function openInstagram(o: { connection: Connection; list: string; dir: st
     return null;
   }
   const library = new InstagramLibrary(o.dir, listed, o.assets);
-  const reader = o.read ? new InstagramReader({ library, connection: o.connection, log: o.log }) : undefined;
+  const reader = o.read && o.connection ? new InstagramReader({ library, connection: o.connection, log: o.log }) : undefined;
   reader?.start();
-  o.log(`[instagram] ${listed.accounts.length} accounts in ${listed.categories.length} categories, ${library.size()} posts kept${reader ? ', reading in the background' : ', reading off'}`);
+  const reading = reader ? 'reading in the background' : o.read ? 'reading asked for but there is no META_IG_TOKEN and META_IG_USER_ID, so nothing is read' : 'reading off';
+  o.log(`[instagram] ${listed.accounts.length} accounts in ${listed.categories.length} categories, ${library.size()} posts kept, ${reading}`);
   return { library, ...(reader ? { reader } : {}) };
 }

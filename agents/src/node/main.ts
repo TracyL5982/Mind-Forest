@@ -130,6 +130,8 @@ try {
   console.error(err instanceof Error ? err.message : String(err));
   process.exit(1);
 }
+// The accounts the user chose, outside the repository since the list names them.
+const instagramList = env.MIND_PALACE_INSTAGRAM_LIST || join(homedir(), '.mind-palace', 'instagram-following.md');
 
 const shared = {
   clientDir: join(root, 'client'),
@@ -151,15 +153,10 @@ const shared = {
         }
       : undefined,
   transcribe: !fake && env.OPENAI_API_KEY ? openaiTranscribe(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_HEARING_MODEL }) : undefined,
-  // The accounts the user chose, outside the repository since the list names them. MIND_PALACE_INSTAGRAM_READ=off searches what is kept without reading Instagram.
+  // MIND_PALACE_INSTAGRAM_READ=off searches what is kept without reading Instagram.
   instagram:
     env.META_IG_TOKEN && env.META_IG_USER_ID
-      ? {
-          token: env.META_IG_TOKEN,
-          userId: env.META_IG_USER_ID,
-          list: env.MIND_PALACE_INSTAGRAM_LIST || join(homedir(), '.mind-palace', 'instagram-following.md'),
-          read: env.MIND_PALACE_INSTAGRAM_READ !== 'off',
-        }
+      ? { token: env.META_IG_TOKEN, userId: env.META_IG_USER_ID, list: instagramList, read: env.MIND_PALACE_INSTAGRAM_READ !== 'off' }
       : undefined,
   maps,
 };
@@ -179,13 +176,10 @@ if (ledger) {
           return new Uint8Array(await new Response(await speak(text, AbortSignal.timeout(20_000))).arrayBuffer());
         }
       : undefined;
-  // One library of the user's Instagram accounts for every space, on the volume. Its pictures are made small with macOS's `sips`,
-  // which a Linux server lacks, so the server reads Instagram only with MIND_PALACE_INSTAGRAM_READ=on; deploy/instagram.sh copies
-  // the Mac's library there instead.
-  const ig = shared.instagram;
-  const following = ig?.list
-    ? (openInstagram({ connection: ig, list: ig.list, dir: join(dataDir, 'instagram'), read: env.MIND_PALACE_INSTAGRAM_READ === 'on', log }) ?? undefined)
-    : undefined;
+  // One library of the user's Instagram accounts for every space, on the volume, opened from the list alone: the server needs no
+  // Instagram account. Its pictures are made small with macOS's `sips`, which a Linux server lacks, so deploy/instagram.sh copies the
+  // Mac's library there, and the server reads Instagram only with MIND_PALACE_INSTAGRAM_READ=on and an account.
+  const following = openInstagram({ connection: shared.instagram, list: instagramList, dir: join(dataDir, 'instagram'), read: env.MIND_PALACE_INSTAGRAM_READ === 'on', log }) ?? undefined;
   const service = await startHosted({
     port,
     host,

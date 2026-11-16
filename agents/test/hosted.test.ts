@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
-import type { JsonRequest, ModelClient, Priority, Tools } from '../src/core/ports.ts';
+import type { Found, JsonRequest, ModelClient, Priority, Tools } from '../src/core/ports.ts';
+import type { Roles } from '../src/core/roles/types.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { PICTURE_DOLLARS, spaceOptions, startHosted, telegramAlert, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
@@ -17,7 +18,7 @@ import { chargedPictures, startServer } from '../src/node/server.ts';
 import { makeSources } from '../src/node/sources.ts';
 import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 import { MemoryAssets } from './kit.ts';
-import { followingIn, InstagramLibrary, parseList } from '../src/node/instagram.ts';
+import { followingIn, InstagramLibrary, openInstagram, parseList } from '../src/node/instagram.ts';
 
 interface Msg {
   t: string;
@@ -615,4 +616,61 @@ test("a judge's space gets none of the user's own accounts: no Instagram token o
   assert.ok(!given.includes('ig-token') && !given.includes('17841400000'), 'the token and user id are nowhere in what the space gets');
   assert.equal(options.dataDir, join('/data', 'spaces', A));
   assert.equal(options.clientDir, join('/data', 'no-web-page'));
+});
+
+test('with no Instagram account on the server, the library opens from the list alone, never calls Instagram, and a space finds its posts and pictures', { timeout: 20000 }, async () => {
+  const listFile = join(mkdtempSync(join(tmpdir(), 'mp-list-')), 'following.md');
+  writeFileSync(listFile, '# Accounts\n\n## Art (1)\n\n### Prints (1)\n\n- @ink_and_paper — Ink and Paper — Illustration studio — https://www.instagram.com/ink_and_paper/\n');
+  const libDir = mkdtempSync(join(tmpdir(), 'mp-library-'));
+  const copied = new InstagramLibrary(libDir, parseList(readFileSync(listFile, 'utf8')));
+  copied.keep(copied.accounts[0]!, { state: 'read', at: new Date().toISOString(), posts: [{ id: 'p1', caption: 'A risograph print of the harbour', type: 'image', at: '2026-11-14T10:00:00Z', url: 'https://www.instagram.com/p/p1/' }] });
+  writeFileSync(copied.picture('p1'), new Uint8Array([0xff, 0xd8, 0xff]));
+
+  const realFetch = globalThis.fetch;
+  const instagramCalls: string[] = [];
+  globalThis.fetch = (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url.includes('facebook.com') || url.includes('instagram.com')) instagramCalls.push(url);
+    return realFetch(input, init);
+  };
+  let hosted: Hosted | undefined;
+  let ws: WebSocket | undefined;
+  try {
+    const lines: string[] = [];
+    const following = openInstagram({ list: listFile, dir: libDir, read: true, log: (line) => lines.push(line) });
+    assert.ok(following, 'the library opens with no token or user id');
+    assert.equal(following.reader, undefined, 'and has no reader, though reading was asked for');
+    assert.equal(lines.length, 1);
+    assert.match(lines[0]!, /1 posts kept, reading asked for but there is no META_IG_TOKEN and META_IG_USER_ID, so nothing is read/);
+
+    let found: Found | undefined;
+    let picture: string | undefined;
+    const roles: Roles = {
+      ...fakeRoles,
+      async scout(ctx, { need }) {
+        [found] = await ctx.tools.sources.search('instagram', need ?? '');
+        picture = found?.asset && ctx.assets.url(found.asset);
+        return [];
+      },
+    };
+    ({ hosted } = await host({}, { shared: { clientDir: '', model: new FakeModel(), roles }, following: { library: following.library } }));
+    const c = await connect(hosted, `${KEY}.${A}`);
+    ws = c.ws;
+    const root = treesOf(await c.until((m) => m.t === 'hello'))[0]!.rootId;
+    c.ws.send(JSON.stringify({ t: 'ask', nodeId: root, need: 'risograph harbour' }));
+    const scouted = await c.until((m) => m.t === 'activity' && (m.activity as { role: string; state: string }).role === 'scout' && (m.activity as { state: string }).state !== 'start');
+    assert.equal((scouted.activity as { state: string }).state, 'done');
+    assert.equal(found?.url, 'https://www.instagram.com/p/p1/', "the space found the account's post");
+    const served = new URL(picture!, hosted.url);
+    served.searchParams.set('token', `${KEY}.${A}`);
+    const got = await fetch(served);
+    assert.equal(got.status, 200, "its picture is in the space's own assets");
+    assert.deepEqual([...new Uint8Array(await got.arrayBuffer())], [0xff, 0xd8, 0xff]);
+    assert.deepEqual((await admin(hosted)).instagram, { posts: 1, reading: false });
+    assert.deepEqual(instagramCalls, [], 'Instagram was never called');
+  } finally {
+    ws?.close();
+    await hosted?.close();
+    globalThis.fetch = realFetch;
+  }
 });
