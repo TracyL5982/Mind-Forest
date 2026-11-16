@@ -3,7 +3,8 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } fro
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import type { IncomingMessage } from 'node:http';
+import { createServer, type IncomingMessage } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { PassThrough } from 'node:stream';
 import { WebSocket } from 'ws';
 import type { Found, JsonRequest, ModelClient, Priority, Tools } from '../src/core/ports.ts';
@@ -834,5 +835,38 @@ test('with the volume nearly full, nothing new is written and no new space is ma
   } finally {
     ws?.close();
     await hosted.close();
+  }
+});
+
+test("a hosted space reads a page or picture only from a public address, never this machine's", { timeout: 20000 }, async () => {
+  const asked: string[] = [];
+  const server = createServer((req, res) => void (asked.push(req.url ?? ''), res.writeHead(200, { 'content-type': 'text/html' }).end('<title>Inside</title>')));
+  await new Promise<void>((ready) => server.listen(0, '127.0.0.1', ready));
+  const inside = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  let read: unknown = 'not yet';
+  let picture: unknown = 'not yet';
+  const roles: Roles = {
+    ...fakeRoles,
+    async scout(ctx) {
+      read = await ctx.tools.web.read(`${inside}/page`);
+      picture = await ctx.tools.web.picture(`${inside}/picture.jpg`);
+      return [];
+    },
+  };
+  const { hosted } = await host({}, { shared: { clientDir: '', model: new FakeModel(), roles } });
+  let ws: WebSocket | undefined;
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    ws = c.ws;
+    const root = treesOf(await c.until((m) => m.t === 'hello'))[0]!.rootId;
+    c.ws.send(JSON.stringify({ t: 'ask', nodeId: root, need: 'the page' }));
+    await holds(() => read !== 'not yet' && picture !== 'not yet');
+    assert.equal(read, null);
+    assert.equal(picture, null);
+    assert.deepEqual(asked, [], 'the service never asked this machine');
+  } finally {
+    ws?.close();
+    await hosted.close();
+    server.close();
   }
 });

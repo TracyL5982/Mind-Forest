@@ -6,6 +6,7 @@ import type { Duplex } from 'node:stream';
 import { PROTOCOL_VERSION } from '../protocol.ts';
 import { openSpace, type Meter, type ServerOptions, type Space } from '../server.ts';
 import type { InstagramLibrary, InstagramReader } from '../instagram.ts';
+import { publicFetch } from '../public-fetch.ts';
 import { BOT_API } from '../telegram.ts';
 import { LINES, type Ledger } from './ledger.ts';
 
@@ -29,6 +30,8 @@ export const SET_BYTES = 2_500_000;
 
 /** Below this much free on the volume, which every space and the ledger share, nothing new is written: no upload, change or space. */
 export const MIN_FREE_BYTES = 300e6;
+/** A space fetches a page or a picture from an address it was given only on the public internet: never this machine or Fly's network. */
+const PUBLIC_ONLY = publicFetch();
 const VOLUME_FULL = 'The service is nearly out of room, so nothing more can be added for now. Everything here still opens.';
 
 export interface HostedOptions {
@@ -337,6 +340,7 @@ export function spaceOptions(opts: Pick<HostedOptions, 'shared' | 'dataDir' | 'a
     library: opts.following?.library,
     storeLimit: opts.storeLimit ?? 20e6,
     setBytes: SET_BYTES,
+    fetchPage: PUBLIC_ONLY,
     clientDir: join(opts.dataDir, 'no-web-page'),
     dataDir: join(opts.dataDir, 'spaces', device),
     token: `${opts.appKey}.${device}`,

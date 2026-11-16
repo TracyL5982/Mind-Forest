@@ -7,7 +7,7 @@ const Scene = z.object({ focus: Id.optional(), selection: z.array(Id).default([]
 const Scope = z.object({ treeIds: z.array(Id).default([]), nodeIds: z.array(Id).default([]) });
 const RawDump = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('text'), text: z.string().min(1), name: z.string().optional() }),
-  z.object({ kind: z.literal('link'), url: z.string().url() }),
+  z.object({ kind: z.literal('link'), url: z.string().url().refine((url) => /^https?:$/i.test(new URL(url).protocol), 'a link is an http or https address') }),
   z.object({ kind: z.literal('asset'), asset: z.string(), mime: z.string(), name: z.string().optional(), sound: Sound.optional() }),
 ]);
 

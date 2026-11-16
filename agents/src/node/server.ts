@@ -42,6 +42,8 @@ export interface ServerOptions {
   library?: InstagramLibrary;
   /** Hosted mode: past this many bytes of mindstorm and handoffs on disk, every message that writes is refused. */
   storeLimit?: number;
+  /** How a page or a picture named by a dump, a search or the model is fetched (`ToolOptions.fetchPage`). */
+  fetchPage?: typeof fetch;
   /** Hosted mode: why the volume takes no more writes now, or null. Reads go on. */
   volumeFull?: () => string | null;
   /** Hosted mode: most bytes one change may store (`MindstormOptions.setBytes`), so a message passes the store limit by at most this. */
@@ -227,7 +229,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     mind,
     roles: meter ? metered(opts.roles, meter) : opts.roles,
     model: opts.model,
-    tools: chargedPictures(makeTools({ model: opts.model, assets, instagram: opts.instagram, following, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)), log: opts.log }), meter),
+    tools: chargedPictures(makeTools({ model: opts.model, assets, instagram: opts.instagram, following, fetchPage: opts.fetchPage, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)), log: opts.log }), meter),
     assets,
     store,
     settings,

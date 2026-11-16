@@ -12,6 +12,8 @@ export interface ToolOptions {
   /** Keys for sources that need one, by the name they have in the env file. A source without its key is left out. */
   keys?: Record<string, string | undefined>;
   fetch?: typeof fetch;
+  /** How a page or a picture named by a dump, a search or the model is fetched; `fetch` unless given. Hosted mode reaches only public addresses. */
+  fetchPage?: typeof fetch;
   /** Given only when maps are on. */
   geocoder?: Geocoder;
   /** Told what a priced call cost, in dollars, for the hosted service's daily cap. */
@@ -62,16 +64,17 @@ const CodeReply = z.object({ title: z.string(), language: z.string(), source: z.
 
 export function makeTools(opts: ToolOptions): Tools {
   const send = opts.fetch ?? fetch.bind(globalThis);
+  const page = opts.fetchPage ?? send;
   return {
     web: {
       search: (query, max) => opts.model.search({ role: 'tool.web', query, max }),
-      read: (url) => readPage(send, url),
+      read: (url) => readPage(page, url),
       picture: async (url) => {
-        const got = await fetchPicture(send, url);
+        const got = await fetchPicture(page, url);
         return got ? { asset: (await opts.assets.put(got.bytes, got.mime, 'found')).id } : null;
       },
       async look(url) {
-        const got = await fetchPicture(send, url);
+        const got = await fetchPicture(page, url);
         return got ? `data:${got.mime};base64,${Buffer.from(got.bytes).toString('base64')}` : null;
       },
       async videos(query) {
@@ -81,7 +84,7 @@ export function makeTools(opts: ToolOptions): Tools {
         return (await Promise.all(hits.map((hit) => playable(send, hit.url)))).flatMap((v) => v ?? []);
       },
     },
-    sources: makeSources({ send, model: opts.model, read: (url) => readPage(send, url), keys: opts.keys, spent: opts.spent, following: opts.following }),
+    sources: makeSources({ send, model: opts.model, read: (url) => readPage(page, url), keys: opts.keys, spent: opts.spent, following: opts.following }),
     instagram: {
       async recent(limit = 12): Promise<SocialPost[]> {
         if (!opts.instagram) return [];
