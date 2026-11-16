@@ -45,8 +45,6 @@ struct Sheet {
     Words words;
     /// The tallest a picture may be set, px: what one page holds.
     float most = INFINITY;
-    /// The furthest down the parts can reach with the whole card in its first view, px: past it, the card scrolls.
-    float fits = INFINITY;
     float y = 0;
     bool first = true;
     /// Every string the card has written so far, for what the item's text still has to say.
@@ -81,7 +79,8 @@ struct Kind {
     /// The chip line's margin each side, and its distance from the bottom, px.
     int chipInset = 15, chipBottom = 12;
     /// A card the app makes itself, such as a lesson of the welcome tree: its opened card's badge is its
-    /// `props.badge`, and it says nowhere that it came from, since it came from nowhere.
+    /// `props.badge`, it says nowhere that it came from, since it came from nowhere, and its opened card is as
+    /// tall as everything on it (`cards::ocean`), so it never scrolls.
     bool premade = false;
 };
 

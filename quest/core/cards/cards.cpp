@@ -205,7 +205,6 @@ Laid layOut(const Entry& e, float k, float viewTall, float pictureTall) {
     // to show one, than a view.
     float under = viewTall - INSET_Y - sheet.y - Sheet::gap;
     sheet.most = std::min(pictureTall, under >= LEAST ? under : viewTall - 2 * INSET_Y);
-    sheet.fits = viewTall - INSET_Y - FOOT;
     // The item's own lines over its structure, in order, and the heads row over a structure of two columns.
     for (const Over& line : oversOf(e.view.props)) {
         sheet.paragraph(line.words, line.head ? setting::bodyHead : setting::body, palette::ink);

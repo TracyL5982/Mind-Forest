@@ -57,6 +57,11 @@ const Shown* shownOf(const std::string& noteID) {
                                                  : Vec2{Metrics::openNoteWidth, OPEN_TALL * openScale / Art::ppm};
     s.viewTall = s.open.y * Art::ppm / openScale;
     if (kind->opens == Kind::Opens::picture) s.pictureTall = Catalog::pictureSize(aspect).y * Art::ppm / openScale;
+    // A card the app makes itself opens as tall as its whole panel: laid out in no frame at all, it runs as far as it goes.
+    if (std::optional<Opened> whole = kind->premade ? cards::opened(noteID, openScale, 0, s.pictureTall) : std::nullopt) {
+        s.viewTall = whole->contentTall / openScale;
+        s.open = {Metrics::openNoteWidth, whole->contentTall / Art::ppm};
+    }
     return &s;
 }
 

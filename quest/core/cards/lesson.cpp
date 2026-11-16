@@ -1,10 +1,9 @@
 // A lesson of the welcome tree (core/ocean/oceanmodel_guide.cpp): a card the app makes itself, in the look of
 // the others. Its stage is where the guide plays the lesson's gesture with the headset's hand drawn in lines:
-// small, the top of the face, with the lesson's number on it; opened, the room between the title and the one
-// line that says what to do. The marking lesson's stage is the picture to mark.
-//   props: `step`, its number; `badge`, what its opened card is ("Step 2 of 7"); `aspect`, the stage's width
-//   over its height; and `src`, a picture in place of the stage.
-#include <algorithm>
+// small, the top of the face, with the lesson's number on it; opened, the room between the title and the words
+// that say what to do. The marking lesson's stage is the picture to mark.
+//   props: `step`, its number; `badge`, what its opened card is ("Step 2 of 7"); `tall`, the stage's height, px;
+//   or `src`, a picture in place of the stage, and `aspect`, its width over its height.
 #include <cmath>
 
 #include "face.h"
@@ -17,16 +16,11 @@ namespace {
 /// The lesson's number on the small face's stage: as large for it as on the stage the guide drew before.
 constexpr Setting figure{50, 50, Font::Weight::semibold};
 
-float stageAspect(const Json& props) {
-    double given = number(props["aspect"]);
-    return given > 0 ? float(given) : 1.35f;
-}
-
 /// The stage to the face's edges with the number in its middle, then the title on a plate under it.
 void lay(Col& c, const Item& item, const Json& props) {
     Titled plate = titled(item.titleOrUntitled(), face::COL, Measure::title);
     float under = 19 + float(plate.lines * face::TITLE);
-    float tall = std::min(float(face::H) - 2 - under, std::round(float(face::W) / stageAspect(props)));
+    float tall = float(face::H) - 2 - under;
     if (c.pen) {
         const Pen& pen = *c.pen;
         pen.ctx.setFillColor(palette::media);
@@ -48,13 +42,13 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
     drawFace(pen, look, item, [&](Col& c) { lay(c, item, props); });
 }
 
-/// The stage as wide as the sheet and as tall as the first view leaves it over the line that says what to do:
-/// the card is whole in view and never scrolls.
+/// The stage as wide as the sheet, then the words that say what to do. The opened card is as tall as both
+/// (`Kind::premade`), so the stage never gives way and nothing scrolls.
 void detail(Sheet& sheet, const Item& item, const Json& props) {
-    std::string line = item.summary, src = text(props["src"]);
+    std::string src = text(props["src"]);
+    double given = number(props["tall"]), aspect = number(props["aspect"]);
     float top = sheet.y + (sheet.first ? 0 : Sheet::gap);
-    float under = line.empty() ? 0 : Sheet::gap + heightOf(line, Sheet::width, 0, setting::body, sheet.k);
-    float tall = std::min(Sheet::width / stageAspect(props), sheet.fits - under - top);
+    float tall = given > 0 ? float(given) : Sheet::width / float(aspect > 0 ? aspect : 1.35);
     sheet.picture = CGRect{Sheet::left * sheet.k, top * sheet.k, Sheet::width * sheet.k, tall * sheet.k};
     Words words = item.words;
     sheet.part(tall, [src, tall, words](const Pen& pen, float y) {
@@ -64,7 +58,7 @@ void detail(Sheet& sheet, const Item& item, const Json& props) {
         if (!src.empty()) pen.picture(src, box, false, words);
         pen.mask(box, 14 * pen.k, palette::glass);
     });
-    sheet.paragraph(line, setting::body, palette::ink);
+    sheet.paragraph(item.summary, setting::body, palette::ink);
 }
 
 std::vector<std::string> pictures(const Json& props) { return {text(props["src"])}; }

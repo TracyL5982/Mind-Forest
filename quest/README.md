@@ -397,7 +397,9 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
     then a dashed round on the face for marking; the small tree, with the way down to it; Put away.
   - **The open lesson plays its gesture on its own face.** Opened, a lesson's card is its step as the
     badge ("Step 3 of 7"), the lesson's name, the stage where the hand plays the gesture (for marking, the
-    picture to mark), and one line that says what to do. It never scrolls: the stage gives way to the line.
+    picture to mark), and what to do in the lesson's own words. The hand is at its full size (`stage` in
+    the lessons' table), in the middle of a stage 35 cm tall (`lessonStageTall`) that holds all it draws;
+    the card is as tall as that and the words, taller than the library's cards, and never scrolls.
     Closed, every lesson is its number on a plain ground over its name, always on the right of the open one.
   - **Beats.** Pulling is two (pull; then "Now push it away to come back", with pull and push playing on
     the layer pulled back to). Marking is four (go in; take up the pen; draw; come back out), the last
