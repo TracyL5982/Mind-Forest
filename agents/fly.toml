@@ -14,7 +14,11 @@ kill_timeout = "30s"
   MIND_PALACE_LIMIT_WEB_ANSWERS = "30"
   MIND_PALACE_CAP_DOLLARS = "30"
   MIND_PALACE_IDLE_MINUTES = "20"
-  MIND_PALACE_MAX_DEVICES = "40"
+  MIND_PALACE_MAX_DEVICES = "60"
+  MIND_PALACE_NEW_DEVICES_PER_HOUR = "30"
+  # One file, and what one headset's files may come to: 60 headsets at 40 MB stay inside the 3 GB volume.
+  MIND_PALACE_UPLOAD_MB = "25"
+  MIND_PALACE_UPLOAD_MB_PER_DEVICE = "40"
   # Per process, a guard against a runaway loop; the day's spend cap is the real limit. The Mac's default of 5M would run out in a day.
   MIND_PALACE_TOKEN_BUDGET = "60000000"
 

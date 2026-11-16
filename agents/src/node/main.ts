@@ -13,7 +13,7 @@ import { openaiWebAnswer } from './web-answer.ts';
 import { startHosted, telegramAlert } from './hosted/hosted.ts';
 import { DEFAULT_LIMITS, Ledger } from './hosted/ledger.ts';
 import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareCost } from './hosted/overflow.ts';
-import { openaiSearch } from './search-openai.ts';
+import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -87,10 +87,8 @@ if (fake) {
       meta,
       spare,
       search: async (req) => {
-        const hits = await openaiSearch(fetch, { apiKey, model: SPARE_QUICK_MODEL }, req);
-        // One search call and a short list at gpt-5.4-mini's prices: an estimate, as web-answer.ts prices its own search.
-        ledger?.spend(0.012);
-        return hits;
+        ledger?.spend(SEARCH_DOLLARS);
+        return openaiSearch(fetch, { apiKey, model: SPARE_QUICK_MODEL }, req);
       },
       overflowed: (role, kind) => {
         ledger?.overflowed();
@@ -175,7 +173,9 @@ if (ledger) {
     ledger,
     shared,
     idleMs: number('MIND_PALACE_IDLE_MINUTES', 20) * 60_000,
-    maxDevices: number('MIND_PALACE_MAX_DEVICES', 40),
+    maxDevices: number('MIND_PALACE_MAX_DEVICES', 60),
+    newPerHour: number('MIND_PALACE_NEW_DEVICES_PER_HOUR', 30),
+    uploads: { file: number('MIND_PALACE_UPLOAD_MB', 25) * 1e6, total: number('MIND_PALACE_UPLOAD_MB_PER_DEVICE', 40) * 1e6 },
     record,
     log,
   });

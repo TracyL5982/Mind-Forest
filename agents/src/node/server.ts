@@ -16,7 +16,7 @@ import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '.
 import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
-import type { Speak, Transcribe } from './speech-openai.ts';
+import { HEARING_DOLLARS_PER_MINUTE, heardMs, SPEECH_DOLLARS_PER_MINUTE, spokenMs, type Speak, type Transcribe } from './speech-openai.ts';
 import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
 import { Telegram, type TelegramOptions } from './telegram.ts';
@@ -49,6 +49,8 @@ export interface ServerOptions {
   telegram?: Omit<TelegramOptions, 'desk' | 'file' | 'log'>;
   /** Hosted mode: what this space's device may still do today, and where its use and spend are counted. */
   meter?: Meter;
+  /** Hosted mode: the largest file one upload may be, and what this space's uploads may come to in all, in bytes. */
+  uploads?: { file: number; total: number };
   log?: (line: string) => void;
 }
 
@@ -79,6 +81,8 @@ export interface Space {
 
 /** The voice tools that start a Scout run. */
 const SEARCHING = new Set(['find_new', 'more_like_this', 'start_tree']);
+/** `/live` sockets one metered space keeps: a headset reconnecting while its old socket lingers. A newer one closes the oldest. */
+const LIVE_PER_SPACE = 2;
 
 export interface Running {
   url: string;
@@ -133,6 +137,14 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   const assets = new DiskAssets(join(opts.dataDir, 'assets'), '', opts.films);
   const handoffDir = join(opts.dataDir, 'handoffs');
   mkdirSync(handoffDir, { recursive: true });
+  /** What this space's uploads come to, kept beside them so a restart does not forget it. Only counted when `uploads` caps it. */
+  const uploadedFile = join(opts.dataDir, 'uploads.json');
+  const uploaded: { bytes: number; files: number } = existsSync(uploadedFile) ? JSON.parse(readFileSync(uploadedFile, 'utf8')) : { bytes: 0, files: 0 };
+  const keepUploaded = (bytes: number) => {
+    uploaded.bytes += bytes;
+    uploaded.files += 1;
+    writeFileSync(uploadedFile, JSON.stringify(uploaded));
+  };
 
   const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID() });
   mind.load(store.all());
@@ -184,7 +196,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     mind,
     roles: meter ? metered(opts.roles, meter) : opts.roles,
     model: opts.model,
-    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder }),
+    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)) }),
     assets,
     store,
     settings,
@@ -228,6 +240,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
 
   const serve = (req: IncomingMessage, res: ServerResponse): Promise<void> =>
     route(req, res).catch((err) => {
+      if (err instanceof TooLarge && !res.headersSent) return json(res, 413, { error: err.message });
       log(`http error: ${String(err)}`);
       if (!res.headersSent) json(res, 500, { error: String(err instanceof Error ? err.message : err) });
       else res.end();
@@ -242,22 +255,38 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (guarded) res.setHeader('Set-Cookie', `mp_token=${token}; Path=/; HttpOnly; SameSite=Lax`);
 
     if (req.method === 'POST' && path === '/api/assets') {
-      const bytes = await body(req, MAX_UPLOAD);
+      const limit = opts.uploads?.file ?? MAX_UPLOAD;
+      const declared = Number(req.headers['content-length'] ?? 0) || 0;
+      const roomLeft = opts.uploads ? opts.uploads.total - uploaded.bytes : Infinity;
+      if (declared > limit) return json(res, 413, { error: `a file may be at most ${Math.round(limit / 1e6)} MB here` });
+      if (declared > roomLeft) return json(res, 413, { error: FULL });
+      const bytes = await body(req, Math.min(limit, roomLeft), roomLeft < limit ? FULL : undefined);
       const mime = req.headers['content-type'] ?? 'application/octet-stream';
       const { id } = await assets.put(bytes, mime, url.searchParams.get('name') ?? undefined);
+      if (opts.uploads) keepUploaded(bytes.length);
       return json(res, 200, { id, url: assets.url(id), mime: mime.split(';')[0] });
     }
     if (req.method === 'POST' && path === '/api/transcribe') {
+      const why = meter?.refused('voiceMs');
+      if (why) return json(res, 429, { error: why });
       const audio = await body(req, 25 * 1024 * 1024);
       const mime = req.headers['content-type'] ?? 'audio/wav';
+      const ms = heardMs(audio, mime);
+      meter?.used('voiceMs', ms);
+      meter?.spent((ms / 60_000) * HEARING_DOLLARS_PER_MINUTE);
       const heard = opts.transcribe
         ? await opts.transcribe(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, url.searchParams.get('tree')) })
         : await opts.model.transcribe({ audio, mime });
       return json(res, 200, { text: withoutWakePhrase(heard, settings.agentName).trim() });
     }
     if (req.method === 'GET' && path === '/api/speak') {
+      const why = meter?.refused('voiceMs');
+      if (why) return json(res, 429, { error: why });
       const text = (url.searchParams.get('text') ?? '').slice(0, MAX_SPOKEN).trim();
       if (!opts.speak || !text) return json(res, 404, { error: 'no voice' });
+      const ms = spokenMs(text);
+      meter?.used('voiceMs', ms);
+      meter?.spent((ms / 60_000) * SPEECH_DOLLARS_PER_MINUTE);
       const stop = new AbortController();
       res.on('close', () => stop.abort());
       const audio = await opts.speak(text, stop.signal);
@@ -340,6 +369,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
 
   liveWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const live = opts.live!;
+    if (meter) for (const old of [...liveWss.clients].slice(0, Math.max(0, liveWss.clients.size - LIVE_PER_SPACE))) old.close(4000, 'a newer voice connection replaced this one');
     /** The device's own connection, as its hello named it: what Momo starts is that connection's, and Momo hears of its work. */
     const own = connections.get(new URL(req.url ?? '/', 'http://localhost').searchParams.get('connection') ?? '');
     const webAnswer: typeof live.webAnswer = live.webAnswer && meter
@@ -378,7 +408,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         log,
       },
       (frame) => {
-        if (frame.t === 'audio') counted(frame.pcm, RATE);
+        if (frame.t === 'audio') {
+          counted(frame.pcm, RATE);
+          const why = meter?.refused('voiceMs');
+          if (why) return cut(why, frame.id);
+        }
         if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame));
       },
     );
@@ -393,6 +427,26 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     });
     /** The turn being refused: its audio goes nowhere, and it is over at once. */
     let refusedTurn: number | null = null;
+    /** The turn the device is in, from its `start` to its `end`. */
+    let turn: number | null = null;
+    let cutting = false;
+    /**
+     * The voice limit, the cap or the off switch came in the middle of a turn or an answer: the turn is over, the answer ends, the
+     * realtime session closes so nothing more costs, and Momo says why from a recording. The next `start` opens a session again if allowed.
+     */
+    const cut = (why: string, answer?: string) => {
+      if (cutting) return;
+      cutting = true;
+      log(`[limits] refused in the middle of a turn: ${why}`);
+      const send = (frame: VoiceFrame) => ws.readyState === ws.OPEN && ws.send(JSON.stringify(frame));
+      if (turn !== null) {
+        send({ t: 'over', turn });
+        refusedTurn = turn;
+      }
+      if (answer) send({ t: 'done', id: answer });
+      setImmediate(() => voice.close());
+      void sayRecorded(ws, why);
+    };
     ws.on('message', (raw) => {
       let frame: DeviceFrame;
       try {
@@ -405,6 +459,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       if (frame.t === 'start') {
         const why = meter?.refused('voiceMs');
         refusedTurn = why ? frame.turn : null;
+        turn = frame.turn;
+        cutting = false;
         if (why) {
           log(`[limits] refused: ${why}`);
           if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ t: 'over', turn: frame.turn } satisfies VoiceFrame));
@@ -412,11 +468,16 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           return;
         }
       }
+      if (frame.t === 'end' || frame.t === 'cancel') turn = null;
       if (refusedTurn !== null) {
         if (frame.t === 'end' || frame.t === 'cancel') refusedTurn = null;
         return;
       }
-      if (frame.t === 'audio') counted(frame.pcm, 16000);
+      if (frame.t === 'audio') {
+        counted(frame.pcm, 16000);
+        const why = meter?.refused('voiceMs');
+        if (why) return cut(why);
+      }
       voice.heard(frame);
     });
   });
@@ -552,12 +613,17 @@ function json(res: ServerResponse, status: number, value: unknown): void {
   res.end(JSON.stringify(value));
 }
 
-async function body(req: IncomingMessage, limit: number): Promise<Uint8Array> {
+const FULL = 'this headset has used all its room for files';
+
+/** A request body over its limit, answered with 413. */
+class TooLarge extends Error {}
+
+async function body(req: IncomingMessage, limit: number, tooLarge = `a file may be at most ${Math.round(limit / 1e6)} MB here`): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
     size += (chunk as Buffer).length;
-    if (size > limit) throw new Error('upload too large');
+    if (size > limit) throw new TooLarge(tooLarge);
     chunks.push(chunk as Buffer);
   }
   return new Uint8Array(Buffer.concat(chunks));

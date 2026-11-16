@@ -1,5 +1,5 @@
 import type { Found, ModelClient, Page, Source } from '../core/ports.ts';
-import { openaiSearch } from './search-openai.ts';
+import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
 
 type Send = typeof fetch;
 type Json = Record<string, any>;
@@ -10,6 +10,8 @@ export interface SourceOptions {
   read: (url: string) => Promise<Page | null>;
   /** Keys by their name in the env file. A source whose key is missing is not offered. */
   keys?: Record<string, string | undefined>;
+  /** Told what a priced call cost, in dollars. */
+  spent?: (dollars: number) => void;
 }
 
 interface Adapter extends Source {
@@ -70,6 +72,7 @@ export function makeSources(opts: SourceOptions): { list(): Source[]; search(id:
     show: 1,
     async search(query) {
       const openaiKey = opts.keys?.OPENAI_API_KEY;
+      if (openaiKey) opts.spent?.(SEARCH_DOLLARS);
       const hits = openaiKey
         ? await openaiSearch(send, { apiKey: openaiKey, model: opts.keys?.MIND_PALACE_SEARCH_MODEL }, { query, max: 8, prefer: WEB_PREFERENCE })
         : await opts.model.search({ role: 'tool.web', query, max: 8, prefer: WEB_PREFERENCE });

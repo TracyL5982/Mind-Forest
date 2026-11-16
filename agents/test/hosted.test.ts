@@ -11,7 +11,9 @@ import { startHosted, telegramAlert, type Hosted, type HostedOptions } from '../
 import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
 import type { LiveDeps, VoiceFrame } from '../src/node/live.ts';
+import { SEARCH_DOLLARS } from '../src/node/search-openai.ts';
 import { startServer } from '../src/node/server.ts';
+import { makeSources } from '../src/node/sources.ts';
 import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 
 interface Msg {
@@ -307,4 +309,104 @@ test("the hosted service never reads the user's bot, even when handed it, and it
   c.ws.close();
   await hosted.close();
   await bot.close();
+});
+
+test('speech and transcription are refused while off by any spelling of their path, and each call counts as voice and dollars', { timeout: 20000 }, async () => {
+  const calls: string[] = [];
+  const speak = async () => (calls.push('speak'), new ReadableStream<Uint8Array>({ start: (c) => (c.enqueue(new Uint8Array([1, 2, 3])), c.close()) }));
+  const transcribe = async () => (calls.push('transcribe'), 'hello');
+  const dataDir = mkdtempSync(join(tmpdir(), 'mp-hosted-'));
+  const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
+  const hosted = await startHosted({ port: 0, host: '127.0.0.1', dataDir, appKey: KEY, adminToken: ADMIN, ledger, shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, speak, transcribe }, log: () => {} });
+  const auth = { Authorization: `Bearer ${KEY}.${A}` };
+  const second = new Uint8Array(44 + 32000);
+  const header = new DataView(second.buffer);
+  header.setUint32(0, 0x52494646, false);
+  header.setUint32(28, 32000, true);
+  const wav = { method: 'POST', headers: { ...auth, 'Content-Type': 'audio/wav' }, body: second };
+
+  ledger.setOff(true);
+  for (const path of ['/api/speak', '/api/%73peak', '/api/%2573peak', '/api/./speak', '/assets/../api/speak']) {
+    const status = (await fetch(`${hosted.url}${path}?text=hello`, { headers: auth })).status;
+    assert.ok(status === 429 || status === 404, `${path} answered ${status}`);
+  }
+  for (const path of ['/api/transcribe', '/api/%74ranscribe']) assert.equal((await fetch(`${hosted.url}${path}`, wav)).status, 429, path);
+  assert.deepEqual(calls, [], 'no speech or transcription while off');
+
+  ledger.setOff(false);
+  assert.equal((await fetch(`${hosted.url}/api/speak?text=${'a'.repeat(140)}`, { headers: auth })).status, 200);
+  assert.equal((await fetch(`${hosted.url}/api/transcribe`, wav)).status, 200);
+  assert.deepEqual(calls, ['speak', 'transcribe']);
+  const used = ledger.status().devices[A]!;
+  assert.equal(used.voiceMinutes, Number(((10_000 + 1000) / 60_000).toFixed(3)), '140 characters said is 10 s, and the recording 1 s');
+  assert.ok(used.dollars > 0, 'and both cost');
+  await hosted.close();
+});
+
+test('a device reaches only its own paths: a decoded or dotted path to the web page or elsewhere is 404', { timeout: 20000 }, async () => {
+  const { hosted } = await host();
+  for (const path of ['/api/..%2Findex.html', '/api/%2e%2e/index.html', '/api/../client/js/dom.js', '/assets/..%2F..%2Fledger.json']) {
+    assert.equal((await fetch(`${hosted.url}${path}?token=${KEY}.${A}`)).status, 404, path);
+  }
+  assert.equal((await fetch(`${hosted.url}/%61dmin?token=${KEY}.${A}`)).status, 401, 'an encoded /admin is still the admin endpoint, and a device token is not its token');
+  await hosted.close();
+});
+
+test('uploads are capped per file and per device, new devices per hour, and the status names every device in full', { timeout: 20000 }, async () => {
+  const { hosted } = await host({}, { uploads: { file: 1000, total: 1500 }, newPerHour: 2 });
+  const upload = (bytes: number) => fetch(`${hosted.url}/api/assets?name=f.bin`, { method: 'POST', headers: { Authorization: `Bearer ${KEY}.${A}` }, body: new Uint8Array(bytes) });
+  assert.equal((await upload(2000)).status, 413, 'a file over the limit');
+  assert.equal((await upload(1000)).status, 200);
+  assert.equal((await upload(800)).status, 413, "over the device's room");
+  assert.equal((await upload(400)).status, 200, 'what fits still goes in');
+  assert.equal((await fetch(`${hosted.url}/api/state?token=${KEY}.${B}`)).status, 200);
+  const third = 'device-cccccccccccc';
+  assert.equal((await fetch(`${hosted.url}/api/state?token=${KEY}.${third}`)).status, 429, 'a third new device in the hour');
+  await assert.rejects(connect(hosted, `${KEY}.${third}`), /429/);
+  const status = await admin(hosted);
+  assert.deepEqual((status.known as string[]).sort(), [A, B]);
+  assert.ok((status.open as { device: string }[]).some((s) => s.device === A), 'open spaces by full id');
+  await hosted.close();
+});
+
+test('a device keeps two voice sockets, and the off switch in the middle of a turn ends it, the answer and the session', { timeout: 20000 }, async () => {
+  const shut: number[] = [];
+  let sessions = 0;
+  const open: LiveDeps['open'] = () => {
+    const n = ++sessions;
+    return { send: () => {}, close: () => void shut.push(n) };
+  };
+  const shared = { clientDir: '', model: new FakeModel(), roles: fakeRoles, live: { open, options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } } };
+  const { hosted, ledger } = await host({}, { shared, record: async () => new Uint8Array(4800) });
+  const c = await connect(hosted, `${KEY}.${A}`);
+  const hello = await c.until((m) => m.t === 'hello');
+  const path = `/live?connection=${hello.connection as string}`;
+  const first = await connect(hosted, `${KEY}.${A}`, path);
+  const closed = new Promise<number>((done) => first.ws.on('close', (code) => done(code)));
+  await connect(hosted, `${KEY}.${A}`, path);
+  const live = await connect(hosted, `${KEY}.${A}`, path);
+  assert.equal(await closed, 4000, 'the oldest of three closes');
+
+  await live.until((m) => m.t === 'ready');
+  live.ws.send(JSON.stringify({ t: 'start', turn: 1, scene: { selection: [] } }));
+  live.ws.send(JSON.stringify({ t: 'audio', pcm: Buffer.alloc(3200).toString('base64') }));
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(sessions, 1);
+  ledger.setOff(true);
+  live.ws.send(JSON.stringify({ t: 'audio', pcm: Buffer.alloc(3200).toString('base64') }));
+  await live.until((m) => m.t === 'over' && m.turn === 1);
+  await live.until((m) => m.t === 'text' && m.text === LINES.off);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.deepEqual(shut, [1], 'the realtime session closes');
+  for (const ws of [live.ws, c.ws]) ws.close();
+  await hosted.close();
+});
+
+test("the Scout's web source on OpenAI is charged", async () => {
+  const spent: number[] = [];
+  const send = (async (url: string) =>
+    String(url).startsWith('https://api.openai.com/') ? new Response(JSON.stringify({ output: [] })) : new Response('', { status: 404 })) as typeof fetch;
+  const sources = makeSources({ send, model: new FakeModel(), read: async () => null, keys: { OPENAI_API_KEY: 'k' }, spent: (d) => spent.push(d) });
+  await sources.search('web', 'brutalist libraries');
+  assert.deepEqual(spent, [SEARCH_DOLLARS]);
 });

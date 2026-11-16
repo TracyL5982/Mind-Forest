@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { join } from 'node:path';
+import { join, posix } from 'node:path';
 import { PROTOCOL_VERSION } from '../protocol.ts';
 import { openSpace, type Meter, type ServerOptions, type Space } from '../server.ts';
 import { BOT_API } from '../telegram.ts';
@@ -31,6 +31,10 @@ export interface HostedOptions {
   idleMs?: number;
   /** New devices are refused once this many have a space. */
   maxDevices?: number;
+  /** New devices are refused once this many were made in the last hour, so a script with the app's key cannot take every slot at once. */
+  newPerHour?: number;
+  /** The largest upload, and what one device's uploads may come to in all, in bytes. */
+  uploads?: { file: number; total: number };
   /** A line in Momo's voice as 16-bit mono PCM at the live voice's rate, for a refusal said without the realtime model. */
   record?: (text: string) => Promise<Uint8Array>;
   log: (line: string) => void;
@@ -56,7 +60,11 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
   const open = new Map<string, { space: Promise<Space>; last: number }>();
   const closing = new Map<string, Promise<void>>();
   const idleMs = opts.idleMs ?? 20 * 60_000;
-  const maxDevices = opts.maxDevices ?? 40;
+  const maxDevices = opts.maxDevices ?? 60;
+  const newPerHour = opts.newPerHour ?? 30;
+  const uploads = opts.uploads ?? { file: 25e6, total: 40e6 };
+  /** When each device of the last hour was made. */
+  const born: number[] = [];
   const started = Date.now();
 
   const errors: string[] = [];
@@ -91,7 +99,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     recorded,
   });
 
-  async function spaceOf(device: string): Promise<Space | null> {
+  async function spaceOf(device: string): Promise<Space | { status: number; error: string }> {
     await closing.get(device);
     const there = open.get(device);
     if (there) {
@@ -100,13 +108,26 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     }
     const dir = join(spacesDir, device);
     if (!known.has(device)) {
-      if (known.size >= maxDevices) return null;
+      if (known.size >= maxDevices) return { status: 403, error: 'this service has all the headsets it can take' };
+      while (born.length > 0 && born[0]! < Date.now() - 3_600_000) born.shift();
+      if (born.length >= newPerHour) return { status: 429, error: 'too many new headsets this hour; try again later' };
+      born.push(Date.now());
       if (opts.starter && existsSync(opts.starter)) cpSync(opts.starter, dir, { recursive: true });
       known.add(device);
       note(`[spaces] new space for ${short(device)}${opts.starter && existsSync(opts.starter) ? ', from the starter trees' : ''}`);
     }
     // The user's Mac reads their bot, and two readers of one bot take each other's messages: no space here ever reads it.
-    const space = openSpace({ ...opts.shared, telegram: undefined, dataDir: dir, token: `${opts.appKey}.${device}`, meter: meterOf(device), log: (line) => note(`[${short(device)}] ${line}`) });
+    // The web page is off: a space's static files come from a folder that is never made.
+    const space = openSpace({
+      ...opts.shared,
+      telegram: undefined,
+      clientDir: join(opts.dataDir, 'no-web-page'),
+      dataDir: dir,
+      token: `${opts.appKey}.${device}`,
+      meter: meterOf(device),
+      uploads,
+      log: (line) => note(`[${short(device)}] ${line}`),
+    });
     open.set(device, { space, last: Date.now() });
     space.catch((err) => {
       open.delete(device);
@@ -161,7 +182,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     const spaces = await Promise.all(
       [...open].map(async ([device, entry]) => {
         const space = await entry.space.catch(() => null);
-        return { device: short(device), online: space?.online() ?? 0, trees: space?.mind.trees.size ?? 0, idleS: Math.round((Date.now() - entry.last) / 1000) };
+        return { device, online: space?.online() ?? 0, trees: space?.mind.trees.size ?? 0, idleS: Math.round((Date.now() - entry.last) / 1000) };
       }),
     );
     return {
@@ -170,6 +191,9 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       uptimeS: Math.round((Date.now() - started) / 1000),
       spaces: known.size,
       maxDevices,
+      newThisHour: born.filter((at) => at >= Date.now() - 3_600_000).length,
+      newPerHour,
+      known: [...known],
       devicesOnline: spaces.filter((s) => s.online > 0).length,
       open: spaces,
       ...ledger.status(),
@@ -179,18 +203,25 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
 
   async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    if (url.pathname === '/api/health') return json(res, 200, { ok: true, protocol: PROTOCOL_VERSION });
-    if (url.pathname === '/admin' || url.pathname.startsWith('/admin/')) {
+    // Every check here reads the path as a space will: decoded, then with its dot segments resolved.
+    let path: string;
+    try {
+      path = posix.normalize(decodeURIComponent(url.pathname));
+    } catch {
+      return json(res, 400, { error: 'a path that does not decode' });
+    }
+    if (path === '/api/health') return json(res, 200, { ok: true, protocol: PROTOCOL_VERSION });
+    if (path === '/admin' || path.startsWith('/admin/')) {
       const given = req.headers.authorization?.replace(/^Bearer\s+/i, '') ?? '';
       if (!equal(given, opts.adminToken)) return json(res, 401, { error: 'missing or wrong admin token' });
-      const deleting = /^\/admin\/spaces\/([^/]+)$/.exec(url.pathname)?.[1];
+      const deleting = /^\/admin\/spaces\/([^/]+)$/.exec(path)?.[1];
       if (req.method === 'DELETE' && deleting) {
         if (!DEVICE.test(deleting) || !known.has(deleting)) return json(res, 404, { error: 'no such space' });
         await forget(deleting);
         note(`[admin] deleted the space of ${short(deleting)}`);
         return json(res, 200, await status());
       }
-      if (url.pathname !== '/admin') return json(res, 404, { error: 'not found' });
+      if (path !== '/admin') return json(res, 404, { error: 'not found' });
       if (req.method === 'POST') {
         const off = url.searchParams.get('off');
         if (off !== '1' && off !== '0') return json(res, 400, { error: 'POST /admin?off=1 switches costly work off, ?off=0 on again' });
@@ -199,15 +230,11 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       }
       return json(res, 200, await status());
     }
-    if (!DEVICE_PATHS.test(url.pathname)) return json(res, 404, { error: 'not found' });
+    if (!DEVICE_PATHS.test(path)) return json(res, 404, { error: 'not found' });
     const device = deviceOf(req, url);
     if (!device) return json(res, 401, { error: 'missing or wrong token' });
-    if (url.pathname === '/api/speak' || url.pathname === '/api/transcribe') {
-      const why = ledger.refusal(device, 'voiceMs');
-      if (why) return json(res, 429, { error: LINES[why] });
-    }
     const space = await spaceOf(device);
-    if (!space) return json(res, 403, { error: 'this service has all the headsets it can take' });
+    if ('error' in space) return json(res, space.status, { error: space.error });
     await space.serve(req, res);
   }
 
@@ -226,7 +253,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     const device = deviceOf(req, new URL(req.url ?? '/', 'http://localhost'));
     if (!device) return refuse('401 Unauthorized');
     void spaceOf(device).then(
-      (space) => (space ? space.upgrade(req, socket, head) : refuse('403 Forbidden')),
+      (space) => ('error' in space ? refuse(space.status === 429 ? '429 Too Many Requests' : '403 Forbidden') : space.upgrade(req, socket, head)),
       () => refuse('500 Internal Server Error'),
     );
   });

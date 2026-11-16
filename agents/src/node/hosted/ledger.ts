@@ -64,11 +64,12 @@ export interface LedgerOptions {
 export class Ledger {
   private saved: Saved;
   private timer: ReturnType<typeof setTimeout> | null = null;
-  private readonly zone: string;
+  /** The day in the judges' time zone, as YYYY-MM-DD. Made once: it is asked for on every piece of audio. */
+  private readonly dayOf: Intl.DateTimeFormat;
   private readonly now: () => Date;
 
   constructor(private readonly opts: LedgerOptions) {
-    this.zone = opts.zone ?? 'America/Los_Angeles';
+    this.dayOf = new Intl.DateTimeFormat('en-CA', { timeZone: opts.zone ?? 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' });
     this.now = opts.now ?? (() => new Date());
     this.saved = this.load();
   }
@@ -159,7 +160,7 @@ export class Ledger {
   }
 
   private today(): Saved {
-    const day = new Intl.DateTimeFormat('en-CA', { timeZone: this.zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(this.now());
+    const day = this.dayOf.format(this.now());
     if (this.saved.day !== day) {
       this.saved = Saved.parse({ day, off: this.saved.off });
       this.changed();

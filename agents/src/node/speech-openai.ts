@@ -10,6 +10,23 @@ export type Speak = (text: string, signal: AbortSignal) => Promise<ReadableStrea
 /** How long OpenAI may take to start answering before a reply is given up, so a stalled reply does not keep a client's microphone waiting. */
 const FIRST_BYTE_MS = 15000;
 
+/** Dollars per minute of audio, OpenAI's own estimates for gpt-4o-mini-tts and gpt-4o-transcribe, as listed in 2025 and not read again. */
+export const SPEECH_DOLLARS_PER_MINUTE = 0.015;
+export const HEARING_DOLLARS_PER_MINUTE = 0.006;
+
+/** How long a reply takes to say: about 14 characters a second at a calm pace (150 words a minute). An estimate. */
+export function spokenMs(text: string): number {
+  return (text.length / 14) * 1000;
+}
+
+/** How long a recording is: from a WAV header's byte rate, else at 32 kbit/s, which a compressed voice recording is near. */
+export function heardMs(audio: Uint8Array, mime: string): number {
+  const view = new DataView(audio.buffer, audio.byteOffset, audio.byteLength);
+  const wav = /wav|wave/.test(mime) && audio.length > 44 && view.getUint32(0, false) === 0x52494646;
+  const rate = wav ? view.getUint32(28, true) : 4000;
+  return ((wav ? audio.length - 44 : audio.length) / (rate || 4000)) * 1000;
+}
+
 /**
  * Spoken replies from OpenAI's speech model, as MP3 that arrives while it is made, so playback starts early. `pcm` is 16-bit mono
  * at 24 kHz instead, the live voice's own format.
