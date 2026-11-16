@@ -10,7 +10,7 @@ import { startServer } from './server.ts';
 import type { LiveOptions } from './live.ts';
 import { HEARING_MODEL, openaiRealtime, openaiSpeech, openaiTranscribe, SPEECH_VOICE } from './speech-openai.ts';
 import { openaiWebAnswer } from './web-answer.ts';
-import { startHosted, telegramAlert } from './hosted/hosted.ts';
+import { PICTURE_DOLLARS, startHosted, telegramAlert } from './hosted/hosted.ts';
 import { DEFAULT_LIMITS, Ledger } from './hosted/ledger.ts';
 import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareCost } from './hosted/overflow.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
@@ -175,6 +175,7 @@ if (ledger) {
     idleMs: number('MIND_PALACE_IDLE_MINUTES', 20) * 60_000,
     maxDevices: number('MIND_PALACE_MAX_DEVICES', 60),
     newPerHour: number('MIND_PALACE_NEW_DEVICES_PER_HOUR', 30),
+    pictureDollars: number('MIND_PALACE_PICTURE_DOLLARS', PICTURE_DOLLARS),
     uploads: { file: number('MIND_PALACE_UPLOAD_MB', 25) * 1e6, total: number('MIND_PALACE_UPLOAD_MB_PER_DEVICE', 40) * 1e6 },
     record,
     log,

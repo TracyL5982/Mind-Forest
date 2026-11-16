@@ -4,15 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
-import type { JsonRequest, ModelClient, Priority } from '../src/core/ports.ts';
+import type { JsonRequest, ModelClient, Priority, Tools } from '../src/core/ports.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { startHosted, telegramAlert, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
+import { PICTURE_DOLLARS, startHosted, telegramAlert, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
 import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
 import type { LiveDeps, VoiceFrame } from '../src/node/live.ts';
 import { SEARCH_DOLLARS } from '../src/node/search-openai.ts';
-import { startServer } from '../src/node/server.ts';
+import { chargedPictures, startServer } from '../src/node/server.ts';
 import { makeSources } from '../src/node/sources.ts';
 import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 
@@ -409,4 +409,26 @@ test("the Scout's web source on OpenAI is charged", async () => {
   const sources = makeSources({ send, model: new FakeModel(), read: async () => null, keys: { OPENAI_API_KEY: 'k' }, spent: (d) => spent.push(d) });
   await sources.search('web', 'brutalist libraries');
   assert.deepEqual(spent, [SEARCH_DOLLARS]);
+});
+
+test('a made picture is charged at the price of one, and none is made while the service is paused', async () => {
+  const made: string[] = [];
+  const tools = { images: { generate: async (prompt: string) => (made.push(prompt), { asset: 'a.png' }) } } as unknown as Tools;
+  const dataDir = mkdtempSync(join(tmpdir(), 'mp-ledger-'));
+  const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
+  const meter = {
+    refused: () => null,
+    used: () => {},
+    spent: (d: number) => ledger.spend(d, A),
+    paused: () => (ledger.paused() ? LINES.off : null),
+    pictured: () => ledger.spend(PICTURE_DOLLARS, A),
+    recorded: async () => null,
+  };
+  const charged = chargedPictures(tools, meter);
+  await charged.images.generate('a lighthouse');
+  assert.equal(ledger.status().devices[A]?.dollars, PICTURE_DOLLARS);
+  ledger.setOff(true);
+  await assert.rejects(charged.images.generate('another'), new RegExp(LINES.off.slice(0, 20)));
+  assert.deepEqual(made, ['a lighthouse']);
+  assert.equal(chargedPictures(tools, undefined), tools, 'the Mac makes pictures as before');
 });

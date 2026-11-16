@@ -5,7 +5,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { extname, join, normalize, resolve } from 'node:path';
 import { Readable, type Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { ModelClient } from '../core/ports.ts';
+import type { ModelClient, Tools } from '../core/ports.ts';
 import { Pipeline, type Outbound } from '../core/pipeline.ts';
 import { DEFAULT_SETTINGS, type Handoff, type Playback, type Roles, type Settings } from '../core/roles/types.ts';
 import { Mindstorm } from '../core/state.ts';
@@ -62,6 +62,10 @@ export interface Meter {
   refused(kind: Metered): string | null;
   used(kind: Metered, amount: number): void;
   spent(dollars: number): void;
+  /** The line Momo says while all costly work is stopped (switched off, or over the day's cap), or null. */
+  paused(): string | null;
+  /** A picture was made, on whichever model made it: counted at the price of one. */
+  pictured(): void;
   /** A line said in Momo's voice, as 16-bit mono PCM at the live voice's rate, when it can be made. */
   recorded(text: string): Promise<Uint8Array | null>;
 }
@@ -196,7 +200,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     mind,
     roles: meter ? metered(opts.roles, meter) : opts.roles,
     model: opts.model,
-    tools: makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)) }),
+    tools: chargedPictures(makeTools({ model: opts.model, assets, instagram: opts.instagram, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)) }), meter),
     assets,
     store,
     settings,
@@ -566,6 +570,26 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       wss.close();
       liveWss.close();
       store.close();
+    },
+  };
+}
+
+/**
+ * Every made picture charged, and none made while the service is paused, whichever model the tools make it on (fal's, or the Meta
+ * model's as its fallback), so a picture still being made for a run under way when the switch flips costs nothing.
+ */
+export function chargedPictures(tools: Tools, meter: Meter | undefined): Tools {
+  if (!meter) return tools;
+  return {
+    ...tools,
+    images: {
+      async generate(prompt) {
+        const why = meter.paused();
+        if (why) throw new Error(why);
+        const made = await tools.images.generate(prompt);
+        meter.pictured();
+        return made;
+      },
     },
   };
 }

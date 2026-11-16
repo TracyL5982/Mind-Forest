@@ -12,6 +12,11 @@ const DEVICE = /^[A-Za-z0-9_-]{16,64}$/;
 /** The paths a device uses. The web page and everything else stay off in hosted mode. */
 const DEVICE_PATHS = /^\/(api|assets|handoffs)\//;
 const ERRORS_KEPT = 30;
+/**
+ * What a made picture costs: fal's Meta Muse Image at $0.01 a picture, as fal's model page lists it (read through a search,
+ * 15 Nov 2026). The Meta API's own muse-image-1.0, the fallback, has no listed price and is counted the same.
+ */
+export const PICTURE_DOLLARS = 0.01;
 
 export interface HostedOptions {
   port: number;
@@ -35,6 +40,8 @@ export interface HostedOptions {
   newPerHour?: number;
   /** The largest upload, and what one device's uploads may come to in all, in bytes. */
   uploads?: { file: number; total: number };
+  /** What a made picture costs, in dollars; another fal model than the default is priced otherwise. */
+  pictureDollars?: number;
   /** A line in Momo's voice as 16-bit mono PCM at the live voice's rate, for a refusal said without the realtime model. */
   record?: (text: string) => Promise<Uint8Array>;
   log: (line: string) => void;
@@ -96,6 +103,11 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     },
     used: (kind, amount) => ledger.used(device, kind, amount),
     spent: (dollars) => ledger.spend(dollars, device),
+    paused: () => {
+      const why = ledger.paused();
+      return why ? LINES[why] : null;
+    },
+    pictured: () => ledger.spend(opts.pictureDollars ?? PICTURE_DOLLARS, device),
     recorded,
   });
 
