@@ -155,6 +155,15 @@ export type Edit = z.infer<typeof Edit>;
 /** Most edits one card keeps. */
 export const MAX_EDITS = 100;
 
+/**
+ * Most bytes a card's edits come to, as JSON: a hundred lines of about 360 points at the headset's four places. Every change to a card
+ * keeps the card before and after, so this bounds what one change to it can store.
+ */
+export const EDIT_BYTES = 512 * 1024;
+
+/** The size of a value as stored: its JSON, in UTF-8 bytes. */
+export const storedBytes = (value: unknown): number => new TextEncoder().encode(JSON.stringify(value)).length;
+
 export const Node = z.object({
   id: Id,
   treeId: Id,
@@ -168,7 +177,7 @@ export const Node = z.object({
   /** Position among siblings. */
   order: z.number(),
   /** The user's highlights, drawings and video stretch on the card, oldest first. Absent when there are none. */
-  edits: z.array(Edit).max(MAX_EDITS).optional(),
+  edits: z.array(Edit).max(MAX_EDITS).refine((edits) => storedBytes(edits) <= EDIT_BYTES, `a card's edits come to at most ${EDIT_BYTES / 1024} KB`).optional(),
 });
 export type Node = z.infer<typeof Node>;
 

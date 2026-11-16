@@ -12,11 +12,14 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { loadEnv } from '../src/node/env.ts';
 
-/** What the service reads from its environment, as on the Mac. The budget and the limits are set in fly.toml instead. */
+/**
+ * What the service reads from its environment, as on the Mac. The budget and the limits are set in fly.toml instead. The Instagram
+ * account (META_IG_TOKEN, META_IG_USER_ID) stays on the Mac: the server only searches the library deploy/instagram.sh copies.
+ */
 const PASSED = [
   'MODEL_API_KEY', 'MUSE_LLM_BASE_URL', 'MUSE_LLM_MODEL', 'MIND_PALACE_QUICK_MODEL',
   'OPENAI_API_KEY', 'YOUTUBE_API_KEY', 'TMDB_API_KEY', 'EUROPEANA_API_KEY', 'GUARDIAN_API_KEY', 'UNSPLASH_ACCESS_KEY', 'FAL_KEY',
-  'META_IG_TOKEN', 'META_IG_USER_ID', 'TELEGRAM_BOT_TOKEN',
+  'TELEGRAM_BOT_TOKEN',
   'MIND_PALACE_LIVE', 'MIND_PALACE_LIVE_MODEL', 'MIND_PALACE_LIVE_TURN', 'MIND_PALACE_LIVE_EFFORT', 'MIND_PALACE_LIVE_PAUSE',
   'MIND_PALACE_VOICE', 'MIND_PALACE_VOICE_MODEL', 'MIND_PALACE_HEARING_MODEL',
   'MIND_PALACE_WEB_MODEL', 'MIND_PALACE_WEB_EFFORT', 'MIND_PALACE_SEARCH_MODEL', 'MIND_PALACE_MAPS',

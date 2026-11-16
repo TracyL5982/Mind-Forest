@@ -40,8 +40,16 @@ export interface ServerOptions {
   instagram?: { token: string; userId: string; list?: string; read?: boolean };
   /** The user's Instagram accounts, opened once and shared: this space searches them through a view of its own and reads nothing. */
   library?: InstagramLibrary;
-  /** Hosted mode: past this many bytes of mindstorm on disk, the device's own commands and drops are refused. */
+  /** Hosted mode: past this many bytes of mindstorm and handoffs on disk, every message that writes is refused. */
   storeLimit?: number;
+  /** How a page or a picture named by a dump, a search or the model is fetched (`ToolOptions.fetchPage`). */
+  fetchPage?: typeof fetch;
+  /** Hosted mode: what the files the service keeps in this space itself may come to, in bytes (pictures fetched, made or copied in). */
+  madeLimit?: number;
+  /** Hosted mode: why the volume takes no more writes now, or null. Reads go on. */
+  volumeFull?: () => string | null;
+  /** Hosted mode: most bytes one change may store (`MindstormOptions.setBytes`), so a message passes the store limit by at most this. */
+  setBytes?: number;
   keys?: Record<string, string | undefined>;
   /** Reads a reply aloud. Without it the client uses the browser's own voice. */
   speak?: Speak;
@@ -94,6 +102,10 @@ export interface Space {
 
 /** The voice tools that start a Scout run. */
 const SEARCHING = new Set(['find_new', 'more_like_this', 'start_tree']);
+/** The voice tools that write nothing. Every other one is refused once the space has no room. */
+const READING = new Set(['web_answer', 'look_up_mindstorm', 'go_to']);
+/** The messages that write to the mindstorm, its pictures or its handoffs. */
+const WRITES = new Set<ClientMessage['t']>(['dump', 'utter', 'ask', 'more', 'keep', 'undo', 'commands', 'organize', 'handoff']);
 /** `/live` sockets one metered space keeps: a headset reconnecting while its old socket lingers. A newer one closes the oldest. */
 const LIVE_PER_SPACE = 2;
 /** What a metered space takes on /api/transcribe: the Quest's own WAV, of about a minute at most. */
@@ -149,7 +161,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   mkdirSync(opts.dataDir, { recursive: true });
   const token = opts.token ?? savedToken(join(opts.dataDir, 'token'));
   const store = new SqliteStore(join(opts.dataDir, 'mindstorm.sqlite'));
-  const assets = new DiskAssets(join(opts.dataDir, 'assets'), '', opts.films);
+  const assets = new DiskAssets(join(opts.dataDir, 'assets'), '', opts.films, opts.madeLimit);
   const handoffDir = join(opts.dataDir, 'handoffs');
   mkdirSync(handoffDir, { recursive: true });
   /** What this space's uploads come to, kept beside them so a restart does not forget it. Only counted when `uploads` caps it. */
@@ -169,7 +181,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     : null;
   const following = opts.library ? followingIn(opts.library, assets) : opened?.library;
 
-  const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID() });
+  const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID(), setBytes: opts.setBytes });
   mind.load(store.all());
   const settings: Settings = { ...DEFAULT_SETTINGS, ...opts.settings };
   const maps = opts.maps ? { tiles: opts.maps.tiles, credit: opts.maps.credit, link: opts.maps.link } : null;
@@ -219,7 +231,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     mind,
     roles: meter ? metered(opts.roles, meter) : opts.roles,
     model: opts.model,
-    tools: chargedPictures(makeTools({ model: opts.model, assets, instagram: opts.instagram, following, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)), log: opts.log }), meter),
+    tools: chargedPictures(makeTools({ model: opts.model, assets, instagram: opts.instagram, following, fetchPage: opts.fetchPage, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)), log: opts.log }), meter),
     assets,
     store,
     settings,
@@ -277,6 +289,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (guarded && !authorized(req, url)) return json(res, 401, { error: 'missing or wrong token' });
     if (guarded) res.setHeader('Set-Cookie', `mp_token=${token}; Path=/; HttpOnly; SameSite=Lax`);
 
+    const volumeFull = req.method === 'POST' && path === '/api/assets' ? opts.volumeFull?.() : null;
+    if (volumeFull) return json(res, 507, { error: volumeFull });
     if (req.method === 'POST' && path === '/api/assets' && opts.uploads) {
       if (uploading) return json(res, 429, { error: 'one upload at a time' });
       const limit = opts.uploads.file;
@@ -352,7 +366,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (req.method === 'GET' && path.startsWith('/assets/')) {
       const stored = assets.open(path.slice('/assets/'.length));
       if (!stored) return json(res, 404, { error: 'no such asset' });
-      if ('url' in stored) return relay(req, res, stored.url, stored.mime);
+      if ('url' in stored) return relay(req, res, stored.url, stored.mime, opts.fetchPage ?? fetch);
       if ('bytes' in stored) return ranged(req, res, stored.mime, stored.bytes.length, (start, end) => res.end(stored.bytes.subarray(start, end + 1)));
       return ranged(req, res, stored.mime, stored.size, (start, end) => void createReadStream(stored.file, { start, end }).on('error', () => res.destroy()).pipe(res));
     }
@@ -373,11 +387,14 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   // In hosted mode a message is small: a client's commands and drops, and on /live 100 ms of audio (a frame's own limit is 1 MiB).
   const wss = new WebSocketServer({ noServer: true, ...(meter ? { maxPayload: 1_000_000 } : {}) });
   const liveWss = new WebSocketServer({ noServer: true, ...(meter ? { maxPayload: 1_500_000 } : {}) });
-  const storeFull = (): boolean => {
-    if (opts.storeLimit === undefined) return false;
+  /** Why this space takes no more writes now, or null: the volume nearly full, or its mindstorm and handoffs past the store limit. */
+  const noRoom = (): string | null => {
+    const volume = opts.volumeFull?.();
+    if (volume || opts.storeLimit === undefined) return volume ?? null;
     const size = (file: string) => (existsSync(file) ? statSync(file).size : 0);
     const db = join(opts.dataDir, 'mindstorm.sqlite');
-    return size(db) + size(`${db}-wal`) > opts.storeLimit;
+    const handoffs = existsSync(handoffDir) ? readdirSync(handoffDir).reduce((sum, name) => sum + size(join(handoffDir, name)), 0) : 0;
+    return size(db) + size(`${db}-wal`) + handoffs > opts.storeLimit ? STORE_FULL : null;
   };
   const upgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -438,7 +455,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         words: (scene) => likelyWords(mind, scene.treeId ?? null),
         tools: toolSpecs,
         call: (name, args, scene, said) => {
-          const why = SEARCHING.has(name) ? meter?.refused('searches') : null;
+          const why = (READING.has(name) ? null : noRoom()) ?? (SEARCHING.has(name) ? meter?.refused('searches') : null);
           if (why) return Promise.resolve({ error: why });
           return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said }));
         },
@@ -556,12 +573,13 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   });
 
   async function handle(m: ClientMessage, ws: WebSocket): Promise<void> {
+    const full = WRITES.has(m.t) ? noRoom() : null;
+    if (full) return decline(ws, full);
     switch (m.t) {
       case 'client':
         plays.set(ws, m.media);
         return;
       case 'dump':
-        if (storeFull()) return decline(ws, STORE_FULL);
         await pipeline.dump(m.dumps);
         return;
       case 'utter':
@@ -587,7 +605,6 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         pipeline.undo(m.id);
         return;
       case 'commands':
-        if (storeFull()) return decline(ws, STORE_FULL);
         pipeline.userCommands(m.label, m.commands);
         return;
       case 'organize':
@@ -735,12 +752,13 @@ function ranged(req: IncomingMessage, res: ServerResponse, mime: string, size: n
 }
 
 /** A linked remote file, streamed through the service so a client only ever fetches from it. The client's byte range goes to the source. */
-async function relay(req: IncomingMessage, res: ServerResponse, url: string, mime: string): Promise<void> {
+/** A linked asset's remote bytes, streamed as they come, fetched with `send`: in hosted mode only from a public address. */
+async function relay(req: IncomingMessage, res: ServerResponse, url: string, mime: string, send: typeof fetch): Promise<void> {
   const stop = new AbortController();
   res.on('close', () => stop.abort());
   let upstream: Response;
   try {
-    upstream = await fetch(url, {
+    upstream = await send(url, {
       headers: { 'User-Agent': 'MindPalace/0.1 (local prototype)', ...(req.headers.range ? { Range: req.headers.range } : {}) },
       redirect: 'follow',
       signal: stop.signal,

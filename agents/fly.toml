@@ -12,23 +12,35 @@ kill_timeout = "30s"
   MIND_PALACE_LIMIT_VOICE_MINUTES = "60"
   MIND_PALACE_LIMIT_SEARCHES = "30"
   MIND_PALACE_LIMIT_WEB_ANSWERS = "30"
-  MIND_PALACE_CAP_DOLLARS = "30"
+  # No total cap, the user's decision for judging: the bounds are each headset's limits and shares, at most 20 headsets, and the off
+  # switch, so at worst 20 x $23 = $460 a day. Telegram hears at $25, $50, $100 and every $100 after. A number here sets a cap.
+  MIND_PALACE_CAP_DOLLARS = "0"
+  # One headset's share of the day's spend and of Meta's tokens: the most it can use inside its own limits ($23), and about twice
+  # that in tokens (9M), so a share stops only a script past them (src/node/hosted/ledger.ts, DEFAULT_LIMITS).
+  MIND_PALACE_LIMIT_DEVICE_DOLLARS = "23"
+  MIND_PALACE_LIMIT_DEVICE_TOKENS = "9000000"
   MIND_PALACE_IDLE_MINUTES = "20"
-  MIND_PALACE_MAX_DEVICES = "60"
-  MIND_PALACE_NEW_DEVICES_PER_HOUR = "30"
-  # One file, and what one headset's files may come to: 60 headsets at 40 MB stay inside the 3 GB volume.
+  # Near the number of judges: one person can make many devices, each with its own share, since the app's key is in the APK.
+  # A second 10-judge load test within the hour is refused new devices.
+  MIND_PALACE_MAX_DEVICES = "20"
+  MIND_PALACE_NEW_DEVICES_PER_HOUR = "10"
+  # One file; what one headset's uploads may come to; its mindstorm with its handoffs; and the pictures the service keeps for it
+  # (fetched, made, copied from Instagram). That is about 120 MB a headset: the 20 headsets MIND_PALACE_MAX_DEVICES allows take 2.4 GB,
+  # beside the Instagram library (about 290 MB) on the 5 GB volume, and nothing new is written while under 300 MB is free.
   MIND_PALACE_UPLOAD_MB = "25"
   MIND_PALACE_UPLOAD_MB_PER_DEVICE = "40"
   MIND_PALACE_STORE_MB_PER_DEVICE = "20"
+  MIND_PALACE_FILES_MB_PER_DEVICE = "60"
   # The user's Instagram accounts and the library read from them, copied from the Mac by deploy/instagram.sh, never in the image.
   MIND_PALACE_INSTAGRAM_LIST = "/data/instagram-following.md"
-  # Per process, a guard against a runaway loop; the day's spend cap is the real limit. The Mac's default of 5M would run out in a day.
-  MIND_PALACE_TOKEN_BUDGET = "60000000"
+  # Meta's tokens for the whole service in a day, a guard against a runaway loop, counted again at midnight Pacific with the shares:
+  # 20 headsets x their 9M share, so headsets within their shares never stop the others. Meta's tokens cost $0.
+  MIND_PALACE_TOKEN_BUDGET = "180000000"
 
 [[mounts]]
   source = "mind_palace_data"
   destination = "/data"
-  initial_size = "3gb"
+  initial_size = "5gb"
 
 [http_service]
   internal_port = 8080
