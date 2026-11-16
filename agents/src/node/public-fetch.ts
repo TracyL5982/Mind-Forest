@@ -7,14 +7,14 @@ import { Readable } from 'node:stream';
 /**
  * Addresses a page or a picture is never fetched from on the hosted service: this machine, private networks, link-local, CGNAT,
  * multicast and reserved ranges, and in IPv6 the unique-local range, which holds Fly's private network (fdaa::/16), and the forms
- * that carry an IPv4 address inside (mapped, NAT64, 6to4).
+ * that carry an IPv4 address inside (compatible, mapped, translated, NAT64 and its local-use range, 6to4).
  */
 const V4: [string, number][] = [
   ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12],
   ['192.0.0.0', 24], ['192.0.2.0', 24], ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24],
   ['224.0.0.0', 4], ['240.0.0.0', 4],
 ];
-const V6: [string, number][] = [['::', 127], ['::ffff:0:0', 96], ['64:ff9b::', 96], ['100::', 64], ['2001:db8::', 32], ['2002::', 16], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8]];
+const V6: [string, number][] = [['::', 96], ['::ffff:0:0', 96], ['::ffff:0:0:0', 96], ['64:ff9b::', 96], ['64:ff9b:1::', 48], ['100::', 64], ['2001:db8::', 32], ['2002::', 16], ['fc00::', 7], ['fe80::', 10], ['ff00::', 8]];
 // Two lists, since one list matches an IPv4 address against its IPv6 rules too, and ::ffff:0:0/96 would then hold them all.
 const INSIDE_V4 = new BlockList();
 const INSIDE_V6 = new BlockList();

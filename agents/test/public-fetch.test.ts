@@ -13,7 +13,7 @@ test('a dumped link is an http or https address', () => {
 });
 
 test('only public internet addresses count as public', () => {
-  const inside = ['127.0.0.1', '10.1.2.3', '172.16.0.9', '192.168.1.20', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', '::', 'fdaa:0:1::3', 'fc00::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:7f00:1', '64:ff9b::a00:1'];
+  const inside = ['127.0.0.1', '10.1.2.3', '172.16.0.9', '192.168.1.20', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', '::', 'fdaa:0:1::3', 'fc00::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:7f00:1', '64:ff9b::a00:1', '::7f00:1', '::a00:1', '::ffff:0:7f00:1', '64:ff9b:1::a00:1'];
   const outside = ['8.8.8.8', '93.184.216.34', '1.1.1.1', '2606:4700:4700::1111', '2a00:1450:4001::200e'];
   assert.deepEqual(inside.filter(isPublic), [], 'none of these is public');
   assert.deepEqual(outside.filter((a) => !isPublic(a)), [], 'all of these are');
