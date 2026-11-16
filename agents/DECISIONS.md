@@ -941,3 +941,9 @@ It searched Instagram more often by no more than ten runs a side can show, and i
 **Why.** Labelled buttons are easier to find than a long pinch, and Kai's guide already teaches them. The marks keep 65's data, so nothing the service or the web client holds changes.
 
 **Measured with.** `quest/desktop/test/cards_edit_check.mjs`, rewritten for the buttons: 20 checks against the fake service (at most 3 pills; with the pen up a drag highlights, draws, and never scrolls; nothing is asked while the pen is up; the eraser takes off the newest edit at the service; the pen is put down when the card is left; reopened, the card shows its edits; with the pen down a drag scrolls and a long pinch asks for more, leaning on the highlight; Send asks about the marked part; a second preview shows the edits and an undo there takes a line off).
+
+## 67. The headset: palms together closes a tree, and a handoff is asked for by voice
+
+**Decision.** Kai's welcome tree teaches "palms together to close", and the user chose that meaning everywhere. On the headset, palms held together for a second close the tree you are in and put it away, on the service's trees too. They no longer send a handoff (the headset's `handoff` message for the tree, from the clap, is gone with `Bridge::pressed`). A tree is handed off by voice ("hand this off"), which the service already understands. While joined to the service the tree's strip has no "Send to image generation" button, which reached the same handoff. Without the service, Kai's own app is as he made it.
+
+**Why.** One gesture should mean one thing, and the walk teaches this one as closing. A handoff gesture or button may come later.
