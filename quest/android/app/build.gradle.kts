@@ -92,8 +92,9 @@ android {
     sourceSets["main"].assets.srcDir("../../vendor/sherpa-onnx/assets")
     // The judging build's media, which judge.sh lays out in build/judge-media/media with its index.txt.
     sourceSets["judge"].assets.srcDir(judgeMedia)
-    // Stored, not deflated: a film is played from where it lies in the APK, and the rest is compressed already.
-    androidResources { noCompress += listOf("mp4", "jpg", "heic", "json") }
+    // Stored, not deflated: a film is played from where it lies in the APK, and the rest is compressed already or small
+    // (the app's own sounds, hand model and greeting fonts, with the fonts' notice).
+    androidResources { noCompress += listOf("mp4", "jpg", "heic", "json", "wav", "bin", "ttf", "txt") }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

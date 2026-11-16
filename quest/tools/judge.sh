@@ -16,8 +16,9 @@ JUDGE_ID=com.kaifengwu.mindpalace.ocean.judge
 "$QUEST_ROOT/tools/fetch-voice.sh"
 "$QUEST_ROOT/tools/works_small.sh"
 
-# The media as push_media.sh lays it out on the headset, under assets/media, with the list the app reads it by.
-# Cloned, so the copy takes no room on this Mac.
+# The media as push_media.sh lays it out on the headset, under assets/media, with the list the app reads it by:
+# the library's, and the app's own (in git): the sounds, the guide's hand model, the greeting's two fonts with their
+# notice. Cloned, so the copy takes no room on this Mac.
 rm -rf "$STAGE"
 mkdir -p "$STAGE/media"
 cp -c "$REPO_ROOT/visionos/MindPalace/Resources/ocean.json" "$STAGE/media/"
@@ -25,6 +26,10 @@ for f in "$REPO_ROOT"/visionos/MindPalace/Resources/Ocean/*; do [ -f "$f" ] && c
 cp -cR "$REPO_ROOT/public/clips" "$STAGE/media/clips"
 cp -cR "$REPO_ROOT/public/works" "$STAGE/media/works"
 cp -cR "$REPO_ROOT/media-src/quest/works-small" "$STAGE/media/works-small"
+for own in sounds hands fonts; do
+  [ -n "$(ls -A "$REPO_ROOT/media-src/quest/$own" 2>/dev/null)" ] || { echo "media-src/quest/$own is missing or empty"; exit 1; }
+  cp -cR "$REPO_ROOT/media-src/quest/$own" "$STAGE/media/$own"
+done
 find "$STAGE" -name '.*' -type f -delete
 (cd "$STAGE/media" && find . -type f | sed 's|^\./||' | LC_ALL=C sort > ../index.txt)
 mv "$STAGE/index.txt" "$STAGE/media/index.txt"

@@ -37,6 +37,25 @@ class MainActivity : Activity() {
 
     private val scenePermission = "com.oculus.permission.USE_SCENE"
 
+    /**
+     * The system's questions, one at a time: Android cancels a request made while another is up (it answers it at once,
+     * with nothing granted), so the microphone and the room would each read as refused if they met. A question asked
+     * while one is up waits for its answer.
+     */
+    private val waitingQuestions = ArrayDeque<Pair<String, Int>>()
+    private var questionUp = false
+
+    fun askPermission(permission: String, requestCode: Int) {
+        runOnUiThread {
+            if (questionUp) {
+                waitingQuestions.addLast(permission to requestCode)
+            } else {
+                questionUp = true
+                requestPermissions(arrayOf(permission), requestCode)
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val args = (intent.getStringExtra("args") ?: "").trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
@@ -71,16 +90,18 @@ class MainActivity : Activity() {
     @Suppress("unused")
     fun askForRoom() {
         runOnUiThread {
-            if (checkSelfPermission(scenePermission) != PackageManager.PERMISSION_GRANTED) requestPermissions(arrayOf(scenePermission), 1)
+            if (checkSelfPermission(scenePermission) != PackageManager.PERMISSION_GRANTED) askPermission(scenePermission, 1)
         }
     }
 
-    /** The microphone's answer goes to Sound (its own request code); the room's to the native side. */
+    /** The microphone's answer goes to Sound (its own request code); the room's to the native side. Then the next question. */
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         Sound.answered(requestCode, grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
         val at = permissions.indexOf(scenePermission)
         if (at >= 0 && at < grantResults.size) nativeRoomPermission(grantResults[at] == PackageManager.PERMISSION_GRANTED)
+        questionUp = false
+        waitingQuestions.removeFirstOrNull()?.let { (permission, code) -> askPermission(permission, code) }
     }
 
     /** Called from native code when a run is over (`-quitAfter`). */

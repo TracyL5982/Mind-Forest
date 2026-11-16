@@ -256,10 +256,16 @@ quest/tools/judge.sh --install   # and install it on the headset on the cable
   again after 1, 2, 4 and 8 s, then every 15 s.
 - **The microphone.** The first time, Momo's caption says "Allow the microphone to talk to Momo", and the system asks
   1.5 s later. Refused, the caption says "No microphone, so type or pick to ask Momo" for 10 s, and typing and picking
-  work as before. Nothing else is asked: passthrough and hands need no permission while the app runs.
-- **The media** (about 700 MB) is inside the APK, stored uncompressed under `assets/media` with the list of it
+  work as before.
+- **The room.** As in every build, the first time a hand is held up the system asks whether the app may see the room,
+  so the scene sits at the real desk (Where it sits). Refused, it sits at an assumed desk. The two questions never meet:
+  one asked while the other is up waits for its answer (`MainActivity.askPermission`), since Android cancels a second
+  request outright. Passthrough and hands need no permission while the app runs.
+- **The media** (about 780 MB) is inside the APK, stored uncompressed under `assets/media` with the list of it
   (`index.txt`), and read from there: pictures by `ImageDecoder` from the APK, films by `MediaPlayer` from the APK's
-  own file, text through the NDK's asset manager. Nothing is copied out at first launch.
+  own file, text and sounds through the NDK's asset manager, Fraunces by `Typeface.createFromAsset`. Besides the
+  library's media it carries the app's own, from `media-src/quest`: the sounds (about 80 MB), the guide's hand model
+  and the greeting's two fonts with their notice. Nothing is copied out at first launch.
 - **Signing.** Release-signed with `~/.mind-palace/keys/judge.jks`, its passwords in `keys/judge.properties` beside it.
   A later APK installs over this one only if it is signed with the same key, so keep both. Raise `version` in
   `judging.properties` for each APK handed out.
