@@ -29,6 +29,13 @@ export const PICTURE_DOLLARS = 0.01;
  */
 export const SET_BYTES = 2_500_000;
 
+/**
+ * Spaces in all, and new ones an hour: near the number of judges (about 10), since the app's key is in the APK and a device names
+ * itself, so one person can make many devices, each with its own share of the day's cap.
+ */
+export const MAX_DEVICES = 20;
+export const NEW_DEVICES_PER_HOUR = 10;
+
 /** Below this much free on the volume, which every space and the ledger share, nothing new is written: no upload, change or space. */
 export const MIN_FREE_BYTES = 300e6;
 /** A space fetches a page or a picture from an address it was given only on the public internet: never this machine or Fly's network. */
@@ -92,8 +99,8 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
   const open = new Map<string, { space: Promise<Space>; last: number }>();
   const closing = new Map<string, Promise<void>>();
   const idleMs = opts.idleMs ?? 20 * 60_000;
-  const maxDevices = opts.maxDevices ?? 60;
-  const newPerHour = opts.newPerHour ?? 30;
+  const maxDevices = opts.maxDevices ?? MAX_DEVICES;
+  const newPerHour = opts.newPerHour ?? NEW_DEVICES_PER_HOUR;
   const uploads = opts.uploads ?? { file: 25e6, total: 40e6 };
   /** When each device of the last hour was made. */
   const born: number[] = [];

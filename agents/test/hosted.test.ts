@@ -956,3 +956,16 @@ test("the files the service keeps for a device count toward a limit of their own
     await hosted.close();
   }
 });
+
+test('by default the service takes 10 new devices an hour and 20 in all, near the number of judges', { timeout: 60000 }, async () => {
+  const { hosted } = await host();
+  const device = (n: number) => `device-${String(n).padStart(12, '0')}`;
+  try {
+    const made = [];
+    for (let n = 1; n <= 11; n++) made.push((await fetch(`${hosted.url}/api/state?token=${KEY}.${device(n)}`)).status);
+    assert.deepEqual(made, [...Array(10).fill(200), 429], 'the eleventh new device in an hour is refused');
+    assert.deepEqual([(await admin(hosted)).maxDevices, (await admin(hosted)).newPerHour], [20, 10]);
+  } finally {
+    await hosted.close();
+  }
+});
