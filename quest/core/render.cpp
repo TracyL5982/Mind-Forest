@@ -187,6 +187,45 @@ void main() {
 }
 )";
 
+// The guide's hands: a shape as a line drawing. `uSwell` moves every point out along its normal: the edge
+// line is the swollen shape seen from inside, which shows only where it passes the shape itself.
+static const char* kGhostVertex = R"(
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aUV0;
+layout(location = 2) in vec2 aUV1;
+uniform mat4 uModel;
+uniform mat4 uViewProj[2];
+uniform vec3 uEye[2];
+uniform float uSwell;
+out highp vec3 vNormal;
+out highp vec3 vToEye;
+out highp float vThere;
+void main() {
+    vec3 n = normalize(mat3(uModel) * vec3(aUV0.x, aUV0.y, aUV1.x));
+    vec3 p = (uModel * vec4(aPos, 1.0)).xyz + n * uSwell;
+    vNormal = n;
+    vToEye = uEye[VIEW] - p;
+    vThere = aUV1.y;
+    gl_Position = uViewProj[VIEW] * vec4(p, 1.0);
+}
+)";
+
+// `uLook`: how much the body is filled, and how much light gathers toward its edge (for the line: 1 and 0).
+static const char* kGhostFragment = R"(
+uniform vec4 uTint;
+uniform float uOpacity;
+uniform vec2 uLook;
+in highp vec3 vNormal;
+in highp vec3 vToEye;
+in highp float vThere;
+out vec4 frag;
+void main() {
+    float edge = 1.0 - abs(dot(normalize(vNormal), normalize(vToEye)));
+    float a = clamp((uLook.x + uLook.y * edge * edge) * uOpacity * uTint.a * vThere, 0.0, 1.0);
+    frag = vec4(uTint.rgb * a, a);
+}
+)";
+
 static unsigned compile(GLenum type, const std::string& source, const char* name) {
     unsigned s = glCreateShader(type);
     const char* text = source.c_str();
@@ -250,6 +289,9 @@ Renderer::Program Renderer::build(const char* name, const char* vertex, const ch
     p.uvMatrix = glGetUniformLocation(p.id, "uUVMatrix");
     p.loading = glGetUniformLocation(p.id, "uLoading");
     p.additive = glGetUniformLocation(p.id, "uAdditive");
+    p.eye = glGetUniformLocation(p.id, "uEye");
+    p.swell = glGetUniformLocation(p.id, "uSwell");
+    p.look = glGetUniformLocation(p.id, "uLook");
     return p;
 }
 
@@ -276,6 +318,7 @@ void Renderer::init(bool multiviewOn) {
     line = build("line", kLineVertex, kLineFragment);
     dust = build("dust", kDustVertex, kDustFragment);
     glow = build("glow", kGlowVertex, kGlowFragment);
+    ghost = build("ghost", kGhostVertex, kGhostFragment);
     glGenTextures(1, &whiteTexture);
     glBindTexture(GL_TEXTURE_2D, whiteTexture);
     const uint8_t white[4] = {255, 255, 255, 255};
@@ -409,7 +452,7 @@ void Renderer::upload(Mesh* m) {
 
 static bool isTransparent(const Material& m, float opacity) {
     return m.transparent || m.kind == Material::Kind::line || m.kind == Material::Kind::dust ||
-           m.kind == Material::Kind::hoverGlow || opacity < 0.999f;
+           m.kind == Material::Kind::hoverGlow || m.kind == Material::Kind::ghost || opacity < 0.999f;
 }
 
 void Renderer::collect(const Entity* e, const Mat4& parent, float opacity, const Hover* hover, float hovered, const Views& views) {
@@ -622,6 +665,45 @@ void Renderer::draw(const EntityRef& root, const Views& views, double time) {
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     for (const Item& item : transparent) submit(item, views, time, viewProj);
+    if (veil < 0.999f) {
+        // The whole picture, faded: one triangle over everything that multiplies what is there (colour
+        // and alpha, so on the headset the room shows through) by `veil`.
+        static const float identity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+        static const float both[32] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+        if (!veilVao) {
+            static const float corners[15] = {-1, -1, 0, 0, 0, 3, -1, 0, 0, 0, -1, 3, 0, 0, 0};
+            glGenVertexArrays(1, &veilVao);
+            glGenBuffers(1, &veilVbo);
+            glBindVertexArray(veilVao);
+            glBindBuffer(GL_ARRAY_BUFFER, veilVbo);
+            glBufferData(GL_ARRAY_BUFFER, sizeof corners, corners, GL_STATIC_DRAW);
+            glEnableVertexAttribArray(0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 20, (const void*)0);
+            glEnableVertexAttribArray(1);
+            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 20, (const void*)12);
+        }
+        const Program& p = unlit;
+        glUseProgram(p.id);
+        glBindVertexArray(veilVao);
+        glUniformMatrix4fv(p.viewProj, 2, GL_FALSE, both);
+        glUniformMatrix4fv(p.model, 1, GL_FALSE, identity);
+        glUniformMatrix4fv(p.uvMatrix, 1, GL_FALSE, identity);
+        glUniform1f(p.opacity, std::max(0.f, veil));
+        glUniform1i(p.opaque, 0);
+        glUniform4f(p.tint, 0, 0, 0, 1);
+        glUniform1f(p.threshold, 0);
+        glUniform1f(p.loading, 0);
+        glUniform3f(p.hover, 0, 0, 0);
+        glUniform1i(p.useTexture, 0);
+        glBindTexture(GL_TEXTURE_2D, whiteTexture);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glDepthMask(GL_FALSE);
+        glBlendFuncSeparate(GL_ZERO, GL_SRC_ALPHA, GL_ZERO, GL_SRC_ALPHA);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glEnable(GL_DEPTH_TEST);
+        stats.drawCalls++;
+    }
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
     glBindVertexArray(0);
@@ -644,6 +726,7 @@ void Renderer::submit(const Item& item, const Views& views, double time, const M
     case Material::Kind::line: p = &line; break;
     case Material::Kind::dust: p = &dust; break;
     case Material::Kind::hoverGlow: p = &glow; break;
+    case Material::Kind::ghost: p = &ghost; break;
     case Material::Kind::video: {
         p = &video;
         static TextureRef frame;
@@ -729,6 +812,33 @@ void Renderer::submit(const Item& item, const Views& views, double time, const M
 
     int count = item.mesh->isLowLevel() ? static_cast<LowLevelMesh*>(item.mesh)->indexCount : int(item.mesh->indices.size());
     glBindVertexArray(item.mesh->vao);
+    if (m.kind == Material::Kind::ghost) {
+        // Three times over: its shape, unseen, so that what is in front covers what is behind; then its
+        // body, faintly; then its edge, which is the far side of the shape swollen by the line's weight.
+        auto number = [&](const char* name, float otherwise) {
+            auto it = m.parameters.find(name);
+            return it == m.parameters.end() ? otherwise : it->second.x;
+        };
+        Vec3 eyes[2];
+        for (int i = 0; i < 2; i++) eyes[i] = views.view[std::min(i, views.count - 1)].inverse().position();
+        glUniform3fv(p->eye, 2, &eyes[0].x);
+        glEnable(GL_CULL_FACE);
+        for (int pass = 0; pass < 3; pass++) {
+            glColorMask(pass > 0, pass > 0, pass > 0, pass > 0);
+            glDepthMask(pass == 0 ? GL_TRUE : GL_FALSE);
+            glDepthFunc(pass == 1 ? GL_LEQUAL : GL_LESS);
+            glCullFace(pass == 2 ? GL_FRONT : GL_BACK);
+            glUniform1f(p->swell, pass == 2 ? number("Line", 0.0012f) : 0);
+            glUniform2f(p->look, pass == 2 ? 1 : number("Fill", 0.03f), pass == 2 ? 0 : number("Glow", 0.1f));
+            glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, nullptr);
+            stats.drawCalls++;
+        }
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDepthFunc(GL_LEQUAL);
+        glCullFace(GL_BACK);
+        stats.triangles += count;
+        return;
+    }
     glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, nullptr);
     stats.drawCalls++;
     stats.triangles += count / 3;

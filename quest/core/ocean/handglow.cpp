@@ -297,6 +297,57 @@ void HandGlow::orbs(Pen& pen, const std::vector<Finger>& fingers, float shown, d
     }
 }
 
+/// A flat hand as a blade: light gathers along the hand and runs out past the fingertips, thinning away.
+void HandGlow::blade(Pen& pen, const Blade& b) const {
+    Vec3 along = b.tip - b.palm;
+    float far = length(along);
+    if (far < 1e-4f || b.shown < 0.01f) return;
+    along = along / far;
+    float s = b.shown;
+    Vec3 end = b.tip + along * 0.12f;
+    pen.line(b.palm, b.tip, 0.018f, cool, 0, 0.3f * s);
+    pen.line(b.tip, end, 0.018f, cool, 0.3f * s, 0);
+    pen.line(b.palm + along * (far * 0.5f), b.tip, 0.0045f, warm, 0.2f * s, 0.95f * s);
+    pen.line(b.tip, end, 0.0045f, warm, 0.95f * s, 0);
+    pen.orb(b.tip, 0.007f, warm, 0.9f * s);
+}
+
+/// A thread in the accent, with a mark at the place on it that matters.
+void HandGlow::cut(Pen& pen, const Cut& c) const {
+    const Vec3 accent{1.0f, 0.102f, 0.037f};        // Art::hot, as light
+    float a = std::max(c.lit * 0.6f, c.armed);
+    if (a < 0.01f) return;
+    for (size_t k = 1; k < c.line.size(); k++) {
+        pen.line(c.line[k - 1], c.line[k], 0.022f, accent, a * 0.22f, a * 0.22f);
+        pen.line(c.line[k - 1], c.line[k], 0.0065f + 0.0025f * c.armed, accent, a, a);
+    }
+    Vec3 toEye = pen.eye - c.at;
+    float off = length(toEye);
+    toEye = off > 1e-6f ? toEye / off : Vec3{0, 0, 1};
+    Vec3 x = cross(Vec3{0, 1, 0}, toEye);
+    x = length(x) > 1e-5f ? normalize(x) : Vec3{1, 0, 0};
+    Vec3 y = cross(toEye, x);
+    if (c.armed > 0.01f) {
+        // Marked for cutting: a ring round the place, running down with the time left to decide.
+        pen.ring(c.at, x, y, 0.024f, 0.002f, accent, 0.35f * c.armed);
+        pen.arc(c.at, x, y, 0.024f, pi / 2, pi / 2 - c.left * 2 * pi, 0.005f, white, 0.9f * c.armed);
+        pen.orb(c.at, 0.009f, accent, 0.95f * c.armed);
+    } else {
+        pen.ring(c.at, x, y, 0.014f, 0.003f, accent, c.lit);
+        pen.orb(c.at, 0.006f, accent, 0.9f * c.lit);
+    }
+    if (c.leader) {
+        // From the blade to where it would cut.
+        Vec3 d = c.at - c.from;
+        float reach = length(d);
+        int dashes = std::max(1, int(reach / 0.03f));
+        for (int k = 0; k < dashes; k++) {
+            float u0 = float(k) / float(dashes), u1 = (float(k) + 0.5f) / float(dashes);
+            pen.line(c.from + d * u0, c.from + d * u1, 0.003f, warm, 0.4f * c.lit, 0.4f * c.lit);
+        }
+    }
+}
+
 bool HandGlow::draw(Vec3 eye, const std::vector<Grab>& grabs, const std::vector<Finger>& fingers, double now, float dt) {
     for (Held& h : held) h.present = false;
     for (const Grab& g : grabs) {
@@ -340,6 +391,7 @@ bool HandGlow::draw(Vec3 eye, const std::vector<Grab>& grabs, const std::vector<
     fingersShown += ((fingers.empty() ? 0.f : 1.f) - fingersShown) * std::min(1.f, 10 * dt);
     if (fingers.empty() && fingersShown < 0.01f) fingersShown = 0;
     if (fingersShown > 0) any = true;
+    if (!blades.empty() || !cuts.empty() || hold) any = true;
 
     if (!any) {
         // Nothing to show: the mesh is left alone once it has been emptied.
@@ -355,6 +407,20 @@ bool HandGlow::draw(Vec3 eye, const std::vector<Grab>& grabs, const std::vector<
             Pen pen{v, idx, eye};
             for (const Held& h : held) gauge(pen, h, now);
             orbs(pen, lastFingers, fingersShown, now);
+            for (const Blade& b : blades) blade(pen, b);
+            for (const Cut& c : cuts) cut(pen, c);
+            if (hold) {
+                // Round the hands, facing you: a faint ring, and over it an arc from the top that closes as the second runs.
+                Vec3 toEye = pen.eye - hold->at;
+                float off = length(toEye);
+                toEye = off > 1e-6f ? toEye / off : Vec3{0, 0, 1};
+                Vec3 x = cross(Vec3{0, 1, 0}, toEye);
+                x = length(x) > 1e-5f ? normalize(x) : Vec3{1, 0, 0};
+                Vec3 y = cross(toEye, x);
+                pen.film(hold->at, x, y, 0.125f, cool, 0.02f, 0.07f);
+                pen.ring(hold->at, x, y, 0.125f, 0.003f, cool, 0.5f);
+                if (hold->progress > 0.01f) pen.arc(hold->at, x, y, 0.134f, pi / 2, pi / 2 - hold->progress * 2 * pi, 0.0065f, warm, 0.95f, true);
+            }
             nv = pen.nv;
             ni = pen.ni;
         });

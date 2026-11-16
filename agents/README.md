@@ -32,7 +32,7 @@ Then:
 
 - Send a thought, a link, a photo, a video, a file or a voice note. What you write with it is the instruction: "start a tree on this" grows a tree from it. Mind Palace answers with what it added and where it went, a tree or your knowledge base.
 - A voice note is written out by `OPENAI_API_KEY`'s transcription model, and its words are added. Without that key the recording itself is added.
-- Every handoff the service makes (Handoff on the web page, a clap on the headset, or asking for one) comes to the chat as a message and one file, `<tree>-handoff-<date>.md`. It names no other file: each picture is described in words, with the address it came from. Share it into Claude, ChatGPT, Muse or any agent that takes a file. `/handoff` or "send me the handoff" sends the latest again.
+- Every handoff the service makes (Handoff on the web page, or asking for one, as "hand this off" on the headset) comes to the chat as a message and one file, `<tree>-handoff-<date>.md`. It names no other file: each picture is described in words, with the address it came from. Share it into Claude, ChatGPT, Muse or any agent that takes a file. `/handoff` or "send me the handoff" sends the latest again.
 
 Limits:
 

@@ -15,7 +15,7 @@ mkdir -p $OUT
 VOICE="$(cd ../vendor/sherpa-onnx && pwd)"
 FLAGS="-std=c++20 -O2 -g -Wall -Wno-unused-variable -Wno-unused-function -Wno-missing-braces -Wno-deprecated-declarations \
   -I$CORE -I$CORE/ocean -I. -I$GLFW_ROOT/include -I$VOICE/include -DREPO_ROOT=\"$REPO\""
-sources=(main.cpp platform_mac.mm net_mac.mm $CORE/base.cpp $CORE/json.cpp $CORE/scene.cpp $CORE/render.cpp $CORE/input.cpp $CORE/perf.cpp $CORE/async.cpp $CORE/app.cpp)
+sources=(main.cpp platform_mac.mm net_mac.mm audio_mac.cpp $CORE/audio.cpp $CORE/base.cpp $CORE/json.cpp $CORE/scene.cpp $CORE/render.cpp $CORE/input.cpp $CORE/perf.cpp $CORE/async.cpp $CORE/app.cpp)
 if [ "$1" = "--host-only" ]; then
   FLAGS="$FLAGS -DOCEAN_NO_SCENE"
 else
@@ -25,7 +25,8 @@ fi
 objects=()
 pids=()
 for s in "${sources[@]}"; do
-  o="$OUT/$(basename "$s" | sed 's/\.[a-z]*$//').o"
+  # Named by its path, so core/audio.cpp and core/cards/audio.cpp make two objects.
+  o="$OUT/$(echo "$s" | sed -e 's|^\.\./||' -e 's|/|_|g' -e 's/\.[a-z]*$//').o"
   objects+=("$o")
   if [ ! -f "$o" ] || [ "$s" -nt "$o" ] || [ -n "$(find $CORE . -maxdepth 2 -name '*.h' -newer "$o" | head -1)" ]; then
     case "$s" in
@@ -41,5 +42,5 @@ for p in "${pids[@]}"; do wait $p || status=1; done
 VOICE_LIB=""
 [ "$1" = "--host-only" ] || VOICE_LIB="-L$VOICE/mac -lsherpa-onnx-c-api -Wl,-rpath,$VOICE/mac -framework AVFoundation"
 xcrun clang++ "${objects[@]}" -o preview $GLFW_LIB $VOICE_LIB -framework OpenGL -framework Cocoa -framework IOKit \
-  -framework CoreGraphics -framework CoreText -framework ImageIO -framework CoreFoundation -framework Foundation
+  -framework CoreGraphics -framework CoreText -framework ImageIO -framework CoreFoundation -framework Foundation -framework AudioToolbox -framework CoreAudio
 echo "built quest/desktop/preview"

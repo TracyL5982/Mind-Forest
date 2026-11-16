@@ -18,6 +18,11 @@
     <!-- The system keyboard over the app, for typing to the agent (Keyboard.kt). -->
     <uses-feature android:name="oculus.software.overlay_keyboard" android:required="false" />
 
+    <!-- The room: the scene sits at the desk in front of you if the headset knows one (its scene model,
+         made in Space Setup). USE_SCENE is asked of the user when the app first runs. -->
+    <uses-permission android:name="com.oculus.permission.USE_ANCHOR_API" />
+    <uses-permission android:name="com.oculus.permission.USE_SCENE" />
+
     <uses-permission android:name="org.khronos.openxr.permission.OPENXR" />
     <uses-permission android:name="org.khronos.openxr.permission.OPENXR_SYSTEM" />
     <queries>

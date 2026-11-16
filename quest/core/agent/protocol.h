@@ -92,7 +92,7 @@ struct View {
     bool operator==(const View&) const = default;
 };
 
-/// What the user marked on a card with the edit pencil: words highlighted, or a line drawn.
+/// What the user marked on a card with the pen: words highlighted, or a line drawn.
 struct Edit {
     enum class Kind { highlight, stroke };
     std::string id;

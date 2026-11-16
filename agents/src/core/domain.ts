@@ -134,8 +134,22 @@ export const Stroke = z.object({
 });
 export type Stroke = z.infer<typeof Stroke>;
 
-/** What the user marked on a card with the edit pencil. */
-export const Edit = z.discriminatedUnion('kind', [Highlight, Stroke]);
+/** The latest a stretch may end, seconds: a day. */
+export const STRETCH_SECONDS = 24 * 60 * 60;
+
+/** A stretch of the card's video the user marked, seconds from its start. A card keeps one: a new one takes its place. */
+export const Stretch = z
+  .object({
+    id: Id,
+    kind: z.literal('stretch'),
+    from: z.number().nonnegative().max(STRETCH_SECONDS),
+    to: z.number().positive().max(STRETCH_SECONDS),
+  })
+  .refine((s) => s.from < s.to, 'a stretch ends after it begins');
+export type Stretch = z.infer<typeof Stretch>;
+
+/** What the user marked on a card with the headset's pen. */
+export const Edit = z.discriminatedUnion('kind', [Highlight, Stroke, Stretch]);
 export type Edit = z.infer<typeof Edit>;
 
 /** Most edits one card keeps. */
@@ -153,7 +167,7 @@ export const Node = z.object({
   view: View,
   /** Position among siblings. */
   order: z.number(),
-  /** The user's highlights and drawings on the card, oldest first. Absent when there are none. */
+  /** The user's highlights, drawings and video stretch on the card, oldest first. Absent when there are none. */
   edits: z.array(Edit).max(MAX_EDITS).optional(),
 });
 export type Node = z.infer<typeof Node>;

@@ -32,6 +32,22 @@ sync_dir() {
 "$QUEST_ROOT/tools/works_small.sh"
 SMALL="$REPO_ROOT/media-src/quest/works-small"
 
+# The app's own sounds (about 80 MB of wav, in git), made by quest/sound/synth.py: made again only when the
+# script is not the one they were last made by (its hash is kept in quest/sound/made-by.sha; a file's date
+# says nothing in a fresh clone). Needs numpy and scipy.
+SOUNDS="$REPO_ROOT/media-src/quest/sounds"
+SYNTH="$REPO_ROOT/quest/sound/synth.py"
+STAMP="$REPO_ROOT/quest/sound/made-by.sha"
+synth_now=$(shasum -a 256 "$SYNTH" | cut -d' ' -f1)
+if [ ! -f "$SOUNDS/manifest.json" ] || [ "$(cat "$STAMP" 2>/dev/null)" != "$synth_now" ]; then
+  echo "sounds: making them"
+  if python3 "$SYNTH" --out "$SOUNDS"; then
+    echo "$synth_now" > "$STAMP"
+  else
+    echo "sounds: could not be made (python3 with numpy and scipy is needed); the ones already there are sent as they are"
+  fi
+fi
+
 adb push "$REPO_ROOT/visionos/MindPalace/Resources/ocean.json" $DEVICE_FILES/media/ocean.json | tail -1
 # Notes' own pictures: the visionOS bundle holds them at its top, beside ocean.json.
 for f in "$REPO_ROOT"/visionos/MindPalace/Resources/Ocean/*; do
@@ -40,4 +56,9 @@ done
 sync_dir "$REPO_ROOT/public/clips" clips
 sync_dir "$REPO_ROOT/public/works" works
 sync_dir "$SMALL" works-small
+[ -f "$SOUNDS/manifest.json" ] && sync_dir "$SOUNDS" sounds
+# The headset's own hand model, for the guide's hands (in git; written once with `-dumpHandMesh`, see tools/hand_mesh.py).
+[ -f "$REPO_ROOT/media-src/quest/hands/hand-right.bin" ] && sync_dir "$REPO_ROOT/media-src/quest/hands" hands
+# The greeting's lettering (Fraunces 72pt Soft Light and its italic, SIL Open Font License; in git).
+[ -d "$REPO_ROOT/media-src/quest/fonts" ] && sync_dir "$REPO_ROOT/media-src/quest/fonts" fonts
 adb shell "du -sh $DEVICE_FILES/media"
