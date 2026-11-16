@@ -520,9 +520,11 @@ For Kai: what merging this branch into the agents work (tracy/agents) changed or
   highlights (a drag from words) and lines (a drag from anywhere else) are the service's own edits, kept with
   the card (`addEdit`, agents/docs/protocol.md, Edits on a card): they come back on any headset and "undo" takes
   the last back. They are drawn as the agents' cards draw them, amber behind words and a white line, not your
-  marker. A video's stretch stays your mark, on the headset only. The eraser takes off the newest edit
-  (`removeEdit`). Send asks Momo "Tell me more about this part: …", naming the highlighted words, "the part I
-  drew on" and a stretch by its times; the card leads a new layer and Momo answers. With the pen down, a pinch
+  marker. A card keeps up to 100. A video's stretch is drawn as your mark and kept by the service too, one a
+  card: a new stretch takes the old one's place, and one undo brings the old one back. The eraser works as
+  yours does: one press takes every mark off, as one change that one undo brings back. Send asks Momo about all
+  the card's marks together ("Tell me more about these parts: …"), naming the highlighted words, the lines and
+  the stretch by its times; the card leads a new layer and Momo answers. With the pen down, a pinch
   held still on the open card asks for more like it, and a drag scrolls the card. On your own trees all three
   work as you made them. The Gestures sheet has a row for the pinch held still, and the marking gesture draws
   all three buttons where the card has them (agents/DECISIONS.md 66).
