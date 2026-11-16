@@ -19,6 +19,13 @@ const ERRORS_KEPT = 30;
  */
 export const PICTURE_DOLLARS = 0.01;
 
+/**
+ * Most one change may store in a space. A text dump at the 1 MB message limit stores about 2.0 MB, its words in the commands and
+ * again in the item, and a 1 MB `commands` message on a card at EDIT_BYTES stores the card before and after besides. A change past
+ * this is refused, so a device's mindstorm passes its store limit by at most this much.
+ */
+export const SET_BYTES = 2_500_000;
+
 export interface HostedOptions {
   port: number;
   host: string;
@@ -297,6 +304,7 @@ export function spaceOptions(opts: Pick<HostedOptions, 'shared' | 'dataDir' | 'a
     instagram: undefined,
     library: opts.following?.library,
     storeLimit: opts.storeLimit ?? 20e6,
+    setBytes: SET_BYTES,
     clientDir: join(opts.dataDir, 'no-web-page'),
     dataDir: join(opts.dataDir, 'spaces', device),
     token: `${opts.appKey}.${device}`,

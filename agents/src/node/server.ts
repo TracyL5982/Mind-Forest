@@ -42,6 +42,8 @@ export interface ServerOptions {
   library?: InstagramLibrary;
   /** Hosted mode: past this many bytes of mindstorm on disk, the device's own commands and drops are refused. */
   storeLimit?: number;
+  /** Hosted mode: most bytes one change may store (`MindstormOptions.setBytes`), so a message passes the store limit by at most this. */
+  setBytes?: number;
   keys?: Record<string, string | undefined>;
   /** Reads a reply aloud. Without it the client uses the browser's own voice. */
   speak?: Speak;
@@ -169,7 +171,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     : null;
   const following = opts.library ? followingIn(opts.library, assets) : opened?.library;
 
-  const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID() });
+  const mind = new Mindstorm({ now: () => new Date().toISOString(), newId: () => randomUUID(), setBytes: opts.setBytes });
   mind.load(store.all());
   const settings: Settings = { ...DEFAULT_SETTINGS, ...opts.settings };
   const maps = opts.maps ? { tiles: opts.maps.tiles, credit: opts.maps.credit, link: opts.maps.link } : null;

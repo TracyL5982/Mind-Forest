@@ -8,7 +8,7 @@ import type { Found, JsonRequest, ModelClient, Priority, Tools } from '../src/co
 import type { Roles } from '../src/core/roles/types.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { PICTURE_DOLLARS, spaceOptions, startHosted, telegramAlert, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
+import { PICTURE_DOLLARS, SET_BYTES, spaceOptions, startHosted, telegramAlert, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
 import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
 import { LiveVoice, type LiveDeps, type VoiceFrame } from '../src/node/live.ts';
@@ -18,6 +18,8 @@ import { chargedPictures, startServer } from '../src/node/server.ts';
 import { makeSources } from '../src/node/sources.ts';
 import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 import { MemoryAssets } from './kit.ts';
+import { SqliteStore } from '../src/node/store.ts';
+import { EDIT_BYTES, storedBytes, type Command } from '../src/core/domain.ts';
 import { followingIn, InstagramLibrary, openInstagram, parseList } from '../src/node/instagram.ts';
 
 interface Msg {
@@ -101,6 +103,10 @@ function recording(ms: number, byteRate = 32000): Uint8Array<ArrayBuffer> {
   view.setUint32(40, data, true);
   return wav;
 }
+
+/** The promise, or a failure after `ms`, so a test that waits for a reply that never comes fails instead of holding the run open. */
+const soon = <T,>(promise: Promise<T>, ms = 8000): Promise<T> =>
+  Promise.race([promise, new Promise<never>((_done, fail) => setTimeout(() => fail(new Error(`nothing came in ${ms} ms`)), ms).unref())]);
 
 const treesOf = (hello: Msg) => (hello.snapshot as { trees: { id: string; title: string; rootId: string }[] }).trees;
 const admin = (hosted: Hosted, query = '', method = 'GET') => fetch(`${hosted.url}/admin${query}`, { method, headers: { Authorization: `Bearer ${ADMIN}` } }).then((r) => r.json() as Promise<Record<string, unknown>>);
@@ -672,5 +678,51 @@ test('with no Instagram account on the server, the library opens from the list a
     ws?.close();
     await hosted?.close();
     globalThis.fetch = realFetch;
+  }
+});
+
+test("one message stores at most SET_BYTES however many large cards it touches, and a card's edits stop at EDIT_BYTES", { timeout: 30000 }, async () => {
+  const { hosted, dataDir } = await host();
+  let ws: WebSocket | undefined;
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    ws = c.ws;
+    await c.until((m) => m.t === 'hello');
+    const at = '2026-11-15T00:00:00.000Z';
+    const cards = [1, 2, 3, 4];
+    const send = (label: string, commands: Command[]) => c.ws.send(JSON.stringify({ t: 'commands', label, commands }));
+    const kept = (label: string) => soon(c.until((m) => m.t === 'change' && (m.set as { label: string }).label === label));
+    const refused = (pattern: RegExp) => soon(c.until((m) => m.t === 'note' && pattern.test(String(m.message))));
+    send('Four cards', cards.flatMap((n): Command[] => [
+      { type: 'addItem', item: { id: `item-${n}`, kind: 'text', title: `Card ${n}`, text: 'A card to draw on.', summary: '', tags: [], data: {}, origin: { by: 'user' }, source: { from: 'paste', capturedAt: at }, archived: false, revision: 0 } },
+      { type: 'createTree', tree: { id: `tree-${n}`, title: `Card ${n}`, rootId: `node-${n}`, digest: '', createdAt: at }, root: { id: `node-${n}`, treeId: `tree-${n}`, itemId: `item-${n}`, parent: null, status: 'kept', why: '', importance: 1, origin: { by: 'user' }, view: { component: 'note', props: {}, by: 'renderer' }, order: 0 } },
+    ]));
+    await kept('Four cards');
+
+    // Lines at full precision rather than the headset's four places, as a script would send them: about 17 bytes a number.
+    const line = (id: string) => ({ id, kind: 'stroke' as const, points: Array.from({ length: 1024 }, (_v, i) => (i % 997) / 1000 + 0.000123456789012) });
+    const fit = Math.floor((EDIT_BYTES - 1) / (storedBytes(line('e-1-00')) + 1));
+    for (const n of cards) {
+      send(`Draw on ${n}`, Array.from({ length: fit }, (_v, k) => ({ type: 'addEdit', id: `node-${n}`, edit: line(`e-${n}-${k}`) })));
+      await kept(`Draw on ${n}`);
+    }
+    send('One line too many', [{ type: 'addEdit', id: 'node-1', edit: line('e-1-over') }]);
+    await refused(/a card's edits come to at most 512 KB/);
+
+    send('Rub out a line on four cards', cards.map((n) => ({ type: 'removeEdit', id: `node-${n}`, editId: `e-${n}-0` })));
+    await refused(/one change keeps at most 2\.5 MB, and this one would keep [4-9]\.\d MB/);
+    send('Rub out a line on two cards', [1, 2].map((n) => ({ type: 'removeEdit', id: `node-${n}`, editId: `e-${n}-0` })));
+    await kept('Rub out a line on two cards');
+
+    const nodes = (await fetch(`${hosted.url}/api/state?token=${KEY}.${A}`).then((r) => r.json()) as { snapshot: { nodes: { id: string; edits?: unknown[] }[] } }).snapshot.nodes;
+    const edits = (id: string) => nodes.find((node) => node.id === id)?.edits?.length;
+    assert.deepEqual(cards.map((n) => edits(`node-${n}`)), [fit - 1, fit - 1, fit, fit], 'the refused change changed nothing, and the one kept took a line from two cards');
+    const store = new SqliteStore(join(dataDir, 'spaces', A, 'mindstorm.sqlite'));
+    const largest = Math.max(...store.all().map((set) => storedBytes(set)));
+    store.close();
+    assert.ok(largest <= SET_BYTES, `no change stored more than SET_BYTES (the largest was ${largest} bytes)`);
+  } finally {
+    ws?.close();
+    await hosted.close();
   }
 });
