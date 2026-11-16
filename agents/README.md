@@ -53,7 +53,7 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 | `MIND_PALACE_DATA` | `agents/data` | Where the mindstorm and files are kept. |
 | `MUSE_LLM_MODEL` | `muse-spark-1.3` | The model for thinking of directions (each started as it is written), grouping siblings, and every role not on the quick model. |
 | `MIND_PALACE_QUICK_MODEL` | `muse-ember-1.0` | The model for what you wait on: the Conductor's reply, the suggested questions under an open card, rating ties to what you have, choosing the catalogues and words of the Scout's fast lane, choosing among what a search returned, and the card a note you drop in lands as. |
-| `MIND_PALACE_TOKEN_BUDGET` | 5,000,000 | Tokens the service may spend before it refuses model calls. Restart to reset. |
+| `MIND_PALACE_TOKEN_BUDGET` | 5,000,000 | Tokens the service may spend before it refuses model calls. Restart to reset. Hosted, 60,000,000 a day, counted again at midnight Pacific. |
 | `MIND_PALACE_ENV` | `~/.muse-garden.env` | The file keys are read from. |
 | `MIND_PALACE_MAPS` | unset, maps off | A map provider: `openstreetmap`. With it set, a place a note names is looked up on that provider's server, which sends the place's name off this machine, and place cards draw a map from its tiles. Unset, nothing about a place leaves the machine. Lookups are kept in `data/places.json`. |
 | `TELEGRAM_BOT_TOKEN` | unset | The bot that makes Mind Palace a Telegram contact. See Reach it from Telegram. |

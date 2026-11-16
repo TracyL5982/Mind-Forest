@@ -14,6 +14,8 @@ export interface Limits {
   deviceDollars: number;
   /** One device's share of Meta's tokens in a day, which have no price and so would never reach the cap. */
   deviceTokens: number;
+  /** Meta's tokens the whole service may use in a day, a guard against a runaway loop, counted again each day as the shares are. */
+  tokensPerDay: number;
 }
 
 /**
@@ -23,18 +25,22 @@ export interface Limits {
  * them: 30 Scout runs at 120,000 tokens, with typical turns, organizing, questions and drops besides (4.5M), and under a quarter of
  * fly.toml's 60M token budget. The working is in reports/ws37.md of the judging program.
  */
-export const DEFAULT_LIMITS: Limits = { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: 30, deviceDollars: 23, deviceTokens: 9_000_000 };
+export const DEFAULT_LIMITS: Limits = { voiceMinutes: 60, searches: 30, webAnswers: 30, dollarsPerDay: 30, deviceDollars: 23, deviceTokens: 9_000_000, tokensPerDay: 60_000_000 };
 
 /** The device whose work this is, for the model's calls, which the whole service shares: its tokens and spend are counted to it. */
 export const forDevice = new AsyncLocalStorage<string>();
 
-/** Why work is refused, in the order it is checked: the off switch, the day's spend, the device's share of it, then its own limit. */
-export type Refusal = 'off' | 'cap' | 'share' | Metered;
+/**
+ * Why work is refused, in the order it is checked: the off switch, the day's spend, the day's tokens, the device's share of them,
+ * then its own limit.
+ */
+export type Refusal = 'off' | 'cap' | 'budget' | 'share' | Metered;
 
 /** What Momo says for each refusal. */
 export const LINES: Record<Refusal, string> = {
   off: 'Mind Palace is paused for a little while. Your trees are safe, so try again soon.',
   cap: "Mind Palace has done all it can for today. Your trees are safe; come back tomorrow.",
+  budget: "Mind Palace has done all the thinking it can for today. Your trees are safe; come back tomorrow.",
   share: "This headset has reached today's limit, so I can't do more for it until tomorrow. Your trees are all here to browse.",
   voiceMs: "That's all the talking I can do today. Your trees are still here to browse.",
   searches: "That's today's searches used up. I can still talk, and your trees are all here.",
@@ -96,11 +102,9 @@ export class Ledger {
 
   /** Why this device may not do this kind of work now, or null. */
   refusal(device: string, kind: Metered): Refusal | null {
-    const day = this.today();
-    if (day.off) return 'off';
-    if (day.dollars >= this.opts.limits.dollarsPerDay) return 'cap';
-    if (this.shareUsed(device)) return 'share';
-    const used = day.devices[device]?.[kind] ?? 0;
+    const held = this.held(device);
+    if (held) return held;
+    const used = this.today().devices[device]?.[kind] ?? 0;
     const limit = { voiceMs: this.opts.limits.voiceMinutes * 60_000, searches: this.opts.limits.searches, webAnswers: this.opts.limits.webAnswers }[kind];
     return used >= limit ? kind : null;
   }
@@ -115,10 +119,12 @@ export class Ledger {
     return Boolean(usage && (usage.dollars >= this.opts.limits.deviceDollars || usage.tokens >= this.opts.limits.deviceTokens));
   }
 
-  /** Whether the service does no costly work at all now: switched off, or the day's cap is spent. */
+  /** Whether the service does no costly work at all now: switched off, the day's cap spent, or the day's tokens used. */
   paused(): Refusal | null {
     const day = this.today();
-    return day.off ? 'off' : day.dollars >= this.opts.limits.dollarsPerDay ? 'cap' : null;
+    if (day.off) return 'off';
+    if (day.dollars >= this.opts.limits.dollarsPerDay) return 'cap';
+    return day.metaTokens >= this.opts.limits.tokensPerDay ? 'budget' : null;
   }
 
   used(device: string, kind: Metered, amount: number): void {

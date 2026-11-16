@@ -38,6 +38,7 @@ const ledger = hosted
         dollarsPerDay: number('MIND_PALACE_CAP_DOLLARS', DEFAULT_LIMITS.dollarsPerDay),
         deviceDollars: number('MIND_PALACE_LIMIT_DEVICE_DOLLARS', DEFAULT_LIMITS.deviceDollars),
         deviceTokens: number('MIND_PALACE_LIMIT_DEVICE_TOKENS', DEFAULT_LIMITS.deviceTokens),
+        tokensPerDay: number('MIND_PALACE_TOKEN_BUDGET', DEFAULT_LIMITS.tokensPerDay),
       },
       metaDollarsPerMillion: number('MIND_PALACE_META_PRICE', 0),
       alert:
@@ -62,7 +63,8 @@ if (fake) {
     baseUrl: env.MUSE_LLM_BASE_URL || undefined,
     model: env.MUSE_LLM_MODEL || undefined,
     quickModel: env.MIND_PALACE_QUICK_MODEL || undefined,
-    tokenBudget: env.MIND_PALACE_TOKEN_BUDGET ? Number(env.MIND_PALACE_TOKEN_BUDGET) : undefined,
+    // Hosted, the budget is the ledger's, counted again each day; on the Mac it lasts as long as the process.
+    tokenBudget: hosted ? Number.POSITIVE_INFINITY : env.MIND_PALACE_TOKEN_BUDGET ? Number(env.MIND_PALACE_TOKEN_BUDGET) : undefined,
     onCall: (c) => {
       ledger?.metaTokens(c.tokens ?? 0, forDevice.getStore());
       console.log(
@@ -106,7 +108,7 @@ if (ledger) {
   const inner = model;
   model = new Paused(inner, () => {
     const why = ledger.paused();
-    return why ? `the service is ${why === 'off' ? 'switched off' : "over today's spend cap"}` : null;
+    return why ? `the service is ${why === 'off' ? 'switched off' : why === 'budget' ? "over today's token budget" : "over today's spend cap"}` : null;
   });
 }
 
