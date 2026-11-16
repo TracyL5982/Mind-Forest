@@ -402,9 +402,10 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
   - **Beats.** Pulling is two (pull; then "Now push it away to come back", with pull and push playing on
     the layer pulled back to). Marking is four (go in; take up the pen; draw; come back out), the last
     three said along the foot of the picture on the card itself.
-  - **Done, then the next card.** A lesson done is a chime, a tick where its gesture played and "Done.
-    Pinch card 4 to go on", with that card ringed and arrowheads running to it. Pinching it is the next
-    lesson (as it is at any time: that is the skip, and it is said so after 14 s on a lesson not done).
+  - **Done, then the next card.** A lesson done is a chime, a tick where its gesture played (it stays
+    there while the card is shown) and "Done. Pinch card 4 to go on", with that card ringed and
+    arrowheads running to it. Pinching it is the next lesson (as it is at any time: that is the skip,
+    and it is said so after 14 s on a lesson not done).
     Left alone for 15 s the walk takes the card itself (`-guideAutoAfter <s>`); after the small tree, which
     leaves you on another layer where the next card is not to be seen, it does so after 4 s.
   - **The way out of the marked picture** ("Pinch empty space to come back out") has a place shown for it:

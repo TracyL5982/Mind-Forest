@@ -73,11 +73,10 @@ const float lessonSize = 0.35f;     // of life size
 const float lessonGround = 0.5f;    // how solid the card behind an idle lesson is
 const float lessonLine = 0.0024f;   // the hand's line at that size, m (drawn small, it wants more weight)
 
-// A lesson done: for a moment a ring closes and a tick is drawn where its gesture played.
-const float doneSeconds = 1.7f;
+// A lesson done: a ring closes and a tick is drawn where its gesture played. They stay while its card is shown.
+const float doneSeconds = 0.75f;
 void drawDone(float t, guide::Frame& f) {
     const Vec3 X{1, 0, 0}, Y{0, 1, 0};
-    f.fade = 1 - guide::span(t, 1.35f, doneSeconds);
     float round = guide::travel(guide::span(t, 0, 0.5f)), tick = guide::travel(guide::span(t, 0.3f, 0.75f));
     f.arc(Vec3::zero(), X, Y, 0.062f, floatPi / 2, floatPi / 2 - round * 2 * floatPi, 0.003f, guide::white, 0.9f);
     if (tick < 0.01f) return;
@@ -774,14 +773,9 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     }
     if (want != teach.tourShown) tourShow(want);
     if (teach.tourShown >= 0) {
-        // A lesson just done: the tick, the first time its card is looked at after.
+        // A lesson just done: the tick, drawn the first time its card is looked at after, and kept there.
         bool ticking = teach.tourShown == teach.tourTickFor;
         if (ticking && teach.tourTick < 0) teach.tourTick = now;
-        if (ticking && now - teach.tourTick >= double(doneSeconds) && !holdDone) {
-            teach.tourTickFor = -1;
-            teach.tourBegan = now;
-            ticking = false;
-        }
         if (ticking) {
             teach.painter->draw(doneGesture, float(teach.demoT >= 0 ? teach.demoT : now - teach.tourTick), eye);
         } else if (const guide::Gesture* g = guide::gesture(tourSteps[teach.tourShown >= 200 ? pullStep : teach.tourShown % 100].gesture)) {
