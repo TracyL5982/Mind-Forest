@@ -31,7 +31,7 @@ sync_dir() {
 
 # Small copies of the works' pictures (512 px JPEG, about 25 MB for 750), for cards a few centimetres wide:
 # unpacking a 1600 px HEIC takes the headset about 55 ms, a small JPEG a few. Made once, beside the other
-# caches in media-src (git ignores this one); a later run only makes what is missing.
+# caches in media-src (which git ignores); a later run only makes what is missing.
 SMALL="$REPO_ROOT/media-src/quest/works-small"
 mkdir -p "$SMALL"
 made=0
