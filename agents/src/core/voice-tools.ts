@@ -25,6 +25,8 @@ export interface ToolDeps {
    * A run Momo starts is asked in these words, and Momo's own wording goes beside them as its reading (`Asked`).
    */
   said?: () => Promise<string | undefined>;
+  /** The chat app this mindstorm can be paired with, when the service has one. */
+  contact?: { status(): { paired: string | null }; pair(): { bot: string; code?: string } | null };
 }
 
 interface Tool {
@@ -273,6 +275,27 @@ export const TOOLS: Record<string, Tool> = {
       const scope = args.everything === true ? null : defaultScope(see(ctx, deps.scene));
       performed(deps, { kind: 'handoff', scope: scope ?? { treeIds: [], nodeIds: [] }, note: text(args, 'note') });
       return { started: true, note: 'You will get a note when the file is ready.' };
+    },
+  },
+
+  connect_telegram: {
+    description:
+      'Connect the user\'s Telegram, so they can send things in from their phone and get handoffs there: "connect my Telegram", "pair Telegram", "how do I use Telegram with this". ' +
+      'Answers with the bot to open and a short code to send it.',
+    parameters: object({}),
+    run: (_args, deps) => {
+      if (!deps.contact) return { done: false, why: 'Telegram is not set up on this service. Say so.' };
+      const paired = deps.contact.status().paired;
+      const invite = deps.contact.pair();
+      if (!invite) return { done: false, why: 'Telegram has not answered yet. Ask them to try again in a minute.' };
+      if (!invite.code) return { done: false, why: 'Here Telegram is paired from the web page: Settings, then Pair under Telegram. Say so.' };
+      return {
+        done: true,
+        bot: `@${invite.bot}`,
+        code: `${invite.code.slice(0, 3)} ${invite.code.slice(3)}`,
+        ...(paired ? { already: `Telegram is connected as ${paired} now. The chat that sends this code takes its place.` } : {}),
+        note: 'Tell the user to open Telegram, find the bot by this name, and send it this code. Say the bot\'s name as given, then the code one digit at a time. It works once, for ten minutes. Say nothing else.',
+      };
     },
   },
 

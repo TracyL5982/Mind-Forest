@@ -106,7 +106,7 @@ export interface Space {
 /** The voice tools that start a Scout run. */
 const SEARCHING = new Set(['find_new', 'more_like_this', 'start_tree']);
 /** The voice tools that write nothing. Every other one is refused once the space has no room. */
-const READING = new Set(['web_answer', 'look_up_mindstorm', 'go_to']);
+const READING = new Set(['web_answer', 'look_up_mindstorm', 'go_to', 'connect_telegram']);
 /** The messages that write to the mindstorm, its pictures or its handoffs. */
 const WRITES = new Set<ClientMessage['t']>(['dump', 'utter', 'ask', 'more', 'keep', 'undo', 'commands', 'organize', 'handoff']);
 /** `/live` sockets one metered space keeps: a headset reconnecting while its old socket lingers. A newer one closes the oldest. */
@@ -496,7 +496,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         call: (name, args, scene, said) => {
           const why = (READING.has(name) ? null : noRoom()) ?? (SEARCHING.has(name) ? meter?.refused('searches') : null);
           if (why) return Promise.resolve({ error: why });
-          return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said }));
+          return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said, contact: telegram ?? undefined }));
         },
         label: toolLabel,
         where: (scene) => whereNote(pipeline.ctx, scene),

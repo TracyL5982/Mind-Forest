@@ -12,6 +12,7 @@ import type { LiveOptions } from './live.ts';
 import { HEARING_MODEL, openaiRealtime, openaiSpeech, openaiTranscribe, SPEECH_VOICE } from './speech-openai.ts';
 import { openaiWebAnswer } from './web-answer.ts';
 import { MAX_DEVICES, NEW_DEVICES_PER_HOUR, PICTURE_DOLLARS, startHosted, telegramAlert } from './hosted/hosted.ts';
+import { judgeBotToken } from './hosted/judges.ts';
 import { forDevice, Ledger, limitsFrom } from './hosted/ledger.ts';
 import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareCost } from './hosted/overflow.ts';
 import { openInstagram } from './instagram.ts';
@@ -176,6 +177,8 @@ if (ledger) {
   // Instagram account. Its pictures are made small with macOS's `sips`, which a Linux server lacks, so deploy/instagram.sh copies the
   // Mac's library there, and the server reads Instagram only with MIND_PALACE_INSTAGRAM_READ=on and an account.
   const following = openInstagram({ connection: shared.instagram, list: instagramList, dir: join(dataDir, 'instagram'), read: env.MIND_PALACE_INSTAGRAM_READ === 'on', log }) ?? undefined;
+  // The judges' own bot, which only this service reads. The owner's bot is never read here: their Mac reads it.
+  const judgeToken = fake ? undefined : judgeBotToken(env, log);
   const service = await startHosted({
     port,
     host,
@@ -194,6 +197,7 @@ if (ledger) {
     storeLimit: number('MIND_PALACE_STORE_MB_PER_DEVICE', 20) * 1e6,
     madeLimit: number('MIND_PALACE_FILES_MB_PER_DEVICE', 60) * 1e6,
     record,
+    judgeBot: judgeToken ? { token: judgeToken } : undefined,
     // deploy/deploy.sh says which: judging, with fly.toml's limits, or testing, with deploy/testing.env's.
     mode: env.MIND_PALACE_LIMITS_MODE || 'judging',
     log,
@@ -202,7 +206,7 @@ if (ledger) {
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => void service.close().finally(() => process.exit(0)));
   console.log(`Mind Palace agents, hosted${fake ? ' (fake roles, no model)' : ''}: a space per device under ${join(dataDir, 'spaces')}`);
   console.log(`  listening ${service.url}, limits ${JSON.stringify(ledger.limits)}`);
-  console.log(`  telegram  ${env.TELEGRAM_BOT_TOKEN && env.MIND_PALACE_ALERT_CHAT ? 'alerts only, no reading' : 'off'}`);
+  console.log(`  telegram  the owner's bot: ${env.TELEGRAM_BOT_TOKEN && env.MIND_PALACE_ALERT_CHAT ? 'alerts only, never read' : 'off'}; the judges' bot: ${judgeToken ? 'read, a chat per headset' : 'off (MIND_PALACE_JUDGE_BOT_TOKEN is not set)'}`);
 } else {
   const running = await startServer({
     ...shared,

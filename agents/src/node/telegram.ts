@@ -33,7 +33,7 @@ export interface TelegramOptions extends BotOptions {
 }
 
 /** Which bot a file's read position belongs to, and how far its messages have been read. */
-const Position = z.object({ bot: z.number().nullable().default(null), offset: z.number().int().default(0) });
+export const Position = z.object({ bot: z.number().nullable().default(null), offset: z.number().int().default(0) });
 type Position = z.infer<typeof Position>;
 
 const Paired = z.object({ userId: z.number(), chatId: z.number(), name: z.string() });
