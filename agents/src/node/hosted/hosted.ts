@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statfsSync } from 'node:fs';
+import { createServer, STATUS_CODES, type IncomingMessage, type ServerResponse } from 'node:http';
 import { join, posix } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { PROTOCOL_VERSION } from '../protocol.ts';
@@ -26,6 +26,10 @@ export const PICTURE_DOLLARS = 0.01;
  * this is refused, so a device's mindstorm passes its store limit by at most this much.
  */
 export const SET_BYTES = 2_500_000;
+
+/** Below this much free on the volume, which every space and the ledger share, nothing new is written: no upload, change or space. */
+export const MIN_FREE_BYTES = 300e6;
+const VOLUME_FULL = 'The service is nearly out of room, so nothing more can be added for now. Everything here still opens.';
 
 export interface HostedOptions {
   port: number;
@@ -53,8 +57,10 @@ export interface HostedOptions {
   pictureDollars?: number;
   /** The user's Instagram accounts, opened once: every space searches this one library, and only its reader, if any, reads Instagram. */
   following?: { library: InstagramLibrary; reader?: InstagramReader };
-  /** What one device's mindstorm may come to on disk, in bytes, before its own commands and drops are refused. */
+  /** What one device's mindstorm and handoffs may come to on disk, in bytes, before every message that writes is refused. */
   storeLimit?: number;
+  /** What is free on the volume, in bytes. Defaults to the file system's own count. */
+  freeBytes?: () => number;
   /** A line in Momo's voice as 16-bit mono PCM at the live voice's rate, for a refusal said without the realtime model. */
   record?: (text: string) => Promise<Uint8Array>;
   log: (line: string) => void;
@@ -86,6 +92,11 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
   /** When each device of the last hour was made. */
   const born: number[] = [];
   const started = Date.now();
+  const freeBytes = opts.freeBytes ?? (() => {
+    const fs = statfsSync(opts.dataDir);
+    return fs.bavail * fs.bsize;
+  });
+  const volumeFull = () => (freeBytes() < MIN_FREE_BYTES ? VOLUME_FULL : null);
 
   const errors: string[] = [];
   let errorCount = 0;
@@ -133,6 +144,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
     }
     const dir = join(spacesDir, device);
     if (!known.has(device)) {
+      if (volumeFull()) return { status: 507, error: VOLUME_FULL };
       if (known.size >= maxDevices) return { status: 403, error: 'this service has all the headsets it can take' };
       while (born.length > 0 && born[0]! < Date.now() - 3_600_000) born.shift();
       if (born.length >= newPerHour) return { status: 429, error: 'too many new headsets this hour; try again later' };
@@ -141,7 +153,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       known.add(device);
       note(`[spaces] new space for ${short(device)}${opts.starter && existsSync(opts.starter) ? ', from the starter trees' : ''}`);
     }
-    const space = openSpace({ ...spaceOptions(opts, device), meter: meterOf(device), uploads, log: (line) => note(`[${short(device)}] ${line}`) });
+    const space = openSpace({ ...spaceOptions(opts, device), volumeFull, meter: meterOf(device), uploads, log: (line) => note(`[${short(device)}] ${line}`) });
     open.set(device, { space, last: Date.now() });
     space.catch((err) => {
       open.delete(device);
@@ -302,7 +314,7 @@ export function upgradeWhenOpen(
     if (!device) return refuse('401 Unauthorized');
     void spaceOf(device).then(
       (space) => {
-        if ('error' in space) return refuse(space.status === 429 ? '429 Too Many Requests' : '403 Forbidden');
+        if ('error' in space) return refuse(`${space.status} ${STATUS_CODES[space.status]}`);
         socket.removeListener('error', heard);
         space.upgrade(req, socket, head);
       },

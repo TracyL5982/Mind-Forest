@@ -10,7 +10,7 @@ import type { Found, JsonRequest, ModelClient, Priority, Tools } from '../src/co
 import type { Roles } from '../src/core/roles/types.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { PICTURE_DOLLARS, SET_BYTES, spaceOptions, startHosted, telegramAlert, upgradeWhenOpen, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
+import { MIN_FREE_BYTES, PICTURE_DOLLARS, SET_BYTES, spaceOptions, startHosted, telegramAlert, upgradeWhenOpen, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
 import { DEFAULT_LIMITS, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
 import { LiveVoice, type LiveDeps, type VoiceFrame } from '../src/node/live.ts';
@@ -109,6 +109,14 @@ function recording(ms: number, byteRate = 32000): Uint8Array<ArrayBuffer> {
 /** The promise, or a failure after `ms`, so a test that waits for a reply that never comes fails instead of holding the run open. */
 const soon = <T,>(promise: Promise<T>, ms = 8000): Promise<T> =>
   Promise.race([promise, new Promise<never>((_done, fail) => setTimeout(() => fail(new Error(`nothing came in ${ms} ms`)), ms).unref())]);
+
+/** Resolves once `check` holds, looked at every 10 ms, or fails after `ms`. */
+const holds = (check: () => unknown, ms = 8000): Promise<void> =>
+  new Promise((done, fail) => {
+    const by = Date.now() + ms;
+    const look = (): void => void (check() ? done() : Date.now() > by ? fail(new Error(`it did not hold in ${ms} ms`)) : setTimeout(look, 10).unref());
+    look();
+  });
 
 const treesOf = (hello: Msg) => (hello.snapshot as { trees: { id: string; title: string; rootId: string }[] }).trees;
 const admin = (hosted: Hosted, query = '', method = 'GET') => fetch(`${hosted.url}/admin${query}`, { method, headers: { Authorization: `Bearer ${ADMIN}` } }).then((r) => r.json() as Promise<Record<string, unknown>>);
@@ -744,4 +752,87 @@ test("a socket that fails while its space opens is heard, and the space then has
   await opening;
   await new Promise((done) => setImmediate(done));
   assert.equal(listeners, own, "the wait's listener is gone when the space takes the socket");
+});
+
+test('once a space is at its store limit every message that writes is refused, the voice tools that write too, and handoff zips count', { timeout: 30000 }, async () => {
+  let heard: ((event: Record<string, unknown>) => void) | undefined;
+  const open: LiveDeps['open'] = (on) => {
+    heard = on.event as (event: Record<string, unknown>) => void;
+    return { send: () => {}, close: () => {} };
+  };
+  const live = { open, options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } };
+  const { hosted, dataDir, lines } = await host({}, { shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, live }, storeLimit: 5e6 });
+  const sockets: WebSocket[] = [];
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    sockets.push(c.ws);
+    const hello = await c.until((m) => m.t === 'hello');
+    const root = treesOf(hello)[0]!.rootId;
+    const fulls = () => c.seen.filter((m) => m.t === 'say' && String(m.text).includes('is full')).length;
+    c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'Under the limit, a note is kept' }] }));
+    await soon(c.until((m) => m.t === 'change'));
+    assert.equal(fulls(), 0);
+
+    writeFileSync(join(dataDir, 'spaces', A, 'handoffs', 'earlier.zip'), new Uint8Array(5e6));
+    const writes = [
+      { t: 'dump', dumps: [{ kind: 'text', text: 'one more note' }] },
+      { t: 'utter', text: 'start a tree on lighthouses', final: true, scene: { focus: root, selection: [] } },
+      { t: 'ask', nodeId: root, need: 'a museum work' },
+      { t: 'more', nodeId: root },
+      { t: 'keep', nodeIds: [root] },
+      { t: 'undo' },
+      { t: 'commands', label: 'Rename', commands: [{ type: 'renameTree', id: treesOf(hello)[0]!.id, title: 'Renamed' }] },
+      { t: 'organize', request: 'group these', scope: { treeIds: [], nodeIds: [root] } },
+      { t: 'handoff', scope: { treeIds: [], nodeIds: [root] } },
+    ];
+    for (const message of writes) c.ws.send(JSON.stringify(message));
+    await soon(c.until(() => fulls() === writes.length));
+    c.ws.send(JSON.stringify({ t: 'focus', nodeId: root }));
+    c.ws.send(JSON.stringify({ t: 'questions', nodeId: root }));
+    await soon(c.until((m) => m.t === 'questions'));
+    assert.equal(fulls(), writes.length, 'what only reads still works');
+
+    const voice = await connect(hosted, `${KEY}.${A}`, `/live?connection=${hello.connection as string}`);
+    sockets.push(voice.ws);
+    await voice.until((m) => m.t === 'ready');
+    voice.ws.send(JSON.stringify({ t: 'start', turn: 1, scene: { selection: [] } }));
+    voice.ws.send(JSON.stringify({ t: 'audio', pcm: Buffer.alloc(3200).toString('base64') }));
+    await holds(() => heard);
+    heard!({ type: 'response.created', response: { id: 'r1', metadata: { purpose: 'reply' } } });
+    heard!({ type: 'response.output_item.added', response_id: 'r1', item: { type: 'function_call', call_id: 'c1', name: 'save_note' } });
+    heard!({ type: 'response.function_call_arguments.done', response_id: 'r1', call_id: 'c1', arguments: JSON.stringify({ text: 'remember the harbour' }) });
+    heard!({ type: 'response.done', response: { id: 'r1', status: 'completed' } });
+    const answered = () => lines.find((line) => line.includes('[live] save_note('));
+    await holds(answered);
+    assert.match(answered()!, /"error":"This headset's mind palace is full/, "Momo's note is refused too");
+  } finally {
+    for (const ws of sockets) ws.close();
+    await hosted.close();
+  }
+});
+
+test('with the volume nearly full, nothing new is written and no new space is made, while health and reads go on', { timeout: 20000 }, async () => {
+  let free = 10 * MIN_FREE_BYTES;
+  const { hosted } = await host({}, { freeBytes: () => free });
+  let ws: WebSocket | undefined;
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    ws = c.ws;
+    await c.until((m) => m.t === 'hello');
+    free = MIN_FREE_BYTES - 1;
+    c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'a note with no room for it' }] }));
+    await soon(c.until((m) => m.t === 'say' && String(m.text).includes('nearly out of room')));
+    const upload = await fetch(`${hosted.url}/api/assets?name=note.txt`, { method: 'POST', headers: { Authorization: `Bearer ${KEY}.${A}`, 'Content-Type': 'text/plain' }, body: 'hello' });
+    assert.equal(upload.status, 507);
+    assert.match(((await upload.json()) as { error: string }).error, /nearly out of room/);
+    assert.equal((await fetch(`${hosted.url}/api/state?token=${KEY}.${B}`)).status, 507, 'no new space');
+    await assert.rejects(connect(hosted, `${KEY}.${B}`), /507/);
+    assert.equal((await fetch(`${hosted.url}/api/health`)).status, 200);
+    assert.equal((await fetch(`${hosted.url}/api/state?token=${KEY}.${A}`)).status, 200, 'a space that is there still opens');
+    free = 10 * MIN_FREE_BYTES;
+    assert.equal((await fetch(`${hosted.url}/api/state?token=${KEY}.${B}`)).status, 200, 'and with room again, a new one is made');
+  } finally {
+    ws?.close();
+    await hosted.close();
+  }
 });

@@ -40,8 +40,10 @@ export interface ServerOptions {
   instagram?: { token: string; userId: string; list?: string; read?: boolean };
   /** The user's Instagram accounts, opened once and shared: this space searches them through a view of its own and reads nothing. */
   library?: InstagramLibrary;
-  /** Hosted mode: past this many bytes of mindstorm on disk, the device's own commands and drops are refused. */
+  /** Hosted mode: past this many bytes of mindstorm and handoffs on disk, every message that writes is refused. */
   storeLimit?: number;
+  /** Hosted mode: why the volume takes no more writes now, or null. Reads go on. */
+  volumeFull?: () => string | null;
   /** Hosted mode: most bytes one change may store (`MindstormOptions.setBytes`), so a message passes the store limit by at most this. */
   setBytes?: number;
   keys?: Record<string, string | undefined>;
@@ -96,6 +98,10 @@ export interface Space {
 
 /** The voice tools that start a Scout run. */
 const SEARCHING = new Set(['find_new', 'more_like_this', 'start_tree']);
+/** The voice tools that write nothing. Every other one is refused once the space has no room. */
+const READING = new Set(['web_answer', 'look_up_mindstorm', 'go_to']);
+/** The messages that write to the mindstorm, its pictures or its handoffs. */
+const WRITES = new Set<ClientMessage['t']>(['dump', 'utter', 'ask', 'more', 'keep', 'undo', 'commands', 'organize', 'handoff']);
 /** `/live` sockets one metered space keeps: a headset reconnecting while its old socket lingers. A newer one closes the oldest. */
 const LIVE_PER_SPACE = 2;
 /** What a metered space takes on /api/transcribe: the Quest's own WAV, of about a minute at most. */
@@ -279,6 +285,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (guarded && !authorized(req, url)) return json(res, 401, { error: 'missing or wrong token' });
     if (guarded) res.setHeader('Set-Cookie', `mp_token=${token}; Path=/; HttpOnly; SameSite=Lax`);
 
+    const volumeFull = req.method === 'POST' && path === '/api/assets' ? opts.volumeFull?.() : null;
+    if (volumeFull) return json(res, 507, { error: volumeFull });
     if (req.method === 'POST' && path === '/api/assets' && opts.uploads) {
       if (uploading) return json(res, 429, { error: 'one upload at a time' });
       const limit = opts.uploads.file;
@@ -375,11 +383,14 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   // In hosted mode a message is small: a client's commands and drops, and on /live 100 ms of audio (a frame's own limit is 1 MiB).
   const wss = new WebSocketServer({ noServer: true, ...(meter ? { maxPayload: 1_000_000 } : {}) });
   const liveWss = new WebSocketServer({ noServer: true, ...(meter ? { maxPayload: 1_500_000 } : {}) });
-  const storeFull = (): boolean => {
-    if (opts.storeLimit === undefined) return false;
+  /** Why this space takes no more writes now, or null: the volume nearly full, or its mindstorm and handoffs past the store limit. */
+  const noRoom = (): string | null => {
+    const volume = opts.volumeFull?.();
+    if (volume || opts.storeLimit === undefined) return volume ?? null;
     const size = (file: string) => (existsSync(file) ? statSync(file).size : 0);
     const db = join(opts.dataDir, 'mindstorm.sqlite');
-    return size(db) + size(`${db}-wal`) > opts.storeLimit;
+    const handoffs = existsSync(handoffDir) ? readdirSync(handoffDir).reduce((sum, name) => sum + size(join(handoffDir, name)), 0) : 0;
+    return size(db) + size(`${db}-wal`) + handoffs > opts.storeLimit ? STORE_FULL : null;
   };
   const upgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -440,7 +451,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         words: (scene) => likelyWords(mind, scene.treeId ?? null),
         tools: toolSpecs,
         call: (name, args, scene, said) => {
-          const why = SEARCHING.has(name) ? meter?.refused('searches') : null;
+          const why = (READING.has(name) ? null : noRoom()) ?? (SEARCHING.has(name) ? meter?.refused('searches') : null);
           if (why) return Promise.resolve({ error: why });
           return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said }));
         },
@@ -558,12 +569,13 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   });
 
   async function handle(m: ClientMessage, ws: WebSocket): Promise<void> {
+    const full = WRITES.has(m.t) ? noRoom() : null;
+    if (full) return decline(ws, full);
     switch (m.t) {
       case 'client':
         plays.set(ws, m.media);
         return;
       case 'dump':
-        if (storeFull()) return decline(ws, STORE_FULL);
         await pipeline.dump(m.dumps);
         return;
       case 'utter':
@@ -589,7 +601,6 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         pipeline.undo(m.id);
         return;
       case 'commands':
-        if (storeFull()) return decline(ws, STORE_FULL);
         pipeline.userCommands(m.label, m.commands);
         return;
       case 'organize':
