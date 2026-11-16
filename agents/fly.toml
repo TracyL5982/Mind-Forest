@@ -26,7 +26,7 @@ kill_timeout = "30s"
   MIND_PALACE_NEW_DEVICES_PER_HOUR = "10"
   # One file; what one headset's uploads may come to; its mindstorm with its handoffs; and the pictures the service keeps for it
   # (fetched, made, copied from Instagram). That is about 120 MB a headset: the 20 headsets MIND_PALACE_MAX_DEVICES allows take 2.4 GB,
-  # beside the Instagram library (about 290 MB) on the 3 GB volume, and nothing new is written while under 300 MB is free.
+  # beside the Instagram library (about 290 MB) on the 5 GB volume, and nothing new is written while under 300 MB is free.
   MIND_PALACE_UPLOAD_MB = "25"
   MIND_PALACE_UPLOAD_MB_PER_DEVICE = "40"
   MIND_PALACE_STORE_MB_PER_DEVICE = "20"
@@ -40,7 +40,7 @@ kill_timeout = "30s"
 [[mounts]]
   source = "mind_palace_data"
   destination = "/data"
-  initial_size = "3gb"
+  initial_size = "5gb"
 
 [http_service]
   internal_port = 8080

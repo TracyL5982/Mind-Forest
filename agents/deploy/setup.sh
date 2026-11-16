@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 FLY=${FLY:-fly}
 APP=${FLY_APP:-mind-palace-judging}
 "$FLY" apps create "$APP"
-"$FLY" volumes create mind_palace_data --app "$APP" --region sjc --size 3 --yes
+"$FLY" volumes create mind_palace_data --app "$APP" --region sjc --size 5 --yes
 # fly 0.4.53's first deploy failed to give the app its addresses, so they are allocated here.
 "$FLY" ips allocate-v6 --app "$APP"
 "$FLY" ips allocate-v4 --shared --app "$APP"
