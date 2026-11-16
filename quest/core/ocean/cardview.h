@@ -23,7 +23,7 @@ constexpr float openLift = 0.0015f;
 
 /// NOTE(port): added for Quest (core/cards). What the user marked on a service card with the pen, as the scene draws it.
 struct CardEdit {
-    enum class Kind { highlight, stroke };
+    enum class Kind { highlight, stroke, stretch };
     std::string id;
     Kind kind = Kind::highlight;
     /// A highlight: the words, and which of their appearances on the card's content it is, 0 the first.
@@ -31,8 +31,10 @@ struct CardEdit {
     int occurrence = 0;
     /// A line: its points in order, each 0 to 1 across and down the card's whole content, however far it is scrolled.
     std::vector<Vec2> points;
+    /// A stretch of the card's video: seconds from its start. A card keeps one, drawn as the pen's own mark (`syncStretch`).
+    double from = 0, to = 0;
     bool operator==(const CardEdit& o) const {
-        return id == o.id && kind == o.kind && quote == o.quote && occurrence == o.occurrence && points.size() == o.points.size() &&
+        return id == o.id && kind == o.kind && quote == o.quote && occurrence == o.occurrence && from == o.from && to == o.to && points.size() == o.points.size() &&
                std::equal(points.begin(), points.end(), o.points.begin(), [](Vec2 a, Vec2 b) { return a.x == b.x && a.y == b.y; });
     }
 };

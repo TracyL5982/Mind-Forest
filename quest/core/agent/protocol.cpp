@@ -108,6 +108,14 @@ public:
         return int64_t(v);
     }
 
+    /// Two numbers, the first not below 0 and the second after it: a stretch of time.
+    std::pair<double, double> span(const char* fromKey, const char* toKey) {
+        double from = number(fromKey), to = number(toKey);
+        if (ok_ && from < 0) fail(fromKey, "below 0");
+        if (ok_ && !(from < to)) fail(toKey, "not after " + std::string(fromKey));
+        return {from, to};
+    }
+
     bool boolean(const char* key) {
         const Json& v = json_[key];
         if (!v.isBool()) fail(key, v.isNull() ? "missing" : "not true or false");
@@ -310,11 +318,16 @@ std::optional<View> readView(const Json& j, Why& why) {
 
 std::optional<Edit> readEdit(const Json& j, Why& why) {
     Fields f(j, why);
-    Edit e{.id = f.string("id"), .kind = f.choice<Edit::Kind>("kind", {{"highlight", Edit::Kind::highlight}, {"stroke", Edit::Kind::stroke}})};
+    Edit e{.id = f.string("id"),
+           .kind = f.choice<Edit::Kind>("kind", {{"highlight", Edit::Kind::highlight}, {"stroke", Edit::Kind::stroke}, {"stretch", Edit::Kind::stretch}})};
     if (!f.ok()) return std::nullopt;
     if (e.kind == Edit::Kind::highlight) {
         e.quote = f.string("quote");
         if (j["at"].isNumber()) e.at = int(f.whole("at"));
+    } else if (e.kind == Edit::Kind::stretch) {
+        auto [from, to] = f.span("from", "to");
+        e.from = from;
+        e.to = to;
     } else {
         e.points = f.points("points");
     }
@@ -605,6 +618,10 @@ Command Command::addEdit(const NodeId& id, const Edit& edit) {
     if (edit.kind == Edit::Kind::highlight) {
         e.set("kind", "highlight").set("quote", edit.quote);
         if (edit.at) e.set("at", *edit.at);
+    } else if (edit.kind == Edit::Kind::stretch) {
+        // Hundredths of a second.
+        auto rounded = [](double v) { return std::round(v * 100) / 100; };
+        e.set("kind", "stretch").set("from", rounded(edit.from)).set("to", rounded(edit.to));
     } else {
         Json points = Json::list();
         // Four places: a tenth of a millimetre on the widest card.

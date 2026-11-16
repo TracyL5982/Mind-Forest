@@ -78,6 +78,10 @@ struct Kind {
     enum class Opens { text, chart, link, picture } opens = Opens::text;
     /// The chip line's margin each side, and its distance from the bottom, px.
     int chipInset = 15, chipBottom = 12;
+    /// A card the app makes itself, such as a lesson of the welcome tree: its opened card's badge is its
+    /// `props.badge`, it says nowhere that it came from, since it came from nowhere, and its opened card is as
+    /// tall as everything on it (`cards::ocean`), so it never scrolls.
+    bool premade = false;
 };
 
 /// Puts a type in the registry. Each type's file holds one, after its `Kind`.

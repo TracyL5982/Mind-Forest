@@ -379,20 +379,22 @@ public:
 private:
     static std::optional<Material> glowMaterial;
 
-    /// One small picture of a soft rectangle of light, stretched to fit any
-    /// card: bright along the card's edge, gone within two centimeters.
-    std::optional<Material> glowLook() const;
+    /// The light across a glow's band, as a thin picture: from the band's outer
+    /// edge, where there is none, to the card's edge, where it is brightest, and
+    /// on a little way under the card.
+    static std::optional<Material> glowLook();
 
 public:
-    /// A soft edge of light for a card whose face is `size`. Its corners
-    /// keep their shape whatever the card's proportions: only the
-    /// stretches between them are stretched.
-    EntityRef glow(Vec2 size) const;
+    /// A soft edge of light for a card whose face is `size` with corners of
+    /// `radius`: a band that keeps its distance from the card's edge all the
+    /// way round, so it turns each corner with the card, whatever its size.
+    static EntityRef glow(Vec2 size, float radius = 0);
 
     /// The light that comes up around a card while it is looked at: a band
-    /// from the card's edge outward, strongest at the edge. Nothing lies over
-    /// the card itself, so what it shows stays clear.
-    EntityRef gazeRim(Vec2 size, const std::optional<Material>& material) const;
+    /// from the card's edge outward, strongest at the edge, round its corners
+    /// of `radius` as the glow is. Nothing lies over the card itself, so what
+    /// it shows stays clear.
+    static EntityRef gazeRim(Vec2 size, const std::optional<Material>& material, float radius = 0);
 
     /// How a card in the tree answers being looked at: light around it, none on it.
     static Hover gaze() { return Hover::shader(); }

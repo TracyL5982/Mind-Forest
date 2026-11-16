@@ -131,6 +131,7 @@ void PresenceDemo::frame(double now) {
     crew.update(t);
     at(now, presence);
     presence.agents = crew.lines("Momo");
+    model.conversing = presence.conversing();
     Mat4 head = platform::head().value_or(Mat4::trs(model.stage.origin, Quat::identity(), {1, 1, 1}));
     double began = mediaTime();
     view->frame(presence, "Momo", head, now);

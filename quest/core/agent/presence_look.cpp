@@ -144,7 +144,7 @@ void Face::update(const Presence& p, float dt) {
 
     // AgentSphere: the level follows the voice up fast and down slower, so the rings breathe and do not flicker. Listening
     // it is the user's voice, which moves the ring; speaking, Momo's, which also parts it into colour.
-    bool hears = p.state == S::listening || p.state == S::responding;
+    bool hears = p.state == S::listening || p.state == S::open || p.state == S::responding;
     float heard = hears ? clamp(p.level, 0, 1) : 0;
     float k = heard > l.voice ? attack : release;
     l.voice += (heard - l.voice) * std::min(1.f, k * dt);
@@ -311,8 +311,10 @@ float Caption::tone(const Entry& e) const {
 
 void Caption::update(const Presence& p, const std::string& name, double now, float dt) {
     using S = Presence::State;
-    auto active = [](S s) { return s == S::listening || s == S::sent || s == S::thinking || s == S::responding; };
-    if (p.state == S::listening && state != S::listening) startTurn(now);
+    auto active = [](S s) { return s == S::listening || s == S::open || s == S::sent || s == S::thinking || s == S::responding; };
+    // The conversation open between turns listens as the turn itself does, so the user's words begin no new one.
+    auto listens = [](S s) { return s == S::listening || s == S::open; };
+    if (listens(p.state) && !listens(state)) startTurn(now);
     if (active(state) && !active(p.state)) {
         quietSince = now;
         // Woken, and nothing said: the hint may help again.
@@ -356,6 +358,7 @@ void Caption::update(const Presence& p, const std::string& name, double now, flo
         }
         break;
     case S::listening:
+    case S::open:
     case S::sent: add(user.empty() ? Part::listening : Part::user, user.empty() ? listening : user); break;
     case S::thinking:
         if (!user.empty()) add(Part::user, user);

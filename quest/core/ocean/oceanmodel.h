@@ -75,6 +75,7 @@
 // reach the scene's insides as friends.
 namespace agent {
 class Bridge;
+class EchoCheck;
 class PresenceDemo;
 }
 
@@ -82,8 +83,10 @@ class OceanModel : public PalaceScene {
 public:
     friend class agent::Bridge;
     friend class agent::PresenceDemo;
+    friend class agent::EchoCheck;
     std::shared_ptr<agent::Bridge> agentBridge;     // AGENT: only with -agent
     std::shared_ptr<agent::PresenceDemo> presenceDemo;     // AGENT: only with -presenceDemo
+    std::shared_ptr<agent::EchoCheck> echoCheck;     // AGENT: only with -echoCheck
     // NOTE(port): `root` in the Swift. PalaceScene asks for it as a function, so the field takes an underscore.
     EntityRef root_ = Entity::make();
     EntityRef root() override { return root_; }
@@ -595,7 +598,7 @@ private:
         bool tourDone[8] = {};              // which lessons the viewer has done
         int tourLessonWas = -2;             // the lesson in focus last frame, and since when it has been
         double tourLessonAt = 0;
-        int tourTickFor = -1;               // the lesson just done, whose card shows a tick the next time it is looked at
+        int tourTickFor = -1;               // the lesson just done, whose card shows a tick from the next time it is looked at
         double tourTick = -1;               // since when it has (-1: not yet)
         float tourCarried = 0;              // how far the tree has been carried on the walk, m
         int tourShown = -1;                 // where the ghost hand is: on lesson n's card; 100 + n on a card of its own; -1 nowhere
@@ -689,6 +692,7 @@ private:
     int soundDepth = 0;
     double soundLayerAfter = 0;                         // the next layer chord waits this long (a card is still on its way up)
     double thinkFrom = 0, thinkUntil = 0;
+    bool conversing = false;                            // AGENT: Momo listens, thinks or speaks, and the ocean draws back
     double stirSounded = -100, landSounded = -100;
     const Entity* landedLast[2] = {nullptr, nullptr};   // the last two things a ray's arrival sounded on
     std::vector<HandGlow::Grab> fistsDrawn;             // the closed hands the gauge was last drawn for (`drawHandGlow`)
@@ -1201,12 +1205,20 @@ private:
 
     // NOTE(port): added for Quest (core/cards). What the pen marks on a service card, kept with the card by the service
     /// (oceanmodel_edits.cpp). With the pen up, a drag on the card gone into begins one: a highlight on words, a line
-    /// anywhere else; a video's stretch is the headset's own mark (`markBegin`). What it was claimed for.
+    /// anywhere else, or a stretch along a video, drawn as Kai's mark is (`markBegin`, `keepStretch`). What it was claimed for.
     Press::Claim beginMark(CardView& c, Vec2 at);
-    /// Whether the card has anything marked on it: a highlight or a line the service keeps, or a mark of the headset's own.
+    /// Whether the card has anything marked on it: a mark the service keeps, or one of the headset's own.
     bool marked(int id) const;
-    /// What is marked on a service card, in words, for Send: its highlights, what is drawn on it, a video's stretch.
-    std::string markedPart(const CardView& c) const;
+    /// What Send asks about a service card: every mark on it, together ("Tell me more about these parts: …").
+    std::string tellMoreAbout(const CardView& c) const;
+    /// A stretch made on a service card's video, kept with the card by the service in place of the one it had.
+    void keepStretch(CardView& c, const Mark& made);
+    /// The pen's own mark on a service card's video shows the stretch the service keeps, or none.
+    void syncStretch(CardView& c);
+    /// The eraser on a service card: every mark off, at the service as one change.
+    void eraseAll(CardView& c);
+    /// A stretch's bar along the foot of the card's picture (`markMove`, `syncStretch`).
+    void drawStretch(CardView& c, float x0, float x1, bool made, double t0, double t1);
     /// A highlight or a line being drawn: begun by the drag, carried by it, kept when the pinch lets go.
     struct Drawing {
         int card;
@@ -1235,7 +1247,6 @@ private:
     void moveEdit(CardView& c, Vec2 at);
     /// Keeps it with the card, if it came to anything.
     void endEdit(CardView& c);
-    void eraseEdit(CardView& c, const std::string& editId);
     /// A point of a card's open face in the world, for pinches made by flag.
     Vec3 facePoint(const CardView& c, Vec2 at) const;
     /// Pinches the open card by flag, as a hand would: held `hold` s at the path's start, then drawn along it over `over` s.
