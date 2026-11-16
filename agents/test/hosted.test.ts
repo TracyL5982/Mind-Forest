@@ -920,3 +920,36 @@ test("a space's web answers run as its device's work, so their spend is counted 
   assert.equal(await options.live!.webAnswer!('When is low tide?'), 'An answer.');
   assert.deepEqual(seen, [A]);
 });
+
+test("the files the service keeps for a device count toward a limit of their own, and its uploads do not", { timeout: 30000 }, async () => {
+  const kept: string[] = [];
+  const roles: Roles = {
+    ...fakeRoles,
+    async scout(ctx, { need }) {
+      await ctx.assets.put(new Uint8Array(600_000), 'image/jpeg', `${need}.jpg`).then(
+        () => kept.push(`kept ${need}`),
+        (err: Error) => kept.push(`refused ${need}: ${err.message}`),
+      );
+      return [];
+    },
+  };
+  const { hosted } = await host({}, { shared: { clientDir: '', model: new FakeModel(), roles }, madeLimit: 1_000_000 });
+  let ws: WebSocket | undefined;
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    ws = c.ws;
+    const root = treesOf(await c.until((m) => m.t === 'hello'))[0]!.rootId;
+    const ask = async (need: string) => {
+      c.ws.send(JSON.stringify({ t: 'ask', nodeId: root, need }));
+      await holds(() => kept.some((line) => line.includes(` ${need}`)));
+    };
+    await ask('harbour');
+    const upload = await fetch(`${hosted.url}/api/assets?name=scan.bin`, { method: 'POST', headers: { Authorization: `Bearer ${KEY}.${A}`, 'Content-Type': 'application/octet-stream' }, body: new Uint8Array(1_500_000) });
+    assert.equal(upload.status, 200, 'an upload is not one of the files the service keeps');
+    await ask('lighthouse');
+    assert.deepEqual(kept, ['kept harbour', "refused lighthouse: no room to keep lighthouse.jpg: this headset's files come to 1 MB at most"]);
+  } finally {
+    ws?.close();
+    await hosted.close();
+  }
+});

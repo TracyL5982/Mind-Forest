@@ -20,11 +20,13 @@ kill_timeout = "30s"
   MIND_PALACE_IDLE_MINUTES = "20"
   MIND_PALACE_MAX_DEVICES = "60"
   MIND_PALACE_NEW_DEVICES_PER_HOUR = "30"
-  # One file, what one headset's uploads may come to, and its mindstorm with its handoffs. That is about 60 MB a headset: 10 headsets
-  # take 0.6 GB, but 60 would take 3.6 GB, more than the 3 GB volume, so the service writes nothing new while under 300 MB is free.
+  # One file; what one headset's uploads may come to; its mindstorm with its handoffs; and the pictures the service keeps for it
+  # (fetched, made, copied from Instagram). That is about 120 MB a headset: 10 headsets take 1.2 GB, but 60 would take 7.2 GB, more
+  # than the 3 GB volume, which also holds the Instagram library (about 290 MB), so nothing new is written while under 300 MB is free.
   MIND_PALACE_UPLOAD_MB = "25"
   MIND_PALACE_UPLOAD_MB_PER_DEVICE = "40"
   MIND_PALACE_STORE_MB_PER_DEVICE = "20"
+  MIND_PALACE_FILES_MB_PER_DEVICE = "60"
   # The user's Instagram accounts and the library read from them, copied from the Mac by deploy/instagram.sh, never in the image.
   MIND_PALACE_INSTAGRAM_LIST = "/data/instagram-following.md"
   # Per process, a guard against a runaway loop; the day's spend cap is the real limit. The Mac's default of 5M would run out in a day.

@@ -63,6 +63,8 @@ export interface HostedOptions {
   following?: { library: InstagramLibrary; reader?: InstagramReader };
   /** What one device's mindstorm and handoffs may come to on disk, in bytes, before every message that writes is refused. */
   storeLimit?: number;
+  /** What the files the service keeps for one device may come to, in bytes: pictures fetched, made or copied in. Uploads are apart. */
+  madeLimit?: number;
   /** What is free on the volume, in bytes. Defaults to the file system's own count. */
   freeBytes?: () => number;
   /** A line in Momo's voice as 16-bit mono PCM at the live voice's rate, for a refusal said without the realtime model. */
@@ -337,7 +339,7 @@ export function upgradeWhenOpen(
  * posts: a space searches the one shared library, whose reader alone holds the account. No web page: static files come from a folder
  * that is never made.
  */
-export function spaceOptions(opts: Pick<HostedOptions, 'shared' | 'dataDir' | 'appKey' | 'following' | 'storeLimit'>, device: string): Omit<ServerOptions, 'port' | 'host'> {
+export function spaceOptions(opts: Pick<HostedOptions, 'shared' | 'dataDir' | 'appKey' | 'following' | 'storeLimit' | 'madeLimit'>, device: string): Omit<ServerOptions, 'port' | 'host'> {
   const live = opts.shared.live;
   const answer = live?.webAnswer;
   return {
@@ -348,6 +350,7 @@ export function spaceOptions(opts: Pick<HostedOptions, 'shared' | 'dataDir' | 'a
     instagram: undefined,
     library: opts.following?.library,
     storeLimit: opts.storeLimit ?? 20e6,
+    madeLimit: opts.madeLimit ?? 60e6,
     setBytes: SET_BYTES,
     fetchPage: PUBLIC_ONLY,
     clientDir: join(opts.dataDir, 'no-web-page'),

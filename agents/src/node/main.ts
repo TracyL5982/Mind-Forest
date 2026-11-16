@@ -198,6 +198,7 @@ if (ledger) {
     uploads: { file: number('MIND_PALACE_UPLOAD_MB', 25) * 1e6, total: number('MIND_PALACE_UPLOAD_MB_PER_DEVICE', 40) * 1e6 },
     following,
     storeLimit: number('MIND_PALACE_STORE_MB_PER_DEVICE', 20) * 1e6,
+    madeLimit: number('MIND_PALACE_FILES_MB_PER_DEVICE', 60) * 1e6,
     record,
     log,
   });

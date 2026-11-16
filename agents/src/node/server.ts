@@ -44,6 +44,8 @@ export interface ServerOptions {
   storeLimit?: number;
   /** How a page or a picture named by a dump, a search or the model is fetched (`ToolOptions.fetchPage`). */
   fetchPage?: typeof fetch;
+  /** Hosted mode: what the files the service keeps in this space itself may come to, in bytes (pictures fetched, made or copied in). */
+  madeLimit?: number;
   /** Hosted mode: why the volume takes no more writes now, or null. Reads go on. */
   volumeFull?: () => string | null;
   /** Hosted mode: most bytes one change may store (`MindstormOptions.setBytes`), so a message passes the store limit by at most this. */
@@ -159,7 +161,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   mkdirSync(opts.dataDir, { recursive: true });
   const token = opts.token ?? savedToken(join(opts.dataDir, 'token'));
   const store = new SqliteStore(join(opts.dataDir, 'mindstorm.sqlite'));
-  const assets = new DiskAssets(join(opts.dataDir, 'assets'), '', opts.films);
+  const assets = new DiskAssets(join(opts.dataDir, 'assets'), '', opts.films, opts.madeLimit);
   const handoffDir = join(opts.dataDir, 'handoffs');
   mkdirSync(handoffDir, { recursive: true });
   /** What this space's uploads come to, kept beside them so a restart does not forget it. Only counted when `uploads` caps it. */
