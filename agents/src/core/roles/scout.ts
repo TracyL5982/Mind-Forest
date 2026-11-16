@@ -31,6 +31,9 @@ const HISTORY_TURNS = 6;
 /** The fast lane searches this many catalogues at most, and fills at most FAST_MOST slots, never half of a run's. */
 const FAST_LOOKS = 3;
 const FAST_MOST = 2;
+/** What makes a request one for something to look at, told to both models the same way. */
+const SEEABLE =
+  'true when it is about a place, an object, an artwork, a film or a scene, a person or a design; false when it asks for findings, causes, whether something is true, or how or why something is so.';
 /** What the fast lane names to look for a video, beside the catalogues' ids. */
 const VIDEO_LOOK = 'video';
 
@@ -66,13 +69,16 @@ type Direction = z.infer<typeof Direction>;
 const isWritten = (d: Direction): d is Direction & { format: Written } => (WRITTEN as readonly string[]).includes(d.format);
 /** The written slots of a direction that is no written idea. */
 const UNWRITTEN = { lines: [], pros: [], cons: [], subject: '', passage: '', by: '' } satisfies Partial<Direction>;
-const Ideas = z.object({ reading: z.string(), directions: z.array(Direction) });
+/** Whether the request is about something that can be seen. Sent as required; a model that gives none is taken to say yes. */
+const Seeable = z.boolean().nullish();
+const Ideas = z.object({ reading: z.string(), seeable: Seeable, directions: z.array(Direction) });
 
 const Ratings = z.object({
   ratings: z.array(z.object({ itemId: z.string(), strength: z.number(), why: z.string() })),
 });
 
 const Looks = z.object({
+  seeable: Seeable,
   looks: z.array(z.object({ source: z.string(), search: z.string(), title: z.string(), why: z.string(), tags: z.array(z.string()) })),
 });
 
@@ -208,31 +214,36 @@ export const scout: Roles['scout'] = async (given, input) => {
   // where to look is given up, and a find of its still out lands only into a slot nobody else claims.
   let fastMost = FAST_MOST;
   let lose = () => {};
-  const beaten = new Promise<Direction[]>((give) => {
+  const beaten = new Promise<FirstLooks>((give) => {
     lose = () => {
       fastMost = Math.min(fastMost, fast.filled);
       fast.writing = false;
-      give([]);
+      give({ looks: [] });
     };
   });
   const lanes = new Map<Direction, Lane>();
   const out = new Set<Direction>();
   const waiting: Waiting[] = [];
   let pictureTaken = false;
+  // Whether the request is about something that can be seen, as the first model to say so says, and the main model once it does.
+  // Until one says, it is taken to be, so slots are held for something to look at. A question of findings, causes, a fact or a why
+  // holds none: a picture there is welcome only when it shows the thing itself, and it waits for no slot.
+  let seeable: boolean | undefined;
+  const holding = () => seeable !== false;
   const making = () => [...out].filter(pictured).length;
   const seeing = (lane: Lane) => [...out].some((d) => lanes.get(d) === lane && visual(d));
   const finding = () => [...out].some((d) => lanes.get(d) === inventive && visual(d) && !pictured(d));
   // Until the inventive lane has shown something to look at, one slot is held for its first: while a find of pictures or a video is
   // out, and while the model may still write one, unless a picture being made holds its own slot. A find keeps the slot even then,
   // since a made picture takes 15 to 48 s and lands after the line, and a find lands before it.
-  const awaited = () => (inventive.shown === 0 && (finding() || (inventive.writing && making() === 0)) ? 1 : 0);
+  const awaited = () => (holding() && inventive.shown === 0 && (finding() || (inventive.writing && making() === 0)) ? 1 : 0);
   // The held slot, while what will fill it is not written yet.
   const kept = () => (awaited() && !finding() ? 1 : 0);
   const held = () => making() + awaited();
   // The fast lane fills at most two slots and never half, so the inventive lane always keeps the most.
   const fastShare = () => Math.min(fastMost, Math.floor(slots / 2));
   // Once its first card is in, a fast look at something to see keeps one of the lane's slots until it lands or comes back empty.
-  const fastHold = () => (fast.shown === 0 && seeing(fast) ? 1 : 0);
+  const fastHold = () => (holding() && fast.shown === 0 && seeing(fast) ? 1 : 0);
   // What it may still fill: its whole share while it is choosing, then no more than its finds still out could bring.
   const fastOwed = () => {
     const stillOut = [...out].filter((d) => lanes.get(d) === fast).length;
@@ -285,6 +296,14 @@ export const scout: Roles['scout'] = async (given, input) => {
     if (room <= 0 || (input.deliver !== undefined && room <= making())) return true;
     return !fast.writing && !inventive.writing && (out.size === 0 || (input.deliver !== undefined && making() === out.size));
   };
+  const see = (said: boolean | null | undefined, main: boolean) => {
+    if (said === null || said === undefined || (!main && seeable !== undefined)) return;
+    seeable = said;
+    void rated.then(() => {
+      drain();
+      check();
+    });
+  };
   let check = () => {};
   const finished = new Promise<void>((done) => (check = () => over() && done()));
   const start = (d: Direction, lane: Lane, budget: number) => {
@@ -309,7 +328,7 @@ export const scout: Roles['scout'] = async (given, input) => {
       // A picture is only made into a slot that no other picture holds.
       if (room <= making()) return;
       pictureTaken = true;
-    } else if (visual(d) && inventive.shown === 0 && !finding() && room > making()) {
+    } else if (visual(d) && holding() && inventive.shown === 0 && !finding() && room > making()) {
       // The first find of something to look at is taken for the slot held for it, even once the count of directions is full.
       inventive.arrived++;
     } else {
@@ -331,7 +350,8 @@ export const scout: Roles['scout'] = async (given, input) => {
   // The fast lane starts at once and searches while the main model thinks. Its finds land once the ties are rated.
   void (async () => {
     try {
-      const looks = await ctx.step(ROLE, 'Choosing where to look first', () => Promise.race([firstLooks(ctx, run), beaten]));
+      const { looks, seeable: said } = await ctx.step(ROLE, 'Choosing where to look first', () => Promise.race([firstLooks(ctx, run), beaten]));
+      if (fast.writing) see(said, false);
       if (!fast.writing) ctx.note(ROLE, 'does not look first: the inventive cards were ready before the quick model chose where to look');
       else if (looks.length > 0) ctx.note(ROLE, `looks first in ${looks.map((d) => `${d.source || 'videos'} for "${d.lookups[0]}" (${oneLine(d.why, 60)})`).join(', ')}`);
       for (const d of fast.writing ? looks : []) {
@@ -350,12 +370,18 @@ export const scout: Roles['scout'] = async (given, input) => {
   void (async () => {
     try {
       await ctx.step(ROLE, label('Thinking of directions for', nameOf(item)), () =>
-        ideate(ctx, run, asked, (d) => {
-          void rated.then(() => {
-            accept(d);
-            check();
-          });
-        }),
+        ideate(
+          ctx,
+          run,
+          asked,
+          (d) => {
+            void rated.then(() => {
+              accept(d);
+              check();
+            });
+          },
+          (said) => see(said, true),
+        ),
       );
     } catch (err) {
       ctx.note(ROLE, `could not think of directions (${message(err)})${started() ? '' : ', the picks stay as they are'}`);
@@ -435,13 +461,14 @@ async function pictureFor(ctx: RoleContext, anchor: Node): Promise<string | unde
  * Read as they are written, each starts the moment it is whole. The quick models wrote them four times faster and lost the concrete
  * examples a request for examples asks for.
  */
-async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Direction) => void): Promise<void> {
+async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Direction) => void, judged?: (seeable: boolean) => void): Promise<void> {
   const asked = run.need || run.reading
     ? `${run.need ? `The user asked for "${run.need}".` : `The voice assistant read the user's request as "${run.reading}".`} Every direction must serve that request as it applies to this very thing, not the topic in general. Asked for "world building" on a picture, you build the world of that picture: who lives there, its places, its history, its rules. Asked for "examples from horror films", every direction is such an example.`
     : 'The user gave no explanation, so show them where this could go. Each direction leaves from something specific you can see or read in it and heads somewhere different.';
   const seen = new Set<string>();
   let offered = 0;
   let read = 0;
+  let told = false;
   const offer = (d: Direction) => {
     const key = oneLine(d.title, 120).toLowerCase();
     if (!key || seen.has(key) || offered >= count) return;
@@ -459,6 +486,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
       asked,
       '',
       'First, in reading, say in one sentence what kind of thing this is, what field it belongs to, and what the user is most likely doing with it. Let that decide the angles, the formats and the sources. A startup idea wants evidence, numbers, people who tried it and what they learned. A research question wants studies and counter-evidence. A picture wants things to look at. A trip wants places and practicalities. If nothing about it can be seen, say so in reading and why.',
+      `Then, in seeable, say whether the request is about something that can be seen: ${SEEABLE}`,
       '',
       `Return exactly ${count} directions.`,
       'Diversity rules:',
@@ -469,7 +497,7 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
         : count === 3
           ? '- Mix the formats: at least one "find" and at least one written idea.'
           : '- Prefer different formats.',
-      '- At least one direction brings something to look at: a "find" in a source whose records are pictures, a "video", or an "image" or "gallery". Most subjects have something to see: the people, places, objects, works, events or look of it. Leave all of them out only when nothing about the subject can be seen.',
+      '- When seeable, at least one direction brings something to look at: a "find" in a source whose records are pictures, a "video", or an "image" or "gallery". Otherwise something to look at is welcome only when it shows the very thing asked about. Leave them all out when nothing about the subject can be seen.',
       '- Write the written ideas first, since each lands the moment it is written, and any "image" or "gallery" direction last, after the others.',
       '',
       'For each direction:',
@@ -507,6 +535,12 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
     // Minimal effort writes them in 11 to 15 s instead of 19 to 25, but two blind readers ranked its directions below these on every card.
     effort: 'low',
     onText: (soFar) => {
+      // Written before the directions, so the slots know before the first direction lands.
+      const said = told ? null : /"seeable"\s*:\s*(true|false)/.exec(soFar)?.[1];
+      if (said) {
+        told = true;
+        judged?.(said === 'true');
+      }
       for (const raw of completeElements(soFar, 'directions').slice(read)) {
         read++;
         const d = Direction.safeParse(raw);
@@ -514,8 +548,9 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
       }
     },
   });
+  if (!told && typeof answer.seeable === 'boolean') judged?.(answer.seeable);
   for (const d of answer.directions) offer(d);
-  if (answer.reading.trim()) ctx.note(ROLE, `reads it as: ${oneLine(answer.reading, 200)}`);
+  if (answer.reading.trim()) ctx.note(ROLE, `reads it as: ${oneLine(answer.reading, 200)}${answer.seeable === false ? ' (not something to see)' : ''}`);
 }
 
 /**
@@ -523,9 +558,14 @@ async function ideate(ctx: RoleContext, run: Run, count: number, arrive: (d: Dir
  * second, so they are searched while the main model is still thinking. Words as the user said them find records only where they
  * name the subject. The web and generated pictures take 5 to 40 s, and are left to the inventive lane.
  */
-async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
+interface FirstLooks {
+  looks: Direction[];
+  seeable?: boolean | null;
+}
+
+async function firstLooks(ctx: RoleContext, run: Run): Promise<FirstLooks> {
   const catalogues = ctx.tools.sources.list().filter((src) => src.id !== 'web');
-  if (catalogues.length === 0) return [];
+  if (catalogues.length === 0) return { looks: [] };
   const answer = await ctx.model.json({
     role: `${ROLE}.looks`,
     system: SYSTEM,
@@ -533,8 +573,9 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
       run.brief,
       '',
       'The user is waiting for the first cards, and a slower search will bring more later. Name two or three of the catalogues below that are likely to hold a strong record for what the user asked, as it applies to this very thing. Each a different catalogue.',
-      'When the subject can be seen (its people, places, objects, works, events or look), make one of them a catalogue of pictures or a video, so the user has something to look at.',
-      'For each:',
+      `First, seeable: whether the request is about something that can be seen. ${SEEABLE}`,
+      'When it is, make one of the catalogues a catalogue of pictures, or a video, so the user has something to look at. When it is not, name a catalogue of pictures only if its pictures would show the very thing asked about.',
+      'For each look:',
       '- source: its id as listed.',
       '- search: what to type into its search box, as its line says. It names the subject itself, never the words of the request ("something interesting", "help me") and never a question. Each extra word removes results.',
       '- title: about 26 characters, what you hope to find.',
@@ -550,7 +591,7 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
   });
   const known = new Set(catalogues.map((src) => src.id));
   const used = new Set<string>();
-  return answer.looks.flatMap((look): Direction[] => {
+  const looks = answer.looks.flatMap((look): Direction[] => {
     const source = look.source.trim();
     const search = oneLine(look.search, 120);
     if (!search || used.has(source) || (source !== VIDEO_LOOK && !known.has(source))) return [];
@@ -570,6 +611,7 @@ async function firstLooks(ctx: RoleContext, run: Run): Promise<Direction[]> {
       lookups: [search],
     }];
   }).slice(0, FAST_LOOKS);
+  return { looks, seeable: answer.seeable };
 }
 
 /** An item a direction made, and what to tell its source once it lands, when the source asks to be told. */
@@ -947,7 +989,9 @@ async function curate(ctx: RoleContext, d: Direction, source: Source, found: Fou
         '',
         `A search of ${source.name} returned these records:`,
         ...found.map((f, i) => `${i + 1}. "${oneLine(f.title, 140)}"${f.by ? ` by ${oneLine(f.by, 80)}` : ''}${f.date ? `, ${f.date}` : ''}${f.from ? ` (${f.from})` : ''}${f.text ? `\n   ${oneLine(f.text, perRecord)}` : ''}`),
-        ...(images ? ['', 'Their pictures are attached in the same order. Look at them and judge by what you see.'] : []),
+        ...(images
+          ? ['', 'Their pictures are attached in the same order. Look at them and judge by what you see. Choose a picture only if it shows the very thing this direction is about: not a stand-in, another place or time, or something that only shares a word or a mood with it. None is better than one that does not.']
+          : []),
         '',
         `Choose up to ${most} that would really help the user in this direction, best first, and prefer different makers. The direction was written before the search, so a strong record that comes at it from a slightly different side still belongs. Leave out records that are off the subject, thin, promotional, or that only share a word with the search. Choose none when none are worth the user's time.`,
         'For each:',
