@@ -213,6 +213,7 @@ void OceanModel::update(float dt) {
     landPictures();
     repaintCards();
     holdPress();
+    editFrame();
     composeFrame(now);
 
     if (now < busyUntil + 0.1) {

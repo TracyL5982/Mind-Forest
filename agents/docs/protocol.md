@@ -15,7 +15,7 @@ Five maps keyed by id: `item`, `node`, `tree`, `link`, `group`. Shapes are in `s
 
 - **Item.** One piece of content: `kind`, `title`, `text`, `summary`, `tags`, `data`, `source` (`from`, `url`, `asset`), `origin`.
   - `title` is the item's whole title. A title the model wrote stands on the two lines a small card face gives a title; a source's own title, a paper's, a work's, a page's, a file's name, or one a person wrote, is kept whole. `data.shortTitle`, a string, is then what a small face shows of it: its first whole clause or words that fit two lines, with no ellipsis. It is there only when the whole title does not fit, and the service sets it again whenever the title changes. A client's small face shows `data.shortTitle` when it is there, else `title`, and its opened card shows `title`. docs/libraries.md gives the rule.
-- **Node.** An item's place in a tree: `treeId`, `itemId`, `parent` (null for a root), `status` (`kept` or `pick`), `why`, `importance` (0 to 1), `view` (`component`, `props`, `by`, and `composing` while its look is being chosen), `order` among siblings.
+- **Node.** An item's place in a tree: `treeId`, `itemId`, `parent` (null for a root), `status` (`kept` or `pick`), `why`, `importance` (0 to 1), `view` (`component`, `props`, `by`, and `composing` while its look is being chosen), `order` among siblings, and `edits`, the user's highlights and drawings on its card, when it has any (see Edits on a card).
 - **Tree.** `title`, `rootId`, `digest`.
 - **Link.** A tie between two nodes, usually across trees: `a`, `b`, `why`, `strength`.
 - **Group.** A composite: `anchor` (the parent node), `composite`, `title`, `members` (node ids), `props`.
@@ -38,6 +38,16 @@ Everything the user drops becomes an item, and every item is part of the user's 
 - Words that ask for a tree start one. In a text dump, at its start or its end: "start a tree on this: …", "make a tree about Kubrick", "… make a tree from this". Said or typed as an `utter`: "make a tree about …", or "start a tree on this" for what was just dropped or, failing that, the open card. The words are taken off what was dropped. The `change` holds a `createTree` whose root is kept, and the root's first round follows.
 - "Make a tree about X" where X is the title of something the user already has, such as a library film, makes that item the root.
 - Taking away a pick that holds what the user dropped leaves the item in the knowledge base. Deleting a kept card archives its item, as before.
+
+## Edits on a card
+
+With the headset's edit pencil the user highlights words on an open card and draws lines on it. They are kept with the card, as `node.edits`, oldest first, so they come back when the card opens again, after a restart, and on another device. A node with none has no `edits` field.
+
+- **A highlight** is `{id, kind: 'highlight', quote, at?}`. `quote` is the highlighted words as the card shows them. `at` is where they start in the item's `text`, in UTF-16 units as JavaScript counts them, when they are in it: `text.slice(at, at + quote.length) === quote`. Words the card shows from elsewhere, such as a list entry or the title, have no `at`. A client finds a highlight again by its words, and by `at` when the same words appear more than once.
+- **A line** is `{id, kind: 'stroke', points}`. `points` is x then y for each point in order, two to 512 points, each 0 to 1 across and down the opened card's whole content, however far it is scrolled. So a line stays on what it was drawn over when the card is drawn at another size.
+- A card keeps at most 100 edits. An edit's `id` is made by the client that draws it, unique on its card.
+- A client sends edits as `commands`: `{type: 'addEdit', id: <node id>, edit}` adds one, or puts it in place of the one with its id, and `{type: 'removeEdit', id: <node id>, editId}` takes one off. Each is one undoable change, so `undo` takes back the last edit. Taking off an edit that is not there changes nothing and sends no `change`. An edit changes no card's look and asks no agent for anything.
+- What is highlighted is listed in a handoff (docs/handoff-format.md). Asking for more like a card with highlights says so: the headset's long pinch sends `more` with `need` "More like this, especially what I highlighted: "…"".
 
 ## Rounds
 
@@ -131,7 +141,7 @@ The picks of a run arrive in several `change` sets before its `say`: what the us
 | `more` | `nodeId`, `need?` | More picks for a node, joining its round. |
 | `keep` | `nodeIds` | Keep picks. |
 | `undo` | `id?` | Undo the latest real change, or the named one. Format choices and digests that followed it are undone with it. |
-| `commands` | `label`, `commands` | Direct manipulation: any commands from `src/core/domain.ts`, such as `moveNode`, `editItem`, `deleteNode`. Applied as one undoable set. |
+| `commands` | `label`, `commands` | Direct manipulation: any commands from `src/core/domain.ts`, such as `moveNode`, `editItem`, `deleteNode`, and `addEdit` and `removeEdit` for a card's highlights and lines (see Edits on a card). Applied as one undoable set. |
 | `organize` | `request`, `scope`, `focus?` | A typed organizing request. `scope` is `{treeIds, nodeIds}`. |
 | `handoff` | `scope`, `note?` | Package a handoff. An empty scope means everything. |
 | `settings` | `patch` | `picksMode` (`provisional` or `immediate`), `picksPerRun`, `scoutOnDump`, `agentName` (1 to 32 characters: a letter, then letters, digits, spaces, hyphens or apostrophes). |
@@ -147,7 +157,7 @@ Under an open card a client offers a few things to ask, so the user can start a 
 2. The service answers this connection, and no other, with `{"t": "questions", "nodeId": "<node id>", "questions": ["How did Hitchcock use the dolly zoom?", "Show me a dolly zoom on film"]}`.
 3. When the user picks one, send it as `{"t": "ask", "nodeId": "<node id>", "need": "<the question, as written>"}`.
 
-- `questions` holds at most four strings, each a question or a short request under about eight words, written for that card, where it stands in its tree, the cards round it, and the recent conversation, in the language the user uses. An empty list means the service has nothing to offer: a model failure, or a card that is not there.
+- `questions` holds at most three strings, each a question or a short request under about eight words, written for that card, where it stands in its tree, the cards round it, and the recent conversation, in the language the user uses. An empty list means the service has nothing to offer: a model failure, or a card that is not there.
 - Show your own rows until the reply arrives, and keep them when the list is empty. The first time a card is asked for, the reply took 0.75 to 3 s in eight live runs, about 1.2 s typically. Ignoring it is always safe, and a client that never asks never gets one.
 - Match a reply by `nodeId`. One for a card that is no longer open is stale: drop it.
 - Ask again each time a card opens. The service keeps what it wrote for each card and answers from it while the card, the cards round it and the conversation are unchanged, so asking again costs nothing then. Once any of them changes, the next ask is written afresh.

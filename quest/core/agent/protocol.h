@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -91,6 +92,19 @@ struct View {
     bool operator==(const View&) const = default;
 };
 
+/// What the user marked on a card with the edit pencil: words highlighted, or a line drawn.
+struct Edit {
+    enum class Kind { highlight, stroke };
+    std::string id;
+    Kind kind = Kind::highlight;
+    /// A highlight: the words as the card shows them, and where they start in the item's text (UTF-16 units) when they are in it.
+    std::string quote;
+    std::optional<int> at;
+    /// A line: its points in order, each 0 to 1 across and down the opened card's content, the whole of it as it scrolls.
+    std::vector<std::pair<float, float>> points;
+    bool operator==(const Edit&) const = default;
+};
+
 /// An item's place in a tree.
 struct Node {
     enum class Status { kept, pick };
@@ -107,6 +121,8 @@ struct Node {
     View view;
     /// Position among siblings.
     double order = 0;
+    /// The user's highlights and lines on the card, oldest first.
+    std::vector<Edit> edits;
     bool operator==(const Node&) const = default;
 };
 
@@ -344,6 +360,10 @@ public:
                             std::optional<double> order = std::nullopt);
     static Command renameTree(const TreeId& id, const std::string& title);
     static Command deleteTree(const TreeId& id);
+    /// Puts an edit on the node's card, in place of one with its id.
+    static Command addEdit(const NodeId& id, const Edit& edit);
+    /// Takes an edit off the node's card.
+    static Command removeEdit(const NodeId& id, const std::string& editId);
     const Json& json() const { return json_; }
 
 private:

@@ -2,6 +2,7 @@ import {
   Command,
   CommandError,
   inLibrary,
+  MAX_EDITS,
   type ChangeSet,
   type EntityName,
   type EntityOf,
@@ -376,6 +377,19 @@ export class Mindstorm {
       case 'setView':
         this.put('node', { ...this.node(c.id), view: c.view });
         return;
+      case 'addEdit': {
+        const n = this.node(c.id);
+        const edits = [...(n.edits ?? []).filter((e) => e.id !== c.edit.id), c.edit];
+        if (edits.length > MAX_EDITS) throw new CommandError('invalid', `a card keeps at most ${MAX_EDITS} edits`);
+        this.put('node', { ...n, edits });
+        return;
+      }
+      case 'removeEdit': {
+        const { edits = [], ...n } = this.node(c.id);
+        const left = edits.filter((e) => e.id !== c.editId);
+        this.put('node', left.length > 0 ? { ...n, edits: left } : n);
+        return;
+      }
       case 'setGroup': {
         const members = [...new Set(c.group.members)];
         for (const id of [c.group.anchor, ...members]) {

@@ -50,7 +50,10 @@ The Quest 3 has no eye tracking, so:
 
 The agents (`agents/`, a service on the Mac) can grow the ocean's trees: your mindstorm's trees stand and
 hang on the shelf, a pinch on a card opens it and the Scout's picks come up round it with dashed threads,
-a pinch on a pick keeps it, the knife deletes, and a clap sends the tree on as a handoff. The plan and
+a pinch on a pick keeps it, the knife deletes, and a clap sends the tree on as a handoff. Under an open card stand at most
+three suggested questions as pills; a pinch held still on it, while a ring fills round the pinch, asks for more like it; and
+its edit pencil, just outside its top right corner, turns a long pinch into highlighting words or drawing on the card, which
+the service keeps with it (core/cards/README.md). The plan and
 its state are in [agent-plan.md](agent-plan.md).
 
 This build installs beside the app already on the headset, as "Mind Palace Ocean (agents)", because it is

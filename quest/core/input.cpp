@@ -297,7 +297,10 @@ void Input::update(const EntityRef& root, const std::optional<Mat4>& head, float
     }
 
     EntityRef aimed[2];
-    for (int i = 0; i < 2; i++) aimed[i] = holder == i ? held : hands[i].hit.entity;
+    for (int i = 0; i < 2; i++) {
+        aimed[i] = holder == i ? held : hands[i].hit.entity;
+        scene->aimed(i, hands[i].hit.entity, hands[i].hit.point);
+    }
     hover(aimed[0] ? hoverOwner(aimed[0]) : nullptr, aimed[1] ? hoverOwner(aimed[1]) : nullptr, dt);
     for (auto& h : hands) showCursor(h, head, dt);
 }

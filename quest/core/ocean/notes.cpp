@@ -52,11 +52,20 @@ std::optional<TextBlock::Words> TextBlock::words(CGPoint a, CGPoint b) const {
     layout.enumerateEnclosingRects(range, [&](CGRect rect) {
         rects.push_back(rect.offsetBy(origin.x, origin.y));
     });
-    std::string text = utf8(trimmingCharacters(ns.substr(size_t(range.location), size_t(range.length)), [](char32_t c) {
+    std::u16string picked = trimmingCharacters(ns.substr(size_t(range.location), size_t(range.length)), [](char32_t c) {
         return CharacterSet::punctuationCharacters(c) || CharacterSet::whitespacesAndNewlines(c);
-    }));
+    });
+    std::string text = utf8(picked);
     if (text.empty() || rects.empty()) return std::nullopt;
-    return Words{text, rects};
+    size_t at = ns.find(picked, size_t(range.location));
+    return Words{text, rects, at == std::u16string::npos ? range.location : int(at)};
+}
+
+std::vector<CGRect> TextBlock::rects(int at, int length) const {
+    std::vector<CGRect> out;
+    if (length <= 0) return out;
+    layout.enumerateEnclosingRects(CharacterRange{at, length}, [&](CGRect rect) { out.push_back(rect.offsetBy(origin.x, origin.y)); });
+    return out;
 }
 
 // MARK: - NoteLayout

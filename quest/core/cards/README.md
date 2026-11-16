@@ -32,19 +32,30 @@ All calls run on the frame thread.
 
 The note is the scene's `OceanNote` with the id `noteID`, in `catalog->notes`. Its kind does not matter. Once `put` holds a card for a note, the scene sizes and draws it through `ocean.h` (`OceanModel::bodies`, `buildSmall`, `buildOpen` and `Tree::openExtent` ask `cards::ocean::cardOf` first). The small card is `footprint * ocean::smallScale` pixels, one web px a millimetre at 1.5 m, so a face is at most 21 by 14.6 cm. The opened card is the web's 384 px panel at `ocean::openScale`, as wide as the ocean's open note. Both sizes are worked out the first time the scene asks and kept until the card is put again.
 
-## Scrolling and marking the opened card
+## Scrolling, the long pinch and the edit pencil on the opened card
 
 Under `-cards` a pinch on the opened card's content works like this. Without `-cards` nothing changes: a drag of 2 cm on the open card marks at once.
 
-- A pinch-drag that starts on the content scrolls it when it runs on past the window. The content follows the hand one to one and stops at its top and its end. The card never moves or resizes. Each time the card opens, the content starts at the top.
-- A pinch held still on words or the picture for 0.4 s, within 2 cm, arms a mark: the word under it takes the mark's stroke, the picture a 2 px outline. A drag after that marks, as the original marks.
-- A drag that begins before the hold arms is a scroll. A pinch released without moving is today's tap, which zooms. A drag that scrolled or marked is never a tap.
-- Nothing scrolls or arms while the card grows or the layer glides.
+- A pinch-drag that starts on the content scrolls it when it runs on past the window, with the edit pencil on or off. The content follows the hand one to one and stops at its top and its end. The card never moves or resizes. Each time the card opens, the content starts at the top.
+- A pinch held still for 0.4 s, within 2 cm, is a long pinch. A small ring fills round the pinch while it is held, from 0.08 s, so the hand knows when it will count.
+- With the pencil off, a long pinch asks for more like the card: the service's `more`, as Momo's "more like this" asks. The card is kept if it was a suggestion and leads a layer of its own, where what comes stands. When it has highlights, `need` is "More like this, especially what I highlighted: "…"".
+- A drag that begins before the hold counts is a scroll. A pinch released without moving is today's tap, which zooms. A pinch that scrolled, highlighted, drew or asked is never a tap.
+- Nothing scrolls or counts while the card grows or the layer glides.
 - A thin bar inside the frame's right edge shows where the window is, only while the content runs on past it. It is not a target.
 
-In the scene: `OceanModel::Press` holds the claim, `holdPress` checks the hold each frame, `scrollCard` moves the window, and `cards::ocean` keeps each card's scroll. A film plays on its poster only while the poster is whole in view, at the top. A mark goes with its words as the panel scrolls and shows only while all of it is in the window.
+A card of the agent service's has the edit pencil, a round button just outside its top right corner: outlined when off, filled when on. A pinch on it turns it on or off, and it turns off when the card closes. While it is on:
 
-To drive it in the preview, `-scrollAt <s>` drags the open card's panel by `-scrollBy` (a share of how far it runs on, 1 if not given) as a hand would, `-holdAt <s>` holds a pinch still on its first words and then draws it across them, and `-tapAt <s>` pinches it without moving:
+- A small italic line under it says what a long pinch will do where the hand points: "Long pinch to highlight" over words, "Long pinch to draw" elsewhere.
+- A long pinch on words, then a drag, highlights them, in whole words of one run of text, in see-through amber (Momo's `#F2C27A`) behind the words.
+- A long pinch elsewhere, over the picture or an empty part of the card, then a drag, draws a white line 2 px wide.
+- A long pinch never asks for anything.
+- A short pinch on a highlight or a line takes it off.
+
+Edits are kept by the service with the card (`node.edits`, agents/docs/protocol.md, Edits on a card), so they come back when the card opens again, after a restart and on another headset, and "undo" takes back the last. A highlight is its words and which of their appearances on the content it is, and a line its points 0 to 1 across and down the whole content, so both are found again when the card is drawn at another size. They are drawn where the content stands in its window, as two meshes cut to it (`OceanModel::drawEdits`).
+
+In the scene: `OceanModel::Press` holds the claim, `holdPress` fills the ring and counts the hold each frame, `scrollCard` moves the window, `oceanmodel_edits.cpp` holds the pencil, and `cards::ocean` keeps each card's scroll. A film plays on its poster only while the poster is whole in view, at the top.
+
+To drive it in the preview, `-scrollAt <s>` drags the open card's panel by `-scrollBy` (a share of how far it runs on, 1 if not given) as a hand would, `-holdAt <s>` holds a pinch still on its first words and then draws it across them, `-tapAt <s>` pinches it without moving, `-longPinchAt <s>` holds a pinch still on its middle, `-pencilAt <s>` pinches the pencil, `-drawAt <s>` holds a pinch where there are no words and draws a ring round what lies beside it, `-eraseAt <s>` pinches the newest edit, and `-aimAt <s> -aim words|elsewhere` points a hand there. `quest/desktop/test/cards_edit_check.mjs` runs them against the fake service and checks each:
 
 ```bash
 quest/desktop/preview -cards -saved 0 -zoomAt 4 -scrollAt 6 -scrollBy 0.6 -holdAt 8

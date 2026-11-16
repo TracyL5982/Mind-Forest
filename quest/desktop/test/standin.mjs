@@ -122,11 +122,15 @@ export async function standIn(name, source) {
   });
   proxy.listen(proxyPort, '127.0.0.1');
 
-  /** The preview, joined through the proxy, run in real time until `seconds`, with a picture every 2 s into `shots`. */
-  function launch(shots, name, seconds, extra) {
+  /**
+   * The preview, joined through the proxy, run in real time until `seconds`, with a picture every 2 s into `shots`. With
+   * `realtime` false its clock runs a frame at a time as fast as it can draw, so a picture is taken at the very moment the
+   * scene's flags count from.
+   */
+  function launch(shots, name, seconds, extra, { realtime = true } = {}) {
     const log = [];
     const began = Date.now();
-    const args = ['-agent', `ws://127.0.0.1:${proxyPort}`, '-agentToken', token, '-cards', '-mute', '-agentVoice', 'off', '-dataDir', previewData, '-realtime',
+    const args = ['-agent', `ws://127.0.0.1:${proxyPort}`, '-agentToken', token, '-cards', '-mute', '-agentVoice', 'off', '-dataDir', previewData, ...(realtime ? ['-realtime'] : []),
       '-shot', join(shots, `${name}.png`), '-shotAt', String(seconds), '-shotEvery', '2', ...extra];
     const preview = spawn(join(quest, 'desktop/preview'), args, { stdio: ['ignore', 'ignore', 'pipe'] });
     started.push(preview);
@@ -134,7 +138,7 @@ export async function standIn(name, source) {
     preview.stderr.on('data', (chunk) => {
       const lines = (partial + chunk).split('\n');
       partial = lines.pop();
-      for (const line of lines) if (/^\[(agent|ocean)\]/.test(line)) log.push({ at: (Date.now() - began) / 1000, line });
+      for (const line of lines) if (/^\[(agent|ocean|cards)\]/.test(line)) log.push({ at: (Date.now() - began) / 1000, line });
     });
     const done = new Promise((resolve) => preview.on('exit', resolve));
     const sent = (t) => fromPreview.filter((m) => m.message.t === t && m.when >= began).map((m) => ({ ...m.message, at: (m.when - began) / 1000 }));

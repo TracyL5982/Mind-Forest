@@ -39,7 +39,7 @@ test('the questions are written from the card, where it stands, the cards round 
   }
 });
 
-test('only questions a client can show come back: short, distinct, at most four, never filler', async () => {
+test('only questions a client can show come back: short, distinct, at most three, never filler', async () => {
   const k = kit();
   const { nodeIds } = k.seedTree('Film', ['Dolly zoom']);
   k.model.on('questions', () => ({
@@ -59,7 +59,6 @@ test('only questions a client can show come back: short, distinct, at most four,
     'How did Hitchcock use it?',
     'Show me Vertigo',
     'Dolly zoom in Jaws?',
-    'Who named the dolly zoom?',
   ]);
 });
 

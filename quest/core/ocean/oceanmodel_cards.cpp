@@ -456,6 +456,7 @@ void OceanModel::buildOpen(CardView& c, const TreeNode& node) {
     c.asks = catalog->asks(c.ref, previousPiece(node.id));
     if (agentBridge) agentBridge->rows(node, c.asks);     // AGENT
     buildRows(c);
+    buildEdits(c);
     c.refresh();
 }
 
@@ -478,14 +479,22 @@ void OceanModel::buildRows(CardView& c) {
         if (note != catalog->notes.end() && note->second.link) {
             const LinkSpec& link = *note->second.link;
             float gap = rows.empty() ? 0 : 0.008f;
-            rows.push_back(Row{art->row("Open " + link.site + "  ↗"), Pick::openLink(c.id), gap});
+            std::string words = "Open " + link.site + "  ↗";
+            rows.push_back(Row{cardGestures ? art->pill(words, c.openBody.x) : art->row(words), Pick::openLink(c.id), gap});
             key += "link|";
         }
     }
     std::vector<std::pair<std::string, Pick>> questions;
     if (marks.count(c.id)) questions.push_back({"More on what you marked", Pick::askMark(c.id)});
     for (size_t k = 0; k < c.asks.size(); k++) questions.push_back({c.asks[k].question, Pick::ask(c.id, int(k))});
-    if (!questions.empty()) {
+    if (cardGestures) {
+        // NOTE(port): added for Quest (core/cards). Under `-cards` what can be asked stands as pills, one to a line, each as
+        // wide as its words, with no heading.
+        for (const std::pair<std::string, Pick>& q : questions) {
+            rows.push_back(Row{art->pill(q.first, c.openBody.x), q.second, rows.empty() ? 0 : 0.006f});
+            key += q.first + "|";
+        }
+    } else if (!questions.empty()) {
         float gap = rows.empty() ? 0 : 0.012f;
         rows.push_back(Row{art->heading("Ask", Tone::question), std::nullopt, gap});
         for (const std::pair<std::string, Pick>& q : questions) {
@@ -496,6 +505,7 @@ void OceanModel::buildRows(CardView& c) {
     if (key == c.rowsKey) return;
     bool first = c.rowsKey.empty();
     c.rowsKey = key;
+    if (cardGestures) logLine(fmt("[cards] %d pills under %s: ", int(rows.size()), catalog->title(c.ref).c_str()) + key);
     std::vector<EntityRef> children = c.askHolder->children;
     for (const EntityRef& child : children) {
         picks.erase(child.get());
@@ -571,6 +581,7 @@ void OceanModel::redrawCard(CardView& c) {
         cards::ocean::showIndicator(c.scrollBar, *id);
         c.layout = cards::ocean::layout(*id);
         if (tree && tree->focus() == c.id) buildRows(c);
+        drawEdits(c);
     }
     touch(time + 0.3);
 }
@@ -584,27 +595,14 @@ void OceanModel::solid(const EntityRef& quad) {
 void OceanModel::scrollCard(CardView& c, float offset) {
     std::optional<std::string> id = c.openPanel ? cards::ocean::cardOf(c.ref) : std::nullopt;
     if (!id) return;
-    float was = cards::ocean::scroll(*id);
     if (!cards::ocean::scrollTo(*id, offset)) return;
-    float moved = (cards::ocean::scroll(*id) - was) * cards::ocean::openScale / Art::ppm;
     bool pictured = c.layout && c.layout->picture;
     cards::ocean::showPanel(c.openPanel, *id);
     c.remade(c.openPanel);
     cards::ocean::showIndicator(c.scrollBar, *id);
     c.layout = cards::ocean::layout(*id);
-    // What is marked goes with the words under it, and shows only while all of it is in the window.
-    if (c.markHolder) {
-        c.markHolder->position.y += moved;
-        std::optional<Vec2> span = cards::ocean::window(*id);
-        bool inside = true;
-        for (const EntityRef& part : c.markHolder->children) {
-            if (!(part->model && part->model->mesh && span)) continue;
-            const BoundingBox& box = part->model->mesh->bounds;
-            float y = c.markHolder->position.y + part->position.y;
-            inside = inside && y + box.min.y * part->scale.y >= span->x && y + box.max.y * part->scale.y <= span->y;
-        }
-        c.markHolder->isEnabled = inside;
-    }
+    // The highlights and lines go with what they were drawn on.
+    drawEdits(c);
     c.changed();
     touch(time + 0.2);
     // Its film plays only while its picture is in view.
@@ -615,70 +613,40 @@ double OceanModel::settledAt(const CardView& c) const {
     return std::max({c.openMix.end(), c.xy.end(), c.nudge.end(), focusLevel.end(), pan.end()});
 }
 
-bool OceanModel::arm(CardView& c, Vec2 a) {
-    if (!(art && c.layout)) return false;
-    const NoteLayout& layout = *c.layout;
-    PictureFrame picture = pictureFrame(c);
-    bool inPicture = layout.picture && std::fabs(a.x - picture.center.x) <= picture.size.x / 2 && std::fabs(a.y - picture.center.y) <= picture.size.y / 2;
-    CGPoint p = layout.pixels(a);
-    int k = -1;
-    for (size_t i = 0; !inPicture && i < layout.blocks.size(); i++) {
-        if (layout.blocks[i]->frame().insetBy(-10, -10).contains(p)) {
-            k = int(i);
-            break;
-        }
-    }
-    if (!inPicture && k < 0) return false;
-    EntityRef holder = Entity::make();
-    holder->position = {0, 0, 0.004f};
-    if (inPicture) {
-        // The picture's frame takes a 2 px outline.
-        float w = 2 * cards::ocean::openScale / Art::ppm;
-        Vec2 h = picture.size / 2;
-        for (const auto& [at, size] : std::vector<std::pair<Vec2, Vec2>>{{{0, h.y - w / 2}, {picture.size.x, w}},
-                                                                          {{0, -h.y + w / 2}, {picture.size.x, w}},
-                                                                          {{-h.x + w / 2, 0}, {w, picture.size.y}},
-                                                                          {{h.x - w / 2, 0}, {w, picture.size.y}}}) {
-            EntityRef side = art->swatch(Art::hot, size);
-            side->position = {picture.center.x + at.x, picture.center.y + at.y, 0};
-            holder->addChild(side);
-        }
-    } else {
-        // The word under the pinch takes the mark's own stroke, as `markMove` draws a marked word.
-        if (std::optional<TextBlock::Words> found = layout.blocks[size_t(k)]->words(p, p)) {
-            for (const CGRect& rect : found->rects) {
-                EntityRef stroke = art->swatch(Art::hot, {rect.width() / Art::ppm + 0.004f, rect.height() / Art::ppm}, 0.45f);
-                Vec2 mid = layout.meters(CGPoint(rect.midX(), rect.midY()));
-                stroke->position = {mid.x, mid.y, 0};
-                holder->addChild(stroke);
+void OceanModel::holdPress() {
+    CardRef c = cardGestures && tree && tree->focus() ? card(*tree->focus()) : nullptr;
+    if (!(c && c->holdRing && art)) return;
+    int step = -1;
+    if (c->openBuilt && press && !press->cancelled && press->claim == Press::Claim::open && press->pick.kind == Pick::Kind::card &&
+        press->pick.index == c->id && length(press->at - press->start) <= 0.02f) {
+        double settled = settledAt(*c), held = time - std::max(press->began, settled);
+        // A quick pinch, a tap, never shows it.
+        if (time >= settled && held >= 0.08) step = std::min(Art::holdSteps, int(held / holdFor * Art::holdSteps));
+        if (time >= settled && held >= holdFor) {
+            step = -1;
+            Vec2 at = onCard(*c, press->start);
+            if (pencilOn()) {
+                beginEdit(*c, at);
+                press->claim = drawing ? (drawing->edit.kind == CardEdit::Kind::highlight ? Press::Claim::highlight : Press::Claim::draw)
+                                       : Press::Claim::spent;
+            } else {
+                press->claim = Press::Claim::spent;
+                logLine("[cards] a long pinch: more like " + (catalog ? catalog->title(c->ref) : std::string("this card")));
+                agentBridge->moreLike(c->id);
             }
         }
     }
-    disarm(c);
-    c.openHolder->addChild(holder);
-    c.armHolder = holder;
-    c.changed();
-    touch(time + 0.2);
-    return true;
-}
-
-void OceanModel::disarm(CardView& c) {
-    if (!c.armHolder) return;
-    c.armHolder->removeFromParent();
-    c.armHolder = nullptr;
-    c.changed();
+    if (step == c->holdShown) return;
+    if ((step >= 0) != (c->holdShown >= 0)) logLine(step >= 0 ? "[cards] the ring fills" : "[cards] the ring goes");
+    c->holdShown = step;
+    c->holdRing->isEnabled = step >= 0;
+    if (step >= 0) {
+        if (std::optional<Piece> piece = art->holdRing(step)) art->shade(c->holdRing, piece->texture, 0);
+        Vec2 at = onCard(*c, press->start);
+        c->holdRing->position = {at.x, at.y, 0.008f};
+    }
+    c->changed();
     touch(time + 0.1);
-}
-
-void OceanModel::holdPress() {
-    if (!(cardGestures && press && !press->cancelled && !press->armed && press->claim == Press::Claim::open && press->pick.kind == Pick::Kind::card)) return;
-    int id = press->pick.index;
-    CardRef c = card(id);
-    if (!(c && c->openBuilt && tree && tree->focus() == id)) return;
-    double settled = settledAt(*c);
-    if (time < settled || time - std::max(press->began, settled) < 0.4 || length(press->at - press->start) > 0.02f) return;
-    // On the margin, away from any block, it never arms, and a drag after it scrolls.
-    if (arm(*c, onCard(*c, press->start))) press->armed = true;
 }
 
 void OceanModel::repaintCards() {
