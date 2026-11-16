@@ -85,10 +85,10 @@ when the service has a voice. Momo sits low in front of you, drawn as in CurioCi
 one white ring as wide as two lines of its words, with two tall white eyes that blink and dart. The words are beside
 it: yours in white as the voice hears them, then `Thinking…`, then Momo's reply in amber as it is spoken. The ring
 wobbles with your voice as you speak, and with Momo's as it speaks, when it also parts into coloured fringes. From the
-moment your turn is sent until Momo answers, bubbles rise from its upper right: each pops small at the base and the
-next pushes it one place out, growing, until the largest, pushed past the end, bursts with a faint ring; the first
-three pop 0.15 s apart, then three more every 2 s, springy, squashing and wobbling as they wait. Once begun they stay
-until the first three are in, then fade gently, so a quick answer never cuts them off; any agents' lines stand above
+moment your turn is sent until Momo answers, three bubbles form at its upper right: each swells up small at the base,
+and as the next forms it eases the others one place out, growing, until the first is the largest at the far end, all
+settled by 1.1 s; then each circles its own place, so the three turn through a line and a triangle. Once begun they
+stay until they have settled, then fade gently, and Momo's voice never waits for them; any agents' lines stand above
 them meanwhile. While any
 agent works, Momo wears a monocle, in fine lines round the eye on your left, and its eyes glance about, and above
 the words a small line for each agent at work says what it is doing (`Scout · Searching museum collections for dancing
