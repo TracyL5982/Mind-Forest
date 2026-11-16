@@ -69,9 +69,12 @@ export function makeTools(opts: ToolOptions): Tools {
     web: {
       search: (query, max) => opts.model.search({ role: 'tool.web', query, max }),
       read: (url) => readPage(page, url),
+      // With the headset's files full, a picture is nothing, as one that cannot be fetched is: a dropped link keeps its card without it.
       picture: async (url) => {
+        if (opts.assets.room?.(MIN_PICTURE_BYTES) === false) return null;
         const got = await fetchPicture(page, url);
-        return got ? { asset: (await opts.assets.put(got.bytes, got.mime, 'found')).id } : null;
+        if (!got || opts.assets.room?.(got.bytes.length) === false) return null;
+        return { asset: (await opts.assets.put(got.bytes, got.mime, 'found')).id };
       },
       async look(url) {
         const got = await fetchPicture(page, url);
@@ -108,6 +111,8 @@ export function makeTools(opts: ToolOptions): Tools {
     },
     images: {
       async generate(prompt) {
+        // Not made when it could not be kept, so a picture is never paid for and thrown away.
+        if (opts.assets.room?.(MADE_PICTURE_BYTES) === false) throw new Error("no room to keep another picture for this headset");
         const model = opts.keys?.MIND_PALACE_FAL_MODEL || FAL_DEFAULT;
         const fal = opts.keys?.FAL_KEY && model !== 'off' ? { key: opts.keys.FAL_KEY, model } : null;
         let made: { bytes: Uint8Array; mime: string } | undefined;
@@ -144,6 +149,8 @@ export function makeTools(opts: ToolOptions): Tools {
 const AGENT_NAME = 'MindPalace/0.1 (local prototype)';
 
 const MIN_PICTURE_BYTES = 4_000;
+/** Room a made picture needs: a 1K JPEG, a few hundred KB. */
+const MADE_PICTURE_BYTES = 1_000_000;
 const MAX_PICTURE_BYTES = 8_000_000;
 
 async function fetchPicture(send: typeof fetch, url: string): Promise<{ bytes: Uint8Array; mime: string } | null> {

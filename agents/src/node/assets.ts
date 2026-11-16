@@ -68,9 +68,13 @@ export class DiskAssets implements Assets {
     return this.madeBytes;
   }
 
+  room(bytes: number): boolean {
+    return this.madeLimit === undefined || this.madeBytes + bytes <= this.madeLimit;
+  }
+
   async put(bytes: Uint8Array, mime: string, name?: string): Promise<{ id: string }> {
-    if (this.madeLimit !== undefined && this.madeBytes + bytes.length > this.madeLimit) {
-      throw new Error(`no room to keep ${name ?? 'a file'}: this headset's files come to ${(this.madeLimit / 1e6).toFixed(0)} MB at most`);
+    if (!this.room(bytes.length)) {
+      throw new Error(`no room to keep ${name ?? 'a file'}: this headset's files come to ${(this.madeLimit! / 1e6).toFixed(0)} MB at most`);
     }
     const id = newId(mime, name);
     writeFileSync(join(this.dir, id), bytes);
