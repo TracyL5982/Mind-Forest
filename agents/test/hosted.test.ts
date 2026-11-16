@@ -16,6 +16,8 @@ import { questWavMs } from '../src/node/speech-openai.ts';
 import { chargedPictures, startServer } from '../src/node/server.ts';
 import { makeSources } from '../src/node/sources.ts';
 import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
+import { MemoryAssets } from './kit.ts';
+import { followingIn, InstagramLibrary, parseList } from '../src/node/instagram.ts';
 
 interface Msg {
   t: string;
@@ -561,4 +563,43 @@ test("after a cut, the live voice's next session answers its first turn instead 
   sessions[1]!.event({ type: 'response.created', response: { id: 'r2', metadata: { purpose: 'reply' } } });
   assert.deepEqual(sessions[1]!.sent.filter((e) => e.type === 'response.cancel'), [], "the new session's first answer stands");
   voice.close();
+});
+
+test("every hosted space searches one Instagram library through its own view, and no space opens or reads its own", { timeout: 20000 }, async () => {
+  const listFile = join(mkdtempSync(join(tmpdir(), 'mp-list-')), 'following.md');
+  writeFileSync(listFile, '# Accounts\n\n## Art (1)\n\n### Prints (1)\n\n- @ink_and_paper — Ink and Paper — Illustration studio — https://www.instagram.com/ink_and_paper/\n');
+  const libDir = mkdtempSync(join(tmpdir(), 'mp-library-'));
+  const library = new InstagramLibrary(libDir, parseList(readFileSync(listFile, 'utf8')));
+  library.keep(library.accounts[0]!, { state: 'read', at: new Date().toISOString(), posts: [{ id: 'p1', caption: 'A risograph print of the harbour', type: 'image', at: '2026-11-14T10:00:00Z', url: 'https://www.instagram.com/p/p1/' }] });
+  writeFileSync(library.picture('p1'), new Uint8Array([0xff, 0xd8, 0xff]));
+
+  const a = new MemoryAssets();
+  const b = new MemoryAssets();
+  const [inA, inB] = [followingIn(library, a), followingIn(library, b)];
+  const [foundA] = await inA.search('risograph harbour');
+  const [foundB] = await inB.search('risograph');
+  assert.equal(foundA?.url, 'https://www.instagram.com/p/p1/');
+  assert.ok(a.files.has(foundA!.asset!) && b.files.has(foundB!.asset!), "each space's copy of the picture is in its own assets");
+  assert.equal((await inA.search('risograph'))[0]!.asset, foundA!.asset, 'and is not copied again');
+
+  const dataDir = mkdtempSync(join(tmpdir(), 'mp-hosted-'));
+  const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
+  const instagram = { token: 'ig', userId: '1', list: listFile, read: true };
+  const hosted = await startHosted({ port: 0, host: '127.0.0.1', dataDir, appKey: KEY, adminToken: ADMIN, ledger, shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, instagram }, following: { library }, log: () => {} });
+  for (const device of [A, B]) assert.equal((await fetch(`${hosted.url}/api/state?token=${KEY}.${device}`)).status, 200);
+  for (const device of [A, B]) assert.ok(!existsSync(join(dataDir, 'spaces', device, 'instagram')), `${device} opened no library of its own`);
+  assert.deepEqual((await admin(hosted)).instagram, { posts: 1, reading: false });
+  await hosted.close();
+});
+
+test("a device's commands and drops stop once its mindstorm is at its limit, and a socket message is small", { timeout: 20000 }, async () => {
+  const { hosted } = await host({}, { storeLimit: 1 });
+  const c = await connect(hosted, `${KEY}.${A}`);
+  await c.until((m) => m.t === 'hello');
+  c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'one more note' }] }));
+  await c.until((m) => m.t === 'say' && String(m.text).includes('is full'));
+  const closed = new Promise<number>((done) => c.ws.on('close', (code) => done(code)));
+  c.ws.send(JSON.stringify({ t: 'dump', dumps: [{ kind: 'text', text: 'x'.repeat(1_200_000) }] }));
+  assert.equal(await closed, 1009, 'a message over 1 MB closes the socket');
+  await hosted.close();
 });
