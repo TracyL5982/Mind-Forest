@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "base.h"
+#include "json.h"
 #include "platform.h"
 #include "ocean/oceanmodel.h"
 
@@ -60,6 +61,28 @@ constexpr Scripted steps[] = {
 }  // namespace
 
 std::shared_ptr<PresenceDemo> PresenceDemo::fromFlags(OceanModel& model) {
+    if (std::optional<std::string> path = Flags::string("presenceTake")) {
+        std::optional<std::string> text = platform::readFile(*path);
+        std::optional<Json> j = text ? Json::parse(*text) : std::nullopt;
+        if (!j) {
+            logLine(fmt("[presence] take: can't read %s", path->c_str()));
+            return nullptr;
+        }
+        auto demo = std::make_shared<PresenceDemo>(model);
+        double last = 0;
+        int n = 0;
+        for (const Json& s : (*j)["steps"].array()) {
+            std::string id = fmt("take%d", n++), role = s["role"].string("scout");
+            double at = takeFrom + s["at"].number() / 1000, end = takeFrom + s["end"].number() / 1000;
+            demo->take.push_back({at, id, role, s["label"].string()});
+            demo->take.push_back({end, id, role, ""});
+            last = std::max(last, end);
+        }
+        std::stable_sort(demo->take.begin(), demo->take.end(), [](const Step& a, const Step& b) { return a.at < b.at; });
+        demo->length = last + takeAfter;
+        logLine(fmt("[presence] take: %d labels from %s, on a %.1f s loop", n, path->c_str(), demo->length));
+        return demo;
+    }
     if (!Flags::has("presenceDemo")) return nullptr;
     logLine(fmt("[presence] demo: every state and look on a %.0f s loop", loop));
     return std::make_shared<PresenceDemo>(model);
@@ -112,24 +135,33 @@ void PresenceDemo::frame(double now) {
         if (!model.art || !model.lineMaterial) return;
         view = std::make_unique<PresenceView>(model.art, *model.lineMaterial, model.root_);
     }
-    double t = std::fmod(now, loop);
+    double t = std::fmod(now, length);
     if (t < played) {
         crew = Crew{};
         played = -1;
     }
-    for (const Scripted& s : steps) {
-        if (s.at <= played || s.at > t) continue;
+    auto play = [&](double when, const std::string& id, const std::string& role, const std::string& label) {
+        if (when <= played || when > t) return;
         Activity a;
-        a.id = s.id;
-        a.role = s.role;
-        a.state = *s.label ? Activity::State::start : Activity::State::done;
-        a.message = s.label;
-        if (*s.label) a.label = std::string(s.label);
+        a.id = id;
+        a.role = role;
+        a.state = !label.empty() ? Activity::State::start : Activity::State::done;
+        a.message = label;
+        if (!label.empty()) a.label = label;
         crew.activity(a, t);
+    };
+    if (take.empty()) {
+        for (const Scripted& s : steps) play(s.at, s.id, s.role, s.label);
+    } else {
+        for (const Step& s : take) play(s.at, s.id, s.role, s.label);
     }
     played = t;
     crew.update(t);
-    at(now, presence);
+    if (take.empty()) {
+        at(now, presence);
+    } else {
+        presence.state = crew.working() ? Presence::State::working : Presence::State::waiting;
+    }
     presence.agents = crew.lines("Momo");
     model.conversing = presence.conversing();
     Mat4 head = platform::head().value_or(Mat4::trs(model.stage.origin, Quat::identity(), {1, 1, 1}));
@@ -144,7 +176,7 @@ void PresenceDemo::frame(double now) {
     if (way != 0 && way != looking) logLine(fmt("[presence] eyes %s at %.2f", way < 0 ? "left" : "right", t));
     if (way != 0) looking = way;
 
-    if (now - loggedAt < loop) return;
+    if (now - loggedAt < length) return;
     loggedAt = now;
     std::sort(took.begin(), took.end());
     auto percentile = [&](double share) { return took[std::min(took.size() - 1, size_t(share * double(took.size())))]; };
