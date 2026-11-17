@@ -445,6 +445,40 @@ void OceanModel::runFlags() {
             }
         });
     }
+    // AGENT: `-script "back|note:agent-x|…" -scriptAt <s> [-scriptEvery <s>]`: one step after another, a step back a layer as
+    // the fist takes one, or a pinch on a named card. Each pinch says whether the card was in sight, on which layer, and which
+    // layer stands after it, by the card that leads it (`[ocean] script: …`), for walking a tree by hand.
+    if (std::optional<std::string> script = Flags::string("script")) {
+        std::vector<std::string> steps{""};
+        for (char ch : *script) {
+            if (ch == '|') steps.emplace_back(); else steps.back() += ch;
+        }
+        double from = Flags::number("scriptAt"), every = Flags::number("scriptEvery") > 0 ? Flags::number("scriptEvery") : 0.6;
+        for (size_t k = 0; k < steps.size(); k++) {
+            after(from + double(k) * every, [this, step = steps[k]] {
+                if (!tree) return;
+                if (step == "back") {
+                    moveLayer(1);
+                    logLine(fmt("[ocean] script: back, now on layer %d", tree->standDepth() + 1));
+                    return;
+                }
+                std::optional<Ref> ref = Ref::make(step);
+                std::optional<TreeNode> n = ref ? tree->node(*ref) : std::nullopt;
+                if (!n) {
+                    logLine("[ocean] script: " + step + " is not in the tree");
+                    return;
+                }
+                std::optional<Tree::Place> shown = tree->shown(*n);
+                bool seen = shown && style(*n, *tree).alpha > 0.05f;
+                int on = tree->standDepth() + 1;
+                take(n->id);
+                const TreeNode* leads = find(*tree, tree->stand);
+                logLine(fmt("[ocean] script: pinched %s, %s on layer %d while layer %d stood; now on layer %d, of %s", step.c_str(),
+                            seen ? "in sight" : "out of sight", shown ? shown->depth + 1 : 0, on, tree->standDepth() + 1,
+                            leads ? leads->ref.key().c_str() : "nothing"));
+            });
+        }
+    }
     at("bringAt", [](OceanModel& m) {
         if (m.peek) m.bringIn(m.peek->film);
     });
