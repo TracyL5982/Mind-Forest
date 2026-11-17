@@ -298,13 +298,14 @@ PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& lineMateria
       edge(size / grown * 1.5f),
       // The same gap, half its radius now, to the left of the bars; its top at the first agent's bar's top.
       middle{edge - size * 1.5f, step + apart + small - size} {
-    // The ocean's dust is seen through and drawn after everything else, so the bars say where they stand; Momo's light
-    // does not, or a fading part of it would hide the words. Momo is light added to what is behind it, as CurioCity
+    // Momo's block draws over whatever it overlaps (the user's choice, 2026-11-17), so nothing in the room ever ties with
+    // it, and the pieces of it in their own order (draw()). Momo is light added to what is behind it, as CurioCity
     // draws it, so its three rings sum to white.
     Material dark = lineMaterial;
-    dark.writesDepth = true;
+    dark.onTop = true;
     Material added = lineMaterial;
     added.additive = true;
+    added.onTop = true;
     group->name = "presence";
     // (Named, for the preview's depth audit.)
     EntityRef bars = Entity::make(backing, {dark}), ring = Entity::make(light, {added});
@@ -332,10 +333,9 @@ EntityRef PresenceView::picture(const std::string& text, Speaker who, size_t nam
     Material m = Material::unlit(Color::white());
     m.texture = piece->texture;
     m.transparent = true;
-    // Words are blended over their bar, which holds the depth for them. All of Momo's lines lie in one plane, and each
-    // picture is a little taller than a line with its margin: writing depth, those of neighbouring lines (and a caption
-    // line scrolling up past the agents' lines) tied for the pixels they share, and flickered on the headset.
-    m.writesDepth = false;
+    // Over everything, as the rest of Momo is. (All of Momo's lines lie in one plane, and each picture is a little
+    // taller than a line with its margin: when they wrote depth, neighbouring lines tied for the pixels they share.)
+    m.onTop = true;
     EntityRef e = Entity::make(Mesh::generatePlane(piece->size.x, piece->size.y), {m});
     e->name = std::string(who == Speaker::agent ? "presence agent line (" : "presence words (") + text.substr(0, 24) + ")";
     return e;
@@ -514,8 +514,8 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
 
 void PresenceView::draw() {
     const Face::Look& l = face.look();
-    // Both meshes say they stand behind the words, so the renderer, which draws what is seen through farthest first,
-    // draws them before the words. The bars are written again only while they change.
+    // Both meshes say they stand behind the words, so the renderer, which draws what is on top farthest first, draws
+    // them before the words: the bars, then Momo's light, then the words. The bars are written again only while they change.
     if (bars != barsDrawn) {
         barsDrawn = bars;
         fill(backing, scratch, BoundingBox{{0, -0.08f, -0.065f}, {0.42f, 0.16f, -0.055f}}, [&](Pen& pen) {

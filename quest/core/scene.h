@@ -206,6 +206,9 @@ struct Material {
     bool writesDepth = true;
     /// Kind::line only: its light is added to what is behind and covers none of it, so overlapping colours sum toward white.
     bool additive = false;
+    /// NOTE(port): Quest only (Momo's block). Drawn over whatever it overlaps, as a heads-up display is: seen through,
+    /// after everything else, its depth neither tested nor written; among such things, the farthest first.
+    bool onTop = false;
     /// ShaderGraphMaterial.setParameter(name:value:): a float is stored in x.
     std::map<std::string, Vec4> parameters;
     /// For Kind::video.
