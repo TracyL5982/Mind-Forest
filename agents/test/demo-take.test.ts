@@ -1,22 +1,21 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { WebSocket } from 'ws';
 import { Lines, type LinesFile } from '../src/demo/lines.ts';
 import { loadScript, type ScriptPhase } from '../src/demo/script.ts';
 import { momentAt, planLines, REAL, schedule, takeOf, type Line } from '../src/demo/take.ts';
 import { FakeModel } from '../src/fake/model.ts';
+import { demoData } from './demo-data.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running } from '../src/node/server.ts';
 
 const demoDir = join(import.meta.dirname, '../demo');
-/** Each boot of the demo copies its pictures into its data folder, about 20 MB: every folder made here is removed when the tests end. */
-const made: string[] = [];
-const temp = (prefix: string) => (made.push(mkdtempSync(join(tmpdir(), prefix))), made.at(-1)!);
-process.on('exit', () => made.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 const script = loadScript(join(demoDir, 'script.json'));
+const data = demoData();
+after(data.clean);
+const temp = data.temp;
 const round = (id: string): ScriptPhase => script.phases.find((phase) => phase.id === id)!;
 const titlesOf = (phase: ScriptPhase, ids: string[]) => ids.map((id) => phase.cards.find((card) => card.id === id)!.title).sort();
 
@@ -170,7 +169,7 @@ interface Stage {
 async function stage(rate: number, rounds = ['n3']): Promise<Stage> {
   const spoken: string[] = [];
   const run = await startServer({
-    port: 0, host: '127.0.0.1', dataDir: temp('mp-demo-'), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
+    port: 0, host: '127.0.0.1', dataDir: data.fresh(), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
     live: { open: () => ({ send: () => {}, close: () => {} }), options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } },
     demo: {
       script, mediaDir: join(demoDir, 'media'), linesDir: await linesFolder(rounds), voice: 'test-voice', speak: async (text) => (spoken.push(text), speak(text)),
