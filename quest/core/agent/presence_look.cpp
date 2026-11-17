@@ -472,51 +472,99 @@ void Roster::write(Line& line, const AgentLine& agent) const {
     }
 }
 
+void Roster::give(Line& line, const AgentLine& a, float hold) {
+    if (line.from == a) {
+        line.next.reset();
+    } else if (a.finished && line.lastStep && !(line.from == *line.lastStep)) {
+        // The run ended on a step not yet shown: that step first, for its while, then "finished working" (the lead,
+        // 2026-11-17: the last step of a run is shown before the line moves on). It has stood its moment already.
+        if (!(line.next && *line.next == *line.lastStep)) {
+            line.next = line.lastStep;
+            line.nextSince = clock - settleWords;
+        }
+    } else if (!(line.next && *line.next == a)) {
+        // New words for a line wait until they have stood a moment, and until the line's words have stood their while.
+        line.next = a;
+        line.nextSince = clock;
+    }
+    if (!a.finished) line.lastStep = a;
+    line.given = a;
+    if (line.next && clock - line.nextSince >= settleWords && clock - line.since >= hold) {
+        write(line, *line.next);
+        line.since = clock;
+        line.next.reset();
+    }
+}
+
+void Roster::let(Line& line) {
+    if (line.next) {
+        write(line, *line.next);
+        line.since = clock;
+        line.next.reset();
+    }
+    line.going = true;
+    line.toOpacity = 0;
+}
+
 void Roster::update(const std::vector<AgentLine>& agents, float dt) {
     if (dt > 0) clock += dt;
-    for (Line& l : lines_) l.toOpacity = 0;
-    for (size_t i = 0; i < agents.size(); i++) {
-        const AgentLine& a = agents[i];
-        auto found = std::find_if(lines_.begin(), lines_.end(), [&](const Line& l) { return l.role == a.role; });
-        if (found == lines_.end()) {
-            Line l;
-            l.role = a.role;
-            write(l, a);
-            l.since = clock;
-            // (The view has it rise the last little way into its place as its words come: presence_view.cpp.)
-            l.y = float(i);
-            lines_.push_back(std::move(l));
-            found = lines_.end() - 1;
-        } else if (found->from == a) {
-            found->next.reset();
-        } else if (a.finished && found->lastStep && !(found->from == *found->lastStep)) {
-            // The run ended on a step not yet shown: that step first, for its while, then "finished working" (the lead,
-            // 2026-11-17: the last step of a run is shown before the line moves on). It has stood its moment already.
-            if (!(found->next && *found->next == *found->lastStep)) {
-                found->next = found->lastStep;
-                found->nextSince = clock - settleWords;
-            }
-        } else if (!(found->next && *found->next == a)) {
-            // New words for a line wait until they have stood a moment, and until the line's words have stood a while.
-            found->next = a;
-            found->nextSince = clock;
-        }
-        if (!a.finished) found->lastStep = a;
-        if (found->next && clock - found->nextSince >= settleWords && clock - found->since >= holdWords) {
-            write(*found, *found->next);
-            found->since = clock;
-            found->next.reset();
-        }
-        found->toY = float(i);
-        found->toOpacity = 1;
-    }
-    // A line whose agent has gone fades with its newest words, never a step held back.
+    bool working = std::any_of(agents.begin(), agents.end(), [](const AgentLine& a) { return !a.finished; });
+    float hold = working ? holdWords : holdOnceNoneWork;
+    auto agentOf = [&](const std::string& role) -> const AgentLine* {
+        auto found = std::find_if(agents.begin(), agents.end(), [&](const AgentLine& a) { return a.role == role; });
+        return found == agents.end() ? nullptr : &*found;
+    };
+    int shown = 0;
+    // A line keeps its place while its agent works, and changes its words there. The crew lets an agent go a while
+    // after it finished; its line stays until its last words have had their while and "finished working" its
+    // `Crew::finishedFor`. One whose agent went while still at work (the crew is cleared on a new connection) goes at once.
     for (Line& l : lines_) {
-        if (l.toOpacity == 0 && l.next) {
-            write(l, *l.next);
-            l.since = clock;
-            l.next.reset();
+        if (l.going) continue;
+        const AgentLine* a = agentOf(l.role);
+        if (!a && !l.given.finished) {
+            let(l);
+            continue;
         }
+        give(l, a ? *a : l.given, hold);
+        if (!a && l.from.finished && !l.next && clock - l.since >= float(Crew::finishedFor)) {
+            let(l);
+            continue;
+        }
+        l.toOpacity = 1;
+        shown++;
+    }
+    // An agent without a line takes a place while there is one. When there is none, one at work takes the place of the
+    // first line that has said "finished working" for its while; otherwise it waits. (One whose line is still fading
+    // waits for it to go.)
+    for (const AgentLine& a : agents) {
+        if (std::any_of(lines_.begin(), lines_.end(), [&](const Line& l) { return l.role == a.role; })) continue;
+        if (shown >= mostLines) {
+            if (a.finished) continue;
+            auto done = std::find_if(lines_.begin(), lines_.end(), [&](const Line& l) {
+                return !l.going && l.from.finished && !l.next && clock - l.since >= holdWords;
+            });
+            if (done == lines_.end()) continue;
+            let(*done);
+            shown--;
+        }
+        Line l;
+        l.role = a.role;
+        write(l, a);
+        l.since = clock;
+        l.given = a;
+        if (!a.finished) l.lastStep = a;
+        l.toOpacity = 1;
+        lines_.push_back(std::move(l));
+        shown++;
+    }
+    // In the order they began, the first lowest. (The view has a new line rise the last little way into its place as its
+    // words come: presence_view.cpp.)
+    float place = 0;
+    for (Line& l : lines_) {
+        if (l.going) continue;
+        l.toY = place++;
+        if (l.fresh) l.y = l.toY;
+        l.fresh = false;
     }
     if (!(dt > 0)) return;
     for (Line& l : lines_) {
@@ -524,7 +572,7 @@ void Roster::update(const std::vector<AgentLine>& agents, float dt) {
         // A line that goes, goes quickly, so the lines above can take its place without the two standing together.
         ease(l.opacity, l.toOpacity, l.toOpacity > l.opacity ? 0.08f : 0.07f, dt);
     }
-    std::erase_if(lines_, [](const Line& l) { return l.toOpacity == 0 && l.opacity < 0.01f; });
+    std::erase_if(lines_, [](const Line& l) { return l.going && l.opacity < 0.01f; });
 }
 
 int Roster::resting() const {

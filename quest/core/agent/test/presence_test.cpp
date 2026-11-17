@@ -546,7 +546,8 @@ TEST(eachAgentAtWorkHasALineTheFirstLowestCutToOneLine) {
 TEST(aLineThatGoesFadesAndTheLinesAboveTakeItsPlace) {
     Roster r = roster();
     AgentLine momo{"momo", "Momo (librarian)", "", true}, scout{"scout", "Scout", "Searching", false};
-    run(r, {momo, scout}, 1);
+    // (The crew lets an agent go once it has finished for its while.)
+    run(r, {momo, scout}, float(Crew::finishedFor));
     run(r, {scout}, 0.1f);
     const Roster::Line* going = line(r, "momo");
     CHECK(going && going->opacity < 0.5f, "the finished line fades quickly");
@@ -559,30 +560,76 @@ TEST(aLineThatGoesFadesAndTheLinesAboveTakeItsPlace) {
 TEST(aLinesWordsChangeAtMostEveryHoldTheLatestWinning) {
     Roster r = roster();
     auto step = [](const char* words) { return AgentLine{"scout", "Scout", words, false}; };
-    run(r, {step("Looking into dancing people")}, 1);
+    run(r, {step("Looking into dancing people")}, Roster::holdWords + 0.1f);
     run(r, {step("Searching museum collections")}, 0.1f);
     const Roster::Line* l = line(r, "scout");
     CHECK(l && l->text == "Scout · Looking into dancing people", "new words wait a moment, in case more come: \"%s\"", l ? l->text.c_str() : "");
     run(r, {step("Searching museum collections")}, 0.1f);
     l = line(r, "scout");
     CHECK(l && l->text == "Scout · Searching museum collections", "then show: \"%s\"", l ? l->text.c_str() : "");
-    run(r, {step("Making a picture")}, 0.1f);
-    run(r, {step("Laying out 2 cards")}, 0.1f);
+    run(r, {step("Making a picture")}, 0.5f);
+    run(r, {step("Laying out 2 cards")}, 0.5f);
     l = line(r, "scout");
-    CHECK(l && l->text == "Scout · Searching museum collections", "two more steps within 0.4 s: the words stay: \"%s\"", l ? l->text.c_str() : "");
-    run(r, {step("Laying out 2 cards")}, 0.3f);
+    CHECK(l && l->text == "Scout · Searching museum collections", "two more steps within the hold: the words stay: \"%s\"", l ? l->text.c_str() : "");
+    run(r, {step("Laying out 2 cards")}, Roster::holdWords - 0.9f);
     l = line(r, "scout");
     CHECK(l && l->text == "Scout · Laying out 2 cards", "then the latest, the step between passed over: \"%s\"", l ? l->text.c_str() : "");
     CHECK(l && l->opacity > 0.99f, "and the line never fades as its words change");
 }
 
-TEST(aLineWhoseAgentHasGoneFadesWithItsNewestWords) {
+TEST(eachOfALinesWordsStaysAtLeastTheHoldThoughItsStepsComeFaster) {
     Roster r = roster();
-    run(r, {{"scout", "Scout", "Searching museum collections", false}}, 1);
-    run(r, {{"scout", "Scout", "", true}}, 0.05f);
+    // A step every 0.2 s for 8 s, each a new one, then the run ends.
+    std::string shown;
+    float since = 0, shortest = 1e9f, t = 0;
+    int changes = 0;
+    for (; t < 14; t += frame) {
+        int n = int(t / 0.2f);
+        std::string words = "Step " + std::to_string(n);
+        r.update({t < 8 ? AgentLine{"scout", "Scout", words, false} : AgentLine{"scout", "Scout", "", true}}, frame);
+        const Roster::Line* l = line(r, "scout");
+        if (!l || l->going) break;
+        if (l->text != shown) {
+            if (!shown.empty()) {
+                shortest = std::min(shortest, t - since);
+                changes++;
+            }
+            shown = l->text;
+            since = t;
+        }
+    }
+    CHECK(changes >= 4, "the words do change, %d times", changes);
+    CHECK(shortest >= Roster::holdWords - 0.02f, "and each stood at least %.2f s: %.2f", double(Roster::holdWords), double(shortest));
+    CHECK(shown == "Scout · finished working", "the line goes saying \"finished working\": \"%s\"", shown.c_str());
+    CHECK(t - since >= float(Crew::finishedFor) - 0.02f, "after it has said so for %.2f s", double(t - since));
+}
+
+TEST(aLineWhoseAgentHasGoneFadesWithItsNewestWords) {
+    // Gone at work (the crew is cleared on a new connection): it goes at once, saying what it last said it was doing.
+    Roster r = roster();
+    run(r, {{"scout", "Scout", "Searching museum collections", false}}, Roster::holdWords + 0.1f);
+    run(r, {{"scout", "Scout", "Reading 8 results", false}}, 0.3f);
     run(r, {}, 0.05f);
     const Roster::Line* l = line(r, "scout");
-    CHECK(l && l->text == "Scout · finished working", "fading, it says what it last said it was doing: \"%s\"", l ? l->text.c_str() : "gone");
+    CHECK(l && l->going && l->text == "Scout · Reading 8 results", "fading, it says what it last said it was doing: \"%s\"", l ? l->text.c_str() : "gone");
+    // Let go after it finished, before its last words had their while: those first, then "finished working" for its
+    // while, and only then it fades.
+    Roster q = roster();
+    run(q, {{"scout", "Scout", "Searching museum collections", false}}, 1);
+    run(q, {{"scout", "Scout", "", true}}, 0.05f);
+    float t = 0, finishedFrom = -1;
+    bool stale = false;
+    for (; t < 8; t += frame) {
+        q.update({}, frame);
+        const Roster::Line* m = line(q, "scout");
+        if (!m || m->going) break;
+        if (finishedFrom < 0 && m->text == "Scout · finished working") finishedFrom = t;
+        if (finishedFrom >= 0 && m->text != "Scout · finished working") stale = true;
+    }
+    const Roster::Line* m = line(q, "scout");
+    CHECK(finishedFrom >= 0 && !stale, "it said \"finished working\", and nothing after");
+    CHECK(m && m->text == "Scout · finished working", "fading, it says so: \"%s\"", m ? m->text.c_str() : "gone");
+    CHECK(t - finishedFrom >= float(Crew::finishedFor) - 0.02f, "after %.2f s", double(t - finishedFrom));
 }
 
 TEST(theLastStepOfARunShowsForItsWhileBeforeFinishedWorking) {
@@ -592,7 +639,7 @@ TEST(theLastStepOfARunShowsForItsWhileBeforeFinishedWorking) {
     // The run's last step comes, and ends at once: no sooner shown than over.
     run(r, {step("Reading 8 results")}, 0.05f);
     float t = 0, readFrom = -1, finishedFrom = -1;
-    for (; t < 1.5f; t += frame) {
+    for (; t < 2 * Roster::holdWords + 0.5f; t += frame) {
         r.update({{"scout", "Scout", "", true}}, frame);
         const Roster::Line* l = line(r, "scout");
         if (l && readFrom < 0 && l->text == "Scout · Reading 8 results") readFrom = t;
@@ -601,4 +648,47 @@ TEST(theLastStepOfARunShowsForItsWhileBeforeFinishedWorking) {
     CHECK(readFrom >= 0, "the last step is shown, though the run had ended before its words had stood their moment");
     CHECK(finishedFrom > readFrom && finishedFrom - readFrom >= Roster::holdWords - 0.02f,
           "then \"finished working\", after it has stood %.2f s", double(finishedFrom - readFrom));
+}
+
+TEST(atMostThreeLinesShowAnotherAtWorkWaitsForAFinishedLinesPlace) {
+    Roster r = roster();
+    AgentLine intake{"intake", "Intake", "Reading what you dropped", false}, filer{"filer", "Filer", "Filing a link", false},
+        scout{"scout", "Scout", "Searching", false}, renderer{"renderer", "Renderer", "Laying out a card", false};
+    run(r, {intake, filer, scout, renderer}, 1);
+    CHECK_EQ(r.resting(), Roster::mostLines);
+    CHECK(!line(r, "renderer"), "the fourth waits for a place");
+    intake.step.clear();
+    intake.finished = true;
+    run(r, {intake, filer, scout, renderer}, Roster::holdWords + 0.2f);
+    const Roster::Line* done = line(r, "intake");
+    CHECK(done && !done->going && done->text == "Intake · finished working", "a line that has finished says so for its while first");
+    CHECK(!line(r, "renderer"), "while the fourth still waits");
+    run(r, {intake, filer, scout, renderer}, Roster::holdWords);
+    done = line(r, "intake");
+    CHECK(!done || done->going, "then it gives its place up");
+    const Roster::Line *waited = line(r, "renderer"), *filing = line(r, "filer");
+    CHECK(waited && waited->toY == 2 && waited->text == "Renderer · Laying out a card", "to the fourth, above the others");
+    CHECK(filing && filing->toY == 0, "which come down in their order");
+    CHECK_EQ(r.resting(), Roster::mostLines);
+}
+
+TEST(aLineStaysInItsPlaceBetweenItsAgentsSteps) {
+    Roster r = roster();
+    AgentLine scout{"scout", "Scout", "Thinking of directions", false};
+    AgentLine laying{"renderer", "Renderer", "Laying out a card", false}, done{"renderer", "Renderer", "", true};
+    run(r, {scout, laying}, 0.12f);
+    run(r, {scout, done}, 2.5f);
+    const Roster::Line* l = line(r, "renderer");
+    CHECK(l && l->text == "Renderer · finished working", "the Renderer finished: \"%s\"", l ? l->text.c_str() : "gone");
+    float y = l ? l->toY : -1, least = 1;
+    AgentLine again{"renderer", "Renderer", "Laying out 2 cards", false};
+    for (float t = 0; t < 2; t += frame) {
+        r.update({scout, again}, frame);
+        if (const Roster::Line* m = line(r, "renderer")) least = std::min(least, m->opacity);
+        else least = 0;
+    }
+    l = line(r, "renderer");
+    CHECK(l && l->text == "Renderer · Laying out 2 cards", "at work again, its words change: \"%s\"", l ? l->text.c_str() : "gone");
+    CHECK(l && l->toY == y, "where it was");
+    CHECK(least > 0.99f, "and it never left: %.2f at the least", double(least));
 }

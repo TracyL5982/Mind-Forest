@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "crew.h"
 #include "presence.h"
 #include "vecmath.h"
 
@@ -240,9 +241,16 @@ private:
 class Roster {
 public:
     static constexpr const char* finished = "finished working";
-    /// s new words must stand before they are shown, and s a line's words stay before they change again: steps that
-    /// come and go faster than that are passed over for the latest.
-    static constexpr float settleWords = 0.15f, holdWords = 0.4f;
+    /// s new words must stand before they are shown, and s a line's words stay before they change again, even past the
+    /// end of their step: steps that come and go faster are passed over for the latest. The user's rule (2026-11-17):
+    /// "each line stays at least about 1.5 s, at most 3 lines show, and a line changes its words in place".
+    static constexpr float settleWords = 0.15f, holdWords = 1.5f;
+    /// s a line's words stay once no agent is at work, so as Momo wraps up. Whether a label held past its step may show
+    /// on into her wrap-up is the user's to say (WS64, point 4, asked 2026-11-17); until then, the same as at work.
+    static constexpr float holdOnceNoneWork = holdWords;
+    /// At most this many lines show. An agent beyond them waits for a place: a line that has said "finished working"
+    /// for `holdWords` gives its place up to one at work (the lead's call, WS64, point 1).
+    static constexpr int mostLines = 3;
 
     struct Line {
         std::string role;           // whose: a line keeps it while its words change
@@ -257,6 +265,9 @@ public:
         std::optional<AgentLine> next;  // words waiting their turn (see `settleWords`)
         float nextSince = 0;            // and since when
         std::optional<AgentLine> lastStep;  // the newest step it was given, shown or not, for the end of a run
+        AgentLine given;                    // what it was last given, shown or not
+        bool going = false;                 // it has given its place up, and fades
+        bool fresh = true;                  // it has no place yet
     };
 
     using Measure = std::function<float(const std::string&)>;
@@ -277,6 +288,10 @@ private:
     float clock = 0;
 
     void write(Line& line, const AgentLine& agent) const;
+    /// Gives `line` what its agent is doing now, and changes its words when it is their time (`hold`).
+    void give(Line& line, const AgentLine& agent, float hold);
+    /// `line` gives its place up, and fades with its newest words, never a step held back.
+    void let(Line& line);
 };
 
 }  // namespace agent
