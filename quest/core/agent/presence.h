@@ -1,10 +1,15 @@
 // What the voice is doing, for the view of Momo's presence in the scene (presence_view.h): one value the frame
 // thread reads each frame. The voice fills it (Voice::presence).
 #pragma once
+#include <algorithm>
 #include <string>
 #include <vector>
 
 namespace agent {
+
+/// The level Momo's ring follows, 0 to 1, from a voice's RMS in -1…1: AgentSphere's, the RMS three times over (its
+/// LEVEL_GAIN), so a voice at about -16 dBFS reads near 0.5 and a room's hiss near nothing.
+inline float levelOf(float rms) { return std::clamp(rms * 3, 0.f, 1.f); }
 
 /// One agent at work, for its line above Momo's words: "Scout · Searching museum collections for dancing people".
 /// Once its last step ends it is `finished` for a while ("Scout · finished working"), then has no line.

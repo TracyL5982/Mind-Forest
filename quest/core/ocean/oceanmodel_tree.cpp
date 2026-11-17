@@ -968,12 +968,50 @@ void OceanModel::clearMark(int id) {
 // MARK: - The ocean: peeking and bringing in
 
 /// Where a film comes to when it is lifted for a look: up off the water, most of the way to you.
-Vec3 OceanModel::peekPoint(int film) const {
+Vec3 OceanModel::peekPoint(int film, float tall) const {
     if (!shell) return Vec3::zero();
     Vec3 home = shell->homes[film];
     Vec3 away = home - stage.origin;
     float dist = std::min(2.3f, std::max(1.5f, length(away) * 0.6f));
-    return stage.origin + normalize(away) * dist + stage.u * 0.16f;
+    Vec3 to = stage.origin + normalize(away) * dist + stage.u * 0.16f;
+    // NOTE(port): added for Quest. Kai, 2026-11-17: "the item sometimes can get obstructed by a tree sitting on the
+    // table - fly them higher so that we make sure that they can be clicked on". Its lower edge goes above the line
+    // from your eyes, and from your hand under them, over the top of every tree put away that stands nearer than it
+    // and not far to one side: seen past them, and pinched past them.
+    Vec3 level = to - stage.origin;
+    level -= stage.u * dot(level, stage.u);
+    float far = length(level);
+    if (far < 0.3f) return to;
+    Vec3 ahead = level / far;
+    float lowest = dot(to - stage.origin, stage.u) - tall / 2;     // its lower edge, m above the eyes
+    float needed = lowest;
+    // m: a hand's ray starts about this far under the eyes; and a part counts within this many degrees to either side of
+    // the piece's middle, its half width and the hand's being off to one side.
+    constexpr float hand = 0.35f, clear = 0.05f, beside = 14;
+    Vec3 side = cross(ahead, stage.u);
+    for (const Shelved& s : shelf) {
+        // The tree and its pictures, not the rings on the ground round it.
+        std::vector<EntityRef> parts{s.branches};
+        for (const CoverPicture& p : s.pictures) parts.push_back(p.entity);
+        for (const EntityRef& part : parts) {
+            if (!(part && part->isEnabledInHierarchy())) continue;
+            BoundingBox box = part->visualBounds();
+            float nearest = INFINITY, top = -INFINITY, left = INFINITY, right = -INFINITY;
+            for (float x : {box.min.x, box.max.x}) {
+                for (float z : {box.min.z, box.max.z}) {
+                    Vec3 corner = root_->convertFrom(Vec3{x, box.max.y, z}, nullptr) - stage.origin;
+                    float along = dot(corner, ahead), turn = std::atan2(dot(corner, side), along) * 180 / floatPi;
+                    nearest = std::min(nearest, along);
+                    top = std::max(top, dot(corner, stage.u));
+                    left = std::min(left, turn);
+                    right = std::max(right, turn);
+                }
+            }
+            if (nearest < 0.2f || nearest >= far || right < -beside || left > beside) continue;
+            needed = std::max(needed, std::max(top * far / nearest, -hand + (top + hand) * far / nearest) + clear);
+        }
+    }
+    return to + stage.u * (needed - lowest);
 }
 
 /// Lifts a film or a work out of the ocean just far enough to see what it is.
@@ -1005,7 +1043,9 @@ void OceanModel::peekAt(int film) {
     const Piece& piece = *made;
     EntityRef holder = Entity::make();
     holder->addChild(art->quad(piece));
-    Vec3 home = shell->center(film), to = peekPoint(film);
+    // (Its card's height as large as it comes to before it is lifted clear of the trees: a little less than it ends.)
+    float tall = piece.size.y * length(peekPoint(film, 0) - stage.origin) / 2.3f * 1.6f;
+    Vec3 home = shell->center(film), to = peekPoint(film, tall);
     holder->orientation = stage.facing(to);
     holder->collision = {Shape::generateBox({piece.size.x, piece.size.y, 0.01f}).offsetBy(Vec3{piece.offset.x, piece.offset.y, 0})};
     holder->inputTarget = true;
@@ -1022,6 +1062,9 @@ void OceanModel::peekAt(int film) {
     touch(time + double(Pace::fly));
     soundAt("peek", to);
     logLine("[ocean] peek: " + catalog->title(ref));
+    Vec3 seen = to - stage.origin;
+    logLine(fmt("[ocean] it comes to %.2f m off, its middle %.1f degrees up", double(length(seen)),
+                double(std::asin(std::clamp(dot(normalize(seen), stage.u), -1.f, 1.f)) * 180 / floatPi)));
 }
 
 void OceanModel::clearPeek(bool returning) {
