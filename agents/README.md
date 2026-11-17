@@ -82,6 +82,10 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 | `MIND_PALACE_INSTAGRAM_READ` | on | `off` searches what `data/instagram/` holds without reading Instagram, for a copy of the service. |
 | `MIND_PALACE_WEB_EFFORT` | `low` | How hard it thinks. `none` answers about 0.5 s sooner and dated a launch wrong more often. |
 
+## The walkthrough demo
+
+`npm run demo` runs the service with one prepared tree, played round by round for recording the film: Momo is live, what the Scout brings is scripted, and a page at `/demo` goes to any round. It keeps its own data folder, `data-demo`. `demo/headset.sh` joins the app on the headset to it, and `demo/headset.sh back` returns the app to the hosted service. See [demo/README.md](demo/README.md).
+
 ## Check it
 
 ```bash

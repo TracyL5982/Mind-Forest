@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +19,8 @@ import { forDevice, Ledger, limitsFrom } from './hosted/ledger.ts';
 import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareCost } from './hosted/overflow.ts';
 import { openInstagram } from './instagram.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
+import { loadScript } from '../demo/script.ts';
+import { loadShowcase } from '../demo/showcase.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -25,8 +29,41 @@ const args = new Set(process.argv.slice(2));
 const fake = args.has('--fake');
 /** One service for many headsets: a space per device, limits, an off switch, and no Telegram reading (see agents/README.md). */
 const hosted = env.MIND_PALACE_HOSTED === '1';
-const dataDir = env.MIND_PALACE_DATA ?? join(root, fake ? 'data-fake' : 'data');
+/**
+ * The demo: one prepared tree played round by round, with a page to go to any round (agents/demo/README.md). It keeps its own
+ * data folder, so the user's mindstorm is not touched. With `--fake` it runs with no model and no voice, to try the page.
+ */
+const demo = args.has('--demo');
+const demoDir = env.MIND_PALACE_DEMO ?? join(root, 'demo');
+const dataDir = env.MIND_PALACE_DATA ?? join(root, demo ? (fake ? 'data-demo-fake' : 'data-demo') : fake ? 'data-fake' : 'data');
 const number = (name: string, fallback: number) => (env[name]?.trim() ? Number(env[name]) : fallback);
+
+/** The showcase trees of the demo's folder that hold together; one that does not is said and left out. */
+function showcase() {
+  const { trees, problems } = loadShowcase(join(demoDir, 'showcase'));
+  for (const problem of problems) console.log(`[demo] ${problem}`);
+  return trees;
+}
+
+/**
+ * Starts the app again on a headset this Mac reaches by adb, joined to this service: what the demo's empty stage needs, since a
+ * headset keeps a tree the service deleted. It is the repository's own script (agents/demo/headset.sh restart), given this
+ * service's data folder and port and none of its keys. Undefined where the script is not there.
+ */
+function restartHeadset(): (() => Promise<string>) | undefined {
+  const script = join(root, 'demo', 'headset.sh');
+  // On Fly there is no adb and no headset on a cable: MIND_PALACE_DEMO_RESTART=off says so, and the page then says what to do.
+  if (env.MIND_PALACE_DEMO_RESTART === 'off' || !existsSync(script)) return undefined;
+  return () =>
+    new Promise((done, failed) => {
+      const given = { ...process.env, MIND_PALACE_DATA: resolve(dataDir), MIND_PALACE_PORT: String(env.MIND_PALACE_PORT ?? 8787) };
+      execFile('bash', [script, 'restart'], { env: given, timeout: 40_000 }, (err, stdout, stderr) => {
+        const said = `${stdout}\n${stderr}`.split('\n').map((line) => line.trim()).filter(Boolean).at(-1) ?? '';
+        if (err) failed(new Error(said || err.message));
+        else done(said || 'the app was started again on the headset');
+      });
+    });
+}
 const log = (line: string) => console.log(line);
 
 const ledger = hosted
@@ -216,10 +253,16 @@ if (ledger) {
     dataDir,
     token: env.MIND_PALACE_TOKEN || undefined,
     // One program at a time may read a bot's messages, so the offline stand-in leaves the bot to the real service.
-    telegram: !fake && env.TELEGRAM_BOT_TOKEN ? { token: env.TELEGRAM_BOT_TOKEN } : undefined,
+    // The demo is a stage, not the user's own space: nothing sent to the bot lands in it.
+    telegram: !fake && !demo && env.TELEGRAM_BOT_TOKEN ? { token: env.TELEGRAM_BOT_TOKEN } : undefined,
+    ...(demo ? { demo: { script: loadScript(join(demoDir, 'script.json')), mediaDir: join(demoDir, 'media'), showcase: showcase(), restart: restartHeadset() } } : {}),
     log,
   });
-  console.log(`Mind Palace agents${fake ? ' (fake roles, no model)' : ''}`);
+  console.log(`Mind Palace agents${fake ? ' (fake roles, no model)' : ''}${demo ? ', the demo' : ''}`);
+  if (demo) {
+    console.log(`  demo   ${running.url}/demo#token=${running.token}   <- the page that goes to any round`);
+    console.log(`  voice  ${shared.live ? 'Momo is live' : 'OFF: Momo cannot hear or speak without OPENAI_API_KEY in ~/.muse-garden.env'}`);
+  }
   console.log(`  open   ${running.url}/#token=${running.token}`);
   console.log(`  socket ${running.url.replace('http', 'ws')}/ws?token=${running.token}`);
 }

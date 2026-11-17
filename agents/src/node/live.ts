@@ -154,6 +154,8 @@ export interface LiveDeps {
   /** How long Momo's answer waits for that check at most, in ms. */
   nameWaitMs?: number;
   log: (line: string) => void;
+  /** More instructions for the session, after Momo's own: the demo's, which make every request a take (src/demo). */
+  extra?: () => string;
   now?: () => number;
   idleMs?: number;
   batchMs?: number;
@@ -675,7 +677,7 @@ export class LiveVoice {
         type: 'realtime',
         model: options.model,
         output_modalities: ['audio'],
-        instructions: instructions(this.deps.name(), today),
+        instructions: instructions(this.deps.name(), today) + (this.deps.extra ? `\n\n${this.deps.extra()}` : ''),
         tools: this.deps.tools(),
         tool_choice: 'auto',
         audio: {

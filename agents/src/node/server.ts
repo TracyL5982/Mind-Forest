@@ -26,6 +26,9 @@ import { Telegram, type TelegramOptions } from './telegram.ts';
 import { followingIn, openInstagram, type InstagramLibrary } from './instagram.ts';
 import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
+import { Director, momoNote, type Pace } from '../demo/director.ts';
+import type { DemoScript } from '../demo/script.ts';
+import type { Showcase } from '../demo/showcase.ts';
 
 export interface ServerOptions {
   port: number;
@@ -75,6 +78,8 @@ export interface ServerOptions {
   meter?: Meter;
   /** Hosted mode: the largest file one upload may be, and what this space's uploads may come to in all, in bytes. */
   uploads?: { file: number; total: number };
+  /** The demo: one prepared tree played round by round, with a page to go to any round (src/demo, agents/demo/README.md). */
+  demo?: { script: DemoScript; mediaDir: string; showcase?: Showcase[]; pace?: Partial<Pace>; restart?: () => Promise<string> };
   log?: (line: string) => void;
 }
 
@@ -101,6 +106,7 @@ export interface Space {
   token: string;
   pipeline: Pipeline;
   mind: Mindstorm;
+  demo: Director | null;
   /** Answers one request. The caller has checked nothing. */
   serve(req: IncomingMessage, res: ServerResponse): Promise<void>;
   upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void;
@@ -125,6 +131,8 @@ export interface Running {
   token: string;
   pipeline: Pipeline;
   mind: Mindstorm;
+  /** The demo's director, when the service runs the demo. */
+  demo: Director | null;
   close(): Promise<void>;
 }
 
@@ -158,6 +166,7 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
     token: space.token,
     pipeline: space.pipeline,
     mind: space.mind,
+    demo: space.demo,
     async close() {
       await space.close();
       await new Promise<void>((done) => http.close(() => done()));
@@ -199,6 +208,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   const sockets = new Set<WebSocket>();
   /** What each connection said it can play. A connection that has not said is taken to be a browser. */
   const plays = new Map<WebSocket, Playback>();
+  /** The connections made by the app on a headset, which joins through OkHttp and says so. The Mac preview is not one. */
+  const headsets = new WeakSet<WebSocket>();
   const playback = (): Playback => {
     const said = [...plays.values()];
     const files = said.length === 0 ? [] : said.map((p) => p.files).reduce((both, next) => both.filter((ext) => next.includes(ext)));
@@ -238,9 +249,21 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     asker?.voice?.observed(message);
   };
 
+  const liveRoles = meter ? metered(opts.roles, meter) : opts.roles;
+  /** The demo's director, made once the pipeline it directs is. Its roles are asked for at each call, so they find it. */
+  let director: Director | null = null;
   const pipeline = new Pipeline({
     mind,
-    roles: meter ? metered(opts.roles, meter) : opts.roles,
+    roles: opts.demo
+      ? {
+          ...liveRoles,
+          scout: (ctx, input) => (director ? director.roles().scout(ctx, input) : liveRoles.scout(ctx, input)),
+          questions: (ctx, input) => (director ? director.roles().questions(ctx, input) : liveRoles.questions(ctx, input)),
+          renderer: (ctx, input) => (director ? director.roles().renderer(ctx, input) : liveRoles.renderer(ctx, input)),
+        }
+      : liveRoles,
+    // A prepared round holds more cards than a live one, and all of them stay.
+    ...(opts.demo ? { round: { most: 24, known: 24 } } : {}),
     model: opts.model,
     tools: chargedPictures(makeTools({ model: opts.model, assets, instagram: opts.instagram, following, fetchPage: opts.fetchPage, keys: opts.keys, geocoder: opts.maps?.geocoder, spent: meter && ((dollars) => meter.spent(dollars)), log: opts.log }), meter),
     assets,
@@ -252,6 +275,40 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     playback,
   });
   pipeline.resume();
+
+  if (opts.demo) {
+    /** The headset the demo is shown on: the newest connection that said it is one, or else the newest client. */
+    const device = (): WebSocket | undefined => {
+      const open = [...sockets].filter((ws) => ws.readyState === ws.OPEN);
+      return open.findLast((ws) => plays.get(ws)?.embeds === false) ?? open.at(-1);
+    };
+    director = new Director({
+      script: opts.demo.script,
+      mediaDir: opts.demo.mediaDir,
+      showcase: opts.demo.showcase,
+      dataDir: opts.dataDir,
+      mind,
+      pipeline,
+      assets,
+      roles: liveRoles,
+      asDevice: (body) => {
+        const ws = device();
+        return asking.run({ ws, voice: ws && voices.get(ws) }, body);
+      },
+      devices: () => [...sockets].filter((ws) => ws.readyState === ws.OPEN && plays.get(ws)?.embeds === false).length,
+      forgetVoices: () => {
+        for (const voice of voices.values()) voice.close();
+      },
+      // Only the app on a headset can be started again from here. The Mac preview joins as a device too, and a headset on the
+      // cable that is not the one joined must be left as it is.
+      restart:
+        opts.demo.restart &&
+        (() => ([...sockets].some((ws) => ws.readyState === ws.OPEN && headsets.has(ws)) ? opts.demo!.restart!() : Promise.reject(new Error('what joined is not the app on a headset')))),
+      log,
+      pace: opts.demo.pace,
+    });
+    await director.prepare();
+  }
 
   /** What a contact's message may not do here now, as a client's may not: write with no room left, or cost while costly work is stopped. */
   const admit = () => {
@@ -440,6 +497,43 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       res.end(readFileSync(file));
       return;
     }
+    if (director && path.startsWith('/api/demo')) {
+      const posted = async (): Promise<Record<string, unknown>> => {
+        try {
+          return JSON.parse(Buffer.from(await body(req, 20_000)).toString('utf8') || '{}') as Record<string, unknown>;
+        } catch {
+          return {};
+        }
+      };
+      if (req.method === 'GET' && path === '/api/demo') return json(res, 200, { outline: director.outline(), status: director.status(), voice: Boolean(opts.live), restarts: director.restarts });
+      if (req.method === 'GET' && path === '/api/demo/status') return json(res, 200, director.status());
+      if (req.method === 'POST' && path === '/api/demo/goto') {
+        const { round } = await posted();
+        // The set-up takes a while on a headset: the page reads how far it is from the status.
+        void director.goto(String(round ?? '')).catch(() => {});
+        return json(res, 202, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/play') {
+        void director.play().catch(() => {});
+        return json(res, 202, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/scripted') {
+        director.setScripted((await posted()).on !== false);
+        return json(res, 200, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/show') {
+        const { tree } = await posted();
+        // The headset is taken through the tree's layers, which takes a few seconds: the page reads how far it is from the status.
+        void director.show(String(tree ?? '')).catch(() => {});
+        return json(res, 202, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/showcase') {
+        void director.setShowcase((await posted()).on !== false).catch(() => {});
+        return json(res, 202, director.status());
+      }
+      return json(res, 404, { error: 'not found' });
+    }
+    if (req.method === 'GET' && path === '/demo' && director) return serveStatic(res, opts.clientDir, '/demo.html');
     if (req.method === 'GET') return serveStatic(res, opts.clientDir, path);
     json(res, 404, { error: 'not found' });
   }
@@ -520,7 +614,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said, contact: telegram ?? undefined }));
         },
         label: toolLabel,
-        where: (scene) => whereNote(pipeline.ctx, scene),
+        where: (scene) => whereNote(pipeline.ctx, scene) + (director?.takeNote(scene.focus) ?? ''),
         cards: (set) => landedCards(mind, set),
         nameOf: (nodeId) => (mind.nodes.has(nodeId) ? nameOf(mind.itemOf(nodeId)) : 'this card'),
         spoken: (turn) => pipeline.spoken(turn),
@@ -543,6 +637,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
             }
           : {}),
         log,
+        ...(opts.demo ? { extra: () => momoNote(opts.demo!.script) } : {}),
       },
       (frame) => {
         if (frame.t === 'audio') {
@@ -624,9 +719,10 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     });
   });
 
-  wss.on('connection', (ws: WebSocket) => {
+  wss.on('connection', (ws: WebSocket, req?: IncomingMessage) => {
     ws.on('error', (err) => log(`[ws] socket closed: ${err.message}`));
     sockets.add(ws);
+    if (/okhttp/i.test(String(req?.headers['user-agent'] ?? ''))) headsets.add(ws);
     const connection = randomUUID();
     connections.set(connection, ws);
     ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, maps, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser', live: Boolean(opts.live), connection }));
@@ -650,11 +746,13 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   });
 
   async function handle(m: ClientMessage, ws: WebSocket): Promise<void> {
+    director?.heard(m);
     const full = WRITES.has(m.t) ? noRoom() : null;
     if (full) return decline(ws, full);
     switch (m.t) {
       case 'client':
         plays.set(ws, m.media);
+        if (director && m.media.embeds === false) director.joined();
         return;
       case 'dump':
         await pipeline.dump(m.dumps);
@@ -701,6 +799,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     token,
     pipeline,
     mind,
+    demo: director,
     serve,
     upgrade,
     online: () => sockets.size + liveWss.clients.size,

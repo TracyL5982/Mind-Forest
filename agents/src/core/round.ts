@@ -9,6 +9,12 @@ export const ROUND_MOST = 10;
 /** The rest of a round stays open to new content. */
 export const KNOWN_MOST = 8;
 
+/** How many unkept picks a round holds, and how many of them things the user already had. The demo's prepared rounds hold more. */
+export interface RoundLimits {
+  most: number;
+  known: number;
+}
+
 /** `origin.tool` of a pick that holds an item from the user's own mindstorm: a dump, or a card of another tree. */
 export const MINDSTORM = 'mindstorm';
 /** `origin.tool` of a pick that holds an item from the headset's library. */
@@ -84,7 +90,7 @@ export function treeKeys(mind: Mindstorm, treeId: Id, without: ReadonlySet<Id> =
  *   first among equals. When the commands alone bring more than that, the last of them are left out, new ones before known ones.
  * Kept cards never count and are never taken away. Returns the commands to apply.
  */
-export function admit(mind: Mindstorm, commands: Command[]): Command[] {
+export function admit(mind: Mindstorm, commands: Command[], limits: RoundLimits = { most: ROUND_MOST, known: KNOWN_MOST }): Command[] {
   const added = new Map<Id, Item>();
   for (const c of commands) if (c.type === 'addItem') added.set(c.item.id, c.item);
   const itemOf = (node: Node) => added.get(node.itemId) ?? mind.item(node.itemId);
@@ -151,8 +157,8 @@ export function admit(mind: Mindstorm, commands: Command[]): Command[] {
         over--;
       }
     };
-    fit(isKnown, KNOWN_MOST);
-    fit(() => true, ROUND_MOST);
+    fit(isKnown, limits.known);
+    fit(() => true, limits.most);
   }
   for (const n of incoming) if (n.parent && left.has(n.parent)) left.add(n.id);
 

@@ -1,0 +1,3430 @@
+{
+ "version": 1,
+ "title": "Brainstorming in a headset",
+ "topic": "How we brainstorm with a VR headset",
+ "phases": [
+  {
+   "id": "r1",
+   "chart": "s3",
+   "title": "Round 1 · Start the tree",
+   "parent": null,
+   "head": "root",
+   "say": "Hey Momo, let's jam on how we brainstorm with VR headset",
+   "sayAlso": [
+    "Hey Momo, Tracy and I want to brainstorm inside a headset. Start a tree on that."
+   ],
+   "do": [],
+   "momo": "Started. Your ocean already has things that fit, so those come first.",
+   "offers": [],
+   "note": "The tree starts here. Kai's own picture of Warburg's library stands first in the row on the board.",
+   "cards": [
+    {
+     "id": "warburg-library",
+     "origin": "ocean",
+     "title": "Warburg’s reading room",
+     "text": "Picture panels standing along the shelves of his library",
+     "date": "Hamburg, 1920s",
+     "credit": "Your picture · not checked",
+     "kind": "picture",
+     "image": "warburg-library.jpg",
+     "w": 600,
+     "h": 435
+    },
+    {
+     "id": "warburg-atlas",
+     "origin": "external",
+     "title": "Mnemosyne Atlas",
+     "text": "Photographs pinned to black panels and rearranged as he thought",
+     "date": "1927–29",
+     "credit": "Panel 47, via Pinterest · rights not checked",
+     "by": "Aby Warburg",
+     "href": "https://www.pinterest.com/pin/705235622942526215/",
+     "kind": "artwork",
+     "image": "warburg-atlas.jpg",
+     "w": 501,
+     "h": 600
+    },
+    {
+     "id": "studio-wall",
+     "origin": "external",
+     "title": "Hans Makart's studio",
+     "text": "",
+     "date": "Vienna, c. 1875",
+     "credit": "Photo Josef Löwy · public domain",
+     "by": "Josef Löwy (photographer)",
+     "holder": "Austrian National Library (collection named on Commons); the studio stood at Gusshausstraße 25, Vienna",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Atelier_of_Hans_Makart,_ca._1875.jpg",
+     "kind": "artwork",
+     "image": "studio-wall.jpg",
+     "w": 1000,
+     "h": 693
+    },
+    {
+     "id": "figjam",
+     "origin": "ocean",
+     "title": "Your FigJam board",
+     "text": "Stickies sorted into themes, insights and key features",
+     "kind": "picture",
+     "image": "figjam.jpg",
+     "w": 1400,
+     "h": 1240
+    },
+    {
+     "id": "space-to-think-2010",
+     "origin": "external",
+     "title": "Space to think",
+     "text": "Analysts given a wall of screens spread their documents out and let position carry meaning: the layout became their memory.",
+     "credit": "Andrews et al., 2010 · ©",
+     "authors": [
+      "Andrews",
+      "Endert",
+      "North"
+     ],
+     "date": "2010",
+     "venue": "Proceedings of the SIGCHI Conference on Human Factors in Computing Systems",
+     "href": "https://doi.org/10.1145/1753326.1753336",
+     "kind": "paper",
+     "image": "space-to-think-2010.jpg",
+     "w": 1400,
+     "h": 740
+    },
+    {
+     "id": "confucius-apricot",
+     "origin": "external",
+     "title": "Confucius at the Apricot Altar",
+     "text": "The altar is where he is said to have taught",
+     "date": "mid-1600s",
+     "credit": "MFA Boston · public domain",
+     "by": "Kano Tan’yū",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Confucius_and_His_Disciples_Yanzi_and_Huizi_at_the_Apricot_Altar_(Confucius).jpg",
+     "kind": "artwork",
+     "image": "confucius-apricot.jpg",
+     "w": 687,
+     "h": 1000
+    },
+    {
+     "id": "bobardi-easels",
+     "origin": "ocean",
+     "title": "Glass easels at MASP, São Paulo",
+     "text": "The labels are on the back",
+     "credit": "Photo Dornicke · CC BY-SA 4.0",
+     "by": "Lina Bo Bardi",
+     "date": "1968",
+     "holder": "Museu de Arte de São Paulo Assis Chateaubriand (MASP), Avenida Paulista, São Paulo",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY-SA 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:MASP_-_Sala_Georges_Wildenstein_02.jpg",
+     "kind": "picture",
+     "image": "bobardi-easels.jpg",
+     "w": 1400,
+     "h": 934
+    },
+    {
+     "id": "architects-table",
+     "origin": "ocean",
+     "title": "Architect's table",
+     "text": "",
+     "date": "c. 1780–90",
+     "credit": "The Met · public domain",
+     "by": "Jean-François Leleu",
+     "holder": "The Metropolitan Museum of Art, New York (accession 2019.283.6)",
+     "from": "The Met Open Access",
+     "licence": "Public domain",
+     "href": "https://www.metmuseum.org/art/collection/search/826329",
+     "kind": "picture",
+     "image": "architects-table.jpg",
+     "w": 800,
+     "h": 1000
+    },
+    {
+     "id": "darwin-sandwalk",
+     "origin": "external",
+     "title": "The Sandwalk, Down House",
+     "text": "Darwin’s “thinking path”",
+     "credit": "Photo Christopher Hilton · CC BY-SA 2.0",
+     "by": "Christopher Hilton",
+     "date": "2017-08-29",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY-SA 2.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Down_House,_the_Sandwalk,_western_side_-_geograph.org.uk_-_5517975.jpg",
+     "kind": "artwork",
+     "image": "darwin-sandwalk.jpg",
+     "w": 1000,
+     "h": 665
+    },
+    {
+     "id": "vam-O1260839",
+     "origin": "ocean",
+     "title": "Don Quixote in his study",
+     "text": "Stereograph: two pictures, one room in depth",
+     "date": "c. 1855",
+     "credit": "V&A",
+     "href": "https://collections.vam.ac.uk/item/O1260839/",
+     "kind": "picture",
+     "image": "vam-O1260839.jpg",
+     "w": 760,
+     "h": 570
+    },
+    {
+     "id": "krokos-2019",
+     "origin": "external",
+     "title": "Virtual memory palaces: immersion aids recall",
+     "text": "A memory palace, like Camillo’s theatre above: place things round a building, walk it to recall them. In a headset, recall beat a flat screen.",
+     "credit": "Krokos et al., 2018",
+     "authors": [
+      "Krokos",
+      "Plaisant",
+      "Varshney"
+     ],
+     "date": "2018",
+     "venue": "Virtual Reality",
+     "href": "https://doi.org/10.1007/s10055-018-0346-3",
+     "kind": "paper",
+     "image": "krokos-2019.jpg",
+     "w": 1376,
+     "h": 988
+    },
+    {
+     "id": "data-mountain-1998",
+     "origin": "external",
+     "title": "Data mountain",
+     "text": "A slope you set pages on, wherever you like. People found 100 web pages again faster that way than in a favourites list: you remember where things are.",
+     "credit": "Robertson et al., 1998 · ©",
+     "authors": [
+      "Robertson",
+      "Czerwinski",
+      "Larson",
+      "Robbins",
+      "Thiel",
+      "van Dantzich"
+     ],
+     "date": "1998",
+     "venue": "Proceedings of the 11th annual ACM symposium on User interface software and technology",
+     "href": "https://doi.org/10.1145/288392.288596",
+     "kind": "paper",
+     "image": "data-mountain-1998.jpg",
+     "w": 1400,
+     "h": 1016
+    }
+   ]
+  },
+  {
+   "id": "n2",
+   "chart": "s7",
+   "title": "Round 2 · Other analogies",
+   "parent": "r1",
+   "head": "krokos-2019",
+   "say": "Hey Momo, the analogy of \"memory palace\" and \"data mountain\" is interesting, other ideas?",
+   "sayAlso": [],
+   "do": [
+    "Pinch the memory palace paper: it opens"
+   ],
+   "momo": "From your ocean: Biotecture and five of your pins. From outside: a coral, a table with gaps, a song in a ring, a city and a ring of ideas.",
+   "offers": [
+    "Why a coral and not a tree?",
+    "What are the gaps in the table for?"
+   ],
+   "note": "Named on the board: 'Pinch the memory palace paper'.",
+   "cards": [
+    {
+     "id": "t080",
+     "origin": "ocean",
+     "title": "A disc of pictures",
+     "text": "Hundreds of small images packed into one circle: all at once, with no path through",
+     "credit": "Your pin · Graph board",
+     "by": "Eugene Pylinsky",
+     "href": "https://www.pinterest.com/pin/346777240304413144/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t080.jpg",
+     "w": 735,
+     "h": 575
+    },
+    {
+     "id": "t125",
+     "origin": "ocean",
+     "title": "Neurones poster",
+     "text": "Coloured fibres bursting from single points, like nerve cells or fireworks: ideas as a burst",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304356503/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t125.jpg",
+     "w": 736,
+     "h": 1041
+    },
+    {
+     "id": "t049",
+     "origin": "ocean",
+     "title": "Smell map of a garden",
+     "text": "The Humble Administrator’s Garden as soft blots of scent: a map of what cannot be seen",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304413150/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t049.jpg",
+     "w": 375,
+     "h": 265
+    },
+    {
+     "id": "moma-445074",
+     "origin": "ocean",
+     "title": "Biotecture",
+     "text": "A tower drawn like a tree, roots and all: a building meant to grow",
+     "date": "c. 1975",
+     "credit": "MoMA · in copyright",
+     "by": "Wolf Hilbertz",
+     "href": "https://www.moma.org/collection/works/445074",
+     "kind": "picture",
+     "image": "moma-445074.jpg",
+     "w": 748,
+     "h": 760
+    },
+    {
+     "id": "t023",
+     "origin": "ocean",
+     "title": "Walls of coloured balls",
+     "text": "A person stands where thousands of balls fan out from one point: a space of ideas to walk into",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304425612/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t023.jpg",
+     "w": 736,
+     "h": 920
+    },
+    {
+     "id": "haeckel-corals",
+     "origin": "external",
+     "title": "Corals",
+     "text": "Darwin’s other picture: a coral, alive only at its tips, built on its own past",
+     "date": "1904",
+     "credit": "Public domain",
+     "by": "Ernst Haeckel",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Haeckel_Hexacoralla_69.jpg",
+     "kind": "artwork",
+     "image": "haeckel-corals.jpg",
+     "w": 714,
+     "h": 1000
+    },
+    {
+     "id": "mendeleev-table",
+     "origin": "external",
+     "title": "Periodic table",
+     "text": "A grid with question marks: places kept for elements not yet found",
+     "date": "1869",
+     "credit": "Public domain",
+     "by": "Dmitri Mendeleev",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Mendeleev%27s_periodic_table_(1869_year).jpg",
+     "kind": "artwork",
+     "image": "mendeleev-table.jpg",
+     "w": 789,
+     "h": 1000
+    },
+    {
+     "id": "cordier-canon",
+     "origin": "external",
+     "title": "A song in a ring",
+     "text": "Music drawn as a circle: the voices chase each other round it",
+     "date": "c. 1400",
+     "credit": "Musée Condé · public domain",
+     "by": "Baude Cordier",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Cordier_circular_canon.gif",
+     "kind": "artwork",
+     "image": "cordier-canon.jpg",
+     "w": 708,
+     "h": 1000
+    },
+    {
+     "id": "nolli-rome",
+     "origin": "external",
+     "title": "Map of Rome",
+     "text": "Streets and open rooms white, the rest dark: a city read as where you can go",
+     "date": "1748",
+     "credit": "Public domain",
+     "by": "Giambattista Nolli",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Piazza_Farnese_from_Giovanni_Battista_Nolli-Nuova_Pianta_di_Roma_(1748)_05-12_(cropped).JPG",
+     "kind": "artwork",
+     "image": "nolli-rome.jpg",
+     "w": 1000,
+     "h": 920
+    },
+    {
+     "id": "llull-figure",
+     "origin": "external",
+     "title": "Llull’s ring",
+     "text": "Nine ideas on a ring, each joined to all the others: thinking by combination",
+     "date": "c. 1305",
+     "credit": "Public domain",
+     "by": "Ramon Llull",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Ramon_Llull_-_Ars_Magna_Fig_1.png",
+     "kind": "artwork",
+     "image": "llull-figure.jpg",
+     "w": 1000,
+     "h": 1000
+    },
+    {
+     "id": "t021",
+     "origin": "ocean",
+     "title": "Floating glass bubbles",
+     "text": "Glass capsules of colour hung at many heights in a bright hall: ideas as vessels you walk among",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304425615/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t021.jpg",
+     "w": 736,
+     "h": 736
+    }
+   ]
+  },
+  {
+   "id": "mo",
+   "chart": "u1",
+   "title": "From Round 2 · More of this",
+   "parent": "n2",
+   "head": "t125",
+   "say": "More of this",
+   "sayAlso": [],
+   "do": [
+    "Pinch and hold the Neurones poster: the ring fills"
+   ],
+   "momo": "More like that one: eleven from your own Graph board, then a neuron and a river delta from outside.",
+   "offers": [],
+   "note": "Named on the board: the long pinch on the Neurones poster.",
+   "cards": [
+    {
+     "id": "t047",
+     "origin": "ocean",
+     "title": "A flower of nodes",
+     "text": "One stalk fanning into hundreds of coloured dots: a network drawn like a flower",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304413152/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t047.jpg",
+     "w": 736,
+     "h": 1308
+    },
+    {
+     "id": "t122",
+     "origin": "ocean",
+     "title": "Co-authorship network",
+     "text": "Who published with whom on hepatitis C: two dense clusters joined by a few threads",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304356506/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t122.jpg",
+     "w": 358,
+     "h": 500
+    },
+    {
+     "id": "t124",
+     "origin": "ocean",
+     "title": "A network grown from its centre",
+     "text": "Thousands of routes branching outward, coloured by where they lead. It looks like a map of the Internet",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304356504/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t124.jpg",
+     "w": 541,
+     "h": 721
+    },
+    {
+     "id": "t082",
+     "origin": "ocean",
+     "title": "Things in a dark disc",
+     "text": "Small bright objects scattered like stars inside one circle",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304413140/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t082.jpg",
+     "w": 736,
+     "h": 736
+    },
+    {
+     "id": "t123",
+     "origin": "ocean",
+     "title": "Abstract 01",
+     "text": "Pink threads and blue dots gathering into strands, like something grown",
+     "credit": "Your pin · Graph board",
+     "by": "Marius Watz",
+     "href": "https://www.pinterest.com/pin/346777240304356505/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t123.jpg",
+     "w": 354,
+     "h": 500
+    },
+    {
+     "id": "t128",
+     "origin": "ocean",
+     "title": "Pictures as a cloud",
+     "text": "Thousands of small pictures drifting into clusters by likeness",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304356538/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t128.jpg",
+     "w": 736,
+     "h": 414
+    },
+    {
+     "id": "t109",
+     "origin": "ocean",
+     "title": "Híbridos Digitales 25",
+     "text": "Cells crowded round a web of green paths, like a city seen from above",
+     "credit": "Your pin · Graph board",
+     "by": "Pablo Lionti",
+     "href": "https://www.pinterest.com/pin/346777240304363321/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t109.jpg",
+     "w": 736,
+     "h": 736
+    },
+    {
+     "id": "t094",
+     "origin": "ocean",
+     "title": "A Facebook network",
+     "text": "Friends as dots: three tight clusters, and the few people who join them",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304363159/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t094.jpg",
+     "w": 554,
+     "h": 554
+    },
+    {
+     "id": "t108",
+     "origin": "ocean",
+     "title": "Threads from a line",
+     "text": "White dots strung along one line, their threads hanging below like roots",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304363325/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t108.jpg",
+     "w": 564,
+     "h": 564
+    },
+    {
+     "id": "t002",
+     "origin": "ocean",
+     "title": "JA ODER NEIN, Studie 1",
+     "text": "Discs joined by looping lines, like a score: notes and the ties between them",
+     "credit": "Your pin · Graph board",
+     "by": "Jorinde Voigt",
+     "href": "https://www.pinterest.com/pin/346777240304543129/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t002.jpg",
+     "w": 735,
+     "h": 572
+    },
+    {
+     "id": "t120",
+     "origin": "ocean",
+     "title": "Data Visualisation, cover",
+     "text": "Andy Kirk’s handbook. Strings of dots flowing like a current: ideas as a stream you follow",
+     "credit": "Your pin · Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304356509/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t120.jpg",
+     "w": 736,
+     "h": 987
+    },
+    {
+     "id": "cajal-neurons",
+     "origin": "external",
+     "title": "A Purkinje neuron",
+     "text": "One cell branching like a tree to gather thousands of signals",
+     "date": "c. 1900",
+     "credit": "Cajal Institute, Madrid · public domain",
+     "by": "Ramón y Cajal",
+     "holder": "Cajal Institute (CSIC), Madrid",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Cajal_-_a_purkinje_neuron_from_the_human_cerebellum.jpg",
+     "kind": "artwork",
+     "image": "cajal-neurons.jpg",
+     "w": 703,
+     "h": 1000
+    },
+    {
+     "id": "lena-delta",
+     "origin": "external",
+     "title": "Lena River delta",
+     "text": "One river splitting into hundreds of channels as it slows",
+     "date": "2000",
+     "credit": "NASA and USGS · public domain",
+     "by": "Landsat 7",
+     "holder": "USGS EROS / NASA Earth Observatory",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Lena_River_Delta_-_Landsat_2000.jpg",
+     "kind": "artwork",
+     "image": "lena-delta.jpg",
+     "w": 820,
+     "h": 820
+    }
+   ]
+  },
+  {
+   "id": "n3",
+   "chart": "s47",
+   "title": "Round 3 · Draw on a diagram: keep it organized",
+   "parent": "n2",
+   "head": "llull-figure",
+   "say": "so how do we keep the information organized?",
+   "sayAlso": [
+    "this looks cool but has a lot going on, how do we keep the information organized?"
+   ],
+   "do": [
+    "Draw on one of the diagrams"
+   ],
+   "momo": "Three ways, each on its own card: by time, by branches, or by what stands in front. Examples are under each.",
+   "offers": [],
+   "note": "Choice: the board says 'Draw on one of the diagrams' and Round 2 holds no drawn diagram any more; Llull's ring is the one with 'a lot going on'. Kai's Linux picture (with its mark) and his note stand in this panel on the board.",
+   "cards": [
+    {
+     "id": "gen-idea-time",
+     "origin": "generated",
+     "title": "By time",
+     "text": "Every ask is a new layer: the first ones fade back along the line, the latest is lit",
+     "credit": "Drawn by the agents",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "gen-idea-time.jpg",
+     "w": 800,
+     "h": 640
+    },
+    {
+     "id": "priestley-chart",
+     "origin": "external",
+     "title": "A New Chart of History",
+     "text": "Empires as bars along one line of time",
+     "date": "1769",
+     "credit": "Public domain",
+     "by": "Joseph Priestley",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:A_New_Chart_of_History_color.jpg",
+     "kind": "artwork",
+     "image": "priestley-chart.jpg",
+     "w": 1000,
+     "h": 700
+    },
+    {
+     "id": "slice-of-heartland",
+     "origin": "ocean",
+     "title": "Slice of Heartland",
+     "text": "A tree drawn as 100 cross-sections, one poster each",
+     "credit": "In copyright",
+     "href": "https://spoon-tamago.com/slice-of-heartland-beer-art-project/",
+     "kind": "film",
+     "image": "slice-of-heartland.jpg",
+     "w": 1000,
+     "h": 523
+    },
+    {
+     "id": "waves-of-grain",
+     "origin": "ocean",
+     "title": "Waves of Grain",
+     "text": "A block of wood planed away, layer by layer",
+     "date": "2013",
+     "credit": "In copyright",
+     "by": "Keith Skretch",
+     "href": "https://vimeo.com/76973207",
+     "kind": "film",
+     "image": "waves-of-grain.jpg",
+     "w": 1000,
+     "h": 562
+    },
+    {
+     "id": "tree-ct",
+     "origin": "ocean",
+     "title": "WoodSwimmer",
+     "text": "Wood milled away, slice by slice",
+     "credit": "In copyright",
+     "by": "Brett Foxwell",
+     "date": "2022",
+     "holder": "PLOS ONE 17(9): e0274168",
+     "from": "PLOS ONE (open access)",
+     "licence": "Creative Commons Attribution License",
+     "href": "https://aeon.co/videos/a-dazzling-slice-by-slice-exploration-of-wood-exposes-hidden-patterns-and-hues",
+     "kind": "film",
+     "image": "tree-ct.jpg",
+     "w": 1000,
+     "h": 583
+    },
+    {
+     "id": "gen-idea-branches",
+     "origin": "generated",
+     "title": "By branches",
+     "text": "A question makes the path fork: each branch grows beside the others in its own colour",
+     "credit": "Drawn by the agents",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "gen-idea-branches.jpg",
+     "w": 800,
+     "h": 640
+    },
+    {
+     "id": "darwin-tree",
+     "origin": "external",
+     "title": "I think",
+     "text": "",
+     "date": "Notebook B, 1837",
+     "credit": "Cambridge University Library · public domain",
+     "by": "Charles Darwin",
+     "holder": "Cambridge University Library (Darwin Archive)",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Darwin_Tree_1837.png",
+     "kind": "artwork",
+     "image": "darwin-tree.jpg",
+     "w": 613,
+     "h": 1000
+    },
+    {
+     "id": "sea-fan",
+     "origin": "external",
+     "title": "Sinuous sea fan, False Bay, South Africa",
+     "text": "",
+     "credit": "Photo Peter Southwood · CC BY-SA 4.0",
+     "by": "Peter Southwood (photographer)",
+     "date": "6 June 2021",
+     "holder": "Super Fan Reef dive site, False Bay, South Africa",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY-SA 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Sinuous_sea_fan_at_Super_Fan_Reef_P6060315.jpg",
+     "kind": "artwork",
+     "image": "sea-fan.jpg",
+     "w": 1000,
+     "h": 750
+    },
+    {
+     "id": "gen-idea-depth",
+     "origin": "generated",
+     "title": "By depth",
+     "text": "The newest layer stands in front, lit; earlier ones step back behind it",
+     "credit": "Drawn by the agents",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "gen-idea-depth.jpg",
+     "w": 800,
+     "h": 640
+    },
+    {
+     "id": "multiplane-camera",
+     "origin": "external",
+     "title": "Disney’s multiplane camera",
+     "text": "Walt Disney shows one scene split into painted layers at different depths",
+     "date": "1957",
+     "credit": "In copyright",
+     "by": "Walt Disney Studios",
+     "holder": "Lobby of the Frank G. Wells Building, Walt Disney Studios, Burbank, California",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY 2.0",
+     "href": "https://www.youtube.com/watch?v=YdHTlUGN1zw&t=163s",
+     "kind": "film",
+     "image": "multiplane-camera.jpg",
+     "w": 472,
+     "h": 360,
+     "video": "multiplane-camera.mp4",
+     "start": 163
+    },
+    {
+     "id": "paper-peepshow",
+     "origin": "external",
+     "title": "Paper peepshow of the Great Exhibition",
+     "text": "Folds flat into a card box",
+     "date": "1851",
+     "credit": "Johns Hopkins Special Collections · CC BY 2.0",
+     "by": "C. A. Lane, London",
+     "holder": "George Peabody Library, Sheridan Libraries, Johns Hopkins University, Baltimore (call no. 606 L248 1851)",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY 2.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Lane%27s_Telescopic_View_-_The_Ceremony_of_Her_Majesty_Opening_the_Great_Exhibition_(open).jpg",
+     "kind": "artwork",
+     "image": "paper-peepshow.jpg",
+     "w": 665,
+     "h": 1000
+    },
+    {
+     "id": "linux-file-system",
+     "origin": "ocean",
+     "title": "Linux file system",
+     "text": "One root, and every folder hangs from it",
+     "credit": "Your picture · maker not known",
+     "kind": "picture",
+     "image": "linux-file-system.jpg",
+     "w": 933,
+     "h": 1400,
+     "mark": [
+      [
+       0.3146,
+       0.1521,
+       0.3375,
+       0.148,
+       0.3617,
+       0.1445,
+       0.3869,
+       0.1416,
+       0.4129,
+       0.1393,
+       0.4396,
+       0.1376,
+       0.4668,
+       0.1365,
+       0.4942,
+       0.136,
+       0.5217,
+       0.1362,
+       0.549,
+       0.137,
+       0.5759,
+       0.1385,
+       0.6023,
+       0.1406,
+       0.6279,
+       0.1432,
+       0.6525,
+       0.1465,
+       0.6759,
+       0.1503,
+       0.698,
+       0.1547,
+       0.7186,
+       0.1595,
+       0.7376,
+       0.1648,
+       0.7547,
+       0.1706,
+       0.7699,
+       0.1767,
+       0.783,
+       0.1831,
+       0.794,
+       0.1898,
+       0.8027,
+       0.1968,
+       0.8092,
+       0.2039,
+       0.8132,
+       0.2111,
+       0.8149,
+       0.2185,
+       0.8143,
+       0.2258,
+       0.8112,
+       0.2331,
+       0.8057,
+       0.2402,
+       0.7979,
+       0.2473,
+       0.7879,
+       0.2541,
+       0.7756,
+       0.2607,
+       0.7613,
+       0.2669,
+       0.745,
+       0.2728,
+       0.7268,
+       0.2783,
+       0.7069,
+       0.2833,
+       0.6854,
+       0.2879,
+       0.6625,
+       0.292,
+       0.6383,
+       0.2955,
+       0.6131,
+       0.2984,
+       0.5871,
+       0.3007,
+       0.5604,
+       0.3024,
+       0.5332,
+       0.3035,
+       0.5058,
+       0.304,
+       0.4783,
+       0.3038,
+       0.451,
+       0.303,
+       0.4241,
+       0.3015,
+       0.3977,
+       0.2994,
+       0.3721,
+       0.2968,
+       0.3475,
+       0.2935,
+       0.3241,
+       0.2897,
+       0.302,
+       0.2853,
+       0.2814,
+       0.2805,
+       0.2624,
+       0.2752,
+       0.2453,
+       0.2694,
+       0.2301,
+       0.2633,
+       0.217,
+       0.2569,
+       0.206,
+       0.2502,
+       0.1973,
+       0.2432,
+       0.1908,
+       0.2361,
+       0.1868,
+       0.2289,
+       0.1851,
+       0.2215,
+       0.1857,
+       0.2142,
+       0.1888,
+       0.2069,
+       0.1943,
+       0.1998,
+       0.2021,
+       0.1927,
+       0.2121,
+       0.1859,
+       0.2244,
+       0.1793,
+       0.2387,
+       0.1731,
+       0.255,
+       0.1672,
+       0.2732,
+       0.1617,
+       0.2931,
+       0.1567,
+       0.3146,
+       0.1521,
+       0.3375,
+       0.148,
+       0.3617,
+       0.1445,
+       0.3869,
+       0.1416,
+       0.4129,
+       0.1393,
+       0.4396,
+       0.1376
+      ]
+     ]
+    },
+    {
+     "id": "note-tree-grows",
+     "origin": "ocean",
+     "title": "A tree grows in two directions",
+     "text": "A Tree grows in 2 directions - width & depth, so does an idea",
+     "credit": "Your note",
+     "kind": "note"
+    }
+   ]
+  },
+  {
+   "id": "f1",
+   "chart": "s15",
+   "title": "Free-form · Easy to get lost",
+   "parent": "n3",
+   "head": "gen-idea-depth",
+   "say": "that’s cool, but seems easy to get lost wandering around…",
+   "sayAlso": [],
+   "do": [],
+   "momo": "People have drawn their way out of that. The Underground map in your ocean drops the real distances. Two more are maps you can hold.",
+   "offers": [
+    "How do you read a stick chart?",
+    "What does the Underground map leave out?"
+   ],
+   "note": "Choice of head. The two pins Kai dropped into this panel come with it.",
+   "cards": [
+    {
+     "id": "vam-O1361001",
+     "origin": "ocean",
+     "title": "Underground map",
+     "text": "",
+     "date": "1934",
+     "credit": "V&A · in copyright",
+     "by": "Harry Beck",
+     "href": "https://collections.vam.ac.uk/item/O1361001/",
+     "kind": "picture",
+     "image": "vam-O1361001.jpg",
+     "w": 760,
+     "h": 531
+    },
+    {
+     "id": "aic-14929",
+     "origin": "ocean",
+     "title": "Celestial Globe",
+     "text": "",
+     "date": "1840s–50s",
+     "credit": "Art Institute of Chicago",
+     "href": "https://www.artic.edu/artworks/14929",
+     "kind": "picture",
+     "image": "aic-14929.jpg",
+     "w": 760,
+     "h": 514
+    },
+    {
+     "id": "stick-chart",
+     "origin": "external",
+     "title": "Stick chart",
+     "text": "Swells and islands in sticks and shells",
+     "date": "Marshall Islands, 1920s",
+     "credit": "Library of Congress · public domain",
+     "by": "Marshallese maker, not recorded (Majuro)",
+     "holder": "Library of Congress, Geography and Map Division, Washington, D.C.",
+     "from": "Library of Congress, via Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://www.loc.gov/item/2010586182/",
+     "kind": "artwork",
+     "image": "stick-chart.jpg",
+     "w": 960,
+     "h": 891
+    },
+    {
+     "id": "ammassalik-map",
+     "origin": "external",
+     "title": "Carved wooden coast maps, East Greenland",
+     "text": "Carved by Kunit, 1885; engraving 1887",
+     "credit": "Public domain",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Holm1887p250_Tr%C3%A6kort.png",
+     "kind": "picture",
+     "image": "ammassalik-map.jpg",
+     "w": 500,
+     "h": 900
+    },
+    {
+     "id": "pocket-globe",
+     "origin": "external",
+     "title": "Pocket globe in its case",
+     "text": "Musée d'histoire des sciences, Geneva",
+     "date": "1776",
+     "credit": "Photo Rama · CC BY-SA 3.0 FR",
+     "holder": "Musee d'histoire des sciences de la Ville de Geneve",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY-SA 3.0 fr",
+     "href": "https://commons.wikimedia.org/wiki/File:Pocket_globes-MHS_1904-IMG_3727-white.jpg",
+     "kind": "artwork",
+     "image": "pocket-globe.jpg",
+     "w": 960,
+     "h": 640
+    },
+    {
+     "id": "wim-1995",
+     "origin": "external",
+     "title": "Virtual reality on a WIM",
+     "text": "The whole room as a model on a clipboard in your hand: see it all, move a far thing by its copy, lift your own figure to travel.",
+     "date": "1995",
+     "credit": "Stoakley, Conway, Pausch · in copyright",
+     "authors": [
+      "Stoakley",
+      "Conway",
+      "Pausch"
+     ],
+     "venue": "Proceedings of the SIGCHI conference on Human factors in computing systems - CHI '95",
+     "href": "https://doi.org/10.1145/223904.223938",
+     "kind": "paper",
+     "image": "wim-1995.jpg",
+     "w": 641,
+     "h": 487
+    },
+    {
+     "id": "t011",
+     "origin": "ocean",
+     "title": "Mobile of small shapes",
+     "text": "Dozens of red, blue and grey shapes balanced on wire arms",
+     "credit": "Your pin · Graph board",
+     "by": "Christel Sadde",
+     "href": "https://www.pinterest.com/pin/346777240304425873/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t011.jpg",
+     "w": 735,
+     "h": 449
+    },
+    {
+     "id": "t012",
+     "origin": "ocean",
+     "title": "Balance mobile",
+     "text": "Coloured ovals hung in balance from thin wire",
+     "credit": "Your pin · Graph board",
+     "by": "Flensted Mobiles",
+     "href": "https://www.pinterest.com/pin/346777240304425794/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t012.jpg",
+     "w": 736,
+     "h": 736
+    }
+   ]
+  },
+  {
+   "id": "f2",
+   "chart": "s11",
+   "title": "Free-form · Tree branches",
+   "parent": "n3",
+   "head": "gen-idea-branches",
+   "say": "help me understand the concept of “tree branches”",
+   "sayAlso": [],
+   "do": [],
+   "momo": "In a tree of knowledge a branch is a kind of thing. In a brainstorm it is a question you followed, with the ones you left still beside it.",
+   "offers": [
+    "A topic, or a path you took?",
+    "What can’t a tree show?"
+   ],
+   "note": "Choice of head: the 'By branches' idea.",
+   "cards": [
+    {
+     "id": "gen-kind-path",
+     "origin": "generated",
+     "title": "Kind or path?",
+     "text": "In a library a branch is a kind of thing. In a brainstorm it is a question you followed, still growing",
+     "credit": "Drawn by the agents",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "gen-kind-path.jpg",
+     "w": 800,
+     "h": 640
+    },
+    {
+     "id": "llull-tree",
+     "origin": "external",
+     "title": "Tree of Science",
+     "text": "Each branch is a field of knowledge, each root a shared principle",
+     "date": "printed 1505",
+     "credit": "Public domain",
+     "by": "Ramon Llull",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Arbor-scientiae.png",
+     "kind": "artwork",
+     "image": "llull-tree.jpg",
+     "w": 685,
+     "h": 1000
+    },
+    {
+     "id": "encyclopedie-tree",
+     "origin": "external",
+     "title": "The Encyclopédie as a tree",
+     "text": "Three boughs: memory, reason, imagination. Every science is a twig on one",
+     "date": "1780",
+     "credit": "Public domain",
+     "by": "Robert Benard (engraver)",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Essai_d%27une_distribution_g%C3%A9n%C3%A9alogique_des_sciences_et_des_arts_principaux,_1780.jpg",
+     "kind": "artwork",
+     "image": "encyclopedie-tree.jpg",
+     "w": 669,
+     "h": 1000
+    },
+    {
+     "id": "haeckel-tree",
+     "origin": "external",
+     "title": "Pedigree of Man",
+     "text": "A branch is a line of descent: at each fork two kinds part for good",
+     "date": "1874",
+     "credit": "Public domain",
+     "by": "Ernst Haeckel",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Pedigree_of_man_(Haeckel_1874).jpg",
+     "kind": "artwork",
+     "image": "haeckel-tree.jpg",
+     "w": 577,
+     "h": 1000
+    },
+    {
+     "id": "quipu",
+     "origin": "external",
+     "title": "Khipu",
+     "text": "A record in branches: cords tied to cords",
+     "date": "Inca, Peru, 1476–1534",
+     "credit": "Dallas Museum of Art · photo Daderot · CC0",
+     "by": "Inca, Peru",
+     "holder": "Dallas Museum of Art, Dallas, Texas",
+     "from": "Wikimedia Commons",
+     "licence": "CC0",
+     "href": "https://commons.wikimedia.org/wiki/File:Fragmentary_quipu_(khipu)_composed_of_two_main_cords_with_subsidiary_and_tertiary_cords,_Inca,_Peru,_Late_Horizon,_1476-1534_AD,_cotton,_plant_fiber,_indigo_dye_-_Dallas_Museum_of_Art_-_DSC04703.jpg",
+     "kind": "artwork",
+     "image": "quipu.jpg",
+     "w": 960,
+     "h": 664
+    },
+    {
+     "id": "cone-trees-1991",
+     "origin": "external",
+     "title": "Cone Trees",
+     "text": "A tree of files in 3D. Each branch is a cone: the parent at the tip, its children round the rim. Pick one and the tree turns to bring its path forward.",
+     "credit": "Robertson et al., 1991",
+     "authors": [
+      "Robertson",
+      "Mackinlay",
+      "Card"
+     ],
+     "date": "1991",
+     "venue": "Proceedings of the SIGCHI conference on Human factors in computing systems Reaching through technology - CHI '91",
+     "href": "https://doi.org/10.1145/108844.108883",
+     "kind": "paper"
+    }
+   ]
+  },
+  {
+   "id": "f3",
+   "chart": "s109",
+   "title": "Free-form · Layers?",
+   "parent": "n3",
+   "head": "slice-of-heartland",
+   "say": "Layers?",
+   "sayAlso": [],
+   "do": [
+    "Mark a few seconds of the wood film"
+   ],
+   "momo": "A layer can be a slice of one thing, a sheet you look through, a flap you lift or a moment kept: one of each here. The Soto is from your ocean.",
+   "offers": [
+    "What joins two layers?",
+    "Should old layers fade?",
+    "A moment, or a kind of thing?"
+   ],
+   "note": "Kai set Slice of Heartland beside this panel's line, so it is the card the round is asked from. The chart draws 'Layers?' after 'tree branches': that order is kept.",
+   "cards": [
+    {
+     "id": "engelbrecht-theatre",
+     "origin": "external",
+     "title": "Paper theatre",
+     "text": "Sheets stood one behind another: a layer is a distance",
+     "date": "c. 1745",
+     "credit": "Photo Gerlinde de Geus · CC BY-SA 4.0",
+     "by": "Engelbrecht",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY-SA 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:VM_10043_%E2%80%93_Diorama_of_a_Lodge_%E2%80%93_ca._1745_%E2%80%93_Wachsmuth_%26_Engelbrecht.jpg",
+     "kind": "artwork",
+     "image": "engelbrecht-theatre.jpg",
+     "w": 1000,
+     "h": 1000
+    },
+    {
+     "id": "soane-picture-room",
+     "origin": "external",
+     "title": "Soane's Picture Room",
+     "text": "118 paintings on walls that fold open",
+     "date": "London, c. 1830",
+     "credit": "Wellcome Collection · CC BY 4.0",
+     "holder": "Wellcome Collection, London (print V0013536); the room is at Sir John Soane's Museum, Lincoln's Inn Fields",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Sir_John_Soane%27s_House_and_Museum;_the_picture_gallery_at_gr_Wellcome_V0013536.jpg",
+     "kind": "artwork",
+     "image": "soane-picture-room.jpg",
+     "w": 738,
+     "h": 1000
+    },
+    {
+     "id": "moma-205998",
+     "origin": "ocean",
+     "title": "Double Transparency",
+     "text": "Two painted sheets, one over the other: together they make a third picture",
+     "date": "1956",
+     "credit": "MoMA · in copyright",
+     "by": "Jesús Rafael Soto",
+     "href": "https://www.moma.org/collection/works/205998",
+     "kind": "picture",
+     "image": "moma-205998.jpg",
+     "w": 760,
+     "h": 722
+    },
+    {
+     "id": "anatomical-flap",
+     "origin": "external",
+     "title": "Flap anatomy sheet",
+     "text": "Lift each paper flap to see the layer beneath: a layer hides the next",
+     "date": "1683",
+     "credit": "Wellcome Collection · public domain",
+     "holder": "Wellcome Collection, London (reference 26829i)",
+     "from": "Wellcome Collection",
+     "licence": "Public Domain Mark",
+     "href": "https://wellcomecollection.org/works/vqmyd5zc",
+     "kind": "artwork",
+     "image": "anatomical-flap.jpg",
+     "w": 758,
+     "h": 1000
+    },
+    {
+     "id": "mri-slices",
+     "origin": "external",
+     "title": "A head in five MRI slices",
+     "text": "A layer as a cut: no slice shows the head, the stack does",
+     "credit": "Photo Genesis12 · CC BY 2.5",
+     "holder": "Wikimedia Commons",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY 2.5",
+     "href": "https://commons.wikimedia.org/wiki/File:MRI_Head_5_slices.jpg",
+     "kind": "artwork",
+     "image": "mri-slices.jpg",
+     "w": 690,
+     "h": 250
+    },
+    {
+     "id": "nakanishi-layers",
+     "origin": "external",
+     "title": "Layer Drawings",
+     "text": "One sunrise photographed at intervals, each shot on its own clear sheet: a layer is a moment",
+     "date": "from 2004",
+     "credit": "The artist's page",
+     "by": "Nobuhiro Nakanishi",
+     "holder": "The artist's own website",
+     "from": "nobuhironakanishi.com",
+     "licence": "In copyright: © Nobuhiro Nakanishi",
+     "href": "http://nobuhironakanishi.com/gallery/layer-drawings/",
+     "site": "nobuhironakanishi.com",
+     "kind": "link"
+    },
+    {
+     "id": "sketch-blend",
+     "origin": "generated",
+     "title": "Layers blending",
+     "text": "Old layers fold into one plane, oldest first, and their dots make room: a layer can melt",
+     "credit": "Try the sketch",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "sketch-blend.jpg",
+     "w": 1280,
+     "h": 800
+    }
+   ]
+  },
+  {
+   "id": "f4",
+   "chart": "s121",
+   "title": "Free-form · Design decisions",
+   "parent": "f3",
+   "head": "engelbrecht-theatre",
+   "say": "Compare these.",
+   "sayAlso": [],
+   "do": [
+    "Select the layers, the map and the memory cards"
+   ],
+   "momo": "Side by side, as boards you can try: six looks for the map, and eight ways to mark what is not yours yet. Your two layer notes are beside them.",
+   "offers": [],
+   "note": "Choice of head: the board selects several cards ('the layers, the map and the memory cards'); a round hangs from one.",
+   "cards": [
+    {
+     "id": "sketch-minimap",
+     "origin": "generated",
+     "title": "Six looks for the minimap",
+     "text": "One journey drawn six ways, side by side: rows, book, lotus, tree, territory, metro",
+     "credit": "Try it",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "sketch-minimap.jpg",
+     "w": 1280,
+     "h": 800
+    },
+    {
+     "id": "sketch-fog",
+     "origin": "generated",
+     "title": "Yours, and not yours yet",
+     "text": "Eight ways to tell your own things from what the agents suggest, side by side",
+     "credit": "Try it",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "sketch-fog.jpg",
+     "w": 1280,
+     "h": 800
+    },
+    {
+     "id": "note-layers",
+     "origin": "ocean",
+     "title": "Layers and Their Relationships",
+     "text": "Your own note",
+     "date": "26 October",
+     "credit": "Open it",
+     "href": "https://claude.ai/artifact/QE5wvh6P7CR3J9fwKDeUr9",
+     "kind": "note"
+    },
+    {
+     "id": "note-a2",
+     "origin": "ocean",
+     "title": "Layer study A2",
+     "text": "The version you chose on 12 November",
+     "kind": "note"
+    }
+   ]
+  },
+  {
+   "id": "px",
+   "chart": "s167",
+   "title": "Free-form · 3D interactive prototype",
+   "parent": "f4",
+   "head": "sketch-minimap",
+   "say": "Make me one I can try.",
+   "sayAlso": [],
+   "do": [],
+   "momo": "Here is one with a dial: turn it and the room opens from one film to everything. Another lets you pull a film a layer deeper. All ten are in the set.",
+   "offers": [],
+   "note": "Choice of head.",
+   "cards": [
+    {
+     "id": "sketch-dial",
+     "origin": "generated",
+     "title": "Glass easels and a dial",
+     "text": "A room you can work: one dial runs from the film in focus, through its stack, to everything",
+     "credit": "Try it",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "sketch-dial.jpg",
+     "w": 1280,
+     "h": 800
+    },
+    {
+     "id": "sketch-index",
+     "origin": "generated",
+     "title": "Forest sketches",
+     "text": "Ten small prototypes, one open question each, all with sliders to argue about",
+     "credit": "Open them",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "sketch-index.jpg",
+     "w": 1280,
+     "h": 800
+    },
+    {
+     "id": "sketch-pull",
+     "origin": "generated",
+     "title": "Open, fill, pull",
+     "text": "Open a film, watch related films fill in round it, then pull it toward you to go a layer deeper",
+     "credit": "Try it",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "sketch-pull.jpg",
+     "w": 1280,
+     "h": 800
+    }
+   ]
+  },
+  {
+   "id": "f5",
+   "chart": "s19",
+   "title": "Free-form · Spatial memory",
+   "parent": "r1",
+   "head": "data-mountain-1998",
+   "say": "find me more interesting things on spatial memory/memory palace",
+   "sayAlso": [
+    "We keep saying memory palace. Where’s that from?"
+   ],
+   "do": [
+    "Highlight a sentence on the memory-palace paper"
+   ],
+   "momo": "People have drawn these since the 1500s: a wheel of books, a memory theatre, a cabinet. And two studies of what practice does to a brain.",
+   "offers": [
+    "How did the memory theatre work?",
+    "Do taxi drivers really differ?"
+   ],
+   "note": "Choice: the board highlights a sentence on 'the memory-palace paper', which already leads Round 2; the other spatial-memory paper leads this one.",
+   "cards": [
+    {
+     "id": "fludd-theatre",
+     "origin": "external",
+     "title": "Memory theatre",
+     "text": "Robert Fludd, Ars memoriae",
+     "date": "1619",
+     "credit": "Deutsche Fotothek, SLUB Dresden · public domain",
+     "by": "Robert Fludd (author)",
+     "holder": "SLUB Dresden, Deutsche Fotothek (df_tg_0006515)",
+     "from": "Wikimedia Commons (Deutsche Fotothek upload)",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Fotothek_df_tg_0006515_Theosophie_%5E_Philosophie_%5E_Judentum_%5E_Kabbala_%5E_Mnemotechnik_%5E_Theater_%5E_B%C3%BChne.jpg",
+     "kind": "artwork",
+     "image": "fludd-theatre.jpg",
+     "w": 798,
+     "h": 572
+    },
+    {
+     "id": "ramelli-bookwheel",
+     "origin": "external",
+     "title": "Ramelli's book wheel",
+     "text": "Many books open at one desk. He never built it",
+     "date": "1588",
+     "credit": "Public domain",
+     "by": "Agostino Ramelli",
+     "holder": "Plate from Le diverse et artificiose machine del Capitano Agostino Ramelli",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Le_diverse_et_artificiose_machine_del_Capitano_Agostino_Ramelli_Figure_CLXXXVIII.jpg",
+     "kind": "artwork",
+     "image": "ramelli-bookwheel.jpg",
+     "w": 695,
+     "h": 1000
+    },
+    {
+     "id": "worm-cabinet",
+     "origin": "external",
+     "title": "Ole Worm's cabinet",
+     "text": "Frontispiece of his museum's catalogue",
+     "date": "1655",
+     "credit": "Wellcome Collection · CC BY 4.0",
+     "by": "Ole Worm (collector and author)",
+     "holder": "Wellcome Collection, London (image L0000128)",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Museum_Wormiani_Historia_1655_Wellcome_L0000128.jpg",
+     "kind": "artwork",
+     "image": "worm-cabinet.jpg",
+     "w": 960,
+     "h": 750
+    },
+    {
+     "id": "lukasa",
+     "origin": "external",
+     "title": "Lukasa memory board, Luba, DR Congo",
+     "text": "Beads and shells, read with the fingertips",
+     "credit": "Brooklyn Museum · CC BY 3.0",
+     "by": "Luba artist, not recorded (Democratic Republic of the Congo)",
+     "date": "late 19th or early 20th century",
+     "holder": "Brooklyn Museum, New York, Arts of Africa collection, 76.20.4, Gift of Marcia and John Friede",
+     "from": "Wikimedia Commons (Brooklyn Museum upload)",
+     "licence": "CC BY 3.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Brooklyn_Museum_76.20.4_Lukasa_Memory_Board.jpg",
+     "kind": "artwork",
+     "image": "lukasa.jpg",
+     "w": 960,
+     "h": 746
+    },
+    {
+     "id": "met-337061",
+     "origin": "ocean",
+     "title": "Astronomicum Caesareum",
+     "text": "Woodcuts by Michael Ostendorfer",
+     "date": "1540",
+     "credit": "The Met",
+     "href": "https://www.metmuseum.org/art/collection/search/337061",
+     "kind": "picture",
+     "image": "met-337061.jpg",
+     "w": 522,
+     "h": 760
+    },
+    {
+     "id": "dresler-2017",
+     "origin": "external",
+     "title": "Mnemonic Training Reshapes Brain Networks to Support Superior Memory",
+     "text": "Six weeks of memory-palace practice lifted beginners’ recall for months, and their brain networks came to resemble those of memory champions.",
+     "credit": "Dresler et al., 2017",
+     "authors": [
+      "Dresler",
+      "Shirer",
+      "Konrad",
+      "Müller",
+      "Wagner",
+      "Fernández",
+      "Czisch",
+      "Greicius"
+     ],
+     "date": "2017",
+     "venue": "Neuron",
+     "href": "https://doi.org/10.1016/j.neuron.2017.02.003",
+     "kind": "paper"
+    },
+    {
+     "id": "maguire-2000",
+     "origin": "external",
+     "title": "Navigation-related structural change in the hippocampi of taxi drivers",
+     "text": "London taxi drivers learn the city by heart. The rear of their hippocampus was larger than other people’s, and larger the longer they had driven.",
+     "credit": "Maguire et al., PNAS 2000",
+     "authors": [
+      "Maguire",
+      "Gadian",
+      "Johnsrude",
+      "Good",
+      "Ashburner",
+      "Frackowiak",
+      "Frith"
+     ],
+     "date": "2000",
+     "venue": "Proceedings of the National Academy of Sciences",
+     "href": "https://doi.org/10.1073/pnas.070039597",
+     "kind": "paper"
+    }
+   ]
+  },
+  {
+   "id": "f7",
+   "chart": "s149",
+   "title": "Free-form · Rooms that help ideas form",
+   "parent": "r1",
+   "head": "bobardi-easels",
+   "say": "",
+   "sayAlso": [],
+   "do": [
+    "Long pinch the gallery photo: more like this, no words"
+   ],
+   "momo": "More rooms like that one: a study whose cupboards are pictures, a theatre built so everyone sees one table, the room that ran Apollo.",
+   "offers": [],
+   "note": "Named on the board: the long pinch on the gallery photo.",
+   "cards": [
+    {
+     "id": "bobardi-row",
+     "origin": "ocean",
+     "title": "Portraits standing on glass, MASP",
+     "text": "Visitors walk behind the pictures",
+     "credit": "Photo Lais Castro · CC BY-SA 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:MASP_SP_2016-2.jpg",
+     "kind": "picture",
+     "image": "bobardi-row.jpg",
+     "w": 1000,
+     "h": 562
+    },
+    {
+     "id": "casa-de-vidro",
+     "origin": "external",
+     "title": "Casa de Vidro",
+     "text": "Lina Bo Bardi's glass house in the trees",
+     "date": "São Paulo, 1951",
+     "credit": "Photo Lucas Medeiros · CC BY-SA 4.0",
+     "by": "Lina Bo Bardi",
+     "holder": "Instituto Bardi / Casa de Vidro, R. Gen. Almério de Moura, 200, Morumbi, São Paulo",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY-SA 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Casa_de_Vidro_-_sede_do_Instituto_Lina_Bo_Bardi.jpg",
+     "kind": "artwork",
+     "image": "casa-de-vidro.jpg",
+     "w": 960,
+     "h": 640
+    },
+    {
+     "id": "gubbio-studiolo",
+     "origin": "external",
+     "title": "Studiolo from Gubbio",
+     "text": "A study panelled in inlaid wood. Its cupboards are pictures",
+     "date": "c. 1478–82",
+     "credit": "The Met · public domain",
+     "by": "Francesco di Giorgio Martini",
+     "holder": "The Metropolitan Museum of Art, New York",
+     "from": "The Met Open Access",
+     "licence": "Public domain (CC0), The Met Open Access",
+     "href": "https://www.metmuseum.org/art/collection/search/198556",
+     "kind": "artwork",
+     "image": "gubbio-studiolo.jpg",
+     "w": 1000,
+     "h": 800
+    },
+    {
+     "id": "jerome-study",
+     "origin": "external",
+     "title": "Saint Jerome in His Study",
+     "text": "",
+     "date": "1514",
+     "credit": "The Met · public domain",
+     "by": "Albrecht Dürer",
+     "holder": "The Metropolitan Museum of Art, New York",
+     "from": "The Met Open Access",
+     "licence": "Public domain (CC0), The Met Open Access",
+     "href": "https://www.metmuseum.org/art/collection/search/336229",
+     "kind": "artwork",
+     "image": "jerome-study.jpg",
+     "w": 775,
+     "h": 1000
+    },
+    {
+     "id": "padua-theatre",
+     "origin": "external",
+     "title": "Anatomical theatre, Padua",
+     "text": "Steep rings round one table",
+     "date": "1595",
+     "credit": "Wellcome Collection · CC BY 4.0",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Padua_anatomical_theatre._Wellcome_M0015500.jpg",
+     "kind": "picture",
+     "image": "padua-theatre.jpg",
+     "w": 1000,
+     "h": 734
+    },
+    {
+     "id": "mission-control",
+     "origin": "external",
+     "title": "Mission control, Houston",
+     "text": "The room at the end of Apollo 11",
+     "date": "24 July 1969",
+     "credit": "NASA · public domain",
+     "by": "NASA",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Mission_Operations_Control_Room_at_the_conclusion_of_Apollo_11.jpg",
+     "kind": "artwork",
+     "image": "mission-control.jpg",
+     "w": 1000,
+     "h": 662
+    },
+    {
+     "id": "drafting-room",
+     "origin": "external",
+     "title": "Drafting room",
+     "text": "Staff drawing the Pentagon. Photo Harold Lang",
+     "date": "1941 or 1942",
+     "credit": "Library of Congress · no known restrictions",
+     "by": "Harold Lang (1905–1983), photographer",
+     "holder": "Library of Congress, Prints & Photographs Division, Washington, D.C.",
+     "from": "Library of Congress",
+     "licence": "No known restrictions on publication.",
+     "href": "https://www.loc.gov/pictures/item/2021640380/",
+     "kind": "artwork",
+     "image": "drafting-room.jpg",
+     "w": 1000,
+     "h": 1000
+    }
+   ]
+  },
+  {
+   "id": "f6",
+   "chart": "s157",
+   "title": "Free-form · Under a tree",
+   "parent": "r1",
+   "head": "confucius-apricot",
+   "say": "Anyone else who had their big idea under a tree?",
+   "sayAlso": [],
+   "do": [
+    "Open the Confucius painting"
+   ],
+   "momo": "Plato’s Academy met in a grove: here is the mosaic from Pompeii. Then the Buddha, and Newton’s apple tree, still growing.",
+   "offers": [
+    "Why a tree, and not a hall?",
+    "Is Newton’s tree the real one?"
+   ],
+   "note": "Named on the board: 'Open the Confucius painting'.",
+   "cards": [
+    {
+     "id": "plato-academy-mosaic",
+     "origin": "external",
+     "title": "Plato’s Academy, mosaic from Pompeii",
+     "text": "Philosophers gathered under a tree, 1st century BCE",
+     "credit": "Naples, MANN · public domain",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:MANNapoli_124545_plato%27s_academy_mosaic_(cropped).jpg",
+     "kind": "picture",
+     "image": "plato-academy-mosaic.jpg",
+     "w": 984,
+     "h": 1000
+    },
+    {
+     "id": "bodhi-tree",
+     "origin": "external",
+     "title": "Buddha seated under the Bodhi tree",
+     "text": "",
+     "date": "8th–9th century",
+     "credit": "The Met · public domain",
+     "by": "Terracotta, Thailand",
+     "holder": "The Metropolitan Museum of Art, New York",
+     "from": "The Met Open Access",
+     "licence": "Public domain (CC0), The Met Open Access",
+     "href": "https://www.metmuseum.org/art/collection/search/39491",
+     "kind": "artwork",
+     "image": "bodhi-tree.jpg",
+     "w": 621,
+     "h": 1000
+    },
+    {
+     "id": "newton-apple-tree",
+     "origin": "external",
+     "title": "Newton’s apple tree, Woolsthorpe Manor",
+     "text": "",
+     "credit": "Photo Humphrey Bolton · CC BY-SA 2.0",
+     "by": "Humphrey Bolton",
+     "date": "2021-01-14",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY-SA 2.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Newton%27s_apple_tree,_Woolsthorpe_Manor_-_geograph.org.uk_-_6730001.jpg",
+     "kind": "artwork",
+     "image": "newton-apple-tree.jpg",
+     "w": 1000,
+     "h": 721
+    },
+    {
+     "id": "newton-prism",
+     "origin": "external",
+     "title": "Newton with the prism",
+     "text": "Engraving by R. M. Meadows after Romney",
+     "date": "1809",
+     "credit": "Wellcome Collection · public domain",
+     "holder": "Wellcome Collection, London (reference 7417i)",
+     "from": "Wellcome Collection",
+     "licence": "Public Domain Mark",
+     "href": "https://wellcomecollection.org/works/jqfcx85j",
+     "kind": "artwork",
+     "image": "newton-prism.jpg",
+     "w": 1000,
+     "h": 771
+    },
+    {
+     "id": "met-816189",
+     "origin": "ocean",
+     "title": "Abiding nowhere, the awakened mind arises",
+     "text": "",
+     "date": "14th century",
+     "credit": "The Met",
+     "by": "Musō Soseki",
+     "href": "https://www.metmuseum.org/art/collection/search/816189",
+     "kind": "picture",
+     "image": "met-816189.jpg",
+     "w": 433,
+     "h": 760
+    }
+   ]
+  },
+  {
+   "id": "pi",
+   "chart": "s479",
+   "title": "Free-form · Expanding on interactions in VR",
+   "parent": "r1",
+   "head": "space-to-think-2010",
+   "say": "I can’t reach that one.",
+   "sayAlso": [
+    "How do people grab far things in VR?"
+   ],
+   "do": [],
+   "momo": "People met that early. A glove and helmet from NASA, 1989, and a 1996 trick: past arm’s length the virtual arm stretches ahead of you.",
+   "offers": [],
+   "note": "Choice of head.",
+   "cards": [
+    {
+     "id": "nasa-view",
+     "origin": "external",
+     "title": "Virtual environment helmet and gloves",
+     "text": "",
+     "date": "1989",
+     "credit": "Photo Wade Sisler, NASA · public domain",
+     "by": "NASA Ames Research Center",
+     "holder": "NASA Image and Video Library, ARC-1989-AC89-0437-20 (taken at Ames Research Center, California)",
+     "from": "NASA Image and Video Library",
+     "licence": "Public domain",
+     "href": "https://images.nasa.gov/details/ARC-1989-AC89-0437-20",
+     "kind": "artwork",
+     "image": "nasa-view.jpg",
+     "w": 853,
+     "h": 854
+    },
+    {
+     "id": "go-go-1996",
+     "origin": "external",
+     "title": "The go-go interaction technique",
+     "text": "Close to your body the virtual hand matches your own. Reach further and the arm stretches ahead, so you can take hold of things across the room.",
+     "credit": "Poupyrev et al., 1996",
+     "authors": [
+      "Poupyrev",
+      "Billinghurst",
+      "Weghorst",
+      "Ichikawa"
+     ],
+     "date": "1996",
+     "venue": "Proceedings of the 9th annual ACM symposium on User interface software and technology  - UIST '96",
+     "href": "https://doi.org/10.1145/237091.237102",
+     "kind": "paper"
+    }
+   ]
+  },
+  {
+   "id": "pd",
+   "chart": "s459",
+   "title": "Free-form · Designing gestures",
+   "parent": "pi",
+   "head": "nasa-view",
+   "say": "This is cool! other historical example of this?",
+   "sayAlso": [],
+   "do": [
+    "Open the 1989 glove photo"
+   ],
+   "momo": "Two older ones: an 1806 manual that drew a sphere round the speaker to give each gesture a place, and a hand that held the musical scale.",
+   "offers": [
+    "How was the sphere used?",
+    "What is a Guidonian hand?"
+   ],
+   "note": "Named on the board: 'Open the 1989 glove photo'.",
+   "cards": [
+    {
+     "id": "austin-chironomia",
+     "origin": "external",
+     "title": "Chironomia",
+     "text": "A sphere round the speaker gives each gesture a position",
+     "date": "1806",
+     "credit": "Public domain",
+     "by": "Gilbert Austin",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Chironomia_Sphere.jpg",
+     "kind": "artwork",
+     "image": "austin-chironomia.jpg",
+     "w": 1000,
+     "h": 978
+    },
+    {
+     "id": "guidonian-hand",
+     "origin": "external",
+     "title": "Guidonian hand",
+     "text": "Musical notes mapped onto the finger joints",
+     "date": "Mantua, late 1400s",
+     "credit": "Bodleian Library · public domain",
+     "by": "Scribe not recorded",
+     "holder": "Bodleian Library, University of Oxford, MS Canon. Liturg. 216, f. 168 recto",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Guidonian_hand.jpg",
+     "kind": "artwork",
+     "image": "guidonian-hand.jpg",
+     "w": 852,
+     "h": 1000
+    }
+   ]
+  },
+  {
+   "id": "pg",
+   "chart": "s533",
+   "title": "Free-form · Gestures",
+   "parent": "pd",
+   "head": "austin-chironomia",
+   "say": "So which ones do we keep?",
+   "sayAlso": [],
+   "do": [],
+   "momo": "Nine, as the build teaches them: pinch to pick, hold for more, grab to pan or to pull a layer near, a pen to mark, palms together to close, a flat hand to cut.",
+   "offers": [],
+   "note": "Choice of head.",
+   "cards": [
+    {
+     "id": "gen-gestures",
+     "origin": "generated",
+     "title": "Our nine gestures",
+     "text": "Pinch, hold, grab, mark, palms together, flat hand: each as the app’s own guide draws it",
+     "credit": "From the headset build",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "gen-gestures.jpg",
+     "w": 1400,
+     "h": 1105
+    },
+    {
+     "id": "string-figures",
+     "origin": "external",
+     "title": "A Sunset",
+     "text": "",
+     "date": "String Figures, 1906",
+     "credit": "Library of Congress · no known restrictions",
+     "by": "Caroline Furness Jayne",
+     "from": "Internet Archive",
+     "licence": "The Library of Congress is unaware of any copyright restrictions for this item.",
+     "href": "https://archive.org/details/stringfiguresstu00jayn",
+     "kind": "artwork",
+     "image": "string-figures.jpg",
+     "w": 1000,
+     "h": 429
+    },
+    {
+     "id": "hand-shadows",
+     "origin": "external",
+     "title": "A Bird in Flight",
+     "text": "",
+     "date": "Hand Shadows, 1859",
+     "credit": "Project Gutenberg · public domain in the USA",
+     "by": "Henry Bursill",
+     "holder": "Project Gutenberg eBook 12962",
+     "from": "Project Gutenberg (read through the gutenberg.pglaf.org mirror)",
+     "licence": "Public domain in the USA.",
+     "href": "https://gutenberg.pglaf.org/1/2/9/6/12962/12962-h/12962-h.htm",
+     "kind": "artwork",
+     "image": "hand-shadows.jpg",
+     "w": 473,
+     "h": 600
+    },
+    {
+     "id": "met-760748",
+     "origin": "ocean",
+     "title": "Figures for Chinese shadow puppets",
+     "text": "",
+     "date": "1859",
+     "credit": "The Met",
+     "by": "Juan Llorens",
+     "href": "https://www.metmuseum.org/art/collection/search/760748",
+     "kind": "picture",
+     "image": "met-760748.jpg",
+     "w": 534,
+     "h": 760
+    }
+   ]
+  },
+  {
+   "id": "fb",
+   "chart": "s209",
+   "title": "Free-form · How do we build this",
+   "parent": "r1",
+   "head": "figjam",
+   "say": "Hey Momo, how do we build this?",
+   "sayAlso": [],
+   "do": [],
+   "momo": "From what you have dropped in: your agent notes, your card library, your hosting notes. Four questions to start from.",
+   "offers": [
+    "Where does the information come from?",
+    "How do we present it?",
+    "How do you work with each item?",
+    "Where does it run?"
+   ],
+   "note": "Choice of head: the FigJam board. Momo answers 'From what you have dropped in: your agent notes, your card library, your hosting notes', so those notes arrive here, and the four questions are offered under the FigJam board. The panels below either tap one of the questions (their cards land round the same board) or open one of the notes.",
+   "cards": [
+    {
+     "id": "note-agents",
+     "origin": "ocean",
+     "title": "Agent system",
+     "text": "One voice over eight roles",
+     "date": "15 November",
+     "credit": "Open it",
+     "href": "https://claude.ai/artifact/7doYYZF2yAtzA9XZquD9XY",
+     "kind": "note"
+    },
+    {
+     "id": "note-sources",
+     "origin": "ocean",
+     "title": "Sources",
+     "text": "Museums, papers, books, film and the web, each named on its card",
+     "kind": "note"
+    },
+    {
+     "id": "note-cards",
+     "origin": "ocean",
+     "title": "Card program",
+     "text": "28 card types, 14 arrangements",
+     "date": "14 November",
+     "credit": "Open it",
+     "href": "https://claude.ai/artifact/DQzMNeaWzMfkCmd1Zbcw8e",
+     "kind": "note"
+    },
+    {
+     "id": "note-hosting",
+     "origin": "ocean",
+     "title": "Hosting notes",
+     "text": "One service holds a space for each headset, with daily limits",
+     "date": "15 November",
+     "kind": "note"
+    }
+   ]
+  },
+  {
+   "id": "bw",
+   "chart": "s221",
+   "title": "Build · Where do information come from",
+   "parent": "fb",
+   "head": "figjam",
+   "say": "",
+   "sayAlso": [],
+   "do": [
+    "Tap “Where does the information come from?”"
+   ],
+   "momo": "Three places: agents that go and look, sources picked by hand, and what you already save. A library’s desk did the same job in 1926.",
+   "offers": [],
+   "note": "Named on the board: tap the offered question. It is asked on the FigJam board, so its card lands there.",
+   "ask": "Where does the information come from?",
+   "cards": [
+    {
+     "id": "reference-desk",
+     "origin": "external",
+     "title": "Information desk",
+     "text": "Public Catalog Room, New York Public Library",
+     "date": "1926",
+     "credit": "NYPL · no known restrictions",
+     "by": "New York Public Library",
+     "from": "Wikimedia Commons",
+     "licence": "No restrictions",
+     "href": "https://commons.wikimedia.org/wiki/File:Information_Desk_in_Public_Catalog_Room_(3109284185).jpg",
+     "kind": "artwork",
+     "image": "reference-desk.jpg",
+     "w": 1000,
+     "h": 937
+    }
+   ]
+  },
+  {
+   "id": "ba",
+   "chart": "s293",
+   "title": "Build · Agentic system",
+   "parent": "fb",
+   "head": "note-agents",
+   "say": "",
+   "sayAlso": [],
+   "do": [
+    "Pinch your agent system note: it opens"
+   ],
+   "momo": "One voice, and eight roles behind it. A conductor passes each request to the role that fits, the way a few operators once routed every call.",
+   "offers": [],
+   "note": "Named on the board: 'Pinch your agent system note'. The note itself arrived with 'How do we build this'. A pinch only opens a card: ask anything about it, or long pinch, and the cards come.",
+   "cards": [
+    {
+     "id": "gen-roles",
+     "origin": "generated",
+     "title": "Who does what",
+     "text": "One voice, and eight roles behind it.",
+     "credit": "Who does what, drawn by the agents",
+     "from": "Made by the agents",
+     "facts": [
+      [
+       "Momo",
+       "The voice you talk to"
+      ],
+      [
+       "Scout",
+       "Finds what fits, yours first"
+      ],
+      [
+       "Renderer",
+       "Chooses how each card looks"
+      ],
+      [
+       "Questions",
+       "Offers what to ask next"
+      ],
+      [
+       "Filer",
+       "Starts trees, files what you drop"
+      ],
+      [
+       "Organizer",
+       "Tidies when you ask"
+      ],
+      [
+       "Packager",
+       "Makes the handoff"
+      ],
+      [
+       "Intake",
+       "Reads what you drop"
+      ],
+      [
+       "Archivist",
+       "Keeps each tree’s summary"
+      ]
+     ],
+     "kind": "facts"
+    },
+    {
+     "id": "switchboard",
+     "origin": "external",
+     "title": "Chinese Telephone Exchange",
+     "text": "A few people route every call",
+     "date": "San Francisco, 1918",
+     "credit": "Pacific Telephone Magazine · public domain",
+     "by": "Anonymous Unknown author",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Chinese_Telephone_Exchange,_San_Francisco,_California,_1918.jpg",
+     "kind": "artwork",
+     "image": "switchboard.jpg",
+     "w": 1000,
+     "h": 686
+    },
+    {
+     "id": "conductor",
+     "origin": "external",
+     "title": "Mahler’s Eighth, American premiere",
+     "text": "Stokowski and the Philadelphia Orchestra. One person plays nothing",
+     "date": "1916",
+     "credit": "Public domain",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Philadelphia_Orchestra_at_American_premiere_of_Mahler%27s_8th_Symphony_(1916).jpg",
+     "kind": "picture",
+     "image": "conductor.jpg",
+     "w": 1000,
+     "h": 575
+    }
+   ]
+  },
+  {
+   "id": "bs",
+   "chart": "s323",
+   "title": "Build · Curated sources, connect with Instagram",
+   "parent": "fb",
+   "head": "note-sources",
+   "say": "",
+   "sayAlso": [],
+   "do": [
+    "Pinch your sources note: it opens"
+   ],
+   "momo": "Museums, papers, books and archives first, each named on its card, then the open web. Your own saves reach me by Telegram today.",
+   "offers": [],
+   "note": "Named on the board: 'Pinch your sources note'. Nothing new arrives: Momo answers aloud from the note.",
+   "cards": []
+  },
+  {
+   "id": "bp",
+   "chart": "s285",
+   "title": "Build · How we present the information",
+   "parent": "fb",
+   "head": "figjam",
+   "say": "",
+   "sayAlso": [],
+   "do": [
+    "Tap “How do we present it?”"
+   ],
+   "momo": "One thing, one card: people have done it with cigarette cards, pressed plants and a catalogue of everything.",
+   "offers": [],
+   "note": "Named on the board: tap the offered question. Its cards land round the FigJam board.",
+   "ask": "How do we present it?",
+   "cards": [
+    {
+     "id": "trade-cards",
+     "origin": "external",
+     "title": "Phalarope",
+     "text": "Allen & Ginter cigarette card: one picture, one name, one size",
+     "date": "Game Birds series, 1889",
+     "credit": "The Met · public domain",
+     "by": "Allen & Ginter",
+     "holder": "The Metropolitan Museum of Art, New York",
+     "from": "The Met Open Access",
+     "licence": "Public domain (CC0), The Met Open Access",
+     "href": "https://www.metmuseum.org/art/collection/search/407957",
+     "kind": "artwork",
+     "image": "trade-cards.jpg",
+     "w": 1000,
+     "h": 562
+    },
+    {
+     "id": "herbarium-sheet",
+     "origin": "external",
+     "title": "Herbarium sheet",
+     "text": "A pressed rose and its label on one sheet",
+     "credit": "Naturalis Biodiversity Center · CC0",
+     "by": "Tausch, Tratt.",
+     "from": "Wikimedia Commons",
+     "licence": "CC0",
+     "href": "https://commons.wikimedia.org/wiki/File:Naturalis_Biodiversity_Center_-_L.1915777_-_Rosa_elliptica_Tausch_ex_Tratt._var._andresiana_-_herbarium_sheet.jpg",
+     "kind": "artwork",
+     "image": "herbarium-sheet.jpg",
+     "w": 562,
+     "h": 1000
+    },
+    {
+     "id": "otlet-mundaneum",
+     "origin": "external",
+     "title": "A catalogue of everything",
+     "text": "Paul Otlet's card repertory, Brussels",
+     "date": "c. 1900",
+     "credit": "Mundaneum · public domain",
+     "holder": "Mundaneum (archive of Paul Otlet and Henri La Fontaine's institute, founded in Brussels)",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Le_R%C3%A9pertoire_Bibliographique_Universel_vers_1900.jpg",
+     "kind": "artwork",
+     "image": "otlet-mundaneum.jpg",
+     "w": 960,
+     "h": 803
+    }
+   ]
+  },
+  {
+   "id": "bu",
+   "chart": "s274",
+   "title": "Build · Intelligent UI system",
+   "parent": "fb",
+   "head": "note-cards",
+   "say": "",
+   "sayAlso": [],
+   "do": [
+    "Pinch your card program note: it opens"
+   ],
+   "momo": "For each thing I choose one of 28 kinds of card: here are two from one museum page. For a whole set I lay it out by template: a board to try.",
+   "offers": [],
+   "note": "Named on the board: 'Pinch your card program note'. The note itself arrived with 'How do we build this'.",
+   "cards": [
+    {
+     "id": "gen-facts",
+     "origin": "external",
+     "title": "The glass easels, in three dates",
+     "text": "Lina Bo Bardi’s easels at MASP.",
+     "from": "MASP",
+     "facts": [
+      [
+       "First shown",
+       "1968"
+      ],
+      [
+       "Taken away",
+       "1996"
+      ],
+      [
+       "Back on the floor",
+       "2015"
+      ]
+     ],
+     "kind": "facts"
+    },
+    {
+     "id": "gen-person",
+     "origin": "external",
+     "title": "Lina Bo Bardi",
+     "text": "Architect of MASP and of its glass easels.",
+     "from": "MASP",
+     "person": {
+      "name": "Lina Bo Bardi",
+      "role": "Architect, 1914–1992"
+     },
+     "kind": "person"
+    },
+    {
+     "id": "sketch-organize",
+     "origin": "generated",
+     "title": "Rearrange by template",
+     "text": "Your things laid out the way you ask: a timeline, an A/B comparison, a matrix, clusters",
+     "credit": "Try it",
+     "from": "Made by the agents",
+     "kind": "picture",
+     "image": "sketch-organize.jpg",
+     "w": 1280,
+     "h": 800
+    }
+   ]
+  },
+  {
+   "id": "bi",
+   "chart": "s347",
+   "title": "Build · How do user interact with each item",
+   "parent": "fb",
+   "head": "figjam",
+   "say": "",
+   "sayAlso": [],
+   "do": [
+    "Tap “How do you work with each item?”"
+   ],
+   "momo": "Three ways: say it, use a shortcut, or draw on it. Speaking and pointing as one command goes back to 1980.",
+   "offers": [],
+   "note": "Named on the board: tap the offered question. Its card lands round the FigJam board.",
+   "ask": "How do you work with each item?",
+   "cards": [
+    {
+     "id": "put-that-there-1980",
+     "origin": "external",
+     "title": "“Put-that-there”",
+     "text": "You say “put that there” and point at a wall-sized screen: the hand says what “that” and “there” mean. Voice and gesture, one command.",
+     "credit": "Richard Bolt, 1980",
+     "authors": [
+      "Bolt"
+     ],
+     "date": "1980",
+     "venue": "Proceedings of the 7th annual conference on Computer graphics and interactive techniques  - SIGGRAPH '80",
+     "href": "https://doi.org/10.1145/800250.807503",
+     "kind": "paper"
+    }
+   ]
+  },
+  {
+   "id": "bv",
+   "chart": "s397",
+   "title": "Build · Voice",
+   "parent": "fb",
+   "head": "figjam",
+   "say": "Hey Momo, do I have anything on Bo Bardi?",
+   "sayAlso": [],
+   "do": [],
+   "momo": "Yes: her glass easels at MASP, and her Glass House.",
+   "offers": [],
+   "note": "Voice: Claude's choice to hang its one card round the FigJam board with the others.",
+   "cards": [
+    {
+     "id": "nipper",
+     "origin": "external",
+     "title": "His Master’s Voice",
+     "text": "Nipper listens",
+     "date": "1898",
+     "credit": "Public domain",
+     "by": "Francis Barraud",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:OriginalNipper.jpg",
+     "kind": "artwork",
+     "image": "nipper.jpg",
+     "w": 1000,
+     "h": 740
+    }
+   ]
+  },
+  {
+   "id": "bq",
+   "chart": "s401",
+   "title": "Build · Shortcuts, agent suggestions, long pinch",
+   "parent": "fb",
+   "head": "figjam",
+   "say": "",
+   "sayAlso": [],
+   "do": [
+    "Tap a question Momo offers",
+    "Long pinch a card: more like this"
+   ],
+   "momo": "Under an open card I offer three or four questions in your voice. A long pinch asks for more like it without a word.",
+   "offers": [],
+   "note": "Shortcuts: Claude's choice to hang its one card round the FigJam board with the others.",
+   "cards": [
+    {
+     "id": "gen-questions",
+     "origin": "generated",
+     "title": "Questions Momo offers",
+     "text": "Three or four under an open card, in your voice.",
+     "from": "Made by the agents",
+     "items": [
+      "What else did she design?",
+      "Why are the labels on the back?",
+      "Who took them away?"
+     ],
+     "kind": "list"
+    }
+   ]
+  },
+  {
+   "id": "bn",
+   "chart": "s409",
+   "title": "Build · Annotate",
+   "parent": "fb",
+   "head": "figjam",
+   "say": "What’s this part?",
+   "sayAlso": [],
+   "do": [
+    "Draw a ring round part of a picture"
+   ],
+   "momo": "Your mark comes to me with the question, so I know which part you mean. Readers drew pointing hands in their margins for the same reason.",
+   "offers": [],
+   "note": "Annotate: Claude's choice to hang its one card round the FigJam board with the others.",
+   "cards": [
+    {
+     "id": "manicule",
+     "origin": "external",
+     "title": "Manicule",
+     "text": "A reader’s pointing hand, drawn in the margin",
+     "date": "15th century",
+     "credit": "University of St Andrews Library · public domain",
+     "by": "Daryl Green",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Manicule_hand_drawn_from_15th_century.png",
+     "kind": "artwork",
+     "image": "manicule.jpg",
+     "w": 1000,
+     "h": 729
+    }
+   ]
+  },
+  {
+   "id": "bh",
+   "chart": "s441",
+   "title": "Build · How we host the backend services",
+   "parent": "fb",
+   "head": "figjam",
+   "say": "",
+   "sayAlso": [],
+   "do": [
+    "Tap “Where does it run?”"
+   ],
+   "momo": "The headset draws and listens; your Mac thinks and remembers. For judging, one hosted service keeps a space for each headset.",
+   "offers": [],
+   "note": "Named on the board: tap the offered question. 'What runs where' lands round the FigJam board; the hosting note arrived with 'How do we build this'.",
+   "ask": "Where does it run?",
+   "cards": [
+    {
+     "id": "note-where",
+     "origin": "ocean",
+     "title": "What runs where",
+     "text": "The headset draws and listens; the Mac thinks and remembers",
+     "kind": "note"
+    }
+   ]
+  },
+  {
+   "id": "rz",
+   "chart": "s508",
+   "title": "Build · Navigation",
+   "parent": "f1",
+   "head": "aic-14929",
+   "say": "",
+   "sayAlso": [],
+   "do": [
+    "Pull: step back through the layers",
+    "Pan across to another branch",
+    "Cut the planets branch",
+    "Flip the small tree, pinch to jump"
+   ],
+   "momo": "",
+   "offers": [],
+   "note": "Choice: the panel's cards are 'the planets branch' that the knife cuts; it grows from the Celestial Globe.",
+   "cards": [
+    {
+     "id": "orrery",
+     "origin": "external",
+     "title": "A Philosopher Lecturing on the Orrery",
+     "text": "",
+     "date": "c. 1766",
+     "credit": "Derby Museum and Art Gallery · public domain",
+     "by": "Joseph Wright of Derby",
+     "holder": "Derby Museum and Art Gallery",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Wright_of_Derby,_The_Orrery.jpg",
+     "kind": "artwork",
+     "image": "orrery.jpg",
+     "w": 960,
+     "h": 674
+    },
+    {
+     "id": "zeiss-planetarium",
+     "origin": "external",
+     "title": "Zeiss star projector, Fernbank Science Center",
+     "text": "",
+     "credit": "Photo Marc Merlin · CC BY-SA 4.0",
+     "by": "Projector: Carl Zeiss. Photo: Marc Merlin",
+     "holder": "Fernbank Science Center, DeKalb County, Georgia, USA",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY-SA 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Mark_V_Zeiss_Star_Projector_at_Fernbank_Science_Center_Planetarium.jpg",
+     "kind": "artwork",
+     "image": "zeiss-planetarium.jpg",
+     "w": 1000,
+     "h": 666
+    },
+    {
+     "id": "star-atlas",
+     "origin": "external",
+     "title": "The northern sky",
+     "text": "",
+     "date": "Harmonia Macrocosmica, 1660",
+     "credit": "Public domain",
+     "by": "Andreas Cellarius",
+     "holder": "Scan on Wikimedia Commons; source given there as R. H. van Gent's Cellarius pages (www.phys.uu.nl/~vgent/cellarius)",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Cellarius_Harmonia_Macrocosmica_-_Haemisphaerium_Stellatum_Boreale_Antiquum.jpg",
+     "kind": "artwork",
+     "image": "star-atlas.jpg",
+     "w": 1000,
+     "h": 842
+    },
+    {
+     "id": "aic-60126",
+     "origin": "ocean",
+     "title": "Full Moon",
+     "text": "",
+     "date": "mid-1800s",
+     "credit": "Art Institute of Chicago",
+     "by": "N. W. Pease",
+     "href": "https://www.artic.edu/artworks/60126",
+     "kind": "picture",
+     "image": "aic-60126.jpg",
+     "w": 760,
+     "h": 390
+    }
+   ]
+  },
+  {
+   "id": "f15",
+   "chart": "s359",
+   "title": "Free-form · Name??",
+   "parent": "r1",
+   "head": "warburg-atlas",
+   "say": "Hey Momo, what do we call this?",
+   "sayAlso": [],
+   "do": [],
+   "momo": "You have called it Mind Palace, Mindstorm and Mind Forest. Memory was the mother of the Muses, and the Norse hung nine worlds on one tree.",
+   "offers": [
+    "Who was Mnemosyne?",
+    "Why a forest, not a palace?"
+   ],
+   "note": "Choice of head: the Mnemosyne Atlas, since the answer begins with Mnemosyne.",
+   "cards": [
+    {
+     "id": "mnemosyne",
+     "origin": "external",
+     "title": "Mnemosyne",
+     "text": "Memory, mother of the nine Muses",
+     "date": "c. 1876–81",
+     "credit": "Delaware Art Museum · public domain",
+     "by": "Dante Gabriel Rossetti",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Mnemosyne_(color)_Rossetti.jpg",
+     "kind": "artwork",
+     "image": "mnemosyne.jpg",
+     "w": 483,
+     "h": 1000
+    },
+    {
+     "id": "ricci-portrait",
+     "origin": "external",
+     "title": "Matteo Ricci",
+     "text": "The Jesuit who wrote on the memory palace in Chinese. Painted by Yu Wen-hui",
+     "date": "1610",
+     "credit": "Public domain",
+     "by": "Chinese brother Emmanuel Pereira (born Yu Wen-hui 游文辉)",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Ricciportrait.jpg",
+     "kind": "artwork",
+     "image": "ricci-portrait.jpg",
+     "w": 759,
+     "h": 1000
+    },
+    {
+     "id": "yggdrasil",
+     "origin": "external",
+     "title": "Yggdrasil, the world tree",
+     "text": "",
+     "date": "1847",
+     "credit": "Public domain",
+     "by": "Oluf Olufsen Bagge",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Oluf_Olufsen_Bagge_-_Yggdrasil,_The_Mundane_Tree_1847_-_full_page.jpg",
+     "kind": "artwork",
+     "image": "yggdrasil.jpg",
+     "w": 714,
+     "h": 1000
+    }
+   ]
+  },
+  {
+   "id": "ry",
+   "chart": "a1",
+   "title": "Added · How it should look",
+   "parent": "n2",
+   "head": "t021",
+   "say": "",
+   "sayAlso": [],
+   "do": [
+    "Long pinch a pin: more like this, no words"
+   ],
+   "momo": "More like that one. Five were already in your ocean.",
+   "offers": [],
+   "note": "Choice: 'Long pinch a pin'; the glass bubbles pin of Round 2. Kai joined this block to 'gestures' on the chart: its place in the order follows that.",
+   "cards": [
+    {
+     "id": "p15",
+     "origin": "ocean",
+     "title": "Hanging Colors",
+     "text": "Architecture portfolio projects and tips for high school students",
+     "credit": "Your pin, from your Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304425304/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "p15.jpg",
+     "w": 736,
+     "h": 1104
+    },
+    {
+     "id": "t017",
+     "origin": "ocean",
+     "title": "Hanging colour lights",
+     "text": "four different colored lights hanging from the ceiling",
+     "credit": "Your pin, from your Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304425773/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t017.jpg",
+     "w": 420,
+     "h": 540
+    },
+    {
+     "id": "t018",
+     "origin": "ocean",
+     "title": "Bokeh Clock, Jonggun Kim",
+     "text": "Bokeh Clock - Jonggun Kim",
+     "credit": "Your pin, from your Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304425772/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t018.jpg",
+     "w": 736,
+     "h": 1104
+    },
+    {
+     "id": "t019",
+     "origin": "ocean",
+     "title": "Hanging colour lights, six",
+     "text": "four different colored lights hanging from the ceiling",
+     "credit": "Your pin, from your Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304425631/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t019.jpg",
+     "w": 374,
+     "h": 720
+    },
+    {
+     "id": "t031",
+     "origin": "ocean",
+     "title": "A glass-bead mobile",
+     "text": "a mobile made out of different colored glass beads hanging from it's s",
+     "credit": "Your pin, from your Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304425303/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t031.jpg",
+     "w": 736,
+     "h": 735
+    },
+    {
+     "id": "t020",
+     "origin": "ocean",
+     "title": "Coloured discs in a hotel",
+     "text": "Experience Joie De Vivre At This Mid-Century Silicon Valley Hotel",
+     "credit": "Your pin, from your Graph board",
+     "href": "https://www.pinterest.com/pin/346777240304425616/",
+     "from": "Pinterest, your Graph board",
+     "kind": "picture",
+     "image": "t020.jpg",
+     "w": 736,
+     "h": 1103
+    },
+    {
+     "id": "sea-glass",
+     "origin": "external",
+     "title": "Sea glass, Glass Beach, California",
+     "text": "A town dump, tumbled smooth by the surf",
+     "credit": "Photo Ryanx7 · CC BY-SA 4.0",
+     "by": "Ryanx7 (photographer)",
+     "date": "16 January 2016",
+     "holder": "Glass Beach, Fort Bragg, California, USA",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY-SA 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Sea_Glass_on_Glass_Beach_near_Fort_Bragg.jpg",
+     "kind": "artwork",
+     "image": "sea-glass.jpg",
+     "w": 1000,
+     "h": 666
+    }
+   ]
+  },
+  {
+   "id": "r10",
+   "chart": "a2",
+   "title": "Added · Where things rest",
+   "parent": "bu",
+   "head": "sketch-organize",
+   "say": "What’s it called when birds all turn at once?",
+   "sayAlso": [
+    "That thing starlings do. Bring me some."
+   ],
+   "do": [],
+   "momo": "A murmuration: thousands of starlings turning together. Want some?",
+   "offers": [
+    "How do they not collide?",
+    "More like this, at night"
+   ],
+   "note": "Choice of head. Kai joined this block to 'intelligent UI system' on the chart.",
+   "cards": [
+    {
+     "id": "murmuration",
+     "origin": "external",
+     "title": "Starlings at dusk",
+     "text": "",
+     "date": "Denmark, 2005",
+     "credit": "Photo Christoffer A Rasmussen · public domain",
+     "by": "Christoffer A Rasmussen (photographer)",
+     "holder": "Ørnsø, Silkeborg, Denmark",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Sort_sol_ved_%C3%98rns%C3%B8_2007.jpg",
+     "kind": "artwork",
+     "image": "murmuration.jpg",
+     "w": 1000,
+     "h": 750
+    },
+    {
+     "id": "bioluminescence",
+     "origin": "external",
+     "title": "Sea sparkle",
+     "text": "The water lights up only where something moves it",
+     "date": "Norderney, 2024",
+     "credit": "Photo Stephan Sprinz · CC BY 4.0",
+     "by": "Stephan Sprinz (photographer)",
+     "holder": "Beach on Norderney, Germany (Lower Saxony Wadden Sea National Park)",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Meeresleuchten_auf_Norderney_02.jpg",
+     "kind": "artwork",
+     "image": "bioluminescence.jpg",
+     "w": 1000,
+     "h": 666
+    },
+    {
+     "id": "haeckel-radiolaria",
+     "origin": "external",
+     "title": "Radiolarians",
+     "text": "",
+     "date": "Kunstformen der Natur, 1904",
+     "credit": "Public domain",
+     "by": "Ernst Haeckel",
+     "holder": "Kunstformen der Natur (Art Forms in Nature); scan on Wikimedia Commons",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Haeckel_Cyrtoidea.jpg",
+     "kind": "artwork",
+     "image": "haeckel-radiolaria.jpg",
+     "w": 706,
+     "h": 1000
+    },
+    {
+     "id": "fireflies",
+     "origin": "external",
+     "title": "Fireflies in a forest",
+     "text": "",
+     "date": "Chiba, 2023",
+     "credit": "Photo F_Photo, FIND/47 · CC BY 4.0",
+     "by": "F_Photo (photographer)",
+     "holder": "Chiba Prefecture, Japan (exact place withheld by the photographer)",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Chiba_firefly_xl.jpg",
+     "kind": "artwork",
+     "image": "fireflies.jpg",
+     "w": 1000,
+     "h": 562
+    },
+    {
+     "id": "cma-120225",
+     "origin": "ocean",
+     "title": "Fireworks at Ryōgoku",
+     "text": "",
+     "date": "1858",
+     "credit": "Cleveland Museum of Art",
+     "by": "Utagawa Hiroshige",
+     "href": "https://clevelandart.org/art/1940.986",
+     "kind": "picture",
+     "image": "cma-120225.jpg",
+     "w": 501,
+     "h": 760
+    },
+    {
+     "id": "moma-79802",
+     "origin": "ocean",
+     "title": "The Starry Night",
+     "text": "",
+     "date": "1889",
+     "credit": "MoMA",
+     "by": "Vincent van Gogh",
+     "href": "https://www.moma.org/collection/works/79802",
+     "kind": "picture",
+     "image": "moma-79802.jpg",
+     "w": 760,
+     "h": 605
+    }
+   ]
+  },
+  {
+   "id": "rw",
+   "chart": "a3",
+   "title": "Added · From a tree to a forest",
+   "parent": "mo",
+   "head": "cajal-neurons",
+   "say": "Show me.",
+   "sayAlso": [],
+   "do": [
+    "Highlight Cajal’s words",
+    "Clap, then zoom out"
+   ],
+   "momo": "Forests, then: one under the sea, one that is a single tree, and a paper on how trees pass carbon through shared fungi.",
+   "offers": [
+    "Is Pando really one tree?"
+   ],
+   "note": "Named on the board: 'Highlight Cajal's words'. Kai joined this block to 'gestures' on the chart.",
+   "cards": [
+    {
+     "id": "pando",
+     "origin": "external",
+     "title": "Pando, Utah",
+     "text": "One aspen: over 40,000 trunks on 106 acres",
+     "credit": "Photo J Zapell, US Forest Service · public domain",
+     "by": "Photo: J Zapell, USDA Forest Service",
+     "holder": "Fishlake National Forest, Utah (about 1 mile southwest of Fish Lake on State Highway 25)",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:FallPando02.jpg",
+     "kind": "artwork",
+     "image": "pando.jpg",
+     "w": 1000,
+     "h": 662
+    },
+    {
+     "id": "great-banyan",
+     "origin": "external",
+     "title": "The Great Banyan, Howrah",
+     "text": "One tree. Its main trunk was removed in 1925",
+     "credit": "Photo Kararkadeep · CC BY-SA 4.0",
+     "by": "Kararkadeep",
+     "date": "2012-04-19 09:51:38",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY-SA 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Great_Banyan_Tree_of_Botanical_Garden,_Howrah.jpg",
+     "kind": "artwork",
+     "image": "great-banyan.jpg",
+     "w": 1000,
+     "h": 485
+    },
+    {
+     "id": "kelp-forest",
+     "origin": "external",
+     "title": "Giant kelp forest, Channel Islands",
+     "text": "",
+     "credit": "NOAA Photo Library · public domain",
+     "by": "NOAA Photo Library (image sanc0001)",
+     "holder": "Channel Islands National Marine Sanctuary, California",
+     "from": "Wikimedia Commons",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Kelp_forest,_Channel_Islands_NMS.jpg",
+     "kind": "artwork",
+     "image": "kelp-forest.jpg",
+     "w": 1000,
+     "h": 649
+    },
+    {
+     "id": "tohaku-pines",
+     "origin": "external",
+     "title": "Pine Trees",
+     "text": "",
+     "date": "left screen, 16th century",
+     "credit": "Tokyo National Museum · public domain",
+     "by": "Hasegawa Tōhaku",
+     "holder": "Tokyo National Museum (A-10471), National Treasure",
+     "from": "Wikimedia Commons (image from e-Museum)",
+     "licence": "Public domain",
+     "href": "https://commons.wikimedia.org/wiki/File:Hasegawa_Tohaku_-_Pine_Trees_(Sh%C5%8Drin-zu_by%C5%8Dbu)_-_left_hand_screen.jpg",
+     "kind": "artwork",
+     "image": "tohaku-pines.jpg",
+     "w": 1000,
+     "h": 467
+    },
+    {
+     "id": "cma-164896",
+     "origin": "ocean",
+     "title": "Traveler on a Road in a Forest",
+     "text": "",
+     "date": "1866",
+     "credit": "Cleveland Museum of Art",
+     "by": "Maxime Lalanne",
+     "href": "https://clevelandart.org/art/2006.257",
+     "kind": "picture",
+     "image": "cma-164896.jpg",
+     "w": 492,
+     "h": 760
+    },
+    {
+     "id": "simard-1997",
+     "origin": "external",
+     "title": "Net transfer of carbon between ectomycorrhizal tree species in the field",
+     "text": "In a Canadian forest, birch passed carbon to fir through the fungi linking their roots, more when the fir was shaded. Separate trees, one network.",
+     "credit": "Simard et al., Nature 1997",
+     "authors": [
+      "Simard",
+      "Perry",
+      "Jones",
+      "Myrold",
+      "Durall",
+      "Molina"
+     ],
+     "date": "1997",
+     "venue": "Nature",
+     "href": "https://doi.org/10.1038/41557",
+     "kind": "paper"
+    }
+   ]
+  }
+ ],
+ "chart": {
+  "nodes": [
+   {
+    "id": "s3",
+    "phase": "r1",
+    "text": "Round 1 · “Hey Momo, start a tree on, hmm, brainstorming with VR headset”",
+    "kind": "ask",
+    "x": 0,
+    "y": 850,
+    "w": 240,
+    "h": 91
+   },
+   {
+    "id": "s7",
+    "phase": "n2",
+    "text": "Round 2 · “Hey Momo, the analogy of ... is interesting, other ideas?”",
+    "kind": "ask",
+    "x": 304,
+    "y": 105,
+    "w": 240,
+    "h": 91
+   },
+   {
+    "id": "u1",
+    "phase": "mo",
+    "text": "More of this",
+    "kind": "ask",
+    "x": 608,
+    "y": 0,
+    "w": 240,
+    "h": 49
+   },
+   {
+    "id": "s47",
+    "phase": "n3",
+    "text": "Round 3 · drawing to annotate on one of the diagrams, “this looks cool but has a lot going on, how do we keep the information organized?”",
+    "kind": "ask",
+    "x": 608,
+    "y": 116,
+    "w": 240,
+    "h": 133
+   },
+   {
+    "id": "s15",
+    "phase": "f1",
+    "text": "“that’s cool, but seems easy to get lost wandering around…”\n- Underground map",
+    "kind": "ask",
+    "x": 912,
+    "y": 63,
+    "w": 240,
+    "h": 112
+   },
+   {
+    "id": "s11",
+    "phase": "f2",
+    "text": "help me understand the concept of “tree branches”",
+    "kind": "ask",
+    "x": 912,
+    "y": 210,
+    "w": 240,
+    "h": 70
+   },
+   {
+    "id": "s109",
+    "phase": "f3",
+    "text": "“Layers”?",
+    "kind": "ask",
+    "x": 1216,
+    "y": 220,
+    "w": 240,
+    "h": 49
+   },
+   {
+    "id": "s121",
+    "phase": "f4",
+    "text": "Making design decisions, compare and contrast Diagram to break down the information system we design",
+    "kind": "gen",
+    "x": 1520,
+    "y": 189,
+    "w": 240,
+    "h": 112
+   },
+   {
+    "id": "s167",
+    "phase": "px",
+    "text": "3D interactive prototype that help user visualize the ideas",
+    "kind": "gen",
+    "x": 1824,
+    "y": 210,
+    "w": 240,
+    "h": 70
+   },
+   {
+    "id": "s19",
+    "phase": "f5",
+    "text": "Annotate on paper on spatial memory, find me more interesting things on spatial memory/memory palace",
+    "kind": "ask",
+    "x": 304,
+    "y": 315,
+    "w": 240,
+    "h": 112
+   },
+   {
+    "id": "s149",
+    "phase": "f7",
+    "text": "long pinch - more architecture/real life examples of spaces that present information that facilitate ideas-forming",
+    "kind": "do",
+    "x": 304,
+    "y": 441,
+    "w": 240,
+    "h": 133
+   },
+   {
+    "id": "s157",
+    "phase": "f6",
+    "text": "More drawings of famous people lecturing/having epiphany moments under a tree",
+    "kind": "ask",
+    "x": 304,
+    "y": 588,
+    "w": 240,
+    "h": 91
+   },
+   {
+    "id": "s479",
+    "phase": "pi",
+    "text": "expanding on interactions in VR",
+    "kind": "topic",
+    "x": 304,
+    "y": 693,
+    "w": 240,
+    "h": 70
+   },
+   {
+    "id": "s459",
+    "phase": "pd",
+    "text": "designing gestures",
+    "kind": "topic",
+    "x": 608,
+    "y": 704,
+    "w": 240,
+    "h": 49
+   },
+   {
+    "id": "s533",
+    "phase": "pg",
+    "text": "gestures",
+    "kind": "topic",
+    "x": 912,
+    "y": 704,
+    "w": 240,
+    "h": 49
+   },
+   {
+    "id": "s209",
+    "phase": "fb",
+    "text": "How do we build this",
+    "kind": "ask",
+    "x": 304,
+    "y": 1082,
+    "w": 240,
+    "h": 49
+   },
+   {
+    "id": "s221",
+    "phase": "bw",
+    "text": "where do information come from",
+    "kind": "topic",
+    "x": 608,
+    "y": 840,
+    "w": 240,
+    "h": 70
+   },
+   {
+    "id": "s293",
+    "phase": "ba",
+    "text": "agentic system",
+    "kind": "topic",
+    "x": 912,
+    "y": 777,
+    "w": 240,
+    "h": 49
+   },
+   {
+    "id": "s323",
+    "phase": "bs",
+    "text": "curated sources for high quality information\n\nconnect with instagram account ...",
+    "kind": "topic",
+    "x": 912,
+    "y": 840,
+    "w": 240,
+    "h": 133
+   },
+   {
+    "id": "s285",
+    "phase": "bp",
+    "text": "how we present the information",
+    "kind": "topic",
+    "x": 608,
+    "y": 987,
+    "w": 240,
+    "h": 70
+   },
+   {
+    "id": "s274",
+    "phase": "bu",
+    "text": "intelligent UI system",
+    "kind": "topic",
+    "x": 912,
+    "y": 998,
+    "w": 240,
+    "h": 49
+   },
+   {
+    "id": "s347",
+    "phase": "bi",
+    "text": "how do user interact with each item",
+    "kind": "topic",
+    "x": 608,
+    "y": 1144,
+    "w": 240,
+    "h": 70
+   },
+   {
+    "id": "s397",
+    "phase": "bv",
+    "text": "Voice",
+    "kind": "topic",
+    "x": 912,
+    "y": 1071,
+    "w": 240,
+    "h": 49
+   },
+   {
+    "id": "s401",
+    "phase": "bq",
+    "text": "shortcuts/quick interactions\nagent suggestions\nlong pinch",
+    "kind": "topic",
+    "x": 912,
+    "y": 1134,
+    "w": 240,
+    "h": 91
+   },
+   {
+    "id": "s409",
+    "phase": "bn",
+    "text": "annotate",
+    "kind": "topic",
+    "x": 912,
+    "y": 1239,
+    "w": 240,
+    "h": 49
+   },
+   {
+    "id": "s441",
+    "phase": "bh",
+    "text": "how we host the backend services",
+    "kind": "topic",
+    "x": 608,
+    "y": 1302,
+    "w": 240,
+    "h": 70
+   },
+   {
+    "id": "s508",
+    "phase": "rz",
+    "text": "navigation",
+    "kind": "topic",
+    "x": 608,
+    "y": 1386,
+    "w": 240,
+    "h": 49
+   },
+   {
+    "id": "s359",
+    "phase": "f15",
+    "text": "Name??",
+    "kind": "ask",
+    "x": 304,
+    "y": 1449,
+    "w": 240,
+    "h": 49
+   },
+   {
+    "id": "a1",
+    "phase": "ry",
+    "text": "Added · long pinch a pin: how it should look",
+    "kind": "do",
+    "x": 1224,
+    "y": 694,
+    "w": 240,
+    "h": 70
+   },
+   {
+    "id": "a2",
+    "phase": "r10",
+    "text": "Added · where things rest when you are not using them: the ocean",
+    "kind": "topic",
+    "x": 1238,
+    "y": 973,
+    "w": 240,
+    "h": 91
+   },
+   {
+    "id": "a3",
+    "phase": "rw",
+    "text": "Added · zoom out: from one tree to a forest, then hand it off",
+    "kind": "topic",
+    "x": 1224,
+    "y": 785,
+    "w": 240,
+    "h": 91
+   }
+  ],
+  "edges": [
+   [
+    "s3",
+    "s7"
+   ],
+   [
+    "s7",
+    "u1"
+   ],
+   [
+    "s7",
+    "s47"
+   ],
+   [
+    "s47",
+    "s15"
+   ],
+   [
+    "s47",
+    "s11"
+   ],
+   [
+    "s11",
+    "s109"
+   ],
+   [
+    "s109",
+    "s121"
+   ],
+   [
+    "s121",
+    "s167"
+   ],
+   [
+    "s3",
+    "s19"
+   ],
+   [
+    "s3",
+    "s149"
+   ],
+   [
+    "s3",
+    "s157"
+   ],
+   [
+    "s3",
+    "s479"
+   ],
+   [
+    "s479",
+    "s459"
+   ],
+   [
+    "s459",
+    "s533"
+   ],
+   [
+    "s3",
+    "s209"
+   ],
+   [
+    "s209",
+    "s221"
+   ],
+   [
+    "s221",
+    "s293"
+   ],
+   [
+    "s221",
+    "s323"
+   ],
+   [
+    "s209",
+    "s285"
+   ],
+   [
+    "s285",
+    "s274"
+   ],
+   [
+    "s209",
+    "s347"
+   ],
+   [
+    "s347",
+    "s397"
+   ],
+   [
+    "s347",
+    "s401"
+   ],
+   [
+    "s347",
+    "s409"
+   ],
+   [
+    "s209",
+    "s441"
+   ],
+   [
+    "s209",
+    "s508"
+   ],
+   [
+    "s3",
+    "s359"
+   ],
+   [
+    "s15",
+    "s121"
+   ],
+   [
+    "s19",
+    "s121"
+   ],
+   [
+    "s149",
+    "s167"
+   ],
+   [
+    "s157",
+    "s11"
+   ],
+   [
+    "s409",
+    "s533"
+   ],
+   [
+    "s508",
+    "s533"
+   ],
+   [
+    "s401",
+    "s533"
+   ],
+   [
+    "s274",
+    "a2"
+   ],
+   [
+    "s533",
+    "a1"
+   ],
+   [
+    "s533",
+    "a3"
+   ]
+  ],
+  "w": 2064,
+  "h": 1498
+ }
+}

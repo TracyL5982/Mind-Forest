@@ -2,7 +2,7 @@ import { announcement } from './announce.ts';
 import { label } from './brief.ts';
 import { CommandError, type ChangeSet, type Command, type Id, type Item, type Node, type Origin, type Patch } from './domain.ts';
 import type { Assets, ModelClient, Store, Tools } from './ports.ts';
-import { admit, plainTitle } from './round.ts';
+import { admit, plainTitle, type RoundLimits } from './round.ts';
 import { treeRequest } from './tree-request.ts';
 import { brief } from './roles/questions.ts';
 import {
@@ -76,6 +76,8 @@ export interface PipelineDeps {
   settleMs?: number;
   /** What the connected clients can play. Without it every client is taken to be a browser. */
   playback?: () => Playback;
+  /** How many picks a round holds, when it is not the usual ten with eight known (the demo's prepared rounds). */
+  round?: RoundLimits;
 }
 
 const USER: Origin = { by: 'user' };
@@ -286,6 +288,34 @@ export class Pipeline {
     });
   }
 
+  // ---- the demo (src/demo): a prepared tree set up at once, and the conversation started over
+
+  /**
+   * Applies commands as they are, with no round rules, no Renderer pass and no announcement: a prepared round of the demo's tree,
+   * whose cards come with their looks chosen. Told to the clients as any change is.
+   */
+  stage(origin: Origin, label: string, commands: Command[]): ChangeSet | null {
+    return this.apply(origin, label, commands);
+  }
+
+  /** Takes every client's view to a card or a tree, as a spoken "go to" does. */
+  go(nodeId?: Id, treeId?: Id): void {
+    this.deps.emit({ t: 'navigate', nodeId, treeId });
+    this.attend(nodeId);
+  }
+
+  /** Starts the conversation over: what was said, the questions written for cards, and the runs under way are forgotten. */
+  forget(): void {
+    this.history.length = 0;
+    this.offered.clear();
+    // A run still under way finds a newer one in its place, so what it brings is dropped and it is not announced.
+    for (const [anchor, run] of this.scoutRun) this.scoutRun.set(anchor, run + 1);
+    this.dropped = [];
+    this.acting = null;
+    this.voiceRun++;
+    this.attend(undefined);
+  }
+
   /** What the next undo would take back, for a client's undo button. */
   undoLabel(): string | null {
     return this.deps.mind.undoTarget(isHousekeeping)?.label ?? null;
@@ -386,7 +416,7 @@ export class Pipeline {
     return this.work('filer', doing, undefined, async () => {
       const placing = await this.deps.roles.filer(this.ctx, items, request);
       const fresh = items.filter((item) => !mind.items.has(item.id)).map((item): Command => ({ type: 'addItem', item }));
-      const set = this.apply(AGENT('filer'), request ? `Start a tree with ${named}` : `Add ${named}`, admit(mind, [...fresh, ...placing]));
+      const set = this.apply(AGENT('filer'), request ? `Start a tree with ${named}` : `Add ${named}`, admit(mind, [...fresh, ...placing], this.deps.round));
       if (!set) return NOTHING;
       const nodeIds = newNodeIds(set);
       this.afterContent(set);
@@ -434,7 +464,7 @@ export class Pipeline {
         const bring = (commands: Command[]) => {
           // A card deleted while its picks were being found takes the run with it.
           if (this.scoutRun.get(anchor) !== run || commands.length === 0 || !this.deps.mind.nodes.has(anchor)) return;
-          const set = this.apply(AGENT('scout'), request ? `Picks for: ${request}`.slice(0, 120) : `Picks for "${title}"`, admit(this.deps.mind, commands), part);
+          const set = this.apply(AGENT('scout'), request ? `Picks for: ${request}`.slice(0, 120) : `Picks for "${title}"`, admit(this.deps.mind, commands, this.deps.round), part);
           if (!set) return;
           brought.push(...newNodeIds(set).filter((id) => mind.nodes.get(id)?.parent === anchor));
           this.afterContent(set);
@@ -567,7 +597,8 @@ function onlyEdits(p: Patch): boolean {
 }
 
 function isHousekeeping(set: ChangeSet): boolean {
-  return set.origin.role === 'renderer' || set.origin.role === 'archivist';
+  // The demo's prepared rounds are set up, not done by the user: an undo never takes one back.
+  return set.origin.role === 'renderer' || set.origin.role === 'archivist' || set.origin.role === 'demo';
 }
 
 /** Whether an item that was there before now has another title, text or data: what a card is drawn from. Its summary and tags are not. */
