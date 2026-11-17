@@ -1,26 +1,32 @@
 /**
- * Writes down what Momo says in each round of the walkthrough demo, and records it. For each round the real Momo is asked: the
- * realtime model with her own instructions, told where the user is, given the user's line, and then given the very notes a real
- * round gives her as its cards land (`Narration`), on the round's own schedule. Each answer is recorded in her voice at once,
- * since how long she talks decides which cards have landed by the time she is free for the next remark.
+ * Writes down what Momo says in each round of the walkthrough demo, in her own live voice. For each round the real Momo is asked:
+ * the realtime model with her own instructions and her voice, told where the user is, given the user's line, and then given the
+ * very notes a real round gives her as its cards land (`Narration`), on the round's own schedule. What she answers aloud is the
+ * recording, and what she says she said is the line's text, so the words and the delivery are hers. How long she talks decides
+ * which cards have landed by the time she is free for the next remark.
  *
- * It writes `demo/lines.json` and one recording per line in `demo/voice/`. A round that is written already is left as it is.
+ * Each recording is written out again from its sound. One whose words are not the text's is recorded again by asking her to say
+ * the line as written (`momo-voice.ts`), and after five such takes the speech model reads it.
+ *
+ * It writes `demo/lines.json`, one recording per line in `demo/voice/`, and `demo/voice/voices.json`, which says which voice each
+ * recording is in. A round that is written already is left as it is.
  * Usage: node --no-warnings --import tsx scripts/demo-lines.ts [--only r1,n2] [--again] [--check]
  *   --again   writes the named rounds afresh.
  *   --check   has every recording written out again from its sound, and says where the words differ from the line.
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { toolSpecs, whereNote } from '../src/core/voice-tools.ts';
 import { spokenName } from '../src/core/wake.ts';
 import { LinesFile, recordingName } from '../src/demo/lines.ts';
 import { loadScript, type ScriptPhase } from '../src/demo/script.ts';
-import { planLines, type Line } from '../src/demo/take.ts';
+import { compare, record as recordLine, wavOf, type Voice, type VoiceOptions } from '../src/demo/momo-voice.ts';
+import { planLines, type Line, type LineKind } from '../src/demo/take.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { loadEnv } from '../src/node/env.ts';
-import { instructions, type RealtimeEvent } from '../src/node/live.ts';
+import { cost, instructions, type RealtimeEvent, type Usage } from '../src/node/live.ts';
 import { startServer } from '../src/node/server.ts';
 import { openaiRealtime, openaiSpeech, openaiTranscribe, SPEECH_VOICE } from '../src/node/speech-openai.ts';
 import { DEFAULT_SETTINGS } from '../src/core/roles/types.ts';
@@ -52,38 +58,43 @@ The user is recording a walkthrough of one tree, and each thing they say is a ta
 - A round here lands many cards at once. At [More cards landed] with more than two cards, never say their titles one after another: say how many came and name the one you like best, in one short line.`;
 const STARTED = JSON.stringify({ started: true, note: 'Started. Cards will land over the next seconds and you will get a note as each does. Describe none until then.' });
 
-const spent = { responses: 0, tokens: 0, spoken: 0, seconds: 0, heard: 0 };
+const spent = { responses: 0, dollars: 0, seconds: 0, heard: 0, own: 0, retaken: 0, takes: 0, speech: 0 };
+/** The most this run may spend on the realtime model, in dollars, by its own count. */
+const BUDGET = 12;
 
-/** One conversation with the realtime model, in text: each `ask` gives what she says next. */
+/** One conversation with the realtime model, aloud: each `ask` gives what she says next, as sound, and what she says she said. */
 function conversation() {
-  let waiting: { text: string; done: (text: string) => void; fail: (err: Error) => void } | null = null;
+  let waiting: { chunks: Buffer[]; said: string; done: (out: { pcm: Uint8Array; text: string }) => void; fail: (err: Error) => void } | null = null;
   const session = openaiRealtime({ apiKey, model })({
     event: (e: RealtimeEvent) => {
       if (e.type === 'error') return waiting?.fail(new Error(JSON.stringify(e.error)));
-      if (e.type === 'response.output_text.delta' && waiting) waiting.text += String(e.delta ?? '');
+      if (e.type === 'response.output_audio.delta' && waiting) waiting.chunks.push(Buffer.from(String(e.delta ?? ''), 'base64'));
+      if (e.type === 'response.output_audio_transcript.done' && waiting) waiting.said += ` ${String(e.transcript ?? '')}`;
       if (e.type !== 'response.done' || !waiting) return;
-      const response = e.response as { status?: string; usage?: { total_tokens?: number }; output?: { type: string; call_id?: string; content?: { type: string; text?: string }[] }[] };
+      const response = e.response as { usage?: Usage; output?: { type: string; call_id?: string }[] };
       spent.responses++;
-      spent.tokens += response.usage?.total_tokens ?? 0;
-      const said = (response.output ?? []).flatMap((out) => (out.type === 'message' ? (out.content ?? []).map((c) => c.text ?? '') : [])).join(' ').trim() || waiting.text.trim();
+      spent.dollars += (response.usage && cost(model, response.usage)) || 0;
       // A call she made is answered as the service answers it, and she is asked for nothing more: its cards come as notes.
       for (const out of response.output ?? []) if (out.type === 'function_call' && out.call_id) session.send({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: out.call_id, output: STARTED } });
-      const { done } = waiting;
+      const { done, chunks, said } = waiting;
       waiting = null;
-      done(said.replace(/\s+/g, ' '));
+      done({ pcm: new Uint8Array(Buffer.concat(chunks)), text: said.replace(/\s+/g, ' ').trim() });
     },
     closed: (why: string) => waiting?.fail(new Error(why)),
   });
   session.send({
     type: 'session.update',
-    session: { type: 'realtime', model, output_modalities: ['text'], instructions: `${instructions(name, today)}\n\n${RECORDING}`, tools: toolSpecs(), tool_choice: 'auto' },
+    session: {
+      type: 'realtime', model, output_modalities: ['audio'], instructions: `${instructions(name, today)}\n\n${RECORDING}`, tools: toolSpecs(), tool_choice: 'auto',
+      audio: { output: { format: { type: 'audio/pcm', rate: 24_000 }, voice } },
+    },
   });
   const note = (text: string) => session.send({ type: 'conversation.item.create', item: { type: 'message', role: 'system', content: [{ type: 'input_text', text }] } });
   const ask = () =>
-    new Promise<string>((done, fail) => {
-      waiting = { text: '', done, fail };
+    new Promise<{ pcm: Uint8Array; text: string }>((done, fail) => {
+      waiting = { chunks: [], said: '', done, fail };
       session.send({ type: 'response.create' });
-      setTimeout(() => waiting && fail(new Error('the realtime model did not answer in 40 s')), 40_000).unref();
+      setTimeout(() => waiting && fail(new Error('the realtime model did not answer in 90 s')), 90_000).unref();
     });
   return {
     note,
@@ -93,20 +104,44 @@ function conversation() {
   };
 }
 
-const speak = openaiSpeech(fetch, { apiKey, model: env.MIND_PALACE_VOICE_MODEL, voice, format: 'pcm', firstByteMs: 30_000 });
+const speech = openaiSpeech(fetch, { apiKey, model: env.MIND_PALACE_VOICE_MODEL, voice, format: 'pcm', firstByteMs: 30_000 });
+const transcribe = openaiTranscribe(fetch, { apiKey, model: env.MIND_PALACE_HEARING_MODEL });
+const hear = async (wav: Uint8Array, likely: string) => (spent.heard++, transcribe(wav, 'audio/wav', { name, words: likely }));
+const voiceOptions: VoiceOptions = {
+  open: openaiRealtime({ apiKey, model }), model, voice, name, hear,
+  speak: async (text) => new Uint8Array(await new Response(await speech(text, AbortSignal.timeout(60_000))).arrayBuffer()),
+  spent: (dollars) => (spent.dollars += dollars),
+  log: (line) => console.log(`    ${line}`),
+};
 const voiceDir = join(demoDir, 'voice');
 mkdirSync(voiceDir, { recursive: true });
+const voicesFile = join(voiceDir, 'voices.json');
+const voices: Record<string, Voice> = existsSync(voicesFile) ? JSON.parse(readFileSync(voicesFile, 'utf8')) : {};
 
-/** The line recorded in Momo's voice, kept by its words, and how long it is. */
-async function record(text: string): Promise<number> {
-  const file = join(voiceDir, recordingName(voice, text));
-  if (!existsSync(file)) {
-    writeFileSync(file, new Uint8Array(await new Response(await speak(text, AbortSignal.timeout(60_000))).arrayBuffer()));
-    spent.spoken++;
-  }
-  const ms = readFileSync(file).length / 48;
-  spent.seconds += ms / 1000;
-  return ms;
+/**
+ * Keeps a line's recording. What she said aloud in the conversation is kept when its sound holds the words of the text; otherwise
+ * she is asked to say the line as written, and after five takes of that the speech model reads it.
+ */
+async function keep(text: string, kind: LineKind, own: Uint8Array, likely: string): Promise<{ ms: number; by: Voice; how: string }> {
+  let pcm = own;
+  let by: Voice = 'realtime';
+  let how = 'her own answer';
+  const heard = own.length > 12_000 ? await hear(wavOf(own), likely) : '';
+  if (compare(text, heard) === 'differs') {
+    console.log(`    her answer's sound was not its text; heard: ${heard.slice(0, 140)}`);
+    const again = await recordLine(voiceOptions, text, kind, likely);
+    pcm = again.pcm;
+    by = again.by;
+    spent.takes += again.takes;
+    how = again.by === 'realtime' ? `said again as written, take ${again.takes}` : 'the speech model, after five takes';
+    if (again.by === 'realtime') spent.retaken++;
+    else spent.speech++;
+  } else spent.own++;
+  const file = recordingName(voice, text);
+  writeFileSync(join(voiceDir, file), pcm);
+  voices[file] = by;
+  spent.seconds += pcm.length / 48_000;
+  return { ms: pcm.length / 48, by, how };
 }
 
 const script = loadScript(join(demoDir, 'script.json'));
@@ -119,34 +154,54 @@ if (lines.voice !== voice) {
 
 if (flag('--check')) {
   // Each recording is written out again from its sound alone, and the words are compared with the line as it is written.
-  const hear = openaiTranscribe(fetch, { apiKey, model: env.MIND_PALACE_HEARING_MODEL });
-  const words = (text: string) => text.toLowerCase().replace(/[’']/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ');
-  const wav = (pcm: Uint8Array) => {
-    const out = new Uint8Array(44 + pcm.length);
-    const view = new DataView(out.buffer);
-    const tag = (at: number, text: string) => [...text].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
-    tag(0, 'RIFF'); view.setUint32(4, 36 + pcm.length, true); tag(8, 'WAVE'); tag(12, 'fmt '); view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, 24000, true); view.setUint32(28, 48000, true);
-    view.setUint16(32, 2, true); view.setUint16(34, 16, true); tag(36, 'data'); view.setUint32(40, pcm.length, true);
-    out.set(pcm, 44);
-    return out;
-  };
-  let same = 0;
-  let checked = 0;
+  const titles = new Map(script.phases.map((phase): [string, string] => [phase.id, phase.cards.map((card) => card.title).join(', ')]));
+  const count = { exact: 0, close: 0, differs: 0 };
   for (const [round, said] of Object.entries(lines.rounds)) {
     if (only && !only.has(round)) continue;
     for (const line of said) {
       const recording = join(voiceDir, recordingName(voice, line.text));
       if (!line.text || !existsSync(recording)) continue;
-      const heard = await hear(wav(new Uint8Array(readFileSync(recording))), 'audio/wav', { name, words: '' });
-      spent.heard++;
-      checked++;
-      const [a, b] = [words(line.text), words(heard)];
-      if (a.join(' ') === b.join(' ')) same++;
-      else console.log(`${round} ${line.id}: the words differ\n  written: ${line.text}\n  heard:   ${heard}`);
+      const heard = await hear(wavOf(new Uint8Array(readFileSync(recording))), titles.get(round) ?? '');
+      const how = compare(line.text, heard);
+      count[how]++;
+      if (how !== 'exact') console.log(`${round} ${line.id} (${voices[recordingName(voice, line.text)] ?? 'speech'}): ${how}\n  written: ${line.text}\n  heard:   ${heard}`);
     }
   }
-  console.log(`${same} of ${checked} recordings were heard word for word as written (${spent.heard} transcriptions)`);
+  console.log(`${count.exact} recordings were heard word for word as written, ${count.close} with only a spelling by ear or a space apart, ${count.differs} with a word added, dropped or changed (${spent.heard} transcriptions)`);
+  process.exit(0);
+}
+
+/** The lines `--lines` names, as `round:line`. */
+const chosen = args.includes('--lines') ? new Set((args[args.indexOf('--lines') + 1] ?? '').split(',')) : null;
+/** A recording written out twice: the second hearing is given when the first is the line's own words, so a take passes only on both. */
+const twice = async (wav: Uint8Array, likely: string) => {
+  const first = await hear(wav, likely);
+  return heardLine && compare(heardLine, first) === 'differs' ? first : hear(wav, likely);
+};
+let heardLine = '';
+if (flag('--retake')) {
+  // Every line the speech model reads is put to the realtime voice again: after a change to how takes are compared, or to try once more.
+  for (const [round, said] of Object.entries(lines.rounds)) {
+    if (only && !only.has(round)) continue;
+    const likely = script.phases.find((phase) => phase.id === round)?.cards.map((card) => card.title).join(', ') ?? '';
+    for (const line of said) {
+      const recording = recordingName(voice, line.text);
+      const named = chosen?.has(`${round}:${line.id}`);
+      heardLine = line.text;
+      if (!line.text || (chosen ? !named : voices[recording] === 'realtime' && existsSync(join(voiceDir, recording)))) continue;
+      // A named line is one whose recording was heard two ways: its new take must be heard as written twice over.
+      const again = await recordLine(named ? { ...voiceOptions, hear: twice } : voiceOptions, line.text, line.kind, likely);
+      if (named && again.by === 'speech') {
+        console.log(`${round} ${line.id}: no take of five was heard as written twice over; her recording is left as it was`);
+        continue;
+      }
+      writeFileSync(join(voiceDir, recording), again.pcm);
+      voices[recording] = again.by;
+      writeFileSync(voicesFile, `${JSON.stringify(voices, null, 1)}\n`);
+      console.log(`${round} ${line.id}: ${again.by === 'realtime' ? `in her realtime voice, take ${again.takes}` : 'still read by the speech model, after five takes'} (${(again.pcm.length / 48_000).toFixed(1)} s)`);
+    }
+  }
+  console.log(`$${spent.dollars.toFixed(2)} on the realtime model, ${spent.heard} transcriptions`);
   process.exit(0);
 }
 
@@ -162,6 +217,7 @@ async function write(phase: ScriptPhase): Promise<Line[]> {
   const where = head
     ? `${whereNote(run.pipeline.ctx, { focus: head.id, treeId: head.treeId, selection: [] })}\nRecording: with this card open, the next thing the user says ${phase.cards.length > 0 ? 'asks for a new layer on it' : 'is a question to answer aloud from this card'}.`
     : whereNote(run.pipeline.ctx, { selection: [] });
+  const likely = phase.cards.map((card) => card.title).join(', ');
   const momo = conversation();
   try {
     momo.note(`[Where the user is] ${where}`);
@@ -169,12 +225,14 @@ async function write(phase: ScriptPhase): Promise<Line[]> {
       // Many cards at once: the demo has always asked her to count them and name one, where the live note asks for every name.
       if (note) momo.note(kind === 'more' && cards.length > 2 ? note.replace(/Tell the user in one short sentence that names them\.$/, 'Say how many came and name the one you like best, in one short sentence.') : note);
       else momo.said(phase.say.replace(/^hey momo,?\s*/i, ''));
-      let text = await momo.ask();
+      if (spent.dollars > BUDGET) throw new Error(`this run has spent $${spent.dollars.toFixed(2)}, past its budget of $${BUDGET}`);
+      let said = await momo.ask();
       // She may call the search without a word: then she is asked once more for the words that go with it.
-      if (!text && kind === 'answer') text = await momo.ask();
-      const ms = text ? await record(text) : 0;
-      console.log(`  ${kind.padEnd(6)} ${(ms / 1000).toFixed(1).padStart(5)} s  ${text}`);
-      return { text, ms };
+      if (!said.text && kind === 'answer') said = await momo.ask();
+      if (!said.text) return { text: '', ms: 0 };
+      const kept = await keep(said.text, kind, said.pcm, likely);
+      console.log(`  ${kind.padEnd(6)} ${(kept.ms / 1000).toFixed(1).padStart(5)} s  ${kept.how}: ${said.text}`);
+      return { text: said.text, ms: kept.ms };
     });
   } finally {
     momo.close();
@@ -188,10 +246,20 @@ try {
     console.log(`${phase.id}: ${phase.title} (${phase.say ? `"${phase.say}"` : phase.ask ? `the question "${phase.ask}" picked` : 'no words'}, ${phase.cards.length} cards)`);
     lines.rounds[phase.id] = await write(phase);
     writeFileSync(file, `${JSON.stringify(lines, null, 1)}\n`);
+    writeFileSync(voicesFile, `${JSON.stringify(voices, null, 1)}\n`);
+    console.log(`  so far $${spent.dollars.toFixed(2)} on the realtime model`);
   }
 } finally {
   await run.close();
   rmSync(dataDir, { recursive: true, force: true });
 }
-console.log(`${spent.responses} answers from the realtime model (${spent.tokens} tokens), ${spent.spoken} lines recorded, ${spent.seconds.toFixed(0)} s of Momo's voice in the rounds written`);
+// A recording no line's words name any more is of a line that was written again: it goes, with its entry.
+const named = new Set(Object.values(lines.rounds).flatMap((said) => said.map((line) => recordingName(voice, line.text))));
+for (const old of readdirSync(voiceDir)) if (old.endsWith('.pcm') && !named.has(old)) rmSync(join(voiceDir, old));
+for (const old of Object.keys(voices)) if (!named.has(old)) delete voices[old];
+writeFileSync(voicesFile, `${JSON.stringify(voices, null, 1)}\n`);
+console.log(
+  `${spent.responses} answers from the realtime model, $${spent.dollars.toFixed(2)} by its own count; ${spent.own} lines kept as she answered, ${spent.retaken} said again as written ` +
+    `(${spent.takes} takes for those and the next), ${spent.speech} read by the speech model; ${spent.seconds.toFixed(0)} s of voice; ${spent.heard} transcriptions`,
+);
 process.exit(0);

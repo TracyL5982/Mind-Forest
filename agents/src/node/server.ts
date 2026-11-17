@@ -27,7 +27,7 @@ import { followingIn, openInstagram, type InstagramLibrary } from './instagram.t
 import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
 import { Director, momoNote, type Pace } from '../demo/director.ts';
-import { Lines } from '../demo/lines.ts';
+import { Lines, type LinesOptions } from '../demo/lines.ts';
 import type { DemoScript } from '../demo/script.ts';
 import type { Showcase } from '../demo/showcase.ts';
 
@@ -88,9 +88,9 @@ export interface ServerOptions {
     restart?: () => Promise<string>;
     /** The folder Momo's written lines and their recordings are in (`lines.json`, `voice/`). Beside the media folder when not given. */
     linesDir?: string;
-    /** The voice the lines are recorded in, and what records one: 16-bit mono PCM at the live voice's rate. */
+    /** The voice the lines are recorded in, and what records one (`LinesOptions.record`): 16-bit mono PCM at the live voice's rate. */
     voice?: string;
-    speak?: (text: string) => Promise<Uint8Array>;
+    record?: LinesOptions['record'];
   };
   log?: (line: string) => void;
 }
@@ -312,7 +312,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       forgetVoices: () => {
         for (const voice of voices.values()) voice.close();
       },
-      lines: new Lines({ demoDir: opts.demo.linesDir ?? dirname(opts.demo.mediaDir), dataDir: opts.dataDir, voice: opts.demo.voice ?? SPEECH_VOICE, speak: opts.demo.speak, log }),
+      lines: new Lines({ demoDir: opts.demo.linesDir ?? dirname(opts.demo.mediaDir), dataDir: opts.dataDir, voice: opts.demo.voice ?? SPEECH_VOICE, record: opts.demo.record, log }),
       // A take's lines go to the headset as the live voice's do, on the socket its voice is open on.
       momo: (frame) => {
         const ws = device();

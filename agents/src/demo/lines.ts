@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { spokenFor, type Line } from './take.ts';
+import type { Recorded, Voice } from './momo-voice.ts';
+import { spokenFor, type Line, type LineKind } from './take.ts';
 
 /**
  * What Momo says in each round of the demo, written down. The words she was given by the real Momo are in `agents/demo/lines.json`
@@ -45,8 +46,11 @@ export interface LinesOptions {
   /** Where edits and their recordings are kept. */
   dataDir: string;
   voice: string;
-  /** Says a line in Momo's voice, as 16-bit mono PCM at 24 kHz. Absent when the service has no voice. */
-  speak?: (text: string) => Promise<Uint8Array>;
+  /**
+   * Records a line in Momo's voice, as 16-bit mono PCM at 24 kHz, and says which voice it is in: the realtime model's, as she is
+   * heard live, or the speech model's when the realtime model did not say the words as written. Absent when the service has no voice.
+   */
+  record?: (text: string, kind: LineKind) => Promise<Pick<Recorded, 'pcm' | 'by'>>;
   log: (line: string) => void;
 }
 
@@ -56,6 +60,9 @@ export class Lines {
   private readonly editsFile: string;
   private readonly made: string;
   private readonly rendering = new Map<string, Promise<Uint8Array | null>>();
+  /** Which voice each recording is in, by its file's name: the repository's, and those made here. */
+  private readonly voices: Record<string, Voice>;
+  private readonly voicesFile: string;
 
   constructor(private readonly opts: LinesOptions) {
     const file = join(opts.demoDir, 'lines.json');
@@ -63,6 +70,8 @@ export class Lines {
     this.editsFile = join(opts.dataDir, 'demo-lines.json');
     this.made = join(opts.dataDir, 'demo-voice');
     mkdirSync(this.made, { recursive: true });
+    this.voicesFile = join(this.made, 'voices.json');
+    this.voices = { ...read(join(opts.demoDir, 'voice', 'voices.json')), ...read(this.voicesFile) };
     try {
       if (existsSync(this.editsFile)) this.edits = Edits.parse(JSON.parse(readFileSync(this.editsFile, 'utf8')));
     } catch {
@@ -128,21 +137,28 @@ export class Lines {
     return !text.trim() || this.kept(text) !== null;
   }
 
+  /** Which voice the line's recording is in, or null while it has none. A recording from before voices were noted is the speech model's. */
+  voice(text: string): Voice | null {
+    return this.kept(text) ? (this.voices[this.name(text)] ?? 'speech') : null;
+  }
+
   /** The line in Momo's voice. Made once and kept; null when the service has no voice, or the voice did not answer. */
-  audio(text: string): Promise<Uint8Array | null> {
+  audio(text: string, kind: LineKind = 'answer'): Promise<Uint8Array | null> {
     if (!text.trim()) return Promise.resolve(null);
     const file = this.kept(text);
     if (file) return Promise.resolve(new Uint8Array(readFileSync(file)));
-    const speak = this.opts.speak;
-    if (!speak) return Promise.resolve(null);
+    const record = this.opts.record;
+    if (!record) return Promise.resolve(null);
     const name = this.name(text);
     let making = this.rendering.get(name);
     if (!making) {
-      making = speak(text).then(
-        (pcm) => {
+      making = record(text, kind).then(
+        ({ pcm, by }) => {
           writeFileSync(join(this.made, `${name}.tmp`), pcm);
           renameSync(join(this.made, `${name}.tmp`), join(this.made, name));
-          this.opts.log(`[demo] Momo's line recorded, ${(pcm.length / BYTES_PER_MS / 1000).toFixed(1)} s: ${text.slice(0, 70)}`);
+          this.voices[name] = by;
+          writeFileSync(this.voicesFile, JSON.stringify({ ...read(this.voicesFile), [name]: by }, null, 1));
+          this.opts.log(`[demo] Momo's line recorded in ${by === 'realtime' ? 'her realtime voice' : 'the speech model\'s voice'}, ${(pcm.length / BYTES_PER_MS / 1000).toFixed(1)} s: ${text.slice(0, 70)}`);
           return pcm;
         },
         (err) => {
@@ -159,5 +175,14 @@ export class Lines {
   /** Lines being recorded now. */
   get busy(): number {
     return this.rendering.size;
+  }
+}
+
+/** Which voice each recording of a folder is in, as its `voices.json` says. */
+function read(file: string): Record<string, Voice> {
+  try {
+    return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as Record<string, Voice>) : {};
+  } catch {
+    return {};
   }
 }

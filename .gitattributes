@@ -9,3 +9,5 @@ agents/demo/media/** filter=lfs diff=lfs merge=lfs -text
 agents/demo/showcase/*/media/** filter=lfs diff=lfs merge=lfs -text
 # Momo's lines for the demo's takes, recorded: 24 kHz PCM, one file per line.
 agents/demo/voice/** filter=lfs diff=lfs merge=lfs -text
+# Which voice each recording is in: a small text file the service reads, kept in git itself.
+agents/demo/voice/*.json -filter -diff -merge text

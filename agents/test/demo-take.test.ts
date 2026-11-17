@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { Lines, type LinesFile } from '../src/demo/lines.ts';
 import { loadScript, type ScriptPhase } from '../src/demo/script.ts';
+import { compare, record as recordLine, wavOf } from '../src/demo/momo-voice.ts';
 import { momentAt, planLines, REAL, schedule, takeOf, type Line } from '../src/demo/take.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { demoData } from './demo-data.ts';
@@ -25,6 +26,8 @@ async function plan(phase: ScriptPhase, ms = 4000): Promise<Line[]> {
 
 /** The stand-in voice: 24 kHz PCM, 50 ms for each character, so a line's length follows from its words. */
 const speak = async (text: string) => new Uint8Array(text.length * 48 * 50);
+/** It records as the service's recorder does, and says which voice the recording is in: here the speech model's for a line that says so. */
+const record = async (text: string) => ({ pcm: await speak(text), by: /speech model/.test(text) ? ('speech' as const) : ('realtime' as const) });
 
 // ---- the timeline
 
@@ -110,7 +113,7 @@ test('the user\'s words over a line win, are kept across a restart, and go back 
   const dir = await linesFolder(['n3']);
   const dataDir = temp('mp-demo-data-');
   const spoken: string[] = [];
-  const open = () => new Lines({ demoDir: dir, dataDir, voice: 'test-voice', speak: async (text) => (spoken.push(text), speak(text)), log: () => {} });
+  const open = () => new Lines({ demoDir: dir, dataDir, voice: 'test-voice', record: async (text) => (spoken.push(text), record(text)), log: () => {} });
   const lines = open();
   const written = lines.of('n3')[0]!.text;
   assert.deepEqual([lines.of('n3')[0]!.edited, lines.edited, lines.of('r1')], [false, 0, []]);
@@ -128,12 +131,19 @@ test('the user\'s words over a line win, are kept across a restart, and go back 
   await lines.audio('Let me pull some threads on that.');
   assert.deepEqual(spoken, [written, 'Let me pull some threads on that.']);
   assert.equal(lines.edit('n3', 'no-such-line', 'x'), false);
+  // Which voice a recording is in is kept with it: the realtime voice, or the speech model's when she did not say the words as written.
+  assert.deepEqual([lines.voice(written), lines.voice('Let me pull some threads on that.'), lines.voice('Never recorded.')], ['realtime', 'realtime', null]);
+  lines.edit('n3', 'first', 'A line the speech model reads.');
+  await lines.audio('A line the speech model reads.', 'first');
+  assert.equal(lines.voice('A line the speech model reads.'), 'speech');
 
   const again = open();
   assert.equal(again.of('n3')[0]!.text, 'Let me pull some threads on that.', 'the data folder keeps the user\'s words');
-  assert.equal(again.edited, 1);
+  assert.equal(again.edited, 2);
   await again.audio('Let me pull some threads on that.');
-  assert.equal(spoken.length, 2, 'and their recording');
+  assert.equal(spoken.length, 3, 'and their recording');
+  assert.deepEqual([again.voice('Let me pull some threads on that.'), again.voice('A line the speech model reads.')], ['realtime', 'speech'], 'and which voice each is in');
+  again.edit('n3', 'first', null);
   again.edit('n3', 'answer', null);
   assert.deepEqual([again.of('n3')[0]!.text, again.edited], [written, 0]);
   again.edit('n3', 'answer', written);
@@ -171,7 +181,7 @@ async function stage(rate: number, rounds = ['n3']): Promise<Stage> {
     port: 0, host: '127.0.0.1', dataDir: data.fresh(), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
     live: { open: () => ({ send: () => {}, close: () => {} }), options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } },
     demo: {
-      script, mediaDir: join(demoDir, 'media'), linesDir: await linesFolder(rounds), voice: 'test-voice', speak: async (text) => (spoken.push(text), speak(text)),
+      script, mediaDir: join(demoDir, 'media'), linesDir: await linesFolder(rounds), voice: 'test-voice', record: async (text) => (spoken.push(text), record(text)),
       pace: { stand: 300, open: 300, land: 300, breath: 0, step: 0, rate, rejoin: 500 },
     },
   });
@@ -240,7 +250,7 @@ test('Play runs a round\'s take on the headset: its labels, its cards as picks i
     for (const line of take.lines) assert.equal(bytesOf(s.voice, line.id), line.text.length * 2400, `all of the recording of ${line.id} was sent`);
     assert.equal(s.voice.filter((m) => m.t === 'done').length, take.lines.length);
     assert.deepEqual([...s.spoken].sort(), take.lines.map((line) => line.text).sort(), 'each line was recorded once, before the take began');
-    assert.ok(played.lines.every((line) => line.recorded && line.ms === line.text.length * 50), 'and from then on is as long as its recording');
+    assert.ok(played.lines.every((line) => line.recorded && line.voice === 'realtime' && line.ms === line.text.length * 50), 'and from then on is as long as its recording, and the page is told which voice it is in');
   } finally {
     await s.close();
   }
@@ -396,4 +406,56 @@ test('Play on an empty stage starts the tree and brings the first round, and a r
   } finally {
     await s.close();
   }
+});
+
+// ---- the realtime voice
+
+test('a recording\'s words are compared as they sound: a spelling by ear or a moved space is the same line, a changed, added or dropped word is not', () => {
+  assert.equal(compare('I’d start with “By time”—new in front, old fading back.', "I'd start with 'By time': new in front, old fading back"), 'exact');
+  assert.equal(compare('The fibres meet at the centre of Llull’s ring.', "The fibers meet at the center of Lowell's ring."), 'close');
+  assert.equal(compare('There are 12 new cards, with a readout at 19 percent: rows, book and lotus.', 'There are twelve new cards with a readout at 19%. Rose, book, and lotus.'), 'close', 'a number, a percent sign and a homophone are the same words said');
+  assert.equal(compare('A line groups them.', 'A line grouped them.'), 'differs');
+  assert.equal(compare('A work room where one dial moves.', 'A workroom where one dial moves.'), 'close');
+  assert.equal(compare('First up, there’s a film card.', 'First up, there’s a foam card.'), 'differs');
+  assert.equal(compare('What’s this part?', 'What’s this card?'), 'differs');
+  assert.equal(compare('We can open it and then keep one or two favorites.', 'We can open it.'), 'differs');
+  assert.equal(compare('It uses a pointing gesture.', 'It uses the pointing gesture.'), 'differs');
+});
+
+/** A stand-in realtime model that says `takes[n]` on its nth session, as sound whose length follows from the words. */
+function realtime(takes: string[]) {
+  const asked: string[] = [];
+  let n = 0;
+  const open = (on: { event: (e: { type: string; [key: string]: unknown }) => void }) => ({
+    send: (e: { type: string; item?: { content: { text: string }[] } }) => {
+      if (e.type === 'conversation.item.create') asked.push(e.item!.content[0]!.text);
+      if (e.type !== 'response.create') return;
+      const said = takes[n++] ?? '';
+      queueMicrotask(() => {
+        on.event({ type: 'response.output_audio.delta', delta: Buffer.from(new TextEncoder().encode(said.padEnd(20_000, ' '))).toString('base64') });
+        on.event({ type: 'response.output_audio_transcript.done', transcript: said });
+        on.event({ type: 'response.done', response: {} });
+      });
+    },
+    close: () => {},
+  });
+  return { open, asked, sessions: () => n };
+}
+/** The stand-in listener writes a take out as the words that made it. */
+const heardAs = async (wav: Uint8Array) => new TextDecoder().decode(wav.subarray(44)).trim();
+
+test('a line is recorded by the realtime model as Momo, a take kept only when it is heard as written; after five that are not, the speech model reads it', async () => {
+  const line = 'Nine more landed, and my favourite is “Linux file system”.';
+  const model = realtime(['Nine more just landed and I love the Linux one.', 'Nine more landed, and my favorite is Linux file system.']);
+  let spoke = 0;
+  const options = { open: model.open, model: 'gpt-realtime-2.1', voice: 'marin', name: 'Momo', hear: heardAs, speak: async (text: string) => (spoke++, new TextEncoder().encode(`speech: ${text}`)), log: () => {} };
+  const kept = await recordLine(options, line, 'more');
+  assert.deepEqual([kept.by, kept.takes, model.sessions(), spoke], ['realtime', 2, 2, 0], 'the first take changed the words and was not kept; the second was');
+  assert.equal(await heardAs(wavOf(kept.pcm)), 'Nine more landed, and my favorite is Linux file system.');
+  assert.match(model.asked[0]!, /^The moment: more cards have just landed.*\nYour line: """Nine more landed, and my favourite is “Linux file system”\."""$/s, 'she is given the line and the moment it is said at');
+
+  const stubborn = realtime(['Something else.', 'Something else.', 'Something else.', 'Something else.', 'Something else.', line]);
+  const read = await recordLine({ ...options, open: stubborn.open }, line, 'more');
+  assert.deepEqual([read.by, read.takes, stubborn.sessions(), spoke], ['speech', 5, 5, 1], 'five takes, then the speech model, and the recording says so');
+  assert.equal(new TextDecoder().decode(read.pcm), `speech: ${line}`);
 });

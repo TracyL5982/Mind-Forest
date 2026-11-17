@@ -285,7 +285,10 @@ function drawTake() {
       el('div', { class: 'line-name' }, el('button', { class: 'line-at', type: 'button', title: 'Move the take to this line', onclick: () => jump(line.at), text: clock(line.at) }), el('span', { text: LINE_NAME[line.kind] }), about ? el('span', { class: 'line-about', title: about, text: about }) : null),
       box,
       el('div', { class: 'line-foot' },
-        el('span', { text: !line.text.trim() ? 'Empty: Momo says nothing here.' : line.recorded ? `${(line.ms / 1000).toFixed(1)} s, said exactly as written` : voice ? 'Recording these words…' : "Momo's voice is off, so this line is not heard" }),
+        el('span', { class: line.recorded && line.voice === 'speech' ? 'by-speech' : '', text: !line.text.trim() ? 'Empty: Momo says nothing here.'
+          : !line.recorded ? (voice ? 'Momo is recording these words in her realtime voice…' : "Momo's voice is off, so this line is not heard")
+          : line.voice === 'realtime' ? `${(line.ms / 1000).toFixed(1)} s, in Momo's realtime voice`
+          : `${(line.ms / 1000).toFixed(1)} s, read by the speech model, not her realtime voice: she did not say these words as written in five takes. Rewording the line gets her to try again.` }),
         line.edited ? el('button', { class: 'link', type: 'button', title: line.written, onclick: () => write(line.id, null), text: 'Back to Momo’s own words' }) : null));
   });
   $('take').replaceChildren(

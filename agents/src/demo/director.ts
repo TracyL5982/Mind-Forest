@@ -9,6 +9,7 @@ import type { Mindstorm } from '../core/state.ts';
 import type { VoiceFrame } from '../node/live.ts';
 import { itemOf, nodeOf, type Making } from './cards.ts';
 import type { Lines, LineShown } from './lines.ts';
+import type { Voice } from './momo-voice.ts';
 import type { DemoScript, ScriptCard, ScriptPhase } from './script.ts';
 import { inLayers, type Showcase } from './showcase.ts';
 import { momentAt, takeOf, type Take, type TimedLine } from './take.ts';
@@ -126,7 +127,8 @@ export interface DemoStatus {
 
 /** A take as the page draws it: the timeline, with each of Momo's lines as it is written and whether its recording exists. */
 export interface TakeShown extends Take {
-  lines: (TimedLine & Pick<LineShown, 'written' | 'edited'> & { recorded: boolean })[];
+  /** `voice`: which voice the line's recording is in, the realtime model's or the speech model's, or null while it has none. */
+  lines: (TimedLine & Pick<LineShown, 'written' | 'edited'> & { recorded: boolean; voice: Voice | null })[];
 }
 
 /** A take that is running. */
@@ -394,7 +396,7 @@ export class Director {
     const { lines } = this.deps;
     const take = this.timeline(round);
     const shown = new Map(lines.of(round).map((line): [string, LineShown] => [line.id, line]));
-    return { ...take, lines: take.lines.map((line) => ({ ...line, written: shown.get(line.id)!.written, edited: shown.get(line.id)!.edited, recorded: lines.recorded(line.text) })) };
+    return { ...take, lines: take.lines.map((line) => ({ ...line, written: shown.get(line.id)!.written, edited: shown.get(line.id)!.edited, recorded: lines.recorded(line.text), voice: lines.voice(line.text) })) };
   }
 
   /**
@@ -404,7 +406,7 @@ export class Director {
   setLine(round: string, line: string, text: string | null): TakeShown {
     this.phase(round);
     if (!this.deps.lines.edit(round, line, text)) throw new Error(`round ${round} has no line called ${line}`);
-    for (const said of this.deps.lines.of(round)) void this.deps.lines.audio(said.text);
+    for (const said of this.deps.lines.of(round)) void this.deps.lines.audio(said.text, said.kind);
     return this.shown(round);
   }
 
@@ -546,7 +548,7 @@ export class Director {
       if (at >= take.ms - 50) at = 0;
       this.halt();
       // Every line is recorded before the take begins, so none starts late for want of its recording.
-      await Promise.all(take.lines.map((line) => this.deps.lines.audio(line.text)));
+      await Promise.all(take.lines.map((line) => this.deps.lines.audio(line.text, line.kind)));
       if (phase.head === 'root' && !this.headOf(phase)) {
         // The tree's own first round follows from starting it, as it does when the user asks for a tree.
         this.pending = { phase: phase.id, from: 0 };
@@ -761,7 +763,7 @@ export class Director {
     if (!send) return;
     const id = `take-${play}-${line.id}`;
     if (!send({ t: 'text', id, text: line.text, kind: line.kind === 'answer' ? 'reply' : 'results' })) return;
-    const pcm = await this.deps.lines.audio(line.text);
+    const pcm = await this.deps.lines.audio(line.text, line.kind);
     if (pcm) {
       const piece = BYTES_PER_MS * 100;
       const began = Date.now();

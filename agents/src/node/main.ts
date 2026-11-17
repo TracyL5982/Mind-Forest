@@ -19,6 +19,8 @@ import { forDevice, Ledger, limitsFrom } from './hosted/ledger.ts';
 import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareCost } from './hosted/overflow.ts';
 import { openInstagram } from './instagram.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
+import type { LinesOptions } from '../demo/lines.ts';
+import { record as recordLine } from '../demo/momo-voice.ts';
 import { loadScript } from '../demo/script.ts';
 import { loadShowcase } from '../demo/showcase.ts';
 
@@ -39,14 +41,30 @@ const dataDir = env.MIND_PALACE_DATA ?? join(root, demo ? (fake ? 'data-demo-fak
 const number = (name: string, fallback: number) => (env[name]?.trim() ? Number(env[name]) : fallback);
 
 /**
- * Says one of Momo's written lines for the demo, as 16-bit mono PCM at the live voice's rate: OpenAI's speech model in Momo's
- * voice, which reads the words as they are written. Without the key a take plays with her words shown and no sound.
+ * Records one of Momo's written lines for the demo, as 16-bit mono PCM at the live voice's rate: the realtime model itself, as
+ * Momo, saying the line, kept once it is heard to be the words as written (`demo/momo-voice.ts`). Without the key a take plays
+ * with her words shown and no sound.
  */
-function demoSpeak(): ((text: string) => Promise<Uint8Array>) | undefined {
+function demoRecord(): LinesOptions['record'] {
   const apiKey = env.OPENAI_API_KEY;
   if (fake || !apiKey) return undefined;
-  const speak = openaiSpeech(fetch, { apiKey, model: env.MIND_PALACE_VOICE_MODEL, voice: env.MIND_PALACE_VOICE, format: 'pcm', firstByteMs: 30_000 });
-  return async (text) => new Uint8Array(await new Response(await speak(text, AbortSignal.timeout(60_000))).arrayBuffer());
+  const speech = openaiSpeech(fetch, { apiKey, model: env.MIND_PALACE_VOICE_MODEL, voice: env.MIND_PALACE_VOICE, format: 'pcm', firstByteMs: 30_000 });
+  const hear = openaiTranscribe(fetch, { apiKey, model: env.MIND_PALACE_HEARING_MODEL });
+  const model = env.MIND_PALACE_LIVE_MODEL || 'gpt-realtime-2.1';
+  return (text, kind) =>
+    recordLine(
+      {
+        open: openaiRealtime({ apiKey, model }),
+        model,
+        voice: env.MIND_PALACE_VOICE || SPEECH_VOICE,
+        name: 'Momo',
+        hear: (wav, likely) => hear(wav, 'audio/wav', { name: 'Momo', words: likely }),
+        speak: async (line) => new Uint8Array(await new Response(await speech(line, AbortSignal.timeout(60_000))).arrayBuffer()),
+        log,
+      },
+      text,
+      kind,
+    );
 }
 
 /** The showcase trees of the demo's folder that hold together; one that does not is said and left out. */
@@ -266,7 +284,7 @@ if (ledger) {
     // One program at a time may read a bot's messages, so the offline stand-in leaves the bot to the real service.
     // The demo is a stage, not the user's own space: nothing sent to the bot lands in it.
     telegram: !fake && !demo && env.TELEGRAM_BOT_TOKEN ? { token: env.TELEGRAM_BOT_TOKEN } : undefined,
-    ...(demo ? { demo: { script: loadScript(join(demoDir, 'script.json')), mediaDir: join(demoDir, 'media'), showcase: showcase(), restart: restartHeadset(), voice: env.MIND_PALACE_VOICE || SPEECH_VOICE, speak: demoSpeak() } } : {}),
+    ...(demo ? { demo: { script: loadScript(join(demoDir, 'script.json')), mediaDir: join(demoDir, 'media'), showcase: showcase(), restart: restartHeadset(), voice: env.MIND_PALACE_VOICE || SPEECH_VOICE, record: demoRecord() } } : {}),
     log,
   });
   console.log(`Mind Palace agents${fake ? ' (fake roles, no model)' : ''}${demo ? ', the demo' : ''}`);
