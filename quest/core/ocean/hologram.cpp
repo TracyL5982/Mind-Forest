@@ -1,6 +1,8 @@
 // Port of visionos/MindPalace/Ocean/Hologram.swift.
 #include "hologram.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <limits>
@@ -225,42 +227,156 @@ void Hologram::draw(double now) {
 // MARK: - Drawing, shared with a tree's cover
 
 void Hologram::branches(const std::vector<Node>& nodes, float thick, const std::function<std::optional<Place>(int)>& shown, Pen& pen) {
+    // NOTE(port): changed for Quest (2026-11-16, "a weird gap between segments", "more tree-like"). The Swift draws a
+    // ribbon of its own up to each card, rising straight out of the one before and bending over at its end, so where
+    // one hands over to the next the line kinks and both glows end square. Here the tree is drawn in limbs: the
+    // trunk runs up through the card that carries the most of the tree at each fork, and every other branch leaves
+    // its limb at an angle and is a limb of its own. A limb is one ribbon, smooth through its cards, thinning as
+    // it climbs, its glow fading in where it leaves and out at its tip.
     auto girthOf = [&](const Node& n) { return (0.0007f + 0.0021f * std::sqrt(n.weight)) * thick; };
-    std::map<int, Node> byID;
-    for (const Node& n : nodes) byID[n.id] = n;
+    const Vec3 up(0, 1, 0);
+    struct Joint {
+        const Node* node;
+        Place place;
+        std::vector<int> children;      // the joints asked about from it
+        Vec3 heading = up;              // its limb's direction through it, once drawn
+    };
+    std::vector<Joint> joints;
+    std::map<int, int> jointOf;
+    std::map<int, const Node*> byID;
+    for (const Node& n : nodes) {
+        byID[n.id] = &n;
+        if (!n.head) continue;
+        if (std::optional<Place> at = shown(n.id)) {
+            jointOf[n.id] = int(joints.size());
+            joints.push_back(Joint{&n, *at, {}});
+        }
+    }
+    // A limb: where it leaves from, which way, how thick, then the joints it runs through.
+    struct Limb {
+        Place from;
+        Vec3 heading;
+        float start;
+        bool trunk;
+        int first;
+    };
+    std::vector<Limb> limbs;
+    for (int i = 0; i < int(joints.size()); i++) {
+        const Node& n = *joints[size_t(i)].node;
+        auto parent = n.parent ? jointOf.find(*n.parent) : jointOf.end();
+        if (parent != jointOf.end()) {
+            joints[size_t(parent->second)].children.push_back(i);
+            continue;
+        }
+        // Out of the ground; or, on the small tree at your hand, out of a card that was not asked about.
+        Limb limb{Place{Vec3(0, 0, 0), joints[size_t(i)].place.color}, up, girthOf(n) * 1.6f, true, i};
+        std::optional<Place> from = n.parent ? shown(*n.parent) : std::nullopt;
+        auto node = n.parent ? byID.find(*n.parent) : byID.end();
+        if (from && node != byID.end()) limb = Limb{*from, up, std::min(girthOf(*node->second), girthOf(n) * 1.7f), false, i};
+        limbs.push_back(limb);
+    }
+    // The child a limb runs on through: the one the most of the tree hangs from.
+    auto leader = [&](const Joint& j) {
+        int best = -1;
+        for (int c : j.children) {
+            if (best < 0 || joints[size_t(c)].node->weight > joints[size_t(best)].node->weight) best = c;
+        }
+        return best;
+    };
+    // Each limb in turn: a limb that leaves another is laid out after it, from the direction that one has there.
+    struct Along {
+        float width;
+        Vec3 color;
+        float strength;
+    };
+    struct Laid {
+        std::vector<Vec3> line;
+        std::vector<Along> marks;
+        bool trunk;
+    };
+    std::vector<Laid> laid;
+    for (size_t l = 0; l < limbs.size(); l++) {
+        Limb limb = limbs[l];
+        std::vector<int> chain;
+        for (int j = limb.first; j >= 0; j = leader(joints[size_t(j)])) chain.push_back(j);
+        // Where it goes: its start, then its joints. Their directions, smooth through each joint and leaning up as a
+        // tree grows; at its tip, on out the way it came and a little up.
+        std::vector<Vec3> at{limb.from.at}, heading{limb.heading};
+        for (int j : chain) at.push_back(joints[size_t(j)].place.at);
+        for (size_t k = 1; k < at.size(); k++) {
+            Vec3 through = k + 1 < at.size() ? at[k + 1] - at[k - 1] : at[k] - at[k - 1];
+            Vec3 h = (length(through) > 1e-6f ? normalize(through) : up) + up * (k + 1 < at.size() ? 0.25f : 0.3f);
+            heading.push_back(normalize(h));
+        }
+        for (size_t k = 0; k < chain.size(); k++) joints[size_t(chain[k])].heading = heading[k + 1];
+        std::vector<Vec3> line{at[0]};
+        std::vector<Along> marks;
+        auto strengthOf = [&](int j) { return joints[size_t(j)].node->onPath ? 1.f : 0.6f; };
+        auto mark = [&](size_t k) {
+            if (k == 0) return Along{limb.start, limb.from.color, strengthOf(chain[0])};
+            const Joint& j = joints[size_t(chain[k - 1])];
+            // A tip thins out, as a twig does.
+            float tip = k == at.size() - 1 ? 0.65f : 1.f;
+            return Along{girthOf(*j.node) * tip, j.place.color, strengthOf(chain[k - 1])};
+        };
+        marks.push_back(mark(0));
+        for (size_t k = 0; k + 1 < at.size(); k++) {
+            float span = length(at[k + 1] - at[k]);
+            Vec3 m0 = heading[k] * span, m1 = heading[k + 1] * span;
+            Along a = mark(k), b = mark(k + 1);
+            for (int s = 1; s <= 10; s++) {
+                float u = float(s) / 10, u2 = u * u, u3 = u2 * u;
+                line.push_back(at[k] * (2 * u3 - 3 * u2 + 1) + m0 * (u3 - 2 * u2 + u) + at[k + 1] * (-2 * u3 + 3 * u2) + m1 * (u3 - u2));
+                marks.push_back(Along{mix(a.width, b.width, u), mix(a.color, b.color, u), mix(a.strength, b.strength, u)});
+            }
+        }
+        laid.push_back(Laid{std::move(line), std::move(marks), limb.trunk});
+        // The branches that leave its joints: each at an angle to it, no more than 45 degrees, toward where it goes.
+        for (int j : chain) {
+            const Joint& fork = joints[size_t(j)];
+            int lead = leader(fork);
+            for (int c : fork.children) {
+                if (c == lead) continue;
+                Vec3 to = joints[size_t(c)].place.at - fork.place.at;
+                Vec3 out = to - fork.heading * dot(to, fork.heading);
+                float apart = std::acos(std::clamp(dot(fork.heading, length(to) > 1e-6f ? normalize(to) : fork.heading), -1.f, 1.f));
+                float angle = std::min(apart, float(M_PI) / 4);
+                Vec3 h = length(out) > 1e-6f ? normalize(fork.heading * std::cos(angle) + normalize(out) * std::sin(angle)) : fork.heading;
+                const Node& child = *joints[size_t(c)].node;
+                limbs.push_back(Limb{fork.place, h, std::min(girthOf(*fork.node), girthOf(child) * 1.7f), false, c});
+            }
+        }
+    }
     for (bool glow : {true, false}) {
-        for (const Node& n : nodes) {
-            if (!n.head) continue;
-            std::optional<Place> to = shown(n.id);
-            if (!to) continue;
-            Place from{Vec3(0, 0, 0), to->color};
-            float start = girthOf(n) * 1.6f;
-            bool trunk = true;
-            if (n.parent) {
-                int p = *n.parent;
-                if (std::optional<Place> parent = shown(p)) {
-                    if (auto node = byID.find(p); node != byID.end()) {
-                        from = *parent;
-                        start = std::min(girthOf(node->second), girthOf(n) * 1.7f);
-                        trunk = false;
-                    }
+        for (const Laid& limb : laid) {
+            const std::vector<Vec3>& line = limb.line;
+            const std::vector<Along>& marks = limb.marks;
+            int count = int(line.size()), first = std::min(count - 1, 10);
+            auto index = [&](float u) { return std::min(count - 1, int(std::lround(u * float(count - 1)))); };
+            // The trunk comes up out of the ground's light; a branch leaves at full strength, its glow coming in
+            // over its first stretch; every glow fades out toward its tip.
+            bool trunk = limb.trunk;
+            auto alpha = [&](float u) {
+                int i = index(u);
+                float a = (glow ? 0.34f : 0.92f) * marks[size_t(i)].strength;
+                float in = float(i) / float(std::max(first, 1));
+                if (trunk) a *= std::min(1.f, 0.35f + in / 0.25f);
+                else if (glow) a *= std::min(1.f, in / 0.4f);
+                if (glow) a *= std::min(1.f, float(count - 1 - i) / 4.f);
+                return a;
+            };
+            // A trunk spreads at its foot, as a tree's does where its roots go in.
+            auto width = [&](float u) {
+                int i = index(u);
+                float w = marks[size_t(i)].width * (glow ? 4.2f : 1);
+                if (trunk) {
+                    float rise = std::max(0.f, 1 - float(i) / (0.35f * float(std::max(first, 1))));
+                    w *= 1 + 1.4f * rise * rise;
                 }
-            }
-            // Up out of where it left, then bending over to where it goes.
-            Vec3 span = to->at - from.at;
-            Vec3 bend = from.at + Vec3(span.x * 0.12f, span.y * 0.62f, span.z * 0.12f);
-            std::vector<Vec3> points;
-            points.reserve(11);
-            for (int k = 0; k <= 10; k++) {
-                float u = float(k) / 10, w = 1 - u;
-                points.push_back(from.at * (w * w) + bend * (2 * w * u) + to->at * (u * u));
-            }
-            float end = girthOf(n), strength = n.onPath ? 1 : 0.6f;
-            // The trunk comes up out of nothing; a branch leaves its orb at full strength.
-            float full = (glow ? 0.34f : 0.92f) * strength;
-            pen.ribbon(points, [&](float u) { return (start + (end - start) * u) * (glow ? 4.2f : 1); },
-                       [&](float u) { return from.color + (to->color - from.color) * u; },
-                       [&](float u) { return trunk ? full * std::min(1.f, u / 0.45f) : full; }, glow);
+                return w;
+            };
+            pen.ribbon(line, width,
+                       [&](float u) { return marks[size_t(index(u))].color; }, alpha, glow);
         }
     }
 }
@@ -271,8 +387,9 @@ EntityRef Hologram::still(const std::vector<Node>& nodes, float thick, const Mat
         if (n.head) heads += 1;
     }
     if (!(heads > 0)) return nullptr;
-    // A branch is eleven points along: a soft ribbon three across, and a plain one two across. Then a round join.
-    int vertexCapacity = heads * (55 + 13), indexCapacity = heads * (180 + 36);
+    // Each limb starts at a point of its own and takes ten more for each card it runs through: a soft ribbon
+    // three across, and a plain one two across. There are no more limbs than cards.
+    int vertexCapacity = heads * 11 * 5, indexCapacity = heads * 10 * 18;
     // (Freed when this returns: the Swift's `defer`.)
     std::unique_ptr<LinkVertex[]> vertexStore(new LinkVertex[size_t(vertexCapacity)]);
     std::unique_ptr<uint32_t[]> indexStore(new uint32_t[size_t(indexCapacity)]);
@@ -285,19 +402,6 @@ EntityRef Hologram::still(const std::vector<Node>& nodes, float thick, const Mat
         auto it = places.find(id);
         return it == places.end() ? std::nullopt : std::optional<Place>(it->second);
     }, pen);
-    // Where one branch hands over to the next its width changes, which an orb hides on the
-    // small tree at your hand. Here a round join does, no wider than the branch.
-    for (const Node& n : nodes) {
-        if (!(n.head && pen.room(13, 36))) continue;
-        float r = (0.0007f + 0.0021f * std::sqrt(n.weight)) * thick / 2;
-        int center = pen.nv;
-        pen.put(n.at + Vec3(0, 0, 0.0004f), n.color, n.onPath ? 0.92f : 0.55f);
-        for (int k = 0; k < 12; k++) {
-            float a = float(k) * float(M_PI) / 6;
-            pen.put(n.at + Vec3(std::cos(a), std::sin(a), 0) * r + Vec3(0, 0, 0.0004f), n.color, n.onPath ? 0.92f : 0.55f);
-        }
-        for (int k = 0; k < 12; k++) pen.triangle(center, center + 1 + k, center + 1 + (k + 1) % 12);
-    }
     if (!(pen.ni > 0)) return nullptr;
     LowLevelMesh::Descriptor d;
     d.vertexCapacity = pen.nv;
