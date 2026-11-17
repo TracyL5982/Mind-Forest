@@ -7,3 +7,5 @@ client/vendor/
 starter/
 data-demo/
 data-demo-fake/
+# A showcase tree's contact sheet is written by demo/showcase/check.py to look the tree over, and is not kept.
+demo/showcase/*/sheet.jpg

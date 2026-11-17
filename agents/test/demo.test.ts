@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -8,6 +8,7 @@ import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { momoNote, wavesOf } from '../src/demo/director.ts';
 import { loadScript } from '../src/demo/script.ts';
+import { loadShowcase, type Showcase } from '../src/demo/showcase.ts';
 import { startServer, type Running } from '../src/node/server.ts';
 
 /** The demo with stand-in roles and no waits: the walkthrough's own script and pictures, as `npm run demo:fake` runs them. */
@@ -15,11 +16,29 @@ const demoDir = join(import.meta.dirname, '../demo');
 const script = loadScript(join(demoDir, 'script.json'));
 const quick = { stand: 400, open: 400, land: 400, breath: 0, step: 0, rejoin: 1500 };
 
-async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-demo-')), restart?: () => Promise<string>): Promise<Running> {
+async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-demo-')), restart?: () => Promise<string>, showcase?: Showcase[]): Promise<Running> {
   return startServer({
     port: 0, host: '127.0.0.1', dataDir, clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
-    demo: { script, mediaDir: join(demoDir, 'media'), pace: quick, restart },
+    demo: { script, mediaDir: join(demoDir, 'media'), pace: quick, restart, showcase },
   });
+}
+
+/** A folder of showcase trees: one small tree that holds together, and one whose card hangs from nothing. */
+function showcaseFolder(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'mp-show-'));
+  mkdirSync(join(dir, 'mini', 'media'), { recursive: true });
+  mkdirSync(join(dir, 'broken'));
+  writeFileSync(join(dir, 'mini', 'media', 'cone.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+  writeFileSync(join(dir, 'mini', 'tree.json'), JSON.stringify({
+    version: 1, id: 'mini', title: 'Seed spirals', topic: 'Why do seeds grow in spirals?',
+    cards: [
+      { id: 'cone', parent: 'root', kind: 'picture', origin: 'ocean', title: 'Pine cone from above', text: 'The scales run in two sets of spirals.', from: 'Pinterest, your Seed board', href: 'https://www.pinterest.com/pin/1/', image: 'cone.jpg', w: 640, h: 640 },
+      { id: 'vogel', parent: 'cone', kind: 'paper', origin: 'external', title: 'A better way to build the sunflower head', text: 'One angle between seeds gives the whole head.', authors: ['Helmut Vogel'], date: '1979', venue: 'Mathematical Biosciences', href: 'https://doi.org/10.1016/0025-5564(79)90080-4' },
+      { id: 'idea', parent: 'root', kind: 'note', origin: 'generated', title: 'Two rules make the spiral', text: 'Each new seed turns by one angle and moves out a little.' },
+    ],
+  }));
+  writeFileSync(join(dir, 'broken', 'tree.json'), JSON.stringify({ version: 1, id: 'broken', title: 'Broken', topic: 'A card that hangs from nothing', cards: [{ id: 'lost', parent: 'nowhere', kind: 'note', origin: 'generated', title: 'Lost', text: 'It hangs from no card.' }] }));
+  return dir;
 }
 
 /**
@@ -241,6 +260,68 @@ test('Momo is told, with where the user is, when the next words said on the open
     run.demo!.setScripted(false);
     assert.equal(run.demo!.takeNote(nodeOf(run, 'Sources')!.id), '', 'with scripting off Momo is on her own');
     assert.match(momoNote(script), /Recording:/);
+  } finally {
+    await run.close();
+  }
+});
+
+test('the showcase trees stand whole in the forest, outlast every set-up, and no round is played on them', async () => {
+  const { trees, problems } = loadShowcase(showcaseFolder());
+  assert.deepEqual(trees.map((show) => show.tree.id), ['mini']);
+  assert.match(problems.join(' '), /"broken" is left out: .*nowhere/);
+  const run = await boot(undefined, undefined, trees);
+  try {
+    const tree = [...run.mind.trees.values()].find((t) => t.id.startsWith('show-mini-'))!;
+    assert.equal(tree.title, 'Seed spirals');
+    assert.equal(run.mind.item(run.mind.node(tree.rootId).itemId).title, 'Why do seeds grow in spirals?');
+    const cone = nodeOf(run, 'Pine cone from above')!;
+    assert.equal(cone.parent, tree.rootId);
+    assert.equal(cone.status, 'kept');
+    assert.equal(cone.view.component, 'image');
+    assert.ok(run.mind.item(cone.itemId).source.asset, 'its picture was stored with the tree');
+    assert.deepEqual(titlesUnder(run, 'Pine cone from above'), ['A better way to build the sunflower head']);
+    assert.equal(nodeOf(run, 'A better way to build the sunflower head')!.view.component, 'reference');
+    assert.deepEqual(run.demo!.status().showcase, { on: true, trees: [{ id: 'mini', title: 'Seed spirals', cards: 3 }] });
+    // The walkthrough comes and goes beside it.
+    await run.demo!.goto('n3');
+    assert.equal(run.mind.trees.size, 2);
+    await run.demo!.goto('r1');
+    assert.deepEqual([...run.mind.trees.keys()], [tree.id]);
+    // Asked on, it is the user's own tree: the Scout answers as ever, and the walkthrough's next round stays where it is.
+    await run.pipeline.more(cone.id);
+    await run.pipeline.idle();
+    assert.ok(run.demo!.status().rounds.every((round) => round.state === 'waiting'));
+    assert.equal(run.demo!.takeNote(cone.id), '');
+    // Taken out and put back from the page.
+    await run.demo!.setShowcase(false);
+    assert.equal(run.mind.trees.size, 0);
+    assert.equal(run.demo!.status().showcase.on, false);
+    await run.demo!.setShowcase(true);
+    assert.ok([...run.mind.trees.keys()].some((id) => id === tree.id));
+  } finally {
+    await run.close();
+  }
+});
+
+test('a showcase tree is stood whole on a headset by taking it to one card under each card that leads others', async () => {
+  // A tree that arrives whole lies on one layer on a headset: a card takes a layer of its own once the headset is taken under it.
+  const { trees } = loadShowcase(showcaseFolder());
+  const run = await boot(undefined, undefined, trees);
+  try {
+    await assert.rejects(run.demo!.show('mini'), /No headset/);
+    const worn = await headset(run);
+    const went: string[] = [];
+    worn.on('message', (raw) => {
+      const m = JSON.parse(String(raw)) as { t: string; nodeId?: string; yours?: boolean };
+      if (m.t === 'navigate' && m.yours && m.nodeId) went.push(m.nodeId.replace(/^show-mini-[0-9a-f]+-/, ''));
+    });
+    await run.demo!.show('mini');
+    await new Promise((r) => setTimeout(r, 50));
+    // The first card, then the paper under the cone (so the cone leads a layer), then the first card again.
+    assert.deepEqual(went, ['root', 'vogel', 'root']);
+    assert.equal(run.demo!.status().busy, null);
+    await assert.rejects(run.demo!.show('nothing'), /no showcase tree/);
+    worn.close();
   } finally {
     await run.close();
   }

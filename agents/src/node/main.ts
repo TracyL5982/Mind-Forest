@@ -20,6 +20,7 @@ import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareC
 import { openInstagram } from './instagram.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
 import { loadScript } from '../demo/script.ts';
+import { loadShowcase } from '../demo/showcase.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -36,6 +37,13 @@ const demo = args.has('--demo');
 const demoDir = env.MIND_PALACE_DEMO ?? join(root, 'demo');
 const dataDir = env.MIND_PALACE_DATA ?? join(root, demo ? (fake ? 'data-demo-fake' : 'data-demo') : fake ? 'data-fake' : 'data');
 const number = (name: string, fallback: number) => (env[name]?.trim() ? Number(env[name]) : fallback);
+
+/** The showcase trees of the demo's folder that hold together; one that does not is said and left out. */
+function showcase() {
+  const { trees, problems } = loadShowcase(join(demoDir, 'showcase'));
+  for (const problem of problems) console.log(`[demo] ${problem}`);
+  return trees;
+}
 
 /**
  * Starts the app again on a headset this Mac reaches by adb, joined to this service: what the demo's empty stage needs, since a
@@ -246,7 +254,7 @@ if (ledger) {
     // One program at a time may read a bot's messages, so the offline stand-in leaves the bot to the real service.
     // The demo is a stage, not the user's own space: nothing sent to the bot lands in it.
     telegram: !fake && !demo && env.TELEGRAM_BOT_TOKEN ? { token: env.TELEGRAM_BOT_TOKEN } : undefined,
-    ...(demo ? { demo: { script: loadScript(join(demoDir, 'script.json')), mediaDir: join(demoDir, 'media'), restart: restartHeadset() } } : {}),
+    ...(demo ? { demo: { script: loadScript(join(demoDir, 'script.json')), mediaDir: join(demoDir, 'media'), showcase: showcase(), restart: restartHeadset() } } : {}),
     log,
   });
   console.log(`Mind Palace agents${fake ? ' (fake roles, no model)' : ''}${demo ? ', the demo' : ''}`);

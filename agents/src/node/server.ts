@@ -27,6 +27,7 @@ import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
 import { Director, momoNote, type Pace } from '../demo/director.ts';
 import type { DemoScript } from '../demo/script.ts';
+import type { Showcase } from '../demo/showcase.ts';
 
 export interface ServerOptions {
   port: number;
@@ -77,7 +78,7 @@ export interface ServerOptions {
   /** Hosted mode: the largest file one upload may be, and what this space's uploads may come to in all, in bytes. */
   uploads?: { file: number; total: number };
   /** The demo: one prepared tree played round by round, with a page to go to any round (src/demo, agents/demo/README.md). */
-  demo?: { script: DemoScript; mediaDir: string; pace?: Partial<Pace>; restart?: () => Promise<string> };
+  demo?: { script: DemoScript; mediaDir: string; showcase?: Showcase[]; pace?: Partial<Pace>; restart?: () => Promise<string> };
   log?: (line: string) => void;
 }
 
@@ -283,6 +284,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     director = new Director({
       script: opts.demo.script,
       mediaDir: opts.demo.mediaDir,
+      showcase: opts.demo.showcase,
       dataDir: opts.dataDir,
       mind,
       pipeline,
@@ -512,6 +514,16 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       if (req.method === 'POST' && path === '/api/demo/scripted') {
         director.setScripted((await posted()).on !== false);
         return json(res, 200, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/show') {
+        const { tree } = await posted();
+        // The headset is taken through the tree's layers, which takes a few seconds: the page reads how far it is from the status.
+        void director.show(String(tree ?? '')).catch(() => {});
+        return json(res, 202, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/showcase') {
+        void director.setShowcase((await posted()).on !== false).catch(() => {});
+        return json(res, 202, director.status());
       }
       return json(res, 404, { error: 'not found' });
     }

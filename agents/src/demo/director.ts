@@ -8,6 +8,7 @@ import type { RoleContext, Roles } from '../core/roles/types.ts';
 import type { Mindstorm } from '../core/state.ts';
 import { itemOf, nodeOf, type Making } from './cards.ts';
 import type { DemoScript, ScriptCard, ScriptPhase } from './script.ts';
+import { inLayers, type Showcase } from './showcase.ts';
 
 /**
  * The demo: one prepared tree, grown round by round.
@@ -47,6 +48,8 @@ export interface DirectorDeps {
   script: DemoScript;
   /** The folder the script's pictures and films are in. */
   mediaDir: string;
+  /** The whole trees that stand in the forest beside the walkthrough's. */
+  showcase?: Showcase[];
   /** Where the record of which media file is which stored asset is kept. */
   dataDir: string;
   mind: Mindstorm;
@@ -102,6 +105,8 @@ export interface DemoStatus {
   rounds: { id: string; state: 'built' | 'played' | 'playing' | 'waiting' }[];
   /** The last thing that went wrong, for the page to show. */
   problem: string | null;
+  /** The showcase trees: whether they stand in the forest, and each by name with the number of its cards. */
+  showcase: { on: boolean; trees: { id: string; title: string; cards: number }[] };
 }
 
 export class Director {
@@ -127,9 +132,13 @@ export class Director {
   private readonly leading = new Set<Id>();
   /** Who waits to hear something from the headset, by what it is and the card it is about: `focus:<node>`, `questions:<node>`. */
   private readonly waiting = new Map<string, Set<() => void>>();
+  /** The showcase trees, and whether they stand in the forest. */
+  private readonly shows: Showcase[];
+  private showing = true;
 
   constructor(private readonly deps: DirectorDeps) {
     this.pace = { ...PACE, ...deps.pace };
+    this.shows = deps.showcase ?? [];
   }
 
   get script(): DemoScript {
@@ -142,11 +151,13 @@ export class Director {
   async prepare(): Promise<void> {
     const record = join(this.deps.dataDir, 'demo-media.json');
     const kept: Record<string, { id: string; size: number; at: number }> = existsSync(record) ? JSON.parse(readFileSync(record, 'utf8')) : {};
-    const files = new Set(this.script.phases.flatMap((phase) => phase.cards.flatMap((card) => [card.image, card.video].filter((f): f is string => Boolean(f)))));
+    // A file's name is its place: the script's own by name, a showcase tree's as `<tree>/<name>`.
+    const files = new Map<string, string>();
+    for (const phase of this.script.phases) for (const card of phase.cards) for (const file of [card.image, card.video]) if (file) files.set(file, join(this.deps.mediaDir, file));
+    for (const { tree, mediaDir } of this.shows) for (const card of tree.cards) if (card.image) files.set(`${tree.id}/${card.image}`, join(mediaDir, card.image));
     let stored = 0;
     const missing: string[] = [];
-    for (const file of files) {
-      const path = join(this.deps.mediaDir, file);
+    for (const [file, path] of files) {
       if (!existsSync(path)) {
         missing.push(file);
         continue;
@@ -154,7 +165,7 @@ export class Director {
       const { size, mtimeMs } = statSync(path);
       const had = kept[file];
       if (!had || had.size !== size || had.at !== Math.round(mtimeMs) || !(await this.deps.assets.get(had.id))) {
-        const { id } = await this.deps.assets.put(new Uint8Array(readFileSync(path)), MIME[extname(file).toLowerCase()] ?? 'application/octet-stream', file);
+        const { id } = await this.deps.assets.put(new Uint8Array(readFileSync(path)), MIME[extname(file).toLowerCase()] ?? 'application/octet-stream', file.split('/').pop()!);
         kept[file] = { id, size, at: Math.round(mtimeMs) };
         stored++;
       }
@@ -164,6 +175,130 @@ export class Director {
     this.deps.log(`[demo] "${this.script.title}": ${this.script.phases.length} rounds, ${files.size} media files (${stored} stored now)${missing.length ? `, MISSING: ${missing.join(', ')}` : ''}`);
     // A data folder kept from an earlier run may hold the tree: find what stands, so the page shows it and the next round is the right one.
     this.adopt();
+    const shown = join(this.deps.dataDir, 'demo-showcase.json');
+    if (existsSync(shown)) this.showing = JSON.parse(readFileSync(shown, 'utf8')).on !== false;
+    this.plant();
+  }
+
+  // ---- the showcase trees
+
+  /** The id a showcase tree is kept under: it changes when the tree's file does, so a changed tree is planted afresh. */
+  private showId(show: Showcase): Id {
+    return `show-${show.tree.id}-${createHash('sha1').update(show.text).digest('hex').slice(0, 8)}`;
+  }
+
+  /** Whether a card hangs in a showcase tree: such a tree is the user's to ask on as ever, and no round is played on it. */
+  private inShowcase(nodeId: Id): boolean {
+    return this.deps.mind.nodes.get(nodeId)?.treeId.startsWith('show-') ?? false;
+  }
+
+  /**
+   * Makes the forest hold the showcase trees as they are written, or none of them: a tree not there is planted whole, its cards
+   * kept, and one that is there from an older file, or that should not be there, is taken down. True when a tree was taken down.
+   */
+  private plant(): boolean {
+    const { mind, pipeline } = this.deps;
+    const wanted = new Map(this.showing ? this.shows.map((show): [Id, Showcase] => [this.showId(show), show]) : []);
+    const gone = [...mind.trees.keys()].filter((id) => id.startsWith('show-') && !wanted.has(id));
+    if (gone.length > 0) this.deps.asDevice(() => pipeline.stage(DEMO, 'Demo: take the showcase trees down', gone.map((id): Command => ({ type: 'deleteTree', id }))));
+    let n = 0;
+    for (const [treeId, show] of wanted) {
+      n++;
+      if (mind.trees.has(treeId)) continue;
+      const { tree } = show;
+      const set = `show-${tree.id}`;
+      const making: Making = { ...this.making, media: (file) => this.media.get(`${tree.id}/${file}`) };
+      // The trees are a few minutes apart, the first written the oldest, so the forest orders them the same way each time.
+      const at = new Date(Date.now() - (this.shows.length - n + 1) * 60_000).toISOString();
+      const rootId = `${treeId}-root`;
+      const first: Item = {
+        id: `${set}-root-${createHash('sha1').update(tree.topic).digest('hex').slice(0, 8)}`,
+        kind: 'text', title: tree.topic, text: tree.topic, summary: '', tags: [], data: {},
+        source: { from: 'voice', capturedAt: at }, origin: { by: 'user' }, archived: false, revision: 0,
+      };
+      const root = nodeOf({ id: 'root', kind: 'note', origin: 'ocean', title: first.title, text: '' }, first, { id: rootId, treeId, parent: rootId, status: 'kept', order: 0, rank: 0 }, making);
+      const commands: Command[] = [
+        ...(mind.items.has(first.id) ? [] : [{ type: 'addItem', item: first } as Command]),
+        { type: 'createTree', tree: { id: treeId, title: tree.title, rootId, digest: '', createdAt: at }, root: { ...root, parent: null, why: '', origin: { by: 'user' }, importance: 1 } },
+      ];
+      const placed = new Map<string, number>();
+      for (const card of inLayers(tree)) {
+        const item = itemOf(card, making, set);
+        if (!mind.items.has(item.id) && !commands.some((c) => c.type === 'addItem' && c.item.id === item.id)) commands.push({ type: 'addItem', item });
+        const parent = card.parent === 'root' ? rootId : `${treeId}-${card.parent}`;
+        const order = placed.get(parent) ?? 0;
+        placed.set(parent, order + 1);
+        commands.push({ type: 'addNode', node: nodeOf(card, item, { id: `${treeId}-${card.id}`, treeId, parent, status: 'kept', order, rank: order }, making) });
+      }
+      // Planted as nobody's request: a headset puts such a tree away on its desk, where one it asked for would stand.
+      pipeline.stage(DEMO, `Demo: the showcase tree "${tree.title}"`, commands);
+      this.deps.log(`[demo] the showcase tree "${tree.title}" stands in the forest: ${tree.cards.length} cards`);
+    }
+    return gone.length > 0;
+  }
+
+  /**
+   * Stands a showcase tree on the headset with every layer open, for showing it whole. A tree that arrives whole lies on one
+   * layer there, its deeper cards bunched behind the first: a card takes a layer of its own only once it is asked on, or once
+   * the headset is taken to a card under it. So the headset is taken to one card under each card that has any, a layer at a
+   * time, and then back to the first card.
+   */
+  async show(id: string): Promise<void> {
+    const found = this.shows.find((show) => show.tree.id === id);
+    if (!found) throw new Error(`there is no showcase tree called ${id}`);
+    const treeId = this.showId(found);
+    const { mind, pipeline } = this.deps;
+    if (!this.showing || !mind.trees.has(treeId)) throw new Error(`"${found.tree.title}" is not in the forest: switch the other trees on first`);
+    if (this.deps.devices() === 0) throw new Error('No headset is joined to show it on.');
+    const take = ++this.take;
+    const going = () => take === this.take;
+    this.problem = null;
+    this.busy = `Showing "${found.tree.title}" whole on the headset`;
+    try {
+      for (const resume of [...this.waiting.values()].flatMap((set) => [...set])) resume();
+      const rootId = `${treeId}-root`;
+      // The tree stands from its cover, or is gone back to, and says so.
+      const stood = this.hears([`focus:${rootId}`, `questions:${rootId}`], this.pace.stand);
+      this.deps.asDevice(() => pipeline.go(rootId));
+      await stood;
+      await pause(this.pace.breath);
+      // One card under each card that leads others: going to it makes the card above it lead its layer.
+      const leads = inLayers(found.tree).filter((card) => card.parent !== 'root');
+      const seen = new Set<string>();
+      for (const card of leads) {
+        if (!going()) return;
+        if (seen.has(card.parent)) continue;
+        seen.add(card.parent);
+        const node = `${treeId}-${card.id}`;
+        if (!mind.nodes.has(node)) continue;
+        const there = this.hears([`questions:${node}`, `focus:${node}`], this.pace.open / 4);
+        this.deps.asDevice(() => pipeline.go(node));
+        await there;
+        await pause(this.pace.breath);
+      }
+      if (!going()) return;
+      this.deps.asDevice(() => pipeline.go(rootId));
+      this.deps.log(`[demo] "${found.tree.title}" stands whole on the headset: ${seen.size} layers under its first`);
+    } catch (err) {
+      this.problem = err instanceof Error ? err.message : String(err);
+      throw err;
+    } finally {
+      if (going()) this.busy = null;
+    }
+  }
+
+  /** Puts the showcase trees in the forest, or takes them out. A headset keeps a tree that is gone, so it is started again. */
+  async setShowcase(on: boolean): Promise<void> {
+    if (on === this.showing) return;
+    this.showing = on;
+    writeFileSync(join(this.deps.dataDir, 'demo-showcase.json'), JSON.stringify({ on }));
+    this.problem = null;
+    const going = () => true;
+    try {
+      if (this.plant() && this.deps.devices() > 0) await this.startAgain(going);
+    } finally {
+      this.busy = null;
+    }
   }
 
   private get making(): Making {
@@ -181,6 +316,7 @@ export class Director {
       devices: this.deps.devices(),
       rounds: this.script.phases.map((phase) => ({ id: phase.id, state: this.playing.has(phase.id) ? 'playing' : (this.built.get(phase.id) ?? 'waiting') })),
       problem: this.problem,
+      showcase: { on: this.showing, trees: this.shows.map(({ tree }) => ({ id: tree.id, title: tree.title, cards: tree.cards.length })) },
     };
   }
 
@@ -263,7 +399,7 @@ export class Director {
       this.problem = STALE;
       return;
     }
-    this.busy = 'Starting the app again on the headset, for an empty stage';
+    this.busy = 'Starting the app again on the headset, which keeps showing a tree that is gone';
     const joined = this.hears(['joined'], this.pace.rejoin);
     try {
       this.deps.log(`[demo] ${await this.deps.restart()}`);
@@ -336,7 +472,7 @@ export class Director {
     return {
       ...real,
       scout: (ctx, input) => {
-        const phase = this.scripted ? this.choose(input.anchor, input.need) : undefined;
+        const phase = this.scripted && !this.inShowcase(input.anchor) ? this.choose(input.anchor, input.need) : undefined;
         return phase ? this.bring(ctx, phase, input.anchor, input.deliver) : real.scout(ctx, input);
       },
       questions: async (ctx, input) => {
@@ -348,7 +484,7 @@ export class Director {
       },
       renderer: async (ctx, input) => {
         // The script's cards come with their looks. Anything else is the Renderer's as ever.
-        const others = input.nodeIds.filter((id) => !ctx.mind.nodes.get(id)?.itemId.startsWith('demo-'));
+        const others = input.nodeIds.filter((id) => !/^(demo|show)-/.test(ctx.mind.nodes.get(id)?.itemId ?? ''));
         if (others.length === 0) {
           await pause(Math.min(600, this.pace.step / 2));
           return [];

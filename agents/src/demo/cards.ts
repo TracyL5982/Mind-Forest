@@ -49,9 +49,12 @@ const siteOf = (url: string | undefined): string | undefined => {
 /** The source's name on the card: the one given, a paper's journal, the place that holds a work, or the site it is on. */
 const fromOf = (card: ScriptCard): string | undefined => card.from ?? (card.kind === 'paper' ? (card.venue ?? 'Research papers') : (card.holder ?? siteOf(card.href)));
 
-/** An id that changes when the card's words or files do, so an edited script never meets its older self in a kept data folder. */
-export function itemIdOf(card: ScriptCard): string {
-  return `demo-${card.id}-${createHash('sha1').update(JSON.stringify(card)).digest('hex').slice(0, 8)}`;
+/**
+ * An id that changes when the card's words or files do, so an edited script never meets its older self in a kept data folder.
+ * `set` says whose card it is: `demo` for the walkthrough's, `show-<tree>` for a showcase tree's.
+ */
+export function itemIdOf(card: ScriptCard, set = 'demo'): string {
+  return `${set}-${card.id}-${createHash('sha1').update(JSON.stringify(card)).digest('hex').slice(0, 8)}`;
 }
 
 /** The few words on the thread to a card: the turn of thought its text ends on, or its beginning. */
@@ -64,7 +67,7 @@ export function whyOf(card: ScriptCard): string {
   return `${first.slice(0, 62).replace(/\s+\S*$/, '')}…`;
 }
 
-export function itemOf(card: ScriptCard, making: Making): Item {
+export function itemOf(card: ScriptCard, making: Making, set = 'demo'): Item {
   const { item: origin, from } = origins(card);
   const picture = card.image ? making.media(card.image) : undefined;
   const film = card.video ? making.media(card.video) : undefined;
@@ -78,7 +81,7 @@ export function itemOf(card: ScriptCard, making: Making): Item {
     ...(siteOf(card.href) && { site: card.site ?? siteOf(card.href) }),
     ...(card.licence && { licence: card.licence }),
   };
-  const base = { title: card.title, summary: card.text.trim(), tags: [card.origin, card.kind], origin, archived: false, revision: 0, id: itemIdOf(card) };
+  const base = { title: card.title, summary: card.text.trim(), tags: [card.origin, card.kind], origin, archived: false, revision: 0, id: itemIdOf(card, set) };
   const source = (extra: { asset?: string } = {}): Item['source'] => ({ from, ...(card.href && { url: card.href }), ...extra, capturedAt: making.now() });
   const withLabel = (text: string) => (label ? `${text}\n\n${label}` : text);
   const finish = (item: Omit<Item, 'data'> & { data: ItemData }): Item => ({ ...item, data: withShortTitle(item.data, item.title) });

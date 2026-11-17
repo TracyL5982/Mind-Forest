@@ -55,6 +55,18 @@ function drawOrder() {
       title: round.title, onclick: () => pick(round.id), ondblclick: () => go(round.id),
     }, el('span', { class: 'row-n', text: String(n + 1) }), el('span', { class: 'row-name', text: short(round.title) }), el('i', { class: 'dot' })));
   });
+  // The showcase trees, below the rounds: a press stands one on the headset with every layer open.
+  const shown = status.showcase ?? { on: false, trees: [] };
+  if (shown.on && shown.trees.length > 0) {
+    rows.push(el('div', { class: 'order-part', text: 'Other trees in the forest' }));
+    for (const tree of shown.trees) {
+      rows.push(el('button', {
+        class: 'row tree-row', type: 'button', disabled: busy() || !status.devices,
+        title: status.devices ? `Stand "${tree.title}" on the headset with every layer open (${tree.cards} cards)` : 'Join a headset to show a tree on it',
+        onclick: () => show(tree.id),
+      }, el('span', { class: 'row-n', text: String(tree.cards) }), el('span', { class: 'row-name', text: tree.title }), el('span', { class: 'row-do', text: 'Show whole' })));
+    }
+  }
   $('order').replaceChildren(...rows);
 }
 
@@ -197,6 +209,13 @@ function drawBar() {
   speaks.dataset.state = voice ? 'on' : 'warn';
   speaks.lastElementChild.textContent = voice ? 'Momo is live' : "Momo's voice off";
   $('scripted').checked = status.scripted;
+  // The showcase trees: whole trees that stand in the forest beside the walkthrough's.
+  const shown = status.showcase ?? { on: false, trees: [] };
+  $('showcase-switch').hidden = shown.trees.length === 0;
+  $('showcase').checked = shown.on;
+  $('showcase').disabled = busy();
+  $('showcase-name').textContent = shown.trees.length === 1 ? '1 other tree in the forest' : `${shown.trees.length} other trees in the forest`;
+  $('showcase-switch').title = `${shown.trees.map((tree) => `${tree.title} (${tree.cards} cards)`).join(', ')}. Off: the forest holds the walkthrough's tree alone, and a headset is started again to let go of them.`;
   for (const id of ['go-start', 'go-end']) $(id).disabled = busy();
   const progress = /round (\d+) of (\d+)/.exec(status.busy ?? '');
   $('progress').hidden = !status.busy;
@@ -237,6 +256,13 @@ async function play() {
   watch(true);
 }
 
+async function show(tree) {
+  if (busy()) return;
+  status = await api('/api/demo/show', { tree });
+  draw();
+  watch(true);
+}
+
 let timer = null;
 /** The status is read once a second, and four times a second while something is under way. */
 function watch(soon = false) {
@@ -259,6 +285,11 @@ $('go-end').addEventListener('click', () => go('end'));
 $('scripted').addEventListener('change', async (event) => {
   status = await api('/api/demo/scripted', { on: event.target.checked });
   draw();
+});
+$('showcase').addEventListener('change', async (event) => {
+  status = await api('/api/demo/showcase', { on: event.target.checked });
+  draw();
+  watch(true);
 });
 window.addEventListener('resize', () => outline && drawChart());
 
