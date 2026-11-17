@@ -549,7 +549,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         return json(res, 202, director.status());
       }
       if (req.method === 'POST' && path === '/api/demo/pause') {
-        director.pause();
+        await director.pause().catch(() => {});
         return json(res, 200, director.status());
       }
       if (req.method === 'POST' && path === '/api/demo/seek') {

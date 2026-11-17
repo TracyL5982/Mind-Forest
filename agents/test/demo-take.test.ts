@@ -71,7 +71,8 @@ test('on the timeline a remark starts as its cards land, never over the line bef
     const landed = Math.max(0, ...line.cards.map((id) => sched.drops.find((drop) => drop.cards.includes(id))!.at));
     assert.ok(line.at >= landed, `${line.id} is not said before its cards land`);
   }
-  assert.equal(take.lines[1]!.at, sched.drops[0]!.at, 'the first card is told the moment it lands');
+  assert.equal(take.lines[1]!.at, 4000 + REAL.breath, 'the first card is told once her answer is over, when it landed while she spoke');
+  assert.equal(takeOf(n3, lines, () => 2000).lines[1]!.at, sched.drops[0]!.at, 'and the moment it lands, when she was free');
   assert.ok(take.lines.at(-1)!.at >= sched.end);
   assert.equal(take.ms, take.lines.at(-1)!.at + 4000 + REAL.tail);
 
@@ -298,12 +299,14 @@ test('a take pauses where it is and goes on from there: no card lands while paus
     const n3 = round('n3');
     void run.demo!.playTake('n3');
     await until(() => under(run, 'Llull’s ring').length > 0);
-    run.demo!.pause();
+    await run.demo!.pause();
     const paused = run.demo!.status().take!;
     assert.equal(paused.playing, false);
     const take = run.demo!.shown('n3');
     assert.ok(paused.at > 0 && paused.at < take.ms);
     assert.deepEqual(under(run, 'Llull’s ring'), titlesOf(n3, momentAt(take, paused.at).cards), 'the tree is as the take had it at that moment');
+    // What was on its way to the headset as the take stopped arrives first.
+    await new Promise((r) => setTimeout(r, 300));
     const heard = s.voice.length;
     await new Promise((r) => setTimeout(r, 400));
     assert.deepEqual(under(run, 'Llull’s ring'), titlesOf(n3, momentAt(take, paused.at).cards), 'paused, nothing more lands');
@@ -317,8 +320,8 @@ test('a take pauses where it is and goes on from there: no card lands while paus
     assert.deepEqual(under(run, 'Llull’s ring'), n3.cards.map((card) => card.title).sort(), 'played on, the rest of the round arrives');
     if (line) {
       const whole = line.line.text.length * 2400;
-      const total = bytesOf(s.voice, line.line.id);
-      assert.ok(total >= whole && total < whole * 1.5, `the line she was in went on from where it stopped (${before} then ${total - before} of ${whole} bytes)`);
+      const resumed = bytesOf(s.voice, line.line.id) - before;
+      assert.equal(resumed, whole - Math.floor((line.offset * 48) / 2) * 2, 'the line she was in went on from the very point the take was paused at, not from its start');
     }
     const starts = s.voice.filter((m) => m.t === 'text' && m.id?.endsWith('-answer'));
     assert.equal(starts.length, 1, 'her answer, long over, is not said again');

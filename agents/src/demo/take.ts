@@ -8,31 +8,41 @@ import type { ScriptCard, ScriptPhase } from './script.ts';
  */
 
 /**
- * How long each part of a real round takes, in ms. From two real Scout rounds timed on a copy of the service on 17 Nov 2026
- * (reports/ws52.md has the runs), and the judging service's own figures: curating a source's results 1 to 2 s, a made picture
- * about 30 s, an idea written about 40 s.
+ * How long each part of a real round takes, in ms.
+ *
+ * Measured on 17 Nov 2026 in two real Scout rounds on a copy of the service on this Mac (the log is
+ * ~/.mind-palace/program/logs/ws52-real-round.log): choosing where to look took 1.4 and 1.7 s; the sources were then searched
+ * side by side, each answering in 0.2 to 0.7 s; reading a source's results took 1.0 to 1.2 s, so the first found card landed 2.2
+ * to 3.6 s into the run and each further source 0.2 to 1.4 s after; the ideas came one at a time from 11.7 and 17.4 s, 2.2 s
+ * apart, and the run ended as the last landed, at 16 and 22 s.
+ *
+ * Not measured there: a made picture, which the judging service's log has at about 30 s; looking through the user's own things,
+ * which is a search of what the service holds; and a source whose results are pictures, which are fetched before they land.
  */
 export const REAL = {
   /** From the user's last word to the run's own label: Momo has begun her answer and called the search. */
   begins: 600,
   /** Choosing where to look. */
-  plan: 2800,
+  plan: 1500,
   /** Looking through what the user already has. */
-  own: 2200,
+  own: 900,
   /** One source searched: the first to answer, and how much later each further one does. */
-  search: 5200,
-  searchApart: 2400,
-  /** Papers take longer to come back than pictures. */
-  papers: 3000,
+  search: 500,
+  searchApart: 600,
+  /** Papers take a little longer to come back. */
+  papers: 300,
+  /** A source's pictures are fetched before its cards land. */
+  pictures: 1500,
   /** Reading a source's results and choosing among them. */
-  read: 1600,
+  read: 1100,
   /** A picture made, and how much later each further one lands. */
   picture: 30_000,
   pictureApart: 4000,
-  /** An idea written down. */
-  idea: 40_000,
+  /** An idea written down, and how much later each further one lands. */
+  idea: 13_000,
+  ideaApart: 2200,
   /** From the last card to the run's end. */
-  settle: 800,
+  settle: 300,
   /** The breath between two things Momo says. */
   breath: 350,
   /** What is left of the take after the last thing in it. */
@@ -106,7 +116,7 @@ function sourceName(card: ScriptCard): string | undefined {
  * When a real round would show each label and land each card, from the kinds of cards the round brings: what the user already has
  * first, then each source outside as it answers, the sources searched side by side, then what the agents make, which takes longest.
  */
-export function schedule(phase: ScriptPhase): Schedule {
+export function schedule(phase: ScriptPhase, under = ''): Schedule {
   const steps: Step[] = [];
   const drops: Drop[] = [];
   if (phase.cards.length === 0) return { steps, drops, end: 0 };
@@ -115,6 +125,7 @@ export function schedule(phase: ScriptPhase): Schedule {
   const made = phase.cards.filter((card) => card.origin === 'generated');
 
   let start: number = REAL.begins;
+  const began = start;
   if (outside.length + made.length > 0) {
     steps.push({ label: 'Choosing where to look first', at: start, end: start + REAL.plan });
     start += REAL.plan;
@@ -135,20 +146,24 @@ export function schedule(phase: ScriptPhase): Schedule {
   const rest = named.slice(2).flatMap(([, cards]) => cards);
   if (rest.length > 0) sources.push(['the web', rest]);
   for (const [n, [source, cards]] of sources.entries()) {
-    const found = start + REAL.search + n * REAL.searchApart + (source === 'research papers' ? REAL.papers : 0);
+    const found = start + REAL.search + n * REAL.searchApart + (source === 'research papers' ? REAL.papers : 0) + (cards.some((card) => card.image) ? REAL.pictures : 0);
     steps.push({ label: `Searching ${source}`, at: start, end: found });
     steps.push({ label: `Reading ${cards.length} result${cards.length === 1 ? '' : 's'} from ${source}`, at: found, end: found + REAL.read });
     drops.push({ at: found + REAL.read, cards: outside.filter((card) => cards.includes(card)).map((card) => card.id) });
   }
 
   let pictures = 0;
+  let ideas = 0;
   for (const card of made) {
-    const lands = card.image ? start + REAL.picture + pictures++ * REAL.pictureApart : start + REAL.idea;
+    const lands = card.image ? start + REAL.picture + pictures++ * REAL.pictureApart : start + REAL.idea + ideas++ * REAL.ideaApart;
     steps.push({ label: card.image ? `Making a picture of ${card.title}`.slice(0, 60) : 'Writing an idea down', at: start, end: lands });
     drops.push({ at: lands, cards: [card.id] });
   }
   drops.sort((a, b) => a.at - b.at);
-  return { steps, drops, end: drops.at(-1)!.at + REAL.settle };
+  const end = drops.at(-1)!.at + REAL.settle;
+  // The Scout thinks of directions of its own for as long as the run lasts, whatever the sources bring.
+  if (under && outside.length + made.length > 0) steps.push({ label: `Thinking of directions for ${under}`.split(' ').slice(0, 8).join(' ').slice(0, 60), at: began, end });
+  return { steps, drops, end };
 }
 
 /** A card as Momo is told of it when it lands, from the script's own words. */
@@ -222,8 +237,8 @@ export const spokenFor = (text: string): number => (text.trim() ? Math.max(1200,
  * The round's timeline. A remark starts as the last of its cards lands, or when the line before it is over if that is later, so
  * Momo never talks over herself; the wrap-up waits for the run's end too. A line with no words takes no time and is not said.
  */
-export function takeOf(phase: ScriptPhase, lines: readonly Line[], lengthOf: (text: string) => number = spokenFor): Take {
-  const sched = schedule(phase);
+export function takeOf(phase: ScriptPhase, lines: readonly Line[], lengthOf: (text: string) => number = spokenFor, under = ''): Take {
+  const sched = schedule(phase, under);
   const landsAt = new Map(sched.drops.flatMap((drop) => drop.cards.map((id): [string, number] => [id, drop.at])));
   const timed: TimedLine[] = [];
   let free = 0;

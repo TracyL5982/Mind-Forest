@@ -380,7 +380,8 @@ export class Director {
   /** A round's take as it would play now: the user's words where they wrote any, each line as long as its recording. */
   private timeline(round: string): Take {
     const { lines } = this.deps;
-    return takeOf(this.phase(round), lines.of(round), (text) => lines.ms(text));
+    const phase = this.phase(round);
+    return takeOf(phase, lines.of(round), (text) => lines.ms(text), this.titleOfHead(phase));
   }
 
   /** A round's take for the page. */
@@ -562,15 +563,17 @@ export class Director {
     }
   }
 
-  /** Stops the take where it is. The tree stays as it stands at that moment, with that moment's labels. */
-  pause(): void {
+  /**
+   * Stops the take where it is, and leaves it there as a move to that moment would: a delivery whose time had just come is
+   * landed, so the tree is exactly that moment's, with that moment's labels.
+   */
+  async pause(): Promise<void> {
     const was = this.rolling;
     if (!was) return;
     this.halt();
     // The run the take rode on is over without a word: what it would announce is not said.
     this.deps.pipeline.forget();
-    const head = this.headOf(was.phase);
-    if (head && this.cursor) this.hold(was.take, this.cursor.ms, head);
+    if (this.cursor) await this.seek(was.phase.id, this.cursor.ms);
   }
 
   /**
@@ -592,7 +595,7 @@ export class Director {
           this.halt();
           const take = this.timeline(phase.id);
           const at = Math.max(0, Math.min(ms, take.ms));
-          this.cursor = { round: phase.id, ms: at };
+          this.cursor = { round: phase.id, ms: Math.round(at) };
           if (phase.head === 'root' && !this.headOf(phase)) return;
           this.hold(take, at, await this.stand(phase, take, at));
         } catch (err) {
@@ -670,6 +673,8 @@ export class Director {
     const timers = new Set<ReturnType<typeof setTimeout>>();
     const ends = new Set<() => void>();
     let stopped = false;
+    /** Stopped before its end: only then is a line Momo is in cut short. */
+    let cut = false;
     let finish!: () => void;
     const over = new Promise<void>((done) => (finish = done));
     const at = (ms: number, act: () => void) => {
@@ -683,13 +688,19 @@ export class Director {
       stopped = true;
       for (const timer of timers) clearTimeout(timer);
       for (const done of ends) done();
-      this.cursor = { round: phase.id, ms: Math.max(0, Math.min(ms, take.ms)) };
+      this.cursor = { round: phase.id, ms: Math.round(Math.max(0, Math.min(ms, take.ms))) };
       this.rolling = null;
       this.playing.delete(phase.id);
       this.quiet = Date.now() + 500;
       finish();
     };
-    this.rolling = { phase, take, now, stop: () => end(now()) };
+    this.rolling = {
+      phase, take, now,
+      stop: () => {
+        cut = true;
+        end(now());
+      },
+    };
     this.pending = null;
     this.listening = null;
     this.cursor = null;
@@ -727,7 +738,7 @@ export class Director {
     }
     for (const line of take.lines) {
       if (line.ms === 0 || line.at + line.ms <= from) continue;
-      at(line.at, () => void this.say(play, line, Math.max(0, from - line.at), rate, () => stopped));
+      at(line.at, () => void this.say(play, line, Math.max(0, from - line.at), rate, () => cut));
     }
     at(take.ms, () => {
       this.mark(phase, true);
