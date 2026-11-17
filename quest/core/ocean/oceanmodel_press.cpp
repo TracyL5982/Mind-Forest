@@ -3,6 +3,8 @@
 #include "oceanmodel.h"
 
 #include "../agent/bridge.h"
+#include "../cards/cards.h"
+#include "../cards/paint.h"
 
 #include <cmath>
 #include <cstdio>
@@ -78,8 +80,15 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
             auto note = catalog->notes.find(ref.id);
             if (note == catalog->notes.end()) return std::nullopt;
             std::optional<int> f = note->second.stillFilm();
-            if (!(f && *f >= 0 && *f < int(catalog->clips.size()))) return std::nullopt;
-            return Shown{Ref::film(*f), catalog->clips[*f].aspect};
+            if (f && *f >= 0 && *f < int(catalog->clips.size())) return Shown{Ref::film(*f), catalog->clips[*f].aspect};
+            // AGENT: a card of the service's shows its own picture, which the service holds (`coverFace`): at its shape
+            // once it has come, else at an image's usual shape, and cut to fill that when it comes.
+            if (std::optional<std::string> src = coverSource(ref.id)) {
+                std::optional<cards::Picture> had = cards::pictureAt(*src);
+                bool known = had && had->image && had->image->height > 0;
+                return Shown{ref, known ? float(had->image->width) / float(had->image->height) : 1.35f};
+            }
+            return std::nullopt;
         }
         case Ref::Kind::tag:
             return std::nullopt;
@@ -96,7 +105,8 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
     };
     std::vector<Candidate> candidates;
     for (const auto& [id, n] : tree.nodes) {
-        if (!(!n.chip && (n.head || n.kept))) continue;
+        // AGENT: on a tree the service grows, any card: it keeps what the user keeps, and most of a tree is what it brought.
+        if (!(!n.chip && (n.head || n.kept || !tree.grows))) continue;
         std::optional<Shown> shown = picture(n.ref);
         if (!shown) continue;
         int host = n.head ? n.id : n.parent.value_or(tree.root);
@@ -105,6 +115,7 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
         float x = spot(lifted(tree, host), layer).x;
         if (!n.head) x += n.xy.x * tree.spread(host) * Hologram::glitter;
         float score = n.imp.value_or(0.5f) + (n.head && routeIndex(tree, n.id) >= 0 ? 0.5f : 0) + 0.4f * (layers > 1 ? high : 0);
+        if (!tree.grows && n.kept) score += 0.25f;        // AGENT: what the user kept before what was only brought
         candidates.push_back(Candidate{&n, shown->ref, shown->aspect, score, x, high});
     }
     std::stable_sort(candidates.begin(), candidates.end(), [](const Candidate& a, const Candidate& b) {
@@ -136,7 +147,7 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
         float w = plan.thumbs.empty() ? 0.24f : 0.19f;
         if (plan.thumbs.size() >= usualPictures) w = 0.15f;         // NOTE(port): the three added for Quest are smaller
         Vec2 size;
-        if (c.ref.kind == Ref::Kind::work) {
+        if (c.ref.kind == Ref::Kind::work || c.ref.kind == Ref::Kind::note) {       // (a service card's picture, sized as a work)
             size = Metrics::work(w * w * 0.6f, c.aspect, w * 1.15f, w * 1.05f);
         } else {
             size = Metrics::film(w, w * 0.72f, c.aspect);
@@ -144,6 +155,61 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
         plan.thumbs.push_back(CoverPlan::Thumb{c.node->id, c.ref, Vec3{slot.x, plan.foot + slot.y * room, slot.z}, size});
     }
     return plan;
+}
+
+// AGENT: added for the service's cards, whose pictures the service holds and the headset fetches (agent::Bridge::fetchPictures).
+
+std::optional<std::string> OceanModel::coverSource(const std::string& noteID) const {
+    if (noteID.rfind("agent-", 0) != 0) return std::nullopt;
+    for (const std::string& src : cards::pictures(noteID)) {
+        // (A drawn stand-in, `sample:`, is no picture of the card's own.)
+        if (src.rfind("sample:", 0) == 0) continue;
+        std::optional<cards::Picture> had = cards::pictureAt(src);
+        if (!(had && had->missing)) return src;
+    }
+    return std::nullopt;
+}
+
+EntityRef OceanModel::coverFace(const std::string& noteID, Vec2 size) {
+    std::optional<std::string> src = coverSource(noteID);
+    std::optional<cards::Picture> had = src ? cards::pictureAt(*src) : std::nullopt;
+    if (!art || !had || !had->image || had->image->width <= 0 || had->image->height <= 0) return nullptr;
+    ImageRef image = had->image;
+    float w = size.x * Art::ppm, h = size.y * Art::ppm;
+    std::string key = fmt("cover-%s-%.0fx%.0f", src->c_str(), double(w), double(h));
+    // Cut to fill: as wide as the place, or as tall, whichever leaves none of it bare.
+    std::optional<Piece> piece = art->piece(key, w, h, [image](Canvas& ctx, CGSize box) {
+        float fit = std::max(box.width / float(image->width), box.height / float(image->height));
+        float iw = float(image->width) * fit, ih = float(image->height) * fit;
+        ctx.drawImage(image, CGRect((box.width - iw) / 2, (box.height - ih) / 2, iw, ih));
+    });
+    return piece ? art->quad(*piece) : nullptr;
+}
+
+void OceanModel::coverPicturesCame(const std::vector<std::string>& noteIDs) {
+    for (Shelved& s : shelf) {
+        int came = 0, waiting = 0;
+        for (const CoverPicture& p : s.pictures) {
+            if (p.ref.kind != Ref::Kind::note || !p.entity->children.empty()) continue;
+            if (std::find(noteIDs.begin(), noteIDs.end(), p.ref.id) == noteIDs.end()) {
+                waiting++;
+                continue;
+            }
+            EntityRef face = coverFace(p.ref.id, {p.width, p.height});
+            if (!face) {
+                waiting++;
+                continue;
+            }
+            p.entity->addChild(face);
+            if (EntityRef glow = art->glow({p.width, p.height})) {
+                glow->position.z = -0.003f;
+                p.entity->addChild(glow);
+            }
+            came++;
+        }
+        if (came && !waiting) logLine(fmt("[ocean] cover of %s: its %d pictures all shown", s.tree->title.c_str(), int(s.pictures.size())));
+        if (came) touch(time + 0.1);
+    }
 }
 
 /// Builds a tree's cover. `el` is how high it hangs, in degrees up
@@ -187,10 +253,18 @@ std::optional<OceanModel::Cover> OceanModel::makeCover(const Tree& tree, float e
         default:
             break;
         }
-        if (!e->model) continue;
-        if (EntityRef glow = art->glow(thumb.size)) {
-            glow->position.z = -0.003f;
-            e->addChild(glow);
+        // AGENT: a service card's picture shows now if it has come, or when it comes (`coverPicturesCame`), its glow with it.
+        bool later = thumb.ref.kind == Ref::Kind::note;
+        if (later) {
+            if (EntityRef face = coverFace(thumb.ref.id, thumb.size)) e->addChild(face);
+        } else if (!e->model) {
+            continue;
+        }
+        if (!later || !e->children.empty()) {
+            if (EntityRef glow = art->glow(thumb.size)) {
+                glow->position.z = -0.003f;
+                e->addChild(glow);
+            }
         }
         e->position = thumb.at;
         holder->addChild(e);
@@ -401,6 +475,10 @@ void OceanModel::shelve(const TreeRef& tree, std::optional<Vec3> from, const Mov
     bool down = wantDown();
     std::optional<Cover> made = makeCover(*tree, restEl(plot, down), true);
     if (!made) return;
+    int shown = 0;
+    for (const CoverPicture& picture : made->pictures) shown += picture.entity->model || !picture.entity->children.empty();
+    logLine(fmt("[ocean] cover of %s: %d pictures, %d of them while it lies on the ocean's floor; %d still to come", tree->title.c_str(),
+                int(made->pictures.size()), int(std::min(made->pictures.size(), usualPictures)), int(made->pictures.size()) - shown));
     Vec3 p = restPoint(plot, made->foot, down);
     EntityRef holder = made->entity;
     holder->orientation = stage.upright(p).orientation;
