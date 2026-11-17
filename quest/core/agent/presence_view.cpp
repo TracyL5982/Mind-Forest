@@ -14,7 +14,11 @@ constexpr float pi = 3.14159265f;
 constexpr float type = 0.0165f;         // m: the words' size, as large to the eye as an open card's title
 constexpr float statusType = 0.015f;    // m: a word on what is happening, a little smaller, in italics
 constexpr float agentType = 0.0115f;    // m: an agent's line, small, above the words
-constexpr float most = 0.3f;            // m: the widest a line may be, some 35 characters
+constexpr float most = 0.3f;            // m: the widest an agent's line may be
+// m: the widest a line of the caption may be: on the demo's lines, some 47 characters or 8 words (at 0.3, 31 or 5). The
+// user, 2026-11-17: "the caption box can be a bit longer, now it shows very few words per line"; half as long again as
+// it was (my choice, WS68).
+constexpr float wordsMost = 0.45f;
 constexpr float pad = 6;                // px round the words in their picture
 constexpr float curio = 1.08f;          // CurioCity's line, of the type's own line height: its Momo is one such line in radius
 constexpr float larger = 1.2f;          // Momo's size, of CurioCity's. Kai, 2026-11-16: "Momo is too small +20% size"
@@ -287,7 +291,7 @@ void fill(const LowLevelMeshRef& mesh, std::vector<uint32_t>& scratch, const Bou
 }  // namespace
 
 PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& lineMaterial, EntityRef parent)
-    : art(art), caption([art](const std::string& s, Speaker who) { return art->width(s, typeface(*art, who)) / Art::ppm; }, most),
+    : art(art), caption([art](const std::string& s, Speaker who) { return art->width(s, typeface(*art, who)) / Art::ppm; }, wordsMost),
       roster([art](const std::string& s) { return art->width(s, typeface(*art, Speaker::agent)) / Art::ppm; }, most),
       light(mesh(1400, 5600)), backing(mesh(96, 144)), scratch(5600),
       step(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm * pitch),
@@ -473,17 +477,17 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
     // `-presenceLog`: each frame, each agent's line as it is drawn: how solid its bar is, how solid its words, and whether
     // its new words are waiting for their picture or showing over the old, to measure how it changes.
     static const bool logged = Flags::has("presenceLog");
-    // (And each word on what is happening, "Listening…" and the like: the caption's bars come first, in its lines' order.)
+    // (And each of the caption's lines, the user's, Momo's and the words on what is happening: its bars come first, in its lines' order.)
     if (logged) {
         std::string out;
         for (size_t i = 0; i < caption.lines().size() && i < bars.size(); i++) {
             const Caption::Line& line = caption.lines()[i];
-            if (line.who != Speaker::status) continue;
             const Words* w = nullptr;
             for (const Words& x : words) {
                 if (x.key == line.key) w = &x;
             }
-            if (w) out += fmt(" | status bar %.2f words %.2f over 0.00 y %.2f \"%s\"", double(bars[i].alpha), double(w->shown ? w->shown->opacity.value_or(1) : 0),
+            const char* who = line.who == Speaker::status ? "status" : line.who == Speaker::momo ? "momo" : "user";
+            if (w) out += fmt(" | %s bar %.2f words %.2f over 0.00 y %.2f \"%s\"", who, double(bars[i].alpha), double(w->shown ? w->shown->opacity.value_or(1) : 0),
                               double(line.y), w->text.c_str());
         }
         if (!out.empty()) logLine(fmt("[presence] t %.3f", now) + out);
@@ -518,7 +522,7 @@ void PresenceView::draw() {
     // them before the words: the bars, then Momo's light, then the words. The bars are written again only while they change.
     if (bars != barsDrawn) {
         barsDrawn = bars;
-        fill(backing, scratch, BoundingBox{{0, -0.08f, -0.065f}, {0.42f, 0.16f, -0.055f}}, [&](Pen& pen) {
+        fill(backing, scratch, BoundingBox{{0, -0.08f, -0.105f}, {0.6f, 0.16f, -0.095f}}, [&](Pen& pen) {
             for (const Bar& b : bars) pen.bar(b.left, b.right, b.bottom, b.top, -behind, b.alpha);
         });
     }
