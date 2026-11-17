@@ -602,6 +602,66 @@
    "gain": 0.08,
    "seconds": 2.0,
    "loop": 2.0
+  },
+  "take_00": {
+   "about": "A card of the service's is pressed: take on D4, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 5.01
+  },
+  "take_01": {
+   "about": "A card of the service's is pressed: take on E4, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 5.01
+  },
+  "take_02": {
+   "about": "A card of the service's is pressed: take on F#4, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 5.02
+  },
+  "take_03": {
+   "about": "A card of the service's is pressed: take on A4, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 4.44
+  },
+  "take_04": {
+   "about": "A card of the service's is pressed: take on B4, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 4.75
+  },
+  "take_05": {
+   "about": "A card of the service's is pressed: take on C#5, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 4.62
+  },
+  "take_06": {
+   "about": "A card of the service's is pressed: take on D5, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 4.44
+  },
+  "take_07": {
+   "about": "A card of the service's is pressed: take on E5, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 4.66
+  },
+  "take_08": {
+   "about": "A card of the service's is pressed: take on F#5, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 4.58
+  },
+  "take_09": {
+   "about": "A card of the service's is pressed: take on G#5, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 4.09
+  },
+  "take_10": {
+   "about": "A card of the service's is pressed: take on A5, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 4.37
+  },
+  "take_11": {
+   "about": "A card of the service's is pressed: take on B5, the card's own note on its layer",
+   "gain": 0.6,
+   "seconds": 4.34
   }
  }
 }

@@ -410,11 +410,12 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
   (`sound("take")` in `take`). The layer's chord is struck whenever the layer you stand on changes, by any
   means: upward on coming nearer, downward on stepping back. While a fist nears a layer's gate, that
   layer's chord is held and swells with the gauge's arc. The cards the gardener brings sound one note each, up
-  their layer's chord. On the service's trees, where a press opens a card where it stands, the press sounds the
-  card's own note: its layer's chord, by its place among its parent's cards (`soundCard`), so neighbours differ; and
-  the cards the service brings sound one note each as the gardener's do (`desktop/test/click_notes_check.mjs`,
-  which shows what was played with `-soundLog` and writes it to a file, heard by no one). The ocean's bed draws back under a film's sound. While Momo
-  listens, thinks or speaks, the bed, the layer chords and the glints play about 9 dB down (`conversationDip`).
+  their layer's chord. On the service's trees, where a press opens a card where it stands, the press is `take` at the
+  card's own note (`take_00` … `take_11`, synth.py's `takes()`): its layer's chord, by its place among its parent's
+  cards (`soundCard`), so neighbours differ; and the cards the service brings each sound their own note, in one run
+  90 ms apart however many batches they land in (`soundArrivals`; `desktop/test/click_notes_check.mjs`, which shows
+  what was played with `-soundLog` and writes it to a file, heard by no one). The ocean's bed draws back under a film's sound. While Momo
+  listens, thinks or speaks, the bed, the layer chords, the glints and the cards' notes play about 9 dB down (`conversationDip`).
 - **Momo's own** are `momo_chime`, `momo_sent` and `momo_thinking` (a loop), made by `momo()` in synth.py from its
   own random numbers, so the ocean's sounds stay as they were; `core/agent/voice.cpp` plays them.
 - **The ocean** has a held sound under everything, kept very low, and glints: a piece that swells where
