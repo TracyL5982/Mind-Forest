@@ -1158,11 +1158,16 @@ private:
     /// How far aside (on its own sheet) a card must move so it doesn't sit
     /// under the open card, or behind it. (`nudge(for:in:)`)
     Vec2 nudge(const TreeNode& n, const Tree& tree) const;
-    /// AGENT: round a card opened where it stands, how far each card on its layer moves aside, by node id: what lies
-    /// under the open card goes straight out from it, and a card that then lands on another goes on past it.
+    /// AGENT: round the open card, how far each card on its layer moves aside, by node id: what lies under the open card goes
+    /// straight out from it, and of two cards that touch, the one farther out goes on past the other.
     std::map<int, Vec2> makeRoom(const Tree& tree) const;
-    /// AGENT: round a card opened where it stands, moves every card aside (`nudge`, `makeRoom`) as the card grows.
-    void stepAside(double now);
+    /// AGENT: whether the layer of the open card makes room together round it (`makeRoom`): round a card opened where it stands,
+    /// and on any tree the agent service grows.
+    bool roomy(const Tree& tree) const;
+    /// AGENT: where a card opened where it stands had stepped aside to before it opened, which it keeps while open.
+    Vec2 stood(const Tree& tree) const;
+    /// AGENT: where the layer makes room together, moves every card aside (`nudge`, `makeRoom`), at this pace.
+    void stepAside(double now, float pace, Ease ease);
 
     void drawThreads(double now, float dt);
 

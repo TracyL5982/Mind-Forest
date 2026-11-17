@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <functional>
 #include <limits>
+#include <map>
 
 #include "../cards/ocean.h"
 
@@ -278,11 +279,14 @@ Tree::Change Tree::focus(int id) {
     const TreeNode* found = find(nodes, id);
     if (!found) return {{}, {}};
     TreeNode n = *found;
+    bool led = n.head;
+    Vec2 was = n.xy;
     n.kept = true;
     n.head = true;
     n.chip = false;
     n.opened = true;
     nodes[id] = n;
+    if (!led) placeRound(id, was);
     if (!contains(route, id)) route = path(id);
     stand = id;
     current = id;
@@ -291,6 +295,52 @@ Tree::Change Tree::focus(int id) {
     std::vector<int> added = n.children.empty() && grows ? grow(id) : std::vector<int>{};
     relayout();
     return {added, {}};
+}
+
+// AGENT: Kai's trees grow a card's cards only once it leads its layer. A tree the agent service grows can bring them before (a
+// tree that arrives whole, or cards that arrive round a card open where it stands), placed round the card where it stood in
+// the group it was part of (`center`).
+void Tree::placeRound(int id, Vec2 was) {
+    const TreeNode* found = find(nodes, id);
+    if (!found || found->children.empty()) return;
+    std::vector<int> kids;
+    std::map<int, Vec2> before;
+    for (int c : found->children) {
+        TreeNode* k = find(nodes, c);
+        if (!k) continue;
+        // A tag beside it stays beside it.
+        if (k->chip) {
+            k->xy -= was;
+            continue;
+        }
+        kids.push_back(c);
+        before[c] = k->xy;
+        // Out of the way while the others are placed: a card not placed yet takes no place.
+        k->slot = -1;
+        k->xy = Vec2::repeating(1e4f);
+    }
+    // Spread round it as the gardener's are (`grow`): evenly over the free places of the first ring, then the second; any more
+    // on rings further out.
+    std::vector<int> near = freeSlots(id), free = near;
+    if (free.size() < kids.size()) {
+        for (int slot : freeSlots(id, true)) {
+            if (!contains(near, slot)) free.push_back(slot);
+        }
+    }
+    int take = std::min(int(kids.size()), int(free.size()));
+    for (int i = 0; i < int(kids.size()); i++) {
+        int slot = i < take ? free[size_t(take >= int(near.size()) ? i : int((float(i) + 0.5f) * float(near.size()) / float(take)))]
+                            : 2 * int(ringAngles.size()) + (i - take);
+        TreeNode* k = find(nodes, kids[size_t(i)]);
+        k->slot = slot;
+        k->xy = spot(slot, *find(nodes, id));
+        // What hangs from it without a layer of its own was placed round it, and goes with it.
+        if (k->head) continue;
+        Vec2 moved = k->xy - before[kids[size_t(i)]];
+        for (int r : riders(kids[size_t(i)])) {
+            if (TreeNode* rider = find(nodes, r)) rider->xy += moved;
+        }
+    }
 }
 
 /// Steps out of the card in focus: it closes, and its group draws in.
@@ -480,7 +530,9 @@ std::vector<int> Tree::freeSlots(int id, bool outer) const {
 
 float Tree::angle(int slot) const {
     int count = int(ringAngles.size());
-    return ringAngles[size_t(slot % count)] + (slot >= count ? 20 : 0);
+    // NOTE(port): every other ring turned by 20 degrees. The Swift has two rings; a service's card can bring more than 18 cards,
+    // which take a third ring and on, each as much wider again (`spot`).
+    return ringAngles[size_t(slot % count)] + ((slot / count) % 2 == 1 ? 20 : 0);
 }
 
 float Tree::wrap(float deg) const {
@@ -493,7 +545,7 @@ float Tree::wrap(float deg) const {
 Vec2 Tree::spot(int slot, const TreeNode& n) const {
     Ring e = ring(n);
     Vec2 c = e.center, axes = e.axes;
-    if (slot >= int(ringAngles.size())) axes *= 1.45f;
+    for (int ring = slot / int(ringAngles.size()); ring > 0; ring--) axes *= 1.45f;
     float a = angle(slot) * floatPi / 180;
     // A little off the ellipse, the same way every time, so it never looks ruled.
     // (`n.id &* 7919 &+ slot &* 104_729 &+ 17`: 64 bits, wrapping.)
@@ -756,6 +808,13 @@ std::vector<Box> Tree::boxes(const TreeNode& h, int top) const {
         Box own = c.head && front && Branching::deep >= 1 ? foot(c, 1, 1).grown(Branching::hug)
             : Box::centerSize(Vec2::zero(), catalog->smallSize(c.ref));
         out.push_back(own.moved(c.xy * s));
+    }
+    // AGENT: a group of a tree the agent service grows is parted as the one box round all its cards, so no two groups' cards
+    // interleave and lay their panes over each other. (Kai's groups are few and small, and pack between each other's cards.)
+    if (!grows && out.size() > 1) {
+        Box all = out.front();
+        for (const Box& b : out) all = all.joined(b);
+        out = {all};
     }
     return out;
 }

@@ -751,6 +751,9 @@ void Bridge::bring(Planted& p, int id) {
     model.restyle();
     logLine("[agent] went to " + model.catalog->title(n.ref) + " in \"" + t.title + "\" (" + p.service[id] + "), on the layer of " +
             p.service[t.stand]);
+    // (`-placesOnGo`: where every card on that layer is headed, for checking each layer of a tree in turn.)
+    static const bool places = Flags::has("placesOnGo");
+    if (places) model.logPlaces();
 }
 
 void Bridge::reportFocus() {
