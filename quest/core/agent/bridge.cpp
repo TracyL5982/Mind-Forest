@@ -806,6 +806,30 @@ void Bridge::moreLike(int nodeID) {
     logLine("[agent] more like this" + (need ? ": " + *need : std::string(", with nothing highlighted")));
 }
 
+bool Bridge::treeFrom(const Ref& ref) {
+    std::string title = model.catalog->title(ref);
+    // The service roots a tree on something the user has when its title is said ("make a tree about …", read by plain
+    // rules). Those rules end the subject at a colon, a long dash or " - ", and its title match ignores punctuation, so
+    // each becomes a comma, which reads as the user would say it: "2001, A Space Odyssey".
+    std::string subject;
+    for (size_t i = 0; i < title.size(); i++) {
+        bool dash = title.compare(i, 3, "—") == 0 || title.compare(i, 3, "–") == 0;
+        bool spaced = title[i] == '-' && i > 0 && title[i - 1] == ' ';
+        if (!dash && !spaced && title[i] != ':' && title[i] != '\n') {
+            subject += title[i];
+            continue;
+        }
+        while (!subject.empty() && subject.back() == ' ') subject.pop_back();
+        subject += ',';
+        if (dash) i += 2;
+    }
+    std::string words = "Make a tree about " + subject;
+    if (!client.send(Outbound::utter(words, true, scene()))) return false;
+    if (voice) voice->asked(words);
+    logLine("[agent] asked for a tree about " + title);
+    return true;
+}
+
 void Bridge::tellMore(int nodeID, const std::string& question) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
     if (!p || !p->service.count(nodeID) || question.empty()) return;

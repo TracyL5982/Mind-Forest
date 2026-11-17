@@ -1072,6 +1072,11 @@ void OceanModel::bringIn(int film) {
         if (fromPoint) soundAt("bring_in", *fromPoint); else sound("bring_in");
         logLine("[ocean] brought in: " + catalog->title(ref));
         restyle();
+    } else if (agentBridge) {
+        // AGENT: joined to the service, a tree started from a piece of the ocean is the service's, as every other tree is:
+        // Momo is asked for it, and it stands when it comes. Kai's own tree, its picks and its questions, is not made.
+        clearPeek();
+        if (!agentBridge->treeFrom(ref)) logLine("[ocean] the service can't be reached, so no tree is started on " + catalog->title(ref));
     } else {
         clearPeek(false);
         TreeRef t = std::make_shared<Tree>(ref, catalog->short_(ref), Maker::you, catalog);

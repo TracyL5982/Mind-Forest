@@ -53,6 +53,10 @@ public:
     /// A long pinch on the open card: more like it, through the service's `more`, as Momo's "more like this" asks. The card
     /// leads a layer of its own (kept, if it was a suggestion), and when it has highlights the request leans on them.
     void moreLike(int nodeID);
+    /// A tree the user starts from one of the headset's own pieces (a film, work or note of the ocean), asked of Momo as
+    /// the user would say it, so the service makes it, rooted on that piece, and it stands when it comes (`changed`).
+    /// False when the service can't be reached.
+    bool treeFrom(const Ref& ref);
     /// Send on a service card gone into, with something marked on it: `question` ("Tell me more about these parts: …"), a
     /// conversation about the card, as a picked question is.
     void tellMore(int nodeID, const std::string& question);
