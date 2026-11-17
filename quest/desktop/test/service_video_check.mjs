@@ -5,8 +5,11 @@
 //   3. the address it plays streams: with the token the service answers byte ranges of the file (so the player can start at
 //      once and seek), and without it the service refuses
 //   4. a film card with no file (a link) plays nothing
+//   5. a video card whose file is elsewhere, over https, plays it from where it lies, with no token of the service's
+//   6. one over plain http plays nothing, and the log says why
 // The preview's own player is a stand-in that shows nothing (desktop/platform_mac.mm), so what is checked here is that the card
-// chooses to play and that its address serves the file; the picture plays on the headset.
+// chooses to play and from where, and that the service's address serves the file; the picture plays on the headset. The files
+// elsewhere are on example.org, never fetched.
 //
 //   quest/desktop/build.sh && node quest/desktop/test/service_video_check.mjs [--shots <folder>]
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -74,6 +77,43 @@ try {
       await later(1.5);
       check(!find(run.log, /plays its video from the service$/, sent), `a film card with no file, "${linkTitle}", plays nothing`);
     }
+
+    // Two video cards whose files are elsewhere, added under the root as a client would: one over https, one over http.
+    const tree = state.trees.find((t) => t.id === film?.treeId) ?? state.trees[0];
+    const capturedAt = new Date().toISOString();
+    const elsewhere = [
+      { key: 'https', title: 'A film elsewhere', src: 'https://media.example.org/films/ws67.mp4?sig=abc' },
+      { key: 'http', title: 'A film over http', src: 'http://media.example.org/films/ws67.mp4' },
+    ];
+    const ws = new stand.WebSocket(`ws://127.0.0.1:${stand.servicePort}/ws?token=${encodeURIComponent(stand.token)}`);
+    await new Promise((r) => ws.on('open', r));
+    ws.send(JSON.stringify({
+      t: 'commands',
+      label: 'Two films elsewhere',
+      commands: elsewhere.flatMap((f, i) => [
+        { type: 'addItem', item: { id: `ws67-item-${f.key}`, kind: 'video', title: f.title, text: '', summary: '', tags: [], data: { mediaUrl: f.src }, source: { from: 'paste', capturedAt }, origin: { by: 'user' }, archived: false, revision: 0 } },
+        { type: 'addNode', node: { id: `ws67-node-${f.key}`, treeId: tree.id, itemId: `ws67-item-${f.key}`, parent: tree.rootId, status: 'kept', why: '', importance: 1, origin: { by: 'user' }, view: { component: 'video', props: { src: f.src }, by: 'default' }, order: 1000 + i } },
+      ]),
+    }));
+    await later(1.5);
+    ws.close();
+    const added = await stand.state();
+    for (const f of elsewhere) {
+      const node = added.nodes.find((n) => n.id === `ws67-node-${f.key}`);
+      check(node?.view.component === 'video' && node.view.props.src === f.src, `the service holds "${f.title}" as a video card whose src is ${f.src} (${node ? `${node.view.component}, ${node.view.props.src}` : 'no such card'})`);
+    }
+
+    let sent = run.at();
+    stand.inject({ t: 'navigate', nodeId: 'ws67-node-https', yours: true });
+    const away = await until(run.log, /^\[ocean\] A film elsewhere plays its video from /, sent, 15);
+    check(away && away.line.endsWith('from https://media.example.org/films/ws67.mp4') && !/token/.test(away.line),
+      `over https it plays from where it lies, with no token of the service's (${away?.line ?? 'no such line'})`);
+
+    sent = run.at();
+    stand.inject({ t: 'navigate', nodeId: 'ws67-node-http', yours: true });
+    const plain = await until(run.log, /^\[agent\] A film over http's video is not over https, so it does not play$/, sent, 15);
+    await later(1.5);
+    check(plain && !find(run.log, /^\[ocean\] A film over http plays/, sent), `over plain http it plays nothing, and says why (${plain?.line ?? 'no such line'})`);
     run.stop();
     await run.done;
   } finally {

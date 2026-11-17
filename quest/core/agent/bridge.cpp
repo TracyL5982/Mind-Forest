@@ -674,15 +674,23 @@ bool Bridge::opens(int nodeID) {
     return true;
 }
 
-std::optional<std::string> Bridge::video(int nodeID) {
+std::optional<Bridge::Video> Bridge::video(int nodeID) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
     if (!p || !p->service.count(nodeID)) return std::nullopt;
     const Node* n = client.mirror().node(NodeId{p->service[nodeID]});
     if (!n || n->view.component != "video") return std::nullopt;
     std::string src = Json(n->view.props)["src"].string("");
-    // A path on the service is a file it holds (`/assets/<id>`), which answers byte ranges, so it streams and seeks.
-    if (src.empty() || src.find("://") != std::string::npos) return std::nullopt;
-    return client.address().resolve(src);
+    if (src.empty()) return std::nullopt;
+    // On the service, a file it holds (`/assets/<id>`, or one it relays): it answers byte ranges, so it streams and seeks.
+    const std::string& service = client.address().http;
+    if (src.find("://") == std::string::npos) return Video{client.address().resolve(src)};
+    if (src.rfind(service + "/", 0) == 0) return Video{client.address().resolve(src.substr(service.size()))};
+    // Elsewhere: only over https, and as it is. The service's token is the service's alone.
+    if (src.rfind("https://", 0) == 0) return Video{src, true};
+    if (unsafe.insert(n->id.value).second) {
+        logLine("[agent] " + model.catalog->title(p->tree->nodes[nodeID].ref) + "'s video is not over https, so it does not play");
+    }
+    return std::nullopt;
 }
 
 void Bridge::rows(const TreeNode& node, std::vector<Ask>& asks) {

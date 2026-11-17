@@ -41,10 +41,16 @@ public:
     /// its parent's group stands (it may not, for a card whose parent has led no layer yet). True when it did; otherwise
     /// the scene does what it always did (going back to a card's own layer).
     bool opens(int nodeID);
-    /// Where a card of a service tree plays its video from: a file the service holds (its view is "video" and its `src`
-    /// is a path on the service), as an address with the headset's token, streamed as it plays. None for any other card,
-    /// and for a video somewhere else, such as a web page.
-    std::optional<std::string> video(int nodeID);
+    /// Where a card of a service tree plays its video from, streamed as it plays, when its view is "video":
+    /// - its `src` on the service (a path, or the service's own address): there, with the headset's token;
+    /// - its `src` on another host over https: there, as it is, with no token of the service's;
+    /// - over plain http elsewhere: none, and the log says so once.
+    /// None for any other card.
+    struct Video {
+        std::string address;
+        bool elsewhere = false;     // on another host: never with the service's token
+    };
+    std::optional<Video> video(int nodeID);
     /// The rows under an open card of a service tree: "Keep this" for a suggestion, then what can be asked about it (at most
     /// three of the questions the service wrote for the card and the conversation, once they come), then typing your own.
     void rows(const TreeNode& node, std::vector<Ask>& asks);
@@ -181,6 +187,7 @@ private:
     };
     std::shared_ptr<Pictures> pictures = std::make_shared<Pictures>();
     std::set<std::string> asked;                    // picture addresses already fetched or on their way
+    std::set<std::string> unsafe;                   // cards whose video is over plain http, already said so
     /// Pictures that did not come, asked for again until they do, 1, 2, 4 and 8 s on, then every 15 s: when next, and how many
     /// times so far.
     struct Retry {

@@ -1028,7 +1028,8 @@ void OceanModel::restyle(bool stirring) {
         case Ref::Kind::tag:
             break;
         }
-        // AGENT: a card of the service's that holds a video file plays it from the service (agent::Bridge::video).
+        // AGENT: a card of the service's whose video is a file plays it, from the service or from where it lies
+        // (agent::Bridge::video).
         served = !film && agentBridge && agentBridge->video(current->id);
         // NOTE(port): added for Quest. A card plays its film where its picture is, so not on a page without it (core/cards).
         if (CardRef c = card(current->id); c && c->layout && !c->layout->picture) {
@@ -1054,11 +1055,14 @@ void OceanModel::restyle(bool stirring) {
                     key = *film;
                     url = library->fullURL(library->clips[*film]);
                 } else {
-                    std::optional<std::string> address = agentBridge ? agentBridge->video(id) : std::nullopt;
-                    if (!address) return;
+                    std::optional<agent::Bridge::Video> video = agentBridge ? agentBridge->video(id) : std::nullopt;
+                    if (!video) return;
                     key = -1 - id;
-                    url = *address;
-                    logLine("[ocean] " + catalog->title(c->ref) + " plays its video from the service");
+                    url = video->address;
+                    // (Never the service's address in full: it carries the headset's token. One elsewhere has none of
+                    // the service's, and is said without whatever follows its "?".)
+                    logLine("[ocean] " + catalog->title(c->ref) + " plays its video from " +
+                            (video->elsewhere ? url.substr(0, url.find('?')) : std::string("the service")));
                 }
                 PictureFrame frame = pictureFrame(*c);
                 screen->show(key, url, frame.size, c->openHolder, frame.center);

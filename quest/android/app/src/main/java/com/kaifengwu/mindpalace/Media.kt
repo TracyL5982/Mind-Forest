@@ -90,6 +90,8 @@ class VideoSurface(textureName: Int) {
             }
             player = null
             if (path.isEmpty() || mine != asked || released) return@execute
+            // What the log may say of it: never what follows its "?", where the service's address carries the headset's token.
+            val shown = path.substringBefore('?')
             val p = MediaPlayer()
             try {
                 p.setSurface(surface)
@@ -108,19 +110,29 @@ class VideoSurface(textureName: Int) {
                             }
                             if (wantPlaying) mp.start()
                         } catch (e: Exception) {
-                            Log.w("ocean", "[media] could not start $path: $e")
+                            Log.w("ocean", "[media] could not start $shown: $e")
                         }
                     }
                 }
                 p.setOnCompletionListener { ended = true }
+                // A film that will not open (a link gone stale, an address that refuses it) is said once; the card keeps its
+                // poster and play mark, as no frame ever comes.
                 p.setOnErrorListener { _, what, extra ->
-                    Log.w("ocean", "[media] video error $what/$extra for $path")
+                    val why = when {
+                        what == MediaPlayer.MEDIA_ERROR_SERVER_DIED -> "the system's player stopped"
+                        extra == MediaPlayer.MEDIA_ERROR_IO -> "it could not be read (refused, gone, or no connection)"
+                        extra == MediaPlayer.MEDIA_ERROR_MALFORMED -> "it is not a video the player can read"
+                        extra == MediaPlayer.MEDIA_ERROR_UNSUPPORTED -> "it is in a form the player does not play"
+                        extra == MediaPlayer.MEDIA_ERROR_TIMED_OUT -> "it took too long to answer"
+                        else -> "error $what/$extra"
+                    }
+                    Log.w("ocean", "[media] $shown does not play: $why")
                     true
                 }
                 player = p
                 p.prepareAsync()
             } catch (e: Exception) {
-                Log.w("ocean", "[media] could not open $path: $e")
+                Log.w("ocean", "[media] $shown does not play: it could not be opened ($e)")
                 try {
                     p.release()
                 } catch (e2: Exception) {
