@@ -1300,6 +1300,8 @@ private:
     /// NOTE(port): added for Quest. Logs where each card on the layer you work on is headed, and the room it takes there
     /// (`-placesAt`), for checking an arrangement without pictures.
     void logPlaces() const;
+    /// NOTE(port): added for Quest. Logs what is drawn within 2 mm of something else along the eye's sight (`-depthAuditAt`).
+    void depthAudit() const;
     bool cardGestures = false;
 
     void moveLayer(int direction);

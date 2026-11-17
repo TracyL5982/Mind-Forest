@@ -4,6 +4,9 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <array>
+#include <cstring>
+#include <functional>
 #include <tuple>
 
 #include "../cards/gallery.h"
@@ -502,6 +505,16 @@ void OceanModel::runFlags() {
     });
     at("tapAt", [](OceanModel& m) { m.pinchByFlag({{0, 0}, {0, 0}}, 0.1, 0); });
     at("placesAt", [](OceanModel& m) { m.logPlaces(); });
+    at("depthAuditAt", [](OceanModel& m) { m.depthAudit(); });
+    // `-depthAuditEvery <s>`: the same, again and again, for a run that moves the view about while it goes.
+    if (double every = Flags::number("depthAuditEvery"); every > 0) {
+        auto again = std::make_shared<std::function<void()>>();
+        *again = [this, every, again] {
+            depthAudit();
+            after(every, *again);
+        };
+        after(every, *again);
+    }
     at("placesAgainAt", [](OceanModel& m) { m.logPlaces(); });
     // `-acrossPictureAt t` drags across the open card's picture, from 0.2 to 0.55 of its width, as a hand marking a stretch
     // of a video or drawing on a picture does with the pen up; `-acrossPictureAgainAt t` from 0.7 to 0.9, too far from the
@@ -836,4 +849,190 @@ void OceanModel::logPlaces() const {
                 catalog->title(n.ref));
     }
     logLine(fmt("[ocean] places: %d", count));
+}
+
+/// `-depthAuditAt <s>` (and `-depthAuditEvery <s>`): what is drawn within 2 mm of something else along the eye's sight lines, over a grid of them across
+/// the middle of the view (80 by 45 degrees, a sight line every half degree). Each sight line is followed through every
+/// surface it meets; two surfaces met less than 2 mm apart, at least one of them writing depth, are a pair that can fight
+/// over which shows. The pieces of one card, stacked a little apart on purpose, are counted on their own (`[ocean] depth: within
+/// one card: …`); the rest by kind (`[ocean] depth: <kind> / <kind>: <n> sight lines, closest <mm>`), then the ten closest
+/// pairs by name, then `[ocean] depth: done`.
+void OceanModel::depthAudit() const {
+    std::optional<Mat4> seenFrom = platform::head();
+    if (!seenFrom) return;
+    Vec3 eye = seenFrom->position(), ahead = seenFrom->forward(), up = seenFrom->up(), right = seenFrom->right();
+    // What each drawn thing is, by the entity it is drawn from.
+    // (And whose it is: the pieces of one card are stacked a little apart on purpose, and drawn in their order.)
+    std::map<const Entity*, std::pair<std::string, std::string>> what;
+    std::string whose;
+    std::function<void(const EntityRef&, const std::string&)> name = [&](const EntityRef& e, const std::string& as) {
+        if (!e) return;
+        what[e.get()] = {as, whose.empty() ? as : whose};
+        for (const EntityRef& child : e->children) name(child, as);
+    };
+    for (const auto& [id, c] : cards) {
+        if (!c) continue;
+        std::string title = catalog ? catalog->title(c->ref).substr(0, 28) : "?";
+        whose = fmt("card %d", id);
+        name(c->root, "card piece (" + title + ")");
+        if (c->smallQuad) name(c->smallQuad->entity, "small face (" + title + ")");
+        name(c->openFace, "open face (" + title + ")");
+        name(c->openPanel, "open panel (" + title + ")");
+        name(c->askHolder, "pill (" + title + ")");
+        name(c->stepHolder, "step (" + title + ")");
+        name(c->badge, "badge (" + title + ")");
+        name(c->markHolder, "mark (" + title + ")");
+    }
+    whose.clear();
+    if (panes) name(panes->entity, "pane");
+    if (floatingPanes) name(floatingPanes->entity, "floating pane");
+    if (threads) name(threads->entity, "thread");
+    for (const auto& [key, label] : labels) name(label.entity, "thread tag (" + label.words.substr(0, 28) + ")");
+    for (const auto& [head, g] : grids) {
+        if (g) name(g->entity, "grid");
+    }
+    struct Surface {
+        std::string kind, label, owner;
+        bool writesDepth;
+        float opacity;
+        std::vector<std::array<Vec3, 3>> triangles;
+    };
+    std::vector<Surface> surfaces;
+    std::function<void(const EntityRef&, float)> collect = [&](const EntityRef& e, float opacity) {
+        if (!e || !e->isEnabled) return;
+        float o = opacity * e->opacity.value_or(1);
+        // (As the renderer draws it: anything more than barely there, its depth written whatever its opacity.)
+        if (o <= 0.002f) return;
+        if (e->model && e->model->mesh && !e->model->materials.empty()) {
+            const Material& m = e->model->materials.front();
+            const Mesh& mesh = *e->model->mesh;
+            if (m.kind != Material::Kind::dust) {
+                Mat4 world = e->transformMatrix(nullptr);
+                Surface s;
+                auto found = what.find(e.get());
+                s.label = found != what.end() ? found->second.first : (e->name.empty() ? "other" : e->name);
+                s.owner = found != what.end() ? found->second.second : fmt("other %p", static_cast<const void*>(e.get()));
+                s.kind = s.label.substr(0, s.label.find(" ("));
+                s.writesDepth = m.writesDepth;
+                s.opacity = o;
+                std::vector<Vec3> points;
+                std::vector<uint32_t> order;
+                if (mesh.isLowLevel()) {
+                    const auto& low = static_cast<const LowLevelMesh&>(mesh);
+                    size_t at = 0;
+                    for (const auto& a : low.descriptor.vertexAttributes) {
+                        if (a.semantic == LowLevelMesh::Semantic::position) at = a.offset;
+                    }
+                    for (int k = 0; k < low.indexCount; k++) order.push_back(low.indexData[size_t(k)]);
+                    uint32_t most = 0;
+                    for (uint32_t k : order) most = std::max(most, k);
+                    for (uint32_t k = 0; k <= most && order.size() > 0 && (size_t(k) + 1) * low.descriptor.stride <= low.vertexData.size(); k++) {
+                        Vec3 p;
+                        std::memcpy(&p, low.vertexData.data() + size_t(k) * low.descriptor.stride + at, sizeof(float) * 3);
+                        points.push_back(p);
+                    }
+                } else {
+                    points = mesh.positions;
+                    order = mesh.indices;
+                }
+                for (size_t k = 0; k + 2 < order.size(); k += 3) {
+                    if (order[k] >= points.size() || order[k + 1] >= points.size() || order[k + 2] >= points.size()) continue;
+                    s.triangles.push_back({world.point(points[order[k]]), world.point(points[order[k + 1]]), world.point(points[order[k + 2]])});
+                }
+                if (!s.triangles.empty()) surfaces.push_back(std::move(s));
+            }
+        }
+        for (const EntityRef& child : e->children) collect(child, o);
+    };
+    collect(root_, 1);
+    // Where a sight line from the eye along `d` meets a triangle, m, if it does.
+    auto meets = [&](Vec3 d, const std::array<Vec3, 3>& t) -> std::optional<float> {
+        Vec3 e1 = t[1] - t[0], e2 = t[2] - t[0], p = cross(d, e2);
+        float det = dot(e1, p);
+        if (std::fabs(det) < 1e-12f) return std::nullopt;
+        Vec3 q = eye - t[0];
+        float u = dot(q, p) / det;
+        if (u < 0 || u > 1) return std::nullopt;
+        Vec3 r = cross(q, e1);
+        float v = dot(d, r) / det;
+        if (v < 0 || u + v > 1) return std::nullopt;
+        float far = dot(e2, r) / det;
+        return far > 0.05f ? std::optional<float>(far) : std::nullopt;
+    };
+    struct Pair {
+        int lines = 0;
+        float closest = 1;
+    };
+    std::map<std::string, Pair> kinds, named;
+    Pair within;
+    // Each triangle is listed under the sight lines it may cross, by the angles its corners are seen at.
+    constexpr float step = 0.5f, wide = 40, tall = 22.5f;
+    constexpr int across = int(2 * wide / step) + 1, down = int(2 * tall / step) + 1;
+    std::vector<std::vector<std::pair<int, int>>> cells(size_t(across * down));
+    for (int k = 0; k < int(surfaces.size()); k++) {
+        for (int t = 0; t < int(surfaces[size_t(k)].triangles.size()); t++) {
+            float lo[2] = {1e9f, 1e9f}, hi[2] = {-1e9f, -1e9f};
+            bool behind = false;
+            for (const Vec3& p : surfaces[size_t(k)].triangles[size_t(t)]) {
+                Vec3 v = p - eye;
+                float x = dot(v, right), y = dot(v, up), z = dot(v, ahead);
+                if (z < 0.05f) behind = true;
+                float yaw = std::atan2(x, z) * 180 / float(M_PI), pitch = std::atan2(y, std::sqrt(x * x + z * z)) * 180 / float(M_PI);
+                lo[0] = std::min(lo[0], yaw), hi[0] = std::max(hi[0], yaw), lo[1] = std::min(lo[1], pitch), hi[1] = std::max(hi[1], pitch);
+            }
+            if (behind) continue;
+            int i0 = std::max(0, int(std::floor((lo[0] + wide) / step))), i1 = std::min(across - 1, int(std::ceil((hi[0] + wide) / step)));
+            int j0 = std::max(0, int(std::floor((lo[1] + tall) / step))), j1 = std::min(down - 1, int(std::ceil((hi[1] + tall) / step)));
+            for (int i = i0; i <= i1; i++) {
+                for (int j = j0; j <= j1; j++) cells[size_t(i * down + j)].push_back({k, t});
+            }
+        }
+    }
+    int lines = 0;
+    for (int i = 0; i < across; i++) {
+        for (int j = 0; j < down; j++) {
+            float a = (float(i) * step - wide) * float(M_PI) / 180, b = (float(j) * step - tall) * float(M_PI) / 180;
+            Vec3 d = normalize(ahead * (std::cos(a) * std::cos(b)) + right * (std::sin(a) * std::cos(b)) + up * std::sin(b));
+            lines++;
+            std::map<int, float> nearest;
+            for (auto [k, t] : cells[size_t(i * down + j)]) {
+                if (std::optional<float> far = meets(d, surfaces[size_t(k)].triangles[size_t(t)])) {
+                    auto had = nearest.find(k);
+                    if (had == nearest.end() || *far < had->second) nearest[k] = *far;
+                }
+            }
+            std::vector<std::pair<float, int>> met;
+            for (auto [k, far] : nearest) met.push_back({far, k});
+            std::sort(met.begin(), met.end());
+            for (size_t k = 0; k + 1 < met.size(); k++) {
+                float gap = met[k + 1].first - met[k].first;
+                const Surface &x = surfaces[size_t(met[k].second)], &y = surfaces[size_t(met[k + 1].second)];
+                if (gap >= 0.002f || !(x.writesDepth || y.writesDepth)) continue;
+                if (x.owner == y.owner) {
+                    within.lines++;
+                    within.closest = std::min(within.closest, gap);
+                    continue;
+                }
+                std::string kx = x.kind, ky = y.kind, lx = x.label + fmt(" at %.2f", double(x.opacity)), ly = y.label + fmt(" at %.2f", double(y.opacity));
+                if (kx > ky) std::swap(kx, ky);
+                if (lx > ly) std::swap(lx, ly);
+                for (auto [map, key] : {std::pair{&kinds, kx + " / " + ky}, std::pair{&named, lx + " / " + ly}}) {
+                    Pair& p = (*map)[key];
+                    p.lines++;
+                    p.closest = std::min(p.closest, gap);
+                }
+            }
+        }
+    }
+    std::optional<int> focus = tree ? tree->focus() : std::nullopt;
+    logLine(fmt("[ocean] depth: of %s, on layer %d: %d sight lines, %d surfaces drawn", focus && catalog ? catalog->title(find(*tree, *focus)->ref).c_str() : "nothing open",
+                tree ? tree->standDepth() : 0, lines, int(surfaces.size())));
+    logLine(fmt("[ocean] depth: within one card: %d sight lines, closest %.3f mm", within.lines, double(within.closest * 1000)));
+    for (const auto& [key, p] : kinds) logLine(fmt("[ocean] depth: %s: %d sight lines, closest %.3f mm", key.c_str(), p.lines, double(p.closest * 1000)));
+    std::vector<std::pair<std::string, Pair>> worst(named.begin(), named.end());
+    std::sort(worst.begin(), worst.end(), [](const auto& a, const auto& b) { return a.second.closest < b.second.closest; });
+    for (size_t k = 0; k < worst.size() && k < 10; k++) {
+        logLine(fmt("[ocean] depth pair: %s: %d sight lines, closest %.3f mm", worst[k].first.c_str(), worst[k].second.lines, double(worst[k].second.closest * 1000)));
+    }
+    logLine("[ocean] depth: done");
 }

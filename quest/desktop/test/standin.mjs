@@ -156,8 +156,11 @@ const freePort = () =>
     });
   });
 
-/** The fake service on a copy of `source`, and the proxy the preview joins through. */
-export async function standIn(name, source) {
+/**
+ * The fake service on a copy of `source`, and the proxy the preview joins through. With `demo` it runs the walkthrough demo
+ * (`--demo`), which sets its tree up again round by round for each headset that joins.
+ */
+export async function standIn(name, source, { demo = false } = {}) {
   if (!source || !existsSync(join(source, 'mindstorm.sqlite'))) throw new Error('--data must name a data folder with a mindstorm.sqlite');
   const work = mkdtempSync(join(tmpdir(), `${name}-`));
   const data = join(work, 'data');
@@ -178,9 +181,10 @@ export async function standIn(name, source) {
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => (stop(), setTimeout(() => (clean(), process.exit(1)), 500)));
 
   const servicePort = await freePort();
-  const service = spawn(process.execPath, ['--no-warnings', '--import', 'tsx', 'src/node/main.ts', '--fake'], {
+  const service = spawn(process.execPath, ['--no-warnings', '--import', 'tsx', 'src/node/main.ts', ...(demo ? ['--demo'] : []), '--fake'], {
     cwd: agents,
-    env: { PATH: process.env.PATH, HOME: process.env.HOME, MIND_PALACE_ENV: join(work, 'empty.env'), MIND_PALACE_DATA: data, MIND_PALACE_PORT: String(servicePort), MIND_PALACE_TOKEN: token },
+    env: { PATH: process.env.PATH, HOME: process.env.HOME, MIND_PALACE_ENV: join(work, 'empty.env'), MIND_PALACE_DATA: data, MIND_PALACE_PORT: String(servicePort), MIND_PALACE_TOKEN: token,
+      ...(demo ? { MIND_PALACE_DEMO_RESTART: 'off' } : {}) },
     stdio: ['ignore', openSync(join(work, 'service.log'), 'w'), openSync(join(work, 'service.log'), 'a')],
   });
   started.push(service);
@@ -244,7 +248,7 @@ export async function standIn(name, source) {
     });
     const done = new Promise((resolve) => preview.on('exit', resolve));
     const sent = (t) => fromPreview.filter((m) => m.message.t === t && m.when >= began).map((m) => ({ ...m.message, at: (m.when - began) / 1000 }));
-    return { log, done, began, sent, at: () => (Date.now() - began) / 1000 };
+    return { log, done, began, sent, at: () => (Date.now() - began) / 1000, stop: () => preview.exitCode === null && preview.kill() };
   }
 
   async function close() {
