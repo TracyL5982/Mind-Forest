@@ -73,6 +73,9 @@ void OceanModel::start() {
         gazeMaterial = m;
     }
     // NOTE(port): `await tracker.start()` has nothing to do: the host tracks the head (platform::head).
+    hands->surface = [this](Vec3 hand) { return fistSurface(hand); };
+    // A blade cuts on the layer you work on, where it points.
+    hands->target = [this](Vec3 from, Vec3 along) { return onSheet(from, from + along); };
     hands->start();
     audio::start();     // NOTE(port): added for Quest (oceanmodel_sound.cpp)
     loaded = true;
@@ -980,6 +983,57 @@ void OceanModel::report(float dt, double work) {
 
 // MARK: - Light on the hands (Quest)
 
+/// Where a line from `from` through `through` meets the layer you work on (`lift` m in front of it). The
+/// layer is part of a cylinder that stands round the middle of the scene.
+std::optional<Vec3> OceanModel::onSheet(Vec3 from, Vec3 through, float lift) const {
+    Stage::Sheet sheet = stage.sheet(0);
+    if (!(sheet.curve > 1e-4f)) return std::nullopt;
+    Vec3 axis = sheet.hinge + sheet.near * (1 / sheet.curve + sheet.raise);
+    float R = 1 / sheet.curve - lift;
+    Vec3 e = from - axis, d = through - from;
+    e = e - sheet.up * dot(e, sheet.up);
+    Vec3 flat = d - sheet.up * dot(d, sheet.up);
+    float A = dot(flat, flat), B = 2 * dot(e, flat), C = dot(e, e) - R * R, disc = B * B - 4 * A * C;
+    if (!(A > 1e-8f && disc > 0 && C < 0)) return std::nullopt;
+    return from + d * ((-B + std::sqrt(disc)) / (2 * A));
+}
+
+/// The frame a closed hand is read in (hands.h): the normal of the surface in front of it, and the plane
+/// across that. Every surface a fist can act on is on the layer you work on (the cards lie on it, and a card
+/// gone into grows where it lies), so that layer is the surface.
+///
+/// Which place on it the fist is in front of decides the normal, since the layer wraps round you. The
+/// mathematically nearest place is a poor answer from inside a sheet 1.5 m off all round: for a fist beside
+/// the body it is far off to the side, a few centimetres nearer than the sheet straight ahead. So it is the
+/// place straight ahead of the fist, the way you are facing: the line a push goes along.
+/// `-fistFrame nearest` takes the nearest place instead, `-fistFrame eye` the place the fist is seen against
+/// (how it was earlier on 15 Nov), `-fistFrame hand` the Swift's.
+std::optional<Hands::Surface> OceanModel::fistSurface(Vec3 hand) const {
+    static const std::string how = Flags::string("fistFrame").value_or("ahead");
+    if (how == "hand") return std::nullopt;
+    Stage::Sheet sheet = stage.sheet(0);
+    if (!(sheet.curve > 1e-4f)) return std::nullopt;
+    Vec3 axis = sheet.hinge + sheet.near * (1 / sheet.curve + sheet.raise);
+    std::optional<Mat4> head = platform::head();
+    Vec3 on = hand;
+    if (how == "eye" && head) {
+        on = onSheet(head->position(), hand, 0).value_or(hand);
+    } else if (how != "nearest") {
+        // The way you face, level. A head bent right down over the desk still faces somewhere: where its top points.
+        Vec3 facing = head ? head->forward() : stage.f;
+        if (head && std::fabs(facing.y) > 0.94f) facing = head->up() * (facing.y < 0 ? 1.f : -1.f);
+        facing = facing - sheet.up * dot(facing, sheet.up);
+        facing = length(facing) > 1e-3f ? normalize(facing) : stage.f;
+        on = onSheet(hand, hand + facing, 0).value_or(hand);
+    }
+    Vec3 v = on - axis;
+    v = v - sheet.up * dot(v, sheet.up);
+    float far = length(v);
+    // (At the very middle of the scene there is no nearest: straight ahead.)
+    Vec3 normal = far > 0.05f ? v / far : -sheet.near;
+    return Hands::Surface{normal, normalize(cross(normal, sheet.up)), sheet.up};
+}
+
 /// What a closed hand or a finger on the small tree is doing, drawn where the hand is (handglow.h).
 /// `-glowDemo decide|pan|layer|tree` shows each without hands, for looking at it in the preview.
 void OceanModel::drawHandGlow(double now, float dt) {
@@ -1001,6 +1055,8 @@ void OceanModel::drawHandGlow(double now, float dt) {
         out.offset = g.offset;
         out.ahead = g.ahead;
         out.right = g.right;
+        out.up = g.up;
+        out.locked = g.locked;
         out.carried = g.carried;
         out.depth = g.depth;
         out.base = g.base;

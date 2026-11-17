@@ -169,11 +169,11 @@ Under an open card a client offers a few things to ask, so the user can start a 
 |---|---|---|
 | `POST /api/assets?name=<file name>` | The file's bytes, with its `Content-Type` | `{id, url, mime}` |
 | `GET /assets/<id>` | | The bytes. Supports byte ranges for video. A file the service streams from its source answers with the source's status and range. The service streams only the address it stored for that asset, never one named in the request, and a file on its own disk only from `public/clips/full`. |
-| `POST /api/transcribe?tree=<id>` | Audio bytes, with `Content-Type` (`audio/wav`, `audio/webm`, `audio/mp4`, `audio/mpeg`, `audio/ogg`) | `{text}`, without a leading wake phrase, so `""` when only the phrase was said. The agent's name and the titles of the cards in `tree`, then of every tree and the newest cards, are given to the recognizer as words the user is likely to say. |
+| `POST /api/transcribe?tree=<id>&woke=1` | Audio bytes, with `Content-Type` (`audio/wav`, `audio/webm`, `audio/mp4`, `audio/mpeg`, `audio/ogg`) | `{text, named}`: the text without a leading wake phrase, so `""` when only the phrase was said. `woke=1` says the recording began with what the client's spotter took for the name, which also wakes on things that only sound like it: unless the words begin with "hey" or "hi" and the name, the answer is `{text: "", named: false}` and the client makes nothing of it. Without `woke`, as for a recording the user began by hand, `named` is true. The agent's name and the titles of the cards in `tree`, then of every tree and the newest cards, are given to the recognizer as words the user is likely to say. |
 | `GET /handoffs/<name>.zip` | | The bundle. |
 | `GET /handoffs/<name>.md` | | The handoff as one Markdown file that travels alone. |
-| `GET /api/telegram` | | `{available, ready, paired}`. `available` is false when the service has no `TELEGRAM_BOT_TOKEN`. `ready` is true once Telegram has answered the service. `paired` is the paired person's name, or null. |
-| `POST /api/telegram/pair` | | `{link}`, a `https://t.me/<bot>?start=<code>` address. Opening it in Telegram and pressing Start pairs that Telegram account, replacing any pairing before it. The code works once, for 10 minutes, and a new `pair` replaces it. 404 without a bot token, 503 before Telegram has answered. |
+| `GET /api/telegram` | | `{available, ready, paired}`. `available` is false when the service has no Telegram bot: no `TELEGRAM_BOT_TOKEN` on the Mac, no `MIND_PALACE_JUDGE_BOT_TOKEN` hosted. `ready` is true once Telegram has answered the service. `paired` is the paired person's name, or null. |
+| `POST /api/telegram/pair` | | `{link, bot}`, and hosted `code` too. `link` is a `https://t.me/<bot>?start=<code>` address: opening it in Telegram and pressing Start pairs that Telegram account, replacing any pairing before it. `bot` is the bot's username. Hosted, `code` is six digits a headset can show or say: sending it to the bot as a message pairs as the link does. The code works once, for 10 minutes, and a new `pair` replaces it. 404 without a bot, 503 before Telegram has answered. |
 | `POST /api/telegram/unpair` | | `{available, ready, paired}` with `paired` null. Nothing from Telegram is heard until the next pairing. |
 | `GET /api/speak?text=<reply>` | | MP3 of the reply read aloud, streamed as it is made. 404 when the service has no voice. Takes the token as `?token=` so an audio element can play it directly. |
 | `GET /api/state` | | `{snapshot, settings}` |
@@ -187,7 +187,7 @@ A client can turn speech into text itself and send `utter` messages. Or it can r
 
 The user wakes the agent by saying "hey" or "hi" and its name, `settings.agentName` ("hey Momo", "hi Momo"). A client that listens for it:
 
-- Spots the phrase on the device. No audio leaves the device before the phrase is heard.
+- Spots the phrase on the device. No audio leaves the device before the spotter hears the phrase. It also wakes on things that only sound like it, so the service checks each wake: a recording by `woke=1` on `/api/transcribe`, a live turn by the `name` frame.
 - Then records until the speaker pauses for 1.2 seconds, or for 8 seconds when nothing more is said, and sends nothing in that case. The recording starts a moment before the phrase, so words said straight after it are kept.
 - Posts that recording to `/api/transcribe` and sends the text as a final `utter`.
 - Does not listen while a reply is playing.
@@ -213,13 +213,15 @@ Service to client:
 | `{t:'audio', id, pcm}` | Momo's voice for response `id`, in order, to play as it comes, after any response still playing. |
 | `{t:'done', id, usage?}` | Response `id` has no more audio. `usage` is OpenAI's token count. |
 | `{t:'failed', why}` | The session failed, and any turn in progress is over. The next `start` opens a new one. |
+| `{t:'name', ok}` | The answer to the client's `name`: whether the sound that woke it held "hey" or "hi" and the name. Until it comes the service sends nothing else, and what it held back follows it in order. On `false` the turn the wake began is dropped and nothing of it follows: the client stops sending and listens for the name again. A check that fails, or takes over 2.5 s, answers `true`. |
 
 Client to service:
 
 | Frame | Meaning |
 |---|---|
+| `{t:'name', pcm}` | The client's spotter heard the name. `pcm` is the sound it took for it, from a tenth of a second before the name to where it was spotted, base64 of 16-bit mono PCM at 16 kHz, 4 s at most. The spotter also wakes on things that only sound like the name, so the service checks it and answers `{t:'name', ok}`. The client does not wait for the answer: it chimes and may send `start` and audio at once. |
 | `{t:'start', turn, scene}` | The wake phrase was heard. Turn `turn` (1, 2, … per socket) follows as audio, said in `scene`, which Momo is told when it changed. It also stops whatever Momo is saying: the client stops playing at once, and the service cancels the response and cuts Momo's words in the conversation where the client had played them to. |
-| `{t:'audio', pcm}` | The microphone at 16000 Hz until `over`: from 0.8 s before the first word after the phrase, or from a moment before the phrase when the request follows straight on. Nothing before the phrase, and not the phrase alone. |
+| `{t:'audio', pcm}` | The microphone at 16000 Hz until `over`: from 0.8 s before the first word after the phrase, or from a moment before the phrase when the request follows straight on. Nothing before the phrase, and not the phrase alone, which goes only in `name`. |
 | `{t:'end'}` | The client stopped sending before `over` (it sends a minute at most): take what was sent. |
 | `{t:'cancel'}` | Nothing was said after the phrase for 8 seconds: drop the turn. |
 

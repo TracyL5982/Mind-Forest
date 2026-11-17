@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { spokenName, withoutWakePhrase } from '../src/core/wake.ts';
+import { saysWakePhrase, spokenName, withoutWakePhrase } from '../src/core/wake.ts';
 
 test('a leading "hey" or "hi" and the name are dropped, however they were written down', () => {
   const cases: [string, string][] = [
@@ -37,4 +37,17 @@ test('another name works the same way, and the old one no longer wakes anything'
   assert.equal(withoutWakePhrase('hey mister pickle, undo', 'Mister Pickle'), 'Undo');
   assert.equal(spokenName('momo'), 'Momo');
   assert.equal(spokenName('mister pickle'), 'Mister Pickle');
+});
+
+test('the sound of a wake, written down, is the name only when it holds "hey" or "hi" and the name', () => {
+  for (const heard of ['Hey Momo.', 'hi momo', 'Hi, Mo-mo!', 'HEY MOMO', 'Hey Mo mo, what is', 'morning. Hey Momo', 'High Momo.', 'Hay, Momo']) {
+    assert.equal(saysWakePhrase(heard, 'momo'), true, heard);
+  }
+  for (const heard of ['Hey mama.', 'Hi mom.', 'Hey Mo, more!', 'Hey Nemo.', 'Momo.', 'My cat is called Momo.', 'Hey Momoko', "Hey Momo's bakery", 'They hide Momo', 'Hello Momo', '']) {
+    assert.equal(saysWakePhrase(heard, 'momo'), false, heard);
+  }
+  assert.equal(saysWakePhrase('Hi Juno.', 'Juno'), true);
+  assert.equal(saysWakePhrase('Hey Momo.', 'Juno'), false);
+  assert.equal(saysWakePhrase('hey mister pickle', 'Mister Pickle'), true);
+  assert.equal(saysWakePhrase('Hey Momo', ''), false);
 });

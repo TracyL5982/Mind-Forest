@@ -24,6 +24,8 @@ export type VoiceFrame =
   | { t: 'text'; id: string; text: string; kind: SayKind }
   | { t: 'audio'; id: string; pcm: string }
   | { t: 'done'; id: string; usage?: Usage }
+  /** The check of the sound that woke the device: whether it was the name. On `false` the device closes what the wake opened. */
+  | { t: 'name'; ok: boolean }
   | { t: 'failed'; why: string };
 
 /** An event from or to OpenAI's realtime model. */
@@ -49,6 +51,11 @@ export interface Usage {
 
 export const RATE = 24000;
 const IDLE_MS = 5 * 60 * 1000;
+/**
+ * How long the check of a wake may take before the wake is taken for the name. The check answers in about half a second and Momo's
+ * first sound comes two seconds or more after the name, so nothing waits for it unless it is this slow (DECISIONS 70).
+ */
+const NAME_WAIT_MS = 2500;
 /** 16-bit mono at RATE. */
 const BYTES_PER_MS = (RATE * 2) / 1000;
 /** Later cards of a run are gathered into one line at most this often. */
@@ -138,6 +145,13 @@ export interface LiveDeps {
   activity: (a: Activity) => void;
   /** What a response or a transcription cost, in dollars, as it is known. */
   spent?: (dollars: number) => void;
+  /**
+   * Whether the sound that woke the device (16 kHz mono 16-bit PCM) holds the name: the check of a wake (`wake-check.ts`). Without it
+   * every wake is taken for the name.
+   */
+  named?: (pcm: Uint8Array) => Promise<boolean>;
+  /** How long Momo's answer waits for that check at most, in ms. */
+  nameWaitMs?: number;
   log: (line: string) => void;
   /** More instructions for the session, after Momo's own: the demo's, which make every request a take (src/demo). */
   extra?: () => string;
@@ -190,6 +204,7 @@ A question gets an answer, not cards: "who painted it?" is answered from what yo
 - organize: move, group, rename, tidy, delete.
 - hand_off: package cards for another app or agent.
 - save_note: the user dictates a thought to keep.
+- connect_telegram: "connect my Telegram". This once you do read out a name and a code: the bot's name as given, then the code digit by digit.
 Say a few words of your own as you call these ("Keeping that one", "Going up"). When a tool says it could not, say why in a few words.
 
 # Notes from Mind Palace
@@ -450,12 +465,26 @@ export class LiveVoice {
   private played: Played[] = [];
   private upsampler = new Upsampler();
   private idle: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * A wake whose sound is being checked. Until the check answers, Momo does nothing the user could notice: what it would send the
+   * device, the calls it would run and the words it would keep all wait in `held`, in order. `items`: what the conversation gained
+   * meanwhile, to take out again should it not have been the name. `turn`: a turn began since.
+   */
+  private naming: { id: number; at: number; held: (() => void)[]; items: string[]; calls: string[]; turn: boolean; heldAudioAt?: number; timer: ReturnType<typeof setTimeout> } | null = null;
+  private wakes = 0;
+  private readonly device: (frame: VoiceFrame) => void;
 
   constructor(
     private readonly deps: LiveDeps,
-    private readonly device: (frame: VoiceFrame) => void,
+    device: (frame: VoiceFrame) => void,
   ) {
     this.narration = new Narration(deps.batchMs);
+    // Everything for the device waits while a wake is checked, except the check's own answer.
+    this.device = (frame) => {
+      if (!this.naming || frame.t === 'name') return device(frame);
+      if (frame.t === 'audio' && this.naming.heldAudioAt === undefined) this.naming.heldAudioAt = this.now();
+      this.naming.held.push(() => device(frame));
+    };
     device({ t: 'ready', rate: RATE });
   }
 
@@ -467,8 +496,12 @@ export class LiveVoice {
   heard(frame: DeviceFrame): void {
     this.touch();
     switch (frame.t) {
+      case 'name':
+        this.check(Buffer.from(frame.pcm, 'base64'));
+        return;
       case 'start': {
         const s = this.ensure();
+        if (this.naming) this.naming.turn = true;
         this.hush();
         this.scene = frame.scene;
         s.send({ type: 'session.update', session: { type: 'realtime', audio: { input: { transcription: this.transcription(frame.scene) } } } });
@@ -510,6 +543,53 @@ export class LiveVoice {
         this.drain();
         return;
     }
+  }
+
+  /** The device woke: the sound that woke it is checked, and until the check answers Momo's doings wait. */
+  private check(pcm: Uint8Array): void {
+    if (!this.deps.named) return this.device({ t: 'name', ok: true });
+    if (this.naming) this.verdict(this.naming.id, true, 'another wake came first');
+    const id = ++this.wakes;
+    const timer = setTimeout(() => this.verdict(id, true, 'the check did not answer in time'), this.deps.nameWaitMs ?? NAME_WAIT_MS);
+    timer.unref?.();
+    this.naming = { id, at: this.now(), held: [], items: [], calls: [], turn: false, timer };
+    this.deps.named(pcm).then(
+      (ok) => this.verdict(id, ok),
+      (err) => this.verdict(id, true, `the check failed: ${err instanceof Error ? err.message : String(err)}`),
+    );
+  }
+
+  /** The check answered. The name: what waited goes on, in order. Not the name: everything the wake brought is undone. */
+  private verdict(id: number, ok: boolean, why?: string): void {
+    const n = this.naming;
+    if (!n || n.id !== id) return;
+    clearTimeout(n.timer);
+    this.naming = null;
+    const now = this.now();
+    const waited = n.held.length > 0 ? `, and ${n.held.length} of Momo's doings had waited for it` : '';
+    this.deps.log(`[live] wake ${id} ${why ? `taken for the name (${why})` : ok ? 'was the name' : 'was not the name'}, ${now - n.at} ms after it came${waited}`);
+    this.device({ t: 'name', ok });
+    if (ok) {
+      // Sound that waited plays from now, not from when it came.
+      if (n.heldAudioAt !== undefined) {
+        const late = now - n.heldAudioAt;
+        for (const p of this.played) if (p.from >= n.heldAudioAt) p.from += late;
+        this.playedUntil += late;
+      }
+      for (const go of n.held) go();
+      return;
+    }
+    for (const call of n.calls) this.calls.delete(call);
+    if (!n.turn && n.items.length === 0) return;
+    this.hush();
+    this.session?.send({ type: 'input_audio_buffer.clear' });
+    for (const item of n.items) {
+      this.transcribing.delete(item);
+      this.session?.send({ type: 'conversation.item.delete', item_id: item });
+    }
+    this.hearing = null;
+    for (const look of [...this.waiting]) look();
+    this.drain();
   }
 
   /** All of a turn's words so far, the pieces written down before and then `text`, without the name that woke Momo. */
@@ -565,8 +645,8 @@ export class LiveVoice {
    * so the next session does not cancel its own first answer for one asked of this one.
    */
   close(): void {
-    for (const timer of [this.idle, this.wake, this.expected?.timer, this.runEnded]) if (timer) clearTimeout(timer);
-    this.idle = this.wake = this.expected = this.runEnded = null;
+    for (const timer of [this.idle, this.wake, this.expected?.timer, this.runEnded, this.naming?.timer]) if (timer) clearTimeout(timer);
+    this.idle = this.wake = this.expected = this.runEnded = this.naming = null;
     this.session?.close();
     this.session = null;
     this.forget();
@@ -642,6 +722,7 @@ export class LiveVoice {
       case 'input_audio_buffer.committed': {
         const heard = this.hearing;
         if (!heard) return;
+        this.naming?.items.push(e.item_id as string);
         this.transcribing.set(e.item_id as string, { turn: heard.turn, text: '', over: now });
         this.answering = { turn: heard.turn, at: heard.stopped ?? now };
         if (heard.stopped !== undefined) this.deps.log(`[live] turn ${heard.turn} over ${now - heard.stopped} ms after the model heard the end of speech`);
@@ -680,7 +761,7 @@ export class LiveVoice {
         if (this.words.turn === t.turn) this.words.text = whole;
         this.device({ t: 'heard', turn: t.turn, text: whole, final: true });
         const clean = withoutWakePhrase(text, this.deps.name()).trim();
-        if (clean) this.deps.spoken({ who: 'user', text: clean });
+        if (clean) this.afterCheck(() => this.deps.spoken({ who: 'user', text: clean }));
         for (const look of [...this.waiting]) look();
         return;
       }
@@ -724,8 +805,9 @@ export class LiveVoice {
         return;
       }
       case 'response.output_item.added': {
-        const item = e.item as { type?: string; call_id?: string; name?: string } | undefined;
+        const item = e.item as { id?: string; type?: string; call_id?: string; name?: string } | undefined;
         if (item?.type === 'function_call' && item.call_id && item.name) this.names.set(item.call_id, item.name);
+        if (item?.id) this.naming?.items.push(item.id);
         return;
       }
       case 'response.output_audio_transcript.delta': {
@@ -772,7 +854,7 @@ export class LiveVoice {
         if (dollars !== null) this.deps.spent?.(dollars);
         this.deps.log(`[live] ${m.purpose.kind} ${response.status}${m.calls.size ? ` with ${[...m.calls].map((c) => this.names.get(c) ?? '?').join(', ')}` : ''}: ${m.text}${dollars === null ? '' : ` ($${dollars.toFixed(4)})`}`);
         if (m.text || m.heard) this.device({ t: 'done', id: m.id, ...(response.usage ? { usage: response.usage } : {}) });
-        if (m.text.trim() && response.status === 'completed') this.deps.spoken({ who: 'agent', text: m.text.trim() });
+        if (m.text.trim() && response.status === 'completed') this.afterCheck(() => this.deps.spoken({ who: 'agent', text: m.text.trim() }));
         const a = this.answering;
         const waits = a && ([...this.calls.values()].some((c) => c.turn === a.turn) || this.ready.some((r) => r.turn === a.turn && r.answer));
         if (a && m.purpose.kind === 'reply' && m.purpose.turn === a.turn && !m.heard && !waits) {
@@ -810,7 +892,14 @@ export class LiveVoice {
     this.speaking?.calls.add(call);
     this.names.set(call, name);
     this.calls.set(call, { name, ...(turn !== undefined ? { turn } : {}) });
-    void this.run(call, name, args, turn);
+    this.naming?.calls.push(call);
+    this.afterCheck(() => void this.run(call, name, args, turn));
+  }
+
+  /** Does it now, or once the wake being checked is found to be the name, and never if it is not. */
+  private afterCheck(go: () => void): void {
+    if (this.naming) this.naming.held.push(go);
+    else go();
   }
 
   private async run(call: string, name: string, args: string, turn: number | undefined): Promise<void> {
@@ -927,6 +1016,9 @@ export class LiveVoice {
   private lost(why: string): void {
     this.deps.log(`[live] session closed: ${why}`);
     this.session = null;
+    // Nothing is left for a check to let through or undo, and the device is told of the failure at once.
+    if (this.naming) clearTimeout(this.naming.timer);
+    this.naming = null;
     const busy = Boolean(this.hearing) || this.transcribing.size > 0 || Boolean(this.speaking) || Boolean(this.asked) || Boolean(this.expected);
     this.forget();
     if (busy) this.device({ t: 'failed', why });

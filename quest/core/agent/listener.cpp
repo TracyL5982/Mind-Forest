@@ -16,6 +16,8 @@ constexpr int ringPieces = 30;
 constexpr double afterLastPiece = 0.45;
 /// How far before that guess the start of the phrase is looked for, at most.
 constexpr int lookBack = 5;
+/// The name is spotted 0.4 to 0.6 seconds after its sound ends, so the last three pieces before then come after it.
+constexpr int spottedAfter = 3;
 /// The spotter clears itself after 1.5 seconds without speech; a fresh stream after each second of quiet comes first.
 /// After 1.5 and 3 seconds of quiet, 7 and 0 of 60 phrases were caught without it, 52 and 57 with it.
 constexpr int freshAfterQuiet = 10;
@@ -113,7 +115,8 @@ void Listener::spot(const Piece& piece, std::vector<Event>& events) {
 /// can end before the name is spotted, so speech after the phrase counts and the pause is timed from it. The phrase ends at
 /// the first dip once its span has passed (its first piece is reported after its sound begins, its last near the end). A dip
 /// is a piece under a fifth of the phrase's loudest, since a quick speaker may not go quiet, and only a piece as loud as that
-/// after the dip is a word, so the fading end of "Momo" is not taken for one.
+/// after the dip is a word, so the fading end of "Momo" is not taken for one. A speaker who does not stop at all ("hi Momo
+/// what is this") leaves no dip: then the sound just before the name was spotted is the request (DECISIONS.md 69).
 void Listener::wake(const Spotter::Found& found, std::vector<Event>& events) {
     const std::vector<float>& times = found.timestamps;
     double span = times.size() > 1 ? double(times.back()) - double(times.front()) : 0;
@@ -135,9 +138,17 @@ void Listener::wake(const Spotter::Found& found, std::vector<Event>& events) {
     for (int i = start; i <= phraseEnd && i < n; i++) loudest = std::max(loudest, ring[i].level);
     float dip = loudest / 5;
     while (phraseEnd < n && ring[phraseEnd].level >= dip) phraseEnd++;
+    // A request said straight on from the name leaves no dip to find. The name's sound is over before the last
+    // `spottedAfter` pieces, so two of them as loud as a word are the request, and the name ended before them.
+    int tail = std::max(start + 1, n - spottedAfter);
+    int loudTail = 0;
+    for (int i = tail; i < n; i++) loudTail += ring[i].level >= dip && speech(ring[i].level, floor);
+    if (loudTail >= 2) phraseEnd = std::min(phraseEnd, tail - 1);
     auto word = [&](int i) { return i > phraseEnd && ring[i].level >= dip; };
+    Woke woke{found.keyword, {}};
+    for (int i = from; i < n; i++) woke.sound.insert(woke.sound.end(), ring[i].samples.begin(), ring[i].samples.end());
     if (mode == Mode::stream) {
-        events.push_back(Woke{found.keyword});
+        events.push_back(std::move(woke));
         // A request said straight after the name goes out with it; otherwise the conversation is open, and the turn
         // begins just before its first word.
         bool spoke = false;
@@ -163,7 +174,7 @@ void Listener::wake(const Spotter::Found& found, std::vector<Event>& events) {
     }
     phase = std::move(r);
     settle();
-    events.push_back(Woke{found.keyword});
+    events.push_back(std::move(woke));
 }
 
 /// Nothing goes out until a turn begins. Momo's voice, playing or fading, counts as someone talking, and so does Momo
@@ -264,6 +275,12 @@ void Listener::setMode(Mode m) {
 void Listener::turnOver() {
     if (!std::holds_alternative<Streaming>(phase)) return;
     phase = Open{};
+    settle();
+}
+
+void Listener::notNamed() {
+    if (!std::holds_alternative<Open>(phase) && !std::holds_alternative<Streaming>(phase)) return;
+    phase = Between{};
     settle();
 }
 

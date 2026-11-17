@@ -69,6 +69,9 @@ public:
     /// Writes down where this service's trees stand on the desk, in place of the headset's own shelf file.
     void saveShelf();
 
+    // GUIDE: the welcome walk's way to Momo's ears and voice (voice.h, `Tutor`); null with -agentVoice off.
+    Voice* talk() { return voice.get(); }
+
 private:
     /// One service tree as the scene holds it.
     struct Planted {

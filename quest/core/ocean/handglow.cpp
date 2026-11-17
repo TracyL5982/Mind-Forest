@@ -9,6 +9,7 @@ namespace {
 const Vec3 white{1, 1, 1};
 const Vec3 cool{0.72f, 0.85f, 1.0f};        // the small tree's own two colours
 const Vec3 warm{1.0f, 0.9f, 0.72f};
+const Vec3 accent{1.0f, 0.102f, 0.037f};    // Art::hot, as light
 const float pi = floatPi;
 const int vertexCapacity = 9000, indexCapacity = 30000;
 
@@ -161,9 +162,22 @@ void HandGlow::gauge(Pen& pen, const Held& h, double now) const {
     const Grab& g = h.grab;
     float s = h.shown;
     if (s < 0.01f) return;
-    Vec3 x = g.right, y{0, 1, 0}, z = g.ahead;
+    Vec3 x = g.right, y = g.up, z = g.ahead;
     Vec3 c = h.centre;
     const float ring = 0.07f;
+    // The frame itself, while the fist can still be either: the ring is the plane the tree is carried in, and
+    // through where the fist closed runs the normal axis, a small gate a little way along it each way. Once the
+    // fist has committed to carrying, the axis goes; committed to the layers, the gates below are that axis.
+    auto axis = [&](float alpha) {
+        if (alpha < 0.01f) return;
+        const float reach = g.pull * 0.6f, small = 0.013f;
+        pen.line(h.origin - z * reach, h.origin + z * reach, 0.0022f, cool, 0.5f * alpha, 0.5f * alpha);
+        for (int side = 0; side < 2; side++) {
+            Vec3 at = h.origin + z * (side == 0 ? -reach : reach);
+            if (side == 0 ? g.canBack : g.canForward) pen.ring(at, x, y, small, 0.0024f, cool, 0.6f * alpha);
+            else pen.dashes(at, x, y, small, 8, 0.002f, cool, 0.3f * alpha);
+        }
+    };
     // The plate: across the hand, so its face looks where the knuckles point.
     {
         Vec3 px = h.turn.act({1, 0, 0}), py = h.turn.act({0, 1, 0});
@@ -184,6 +198,7 @@ void HandGlow::gauge(Pen& pen, const Held& h, double now) const {
         pen.ticks(c, x, y, ring + 0.004f, ring + 0.013f, 4, 0.0022f, white, 0.7f * s);
         if (near > 0.03f) pen.arc(c, x, y, ring + 0.008f, pi / 2, pi / 2 - near * 2 * pi, 0.005f, white, 0.85f * s, true);
         pen.orb(h.origin, 0.006f, cool, 0.8f * s);
+        axis(s);
         return;
     }
 
@@ -206,6 +221,7 @@ void HandGlow::gauge(Pen& pen, const Held& h, double now) const {
         }
         pen.ring(h.origin, x, y, 0.012f, 0.002f, cool, 0.55f * s);
         pen.orb(h.origin, 0.005f, cool, 0.75f * s);
+        axis(0.7f * s * h.open);
         // The fist's own rings, and on them, brighter, the side it is heading.
         pen.film(c, x, y, ring, cool, 0.03f * s, 0.08f * s);
         pen.ring(c, x, y, ring, 0.005f, cool, 0.85f * s);
@@ -297,24 +313,69 @@ void HandGlow::orbs(Pen& pen, const std::vector<Finger>& fingers, float shown, d
     }
 }
 
-/// A flat hand as a blade: light gathers along the hand and runs out past the fingertips, thinning away.
+/// A hand held as a knife. While the pose is being held, a small ring closes round the middle fingertip. Out,
+/// the blade is one line in the accent, the way the hand points: from the heel of the hand, brightest a little
+/// past the fingertips, and on from there, thinner, all the way to the layer. Where it lands there is a mark,
+/// with the trail of a stroke behind it. The mark is where it cuts, and the line can be followed to it.
 void HandGlow::blade(Pen& pen, const Blade& b) const {
-    Vec3 along = b.tip - b.palm;
-    float far = length(along);
-    if (far < 1e-4f || b.shown < 0.01f) return;
-    along = along / far;
+    float far = distance(b.tip, b.palm);
+    Vec3 along = b.along;
+    if (far < 1e-4f || length(along) < 1e-4f) return;
+    auto facing = [&](Vec3 p, Vec3& x, Vec3& y) {
+        Vec3 toEye = pen.eye - p;
+        float off = length(toEye);
+        toEye = off > 1e-6f ? toEye / off : Vec3{0, 0, 1};
+        x = cross(Vec3{0, 1, 0}, toEye);
+        x = length(x) > 1e-5f ? normalize(x) : Vec3{1, 0, 0};
+        y = cross(toEye, x);
+    };
+    Vec3 x, y;
+    if (b.forming > 0.02f && b.shown < 0.5f) {
+        // Not yet out: the pose is read, and this much of the wait is done.
+        facing(b.tip, x, y);
+        float f = b.forming * (1 - b.shown * 2);
+        pen.ring(b.tip, x, y, 0.014f, 0.002f, cool, 0.35f * f);
+        pen.arc(b.tip, x, y, 0.014f, pi / 2, pi / 2 - b.forming * 2 * pi, 0.004f, white, 0.9f * f, true);
+    }
     float s = b.shown;
-    Vec3 end = b.tip + along * 0.12f;
-    pen.line(b.palm, b.tip, 0.018f, cool, 0, 0.3f * s);
-    pen.line(b.tip, end, 0.018f, cool, 0.3f * s, 0);
-    pen.line(b.palm + along * (far * 0.5f), b.tip, 0.0045f, warm, 0.2f * s, 0.95f * s);
-    pen.line(b.tip, end, 0.0045f, warm, 0.95f * s, 0);
-    pen.orb(b.tip, 0.007f, warm, 0.9f * s);
+    if (s < 0.01f) return;
+    // It comes out of the hand: its length grows with `shown`.
+    Vec3 end = b.tip + (b.point - b.tip) * s;
+    Vec3 heel = b.tip - along * (far * 1.35f);
+    pen.line(heel, end, 0.034f, accent, 0.06f * s, 0.34f * s);
+    pen.line(heel, b.tip, 0.007f, accent, 0.3f * s, 0.95f * s);
+    pen.line(b.tip, end, 0.007f, accent + (white - accent) * 0.35f, 0.95f * s, 0.95f * s);
+    pen.line(heel + along * (far * 0.6f), end, 0.0022f, white, 0.2f * s, 0.9f * s);
+    pen.orb(end, 0.014f, accent, 0.4f * s);
+    if (b.fresh > 0.01f) {
+        // As it comes out, a ring rings out from the hand, once.
+        facing(end, x, y);
+        float u = 1 - b.fresh, out = 1 - (1 - u) * (1 - u);
+        pen.ring(end, x, y, 0.012f + 0.06f * out, 0.007f * (1 - u) + 0.002f, accent, 0.9f * (1 - u) * s);
+    }
+    if (!b.marked) return;
+    // On to the layer, thinner: the line itself leads to the place it cuts. (It reaches there as `shown` does.)
+    Vec3 reach = end + (b.mark - end) * s;
+    pen.line(end, reach, 0.016f, accent, 0.3f * s, 0.14f * s);
+    pen.line(end, reach, 0.0045f, accent + (white - accent) * 0.3f, 0.95f * s, 0.7f * s);
+    if (s < 0.6f) return;
+    float m = (s - 0.6f) / 0.4f;
+    // On the layer: the trail of the stroke, oldest and faintest first, then the mark where it points now.
+    for (size_t k = 1; k < b.trail.size() && k < b.trailAge.size(); k++) {
+        float a0 = (1 - b.trailAge[k - 1]) * m, a1 = (1 - b.trailAge[k]) * m;
+        pen.line(b.trail[k - 1], b.trail[k], 0.03f, accent, 0.3f * a0 * a0, 0.3f * a1 * a1);
+        pen.line(b.trail[k - 1], b.trail[k], 0.008f, accent + (white - accent) * 0.3f, 0.9f * a0 * a0, 0.9f * a1 * a1);
+    }
+    facing(b.mark, x, y);
+    const float round = 0.026f;
+    pen.film(b.mark, x, y, round, accent, 0.1f * m, 0.03f * m);
+    pen.ring(b.mark, x, y, round, 0.0045f, accent, 0.95f * m);
+    pen.ticks(b.mark, x, y, round + 0.006f, round + 0.02f, 4, 0.004f, accent, 0.9f * m, pi / 4);
+    pen.orb(b.mark, 0.011f, white, 0.95f * m);
 }
 
 /// A thread in the accent, with a mark at the place on it that matters.
 void HandGlow::cut(Pen& pen, const Cut& c) const {
-    const Vec3 accent{1.0f, 0.102f, 0.037f};        // Art::hot, as light
     float a = std::max(c.lit * 0.6f, c.armed);
     if (a < 0.01f) return;
     for (size_t k = 1; k < c.line.size(); k++) {
@@ -374,6 +435,7 @@ bool HandGlow::draw(Vec3 eye, const std::vector<Grab>& grabs, const std::vector<
         // one it now starts from, and nothing jumps. It is eased only so far as the hand's own shiver.
         float moved = g.way == 1 ? g.depth - g.base : 0;
         h.moved = fresh || std::fabs(moved - h.moved) > g.pull * 0.5f ? moved : h.moved + (moved - h.moved) * follow;
+        h.open = fresh ? 1 : h.open + ((g.locked ? 0.f : 1.f) - h.open) * std::min(1.f, 8 * dt);
         h.placed = true;
     }
     bool any = false;
@@ -426,7 +488,8 @@ bool HandGlow::draw(Vec3 eye, const std::vector<Grab>& grabs, const std::vector<
         });
     });
     // It is all near the hands: a box round the eye, an arm's length and more each way.
-    mesh->setPart(ni, BoundingBox{eye - Vec3::repeating(1.5f), eye + Vec3::repeating(1.5f)});
+    // (And the layer you work on, where a blade's mark and a marked thread are: 1.5 m off, wherever you lean.)
+    mesh->setPart(ni, BoundingBox{eye - Vec3::repeating(2.2f), eye + Vec3::repeating(2.2f)});
     blank = false;
     return true;
 }

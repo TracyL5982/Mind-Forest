@@ -85,7 +85,7 @@ const card = (title: string, anchor = 'n1'): CardNote => ({ anchor, under: 'Nigh
 const scout = (id: string, state: Activity['state'], nodeId = 'n1', whole = true) => ({ t: 'activity', activity: { id, role: 'scout', state, label: 'Looking into Night stairs', message: '', nodeId, ...(whole ? { whole } : {}) } }) as const;
 const landed = (...titles: string[]) => ({ t: 'change', set: { titles } as unknown as ChangeSet }) as const;
 
-function voice(opts: { batchMs?: number; answerWaitMs?: number } = {}) {
+function voice(opts: { batchMs?: number; answerWaitMs?: number; named?: LiveDeps['named']; nameWaitMs?: number } = {}) {
   const model = new Scripted();
   const frames: VoiceFrame[] = [];
   const called: { name: string; args: string; scene: Scene }[] = [];
@@ -115,6 +115,8 @@ function voice(opts: { batchMs?: number; answerWaitMs?: number } = {}) {
       idleMs: 60_000,
       batchMs: opts.batchMs ?? 6000,
       answerWaitMs: opts.answerWaitMs,
+      ...(opts.named ? { named: opts.named } : {}),
+      ...(opts.nameWaitMs !== undefined ? { nameWaitMs: opts.nameWaitMs } : {}),
     },
     (f) => frames.push(f),
   );
@@ -663,4 +665,139 @@ test("a spoken request reaches the Scout as the user said it, with Momo's readin
     live.close();
     await run.close();
   }
+});
+
+// ---- the check of a wake (DECISIONS 70)
+
+/** A check the test answers when it chooses. */
+function checking() {
+  let answer!: (ok: boolean) => void;
+  let fail!: (err: Error) => void;
+  const sounds: Uint8Array[] = [];
+  const named: LiveDeps['named'] = (pcm) => {
+    sounds.push(pcm);
+    return new Promise<boolean>((ok, no) => {
+      answer = ok;
+      fail = no;
+    });
+  };
+  return { named, sounds, answer: (ok: boolean) => answer(ok), fail: (why: string) => fail(new Error(why)) };
+}
+const WOKE = { t: 'name', pcm: pcm([5, 6, 7, 8]) } as const;
+
+test('a service with no check takes every wake for the name', () => {
+  const { v, frames } = voice();
+  v.heard(WOKE);
+  assert.deepEqual(frames.at(-1), { t: 'name', ok: true });
+});
+
+test('a wake that was the name costs Momo no time: the check has answered before it has anything to say', async () => {
+  const check = checking();
+  const { v, model, frames, of, turn, called, spoken } = voice({ named: check.named });
+  v.heard(WOKE);
+  assert.deepEqual([...check.sounds[0]!], [5, 0, 6, 0, 7, 0, 8, 0], 'the sound of the wake is what is checked');
+  assert.equal(of('name').length, 0, 'no answer before the check');
+  check.answer(true);
+  await tick();
+  assert.deepEqual(frames.at(-1), { t: 'name', ok: true });
+
+  turn(1, 'Hey Momo, what is this painting?');
+  model.begins('r1');
+  model.says('r1', 'It is a Vermeer.');
+  model.calls('r1', 'c1', 'web_answer', { question: 'x' });
+  model.ends('r1');
+  assert.equal(of('audio').length, 2, 'Momo is heard as its voice comes');
+  assert.equal(called.length, 1);
+  assert.deepEqual(spoken.map((s) => s.who), ['user', 'agent']);
+});
+
+test('while a wake is checked Momo does nothing the user could notice, and then does it all in order', async () => {
+  const check = checking();
+  const { v, model, frames, of, turn, called, spoken } = voice({ named: check.named });
+  v.heard(WOKE);
+  turn(1, 'Hey Momo, what is this painting?');
+  model.begins('r1');
+  model.says('r1', 'It is a Vermeer.');
+  model.calls('r1', 'c1', 'web_answer', { question: 'x' });
+  model.ends('r1');
+  assert.deepEqual(frames, [{ t: 'ready', rate: 24000 }], 'nothing reaches the device: no words, no voice, not even that the turn is over');
+  assert.equal(called.length, 0, 'no call runs');
+  assert.equal(spoken.length, 0, 'and nothing is kept of what was said');
+  assert.equal(model.sent('input_audio_buffer.append').length, 1, 'the model hears the turn meanwhile, so no time is lost');
+
+  check.answer(true);
+  await tick();
+  assert.deepEqual(frames.slice(1).map((f) => f.t), ['name', 'heard', 'heard', 'over', 'text', 'audio', 'audio', 'done']);
+  assert.equal(called.length, 1);
+  assert.deepEqual(spoken.map((s) => s.who), ['user', 'agent']);
+  assert.equal(of('name')[0]!.ok, true);
+});
+
+test('a wake that was not the name is undone: the turn is dropped, Momo is stopped and says nothing, and no call runs', async () => {
+  const check = checking();
+  const { v, model, frames, turn, called, spoken } = voice({ named: check.named });
+  v.heard(WOKE);
+  turn(1, 'Hey mama, are you coming tonight?');
+  model.begins('r1');
+  model.last.event({ type: 'response.output_item.added', response_id: 'r1', item: { id: 'r1-message', type: 'message' } });
+  model.says('r1', 'I am not sure who is coming.');
+  model.calls('r1', 'c1', 'web_answer', { question: 'x' });
+
+  check.answer(false);
+  await tick();
+  assert.deepEqual(frames.slice(1), [{ t: 'name', ok: false }], 'the device hears only that it was not the name');
+  assert.deepEqual(model.sent('response.cancel').map((e) => e.response_id), ['r1']);
+  assert.deepEqual(model.sent('conversation.item.delete').map((e) => e.item_id), ['item-1', 'r1-message'], 'what the wake put into the conversation is taken out');
+  assert.equal(model.sent('input_audio_buffer.clear').length, 2, 'at the start and again as it is dropped');
+  model.ends('r1', 'cancelled');
+  await tick();
+  assert.equal(called.length, 0);
+  assert.equal(spoken.length, 0);
+  assert.equal(frames.length, 2, 'and nothing follows');
+
+  // What comes after is heard as ever.
+  v.heard({ t: 'audio', pcm: pcm([1, 2]) });
+  assert.equal(model.sent('input_audio_buffer.append').length, 1, 'the dropped turn takes no more sound');
+  v.heard(WOKE);
+  check.answer(true);
+  await tick();
+  turn(2, 'Hey Momo, undo that.');
+  model.begins('r2');
+  model.says('r2', 'Undone.');
+  model.ends('r2');
+  assert.deepEqual(frames.slice(2).map((f) => f.t), ['name', 'heard', 'heard', 'over', 'text', 'audio', 'audio', 'done']);
+  assert.deepEqual(spoken, [{ who: 'user', text: 'Undo that.' }, { who: 'agent', text: 'Undone.' }]);
+});
+
+test('a wake that was not the name, with nothing said after it, only tells the device', async () => {
+  const check = checking();
+  const { v, model, frames } = voice({ named: check.named });
+  v.heard(WOKE);
+  check.answer(false);
+  await tick();
+  assert.deepEqual(frames.slice(1), [{ t: 'name', ok: false }]);
+  assert.equal(model.sessions.length, 0, 'no session was opened for it');
+});
+
+test('a check that is slow or fails does not keep Momo waiting: the wake is taken for the name', async () => {
+  const slow = checking();
+  const a = voice({ named: slow.named, nameWaitMs: 20 });
+  a.v.heard(WOKE);
+  a.turn(1, 'Hey Momo, more.');
+  a.model.begins('r1');
+  a.model.says('r1', 'Bringing more.');
+  assert.equal(a.frames.length, 1);
+  await new Promise((ok) => setTimeout(ok, 40));
+  assert.deepEqual(a.frames.slice(1).map((f) => f.t), ['name', 'heard', 'heard', 'over', 'text', 'audio', 'audio']);
+  assert.equal(a.of('name')[0]!.ok, true);
+  slow.answer(false);
+  await tick();
+  assert.equal(a.of('name').length, 1, 'its late answer changes nothing');
+
+  const broken = checking();
+  const b = voice({ named: broken.named });
+  b.v.heard(WOKE);
+  broken.fail('OpenAI transcription answered 500');
+  await tick();
+  assert.deepEqual(b.frames.at(-1), { t: 'name', ok: true });
 });

@@ -36,7 +36,7 @@ async function world(roles: Roles = fakeRoles) {
 
 test('every tool is declared with a description and arguments the model fills', () => {
   const specs = toolSpecs();
-  assert.deepEqual(specs.map((s) => s.name), ['web_answer', 'look_up_mindstorm', 'find_new', 'start_tree', 'more_like_this', 'keep', 'undo', 'go_to', 'organize', 'hand_off', 'save_note']);
+  assert.deepEqual(specs.map((s) => s.name), ['web_answer', 'look_up_mindstorm', 'find_new', 'start_tree', 'more_like_this', 'keep', 'undo', 'go_to', 'organize', 'hand_off', 'connect_telegram', 'save_note']);
   for (const s of specs) {
     assert.ok(s.description.length > 30, `${s.name} says when to use it`);
     assert.equal((s.parameters as { type: string }).type, 'object');
@@ -219,4 +219,24 @@ test("a written card is told as what it shows: its quote, facts, list or steps, 
   assert.deepEqual(shapeOf({ steps: ['Prime', 'Glaze'] }), { kind: 'a how-to', shows: '1. Prime 2. Glaze' });
   assert.deepEqual(shapeOf({ term: 'Pentimento', definition: 'a painted-over change that shows through' }), { kind: 'a definition', shows: 'Pentimento: a painted-over change that shows through' });
   assert.equal(shapeOf({ site: 'example.com' }), null, 'a card with no written shape is told by its words');
+});
+
+test('connect_telegram gives Momo the bot and a code to say in two groups, and says why when there is none to give', async () => {
+  const w = await world();
+  try {
+    const run = (contact?: { status(): { paired: string | null }; pair(): { bot: string; code?: string } | null }) =>
+      runTool('connect_telegram', '{}', { pipeline: w.run.pipeline, scene: { selection: [] }, contact });
+    let asked = 0;
+    const out = await run({ status: () => ({ paired: null }), pair: () => (asked++, { bot: 'palace_judges_bot', code: '482913' }) });
+    assert.deepEqual([out.done, out.bot, out.code, out.already], [true, '@palace_judges_bot', '482 913', undefined]);
+    assert.match(String(out.note), /one digit at a time/);
+    assert.equal(asked, 1, 'one code is made for one call');
+    assert.match(String((await run({ status: () => ({ paired: 'Ada Lovelace' }), pair: () => ({ bot: 'b', code: '000001' }) })).already), /connected as Ada Lovelace now/);
+
+    assert.match(String((await run()).why), /not set up/);
+    assert.match(String((await run({ status: () => ({ paired: null }), pair: () => null })).why), /has not answered yet/);
+    assert.match(String((await run({ status: () => ({ paired: null }), pair: () => ({ bot: 'owner_bot' }) })).why), /paired from the web page/, 'the owner\'s bot has no code to say');
+  } finally {
+    await w.close();
+  }
 });

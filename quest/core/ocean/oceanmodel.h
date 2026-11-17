@@ -297,8 +297,8 @@ private:
     // MARK: - Cutting (oceanmodel_cut.cpp)
 
     // NOTE(port): added for Quest. A thread is not cut at once. A slice of the flat hand, or a pinch on
-    // the thread, marks it for cutting: it turns to the accent and "Cut" stands on it for a few seconds.
-    // A second slice across it, or a pinch on "Cut", cuts it; anything else lets it be.
+    // the thread, marks it for cutting: it turns to the accent and "Cut again to confirm" stands on it for a few seconds.
+    // A second slice across it, or a pinch on those words, cuts it; anything else lets it be.
     struct CutArmed {
         int child = 0;                  // the card the thread runs to
         Vec3 at;                        // where on it
@@ -310,10 +310,21 @@ private:
     int threadHitsTick = 0;
     float bladeGlow[2] = {0, 0};                        // how much each hand shows as a blade
     Hands::Blade bladeLast[2];
+    bool bladeOut[2] = {false, false};                  // the blade is out on this hand: its pointer is put away
+    double bladeOutAt[2] = {-10, -10};
+    struct BladeMark {
+        double at;
+        Vec3 on;
+    };
+    std::vector<BladeMark> bladeTrail[2];               // where each blade's point has been on the sheet, this last moment
+    /// Where a line from `from` through `through` meets the layer you work on, a little in front of it.
+    std::optional<Vec3> onSheet(Vec3 from, Vec3 through, float lift = 0.02f) const;
+    /// The frame a fist is read in as it closes at `hand`: the surface in front of it (hands.h).
+    std::optional<Hands::Surface> fistSurface(Vec3 hand) const;
     /// The points along the thread that runs to `child`; empty if none is drawn.
     std::vector<Vec3> threadLine(int child) const;
-    /// The thread a flat hand points at, as you see it, and where on it.
-    std::optional<std::pair<int, Vec3>> threadAimed(Vec3 tip, Vec3 along) const;
+    /// The thread a blade's point is at, as you see it, and where on it.
+    std::optional<std::pair<int, Vec3>> threadAimed(Vec3 point) const;
     void layThreadHits();
     void armCut(int child, Vec3 at);
     void disarmCut();
@@ -594,6 +605,20 @@ private:
         bool homeSeen = false;              // it has been shown and left
         double homeAfter = 0;
         double homeTagsUntil = 0;           // the numbers in the room outlast the card by a little
+        // The walk's two steps with Momo (oceanmodel_guide.cpp, "Talking to Momo").
+        int talkFor = -1;                   // the lesson whose words are waited for; -1 when none are
+        double talkSince = 0;               // since when
+        double talkWoke = -1;               // when the name was heard, while what follows it is awaited
+        int talkMisses = 0;                 // turns that were nothing, or something else
+        std::string talkNote;               // what is said about the last turn
+        std::vector<std::pair<bool, std::string>> talkHeard;    // from Momo's ears: the name alone (true), or the words after it
+        bool tourSent = false;              // the marked part was sent to Momo: what to say about it is waited for
+        std::string tourMarkLinks;          // what the card Momo answers a sketch with points to (`tourMarkNote`)
+        EntityRef talkPanel;                // what is said about it, with the way on without speaking
+        std::vector<const Entity*> talkPicks;
+        std::string talkPanelSaid;
+        float talkPanelScale = 1;           // larger inside a picture gone into, where everything is
+        float talkPanelLift = 0;            // how far up it stands, to keep its button clear of the line under it
         bool tourStood = false;             // its tree has stood
         bool tourDone[8] = {};              // which lessons the viewer has done
         int tourLessonWas = -2;             // the lesson in focus last frame, and since when it has been
@@ -630,6 +655,16 @@ private:
     void startTour();
     int tourLesson() const;
     CardRef tourCard(int lesson) const;
+    /// The card in focus is the layer Momo made for its lesson.
+    bool tourOnResult() const;
+    std::optional<int> tourResultNode(int lesson) const;
+    /// Whether Momo can hear: 0 ready, 1 starting, 2 the microphone is being asked for, 3 refused, 4 off, 5 no Momo here.
+    int tourHearing() const;
+    void tourTalk(int lesson, bool wanted, double now, std::optional<Vec3> at);
+    void tourTalkPanel(const std::string& words, bool pill, std::optional<Vec3> at);
+    void tourAnswer(int lesson, const std::string& words);
+    void tourSend();
+    void tourMarkNote(const std::string& words);
     std::string tourLine() const;
     Quat guideFacing(Vec3 p) const;
     void tourShow(int shown);
@@ -654,7 +689,8 @@ private:
     std::optional<Vec3> overOpenCard() const;
     void guidePin(const char* id, const char* words, bool wanted, Vec3 at, double wait, int most);
     void updateGuide(double now, float dt);
-    bool pointerHidden(int hand) override { return holoTouching && hand == holoHand; }
+    // (A hand whose blade is out is a knife, not a pointer: one line on it, not two.)
+    bool pointerHidden(int hand) override { return (holoTouching && hand == holoHand) || (hand >= 0 && hand < 2 && bladeOut[hand]); }
 
     // MARK: Sound (oceanmodel_sound.cpp)
     // NOTE(port): added for Quest: the visionOS app has no sounds of its own yet. The sounds are made

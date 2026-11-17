@@ -1089,3 +1089,111 @@ It searched Instagram more often by no more than ten runs a side can show, and i
 **Decision.** Kai's welcome tree teaches "palms together to close", and the user chose that meaning everywhere. On the headset, palms held together for a second close the tree you are in and put it away, on the service's trees too. They no longer send a handoff (the headset's `handoff` message for the tree, from the clap, is gone with `Bridge::pressed`). A tree is handed off by voice ("hand this off"), which the service already understands. While joined to the service the tree's strip has no "Send to image generation" button, which reached the same handoff. Without the service, Kai's own app is as he made it.
 
 **Why.** One gesture should mean one thing, and the walk teaches this one as closing. A handoff gesture or button may come later.
+
+## 68. Telegram: trees are asked for in plain words, and judges pair a second bot with a code from the headset
+
+**Decision.** A paired chat lists, finds and hands off a tree in plain words (`src/node/tree-asks.ts`, `src/node/talk.ts`). Plain rules read the usual phrasings at no model call. The quick model reads a message only when it is short and names trees or a handoff, and matches words to a tree only when no tree's name holds them. On the hosted service, judges reach their headset through a second bot that the server alone reads (`src/node/hosted/judges.ts`), paired by a six-digit code that Momo says when asked "connect my Telegram".
+
+**Why.**
+- A drop must stay cheap and never be mistaken for a question, so the model is asked only behind a cue ("tree", "handoff", "export", "package"), and "make a tree about …" stays a drop.
+- Telegram lets one program read a bot. The owner's Mac reads theirs, so judges need another, and one poller routes every chat by its pairing. A space never holds a bot of its own.
+- The code is six digits because Momo says it aloud and a judge types it on a phone: digits survive both. Five wrong codes in ten minutes stop a chat's codes being read, so the million codes cannot be tried through.
+- A chat's message goes through the same `Desk` as the owner's, and the desk refuses what a headset's own message would be refused, so no limit has a second copy to keep in step.
+
+**Not built.** The headset draws no code or QR of its own: the judge hears the code and reads it in Momo's caption. `POST /api/telegram/pair` already returns `{link, bot, code}` for a sheet that shows them.
+
+## 69. Wake word: a wider search for the name, and a request said straight on from it goes out whole (amends 38)
+
+**Decision.** The keyword spotter keeps 16 active paths, not 4, and its boost comes down from 1.5 to 1.0, on the headset (`quest/core/agent/spotter.cpp`) and in the web client (`client/js/wake-worker.js`, `wake.js`). When the user does not stop after the name ("hi Momo what is this painting"), the listener takes the sound just before the name was spotted for the request: two of the last three tenths of a second as loud as a word mean the name ended before them, and the turn goes out from the name on (`Listener::wake`, and `wake()` in the worker). Nothing else in 38 changes.
+
+**Why.** Kai on the headset: the name "can often prove difficult to trigger", and when the request follows "immediately … without pause", Momo "will not trigger at all". Two faults made that, and both were measured.
+
+- **The search dropped the name.** The spotter is a small recognizer that keeps a few readings of the sound alive and reports the name when the best one ends in it. Heard as plain speech, the model rarely writes "MO MO": it writes "HI MO N", "HI MO R", "HI MO M MA", "PA Y MO MENT". With 4 paths the name's own reading was often pruned before its last piece, most of all when the next word ran into it. The number of trailing blanks, which the source suggested (`transducer-keyword-decoder.cc` fires only after more blank frames than `num_trailing_blanks`), made no difference: 1, 0 and -1 caught the same clips. More spellings of the name did not help either, and a higher boost bought false wakes faster than catches.
+- **The listener looked for a pause that was not there.** After the name it looked for a dip in loudness to tell the name from the request. With no pause there is none, so it took the request for part of the name, opened the conversation with nothing held, and the turn began only once the chime's deaf stretch had passed, with its first words cut, or never for a short request.
+
+**Measured.** `quest/tools/wake_measure.sh <clips dir>` makes 2,154 clips with the Mac's voices and plays them to the whole listener (`quest/core/agent/test/wake_measure.cpp`): 26 English voices and 19 voices of other languages reading English, each saying the name alone, before 8 requests after a comma, with the same requests straight on, and straight on at 230 words a minute; then 32 near misses in each English voice, and this repository's documents read aloud by 8 voices.
+
+| Native English voices | Before | After |
+| --- | --- | --- |
+| Name alone: woke | 31 of 52 | 39 of 52 |
+| Request after a comma: woke | 126 of 208 | 159 of 208 |
+| Request straight on: woke | 96 of 208 | 144 of 208 |
+| Request straight on: reached the service whole | 32 of 208 | 141 of 208 |
+| Straight on and fast: woke | 17 of 208 | 32 of 208 |
+| Near misses that woke it | 3 of 832 | 5 of 832 |
+| False wakes in 141 minutes of talk | 1 | 2 |
+
+The other languages' voices went from 16 to 26 of 152 after a comma and from 10 to 18 straight on. They read English with their own language's sounds, so they are a harsher test than an accent: 38 caught 46 of 48 phrases in OpenAI's voices, four of which were told to speak with one. The near misses that woke it after are "Hey mama" (3), "Hey mommy" and "Hey Mo, more!". Both false wakes in talk came from these documents themselves, which say "Momo" in most paragraphs; one of them woke it before as well. The beam costs nothing that could be measured: 59.2 s of CPU for 56 minutes of sound with 4 paths, 59.6 s with 16.
+
+Other settings on the same clips, raw spotter, native voices, request straight on, with near misses of 832: 8 paths and boost 1.5, 140 and 8; 12 and 1.5, 151 and 26; 16 and 1.5, 163 and 45; 32 and 1.5, 175 and 98; 12 and 1.0, 132 and 5; 32 and 1.0, 146 and 12; 32 and 0.75, 103 and 0. Sixteen paths at 1.0 caught 146 with 7.
+
+`quest/core/agent/test/run.sh` passes with two new tests on two new clips, "Hey Momo show me more like this" and "Hi Momo what is this painting" said with no comma. The streaming one fails on the listener as it was (no turn began).
+
+**Found and not fixed.**
+
+- **A short command after a short pause is lost in the chime.** The chime plays as the name is spotted, about 0.45 s after it ends, and nothing counts as words while it plays or for 0.3 s after. "Hi Momo", a pause, "undo that": of 30 that woke it, a turn began in 18 after a pause of 0.25 s, 3 after 0.4 s, 11 after 0.55 s, 26 after 0.7 s and all 30 from 0.85 s (6 voices, 5 commands of one or two words, a scratch tool). The conversation is open, so saying it again works. Counting words through the chime would fix it only where the echo canceller takes the chime out of the microphone, which nobody has measured on the headset, and a turn begun on the chime alone would stream until the 60 s cut, since the service ends a turn only after words.
+- **The catch rate is still far from a product's.** openWakeWord aims at under 5% missed and under 0.5 false wakes an hour, Picovoice claims over 97% caught. Here a quarter of plain utterances are missed and most fast ones. The model has 3.3 million parameters and was never trained on the name, and the phrase is weak by the vendors' own rules: Picovoice asks for at least six phonemes of varied sounds, Sensory for strong consonant boundaries and distinct vowels, and "hi Momo" has four distinct phonemes, one syllable twice, and no plosive. The two ways to a real gain are a wake model trained for the name (openWakeWord from synthetic speech, or sherpa-onnx's own fine-tuning recipe), which fixes the name in advance, and a looser trigger on the device that the service checks against the transcript before acting, as Alexa's cloud verification does, which sends some sound that did not begin with the name. Both change what 38 decided, so they are Kai's to choose.
+- **The spotter's dead moment.** A name that begins 1.3 to 1.5 s into a stream is lost (0 of 52 at 1.4 s), because the spotter clears itself after 1.5 s without a word (reported upstream as sherpa-onnx issue 3990). 38's fresh stream after each quiet second covers it in a quiet room. Two and three staggered streams were tried in its place: 125 and 131 of 208 against 122, for two and three times the work, so they were not kept.
+
+**Not measured.** A human voice, the headset's microphone (its `VOICE_COMMUNICATION` source cleans the sound before the spotter hears it, which may cut the soft start of "hi"), noise, and the web client's worker, whose spotter is not built on this Mac: its rule is the headset's line for line, and `test/client.e2e.ts` was not run.
+
+## 70. Wake word: the spotter is set to miss the name seldom, and the service checks what woke it (amends 38 and 69)
+
+**Decision.** The spotter keeps 32 active paths at a boost of 1.5 (69 had 16 and 1.0). At that setting it catches most names and also wakes on about one near miss in eight, so a wake is no longer taken on trust. With each wake a client sends the sound it took for the name, from a tenth of a second before it to where it was spotted, one to two seconds. The service writes that down with the transcription model and lets Momo act only if it holds "hey" or "hi" and the name (`saysWakePhrase` in `src/core/wake.ts`, `src/node/wake-check.ts`).
+
+- **The live voice.** The sound goes as a `name` frame on `/live`, and the answer comes back as `{t:'name', ok}`. The client does not wait: it chimes, opens the conversation and streams as before. The service does not wait either, since the realtime model hears the turn meanwhile. Until the check answers, the service holds back everything Momo would do that the user could notice: frames for the device, tool calls, and the words kept for the pipeline. On yes they go on in order. On no the response is cancelled, the sound and items the wake put into the model's conversation are cleared and deleted, nothing of it reaches the pipeline, and the client closes the conversation (`Listener::notNamed` on the headset, `onNotNamed` on the page).
+- **A recording.** Without the live voice the recording already begins with the name, so the client adds `woke=1` to `/api/transcribe`, and the service answers `{text: "", named: false}` unless the words begin with the phrase. A recording the user began by pressing the microphone has no `woke` and is taken as it is.
+- **When the check cannot answer.** A check that fails, or takes more than 2.5 s, counts as yes. `MIND_PALACE_WAKE_CHECK=off` turns it off, and every wake is then the name.
+
+**Why.** Kai chose both after 69: to "loosen the current spotter further (32 paths, boost 1.5)", and "a loose trigger on the device, checked by the service against the transcript before Momo acts (as long as this does not increase latency)". The name is checked apart from the turn, and not by the turn's own transcript, for two reasons. When the user pauses after the name, the name is never part of the turn (57: the model took that pause for the end of the turn). And the turn's transcript comes only after the turn is over, when Momo's answer is already beginning.
+
+**Latency.** By design the check adds none. The name is spotted about 0.45 s after it ends, and the check starts then. Momo's first sound comes 1.6 to 2.4 s after the last word of the request (59), so about 2 s after the name, or more, even for the shortest request. The transcription model wrote a whole turn down in 0.29 to 0.64 s (58), and this is one to two seconds of sound. So the answer should be there a second or more before Momo has anything to say, and nothing is held. If it is slower, Momo's first sound waits for it, to 2.5 s after the wake at most. The service logs each one: `[live] wake 3 was the name, 412 ms after it came`, and says so when any of Momo's doings had to wait.
+
+**Measured.** `quest/tools/wake_measure.sh` on the same 2,154 clips as 69, through the whole listener, native English voices:
+
+| | 38 | 69 | 70 |
+| --- | --- | --- | --- |
+| Name alone: woke | 31 of 52 | 39 of 52 | 45 of 52 |
+| Request after a comma: woke | 126 of 208 | 159 of 208 | 185 of 208 |
+| Request straight on: woke | 96 of 208 | 144 of 208 | 170 of 208 |
+| Request straight on: reached the service whole | 32 of 208 | 141 of 208 | 169 of 208 |
+| Straight on and fast: woke | 17 of 208 | 32 of 208 | 83 of 208 |
+| Near misses that woke it | 3 of 832 | 5 of 832 | 100 of 832 |
+| False wakes in 141 minutes of talk | 1 | 2 | 4 |
+
+The other languages' voices reading English went from 26 to 65 of 152 after a comma and from 18 to 56 straight on. The near misses that wake it are mostly "Hey mama", "Hey mommy", "Hey Moe", "Hey Mo, more!", "Hey Mona, more tea?" and "Hey, moments ago I saw it".
+
+`test/live.test.ts` has six tests of the check with the model and the transcriber faked: nothing reaches the device, no call runs and nothing is kept while a wake is checked; on yes it all follows in order; on no the turn is undone and the next wake works; a slow or failed check counts as yes. `test/server.test.ts` checks the recording, `test/wake.test.ts` the phrase. `quest/core/agent/test/run.sh` has five more tests: the sound of the wake is handed over and sent, the conversation and a streaming turn close on a no, and a recording the service finds no name in is made nothing of.
+
+**Not measured: the check itself.** How many real names the transcription model writes down as the name, how many false wakes it stops, and how long it takes are not known. The Mac this was built on has no OpenAI key in the service's key file. `scripts/wake-verify.ts <dump dir>` measures all three on the sounds that `wake_measure.sh <clips> -dump <dir>` writes out (about 250 clips, a few cents), with and without telling the model the name. Two risks ride on it. If the model writes a real "hey Momo" as something else, the check turns away real wakes and the catch rate falls below the table's. If, told the name, it writes "hey mama" as "hey Momo", near misses pass as they would without it. Run it before trusting the table's last column in use.
+
+**What it costs.**
+
+- Sound that did not begin with the name now leaves the device: the second or two that woke it, and whatever is said in the turn until the check answers, which goes to the realtime model and is deleted from its conversation on a no. 38 promised that nothing left before the name. On this talk that is about two false wakes an hour, more around people who say "hey mama".
+- The chime still plays on a false wake, because the client does not wait for the check. Waiting would delay the chime by the check's half second on every real wake.
+- Each wake costs one transcription of a second or two, about $0.0001 at $0.006 a minute. A hosted service does not write the words of a wake it turned away into its log.
+
+**Not done.** Nothing here has run on a headset, with a human voice, or in a browser: the web worker's spotter is not built on this Mac, so `client/js` was only checked for syntax and `test/client.e2e.ts` was not run.
+
+## 71. Wake word: on the headset the listener is no longer deaf while the chime plays (settles the first open item of 69)
+
+**Decision.** The listener is told of the chime, and takes nothing for words while it plays and for 0.3 s after, only on a host whose microphone hears the app's own sounds (`platform::microphoneHearsOwnSounds`). The Quest's talking source does not, so there the deaf stretch is gone, and a short word said just after the name is heard. The Mac preview's microphone does, so it keeps the stretch, and so does the headset under `-micSource recognition`, which was not measured worn.
+
+**Why.** Kai: "test on the headset if the deaf window is still necessary, and if not, remove it." The stretch was added on 14 November, when the headset read its microphone with no echo cancelling and the chime itself counted as speech. Since then the headset reads Android's VOICE_COMMUNICATION source, so that the user can talk over Momo. 69 measured what the stretch cost: "Hi Momo", a pause of about half a second, "undo that", and the command was lost.
+
+**Measured on the headset.** `-chimeCheck` (in `quest/core/agent/echo_check.*`, beside `-echoCheck`) opens the microphone as the app does, opens the conversation with the listener told nothing of the chime, and plays the real chime through the app's own mixer: 12 times while the wearer is quiet, then 8 times while they say a short word over each. Worn by Kai, volume 6 of 15, the log saying `echo cancelling: the platform's own, if any: AcousticEchoCanceler is not available`:
+
+| | Loudest tenth of a second at the microphone | A turn began |
+| --- | --- | --- |
+| The chime alone, 12 plays | 0.0000 every time: digital silence | 0 of 12 |
+| A word said over the chime, 8 plays | 0.032 to 0.052 (-30 to -26 dB) | 8 of 8, 0.08 to 1.26 s after the chime began |
+
+Words are louder than 0.015. So the chime does not reach the listener at all, and a voice over it does.
+
+The same check with the headset lying on a desk proved nothing, and is recorded so it is not repeated: the room read -105 dB and the chime -80 dB on both microphone sources, with the recording not silenced by Android. The headset's microphone gives near silence unless someone speaks, so an unworn run cannot tell a chime that is taken out from a microphone that hears nothing. The half the wearer speaks in is what makes the result mean something.
+
+**Measured on the Mac.** In the voice tests, "more" said after the name and a pause of 0.3 to 1.1 s began a turn at every pause on a host that does not hear the chime. With the deaf stretch it was lost at every pause from 0.5 to 0.9 s on the live voice, and from 0.5 to 0.7 s when recording. `quest/core/agent/test/run.sh` has a test of each, at 0.6 s, for both kinds of host.
+
+**Seen on the way.** The microphone's silence when nobody speaks means the headset opens it on the voice itself. If it opens a moment late, the soft start of "hi" is cut before the spotter hears it, which would be a cause of missed wakes that no measurement on the Mac can show. Not measured.
+
+**Not measured.** Other volumes than 6 of 15. The chime while the ocean's own sounds play: the check ran in a copy of the app that had only the chime. The whole path with Momo answering "Hi Momo… undo" on the headset.

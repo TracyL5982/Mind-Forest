@@ -18,6 +18,8 @@ const RING_S = 3;
 const AFTER_LAST_PIECE_S = 0.45;
 /** How far before that guess the start of the phrase is looked for, at most. */
 const LOOK_BACK_S = 0.5;
+/** The name is spotted 0.4 to 0.6 seconds after its sound ends, so the last three pieces before then come after it. */
+const SPOTTED_AFTER_S = 0.3;
 /**
  * The spotter clears itself after 1.5 seconds without speech, and a phrase that begins as it does is lost: after 1.5 or 3 seconds of quiet,
  * 11 and 0 phrases of 60 were caught (scripts/wake-quiet.py). Starting a fresh stream after each second of quiet, before it clears itself, catches 54 and 57.
@@ -109,7 +111,10 @@ function build() {
       modelingUnit: 'bpe',
       bpeVocab: '',
     },
-    maxActivePaths: 4,
+    // 32 readings of the sound kept alive, not 4: with 4 the name's own reading was often dropped before its end, most of all
+    // when the request ran straight on from it. It also wakes on one near miss in eight, so the service checks what woke it
+    // (DECISIONS.md 69 and 70).
+    maxActivePaths: 32,
     numTrailingBlanks: 1,
     keywordsScore: tuning.boost,
     keywordsThreshold: tuning.threshold,
@@ -178,6 +183,7 @@ function spot(piece) {
  * pause that ends the recording is timed from it. The phrase ends at the first dip once its span has passed, since its first word piece
  * is reported after its sound begins and its last near the end. A dip is a piece under a fifth of the phrase's loudest, as a quick speaker may not go quiet,
  * and only a piece as loud as that after the dip is a word, so the fading end of "Momo" is not taken for one.
+ * A speaker who does not stop at all ("hi Momo what is this") leaves no dip: then the sound just before the name was spotted is the request (DECISIONS.md 69).
  */
 function wake(result) {
   const times = result.timestamps ?? [];
@@ -195,11 +201,18 @@ function wake(result) {
   let phraseEnd = start + Math.max(0, Math.round(span / PIECE_S) - 1);
   const dip = Math.max(...ring.slice(start, phraseEnd + 1).map(level)) / 5;
   while (phraseEnd < ring.length && level(ring[phraseEnd]) >= dip) phraseEnd++;
+  // A request said straight on from the name leaves no dip to find. The name's sound is over before the last pieces heard,
+  // so two of them as loud as a word are the request, and the name ended before them.
+  const tail = Math.max(start + 1, ring.length - Math.round(SPOTTED_AFTER_S / PIECE_S));
+  const loudTail = ring.slice(tail).filter((piece) => level(piece) >= dip && speech(piece, floor)).length;
+  if (loudTail >= 2) phraseEnd = Math.min(phraseEnd, tail - 1);
   let lastVoice = -Infinity;
   for (let i = phraseEnd + 1; i < ring.length; i++) if (level(ring[i]) >= dip) lastVoice = (i + 1 - ring.length) * PIECE_S;
   heard = { pieces, quietest, spoke: lastVoice > -Infinity, sinceWake: 0, lastVoice };
   mode = streams ? 'streaming' : 'hearing';
-  self.postMessage({ t: 'wake', keyword: result.keyword, beforeS: pieces.length * PIECE_S, streaming: streams });
+  // The sound taken for the name goes with the wake: the spotter also wakes on what only sounds like it, and the service checks.
+  const sound = pcmOf(pieces);
+  self.postMessage({ t: 'wake', keyword: result.keyword, beforeS: pieces.length * PIECE_S, streaming: streams, sound }, [sound]);
   if (!streams) return;
   if (heard.spoke) for (const piece of pieces) send(piece);
   else heard.held = ring.slice(Math.max(phraseEnd + 1, ring.length - HELD_BACK_S / PIECE_S));
@@ -228,9 +241,16 @@ function flow(piece) {
 
 /** A piece as /live carries it: 16-bit little-endian PCM. */
 function send(piece) {
-  const pcm = new Int16Array(piece.length);
-  for (let i = 0; i < piece.length; i++) pcm[i] = Math.max(-1, Math.min(1, piece[i])) * 0x7fff;
-  self.postMessage({ t: 'piece', pcm: pcm.buffer }, [pcm.buffer]);
+  const pcm = pcmOf([piece]);
+  self.postMessage({ t: 'piece', pcm }, [pcm]);
+}
+
+/** Pieces end to end as 16-bit little-endian PCM. */
+function pcmOf(pieces) {
+  const pcm = new Int16Array(pieces.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const piece of pieces) for (const s of piece) pcm[at++] = Math.max(-1, Math.min(1, s)) * 0x7fff;
+  return pcm.buffer;
 }
 
 function record(piece) {

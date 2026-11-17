@@ -9,14 +9,16 @@ import type { ModelClient, Tools } from '../core/ports.ts';
 import { Pipeline, type Outbound } from '../core/pipeline.ts';
 import { DEFAULT_SETTINGS, type Handoff, type Playback, type Roles, type Settings } from '../core/roles/types.ts';
 import { Mindstorm } from '../core/state.ts';
-import { spokenName, withoutWakePhrase } from '../core/wake.ts';
+import { saysWakePhrase, spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
-import { whereItWent, type Delivery, type Desk } from './contact.ts';
+import { Declined, whereItWent, type Channel, type Delivery, type Desk } from './contact.ts';
+import { matchTrees, modelAsk, treeLines } from './tree-asks.ts';
 import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '../core/voice-tools.ts';
 import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
-import { HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
+import { HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, heardMs, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
+import { checkName } from './wake-check.ts';
 import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
 import { Telegram, type TelegramOptions } from './telegram.ts';
@@ -57,6 +59,8 @@ export interface ServerOptions {
   speak?: Speak;
   /** Turns recorded speech into text, told the card titles. When present the client records instead of using the browser's recognition. */
   transcribe?: Transcribe;
+  /** False takes every wake for the name: the check of what woke a device (DECISIONS 70) is off. It needs `transcribe`. */
+  wakeCheck?: boolean;
   /** Momo's real-time voice on `/live`: the realtime model, how it is set up, and its web answers. Without it `/live` is refused. */
   live?: { open: OpenRealtime; options: LiveOptions; webAnswer?: WebAnswer };
   settings?: Partial<Settings>;
@@ -66,6 +70,8 @@ export interface ServerOptions {
   films?: string;
   /** Mind Palace as a Telegram contact, reached with this bot's token. */
   telegram?: Omit<TelegramOptions, 'desk' | 'file' | 'log'>;
+  /** Hosted mode: this space's contact, made round its desk, in place of a bot of its own. */
+  contact?: (desk: Desk) => Channel;
   /** Hosted mode: what this space's device may still do today, and where its use and spend are counted. */
   meter?: Meter;
   /** Hosted mode: the largest file one upload may be, and what this space's uploads may come to in all, in bytes. */
@@ -85,6 +91,8 @@ export interface Meter {
   spent(dollars: number): void;
   /** The line Momo says while all costly work is stopped (switched off, or over the day's cap), or null. */
   paused(): string | null;
+  /** The line Momo says while this device's own model calls are refused: all of `paused`, or the device past its share of the day. */
+  held(): string | null;
   /** A picture was made, on whichever model made it: counted at the price of one. */
   pictured(): void;
   /** A line said in Momo's voice, as 16-bit mono PCM at the live voice's rate, when it can be made. */
@@ -108,7 +116,7 @@ export interface Space {
 /** The voice tools that start a Scout run. */
 const SEARCHING = new Set(['find_new', 'more_like_this', 'start_tree']);
 /** The voice tools that write nothing. Every other one is refused once the space has no room. */
-const READING = new Set(['web_answer', 'look_up_mindstorm', 'go_to']);
+const READING = new Set(['web_answer', 'look_up_mindstorm', 'go_to', 'connect_telegram']);
 /** The messages that write to the mindstorm, its pictures or its handoffs. */
 const WRITES = new Set<ClientMessage['t']>(['dump', 'utter', 'ask', 'more', 'keep', 'undo', 'commands', 'organize', 'handoff']);
 /** `/live` sockets one metered space keeps: a headset reconnecting while its old socket lingers. A newer one closes the oldest. */
@@ -128,6 +136,8 @@ export interface Running {
 
 const MAX_UPLOAD = 300 * 1024 * 1024;
 const MAX_SPOKEN = 1200;
+/** A recording that a wake began holds the name within its first characters: the device starts it a tenth of a second before the name. */
+const WAKE_WITHIN = 48;
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -290,14 +300,52 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     await director.prepare();
   }
 
-  const desk: Desk = {
-    dump: async (dumps) => whereItWent(mind, await pipeline.dump(dumps)),
-    keep: async (bytes, mime, name) => (await assets.put(bytes, mime, name)).id,
-    transcribe: opts.transcribe && (async (audio, mime) =>
-      withoutWakePhrase(await opts.transcribe!(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, null) }), settings.agentName).trim()),
-    latest: () => latestHandoff(handoffDir),
+  /** What a contact's message may not do here now, as a client's may not: write with no room left, or cost while costly work is stopped. */
+  const admit = () => {
+    const why = noRoom() ?? meter?.held();
+    if (why) throw new Declined(why);
   };
-  const telegram = opts.telegram ? new Telegram({ ...opts.telegram, desk, file: join(opts.dataDir, 'telegram.json'), log }) : null;
+  /** A metered space writes out a recording no larger than the headset's own, so one note is one small paid call. */
+  const hearable = (bytes: number): string | null => (meter && bytes > RECORDING_BYTES ? NOTE_TOO_LONG : null);
+  const fits = (bytes: number): string | null => {
+    const volume = opts.volumeFull?.();
+    if (volume || !opts.uploads) return volume ?? null;
+    return bytes > opts.uploads.file ? tooBig(opts.uploads.file) : bytes > opts.uploads.total - uploaded.bytes ? FULL : null;
+  };
+  const hear = opts.transcribe;
+  const desk: Desk = {
+    dump: async (dumps) => {
+      admit();
+      return whereItWent(mind, await pipeline.dump(dumps));
+    },
+    fits,
+    keep: async (bytes, mime, name) => {
+      const why = fits(bytes.length);
+      if (why) throw new Declined(why);
+      const { id } = await assets.put(bytes, mime, name);
+      if (opts.uploads) keepUploaded(bytes.length);
+      return id;
+    },
+    hearable,
+    transcribe: hear && (async (audio, mime, seconds) => {
+      const why = hearable(audio.length) ?? meter?.refused('voiceMs');
+      if (why) throw new Declined(why);
+      const ms = heardMs(audio, seconds);
+      meter?.used('voiceMs', ms);
+      meter?.spent((ms / 60_000) * HEARING_DOLLARS_PER_MINUTE);
+      return withoutWakePhrase(await hear(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, null) }), settings.agentName).trim();
+    }),
+    latest: () => latestHandoff(handoffDir),
+    trees: () => treeLines(mind),
+    ask: (text) => modelAsk(opts.model, text),
+    match: (words) => matchTrees(mind, opts.model, words),
+    handoff: async (treeId) => {
+      admit();
+      await pipeline.handoff({ treeIds: [treeId], nodeIds: [] });
+    },
+  };
+  const own = opts.telegram ? new Telegram({ ...opts.telegram, desk, file: join(opts.dataDir, 'telegram.json'), log }) : null;
+  const telegram: Channel | null = opts.contact?.(desk) ?? own;
   const contact = () => ({ available: telegram !== null, ...(telegram?.status() ?? { ready: false, paired: null }) });
 
   async function bundle(handoff: Handoff): Promise<{ name: string; url: string; markdown: string; files: string[] }> {
@@ -377,7 +425,13 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       const heard = opts.transcribe
         ? await opts.transcribe(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, url.searchParams.get('tree')) })
         : await opts.model.transcribe({ audio, mime });
-      return json(res, 200, { text: withoutWakePhrase(heard, settings.agentName).trim() });
+      // `woke=1`: the recording began with what the device's spotter took for the name, which also wakes on things that only
+      // sound like it. Unless the words begin with the name, nothing was said to Momo (DECISIONS 70).
+      if (url.searchParams.get('woke') === '1' && opts.transcribe && opts.wakeCheck !== false && !saysWakePhrase(heard.slice(0, WAKE_WITHIN), settings.agentName)) {
+        log(`[voice] a recording did not begin with the name, so nothing is made of it${meter ? '' : `: ${heard.slice(0, 80)}`}`);
+        return json(res, 200, { text: '', named: false });
+      }
+      return json(res, 200, { text: withoutWakePhrase(heard, settings.agentName).trim(), named: true });
     }
     if (req.method === 'GET' && path === '/api/speak') {
       const why = meter?.refused('voiceMs');
@@ -403,9 +457,9 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (req.method === 'GET' && path === '/api/state') return json(res, 200, { snapshot: mind.snapshot(), settings, maps });
     if (req.method === 'GET' && path === '/api/telegram') return json(res, 200, contact());
     if (req.method === 'POST' && path === '/api/telegram/pair') {
-      if (!telegram) return json(res, 404, { error: 'TELEGRAM_BOT_TOKEN is not set' });
-      const link = telegram.pair();
-      return link ? json(res, 200, { link }) : json(res, 503, { error: 'Telegram has not answered yet' });
+      if (!telegram) return json(res, 404, { error: 'this service has no Telegram bot' });
+      const invite = telegram.pair();
+      return invite ? json(res, 200, invite) : json(res, 503, { error: 'Telegram has not answered yet' });
     }
     if (req.method === 'POST' && path === '/api/telegram/unpair') {
       telegram?.unpair();
@@ -532,7 +586,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         call: (name, args, scene, said) => {
           const why = (READING.has(name) ? null : noRoom()) ?? (SEARCHING.has(name) ? meter?.refused('searches') : null);
           if (why) return Promise.resolve({ error: why });
-          return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said }));
+          return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said, contact: telegram ?? undefined }));
         },
         label: toolLabel,
         where: (scene) => whereNote(pipeline.ctx, scene),
@@ -545,6 +599,18 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           if (own && own.readyState === own.OPEN) own.send(JSON.stringify({ t: 'activity', activity }));
         },
         spent: (dollars) => meter?.spent(dollars),
+        ...(opts.transcribe && opts.wakeCheck !== false
+          ? {
+              named: async (pcm: Uint8Array) => {
+                const ms = (pcm.length / 2 / 16000) * 1000;
+                meter?.spent((ms / 60_000) * HEARING_DOLLARS_PER_MINUTE);
+                const { ok, heard } = await checkName(opts.transcribe!, pcm, spokenName(settings.agentName));
+                // What was not said to Momo is not written into a log others keep.
+                log(`[live] the sound of the wake was written down${ok || !meter ? ` as: ${heard}` : ', and is not the name'}`);
+                return ok;
+              },
+            }
+          : {}),
         log,
         ...(director ? { extra: () => MOMO_NOTE } : {}),
       },
@@ -618,6 +684,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         counted(frame.pcm, 16000);
         const why = meter?.refused('voiceMs');
         if (why) return cut(why);
+      }
+      if (frame.t === 'name') {
+        // Past the day's share the turn itself is refused, with its reason said aloud: the check is not spent on it.
+        if (meter?.refused('voiceMs')) return void (ws.readyState === ws.OPEN && ws.send(JSON.stringify({ t: 'name', ok: true } satisfies VoiceFrame)));
+        counted(frame.pcm, 16000);
       }
       voice.heard(frame);
     });
@@ -697,7 +768,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     }
   }
 
-  telegram?.start();
+  own?.start();
   return {
     token,
     pipeline,
@@ -782,6 +853,7 @@ function json(res: ServerResponse, status: number, value: unknown): void {
 }
 
 const FULL = 'this headset has used all its room for files';
+const NOTE_TOO_LONG = 'That voice note is too long to write out here. Send one of up to a minute or so.';
 const STORE_FULL = "This headset's mind palace is full, so nothing more can be added here.";
 const tooBig = (limit: number) => `a file may be at most ${Math.round(limit / 1e6)} MB here`;
 

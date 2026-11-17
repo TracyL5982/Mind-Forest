@@ -9,10 +9,11 @@ const LEAD_S = 0.05;
  * `onReady(on)`: the voice is there or gone. `onOver()`: the user's turn has been heard and is on its way. `onHeard(text, final)`: what
  * the user said so far. `onQuiet()`: no reply is coming, or the voice failed. `onSpeaking(playing, interruptible)`: Momo started or
  * stopped being heard; saying the name stops it unless what it says names itself. `onText(text)`: what Momo has said so far.
+ * `onNotNamed()`: the service found that what woke the page was not the name, so the turn it began is dropped.
  */
 export class LiveVoice {
-  constructor({ token, connection, name, onReady, onOver, onHeard, onQuiet, onSpeaking, onText }) {
-    Object.assign(this, { token, connection, name, onReady, onOver, onHeard, onQuiet, onSpeaking, onText });
+  constructor({ token, connection, name, onReady, onOver, onHeard, onQuiet, onSpeaking, onText, onNotNamed }) {
+    Object.assign(this, { token, connection, name, onReady, onOver, onHeard, onQuiet, onSpeaking, onText, onNotNamed });
     this.ready = false;
     this.rate = 24000;
     /** The latest turn, and whether the microphone goes to the service for it. */
@@ -78,6 +79,14 @@ export class LiveVoice {
     return true;
   }
 
+  /**
+   * The sound that woke the page, 16-bit PCM at 16 kHz, for the service to check: the spotter also wakes on what only sounds like the
+   * name. Nothing waits for the answer here. If it was not the name, the service drops the turn and `onNotNamed` is called.
+   */
+  named(pcm) {
+    if (this.ready) this.send({ t: 'name', pcm: base64(new Uint8Array(pcm)) });
+  }
+
   /** 16-bit PCM at 16 kHz, heard after the name. */
   audio(pcm) {
     if (this.streaming) this.send({ t: 'audio', pcm: base64(new Uint8Array(pcm)) });
@@ -128,6 +137,11 @@ export class LiveVoice {
       this.streaming = false;
       this.stop();
       this.onQuiet();
+    } else if (f.t === 'name') {
+      if (f.ok) return;
+      this.streaming = false;
+      this.stop();
+      this.onNotNamed?.();
     } else if (this.streaming) {
       // Sound and words for an answer the user's new turn is cancelling.
     } else if (f.t === 'audio') {

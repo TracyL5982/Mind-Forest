@@ -123,6 +123,10 @@ function receive(message) {
           handsFree.over();
           turn.quiet();
         },
+        onNotNamed: () => {
+          handsFree.over();
+          turn.quiet();
+        },
         onSpeaking: momoHeard,
         onText: (text) => caption('librarian', text),
       });
@@ -418,7 +422,8 @@ const handsFree = new HandsFree({
   onProblem: toast,
   onRecorded: async (blob) => {
     try {
-      const text = (await conn.transcribe(blob, currentTree())).trim();
+      // The recording began with what the spotter took for the name, and the service checks that it was.
+      const text = (await conn.transcribe(blob, currentTree(), { woke: true })).trim();
       if (text) utter(text, true);
       else {
         toast('Nothing was heard after the name.');
@@ -430,6 +435,7 @@ const handsFree = new HandsFree({
     }
     handsFree.done();
   },
+  onWoke: (sound) => live?.named(sound),
   onStart: () => live?.start(scene()),
   onPiece: (pcm) => live?.audio(pcm),
   onEnd: (said) => {

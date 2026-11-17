@@ -9,6 +9,7 @@ import type { InstagramLibrary, InstagramReader } from '../instagram.ts';
 import { publicFetch } from '../public-fetch.ts';
 import { BOT_API } from '../telegram.ts';
 import { forDevice, LINES, type Ledger } from './ledger.ts';
+import { JudgeTelegram, type JudgeBotOptions } from './judges.ts';
 import { DeviceModel } from './overflow.ts';
 
 /** A device names itself with an id it made on first launch. */
@@ -76,6 +77,8 @@ export interface HostedOptions {
   freeBytes?: () => number;
   /** Which limits the service was deployed with, for `/admin`: `judging`, or `testing` with no per-device daily limits. */
   mode?: string;
+  /** The judges' own Telegram bot, which this service alone reads. Without it no space has Telegram. */
+  judgeBot?: Omit<JudgeBotOptions, 'log'>;
   /** A line in Momo's voice as 16-bit mono PCM at the live voice's rate, for a refusal said without the realtime model. */
   record?: (text: string) => Promise<Uint8Array>;
   log: (line: string) => void;
@@ -146,9 +149,18 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       const why = ledger.paused();
       return why ? LINES[why] : null;
     },
+    held: () => {
+      const why = ledger.held(device);
+      return why ? LINES[why] : null;
+    },
     pictured: () => ledger.spend(opts.pictureDollars ?? PICTURE_DOLLARS, device),
     recorded,
   });
+
+  /** A chat's message opens only the space of a device that has one: Telegram never makes a device. */
+  const judges = opts.judgeBot
+    ? new JudgeTelegram({ ...opts.judgeBot, file: join(opts.dataDir, 'judge-telegram.json'), log: note, open: async (device) => known.has(device) && !('error' in (await spaceOf(device))) })
+    : null;
 
   async function spaceOf(device: string): Promise<Space | { status: number; error: string }> {
     await closing.get(device);
@@ -172,7 +184,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       const why = ledger.held(device);
       return why ? LINES[why] : null;
     });
-    const space = openSpace({ ...spaceOptions(opts, device), model, volumeFull, meter: meterOf(device), uploads, log: (line) => note(`[${short(device)}] ${line}`) });
+    const space = openSpace({ ...spaceOptions(opts, device), model, volumeFull, meter: meterOf(device), uploads, contact: judges?.channel(device), log: (line) => note(`[${short(device)}] ${line}`) });
     open.set(device, { space, last: Date.now() });
     space.catch((err) => {
       open.delete(device);
@@ -191,6 +203,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       await space.pipeline.idle();
       await space.close();
     }
+    judges?.forget(device);
     rmSync(join(spacesDir, device), { recursive: true, force: true });
     known.delete(device);
   }
@@ -240,6 +253,7 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
       newThisHour: born.filter((at) => at >= Date.now() - 3_600_000).length,
       newPerHour,
       known: [...known],
+      telegram: judges?.status() ?? null,
       instagram: opts.following ? { posts: opts.following.library.size(), reading: Boolean(opts.following.reader) } : null,
       devicesOnline: spaces.filter((s) => s.online > 0).length,
       open: spaces,
@@ -297,11 +311,13 @@ export async function startHosted(opts: HostedOptions): Promise<Hosted> {
   await new Promise<void>((ready) => http.listen(opts.port, opts.host, ready));
   const address = http.address();
   const port = typeof address === 'object' && address ? address.port : opts.port;
+  judges?.start();
   return {
     url: `http://${opts.host === '0.0.0.0' ? 'localhost' : opts.host}:${port}`,
     open: () => [...open.keys()],
     async close() {
       clearInterval(sweep);
+      await judges?.close();
       opts.following?.reader?.stop();
       await Promise.all([...closing.values()]);
       for (const [, entry] of open) await (await entry.space.catch(() => null))?.close();
@@ -344,8 +360,9 @@ export function upgradeWhenOpen(
 }
 
 /**
- * What a device's space is opened with: the shared parts, less what a judge's space must never have. No Telegram, since the user's
- * Mac reads their bot and two readers take each other's messages. No Instagram account of the user's, neither its token nor their own
+ * What a device's space is opened with: the shared parts, less what a judge's space must never have. No Telegram bot of its own,
+ * since the user's Mac reads their bot and two readers take each other's messages: a space's Telegram is the judges' bot, which
+ * `startHosted` gives it as its contact. No Instagram account of the user's, neither its token nor their own
  * posts: a space searches the one shared library, whose reader alone holds the account. No web page: static files come from a folder
  * that is never made.
  */

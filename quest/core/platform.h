@@ -252,6 +252,9 @@ struct MicrophoneEvents {
 };
 /// Opens the microphone. Where the user must allow it first (the Quest), sound starts once they have.
 MicrophoneRef openMicrophone(MicrophoneEvents events);
+/// Whether the microphone hears the app's own sounds, such as the chime that says the name was heard. Not on the Quest:
+/// its talking source gives silence unless someone speaks, measured with `-chimeCheck` (agents/DECISIONS.md 71).
+bool microphoneHearsOwnSounds();
 
 /// A sound file playing.
 class Sound {

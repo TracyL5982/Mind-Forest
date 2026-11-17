@@ -23,8 +23,8 @@ export async function wakeProblem() {
  * state: 'off' | 'starting' | 'waiting' | 'hearing' | 'working' | 'speaking'
  */
 export class HandsFree {
-  constructor({ cues, onState, onRecorded, onProblem, onStart, onPiece, onEnd }) {
-    Object.assign(this, { cues, onState, onRecorded, onProblem, onStart, onPiece, onEnd });
+  constructor({ cues, onState, onRecorded, onProblem, onStart, onPiece, onEnd, onWoke }) {
+    Object.assign(this, { cues, onState, onRecorded, onProblem, onStart, onPiece, onEnd, onWoke });
     this.state = 'off';
     this.streams = false;
     this.interruptible = false;
@@ -145,6 +145,8 @@ export class HandsFree {
     if (m.t === 'wake') {
       this.cues.chime();
       this.set('hearing');
+      // Streaming, the service checks the sound that woke the page; a recording is checked where it is transcribed.
+      if (m.streaming) this.onWoke?.(m.sound);
       if (m.streaming) this.onStart();
     } else if (m.t === 'piece') {
       this.onPiece(m.pcm);

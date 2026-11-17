@@ -5,6 +5,7 @@
 #include <mutex>
 
 #include "async.h"
+#include "audio.h"
 #include "base.h"
 #include "listener.h"
 #include "ocean/oceanmodel.h"
@@ -20,11 +21,24 @@ struct EchoCheck::Ears {
     std::vector<Listener::Event> events;
     std::vector<int> ended;         // the players that ended, by number
     bool sound = false;
+    /// The loudness (RMS) of each tenth of a second heard and when it ended, the last ten seconds: for `-chimeCheck`.
+    std::deque<std::pair<double, float>> levels;
+    double sum = 0;
+    int summed = 0;
 
     void heard(const float* samples, size_t count) {
         std::lock_guard<std::mutex> g(lock);
         sound = true;
         double now = mediaTime();
+        for (size_t i = 0; i < count; i++) {
+            sum += double(samples[i]) * samples[i];
+            if (++summed < Listener::pieceLength) continue;
+            // The run's samples after this one were heard a little later than it.
+            levels.emplace_back(now - double(count - 1 - i) / Listener::rate, float(std::sqrt(sum / summed)));
+            if (levels.size() > 100) levels.pop_front();
+            sum = 0;
+            summed = 0;
+        }
         for (Listener::Event& e : listener->hear(samples, count)) {
             if (auto* piece = std::get_if<Listener::Streamed>(&e)) piece->heard = now;
             events.push_back(std::move(e));
@@ -70,6 +84,14 @@ std::optional<EchoCheck::Clip> EchoCheck::readClip(const std::string& s) {
 }
 
 std::shared_ptr<EchoCheck> EchoCheck::fromFlags(OceanModel& model) {
+    if (Flags::has("chimeCheck")) {
+        logLine(fmt("[chime] the chime plays %d times, %.0f s apart, with the conversation open and no deaf stretch, while the user stays quiet; "
+                    "then %d times while they say a short word over each",
+                    chimes, chimeGap, chimesTalked));
+        auto check = std::make_shared<EchoCheck>(model);
+        check->start();
+        return check;
+    }
     std::optional<std::string> flag = Flags::string("echoCheck");
     if (!flag) return nullptr;
     std::string path = !flag->empty() && (*flag)[0] == '/' ? *flag : platform::resourcePath(*flag);
@@ -87,6 +109,8 @@ std::shared_ptr<EchoCheck> EchoCheck::fromFlags(OceanModel& model) {
 }
 
 EchoCheck::EchoCheck(OceanModel& model, std::vector<int16_t> reply, int rate) : model(model), reply(std::move(reply)), rate(rate) {}
+
+EchoCheck::EchoCheck(OceanModel& model) : model(model), rate(Listener::rate), chime(true) {}
 
 EchoCheck::~EchoCheck() {
     if (microphone) microphone->stop();
@@ -141,7 +165,11 @@ void EchoCheck::frame(double now) {
         ended.swap(ears->ended);
         sound = ears->sound;
     }
-    if (std::holds_alternative<Loading>(step) && sound) step = Waiting{now + turnAround};
+    if (std::holds_alternative<Loading>(step) && sound) {
+        step = Waiting{now + turnAround};
+        if (chime) openConversation();
+    }
+    if (chime) return chimeFrame(now, events);
 
     for (size_t i = 0; i < events.size(); i++) {
         if (!std::holds_alternative<Listener::Began>(events[i])) continue;
@@ -220,6 +248,109 @@ void EchoCheck::frame(double now) {
     else if (played == plays && !std::holds_alternative<Playing>(step)) presence.notice = "Echo check: next, talk over Momo to stop it";
     else if (talkingHalf()) presence.notice = fmt("Echo check: talk over Momo to stop it (%d of %d)", played - plays, plays);
     else presence.notice = fmt("Echo check: stay quiet while Momo talks (%d of %d)", std::max(played, 1), plays);
+    if (!view) {
+        if (!model.art || !model.lineMaterial) return;
+        view = std::make_unique<PresenceView>(model.art, *model.lineMaterial, model.root_);
+    }
+    Mat4 head = platform::head().value_or(Mat4::trs(model.stage.origin, Quat::identity(), {1, 1, 1}));
+    view->frame(presence, "Momo", head, now);
+}
+
+/// The conversation as it is once the name has been heard: open, nothing playing, any speech begins a turn.
+void EchoCheck::openConversation() {
+    std::lock_guard<std::mutex> g(ears->lock);
+    ears->listener->replyStreams();
+    ears->listener->replyEnded();
+}
+
+void EchoCheck::chimeFrame(double now, const std::vector<Listener::Event>& events) {
+    for (const Listener::Event& e : events) {
+        if (!std::holds_alternative<Listener::Began>(e)) continue;
+        {
+            std::lock_guard<std::mutex> g(ears->lock);
+            ears->listener->turnOver();
+        }
+        if (auto* playing = std::get_if<Playing>(&step)) {
+            if (!chimeBegan) chimeBeganAfter = now - playing->began;
+            chimeBegan = true;
+        } else if (played > 0) {
+            roomStarts++;
+            logLine("[chime] something in the room began a turn between chimes");
+        }
+    }
+    if (auto* p = std::get_if<Playing>(&step); p && now >= p->began + chimeHeardFor) {
+        float loudest = 0, room = 0, quietest = 1;
+        int pieces = 0, loud = 0;
+        {
+            std::lock_guard<std::mutex> g(ears->lock);
+            for (const auto& [at, level] : ears->levels) {
+                if (at > p->sounded - 3 && at <= p->sounded + chimeHeardFor) quietest = std::min(quietest, level);
+            }
+            // A tenth of a second counts as words when it is louder than both 0.015 and three times the quietest of
+            // the last three seconds, the listener's own rule.
+            float words = std::max(0.015f, quietest * 3);
+            for (const auto& [at, level] : ears->levels) {
+                if (at > p->sounded - 1 && at <= p->sounded) room = std::max(room, level);
+                if (at <= p->sounded || at > p->sounded + chimeHeardFor) continue;
+                pieces++;
+                loudest = std::max(loudest, level);
+                loud += level > words;
+            }
+        }
+        auto db = [](float rms) { return 20 * std::log10(std::max(rms, 1e-6f)); };
+        if (chimeTalking()) {
+            talkedStarts += chimeBegan;
+            talkedLoudest.push_back(loudest);
+            logLine(fmt("[chime] talked over %d of %d: loudest %.4f (%.0f dB) in the %.1f s after it began; %d of %d tenths of a second count as words; %s",
+                        played - chimes, chimesTalked, loudest, db(loudest), chimeHeardFor, loud, pieces,
+                        chimeBegan ? fmt("a turn began %.2f s after the chime did", chimeBeganAfter).c_str() : "NO TURN BEGAN"));
+        } else {
+            chimeStarts += chimeBegan;
+            chimeLoudest.push_back(loudest);
+            roomLoudest.push_back(room);
+            logLine(fmt("[chime] quiet %d of %d: loudest %.4f (%.0f dB) in the %.1f s after it began, the room %.4f (%.0f dB) in the second before; %d of %d "
+                        "tenths of a second count as words; %s",
+                        played, chimes, loudest, db(loudest), chimeHeardFor, room, db(room), loud, pieces, chimeBegan ? "IT BEGAN A TURN" : "no turn began"));
+        }
+        // The pause between the halves is longer, to read that the user is to talk now.
+        step = Waiting{now + (played == chimes ? turnAround : chimeGap - chimeHeardFor)};
+        openConversation();
+    }
+    if (auto* w = std::get_if<Waiting>(&step); w && now >= w->until) {
+        if (played < chimes + chimesTalked && audio::on()) {
+            played++;
+            chimeBegan = false;
+            if (played == chimes + 1) {
+                logLine("[chime] now say a short word over each chime");
+                openConversation();
+            }
+            audio::play("momo_chime");
+            step = Playing{now, mediaTime(), ++players};
+        } else {
+            if (!audio::on()) logLine("[chime] the app has no sounds (quest/tools/push_media.sh), so there is no check");
+            std::vector<float> c = chimeLoudest, r = roomLoudest, t = talkedLoudest;
+            std::sort(c.begin(), c.end());
+            std::sort(r.begin(), r.end());
+            std::sort(t.begin(), t.end());
+            if (!c.empty() && !t.empty()) {
+                logLine(fmt("[chime] done: alone, the chime began a turn in %d of %d plays (and the room %d times between them); at the microphone its loudest "
+                            "tenth of a second was %.4f at the median and %.4f at most, the room before it %.4f at the median. Talked over, a turn began in %d of "
+                            "%d, the loudest tenth of a second %.4f at the median and %.4f at least. Words are louder than 0.0150",
+                            chimeStarts, int(c.size()), roomStarts, c[c.size() / 2], c.back(), r[r.size() / 2], talkedStarts, int(t.size()), t[t.size() / 2], t.front()));
+            }
+            step = Finished{};
+        }
+    }
+    using S = Presence::State;
+    presence.state = S::open;
+    presence.level = 0;
+    if (std::holds_alternative<Loading>(step)) presence.notice = "Chime check: allow the microphone";
+    else if (std::holds_alternative<Finished>(step)) {
+        presence.notice = fmt("Chime check done: the chime alone was taken for you %d of %d, you were heard over it %d of %d", chimeStarts, int(chimeLoudest.size()),
+                              talkedStarts, int(talkedLoudest.size()));
+    } else if (played == chimes && !std::holds_alternative<Playing>(step)) presence.notice = "Chime check: next, say a short word over each chime";
+    else if (chimeTalking()) presence.notice = fmt("Chime check: say a short word over each chime (%d of %d)", played - chimes, chimesTalked);
+    else presence.notice = fmt("Chime check: stay quiet (%d of %d)", std::max(played, 1), chimes);
     if (!view) {
         if (!model.art || !model.lineMaterial) return;
         view = std::make_unique<PresenceView>(model.art, *model.lineMaterial, model.root_);
