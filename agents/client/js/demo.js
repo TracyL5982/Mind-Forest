@@ -255,6 +255,23 @@ async function loadTake() {
   }
 }
 
+/** Her closest wording, with the words that are not the line's marked: those not in a longest run of words the two share, in order. */
+function marked(line, closest) {
+  const key = (word) => word.toLowerCase().replace(/[’']/g, '').replace(/[^\p{L}\p{N}]+/gu, '');
+  const a = line.split(/\s+/).map(key).filter(Boolean);
+  const words = closest.split(/\s+/).filter(Boolean);
+  const b = words.map(key);
+  const run = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) run[i][j] = a[i] === b[j] ? run[i + 1][j + 1] + 1 : Math.max(run[i + 1][j], run[i][j + 1]);
+  const same = new Set();
+  for (let i = 0, j = 0; i < a.length && j < b.length; ) {
+    if (a[i] === b[j]) (same.add(j), i++, j++);
+    else if (run[i + 1][j] >= run[i][j + 1]) i++;
+    else j++;
+  }
+  return words.flatMap((word, j) => [same.has(j) || !b[j] ? word : el('mark', { text: word }), ' ']).slice(0, -1);
+}
+
 const LINE_NAME = { answer: 'Her answer, as the search starts', first: 'As the first card lands', more: 'As more cards land', wrap: 'Her wrap-up, when the search is over' };
 
 function drawTake() {
@@ -287,9 +304,10 @@ function drawTake() {
       el('div', { class: 'line-foot' },
         line.closest !== null
           ? el('span', { class: 'unsaid' },
-              'Not ready: Momo did not say this line as written, and nothing else is ever said in its place. This round’s take will not play until the line is ready. ',
-              line.closest ? `The closest she said: “${line.closest}” ` : '',
-              line.closest ? el('button', { class: 'link', type: 'button', title: 'Makes her wording this line’s text. Its recording is ready.', onclick: () => write(line.id, line.closest), text: 'Use her wording' }) : null,
+              'Not ready: Momo did not say this line as written. Until it is ready, the take plays her closest take of it, in her realtime voice, which says: “',
+              ...marked(line.text, line.closest),
+              '” ',
+              el('button', { class: 'link', type: 'button', title: 'Makes her wording this line’s text, so the box and what she says agree.', onclick: () => write(line.id, line.closest), text: 'Use her wording' }),
               ' ',
               el('button', { class: 'link', type: 'button', title: 'Has her try these same words again.', onclick: () => write(line.id, line.text), text: 'Try again' }))
           : el('span', { text: !line.text.trim() ? 'Empty: Momo says nothing here.'

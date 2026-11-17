@@ -5,8 +5,8 @@ import type { LineKind } from './take.ts';
  * Momo's recorded lines in the voice the headset hears live: the realtime model itself, as Momo, saying a given line. The model
  * cannot be held to a text word for word, so each take is written out again from its sound and kept only when its words are the
  * line's: five takes of the whole line, then the line a sentence at a time, the sentences joined at their pauses. No other voice
- * ever stands in. A line she does not say as written is not ready, and comes back with the closest thing she did say, so the
- * user can take her wording in its place.
+ * ever stands in. A line she does not say as written is not ready: it comes back with the closest take she made of it, which
+ * plays in its place until the user takes her wording or rewords the line.
  */
 
 /** Which voice a recording is in. There is one: the realtime model's, as the headset hears Momo live. */
@@ -20,13 +20,15 @@ export interface Recorded {
 }
 
 /**
- * A line she did not say as written. `closest` is the nearest wording she did say, and `pcm` its recording when that take's
- * sound holds exactly those words, so taking her wording needs no new take.
+ * A line she did not say as written. `closest` is the nearest wording she did say and `pcm` that take, which is what plays
+ * until the line is ready. `own` says the take's sound holds exactly `closest`, so taking her wording needs no new take. A line
+ * of which no take came back at all has neither.
  */
 export interface Unsaid {
   unsaid: true;
   closest: string;
   pcm?: Uint8Array;
+  own: boolean;
   takes: number;
 }
 
@@ -189,11 +191,11 @@ export function sentences(text: string): string[] {
  * 1. Up to five takes of the whole line, each written out from its sound: the first whose words are the line's is kept.
  * 2. If none is, the line a sentence at a time, up to four takes of each, the sentences joined with a short pause: a short
  *    sentence is said as written far more often than a long line.
- * 3. If a sentence still is not, the line is not ready. Nothing stands in for it. It comes back with the closest wording she said.
+ * 3. If a sentence still is not, the line is not ready. It comes back with the closest take of the whole line she made.
  */
 export async function record(opts: VoiceOptions, text: string, kind: LineKind, likely = ''): Promise<Recorded | Unsaid> {
   let takes = 0;
-  let closest: { apart: number; text: string; pcm?: Uint8Array } | null = null;
+  let closest: { apart: number; text: string; pcm: Uint8Array; own: boolean } | null = null;
   /** One take, heard: its sound when it is the words asked for, else null, with the take noted if it is the closest so far. */
   const attempt = async (words: string, whole: boolean): Promise<Uint8Array | null> => {
     takes++;
@@ -204,10 +206,11 @@ export async function record(opts: VoiceOptions, text: string, kind: LineKind, l
       if (compare(words, heard) !== 'differs') return pcm;
       opts.log(`[demo] take ${takes} of a line was not as written; heard: ${heard.slice(0, 160)}`);
       if (whole) {
-        // What she says she said is offered when the sound bears it out: then its recording is ready too.
-        const own = said && compare(said, heard) !== 'differs';
+        // Her closest take is what plays until the line is ready. What she says she said is its wording when the sound
+        // bears it out, and then the take is that wording's own recording; otherwise its wording is what was heard.
+        const own = Boolean(said) && compare(said, heard) !== 'differs';
         const far = apart(text, own ? said : heard);
-        if (!closest || far < closest.apart) closest = { apart: far, text: (own ? said : heard).replace(/\s+/g, ' ').trim(), ...(own ? { pcm } : {}) };
+        if (!closest || far < closest.apart) closest = { apart: far, text: (own ? said : heard).replace(/\s+/g, ' ').trim(), pcm, own };
       }
     } catch (err) {
       opts.log(`[demo] take ${takes} of a line failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -236,6 +239,6 @@ export async function record(opts: VoiceOptions, text: string, kind: LineKind, l
     }
   }
   opts.log(`[demo] Momo did not say a line as written in ${takes} takes, so it is not ready: ${text.slice(0, 80)}`);
-  const found = closest as { apart: number; text: string; pcm?: Uint8Array } | null;
-  return { unsaid: true, closest: found?.text ?? '', ...(found?.pcm ? { pcm: found.pcm } : {}), takes };
+  const found = closest as { apart: number; text: string; pcm: Uint8Array; own: boolean } | null;
+  return found ? { unsaid: true, closest: found.text, pcm: found.pcm, own: found.own, takes } : { unsaid: true, closest: '', own: false, takes };
 }

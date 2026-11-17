@@ -184,7 +184,7 @@ const twice = async (wav: Uint8Array, likely: string) => {
 };
 let heardLine = '';
 if (flag('--retake')) {
-  // Every line the speech model reads is put to the realtime voice again: after a change to how takes are compared, or to try once more.
+  // Every line with no recording in her realtime voice is put to her again, or with --lines, the lines named.
   for (const [round, said] of Object.entries(lines.rounds)) {
     if (only && !only.has(round)) continue;
     const likely = script.phases.find((phase) => phase.id === round)?.cards.map((card) => card.title).join(', ') ?? '';

@@ -28,11 +28,11 @@ async function plan(phase: ScriptPhase, ms = 4000): Promise<Line[]> {
 const speak = async (text: string) => new Uint8Array(text.length * 48 * 50);
 /**
  * It records as the service's recorder does. A line with "tongue twister" in it is one she does not say as written: it comes
- * back not ready, with her closest wording and that wording's own take.
+ * back not ready, with her closest take of it and that take's wording.
  */
 const record = async (text: string) =>
   /tongue twister/.test(text)
-    ? { unsaid: true as const, closest: 'Her closest wording.', pcm: await speak('Her closest wording.'), takes: 9 }
+    ? { unsaid: true as const, closest: 'Her closest wording.', pcm: await speak('Her closest wording.'), own: true, takes: 9 }
     : { pcm: await speak(text), takes: 1 };
 
 // ---- the timeline
@@ -139,14 +139,17 @@ test('the user\'s words over a line win, are kept across a restart, and go back 
   await lines.audio('Let me pull some threads on that.');
   assert.deepEqual(spoken, [written, 'Let me pull some threads on that.']);
   assert.equal(lines.edit('n3', 'no-such-line', 'x'), false);
-  // A line she does not say as written is not ready: it has no recording, nothing stands in for it, and her closest wording is offered with its own take.
+  // A line she does not say as written is not ready: her closest take of it plays for it, and its wording is offered.
   assert.deepEqual([lines.voice(written), lines.voice('Let me pull some threads on that.'), lines.voice('Never recorded.')], ['realtime', 'realtime', null]);
   lines.edit('n3', 'first', 'A tongue twister of a line.');
-  assert.equal(await lines.audio('A tongue twister of a line.', 'first'), null);
+  const standIn = await lines.audio('A tongue twister of a line.', 'first');
+  assert.equal(standIn!.length, 'Her closest wording.'.length * 2400, 'what plays is her closest take, never silence and never another voice');
   assert.deepEqual([lines.recorded('A tongue twister of a line.'), lines.closest('A tongue twister of a line.'), lines.closest(written)], [false, 'Her closest wording.', null]);
+  assert.equal(lines.ms('A tongue twister of a line.'), 'Her closest wording.'.length * 50, 'and the line is as long as that take');
   assert.deepEqual([lines.recorded('Her closest wording.'), lines.voice('Her closest wording.')], [true, 'realtime'], 'taking her wording needs no new take');
   await lines.audio('A tongue twister of a line.', 'first');
   assert.equal(spoken.filter((text) => /tongue twister/.test(text)).length, 1, 'it is not tried again by itself');
+  assert.equal(open().closest('A tongue twister of a line.'), 'Her closest wording.', 'a restart keeps the line not ready, with her take');
   lines.again('A tongue twister of a line.');
   await lines.audio('A tongue twister of a line.', 'first');
   assert.equal(spoken.filter((text) => /tongue twister/.test(text)).length, 2, 'but is when asked');
@@ -386,17 +389,19 @@ test('the user\'s words over a line are what Momo says; her live voice is kept f
     assert.ok(s.spoken.includes('Look at this one first.') && !s.spoken.some((text) => text.startsWith('first: ')), 'and only they were recorded for that line');
     assert.equal(run.demo!.mutes(), false, 'the round played, Momo is herself again');
 
-    // A line she does not say as written is not ready: the page is told so with her closest wording, and the round's take is not played.
+    // A line she does not say as written is not ready: the page is told so with her closest wording, and the take plays her closest take of it.
     await run.demo!.goto('n3');
     await post('/api/demo/line', { round: 'n3', line: 'wrap', text: 'A tongue twister of a wrap-up.' });
     await until(() => run.demo!.shown('n3').lines.at(-1)!.closest !== null);
     const unready = run.demo!.shown('n3').lines.at(-1)!;
-    assert.deepEqual([unready.closest, unready.recorded, unready.voice], ['Her closest wording.', false, null]);
+    assert.deepEqual([unready.closest, unready.recorded, unready.voice, unready.ms], ['Her closest wording.', false, null, 'Her closest wording.'.length * 50]);
     const heardBefore = s.voice.length;
-    await assert.rejects(run.demo!.playTake('n3'), /has not said one of this round's lines as written/);
-    assert.match(run.demo!.status().problem!, /take her wording for that line or reword it/);
-    assert.equal(s.voice.length, heardBefore, 'nothing of the take was said');
-    // One click takes her wording: it is the line's text, its recording is there, and the take plays.
+    void run.demo!.playTake('n3');
+    await until(() => run.demo!.status().take?.round === 'n3' && run.demo!.status().take?.playing === false && run.demo!.status().take!.at > 0, 10000);
+    const lastSaid = s.voice.slice(heardBefore).filter((m) => m.t === 'text').at(-1)!;
+    assert.equal(lastSaid.text, 'Her closest wording.', 'the caption is what is heard');
+    assert.equal(bytesOf(s.voice.slice(heardBefore), 'wrap'), 'Her closest wording.'.length * 2400, 'and what is heard is her closest take, whole');
+    // One click takes her wording: it is the line's text, its recording is there, and the line is ready.
     await post('/api/demo/line', { round: 'n3', line: 'wrap', text: 'Her closest wording.' });
     const taken = run.demo!.shown('n3').lines.at(-1)!;
     assert.deepEqual([taken.text, taken.recorded, taken.closest], ['Her closest wording.', true, null]);
@@ -502,6 +507,6 @@ test('a line is recorded by the realtime model as Momo, a take kept only when it
   const stubborn = realtime(['Nine landed, my favourite is Linux.', 'Something else entirely.', 'x', 'x', 'x']);
   const unsaid = await recordLine({ ...options, open: stubborn.open }, line, 'more');
   assert.ok('unsaid' in unsaid);
-  assert.deepEqual([unsaid.closest, unsaid.takes, stubborn.sessions()], ['Nine landed, my favourite is Linux.', 5, 5], 'a line of one sentence has no sentences to try: five takes, and it is not ready');
+  assert.deepEqual([unsaid.closest, unsaid.own, unsaid.takes, stubborn.sessions()], ['Nine landed, my favourite is Linux.', true, 5, 5], 'a line of one sentence has no sentences to try: five takes, and it is not ready');
   assert.equal(await heardAs(wavOf(unsaid.pcm!)), 'Nine landed, my favourite is Linux.');
 });
