@@ -1,8 +1,8 @@
 // Runs the Mac preview against the fake service on a fresh copy of a data folder (standin.mjs) and checks the rule for
 // opening a card and starting a layer, from the preview's log and from what it sends the service:
 //   1. a pinch on a card of the service's tree opens it where it stands: no layer starts, and neither a focus nor an ask
-//      reaches the service; the other cards keep their places, only those under the open card step aside, and none is
-//      left under it
+//      reaches the service; the other cards stay where they were or step straight out from it, none is left under it,
+//      and no two cards come to overlap
 //   2. a question picked under it is a conversation about it: it is kept, leads a layer of its own, the service hears
 //      the ask, and the picks the service brings stand on that layer
 //   3. a card that already leads a layer is gone to, the root and then the asked card again: the same two layers, and
@@ -13,7 +13,7 @@
 //   quest/desktop/build.sh && node quest/desktop/test/layer_check.mjs --data <data folder> [--shots <folder>]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { checker, find, flag, standIn, until } from './standin.mjs';
+import { checker, find, flag, places, room, standIn, until } from './standin.mjs';
 
 const stand = await standIn('layer-check', flag('--data'));
 const shots = flag('--shots', join(stand.work, 'shots'));
@@ -62,33 +62,12 @@ try {
   const open = last(opened, asked);
   check(find(run.log, /^\[agent\] opened /, opened), `1. a pinch on the suggestion opens it where it stands (${find(run.log, /^\[agent\] opened /, opened)?.line})`);
   check(open && open.route.length === 1 && open.stands === 0, `1. and no layer starts: one layer, the root's, still stands (${open?.route.length} layers)`);
-  // `[ocean] place x y half down up open title`: where each card on the layer is headed, and how far it reaches, m.
-  const places = (flagName) => {
-    const from = run.log.findIndex((l) => l.line === `[ocean] -${flagName} runs`);
-    const out = [];
-    for (let i = from + 1; from >= 0 && i < run.log.length; i++) {
-      const m = /^\[ocean\] place (\S+) (\S+) (\S+) (\S+) (\S+) (\d) (.*)$/.exec(run.log[i].line);
-      if (!m) break;
-      const [x, y, half, down, up] = m.slice(1, 6).map(Number);
-      out.push({ x, y, lo: [x - half, y - down], hi: [x + half, y + up], open: m[6] === '1', title: m[7] });
-    }
-    return out;
-  };
-  const overlap = (a, b, by = 0.003) => a.lo[0] < b.hi[0] - by && b.lo[0] < a.hi[0] - by && a.lo[1] < b.hi[1] - by && b.lo[1] < a.hi[1] - by;
-  const was = places('placesAt'), now = places('placesAgainAt');
-  const openCard = now.find((p) => p.open);
-  const moved = now.filter((p) => !p.open).map((p) => {
-    const then = was.find((q) => q.title === p.title);
-    return { p, then, far: then ? Math.hypot(p.x - then.x, p.y - then.y) : NaN };
-  });
-  const strays = moved.filter(({ then, far }) => !(far < 0.005 || (then && openCard && overlap(then, openCard))));
-  const openWas = openCard && was.find((q) => q.title === openCard.title);
-  const openMoved = openWas ? Math.hypot(openCard.x - openWas.x, openCard.y - openWas.y) : NaN;
-  check(openCard && openMoved < 0.005, `1. the open card grows where it stood (it moved ${openMoved.toFixed(3)} m)`);
-  check(openCard && was.length >= 3 && moved.length === was.length - 1 && strays.length === 0,
-    `1. the other ${moved.length} cards keep their places; ${moved.filter((m) => m.far >= 0.005).length} under the open card step aside (${strays.map((s) => `"${s.p.title}" moved ${s.far.toFixed(3)} m`).join(', ') || 'no other moves'})`);
-  const under = now.filter((p) => !p.open && openCard && overlap(p, openCard));
-  check(openCard && under.length === 0, `1. and none is left under the open card (${under.map((p) => `"${p.title}"`).join(', ') || 'none'})`);
+  const made = room(places(run.log, 'placesAt'), places(run.log, 'placesAgainAt'));
+  check(made.open && made.openMoved < 0.005, `1. the open card grows where it stood (it moved ${made.openMoved.toFixed(3)} m)`);
+  check(made.open && made.others.length >= 3 && made.inward.length === 0,
+    `1. the other ${made.others.length} cards stay, or step straight out from it: ${made.moved.length} stepped out (${made.inward.map((p) => `"${p.title}" moved towards it`).join(', ') || 'none moved towards it'})`);
+  check(made.open && made.under.length === 0, `1. none is left under the open card (${made.under.map((p) => `"${p.title}"`).join(', ') || 'none'})`);
+  check(made.open && made.crowded.length === 0, `1. and no two cards overlap that did not before (${made.crowded.join(', ') || 'none'})`);
   const early = ['focus', 'ask', 'keep', 'utter', 'more'].flatMap((t) => sentBetween(t, opened, asked).map((m) => m.t));
   check(early.length === 0, `1. the service hears no focus and no ask for it (${early.length ? early.join(', ') : 'nothing but its questions'})`);
 

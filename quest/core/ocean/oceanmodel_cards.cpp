@@ -305,6 +305,7 @@ void OceanModel::settleCard(int id) {
     made->sourceScale = old->sourceScale;
     made->emerge = old->emerge;
     made->bornAt = old->bornAt;
+    made->nudge = old->nudge;
     buildSmall(*made);
     buildQueue.erase(std::remove(buildQueue.begin(), buildQueue.end(), id), buildQueue.end());
     // The composing card stays as it is until the finished card's faces are on the GPU (startSettle). Meanwhile the finished
@@ -577,6 +578,28 @@ void OceanModel::buildRows(CardView& c) {
     }
     c.rowsDown = std::max(0.f, -y - down);
     c.changed();
+    // (The rows are part of what the cards round it keep clear of.)
+    if (tree && tree->focus() == c.id) stepAside(time);
+}
+
+void OceanModel::stepAside(double now) {
+    const TreeNode* current = tree && tree->focus() ? find(*tree, *tree->focus()) : nullptr;
+    if (!(current && !current->head)) return;
+    const Tree& tree = *this->tree;
+    for (const auto& [id, n] : tree.nodes) {
+        const CardRef& c = card(id);
+        if (!c || id == current->id) continue;
+        // A condensed group moves as one, with the card it stands on, unless that is the open card.
+        const TreeNode* mover = &n;
+        while (tree.condensed(*mover) && mover->parent && *mover->parent != current->id) {
+            const TreeNode* host = find(tree, *mover->parent);
+            if (!host) break;
+            mover = host;
+        }
+        Vec2 aside = style(n, tree).alpha > 0 ? nudge(*mover, tree) : Vec2::zero();
+        // As it grows, not after.
+        if (distance(c->nudge.target(), aside) > 0.004f) c->nudge.go(aside, now, Pace::grow, Ease::out);
+    }
 }
 
 /// The film or work before `id` on its way from the root, if there is one (its place among the pieces).
@@ -895,6 +918,7 @@ void OceanModel::restyle(bool stirring) {
     focusLevel.go(float(tree.standDepth()), now, Pace::step, Ease::glide);
     float pace = moving ? Pace::step : Pace::grow;
     Ease ease = moving ? Ease::glide : Ease::out;
+    bool inPlace = current && !current->head;
     touch(now + double(Pace::step));
     // (In the order of their ids; a Swift dictionary has none.)
     for (const auto& [nid, n] : tree.nodes) {
@@ -945,15 +969,18 @@ void OceanModel::restyle(bool stirring) {
             c.openMix.go(look.open, now, Pace::grow, Ease::out);
         }
         setHit(c, look);
-        // A condensed group moves aside as one, with the card it stands on, unless that card is the open one.
-        const TreeNode* mover = &n;
-        while (tree.condensed(*mover) && mover->parent && std::optional<int>(*mover->parent) != focus) {
-            const TreeNode* host = find(tree, *mover->parent);
-            if (!host) break;
-            mover = host;
+        // A condensed group moves aside as one, with the card it stands on. (AGENT: round a card opened where it stands,
+        // every card steps aside together once its rows are built, below: `stepAside`.)
+        if (!inPlace) {
+            const TreeNode* mover = &n;
+            while (tree.condensed(*mover) && mover->parent) {
+                const TreeNode* host = find(tree, *mover->parent);
+                if (!host) break;
+                mover = host;
+            }
+            Vec2 aside = look.alpha > 0 ? nudge(*mover, tree) : Vec2::zero();
+            if (distance(c.nudge.target(), aside) > 0.004f) c.nudge.go(aside, now, Pace::step, Ease::glide);
         }
-        Vec2 aside = look.alpha > 0 ? nudge(*mover, tree) : Vec2::zero();
-        if (distance(c.nudge.target(), aside) > 0.004f) c.nudge.go(aside, now, Pace::step, Ease::glide);
         // A step of the path carries its number.
         std::string key;
         if (n.head) {
@@ -984,6 +1011,7 @@ void OceanModel::restyle(bool stirring) {
     if (focus) {
         if (CardRef c = card(*focus); c && c->openBuilt) buildRows(*c);
     }
+    stepAside(now);
     // The open card's video plays; nothing else does.
     std::optional<int> film;
     if (current && !pressing) {

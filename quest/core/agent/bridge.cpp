@@ -559,6 +559,8 @@ void Bridge::redraw(int localId) {
         made->sourceScale = old->sourceScale;
         made->emerge = old->emerge;
         made->bornAt = old->bornAt;
+        // And where it stepped aside to, out from under the open card.
+        made->nudge = old->nudge;
     }
 }
 
