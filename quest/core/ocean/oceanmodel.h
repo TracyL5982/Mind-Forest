@@ -706,8 +706,14 @@ private:
     void soundLayer(int layer, bool forward, double after = 0);
     /// One note for each card the gardener brings, up the chord of the layer they come to.
     void soundNotes(int count, double delay);
-    /// A card's own note, as it is pressed: one of its layer's chord, by its place on the layer from left to right.
+    /// A card's own note on its layer, a place on the ladder (note_00 … note_11): one of the layer's chord, by its
+    /// place among its parent's cards. None for a card not on the tree.
+    std::optional<int> cardNote(int id) const;
+    /// A press on a card of the service's: "take" at the card's own note.
     void soundCard(int id);
+    /// The cards the agent brings to a standing tree: each its own note, in one run however many batches they land in.
+    void soundArrivals(const std::vector<int>& ids, double delay);
+    double notesFree = 0;                               // when the next arriving card's note may sound, on `time`
     /// The note of a level of the small tree: its layer's root, a step higher for each level.
     void soundLevel(int level);
     /// What sounds for as long as something lasts: the ocean under everything, the gardener

@@ -71,21 +71,18 @@ void OceanModel::soundNotes(int count, double delay) {
     if (!tree || count <= 0) return;
     const std::vector<int>& notes = chordNotes[std::max(tree->standDepth(), 0) % 5];
     int n = std::min(count, 6);
-    // Each a little after the last, as the cards are but slower, so it is heard as notes; many are each quieter.
-    float gain = 0.5f * (n > 3 ? std::sqrt(3.f / float(n)) : 1);
+    // Each a little after the last, as the cards are but slower, so it is heard as notes; many are each quieter. Like the
+    // ocean's other sounds, they draw back under Momo.
+    float gain = 0.5f * (n > 3 ? std::sqrt(3.f / float(n)) : 1) * (conversing ? conversationDip : 1);
     for (int i = 0; i < n; i++) {
         float pan = n > 1 ? (float(i) / float(n - 1) - 0.5f) * 0.7f : 0;
         audio::play(fmt("note_%02d", notes[size_t(i) % notes.size()]), gain, delay + double(i) * 0.09, pan);
     }
 }
 
-void OceanModel::soundCard(int id) {
+std::optional<int> OceanModel::cardNote(int id) const {
     const TreeNode* n = tree ? find(*tree, id) : nullptr;
-    const CardRef& c = card(id);
-    if (!n) {
-        if (c) soundAt("take", c->position); else sound("take");
-        return;
-    }
+    if (!n) return std::nullopt;
     // Its place among the cards that came with it, its parent's, in the order they come (`soundNotes`): so each keeps
     // the note it came in on, neighbours differ, and the notes climb along them. It does not move as cards open.
     size_t place = 0;
@@ -94,10 +91,40 @@ void OceanModel::soundCard(int id) {
     }
     std::optional<Tree::Place> at = tree->shown(*n);
     const std::vector<int>& notes = chordNotes[std::max(at ? at->depth : tree->standDepth(), 0) % 5];
-    std::string name = fmt("note_%02d", notes[place % notes.size()]);
-    logLine(fmt("[ocean] %s sounds %s: card %d of its parent's on layer %d", catalog ? catalog->title(n->ref).c_str() : "a card",
-                name.c_str(), int(place) + 1, at ? at->depth : tree->standDepth()));
-    if (c) soundAt(name.c_str(), c->position); else sound(name.c_str());
+    return notes[place % notes.size()];
+}
+
+void OceanModel::soundCard(int id) {
+    const CardRef& c = card(id);
+    std::optional<int> note = cardNote(id);
+    // "take" moved to the card's note: the same chime, so a press still sounds like one (synth.py's takes).
+    std::string meant = note ? fmt("take_%02d", *note) : "take", name = audio::seconds(meant) > 0 ? meant : "take";
+    if (const TreeNode* n = note ? find(*tree, id) : nullptr) {
+        logLine(fmt("[ocean] %s sounds %s%s", catalog ? catalog->title(n->ref).c_str() : "a card", name.c_str(),
+                    name == meant ? "" : (" (" + meant + " is not among the sounds)").c_str()));
+    }
+    float gain = conversing ? conversationDip : 1;
+    if (c) soundAt(name.c_str(), c->position, gain); else sound(name.c_str(), gain);
+}
+
+void OceanModel::soundArrivals(const std::vector<int>& ids, double delay) {
+    if (!tree || ids.empty()) return;
+    // Each its own note, one after another 90 ms apart, after any of the last cards' still to come: cards that land in
+    // several batches within a second are heard as one run, never at once. One due more than 1.2 s on is let go, and a
+    // batch of more than six is each quieter: ten cards in a second peak at about 0.35 of full scale, under where the
+    // mixer bends (shots/ws54/burst). Like the ocean's other sounds, they draw back under Momo.
+    float gain = 0.35f * std::min(1.f, std::sqrt(6.f / float(ids.size()))) * (conversing ? conversationDip : 1);
+    double at = std::max(time + delay, notesFree);
+    for (int id : ids) {
+        if (at - time > 1.2) break;
+        std::optional<int> note = cardNote(id);
+        if (!note) continue;
+        std::string name = fmt("note_%02d", *note);
+        if (const CardRef& c = card(id)) soundAt(name.c_str(), c->position, gain, at - time);
+        else audio::play(name, gain, at - time);
+        at += 0.09;
+    }
+    notesFree = at;
 }
 
 void OceanModel::soundLevel(int level) {

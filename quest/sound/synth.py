@@ -502,6 +502,22 @@ def momo():
     rng = kai
 
 
+def takes():
+    """take, on each note of the ladder: a press on a card of the service's sounds that card's own note on its layer
+    (soundCard in core/ocean/oceanmodel_sound.cpp) with take's own chime, so a press still sounds like one. The upper
+    voice is a fifth above, as take's is, but for G#, whose fifth (D#) is not in the key: its fourth (C#)."""
+    global rng
+    # Its own draws: Kai's sounds and Momo's never move these, nor these them.
+    kai, rng = rng, np.random.default_rng(54)
+    for i, n in enumerate(LADDER):
+        upper = up(n, 5 if n[:-1] == "G#" else 7)
+        t = chime(hz(n), 3.0, 1.0, "glass")
+        t = place(t, chime(hz(upper), 2.6, 0.45, "glass", 0.25), 0.09)
+        t = place(t, chime(hz(up(n, -24)), 2.6, 0.5, "mallet"), 0.0)
+        add(f"take_{i:02d}", t, 0.6, f"A card of the service's is pressed: take on {n}, the card's own note on its layer")
+    rng = kai
+
+
 def pcm(x):
     return (np.clip(x, -1, 1) * 32767).astype(np.int16)
 
@@ -554,5 +570,6 @@ if __name__ == "__main__":
     args = ap.parse_args()
     build()
     momo()
+    takes()
     if args.out or not args.page: write_app(args.out or os.path.join(repo, "media-src", "quest", "sounds"))
     if args.page: write_page(args.page)

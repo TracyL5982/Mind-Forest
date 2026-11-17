@@ -58,21 +58,24 @@ try {
 const ran = run.log.filter((l) => /^\[ocean\] -pickAt\d? runs$/.test(l.line));
 const heard = ran.map((r, i) => {
   const until = ran[i + 1]?.at ?? Infinity;
-  const sound = run.log.find((l) => l.at >= r.at && l.at < until && /^\[sound\] (take|note_\d\d)\b/.test(l.line));
+  const sound = run.log.find((l) => l.at >= r.at && l.at < until && /^\[sound\] (take(_\d\d)?|note_\d\d)\b/.test(l.line));
   return sound ? sound.line.replace(/^\[sound\] /, '').split(' ')[0] : 'nothing';
 });
 console.log(`the five presses sounded: ${heard.join(', ')}`);
 check(ran.length === 5, `five presses ran (${ran.length})`);
-const notes = heard.filter((h) => /^note_\d\d$/.test(h)).map((h) => Number(h.slice(5)));
-check(notes.length === 5 && new Set(notes).size === 5, `each press sounded a note of its own (${heard.join(', ')})`);
+// A press is "take" moved to the card's own note (take_03 is take on note_03), so it still sounds like a press.
+const notes = heard.filter((h) => /^take_\d\d$/.test(h)).map((h) => Number(h.slice(5)));
+check(notes.length === 5 && new Set(notes).size === 5, `each press sounded take on a note of its own (${heard.join(', ')})`);
 const chord = CHORDS.findIndex((c) => notes.length > 0 && notes.every((n) => c.includes(n)));
 check(chord >= 0, `all of one layer's chord${chord >= 0 ? ` (chord ${chord}: ladder notes ${CHORDS[chord].join(' ')})` : ''}`);
 
-// The service's cards brought by the question: one note each, up the chord of the layer they come to.
+// The service's cards brought by the question: one note each, their own, 90 ms apart, up the chord of the layer they come to.
 const came = run.log.find((l) => /^\[agent\] \d+ new cards$/.test(l.line) && l.at >= (ran.at(-1)?.at ?? 0));
 const count = came ? Number(came.line.match(/(\d+) new cards/)[1]) : 0;
-const rang = came ? run.log.filter((l) => l.at >= came.at - 0.05 && l.at < came.at + 1 && /^\[sound\] note_\d\d\b/.test(l.line)).map((l) => l.line.replace(/^\[sound\] /, '').split(' ')[0]) : [];
-check(came && rang.length === Math.min(count, 6) && new Set(rang).size === rang.length,
-  `the ${count} cards the service brought each sounded a note of their own (${rang.join(', ') || 'nothing'})`);
+const rung = came ? run.log.filter((l) => l.at >= came.at - 0.05 && l.at < came.at + 1 && /^\[sound\] note_\d\d\b/.test(l.line)).map((l) => l.line.replace(/^\[sound\] /, '')) : [];
+const rang = rung.map((l) => l.split(' ')[0]);
+const after = rung.map((l) => Number(l.match(/ in ([\d.]+) s/)?.[1] ?? 0));
+check(came && rang.length === count && new Set(rang).size === Math.min(count, 6) && after.every((t, i) => i === 0 || t > after[i - 1] + 0.08),
+  `the ${count} cards the service brought each sounded a note of their own, one after another (${rung.join(', ') || 'nothing'})`);
 console.log(summary(shots));
 process.exit(failed() ? 1 : 0);
