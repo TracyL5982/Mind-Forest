@@ -1265,6 +1265,10 @@ private:
     void holdPress();
     /// How long a pinch is held still before it counts, s, once the card has settled.
     static constexpr double holdFor = 0.4;
+    /// AGENT: (c) the lead's call, 2026-11-17: the cards folded onto a branch opened where it stands fold away while it is
+    /// open, and come back when it closes. False leaves them where they are, partly under it.
+    static constexpr bool openFoldsAway = true;
+    bool foldedOntoOpen(const TreeNode& n, const Tree& tree) const;
 
     // NOTE(port): added for Quest (core/cards). What the pen marks on a service card, kept with the card by the service
     /// (oceanmodel_edits.cpp). With the pen up, a drag on the card gone into begins one: a highlight on words, a line

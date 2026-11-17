@@ -113,6 +113,9 @@ public:
     EntityRef scrollBar;
     EntityRef holdRing;
     int holdShown = -1;
+    // AGENT: the same ring round a pinch held still on the card while it is closed, made the first time (`holdPress`).
+    EntityRef pressRing;
+    int pressShown = -1;
     std::vector<CardEdit> edits;
     EntityRef highlights;
     EntityRef lines;

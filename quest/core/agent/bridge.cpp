@@ -908,6 +908,20 @@ void Bridge::acknowledge(int nodeID, int k) {
     }
 }
 
+void Bridge::longPinch(int nodeID) {
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    if (!p || !p->service.count(nodeID)) return;
+    Tree& t = *p->tree;
+    if (t.nodes[nodeID].children.empty()) {
+        moreLike(nodeID);
+        return;
+    }
+    t.lead(nodeID);
+    standGroup(t, nodeID);
+    model.restyle();
+    logLine("[agent] into the layer of " + model.catalog->title(t.nodes[nodeID].ref));
+}
+
 void Bridge::moreLike(int nodeID) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
     if (!p || !p->service.count(nodeID)) return;

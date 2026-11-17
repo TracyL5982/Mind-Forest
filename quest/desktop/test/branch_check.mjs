@@ -4,8 +4,8 @@
 //      layers as deep, the first reached taking at each fork the first card in the service's order (`[agent] tree "…": …`);
 //   2. gone to as a tree, it stands there;
 //   3. from there each branch is reached by hand: a step back a layer at a time to the root's, as the fist takes one, then a
-//      pinch on each card on the way to the branch, each in sight on the layer that stands then, and the last goes into the
-//      branch's own layer (`-script`);
+//      long pinch on each card on the way to the branch, each in sight on the layer that stands then, and the last goes into
+//      the branch's own layer (`-script`'s `hold:`; a click only opens a card, the user's rule of 2026-11-17);
 //   4. a last preview, as after a restart, finds each tree on the layer it was left on, the last branch gone into.
 // One preview for each tree, its clock a frame at a time, and one more for 4.
 //
@@ -51,8 +51,9 @@ try {
     // (`branches` is in that order already.)
     const first = branches.find((b) => pathTo(b).length === layers) ?? root;
     const named = branches.filter((b) => pathTo(b).slice(1).every(refOf));
-    const steps = named.flatMap((b) => [...Array(layers - 1).fill('back'), ...pathTo(b).slice(1).map(refOf)]);
-    const at = 6, every = 0.6;
+    const steps = named.flatMap((b) => [...Array(layers - 1).fill('back'), ...pathTo(b).slice(1).map((n) => `hold:${refOf(n)}`)]);
+    // (A long pinch is held 0.9 s, from when its card has settled.)
+    const at = 6, every = 1.5;
     // (Ten quiet seconds at the end, for the headset to settle and write down where the tree was left.)
     const run = stand.launch(shots, `walk-${tree.id.slice(0, 12)}`, at + steps.length * every + 10,
       ['-script', steps.join('|'), '-scriptAt', String(at), '-scriptEvery', String(every), '-shotEvery', '100000'], { realtime: false });
@@ -74,8 +75,8 @@ try {
     for (const b of named) {
       const mine = said.slice(k, k + layers - 1 + pathTo(b).length - 1);
       k += layers - 1 + pathTo(b).length - 1;
-      const pinches = mine.filter((s) => s.startsWith('pinched '));
-      // `pinched <ref>, in sight on layer <d> while layer <t> stood; now on layer <n>, of <ref>`
+      const pinches = mine.filter((s) => s.startsWith('held '));
+      // `held <ref>, in sight on layer <d> while layer <t> stood; now on layer <n>, of <ref>`
       const blind = pinches.filter((s) => !/, in sight on layer (\d+) while layer \1 stood;/.test(s));
       const last = /now on layer (\d+), of (.+)$/.exec(pinches.at(-1) ?? '');
       const ref = refOf(b);
@@ -83,7 +84,7 @@ try {
       if (!(mine.length && blind.length === 0 && inside)) unreached.push(`"${items.get(b.itemId)?.title}"${blind.length ? `: ${blind[0]}` : `: ${pinches.at(-1) ?? 'no pinch'}`}`);
     }
     check(said.length === steps.length && unreached.length === 0,
-      `3. every branch is reached by hand, stepping back to the root's layer and pinching down to it: ${named.length - unreached.length} of ${named.length}${branches.length > named.length ? ` (${branches.length - named.length} under a work of the library, which no flag names)` : ''}${unreached.length ? `; not: ${unreached.slice(0, 3).join('; ')}` : ''}`);
+      `3. every branch is reached by hand, stepping back to the root's layer and long-pinching down to it: ${named.length - unreached.length} of ${named.length}${branches.length > named.length ? ` (${branches.length - named.length} under a work of the library, which no flag names)` : ''}${unreached.length ? `; not: ${unreached.slice(0, 3).join('; ')}` : ''}`);
     if (named.length) left.set(tree.id, named.at(-1));
   }
   // A last preview, as after a restart: each tree stands where it was left.
