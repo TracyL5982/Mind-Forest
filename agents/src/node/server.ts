@@ -596,7 +596,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said, contact: telegram ?? undefined }));
         },
         label: toolLabel,
-        where: (scene) => whereNote(pipeline.ctx, scene),
+        where: (scene) => whereNote(pipeline.ctx, scene) + (director?.takeNote(scene.focus) ?? ''),
         cards: (set) => landedCards(mind, set),
         nameOf: (nodeId) => (mind.nodes.has(nodeId) ? nameOf(mind.itemOf(nodeId)) : 'this card'),
         spoken: (turn) => pipeline.spoken(turn),

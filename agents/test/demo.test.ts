@@ -222,3 +222,26 @@ test('the tree a played first round starts is named as a set-up names it, and Mo
     await run.close();
   }
 });
+
+test('Momo is told, with where the user is, when the next words said on the open card ask for the round that waits on it', async () => {
+  // By her own rules a question gets an answer and no cards, and half the walkthrough's lines are questions.
+  const run = await boot();
+  try {
+    await run.demo!.goto('n3');
+    const ring = nodeOf(run, 'Llull’s ring')!;
+    assert.match(run.demo!.takeNote(ring.id), /^\nRecording: .*new layer/);
+    assert.equal(run.demo!.takeNote(nodeOf(run, 'Corals')!.id), '', 'no round waits on this card, so Momo is told nothing more');
+    assert.equal(run.demo!.takeNote(undefined), '');
+    await run.pipeline.more(ring.id);
+    await run.pipeline.idle();
+    assert.equal(run.demo!.takeNote(ring.id), '', 'the round was played: the card is an ordinary card again');
+    // The one round that brings nothing is answered aloud from its card.
+    await run.demo!.goto('bs');
+    assert.match(run.demo!.takeNote(nodeOf(run, 'Sources')!.id), /answer aloud/);
+    run.demo!.setScripted(false);
+    assert.equal(run.demo!.takeNote(nodeOf(run, 'Sources')!.id), '', 'with scripting off Momo is on her own');
+    assert.match(momoNote(script), /Recording:/);
+  } finally {
+    await run.close();
+  }
+});

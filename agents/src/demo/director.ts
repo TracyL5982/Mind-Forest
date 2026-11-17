@@ -72,14 +72,15 @@ export interface DirectorDeps {
 
 /**
  * What Momo is told beside her own instructions while the demo runs. Her words stay her own: this only makes a request a take,
- * so a line of the walkthrough starts a search without a question back.
+ * so a line of the walkthrough starts a search without a question back. Which card a round waits on she is told with where the
+ * user is (`takeNote`), since by her own rules a question gets an answer and no cards, and half the walkthrough's lines are questions.
  */
 export const momoNote = (script: DemoScript) => `# Recording a walkthrough
 The user is recording a walkthrough of one tree, and each thing they say is a take. So, only here:
 - With no tree open, "let's jam on…", "let's brainstorm…" or a subject alone asks for a tree: call start_tree with the subject, and ask nothing first. The walkthrough's own subject is "${script.topic}": when that is what they mean, in whatever words, give start_tree exactly those words.
-- With a card open, what the user says about what is in view is a request for the next layer on that card, even when it is a reaction or a single word ("that's cool, but…", "Layers?", "Show me."): call find_new on the open card, their words as the need. "More of this" and "more like this" are more_like_this. Do not ask which card, nor whether to start a tree.
-- A question about what they already have ("do I have anything on…") is look_up_mindstorm as ever, and a question the open card itself answers, you answer from the card.
-Everything else is as above: a few lively words of your own as you call the tool, then tell of the cards as their notes land.`;
+- A [Where the user is] note may end with a line that begins "Recording:". It says what the next thing the user says asks for with that card open, and it comes before the rules above. When it says a new layer: say a few lively words of your own and call find_new on the open card, their words as the need, even when they put it as a question, a reaction or a single word ("So which ones do we keep?", "that's cool, but…", "Layers?"), and ask nothing back. Only "more of this" and "more like this" stay more_like_this. When it says to answer aloud: answer from the card in a sentence or two, and call no tool.
+- With no such line, everything is as above.
+- A round here lands many cards at once. At [More cards landed] with more than two cards, never say their titles one after another: say how many came and name the one you like best, in one short line.`;
 
 /** What a set-up round is recorded as: never the user's doing, so an undo does not take one back. */
 const DEMO: Origin = { by: 'user', role: 'demo' };
@@ -301,6 +302,21 @@ export class Director {
       this.deps.log(`[demo] could not play: ${this.problem}`);
       throw err;
     }
+  }
+
+  /**
+   * What Momo is told, with where the user is, about the card they have open: whether the next thing they say asks for the round
+   * that waits on that card. A round with cards is a new layer on it; a round that brings nothing is answered aloud from it.
+   */
+  takeNote(focus: Id | undefined): string {
+    if (!this.scripted || !focus) return '';
+    const here = this.script.phases.filter(
+      (phase) => !this.built.has(phase.id) && !this.playing.has(phase.id) && (phase.head === 'root' ? this.root === focus : this.nodes.get(phase.head) === focus),
+    );
+    if (here.length === 0) return '';
+    return here.some((phase) => phase.cards.length > 0)
+      ? '\nRecording: with this card open, the next thing the user says asks for a new layer on it.'
+      : '\nRecording: with this card open, the next thing the user says is a question to answer aloud from this card.';
   }
 
   /**

@@ -30,7 +30,7 @@ The demo is on the branch `demo/walkthrough`, which holds `tracy/agents` as it s
 
 ## Set up, once
 
-1. **Keys.** `~/.muse-garden.env` needs two lines: `MODEL_API_KEY=...` and `OPENAI_API_KEY=...`. Without the OpenAI key the demo runs but Momo can neither hear nor speak, and the page says "Momo's voice off". On 2026-11-16 Kai's Mac had the first and not the second.
+1. **Keys.** `~/.muse-garden.env` needs two lines: `MODEL_API_KEY=...` and `OPENAI_API_KEY=...`. Without the OpenAI key the demo runs but Momo can neither hear nor speak, and the page says "Momo's voice off". A key file kept somewhere else is named when the service is started: `MIND_PALACE_ENV=<file> npm run demo` (it is then the only one read). When the service starts with the key it prints `voice  Momo is live`.
 2. **The service's packages.**
 
    ```bash
@@ -102,14 +102,15 @@ Round 1 starts the tree, so the stage must be empty. Press **Empty stage**. A he
 agents/demo/headset.sh restart
 ```
 
-Then say the line. "Start a tree on ..." always works; the line as written ("let's jam on how we brainstorm with VR headset") relies on a note Momo is given in demo mode, which has not been tried with the live voice yet. The note also gives her the tree's subject, "How we brainstorm with a VR headset", so the first card reads the same in every take. However the tree is started, it is named "Brainstorming in a headset".
+Then say the line. "Start a tree on ..." always works, and so does the line as written ("let's jam on how we brainstorm with VR headset"): a note Momo is given in demo mode tells her that it asks for a tree, and gives her the tree's subject, "How we brainstorm with a VR headset", so the first card reads the same in every take. However the tree is started, it is named "Brainstorming in a headset".
 
 ## What is fixed and what is live
 
 | Fixed by the script | Live |
 |---|---|
 | Which cards a round brings, their words, pictures and order | Momo's hearing and everything she says |
-| The step labels ("Checking what you already have", "Searching Wikimedia Commons", "Making a picture of ...") | When she decides to search, and on which card |
+| The step labels ("Checking what you already have", "Searching Wikimedia Commons", "Making a picture of ...") | What she does when the open card is not one a round waits on |
+| That what you say with a round's card open brings that round, even put as a question or one word | |
 | The questions offered under the card a round is asked from | The questions under every other card |
 | Each card's look | Anything you ask after the last round, or with scripting off |
 
@@ -121,6 +122,8 @@ How a request finds its round:
 
 A stray request therefore also brings the next round. If that happens, go to the round again.
 
+Momo's own rule is that a question gets an answer and no cards, and half the walkthrough's lines are questions ("so how do we keep the information organized?"). So while a round waits on the card you have open, she is told so at the start of your turn, and takes whatever you say next as a request for a new layer on it: a few words of her own, then the search. On any other card she is herself: a question is answered aloud, and a request for things to look at brings the next round.
+
 ## When something is off
 
 | What you see | What to do |
@@ -131,7 +134,8 @@ A stray request therefore also brings the next round. If that happens, go to the
 | An old tree stays on the headset after Empty stage | Start the app again: `agents/demo/headset.sh restart`. |
 | The app on the headset shows your real trees, not the demo | It is joined to the hosted service. Run `agents/demo/headset.sh`. |
 | After the recording, the app shows nothing and Momo does not answer | It is still looking for the demo on this Mac. Run `agents/demo/headset.sh back`. |
-| Momo answers but no cards come | Press Play it now, without a word. |
+| Momo answers but no cards come | The card you had open is not the one the round is asked from (the page names it under "Asked from"). Open that card and say it again, or press Play it now, without a word. |
+| Momo reads out a row of card titles | She tells of the first card, then of the others in one line, then says which she would open: about 30 to 40 seconds a round. Saying "Hey Momo" stops her. |
 | The wrong round arrived | Press Go to this round. |
 | The page says the service is not answering | The service stopped: `cd agents && npm run demo`. The tree is kept in `agents/data-demo` and is taken up where it stood. |
 
@@ -181,14 +185,20 @@ The file was generated from the walkthrough board by `sketches/walkthrough/gen/d
 - Requests as the headset sends them, from a test connection: a long pinch on "Neurones poster" brought "More of this" in 5 seconds, and the words "so how do we keep the information organized?" with Llull's ring open went through the real Conductor ("Looking at how to keep this information organized.") and brought Round 3 in 8.
 - The service stopped and started again took the tree up where it stood, and the headset joined again by itself.
 
-The Mac preview of the app, built from this branch, showed the same on 2026-11-16 (pictures above and below). The service's tests pass: 704, with one that is skipped without a key; eight of them are the demo's.
+The Mac preview of the app, built from this branch, showed the same on 2026-11-16 (pictures above and below). The service's tests pass: 705, with one that is skipped without a key; nine of them are the demo's.
 
 ![A round being played: suggestions arriving on dashed threads round the open card](docs/round-played.jpg)
 
+**Momo's live voice, 2026-11-16** (the service on Kai's Mac with the OpenAI key, no headset: each line said by the Mac's own speech into a file and sent as a headset sends its microphone, nothing played aloud):
+
+- "Let's jam on how we brainstorm with a VR headset", with nothing open: she said "Love that—let's spin up a fresh space for that idea and see what grows", started the tree with the subject as written, and Round 1 arrived.
+- With the round's card open, each of these brought its round, with a short line of hers first and no question back: "The analogy of memory palace and data mountain is interesting. Other ideas?", "More of this.", "So how do we keep the information organized?", "That's cool, but seems easy to get lost wandering around.", "Layers?", "So which ones do we keep?".
+- Before she was told which card a round waits on, "So how do we keep the information organized?" was answered aloud and brought nothing. That is what happens on a card no round waits on.
+- She speaks for 30 to 50 seconds a round in three or four parts: the first card, the rest in a line, and which she would open first.
+
 Not tried:
 
-- **Momo's live voice in demo mode.** Kai's Mac has no OpenAI key, so on it Momo neither hears nor speaks. The note that makes each line a take (`momoNote` in `director.ts`) has never met the real model.
-- **A person's hands.** Nobody wore the headset: pinching a card open, keeping a pick, tapping an offered question and "Hey Momo" were not done by hand or voice.
+- **A person's voice and hands in the headset.** Nobody wore it: "Hey Momo" said aloud, pinching a card open, keeping a pick and tapping an offered question were not done by a person. The lines above were a computer voice in a quiet file.
 - **The film card.** "Disney's multiplane camera" carries its file (from 2:43 of the source) and shows its poster and play mark on the headset; whether it plays there when the card is gone into was not checked.
 - **The mark on the Linux picture.** It is a real stroke on the card; its place was set by calculation, and it is drawn only once the card is gone into.
 
