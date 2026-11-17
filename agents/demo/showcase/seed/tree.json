@@ -538,26 +538,8 @@
       "h": 1093
     },
     {
-      "id": "fern-cyanotype",
-      "parent": "cherry-blossom",
-      "kind": "artwork",
-      "origin": "external",
-      "title": "Fern study, Hatton Fern Album",
-      "text": "A pressed fern beside its cyanotype, the same frond in white on blue, from about 1850. Here the plant leaves its own outline, with no drawing hand between.",
-      "by": "Anonymous, English",
-      "date": "c. 1850",
-      "holder": "Art Institute of Chicago",
-      "from": "Art Institute of Chicago",
-      "credit": "Art Institute of Chicago",
-      "licence": "CC0",
-      "href": "https://www.artic.edu/artworks/125577",
-      "image": "fern-cyanotype.jpg",
-      "w": 843,
-      "h": 481
-    },
-    {
       "id": "blossfeldt-fern",
-      "parent": "fern-cyanotype",
+      "parent": "cherry-blossom",
       "kind": "artwork",
       "origin": "external",
       "title": "Young fern fronds, enlarged",
