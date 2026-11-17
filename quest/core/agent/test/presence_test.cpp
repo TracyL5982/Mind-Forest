@@ -3,6 +3,7 @@
 #include "support.h"
 
 #include <cmath>
+#include <map>
 
 #include "../presence_look.h"
 
@@ -222,6 +223,59 @@ TEST(aLongReplyScrollsAndOnlyTheLastTwoLinesRest) {
     for (const Caption::Line& l : c.lines()) {
         CHECK(l.toOpacity > 0 || l.opacity < 0.05f, "an older line \"%s\" still shows at %.2f", l.text.c_str(), double(l.opacity));
     }
+}
+
+namespace {
+
+/// Says `text` into the caption a word every `each` s, as Momo's voice shows it.
+void sayWords(Caption& c, const std::string& asked, const std::string& text, double each) {
+    std::string spoken;
+    for (size_t at = 0; at < text.size();) {
+        size_t end = text.find(' ', at);
+        spoken = text.substr(0, end == std::string::npos ? text.size() : end);
+        run(c, say(S::responding, asked, spoken), each);
+        at = end == std::string::npos ? text.size() : end + 1;
+    }
+}
+
+}  // namespace
+
+TEST(momosNextLineKeepsTheEndOfHerLastAboveItUntilItsWordsPushItOut) {
+    Caption c = caption();
+    run(c, say(S::listening, "Why?"), 0.3);
+    sayWords(c, "Why?", "It pulls the background away while the subject stays the same size", 0.35);
+    // Her voice ends; the next line begins 0.35 s later.
+    run(c, say(S::working, "Why?", "It pulls the background away while the subject stays the same size"), 0.35);
+    run(c, say(S::responding, "Why?", "Two"), 0.5);
+    auto rest = resting(c);
+    CHECK(rest.size() == 2 && rest[0]->text == "stays the same size" && rest[1]->text == "Two",
+          "the last line's end stays above the new words: \"%s\" over \"%s\"", rest.size() > 0 ? rest[0]->text.c_str() : "",
+          rest.size() > 1 ? rest[1]->text.c_str() : "");
+    const Caption::Line* asked = shown(c, "Why?");
+    CHECK(!asked || asked->toOpacity == 0, "and the question is not shown again");
+    sayWords(c, "Why?", "Two more cards came in from the museum", 0.35);
+    run(c, say(S::responding, "Why?", "Two more cards came in from the museum"), 0.5);
+    rest = resting(c);
+    CHECK(rest.size() == 2 && rest[0]->text == "Two more cards came" && rest[1]->text == "in from the museum", "then pushed out by them");
+}
+
+TEST(wordsThatComeAllAtOnceShowEachLineInTurnNonePassedOver) {
+    Caption c = caption();
+    run(c, say(S::listening, "Why?"), 0.3);
+    run(c, say(S::thinking, "Why?"), 0.3);
+    const std::string reply = "It pulls the background away while the subject stays the same size so the room stretches";
+    std::map<std::string, float> inSight;
+    for (double t = 0; t < 12; t += frame) {
+        run(c, say(S::responding, "Why?", reply), frame);
+        for (const Caption::Line& l : c.lines()) {
+            if (l.toOpacity > 0 && l.opacity > 0.5f * l.toOpacity) inSight[l.text] += float(frame);
+        }
+    }
+    for (const char* row : {"It pulls the", "background away", "while the subject", "stays the same size", "so the room", "stretches"}) {
+        CHECK(inSight[row] >= Caption::shownAtLeast - 0.05f, "\"%s\" was in sight %.2f s", row, double(inSight[row]));
+    }
+    auto rest = resting(c);
+    CHECK(rest.size() == 2 && rest[0]->text == "so the room" && rest[1]->text == "stretches", "and the last words rest at the bottom");
 }
 
 TEST(theReplyLingersThenFadesAndNoHintFollowsATurnWithWords) {
@@ -655,7 +709,7 @@ TEST(atMostThreeLinesShowAnotherAtWorkWaitsForAFinishedLinesPlace) {
     AgentLine intake{"intake", "Intake", "Reading what you dropped", false}, filer{"filer", "Filer", "Filing a link", false},
         scout{"scout", "Scout", "Searching", false}, renderer{"renderer", "Renderer", "Laying out a card", false};
     run(r, {intake, filer, scout, renderer}, 1);
-    CHECK_EQ(r.resting(), Roster::mostLines);
+    CHECK_EQ(r.resting(), Roster::mostLines + 1);   // (and the line that says one waits)
     CHECK(!line(r, "renderer"), "the fourth waits for a place");
     intake.step.clear();
     intake.finished = true;
@@ -693,31 +747,35 @@ TEST(aLineStaysInItsPlaceBetweenItsAgentsSteps) {
     CHECK(least > 0.99f, "and it never left: %.2f at the least", double(least));
 }
 
-TEST(theTopLineSaysHowManyWaitTheCountChangingAtMostEveryHold) {
+TEST(howManyWaitIsALineOfItsOwnAboveTheAgentsChangingAtMostEveryHold) {
     Roster r = roster();
     AgentLine intake{"intake", "Intake", "Reading what you dropped", false}, filer{"filer", "Filer", "Filing a link", false},
         scout{"scout", "Scout", "Searching", false}, renderer{"renderer", "Renderer", "Laying out a card", false},
         organizer{"organizer", "Organizer", "Reorganizing your cards", false};
+    run(r, {intake, filer, scout}, 0.5f);
+    const Roster::Line* top = line(r, "scout");
+    float before = top ? top->y : -1;
     run(r, {intake, filer, scout, renderer, organizer}, 0.5f);
-    const Roster::Line *top = line(r, "scout"), *low = line(r, "intake");
-    CHECK(top && top->toY == 2 && top->text == "Scout · Searching · +2 more", "two wait: \"%s\"", top ? top->text.c_str() : "");
-    CHECK(low && low->text == "Intake · Reading what you dropped", "said once, on the top line");
-    CHECK(top && top->width <= 0.2f, "still one line");
+    const Roster::Line* tally = line(r, Roster::tallyRole);
+    top = line(r, "scout");
+    CHECK(tally && !tally->going && tally->toY == 3 && tally->text == "+2 more", "two wait, said above the three: \"%s\"",
+          tally ? tally->text.c_str() : "none");
+    CHECK(top && top->text == "Scout · Searching" && top->toY == 2 && top->y == before, "the agents' lines as they were, unmoved");
     renderer.step.clear();
     renderer.finished = true;
     run(r, {intake, filer, scout, renderer, organizer}, 0.6f);
-    top = line(r, "scout");
-    CHECK(top && top->text == "Scout · Searching · +2 more", "one done while waiting: the count stays its while: \"%s\"",
-          top ? top->text.c_str() : "");
+    tally = line(r, Roster::tallyRole);
+    CHECK(tally && tally->text == "+2 more", "one done while waiting: the count stays its while: \"%s\"", tally ? tally->text.c_str() : "none");
     run(r, {intake, filer, scout, renderer, organizer}, Roster::holdWords - 0.6f);
-    top = line(r, "scout");
-    CHECK(top && top->text == "Scout · Searching · +1 more", "then says one: \"%s\"", top ? top->text.c_str() : "");
+    tally = line(r, Roster::tallyRole);
+    CHECK(tally && tally->text == "+1 more", "then says one: \"%s\"", tally ? tally->text.c_str() : "none");
     intake.step.clear();
     intake.finished = true;
-    run(r, {intake, filer, scout, renderer, organizer}, 2 * Roster::holdWords + 0.3f);
-    const Roster::Line *came = line(r, "organizer");
-    top = line(r, "scout");
-    CHECK(came && came->toY == 2 && came->text == "Organizer · Reorganizing your cards", "the last at work takes a place, on top: \"%s\"",
+    run(r, {intake, filer, scout, renderer, organizer}, Roster::holdWords + 0.3f);
+    const Roster::Line* came = line(r, "organizer");
+    CHECK(came && came->toY == 2 && came->text == "Organizer · Reorganizing your cards", "the last at work takes a place, on top of the agents: \"%s\"",
           came ? came->text.c_str() : "");
-    CHECK(top && top->text == "Scout · Searching", "and nobody waits: \"%s\"", top ? top->text.c_str() : "");
+    run(r, {intake, filer, scout, renderer, organizer}, Roster::holdWords);
+    tally = line(r, Roster::tallyRole);
+    CHECK(!tally || tally->going, "and with nobody waiting, the count's line goes once it has stood its while");
 }

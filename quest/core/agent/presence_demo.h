@@ -3,9 +3,11 @@
 // a frame on the frame thread, and as they happen, when Momo blinks and which way its eyes glance, so a picture of
 // either can be timed.
 //
-// `-presenceTake <file>`: in place of the loop, the agents' labels of a demo take, as the service's /api/demo/take gives
-// it (`steps`: each a label, the Scout's unless its role says, from `at` to `end` ms), played from 2 s in through the
-// same Crew and lines as the live voice, and again after it. With `-presenceLog`, what the lines do each frame.
+// `-presenceTake <file>`: in place of the loop, a demo take, as the service's /api/demo/take gives it: the agents'
+// labels (`steps`: each a label, the Scout's unless its role says, from `at` to `end` ms) through the same Crew and lines
+// as the live voice, and Momo's lines (`lines`: each its words, from `at` for `ms`), her words shown a little ahead of
+// where her voice would be, as the voice shows them. Played from 2 s in, and again after it. With `-presenceLog`, what
+// the lines do each frame.
 #pragma once
 #include <memory>
 #include <string>
@@ -46,6 +48,12 @@ private:
     };
     /// `-presenceTake`'s, in place of the scripted ones: when there are any, Momo only works and waits.
     std::vector<Step> take;
+    /// And Momo's lines, `at` s into the loop for `length` s.
+    struct Said {
+        double at, length;
+        std::string text;
+    };
+    std::vector<Said> said;
     double length = loop;
     double played = -1;             // how far into the loop the agents' steps have been played
     bool shut = false;
