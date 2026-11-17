@@ -33,6 +33,46 @@ export const until = async (log, pattern, after = 0, seconds = 30) => {
   return null;
 };
 
+/**
+ * The `[ocean] place x y half down up open title` lines the preview logs when the flag `name` runs (`-placesAt`): where each
+ * card on the layer you work on is headed, and the box it takes there, m.
+ */
+export function places(log, name) {
+  const from = log.findIndex((l) => l.line === `[ocean] -${name} runs`);
+  const out = [];
+  for (let i = from + 1; from >= 0 && i < log.length; i++) {
+    const m = /^\[ocean\] place (\S+) (\S+) (\S+) (\S+) (\S+) (\d) (.*)$/.exec(log[i].line);
+    if (!m) break;
+    const [x, y, half, down, up] = m.slice(1, 6).map(Number);
+    out.push({ x, y, lo: [x - half, y - down], hi: [x + half, y + up], open: m[6] === '1', title: m[7] });
+  }
+  return out;
+}
+
+/**
+ * How a layer took a card opening where it stands, from its places before (`was`) and after (`now`): how far the open card
+ * moved, the cards that moved and those of them that moved towards it, what lies under it, and pairs of cards that overlap
+ * now and did not before.
+ */
+export function room(was, now) {
+  const overlap = (a, b, by = 0.003) => a.lo[0] < b.hi[0] - by && b.lo[0] < a.hi[0] - by && a.lo[1] < b.hi[1] - by && b.lo[1] < a.hi[1] - by;
+  const open = now.find((p) => p.open);
+  const then = (p) => was.find((q) => q.title === p.title);
+  const openThen = open && then(open);
+  const others = now.filter((p) => !p.open);
+  const moved = others.filter((p) => then(p) && Math.hypot(p.x - then(p).x, p.y - then(p).y) >= 0.005);
+  const inward = moved.filter((p) => open && (p.x - then(p).x) * (then(p).x - open.x) + (p.y - then(p).y) * (then(p).y - open.y) <= 0);
+  const under = others.filter((p) => open && overlap(p, open));
+  const crowded = [];
+  for (let i = 0; i < others.length; i++) {
+    for (let j = i + 1; j < others.length; j++) {
+      const [a, b] = [others[i], others[j]];
+      if (overlap(a, b) && !(then(a) && then(b) && overlap(then(a), then(b)))) crowded.push(`"${a.title}" / "${b.title}"`);
+    }
+  }
+  return { open, openMoved: openThen ? Math.hypot(open.x - openThen.x, open.y - openThen.y) : NaN, others, moved, inward, under, crowded };
+}
+
 export function checker() {
   const checks = [];
   const check = (ok, what) => {

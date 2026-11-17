@@ -2,6 +2,8 @@
 #include "oceanmodel.h"
 
 #include <cmath>
+#include <limits>
+#include <map>
 
 // MARK: - Threads
 
@@ -54,8 +56,16 @@ std::optional<OceanModel::Reach> OceanModel::openBox(const TreeNode* node, float
 Vec2 OceanModel::nudge(const TreeNode& n, const Tree& tree) const {
     std::optional<int> focus = tree.focus();
     const TreeNode* current = focus ? find(tree, *focus) : nullptr;
-    // (AGENT: what is condensed round a card opened where it stands lies under it, and moves out like the rest.)
-    if (!(current && n.id != current->id && (n.parent != current->id || tree.condensed(n)))) return Vec2::zero();
+    // AGENT: round a card opened where it stands, which leads no group, its layer makes room together (`makeRoom`).
+    if (current && !current->head && n.id != current->id) {
+        std::optional<Tree::Place> me = tree.shown(n), it = tree.shown(*current);
+        if (me && it && me->depth == it->depth) {
+            std::map<int, Vec2> room = makeRoom(tree);
+            auto aside = room.find(n.id);
+            return aside != room.end() ? aside->second : Vec2::zero();
+        }
+    }
+    if (!(current && n.id != current->id && n.parent != current->id)) return Vec2::zero();
     std::optional<Tree::Place> me = tree.shown(n), it = tree.shown(*current);
     if (!me || !it) return Vec2::zero();
     if (me->depth == it->depth) {
@@ -76,6 +86,90 @@ Vec2 OceanModel::nudge(const TreeNode& n, const Tree& tree) const {
     Seen s = seen(treePoint(&n));
     Vec2 move = clear(s.at, box->lo, box->hi);
     return move * (s.depth / Stage::focus) / Stage::gather(behind);
+}
+
+// AGENT: added for the agents' trees, where a pinch opens a card where it stands (agent::Bridge::opens).
+std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree) const {
+    std::map<int, Vec2> out;
+    std::optional<int> focus = tree.focus();
+    const TreeNode* current = focus ? find(tree, *focus) : nullptr;
+    std::optional<Tree::Place> it = current ? tree.shown(*current) : std::nullopt;
+    if (!it) return out;
+    // A card, or a group condensed onto one, which moves as one. What is condensed onto the open card moves on its own.
+    struct Unit {
+        Box rest;
+        Vec2 aside = Vec2::zero();
+        std::vector<int> members;
+        Box now() const { return rest.moved(aside); }
+    };
+    std::vector<Unit> units;
+    std::map<int, size_t> unitOf;        // by the card the unit stands on
+    for (const auto& [id, n] : tree.nodes) {
+        std::optional<Tree::Place> me = tree.shown(n);
+        if (n.id == current->id || n.chip || !me || me->depth != it->depth) continue;
+        Look look = style(n, tree);
+        if (look.alpha <= 0) continue;
+        const TreeNode* mover = &n;
+        while (tree.condensed(*mover) && mover->parent && *mover->parent != current->id) {
+            const TreeNode* host = find(tree, *mover->parent);
+            if (!host) break;
+            mover = host;
+        }
+        const CardRef& c = card(n.id);
+        Box b = Box::centerSize(me->xy, (c ? c->smallBody : catalog->smallSize(n.ref)) * look.scale);
+        auto [at, made] = unitOf.try_emplace(mover->id, units.size());
+        if (made) units.push_back(Unit{b});
+        else units[at->second].rest = units[at->second].rest.joined(b);
+        units[at->second].members.push_back(n.id);
+    }
+    Reach reach = openReach(*current);
+    const Vec2 margin{0.025f, 0.035f};
+    const Box open(it->xy + reach.lo - margin, it->xy + reach.hi + margin);
+    const Vec2 middle = it->xy;
+    const float pad = 0.012f, infinity = std::numeric_limits<float>::infinity();
+    auto centre = [](const Box& b) { return (b.lo + b.hi) / 2; };
+    // Straight out from the open card's middle, through `b`'s.
+    auto outward = [&](const Box& b) {
+        Vec2 d = centre(b) - middle;
+        return length(d) > 1e-4f ? d / length(d) : Vec2{1, 0};
+    };
+    // How far `b` must go along `d` to be clear of `o`.
+    auto clearAlong = [&](const Box& b, const Box& o, Vec2 d) {
+        auto axis = [&](float lo, float hi, float olo, float ohi, float v) {
+            return v > 1e-4f ? (ohi - lo) / v : v < -1e-4f ? (olo - hi) / v : infinity;
+        };
+        return std::max(0.f, std::min(axis(b.lo.x, b.hi.x, o.lo.x, o.hi.x, d.x), axis(b.lo.y, b.hi.y, o.lo.y, o.hi.y, d.y))) + 0.001f;
+    };
+    // Out from under the open card, straight away from it; then of two cards that touch once either has moved, the one
+    // farther from the open card goes on out past the other. Everything moves outward, so the arrangement keeps its shape
+    // round the open card, and what was not moved is left as it was.
+    for (int round = 0; round < 60; round++) {
+        bool moved = false;
+        for (Unit& u : units) {
+            if (!u.now().hits(open, 0)) continue;
+            Vec2 d = outward(u.now());
+            u.aside += d * clearAlong(u.now(), open, d);
+            moved = true;
+        }
+        for (size_t i = 0; i < units.size(); i++) {
+            for (size_t j = i + 1; j < units.size(); j++) {
+                bool still = units[i].aside == Vec2::zero() && units[j].aside == Vec2::zero();
+                if (still || !units[i].now().hits(units[j].now(), pad)) continue;
+                bool iFarther = distance(centre(units[i].now()), middle) >= distance(centre(units[j].now()), middle);
+                Unit& far = iFarther ? units[i] : units[j];
+                const Unit& near = iFarther ? units[j] : units[i];
+                Vec2 d = outward(far.now());
+                far.aside += d * clearAlong(far.now(), near.now().grown(pad), d);
+                moved = true;
+            }
+        }
+        if (!moved) break;
+    }
+    for (const auto& [mover, k] : unitOf) {
+        out[mover] = units[k].aside;
+        for (int id : units[k].members) out[id] = units[k].aside;
+    }
+    return out;
 }
 
 void OceanModel::drawThreads(double now, float dt) {
