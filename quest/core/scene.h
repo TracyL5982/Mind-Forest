@@ -209,6 +209,9 @@ struct Material {
     /// NOTE(port): Quest only (Momo's block). Drawn over whatever it overlaps, as a heads-up display is: seen through,
     /// after everything else, its depth neither tested nor written; among such things, the farthest first.
     bool onTop = false;
+    /// NOTE(port): Quest only (the hands' pointer and light). Drawn after what is on top, so it shows over that too, and
+    /// otherwise as it would be: seen through, and behind whatever stands in front of it in the room.
+    bool overOnTop = false;
     /// ShaderGraphMaterial.setParameter(name:value:): a float is stored in x.
     std::map<std::string, Vec4> parameters;
     /// For Kind::video.

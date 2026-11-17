@@ -148,7 +148,10 @@ std::shared_ptr<HandGlow> HandGlow::make(const std::optional<Material>& material
     std::shared_ptr<HandGlow> glow(new HandGlow());
     glow->mesh = mesh;
     mesh->setPart(0, BoundingBox{{-0.01f, -0.01f, -0.01f}, {0.01f, 0.01f, 0.01f}});
-    glow->entity = Entity::make(mesh, {*material});
+    // Shown over Momo (the user's choice, 2026-11-17), still behind what stands in front of it.
+    Material over = *material;
+    over.overOnTop = true;
+    glow->entity = Entity::make(mesh, {over});
     glow->entity->name = "hand glow";
     return glow;
 }
