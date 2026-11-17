@@ -631,12 +631,20 @@ test("the owner's bot is read by one program: the Mac's service, the demo only w
   assert.equal(ownBot({ MIND_PALACE_DEMO_TELEGRAM: 'on' }, { fake: false, demo: true }), undefined, 'no token, no bot');
 });
 
+const demoDir = join(import.meta.dirname, '../demo');
+const demoScript = loadScript(join(demoDir, 'script.json'));
+const demo = (rate = 400): ServerOptions['demo'] => ({ script: demoScript, mediaDir: join(demoDir, 'media'), pace: { stand: 400, open: 400, land: 400, breath: 0, step: 0, rate, rejoin: 1500 } });
+const until = async (check: () => boolean, ms = 8000): Promise<void> => {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) throw new Error(`it did not happen in ${ms} ms`);
+    await new Promise((r) => setTimeout(r, 10));
+  }
+};
+
 test('the demo reads the bot as the Mac does: what the paired account sends is kept through the same path, and Momo answers it', async () => {
-  const demoDir = join(import.meta.dirname, '../demo');
-  const script = loadScript(join(demoDir, 'script.json'));
-  const pace = { stand: 400, open: 400, land: 400, breath: 0, step: 0, rate: 400, rejoin: 1500 };
   const bot = await stand();
-  const b = await boot(bot, { demo: { script, mediaDir: join(demoDir, 'media'), pace } });
+  const b = await boot(bot, { demo: demo() });
   await pair(b, bot);
   const count = items(b.run).length;
   bot.push(ADA, { text: 'Sourdough rises slowly in winter' });
@@ -670,4 +678,41 @@ test("the Mac's pairing goes up as one secret value that decodes to it, and a mi
   assert.equal(ownerSecret.decode('not a pairing'), null);
   assert.equal(ownerSecret.decode(Buffer.from('{"userId":"x"}').toString('base64url')), null);
   assert.equal(pairingIn(join(tempDir('mp-'), 'no-such-telegram.json')), null);
+});
+
+test('in the demo a tree started from Telegram is grown by the real Scout, then and when asked on later, and takes no round of the script', async () => {
+  const bot = await stand();
+  const b = await boot(bot, { demo: demo() });
+  await pair(b, bot);
+  bot.push(ADA, { text: 'Make a tree about volcanoes' });
+  await bot.reply(ADA.id, /started the tree/);
+  const root = [...b.run.mind.nodes.values()].find((node) => node.parent === null && /volcano/i.test(b.run.mind.tree(node.treeId).title))!;
+  assert.ok(root, 'the tree stands');
+  const picks = () => b.run.mind.children(root.id).map((node) => node.itemId);
+  await until(() => picks().length > 0);
+  assert.deepEqual(picks().filter((id) => id.startsWith('demo-')), [], 'no card of the script under it');
+  const had = picks().length;
+  await b.run.pipeline.ask(root.id, 'more about lava');
+  await until(() => picks().length > had);
+  assert.deepEqual(picks().filter((id) => id.startsWith('demo-')), [], 'nor when asked on later, from the headset');
+  assert.equal(b.run.demo!.status().take, null, 'no take was played');
+});
+
+test('in the demo what Telegram brings while a take plays waits for the take to end, then is filed as ever', async () => {
+  const bot = await stand();
+  const b = await boot(bot, { demo: demo(25) });
+  await pair(b, bot);
+  await b.run.demo!.goto('n2');
+  const playing = b.run.demo!.playTake('n2');
+  await until(() => b.run.demo!.directing());
+  const count = items(b.run).length;
+  await bot.read(bot.push(ADA, { text: 'Sourdough rises slowly in winter' }));
+  await new Promise((r) => setTimeout(r, 300));
+  assert.ok(b.run.demo!.directing(), 'the take is still playing');
+  assert.equal(items(b.run).filter((item) => /Sourdough/.test(item.title)).length, 0, 'nothing is filed during the take');
+  await playing;
+  await until(() => !b.run.demo!.directing(), 30_000);
+  const reply = await bot.reply(ADA.id, /^I’ve kept “Sourdough/);
+  assert.equal(items(b.run).slice(count).filter((item) => /Sourdough/.test(item.title)).length, 1, 'and it is filed once the take is over');
+  assert.match(reply.text, /knowledge base|went under/);
 });

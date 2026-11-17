@@ -82,6 +82,8 @@ export interface DirectorDeps {
    * cannot do it; then the page says to do it by hand.
    */
   restart?: () => Promise<string>;
+  /** Whether the work under way came from the person's own contact (their Telegram), not from the headset or the page. */
+  fromContact?: () => boolean;
   log: (line: string) => void;
   pace?: Partial<Pace>;
 }
@@ -196,6 +198,8 @@ export class Director {
   /** The newest move asked for: an older one still waiting gives way to it. */
   private moves = 0;
   private moving: Promise<void> = Promise.resolve();
+  /** Trees started from the person's contact: no round of the script plays under them (the user's choice, 2026-11-17). */
+  private outside = new Set<Id>();
 
   constructor(private readonly deps: DirectorDeps) {
     this.pace = { ...PACE, ...deps.pace };
@@ -238,7 +242,28 @@ export class Director {
     this.adopt();
     const shown = join(this.deps.dataDir, 'demo-showcase.json');
     if (existsSync(shown)) this.showing = JSON.parse(readFileSync(shown, 'utf8')).on !== false;
+    const outside = join(this.deps.dataDir, 'demo-outside.json');
+    if (existsSync(outside)) this.outside = new Set(JSON.parse(readFileSync(outside, 'utf8')) as Id[]);
     this.plant();
+  }
+
+  /**
+   * Whether the Scout here is the real one: a tree started from the person's contact is theirs, grown as their own service grows it,
+   * and never takes a round of the script, then or later. Such a tree is known by its root, asked for in the contact's work.
+   */
+  private outsideScript(anchor: Id): boolean {
+    const node = this.deps.mind.nodes.get(anchor);
+    if (!node) return false;
+    if (node.parent === null && this.deps.fromContact?.() && !this.outside.has(node.treeId)) {
+      this.outside.add(node.treeId);
+      writeFileSync(join(this.deps.dataDir, 'demo-outside.json'), JSON.stringify([...this.outside]));
+    }
+    return this.outside.has(node.treeId);
+  }
+
+  /** Resolves once no take is playing: what the person's contact sends meanwhile waits for it (the user's choice, 2026-11-17). */
+  async untilTaken(): Promise<void> {
+    while (this.directing()) await pause(250);
   }
 
   // ---- the showcase trees
@@ -894,6 +919,7 @@ export class Director {
     return {
       ...real,
       scout: (ctx, input) => {
+        if (!this.pending && this.outsideScript(input.anchor)) return real.scout(ctx, input);
         // The page's Play names its round and the moment it starts from; a request made on the headset finds its round, from the start.
         const asked = this.pending;
         const phase = asked ? this.phase(asked.phase) : this.scripted && !this.inShowcase(input.anchor) ? this.choose(input.anchor, input.need) : undefined;
