@@ -201,3 +201,5 @@ button, input { font: inherit; color: inherit; }
 .line-foot .unsaid { color: var(--danger); }
 .line-foot .unsaid .link { color: var(--ink); }
 .line-foot .unsaid mark { background: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--ink); border-radius: 3px; padding: 0 2px; }
+.take-top { flex-wrap: wrap; }
+.take-top .play { flex: 1 1 150px; min-width: 0; }

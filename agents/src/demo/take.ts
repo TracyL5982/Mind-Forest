@@ -1,5 +1,6 @@
 import type { CardNote } from '../core/voice-tools.ts';
 import { Narration } from '../node/live.ts';
+import { queryOf, realSchedule, sourceOf } from './real-pace.ts';
 import type { ScriptCard, ScriptPhase } from './script.ts';
 
 /**
@@ -54,8 +55,17 @@ export const REAL = {
 /** Momo gathers later cards into one remark at most this often, as the live voice does (`BATCH_MS` in live.ts). */
 const BATCH_MS = 6000;
 
+/**
+ * The pace a take runs at. `fast` is quick and tidy: the found cards are in within a few seconds. `real` is the pace and the
+ * pattern of a real round, drawn from measured ones (`real-pace.ts`). Each has its own schedule, and so its own lines of Momo's.
+ */
+export type Mode = 'fast' | 'real';
+export const MODES: readonly Mode[] = ['fast', 'real'];
+
 /** One of the agents' labels, from when it shows to when it goes. */
 export interface Step {
+  /** Whose label it is. The Scout's unless said: the Renderer's own label comes from the pipeline, and is here for the bar. */
+  role?: 'renderer';
   label: string;
   at: number;
   end: number;
@@ -99,6 +109,7 @@ export interface TimedLine extends Line {
 
 export interface Take {
   round: string;
+  mode: Mode;
   /** Its whole length. */
   ms: number;
   lines: TimedLine[];
@@ -110,7 +121,7 @@ export interface Take {
   settled: number;
 }
 
-/** The source's name as a step would say it: short, and a museum by its own name. */
+/** The source a found card is grouped under in a fast take: its own, so the deliveries stay as they were recorded with. */
 function sourceName(card: ScriptCard): string | undefined {
   const from = (card.from ?? card.holder ?? '').replace(/,? via .*$/i, '').replace(/,.*$/, '').trim();
   if (!from) return undefined;
@@ -119,10 +130,12 @@ function sourceName(card: ScriptCard): string | undefined {
 }
 
 /**
- * When a real round would show each label and land each card, from the kinds of cards the round brings: what the user already has
- * first, then each source outside as it answers, the sources searched side by side, then what the agents make, which takes longest.
+ * When a round shows each label and lands each card. At real pace it is `realSchedule`. A fast take is quick and tidy: what the
+ * user already has first, then each source outside as it answers, the sources searched side by side, then what the agents make.
+ * Its labels are worded as the service words them, with the service's own sources.
  */
-export function schedule(phase: ScriptPhase, under = ''): Schedule {
+export function schedule(phase: ScriptPhase, under = '', mode: Mode = 'fast'): Schedule {
+  if (mode === 'real') return realSchedule(phase, under);
   const steps: Step[] = [];
   const drops: Drop[] = [];
   if (phase.cards.length === 0) return { steps, drops, end: 0, settled: 0 };
@@ -153,8 +166,10 @@ export function schedule(phase: ScriptPhase, under = ''): Schedule {
   if (rest.length > 0) sources.push(['the web', rest]);
   for (const [n, [source, cards]] of sources.entries()) {
     const found = start + REAL.search + n * REAL.searchApart + (source === 'research papers' ? REAL.papers : 0) + (cards.some((card) => card.image) ? REAL.pictures : 0);
-    steps.push({ label: `Searching ${source}`, at: start, end: found });
-    steps.push({ label: `Reading ${cards.length} result${cards.length === 1 ? '' : 's'} from ${source}`, at: found, end: found + REAL.read });
+    // The label names the service's own source, which a single museum or library is not, and what was searched for.
+    const named = sourceOf(cards[0]!);
+    steps.push({ label: `Searching ${named} for ${queryOf(cards[0]!.title)}`.split(' ').slice(0, 7).join(' '), at: start, end: found });
+    steps.push({ label: `Reading ${cards.length} result${cards.length === 1 ? '' : 's'} from ${named}`, at: found, end: found + REAL.read });
     drops.push({ at: found + REAL.read, cards: outside.filter((card) => cards.includes(card)).map((card) => card.id) });
   }
 
@@ -162,7 +177,8 @@ export function schedule(phase: ScriptPhase, under = ''): Schedule {
   let ideas = 0;
   for (const card of made) {
     const lands = card.image ? start + REAL.picture + pictures++ * REAL.pictureApart : start + REAL.idea + ideas++ * REAL.ideaApart;
-    steps.push({ label: card.image ? `Making a picture of ${card.title}`.slice(0, 60) : 'Writing an idea down', at: start, end: lands });
+    // What the Scout writes itself has no label of its own: it comes out of "Thinking of directions".
+    if (card.image) steps.push({ label: `Making a picture of ${card.title}`.slice(0, 60), at: start, end: lands });
     drops.push({ at: lands, cards: [card.id] });
   }
   drops.sort((a, b) => a.at - b.at);
@@ -189,6 +205,7 @@ export async function planLines(
   phase: ScriptPhase,
   under: string,
   say: (line: { kind: LineKind; cards: ScriptCard[]; note: string | null }) => Promise<{ text: string; ms: number }>,
+  mode: Mode = 'fast',
 ): Promise<Line[]> {
   const lines: Line[] = [];
   const told = async (kind: LineKind, cards: ScriptCard[], note: string | null): Promise<number> => {
@@ -197,7 +214,7 @@ export async function planLines(
     return ms;
   };
   let free = phase.say ? (await told('answer', [], null)) + REAL.breath : 0;
-  const sched = schedule(phase);
+  const sched = schedule(phase, under, mode);
   if (sched.drops.length === 0) return lines;
 
   const byId = new Map(phase.cards.map((card): [string, ScriptCard] => [card.id, card]));
@@ -243,8 +260,8 @@ export const spokenFor = (text: string): number => (text.trim() ? Math.max(1200,
  * The round's timeline. A remark starts as the last of its cards lands, or when the line before it is over if that is later, so
  * Momo never talks over herself; the wrap-up waits too for every agent's label to have gone. A line with no words takes no time and is not said.
  */
-export function takeOf(phase: ScriptPhase, lines: readonly Line[], lengthOf: (text: string) => number = spokenFor, under = ''): Take {
-  const sched = schedule(phase, under);
+export function takeOf(phase: ScriptPhase, lines: readonly Line[], lengthOf: (text: string) => number = spokenFor, under = '', mode: Mode = 'fast'): Take {
+  const sched = schedule(phase, under, mode);
   const landsAt = new Map(sched.drops.flatMap((drop) => drop.cards.map((id): [string, number] => [id, drop.at])));
   const timed: TimedLine[] = [];
   let free = 0;
@@ -257,7 +274,7 @@ export function takeOf(phase: ScriptPhase, lines: readonly Line[], lengthOf: (te
     if (ms > 0) free = at + ms + REAL.breath;
   }
   const last = Math.max(sched.settled, ...timed.map((line) => line.at + line.ms));
-  return { round: phase.id, ms: last + REAL.tail, lines: timed, steps: sched.steps, drops: sched.drops, end: sched.end, settled: sched.settled };
+  return { round: phase.id, mode, ms: last + REAL.tail, lines: timed, steps: sched.steps, drops: sched.drops, end: sched.end, settled: sched.settled };
 }
 
 /** What stands at one moment of a take: the cards that have landed, the labels showing, and the line Momo is in with how far. */

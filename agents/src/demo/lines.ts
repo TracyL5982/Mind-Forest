@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSyn
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { Recorded, Unsaid, Voice } from './momo-voice.ts';
-import { spokenFor, type Line, type LineKind } from './take.ts';
+import { spokenFor, type Line, type LineKind, type Mode } from './take.ts';
 
 /**
  * What Momo says in each round of the demo, written down. The words she was given by the real Momo are in `agents/demo/lines.json`
@@ -16,12 +16,16 @@ export const LinesFile = z.object({
   version: z.literal(1),
   /** The voice the recordings were made in. Another voice is another set of recordings. */
   voice: z.string(),
+  /** The lines of the fast takes, by round. */
   rounds: z.record(z.string(), z.array(StoredLine)),
+  /** The lines of the takes at real pace, by round: their cards land at other moments, so her remarks are others. */
+  real: z.record(z.string(), z.array(StoredLine)).default({}),
 });
 export type LinesFile = z.infer<typeof LinesFile>;
 
-/** The user's own words for lines, by round and line. */
-const Edits = z.record(z.string(), z.record(z.string(), z.string()));
+/** The user's own words for lines, by round and line, for each pace. */
+const RoundEdits = z.record(z.string(), z.record(z.string(), z.string()));
+const Edits = z.object({ fast: RoundEdits.default({}), real: RoundEdits.default({}) });
 export type Edits = z.infer<typeof Edits>;
 
 /** 16-bit mono at 24 kHz, the live voice's own format. */
@@ -55,8 +59,8 @@ export interface LinesOptions {
 }
 
 export class Lines {
-  private readonly written: LinesFile['rounds'];
-  private edits: Edits = {};
+  private readonly written: Record<Mode, LinesFile['rounds']>;
+  private edits: Edits = { fast: {}, real: {} };
   private readonly editsFile: string;
   private readonly made: string;
   private readonly rendering = new Map<string, Promise<Uint8Array | null>>();
@@ -69,7 +73,8 @@ export class Lines {
 
   constructor(private readonly opts: LinesOptions) {
     const file = join(opts.demoDir, 'lines.json');
-    this.written = existsSync(file) ? LinesFile.parse(JSON.parse(readFileSync(file, 'utf8'))).rounds : {};
+    const kept = existsSync(file) ? LinesFile.parse(JSON.parse(readFileSync(file, 'utf8'))) : null;
+    this.written = { fast: kept?.rounds ?? {}, real: kept?.real ?? {} };
     this.editsFile = join(opts.dataDir, 'demo-lines.json');
     this.made = join(opts.dataDir, 'demo-voice');
     mkdirSync(this.made, { recursive: true });
@@ -82,43 +87,49 @@ export class Lines {
       this.unsaid = {};
     }
     try {
-      if (existsSync(this.editsFile)) this.edits = Edits.parse(JSON.parse(readFileSync(this.editsFile, 'utf8')));
+      if (existsSync(this.editsFile)) {
+        const saved = JSON.parse(readFileSync(this.editsFile, 'utf8')) as Record<string, unknown>;
+        // A file from before there were two paces holds the fast takes' edits alone, by round.
+        this.edits = 'fast' in saved || 'real' in saved ? Edits.parse(saved) : { fast: RoundEdits.parse(saved), real: {} };
+      }
     } catch {
-      this.edits = {};
+      this.edits = { fast: {}, real: {} };
     }
   }
 
-  /** A round's lines as Momo says them now: the user's words where they wrote any. */
-  of(round: string): LineShown[] {
-    return (this.written[round] ?? []).map((line) => {
-      const own = this.edits[round]?.[line.id];
+  /** A round's lines at one pace, as Momo says them now: the user's words where they wrote any. */
+  of(round: string, mode: Mode = 'fast'): LineShown[] {
+    return (this.written[mode][round] ?? []).map((line) => {
+      const own = this.edits[mode][round]?.[line.id];
       return { ...line, written: line.text, text: own ?? line.text, edited: own !== undefined };
     });
   }
 
   /**
-   * Every round's lines as they are said now, as the file `demo/lines.json` is written: the user's words in place of Momo's
-   * where they wrote any. Put in the repository, it makes those words every copy's.
+   * Every round's lines at both paces as they are said now, as the file `demo/lines.json` is written: the user's words in place of
+   * Momo's where they wrote any. Put in the repository, it makes those words every copy's.
    */
   file(): LinesFile {
-    return { version: 1, voice: this.opts.voice, rounds: Object.fromEntries(Object.keys(this.written).map((round) => [round, this.of(round).map(({ id, kind, cards, text }) => ({ id, kind, cards, text }))])) };
+    const said = (mode: Mode) => Object.fromEntries(Object.keys(this.written[mode]).map((round) => [round, this.of(round, mode).map(({ id, kind, cards, text }) => ({ id, kind, cards, text }))]));
+    return { version: 1, voice: this.opts.voice, rounds: said('fast'), real: said('real') };
   }
 
   /** Whether the service holds any words of the user's. The page sends its own copy again when it holds none, as after a restart with no volume. */
   get edited(): number {
-    return Object.values(this.edits).reduce((n, round) => n + Object.keys(round).length, 0);
+    return [this.edits.fast, this.edits.real].reduce((n, rounds) => n + Object.values(rounds).reduce((m, round) => m + Object.keys(round).length, 0), 0);
   }
 
   /** Writes the user's words over a line, or with `null` goes back to Momo's own. Returns false when the round has no such line. */
-  edit(round: string, line: string, text: string | null): boolean {
-    const there = this.written[round]?.find((l) => l.id === line);
+  edit(round: string, line: string, text: string | null, mode: Mode = 'fast'): boolean {
+    const there = this.written[mode][round]?.find((l) => l.id === line);
     if (!there) return false;
     const clean = text?.replace(/\s+/g, ' ').trim().slice(0, MAX_LINE);
-    const round_ = { ...this.edits[round] };
+    const round_ = { ...this.edits[mode][round] };
     if (clean === undefined || clean === there.text) delete round_[line];
     else round_[line] = clean;
-    this.edits = { ...this.edits, [round]: round_ };
-    if (Object.keys(round_).length === 0) delete this.edits[round];
+    const rounds = { ...this.edits[mode], [round]: round_ };
+    if (Object.keys(round_).length === 0) delete rounds[round];
+    this.edits = { ...this.edits, [mode]: rounds };
     writeFileSync(`${this.editsFile}.tmp`, JSON.stringify(this.edits, null, 1));
     renameSync(`${this.editsFile}.tmp`, this.editsFile);
     return true;

@@ -527,6 +527,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           return {};
         }
       };
+      /** The pace a call names, or the one that is loaded when it names none. */
+      const modeOf = (given: unknown) => (given === 'fast' || given === 'real' ? given : undefined);
       if (req.method === 'GET' && path === '/api/demo') return json(res, 200, { outline: director.outline(), status: director.status(), voice: Boolean(opts.live), restarts: director.restarts });
       if (req.method === 'GET' && path === '/api/demo/status') return json(res, 200, director.status());
       if (req.method === 'POST' && path === '/api/demo/goto') {
@@ -537,7 +539,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       }
       if (req.method === 'GET' && path === '/api/demo/take') {
         try {
-          return json(res, 200, director.shown(url.searchParams.get('round') ?? ''));
+          return json(res, 200, director.shown(url.searchParams.get('round') ?? '', modeOf(url.searchParams.get('mode'))));
         } catch (err) {
           return json(res, 404, { error: err instanceof Error ? err.message : String(err) });
         }
@@ -553,6 +555,12 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         void director.playTake(typeof round === 'string' ? round : undefined, typeof at === 'number' ? at : undefined).catch(() => {});
         return json(res, 202, director.status());
       }
+      if (req.method === 'POST' && path === '/api/demo/mode') {
+        const { mode } = await posted();
+        if (mode !== 'fast' && mode !== 'real') return json(res, 400, { error: 'a mode is "fast" or "real"' });
+        director.setMode(mode);
+        return json(res, 200, director.status());
+      }
       if (req.method === 'POST' && path === '/api/demo/pause') {
         await director.pause().catch(() => {});
         return json(res, 200, director.status());
@@ -563,9 +571,9 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         return json(res, 200, director.status());
       }
       if (req.method === 'POST' && path === '/api/demo/line') {
-        const { round, line, text } = await posted();
+        const { round, line, text, mode } = await posted();
         try {
-          return json(res, 200, director.setLine(String(round ?? ''), String(line ?? ''), typeof text === 'string' ? text : null));
+          return json(res, 200, director.setLine(String(round ?? ''), String(line ?? ''), typeof text === 'string' ? text : null, modeOf(mode)));
         } catch (err) {
           return json(res, 404, { error: err instanceof Error ? err.message : String(err) });
         }
