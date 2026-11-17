@@ -11,10 +11,11 @@ namespace {
 // A point of the panel's drawing is half a millimetre: type of 15 points is 7.5 mm tall, which at the
 // panel's 60 cm reads as a card's body does at arm's length.
 constexpr float metre = 0.0005f;
-constexpr float wide = 520, high = 232;
+constexpr float wide = 520, high = 304;
 constexpr float margin = 24, gap = 12;
 constexpr float buttonHigh = 60, buttonWide = (wide - 2 * margin - gap) / 2;
-constexpr float buttonTop = high - margin - buttonHigh;
+constexpr float cueTop = high - margin - buttonHigh, buttonTop = cueTop - gap - buttonHigh;
+constexpr float cueWide = wide - 2 * margin;
 
 // Art's colours (core/ocean/art.h): the panel, the well a quiet button sits in, the one accent.
 constexpr Color panel = Color::hex(0x161A21), quiet = Color::hex(0x2A2E36), well = Color::hex(0x20252E), hot = Color::hex(0xFF5A36);
@@ -67,6 +68,13 @@ std::string words(const FilmPanel::State& s) {
     return "Sheet seen. Come closer.";
 }
 
+/// What the greeting's button says. It counts the wait down: the person has pinched it and is looking up again.
+std::string cueWords(const FilmPanel::State& s) {
+    if (s.cueIn > 0) return fmt("Greeting in %d. Pinch to call it off", int(std::ceil(s.cueIn)));
+    if (s.cueIn == 0) return "Momo is greeting you";
+    return s.cueReady ? "Play greeting" : "Close every tree to play the greeting";
+}
+
 EntityRef quad(float w, float h) {
     Material m = Material::unlit(Color::white());
     m.transparent = true;
@@ -79,7 +87,7 @@ EntityRef quad(float w, float h) {
 
 bool FilmPanel::State::operator==(const State& o) const {
     return sheetSeen == o.sheetSeen && sheetSteady == o.sheetSteady && sheetLocked == o.sheetLocked && recording == o.recording &&
-           int(sheetAway * 20) == int(o.sheetAway * 20) && int(recorded) == int(o.recorded);
+           int(sheetAway * 20) == int(o.sheetAway * 20) && int(recorded) == int(o.recorded) && cueWords(*this) == cueWords(o);
 }
 
 FilmPanel::FilmPanel() {
@@ -89,21 +97,22 @@ FilmPanel::FilmPanel() {
     plate = quad(wide, high);
     base->addChild(plate);
     // The buttons stand a little off the plate, each its own picture, so that a ray resting on one lights it alone.
-    auto button = [&](float left) {
-        EntityRef e = quad(buttonWide, buttonHigh);
-        e->position = {(left + buttonWide / 2 - wide / 2) * metre, (high / 2 - buttonTop - buttonHigh / 2) * metre, 0.003f};
-        e->collision = {Shape::generateBox({buttonWide * metre, buttonHigh * metre, 0.01f})};
+    auto button = [&](float left, float top, float width) {
+        EntityRef e = quad(width, buttonHigh);
+        e->position = {(left + width / 2 - wide / 2) * metre, (high / 2 - top - buttonHigh / 2) * metre, 0.003f};
+        e->collision = {Shape::generateBox({width * metre, buttonHigh * metre, 0.01f})};
         e->inputTarget = true;
         e->hover = Hover::highlight(Color::hex(0xFFE2A8), 0.9f);     // a lift, not another colour: these are small and dark
         base->addChild(e);
         return e;
     };
-    lockButton = button(margin);
-    recordButton = button(margin + buttonWide + gap);
+    lockButton = button(margin, buttonTop, buttonWide);
+    recordButton = button(margin + buttonWide + gap, buttonTop, buttonWide);
+    cueButton = button(margin, cueTop, cueWide);
 }
 
 FilmPanel::Press FilmPanel::pressed(const EntityRef& entity) const {
-    return entity == lockButton ? Press::lock : entity == recordButton ? Press::record : Press::none;
+    return entity == lockButton ? Press::lock : entity == recordButton ? Press::record : entity == cueButton ? Press::cue : Press::none;
 }
 
 void FilmPanel::set(const EntityRef& onto, const ImageRef& image) {
@@ -142,13 +151,13 @@ void FilmPanel::draw(const State& s) {
         }));
         shownSecond = int(s.recorded);
     }
-    auto label = [&](const EntityRef& onto, const std::string& text, Color ground, Color ink) {
-        set(onto, picture(buttonWide, buttonHigh, [=] {
+    auto label = [&](const EntityRef& onto, const std::string& text, Color ground, Color ink, float width = buttonWide) {
+        set(onto, picture(width, buttonHigh, [=] {
             setFill(ground);
-            rounded(CGRect(0, 0, buttonWide, buttonHigh), 14).fill();
+            rounded(CGRect(0, 0, width, buttonHigh), 14).fill();
             TextAttributes t = type(17, Font::Weight::semibold, ink);
             CGSize size = stringSize(text, t);
-            drawString(text, CGPoint((buttonWide - size.width) / 2, (buttonHigh - size.height) / 2), t);
+            drawString(text, CGPoint((width - size.width) / 2, (buttonHigh - size.height) / 2), t);
         }));
     };
     // Lock: there to be pinched once the sheet is seen; a locked sheet is unlocked by the same button, but not during a take.
@@ -160,24 +169,40 @@ void FilmPanel::draw(const State& s) {
     if (first || s.recording != shown.recording) {
         label(recordButton, s.recording ? "Stop" : "Record", s.recording ? quiet : hot, Color::white());
     }
+    // The greeting: there to be pinched while every tree is closed, and again to call it off while it waits.
+    if (std::string says = cueWords(s); first || says != cueShown) {
+        bool can = s.cueIn > 0 || (s.cueIn < 0 && s.cueReady);
+        label(cueButton, says, can ? quiet : well, Color::white(1, can ? 1 : 0.35f), cueWide);
+        cueShown = says;
+    }
     shown = s;
     drawnOnce = true;
 }
 
 void FilmPanel::place(const Mat4& head) {
-    // To the left of where the head faces, a forearm off and below the eyes: in reach of a ray, out of the middle of things.
-    static const double turn = Flags::has("filmPanelTurn") ? Flags::number("filmPanelTurn") : 48;
-    static const double drop = Flags::has("filmPanelDrop") ? Flags::number("filmPanelDrop") : 0.24;
-    static const double reach = Flags::has("filmPanelReach") ? Flags::number("filmPanelReach") : 0.6;
+    // Low and close, in the middle, just ahead of the feet: where the person looks only when they mean to, and so out of the picture
+    // when the headset's own recorder is running too (it records what one eye sees, and nothing tells the app that
+    // it is on). Kai, 2026-11-17: "let's put it low and close to the user (near their feet) so that under normal
+    // use it would not be recorded in the first person headset view". It was to the left at a forearm's reach,
+    // a little under the eyes, which is in view whenever the head turns. Then beside the left foot; Kai, the same
+    // day: "instead of so far to the left, put it right in the middle."
+    static const double turn = Flags::has("filmPanelTurn") ? Flags::number("filmPanelTurn") : 0;
+    static const double reach = Flags::has("filmPanelReach") ? Flags::number("filmPanelReach") : 0.25;
+    static const double height = Flags::has("filmPanelHeight") ? Flags::number("filmPanelHeight") : 0.30;
     Vec3 ahead = head.forward();
     ahead.y = 0;
     ahead = length(ahead) > 1e-3f ? normalize(ahead) : Vec3{0, 0, -1};
     Vec3 toward = Quat::angleAxis(float(turn * M_PI / 180), {0, 1, 0}).act(ahead);
-    Vec3 at = head.position() + toward * float(reach) - Vec3{0, float(drop), 0};
-    // Facing the eyes, upright.
-    Vec3 z = normalize(head.position() - at), x = normalize(cross({0, 1, 0}, z));
+    Vec3 eye = head.position();
+    // (The floor is y = 0. Under a head that is itself low, it keeps at least 60 cm below the eyes.)
+    Vec3 at{eye.x + toward.x * float(reach), std::min(float(height), eye.y - 0.6f), eye.z + toward.z * float(reach)};
+    // Tipped back to face the eyes, its top edge away from the feet, and as large as it takes to read from there
+    // as it read at a forearm's reach.
+    Vec3 z = normalize(eye - at), x = normalize(cross({0, 1, 0}, z));
     base->position = at;
     base->orientation = Quat(Mat3(x, cross(z, x), z));
+    float size = std::min(2.8f, std::max(1.f, distance(eye, at) / 0.6f));
+    base->scale = {size, size, size};
     placed = true;
     farFor = 0;
 }
@@ -196,8 +221,10 @@ void FilmPanel::update(const State& state, const std::optional<Mat4>& head, floa
     if (!head) return;
     if (!placed) place(*head);
     // Left behind (the person has walked off, or the scene was brought elsewhere): it comes along after a moment.
-    float away = distance(head->position(), base->position);
-    farFor = away > 1.3f ? farFor + dt : 0;
+    // (Measured along the floor: it is always a body's height below the eyes.)
+    Vec3 gap = head->position() - base->position;
+    gap.y = 0;
+    farFor = length(gap) > 1.3f ? farFor + dt : 0;
     if (farFor > 3) {
         place(*head);
         appear = 0;

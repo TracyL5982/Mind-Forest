@@ -591,6 +591,14 @@ std::optional<Piece> Art::coverCaption(const std::string& title, Maker maker, bo
     });
 }
 
+std::optional<Piece> Art::coverTab(const std::string& words) {
+    Font mf = Font::systemFont(26, Font::Weight::medium);
+    CGSize s = label(words, CGPoint::zero(), mf, Color::white(), hot, 14, 8, INFINITY, false);
+    return piece(std::nullopt, s.width, s.height, 1000 / type, [&](Canvas&, CGSize) {
+        label(words, CGPoint::zero(), mf, Color::white(), hot, 14, 8);
+    });
+}
+
 /// Paints a tree's items into a box: threads first, then the least
 /// important items, so the path's steps end on top.
 void Art::paint(const std::vector<PressedItem>& items, float w, float h, Canvas& ctx, const std::shared_ptr<Catalog>& catalog) const {

@@ -33,7 +33,9 @@ std::string resourcePath(const std::string& name) {
     struct stat st;
     // (FILM: the people a tree can be shared with, in git beside the tree this preview was built from, which may not be
     // the one `-repo` names for the large media.)
-    if (name.rfind("people/", 0) == 0) {
+    // (The filming greeting, made by agents/scripts/say-line.ts: with the tree this preview was built from, which
+    // may not be the one `-repo` names for the large media.)
+    if (name.rfind("people/", 0) == 0 || name.rfind("film/", 0) == 0) {
         char exe[4096];
         uint32_t size = sizeof exe;
         std::string own = _NSGetExecutablePath(exe, &size) == 0 ? std::string(exe) : "";

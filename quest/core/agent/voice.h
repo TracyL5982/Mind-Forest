@@ -151,6 +151,11 @@ public:
     /// s her lines for the walk are fed to the player ahead of being heard, which is how soon a fade can begin; and s the
     /// fade takes.
     static constexpr double walkAhead = 0.2, walkFade = 0.12;
+    // FILM: added for the filming panel's greeting (core/ocean/oceanmodel_cue.cpp, quest/film/README.md). A line the app
+    // holds a recording of, given as Momo's own: her presence speaks, her words show as her voice comes to them, and
+    // the listener takes it as it takes any reply of hers (it opens the conversation, and words cut it off). What she
+    // was saying stops. `pcm` is 16-bit mono at `rate`. False when the host cannot play.
+    bool recite(const std::string& text, const std::vector<int16_t>& pcm, int rate);
     /// A reply has come from the service and has not begun to sound yet: Momo is about to speak. At most `lineWait`.
     bool lineComing() const { return lineAt >= 0 && clock - lineAt < lineWait; }
     static constexpr double lineWait = 5;
@@ -433,7 +438,8 @@ private:
     void hushLive();
     LiveReply& liveReply(const std::string& id);
     /// Starts the player for the live reply, with what it held. False when the host cannot play.
-    bool startPlayer(LiveReply& reply);
+    /// (FILM: `rate` for a line of the app's own, which plays whether or not /live is ready.)
+    bool startPlayer(LiveReply& reply, int rate = 0);
 };
 
 /// The first `share` of `text`, ending on a whole word, or on a whole character in words without spaces, as Chinese: as

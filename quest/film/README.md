@@ -37,10 +37,11 @@ The app must have been allowed to see the room (the same permission as the desk:
 
 ## Shooting a take
 
-Everything on the headset is done from the **filming panel**: a small dark card to your left, a forearm away and a
-little below eye level (it follows after a few seconds if you walk off). It shows one line on where things stand and
+Everything on the headset is done from the **filming panel**: a dark card low in front of your feet, tipped up to face
+you: look straight down (it follows after a few seconds if you walk off). It is kept down there so that it
+stays out of the headset's own recording, when that runs at the same time as a take. It shows one line on where things stand and
 two buttons, pinched with a hand ray like anything else. It and the sheet's outline are drawn for you only: neither
-is ever in a take.
+is ever in a take. The outline is hidden while a take records.
 
 1. Put the sheet where the camera and the headset both see it: flat on the desk in front of the person is the natural
    place. It must not move during a take. Printed: tape it down. On an iPad (`film.py sheet --paper ipad`, for the
@@ -60,6 +61,32 @@ is ever in a take.
    a second longer, then stop it.
 
 A take can also be begun and ended from the Mac, by whoever holds the camera: `film.py start` and `film.py stop`.
+
+### Momo's greeting
+
+The panel's third button, **Play greeting**, starts a short scene with Momo and one tree. It can be pinched while
+every tree is closed; pinched again while it counts down, it is called off and everything goes back.
+
+1. At the pinch the tree fades out where it stands. Out of sight it is given the middle, straight ahead and 1.5 m
+   off; trees that would be in its way glide aside round you, and the question cards in the middle of the desk fade.
+   No gap is left in the other trees' rings where it will come.
+2. Five seconds on (time to look up from the panel) Momo says "Hi there! I grew a new tree today on the topics you
+   love! Would you like to check it out?"
+3. A breath after her last word the tree grows in, over about 3.6 s: its rings spread over the ground and its
+   neighbours' give way before them, the trunk comes up and opens, each picture comes as the tree reaches its
+   height, then its name, then a **New** tab beside the name. A soft sound and a quiet note for each picture go with it.
+4. Opened, the tree and the ones that made room have their old places again the next time they stand on the desk.
+
+- The line is a recording of Momo's live voice (`media-src/quest/film/greeting.pcm`, its words in `greeting.txt`),
+  played through her own voice in the app, so she pulses and shows the words as with any answer. Another line:
+  `cd agents && MIND_PALACE_ENV=<key file> node --no-warnings --import tsx scripts/say-line.ts "<the line>" ../media-src/quest/film/greeting.pcm`,
+  then `tools/push_media.sh`.
+- Which tree: the one whose name has the words given, else the last one the gardener made, else the last put away.
+  Say it once and it is kept: `adb shell setprop debug.mindpalace.freshTree "planet"` before pinching (or `-freshTree planet` at launch).
+- From the Mac: `adb shell setprop debug.mindpalace.cue $(date +%s)` is a pinch on the button. `-cueDelay 8` changes
+  the wait, `-cueFar 1.8` how far off the tree stands.
+- In the Mac preview: `preview -cueAt 4 -freshTree machines` asks for it four seconds in.
+- As after anything Momo says, the conversation stays open for a few seconds: what is said then goes to her without her name.
 
 A take is about 400 MB a minute on the headset while a lot is moving, less when little is. A take's first frame or
 two run long (about 20 ms) while the scene's large pictures are read back.
@@ -151,6 +178,7 @@ Not tried yet: a tripod shot of a real take, a printed sheet, HDR footage of the
 | `core/render.*` | `Renderer::drawn`: what a frame put on screen; `Renderer::read`: a picture back from the GPU |
 | `core/audio.*` | `audio::sync()`: the sync sound, and the count of frames it began at |
 | `android/…/filming_android.*` | the Quest: finding the sheet, locking it, beginning and ending takes, the clocks |
+| `core/ocean/oceanmodel_cue.cpp` | Momo's greeting from the panel: the tree hidden and given the middle, the line (`Voice::recite`), the tree growing in |
 | `core/ocean/filmpanel.*` | the filming panel; `Input::setFront` gives it pinches before the scene, `Entity::unfilmed` keeps it out of takes |
 | `desktop/film.cpp` | the Mac: drawing a take from a camera over footage (`preview -film`), `-takeInfo` |
 | `film/sheet.py` | the sheet |

@@ -12,5 +12,6 @@ media-src/quest/*
 !media-src/quest/people/
 !media-src/quest/people-placeholders/
 !media-src/quest/voice/
+!media-src/quest/film/
 quest/vendor
 !media-src/README.md

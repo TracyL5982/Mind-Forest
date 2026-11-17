@@ -322,6 +322,12 @@ int main(int argc, char** argv) {
         if (lap) layLapHand(elapsed >= Flags::number("lapHandAt") && frameCount >= 3);
         input.update(scene->root(), host::head, dt);
 #ifndef OCEAN_NO_SCENE
+        // `-cueAt <s>` asks for Momo's greeting then, as a pinch on the filming panel's button does (`-cueDelay`, `-freshTree`).
+        static bool cueAsked = false;
+        if (Flags::has("cueAt") && !cueAsked && elapsed >= Flags::number("cueAt")) {
+            cueAsked = true;
+            scene->cue(Flags::has("cueDelay") ? Flags::number("cueDelay") : 5, Flags::string("freshTree").value_or(""));
+        }
         if (withPanel) {
             if (press == FilmPanel::Press::lock && sheetInRoom && !(sheetLocked && recorder.on())) sheetLocked = !sheetLocked;
             if (press == FilmPanel::Press::record) {
@@ -334,8 +340,11 @@ int main(int argc, char** argv) {
                     synced = 0;
                 }
             }
+            if (press == FilmPanel::Press::cue) scene->cue(Flags::has("cueDelay") ? Flags::number("cueDelay") : 5, Flags::string("freshTree").value_or(""));
             press = FilmPanel::Press::none;
             FilmPanel::State state;
+            state.cueReady = scene->cueReady();
+            state.cueIn = scene->cueIn();
             state.sheetSeen = state.sheetSteady = sheetInRoom.has_value();
             state.sheetLocked = sheetLocked && sheetInRoom;
             state.sheetAway = 0.4f;

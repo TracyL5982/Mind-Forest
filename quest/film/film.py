@@ -173,11 +173,19 @@ def solve_camera(args, take, footage):
     placed, misses = solve.place(seen, f, info)
     still = True if args.tripod else False if args.handheld else None
     path, note = solve.settle(placed, info["fps"], smooth=args.smooth, still=still)
+    if not note.get("still") and not args.unsteadied:
+        # In the hand: which way the camera faces from frame to frame is taken from the whole picture's movement, which is
+        # far finer than a few marks, and the marks keep it from wandering.
+        say("Following how the picture moves from frame to frame…")
+        turned = solve.turns(footage, info, f)
+        path, note = solve.steady(seen, placed, turned, f, info, info["fps"], hold=args.hold, smooth=args.smooth)
     good = [m for m, p in zip(misses, placed) if p is not None]
     say("Camera: placed in %d of %d frames, %.2f m from the sheet, off by %.2f pixels on average; %s" %
         (note["placed"], note["frames"], note.get("distance", 0), float(np.mean(good)) if good else 0,
          "on a tripod: one place for the whole take" if note.get("still") else
-         "in the hand: followed frame by frame (%d frames bridged, %d left without the scene)" % (note.get("bridged", 0), note.get("unplaced", 0))))
+         "in the hand: followed frame by frame%s (%d frames bridged, %d left without the scene)" %
+         (", steadied by the picture's own movement (%d frames' marks outvoted)" % note.get("outvoted", 0) if note.get("steadied") else "",
+          note.get("bridged", 0), note.get("unplaced", 0))))
 
     # The clocks, by the sync sounds.
     clock = None
@@ -202,12 +210,24 @@ def solve_camera(args, take, footage):
             head_on_sheet = sheet_from_scene[:3, :3] @ head + sheet_from_scene[:3, 3]
             return float(np.linalg.norm(head_on_sheet - path[frame][:3, 3])) / sync.SPEED_OF_SOUND
 
-        first = sync.match([t for t, _ in heard], about["syncs"])
-        left = [t - travel(t, first[0] + first[1] * t) for t, _ in heard]
-        clock = sync.match(left, about["syncs"])
-        say("Clocks: %d sync sound%s heard (%s); %s. The take begins %.3f s into the footage." %
-            (len(heard), "" if len(heard) == 1 else "s", ", ".join("%.3f s" % t for t, _ in sorted(heard)), clock[2],
-             (about["from"] - clock[0]) / clock[1]))
+        which = args.sweep
+        both = len(about["syncs"]) >= 2 and "both" in sync.match(heard, about["syncs"])[2]
+        if args.headset and not which and not both:
+            # The headset's own recording of the same moment has both sync sounds plainly, and shares the room's sound
+            # with the footage: roughly lined up with it, it says which sync sound the footage's one is.
+            theirs = sync.match(sync.find(sync.sound_of(args.headset)), about["syncs"])
+            rough = sync.coarse_lag(footage, args.headset)
+            if theirs and rough:
+                begins = theirs[0] + theirs[1] * rough[0]      # the take's time at the footage's start, roughly
+                best = max(heard, key=lambda h: h[1])[0]
+                which = min(("first", "last"), key=lambda w: abs((about["syncs"][0 if w == "first" else -1] - best) - begins))
+                say("  (By the headset's own recording the footage begins about %.1f s %s the take: its sync sound is the take's %s.)" %
+                    (abs(about["from"] - begins), "before" if begins < about["from"] else "into", which))
+        which = which or "first"
+        first = sync.match(heard, about["syncs"], which)
+        left = [(t - travel(t, first[0] + first[1] * t), s) for t, s in heard]
+        clock = sync.match(left, about["syncs"], which)
+        say("Clocks: %s. The take begins %.3f s into the footage." % (clock[2], (about["from"] - clock[0]) / clock[1]))
     camera = {
         "width": info["width"], "height": info["height"], "fps": info["fps"], "fx": float(f), "fy": float(f),
         # (The solver's lens is centred at width / 2 counting from the first pixel's middle; the renderer counts from the picture's edge.)
@@ -219,11 +239,17 @@ def solve_camera(args, take, footage):
     return camera, info
 
 
-def encoder(out, info, footage=None, alpha=False, prores=False, draft=False):
+def encoder(out, info, footage=None, alpha=False, prores=False, draft=False, sound=None):
     """The ffmpeg that takes the drawn frames (RGBA, rows from the bottom) and writes a film."""
     command = ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", "%dx%d" % (info["width"], info["height"]),
                "-r", repr(info["fps"]), "-i", "-"]
-    if footage and not alpha:
+    if sound and not alpha:
+        # The sound of another recording of the same moment (the headset's own, which has Momo's voice as the app
+        # played it), from the place in it where the footage begins.
+        path, begins = sound
+        command += (["-ss", "%.4f" % begins] if begins >= 0 else ["-itsoffset", "%.4f" % -begins]) + ["-i", path]
+        command += ["-map", "0:v", "-map", "1:a:0", "-c:a", "aac", "-b:a", "192k", "-shortest"]
+    elif footage and not alpha:
         # (The footage's first sound track only: an iPhone adds a second, spatial one that a film file cannot carry as it is.)
         command += ["-i", footage, "-map", "0:v", "-map", "1:a:0?", "-c:a", "copy", "-shortest"]
     command += ["-vf", "vflip"]
@@ -236,6 +262,22 @@ def encoder(out, info, footage=None, alpha=False, prores=False, draft=False):
         command += ["-c:v", "libx264"] + quality + ["-pix_fmt", "yuv420p", "-movflags", "+faststart"]
     command += ["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", out]
     return " ".join(shlex.quote(c) for c in command)
+
+
+def headset_sound(args, take, camera_file):
+    """Where the footage begins in the headset's own recording, if one was given: (file, seconds)."""
+    if not args.headset:
+        return None
+    about = take_info(take)
+    theirs = sync.match(sync.find(sync.sound_of(args.headset)), about["syncs"])
+    if not theirs:
+        say("  (No sync sound in the headset's recording: the film keeps the footage's own sound.)")
+        return None
+    with open(camera_file) as f:
+        clock = json.load(f)["clock"]
+    begins = (clock["offset"] - theirs[0]) / theirs[1]
+    say("Sound: the headset's own recording, from %.3f s into it (%s)." % (begins, theirs[2]))
+    return args.headset, begins
 
 
 def cmd_make(args):
@@ -267,7 +309,8 @@ def cmd_make(args):
         info = dict(info, width=size[0], height=size[1])
     arguments = ["-film", take_file(take), "-camera", camera_file,
                  "-footage", " ".join(shlex.quote(c) for c in solve.frames_command(footage, info["fps"], "rgba", size=size)),
-                 "-out", encoder(out, info, footage, prores=args.prores, draft=args.draft), "-dimScale", repr(args.dim)]
+                 "-out", encoder(out, info, footage, prores=args.prores, draft=args.draft, sound=headset_sound(args, take, camera_file)),
+                 "-dimScale", repr(args.dim)]
     if info["transfer"] == "arib-std-b67":
         arguments += ["-footageHLG"]
     if args.overlay:
@@ -325,6 +368,8 @@ def main():
     make.add_argument("--focal", type=float, help="the camera's focal length, in pixels of the footage")
     make.add_argument("--tripod", action="store_true", help="the camera did not move: one place for the whole take")
     make.add_argument("--handheld", action="store_true", help="the camera moved: follow it frame by frame")
+    make.add_argument("--hold", type=float, default=0.5, help="in the hand: over how many seconds each way the marks' word on the camera's facing is averaged")
+    make.add_argument("--unsteadied", action="store_true", help="in the hand: place the camera from the marks alone, frame by frame, as before")
     make.add_argument("--smooth", type=float, default=2.0, help="how much a hand-held path is smoothed, in frames (0: not at all)")
     make.add_argument("--offset", type=float, help="the take's time at the footage's first frame, instead of matching by sound")
     make.add_argument("--dim", type=float, default=1.0, help="how much of the headset's dimming of the room is put on the footage (0: none)")
@@ -332,6 +377,8 @@ def main():
     make.add_argument("--prores", action="store_true", help="write ProRes 422 HQ instead of H.264")
     make.add_argument("--marks", action="store_true", help="mark the sheet, the head and the hands' joints, to check the fit")
     make.add_argument("--still", type=float, help="make one picture, at this many seconds into the footage, instead of a film")
+    make.add_argument("--headset", help="the headset's own recording of the same moment: its sound (Momo's voice as the app played it) becomes the film's")
+    make.add_argument("--sweep", choices=["first", "last"], help="when the footage holds only one sync sound: which of the take's two it is")
     make.add_argument("--draft", action="store_true", help="a rough film for looking at: 1280 across and quickly packed, several times faster and smaller")
     make.add_argument("--again", action="store_true", help="use the camera worked out the last time for this take and footage")
     make.add_argument("--out")

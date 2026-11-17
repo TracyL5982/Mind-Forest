@@ -408,6 +408,14 @@ public:
     /// How much of the whole scene shows, 1 as a rule; it goes to 0 and back while the scene
     /// is brought to where the user now is. The renderer fades the finished picture (Renderer::veil).
     virtual float veil() { return 1; }
+    // FILM: added for the filming panel (core/ocean/filmpanel.h, quest/film/README.md): a greeting Momo gives when
+    // asked from it. Whether it can be asked for now (every tree is closed, and the app has the recording); asking for
+    // it to start `after` seconds from now, on the tree whose name has `tree` in it (empty: the scene picks), which
+    // asked again while it waits calls it off; and where it stands: seconds until it starts while it waits, 0 while
+    // it sounds, below 0 otherwise.
+    virtual bool cueReady() { return false; }
+    virtual void cue(double /*after*/, const std::string& /*tree*/) {}
+    virtual double cueIn() { return -1; }
 };
 
 /// GPU objects whose owners have gone, for the renderer to free at the start

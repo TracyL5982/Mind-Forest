@@ -62,6 +62,17 @@ void OceanModel::soundAt(const char* name, Vec3 at, float gain, double after) {
     audio::play(name, gain, after, pan);
 }
 
+// FILM: a tree growing in (oceanmodel_cue.cpp): the sound a card makes as it is brought in, from where the tree is, and
+// a quiet note of the first chord for each picture as it comes, climbing.
+void OceanModel::soundSprout(Vec3 at, const std::vector<double>& pops) {
+    soundAt("bring_in", at, 0.7f);
+    const std::vector<int>& notes = chordNotes[0];
+    for (size_t i = 0; i < pops.size(); i++) {
+        float pan = pops.size() > 1 ? (float(i) / float(pops.size() - 1) - 0.5f) * 0.5f : 0;
+        audio::play(fmt("note_%02d", notes[i % notes.size()]), 0.28f, pops[i], pan);
+    }
+}
+
 void OceanModel::soundLayer(int layer, bool forward, double after) {
     int k = std::min(std::max(layer, 0), layerChords - 1);
     audio::play(fmt(forward ? "layer_up_%d" : "layer_down_%d", k), conversing ? conversationDip : 1, after);

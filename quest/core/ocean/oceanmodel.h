@@ -948,6 +948,11 @@ public:
     /// which is what PalaceScene asks for; 0 leaves the room alone.
     float surroundingsDim() override;
 
+    // MARK: - FILM: the filming panel's greeting (oceanmodel_cue.cpp)
+    bool cueReady() override;
+    void cue(double after, const std::string& tree) override;
+    double cueIn() override;
+
 private:
     // MARK: - FILM: sharing a tree with someone (oceanmodel_share.cpp)
     /// The list of people that Share opens over a tree in the forest, and the one of them the tree was shared with.
@@ -1003,6 +1008,66 @@ private:
     void sharePerson(int uid, int who);
     void driftOff(const Shelved& s);
     void tendShare(double now);
+
+    struct Cue {
+        bool looked = false;                // the recording was looked for
+        std::string words;                  // what Momo says
+        std::vector<int16_t> sound;         // her saying it: 16-bit mono at `rate`
+        static constexpr int rate = 24000;
+        /// Waiting: the tree is hidden and has the middle, and Momo has not begun. Speaking: her line sounds.
+        /// Growing: the tree comes up. Otherwise nothing is going on.
+        enum class Phase { none, waiting, speaking, growing };
+        Phase phase = Phase::none;
+        int run = 0;                        // counts the times it was asked for: what an earlier one left to do is dropped
+        double startAt = -1;                // waiting: when she starts, on `time`
+        double endsAt = -1;                 // speaking: when her line ends
+        double growAt = -1;                 // growing: when the trunk starts up
+        double nameAt = -1, markAt = -1, grownAt = -1;      // when its name comes, its "New" tab, and when it is all there
+        std::string tree;                   // part of the name of the tree; empty: `freshTree` picks
+        int fresh = -1;                     // the uid of the tree
+        TreeRef freshRef;                   // and the tree itself, for when it is opened
+        bool staged = false;                // it is hidden, in the middle, with nothing of it showing
+        /// Every tree given another place for it, itself among them, and where each stood before: kept until it is opened.
+        struct Moved {
+            int uid;
+            Vec2 from;
+        };
+        std::vector<Moved> moved;
+        double goneAt = -1;                 // when it was first found gone from the desk, while the moved wait to go back
+        std::optional<Piece> tab;           // its "New" tab, made before it is shown: its width says how much room the name needs
+        EntityRef briefs;                   // the briefs, hidden while it has the middle
+        /// A picture of its and when it comes.
+        struct Pop {
+            int id;
+            double at;
+        };
+        std::vector<Pop> pops;
+        EntityRef mark;
+        Vec3 markRest = Vec3::zero();
+        Tween<float> drop{0.f};             // how far above its place the mark is, m
+        platform::StreamRef plain;          // her voice with no agent to say it
+    };
+    Cue greeting;
+    bool cueLoaded();
+    void tendCue(double now);
+    Shelved* freshTree();
+    Shelved* cueTree();
+    /// The middle of the clearing, before the eyes: where the new tree stands.
+    Vec2 cuePlot() const;
+    void stageFresh(double now);
+    void bareFresh(int run);
+    void growFresh(double now);
+    void markFresh(double now);
+    void showFresh(Shelved& s);
+    void undoCue();
+    void moveTree(Shelved& s, Vec2 plot, double delay);
+    /// How much of a tree's rings count as ground it has, 0 to 1: all of them, but for the greeting's tree while it
+    /// is hidden (none: no gap waits for it in its neighbours' rings) and as it grows (as far as they have spread).
+    float cueRings(const Shelved& s) const;
+    /// The ground other trees' rings have of the tree at `i` in the shelf (`rakeForest`).
+    std::vector<Gravel::Cut> ringCuts(size_t i) const;
+    int cueRaked = 0;                   // the frames it has tended while its tree's rings spread
+    void soundSprout(Vec3 at, const std::vector<double>& pops);
 
 public:
 

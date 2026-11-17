@@ -98,7 +98,11 @@ class Detector:
             margin = side * 0.45
             left, top = max(0, int(points[:, 0].min() - margin)), max(0, int(points[:, 1].min() - margin))
             right, bottom = min(width, int(points[:, 0].max() + margin) + 1), min(height, int(points[:, 1].max() + margin) + 1)
-            again, again_ids, _ = self.fine.detectMarkers(np.ascontiguousarray(grey[top:bottom, left:right]))
+            try:
+                again, again_ids, _ = self.fine.detectMarkers(np.ascontiguousarray(grey[top:bottom, left:right]))
+            except cv2.error:
+                # (OpenCV's edge fitting gives up on some smeared or half-hidden marks: such a mark is left out of the frame.)
+                continue
             if again_ids is None or int(ident) not in again_ids.flatten():
                 continue
             quad = again[list(again_ids.flatten()).index(int(ident))].reshape(4, 2)
@@ -297,6 +301,163 @@ def settle(placed, fps, smooth=2.0, still=None, bridge=0.5):
         pose[:3, 3] = where[i]
         path[i] = pose
     note["unplaced"] = int(n - filled.sum())
+    return path, note
+
+
+def turns(footage, info, f, wide=960):
+    """How the camera turned from each frame to the next, from how the whole picture moved: a 3 x 3 for every frame
+    (camera axes now from camera axes a frame ago), None for the first and where it could not be told.
+
+    The sheet's marks say where the camera is, but from a few small squares: frame to frame their answer jumps by a
+    tenth of a degree and more, which is centimetres of shake two metres from the sheet. The picture as a whole says
+    how the camera turned between two frames far more finely (hundreds of points over the whole frame), though not
+    where it is. `steady` puts the two together.
+    """
+    high = int(round(info["height"] * wide / info["width"] / 2)) * 2
+    command = ["ffmpeg", "-v", "error", "-i", footage, "-an", "-vf", "fps=%s,scale=%d:%d" % (repr(info["fps"]), wide, high),
+               "-f", "rawvideo", "-pix_fmt", "gray", "-"]
+    pipe = subprocess.Popen(command, stdout=subprocess.PIPE)
+    scale = wide / info["width"]
+    k = np.array([[f * scale, 0, wide / 2], [0, f * scale, high / 2], [0, 0, 1]])
+    k_inverse = np.linalg.inv(k)
+    out, before = [], None
+    while True:
+        data = pipe.stdout.read(wide * high)
+        if len(data) < wide * high:
+            break
+        grey = np.frombuffer(data, np.uint8).reshape(high, wide)
+        turn = None
+        if before is not None:
+            points = cv2.goodFeaturesToTrack(before, 600, 0.01, 12)
+            if points is not None and len(points) >= 40:
+                moved, found, _ = cv2.calcOpticalFlowPyrLK(before, grey, points, None, winSize=(21, 21), maxLevel=3)
+                was, now = points[found.ravel() == 1].reshape(-1, 2), moved[found.ravel() == 1].reshape(-1, 2)
+                if len(was) >= 40:
+                    # What moves with the camera fits one mapping of the picture onto itself; a person moving in it does not, and is left out.
+                    mapping, fits = cv2.findHomography(was, now, cv2.RANSAC, 1.5)
+                    if mapping is not None and fits.mean() > 0.35:
+                        u, _, vt = np.linalg.svd(k_inverse @ mapping @ k)
+                        turn = u @ vt
+                        if np.linalg.det(turn) < 0:
+                            turn = -turn
+        out.append(turn)
+        before = grey
+    pipe.wait()
+    return out
+
+
+def steady(seen, placed, turned, f, info, fps, hold=0.5, smooth=2.0, bridge=0.5):
+    """A hand-held camera's path, steadied: each frame's camera in the sheet's frame (4 x 4, sheet from camera), or None.
+
+    Which way the camera faces is taken from the picture's own movement from frame to frame (`turned`), kept from
+    wandering by the marks: what the marks say against that running turn is averaged over about `hold` seconds each
+    way, so the marks decide where the camera faces in the long run and the picture decides how it gets there.
+    Where the camera stands is then worked out afresh from the marks with its facing given, and smoothed a little.
+    """
+    n = len(placed)
+    width, height = info["width"], info["height"]
+    known = [i for i, p in enumerate(placed) if p is not None]
+    note = {"placed": len(known), "frames": n, "still": False, "steadied": True}
+    if len(known) < 3:
+        return [None] * n, note
+    # The running turn: camera axes at each frame from those at the first.
+    run = [np.eye(3)]
+    for i in range(1, n):
+        step = turned[i] if i < len(turned) else None
+        if step is None:
+            # (Not told for this pair: the marks' own word for it if they have one, else none at all.)
+            step = placed[i][:3, :3] @ placed[i - 1][:3, :3].T if placed[i] is not None and placed[i - 1] is not None else np.eye(3)
+        run.append(step @ run[-1])
+    # What the marks say against it: the sheet's axes as the running turn would have them. Slowly changing, if the marks are right.
+    against = np.full((n, 4), np.nan)
+    weight = np.zeros(n)
+    last = None
+    for i in known:
+        q = _quaternion(run[i].T @ placed[i][:3, :3])
+        if last is not None and np.dot(q, last) < 0:
+            q = -q
+        against[i] = last = q
+        weight[i] = len(seen[i][0])
+    reach = int(np.ceil(hold * fps * 3))
+    bell = np.exp(-0.5 * (np.arange(-reach, reach + 1) / (hold * fps)) ** 2)
+
+    def average(weights):
+        out = np.full((n, 4), np.nan)
+        for i in range(n):
+            lo, hi = max(0, i - reach), min(n, i + reach + 1)
+            w = weights[lo:hi] * bell[lo - i + reach:hi - i + reach]
+            if w.sum() <= 0:
+                continue
+            q = np.nansum(np.where(np.isnan(against[lo:hi]), 0, against[lo:hi]) * w[:, None], axis=0)
+            out[i] = q / np.linalg.norm(q)
+        return out
+
+    held = average(weight)
+    # A frame whose marks disagree with their neighbours by more than a degree (a flat target read the wrong way round, a smeared frame) has no say.
+    for i in known:
+        if not np.isnan(held[i][0]) and np.degrees(2 * np.arccos(np.clip(abs(np.dot(held[i], against[i])), -1, 1))) > 1.0:
+            weight[i] = 0
+    note["outvoted"] = int(sum(1 for i in known if weight[i] == 0))
+    held = average(weight)
+    # Where the camera stands, with its facing given: the marks' corners must fall where they are seen.
+    cx, cy = width / 2, height / 2
+    where = np.full((n, 3), np.nan)
+    facing = [None] * n
+    misses = []
+    for i in range(n):
+        if np.isnan(held[i][0]):
+            continue
+        facing[i] = run[i] @ _rotation(held[i])
+        if placed[i] is None:
+            continue
+        on_sheet, in_picture = seen[i]
+        turned_points = on_sheet @ facing[i].T
+        x, y = (in_picture[:, 0] - cx) / f, (in_picture[:, 1] - cy) / f
+        rows = np.zeros((2 * len(x), 3))
+        rows[0::2, 0], rows[0::2, 2] = 1, -x
+        rows[1::2, 1], rows[1::2, 2] = 1, -y
+        right = np.empty(2 * len(x))
+        right[0::2] = x * turned_points[:, 2] - turned_points[:, 0]
+        right[1::2] = y * turned_points[:, 2] - turned_points[:, 1]
+        move = np.linalg.lstsq(rows, right, rcond=None)[0]
+        in_camera = turned_points + move
+        off = np.hypot(f * in_camera[:, 0] / in_camera[:, 2] + cx - in_picture[:, 0], f * in_camera[:, 1] / in_camera[:, 2] + cy - in_picture[:, 1])
+        misses.append(float(np.sqrt(np.mean(off ** 2))))
+        where[i] = -facing[i].T @ move          # the camera in the sheet's frame
+    note["miss"] = float(np.mean(misses)) if misses else 0.0
+    got = ~np.isnan(where[:, 0])
+    limit = int(round(bridge * fps))
+    frames = np.nonzero(got)[0]
+    bridged = 0
+    for a, b in zip(frames[:-1], frames[1:]):
+        if 1 < b - a <= limit + 1:
+            for i in range(a + 1, b):
+                if facing[i] is not None:
+                    t = (i - a) / (b - a)
+                    where[i] = (1 - t) * where[a] + t * where[b]
+                    got[i] = True
+                    bridged += 1
+    note["bridged"] = bridged
+    if smooth > 0:
+        reach2 = int(np.ceil(smooth * 3))
+        bell2 = np.exp(-0.5 * (np.arange(-reach2, reach2 + 1) / smooth) ** 2)
+        smoothed = where.copy()
+        for i in np.nonzero(got)[0]:
+            k = 0
+            while k < reach2 and i - k - 1 >= 0 and i + k + 1 < n and got[i - k - 1] and got[i + k + 1]:
+                k += 1
+            w = bell2[reach2 - k:reach2 + k + 1]
+            smoothed[i] = (where[i - k:i + k + 1] * w[:, None]).sum(axis=0) / w.sum()
+        where = smoothed
+    path = [None] * n
+    for i in np.nonzero(got)[0]:
+        pose = np.eye(4)
+        pose[:3, :3] = facing[i].T
+        pose[:3, 3] = where[i]
+        path[i] = pose
+    spot = np.nanmedian(where[got], axis=0)
+    note["distance"] = float(np.linalg.norm(spot))
+    note["unplaced"] = int(n - got.sum())
     return path, note
 
 

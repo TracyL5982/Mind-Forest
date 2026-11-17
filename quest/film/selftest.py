@@ -48,8 +48,10 @@ def camera_at(t, still):
 def make_footage(path, seconds, layout, page, heard_at, still):
     """Writes the made-up footage; returns each frame's true camera."""
     rng = np.random.default_rng(7)
-    backdrop = cv2.GaussianBlur(rng.integers(70, 140, (HEIGHT // 8, WIDTH // 8), dtype=np.uint8), (0, 0), 3)
-    backdrop = cv2.resize(backdrop, (WIDTH, HEIGHT), interpolation=cv2.INTER_CUBIC)
+    # The desk the sheet lies on, six metres of it, mottled: it moves in the picture as the camera does, which is
+    # what a hand-held take's steadying goes by (solve.turns).
+    grain = cv2.GaussianBlur(rng.integers(40, 200, (1500, 1500), dtype=np.uint8), (0, 0), 2.2)
+    grain_to_desk = np.array([[0.004, 0, -3.0], [0, -0.004, 3.0], [0, 0, 1.0]])
     k = np.array([[FOCAL, 0, WIDTH / 2], [0, FOCAL, HEIGHT / 2], [0, 0, 1]])
     ph, pw = page.shape
     w, h = layout["width"], layout["height"]
@@ -81,7 +83,8 @@ def make_footage(path, seconds, layout, page, heard_at, still):
         seen = (k @ (inverse[:3, :3] @ paper.T + inverse[:3, 3:4])).T
         seen = (seen[:, :2] / seen[:, 2:3]).astype(np.float32)
         warp = cv2.getPerspectiveTransform(corners, seen)
-        frame = backdrop.copy()
+        desk = k @ np.column_stack([inverse[:3, 0], inverse[:3, 1], inverse[:3, 3]]) @ grain_to_desk
+        frame = cv2.warpPerspective(grain, desk, (WIDTH, HEIGHT), flags=cv2.INTER_LINEAR, borderValue=105)
         sheet_in = cv2.warpPerspective(page, warp, (WIDTH, HEIGHT), flags=cv2.INTER_LINEAR, borderValue=0)
         mask = cv2.warpPerspective(np.full_like(page, 255), warp, (WIDTH, HEIGHT), flags=cv2.INTER_LINEAR, borderValue=0)
         frame = np.where(mask > 127, (sheet_in * 0.86 + 12).astype(np.uint8), frame)
@@ -124,7 +127,7 @@ def one(folder, still, repo):
     truth = make_footage(footage, lead + seconds + 0.8, layout, page, heard, still)
 
     args = types.SimpleNamespace(paper="letter", lens=None, fov=None, focal=None if not still else FOCAL, tripod=False, handheld=False, smooth=2.0,
-                                 offset=None, repo=repo)
+                                 offset=None, repo=repo, headset=None, sweep=None, hold=0.5, unsteadied=False)
     camera, info = film.solve_camera(args, take, footage)
     # What was worked out, against what was put in.
     flip = np.diag([1.0, -1.0, -1.0, 1.0])

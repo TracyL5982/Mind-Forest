@@ -1145,9 +1145,32 @@ void Voice::hushLive() {
     live.reset();
 }
 
-bool Voice::startPlayer(LiveReply& r) {
+bool Voice::recite(const std::string& text, const std::vector<int16_t>& pcm, int rate) {
+    if (pcm.empty() || rate <= 0) return false;
+    endTurn();
+    hushLive();
+    if (!std::holds_alternative<Idle>(turn)) turnTo(Idle{});
+    shown.userText.clear();
+    shown.userFinal = false;
+    LiveReply& r = liveReply(fmt("recited-%d", players + 1));
+    r.text = text;
+    r.length = double(pcm.size()) / rate;
+    r.held = pcm;
+    r.finished = true;
+    spoken = text;
+    if (!startPlayer(r, rate)) {
+        live.reset();
+        spoken.clear();
+        return false;
+    }
+    logLine(fmt("[voice] Momo says a line of the app's own, %.1f s: %s", r.length, text.c_str()));
+    return true;
+}
+
+bool Voice::startPlayer(LiveReply& r, int rate) {
     auto* ready = std::get_if<Ready>(&link);
-    if (!ready) return false;
+    int hz = rate > 0 ? rate : ready ? ready->rate : 0;
+    if (hz <= 0) return false;
     std::weak_ptr<Inbox> box = inbox;
     int number = r.player = ++players;
     auto played = [box, number](bool) {
@@ -1157,7 +1180,7 @@ bool Voice::startPlayer(LiveReply& r) {
         }
     };
     std::shared_ptr<Unheard> unheard = muted ? std::make_shared<Unheard>(played) : nullptr;
-    platform::StreamRef player = unheard ? unheard : platform::playStream(ready->rate, played);
+    platform::StreamRef player = unheard ? unheard : platform::playStream(hz, played);
     if (!player) {
         logLine("[voice] Momo's voice could not be played");
         return false;
@@ -1166,7 +1189,7 @@ bool Voice::startPlayer(LiveReply& r) {
     sounding->number = number;
     sounding->player = player;
     sounding->unheard = unheard;
-    sounding->rate = ready->rate;
+    sounding->rate = hz;
     sounding->text = r.text;
     sounding->length = r.length;
     sounding->from = r.from;

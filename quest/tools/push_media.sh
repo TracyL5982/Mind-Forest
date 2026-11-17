@@ -65,6 +65,8 @@ sync_dir "$SMALL" works-small
 [ -d "$REPO_ROOT/media-src/quest/fonts" ] && sync_dir "$REPO_ROOT/media-src/quest/fonts" fonts
 # The people a tree can be shared with (in git; drawn placeholders for their profile pictures, see quest/core/ocean/oceanmodel_share.cpp).
 [ -d "$REPO_ROOT/media-src/quest/people" ] && sync_dir "$REPO_ROOT/media-src/quest/people" people
+# The greeting Momo gives from the filming panel (in git; made by agents/scripts/say-line.ts, see quest/film/README.md).
+[ -f "$REPO_ROOT/media-src/quest/film/greeting.pcm" ] && sync_dir "$REPO_ROOT/media-src/quest/film" film
 adb shell "du -sh $DEVICE_FILES/media"
 
 # What adb copies into an app's storage belongs to the shell and, on a fresh install, is closed to everyone else: the app

@@ -185,35 +185,44 @@ void OceanModel::layName(const EntityRef& caption, Vec2 size, float foot, float 
     caption->position = {0, foot + size.y * k / 2 + 0.01f, 0.03f + 0.07f * k};
 }
 
-void OceanModel::rakeForest() {
+std::vector<Gravel::Cut> OceanModel::ringCuts(size_t i) const {
     bool down = wantDown();
-    /// Where each tree's foot is (or is going), how large it is there, and how far from the eyes.
+    /// Where a tree's foot is (or is going), how large it is there, and how far from the eyes.
     struct Stood {
         Vec3 at;
         float size;
         float far;
     };
-    std::vector<Stood> stood;
-    for (const Shelved& s : shelf) {
+    auto stood = [&](const Shelved& s) {
         Vec3 p = restPoint(s.plot, 0, down);
         Vec3 v = p - stage.origin;
-        stood.push_back(Stood{p, down ? Forest::scale() : Forest::grown(), std::sqrt(v.x * v.x + v.z * v.z)});
+        return Stood{p, down ? Forest::scale() : Forest::grown(), std::sqrt(v.x * v.x + v.z * v.z)};
+    };
+    Stood mine = stood(shelf[i]);
+    std::vector<Gravel::Cut> cuts;
+    Quat turn = stage.upright(mine.at).orientation.inverse();
+    for (size_t j = 0; j < shelf.size(); j++) {
+        if (j == i) continue;
+        // FILM: a tree whose rings are not all out has only the ground they have come to (`cueRings`).
+        float share = cueRings(shelf[j]);
+        if (share <= 0.001f) continue;
+        Stood other = stood(shelf[j]);
+        // Only a nearer tree's rings are in the way: its are whole, and these stop short of them.
+        bool nearer = other.far < mine.far || (other.far == mine.far && j < i);
+        if (!nearer) continue;
+        Vec3 d = other.at - mine.at;
+        if (std::sqrt(d.x * d.x + d.z * d.z) > Gravel::reach * (mine.size + other.size * share)) continue;
+        Vec3 local = turn.act(d) / mine.size;
+        // (Just clear of its last ring: they run up to that line and end at it.)
+        cuts.push_back(Gravel::Cut{Vec2{local.x, local.z}, Gravel::reach * other.size / mine.size * 1.025f * share});
     }
+    return cuts;
+}
+
+void OceanModel::rakeForest() {
     for (size_t i = 0; i < shelf.size(); i++) {
         if (!shelf[i].gravel) continue;
-        std::vector<Gravel::Cut> cuts;
-        Quat turn = stage.upright(stood[i].at).orientation.inverse();
-        for (size_t j = 0; j < shelf.size(); j++) {
-            // Only a nearer tree's rings are in the way: its are whole, and these stop short of them.
-            bool nearer = stood[j].far < stood[i].far || (stood[j].far == stood[i].far && j < i);
-            if (j == i || !nearer) continue;
-            Vec3 d = stood[j].at - stood[i].at;
-            if (std::sqrt(d.x * d.x + d.z * d.z) > Gravel::reach * (stood[i].size + stood[j].size)) continue;
-            Vec3 local = turn.act(d) / stood[i].size;
-            // (Just clear of its last ring: they run up to that line and end at it.)
-            cuts.push_back(Gravel::Cut{Vec2{local.x, local.z}, Gravel::reach * stood[j].size / stood[i].size * 1.025f});
-        }
-        shelf[i].cuts = cuts;
+        shelf[i].cuts = ringCuts(i);
         shelf[i].rakeDue = true;
     }
     touch(time + 0.1 + 0.02 * double(shelf.size()));

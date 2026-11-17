@@ -591,6 +591,7 @@ void run() {
     Input input(scene.get());
     EntityRef world = Entity::make();
     world->addChild(scene->root());
+    filming.scene = scene.get();
     world->addChild(input.visuals());
     if (filming.visuals()) world->addChild(filming.visuals());
     if (filming.front()) {

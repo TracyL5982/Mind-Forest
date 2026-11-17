@@ -15,7 +15,7 @@
 // centimetres. So where the sheet is held to be is the person's to settle. An outline of the paper
 // is drawn where the headset has the sheet (never part of a take): amber, following the readings,
 // and holding still once a few close readings agree (the head within 45 cm, facing it). The filming
-// panel (core/ocean/filmpanel.h), to the person's left, has "Lock sheet": pinched, the outline's
+// panel (core/ocean/filmpanel.h), low in front of the person's feet, has "Lock sheet": pinched, the outline's
 // place is kept, the outline turns green, and no reading moves it again until "Unlock sheet". Only a
 // locked sheet goes into a take. The panel's other button begins and ends a take, as
 // `debug.mindpalace.take` does from the Mac.
@@ -57,6 +57,8 @@ public:
     /// Once a frame, after it has been drawn and the GL framebuffer let go: begins, records and ends takes.
     /// `started`: the scene is running. `elapsed`, `dim`: what the frame was drawn with.
     void frame(Renderer& renderer, bool started, double elapsed, float dim, XrTime displayTime);
+    /// The scene, for the panel's greeting (PalaceScene::cue). Not owned.
+    PalaceScene* scene = nullptr;
     /// The sheet's outline, for the host to draw with the scene.
     EntityRef visuals() const { return outline; }
     /// The filming panel: for the host to draw, and to give to Input::setFront with `pressed`.
@@ -84,6 +86,9 @@ private:
     float sheetAway = -1;
 #ifndef OCEAN_NO_SCENE
     FilmPanel panel;
+    std::string freshTree;          // part of the name of the tree the greeting marks; empty: the scene picks
+    /// A pinch on the greeting's button, or the same asked over adb.
+    void askCue();
 #endif
     double frameAt = 0;
     void lockSheet();

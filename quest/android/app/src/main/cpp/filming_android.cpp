@@ -72,6 +72,10 @@ void Filming::start(XrInstance instance_, XrSystemId system_, XrSession session_
     std::string kept = host::dataDir + "/film-paper.txt";
     std::string paper = Flags::string("sheetPaper").value_or(platform::readFile(kept).value_or("letter"));
     if (Flags::has("sheetPaper")) platform::writeFile(kept, paper);
+    // The tree the greeting marks as new, by part of its name: kept the same way.
+    std::string keptTree = host::dataDir + "/film-fresh-tree.txt";
+    freshTree = Flags::string("freshTree").value_or(platform::readFile(keptTree).value_or(""));
+    if (Flags::has("freshTree")) platform::writeFile(keptTree, freshTree);
     float scale = 1;
     if (paper == "a4") { paperWidth = 0.297f; paperHeight = 0.210f; scale = 0.9727f; }
     else if (paper == "tabloid") { paperWidth = 0.4318f; paperHeight = 0.2794f; scale = 1.2941f; }
@@ -422,6 +426,18 @@ EntityRef Filming::front() const {
 #endif
 }
 
+void Filming::askCue() {
+    if (!scene) return;
+    // Which tree it marks can be said while the app runs, and is kept: adb shell setprop debug.mindpalace.freshTree "planet"
+    char named[PROP_VALUE_MAX] = {0};
+    __system_property_get("debug.mindpalace.freshTree", named);
+    if (named[0] && freshTree != named) {
+        freshTree = named;
+        platform::writeFile(host::dataDir + "/film-fresh-tree.txt", freshTree);
+    }
+    scene->cue(Flags::has("cueDelay") ? Flags::number("cueDelay") : 5, freshTree);
+}
+
 void Filming::pressed(const EntityRef& entity) {
 #ifndef OCEAN_NO_SCENE
     switch (panel.pressed(entity)) {
@@ -429,6 +445,10 @@ void Filming::pressed(const EntityRef& entity) {
     case FilmPanel::Press::record:
         if (!ending) asked = !recorder.on();
         logLine(asked ? "[film] a take is asked for, from the panel" : "[film] the take is asked to end, from the panel");
+        break;
+    case FilmPanel::Press::cue:
+        // Momo's greeting (PalaceScene::cue): it starts a few seconds on, time to look up from the panel.
+        askCue();
         break;
     case FilmPanel::Press::none: break;
     }
@@ -572,8 +592,21 @@ void Filming::frame(Renderer& renderer, bool started, double elapsed, float dim,
             asked = value[0] == '1';
             logLine(asked ? "[film] a take is asked for" : "[film] the take is asked to end");
         }
+        // The greeting, the same way: any change of `debug.mindpalace.cue` is a pinch on its button.
+        char cue[PROP_VALUE_MAX] = {0};
+        __system_property_get("debug.mindpalace.cue", cue);
+        static bool firstCue = true;
+        static std::string cueBy;
+        if (firstCue) {
+            firstCue = false;
+            cueBy = cue;
+        } else if (cueBy != cue) {
+            cueBy = cue;
+            askCue();
+        }
     }
-    outline->isEnabled = sheetInRoom.has_value();
+    // (Not while a take records: the headset's own recorder may be filming the same moment, and would show it.)
+    outline->isEnabled = sheetInRoom.has_value() && !recorder.on();
     if (sheetInRoom) {
         Mat4 inScene = host::sceneFromRoom * *sheetInRoom;
         outline->position = inScene.position();
@@ -595,6 +628,8 @@ void Filming::frame(Renderer& renderer, bool started, double elapsed, float dim,
         state.sheetAway = sheetAway;
         state.recording = recorder.on() && !ending;
         state.recorded = recorder.on() ? now - beganAt : 0;
+        state.cueReady = scene && started && scene->cueReady();
+        state.cueIn = scene && started ? scene->cueIn() : -1;
         float dt = frameAt > 0 ? float(std::min(0.1, now - frameAt)) : 1.f / 90;
         frameAt = now;
         if (started) panel.update(state, host::head, dt);

@@ -284,6 +284,10 @@ public:
     /// What stands under a tree's cover on the shelf: its name, who made it,
     /// and whether it has been sent, as flat labels side by side.
     std::optional<Piece> coverCaption(const std::string& title, Maker maker, bool sent);
+    // FILM: added for the filming greeting (oceanmodel_cue.cpp). A tab to stand beside a tree's name as "Sent" does
+    // inside it, in the same look, and how far from the name it stands (m).
+    std::optional<Piece> coverTab(const std::string& words);
+    static constexpr float coverTabGap = 10 * type / 1000;
 
 private:
     /// Paints a tree's items into a box: threads first, then the least
