@@ -28,6 +28,9 @@ const BYTES_PER_MS = 48;
 /** A line is a few sentences. Longer is cut, so one box cannot ask for minutes of speech. */
 export const MAX_LINE = 1200;
 
+/** The file a recording of these exact words in this voice is kept in: the same words are the same file, wherever they are said. */
+export const recordingName = (voice: string, text: string): string => `${createHash('sha1').update(`${voice}\n${text}`).digest('hex').slice(0, 20)}.pcm`;
+
 export interface LineShown extends Line {
   /** The words the real Momo gave it. */
   written: string;
@@ -93,9 +96,8 @@ export class Lines {
     return true;
   }
 
-  /** The recording of these exact words, by what they are: the same words are the same file, wherever they are said. */
   private name(text: string): string {
-    return `${createHash('sha1').update(`${this.opts.voice}\n${text}`).digest('hex').slice(0, 20)}.pcm`;
+    return recordingName(this.opts.voice, text);
   }
 
   private file(text: string): string | null {

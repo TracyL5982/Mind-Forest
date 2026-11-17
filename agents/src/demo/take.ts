@@ -159,8 +159,9 @@ export function noteOf(card: ScriptCard, under: string): CardNote {
 }
 
 /**
- * Walks a round as the live voice would, and asks `say` for each thing Momo says, in order: her answer, then each note the real
- * `Narration` gives as the round's cards land on this schedule. `say` returns how long the line takes to speak, which decides
+ * Walks a round as the live voice would, and asks `say` for each thing Momo says, in order: her answer, when the round is asked
+ * for in words (a pinch or a tapped question gets none), then each note the real `Narration` gives as the round's cards land on
+ * this schedule. `say` returns how long the line takes to speak, which decides
  * what has landed by the time she is free again, and so which cards the next remark gathers. Returns the lines with their cards.
  */
 export async function planLines(
@@ -174,7 +175,7 @@ export async function planLines(
     lines.push({ id: kind === 'more' ? `more-${lines.filter((l) => l.kind === 'more').length + 1}` : kind, kind, cards: cards.map((card) => card.id), text });
     return ms;
   };
-  let free = (await told('answer', [], null)) + REAL.breath;
+  let free = phase.say ? (await told('answer', [], null)) + REAL.breath : 0;
   const sched = schedule(phase);
   if (sched.drops.length === 0) return lines;
 
