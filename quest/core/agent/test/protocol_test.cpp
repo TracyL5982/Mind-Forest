@@ -429,5 +429,6 @@ std::vector<std::pair<Outbound, std::string>> outboundCases() {
          R"({"patch":{"picksMode":"immediate","picksPerRun":3,"scoutOnDump":false},"t":"settings"})"},
         {Outbound::settings(SettingsPatch{}), R"({"patch":{},"t":"settings"})"},
         {Outbound::client(Media{.embeds = false, .files = {"mp4", "webm", "mp3"}}), R"({"media":{"embeds":false,"files":["mp4","webm","mp3"]},"t":"client"})"},
+        {Outbound::worn(42.36), R"({"away":42.4,"t":"worn"})"},
     };
 }

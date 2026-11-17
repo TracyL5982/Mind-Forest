@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <cstring>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "base.h"
@@ -38,6 +39,7 @@ bool readRoomAsked = false;
 int heldTable = 0;
 bool recentred = false;
 bool resumed = false;
+double wornAway = -1;
 
 void useAssets(JNIEnv* env, jobject manager) {
     // MainActivity keeps the AssetManager for the life of the process; the global reference keeps it here too.
@@ -145,6 +147,11 @@ bool resumed() {
     bool was = host::resumed;
     host::resumed = false;
     return was;
+}
+
+std::optional<double> wornAgain() {
+    if (host::wornAway < 0) return std::nullopt;
+    return std::exchange(host::wornAway, -1.0);
 }
 
 void openURL(const std::string& url) {

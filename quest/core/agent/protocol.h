@@ -396,6 +396,8 @@ public:
     static Outbound handoff(const Scope& scope, const std::optional<std::string>& note = std::nullopt);
     static Outbound settings(const SettingsPatch& patch);
     static Outbound client(const Media& media);
+    /// The headset is worn again after `away` s off (its session back in front), to the tenth of a second.
+    static Outbound worn(double away);
 
     const Json& json() const { return json_; }
     std::string text() const { return json_.dump(); }
