@@ -356,7 +356,7 @@ private:
     // NOTE(port): added for Quest: a picture on a cover, and the card it stands for.
     struct CoverPicture {
         int id;                             // the card
-        Ref ref;                            // the film or the work
+        Ref ref;                            // the film or the work (AGENT: or a service card, whose own picture it shows)
         EntityRef entity;
         float width;                        // m, in the cover's own measure
         Vec3 at;                            // where it floats, m from the cover's middle, before it is drawn in to the trunk
@@ -1368,12 +1368,13 @@ private:
     struct CoverPlan {
         struct Thumb {
             int id;                     // the card it stands for
-            Ref ref;                    // the film or the work whose picture it shows
+            Ref ref;                    // the film or the work whose picture it shows (AGENT: or a service card's own)
             Vec3 at;                    // m from the cover's middle
             Vec2 size;
         };
         std::vector<Hologram::Node> nodes;
         std::vector<Thumb> thumbs;
+        int choices = 0;                // AGENT: how many different pictures its cards had to show
         float foot = 0;                 // m from the cover's middle down to the tree's foot
         float top = 0;                  // m from the cover's middle up to its highest picture
         // NOTE(port): added for Quest: how its tree is drawn, in the small tree's measure (see `Becoming`).
@@ -1435,6 +1436,7 @@ private:
         // (and its parts, as `Shelved` keeps them)
         EntityRef branches, caption;
         std::vector<CoverPicture> pictures;
+        int choices = 0;                    // AGENT: as `CoverPlan::choices`
         int layers = 1;
         float treeFoot = 0.03f, treeRise = 0.055f;
     };

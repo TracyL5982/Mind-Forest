@@ -128,6 +128,7 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
     for (int i = 0; i < int(slots.size()); i++) free.push_back(i);
     std::vector<Ref> seen;
     for (const Candidate& c : candidates) {
+        if (std::find(seen.begin(), seen.end(), c.ref) == seen.end()) plan.choices++;
         if (free.empty()) continue;
         if (std::find(seen.begin(), seen.end(), c.ref) != seen.end()) continue;
         seen.push_back(c.ref);
@@ -302,6 +303,7 @@ std::optional<OceanModel::Cover> OceanModel::makeCover(const Tree& tree, float e
     cover.branches = tree3d;
     cover.caption = name;
     cover.pictures = pictures;
+    cover.choices = plan.choices;
     cover.layers = plan.layers;
     cover.treeFoot = plan.treeFoot;
     cover.treeRise = plan.treeRise;
@@ -477,8 +479,9 @@ void OceanModel::shelve(const TreeRef& tree, std::optional<Vec3> from, const Mov
     if (!made) return;
     int shown = 0;
     for (const CoverPicture& picture : made->pictures) shown += picture.entity->model || !picture.entity->children.empty();
-    logLine(fmt("[ocean] cover of %s: %d pictures, %d of them while it lies on the ocean's floor; %d still to come", tree->title.c_str(),
-                int(made->pictures.size()), int(std::min(made->pictures.size(), usualPictures)), int(made->pictures.size()) - shown));
+    logLine(fmt("[ocean] cover of %s: %d pictures of the %d its cards have, %d of them while it lies on the ocean's floor; %d still to come",
+                tree->title.c_str(), int(made->pictures.size()), made->choices, int(std::min(made->pictures.size(), usualPictures)),
+                int(made->pictures.size()) - shown));
     Vec3 p = restPoint(plot, made->foot, down);
     EntityRef holder = made->entity;
     holder->orientation = stage.upright(p).orientation;
