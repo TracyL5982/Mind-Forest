@@ -306,8 +306,12 @@ PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& lineMateria
     Material added = lineMaterial;
     added.additive = true;
     group->name = "presence";
-    group->addChild(Entity::make(backing, {dark}));
-    group->addChild(Entity::make(light, {added}));
+    // (Named, for the preview's depth audit.)
+    EntityRef bars = Entity::make(backing, {dark}), ring = Entity::make(light, {added});
+    bars->name = "presence bars";
+    ring->name = "presence Momo";
+    group->addChild(bars);
+    group->addChild(ring);
     group->isEnabled = false;
     parent->addChild(group);
 }
@@ -328,7 +332,13 @@ EntityRef PresenceView::picture(const std::string& text, Speaker who, size_t nam
     Material m = Material::unlit(Color::white());
     m.texture = piece->texture;
     m.transparent = true;
-    return Entity::make(Mesh::generatePlane(piece->size.x, piece->size.y), {m});
+    // Words are blended over their bar, which holds the depth for them. All of Momo's lines lie in one plane, and each
+    // picture is a little taller than a line with its margin: writing depth, those of neighbouring lines (and a caption
+    // line scrolling up past the agents' lines) tied for the pixels they share, and flickered on the headset.
+    m.writesDepth = false;
+    EntityRef e = Entity::make(Mesh::generatePlane(piece->size.x, piece->size.y), {m});
+    e->name = std::string(who == Speaker::agent ? "presence agent line (" : "presence words (") + text.substr(0, 24) + ")";
+    return e;
 }
 
 float PresenceView::write(const std::string& text, Speaker who, size_t name, float y, float opacity, Words& w, float crossFade, float dt) {
@@ -479,7 +489,7 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
         if (!out.empty()) logLine(fmt("[presence] t %.3f", now) + out);
     }
     if (logged && !roster.lines().empty()) {
-        std::string out = fmt("[presence] t %.3f", now);
+        std::string out = fmt("[presence] t %.3f rows %d from %.4f", now, rows, double(agentsFrom));
         for (const Roster::Line& line : roster.lines()) {
             const Words* w = nullptr;
             for (const Words& x : agents) {
@@ -492,8 +502,9 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
             // `over`: the other words showing as well, the old fading out or the new laid over before their turn.
             float words = w->shown ? w->shown->opacity.value_or(1) : 0;
             float over = w->leaving ? w->leaving->opacity.value_or(1) : w->coming && w->coming->parent ? w->coming->opacity.value_or(1) : 0;
-            out += fmt(" | %s bar %.2f words %.2f over %.2f%s y %.2f \"%s\"", line.role.c_str(), double(barAlpha), double(words), double(over),
-                       w->coming && !w->coming->parent ? " waiting" : "", double(line.y), w->text.c_str());
+            out += fmt(" | %s bar %.2f words %.2f over %.2f%s y %.2f \"%s\" at %.4f", line.role.c_str(), double(barAlpha), double(words), double(over),
+                       w->coming && !w->coming->parent ? " waiting" : "", double(line.y), w->text.c_str(),
+                       double(w->shown ? w->shown->position.y : 0));
         }
         logLine(out);
     }
