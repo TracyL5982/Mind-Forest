@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 import { z } from 'zod';
 import type { Channel, Delivery, Desk } from '../contact.ts';
 import { JUDGE_LINES, Talk } from '../talk.ts';
-import { Bot, CODE_MS, Kept, nameOf, Position, read, type BotOptions, type Message } from '../telegram.ts';
+import { allowed, Bot, CODE_MS, Kept, nameOf, Position, read, STRANGER_REPLIES, type BotOptions, type Message } from '../telegram.ts';
 
 export interface JudgeBotOptions extends BotOptions {
   now?: () => number;
@@ -20,24 +20,20 @@ type Chat = z.infer<typeof Chat>;
 /** Each paired chat, by its Telegram chat id, beside the read position of the bot they belong to. */
 const Saved = Position.extend({ chats: z.record(z.string(), Chat).default({}) });
 
-const PAIRED = 'Paired with your headset. Anything you send here goes into your mind palace: a thought, a link, a photo, a file or a voice note. “List my trees” names your trees and “hand off <a tree>” sends its handoff: one file to share with any agent. /unpair ends this.';
-const UNPAIRED = 'Unpaired. To connect again, say “Momo, connect my Telegram” in your headset.';
+const PAIRED = 'We’re paired. I’m Momo, the voice of the Mind Palace in your headset. Tell me anything: a thought, a link, a photo, a file or a voice note. I’ll keep it or talk it over, whichever fits, and I’ll always say what I kept. “List my trees” names your trees and “hand off <a tree>” sends its handoff: one file to share with any agent. /unpair ends this.';
+const UNPAIRED = 'Okay, we’re unpaired. To connect again, say “Momo, connect my Telegram” in your headset.';
 /** The one line a chat that is not paired gets. */
-const STRANGER = 'This is the Mind Palace bot for headsets. In your headset, say “Momo, connect my Telegram”, then send me the 6-digit code Momo gives you.';
-const WRONG_CODE = 'That code did not work. A code works once, for 10 minutes. In your headset, say “Momo, connect my Telegram” for a new one, and send it here.';
-const NO_SPACE = 'Your headset’s mind palace could not be opened just now. Try again in a moment.';
+const STRANGER = 'Hi, I’m Momo, the voice of Mind Palace. I don’t know this chat yet. In your headset, say “Momo, connect my Telegram”, then send me the 6-digit code I give you there.';
+const WRONG_CODE = 'Hmm, that code didn’t work. A code works once, for 10 minutes. In your headset, say “Momo, connect my Telegram” and I’ll give you a new one to send here.';
+const NO_SPACE = 'I couldn’t open your headset’s mind palace just now. Try me again in a moment.';
 
 const WINDOW_MS = 10 * 60 * 1000;
 /** Wrong codes one chat may send in ten minutes before its codes are no longer read, so the million codes cannot be tried through. */
 const WRONG_CODES = 5;
-/** Replies one unpaired chat gets in ten minutes, so the bot cannot be made to send without end. */
-const STRANGER_REPLIES = 6;
-/** Chats counted at once. Past this, counts that have run out are cleared; if none have, a new chat is not counted and gets no reply. */
-const MAX_COUNTED = 2000;
 /** Wrong codes from every chat together in ten minutes before no code is read for a while: many accounts cannot share out the guessing. */
 const WRONG_CODES_IN_ALL = 50;
 const PAUSE_MS = 5 * 60 * 1000;
-const PAIRING_PAUSED = 'Pairing is paused for a few minutes. Try your code again shortly.';
+const PAIRING_PAUSED = 'I’ve paused pairing for a few minutes. Send me your code again shortly.';
 
 /**
  * Telegram for the judges' headsets, through one bot that only the hosted service reads. A headset asks for a short code, its
@@ -193,21 +189,6 @@ export class JudgeTelegram {
 function codeIn(text: string): string {
   const code = /^(\d{3})[\s-]?(\d{3})$/.exec(text.trim());
   return code ? `${code[1]}${code[2]}` : '';
-}
-
-/**
- * Counts one more for the chat now, and says whether it is still within `most` in the last ten minutes. A chat's count is never
- * dropped while it holds: with too many chats counted, a chat not yet counted is refused instead.
- */
-function allowed(counts: Map<number, number[]>, chat: number, most: number, now: number): boolean {
-  const recent = (counts.get(chat) ?? []).filter((at) => at > now - WINDOW_MS);
-  if (recent.length >= most) return false;
-  if (!counts.has(chat) && counts.size >= MAX_COUNTED) {
-    for (const [other, times] of counts) if (times.every((at) => at <= now - WINDOW_MS)) counts.delete(other);
-    if (counts.size >= MAX_COUNTED) return false;
-  }
-  counts.set(chat, [...recent, now]);
-  return true;
 }
 
 /**

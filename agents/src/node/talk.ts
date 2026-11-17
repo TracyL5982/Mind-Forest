@@ -1,7 +1,9 @@
 import { asUrl } from '../core/roles/intake/plain.ts';
 import type { RawDump } from '../core/roles/types.ts';
-import { Declined, type Arrival, type Attachment, type Delivery, type Desk } from './contact.ts';
-import { MAX_OFFERED, mayAsk, plainAsk, type TreeLine } from './tree-asks.ts';
+import { treeRequest } from '../core/tree-request.ts';
+import { Declined, type Arrival, type Attachment, type Delivery, type Desk, type Kept } from './contact.ts';
+import type { Reading, Said } from './momo-chat.ts';
+import { MAX_OFFERED, plainAsk, type Ask, type TreeLine } from './tree-asks.ts';
 
 /** How a talk reaches the chat app. */
 export interface Wire {
@@ -23,37 +25,52 @@ export interface Lines {
 }
 
 export const OWNER_LINES: Lines = {
-  hello: 'You are paired. Send anything to add it to your mindstorm. “List my trees” names them, “hand off <a tree>” sends its handoff, and /handoff sends the latest again.',
-  tooBig: 'That file is over 20 MB, more than a Telegram bot can take. Drop it on the Mind Palace web page instead.',
-  failed: 'That could not be added. Try again, or drop it on the Mind Palace web page.',
-  noHandoff: 'No handoff yet. Say “hand off” and a tree’s name here, or ask on the headset.',
-  notHeard: 'Voice notes are written out only with OPENAI_API_KEY in ~/.muse-garden.env, so the recording was added as it is.',
+  hello: 'I’m here, and we’re paired. Tell me anything and I’ll keep it or talk it over, whichever fits. “List my trees” names your trees, “hand off <a tree>” sends its handoff, and /handoff sends the latest again.',
+  tooBig: 'That one’s over 20 MB, more than Telegram lets me take. Drop it on the Mind Palace web page instead.',
+  failed: 'Something went wrong on my side, so I didn’t keep that. Try again, or drop it on the Mind Palace web page.',
+  noHandoff: 'There’s no handoff yet. Tell me “hand off” and a tree’s name, or ask me in the headset.',
+  notHeard: 'I can’t write voice notes out here without OPENAI_API_KEY in ~/.muse-garden.env, so I kept the recording as it is.',
 };
 
 export const JUDGE_LINES: Lines = {
-  hello: 'You are paired with your headset. Send anything to add it to your mind palace. “List my trees” names them, “hand off <a tree>” sends its handoff, and /unpair ends this.',
-  tooBig: 'That file is over 20 MB, more than a Telegram bot can take.',
-  failed: 'That could not be added. Try again in a moment.',
-  noHandoff: 'No handoff yet. Say “hand off” and a tree’s name here, or ask Momo in the headset.',
-  notHeard: 'Voice notes cannot be written out on this service, so the recording was added as it is.',
+  hello: 'I’m here, and we’re paired with your headset. Tell me anything and I’ll keep it or talk it over, whichever fits. “List my trees” names your trees, “hand off <a tree>” sends its handoff, and /unpair ends this.',
+  tooBig: 'That one’s over 20 MB, more than Telegram lets me take.',
+  failed: 'Something went wrong on my side, so I didn’t keep that. Try again in a moment.',
+  noHandoff: 'There’s no handoff yet. Tell me “hand off” and a tree’s name, or ask me in the headset.',
+  notHeard: 'I can’t write voice notes out on this service, so I kept the recording as it is.',
 };
 
-const OTHER = 'Mind Palace takes text, links, photos, videos, files and voice notes.';
-const HEARD_FAILED = 'The words could not be written out, so the recording was added as it is.';
-const NO_TREES = 'You have no trees yet. Send “make a tree about …” to grow one.';
+const OTHER = 'I can take text, links, photos, videos, files and voice notes. That one I can’t read.';
+const HEARD_FAILED = 'I couldn’t make out the words, so I kept the recording as it is.';
+const NO_TREES = 'You’ve no trees yet. Send me “make a tree about …” and I’ll grow one.';
 /** The most trees one list names. */
 const MAX_LISTED = 20;
 /** How long a list stays open to an answer by number. */
 const OFFER_MS = 10 * 60 * 1000;
-/** Chats with an open list. Past this many the oldest is dropped, so strangers' chats cannot grow it without end. */
-const MAX_OFFERS = 500;
+/** How long what was said is remembered, so a follow-up is read with it. */
+const SAID_MS = 30 * 60 * 1000;
+/** How many things said are remembered: three turns each way. */
+const SAID_KEPT = 6;
+/** Chats remembered at once. Past this many the oldest is dropped. */
+const MAX_CHATS = 500;
+
+/** What is remembered of one chat, in memory only: a restart forgets it, and the next message is read on its own. */
+interface Memory {
+  /** The trees last listed, so "2" picks the second. */
+  offer?: { trees: TreeLine[]; expires: number };
+  said: Said[];
+  /** The message Momo asked about keeping. */
+  waiting?: string;
+  at: number;
+}
 
 /**
- * What a paired person's messages do, whichever chat app they came through: a drop goes into the mindstorm, and plain words about
- * the trees list them, find one or send its handoff. A list that offers trees stays open for ten minutes, so "2" picks the second.
+ * What a paired person's messages do, whichever chat app they came through. Momo reads each one and answers it, keeps it, does
+ * both or asks (`momo-chat.ts`); plain words about the trees list them, find one or send its handoff with no model call; and a
+ * link, photo or file is always kept, with Momo answering what is asked about it.
  */
 export class Talk {
-  private readonly offers = new Map<number, { trees: TreeLine[]; expires: number }>();
+  private readonly chats = new Map<number, Memory>();
 
   constructor(
     private readonly wire: Wire,
@@ -72,9 +89,20 @@ export class Talk {
     }
   }
 
-  /** The chat is no longer paired, so nothing it was offered is kept. */
+  /** The chat is no longer paired, so nothing of it is remembered. */
   forget(chat: number): void {
-    this.offers.delete(chat);
+    this.chats.delete(chat);
+  }
+
+  private memory(chat: number): Memory {
+    const now = this.now();
+    let memory = this.chats.get(chat);
+    if (!memory || now - memory.at > SAID_MS) memory = { said: [], at: now };
+    memory.at = now;
+    this.chats.delete(chat);
+    this.chats.set(chat, memory);
+    if (this.chats.size > MAX_CHATS) this.chats.delete(this.chats.keys().next().value!);
+    return memory;
   }
 
   private async answer(chat: number, desk: Desk, arrival: Arrival): Promise<void> {
@@ -91,7 +119,8 @@ export class Talk {
         const bytes = await this.fetch(desk, arrival.file);
         if (!bytes) return say(this.lines.tooBig);
         const asset = await desk.keep(bytes, arrival.file.mime, arrival.file.name);
-        return say(await desk.dump([{ kind: 'asset', asset, mime: arrival.file.mime, name: arrival.file.name }, ...dumpsOf(arrival.caption)]));
+        const kept = await desk.dump([{ kind: 'asset', asset, mime: arrival.file.mime, name: arrival.file.name }, ...dumpsOf(arrival.caption)]);
+        return this.about(chat, desk, arrival.caption, kept);
       }
       case 'voice': {
         // A voice note is written out, not kept, so the room for files does not decide it: only its own size does.
@@ -103,19 +132,90 @@ export class Talk {
         if (heard.text) return this.words(chat, desk, heard.text);
         const asset = await desk.keep(bytes, arrival.file.mime, arrival.file.name);
         const filed = await desk.dump([{ kind: 'asset', asset, mime: arrival.file.mime, name: arrival.file.name }]);
-        return say(`${filed}\n${heard.note}`);
+        return say(`${filed.line}\n${heard.note}`);
       }
     }
   }
 
-  /** Words the person typed or said: an answer to the list they were offered, something asked of the trees, or a drop. */
+  /**
+   * Words the person typed or said. Plain rules read the cases that need no judgment: a pick from the list they were offered,
+   * something asked of the trees, a request for a new tree, a link. Momo reads everything else.
+   */
   private async words(chat: number, desk: Desk, text: string): Promise<void> {
-    const say = (line: string) => this.wire.say(chat, line);
-    const picked = this.picked(chat, text);
+    const memory = this.memory(chat);
+    const picked = this.picked(memory, text);
     if (picked) return this.pack(chat, desk, picked);
-    const ask = plainAsk(text) ?? (mayAsk(text) ? await desk.ask(text).catch(() => null) : null);
-    if (!ask) return say(await desk.dump(dumpsOf(text)));
-    this.offers.delete(chat);
+    const asked = plainAsk(text);
+    if (asked) return this.trees(chat, desk, asked);
+    if (treeRequest(text)) return this.wire.say(chat, (await desk.dump(dumpsOf(text))).line);
+    if (/https?:\/\//i.test(text)) {
+      const kept = await desk.dump(dumpsOf(text));
+      return this.about(chat, desk, asUrl(text.trim()) ? '' : text, kept);
+    }
+
+    let reading: Reading;
+    try {
+      reading = await desk.read({ text, said: memory.said, waiting: memory.waiting });
+    } catch (err) {
+      if (err instanceof Declined) throw err;
+      // With no reading, the message is kept, as every message was before Momo read them: nothing the person sent is lost.
+      this.wire.log(`Momo could not read a message, so it was kept: ${err instanceof Error ? err.message : String(err)}`);
+      return this.wire.say(chat, (await desk.dump(dumpsOf(text))).line);
+    }
+    const waited = reading.earlier ? memory.waiting : undefined;
+    memory.waiting = undefined;
+    const reply = reading.reply.trim();
+    switch (reading.does) {
+      case 'ask':
+        memory.waiting = text;
+        return this.told(chat, memory, text, reply || 'Want me to keep that, or were you just telling me?');
+      case 'answer':
+        return this.told(chat, memory, text, reply || 'Okay.');
+      case 'save':
+        return this.told(chat, memory, text, reply, await desk.dump(dumpsOf(waited ?? text)));
+      case 'both':
+        return this.told(chat, memory, text, reply, await desk.dump([{ kind: 'text', text: `${(waited ?? text).trim()}\n\n${reply}` }]));
+      case 'tree': {
+        const subject = reading.words.trim();
+        if (!subject) return this.told(chat, memory, text, reply || 'What should the tree be about?');
+        return this.told(chat, memory, text, reply, await desk.dump([{ kind: 'text', text: `Make a tree about ${subject}` }]));
+      }
+      case 'list':
+      case 'latest':
+        return this.trees(chat, desk, { kind: reading.does });
+      case 'find':
+      case 'handoff': {
+        const words = reading.words.trim();
+        return words ? this.trees(chat, desk, { kind: reading.does, words }) : this.trees(chat, desk, { kind: 'list' });
+      }
+    }
+  }
+
+  /** Momo's reply, then what was kept and where, and both remembered for the next message. */
+  private async told(chat: number, memory: Memory, text: string, reply: string, kept?: Kept): Promise<void> {
+    const whole = [reply, kept?.line].filter(Boolean).join('\n\n');
+    memory.said = [...memory.said, { who: 'user' as const, text }, { who: 'momo' as const, text: whole }].slice(-SAID_KEPT);
+    await this.wire.say(chat, whole);
+  }
+
+  /** What came with a message is kept already. Momo answers the words sent with it, when there are any; the reply always says what was kept. */
+  private async about(chat: number, desk: Desk, words: string, kept: Kept): Promise<void> {
+    const asked = words.trim();
+    if (!asked || treeRequest(asked) || kept.things.length === 0) return this.wire.say(chat, kept.line);
+    const memory = this.memory(chat);
+    let reply = '';
+    try {
+      reply = (await desk.read({ text: asked, said: memory.said, kept: kept.things })).reply.trim();
+    } catch (err) {
+      this.wire.log(`Momo could not read the words sent with something kept: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return this.told(chat, memory, asked, reply, kept);
+  }
+
+  /** Something asked of the trees the person has. */
+  private async trees(chat: number, desk: Desk, ask: Ask): Promise<void> {
+    const say = (line: string) => this.wire.say(chat, line);
+    this.memory(chat).offer = undefined;
     switch (ask.kind) {
       case 'latest': {
         const latest = desk.latest();
@@ -124,47 +224,45 @@ export class Talk {
       case 'list': {
         const trees = desk.trees();
         if (trees.length === 0) return say(NO_TREES);
-        return say(`Your trees, newest first:\n${this.offer(chat, trees, MAX_LISTED)}\nReply with a number for a tree’s handoff.`);
+        return say(`Here are your trees, newest first:\n${this.offer(chat, trees, MAX_LISTED)}\nSend me a number and I’ll hand that tree off.`);
       }
       case 'handoff': {
         const found = await desk.match(ask.words);
         if (found.length === 1) return this.pack(chat, desk, found[0]!);
-        if (found.length > 1) return say(`Which one?\n${this.offer(chat, found, MAX_OFFERED)}\nReply with a number.`);
+        if (found.length > 1) return say(`Which one do you mean?\n${this.offer(chat, found, MAX_OFFERED)}\nSend me its number.`);
         return say(this.none(chat, desk, ask.words));
       }
       case 'find': {
         const found = await desk.match(ask.words);
         if (found.length === 0) return say(this.none(chat, desk, ask.words));
-        return say(`Found:\n${this.offer(chat, found, MAX_OFFERED)}\nReply with ${found.length === 1 ? '“yes” or 1' : 'a number'} for ${found.length === 1 ? 'its' : 'a tree’s'} handoff.`);
+        return say(`I found ${found.length === 1 ? 'this' : 'these'}:\n${this.offer(chat, found, MAX_OFFERED)}\nSend me ${found.length === 1 ? '“yes” or 1' : 'a number'} and I’ll hand ${found.length === 1 ? 'it' : 'that one'} off.`);
       }
     }
   }
 
   private async pack(chat: number, desk: Desk, tree: TreeLine): Promise<void> {
-    this.offers.delete(chat);
+    this.memory(chat).offer = undefined;
     await this.wire.say(chat, `Packing “${tree.title}”…`);
     try {
       await desk.handoff(tree.id);
     } catch (err) {
       if (err instanceof Declined) throw err;
       this.wire.log(`a handoff could not be made: ${err instanceof Error ? err.message : String(err)}`);
-      await this.wire.say(chat, `The handoff of “${tree.title}” could not be made. Try again in a moment.`);
+      await this.wire.say(chat, `I couldn’t make the handoff of “${tree.title}”. Try me again in a moment.`);
     }
   }
 
   /** The trees as numbered lines, kept so the next message can pick one by its number. */
   private offer(chat: number, trees: TreeLine[], most: number): string {
     const shown = trees.slice(0, most);
-    this.offers.delete(chat);
-    this.offers.set(chat, { trees: shown, expires: this.now() + OFFER_MS });
-    if (this.offers.size > MAX_OFFERS) this.offers.delete(this.offers.keys().next().value!);
+    this.memory(chat).offer = { trees: shown, expires: this.now() + OFFER_MS };
     const more = trees.length > shown.length ? [`And ${trees.length - shown.length} more.`] : [];
     return [...shown.map((tree, i) => `${i + 1}. ${tree.title}: ${tree.line}`), ...more].join('\n');
   }
 
   /** The tree a message picks from the list this chat was offered: its number, its name, or "yes" to a list of one. */
-  private picked(chat: number, text: string): TreeLine | undefined {
-    const offer = this.offers.get(chat);
+  private picked(memory: Memory, text: string): TreeLine | undefined {
+    const offer = memory.offer;
     if (!offer || this.now() > offer.expires) return undefined;
     const clean = text.trim().replace(/[.!]+$/, '').toLowerCase();
     const number = /^#?(\d{1,2})$/.exec(clean)?.[1];
@@ -176,7 +274,7 @@ export class Talk {
   private none(chat: number, desk: Desk, words: string): string {
     const trees = desk.trees();
     if (trees.length === 0) return NO_TREES;
-    return `No tree matches “${words}”. Your trees, newest first:\n${this.offer(chat, trees, MAX_LISTED)}\nReply with a number for a tree’s handoff.`;
+    return `I can’t find a tree for “${words}”. Here are your trees, newest first:\n${this.offer(chat, trees, MAX_LISTED)}\nSend me a number and I’ll hand that tree off.`;
   }
 
   private async fetch(desk: Desk, file: Attachment): Promise<Uint8Array | null> {

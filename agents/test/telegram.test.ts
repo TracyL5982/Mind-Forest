@@ -7,7 +7,11 @@ import { packager } from '../src/core/roles/packager.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running, type ServerOptions } from '../src/node/server.ts';
+import { MOMO } from '../src/core/momo.ts';
+import type { JsonRequest } from '../src/core/ports.ts';
 import { makeItem, makeNode } from '../src/core/roles/types.ts';
+import { instructions } from '../src/node/live.ts';
+import type { Reading } from '../src/node/momo-chat.ts';
 import { ADA, BOT_TOKEN as TOKEN, EVE, FakeBot, type Person, type Sent } from './fake-bot.ts';
 
 /** Everything a test opened, closed after it whether it passed or not, so a failure does not leave the run waiting. */
@@ -68,12 +72,12 @@ async function code(run: Running): Promise<string> {
 async function pair(b: Booted, bot: FakeBot, who: Person = ADA): Promise<void> {
   const after = bot.sent.length;
   bot.push(who, { text: `/start ${await code(b.run)}` });
-  await bot.reply(who.id, /^Paired\./, 'sendMessage', after);
+  await bot.reply(who.id, /^We’re paired\./, 'sendMessage', after);
 }
 
 const items = (run: Running) => [...run.mind.items.values()];
 
-test('a good code pairs one account; a reused or an expired one pairs no one and gets no reply; no one else is heard', async () => {
+test('a good code pairs one account; a reused or an expired one pairs no one; anyone else gets Momo\'s one fixed line, a few times, and nothing they send is kept', async () => {
   const bot = await stand();
   let clock = 1_000_000;
   const b = await boot(bot, { telegram: { token: TOKEN, now: () => clock } });
@@ -85,15 +89,19 @@ test('a good code pairs one account; a reused or an expired one pairs no one and
   await bot.read(bot.push(EVE, { text: 'Before anyone is paired' }));
   const good = await code(b.run);
   bot.push(ADA, { text: `/start ${good}` });
-  await bot.reply(ADA.id, /^Paired\./);
+  await bot.reply(ADA.id, /^We’re paired\./);
   assert.equal((await status(b.run)).paired, 'Ada Lovelace');
 
   await bot.read(bot.push(EVE, { text: `/start ${good}` }));
   await bot.read(bot.push(EVE, { text: 'Hello from someone else' }));
   await b.run.pipeline.idle();
   assert.equal((await status(b.run)).paired, 'Ada Lovelace', 'a used code pairs no one');
-  assert.deepEqual(bot.sent.filter((s) => s.chat === EVE.id), [], 'an account that is not paired gets no reply at all');
+  await bot.until(() => bot.sent.filter((s) => s.chat === EVE.id).length === 3);
+  for (const reply of bot.sent.filter((s) => s.chat === EVE.id)) assert.match(reply.text, /^Hi, I’m Momo, the voice of a Mind Palace\. I only talk with the person this palace belongs to\..*pair me on the Mind Palace web page/);
   assert.deepEqual(items(b.run), [], 'and nothing it sent was added');
+  for (let n = 0; n < 5; n++) await bot.read(bot.push(EVE, { text: 'who are you' }));
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(bot.sent.filter((s) => s.chat === EVE.id).length, 6, 'a stranger gets the line six times in ten minutes, then nothing');
 
   assert.equal((await (await api(b.run, '/api/telegram/unpair', 'POST')).json() as { paired: unknown }).paired, null);
   const late = await code(b.run);
@@ -103,7 +111,8 @@ test('a good code pairs one account; a reused or an expired one pairs no one and
   await bot.read(bot.push(ADA, { text: 'Sent after unpairing' }));
   await b.run.pipeline.idle();
   assert.equal((await status(b.run)).paired, null, 'a code older than ten minutes pairs no one');
-  assert.equal(bot.sent.length, before, 'and an unpaired account gets no reply');
+  await bot.until(() => bot.sent.length === before + 2);
+  assert.ok(bot.sent.slice(before).every((s) => /^Hi, I’m Momo/.test(s.text)), 'and an unpaired account gets only the fixed line');
   assert.deepEqual(items(b.run), []);
 
   await b.run.close();
@@ -132,13 +141,13 @@ test('text, a link, a photo at its largest size, a file, a video and audio each 
   for (const c of cases) {
     const count = items(b.run).length;
     bot.push(ADA, c.fields);
-    const reply = await bot.reply(ADA.id, /^Added “/);
+    const reply = await bot.reply(ADA.id, /^I’ve kept “/);
     bot.sent.splice(bot.sent.indexOf(reply), 1);
     const made = items(b.run).slice(count);
     assert.equal(made.length, 1, `one item for ${c.kind}`);
     assert.equal(made[0]!.kind, c.kind);
     assert.match(made[0]!.title, c.title);
-    assert.equal(reply.text, `Added “${made[0]!.title}”. It is in your knowledge base.`);
+    assert.equal(reply.text, `I’ve kept “${made[0]!.title}”. It is in your knowledge base, in no tree yet.`);
   }
 
   const photo = items(b.run).find((i) => i.kind === 'image')!;
@@ -157,14 +166,14 @@ test('a caption that asks for a tree makes one from the photo it came with', asy
   bot.file('stairs', new Uint8Array([1, 2, 3]));
 
   bot.push(ADA, { photo: [{ file_id: 'stairs', width: 800, height: 600 }], caption: 'Start a tree on this' });
-  const reply = await bot.reply(ADA.id, /^Added “/);
+  const reply = await bot.reply(ADA.id, /^I’ve kept “/);
   await b.run.pipeline.idle();
 
   assert.equal(b.run.mind.trees.size, 1);
   const tree = [...b.run.mind.trees.values()][0]!;
   const root = b.run.mind.itemOf(tree.rootId);
   assert.equal(root.kind, 'image', 'the photo is the root');
-  assert.equal(reply.text, `Added “${root.title}”. It started the tree “${tree.title}”.`);
+  assert.equal(reply.text, `I’ve kept “${root.title}”. It started the tree “${tree.title}”.`);
   assert.ok(!items(b.run).some((i) => /start a tree/i.test(i.title + i.text)), 'the words that asked are not kept as a card');
 
   await b.run.close();
@@ -179,7 +188,7 @@ test('a voice note is written out and its words are dumped; with no way to hear,
   bot.file('voice', new Uint8Array([79, 103, 103, 83]));
 
   bot.push(ADA, { voice: { file_id: 'voice', mime_type: 'audio/ogg', duration: 2 } });
-  const reply = await bot.reply(ADA.id, /^Added “/);
+  const reply = await bot.reply(ADA.id, /^I’ve kept “/);
   assert.deepEqual(heard, [{ audio: [79, 103, 103, 83], mime: 'audio/ogg' }]);
   assert.deepEqual(items(b.run).map((i) => [i.kind, i.text]), [['text', 'Buy more film for the Leica']]);
   assert.doesNotMatch(reply.text, /OPENAI/);
@@ -189,7 +198,7 @@ test('a voice note is written out and its words are dumped; with no way to hear,
   await pair(deaf, bot);
   bot.push(ADA, { voice: { file_id: 'voice', mime_type: 'audio/ogg', duration: 2 } });
   const said = await bot.reply(ADA.id, /OPENAI_API_KEY/);
-  assert.match(said.text, /^Added “voice-\d+\.ogg”\. It is in your knowledge base\.\nVoice notes are written out only with OPENAI_API_KEY/);
+  assert.match(said.text, /^I’ve kept “voice-\d+\.ogg”\. It is in your knowledge base, in no tree yet\.\nI can’t write voice notes out here without OPENAI_API_KEY/);
   assert.deepEqual(items(deaf.run).map((i) => i.kind), ['file'], 'the recording itself is kept');
 
   await deaf.run.close();
@@ -221,7 +230,7 @@ test('the read position and the pairing survive a restart, so no message is take
   const first = await boot(bot);
   await pair(first, bot);
   const id = bot.push(ADA, { text: 'Kept once, only once' });
-  await bot.reply(ADA.id, /^Added “/);
+  await bot.reply(ADA.id, /^I’ve kept “/);
   await first.run.close();
 
   const polled = bot.polls();
@@ -230,10 +239,10 @@ test('the read position and the pairing survive a restart, so no message is take
   const asked = bot.calls.filter((c) => c.method === 'getUpdates').slice(polled);
   assert.ok(asked.every((c) => Number(c.body.offset) > id), 'the restarted service asks only for what comes after');
   assert.equal(items(again.run).filter((i) => i.title.includes('Kept once')).length, 1);
-  assert.equal(bot.sent.filter((s) => /^Added “/.test(s.text)).length, 1, 'and replies once');
+  assert.equal(bot.sent.filter((s) => /^I’ve kept “/.test(s.text)).length, 1, 'and replies once');
 
   bot.push(ADA, { text: 'Heard after the restart' });
-  await bot.until(() => bot.sent.filter((s) => /^Added “/.test(s.text)).length === 2);
+  await bot.until(() => bot.sent.filter((s) => /^I’ve kept “/.test(s.text)).length === 2);
   assert.equal((await status(again.run)).paired, 'Ada Lovelace');
 
   await again.run.close();
@@ -253,7 +262,7 @@ test('a 409 from another program reading the bot is logged once and waited out, 
   bot.refuse = null;
   await pair(b, bot);
   bot.push(ADA, { text: 'After the other program stopped' });
-  await bot.reply(ADA.id, /^Added “/);
+  await bot.reply(ADA.id, /^I’ve kept “/);
 
   await b.run.close();
   await bot.close();
@@ -265,9 +274,9 @@ test('a handoff comes to the paired chat as a message and one Markdown file that
   await pair(b, bot);
 
   bot.push(ADA, { text: '/handoff' });
-  await bot.reply(ADA.id, /^No handoff yet/);
+  await bot.reply(ADA.id, /^There’s no handoff yet/);
   bot.push(ADA, { text: '/help' });
-  await bot.reply(ADA.id, /^You are paired\./);
+  await bot.reply(ADA.id, /^I’m here, and we’re paired\./);
 
   bot.file('stairs', new Uint8Array([1, 2, 3]));
   bot.push(ADA, { photo: [{ file_id: 'stairs', width: 800, height: 600 }], caption: 'Start a tree on this' });
@@ -310,7 +319,7 @@ test('the bot token is in no log line, reply or saved file, whatever fails', asy
   bot.refuse = null;
   await pair(b, bot);
   bot.push(ADA, { document: { file_id: 'gone', file_name: 'lost.txt' } });
-  await bot.reply(ADA.id, /could not be added/);
+  await bot.reply(ADA.id, /^Something went wrong on my side, so I didn’t keep that\./);
   await b.run.close();
 
   const unreachable = await boot(bot, { telegram: { token: TOKEN, api: 'http://[unparseable' } });
@@ -357,7 +366,7 @@ test('"list my trees" names the trees newest first with a line each, and a numbe
   await pair(b, bot);
 
   bot.push(ADA, { text: 'list my trees' });
-  assert.match((await bot.reply(ADA.id, /no trees yet/)).text, /^You have no trees yet\. Send “make a tree about …”/);
+  assert.match((await bot.reply(ADA.id, /no trees yet/)).text, /^You’ve no trees yet\. Send me “make a tree about …”/);
 
   grow(b.run, 'Film', ['Camera moves', 'Dolly zoom']);
   grow(b.run, 'Solar panels at home', ['Payback', 'Inverters', 'Roof angle']);
@@ -365,7 +374,7 @@ test('"list my trees" names the trees newest first with a line each, and a numbe
   bot.push(ADA, { text: 'What trees do I have?' });
   assert.equal(
     (await next(bot, sent, 1))[0]!.text,
-    'Your trees, newest first:\n1. Solar panels at home: 3 cards. About solar panels at home\n2. Film: 2 cards. About film\nReply with a number for a tree’s handoff.',
+    'Here are your trees, newest first:\n1. Solar panels at home: 3 cards. About solar panels at home\n2. Film: 2 cards. About film\nSend me a number and I’ll hand that tree off.',
   );
 
   sent = bot.sent.length;
@@ -380,7 +389,7 @@ test('"list my trees" names the trees newest first with a line each, and a numbe
 
   sent = bot.sent.length;
   bot.push(ADA, { text: '2' });
-  assert.match((await next(bot, sent, 1))[0]!.text, /^Added “/, 'with no list open, a number is a thought again');
+  assert.match((await next(bot, sent, 1))[0]!.text, /^I’ve kept “/, 'with no list open, a number is a thought again');
 });
 
 test('"hand off <name>" sends the one tree the name means; several are offered to choose from; none says so and lists the trees', async () => {
@@ -403,7 +412,7 @@ test('"hand off <name>" sends the one tree the name means; several are offered t
   bot.push(ADA, { text: 'send me the handoff for solar' });
   assert.equal(
     (await next(bot, sent, 1))[0]!.text,
-    'Which one?\n1. Solar panels at home: 1 card. About solar panels at home\n2. Solar system: 1 card. About solar system\nReply with a number.',
+    'Which one do you mean?\n1. Solar panels at home: 1 card. About solar panels at home\n2. Solar system: 1 card. About solar system\nSend me its number.',
   );
   sent = bot.sent.length;
   bot.push(ADA, { text: 'solar system' });
@@ -411,7 +420,7 @@ test('"hand off <name>" sends the one tree the name means; several are offered t
 
   sent = bot.sent.length;
   bot.push(ADA, { text: 'hand off gardening' });
-  assert.match((await next(bot, sent, 1))[0]!.text, /^No tree matches “gardening”\. Your trees, newest first:\n1\. Solar panels at home/);
+  assert.match((await next(bot, sent, 1))[0]!.text, /^I can’t find a tree for “gardening”\. Here are your trees, newest first:\n1\. Solar panels at home/);
   assert.deepEqual(model.calls.map((c) => c.role), ['contact.match'], 'words no name holds went to the model');
 
   const before = bot.sent.length;
@@ -431,7 +440,7 @@ test('"find the tree about …" matches by what is in a tree through the model, 
 
   let sent = bot.sent.length;
   bot.push(ADA, { text: 'find the tree about heat pumps' });
-  assert.equal((await next(bot, sent, 1))[0]!.text, 'Found:\n1. Home energy: 2 cards. About home energy\nReply with “yes” or 1 for its handoff.');
+  assert.equal((await next(bot, sent, 1))[0]!.text, 'I found this:\n1. Home energy: 2 cards. About home energy\nSend me “yes” or 1 and I’ll hand it off.');
   assert.deepEqual(model.calls.map((c) => c.role), ['contact.match']);
 
   sent = bot.sent.length;
@@ -441,27 +450,133 @@ test('"find the tree about …" matches by what is in a tree through the model, 
   assert.equal(ready!.text.split('\n')[0], 'Handoff ready: Home energy');
 });
 
-test('words the rules do not read are read by the model when they name trees or a handoff, and a thought is still a thought', async () => {
+/** A model that answers as Momo with whatever `script` gives for the message, and describes drops as the fake Intake does. */
+function momo(script: (message: string, user: string) => Partial<Reading>): { model: FakeModel; asked: JsonRequest<unknown>[] } {
+  const asked: JsonRequest<unknown>[] = [];
+  const model = new FakeModel().describing().on('momo.chat', (req) => {
+    asked.push(req);
+    return { does: 'answer', reply: '', words: '', earlier: false, ...script(/Message: """\n([\s\S]*)\n"""$/.exec(req.user)![1]!, req.user) };
+  });
+  return { model, asked };
+}
+
+/** What Momo says to one message. */
+async function tell(bot: FakeBot, text: string, count = 1): Promise<Sent[]> {
+  const sent = bot.sent.length;
+  bot.push(ADA, { text });
+  return next(bot, sent, count);
+}
+
+test('Momo answers a message that is talk and keeps nothing, as the same Momo as the headset, told the trees and cards it asks about', async () => {
   const bot = await stand();
-  const model = new FakeModel()
-    .describing()
-    .on('contact.ask', (req) => (/packaged up/.test(req.user) ? { kind: 'handoff', words: 'film' } : { kind: 'none', words: '' }));
-  const b = await boot(bot, { model, roles: { ...fakeRoles } });
+  const { model, asked } = momo((message) => ({ does: 'answer', reply: /who are you/i.test(message) ? 'I’m Momo. Tell me things to keep, or ask me anything.' : 'Payback and inverters, mostly.' }));
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+  grow(b.run, 'Solar panels at home', ['Payback', 'Inverters']);
+  grow(b.run, 'Film', ['Camera moves']);
+
+  assert.equal((await tell(bot, 'who are you'))[0]!.text, 'I’m Momo. Tell me things to keep, or ask me anything.');
+  assert.equal((await tell(bot, 'what’s in my solar tree?'))[0]!.text, 'Payback and inverters, mostly.');
+  assert.equal(items(b.run).length, 3, 'talk keeps nothing');
+
+  const [first, second] = asked;
+  assert.ok(first!.system.includes(`You are ${MOMO.friend}.`) && first!.system.includes(MOMO.warm), 'the character is the one the headset\'s Momo has');
+  assert.ok(instructions('Momo', 'today').includes(`You are ${MOMO.friend}.`) && instructions('Momo', 'today').includes(MOMO.warm));
+  assert.match(first!.user, /\[Their trees, newest first\]\n- Film: 1 card\. About film\n- Solar panels at home: 2 cards\./);
+  assert.match(second!.user, /\[In the tree "Solar panels at home"\]\n- "Payback" \(saved, in "Solar panels at home"\): Payback\n- "Inverters"/);
+  assert.match(second!.user, /\[The chat so far\]\nUser: who are you\nMomo: I’m Momo\. Tell me things to keep/, 'a follow-up is read with what was said');
+});
+
+test('Momo keeps a thought with a word of its own and where it went, and keeps a question worth keeping with its answer', async () => {
+  const bot = await stand();
+  const { model } = momo((message) =>
+    /\?$/.test(message) ? { does: 'both', reply: 'Mostly frost on the outdoor coil, which the defrost cycle has to melt.' } : { does: 'save', reply: 'That’s a big change from ten years ago.' },
+  );
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+
+  assert.match((await tell(bot, 'Heat pumps work below freezing now'))[0]!.text, /^That’s a big change from ten years ago\.\n\nI’ve kept “.*”\. It is in your knowledge base, in no tree yet\.$/);
+  assert.deepEqual(items(b.run).map((i) => i.text), ['Heat pumps work below freezing now']);
+
+  assert.match((await tell(bot, 'Why do heat pumps fail in the cold?'))[0]!.text, /^Mostly frost on the outdoor coil, which the defrost cycle has to melt\.\n\nI’ve kept “/);
+  assert.equal(items(b.run)[1]!.text, 'Why do heat pumps fail in the cold?\n\nMostly frost on the outdoor coil, which the defrost cycle has to melt.', 'the question is kept with its answer');
+});
+
+test('when Momo cannot tell, it asks, and the next message settles the earlier one: kept as it was sent, or let go', async () => {
+  const bot = await stand();
+  const { model, asked } = momo((message, user) => {
+    if (!/\[Waiting on\]/.test(user)) return { does: 'ask', reply: 'Want me to keep that, or were you just telling me?' };
+    return /^yes/i.test(message) ? { does: 'save', reply: 'Done.', earlier: true } : { does: 'answer', reply: 'No worries.', earlier: true };
+  });
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+
+  assert.equal((await tell(bot, 'The bakery on Elm closes at four'))[0]!.text, 'Want me to keep that, or were you just telling me?');
+  assert.equal(items(b.run).length, 0, 'nothing is kept while Momo asks');
+  assert.match((await tell(bot, 'yes please'))[0]!.text, /^Done\.\n\nI’ve kept “/);
+  assert.deepEqual(items(b.run).map((i) => i.text), ['The bakery on Elm closes at four'], 'the earlier message is kept, not the "yes"');
+  assert.match(asked[1]!.user, /\[Waiting on\]\nYou asked whether to keep this earlier message: """The bakery on Elm closes at four"""/);
+
+  await tell(bot, 'Rain again tomorrow');
+  assert.equal((await tell(bot, 'no, just saying'))[0]!.text, 'No worries.');
+  assert.equal(items(b.run).length, 1, 'let go, nothing more is kept');
+  assert.ok(!/\[Waiting on\]/.test((await tell(bot, 'hello'), asked.at(-1)!.user)), 'and the question is no longer open');
+});
+
+test('Momo starts a tree when asked in its own words, and hands off a tree asked for in words the rules do not read', async () => {
+  const bot = await stand();
+  const { model, asked } = momo((message) =>
+    /packaged up/.test(message) ? { does: 'handoff', words: 'film' } : /grow me/.test(message) ? { does: 'tree', words: 'Kubrick', reply: 'Ooh, Kubrick. On it.' } : { does: 'list' },
+  );
+  const b = await boot(bot, { model });
   await pair(b, bot);
   grow(b.run, 'Film', ['Camera moves']);
 
-  let sent = bot.sent.length;
-  bot.push(ADA, { text: 'could I get my film tree packaged up for Claude' });
-  assert.equal((await next(bot, sent, 3))[0]!.text, 'Packing “Film”…');
-  assert.deepEqual(model.calls.map((c) => c.role), ['contact.ask']);
+  assert.equal((await tell(bot, 'could I get my film tree packaged up for Claude', 3))[0]!.text, 'Packing “Film”…');
+  assert.match((await tell(bot, 'grow me something on Kubrick'))[0]!.text, /^Ooh, Kubrick\. On it\.\n\nI’ve kept “.*”\. It started the tree “Kubrick”\.$/);
+  assert.match((await tell(bot, 'what have I got so far'))[0]!.text, /^Here are your trees, newest first:\n1\. /);
 
+  const calls = asked.length;
+  assert.match((await tell(bot, 'make a tree about lenses'))[0]!.text, /It started the tree “Lenses”\.$/i);
+  await tell(bot, 'list my trees');
+  assert.equal(asked.length, calls, 'what plain rules read never asks the model');
+});
+
+test('a link or a photo is always kept, and Momo answers what is asked about it from what was kept', async () => {
+  const bot = await stand();
+  const { model, asked } = momo(() => ({ does: 'save', reply: 'Looks like a solid explainer on defrost cycles.' }));
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+
+  assert.match((await tell(bot, 'https://example.com/heat-pumps is this any good?'))[0]!.text, /^Looks like a solid explainer on defrost cycles\.\n\nI’ve kept “/);
+  assert.equal(items(b.run).length, 1, 'kept once, whatever Momo chose');
+  assert.match(asked[0]!.user, /\[Already kept\]\n- "/);
+  assert.match(asked[0]!.user, /Message: """\nhttps:\/\/example\.com\/heat-pumps is this any good\?\n"""$/);
+
+  bot.file('coil', new Uint8Array([1, 2, 3]));
+  let sent = bot.sent.length;
+  bot.push(ADA, { photo: [{ file_id: 'coil', width: 800, height: 600 }], caption: 'what is this part?' });
+  assert.match((await next(bot, sent, 1))[0]!.text, /^Looks like a solid explainer on defrost cycles\.\n\nI’ve kept /);
+  assert.match(asked[1]!.user, /\[Already kept\]/);
+
+  const calls = asked.length;
   sent = bot.sent.length;
-  const count = items(b.run).length;
-  bot.push(ADA, { text: 'Decision trees are overrated' });
-  assert.match((await next(bot, sent, 1))[0]!.text, /^Added “/, 'the model said it asks nothing, so it is dropped');
-  bot.push(ADA, { text: 'Sourdough needs a long cold proof' });
-  await bot.until(() => items(b.run).length === count + 2);
-  assert.equal(model.calls.filter((c) => c.role === 'contact.ask').length, 2, 'a thought with no word of trees or handoffs never asks the model');
+  bot.push(ADA, { photo: [{ file_id: 'coil', width: 800, height: 600 }] });
+  assert.match((await next(bot, sent, 1))[0]!.text, /^I’ve kept “/);
+  assert.match((await tell(bot, 'https://example.com/only-a-link'))[0]!.text, /^I’ve kept “/);
+  assert.equal(asked.length, calls, 'with no words sent with it, there is nothing to ask Momo');
+});
+
+test('when the model does not answer, the message is kept and the reply says so', async () => {
+  const bot = await stand();
+  const model = new FakeModel().describing().on('momo.chat', () => {
+    throw new Error('no answer');
+  });
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+  assert.match((await tell(bot, 'Sourdough needs a long cold proof'))[0]!.text, /^I’ve kept “/);
+  assert.equal(items(b.run).length, 1);
+  assert.ok(b.logs.some((l) => /Momo could not read a message, so it was kept/.test(l)));
 });
 
 test('a voice note that asks for a tree\'s handoff gets it, and /unpair from the chat ends the pairing', async () => {
@@ -478,9 +593,8 @@ test('a voice note that asks for a tree\'s handoff gets it, and /unpair from the
 
   sent = bot.sent.length;
   bot.push(ADA, { text: '/unpair' });
-  assert.match((await next(bot, sent, 1))[0]!.text, /^Unpaired\./);
+  assert.match((await next(bot, sent, 1))[0]!.text, /^Okay, we’re unpaired\./);
   assert.equal((await status(b.run)).paired, null);
   await bot.read(bot.push(ADA, { text: 'list my trees' }));
-  await new Promise((r) => setTimeout(r, 50));
-  assert.equal(bot.sent.length, sent + 1, 'an unpaired chat is not answered');
+  assert.match((await next(bot, sent + 1, 1))[0]!.text, /^Hi, I’m Momo/, 'an unpaired chat gets only the fixed line');
 });

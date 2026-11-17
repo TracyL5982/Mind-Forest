@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { matchTrees, mayAsk, modelAsk, plainAsk, treeLines } from '../src/node/tree-asks.ts';
+import { matchTrees, plainAsk, treeLines } from '../src/node/tree-asks.ts';
 import { kit } from './kit.ts';
 
 test('plain words that ask for the trees, a handoff by name, a find or the latest handoff are read with no model', () => {
@@ -28,29 +28,10 @@ test('plain words that ask for the trees, a handoff by name, a find or the lates
   for (const [text, words] of finds) assert.deepEqual(plainAsk(text), { kind: 'find', words }, text);
 });
 
-test('a thought, a link and a request for a new tree ask nothing, and only a message that names trees or a handoff is worth the model', () => {
+test('a thought, a link and a request for a new tree ask nothing by the rules', () => {
   for (const text of ['Solar panels pay back in nine years', 'https://example.com/trees', 'make a tree about Kubrick', 'Build a treehouse', '3']) {
     assert.equal(plainAsk(text), null, text);
   }
-  assert.equal(mayAsk('could I get that lenses tree packaged up for Claude'), true);
-  assert.equal(mayAsk('export the one on heat pumps'), true);
-  assert.equal(mayAsk('could I get my bread stuff packaged up for Claude'), true);
-  assert.equal(mayAsk('I want to hand the Kubrick stuff over to ChatGPT'), true);
-  assert.equal(mayAsk('Solar panels pay back in nine years'), false, 'no word of trees or handoffs');
-  assert.equal(mayAsk('make a tree about Kubrick'), false, 'a new tree is a drop');
-  assert.equal(mayAsk('Read this on decision trees https://example.com/a'), false, 'a link is a drop');
-  assert.equal(mayAsk(`trees ${'and more '.repeat(40)}`), false, 'a long text is a drop');
-});
-
-test('the model reads what the rules do not, and "none" or no words is a drop', async () => {
-  const k = kit();
-  k.model.on('contact.ask', (req) =>
-    /packaged up/.test(req.user) ? { kind: 'handoff', words: 'the lenses tree' } : /what have I got/.test(req.user) ? { kind: 'list', words: '' } : /nameless/.test(req.user) ? { kind: 'find', words: '' } : { kind: 'none', words: '' },
-  );
-  assert.deepEqual(await modelAsk(k.model, 'could I get that lenses tree packaged up for Claude'), { kind: 'handoff', words: 'lenses' });
-  assert.deepEqual(await modelAsk(k.model, 'what have I got in trees'), { kind: 'list' });
-  assert.equal(await modelAsk(k.model, 'decision trees are overrated'), null);
-  assert.equal(await modelAsk(k.model, 'nameless tree'), null);
 });
 
 test('trees are listed newest first, each with its cards counted and what it is about', () => {
