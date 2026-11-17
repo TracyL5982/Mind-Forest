@@ -109,7 +109,8 @@ ImageRef decodeImage(const std::string& path, int maxPixel) {
 
 std::optional<Mat4> head() { return host::head; }
 const Hand& hand(int which) { return host::hands[which == 0 ? 0 : 1]; }
-bool handTrackingSupported() { return false; }
+// (`-lapHand` lays a left hand at rest where a lap is, which the hands then read: see main.cpp.)
+bool handTrackingSupported() { return Flags::has("lapHand"); }
 
 // MARK: - The room
 

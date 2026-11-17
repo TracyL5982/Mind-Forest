@@ -14,6 +14,9 @@
 // - `-moveX <m>` / `-moveZ <m>` step the head to the right / back once the scene has started, as `-yaw` turns it;
 //   `-moveAt <s>` does all three at that time instead (to see the scene offer to come along, and `-reseatAt` bring it).
 // - `-deskAhead <m>` puts a table in the room (platform_mac.mm).
+// - `-lapHand` lays a left hand at rest, out of view, where a lap is: 39 cm ahead of the eyes and 57 cm under them, at
+//   the height of the desk the scene assumes when it knows no table, its fingers over the small tree's place. Hand tracking
+//   is on with it; the right hand is still the mouse. `-lapHandAt <s>` lays it there only from that second.
 #define GL_SILENCE_DEPRECATION
 #define GLFW_INCLUDE_GLCOREARB
 #include <GLFW/glfw3.h>
@@ -39,6 +42,54 @@
 #endif
 
 static double scrolled = 0;
+
+/// A left hand at rest on a lap, palm down, its fingers a little curled, laid where it is when the scene starts (`-lapHand`).
+static void layLapHand(bool there) {
+    using platform::Joint;
+    static std::optional<Mat4> laidFrom;
+    platform::Hand& h = host::hands[0];
+    if (!there) {
+        h.tracked = false;
+        return;
+    }
+    if (!laidFrom) laidFrom = host::head;
+    Vec3 eye = laidFrom->position(), f = laidFrom->forward();
+    f.y = 0;
+    f = normalize(f);
+    Vec3 u{0, 1, 0}, r = normalize(cross(f, u));
+    Vec3 tip = eye + f * 0.39f - r * 0.03f - u * 0.565f;
+    Vec3 wrist = tip - f * 0.175f + r * 0.01f + u * 0.01f;
+    auto at = [&](Joint j, Vec3 p) {
+        h.joints[int(j)] = p;
+        h.rotations[int(j)] = Quat(Mat3(r, u, -f));
+    };
+    at(Joint::wrist, wrist);
+    at(Joint::palm, wrist + f * 0.07f);
+    // Each finger from its knuckle, its last two joints dipping toward the lap; the thumb on the right, apart from the index.
+    const Joint fingers[4][5] = {{Joint::indexMetacarpal, Joint::indexProximal, Joint::indexIntermediate, Joint::indexDistal, Joint::indexTip},
+                                 {Joint::middleMetacarpal, Joint::middleProximal, Joint::middleIntermediate, Joint::middleDistal, Joint::middleTip},
+                                 {Joint::ringMetacarpal, Joint::ringProximal, Joint::ringIntermediate, Joint::ringDistal, Joint::ringTip},
+                                 {Joint::littleMetacarpal, Joint::littleProximal, Joint::littleIntermediate, Joint::littleDistal, Joint::littleTip}};
+    const float side[4] = {0, -0.02f, -0.038f, -0.054f}, reach[4] = {1, 1.04f, 0.97f, 0.82f};
+    for (int k = 0; k < 4; k++) {
+        Vec3 base = wrist + r * (side[k] - 0.01f);
+        float s = reach[k];
+        at(fingers[k][0], base + f * 0.03f + r * side[k] * 0.5f);
+        at(fingers[k][1], base + f * 0.095f * s);
+        at(fingers[k][2], base + f * 0.135f * s - u * 0.008f);
+        at(fingers[k][3], base + f * 0.16f * s - u * 0.016f);
+        at(fingers[k][4], base + f * 0.175f * s - u * 0.022f);
+    }
+    at(Joint::thumbMetacarpal, wrist + r * 0.02f + f * 0.02f);
+    at(Joint::thumbProximal, wrist + r * 0.035f + f * 0.05f);
+    at(Joint::thumbDistal, wrist + r * 0.042f + f * 0.08f);
+    at(Joint::thumbTip, wrist + r * 0.045f + f * 0.105f - u * 0.01f);
+    h.tracked = true;
+    h.aimValid = false;
+    h.systemGesture = false;
+    h.pinchStrength = 0;
+    h.graspStrength = 0;
+}
 
 int main(int argc, char** argv) {
     std::vector<std::string> args;
@@ -189,6 +240,8 @@ int main(int argc, char** argv) {
             p.grip = head.position() + dir * 0.6f;
             input.set(1, p);
         }
+        static const bool lap = Flags::has("lapHand");
+        if (lap) layLapHand(elapsed >= Flags::number("lapHandAt") && frameCount >= 3);
         input.update(scene->root(), host::head, dt);
         if (scrolled != 0) {
             magnify *= float(std::pow(1.08, scrolled));
