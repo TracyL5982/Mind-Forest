@@ -1,5 +1,5 @@
 // Runs the Mac preview against the fake service on a fresh copy of a data folder (standin.mjs) and opens, where it stands,
-// every card with no cards under it that hangs from the root of each tree, one preview each, its clock a frame at a time. Each time it checks,
+// every card that hangs from the root of each tree, one preview each, its clock a frame at a time. Each time it checks,
 // from where the cards are headed before the pinch and after (`-placesAt`, standin.mjs `room`), that:
 //   - the open card grows where it stood;
 //   - the other cards stay, or step straight out from it;
@@ -149,8 +149,8 @@ try {
     writeFileSync(join(shots, 'log-depth.txt'), run.log.map((l) => `${l.at.toFixed(2).padStart(7)} ${l.line}`).join('\n'));
   }
   for (const tree of process.argv.includes('--walk') ? [] : trees) {
-    // (A card with cards under it is a branch, which a pinch goes into rather than opening where it stands.)
-    for (const card of before.nodes.filter((n) => n.parent === tree.rootId && !before.nodes.some((c) => c.parent === n.id))) {
+    // (A card with cards under it opens where it stands too: a click never goes into a layer.)
+    for (const card of before.nodes.filter((n) => n.parent === tree.rootId)) {
       // The headset names a card by its library piece when it is one; a work of the library is not named by flag here.
       const library = items.get(card.itemId)?.source?.from === 'library' ? items.get(card.itemId).data?.library : null;
       if (library && library.kind !== 'film') {

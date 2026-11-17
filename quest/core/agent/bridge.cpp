@@ -665,8 +665,9 @@ bool Bridge::opens(int nodeID) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
     if (!p || !p->service.count(nodeID)) return false;
     const TreeNode& n = p->tree->nodes[nodeID];
-    // A card that already leads a layer, or one on another layer, is gone to as before.
-    if (n.head || p->tree->seat(n).depth != p->tree->standDepth()) return false;
+    // A click only opens a card, to show it in detail (the user's rule, 2026-11-17): on the layer you stand on, one that leads
+    // a layer of its own opens here too, and is not gone into. One on another layer is gone to as before.
+    if (p->tree->seat(n).depth != p->tree->standDepth()) return false;
     // One whose parent leads no layer lies on this one where no group is, so its parent's group stands first.
     if (n.parent && !p->tree->nodes[*n.parent].head) standGroup(*p->tree, *n.parent);
     p->tree->open(nodeID);

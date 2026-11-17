@@ -110,7 +110,9 @@ bool OceanModel::roomy(const Tree& tree) const {
 Vec2 OceanModel::stood(const Tree& tree) const {
     std::optional<int> focus = tree.focus();
     const TreeNode* current = focus ? find(tree, *focus) : nullptr;
-    if (!current || current->head) return Vec2::zero();
+    // (One that leads a layer and is only opened there, a click on a branch, grows where it stood too; the card that leads
+    // the layer you stand on stands at its place.)
+    if (!current || current->id == tree.stand) return Vec2::zero();
     const CardRef& c = card(current->id);
     return c ? c->nudge.target() : Vec2::zero();
 }
