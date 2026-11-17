@@ -979,7 +979,8 @@ TEST(presenceFollowsALiveTurn) {
     t.frame(0.5);
     std::string half = t.voice.presence().momoText;
     CHECK(!half.empty() && half.size() < std::string("Here are three older films with one.").size(), "Momo's words come as they are heard: \"%s\"", half.c_str());
-    CHECK(t.voice.presence().level >= 0.5f, "the level follows Momo's voice (%.2f)", t.voice.presence().level);
+    CHECK(std::fabs(t.voice.presence().level - levelOf(6000 / 32768.f / std::sqrt(2.f))) < 0.02f,
+          "the level follows Momo's voice, as AgentSphere's does: its RMS three times over (%.2f)", t.voice.presence().level);
     t.serviceSays(R"({"t":"done","id":"r1"})");
     t.frame(0.6);
     CHECK(!host.players.empty() && host.players[0]->finished, "finished");
@@ -1120,7 +1121,8 @@ TEST(presenceMutedMakesNoSoundYetTakesTheTime) {
     t.serviceSays(R"({"t":"done","id":"r1"})");
     t.frame(0.5);
     CHECK(t.shows() == S::responding, "responding for as long as Momo's voice lasts");
-    CHECK(t.voice.presence().level >= 0.5f, "with the level of the voice (%.2f)", t.voice.presence().level);
+    CHECK(std::fabs(t.voice.presence().level - levelOf(6000 / 32768.f / std::sqrt(2.f))) < 0.02f, "with the level of the voice (%.2f)",
+          t.voice.presence().level);
     t.frame(0.4);
     CHECK(t.shows() == S::responding, "still");
     t.frame(0.2);

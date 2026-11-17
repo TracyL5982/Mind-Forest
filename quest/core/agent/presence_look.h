@@ -65,11 +65,14 @@ public:
     static constexpr float radius = 2;                  // the ring's outer radius
     static constexpr float innerFraction = 0.2f;        // the band's width, of the radius
     static constexpr int points = 32;                   // round each rim
-    static constexpr float noiseScale = 1;
+    // NOTE(port): the undulation is AgentRing.ts's own (its README: "Quiet/Loud Speed 0.15 / 1.2", Loud Distortion 7,
+    // noise scale 0.5), not Scene.scene's 12 and 1 the port first took. Kai, 2026-11-17: Momo looked "a bit unhinged - the
+    // undulations are too large, and too fast"; match the reference's "gentle, spirited undulation".
+    static constexpr float noiseScale = 0.5f;
     static constexpr float zGap = 0.1f;                 // between the three rings
     static constexpr float colorIntensity = 0.8f;
-    static constexpr float quietDistortion = 1.5f, loudDistortion = 6;
-    static constexpr float quietSpeed = 0.15f, loudSpeed = 12;      // noise time a second
+    static constexpr float quietDistortion = 1.5f, loudDistortion = 7;
+    static constexpr float quietSpeed = 0.15f, loudSpeed = 1.2f;    // noise time a second
     static constexpr float divergence = 1.6f, divergenceExponent = 1.5f;
     static constexpr float eyeSize = 0.08f;             // half the width
     static constexpr float eyeAspect = 5;               // height to width

@@ -53,12 +53,6 @@ uint32_t u32(const std::string& s, size_t at) {
 }
 uint16_t u16(const std::string& s, size_t at) { return uint16_t(uint8_t(s[at]) | uint8_t(s[at + 1]) << 8); }
 
-/// As voice.cpp's: loudness 0 to 1 by decibels, so a voice sits at 0.5 to 0.9.
-float levelOf(float rms) {
-    float db = 20 * std::log10(std::max(rms, 1e-6f));
-    return std::clamp((db + 48) / 36, 0.f, 1.f);
-}
-
 }  // namespace
 
 std::optional<EchoCheck::Clip> EchoCheck::readClip(const std::string& s) {

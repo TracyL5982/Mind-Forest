@@ -153,13 +153,6 @@ std::optional<std::vector<int16_t>> samplesOf(const std::string& base64) {
     return out;
 }
 
-/// Loudness for the presence, 0 to 1, from an RMS in -1...1: by decibels, so speech near the microphone or Momo's
-/// voice (about -30 to -15 dBFS) sits at 0.5 to 0.9, and the room's hiss near 0.
-float levelOf(float rms) {
-    float db = 20 * std::log10(std::max(rms, 1e-6f));
-    return std::clamp((db + 48) / 36, 0.f, 1.f);
-}
-
 /// How long a reply file would take to hear, for `-mute`, which plays none: about 2.6 words a second, as a voice speaks.
 double spokenSeconds(const std::string& text) {
     int words = 0;
