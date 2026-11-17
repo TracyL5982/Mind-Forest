@@ -29,10 +29,13 @@ import type { Drop, Schedule, Step } from './take.ts';
 export const PICTURES: 'beside' | 'after' = 'beside';
 /**
  * `SMALL_ROUNDS_FULL`: whether a round that brings three cards or fewer still runs the span of a real run, about 25 s of thinking
- * with searches that bring nothing, as a real round does whatever it brings. Off, such a round ends a few seconds after its
- * last card, with one wave of searches.
+ * with searches that bring nothing. The user chose off: nobody is made to watch labels with nothing arriving. Such a round's
+ * cards come from the fast searches, at the times of a real run's first wave, and every agent's label has ended within about
+ * 2 s of its last card.
  */
-export const SMALL_ROUNDS_FULL = true;
+export const SMALL_ROUNDS_FULL: boolean = false;
+/** In a small round that does not run the full span, how long after its last card the last label may end, in ms. */
+const SOON = 1800;
 /** A round with this many cards or fewer is a small one. */
 export const SMALL_ROUND = 3;
 
@@ -153,7 +156,8 @@ export function realSchedule(phase: ScriptPhase, under: string): Schedule {
   // The second wave: the deliveries the first did not bring, each from a search of its own, with one or two that bring nothing.
   const later = deliveries.filter((d) => !first.includes(d));
   const again = full ? later.length + 1 + Math.floor(rnd() * 2) : later.length;
-  let from = full ? Math.max(chosen + 9000, Math.min(thought - 9000, began + between(15, 24))) : chosen + between(3, 5);
+  // A small round has one wave: every search starts as the choosing ends.
+  let from = full ? Math.max(chosen + 9000, Math.min(thought - 9000, began + between(15, 24))) : chosen;
   let lastRead = 0;
   for (let n = 0; n < again; n++) {
     const delivery = later[n];
@@ -161,11 +165,18 @@ export function realSchedule(phase: ScriptPhase, under: string): Schedule {
       ? search(from, delivery.source, delivery.cards, queryOf(delivery.cards.at(-1)!.title))
       : search(from, other(new Set<string>()), [], queryOf(about.split(' ').reverse().join(' '), 2));
     lastRead = Math.max(lastRead, read);
-    from += between(0.6, 4.5, 1.4);
+    if (full) from += between(0.6, 4.5, 1.4);
   }
 
+  if (!full) {
+    // Nothing is left on screen with nothing arriving: every label ends soon after the round's last card, the thinking with it.
+    const lastCard = Math.max(...drops.map((drop) => drop.at));
+    const done = lastCard + between(0.6, SOON / 1000);
+    for (const step of steps) step.end = Math.min(step.end, step.label.startsWith('Thinking of directions') ? done : Math.max(step.at + 200, Math.min(step.end, done - 200)));
+    for (let n = steps.length - 1; n >= 0; n--) if (steps[n]!.at >= done - 300) steps.splice(n, 1);
+  }
   // The run is over when its thinking and its searches are: its own label goes then.
-  const end = Math.max(thought, lastRead, ...drops.map((drop) => drop.at)) + between(0.1, 0.6);
+  const end = Math.max(...steps.map((step) => step.end), ...drops.map((drop) => drop.at)) + between(0.1, full ? 0.6 : 0.2);
 
   // A picture is made once the directions are written, and lands after the run is over.
   let making = thought + between(0.2, 1.5);
@@ -181,7 +192,7 @@ export function realSchedule(phase: ScriptPhase, under: string): Schedule {
   // The Renderer lays a found card out at once, and takes its time over one that was written.
   for (const drop of drops) {
     const slow = drop.cards.some((id) => written.some((card) => card.id === id));
-    const laid = drop.at + (slow ? between(5, 23, 1.2) : between(0.05, 0.6));
+    const laid = drop.at + (slow && full ? between(5, 23, 1.2) : between(0.05, 0.6));
     steps.push({ role: 'renderer', label: `Laying out ${drop.cards.length === 1 ? 'a card' : `${drop.cards.length} cards`}`, at: drop.at, end: laid });
   }
   drops.sort((a, b) => a.at - b.at);

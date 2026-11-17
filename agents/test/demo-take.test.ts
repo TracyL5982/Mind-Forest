@@ -570,6 +570,17 @@ test('a round at real pace is the same every time, and comes as a real round doe
     const labels = sched.steps.map((step) => step.label);
     assert.ok(labels.includes('Choosing where to look first') && labels.some((label) => label.startsWith('Thinking of directions for ')), `${phase.id}: the Scout chooses and thinks, as in every real run`);
     const thinking = sched.steps.find((step) => step.label.startsWith('Thinking of directions for '))!;
+    // A round of three cards or fewer does not run the span of a real run: its cards come from the fast searches, and nobody
+    // is left watching labels with nothing arriving. Every label has ended within about 2 s of its last found card.
+    const small = phase.cards.length <= 3;
+    if (small) {
+      const found = sched.drops.filter((drop) => !drop.cards.some((id) => phase.cards.find((card) => card.id === id)!.origin === 'generated' && phase.cards.find((card) => card.id === id)!.image));
+      const last = Math.max(...found.map((drop) => drop.at));
+      const before = sched.steps.filter((step) => !step.label.startsWith('Making a picture') && step.at <= last + 2300);
+      assert.ok(last <= 7000, `${phase.id}: a small round's cards are in by ${last}, at the times of a real run's first searches`);
+      assert.ok(before.every((step) => step.end <= last + 2300), `${phase.id}: a small round's labels end within about 2 s of its last card`);
+      continue;
+    }
     assert.ok(thinking.end - thinking.at >= 19_000 && thinking.end - thinking.at <= 36_000, `${phase.id}: it thinks for as long as a real run does`);
     const searches = sched.steps.filter((step) => step.label.startsWith('Searching '));
     assert.ok(searches.length >= 3 && searches.every((step) => / for \S/.test(step.label)), `${phase.id}: three searches or more, each for some words`);
