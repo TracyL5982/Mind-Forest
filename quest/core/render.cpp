@@ -451,7 +451,7 @@ void Renderer::upload(Mesh* m) {
 // MARK: - The frame
 
 static bool isTransparent(const Material& m, float opacity) {
-    return m.transparent || m.kind == Material::Kind::line || m.kind == Material::Kind::dust ||
+    return m.transparent || m.onTop || m.kind == Material::Kind::line || m.kind == Material::Kind::dust ||
            m.kind == Material::Kind::hoverGlow || m.kind == Material::Kind::ghost || opacity < 0.999f;
 }
 
@@ -489,7 +489,7 @@ void Renderer::collect(const Entity* e, const Mat4& parent, float opacity, const
             }
         }
         if (drawn) {
-            Item item{e, mesh, &material, world, opacity, hovered, hover, distance, int(opaque.size() + transparent.size())};
+            Item item{e, mesh, &material, world, opacity, hovered, hover, distance, int(opaque.size() + transparent.size() + above.size())};
             bool see = isTransparent(material, opacity);
             if (Texture* texture = material.kind == Material::Kind::unlit ? material.texture.get() : nullptr) {
                 if (!texture->gl) {
@@ -510,7 +510,7 @@ void Renderer::collect(const Entity* e, const Mat4& parent, float opacity, const
                     }
                 }
             }
-            if (drawn) (see ? transparent : opaque).push_back(item);
+            if (drawn) (material.onTop ? above : see ? transparent : opaque).push_back(item);
         }
     }
     for (const auto& c : e->children) collect(c.get(), world, opacity, hover, hovered, views);
@@ -634,6 +634,7 @@ void Renderer::draw(const EntityRef& root, const Views& views, double time) {
 
     opaque.clear();
     transparent.clear();
+    above.clear();
     frameTime = mediaTime();
     if (root) collect(root.get(), Mat4::identity(), 1, nullptr, 0, views);
     if (batching) {
@@ -646,6 +647,7 @@ void Renderer::draw(const EntityRef& root, const Views& views, double time) {
     // Nearest first for what hides things, farthest first for what is seen through.
     std::stable_sort(opaque.begin(), opaque.end(), [](const Item& a, const Item& b) { return a.distance < b.distance; });
     std::stable_sort(transparent.begin(), transparent.end(), [](const Item& a, const Item& b) { return a.distance > b.distance; });
+    std::stable_sort(above.begin(), above.end(), [](const Item& a, const Item& b) { return a.distance > b.distance; });
     double built = mediaTime();
     stats.buildMs = (built - began) * 1000;
 
@@ -665,6 +667,10 @@ void Renderer::draw(const EntityRef& root, const Views& views, double time) {
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     for (const Item& item : transparent) submit(item, views, time, viewProj);
+    // What draws over everything: with no depth test, which also writes none.
+    glDisable(GL_DEPTH_TEST);
+    for (const Item& item : above) submit(item, views, time, viewProj);
+    glEnable(GL_DEPTH_TEST);
     if (veil < 0.999f) {
         // The whole picture, faded: one triangle over everything that multiplies what is there (colour
         // and alpha, so on the headset the room shows through) by `veil`.

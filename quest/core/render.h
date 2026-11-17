@@ -95,7 +95,7 @@ private:
     std::vector<Batch> batches;
     bool multiview = false;
     Program unlit, line, dust, glow, video, ghost;
-    std::vector<Item> opaque, transparent;
+    std::vector<Item> opaque, transparent, above;   // above: Material::onTop
     double uploadSpentMs = 0;
     double frameTime = 0;
     /// Whether a picture still waiting may be sent this frame; false means leave what uses it undrawn for now.

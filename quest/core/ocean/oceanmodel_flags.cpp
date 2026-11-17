@@ -951,7 +951,8 @@ void OceanModel::depthAudit() const {
         if (e->model && e->model->mesh && !e->model->materials.empty()) {
             const Material& m = e->model->materials.front();
             const Mesh& mesh = *e->model->mesh;
-            if (m.kind != Material::Kind::dust) {
+            // (Nor what draws over everything, Material::onTop, which nothing can tie with.)
+            if (m.kind != Material::Kind::dust && !m.onTop) {
                 Mat4 world = e->transformMatrix(nullptr);
                 Surface s;
                 auto found = what.find(e.get());
