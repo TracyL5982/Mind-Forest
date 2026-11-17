@@ -575,3 +575,12 @@ TEST(aLinesWordsChangeAtMostEveryHoldTheLatestWinning) {
     CHECK(l && l->text == "Scout · Laying out 2 cards", "then the latest, the step between passed over: \"%s\"", l ? l->text.c_str() : "");
     CHECK(l && l->opacity > 0.99f, "and the line never fades as its words change");
 }
+
+TEST(aLineWhoseAgentHasGoneFadesWithItsNewestWords) {
+    Roster r = roster();
+    run(r, {{"scout", "Scout", "Searching museum collections", false}}, 1);
+    run(r, {{"scout", "Scout", "", true}}, 0.05f);
+    run(r, {}, 0.05f);
+    const Roster::Line* l = line(r, "scout");
+    CHECK(l && l->text == "Scout · finished working", "fading, it says what it last said it was doing: \"%s\"", l ? l->text.c_str() : "gone");
+}

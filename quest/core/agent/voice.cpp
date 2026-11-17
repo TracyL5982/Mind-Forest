@@ -999,7 +999,11 @@ void Voice::show() {
     bool speaks = sounding || sound;
     shown.state = std::visit(overloaded{
                                  [](const Listening&) { return S::listening; },
-                                 [](const Open&) { return S::open; },
+                                 // The conversation is open and nobody speaks (speech begins a turn): the microphone stays
+                                 // open, and Momo looks idle, or working while an agent is. The user, 2026-11-17:
+                                 // "listening should only show when USER IS TALKING, if mic is open but user is not
+                                 // talking, mic stays open but momo appears idle".
+                                 [&](const Open&) { return crew.working() ? S::working : S::waiting; },
                                  [](const Sent&) { return S::sent; },
                                  [](const Thinking&) { return S::thinking; },
                                  [&](const Idle&) { return speaks ? S::responding : crew.working() ? S::working : state() ? S::waiting : S::off; },

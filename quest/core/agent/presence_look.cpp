@@ -502,6 +502,14 @@ void Roster::update(const std::vector<AgentLine>& agents, float dt) {
         found->toY = float(i);
         found->toOpacity = 1;
     }
+    // A line whose agent has gone fades with its newest words, never a step held back.
+    for (Line& l : lines_) {
+        if (l.toOpacity == 0 && l.next) {
+            write(l, *l.next);
+            l.since = clock;
+            l.next.reset();
+        }
+    }
     if (!(dt > 0)) return;
     for (Line& l : lines_) {
         l.y = damp(l.y, l.toY, l.ySpeed, 0.2f, 20, dt);
