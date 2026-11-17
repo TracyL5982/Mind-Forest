@@ -1,5 +1,5 @@
 // Checks every gallery sample at the size the Quest shows it, by the sizing spec (sizing/quest-card-sizing.md,
-// "Build spec", section 10). Small: 1 mm a web px, never shrunk, at most 210 by 146 px, and drawn with whole
+// "Build spec", section 10). Small: `Art::type` mm a web px, never shrunk, at most 210 by 146 mm, and drawn with whole
 // lines only, so no text is cut with an ellipsis or loses lines without the cue after it. Opened: the fixed
 // box of its kind, 46 by 37.2 cm for text, chart and link, the panel's window inside the frame, and the whole
 // panel drawn once with nothing cut. Prints one line per sample and exits with 1 if any fails.
@@ -51,15 +51,16 @@ int main() {
             float box = kind.opens == cards::Kind::Opens::picture ? Catalog::openSize(OceanNote::Kind::image, false, *cards::pictureAspect(id)).y
                                                                   : textTall;
             std::vector<std::string> wrong;
-            if (f.width > cards::face::W || f.height > cards::face::H) wrong.push_back("small over 210 x 146");
-            if (std::fabs(small.x - float(f.width) / 1000) > 1e-5f || std::fabs(small.y - float(f.height) / 1000) > 1e-5f) wrong.push_back("small shrunk");
+            if (f.width > cards::face::W || f.height > cards::face::H) wrong.push_back("small over 210 x 146 mm");
+            const float mm = cards::ocean::smallScale / Art::ppm;
+            if (std::fabs(small.x - float(f.width) * mm) > 1e-5f || std::fabs(small.y - float(f.height) * mm) > 1e-5f) wrong.push_back("small shrunk");
             std::optional<cards::Drawn> face = cards::small(id, cards::ocean::smallScale);
             for (const std::string& cut : watched(face->size, face->draw)) wrong.push_back("small " + cut);
             if (std::fabs(open.x - Metrics::openNoteWidth) > 1e-4f || std::fabs(open.y - box) > 1e-4f) wrong.push_back("open box");
             if (std::fabs(o.size.height / Art::ppm - open.y) > 1.5f / Art::ppm) wrong.push_back("frame height");
             if (!(o.window.minX() >= 0 && o.window.minY() >= 0 && o.window.maxX() <= o.size.width && o.window.maxY() <= o.size.height)) wrong.push_back("window outside the frame");
             if (o.contentTall < o.size.height) wrong.push_back("panel shorter than the frame");
-            if (o.contentTall / cards::ocean::openScale >= 3200) wrong.push_back("panel cut at its longest");
+            if (o.contentTall >= 8000) wrong.push_back("panel cut at its longest");
             for (const std::string& cut : watched(CGSize{o.size.width, o.contentTall}, o.content)) wrong.push_back("open " + cut);
             float runs = cards::ocean::overflow(id);
             count++;

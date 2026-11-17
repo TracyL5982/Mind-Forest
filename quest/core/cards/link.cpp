@@ -12,10 +12,10 @@ namespace {
 
 constexpr int BAR = 30;
 constexpr int THUMB = 64;
-/// A film's poster beside the words under the bar, two by three as a poster stands.
-constexpr int POSTER_WIDE = 60, POSTER_TALL = 90;
+/// A film's poster beside the words under the bar, two by three as a poster stands, from under the bar to the frame's foot.
+constexpr int POSTER_TALL = face::H - 13 - (BAR + 13), POSTER_WIDE = POSTER_TALL * 2 / 3;
 /// A wide picture in a band across the face under the bar, as tall as leaves room for a line of the title and the cue.
-constexpr int BAND = 48;
+constexpr int BAND = face::H - face::BOTTOM - (BAR + 13) - face::TITLE - face::CUE;
 constexpr const char* OUT = "\xE2\x86\x97";
 constexpr Setting DOT{11, 11, Font::Weight::bold};
 
@@ -71,8 +71,13 @@ void bar(const Pen& pen, float x, float y, float w, const std::string& site, boo
     pen.words(letter, left + (tile - letterWidth) / 2, dotTop + (tile - DOT.lead) / 2, letterWidth + 1, 1, DOT, Art::ink);
     float lineTop = kicked ? top + 12.5f : top + (inner - said.lead) / 2, outWidth = std::ceil(pen.width(OUT, said));
     pen.words(OUT, right - outWidth, lineTop, outWidth + 1, 1, said, palette::ink3);
-    float host = left + tile + 8;
-    pen.words(site, host, lineTop, right - outWidth - 8 - host, 1, said, palette::ink2);
+    float host = left + tile + 8, room = right - outWidth - 8 - host;
+    // The site whole: a host name too long for the bar loses its first names, so ferries.example.com is example.com.
+    std::string shown = site;
+    for (size_t dot; pen.width(shown, said) > room && (dot = shown.find('.')) != std::string::npos && shown.find('.', dot + 1) != std::string::npos;) {
+        shown = shown.substr(dot + 1);
+    }
+    pen.words(shown, host, lineTop, room, 1, said, palette::ink2);
 }
 
 
@@ -107,7 +112,8 @@ void lay(Col& c, const Item& item, const Json& props) {
     }
     std::string about = text(props["description"]);
     if (about.empty()) about = item.summary;
-    if (!c.title(item.titleOrUntitled(), -1, -1, at == Placed::band ? 1 : face::TITLE_LINES)) return;
+    // Over a description, the title leaves the cue's row for it.
+    if (!c.title(item.titleOrUntitled(), -1, -1, at == Placed::band ? 1 : face::TITLE_LINES, about.empty() ? 0 : face::CUE)) return;
     if (!about.empty() && c.room() >= 4 + face::BODY) {
         c.gap(4);
         c.lines(about, Measure::body, 99, c.look.ink2);

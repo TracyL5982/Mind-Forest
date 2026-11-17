@@ -246,7 +246,8 @@ void lay(Col& c, const Item& item, const Json& props) {
         }
         c.y = BAND + face::TOP - 2;
     }
-    if (!c.title(p.title)) return;
+    // The title leaves the row of the cue that counts the parts.
+    if (!c.title(p.title, -1, -1, face::TITLE_LINES, p.parts.empty() ? 0 : face::CUE)) return;
     if (!p.parts.empty() && c.above(props)) {
         const Part& part = p.parts.front();
         c.gap(face::GAP);

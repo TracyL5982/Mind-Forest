@@ -56,11 +56,12 @@ void lay(Col& c, const Item& item, const Json&) {
         pen.ctx.fillPath();
     }
     c.gap(MARK);
-    // The thought is the face's title: two lines at the largest size that holds it, or the smallest's
+    // The thought is the face's title: two lines at the largest size that holds it in the face, or the smallest's
     // first two cut with an ellipsis.
     const Figure* size = &SMALLEST;
     for (const Figure* step : {&LARGEST, &MIDDLE}) {
-        if (figureLines(thought, face::COL, *step) <= face::TITLE_LINES) {
+        int lines = figureLines(thought, face::COL, *step);
+        if (lines <= face::TITLE_LINES && float(lines * step->lineHeight) <= c.room()) {
             size = step;
             break;
         }
