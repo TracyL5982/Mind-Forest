@@ -17,6 +17,8 @@
 // - `-lapHand` lays a left hand at rest, out of view, where a lap is: 39 cm ahead of the eyes and 57 cm under them, at
 //   the height of the desk the scene assumes when it knows no table, its fingers over the small tree's place. Hand tracking
 //   is on with it; the right hand is still the mouse. `-lapHandAt <s>` lays it there only from that second.
+// - `-lookAt <s> -lookPitch <degrees>` tips the head to that pitch at that second (after `-pitch`); `-lookBackAt <s>`
+//   tips it back to `-pitch`.
 #define GL_SILENCE_DEPRECATION
 #define GLFW_INCLUDE_GLCOREARB
 #include <GLFW/glfw3.h>
@@ -182,6 +184,17 @@ int main(int argc, char** argv) {
             pitch = flagNumber("-pitch") * float(M_PI) / 180;
             eye.x += flagNumber("-moveX");
             eye.z += flagNumber("-moveZ");
+        }
+        // `-lookAt <s> -lookPitch <degrees>`: the head tips up or down to that pitch then, as one looking up from the desk.
+        static bool looked = false, lookedBack = false;
+        if (!looked && Flags::has("lookAt") && elapsed >= Flags::number("lookAt")) {
+            looked = true;
+            pitch = flagNumber("-lookPitch") * float(M_PI) / 180;
+        }
+        // `-lookBackAt <s>`: and back to `-pitch`, as from a glance.
+        if (looked && !lookedBack && Flags::has("lookBackAt") && elapsed >= Flags::number("lookBackAt")) {
+            lookedBack = true;
+            pitch = flagNumber("-pitch") * float(M_PI) / 180;
         }
         // For a picture, app time runs as fast as frames can be made.
         // (`-realtime` keeps the wall clock even for a picture: for looking at what waiting looks like. A hidden
