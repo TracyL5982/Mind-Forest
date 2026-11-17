@@ -60,6 +60,10 @@ async function headset(run: Running, app = true): Promise<WebSocket> {
   return ws;
 }
 
+/** A played round's take goes on after its run, while Momo wraps up: resolves once no take is running. */
+const over = async (run: Running) => {
+  while (run.demo!.status().take?.playing) await new Promise((r) => setTimeout(r, 5));
+};
 const cardsOf = (id: string) => script.phases.find((phase) => phase.id === id)!.cards;
 const before = (id: string) => script.phases.slice(0, script.phases.findIndex((phase) => phase.id === id));
 /** The node a card of the script hangs on, found by its title. */
@@ -109,6 +113,7 @@ test('a request on the card a round is asked from plays that round as the Scout 
     const head = nodeOf(run, 'Llull’s ring')!;
     await run.pipeline.more(head.id);
     await run.pipeline.idle();
+    await over(run);
     const landed = run.mind.children(head.id);
     assert.deepEqual(landed.map((node) => run.mind.item(node.itemId).title).sort(), cardsOf('n3').map((card) => card.title).sort());
     assert.ok(landed.every((node) => node.status === 'pick'), 'a round that is played lands as picks, so Momo tells of them');
@@ -134,6 +139,7 @@ test('a question the script names plays its round wherever it stands in the orde
     const board = nodeOf(run, 'Your FigJam board')!;
     await run.pipeline.ask(board.id, 'How do we present it?');
     await run.pipeline.idle();
+    await over(run);
     const under = titlesUnder(run, 'Your FigJam board');
     for (const card of cardsOf('bp')) assert.ok(under.includes(card.title), `${card.title} did not land`);
     for (const card of cardsOf('bw')) assert.ok(!under.includes(card.title), 'the round before it in the order was played instead');
@@ -142,6 +148,7 @@ test('a question the script names plays its round wherever it stands in the orde
     const had = run.mind.children(elsewhere.id).length;
     await run.pipeline.more(elsewhere.id);
     await run.pipeline.idle();
+    await over(run);
     assert.equal(run.mind.children(elsewhere.id).length, had + cardsOf('bu').length);
     assert.equal(run.demo!.status().rounds.find((round) => round.id === 'bw')!.state, 'waiting', 'the round passed over still waits for its question');
   } finally {
@@ -237,6 +244,7 @@ test('the tree a played first round starts is named as a set-up names it, and Mo
   try {
     await run.pipeline.makeTree(script.topic);
     await run.pipeline.idle();
+    await over(run);
     const tree = [...run.mind.trees.values()][0]!;
     assert.equal(tree.title, script.title);
     assert.equal(run.mind.item(run.mind.node(tree.rootId).itemId).title, script.topic);
@@ -259,6 +267,7 @@ test('Momo is told, with where the user is, when the next words said on the open
     assert.equal(run.demo!.takeNote(undefined), '');
     await run.pipeline.more(ring.id);
     await run.pipeline.idle();
+    await over(run);
     assert.equal(run.demo!.takeNote(ring.id), '', 'the round was played: the card is an ordinary card again');
     // The one round that brings nothing is answered aloud from its card.
     await run.demo!.goto('bs');
@@ -296,6 +305,7 @@ test('the showcase trees stand whole in the forest, outlast every set-up, and no
     // Asked on, it is the user's own tree: the Scout answers as ever, and the walkthrough's next round stays where it is.
     await run.pipeline.more(cone.id);
     await run.pipeline.idle();
+    await over(run);
     assert.ok(run.demo!.status().rounds.every((round) => round.state === 'waiting'));
     assert.equal(run.demo!.takeNote(cone.id), '');
     // Taken out and put back from the page.

@@ -52,7 +52,7 @@ test('a round\'s schedule lands every card once, the user\'s own first, then eac
   assert.deepEqual(sched.steps.slice(0, 2).map((step) => step.label), ['Choosing where to look first', 'Checking what you already have']);
   const made = n3.cards.filter((card) => card.origin === 'generated' && card.image);
   assert.ok(made.length > 0 && made.every((card) => sched.drops.find((drop) => drop.cards.includes(card.id))!.at >= REAL.begins + REAL.plan + REAL.picture), 'a made picture takes as long as one does');
-  assert.deepEqual(schedule(round('bs')), { steps: [], drops: [], end: 0 }, 'a round that brings nothing has no run');
+  assert.deepEqual(schedule(round('bs')), { steps: [], drops: [], end: 0, settled: 0 }, 'a round that brings nothing has no run');
 });
 
 test('Momo speaks at the moments the live voice does: her answer, the first card, later cards gathered, and a wrap-up', async () => {
@@ -397,7 +397,8 @@ test('the user\'s words over a line are what Momo says; her live voice is kept f
     assert.deepEqual([unready.closest, unready.recorded, unready.voice, unready.ms], ['Her closest wording.', false, null, 'Her closest wording.'.length * 50]);
     const heardBefore = s.voice.length;
     void run.demo!.playTake('n3');
-    await until(() => run.demo!.status().take?.round === 'n3' && run.demo!.status().take?.playing === false && run.demo!.status().take!.at > 0, 10000);
+    await until(() => run.demo!.status().take?.playing === true);
+    await until(() => run.demo!.status().take?.playing === false, 10000);
     const lastSaid = s.voice.slice(heardBefore).filter((m) => m.t === 'text').at(-1)!;
     assert.equal(lastSaid.text, 'Her closest wording.', 'the caption is what is heard');
     assert.equal(bytesOf(s.voice.slice(heardBefore), 'wrap'), 'Her closest wording.'.length * 2400, 'and what is heard is her closest take, whole');
@@ -442,6 +443,83 @@ test('Play on an empty stage starts the tree and brings the first round, and a r
     assert.deepEqual(run.demo!.shown('bs').lines, [], 'a round with no words and no cards has nothing on its timeline');
     await run.demo!.playTake('bs');
     assert.equal(run.demo!.status().rounds.find((r) => r.id === 'bs')!.state, 'played');
+  } finally {
+    await s.close();
+  }
+});
+
+// ---- Momo and the other agents
+
+test('in every round Momo wraps up only once every agent is done, and is never left resting while one still works', () => {
+  // The rounds as they are recorded: the repository's own lines, each as long as its recording.
+  const said = new Lines({ demoDir, dataDir: temp('mp-demo-data-'), voice: 'marin', log: () => {} });
+  let wraps = 0;
+  for (const phase of script.phases) {
+    const take = takeOf(phase, said.of(phase.id), (text) => said.ms(text), 'the card');
+    if (phase.cards.length === 0) continue;
+    const lastCard = take.drops.at(-1)!.at;
+    // Every label the take shows ends by the run's end, the run's own label with it, and the Renderer's 0.6 s after the last card.
+    assert.ok(take.steps.every((step) => step.end <= take.end), `${phase.id}: a label outlasts the run`);
+    assert.ok(take.end <= take.settled && lastCard + 600 < take.settled, `${phase.id}: the agents are done before the take says they are`);
+    const wrap = take.lines.find((line) => line.kind === 'wrap');
+    if (wrap) {
+      wraps++;
+      assert.ok(wrap.at >= take.settled, `${phase.id}: the wrap-up starts at ${wrap.at}, before every agent is done at ${take.settled}`);
+      assert.equal(take.lines.at(-1), wrap, `${phase.id}: nothing is said after the wrap-up`);
+    }
+    // From the run's start to the last card laid out, at every moment Momo speaks or an agent has a label up: on the headset she
+    // is then speaking or shown working, never resting. (The run's own label is up from its start to its end.)
+    const laidOut = lastCard + 600;
+    for (let t = REAL.begins; t < laidOut; t += 50) {
+      const speaks = take.lines.some((line) => line.ms > 0 && line.at <= t && t < line.at + line.ms);
+      const works = t < take.end || take.drops.some((drop) => drop.at <= t && t < drop.at + 600);
+      assert.ok(speaks || works, `${phase.id}: at ${t} ms Momo is silent and no agent is shown at work`);
+    }
+    // And she is not kept waiting once they are done: the wrap-up follows within a breath, unless she is still talking.
+    if (wrap) {
+      const before = take.lines.filter((line) => line !== wrap && line.ms > 0).at(-1);
+      assert.ok(wrap.at <= Math.max(take.settled, before ? before.at + before.ms + REAL.breath : 0), `${phase.id}: the wrap-up waits for nothing`);
+    }
+  }
+  assert.ok(wraps >= 29, `the recorded rounds with cards have wrap-ups (${wraps})`);
+});
+
+test('played on a headset, every agent\'s label has ended before the wrap-up is said, the run ends with its last card, and each line closes the conversation it opened', { timeout: 30000 }, async () => {
+  const s = await stage(25);
+  try {
+    const { run } = s;
+    await run.demo!.goto('n3');
+    const take = run.demo!.shown('n3');
+    // What reached the headset, in the order it came, on either socket.
+    const order: { kind: string; label?: string; role?: string; state?: string; id?: string }[] = [];
+    const before = { seen: s.seen.length, voice: s.voice.length };
+    const tick = setInterval(() => {
+      for (const m of s.seen.splice(before.seen)) if (m.t === 'activity') order.push({ kind: 'activity', label: m.activity!.label, role: m.activity!.role, state: m.activity!.state });
+      for (const m of s.voice.splice(before.voice)) order.push({ kind: m.t, id: m.id });
+    }, 2);
+    void run.demo!.playTake('n3');
+    await until(() => run.demo!.status().take?.playing === true);
+    await until(() => run.demo!.status().take?.playing === false, 20000);
+    await new Promise((r) => setTimeout(r, 100));
+    clearInterval(tick);
+
+    const wrapAt = order.findIndex((m) => m.kind === 'text' && m.id?.endsWith('-wrap'));
+    assert.ok(wrapAt > 0, 'the wrap-up was said');
+    const open = new Map<string, number>();
+    for (const m of order.slice(0, wrapAt)) if (m.kind === 'activity') open.set(`${m.role}: ${m.label}`, (open.get(`${m.role}: ${m.label}`) ?? 0) + (m.state === 'start' ? 1 : -1));
+    assert.deepEqual([...open].filter(([, n]) => n > 0).map(([label]) => label), [], 'no agent has a label up when the wrap-up starts');
+    assert.ok(order.slice(0, wrapAt).some((m) => m.kind === 'activity' && m.role === 'scout' && /^(Looking into|Finding more for)/.test(m.label!) && m.state !== 'start'), 'the Scout\'s own label ended before it');
+    assert.deepEqual(order.slice(wrapAt).filter((m) => m.kind === 'activity' && m.state === 'start'), [], 'and no agent starts anything during or after it');
+
+    // Each line: its words, its first sound, then the conversation that sound opened on the headset is closed, once.
+    for (const line of take.lines) {
+      const mine = order.filter((m) => m.id?.endsWith(`-${line.id}`) || m.kind === 'name');
+      const first = mine.findIndex((m) => m.kind === 'audio' && m.id?.endsWith(`-${line.id}`));
+      assert.equal(mine[first + 1]?.kind, 'name', `${line.id}: the conversation is closed right after its first sound`);
+    }
+    assert.equal(order.filter((m) => m.kind === 'name').length, take.lines.length, 'once for each line');
+    assert.equal(s.voice.filter((m) => m.t === 'name' && (m as { ok?: boolean }).ok !== false).length, 0);
+    assert.equal(run.demo!.status().rounds.find((r) => r.id === 'n3')!.state, 'played');
   } finally {
     await s.close();
   }
