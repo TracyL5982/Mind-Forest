@@ -664,12 +664,15 @@ bool Bridge::standing(const Planted& p) const { return model.tree && model.tree.
 bool Bridge::opens(int nodeID) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
     if (!p || !p->service.count(nodeID)) return false;
-    const TreeNode& n = p->tree->nodes[nodeID];
-    // A card that already leads a layer, or one on another layer, is gone to as before.
-    if (n.head || p->tree->seat(n).depth != p->tree->standDepth()) return false;
-    // One whose parent leads no layer lies on this one where no group is, so its parent's group stands first.
-    if (n.parent && !p->tree->nodes[*n.parent].head) standGroup(*p->tree, *n.parent);
-    p->tree->open(nodeID);
+    Tree& t = *p->tree;
+    const TreeNode& n = t.nodes[nodeID];
+    // Where it lies: the layer of its parent's group, where a card that leads a layer of its own is shown too while you are not
+    // on that layer; the root's own. One on the layer you stand on opens there. Any other, behind or folded onto a card,
+    // has the layer it lies on stand first (`clickStands`), as a navigate does; and so does one whose parent leads no layer.
+    int group = n.parent ? *n.parent : n.id;
+    bool here = !t.condensed(n) && t.seat(n).depth == t.standDepth();
+    if ((!here && clickStands) || (here && !t.nodes[group].head)) standGroup(t, group);
+    t.open(nodeID);
     logLine("[agent] opened " + model.catalog->title(n.ref));
     return true;
 }

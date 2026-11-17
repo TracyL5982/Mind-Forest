@@ -5,8 +5,9 @@
 //      and no two cards come to overlap
 //   2. a question picked under it is a conversation about it: it is kept, leads a layer of its own, the service hears
 //      the ask, and the picks the service brings stand on that layer
-//   3. a card that already leads a layer is gone to, the root and then the asked card again: the same two layers, and
-//      no ask
+//   3. the root, on the layer behind, is gone to; then a click on the asked card, which leads a layer, only opens it where it
+//      stands (the user's rule, 2026-11-17: a click opens a card in detail and never starts or enters a layer): the same
+//      two layers, the root's still standing, and no ask
 // The tree is the first whose root and one of whose suggestions are the user's own (not the headset's library), so a
 // pinch can name them by flag (`-pickRef note:agent-<node id>`).
 //
@@ -92,9 +93,11 @@ try {
   const toRoot = last(back, again);
   check(toRoot && toRoot.route.length === 2 && toRoot.stands === 0, `3. a pinch on the root, which leads a layer, goes back to its layer (standing on layer ${toRoot ? toRoot.stands + 1 : '?'} of ${toRoot?.route.length})`);
   const toPick = last(again);
-  check(toPick && toPick.route.length === 2 && toPick.stands === 1, `3. a pinch on the asked card goes to its layer again (standing on layer ${toPick ? toPick.stands + 1 : '?'} of ${toPick?.route.length})`);
+  check(toPick && toPick.route.length === 2 && toPick.stands === 0, `3. a click on the asked card, which leads a layer, does not go into it (standing on layer ${toPick ? toPick.stands + 1 : '?'} of ${toPick?.route.length})`);
+  const openedAgain = find(run.log, /^\[agent\] opened /, again);
+  check(openedAgain, `3. it opens where it stands (${openedAgain?.line ?? 'not opened'})`);
   const late = ['ask', 'keep', 'more', 'utter'].flatMap((t) => sentBetween(t, back).map((m) => m.t));
-  check(late.length === 0 && !find(run.log, /^\[agent\] opened /, back), `3. with no new layer, no ask and nothing opened where it stands (${late.join(', ') || 'none sent'})`);
+  check(late.length === 0, `3. with no new layer and no ask (${late.join(', ') || 'none sent'})`);
   writeFileSync(join(shots, 'log-layers.txt'), run.log.map((l) => `${l.at.toFixed(2).padStart(6)} ${l.line}`).join('\n'));
   writeFileSync(join(shots, 'sent-layers.json'), JSON.stringify(['focus', 'ask', 'keep', 'questions'].flatMap((t) => run.sent(t)), null, 2));
 } finally {

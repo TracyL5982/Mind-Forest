@@ -37,9 +37,10 @@ public:
 
     /// Once a frame, on the frame thread: what the service sent since the last frame reaches the scene.
     void frame(double now);
-    /// A pinch on a card of a service tree on the layer you work on: it opens where it stands, to show its details, once
-    /// its parent's group stands (it may not, for a card whose parent has led no layer yet). True when it did; otherwise
-    /// the scene does what it always did (going back to a card's own layer).
+    /// A click on a card of a service tree: it opens, to show it in detail, and never starts a layer or goes into the one
+    /// it leads (the user's rule, 2026-11-17). One on the layer you stand on opens where it stands. One on another layer,
+    /// or folded onto a card, is shown on the layer it lies on: that layer stands first, as a navigate does (`clickStands`).
+    /// True when it opened; false for a card not of a service tree.
     bool opens(int nodeID);
     /// Where a card of a service tree plays its video from, streamed as it plays, when its view is "video":
     /// - its `src` on the service (a path, or the service's own address): there, with the headset's token;
@@ -51,6 +52,9 @@ public:
         bool elsewhere = false;     // on another host: never with the service's token
     };
     std::optional<Video> video(int nodeID);
+    /// A click on a card off the layer you stand on brings the layer it lies on to stand first (the lead's call, 2026-11-17).
+    /// False would open it where it is, on its own layer, without moving: not built out or checked.
+    static constexpr bool clickStands = true;
     /// The rows under an open card of a service tree: "Keep this" for a suggestion, then what can be asked about it (at most
     /// three of the questions the service wrote for the card and the conversation, once they come), then typing your own.
     void rows(const TreeNode& node, std::vector<Ask>& asks);

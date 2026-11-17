@@ -162,6 +162,12 @@ int Tree::layer(int id) const {
     return n->head ? id : n->parent.value_or(root);
 }
 
+int Tree::openGroup() const {
+    const TreeNode* n = find(nodes, current);
+    if (n && n->head && n->parent && generation(current) > standDepth()) return *n->parent;
+    return layer(current);
+}
+
 /// The group a card came back in.
 int Tree::host(int id) const {
     const TreeNode* n = find(nodes, id);
@@ -799,7 +805,7 @@ Box Tree::foot(const TreeNode& c, float scale, int level) const {
 /// on any other, the group is as it was before that card was asked.
 std::vector<Box> Tree::boxes(const TreeNode& h, int top) const {
     // (AGENT: as open with one of its cards opened where it stands, so the groups stand where they did; see `spread`.)
-    bool open = focused && layer(current) == h.id;
+    bool open = focused && openGroup() == h.id;
     float s = spread(h.id);
     std::vector<Box> out;
     if (open) {

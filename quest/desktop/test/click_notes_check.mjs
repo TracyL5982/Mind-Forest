@@ -47,7 +47,8 @@ const run = stand.launch(shots, 'click-notes', 15, [
 ], { sound: true });
 try {
   await until(run.log, /^\[agent\] connected/);
-  stand.inject({ t: 'navigate', treeId: tree.id, yours: true });
+  // To the root: its cards are the layer that stands then. (A tree gone to as a tree stands on its deepest layer.)
+  stand.inject({ t: 'navigate', treeId: tree.id, nodeId: tree.rootId, yours: true });
   await run.done;
 } finally {
   writeFileSync(join(shots, 'click-notes.log'), run.log.map((l) => `${l.at.toFixed(2)} ${l.line}`).join('\n') + '\n');

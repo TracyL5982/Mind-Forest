@@ -853,7 +853,7 @@ OceanModel::Look OceanModel::style(const TreeNode& n, const Tree& tree) const {
     if (at.depth == tree.standDepth()) {
         // On the layer you work on: with nothing in focus every card is whole; with one, the other groups stand back a little.
         // AGENT: the group of a card opened where it stands is its own group, so it stays whole.
-        bool group = focus && n.parent == tree.layer(*focus);
+        bool group = focus && n.parent == tree.openGroup();
         if (!focus || beside || group || n.id == tree.stand) return Look{1, 1, 0, true};
         return Look{0.8f, 1, 0, true};
     }
