@@ -60,12 +60,13 @@ private:
     std::vector<uint32_t> scratch;  // a mesh's indices, before they are known to have changed
     float step;                     // m from one line of words to the next, and how tall its bar is
     float small;                    // m from one agent's line to the next, and how tall its bar is
-    float size;                     // m: Momo's radius, a fifth more than CurioCity's, which is one line of its words
-    float edge;                     // m right of Momo's middle to where the bars begin
+    float size;                     // m: Momo's radius, 1.2 and then 1.5 times CurioCity's, which is one line of its words
+    float edge;                     // m right of the group's middle, where the words are set round, to where the bars begin
+    Vec2 middle;                    // m: Momo's middle, up and to the left of the group's (see `grown`)
     std::vector<Words> words, agents;
     double last = -1;
     std::vector<Bar> bars, barsDrawn;   // this frame's, and those the mesh holds
-    float agentsFrom = 0;           // m up from Momo's middle to its lowest agent's line, eased
+    float agentsFrom = 0;           // m up from the group's middle to its lowest agent's line, eased
 
     void draw();
     void write(const std::string& text, Speaker who, size_t name, float y, float opacity, Words& w);

@@ -18,6 +18,10 @@ constexpr float most = 0.3f;            // m: the widest a line may be, some 35 
 constexpr float pad = 6;                // px round the words in their picture
 constexpr float curio = 1.08f;          // CurioCity's line, of the type's own line height: its Momo is one such line in radius
 constexpr float larger = 1.2f;          // Momo's size, of CurioCity's. Kai, 2026-11-16: "Momo is too small +20% size"
+// And half as large again, its words left where they were. Kai, 2026-11-17: "Momo can also grow about 50% larger towards
+// top left - to align with status bar": its right edge keeps its gap to the words' bars, and its top meets the top of
+// the first agent's line ("Scout · Searching…") as it stands over two lines of words.
+constexpr float grown = 1.5f;
 // The bars under the words. A line's bar is as tall as the step to the next line, so two lines' bars meet with no gap
 // and no overlap; the steps are set so the words keep some 2 mm of ink above their capitals' line and under their tails.
 constexpr float pitch = 1.2f;           // from one line of words to the next, of the type's own line height
@@ -283,9 +287,11 @@ PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& lineMateria
       step(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm * pitch),
       small(std::ceil(typeface(*art, Speaker::agent).lineHeight()) / Art::ppm * agentPitch),
       // Of the words' line at the size it was chosen at, so Momo keeps its size when the words are set larger.
-      size(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm / Art::type * curio * larger),
-      // CurioCity's gap, half Momo's radius past its edge: room for the ring to swell and bend without reaching a bar.
-      edge(size * 1.5f) {
+      size(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm / Art::type * curio * larger * grown),
+      // Where the bars began beside Momo at its size before: CurioCity's gap, half its radius past its edge.
+      edge(size / grown * 1.5f),
+      // The same gap, half its radius now, to the left of the bars; its top at the first agent's bar's top.
+      middle{edge - size * 1.5f, step + apart + small - size} {
     // The ocean's dust is seen through and drawn after everything else, so the bars say where they stand; Momo's light
     // does not, or a fading part of it would hide the words. Momo is light added to what is behind it, as CurioCity
     // draws it, so its three rings sum to white.
@@ -408,7 +414,7 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
     int rows = caption.resting();
     float top = float(rows) * step / 2;
     // While Momo thinks, its bubbles hang where the lowest lines would be, so the lines stand above them for that while.
-    float above = face.look().dots > 0.5f ? Face::bubblesTop * size / Face::radius + apart + small / 2 : 0;
+    float above = face.look().dots > 0.5f ? middle.y + Face::bubblesTop * size / Face::radius + apart + small / 2 : 0;
     ease(agentsFrom, std::max(rows > 0 ? top + apart + small / 2 : 0, above), 0.18f, dt);
     auto keyOf = [](const std::string& role) { return int(std::hash<std::string>{}(role) & 0x7FFFFFFF); };
     for (const Roster::Line& line : roster.lines()) {
@@ -434,12 +440,12 @@ void PresenceView::draw() {
             for (const Bar& b : bars) pen.bar(b.left, b.right, b.bottom, b.top, -behind, b.alpha);
         });
     }
-    fill(light, scratch, BoundingBox{{-0.1f, -0.1f, -0.045f}, {0.1f, 0.12f, -0.035f}}, [&](Pen& pen) {
+    fill(light, scratch, BoundingBox{{-0.15f, -0.12f, -0.045f}, {0.15f, 0.2f, -0.035f}}, [&](Pen& pen) {
         float shown = l.shown;
         if (shown < 0.003f) return;
         // CurioCity's centimetres to metres, with the swell of a voice.
         float cm = size / Face::radius * l.scale;
-        auto at = [&](Vec2 p) { return p * cm; };
+        auto at = [&](Vec2 p) { return middle + p * cm; };
 
         // The three rings (AgentRing.update): each its own noise time, apart as far as the voice parts them.
         Vec2 outer[Face::points], inner[Face::points];
@@ -451,7 +457,7 @@ void PresenceView::draw() {
                 outer[k] = at(outer[k]);
                 inner[k] = at(inner[k]);
             }
-            pen.band(outer, inner, Face::points, {}, float(i - 1) * Face::zGap * cm, rings[i], shown);
+            pen.band(outer, inner, Face::points, middle, float(i - 1) * Face::zGap * cm, rings[i], shown);
         }
 
         // The eyes, tall and thin, squashed as they blink.
@@ -459,7 +465,7 @@ void PresenceView::draw() {
         Vec2 eyes[2];
         for (int i = 0; i < 2; i++) {
             eyes[i] = Vec2{(i == 0 ? -1.f : 1.f) * Face::eyeDistance / 2, Face::eyeHeight} + l.gaze;
-            pen.rect(at(eyes[i]), at(Vec2{Face::eyeSize, Face::eyeSize * Face::eyeAspect * l.openness}), z, white, shown);
+            pen.rect(at(eyes[i]), Vec2{Face::eyeSize, Face::eyeSize * Face::eyeAspect * l.openness} * cm, z, white, shown);
         }
 
         // Searching: a monocle round the eye on the viewer's left, settling on as it comes, with a short cord hanging
