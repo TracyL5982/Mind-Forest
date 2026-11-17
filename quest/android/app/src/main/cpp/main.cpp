@@ -594,6 +594,7 @@ void run() {
     bool handsWereSeen = false;
     FILE* handsFile = nullptr;
     XrSessionState state = XR_SESSION_STATE_UNKNOWN;
+    double leftFocusAt = -1;            // when the session last left FOCUSED (-1: it is there, or never was)
     XrTime lastDisplayTime = 0;
     double runBegan = 0, lastFrameWall = 0;
 
@@ -635,11 +636,20 @@ void run() {
         bool ended = false;
         while (xrPollEvent(instance, &event) == XR_SUCCESS) {
             if (event.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
+                XrSessionState was = state;
                 state = ((XrEventDataSessionStateChanged*)&event)->state;
                 logLine(fmt("[xr] session state %d", int(state)));
                 // In front: the system lets the app use the microphone again, which it refuses an app put aside or
                 // started while the headset is not worn.
                 if (state == XR_SESSION_STATE_FOCUSED) host::resumed = true;
+                // AGENT: back in front after having left it, the headset put on again (or the system's menu closed): the
+                // service is told, with how long it was away (agent::Bridge, `worn`).
+                if (state == XR_SESSION_STATE_FOCUSED && leftFocusAt >= 0) {
+                    host::wornAway = mediaTime() - leftFocusAt;
+                    leftFocusAt = -1;
+                } else if (was == XR_SESSION_STATE_FOCUSED && state != XR_SESSION_STATE_FOCUSED) {
+                    leftFocusAt = mediaTime();
+                }
                 if (state == XR_SESSION_STATE_READY) {
                     XrSessionBeginInfo begin{XR_TYPE_SESSION_BEGIN_INFO};
                     begin.primaryViewConfigurationType = viewType;

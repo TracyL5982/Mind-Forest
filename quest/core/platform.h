@@ -126,6 +126,9 @@ bool recentred();
 /// True once each time the app is in front again (the headset put back on, or the app brought back): what the system
 /// refused it while it was not, such as the microphone, may be asked for again.
 bool resumed();
+/// AGENT: when the headset is worn again (the app's XR session back in front after having left it), how long it was away,
+/// s: once each time, else nothing. The Mac preview has no session, and never has one (`-wornAt` stands in, agent::Bridge).
+std::optional<double> wornAgain();
 
 // MARK: - Video
 

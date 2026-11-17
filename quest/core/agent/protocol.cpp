@@ -710,6 +710,8 @@ Outbound Outbound::settings(const SettingsPatch& patch) {
     return Outbound(named("settings").set("patch", std::move(p)));
 }
 
+Outbound Outbound::worn(double away) { return Outbound(named("worn").set("away", std::round(away * 10) / 10)); }
+
 Outbound Outbound::client(const Media& media) {
     Json files = Json::list();
     for (const std::string& f : media.files) files.push(Json(f));

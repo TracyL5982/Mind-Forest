@@ -142,6 +142,7 @@ Bridge::Bridge(OceanModel& model, Address address, std::shared_ptr<Transport> tr
       keyboardTest(Flags::has("keyboardTest")) {
     if (Flags::string("agentVoice").value_or("on") != "off") voice = std::make_unique<Voice>(client, [this] { return scene(); }, Flags::string("wakeClip"), Flags::has("mute"));
     if (Flags::string("agentType") && Flags::number("agentTypeAt") > 0) typeAt = Flags::number("agentTypeAt");
+    if (Flags::number("wornAt") > 0) wornAt = Flags::number("wornAt");
     std::string file = plotsFile();
     if (!file.empty()) {
         ShelfPlots kept = ShelfPlots::parse(platform::readFile(file).value_or(""));
@@ -153,6 +154,16 @@ Bridge::Bridge(OceanModel& model, Address address, std::shared_ptr<Transport> tr
 void Bridge::frame(double t) {
     now = t;
     client.tick(now);
+    // The headset worn again: the service is told, once it can be (a demo's tree grows for whoever puts it on).
+    if (std::optional<double> away = platform::wornAgain()) wornAway = away;
+    if (wornAt && now >= *wornAt) {
+        wornAway = Flags::number("wornAway") > 0 ? Flags::number("wornAway") : 30;
+        wornAt.reset();
+    }
+    if (wornAway && client.state() == Client::State::live && client.send(Outbound::worn(*wornAway))) {
+        logLine(fmt("[agent] worn again, after %.1f s away", *wornAway));
+        wornAway.reset();
+    }
     for (Event& event : client.drain()) {
         std::visit(overloaded{
                        [&](Synced& s) {

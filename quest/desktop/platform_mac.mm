@@ -169,6 +169,8 @@ void holdTo(int) {}
 bool recentred() { return false; }
 bool resumed() { return false; }
 
+std::optional<double> wornAgain() { return std::nullopt; }
+
 namespace {
 /// A film that never has a frame: cards show their still.
 class NoVideo : public VideoPlayer {

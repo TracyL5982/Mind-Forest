@@ -202,6 +202,7 @@ export async function standIn(name, source, { demo = false } = {}) {
 
   const proxyPort = await freePort();
   let previewSocket = null;
+  let previewUp = null;
   const fromPreview = [];
   // What becomes of each picture the preview asks for (`/assets/…`), by `pictures(rule)`: `rule(path, n)`, n counting them
   // from 1, says 'refuse' (a 404: not found), 'fail' (a 503: the service can't give it now), a number of seconds to hold it
@@ -238,6 +239,7 @@ export async function standIn(name, source, { demo = false } = {}) {
     const up = new WebSocket(`ws://127.0.0.1:${servicePort}${req.url}`);
     const queued = [];
     previewSocket = down;
+    previewUp = up;
     up.on('message', (m) => down.send(String(m)));
     up.on('open', () => queued.splice(0).forEach((m) => up.send(m)));
     down.on('message', (m) => {
@@ -294,6 +296,8 @@ export async function standIn(name, source, { demo = false } = {}) {
     api,
     state,
     inject: (message) => previewSocket?.send(JSON.stringify(message)),
+    // A message to the service as if the preview sent it, on its own connection: what it starts is the preview's own (`yours`).
+    asPreview: (message) => previewUp?.readyState === WebSocket.OPEN && previewUp.send(JSON.stringify(message)),
     pictures: (rule) => {
       pictureRule = rule;
       picturesAsked = 0;

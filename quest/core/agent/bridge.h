@@ -139,6 +139,10 @@ private:
     bool keyboardTest = false;
     /// `-agentType <words> -agentTypeAt <s>`: the words are asked then, as typed on the headset, for runs with no keyboard.
     std::optional<double> typeAt;
+    /// The headset worn again, how long it was away, s, until the service has been told (`worn`): once the socket is live.
+    /// `-wornAt <s>` stands in on the Mac, as if worn again then after `-wornAway <s>` (30) away.
+    std::optional<double> wornAway;
+    std::optional<double> wornAt;
     /// Where each of this service's trees stands on the desk, by service tree id: read at launch, written with the shelf.
     Plots plots;
     /// Which layer the user last stood on in each, by the service card leading it: read at launch, written with the shelf.
