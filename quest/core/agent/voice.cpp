@@ -595,6 +595,13 @@ void Voice::frame(double now) {
         reopenAt = now + wait;
         logLine(fmt("[voice] opening the microphone again in %.0f s", wait));
     }
+    // In front again (the headset put back on, or the app brought back): a microphone the system would not let capture
+    // meanwhile opens again now, not after its wait, and waits from the first again should it fail.
+    if (platform::resumed() && ears && !microphone && reopenAt >= 0) {
+        logLine("[voice] the app is in front again, so the microphone opens again now");
+        microphoneFailures = 0;
+        reopenAt = now;
+    }
     if (ears && !microphone && reopenAt >= 0 && now >= reopenAt) {
         reopenAt = -1;
         openMicrophone();

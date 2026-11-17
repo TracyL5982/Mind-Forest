@@ -166,6 +166,7 @@ void carryScene(const Mat4& t) {
 }
 void holdTo(int) {}
 bool recentred() { return false; }
+bool resumed() { return false; }
 
 namespace {
 /// A film that never has a frame: cards show their still.

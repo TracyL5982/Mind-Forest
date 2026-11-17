@@ -100,16 +100,21 @@ object Sound {
             }
             Log.i("ocean", "[voice] echo cancelling: $cancelling")
             record.startRecording()
+            // The system lets an app use the microphone only while it is in front. Started while it is not (the headset
+            // not worn), or put aside meanwhile, the recorder does not record or stops: a blocking read then gives 0 at
+            // once, every time. Either is told as a failure, and the recorder let go, so the voice opens another once the
+            // app is in front again; read on, it would spin a core and hear nothing.
             val piece = ShortArray(RATE / 10)
-            while (running.get()) {
+            var stopped = if (record.recordingState == AudioRecord.RECORDSTATE_RECORDING) null else "AudioRecord did not start recording"
+            while (stopped == null && running.get()) {
                 val n = record.read(piece, 0, piece.size)
                 if (n > 0) {
                     heard(handle, piece, n)
-                } else if (n < 0) {
-                    microphoneFailed(handle, "AudioRecord.read gave $n".toByteArray(Charsets.UTF_8))
-                    break
+                } else {
+                    stopped = if (n == 0) "AudioRecord stopped recording" else "AudioRecord.read gave $n"
                 }
             }
+            if (stopped != null) microphoneFailed(handle, stopped.toByteArray(Charsets.UTF_8))
             record.stop()
             canceller?.release()
             record.release()
