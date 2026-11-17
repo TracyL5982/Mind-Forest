@@ -563,7 +563,8 @@ export class Director {
         return;
       }
       const head = await this.stand(phase, take, at);
-      if (phase.cards.length === 0) {
+      // A take with no run in it, or taken up after its run is over, is Momo alone: no Scout is asked, so none is shown at work.
+      if (phase.cards.length === 0 || at >= take.end) {
         await this.roll(this.deps.pipeline.ctx, phase, head, undefined, at);
         return;
       }
@@ -691,6 +692,9 @@ export class Director {
     let cut = false;
     let finish!: () => void;
     const over = new Promise<void>((done) => (finish = done));
+    /** The Scout's run within the take: over once the last card has landed, so its own label goes before Momo wraps up. */
+    let ranOut!: () => void;
+    const ran = new Promise<void>((done) => (ranOut = done));
     const at = (ms: number, act: () => void) => {
       const timer = setTimeout(() => {
         timers.delete(timer);
@@ -706,6 +710,7 @@ export class Director {
       this.rolling = null;
       this.playing.delete(phase.id);
       this.quiet = Date.now() + 500;
+      ranOut();
       finish();
     };
     this.rolling = {
@@ -754,11 +759,13 @@ export class Director {
       if (line.ms === 0 || line.at + line.ms <= from) continue;
       at(line.at, () => void this.say(play, line, Math.max(0, from - line.at), rate, () => cut));
     }
+    at(take.end, ranOut);
     at(take.ms, () => {
       this.mark(phase, true);
       end(take.ms);
     });
-    return over.then(() => []);
+    // Asked for as a Scout's run, the take hands the run back when its cards are in; asked for by itself, it is awaited whole.
+    return (deliver ? ran : over).then(() => []);
   }
 
   /**

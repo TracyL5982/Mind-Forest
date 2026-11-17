@@ -43,6 +43,8 @@ export const REAL = {
   ideaApart: 2200,
   /** From the last card to the run's end. */
   settle: 300,
+  /** From the last card to the Renderer's label going: it lays the cards out for 0.6 s, and a little is left for the label to go. */
+  laidOut: 900,
   /** The breath between two things Momo says. */
   breath: 350,
   /** What is left of the take after the last thing in it. */
@@ -69,8 +71,10 @@ export interface Drop {
 export interface Schedule {
   steps: Step[];
   drops: Drop[];
-  /** When the run is over: its own label goes, and Momo may wrap up. */
+  /** When the run is over: the Scout's own label goes. */
   end: number;
+  /** When every agent's label has gone: the Renderer has laid out the last cards. Only then may Momo wrap up. */
+  settled: number;
 }
 
 /**
@@ -100,8 +104,10 @@ export interface Take {
   lines: TimedLine[];
   steps: Step[];
   drops: Drop[];
-  /** When the run is over. */
+  /** When the run is over: the Scout's own label, up since `REAL.begins`, goes. */
   end: number;
+  /** When every agent's label has gone. Momo's wrap-up starts no earlier. */
+  settled: number;
 }
 
 /** The source's name as a step would say it: short, and a museum by its own name. */
@@ -119,7 +125,7 @@ function sourceName(card: ScriptCard): string | undefined {
 export function schedule(phase: ScriptPhase, under = ''): Schedule {
   const steps: Step[] = [];
   const drops: Drop[] = [];
-  if (phase.cards.length === 0) return { steps, drops, end: 0 };
+  if (phase.cards.length === 0) return { steps, drops, end: 0, settled: 0 };
   const own = phase.cards.filter((card) => card.origin === 'ocean');
   const outside = phase.cards.filter((card) => card.origin === 'external');
   const made = phase.cards.filter((card) => card.origin === 'generated');
@@ -163,7 +169,7 @@ export function schedule(phase: ScriptPhase, under = ''): Schedule {
   const end = drops.at(-1)!.at + REAL.settle;
   // The Scout thinks of directions of its own for as long as the run lasts, whatever the sources bring.
   if (under && outside.length + made.length > 0) steps.push({ label: `Thinking of directions for ${under}`.split(' ').slice(0, 8).join(' ').slice(0, 60), at: began, end });
-  return { steps, drops, end };
+  return { steps, drops, end, settled: drops.at(-1)!.at + REAL.laidOut };
 }
 
 /** A card as Momo is told of it when it lands, from the script's own words. */
@@ -235,7 +241,7 @@ export const spokenFor = (text: string): number => (text.trim() ? Math.max(1200,
 
 /**
  * The round's timeline. A remark starts as the last of its cards lands, or when the line before it is over if that is later, so
- * Momo never talks over herself; the wrap-up waits for the run's end too. A line with no words takes no time and is not said.
+ * Momo never talks over herself; the wrap-up waits too for every agent's label to have gone. A line with no words takes no time and is not said.
  */
 export function takeOf(phase: ScriptPhase, lines: readonly Line[], lengthOf: (text: string) => number = spokenFor, under = ''): Take {
   const sched = schedule(phase, under);
@@ -245,12 +251,13 @@ export function takeOf(phase: ScriptPhase, lines: readonly Line[], lengthOf: (te
   for (const line of lines) {
     const ms = lengthOf(line.text);
     const landed = Math.max(0, ...line.cards.map((id) => landsAt.get(id) ?? 0));
-    const at = Math.max(free, line.kind === 'answer' ? 0 : line.kind === 'wrap' ? sched.end : landed);
+    // The wrap-up waits for every agent to be done, so Momo never sums up a search that is still shown at work.
+    const at = Math.max(free, line.kind === 'answer' ? 0 : line.kind === 'wrap' ? sched.settled : landed);
     timed.push({ ...line, at, ms });
     if (ms > 0) free = at + ms + REAL.breath;
   }
-  const last = Math.max(sched.end, ...timed.map((line) => line.at + line.ms));
-  return { round: phase.id, ms: last + REAL.tail, lines: timed, steps: sched.steps, drops: sched.drops, end: sched.end };
+  const last = Math.max(sched.settled, ...timed.map((line) => line.at + line.ms));
+  return { round: phase.id, ms: last + REAL.tail, lines: timed, steps: sched.steps, drops: sched.drops, end: sched.end, settled: sched.settled };
 }
 
 /** What stands at one moment of a take: the cards that have landed, the labels showing, and the line Momo is in with how far. */
