@@ -1,12 +1,14 @@
 // Runs made-up hands through Hands (core/ocean/hands.cpp) and checks what it reads from them: a fist
 // pushed, pulled and carried in one frame, changing its mind and committing, and the knife's pose and
-// stroke. No window and no headset; the clock is the real one, so it takes about 15 s.
+// stroke; and which finger may work the small tree (holoreach.h). No window and no headset; the clock is the real
+// one, so it takes about 15 s.
 //   quest/desktop/test/hands_check.sh
 #include <cstdio>
 #include <functional>
 #include <thread>
 #include <chrono>
 #include "ocean/hands.h"
+#include "ocean/holoreach.h"
 
 namespace { platform::Hand g[2]; Mat4 gHead; }
 namespace platform {
@@ -162,6 +164,27 @@ int main() {
               shaken == 1 && r.count(Hands::Event::Kind::cut) == 2, "cuts while shaking " + std::to_string(shaken) + ", in all " + std::to_string(r.count(Hands::Event::Kind::cut))); }
     {   Run r; r.lands = true; r.hold(o, Made::knife, 0.7, edge); r.turn(o, 0, 0.35f, 0.15, edge); r.turn(o, 0.35f, 0, 0.15, edge);
         check("a stroke and straight back, with no pause between, cuts once", r.count(Hands::Event::Kind::cut) == 1, "cuts " + std::to_string(r.count(Hands::Event::Kind::cut))); }
+    // The small tree at your hand takes only a finger you can see (HoloReach). Seated, looking ahead: the eyes 1.2 m up,
+    // the small tree on the desk 0.39 m ahead and 0.57 m under them.
+    {   Vec3 eye{0, 1.2f, 0}, tip{0, 1.2f - 0.565f, -0.39f};
+        float ahead = HoloReach::off(eye, {0, 0, -1}, tip), down = HoloReach::off(eye, normalize(Vec3{0, -0.565f, -0.39f}), tip);
+        check("a finger resting on the small tree while you look ahead is out of view, and does not take it", !HoloReach::takes(ahead), std::to_string(int(ahead)) + " degrees off");
+        check("the same finger while you look down at it takes it", HoloReach::takes(down), std::to_string(int(down)) + " degrees off"); }
+    {   HoloReach reach;
+        bool kept = reach.keep(45.f, 0) == HoloReach::Hold::on;
+        check("the hand on it keeps it 45 degrees off, past where it may take it", kept, ""); }
+    {   HoloReach reach;
+        HoloReach::Hold atOnce = reach.keep(55.f, 1.0), during = reach.keep(55.f, 1.4), after = reach.keep(55.f, 1.5);
+        check("past 50 degrees it holds nothing at once, and lets go after 0.5 s", atOnce == HoloReach::Hold::holdingNothing &&
+              during == HoloReach::Hold::holdingNothing && after == HoloReach::Hold::letGo, ""); }
+    {   HoloReach reach;
+        reach.keep(55.f, 1.0);
+        HoloReach::Hold back = reach.keep(20.f, 1.3), again = reach.keep(55.f, 1.6), later = reach.keep(55.f, 1.9);
+        check("back in view after 0.3 s it goes on, and the next time out of view counts afresh", back == HoloReach::Hold::on &&
+              again == HoloReach::Hold::holdingNothing && later == HoloReach::Hold::holdingNothing, ""); }
+    {   HoloReach reach;
+        HoloReach::Hold lost = reach.keep(std::nullopt, 2.0), gone = reach.keep(std::nullopt, 2.5);
+        check("a hand no longer tracked counts as out of view", lost == HoloReach::Hold::holdingNothing && gone == HoloReach::Hold::letGo, ""); }
     printf("%d failed\n", failures);
     return failures;
 }
