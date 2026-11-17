@@ -233,10 +233,13 @@ export async function standIn(name, source, { demo = false } = {}) {
    * `realtime` false its clock runs a frame at a time as fast as it can draw, so a picture is taken at the very moment the
    * scene's flags count from.
    */
-  function launch(shots, name, seconds, extra, { realtime = true } = {}) {
+  function launch(shots, name, seconds, extra, { realtime = true, sound = false } = {}) {
     const log = [];
     const began = Date.now();
-    const args = ['-agent', `ws://127.0.0.1:${proxyPort}`, '-agentToken', token, '-cards', '-mute', '-agentVoice', 'off', '-dataDir', previewData, ...(realtime ? ['-realtime'] : []),
+    // With `sound`, the mixer runs and logs each sound it is asked for, and what it plays goes to <name>.wav: with -shot the
+    // preview never opens the Mac's output, so still nothing is heard.
+    const heard = sound ? ['-soundOut', join(shots, `${name}.wav`), '-soundLog'] : ['-mute'];
+    const args = ['-agent', `ws://127.0.0.1:${proxyPort}`, '-agentToken', token, '-cards', ...heard, '-agentVoice', 'off', '-dataDir', previewData, ...(realtime ? ['-realtime'] : []),
       '-shot', join(shots, `${name}.png`), '-shotAt', String(seconds), '-shotEvery', '2', ...extra];
     const preview = spawn(join(quest, 'desktop/preview'), args, { stdio: ['ignore', 'ignore', 'pipe'] });
     started.push(preview);
@@ -244,7 +247,7 @@ export async function standIn(name, source, { demo = false } = {}) {
     preview.stderr.on('data', (chunk) => {
       const lines = (partial + chunk).split('\n');
       partial = lines.pop();
-      for (const line of lines) if (/^\[(agent|ocean|cards)\]/.test(line)) log.push({ at: (Date.now() - began) / 1000, line });
+      for (const line of lines) if (/^\[(agent|ocean|cards|sound)\]/.test(line)) log.push({ at: (Date.now() - began) / 1000, line });
     });
     const done = new Promise((resolve) => preview.on('exit', resolve));
     const sent = (t) => fromPreview.filter((m) => m.message.t === t && m.when >= began).map((m) => ({ ...m.message, at: (m.when - began) / 1000 }));

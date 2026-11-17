@@ -706,6 +706,8 @@ private:
     void soundLayer(int layer, bool forward, double after = 0);
     /// One note for each card the gardener brings, up the chord of the layer they come to.
     void soundNotes(int count, double delay);
+    /// A card's own note, as it is pressed: one of its layer's chord, by its place on the layer from left to right.
+    void soundCard(int id);
     /// The note of a level of the small tree: its layer's root, a step higher for each level.
     void soundLevel(int level);
     /// What sounds for as long as something lasts: the ocean under everything, the gardener

@@ -79,6 +79,27 @@ void OceanModel::soundNotes(int count, double delay) {
     }
 }
 
+void OceanModel::soundCard(int id) {
+    const TreeNode* n = tree ? find(*tree, id) : nullptr;
+    const CardRef& c = card(id);
+    if (!n) {
+        if (c) soundAt("take", c->position); else sound("take");
+        return;
+    }
+    // Its place among the cards that came with it, its parent's, in the order they come (`soundNotes`): so each keeps
+    // the note it came in on, neighbours differ, and the notes climb along them. It does not move as cards open.
+    size_t place = 0;
+    if (const TreeNode* parent = n->parent ? find(*tree, *n->parent) : nullptr) {
+        place = size_t(std::find(parent->children.begin(), parent->children.end(), id) - parent->children.begin());
+    }
+    std::optional<Tree::Place> at = tree->shown(*n);
+    const std::vector<int>& notes = chordNotes[std::max(at ? at->depth : tree->standDepth(), 0) % 5];
+    std::string name = fmt("note_%02d", notes[place % notes.size()]);
+    logLine(fmt("[ocean] %s sounds %s: card %d of its parent's on layer %d", catalog ? catalog->title(n->ref).c_str() : "a card",
+                name.c_str(), int(place) + 1, at ? at->depth : tree->standDepth()));
+    if (c) soundAt(name.c_str(), c->position); else sound(name.c_str());
+}
+
 void OceanModel::soundLevel(int level) {
     int note = levelNotes[std::min(std::max(level, 0), 9)];
     if (hologram) soundAt(fmt("note_%02d", note).c_str(), hologram->entity->convertTo(Vec3::zero(), nullptr), 0.5f);

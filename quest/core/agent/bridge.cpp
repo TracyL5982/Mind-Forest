@@ -362,6 +362,8 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
             }
         }
         model.arrive(ids, animate ? 0.1 : 0.0);
+        // The agent's cards come as the gardener's do on Kai's trees: one note each, up the chord of the layer.
+        if (animate) model.soundNotes(int(ids.size()), 0.1);
         logLine(fmt("[agent] %d new cards", int(ids.size())));
         touched = true;
         std::optional<int> open = p->tree->focus();

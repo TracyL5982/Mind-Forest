@@ -428,8 +428,8 @@ void OceanModel::runFlags() {
         int f = Flags::integer("peekFilm");
         after(Flags::number("peekAt") > 0 ? Flags::number("peekAt") : 1.2, [this, f] { peekAt(f); });
     }
-    // `-pickRef note:dz-count -pickAt 3` picks one named thing (and `2`, `3` for more), bringing it in if it isn't there.
-    for (const char* suffix : {"", "2", "3"}) {
+    // `-pickRef note:dz-count -pickAt 3` picks one named thing (and `2` to `5` for more), bringing it in if it isn't there.
+    for (const char* suffix : {"", "2", "3", "4", "5"}) {
         std::optional<std::string> key = Flags::string(std::string("pickRef") + suffix);
         std::optional<Ref> ref = key ? Ref::make(*key) : std::nullopt;
         if (!ref) continue;

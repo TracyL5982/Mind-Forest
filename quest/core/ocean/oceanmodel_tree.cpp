@@ -126,9 +126,12 @@ void OceanModel::take(int id) {
     const TreeNode* asked = find(*tree, target);
     bool fresh = asked ? asked->children.empty() : true;
     // The card's own note now; its new layer's chord a moment later, as it rises (`updateSound`).
-    if (const CardRef& c = card(target)) soundAt("take", c->position); else sound("take");
     // AGENT: in a tree the agent service grows, a pinch opens a card where it stands, to show its details; a layer
-    // starts from it only when there is a conversation about it (agent::Bridge::ask). So it has the note and no chord.
+    // starts from it only when there is a conversation about it (agent::Bridge::ask). So it has its note and no chord,
+    // and as no layer of cards comes to sound the layer's notes in turn, the note is the card's own on its layer.
+    if (agentBridge && agentBridge->serves(*tree)) soundCard(target);
+    else if (const CardRef& c = card(target)) soundAt("take", c->position);
+    else sound("take");
     if (agentBridge && agentBridge->opens(target)) {
         restyle();
         return;
