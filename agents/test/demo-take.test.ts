@@ -467,8 +467,10 @@ test('in every round Momo wraps up only once every agent is done, and is never l
       assert.ok(wrap.at >= take.settled, `${phase.id}: the wrap-up starts at ${wrap.at}, before every agent is done at ${take.settled}`);
       assert.equal(take.lines.at(-1), wrap, `${phase.id}: nothing is said after the wrap-up`);
     }
-    // From the run's start to the last card laid out, at every moment Momo speaks or an agent has a label up: on the headset she
-    // is then speaking or shown working, never resting. (The run's own label is up from its start to its end.)
+    // From the run's start to the last card laid out, at every moment Momo speaks or an agent has a label up. This is the
+    // service's half of "never resting while an agent works": it assumes the headset shows her working whenever she is silent
+    // and an agent has a label up, with the conversation open or not, which is the headset's to do. (The run's own label is up
+    // from its start to its end.)
     const laidOut = lastCard + 600;
     for (let t = REAL.begins; t < laidOut; t += 50) {
       const speaks = take.lines.some((line) => line.ms > 0 && line.at <= t && t < line.at + line.ms);
@@ -484,7 +486,7 @@ test('in every round Momo wraps up only once every agent is done, and is never l
   assert.ok(wraps >= 29, `the recorded rounds with cards have wrap-ups (${wraps})`);
 });
 
-test('played on a headset, every agent\'s label has ended before the wrap-up is said, the run ends with its last card, and each line closes the conversation it opened', { timeout: 30000 }, async () => {
+test('played on a headset, every agent\'s label has ended before the wrap-up is said, and the run ends with its last card', { timeout: 30000 }, async () => {
   const s = await stage(25);
   try {
     const { run } = s;
@@ -511,14 +513,8 @@ test('played on a headset, every agent\'s label has ended before the wrap-up is 
     assert.ok(order.slice(0, wrapAt).some((m) => m.kind === 'activity' && m.role === 'scout' && /^(Looking into|Finding more for)/.test(m.label!) && m.state !== 'start'), 'the Scout\'s own label ended before it');
     assert.deepEqual(order.slice(wrapAt).filter((m) => m.kind === 'activity' && m.state === 'start'), [], 'and no agent starts anything during or after it');
 
-    // Each line: its words, its first sound, then the conversation that sound opened on the headset is closed, once.
-    for (const line of take.lines) {
-      const mine = order.filter((m) => m.id?.endsWith(`-${line.id}`) || m.kind === 'name');
-      const first = mine.findIndex((m) => m.kind === 'audio' && m.id?.endsWith(`-${line.id}`));
-      assert.equal(mine[first + 1]?.kind, 'name', `${line.id}: the conversation is closed right after its first sound`);
-    }
-    assert.equal(order.filter((m) => m.kind === 'name').length, take.lines.length, 'once for each line');
-    assert.equal(s.voice.filter((m) => m.t === 'name' && (m as { ok?: boolean }).ok !== false).length, 0);
+    // The take sends the headset nothing about the conversation: whether it stays open after a line, and what her mark shows then, is the headset's.
+    assert.equal(order.filter((m) => m.kind === 'name').length, 0);
     assert.equal(run.demo!.status().rounds.find((r) => r.id === 'n3')!.state, 'played');
   } finally {
     await s.close();

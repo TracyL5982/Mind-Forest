@@ -782,16 +782,8 @@ export class Director {
     if (pcm) {
       const piece = BYTES_PER_MS * 100;
       const began = Date.now();
-      let closed = false;
       for (let at = Math.floor((offset * BYTES_PER_MS) / 2) * 2; at < pcm.length && !stopped(); at += piece) {
         send({ t: 'audio', id, pcm: Buffer.from(pcm.subarray(at, at + piece)).toString('base64') });
-        // A reply that starts to sound opens the conversation on a headset, which then shows "listening" for eight seconds
-        // after it. Nobody is listened to in a take, so the headset is told to close it, in the one way it knows: as it is
-        // told that a wake was not her name. Her line plays on, and when it ends she rests, or is shown working with the agents.
-        if (!closed) {
-          closed = true;
-          send({ t: 'name', ok: false });
-        }
         const ahead = (at + piece) / BYTES_PER_MS - offset - (Date.now() - began) * rate;
         if (ahead > 250) await pause((ahead - 250) / rate);
       }
