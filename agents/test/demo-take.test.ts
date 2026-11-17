@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { Lines, recordingName, type LinesFile } from '../src/demo/lines.ts';
+import { upTo } from '../src/demo/director.ts';
 import { loadScript, type ScriptPhase } from '../src/demo/script.ts';
 import { compare, record as recordLine, sentences, wavOf } from '../src/demo/momo-voice.ts';
 import { MODES, momentAt, planLines, REAL, schedule, takeOf, type Line } from '../src/demo/take.ts';
@@ -240,6 +241,12 @@ const under = (run: Running, title: string) => {
   const head = [...run.mind.nodes.values()].find((node) => run.mind.item(node.itemId).title === title)!;
   return run.mind.children(head.id).map((node) => run.mind.item(node.itemId).title).sort();
 };
+/** What Momo said, line by line: a line's words come as its sound does, so its last words sent are the line. */
+const saidOf = (voice: Seen[]) => {
+  const lines = new Map<string, string>();
+  for (const m of voice) if (m.t === 'text') lines.set(m.id!, m.text!);
+  return [...lines.values()];
+};
 const bytesOf = (voice: Seen[], id: string) => voice.filter((m) => m.t === 'audio' && m.id?.endsWith(`-${id}`)).reduce((n, m) => n + Buffer.from(m.pcm!, 'base64').length, 0);
 
 test('Play runs a round\'s take on the headset: its labels, its cards as picks in their deliveries, and each of Momo\'s lines said exactly', { timeout: 30000 }, async () => {
@@ -271,7 +278,26 @@ test('Play runs a round\'s take on the headset: its labels, its cards as picks i
     for (const step of take.steps) assert.ok(labels.includes(step.label), `the label "${step.label}" was shown`);
     assert.ok(labels.some((label) => /^(Looking into|Finding more for)/.test(label)), 'under the run\'s own label');
 
-    const said = s.voice.filter((m) => m.t === 'text').map((m) => m.text);
+    const said = saidOf(s.voice);
+    // Her words come as their sound does: the headset shows the share of a line it has played out of what it was sent, and a
+    // recording is sent a quarter of a second ahead, so a whole line sent at once would stand there from its first word.
+    for (const id of new Set(s.voice.filter((m) => m.t === 'audio').map((m) => m.id!))) {
+      const frames = s.voice.filter((m) => m.id === id && (m.t === 'text' || m.t === 'audio'));
+      const whole = frames.filter((m) => m.t === 'text').at(-1)!.text!;
+      const sound = frames.filter((m) => m.t === 'audio').reduce((n, m) => n + Buffer.from(m.pcm!, 'base64').length, 0);
+      let sent = 0;
+      let words = '';
+      for (const m of frames) {
+        if (m.t === 'audio') sent += Buffer.from(m.pcm!, 'base64').length;
+        else {
+          assert.ok(whole.startsWith(m.text!) && m.text!.length >= words.length, 'her words only grow, and are the line\'s own');
+          words = m.text!;
+          // No more of the line than the sound sent with it, the piece that follows these words included, and one word over.
+          const share = Math.min(1, (sent + 4800) / sound);
+          assert.ok(words.length <= Math.max(upTo(whole, share).length, upTo(whole, 0).length), `the words keep to the sound: ${words.length} of ${whole.length} at ${share.toFixed(2)}`);
+        }
+      }
+    }
     assert.deepEqual(said, take.lines.map((line) => line.text), 'Momo says every line, in order, in the words as written');
     // The last line's sound may still be on its way as the take ends.
     await until(() => s.voice.filter((m) => m.t === 'done').length === take.lines.length);
@@ -363,7 +389,7 @@ test('a take pauses where it is and goes on from there: no card lands while paus
       const resumed = bytesOf(s.voice, line.line.id) - before;
       assert.equal(resumed, whole - Math.floor((line.offset * 48) / 2) * 2, 'the line she was in went on from the very point the take was paused at, not from its start');
     }
-    const starts = s.voice.filter((m) => m.t === 'text' && m.id?.endsWith('-answer'));
+    const starts = [...new Set(s.voice.filter((m) => m.t === 'text' && m.id?.endsWith('-answer')).map((m) => m.id))];
     assert.equal(starts.length, 1, 'her answer, long over, is not said again');
   } finally {
     await s.close();
@@ -446,7 +472,7 @@ test('Play on an empty stage starts the tree and brings the first round, and a r
     await until(() => run.demo!.status().take?.playing === false && run.demo!.status().rounds[0]!.state === 'played', 10000);
     const tree = [...run.mind.trees.values()].find((t) => t.title === script.title)!;
     assert.deepEqual(run.mind.children(tree.rootId).map((node) => run.mind.item(node.itemId).title).sort(), round('r1').cards.map((card) => card.title).sort());
-    assert.deepEqual(s.voice.filter((m) => m.t === 'text').map((m) => m.text), run.demo!.shown('r1').lines.map((line) => line.text));
+    assert.deepEqual(saidOf(s.voice), run.demo!.shown('r1').lines.map((line) => line.text));
 
     await run.demo!.goto('bs');
     assert.deepEqual(run.demo!.shown('bs').lines, [], 'a round with no words and no cards has nothing on its timeline');
@@ -638,7 +664,7 @@ test('the page loads a pace: its take, its lines and its edits are its own, a sp
     await until(() => run.demo!.status().take?.playing === false, 20000);
     await until(() => s.voice.filter((m) => m.t === 'done').length === real.lines.length);
     assert.deepEqual(under(run, 'Llull’s ring'), round('n3').cards.map((card) => card.title).sort());
-    const texts = s.voice.filter((m) => m.t === 'text').map((m) => m.text);
+    const texts = saidOf(s.voice);
     assert.deepEqual(texts, run.demo!.shown('n3').lines.map((line) => line.text));
     assert.equal(texts.at(-1), 'A wrap-up for the real take.');
 
@@ -716,4 +742,13 @@ test('a line is recorded by the realtime model as Momo, a take kept only when it
   assert.ok('unsaid' in unsaid);
   assert.deepEqual([unsaid.closest, unsaid.own, unsaid.takes, stubborn.sessions()], ['Nine landed, my favourite is Linux.', true, 5, 5], 'a line of one sentence has no sentences to try: five takes, and it is not ready');
   assert.equal(await heardAs(wavOf(unsaid.pcm!)), 'Nine landed, my favourite is Linux.');
+});
+
+test('the words of a line said so far are whole words, never fewer than the first, and all of it at its end', () => {
+  const line = 'Nice, that is a rich rabbit hole.';
+  assert.equal(upTo(line, 0), 'Nice,');
+  assert.equal(upTo(line, 0.5), 'Nice, that is a');
+  assert.equal(upTo(line, 0.99), 'Nice, that is a rich rabbit');
+  assert.equal(upTo(line, 1), line);
+  assert.equal(upTo('Sure.', 0.2), 'Sure.');
 });
