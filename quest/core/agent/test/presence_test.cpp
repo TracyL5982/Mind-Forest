@@ -584,3 +584,21 @@ TEST(aLineWhoseAgentHasGoneFadesWithItsNewestWords) {
     const Roster::Line* l = line(r, "scout");
     CHECK(l && l->text == "Scout · finished working", "fading, it says what it last said it was doing: \"%s\"", l ? l->text.c_str() : "gone");
 }
+
+TEST(theLastStepOfARunShowsForItsWhileBeforeFinishedWorking) {
+    Roster r = roster();
+    auto step = [](const char* words) { return AgentLine{"scout", "Scout", words, false}; };
+    run(r, {step("Searching museum collections")}, 1);
+    // The run's last step comes, and ends at once: no sooner shown than over.
+    run(r, {step("Reading 8 results")}, 0.05f);
+    float t = 0, readFrom = -1, finishedFrom = -1;
+    for (; t < 1.5f; t += frame) {
+        r.update({{"scout", "Scout", "", true}}, frame);
+        const Roster::Line* l = line(r, "scout");
+        if (l && readFrom < 0 && l->text == "Scout · Reading 8 results") readFrom = t;
+        if (l && finishedFrom < 0 && l->text == "Scout · finished working") finishedFrom = t;
+    }
+    CHECK(readFrom >= 0, "the last step is shown, though the run had ended before its words had stood their moment");
+    CHECK(finishedFrom > readFrom && finishedFrom - readFrom >= Roster::holdWords - 0.02f,
+          "then \"finished working\", after it has stood %.2f s", double(finishedFrom - readFrom));
+}
