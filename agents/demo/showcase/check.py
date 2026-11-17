@@ -42,7 +42,7 @@ def check(name):
     cards = tree.get('cards', [])
     if not 36 <= len(cards) <= 52:
         wrong.append(f'{len(cards)} cards: a showcase tree has 36 to 52')
-    ids, titles, hrefs = {}, {}, {}
+    ids, titles, hrefs, reasons = {}, {}, {}, {}
     for card in cards:
         cid = card.get('id', '')
         where = f'card {cid or "?"}'
@@ -64,6 +64,13 @@ def check(name):
         text = card.get('text', '')
         if not 40 <= len(text) <= 230:
             wrong.append(f'{where}: "text" is one or two sentences, 40 to 230 characters, not {len(text)}')
+        why = card.get('why', '').strip()
+        if not why or len(why.split()) >= 8 or '…' in why or '...' in why or why.endswith('.'):
+            wrong.append(f'{where}: "why" is the words on its thread, why it hangs from its card: under eight words, no "…", no full stop')
+        said = (card.get('parent'), why.lower())
+        if why and said in reasons:
+            wrong.append(f'{where}: its "why" is also the "why" of {reasons[said]}, under the same card')
+        reasons[said] = cid
         href = card.get('href')
         if href:
             if not href.startswith('https://'):

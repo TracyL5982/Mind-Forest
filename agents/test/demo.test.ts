@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -7,6 +7,7 @@ import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { momoNote, wavesOf } from '../src/demo/director.ts';
+import { itemOf, nodeOf as nodeOfCard } from '../src/demo/cards.ts';
 import { loadScript } from '../src/demo/script.ts';
 import { loadShowcase, type Showcase } from '../src/demo/showcase.ts';
 import { startServer, type Running } from '../src/node/server.ts';
@@ -340,4 +341,45 @@ test('the showcase trees of the demo folder all hold together, and each is a tre
     assert.ok(Math.max(...tree.cards.map((card) => depth(card.id))) >= 4, `${tree.id} is less than four layers deep`);
     assert.ok(tree.cards.length >= 36);
   }
+});
+
+test("no showcase card is a work the headset's library already holds, since a pick gives way to what the user has", () => {
+  const { works } = JSON.parse(readFileSync(join(import.meta.dirname, '../../public/works/works.json'), 'utf8')) as { works: { url?: string }[] };
+  const library = new Set(works.flatMap((work) => work.url ?? []));
+  const { trees } = loadShowcase(join(demoDir, 'showcase'));
+  const again = trees.flatMap(({ tree }) => tree.cards.filter((card) => card.href && library.has(card.href)).map((card) => `${tree.id}/${card.id}`));
+  assert.deepEqual(again, []);
+});
+
+test('a card with a credit keeps it as data.credit, with its page, as the Scout keeps a source credit line', () => {
+  const making = { media: () => undefined, assetUrl: (id: string) => `/assets/${id}`, now: () => '2026-11-16T00:00:00.000Z' };
+  const { trees } = loadShowcase(join(demoDir, 'showcase'));
+  const cards = [...script.phases.flatMap((phase) => phase.cards), ...trees.flatMap(({ tree }) => tree.cards)].filter((card) => card.credit?.trim());
+  assert.ok(cards.length > 100, `${cards.length} cards with a credit`);
+  for (const card of cards) {
+    const item = itemOf(card, making);
+    assert.deepEqual(item.data.credit, { text: card.credit!.trim(), ...(card.href && { url: card.href }) }, card.id);
+  }
+});
+
+test("every card's thread says why it is there in under eight words, as the Scout's do, with no two alike under one card", () => {
+  const making = { media: () => undefined, assetUrl: (id: string) => `/assets/${id}`, now: () => '2026-11-16T00:00:00.000Z' };
+  const { trees } = loadShowcase(join(demoDir, 'showcase'));
+  const sets = [
+    ...trees.map(({ tree }) => ({ name: tree.id, cards: tree.cards })),
+    { name: 'walkthrough', cards: script.phases.flatMap((phase) => phase.cards.map((card) => ({ ...card, parent: phase.head }))) },
+  ];
+  const broken: string[] = [];
+  for (const { name, cards } of sets) {
+    const under = new Map<string, string>();
+    for (const card of cards) {
+      const { why } = nodeOfCard(card, itemOf(card, making), { id: card.id, treeId: name, parent: card.parent, status: 'kept', order: 0, rank: 0 }, making);
+      const words = why.split(/\s+/).filter(Boolean).length;
+      if (words === 0 || words >= 8 || why.includes('…')) broken.push(`${name}/${card.id}: "${why}"`);
+      const key = `${card.parent} ${why.toLowerCase()}`;
+      if (under.has(key)) broken.push(`${name}/${card.id}: "${why}", as ${under.get(key)}`);
+      under.set(key, card.id);
+    }
+  }
+  assert.deepEqual(broken, []);
 });

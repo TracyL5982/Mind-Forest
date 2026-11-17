@@ -19,6 +19,11 @@ export const ScriptCard = z.object({
   title: z.string().min(1),
   /** One or two sentences: what it is and why it is here. Momo tells the user this, and a picture's caption is this. */
   text: z.string().default(''),
+  /**
+   * The words on its thread: why it hangs from the card it does, under eight words, as the Scout writes a pick's ("what the studies
+   * found"). A reason, never a caption. Without it the words come from its text.
+   */
+  why: z.string().optional(),
   date: z.string().optional(),
   by: z.string().optional(),
   holder: z.string().optional(),
