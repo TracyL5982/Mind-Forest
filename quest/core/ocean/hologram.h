@@ -26,7 +26,9 @@
 ///   more it matters.
 /// - Branches curve up out of the orb they left, in their branch's colour,
 ///   running from the parent's colour into their own, thicker the more of
-///   the tree hangs from them.
+///   the tree hangs from them. (NOTE(port): changed for Quest: drawn in
+///   limbs that run smooth through their cards and branch at an angle;
+///   see `branches`.)
 /// - A pane of light lies across it at the layer you work on. With a hand
 ///   over it, it grows a little, every level shows as a ring, and a second
 ///   pane follows the fingers up and down, snapping to the nearest level.
@@ -146,10 +148,11 @@ private:
     // MARK: - Drawing, shared with a tree's cover
 
 public:
-    /// The trunk, and a branch up to every card that was asked about: each
-    /// curves up out of the card it left and bends over to where it goes,
-    /// with a soft glow round it. `shown` says where a card is right now;
-    /// `thick` makes every branch that many times as thick (a cover hangs far off).
+    /// The trunk, and a branch up to every card that was asked about, with a soft glow round it. They are
+    /// drawn in limbs: the trunk spreads at its foot and runs up through the card the most of the tree hangs
+    /// from at each fork; every other branch leaves its limb at up to 45 degrees and is a limb of its own.
+    /// Each limb is one ribbon, smooth through its cards and thinner as it climbs. `shown` says where a card
+    /// is right now; `thick` makes every branch that many times as thick (a cover hangs far off).
     ///
     /// (`thick` is 1 when the Swift leaves it out: it stands before arguments that must be given, so it is always written here.)
     static void branches(const std::vector<Node>& nodes, float thick, const std::function<std::optional<Place>(int)>& shown, Pen& pen);
