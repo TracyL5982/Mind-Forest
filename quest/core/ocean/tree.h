@@ -296,6 +296,9 @@ public:
     /// layer is the one you work on. The first time, what the gardener
     /// brings for it comes up round it. Returns what came.
     Change focus(int id);
+    /// AGENT: the cards already hanging from `id`, a card that has just come to lead its layer from where it stood at `was`,
+    /// placed round it again in its own frame, each in the first free place on its ring as if it came now (`focus`).
+    void placeRound(int id, Vec2 was);
 
     /// Steps out of the card in focus: it closes, and its group draws in.
     std::vector<TreeNode> unfocus();
