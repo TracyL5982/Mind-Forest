@@ -203,13 +203,35 @@ export async function standIn(name, source, { demo = false } = {}) {
   const proxyPort = await freePort();
   let previewSocket = null;
   const fromPreview = [];
+  // What becomes of each picture the preview asks for (`/assets/…`), by `pictures(rule)`: `rule(path, n)`, n counting them
+  // from 1, says 'refuse' (a 404: not found), 'fail' (a 503: the service can't give it now), a number of seconds to hold it
+  // back, or nothing to let it through.
+  let pictureRule = null;
+  let picturesAsked = 0;
   const proxy = createServer((req, res) => {
-    const upstream = request({ host: '127.0.0.1', port: servicePort, path: req.url, method: req.method, headers: req.headers }, (r) => {
-      res.writeHead(r.statusCode, r.headers);
-      r.pipe(res);
-    });
-    upstream.on('error', () => res.destroy());
-    req.pipe(upstream);
+    const forward = (late = false) => {
+      const upstream = request({ host: '127.0.0.1', port: servicePort, path: req.url, method: req.method, headers: req.headers }, (r) => {
+        // (A picture is not to be kept by the Mac between launches: each launch asks the stand-in, which may refuse it.)
+        const headers = req.url.startsWith('/assets/') ? { ...r.headers, 'cache-control': 'no-store' } : r.headers;
+        res.writeHead(r.statusCode, headers);
+        r.pipe(res);
+      });
+      upstream.on('error', () => res.destroy());
+      // (A picture held back is asked for with nothing to send: its own request has ended by then.)
+      if (late) upstream.end();
+      else req.pipe(upstream);
+    };
+    const said = pictureRule && req.url.startsWith('/assets/') ? pictureRule(req.url.split('?')[0], ++picturesAsked) : null;
+    if (said === 'refuse' || said === 'fail') {
+      req.resume();
+      res.writeHead(said === 'refuse' ? 404 : 503);
+      res.end();
+    } else if (typeof said === 'number' && said > 0) {
+      req.resume();
+      setTimeout(() => forward(true), said * 1000);
+    } else {
+      forward();
+    }
   });
   const sockets = new WebSocketServer({ server: proxy, path: '/ws' });
   sockets.on('connection', (down, req) => {
@@ -272,6 +294,10 @@ export async function standIn(name, source, { demo = false } = {}) {
     api,
     state,
     inject: (message) => previewSocket?.send(JSON.stringify(message)),
+    pictures: (rule) => {
+      pictureRule = rule;
+      picturesAsked = 0;
+    },
     launch,
     close,
     WebSocket,

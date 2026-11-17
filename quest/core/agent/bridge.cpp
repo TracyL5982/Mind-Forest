@@ -4,6 +4,7 @@
 #include <cctype>
 #include <functional>
 #include <initializer_list>
+#include <limits>
 #include <random>
 #include <set>
 
@@ -194,21 +195,40 @@ void Bridge::frame(double t) {
                    },
                    event);
     }
-    std::vector<std::pair<std::string, ImageRef>> arrived;
+    for (auto& [src, r] : retries) {
+        if (now < r.at) continue;
+        r.at = std::numeric_limits<double>::infinity();         // (until it comes, or fails again)
+        fetchPicture(src);
+    }
+    std::vector<Came> arrived;
     {
         std::lock_guard<std::mutex> g(pictures->lock);
         arrived.swap(pictures->arrived);
     }
     Planted* standingTree = model.tree ? plantedOf(*model.tree) : nullptr;
-    for (auto& [src, image] : arrived) {
-        std::vector<std::string> shown = cards::picture(src, image);
+    bool covers = false;
+    for (const Came& came : arrived) {
+        // One that did not come, and may yet, is asked for again until it does: 1, 2, 4 and 8 s on, then every 15 s. A card
+        // showing it, and a cover's place for it, wait for it meanwhile. Only one the service says it can't have is let go.
+        if (!came.image && !came.gone) {
+            Retry& r = retries[came.src];
+            r.tries++;
+            r.at = now + (r.tries <= 4 ? double(1 << (r.tries - 1)) : 15.0);
+            logLine(fmt("[agent] a picture did not come (%d %s); asked again in %.0f s", r.tries, r.tries == 1 ? "time" : "times",
+                        r.at - now));
+            continue;
+        }
+        retries.erase(came.src);
+        if (came.gone) logLine("[agent] a picture can't be had: " + came.src);
+        std::vector<std::string> shown = cards::picture(came.src, came.image);
         for (const std::string& noteID : shown) {
             std::string nodeId = noteID.substr(std::string("agent-").size());
             if (standingTree && standingTree->local.count(nodeId)) redraw(standingTree->local[nodeId]);
         }
-        // A tree put away shows its cards' pictures round it as they come.
-        if (image && !shown.empty()) model.coverPicturesCame(shown);
+        covers = covers || !shown.empty();
     }
+    // A tree put away shows its cards' pictures round it as they come, and the next card's in place of one that can't be had.
+    if (covers) model.coverPicturesCame();
     std::vector<std::pair<std::string, bool>> finished;
     {
         std::lock_guard<std::mutex> g(typed->lock);
@@ -572,19 +592,27 @@ bool Bridge::paint(const Item& item, const Node& node) {
 void Bridge::fetchPictures(const std::string& noteID) {
     for (const std::string& src : cards::pictures(noteID)) {
         if (src.rfind("sample:", 0) == 0 || !asked.insert(src).second) continue;
-        std::string file = platform::dataDirectory() + "/agent-picture-" + std::to_string(std::hash<std::string>{}(src));
-        platform::Request request;
-        request.url = client.address().resolve(src);
-        request.saveTo = file;
-        std::weak_ptr<Pictures> inbox = pictures;
-        platform::fetch(request, [inbox, src, file](platform::Response r) {
-            ImageRef image = r.status >= 200 && r.status < 300 && r.error.empty() ? platform::decodeImage(file, 1024) : nullptr;
-            if (auto box = inbox.lock()) {
-                std::lock_guard<std::mutex> g(box->lock);
-                box->arrived.emplace_back(src, image);
-            }
-        });
+        fetchPicture(src);
     }
+}
+
+void Bridge::fetchPicture(const std::string& src) {
+    std::string file = platform::dataDirectory() + "/agent-picture-" + std::to_string(std::hash<std::string>{}(src));
+    platform::Request request;
+    request.url = client.address().resolve(src);
+    request.saveTo = file;
+    request.timeout = 10;           // (one that stalls is asked for again sooner)
+    std::weak_ptr<Pictures> inbox = pictures;
+    platform::fetch(request, [inbox, src, file](platform::Response r) {
+        bool ok = r.status >= 200 && r.status < 300 && r.error.empty();
+        ImageRef image = ok ? platform::decodeImage(file, 1024) : nullptr;
+        // Not found, gone, or a reply that is no picture the headset can draw: it never will be. Anything else may pass.
+        bool gone = r.status == 404 || r.status == 410 || (ok && !image);
+        if (auto box = inbox.lock()) {
+            std::lock_guard<std::mutex> g(box->lock);
+            box->arrived.push_back(Came{src, image, gone});
+        }
+    });
 }
 
 void Bridge::redraw(int localId) {

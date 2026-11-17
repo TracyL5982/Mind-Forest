@@ -16,7 +16,7 @@
 /// an earlier one, and then by how much the card matters. The first of
 /// them is a little larger. Each floats on the side of the tree its
 /// card stands on, about as high as its layer.
-OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
+OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree, const std::vector<Ref>& without, const std::vector<Ref>* only) const {
     if (!catalog) return CoverPlan{};
     CoverPlan plan;
     int deepest = 0;
@@ -108,7 +108,8 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
         // AGENT: on a tree the service grows, any card: it keeps what the user keeps, and most of a tree is what it brought.
         if (!(!n.chip && (n.head || n.kept || !tree.grows))) continue;
         std::optional<Shown> shown = picture(n.ref);
-        if (!shown) continue;
+        if (!shown || std::find(without.begin(), without.end(), shown->ref) != without.end()) continue;
+        if (only && std::find(only->begin(), only->end(), shown->ref) == only->end()) continue;
         int host = n.head ? n.id : n.parent.value_or(tree.root);
         int layer = tree.generation(host);
         float high = layers > 1 ? float(layer) / float(layers - 1) : 0.5f;
@@ -128,7 +129,10 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
     for (int i = 0; i < int(slots.size()); i++) free.push_back(i);
     std::vector<Ref> seen;
     for (const Candidate& c : candidates) {
-        if (std::find(seen.begin(), seen.end(), c.ref) == seen.end()) plan.choices++;
+        if (std::find(seen.begin(), seen.end(), c.ref) == seen.end()) {
+            plan.choices++;
+            plan.ranked.push_back(c.ref);
+        }
         if (free.empty()) continue;
         if (std::find(seen.begin(), seen.end(), c.ref) != seen.end()) continue;
         seen.push_back(c.ref);
@@ -155,6 +159,7 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree) const {
         }
         plan.thumbs.push_back(CoverPlan::Thumb{c.node->id, c.ref, Vec3{slot.x, plan.foot + slot.y * room, slot.z}, size});
     }
+    plan.picks = int(plan.thumbs.size());
     return plan;
 }
 
@@ -187,30 +192,136 @@ EntityRef OceanModel::coverFace(const std::string& noteID, Vec2 size) {
     return piece ? art->quad(*piece) : nullptr;
 }
 
-void OceanModel::coverPicturesCame(const std::vector<std::string>& noteIDs) {
-    for (Shelved& s : shelf) {
-        int came = 0, waiting = 0;
-        for (const CoverPicture& p : s.pictures) {
-            if (p.ref.kind != Ref::Kind::note || !p.entity->children.empty()) continue;
-            if (std::find(noteIDs.begin(), noteIDs.end(), p.ref.id) == noteIDs.end()) {
-                waiting++;
-                continue;
-            }
-            EntityRef face = coverFace(p.ref.id, {p.width, p.height});
-            if (!face) {
-                waiting++;
-                continue;
-            }
-            p.entity->addChild(face);
-            if (EntityRef glow = art->glow({p.width, p.height})) {
-                glow->position.z = -0.003f;
-                p.entity->addChild(glow);
-            }
-            came++;
+void OceanModel::coverPicturesCame() { tendCovers(); }
+
+std::optional<OceanModel::CoverPicture> OceanModel::coverPicture(const CoverPlan::Thumb& thumb) {
+    EntityRef e = Entity::make();
+    switch (thumb.ref.kind) {
+    case Ref::Kind::film:
+        if (MeshRef mesh = art->stillMesh(catalog->clips[thumb.ref.index], thumb.size)) e->model = ModelComponent{mesh, {art->atlasMaterial()}};
+        break;
+    case Ref::Kind::work:
+        if (MeshRef mesh = art->workMesh(catalog->works[thumb.ref.index], thumb.size)) {
+            if (std::optional<Material> m = art->workAtlasMaterial()) e->model = ModelComponent{mesh, {*m}};
         }
-        if (came && !waiting) logLine(fmt("[ocean] cover of %s: its %d pictures all shown", s.tree->title.c_str(), int(s.pictures.size())));
-        if (came) touch(time + 0.1);
+        break;
+    default:
+        break;
     }
+    // AGENT: a service card's own picture, once it has come; until then nothing is drawn for it (`shownPlan`).
+    if (thumb.ref.kind == Ref::Kind::note) {
+        EntityRef face = coverFace(thumb.ref.id, thumb.size);
+        if (!face) return std::nullopt;
+        e->addChild(face);
+    } else if (!e->model) {
+        return std::nullopt;
+    }
+    if (EntityRef glow = art->glow(thumb.size)) {
+        glow->position.z = -0.003f;
+        e->addChild(glow);
+    }
+    e->position = thumb.at;
+    return CoverPicture{thumb.id, thumb.ref, e, thumb.size.x, thumb.at, thumb.size.y};
+}
+
+bool OceanModel::onHand(const Ref& ref) const {
+    if (ref.kind != Ref::Kind::note) return true;
+    std::optional<std::string> src = coverSource(ref.id);
+    std::optional<cards::Picture> had = src ? cards::pictureAt(*src) : std::nullopt;
+    return had && had->image;
+}
+
+OceanModel::CoverPlan OceanModel::shownPlan(const Tree& tree) const {
+    CoverPlan plan = coverPlan(tree);
+    if (tree.grows) return plan;
+    std::vector<Ref> here;
+    for (const CoverPlan::Thumb& t : plan.thumbs) {
+        if (onHand(t.ref)) here.push_back(t.ref);
+    }
+    if (here.size() == plan.thumbs.size()) return plan;
+    // What has come so far, placed as a cover of that many would place them, each the size it will be.
+    CoverPlan shown = coverPlan(tree, {}, &here);
+    for (CoverPlan::Thumb& t : shown.thumbs) {
+        auto full = std::find_if(plan.thumbs.begin(), plan.thumbs.end(), [&](const CoverPlan::Thumb& f) { return f.id == t.id && f.ref == t.ref; });
+        if (full != plan.thumbs.end()) t.size = full->size;
+    }
+    shown.choices = plan.choices;
+    shown.ranked = plan.ranked;
+    shown.picks = plan.picks;
+    return shown;
+}
+
+Vec3 OceanModel::placeOf(const CoverPicture& p) const {
+    if (p.moveStart < 0) return p.at;
+    float u = std::min(1.f, std::max(0.f, float(time - p.moveStart) / coverEase));
+    return p.from + (p.at - p.from) * Ease::glide(u);
+}
+
+void OceanModel::tendCovers() {
+    for (Shelved& s : shelf) {
+        if (!s.tree || s.tree->grows) continue;      // (Kai's trees show films and works, which never wait)
+        CoverPlan plan = shownPlan(*s.tree);
+        bool same = plan.thumbs.size() == s.pictures.size();
+        for (size_t k = 0; same && k < plan.thumbs.size(); k++) {
+            const CoverPicture& p = s.pictures[k];
+            const CoverPlan::Thumb& t = plan.thumbs[k];
+            same = p.id == t.id && p.ref == t.ref && distance(p.at, t.at) < 1e-4f && std::fabs(p.width - t.size.x) < 1e-4f;
+        }
+        if (!same) relayout(s, plan);
+    }
+}
+
+void OceanModel::relayout(Shelved& s, const CoverPlan& plan) {
+    EntityRef holder = s.mover->entity;
+    // A picture already there eases to its new place; one that has come fades in at its own; one no longer picked goes.
+    std::vector<CoverPicture> pictures;
+    std::vector<EntityRef> made;
+    for (const CoverPlan::Thumb& thumb : plan.thumbs) {
+        auto old = std::find_if(s.pictures.begin(), s.pictures.end(), [&](const CoverPicture& p) {
+            return p.id == thumb.id && p.ref == thumb.ref && std::fabs(p.width - thumb.size.x) < 1e-4f;
+        });
+        if (old != s.pictures.end()) {
+            CoverPicture p = *old;
+            s.pictures.erase(old);
+            if (distance(p.at, thumb.at) > 1e-4f) {
+                p.from = placeOf(p);
+                p.at = thumb.at;
+                p.moveStart = time;
+            }
+            pictures.push_back(p);
+            continue;
+        }
+        std::optional<CoverPicture> picture = coverPicture(thumb);
+        if (!picture) continue;
+        holder->addChild(picture->entity);
+        made.push_back(picture->entity);
+        pictures.push_back(*picture);
+    }
+    for (const CoverPicture& gone : s.pictures) {
+        s.tilts.erase(std::remove(s.tilts.begin(), s.tilts.end(), gone.entity), s.tilts.end());
+        fadeOut(gone.entity, 0.25f);
+    }
+    tip(made, s.el.value(time));
+    for (const EntityRef& e : made) {
+        s.tilts.push_back(e);
+        e->opacity = 0.f;
+    }
+    s.pictures = pictures;
+    layPictures(s.pictures, s.huddle.value(time));
+    // On the ocean's floor only the first five show.
+    for (size_t k = 0; k < s.pictures.size(); k++) {
+        bool shows = !forestDown || k < usualPictures;
+        bool fresh = std::find(made.begin(), made.end(), s.pictures[k].entity) != made.end();
+        bool showing = !(s.pictures[k].entity->opacity && *s.pictures[k].entity->opacity < 0.5f);
+        if (fresh || shows != showing) fadeTo(s.pictures[k].entity, shows ? 1.f : 0.f, 0.0, 0.3f);
+    }
+    holder->collision = coverCollision(s.trunk, s.pictures, s.caption != nullptr, s.nameSize, s.foot);
+    if (int(s.pictures.size()) >= plan.picks) {
+        logLine(fmt("[ocean] cover of %s: its %d pictures all shown", s.tree->title.c_str(), int(s.pictures.size())));
+    } else {
+        logLine(fmt("[ocean] cover of %s: now showing %d of its %d pictures", s.tree->title.c_str(), int(s.pictures.size()), plan.picks));
+    }
+    touch(time + double(coverEase) + 0.1);
 }
 
 /// Builds a tree's cover. `el` is how high it hangs, in degrees up
@@ -219,7 +330,7 @@ void OceanModel::coverPicturesCame(const std::vector<std::string>& noteIDs) {
 /// what on it is tipped, and the box it is picked by.
 std::optional<OceanModel::Cover> OceanModel::makeCover(const Tree& tree, float el, bool planted) {
     if (!art || !catalog) return std::nullopt;
-    CoverPlan plan = coverPlan(tree);
+    CoverPlan plan = shownPlan(tree);       // AGENT: what has come so far, on a service tree
     EntityRef holder = Entity::make();
     std::vector<EntityRef> tilts;
     EntityRef tree3d, name;                     // NOTE(port): kept for Quest, with `pictures` (see `Cover`)
@@ -241,36 +352,11 @@ std::optional<OceanModel::Cover> OceanModel::makeCover(const Tree& tree, float e
     }
     float wide = 0.24f;
     for (const CoverPlan::Thumb& thumb : plan.thumbs) {
-        EntityRef e = Entity::make();
-        switch (thumb.ref.kind) {
-        case Ref::Kind::film:
-            if (MeshRef mesh = art->stillMesh(catalog->clips[thumb.ref.index], thumb.size)) e->model = ModelComponent{mesh, {art->atlasMaterial()}};
-            break;
-        case Ref::Kind::work:
-            if (MeshRef mesh = art->workMesh(catalog->works[thumb.ref.index], thumb.size)) {
-                if (std::optional<Material> m = art->workAtlasMaterial()) e->model = ModelComponent{mesh, {*m}};
-            }
-            break;
-        default:
-            break;
-        }
-        // AGENT: a service card's picture shows now if it has come, or when it comes (`coverPicturesCame`), its glow with it.
-        bool later = thumb.ref.kind == Ref::Kind::note;
-        if (later) {
-            if (EntityRef face = coverFace(thumb.ref.id, thumb.size)) e->addChild(face);
-        } else if (!e->model) {
-            continue;
-        }
-        if (!later || !e->children.empty()) {
-            if (EntityRef glow = art->glow(thumb.size)) {
-                glow->position.z = -0.003f;
-                e->addChild(glow);
-            }
-        }
-        e->position = thumb.at;
-        holder->addChild(e);
-        tilts.push_back(e);
-        pictures.push_back(CoverPicture{thumb.id, thumb.ref, e, thumb.size.x, thumb.at, thumb.size.y});
+        std::optional<CoverPicture> made = coverPicture(thumb);
+        if (!made) continue;
+        holder->addChild(made->entity);
+        tilts.push_back(made->entity);
+        pictures.push_back(*made);
         wide = std::max(wide, std::fabs(thumb.at.x) + thumb.size.x / 2);
     }
     float low = plan.foot;
@@ -304,6 +390,7 @@ std::optional<OceanModel::Cover> OceanModel::makeCover(const Tree& tree, float e
     cover.caption = name;
     cover.pictures = pictures;
     cover.choices = plan.choices;
+    cover.picks = plan.picks;
     cover.layers = plan.layers;
     cover.treeFoot = plan.treeFoot;
     cover.treeRise = plan.treeRise;
@@ -335,7 +422,7 @@ void OceanModel::pressTree(bool send) {
     double now = time;
     if (send) tree->sent = true;
     // The cards whose pictures the cover shows go to where those float; the rest give way.
-    CoverPlan plan = coverPlan(*tree);
+    CoverPlan plan = shownPlan(*tree);
     std::vector<int> ids;
     for (const CoverPlan::Thumb& thumb : plan.thumbs) ids.push_back(thumb.id);
     Vec2 f = pan.target();
@@ -442,6 +529,20 @@ Vec2 OceanModel::freeSpot() const {
     return Vec2{float(int(shelf.size()) % 5) * 20 - 40, 44};
 }
 
+std::vector<Shape> OceanModel::coverCollision(const std::vector<Shape>& trunk, const std::vector<CoverPicture>& pictures, bool caption,
+                                              Vec2 nameSize, float foot) const {
+    std::vector<Shape> shapes = trunk;
+    for (const CoverPicture& picture : pictures) {
+        Vec3 at{picture.at.x * huddleUp, picture.at.y, picture.at.z};
+        shapes.push_back(Shape::generateBox({picture.width * huddleUp, picture.height * huddleUp, 0.06f}).offsetBy(at));
+    }
+    if (caption) {
+        Vec2 plate = nameSize * huddleUp;
+        shapes.push_back(Shape::generateBox({plate.x, plate.y, 0.04f}).offsetBy(Vec3{0, foot + plate.y / 2 + 0.01f, 0.03f + 0.07f * huddleUp}));
+    }
+    return shapes;
+}
+
 /// Hangs a pressed tree's cover on the shelf, above the tree. It stays
 /// where it was last put. `hand` is the card already in flight, which
 /// this one meets.
@@ -477,25 +578,15 @@ void OceanModel::shelve(const TreeRef& tree, std::optional<Vec3> from, const Mov
     bool down = wantDown();
     std::optional<Cover> made = makeCover(*tree, restEl(plot, down), true);
     if (!made) return;
-    int shown = 0;
-    for (const CoverPicture& picture : made->pictures) shown += picture.entity->model || !picture.entity->children.empty();
     logLine(fmt("[ocean] cover of %s: %d pictures of the %d its cards have, %d of them while it lies on the ocean's floor; %d still to come",
-                tree->title.c_str(), int(made->pictures.size()), made->choices, int(std::min(made->pictures.size(), usualPictures)),
-                int(made->pictures.size()) - shown));
+                tree->title.c_str(), made->picks, made->choices, std::min(made->picks, int(usualPictures)),
+                made->picks - int(made->pictures.size())));
     Vec3 p = restPoint(plot, made->foot, down);
     EntityRef holder = made->entity;
     holder->orientation = stage.upright(p).orientation;
     // NOTE(port): changed for Quest: one box round the whole cover in the Swift (`made.box`), which far off
     // and small is what a look can find. Here the trees are large and stand one behind another.
-    holder->collision = made->shapes;
-    for (const CoverPicture& picture : made->pictures) {
-        Vec3 at{picture.at.x * huddleUp, picture.at.y, picture.at.z};
-        holder->collision.push_back(Shape::generateBox({picture.width * huddleUp, picture.height * huddleUp, 0.06f}).offsetBy(at));
-    }
-    if (made->caption) {
-        Vec2 plate = made->nameSize * huddleUp;
-        holder->collision.push_back(Shape::generateBox({plate.x, plate.y, 0.04f}).offsetBy(Vec3{0, made->foot + plate.y / 2 + 0.01f, 0.03f + 0.07f * huddleUp}));
-    }
+    holder->collision = coverCollision(made->shapes, made->pictures, made->caption != nullptr, made->nameSize, made->foot);
     holder->inputTarget = !down;
     holder->hover = down ? Hover::none() : Art::hover();
     for (size_t k = usualPictures; down && k < made->pictures.size(); k++) made->pictures[k].entity->opacity = 0.f;
@@ -533,6 +624,7 @@ void OceanModel::shelve(const TreeRef& tree, std::optional<Vec3> from, const Mov
     kept.branches = made->branches;
     kept.caption = made->caption;
     kept.pictures = made->pictures;
+    kept.trunk = made->shapes;
     kept.layers = made->layers;
     kept.treeFoot = made->treeFoot;
     kept.treeRise = made->treeRise;
