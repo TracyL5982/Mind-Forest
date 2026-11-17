@@ -7,7 +7,7 @@ import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { momoNote, wavesOf } from '../src/demo/director.ts';
-import { itemOf } from '../src/demo/cards.ts';
+import { itemOf, nodeOf as nodeOfCard } from '../src/demo/cards.ts';
 import { loadScript } from '../src/demo/script.ts';
 import { loadShowcase, type Showcase } from '../src/demo/showcase.ts';
 import { startServer, type Running } from '../src/node/server.ts';
@@ -360,4 +360,26 @@ test('a card with a credit keeps it as data.credit, with its page, as the Scout 
     const item = itemOf(card, making);
     assert.deepEqual(item.data.credit, { text: card.credit!.trim(), ...(card.href && { url: card.href }) }, card.id);
   }
+});
+
+test("every card's thread says why it is there in under eight words, as the Scout's do, with no two alike under one card", () => {
+  const making = { media: () => undefined, assetUrl: (id: string) => `/assets/${id}`, now: () => '2026-11-16T00:00:00.000Z' };
+  const { trees } = loadShowcase(join(demoDir, 'showcase'));
+  const sets = [
+    ...trees.map(({ tree }) => ({ name: tree.id, cards: tree.cards })),
+    { name: 'walkthrough', cards: script.phases.flatMap((phase) => phase.cards.map((card) => ({ ...card, parent: phase.head }))) },
+  ];
+  const broken: string[] = [];
+  for (const { name, cards } of sets) {
+    const under = new Map<string, string>();
+    for (const card of cards) {
+      const { why } = nodeOfCard(card, itemOf(card, making), { id: card.id, treeId: name, parent: card.parent, status: 'kept', order: 0, rank: 0 }, making);
+      const words = why.split(/\s+/).filter(Boolean).length;
+      if (words === 0 || words >= 8 || why.includes('…')) broken.push(`${name}/${card.id}: "${why}"`);
+      const key = `${card.parent} ${why.toLowerCase()}`;
+      if (under.has(key)) broken.push(`${name}/${card.id}: "${why}", as ${under.get(key)}`);
+      under.set(key, card.id);
+    }
+  }
+  assert.deepEqual(broken, []);
 });

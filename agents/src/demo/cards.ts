@@ -146,7 +146,7 @@ export function nodeOf(card: ScriptCard, item: Item, hang: Hanging, making: Maki
     itemId: item.id,
     parent: hang.parent,
     status: hang.status,
-    why: whyOf(card),
+    why: card.why?.trim() || whyOf(card),
     importance: Math.max(0.3, Math.round((0.92 - hang.rank * 0.04) * 100) / 100),
     origin,
     view: { component: draw.component, props, by: 'renderer' },
