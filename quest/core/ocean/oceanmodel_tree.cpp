@@ -1054,7 +1054,13 @@ void OceanModel::bringIn(int film) {
     std::optional<Peek> from = peek && peek->film == film ? peek : std::nullopt;
     std::optional<Vec3> fromPoint = from ? std::optional<Vec3>(from->mover->entity->position) : std::nullopt;
     float fromScale = from ? from->mover->scale.target() : 1.6f, fromWidth = from ? from->width : 0.2f;
-    if (tree) {
+    if (tree && agentBridge && agentBridge->serves(*tree)) {
+        // AGENT: brought into one of the service's trees, the piece is a card of the service's like every other there, with
+        // its look and Momo's rows: it goes to the service, and comes back as its card. Kai's own trees take it as before.
+        clearPeek();
+        if (fromPoint) soundAt("bring_in", *fromPoint); else sound("bring_in");
+        if (!agentBridge->addPiece(ref)) logLine("[ocean] " + catalog->title(ref) + " was not added: the service can't be reached");
+    } else if (tree) {
         std::optional<int> id = tree->attach(ref);
         const TreeNode* n = id ? find(*tree, *id) : nullptr;
         if (!n) {
@@ -1072,6 +1078,11 @@ void OceanModel::bringIn(int film) {
         if (fromPoint) soundAt("bring_in", *fromPoint); else sound("bring_in");
         logLine("[ocean] brought in: " + catalog->title(ref));
         restyle();
+    } else if (agentBridge) {
+        // AGENT: joined to the service, a tree started from a piece of the ocean is the service's, as every other tree is:
+        // Momo is asked for it, and it stands when it comes. Kai's own tree, its picks and its questions, is not made.
+        clearPeek();
+        if (!agentBridge->treeFrom(ref)) logLine("[ocean] the service can't be reached, so no tree is started on " + catalog->title(ref));
     } else {
         clearPeek(false);
         TreeRef t = std::make_shared<Tree>(ref, catalog->short_(ref), Maker::you, catalog);

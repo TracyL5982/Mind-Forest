@@ -37,9 +37,13 @@ struct Block {
     std::vector<float> breaks;
 };
 
+/// The opened card's panel, px: the web's 384, with each px drawn `Art::type` times as large, so all on it is that much
+/// larger and the card keeps its size in the room.
+constexpr float PANEL = 384 / Art::type;
+
 /// The opened card being laid out top to bottom, in px: the web client's panel, one part under another.
 struct Sheet {
-    static constexpr float left = 19, width = 346, gap = 13;
+    static constexpr float left = 19, width = PANEL - 2 * left, gap = 13;
     float k;
     Look look;
     Words words;

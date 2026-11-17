@@ -190,10 +190,11 @@ int Col::lines(const std::string& s, Measure m, int max, Color color, float afte
     return shown;
 }
 
-bool Col::title(const std::string& s, float atX, float column, int most) {
+bool Col::title(const std::string& s, float atX, float column, int most, float keep) {
     if (ended) return false;
     if (s.empty()) return true;
     float w = column > 0 ? column : width, at = atX < 0 ? x : atX;
+    if (keep > 0) most = std::min(most, std::max(1, int(std::floor((room() - keep) / face::TITLE))));
     Titled t = titled(s, w, Measure::title, most);
     say(t.said, setting::faceTitle, t.lines, at, y, w, palette::ink);
     y += float(t.lines * face::TITLE);

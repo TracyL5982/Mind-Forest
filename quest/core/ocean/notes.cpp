@@ -222,7 +222,7 @@ NoteLayout Art::noteLayout(const OceanNote& note, const std::shared_ptr<Catalog>
     // `x` and `width` are `pad` and `inner` where the Swift leaves them out.
     auto block = [&](const std::string& string, float y, float x, float width, int lines, float size, Font::Weight weight, Color color,
                      float lineHeight) {
-        return std::make_shared<TextBlock>(string, CGPoint{x, y}, width, lines, attributes(font(size, weight), color, 0, px(lineHeight)));
+        return std::make_shared<TextBlock>(string, CGPoint{x, y}, width, lines, attributes(font(size, weight), color, 0, px(lineHeight * type)));
     };
 
     // NOTE(port): the drawing closures are kept with the layout and run later, so they hold

@@ -46,9 +46,9 @@ void head(const Pen& pen, const std::string& kind, const std::string& year, floa
     float size = face ? setting::faceLabelSize : setting::labelSize;
     const Setting& said = face ? setting::faceMeta : setting::body;
     label(pen, kind, x, y, palette::ink2, size);
-    float room = column - labelWidth(kind, pen.k, size) - 10;
-    float w = std::min(pen.width(year, said), room);
-    pen.words(year, x + column - w, y, w + 0.5f, 1, said, palette::ink2);
+    // The year only whole: beside a cover there may be no room for it next to the kind, and the opened card has it.
+    float room = column - labelWidth(kind, pen.k, size) - 10, w = pen.width(year, said);
+    if (w <= room) pen.words(year, x + column - w, y, w + 0.5f, 1, said, palette::ink2);
     pen.ctx.setFillColor(palette::line2);
     pen.ctx.fill(pen.px(x, y + TEXT + 6, column, 1));
 }

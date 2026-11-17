@@ -21,12 +21,12 @@
 
 namespace cards::ocean {
 
-/// The web's px to the opened card's pixels: the web's 384 px panel is as wide as the ocean's open note.
-constexpr float openScale = Metrics::openNoteWidth * Art::ppm / 384;
-/// The web's px to the small face's pixels: a px is a millimetre.
-constexpr float smallScale = Art::ppm / 1000;
+/// The web's px to the opened card's pixels: the panel is as wide as the ocean's open note.
+constexpr float openScale = Metrics::openNoteWidth * Art::ppm / PANEL;
+/// The web's px to the small face's pixels: a px is `Art::type` millimetres.
+constexpr float smallScale = Art::ppm / 1000 * Art::type;
 /// The opened frame of a text, chart or link card, px: 37.2 cm.
-constexpr float OPEN_TALL = 311;
+constexpr float OPEN_TALL = 311 / Art::type;
 /// The scroll indicator: its height before it is stretched to the share in view, m; and, px, its width, how
 /// far it stands in from the frame's right edge, and how far its track stops short of the top and the foot.
 constexpr float INDICATOR_UNIT = 0.01f;

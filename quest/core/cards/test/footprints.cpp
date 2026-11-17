@@ -13,6 +13,7 @@
 #include <string>
 
 #include "../cards.h"
+#include "../face.h"
 
 namespace {
 
@@ -57,15 +58,15 @@ int main(int argc, char** argv) {
         view.set("component", type);
         view.set("props", sample["props"]);
         cards::Footprint got = cards::footprint(view, sample["item"]);
-        const int cap = 146;
+        const int cap = cards::face::H;
         bool chips = !cards::chipsOf(view, sample["item"]).empty();
         t.tallest = std::max(t.tallest, got.height);
         t.web = std::max(t.web, sample["size"][1].integer());
-        if (got.width == 210 && got.height <= cap && !chips) {
+        if (got.width == cards::face::W && got.height <= cap && !chips) {
             t.held++;
         } else {
             failed++;
-            fprintf(stderr, "%s: %d by %d, the spec allows 210 by %d%s: %s\n", type.c_str(), got.width, got.height, cap, chips ? ", and it has a chip line" : "",
+            fprintf(stderr, "%s: %d by %d, the spec allows %d by %d%s: %s\n", type.c_str(), got.width, got.height, cards::face::W, cap, chips ? ", and it has a chip line" : "",
                     sample["item"].dump().c_str());
         }
     }

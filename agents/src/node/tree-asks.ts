@@ -3,9 +3,8 @@ import type { Id } from '../core/domain.ts';
 import type { ModelClient } from '../core/ports.ts';
 import { tokenize } from '../core/search.ts';
 import type { Mindstorm } from '../core/state.ts';
-import { treeRequest } from '../core/tree-request.ts';
 
-/** What a chat message asks of the trees the person has. Anything else they send is a drop. */
+/** What a chat message asks of the trees the person has, read by plain rules here and by Momo otherwise (`momo-chat.ts`). */
 export type Ask =
   | { kind: 'list' }
   /** The handoff made last, sent again. */
@@ -22,7 +21,6 @@ export interface TreeLine {
   line: string;
 }
 
-const ASK_ROLE = 'contact.ask';
 const MATCH_ROLE = 'contact.match';
 /** The most trees the model is shown to match words against, the newest first. */
 const MAX_SHOWN = 40;
@@ -49,10 +47,6 @@ const FIND: RegExp[] = [
   new RegExp(String.raw`^${POLITE}(?:which|what)\s+trees?\s+(?:is|are|has|have|covers?|mentions?)\s+(?:about\s+)?(.+?)${TAIL}$`, 'i'),
   new RegExp(String.raw`^${POLITE}do\s+i\s+have\s+(?:a|any)\s+trees?\s+(?:about|on|for|with)\s+(.+?)${TAIL}$`, 'i'),
 ];
-/** A message with none of these words asks nothing of the trees, so it is a drop and the model is never asked. */
-const CUE = /\b(?:trees?|hand(?:ing|ed)?[\s-]?offs?|hand(?:ing|ed)?\s+(?:\S+\s+){0,4}over|export(?:ed|ing)?|packag(?:e|ed|ing))\b/i;
-const MAX_ASK_CHARS = 200;
-
 /** What a message asks by plain rules, at no model call, or null when the rules do not say. */
 export function plainAsk(text: string): Ask | null {
   const clean = text.trim();
@@ -65,33 +59,6 @@ export function plainAsk(text: string): Ask | null {
     }
   }
   return null;
-}
-
-/** Whether a message the rules did not read could still ask something of the trees, so the model is worth asking. */
-export function mayAsk(text: string): boolean {
-  const clean = text.trim();
-  return clean.length <= MAX_ASK_CHARS && !clean.includes('\n') && !/https?:\/\//i.test(clean) && CUE.test(clean) && !treeRequest(clean);
-}
-
-const AskReply = z.object({ kind: z.enum(['list', 'latest', 'handoff', 'find', 'none']), words: z.string() });
-
-const ASK_SYSTEM = `A person sent one message to the chat bot of Mind Palace, a brainstorming app where their material lives in trees of cards. Most messages are things to save. A few ask about the trees they already have. Decide which this one is.
-
-Return "kind" and "words".
-- "list": they want to see their trees.
-- "handoff": they want the handoff file of one tree they have: to hand it off, export it, package it or send it to another agent. "words" is what names the tree, in their words.
-- "find": they want to know which tree they have is about something. "words" is that something.
-- "latest": they want the last handoff sent again and name no tree.
-- "none": anything else: a thought, a note, a link, a question about the world, or a request to grow a new tree.
-
-"words" never holds "tree", "handoff" or the words that asked. It is empty for "list", "latest" and "none". When unsure, answer "none".`;
-
-/** What a message asks, read by the model. Null when it asks nothing of the trees. Rejects when the model does not answer. */
-export async function modelAsk(model: ModelClient, text: string): Promise<Ask | null> {
-  const reply = await model.json({ role: ASK_ROLE, system: ASK_SYSTEM, user: `Message: """\n${text.trim()}\n"""`, schema: AskReply, quick: true });
-  if (reply.kind === 'list' || reply.kind === 'latest') return { kind: reply.kind };
-  const words = named(reply.words);
-  return reply.kind === 'none' || !words ? null : { kind: reply.kind, words };
 }
 
 /** The trees, the newest first. */

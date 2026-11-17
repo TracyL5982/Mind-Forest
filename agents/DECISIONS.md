@@ -1197,3 +1197,16 @@ The same check with the headset lying on a desk proved nothing, and is recorded 
 **Seen on the way.** The microphone's silence when nobody speaks means the headset opens it on the voice itself. If it opens a moment late, the soft start of "hi" is cut before the spotter hears it, which would be a cause of missed wakes that no measurement on the Mac can show. Not measured.
 
 **Not measured.** Other volumes than 6 of 15. The chime while the ocean's own sounds play: the check ran in a copy of the app that had only the chime. The whole path with Momo answering "Hi Momo… undo" on the headset.
+
+## 69. Telegram: Momo reads every message and answers, keeps, does both or asks (amends 68)
+
+**Decision.** Every text a paired chat sends, on the owner's bot and the judges' alike, goes to one quick model call as Momo (`src/node/momo-chat.ts`). Its reply says what the message is for, `answer`, `save`, `both`, `ask`, `tree`, or one of the tree asks, and what Momo says. `talk.ts` carries it out. Who Momo is lives in `src/core/momo.ts`, which the headset's instructions and the chat's both use. Plain rules still read list, find, hand off, /handoff and "make a tree about" first, at no model call. The cue-gated model call of decision 68 is gone: Momo reads those messages now.
+
+**Why.**
+- The user asked "who are you" and got a fixed line. A message can be talk, something to keep, or both, and only a reading of it can tell.
+- Momo never says in its own words that something was kept. The service adds that line from what was really filed, so the reply cannot claim a save that did not happen.
+- Momo's reply is sent at once and the kept line when Intake has filed, about ten seconds later. A chat's messages are answered in order, so "yes, keep it" is always read after the question it answers.
+- Momo is told the trees and the cards the message's words find, in the prompt, instead of calling tools: one call, about a second, about 1,300 tokens.
+- A stranger gets a fixed line and no model call, so the bot cannot be made to spend.
+
+**Not built.** Momo in Telegram has no web answer and starts no search: it says it cannot check the web from there. Chat memory is not kept across a restart.

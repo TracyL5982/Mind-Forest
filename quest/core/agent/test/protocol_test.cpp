@@ -403,6 +403,9 @@ std::vector<std::pair<Outbound, std::string>> outboundCases() {
         {Outbound::undo(), R"({"t":"undo"})"},
         {Outbound::undo(SetId{"s1"}), R"({"id":"s1","t":"undo"})"},
         {Outbound::commands("Cut a card", {Command::deleteNode(n1)}), R"({"commands":[{"id":"n1","type":"deleteNode"}],"label":"Cut a card","t":"commands"})"},
+        {Outbound::commands("Add Dracula", {Command::addNode(NodeId{"n3"}, t1, ItemId{"library:film:0"}, n1, 2)}),
+         R"({"commands":[{"node":{"id":"n3","importance":1,"itemId":"library:film:0","order":2,"origin":{"by":"user"},"parent":"n1","status":"kept",)"
+         R"("treeId":"t1","view":{"by":"default","component":"note","composing":true,"props":{}},"why":""},"type":"addNode"}],"label":"Add Dracula","t":"commands"})"},
         {Outbound::commands("Rearrange", {Command::moveNode(n1, n2), Command::moveNode(n1, n2, t2, 2.5), Command::renameTree(t1, "Zooms"),
                                           Command::deleteTree(t2)}),
          R"({"commands":[{"id":"n1","parent":"n2","type":"moveNode"},{"id":"n1","order":2.5,"parent":"n2","treeId":"t2","type":"moveNode"},)"

@@ -18,7 +18,7 @@ const KEY = 'app-key';
 const ADMIN = 'admin-token';
 const A = 'device-aaaaaaaaaaaa';
 const B = 'device-bbbbbbbbbbbb';
-const STRANGER = /^This is the Mind Palace bot for headsets\. In your headset, say “Momo, connect my Telegram”/;
+const STRANGER = /^Hi, I’m Momo, the voice of Mind Palace\. I don’t know this chat yet\. In your headset, say “Momo, connect my Telegram”/;
 
 const opened: { close(): Promise<void> }[] = [];
 afterEach(async () => {
@@ -82,7 +82,7 @@ async function invite(s: Stage, device: string): Promise<{ link: string; bot: st
 async function pair(s: Stage, device: string, who: Person): Promise<void> {
   const after = s.bot.sent.length;
   s.bot.push(who, { text: (await invite(s, device)).code });
-  await s.bot.reply(who.id, /^Paired with your headset\./, 'sendMessage', after);
+  await s.bot.reply(who.id, /^We’re paired\./, 'sendMessage', after);
 }
 
 /** What the bot sent after the `after`th thing, once it has sent `count` more. */
@@ -116,16 +116,16 @@ test('a headset is given a six-digit code and the bot\'s link; the judge who sen
   assert.deepEqual([given.bot, given.link], ['mind_palace_test_bot', `https://t.me/mind_palace_test_bot?start=${given.code}`]);
 
   const wrong = given.code === '000000' ? '111111' : '000000';
-  assert.match((await ask(s, ADA, { text: wrong }))[0]!.text, /^That code did not work\./);
-  assert.match((await ask(s, ADA, { text: `${given.code.slice(0, 3)} ${given.code.slice(3)}` }))[0]!.text, /^Paired with your headset\./, 'the code as Momo says it, in two groups');
+  assert.match((await ask(s, ADA, { text: wrong }))[0]!.text, /^Hmm, that code didn’t work\./);
+  assert.match((await ask(s, ADA, { text: `${given.code.slice(0, 3)} ${given.code.slice(3)}` }))[0]!.text, /^We’re paired\./, 'the code as Momo says it, in two groups');
   assert.equal(((await (await call(s.hosted, A, '/api/telegram')).json()) as { paired: string }).paired, 'Ada Lovelace');
 
-  assert.match((await ask(s, EVE, { text: `/start ${given.code}` }))[0]!.text, /^That code did not work\./, 'a code works once');
+  assert.match((await ask(s, EVE, { text: `/start ${given.code}` }))[0]!.text, /^Hmm, that code didn’t work\./, 'a code works once');
   assert.match((await ask(s, EVE, { text: 'list my trees' }))[0]!.text, STRANGER);
   assert.deepEqual(await titles(s.hosted, A), before, 'nothing a stranger sent was added');
 
   const link = await invite(s, B);
-  assert.match((await ask(s, EVE, { text: `/start ${link.code}` }))[0]!.text, /^Paired with your headset\./, 'the deep link pairs as the typed code does');
+  assert.match((await ask(s, EVE, { text: `/start ${link.code}` }))[0]!.text, /^We’re paired\./, 'the deep link pairs as the typed code does');
   assert.deepEqual((await admin(s.hosted)).telegram, { bot: 'mind_palace_test_bot', paired: 2 });
 });
 
@@ -134,14 +134,14 @@ test('a code lasts ten minutes, a new one replaces the last, and five wrong code
   const first = await invite(s, A);
   const second = await invite(s, A);
   assert.notEqual(first.code, second.code);
-  assert.match((await ask(s, ADA, { text: first.code }))[0]!.text, /^That code did not work\./, 'the replaced code');
+  assert.match((await ask(s, ADA, { text: first.code }))[0]!.text, /^Hmm, that code didn’t work\./, 'the replaced code');
   s.clock.now += 10 * 60_000 + 1;
-  assert.match((await ask(s, ADA, { text: second.code }))[0]!.text, /^That code did not work\./, 'the expired code');
+  assert.match((await ask(s, ADA, { text: second.code }))[0]!.text, /^Hmm, that code didn’t work\./, 'the expired code');
 
   const live = await invite(s, A);
   const others = ['111111', '222222', '333333', '444444', '555555'].filter((code) => code !== live.code).slice(0, 4);
   for (const code of others) await ask(s, ADA, { text: code });
-  assert.match((await ask(s, ADA, { text: live.code }))[0]!.text, /^That code did not work\./, 'after five wrong codes in ten minutes even a good one is not read');
+  assert.match((await ask(s, ADA, { text: live.code }))[0]!.text, /^Hmm, that code didn’t work\./, 'after five wrong codes in ten minutes even a good one is not read');
   assert.equal(((await (await call(s.hosted, A, '/api/telegram')).json()) as { paired: string | null }).paired, null);
   const sent = s.bot.sent.length;
   await s.bot.read(s.bot.push(ADA, { text: 'hello?' }));
@@ -150,7 +150,7 @@ test('a code lasts ten minutes, a new one replaces the last, and five wrong code
 
   s.clock.now += 10 * 60_000 + 1;
   const later = await invite(s, A);
-  assert.match((await ask(s, ADA, { text: later.code }))[0]!.text, /^Paired with your headset\./, 'ten minutes on, the chat may try again');
+  assert.match((await ask(s, ADA, { text: later.code }))[0]!.text, /^We’re paired\./, 'ten minutes on, the chat may try again');
 });
 
 test('each judge reaches only their own headset: drops, trees and handoffs stay in its space, whoever asks', { timeout: 30000 }, async () => {
@@ -158,12 +158,12 @@ test('each judge reaches only their own headset: drops, trees and handoffs stay 
   await pair(s, A, ADA);
   await pair(s, B, EVE);
 
-  assert.match((await ask(s, ADA, { text: 'Rye needs more water than wheat' }))[0]!.text, /^Added “/);
+  assert.match((await ask(s, ADA, { text: 'Rye needs more water than wheat' }))[0]!.text, /^I’ve kept “/);
   assert.ok((await titles(s.hosted, A)).some((t) => /Rye/.test(t)));
   assert.ok(!(await titles(s.hosted, B)).some((t) => /Rye/.test(t)), 'the other headset has none of it');
 
   const listed = (await ask(s, EVE, { text: 'list my trees' }))[0]!.text;
-  assert.match(listed, /^Your trees, newest first:\n1\. .*Sourdough/);
+  assert.match(listed, /^Here are your trees, newest first:\n1\. .*Sourdough/);
 
   const [packing, ready, file] = await ask(s, ADA, { text: 'hand off the sourdough tree' }, 3);
   assert.match(packing!.text, /^Packing “.*Sourdough.*”…$/);
@@ -193,10 +193,10 @@ test('the pairings are on the volume and survive a restart; /unpair and a delete
   await s.hosted.close();
 
   const again = await host({}, {}, s.dataDir, s.bot);
-  assert.match((await ask(again, ADA, { text: 'list my trees' }))[0]!.text, /^Your trees, newest first:/, 'the chat is still paired, and its space opens for it');
+  assert.match((await ask(again, ADA, { text: 'list my trees' }))[0]!.text, /^Here are your trees, newest first:/, 'the chat is still paired, and its space opens for it');
   assert.deepEqual(again.hosted.open(), [A], 'only the space that was written to is open');
 
-  assert.match((await ask(again, ADA, { text: '/unpair' }))[0]!.text, /^Unpaired\./);
+  assert.match((await ask(again, ADA, { text: '/unpair' }))[0]!.text, /^Okay, we’re unpaired\./);
   assert.match((await ask(again, ADA, { text: 'list my trees' }))[0]!.text, STRANGER);
 
   await fetch(`${again.hosted.url}/admin/spaces/${B}`, { method: 'DELETE', headers: { Authorization: `Bearer ${ADMIN}` } });
@@ -219,12 +219,12 @@ test("a judge's Telegram obeys the headset's limits: the store, the upload room,
   s.bot.file('big', new Uint8Array(2000));
   s.bot.file('fits', new Uint8Array(900));
   s.bot.file('memo', new Uint8Array(10));
-  assert.match((await ask(s, ADA, { document: { file_id: 'big', file_size: 2000, file_name: 'big.bin' } }))[0]!.text, /a file may be at most/);
+  assert.match((await ask(s, ADA, { document: { file_id: 'big', file_size: 2000, file_name: 'big.bin' } }))[0]!.text, /too big for me here\. I can take up to 0 MB/);
   assert.ok(!s.bot.calls.some((c) => c.method === 'getFile'), 'a file known to be too large is never fetched');
-  assert.match((await ask(s, ADA, { document: { file_id: 'fits', file_size: 900, file_name: 'fits.txt' } }))[0]!.text, /^Added “/);
+  assert.match((await ask(s, ADA, { document: { file_id: 'fits', file_size: 900, file_name: 'fits.txt' } }))[0]!.text, /^I’ve kept “/);
   assert.match((await ask(s, ADA, { document: { file_id: 'fits', file_name: 'again.txt' } }))[0]!.text, /used all its room for files/, "a second file past the device's room, its size unsaid");
 
-  assert.match((await ask(s, ADA, { voice: { file_id: 'memo', duration: 45 } }))[0]!.text, /^Your trees, newest first:/, 'a voice note asks as text does');
+  assert.match((await ask(s, ADA, { voice: { file_id: 'memo', duration: 45 } }))[0]!.text, /^Here are your trees, newest first:/, 'a voice note asks as text does');
   assert.equal(s.ledger.status().devices[A]?.voiceMinutes, 0.75, 'and its length counts as voice');
   assert.ok((s.ledger.status().devices[A]?.dollars ?? 0) > 0, 'and as spend');
   await ask(s, ADA, { voice: { file_id: 'memo', duration: 30 } });
@@ -273,14 +273,14 @@ test('a voice note is charged by the length the file has, not the one its sender
   const s = await host({ voiceMinutes: 10 }, { uploads: { file: 5, total: 5 }, shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, transcribe } });
   await pair(s, A, ADA);
   s.bot.file('minute', ogg(60));
-  assert.match((await ask(s, ADA, { voice: { file_id: 'minute', duration: 1, file_size: 64 } }))[0]!.text, /^Your trees, newest first:/);
+  assert.match((await ask(s, ADA, { voice: { file_id: 'minute', duration: 1, file_size: 64 } }))[0]!.text, /^Here are your trees, newest first:/);
   assert.equal(s.ledger.status().devices[A]?.voiceMinutes, 1, 'a note that claims 1 s and measures 60 s is charged 60 s');
   assert.equal(s.ledger.status().devices[A]?.dollars, 0.006);
 
   s.bot.file('long', ogg(1, 2_000_001));
-  assert.match((await ask(s, ADA, { voice: { file_id: 'long', duration: 1, file_size: 2_000_001 } }))[0]!.text, /^That voice note is too long/);
+  assert.match((await ask(s, ADA, { voice: { file_id: 'long', duration: 1, file_size: 2_000_001 } }))[0]!.text, /^That voice note’s too long/);
   assert.ok(!s.bot.calls.some((c) => c.method === 'getFile' && c.body.file_id === 'long'), 'a note known to be too large is not fetched');
-  assert.match((await ask(s, ADA, { voice: { file_id: 'long', duration: 1 } }))[0]!.text, /^That voice note is too long/, 'nor written out when its size was not said');
+  assert.match((await ask(s, ADA, { voice: { file_id: 'long', duration: 1 } }))[0]!.text, /^That voice note’s too long/, 'nor written out when its size was not said');
   assert.equal(heard, 1, 'no paid call was made for either');
   assert.equal(s.ledger.status().devices[A]?.voiceMinutes, 1, 'and nothing more was charged');
 });
@@ -301,12 +301,12 @@ test('fifty wrong codes from many chats in ten minutes pause pairing for five, w
   const wrong = good.code === '000000' ? '111111' : '000000';
   for (let chat = 0; chat < 10; chat++) {
     const who = { id: 5000 + chat, first_name: `Guess ${chat}` } as unknown as Person;
-    for (let n = 0; n < 5; n++) assert.match((await ask(s, who, { text: wrong }))[0]!.text, /^That code did not work\./);
+    for (let n = 0; n < 5; n++) assert.match((await ask(s, who, { text: wrong }))[0]!.text, /^Hmm, that code didn’t work\./);
   }
-  assert.match((await ask(s, ADA, { text: good.code }))[0]!.text, /^Pairing is paused for a few minutes\./, 'even a good code is not read while paused');
+  assert.match((await ask(s, ADA, { text: good.code }))[0]!.text, /^I’ve paused pairing for a few minutes\./, 'even a good code is not read while paused');
   assert.equal(s.lines.filter((line) => /50 wrong pairing codes/.test(line)).length, 1);
   assert.equal(((await (await call(s.hosted, A, '/api/telegram')).json()) as { paired: string | null }).paired, null);
 
   s.clock.now += 5 * 60_000 + 1;
-  assert.match((await ask(s, ADA, { text: good.code }))[0]!.text, /^Paired with your headset\./, 'the code, still within its ten minutes, pairs once the pause is over');
+  assert.match((await ask(s, ADA, { text: good.code }))[0]!.text, /^We’re paired\./, 'the code, still within its ten minutes, pairs once the pause is over');
 });

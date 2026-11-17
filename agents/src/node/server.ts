@@ -12,7 +12,8 @@ import { Mindstorm } from '../core/state.ts';
 import { saysWakePhrase, spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
 import { Declined, whereItWent, type Channel, type Delivery, type Desk } from './contact.ts';
-import { matchTrees, modelAsk, treeLines } from './tree-asks.ts';
+import { chatContext, readMessage } from './momo-chat.ts';
+import { matchTrees, treeLines } from './tree-asks.ts';
 import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '../core/voice-tools.ts';
 import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
 import type { Maps } from './geocoder.ts';
@@ -319,7 +320,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   const fits = (bytes: number): string | null => {
     const volume = opts.volumeFull?.();
     if (volume || !opts.uploads) return volume ?? null;
-    return bytes > opts.uploads.file ? tooBig(opts.uploads.file) : bytes > opts.uploads.total - uploaded.bytes ? FULL : null;
+    return bytes > opts.uploads.file ? `That file’s too big for me here. I can take up to ${Math.round(opts.uploads.file / 1e6)} MB.` : bytes > opts.uploads.total - uploaded.bytes ? NO_FILE_ROOM : null;
   };
   const hear = opts.transcribe;
   const desk: Desk = {
@@ -346,7 +347,12 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     }),
     latest: () => latestHandoff(handoffDir),
     trees: () => treeLines(mind),
-    ask: (text) => modelAsk(opts.model, text),
+    read: async (heard) => {
+      const why = meter?.held();
+      if (why) throw new Declined(why);
+      const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      return readMessage(opts.model, { name: spokenName(settings.agentName), today, context: chatContext(mind, heard.text) }, heard);
+    },
     match: (words) => matchTrees(mind, opts.model, words),
     handoff: async (treeId) => {
       admit();
@@ -873,7 +879,8 @@ function json(res: ServerResponse, status: number, value: unknown): void {
 }
 
 const FULL = 'this headset has used all its room for files';
-const NOTE_TOO_LONG = 'That voice note is too long to write out here. Send one of up to a minute or so.';
+const NOTE_TOO_LONG = 'That voice note’s too long for me to write out here. Send me one of up to a minute or so.';
+const NO_FILE_ROOM = 'This headset has used all its room for files, so I can’t keep that one.';
 const STORE_FULL = "This headset's mind palace is full, so nothing more can be added here.";
 const tooBig = (limit: number) => `a file may be at most ${Math.round(limit / 1e6)} MB here`;
 

@@ -153,13 +153,14 @@ const char* label(Chip::Kind kind) {
     return "";
 }
 
-constexpr float WIDTH = 384;
+constexpr float WIDTH = PANEL;
 /// The panel shows through a window inside the card's frame, clear of its round corners, px.
 constexpr float INSET_X = 3, INSET_Y = 10;
-/// The least a picture is shrunk to so it shows whole in the first view, px.
-constexpr float LEAST = 140;
-/// The tallest panel a card draws, px: ten views or so, within what one texture holds.
-constexpr float LONGEST = 3200;
+/// The least a picture is shrunk to so it shows whole in the first view, px: 14 cm, so a film under a title of two
+/// lines in the larger type still plays in the first view.
+constexpr float LEAST = 0.14f * PANEL / Metrics::openNoteWidth;
+/// The tallest panel a card draws, px: 8,000 pixels of its texture, ten views or so, within what one texture holds (8,192).
+constexpr float LONGEST = 8000 * PANEL / (Metrics::openNoteWidth * Art::ppm);
 /// The room under the panel's last part, px.
 constexpr float FOOT = 16;
 
