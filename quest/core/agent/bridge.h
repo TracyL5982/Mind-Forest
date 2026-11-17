@@ -163,6 +163,7 @@ private:
     void type(int nodeID);
     /// Fetches the pictures a card shows from the service, off the frame thread.
     void fetchPictures(const std::string& noteID);
+    void fetchPicture(const std::string& src);
     /// Pictures fetched and unpacked on a host thread, waiting for the frame thread.
     struct Pictures {
         std::mutex lock;
@@ -170,6 +171,12 @@ private:
     };
     std::shared_ptr<Pictures> pictures = std::make_shared<Pictures>();
     std::set<std::string> asked;                    // picture addresses already fetched or on their way
+    /// Pictures that could not be had, asked for again later and later: when next, and how many times so far.
+    struct Retry {
+        double at = 0;
+        int tries = 0;
+    };
+    std::map<std::string, Retry> retries;
     Planted* plantedOf(const Tree& tree);
     Planted* holding(const std::string& nodeId);
     bool standing(const Planted& p) const;

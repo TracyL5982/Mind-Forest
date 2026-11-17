@@ -4,6 +4,11 @@
 //      (a card of the service's shows its own picture, which the service holds; a film or a work, the library's)
 //   2. of them, the first five show while the forest lies on the ocean's floor, as it does while a tree stands
 //   3. the service's pictures, which come after the cover is made, all come, and the cover shows them
+//   5. with the service refusing a third of its pictures every time they are asked for, and holding a seventh of the rest back
+//      3 s, every cover still shows a full set once they have settled (`-coversAt`): as many as the pictures its cards can
+//      show, at most eight, and no place left waiting; a place whose picture was refused went to the next card, and one whose
+//      picture was late (here after 0.5 s, `-coverWait`) to one on hand; and a late picture that came once its cover was full
+//      left the cover as it was
 //   4. a tree made in the app from a piece of the ocean (the first film, Dracula) and put away shows its pictures too: its
 //      root's, when the service roots it on the library's film, and the service's cards' round it
 // Then a last preview, with no tree standing (the welcome tree stood only the first time), has the forest on the desk with
@@ -68,6 +73,44 @@ try {
   const onFilm = root?.itemId === 'library:film:0';
   check(m && n === Math.min(8, k) && (!onFilm || n >= 1),
     `4. "${title ?? 'no tree'}", made from the ocean's first film${onFilm ? ', rooted on it,' : ' (rooted on a note of the service\'s here)'} and put away: ${m ? `${n} pictures of the ${k} its cards have` : cover?.line ?? 'no cover'}`);
+
+  // 5. Pictures refused and held back. The same third is refused each time it is asked for (by its address), so asking
+  // again never brings it; a seventh of the rest come 3 s late. (Not longer, nor more: held at once they hold up every
+  // picture behind them on the preview's few connections, which is a slow service, not a late picture.)
+  const hash = (text) => [...text].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  let refused = 0, held = 0;
+  stand.pictures((path) => {
+    const h = hash(path);
+    if (h % 3 === 0) return (refused++, 'refuse');
+    if (h % 7 === 1) return (held++, 3);
+    return null;
+  });
+  const hard = stand.launch(shots, 'refused', 22, ['-coversAt', '20', '-coverWait', '0.5', '-shotEvery', '100']);
+  await hard.done;
+  stand.pictures(null);
+  writeFileSync(join(shots, 'log-refused.txt'), hard.log.map((l) => `${l.at.toFixed(2).padStart(7)} ${l.line}`).join('\n'));
+  const settled = /^\[ocean\] cover of (.*): (\d+) pictures showing, (\d+) places waiting, of the (\d+) its cards have$/;
+  const refusedWay = hard.log.filter((l) => / could not be had\)$/.test(l.line)).length;
+  const lateWay = hard.log.filter((l) => / late, given to \d+ on hand\)$/.test(l.line)).length;
+  // Once a cover is full, nothing that comes later moves it: a free place is filled only in a cover that had one.
+  const count = new Map();
+  let fullThenFilled = 0;
+  for (const l of hard.log) {
+    const first = made.exec(l.line);
+    const again = /^\[ocean\] cover of (.*): now (\d+) pictures of the \d+ its cards have, \d+ still to come \((.*)\)$/.exec(l.line);
+    if (first) count.set(first[1], Number(first[2]));
+    if (!again) continue;
+    if (again[3] === 'a free place filled' && (count.get(again[1]) ?? 0) >= 8) fullThenFilled++;
+    count.set(again[1], Number(again[2]));
+  }
+  for (const tree of before.trees) {
+    const line = hard.log.filter((l) => l.line.startsWith(`[ocean] cover of ${tree.title}: `) && settled.test(l.line)).at(-1);
+    const [, , showing, waiting, k] = line ? settled.exec(line.line).map(Number) : [];
+    check(line && waiting === 0 && showing === Math.min(8, k),
+      `5. "${tree.title}", with pictures refused and late: ${line ? `${showing} showing, ${waiting} waiting, of the ${k} its cards can show` : 'no cover'}`);
+  }
+  check(refused > 0 && refusedWay > 0 && lateWay > 0 && fullThenFilled === 0,
+    `5. the stand-in refused ${refused} picture asks and held back ${held}; covers gave places on ${refusedWay} refusals and ${lateWay} late pictures, and filled no free place in a full cover (${fullThenFilled})`);
 
   // The forest on the desk.
   const desk = stand.launch(shots, 'desk', 10, ['-shotEvery', '100']);

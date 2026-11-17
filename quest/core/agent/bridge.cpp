@@ -4,6 +4,7 @@
 #include <cctype>
 #include <functional>
 #include <initializer_list>
+#include <limits>
 #include <random>
 #include <set>
 
@@ -194,6 +195,11 @@ void Bridge::frame(double t) {
                    },
                    event);
     }
+    for (auto& [src, r] : retries) {
+        if (now < r.at) continue;
+        r.at = std::numeric_limits<double>::infinity();         // (until it comes, or fails again)
+        fetchPicture(src);
+    }
     std::vector<std::pair<std::string, ImageRef>> arrived;
     {
         std::lock_guard<std::mutex> g(pictures->lock);
@@ -201,6 +207,17 @@ void Bridge::frame(double t) {
     }
     Planted* standingTree = model.tree ? plantedOf(*model.tree) : nullptr;
     for (auto& [src, image] : arrived) {
+        // One that could not be had is asked for again, 5 s on, then 10, 20 … up to every 5 minutes. (A card showing it keeps
+        // its stand-in meanwhile; a cover gives its place to another and may take it back once it comes.)
+        if (!image) {
+            Retry& r = retries[src];
+            r.at = now + std::min(300.0, 5.0 * double(1 << std::min(r.tries, 6)));
+            r.tries++;
+            logLine(fmt("[agent] a picture could not be had (%d %s); asked again in %.0f s", r.tries, r.tries == 1 ? "time" : "times",
+                        r.at - now));
+        } else {
+            retries.erase(src);
+        }
         std::vector<std::string> shown = cards::picture(src, image);
         for (const std::string& noteID : shown) {
             std::string nodeId = noteID.substr(std::string("agent-").size());
@@ -572,19 +589,23 @@ bool Bridge::paint(const Item& item, const Node& node) {
 void Bridge::fetchPictures(const std::string& noteID) {
     for (const std::string& src : cards::pictures(noteID)) {
         if (src.rfind("sample:", 0) == 0 || !asked.insert(src).second) continue;
-        std::string file = platform::dataDirectory() + "/agent-picture-" + std::to_string(std::hash<std::string>{}(src));
-        platform::Request request;
-        request.url = client.address().resolve(src);
-        request.saveTo = file;
-        std::weak_ptr<Pictures> inbox = pictures;
-        platform::fetch(request, [inbox, src, file](platform::Response r) {
-            ImageRef image = r.status >= 200 && r.status < 300 && r.error.empty() ? platform::decodeImage(file, 1024) : nullptr;
-            if (auto box = inbox.lock()) {
-                std::lock_guard<std::mutex> g(box->lock);
-                box->arrived.emplace_back(src, image);
-            }
-        });
+        fetchPicture(src);
     }
+}
+
+void Bridge::fetchPicture(const std::string& src) {
+    std::string file = platform::dataDirectory() + "/agent-picture-" + std::to_string(std::hash<std::string>{}(src));
+    platform::Request request;
+    request.url = client.address().resolve(src);
+    request.saveTo = file;
+    std::weak_ptr<Pictures> inbox = pictures;
+    platform::fetch(request, [inbox, src, file](platform::Response r) {
+        ImageRef image = r.status >= 200 && r.status < 300 && r.error.empty() ? platform::decodeImage(file, 1024) : nullptr;
+        if (auto box = inbox.lock()) {
+            std::lock_guard<std::mutex> g(box->lock);
+            box->arrived.emplace_back(src, image);
+        }
+    });
 }
 
 void Bridge::redraw(int localId) {

@@ -168,6 +168,11 @@ void OceanModel::update(float dt) {
     if (!built) build();
     double now = time;
     if (agentBridge) agentBridge->frame(now);     // AGENT
+    // AGENT: the service's trees put away keep a picture in every place they can (`tendCovers`).
+    if (agentBridge && now >= coversTendedAt + 0.5) {
+        coversTendedAt = now;
+        tendCovers();
+    }
     if (presenceDemo) presenceDemo->frame(now);     // AGENT
     if (echoCheck) echoCheck->frame(now);     // AGENT
 

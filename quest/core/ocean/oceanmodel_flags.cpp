@@ -479,6 +479,18 @@ void OceanModel::runFlags() {
             });
         }
     }
+    // AGENT: `-coversAt <s>`: what each tree put away shows then, for checking that no place is kept empty (`tendCovers`).
+    at("coversAt", [](OceanModel& m) {
+        for (const Shelved& s : m.shelf) {
+            int showing = 0, waiting = 0;
+            for (const CoverPicture& p : s.pictures) {
+                if (p.entity->model || !p.entity->children.empty()) showing++;
+                else waiting++;
+            }
+            logLine(fmt("[ocean] cover of %s: %d pictures showing, %d places waiting, of the %d its cards have", s.tree->title.c_str(),
+                        showing, waiting, m.coverPlan(*s.tree).choices));
+        }
+    });
     at("bringAt", [](OceanModel& m) {
         if (m.peek) m.bringIn(m.peek->film);
     });
