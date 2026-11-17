@@ -70,8 +70,9 @@ void draw(const Pen& pen, const Look& look, const Item& item, const Json& props,
 
 
 
-/// The opened card's player. The headset plays no clip, so a clip it could play shows its poster under
-/// the play mark, and one with no file shows its poster and says so, as the web does.
+/// The opened card's player. A clip it could play shows its poster under the play mark; one whose file the service
+/// holds then plays over it, from its first frame (OceanModel, agent::Bridge::video). One with no file shows its poster
+/// and says so, as the web does.
 void detail(Sheet& sheet, const Item& item, const Json& props) {
     static const std::regex youtube("^https://www\\.youtube\\.com/embed/[\\w-]{11}$");
     std::string embed = text(item.data["embed"]), src = text(props["src"]), poster = text(props["poster"]);

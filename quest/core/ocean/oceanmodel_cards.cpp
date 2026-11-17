@@ -1015,6 +1015,7 @@ void OceanModel::restyle(bool stirring) {
     stepAside(now, moving ? Pace::step : Pace::grow, moving ? Ease::glide : Ease::out);
     // The open card's video plays; nothing else does.
     std::optional<int> film;
+    bool served = false;
     if (current && !pressing) {
         switch (current->ref.kind) {
         case Ref::Kind::film:
@@ -1027,20 +1028,40 @@ void OceanModel::restyle(bool stirring) {
         case Ref::Kind::tag:
             break;
         }
+        // AGENT: a card of the service's that holds a video file plays it from the service (agent::Bridge::video).
+        served = !film && agentBridge && agentBridge->video(current->id);
         // NOTE(port): added for Quest. A card plays its film where its picture is, so not on a page without it (core/cards).
-        if (CardRef c = card(current->id); c && c->layout && !c->layout->picture) film = std::nullopt;
+        if (CardRef c = card(current->id); c && c->layout && !c->layout->picture) {
+            film = std::nullopt;
+            served = false;
+        }
     }
-    if (film && current) {
+    if ((film || served) && current) {
         if (screenNode != current->id) {
             screen->hide();
             screenNode = current->id;
             int id = current->id;
-            after(double(Pace::step) + 0.05, [this, id, film = *film] {
+            after(double(Pace::step) + 0.05, [this, id, film] {
                 if (!(this->tree && this->tree->focus() == id && !pressing)) return;
                 CardRef c = card(id);
-                if (!(c && library && film >= 0 && film < int(library->clips.size()))) return;
+                if (!c) return;
+                // A library film is shown by its place in the library; a service's video by the card's own id below
+                // zero, so the screen never takes one for the other.
+                int key = 0;
+                std::string url;
+                if (film) {
+                    if (!(library && *film >= 0 && *film < int(library->clips.size()))) return;
+                    key = *film;
+                    url = library->fullURL(library->clips[*film]);
+                } else {
+                    std::optional<std::string> address = agentBridge ? agentBridge->video(id) : std::nullopt;
+                    if (!address) return;
+                    key = -1 - id;
+                    url = *address;
+                    logLine("[ocean] " + catalog->title(c->ref) + " plays its video from the service");
+                }
                 PictureFrame frame = pictureFrame(*c);
-                screen->show(film, library->fullURL(library->clips[film]), frame.size, c->openHolder, frame.center);
+                screen->show(key, url, frame.size, c->openHolder, frame.center);
                 // NOTE(port): added for Quest. An agent's card's poster has round corners, and the film over it takes them (core/cards).
                 if (cards::ocean::cardOf(c->ref)) {
                     if (std::optional<Piece> round = cards::ocean::corners(*art, frame.size)) screen->cover(art->quad(*round));

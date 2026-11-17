@@ -674,6 +674,17 @@ bool Bridge::opens(int nodeID) {
     return true;
 }
 
+std::optional<std::string> Bridge::video(int nodeID) {
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    if (!p || !p->service.count(nodeID)) return std::nullopt;
+    const Node* n = client.mirror().node(NodeId{p->service[nodeID]});
+    if (!n || n->view.component != "video") return std::nullopt;
+    std::string src = Json(n->view.props)["src"].string("");
+    // A path on the service is a file it holds (`/assets/<id>`), which answers byte ranges, so it streams and seeks.
+    if (src.empty() || src.find("://") != std::string::npos) return std::nullopt;
+    return client.address().resolve(src);
+}
+
 void Bridge::rows(const TreeNode& node, std::vector<Ask>& asks) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
     if (!p || !p->service.count(node.id)) return;
