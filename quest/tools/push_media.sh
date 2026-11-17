@@ -62,3 +62,7 @@ sync_dir "$SMALL" works-small
 # The greeting's lettering (Fraunces 72pt Soft Light and its italic, SIL Open Font License; in git).
 [ -d "$REPO_ROOT/media-src/quest/fonts" ] && sync_dir "$REPO_ROOT/media-src/quest/fonts" fonts
 adb shell "du -sh $DEVICE_FILES/media"
+
+# What adb copies into an app's storage belongs to the shell and, on a fresh install, is closed to everyone else: the app
+# then finds none of it ("resource missing") and starts with an empty scene. Opened for reading, the app's own files as well.
+adb shell "chmod -R a+rX $DEVICE_FILES/media"
