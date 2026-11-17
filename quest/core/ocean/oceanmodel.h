@@ -361,7 +361,8 @@ private:
         float width;                        // m, in the cover's own measure
         Vec3 at;                            // where it floats, m from the cover's middle, before it is drawn in to the trunk
         float height = 0;
-        double since = -1;                  // AGENT: when it began to wait for a service card's picture (-1: it shows)
+        Vec3 from = Vec3::zero();           // AGENT: where it eases from to `at`, since `moveStart` (-1: it is at `at`)
+        double moveStart = -1;
     };
     // NOTE(port): added for Quest, at Kai's word (2026-11-15): on a tree that stands on the desk the
     // pictures are 0.65 of the size the Swift gives them and as much nearer the trunk ("too large, and
@@ -383,10 +384,8 @@ private:
         // between the desk and the ocean's floor.
         EntityRef branches, caption;
         std::vector<CoverPicture> pictures;
-        // AGENT: the boxes of its tree, which those of its pictures and name join, for pointing at it (`coverCollision`);
-        // and the pictures left off for being late, until they come (`tendCovers`).
+        // AGENT: the boxes of its tree, which those of its pictures and name join, for pointing at it (`coverCollision`).
         std::vector<Shape> trunk;
-        std::vector<Ref> late;
         int layers = 1;
         float treeFoot = 0.03f, treeRise = 0.055f;
         Tween<float> el{0.f};
@@ -479,7 +478,7 @@ private:
     /// Each frame something moves: the opening tree's turn and squash, and the tips of covers on their way.
     void tendForest(double now);
     /// Puts a cover's pictures where they float when drawn in by `k` (see `huddleUp`).
-    static void layPictures(const std::vector<CoverPicture>& pictures, float k);
+    void layPictures(const std::vector<CoverPicture>& pictures, float k) const;
     /// And its name with them: as much smaller, still standing on the ground before the tree's foot.
     static void layName(const EntityRef& caption, Vec2 size, float foot, float k);
     /// Rakes every tree's rings (gravel.h) for where the trees stand, or are on their way to: where two
@@ -1381,6 +1380,7 @@ private:
         std::vector<Thumb> thumbs;
         int choices = 0;                // AGENT: how many different pictures its cards had to show
         std::vector<Ref> ranked;        // AGENT: and which, best first
+        int picks = 0;                  // AGENT: how many it shows once every picture has come (`shownPlan`)
         float foot = 0;                 // m from the cover's middle down to the tree's foot
         float top = 0;                  // m from the cover's middle up to its highest picture
         // NOTE(port): added for Quest: how its tree is drawn, in the small tree's measure (see `Becoming`).
@@ -1409,26 +1409,29 @@ private:
     /// an earlier one, and then by how much the card matters. The first of
     /// them is a little larger. Each floats on the side of the tree its
     /// card stands on, about as high as its layer.
-    CoverPlan coverPlan(const Tree& tree, const std::vector<Ref>& without = {}) const;    // AGENT: `without` those pictures
-    /// AGENT: a cover's picture as a plan places it, or none for a film or a work that can't be drawn. A service card's own
-    /// picture shows once it has come; until then its place waits (`since`).
+    /// AGENT: `without` those pictures; with `only`, of those pictures alone.
+    CoverPlan coverPlan(const Tree& tree, const std::vector<Ref>& without = {}, const std::vector<Ref>* only = nullptr) const;
+    /// AGENT: what a cover shows now. Its picks are the plan's, whatever the network does: a service card's picture is
+    /// fetched until it comes (agent::Bridge), and the place goes to the next card only when the service says it can't be had
+    /// (`coverSource`). Until all have come, what has come is placed as a cover of that many would be, with no gaps, each
+    /// the size it will be; Kai's trees, whose films and works never wait, show their plan.
+    CoverPlan shownPlan(const Tree& tree) const;
+    /// AGENT: a cover's picture as a plan places it, or none for a film or a work that can't be drawn, or for a service
+    /// card's whose picture has not come.
     std::optional<CoverPicture> coverPicture(const CoverPlan::Thumb& thumb);
     /// AGENT: a cover's boxes for pointing at it: its tree's, then each picture's and its name's, as drawn in on the desk.
     std::vector<Shape> coverCollision(const std::vector<Shape>& trunk, const std::vector<CoverPicture>& pictures, bool caption,
                                       Vec2 nameSize, float foot) const;
     /// AGENT: whether a cover could show a picture now: a film's or a work's always, a service card's once it has come.
     bool onHand(const Ref& ref) const;
-    /// AGENT: how long a cover's place waits for a service card's picture before a picture on hand may take it, s
-    /// (`-coverWait <s>`, for checking it).
-    static double coverWait();
-    /// AGENT: a service tree's cover keeps no place empty while its tree has another picture to show. A place whose picture
-    /// could not be had goes to the next card in the cover's order whose picture is on hand or on its way; one whose picture
-    /// is late goes to the next on hand, and the late one may take a free place once it comes. A picture that comes when
-    /// every place is taken leaves the cover as it is. Run every half second, and as pictures come.
+    /// AGENT: a service tree's cover shows what `shownPlan` says: run every half second, and as pictures come or are refused.
     void tendCovers();
-    /// AGENT: places a cover's pictures again as its plan would without `without`: one that stays where it was is kept, the
-    /// rest come and go; with fewer pictures than places, fewer show, placed as the plan places them.
-    void recover(Shelved& s, const std::vector<Ref>& without, const std::string& why);
+    /// AGENT: places a cover's pictures as `plan` places them: one already there eases to its new place (`coverEase` s), one
+    /// that has come fades in at its own, and one no longer picked goes.
+    void relayout(Shelved& s, const CoverPlan& plan);
+    static constexpr float coverEase = 0.5f;
+    /// AGENT: where a cover's picture is now, in the cover's measure, easing to `at`.
+    Vec3 placeOf(const CoverPicture& p) const;
     double coversTendedAt = 0;
     /// AGENT: the first picture a card of the service's shows that has not failed to come, for its cover: none for any
     /// other card.
@@ -1437,8 +1440,9 @@ private:
     EntityRef coverFace(const std::string& noteID, Vec2 size);
 
 public:
-    /// AGENT: pictures the service's cards show have come: covers waiting for them show them now.
-    void coverPicturesCame(const std::vector<std::string>& noteIDs);
+    /// AGENT: pictures the service's cards show have come, or the service said they can't be had: covers show what they
+    /// can now.
+    void coverPicturesCame();
 
 private:
 
@@ -1463,6 +1467,7 @@ private:
         EntityRef branches, caption;
         std::vector<CoverPicture> pictures;
         int choices = 0;                    // AGENT: as `CoverPlan::choices`
+        int picks = 0;                      // AGENT: as `CoverPlan::picks`
         int layers = 1;
         float treeFoot = 0.03f, treeRise = 0.055f;
     };

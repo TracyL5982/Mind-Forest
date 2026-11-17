@@ -200,32 +200,35 @@ void Bridge::frame(double t) {
         r.at = std::numeric_limits<double>::infinity();         // (until it comes, or fails again)
         fetchPicture(src);
     }
-    std::vector<std::pair<std::string, ImageRef>> arrived;
+    std::vector<Came> arrived;
     {
         std::lock_guard<std::mutex> g(pictures->lock);
         arrived.swap(pictures->arrived);
     }
     Planted* standingTree = model.tree ? plantedOf(*model.tree) : nullptr;
-    for (auto& [src, image] : arrived) {
-        // One that could not be had is asked for again, 5 s on, then 10, 20 … up to every 5 minutes. (A card showing it keeps
-        // its stand-in meanwhile; a cover gives its place to another and may take it back once it comes.)
-        if (!image) {
-            Retry& r = retries[src];
-            r.at = now + std::min(300.0, 5.0 * double(1 << std::min(r.tries, 6)));
+    bool covers = false;
+    for (const Came& came : arrived) {
+        // One that did not come, and may yet, is asked for again until it does: 1, 2, 4 and 8 s on, then every 15 s. A card
+        // showing it, and a cover's place for it, wait for it meanwhile. Only one the service says it can't have is let go.
+        if (!came.image && !came.gone) {
+            Retry& r = retries[came.src];
             r.tries++;
-            logLine(fmt("[agent] a picture could not be had (%d %s); asked again in %.0f s", r.tries, r.tries == 1 ? "time" : "times",
+            r.at = now + (r.tries <= 4 ? double(1 << (r.tries - 1)) : 15.0);
+            logLine(fmt("[agent] a picture did not come (%d %s); asked again in %.0f s", r.tries, r.tries == 1 ? "time" : "times",
                         r.at - now));
-        } else {
-            retries.erase(src);
+            continue;
         }
-        std::vector<std::string> shown = cards::picture(src, image);
+        retries.erase(came.src);
+        if (came.gone) logLine("[agent] a picture can't be had: " + came.src);
+        std::vector<std::string> shown = cards::picture(came.src, came.image);
         for (const std::string& noteID : shown) {
             std::string nodeId = noteID.substr(std::string("agent-").size());
             if (standingTree && standingTree->local.count(nodeId)) redraw(standingTree->local[nodeId]);
         }
-        // A tree put away shows its cards' pictures round it as they come.
-        if (image && !shown.empty()) model.coverPicturesCame(shown);
+        covers = covers || !shown.empty();
     }
+    // A tree put away shows its cards' pictures round it as they come, and the next card's in place of one that can't be had.
+    if (covers) model.coverPicturesCame();
     std::vector<std::pair<std::string, bool>> finished;
     {
         std::lock_guard<std::mutex> g(typed->lock);
@@ -598,12 +601,16 @@ void Bridge::fetchPicture(const std::string& src) {
     platform::Request request;
     request.url = client.address().resolve(src);
     request.saveTo = file;
+    request.timeout = 10;           // (one that stalls is asked for again sooner)
     std::weak_ptr<Pictures> inbox = pictures;
     platform::fetch(request, [inbox, src, file](platform::Response r) {
-        ImageRef image = r.status >= 200 && r.status < 300 && r.error.empty() ? platform::decodeImage(file, 1024) : nullptr;
+        bool ok = r.status >= 200 && r.status < 300 && r.error.empty();
+        ImageRef image = ok ? platform::decodeImage(file, 1024) : nullptr;
+        // Not found, gone, or a reply that is no picture the headset can draw: it never will be. Anything else may pass.
+        bool gone = r.status == 404 || r.status == 410 || (ok && !image);
         if (auto box = inbox.lock()) {
             std::lock_guard<std::mutex> g(box->lock);
-            box->arrived.emplace_back(src, image);
+            box->arrived.push_back(Came{src, image, gone});
         }
     });
 }

@@ -16,7 +16,7 @@
 /// an earlier one, and then by how much the card matters. The first of
 /// them is a little larger. Each floats on the side of the tree its
 /// card stands on, about as high as its layer.
-OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree, const std::vector<Ref>& without) const {
+OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree, const std::vector<Ref>& without, const std::vector<Ref>* only) const {
     if (!catalog) return CoverPlan{};
     CoverPlan plan;
     int deepest = 0;
@@ -109,6 +109,7 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree, const std::vector<
         if (!(!n.chip && (n.head || n.kept || !tree.grows))) continue;
         std::optional<Shown> shown = picture(n.ref);
         if (!shown || std::find(without.begin(), without.end(), shown->ref) != without.end()) continue;
+        if (only && std::find(only->begin(), only->end(), shown->ref) == only->end()) continue;
         int host = n.head ? n.id : n.parent.value_or(tree.root);
         int layer = tree.generation(host);
         float high = layers > 1 ? float(layer) / float(layers - 1) : 0.5f;
@@ -158,6 +159,7 @@ OceanModel::CoverPlan OceanModel::coverPlan(const Tree& tree, const std::vector<
         }
         plan.thumbs.push_back(CoverPlan::Thumb{c.node->id, c.ref, Vec3{slot.x, plan.foot + slot.y * room, slot.z}, size});
     }
+    plan.picks = int(plan.thumbs.size());
     return plan;
 }
 
@@ -190,36 +192,7 @@ EntityRef OceanModel::coverFace(const std::string& noteID, Vec2 size) {
     return piece ? art->quad(*piece) : nullptr;
 }
 
-void OceanModel::coverPicturesCame(const std::vector<std::string>& noteIDs) {
-    for (Shelved& s : shelf) {
-        // One left off for being slow has come: it may take a free place (`tendCovers`), never another's.
-        s.late.erase(std::remove_if(s.late.begin(), s.late.end(), [&](const Ref& r) {
-            return r.kind == Ref::Kind::note && std::find(noteIDs.begin(), noteIDs.end(), r.id) != noteIDs.end();
-        }), s.late.end());
-        int came = 0, waiting = 0;
-        for (CoverPicture& p : s.pictures) {
-            if (p.ref.kind != Ref::Kind::note || !p.entity->children.empty()) continue;
-            if (std::find(noteIDs.begin(), noteIDs.end(), p.ref.id) == noteIDs.end()) {
-                waiting++;
-                continue;
-            }
-            EntityRef face = coverFace(p.ref.id, {p.width, p.height});
-            if (!face) {
-                waiting++;
-                continue;
-            }
-            p.entity->addChild(face);
-            if (EntityRef glow = art->glow({p.width, p.height})) {
-                glow->position.z = -0.003f;
-                p.entity->addChild(glow);
-            }
-            p.since = -1;
-            came++;
-        }
-        if (came && !waiting) logLine(fmt("[ocean] cover of %s: its %d pictures all shown", s.tree->title.c_str(), int(s.pictures.size())));
-        if (came) touch(time + 0.1);
-    }
-}
+void OceanModel::coverPicturesCame() { tendCovers(); }
 
 std::optional<OceanModel::CoverPicture> OceanModel::coverPicture(const CoverPlan::Thumb& thumb) {
     EntityRef e = Entity::make();
@@ -235,26 +208,20 @@ std::optional<OceanModel::CoverPicture> OceanModel::coverPicture(const CoverPlan
     default:
         break;
     }
-    // AGENT: a service card's picture shows now if it has come, or when it comes (`coverPicturesCame`), its glow with it.
-    bool later = thumb.ref.kind == Ref::Kind::note;
-    if (later) {
-        if (EntityRef face = coverFace(thumb.ref.id, thumb.size)) e->addChild(face);
+    // AGENT: a service card's own picture, once it has come; until then nothing is drawn for it (`shownPlan`).
+    if (thumb.ref.kind == Ref::Kind::note) {
+        EntityRef face = coverFace(thumb.ref.id, thumb.size);
+        if (!face) return std::nullopt;
+        e->addChild(face);
     } else if (!e->model) {
         return std::nullopt;
     }
-    if (!later || !e->children.empty()) {
-        if (EntityRef glow = art->glow(thumb.size)) {
-            glow->position.z = -0.003f;
-            e->addChild(glow);
-        }
+    if (EntityRef glow = art->glow(thumb.size)) {
+        glow->position.z = -0.003f;
+        e->addChild(glow);
     }
     e->position = thumb.at;
-    return CoverPicture{thumb.id, thumb.ref, e, thumb.size.x, thumb.at, thumb.size.y, e->children.empty() && !e->model ? time : -1};
-}
-
-double OceanModel::coverWait() {
-    static const double wait = Flags::number("coverWait") > 0 ? Flags::number("coverWait") : 4;
-    return wait;
+    return CoverPicture{thumb.id, thumb.ref, e, thumb.size.x, thumb.at, thumb.size.y};
 }
 
 bool OceanModel::onHand(const Ref& ref) const {
@@ -264,62 +231,64 @@ bool OceanModel::onHand(const Ref& ref) const {
     return had && had->image;
 }
 
+OceanModel::CoverPlan OceanModel::shownPlan(const Tree& tree) const {
+    CoverPlan plan = coverPlan(tree);
+    if (tree.grows) return plan;
+    std::vector<Ref> here;
+    for (const CoverPlan::Thumb& t : plan.thumbs) {
+        if (onHand(t.ref)) here.push_back(t.ref);
+    }
+    if (here.size() == plan.thumbs.size()) return plan;
+    // What has come so far, placed as a cover of that many would place them, each the size it will be.
+    CoverPlan shown = coverPlan(tree, {}, &here);
+    for (CoverPlan::Thumb& t : shown.thumbs) {
+        auto full = std::find_if(plan.thumbs.begin(), plan.thumbs.end(), [&](const CoverPlan::Thumb& f) { return f.id == t.id && f.ref == t.ref; });
+        if (full != plan.thumbs.end()) t.size = full->size;
+    }
+    shown.choices = plan.choices;
+    shown.ranked = plan.ranked;
+    shown.picks = plan.picks;
+    return shown;
+}
+
+Vec3 OceanModel::placeOf(const CoverPicture& p) const {
+    if (p.moveStart < 0) return p.at;
+    float u = std::min(1.f, std::max(0.f, float(time - p.moveStart) / coverEase));
+    return p.from + (p.at - p.from) * Ease::glide(u);
+}
+
 void OceanModel::tendCovers() {
     for (Shelved& s : shelf) {
         if (!s.tree || s.tree->grows) continue;      // (Kai's trees show films and works, which never wait)
-        // Its places still waiting for the service's picture: those whose picture could not be had, and those it is late for.
-        std::vector<Ref> failed, slow, placed;
-        for (const CoverPicture& p : s.pictures) {
-            placed.push_back(p.ref);
-            if (p.ref.kind != Ref::Kind::note || !p.entity->children.empty()) continue;
-            if (!coverSource(p.ref.id)) failed.push_back(p.ref);
-            else if (p.since >= 0 && time - p.since > coverWait()) slow.push_back(p.ref);
+        CoverPlan plan = shownPlan(*s.tree);
+        bool same = plan.thumbs.size() == s.pictures.size();
+        for (size_t k = 0; same && k < plan.thumbs.size(); k++) {
+            const CoverPicture& p = s.pictures[k];
+            const CoverPlan::Thumb& t = plan.thumbs[k];
+            same = p.id == t.id && p.ref == t.ref && distance(p.at, t.at) < 1e-4f && std::fabs(p.width - t.size.x) < 1e-4f;
         }
-        // The pictures on hand that no place shows, best first.
-        CoverPlan now = coverPlan(*s.tree, s.late);
-        std::vector<Ref> spare;
-        for (const Ref& r : now.ranked) {
-            if (std::find(placed.begin(), placed.end(), r) == placed.end() && onHand(r)) spare.push_back(r);
-        }
-        std::vector<Ref> without = s.late;
-        std::string why;
-        if (!failed.empty()) {
-            // The next in the ranking takes the place: one on hand, or one still on its way.
-            why = fmt("%d could not be had", int(failed.size()));
-        } else if (!slow.empty() && !spare.empty()) {
-            // A late one gives way to a picture on hand, the lowest first; only pictures on hand take its place, so a place
-            // goes from a late picture to one that shows, never to another on its way. It may come back to a free place.
-            size_t n = std::min(slow.size(), spare.size());
-            for (size_t k = slow.size() - n; k < slow.size(); k++) s.late.push_back(slow[k]);
-            without = s.late;
-            for (const Ref& r : now.ranked) {
-                bool held = std::find(placed.begin(), placed.end(), r) != placed.end();
-                if (!held && !onHand(r)) without.push_back(r);
-            }
-            why = fmt("%d late, given to %d on hand", int(n), int(n));
-        } else if (s.pictures.size() < coverSlots.size() && now.thumbs.size() > s.pictures.size()) {
-            // A free place, and a picture to fill it: one that came after all.
-            why = "a free place filled";
-        } else {
-            continue;
-        }
-        recover(s, without, why);
+        if (!same) relayout(s, plan);
     }
 }
 
-void OceanModel::recover(Shelved& s, const std::vector<Ref>& without, const std::string& why) {
-    CoverPlan plan = coverPlan(*s.tree, without);
+void OceanModel::relayout(Shelved& s, const CoverPlan& plan) {
     EntityRef holder = s.mover->entity;
-    // As the plan would make them now: a picture that stays where it was is kept as it is; the rest come and go.
+    // A picture already there eases to its new place; one that has come fades in at its own; one no longer picked goes.
     std::vector<CoverPicture> pictures;
     std::vector<EntityRef> made;
     for (const CoverPlan::Thumb& thumb : plan.thumbs) {
         auto old = std::find_if(s.pictures.begin(), s.pictures.end(), [&](const CoverPicture& p) {
-            return p.id == thumb.id && p.ref == thumb.ref && distance(p.at, thumb.at) < 1e-4f && std::fabs(p.width - thumb.size.x) < 1e-4f;
+            return p.id == thumb.id && p.ref == thumb.ref && std::fabs(p.width - thumb.size.x) < 1e-4f;
         });
         if (old != s.pictures.end()) {
-            pictures.push_back(*old);
+            CoverPicture p = *old;
             s.pictures.erase(old);
+            if (distance(p.at, thumb.at) > 1e-4f) {
+                p.from = placeOf(p);
+                p.at = thumb.at;
+                p.moveStart = time;
+            }
+            pictures.push_back(p);
             continue;
         }
         std::optional<CoverPicture> picture = coverPicture(thumb);
@@ -343,16 +312,16 @@ void OceanModel::recover(Shelved& s, const std::vector<Ref>& without, const std:
     for (size_t k = 0; k < s.pictures.size(); k++) {
         bool shows = !forestDown || k < usualPictures;
         bool fresh = std::find(made.begin(), made.end(), s.pictures[k].entity) != made.end();
-        if (fresh || (shows != !(s.pictures[k].entity->opacity && *s.pictures[k].entity->opacity < 0.5f))) {
-            fadeTo(s.pictures[k].entity, shows ? 1.f : 0.f, 0.0, 0.3f);
-        }
+        bool showing = !(s.pictures[k].entity->opacity && *s.pictures[k].entity->opacity < 0.5f);
+        if (fresh || shows != showing) fadeTo(s.pictures[k].entity, shows ? 1.f : 0.f, 0.0, 0.3f);
     }
     holder->collision = coverCollision(s.trunk, s.pictures, s.caption != nullptr, s.nameSize, s.foot);
-    int waiting = 0;
-    for (const CoverPicture& p : s.pictures) waiting += p.since >= 0;
-    logLine(fmt("[ocean] cover of %s: now %d pictures of the %d its cards have, %d still to come (%s)", s.tree->title.c_str(),
-                int(s.pictures.size()), plan.choices, waiting, why.c_str()));
-    touch(time + 0.4);
+    if (int(s.pictures.size()) >= plan.picks) {
+        logLine(fmt("[ocean] cover of %s: its %d pictures all shown", s.tree->title.c_str(), int(s.pictures.size())));
+    } else {
+        logLine(fmt("[ocean] cover of %s: now showing %d of its %d pictures", s.tree->title.c_str(), int(s.pictures.size()), plan.picks));
+    }
+    touch(time + double(coverEase) + 0.1);
 }
 
 /// Builds a tree's cover. `el` is how high it hangs, in degrees up
@@ -361,7 +330,7 @@ void OceanModel::recover(Shelved& s, const std::vector<Ref>& without, const std:
 /// what on it is tipped, and the box it is picked by.
 std::optional<OceanModel::Cover> OceanModel::makeCover(const Tree& tree, float el, bool planted) {
     if (!art || !catalog) return std::nullopt;
-    CoverPlan plan = coverPlan(tree);
+    CoverPlan plan = shownPlan(tree);       // AGENT: what has come so far, on a service tree
     EntityRef holder = Entity::make();
     std::vector<EntityRef> tilts;
     EntityRef tree3d, name;                     // NOTE(port): kept for Quest, with `pictures` (see `Cover`)
@@ -421,6 +390,7 @@ std::optional<OceanModel::Cover> OceanModel::makeCover(const Tree& tree, float e
     cover.caption = name;
     cover.pictures = pictures;
     cover.choices = plan.choices;
+    cover.picks = plan.picks;
     cover.layers = plan.layers;
     cover.treeFoot = plan.treeFoot;
     cover.treeRise = plan.treeRise;
@@ -452,7 +422,7 @@ void OceanModel::pressTree(bool send) {
     double now = time;
     if (send) tree->sent = true;
     // The cards whose pictures the cover shows go to where those float; the rest give way.
-    CoverPlan plan = coverPlan(*tree);
+    CoverPlan plan = shownPlan(*tree);
     std::vector<int> ids;
     for (const CoverPlan::Thumb& thumb : plan.thumbs) ids.push_back(thumb.id);
     Vec2 f = pan.target();
@@ -608,11 +578,9 @@ void OceanModel::shelve(const TreeRef& tree, std::optional<Vec3> from, const Mov
     bool down = wantDown();
     std::optional<Cover> made = makeCover(*tree, restEl(plot, down), true);
     if (!made) return;
-    int shown = 0;
-    for (const CoverPicture& picture : made->pictures) shown += picture.entity->model || !picture.entity->children.empty();
     logLine(fmt("[ocean] cover of %s: %d pictures of the %d its cards have, %d of them while it lies on the ocean's floor; %d still to come",
-                tree->title.c_str(), int(made->pictures.size()), made->choices, int(std::min(made->pictures.size(), usualPictures)),
-                int(made->pictures.size()) - shown));
+                tree->title.c_str(), made->picks, made->choices, std::min(made->picks, int(usualPictures)),
+                made->picks - int(made->pictures.size())));
     Vec3 p = restPoint(plot, made->foot, down);
     EntityRef holder = made->entity;
     holder->orientation = stage.upright(p).orientation;

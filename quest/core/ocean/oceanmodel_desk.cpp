@@ -150,7 +150,11 @@ void OceanModel::tendForest(double now) {
             }
             if (now <= s.ripple.end() + 0.05) s.gravel->show(s.ripple.value(now));
         }
-        if (now <= s.huddle.end() + 0.05) {
+        // AGENT: and while a picture eases to a new place (`relayout`).
+        bool easing = std::any_of(s.pictures.begin(), s.pictures.end(), [&](const CoverPicture& p) {
+            return p.moveStart >= 0 && now <= p.moveStart + double(coverEase) + 0.05;
+        });
+        if (now <= s.huddle.end() + 0.05 || easing) {
             layPictures(s.pictures, s.huddle.value(now));
             layName(s.caption, s.nameSize, s.foot, s.huddle.value(now));
         }
@@ -162,11 +166,12 @@ void OceanModel::tendForest(double now) {
     }
 }
 
-void OceanModel::layPictures(const std::vector<CoverPicture>& pictures, float k) {
+void OceanModel::layPictures(const std::vector<CoverPicture>& pictures, float k) const {
     for (const CoverPicture& p : pictures) {
-        // Smaller, and as much nearer the trunk; as high on the tree as before.
+        // Smaller, and as much nearer the trunk; as high on the tree as before. (AGENT: on its way to its place, `placeOf`.)
+        Vec3 at = placeOf(p);
         p.entity->scale = Vec3::repeating(k);
-        p.entity->position = {p.at.x * k, p.at.y, p.at.z};
+        p.entity->position = {at.x * k, at.y, at.z};
     }
 }
 

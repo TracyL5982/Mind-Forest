@@ -204,7 +204,8 @@ export async function standIn(name, source, { demo = false } = {}) {
   let previewSocket = null;
   const fromPreview = [];
   // What becomes of each picture the preview asks for (`/assets/…`), by `pictures(rule)`: `rule(path, n)`, n counting them
-  // from 1, says 'refuse' (a 404), a number of seconds to hold it back, or nothing to let it through.
+  // from 1, says 'refuse' (a 404: not found), 'fail' (a 503: the service can't give it now), a number of seconds to hold it
+  // back, or nothing to let it through.
   let pictureRule = null;
   let picturesAsked = 0;
   const proxy = createServer((req, res) => {
@@ -221,9 +222,9 @@ export async function standIn(name, source, { demo = false } = {}) {
       else req.pipe(upstream);
     };
     const said = pictureRule && req.url.startsWith('/assets/') ? pictureRule(req.url.split('?')[0], ++picturesAsked) : null;
-    if (said === 'refuse') {
+    if (said === 'refuse' || said === 'fail') {
       req.resume();
-      res.writeHead(404);
+      res.writeHead(said === 'refuse' ? 404 : 503);
       res.end();
     } else if (typeof said === 'number' && said > 0) {
       req.resume();
