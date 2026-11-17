@@ -1339,8 +1339,9 @@ private:
 
     // MARK: - The ocean: peeking and bringing in
 
-    /// Where a film comes to when it is lifted for a look: up off the water, most of the way to you.
-    Vec3 peekPoint(int film) const;
+    /// Where a film comes to when it is lifted for a look: up off the water, most of the way to you, and high enough
+    /// that no tree on the desk stands between it and you. `tall` is its card's height, m, at the size it comes to.
+    Vec3 peekPoint(int film, float tall) const;
 
     /// Lifts a film or a work out of the ocean just far enough to see what it is.
     void peekAt(int film);
