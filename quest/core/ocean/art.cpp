@@ -313,6 +313,7 @@ UIBezierPath rounded(CGRect r, float radius) {
 }
 
 std::optional<Piece> Art::lettering(const std::string& word, float size, float ppm) {
+    size *= type;
     // As a title is set in Fraunces at this size: light, a little tight, in a white with some warmth in it.
     Font f = Font::displayFont(size * ppm);
     TextAttributes look = attributes(f, Color::hex(0xFBF8EE), -0.028f * size * ppm);
@@ -324,6 +325,7 @@ std::optional<Piece> Art::lettering(const std::string& word, float size, float p
 }
 
 std::optional<Piece> Art::plain(const std::string& words, float size, Font face, float alpha, float ppm) {
+    size *= type;
     Font f = face;
     f.pointSize = size * ppm;
     TextAttributes look = attributes(f, Color::white(1, alpha));
@@ -334,6 +336,7 @@ std::optional<Piece> Art::plain(const std::string& words, float size, Font face,
 }
 
 std::optional<Piece> Art::way(int number, const std::string& name, const std::string& note, float size, float ppm) {
+    size *= type;
     auto P = [&](float m) { return std::round(m * ppm); };
     Font nameFont = Font::systemFont(size * ppm, Font::Weight::semibold), noteFont = Font::systemFont(size * 0.72f * ppm, Font::Weight::medium);
     Font numberFont = Font::systemFont(size * 0.74f * ppm, Font::Weight::bold);
@@ -520,7 +523,7 @@ std::optional<Piece> Art::tray(const std::string& words) {
 /// What stands under a tree's cover on the shelf: its name, who made it,
 /// and whether it has been sent, as flat labels side by side.
 std::optional<Piece> Art::coverCaption(const std::string& title, Maker maker, bool sent) {
-    float ppm = 1000;
+    float ppm = 1000 / type;
     Font tf = Font::systemFont(40, Font::Weight::semibold), mf = Font::systemFont(26, Font::Weight::medium);
     float gap = 10;
     Color hot = Color::hex(0xFF5A36);

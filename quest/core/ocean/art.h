@@ -119,6 +119,10 @@ public:
         static constexpr float lead = 0.016f;           // the one line to take away; a brief
         static constexpr float title = 0.024f;          // an open card's headline
     };
+    // NOTE(port): added for Quest. How much larger every word in the app is set than the sizes it was chosen at, here
+    // and on the cards (core/cards): on the headset, all of it read "a little small" (2026-11-16). What holds words
+    // keeps its size; the words take more of it.
+    static constexpr float type = 1.2f;
     /// The room words keep inside a flat label, m: side, and top and bottom.
     static constexpr Vec2 pad{0.006f, 0.0035f};
     static constexpr Vec2 buttonPad{0.01f, 0.007f};
@@ -152,7 +156,7 @@ public:
 
     float px(float m) const { return std::round(m * ppm); }
 
-    Font font(float m, Font::Weight weight) const { return Font::systemFont(m * ppm, weight); }
+    Font font(float m, Font::Weight weight) const { return Font::systemFont(m * type * ppm, weight); }
 
     /// `piece(_:width:height:ppm:offset:draw:)`. `ppm` and `offset` have defaults in the Swift and
     /// the closure comes last, so the shorter forms are written out.

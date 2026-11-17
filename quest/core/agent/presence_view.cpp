@@ -282,7 +282,8 @@ PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& lineMateria
       light(mesh(1400, 5600)), backing(mesh(96, 144)), scratch(5600),
       step(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm * pitch),
       small(std::ceil(typeface(*art, Speaker::agent).lineHeight()) / Art::ppm * agentPitch),
-      size(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm * curio * larger),
+      // Of the words' line at the size it was chosen at, so Momo keeps its size when the words are set larger.
+      size(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm / Art::type * curio * larger),
       // CurioCity's gap, half Momo's radius past its edge: room for the ring to swell and bend without reaching a bar.
       edge(size * 1.5f) {
     // The ocean's dust is seen through and drawn after everything else, so the bars say where they stand; Momo's light
