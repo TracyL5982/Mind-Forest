@@ -326,3 +326,18 @@ test('a showcase tree is stood whole on a headset by taking it to one card under
     await run.close();
   }
 });
+
+test('the showcase trees of the demo folder all hold together, and each is a tree with forks and depth, not a stick', () => {
+  const { trees, problems } = loadShowcase(join(demoDir, 'showcase'));
+  assert.deepEqual(problems, []);
+  assert.deepEqual(trees.map((show) => show.tree.id), ['constellations', 'paper', 'planet', 'seed']);
+  for (const { tree } of trees) {
+    const under = new Map<string, number>();
+    for (const card of tree.cards) under.set(card.parent, (under.get(card.parent) ?? 0) + 1);
+    const forks = [...under].filter(([parent, n]) => parent !== 'root' && n >= 2).length;
+    const depth = (id: string): number => (id === 'root' ? 0 : 1 + depth(tree.cards.find((card) => card.id === id)!.parent));
+    assert.ok(forks >= 8, `${tree.id} forks at ${forks} cards`);
+    assert.ok(Math.max(...tree.cards.map((card) => depth(card.id))) >= 4, `${tree.id} is less than four layers deep`);
+    assert.ok(tree.cards.length >= 36);
+  }
+});

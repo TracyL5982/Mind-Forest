@@ -93,6 +93,7 @@ Three more controls:
 - **Play it now, without a word** plays the round with no voice: the headset goes to the card and the round arrives. Use it when you do not want Momo in the take, or when she answers a line without starting a search.
 - **Empty stage** takes the tree away, for recording Round 1, and starts the app again on the headset (see below). **Whole tree** builds everything.
 - **Rounds are scripted**, off: the next request is answered by the real Scout, live. On again: the next request brings the next round.
+- **4 other trees in the forest**, off: the showcase trees (below) are taken out, and the headset's app is started again so it lets go of them.
 
 ### Recording Round 1
 
@@ -155,6 +156,29 @@ quest/desktop/preview -agent ws://127.0.0.1:8787 -agentToken "$(cat agents/data-
 
 `cd agents && node --no-warnings --import tsx --test test/demo.test.ts` runs the demo's own tests.
 
+## The showcase trees
+
+Four whole trees stand in the forest beside the walkthrough's, so the space looks lived in. They were made on 2026-11-16 from the Pinterest boards of the profile the request named, plus things found outside:
+
+| Tree | Its first card | Cards | From |
+|---|---|---|---|
+| Paper architecture | What can one folded sheet build? | 51 | the Paper architecture, Paper sculpture and Architecture sketchbook boards; The Met |
+| Seed spirals | Why do seeds grow in spirals? | 45 | the Seed board and five pins of the Graph board; the Art Institute of Chicago, NASA |
+| Imaginary planet | What would my imaginary planet look like? | 50 | the imaginery planet, Art inspiration and UI boards; the Cleveland Museum of Art, NASA |
+| Constellations | How do scattered dots become one picture? | 46 | the 117 pins of the Graph board that the walkthrough does not use; Wikimedia Commons |
+
+![The forest with the showcase trees put away](docs/showcase-forest.jpg)
+
+![Constellations standing whole](docs/showcase-constellations.jpg)
+
+- They are planted when the service starts, their cards kept, and stay through every set-up. **Empty stage** takes only the walkthrough's tree away, so Round 1 is recorded with these four standing in the forest; switch them off on the page for a bare forest.
+- They are not played round by round. Opened on the headset, one is the user's own tree: asked on, the real Scout answers, and Momo is herself.
+- A tree that arrives whole lies on one layer in the app, its deeper cards bunched small behind the first layer: a card takes a layer of its own only once it is asked on. To show a tree with every layer standing, press its row under **Other trees in the forest** on the page (**Show whole**): the headset is taken through the tree, which takes a few seconds, and rests on its first card.
+- Each tree is a folder of `agents/demo/showcase/`: `tree.json` (the cards as the script writes them, each with the card it hangs from in `parent`) and `media/`. `python3 agents/demo/showcase/check.py <name> --sheet` checks one and writes a sheet of its pictures to look over. A tree must branch: 36 to 52 cards, at least eight cards with two or more under them, and lines of thought four layers deep. A tree whose file does not hold together is left out when the service starts, and the log says why.
+- The pins are other people's work, of unknown rights, as in the walkthrough's tree. What was found outside is public domain or openly licensed, and each card records its licence, credit and page. In a few cards the agents that wrote them were unsure of a detail (a date taken from a neighbouring record, a maker named only by Pinterest's title); `agents/demo/docs/showcase-notes.md` lists them.
+
+Tried on the Mac preview of the app: all four plant, are put away in the forest, and stand whole with their layers (pictures above and in `docs/`). Not tried on a headset.
+
 ## Changing the tree
 
 Everything the demo shows is in two places:
@@ -185,7 +209,7 @@ The file was generated from the walkthrough board by `sketches/walkthrough/gen/d
 - Requests as the headset sends them, from a test connection: a long pinch on "Neurones poster" brought "More of this" in 5 seconds, and the words "so how do we keep the information organized?" with Llull's ring open went through the real Conductor ("Looking at how to keep this information organized.") and brought Round 3 in 8.
 - The service stopped and started again took the tree up where it stood, and the headset joined again by itself.
 
-The Mac preview of the app, built from this branch, showed the same on 2026-11-16 (pictures above and below). The service's tests pass: 705, with one that is skipped without a key; nine of them are the demo's.
+The Mac preview of the app, built from this branch, showed the same on 2026-11-16 (pictures above and below). The service's tests pass: 708, with one that is skipped without a key; twelve of them are the demo's.
 
 ![A round being played: suggestions arriving on dashed threads round the open card](docs/round-played.jpg)
 
