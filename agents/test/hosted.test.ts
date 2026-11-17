@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { createServer, type IncomingMessage } from 'node:http';
@@ -24,6 +23,7 @@ import { MemoryAssets } from './kit.ts';
 import { SqliteStore } from '../src/node/store.ts';
 import { EDIT_BYTES, storedBytes, type Command } from '../src/core/domain.ts';
 import { followingIn, InstagramLibrary, openInstagram, parseList } from '../src/node/instagram.ts';
+import { tempDir } from './temp.ts';
 
 interface Msg {
   t: string;
@@ -37,7 +37,7 @@ const B = 'device-bbbbbbbbbbbb';
 
 /** A data folder with one tree, made by the service itself, as the starter script's output is. */
 async function starterFolder(): Promise<string> {
-  const dir = mkdtempSync(join(tmpdir(), 'mp-starter-'));
+  const dir = tempDir('mp-starter-');
   const run = await startServer({ port: 0, host: '127.0.0.1', dataDir: dir, clientDir: '', model: new FakeModel(), roles: fakeRoles, token: 'x' });
   await run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: Sourdough rises slowly in winter' }]);
   await run.pipeline.idle();
@@ -46,7 +46,7 @@ async function starterFolder(): Promise<string> {
 }
 
 async function host(limits: Partial<Limits> = {}, extra: Partial<HostedOptions> = {}): Promise<{ hosted: Hosted; ledger: Ledger; dataDir: string; lines: string[] }> {
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-hosted-'));
+  const dataDir = tempDir('mp-hosted-');
   const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: { ...DEFAULT_LIMITS, ...limits } });
   const lines: string[] = [];
   const hosted = await startHosted({
@@ -158,7 +158,7 @@ test('a device needs the app key; two devices get separate spaces, each starting
 });
 
 test('with an empty starter a new space starts with no tree', { timeout: 20000 }, async () => {
-  const empty = mkdtempSync(join(tmpdir(), 'mp-empty-'));
+  const empty = tempDir('mp-empty-');
   const { hosted } = await host({}, { starter: empty });
   const c = await connect(hosted, `${KEY}.${A}`);
   assert.deepEqual(treesOf(await c.until((m) => m.t === 'hello')), []);
@@ -266,7 +266,7 @@ test("the voice stops at the device's minutes: the turn is over at once and Momo
 });
 
 test('the day starts again at midnight Pacific with the off switch kept, and a cap, when one is set, refuses costly work and is told once', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'mp-ledger-'));
+  const dir = tempDir('mp-ledger-');
   let now = new Date('2026-11-15T20:00:00Z');
   const alerts: string[] = [];
   const make = () => new Ledger({ file: join(dir, 'ledger.json'), limits: { ...DEFAULT_LIMITS, dollarsPerDay: 10, searches: 2 }, now: () => now, alert: (t) => alerts.push(t) });
@@ -339,7 +339,7 @@ test('an idle space closes, and opens again with its trees on its next request',
 
 test("the hosted service never reads the user's bot, even when handed it, and its alert only sends", { timeout: 20000 }, async () => {
   const bot = await new FakeBot().start();
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-hosted-'));
+  const dataDir = tempDir('mp-hosted-');
   const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
   const shared = { clientDir: '', model: new FakeModel(), roles: fakeRoles, telegram: { token: BOT_TOKEN, api: bot.url, pollSeconds: 1 } } as HostedOptions['shared'];
   const hosted = await startHosted({ port: 0, host: '127.0.0.1', dataDir, appKey: KEY, adminToken: ADMIN, ledger, shared, log: () => {} });
@@ -359,7 +359,7 @@ test('speech and transcription are refused while off by any spelling of their pa
   const calls: string[] = [];
   const speak = async () => (calls.push('speak'), new ReadableStream<Uint8Array>({ start: (c) => (c.enqueue(new Uint8Array([1, 2, 3])), c.close()) }));
   const transcribe = async () => (calls.push('transcribe'), 'hello');
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-hosted-'));
+  const dataDir = tempDir('mp-hosted-');
   const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
   const hosted = await startHosted({ port: 0, host: '127.0.0.1', dataDir, appKey: KEY, adminToken: ADMIN, ledger, shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, speak, transcribe }, log: () => {} });
   const auth = { Authorization: `Bearer ${KEY}.${A}` };
@@ -454,7 +454,7 @@ test("the Scout's web source on OpenAI is charged", async () => {
 test('a made picture is charged at the price of one, and none is made while the service is paused', async () => {
   const made: string[] = [];
   const tools = { images: { generate: async (prompt: string) => (made.push(prompt), { asset: 'a.png' }) } } as unknown as Tools;
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-ledger-'));
+  const dataDir = tempDir('mp-ledger-');
   const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
   const meter = {
     refused: () => null,
@@ -493,7 +493,7 @@ test("hosted transcription takes only the Quest's own WAV header, and counts it 
   assert.equal(questWavMs(new Uint8Array(100)), null);
 
   const transcribe = async () => 'hello';
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-hosted-'));
+  const dataDir = tempDir('mp-hosted-');
   const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
   const hosted = await startHosted({ port: 0, host: '127.0.0.1', dataDir, appKey: KEY, adminToken: ADMIN, ledger, shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, transcribe }, log: () => {} });
   const post = (body: Uint8Array<ArrayBuffer>, type = 'audio/wav') => fetch(`${hosted.url}/api/transcribe`, { method: 'POST', headers: { Authorization: `Bearer ${KEY}.${A}`, 'Content-Type': type }, body });
@@ -586,9 +586,9 @@ test("after a cut, the live voice's next session answers its first turn instead 
 });
 
 test("every hosted space searches one Instagram library through its own view, and no space opens or reads its own", { timeout: 20000 }, async () => {
-  const listFile = join(mkdtempSync(join(tmpdir(), 'mp-list-')), 'following.md');
+  const listFile = join(tempDir('mp-list-'), 'following.md');
   writeFileSync(listFile, '# Accounts\n\n## Art (1)\n\n### Prints (1)\n\n- @ink_and_paper — Ink and Paper — Illustration studio — https://www.instagram.com/ink_and_paper/\n');
-  const libDir = mkdtempSync(join(tmpdir(), 'mp-library-'));
+  const libDir = tempDir('mp-library-');
   const library = new InstagramLibrary(libDir, parseList(readFileSync(listFile, 'utf8')));
   library.keep(library.accounts[0]!, { state: 'read', at: new Date().toISOString(), posts: [{ id: '17900000000000001', caption: 'A risograph print of the harbour', type: 'image', at: '2026-11-14T10:00:00Z', url: 'https://www.instagram.com/p/17900000000000001/' }] });
   writeFileSync(library.picture('17900000000000001'), new Uint8Array([0xff, 0xd8, 0xff]));
@@ -602,7 +602,7 @@ test("every hosted space searches one Instagram library through its own view, an
   assert.ok(a.files.has(foundA!.asset!) && b.files.has(foundB!.asset!), "each space's copy of the picture is in its own assets");
   assert.equal((await inA.search('risograph'))[0]!.asset, foundA!.asset, 'and is not copied again');
 
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-hosted-'));
+  const dataDir = tempDir('mp-hosted-');
   const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: DEFAULT_LIMITS });
   const instagram = { token: 'ig', userId: '1', list: listFile, read: true };
   const hosted = await startHosted({ port: 0, host: '127.0.0.1', dataDir, appKey: KEY, adminToken: ADMIN, ledger, shared: { clientDir: '', model: new FakeModel(), roles: fakeRoles, instagram }, following: { library }, log: () => {} });
@@ -625,7 +625,7 @@ test("a device's commands and drops stop once its mindstorm is at its limit, and
 });
 
 test("a judge's space gets none of the user's own accounts: no Instagram token or user id, no Telegram, and the one shared library", () => {
-  const library = new InstagramLibrary(mkdtempSync(join(tmpdir(), 'mp-library-')), { accounts: [], categories: [] });
+  const library = new InstagramLibrary(tempDir('mp-library-'), { accounts: [], categories: [] });
   const shared = { clientDir: '/web', model: new FakeModel(), roles: fakeRoles, instagram: { token: 'ig-token', userId: '17841400000', list: '/list.md', read: true }, telegram: { token: 'bot' } } as HostedOptions['shared'];
   const options = spaceOptions({ shared, dataDir: '/data', appKey: KEY, following: { library } }, A);
   assert.equal(options.instagram, undefined, 'no token or user id, and so none of their own posts');
@@ -638,9 +638,9 @@ test("a judge's space gets none of the user's own accounts: no Instagram token o
 });
 
 test('with no Instagram account on the server, the library opens from the list alone, never calls Instagram, and a space finds its posts and pictures', { timeout: 20000 }, async () => {
-  const listFile = join(mkdtempSync(join(tmpdir(), 'mp-list-')), 'following.md');
+  const listFile = join(tempDir('mp-list-'), 'following.md');
   writeFileSync(listFile, '# Accounts\n\n## Art (1)\n\n### Prints (1)\n\n- @ink_and_paper — Ink and Paper — Illustration studio — https://www.instagram.com/ink_and_paper/\n');
-  const libDir = mkdtempSync(join(tmpdir(), 'mp-library-'));
+  const libDir = tempDir('mp-library-');
   const copied = new InstagramLibrary(libDir, parseList(readFileSync(listFile, 'utf8')));
   copied.keep(copied.accounts[0]!, { state: 'read', at: new Date().toISOString(), posts: [{ id: '17900000000000001', caption: 'A risograph print of the harbour', type: 'image', at: '2026-11-14T10:00:00Z', url: 'https://www.instagram.com/p/17900000000000001/' }] });
   writeFileSync(copied.picture('17900000000000001'), new Uint8Array([0xff, 0xd8, 0xff]));

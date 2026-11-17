@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, test } from 'node:test';
 import { WebSocket } from 'ws';
@@ -13,6 +12,7 @@ import { Paused } from '../src/node/hosted/overflow.ts';
 import { startServer } from '../src/node/server.ts';
 import { heardMs, oggOpusMs } from '../src/node/speech-openai.ts';
 import { ADA, BOT_TOKEN, EVE, FakeBot, type Person, type Sent } from './fake-bot.ts';
+import { tempDir } from './temp.ts';
 
 const KEY = 'app-key';
 const ADMIN = 'admin-token';
@@ -27,7 +27,7 @@ afterEach(async () => {
 
 /** A data folder with one tree, made by the service itself, as the starter script's output is. */
 async function starterFolder(): Promise<string> {
-  const dir = mkdtempSync(join(tmpdir(), 'mp-starter-'));
+  const dir = tempDir('mp-starter-');
   const run = await startServer({ port: 0, host: '127.0.0.1', dataDir: dir, clientDir: '', model: new FakeModel(), roles: fakeRoles, token: 'x' });
   await run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: Sourdough rises slowly in winter' }]);
   await run.pipeline.idle();
@@ -45,7 +45,7 @@ interface Stage {
 }
 
 /** The hosted service reading the judges' bot at a stand-in for Telegram. */
-async function host(limits: Partial<Limits> = {}, extra: Partial<HostedOptions> = {}, dataDir = mkdtempSync(join(tmpdir(), 'mp-judges-')), bot?: FakeBot): Promise<Stage> {
+async function host(limits: Partial<Limits> = {}, extra: Partial<HostedOptions> = {}, dataDir = tempDir('mp-judges-'), bot?: FakeBot): Promise<Stage> {
   if (!bot) opened.push((bot = await new FakeBot().start()));
   const ledger = new Ledger({ file: join(dataDir, 'ledger.json'), limits: { ...DEFAULT_LIMITS, ...limits } });
   const lines: string[] = [];

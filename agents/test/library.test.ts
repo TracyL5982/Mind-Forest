@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import type { LibraryRef } from '../src/core/domain.ts';
@@ -10,12 +9,13 @@ import { fakeRoles } from '../src/fake/roles.ts';
 import { libraryDraft, sipsPictures, type Pictures } from '../src/node/library.ts';
 import { startServer } from '../src/node/server.ts';
 import { kit } from './kit.ts';
+import { tempDir } from './temp.ts';
 
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
 
 /** A repository with two films, two works, two notes, two tags and one saved tree, laid out as the real one is. */
 function fixture(): { repo: string; saved: string } {
-  const repo = mkdtempSync(join(tmpdir(), 'library-'));
+  const repo = tempDir('library-');
   const put = (path: string, value: unknown) => {
     mkdirSync(join(repo, path, '..'), { recursive: true });
     writeFileSync(join(repo, path), typeof value === 'string' ? value : JSON.stringify(value));
@@ -135,7 +135,7 @@ test('saved trees replayed from an older ocean.json are refused', async () => {
 });
 
 test('the import will not write a data folder the running service is using', async () => {
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-'));
+  const dataDir = tempDir('mp-');
   const run = await startServer({ port: 0, host: '127.0.0.1', dataDir, clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret' });
 
   const refused = spawnSync(process.execPath, ['--no-warnings', '--import', 'tsx', join(import.meta.dirname, '../scripts/import-library.ts')], { env: { ...process.env, MIND_PALACE_DATA: dataDir }, encoding: 'utf8' });

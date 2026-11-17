@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, test } from 'node:test';
 import { packager } from '../src/core/roles/packager.ts';
@@ -13,6 +12,7 @@ import { makeItem, makeNode } from '../src/core/roles/types.ts';
 import { instructions } from '../src/node/live.ts';
 import type { Reading } from '../src/node/momo-chat.ts';
 import { ADA, BOT_TOKEN as TOKEN, EVE, FakeBot, type Person, type Sent } from './fake-bot.ts';
+import { tempDir } from './temp.ts';
 
 /** Everything a test opened, closed after it whether it passed or not, so a failure does not leave the run waiting. */
 const opened: { close(): Promise<void> }[] = [];
@@ -32,7 +32,7 @@ interface Booted {
   dataDir: string;
 }
 
-async function boot(bot: FakeBot, extra: Partial<ServerOptions> = {}, dataDir = mkdtempSync(join(tmpdir(), 'mp-'))): Promise<Booted> {
+async function boot(bot: FakeBot, extra: Partial<ServerOptions> = {}, dataDir = tempDir('mp-')): Promise<Booted> {
   const logs: string[] = [];
   const run = await startServer({
     port: 0,

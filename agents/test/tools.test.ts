@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { FakeModel } from '../src/fake/model.ts';
 import { makeTools } from '../src/node/tools.ts';
 import { MemoryAssets } from './kit.ts';
+import { tempDir } from './temp.ts';
 
 const PAGE = 'https://example.com/post/1';
 
@@ -142,7 +143,7 @@ test("with the headset's files full, a found picture comes back as nothing, so a
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
-  const dir = join(mkdtempSync(join(tmpdir(), 'mp-full-')), 'assets');
+  const dir = join(tempDir('mp-full-'), 'assets');
   const send = (async () => new Response(new Uint8Array(5_000), { headers: { 'content-type': 'image/jpeg' } })) as unknown as typeof fetch;
   const web = makeTools({ model: new FakeModel(), assets: new DiskAssets(dir, '', dir, 6_000), fetch: send }).web;
   assert.ok(await web.picture('https://example.com/first.jpg'), 'the first is kept');
@@ -155,7 +156,7 @@ test("with the headset's files full, no picture is made, so none is paid for and
   const { mkdtempSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
-  const dir = join(mkdtempSync(join(tmpdir(), 'mp-full-')), 'assets');
+  const dir = join(tempDir('mp-full-'), 'assets');
   const assets = new DiskAssets(dir, '', dir, 1_500_000);
   await assets.put(new Uint8Array(900_000), 'image/jpeg', 'earlier.jpg');
   const asked: string[] = [];

@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
@@ -10,13 +8,14 @@ import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running } from '../src/node/server.ts';
 import { kit } from './kit.ts';
+import { tempDir } from './temp.ts';
 
 interface Msg {
   t: string;
   [k: string]: unknown;
 }
 
-async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-edits-'))): Promise<{ run: Running; dataDir: string }> {
+async function boot(dataDir = tempDir('mp-edits-')): Promise<{ run: Running; dataDir: string }> {
   const run = await startServer({ port: 0, host: '127.0.0.1', dataDir, clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret', settings: { scoutOnDump: false } });
   return { run, dataDir };
 }

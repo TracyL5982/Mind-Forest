@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
@@ -10,13 +9,14 @@ import { fakeRoles } from '../src/fake/roles.ts';
 import { DiskAssets } from '../src/node/assets.ts';
 import { startServer, type Running, type ServerOptions } from '../src/node/server.ts';
 import { openaiSpeech, type Hints } from '../src/node/speech-openai.ts';
+import { tempDir } from './temp.ts';
 
 interface Msg {
   t: string;
   [k: string]: unknown;
 }
 
-async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-')), extra: Partial<ServerOptions> = {}): Promise<{ run: Running; dataDir: string }> {
+async function boot(dataDir = tempDir('mp-'), extra: Partial<ServerOptions> = {}): Promise<{ run: Running; dataDir: string }> {
   const run = await startServer({ port: 0, host: '127.0.0.1', dataDir, clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret', ...extra });
   return { run, dataDir };
 }
@@ -345,7 +345,7 @@ test('a linked file and a linked remote file are streamed through the service, b
   });
   await new Promise<void>((ready) => remote.listen(0, '127.0.0.1', ready));
   const port = (remote.address() as { port: number }).port;
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-'));
+  const dataDir = tempDir('mp-');
   const films = join(dataDir, 'films');
   mkdirSync(films);
   const file = join(films, 'clip.mp4');
@@ -398,7 +398,7 @@ test('the service knows while a client that cannot show an embedded player is co
 });
 
 test('a linked file is served only from the films folder, however its record names it', async () => {
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-'));
+  const dataDir = tempDir('mp-');
   const films = join(dataDir, 'films');
   mkdirSync(films);
   writeFileSync(join(films, 'clip.mp4'), 'film');

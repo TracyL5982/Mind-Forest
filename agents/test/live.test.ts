@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
@@ -14,6 +12,7 @@ import { fakeRoles } from '../src/fake/roles.ts';
 import { cost, LiveVoice, Narration, Upsampler, type LiveDeps, type RealtimeEvent, type VoiceFrame } from '../src/node/live.ts';
 import { startServer } from '../src/node/server.ts';
 import { withoutLinks } from '../src/node/web-answer.ts';
+import { tempDir } from './temp.ts';
 
 /** A realtime model the test speaks for: what the voice sent it, and a way to send events back. */
 class Scripted {
@@ -537,7 +536,7 @@ test('a response and a transcription cost what their tokens cost at the listed p
 });
 
 test("the service refuses /live without a live voice; with one, what Momo starts is the named connection's own, and Momo walks through its cards", async () => {
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-live-'));
+  const dataDir = tempDir('mp-live-');
   const base = { port: 0, host: '127.0.0.1', clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret' };
   const plain = await startServer({ ...base, dataDir });
   await assert.rejects(
@@ -615,7 +614,7 @@ test("a spoken request reaches the Scout as the user said it, with Momo's readin
     .on('scout.looks', () => ({ looks: [] }));
   const model = new Scripted();
   const run = await startServer({
-    port: 0, host: '127.0.0.1', dataDir: mkdtempSync(join(tmpdir(), 'mp-live-')), clientDir: join(import.meta.dirname, '../client'), model: brain, roles: { ...fakeRoles, scout: scoutRole }, token: 'secret',
+    port: 0, host: '127.0.0.1', dataDir: tempDir('mp-live-'), clientDir: join(import.meta.dirname, '../client'), model: brain, roles: { ...fakeRoles, scout: scoutRole }, token: 'secret',
     live: { open: model.open, options: { model: 'gpt-realtime-2.1', voice: 'marin', turn: { kind: 'semantic' }, hearing: 'gpt-4o-transcribe' } },
   });
   await run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: A Maid Asleep' }]);

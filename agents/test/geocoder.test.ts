@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { CLIENT_NAME, Nominatim, openMaps } from '../src/node/geocoder.ts';
+import { tempDir } from './temp.ts';
 
 const LISBON = [{ category: 'boundary', lat: '38.7077507', lon: '-9.1365919' }];
 const KITCHEN = [{ category: 'amenity', lat: '51.5', lon: '-0.1' }, { category: 'shop', lat: '51.6', lon: '-0.2' }];
@@ -29,7 +28,7 @@ function lookup(cacheFile: string, answer: (q: string) => Response | Promise<Res
 const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } });
 
 test('lookups wait a second after each other, and a name asked twice at once is asked about once', async () => {
-  const { geocoder, asked } = lookup(join(mkdtempSync(join(tmpdir(), 'mp-geo-')), 'places.json'), (q) => json(q === 'lisbon' ? LISBON : []));
+  const { geocoder, asked } = lookup(join(tempDir('mp-geo-'), 'places.json'), (q) => json(q === 'lisbon' ? LISBON : []));
 
   const found = await Promise.all([geocoder.locate('Lisbon'), geocoder.locate('Porto'), geocoder.locate(' lisbon '), geocoder.locate('Faro')]);
 
@@ -39,7 +38,7 @@ test('lookups wait a second after each other, and a name asked twice at once is 
 });
 
 test('answers are kept on disk, a place not found included, and a failed lookup is asked again', async () => {
-  const cache = join(mkdtempSync(join(tmpdir(), 'mp-geo-')), 'places.json');
+  const cache = join(tempDir('mp-geo-'), 'places.json');
   let up = false;
   const first = lookup(cache, (q) => (q === 'lisbon' && !up ? new Response('busy', { status: 503 }) : json(q === 'lisbon' ? LISBON : [])));
 
@@ -56,7 +55,7 @@ test('answers are kept on disk, a place not found included, and a failed lookup 
 });
 
 test('a shop or a café that shares the name is not the place, and a network failure gives no place', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'mp-geo-'));
+  const dir = tempDir('mp-geo-');
   const { geocoder } = lookup(join(dir, 'places.json'), (q) => (q === 'the kitchen' ? json(KITCHEN) : Promise.reject(new TypeError('fetch failed'))));
 
   assert.equal(await geocoder.locate('The kitchen'), null);
@@ -65,7 +64,7 @@ test('a shop or a café that shares the name is not the place, and a network fai
 });
 
 test('maps open only for a provider the service knows, which names its tiles and its credit', () => {
-  const maps = openMaps('openstreetmap', join(mkdtempSync(join(tmpdir(), 'mp-geo-')), 'places.json'));
+  const maps = openMaps('openstreetmap', join(tempDir('mp-geo-'), 'places.json'));
   assert.equal(maps.tiles, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
   assert.equal(maps.credit, '© OpenStreetMap contributors');
   assert.throws(() => openMaps('acme-maps', '/nowhere/places.json'), /acme-maps/);

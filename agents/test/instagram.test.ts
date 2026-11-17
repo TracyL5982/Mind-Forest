@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import {
@@ -20,6 +20,7 @@ import {
 import { makeSources } from '../src/node/sources.ts';
 import type { ModelClient } from '../src/core/ports.ts';
 import { MemoryAssets } from './kit.ts';
+import { tempDir } from './temp.ts';
 
 const LIST = `# Accounts I keep — a made-up list
 
@@ -77,7 +78,7 @@ const ACCOUNTS = parseList(LIST);
 const account = (handle: string): Account => ACCOUNTS.accounts.find((a) => a.handle === handle)!;
 
 function library(listed: Listed = ACCOUNTS) {
-  const dir = mkdtempSync(join(tmpdir(), 'mp-instagram-'));
+  const dir = tempDir('mp-instagram-');
   const assets = new MemoryAssets();
   return { dir, assets, library: new InstagramLibrary(dir, listed, assets) };
 }
@@ -291,7 +292,7 @@ test('Instagram is offered only with the library, and while it holds posts, as p
 });
 
 test('without a list there is no library, and a list is read without the reader when reading is off', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'mp-instagram-'));
+  const dir = tempDir('mp-instagram-');
   const lines: string[] = [];
   const open = (list: string) => openInstagram({ connection: CONNECTION, list, dir, assets: new MemoryAssets(), read: false, log: (line) => lines.push(line) });
 

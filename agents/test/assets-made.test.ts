@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { test } from 'node:test';
 import { DiskAssets } from '../src/node/assets.ts';
+import { tempDir } from './temp.ts';
 
 test('what the service kept itself is counted again after a restart, and uploads and links never are', async () => {
-  const dir = join(mkdtempSync(join(tmpdir(), 'mp-made-')), 'assets');
+  const dir = join(tempDir('mp-made-'), 'assets');
   const assets = new DiskAssets(dir, '', dir, 1_000_000);
   await assets.put(new Uint8Array(400_000), 'image/jpeg', 'found.jpg');
   await assets.putStream(Readable.from([new Uint8Array(900_000)]), 'application/pdf', 'upload.pdf', 2_000_000, () => new Error('too large'));

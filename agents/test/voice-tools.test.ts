@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
@@ -9,9 +7,10 @@ import { landedCards, nameOf, runTool, shapeOf, toolLabel, toolSpecs, whereNote 
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer } from '../src/node/server.ts';
+import { tempDir } from './temp.ts';
 
 async function world(roles: Roles = fakeRoles) {
-  const run = await startServer({ port: 0, host: '127.0.0.1', dataDir: mkdtempSync(join(tmpdir(), 'mp-tools-')), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles, token: 'secret' });
+  const run = await startServer({ port: 0, host: '127.0.0.1', dataDir: tempDir('mp-tools-'), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles, token: 'secret' });
   await run.pipeline.dump([{ kind: 'text', text: 'Start a tree on this: Sourdough rises slowly in winter' }]);
   await run.pipeline.idle();
   const tree = [...run.mind.trees.values()][0]!;

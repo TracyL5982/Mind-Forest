@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
@@ -11,6 +9,7 @@ import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running } from '../src/node/server.ts';
 import { kit } from './kit.ts';
+import { tempDir } from './temp.ts';
 
 interface Msg {
   t: string;
@@ -63,7 +62,7 @@ test('only questions a client can show come back: short, distinct, at most three
 });
 
 async function boot(model: FakeModel): Promise<Running> {
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-questions-'));
+  const dataDir = tempDir('mp-questions-');
   return startServer({ port: 0, host: '127.0.0.1', dataDir, clientDir: join(import.meta.dirname, '../client'), model, roles: { ...fakeRoles, questions }, token: 'secret', settings: { scoutOnDump: false } });
 }
 

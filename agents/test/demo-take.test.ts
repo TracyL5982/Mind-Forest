@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { Lines, type LinesFile } from '../src/demo/lines.ts';
 import { loadScript, type ScriptPhase } from '../src/demo/script.ts';
@@ -14,7 +14,6 @@ import { startServer, type Running } from '../src/node/server.ts';
 const demoDir = join(import.meta.dirname, '../demo');
 const script = loadScript(join(demoDir, 'script.json'));
 const data = demoData();
-after(data.clean);
 const temp = data.temp;
 const round = (id: string): ScriptPhase => script.phases.find((phase) => phase.id === id)!;
 const titlesOf = (phase: ScriptPhase, ids: string[]) => ids.map((id) => phase.cards.find((card) => card.id === id)!.title).sort();

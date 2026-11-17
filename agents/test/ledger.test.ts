@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { DEFAULT_LIMITS, Ledger, limitsFrom, type Limits } from '../src/node/hosted/ledger.ts';
+import { tempDir } from './temp.ts';
 
 const A = 'device-aaaaaaaaaaaa';
 const B = 'device-bbbbbbbbbbbb';
 
 function ledgerAt(limits: Partial<Limits>, alerts: string[] = []) {
   const clock = { now: new Date('2026-11-15T20:00:00Z') };
-  const ledger = new Ledger({ file: join(mkdtempSync(join(tmpdir(), 'mp-ledger-')), 'ledger.json'), limits: { ...DEFAULT_LIMITS, ...limits }, now: () => clock.now, alert: (t) => alerts.push(t) });
+  const ledger = new Ledger({ file: join(tempDir('mp-ledger-'), 'ledger.json'), limits: { ...DEFAULT_LIMITS, ...limits }, now: () => clock.now, alert: (t) => alerts.push(t) });
   return { ledger, clock };
 }
 
