@@ -495,10 +495,12 @@ test('Momo keeps a thought with a word of its own and where it went, and keeps a
   const b = await boot(bot, { model });
   await pair(b, bot);
 
-  assert.match((await tell(bot, 'Heat pumps work below freezing now'))[0]!.text, /^That’s a big change from ten years ago\.\n\nI’ve kept “.*”\. It is in your knowledge base, in no tree yet\.$/);
+  const [word, kept] = await tell(bot, 'Heat pumps work below freezing now', 2);
+  assert.equal(word!.text, 'That’s a big change from ten years ago.', 'Momo\'s own word comes at once');
+  assert.match(kept!.text, /^I’ve kept “.*”\. It is in your knowledge base, in no tree yet\.$/, 'then what was kept and where');
   assert.deepEqual(items(b.run).map((i) => i.text), ['Heat pumps work below freezing now']);
 
-  assert.match((await tell(bot, 'Why do heat pumps fail in the cold?'))[0]!.text, /^Mostly frost on the outdoor coil, which the defrost cycle has to melt\.\n\nI’ve kept “/);
+  assert.deepEqual((await tell(bot, 'Why do heat pumps fail in the cold?', 2)).map((m) => m.text.split('“')[0]), ['Mostly frost on the outdoor coil, which the defrost cycle has to melt.', 'I’ve kept ']);
   assert.equal(items(b.run)[1]!.text, 'Why do heat pumps fail in the cold?\n\nMostly frost on the outdoor coil, which the defrost cycle has to melt.', 'the question is kept with its answer');
 });
 
@@ -513,7 +515,7 @@ test('when Momo cannot tell, it asks, and the next message settles the earlier o
 
   assert.equal((await tell(bot, 'The bakery on Elm closes at four'))[0]!.text, 'Want me to keep that, or were you just telling me?');
   assert.equal(items(b.run).length, 0, 'nothing is kept while Momo asks');
-  assert.match((await tell(bot, 'yes please'))[0]!.text, /^Done\.\n\nI’ve kept “/);
+  assert.deepEqual((await tell(bot, 'yes please', 2)).map((m) => m.text.split('“')[0]), ['Done.', 'I’ve kept ']);
   assert.deepEqual(items(b.run).map((i) => i.text), ['The bakery on Elm closes at four'], 'the earlier message is kept, not the "yes"');
   assert.match(asked[1]!.user, /\[Waiting on\]\nYou asked whether to keep this earlier message: """The bakery on Elm closes at four"""/);
 
@@ -533,7 +535,9 @@ test('Momo starts a tree when asked in its own words, and hands off a tree asked
   grow(b.run, 'Film', ['Camera moves']);
 
   assert.equal((await tell(bot, 'could I get my film tree packaged up for Claude', 3))[0]!.text, 'Packing “Film”…');
-  assert.match((await tell(bot, 'grow me something on Kubrick'))[0]!.text, /^Ooh, Kubrick\. On it\.\n\nI’ve kept “.*”\. It started the tree “Kubrick”\.$/);
+  const grown = await tell(bot, 'grow me something on Kubrick', 2);
+  assert.equal(grown[0]!.text, 'Ooh, Kubrick. On it.');
+  assert.match(grown[1]!.text, /^I’ve kept “.*”\. It started the tree “Kubrick”\.$/);
   assert.match((await tell(bot, 'what have I got so far'))[0]!.text, /^Here are your trees, newest first:\n1\. /);
 
   const calls = asked.length;
@@ -551,9 +555,13 @@ test('a link or a photo is always kept, and Momo answers what is asked about it 
   assert.match((await tell(bot, 'https://example.com/heat-pumps is this any good?'))[0]!.text, /^Looks like a solid explainer on defrost cycles\.\n\nI’ve kept “/);
   assert.equal(items(b.run).length, 1, 'kept once, whatever Momo chose');
   assert.match(asked[0]!.user, /\[Already kept\]\n- "/);
-  assert.match(asked[0]!.user, /Message: """\nhttps:\/\/example\.com\/heat-pumps is this any good\?\n"""$/);
+  assert.match(asked[0]!.user, /Message: """\nis this any good\?\n"""$/);
+  assert.deepEqual(items(b.run).map((i) => [i.kind, i.source.url]), [['link', 'https://example.com/heat-pumps']], 'the link is kept as a page, and the question about it is not kept');
+  await tell(bot, 'Read https://example.com/defrost, the best piece on defrost cycles.');
+  assert.deepEqual(items(b.run).slice(1).map((i) => i.kind).sort(), ['link', 'text'], 'words that say something are kept beside their link');
 
   bot.file('coil', new Uint8Array([1, 2, 3]));
+  asked.length = 1;
   let sent = bot.sent.length;
   bot.push(ADA, { photo: [{ file_id: 'coil', width: 800, height: 600 }], caption: 'what is this part?' });
   assert.match((await next(bot, sent, 1))[0]!.text, /^Looks like a solid explainer on defrost cycles\.\n\nI’ve kept /);
@@ -597,4 +605,17 @@ test('a voice note that asks for a tree\'s handoff gets it, and /unpair from the
   assert.equal((await status(b.run)).paired, null);
   await bot.read(bot.push(ADA, { text: 'list my trees' }));
   assert.match((await next(bot, sent + 1, 1))[0]!.text, /^Hi, I’m Momo/, 'an unpaired chat gets only the fixed line');
+});
+
+test('a chat\'s messages are answered in the order they came, each read knowing what the one before did', async () => {
+  const bot = await stand();
+  const { model, asked } = momo((message) => (/^First/.test(message) ? { does: 'save', reply: 'One.' } : { does: 'answer', reply: 'Two.' }));
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+  const sent = bot.sent.length;
+  bot.push(ADA, { text: 'First thought' });
+  bot.push(ADA, { text: 'Second' });
+  const replies = (await next(bot, sent, 3)).map((m) => m.text.split('“')[0]);
+  assert.deepEqual(replies, ['One.', 'I’ve kept ', 'Two.'], 'the second is not answered until the first is kept');
+  assert.match(asked[1]!.user, /Momo: One\. I’ve kept “/, 'and Momo knows the first was kept');
 });

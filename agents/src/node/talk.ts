@@ -71,6 +71,8 @@ interface Memory {
  */
 export class Talk {
   private readonly chats = new Map<number, Memory>();
+  /** The message each chat is on, which its next one waits for. */
+  private readonly turns = new Map<number, Promise<void>>();
 
   constructor(
     private readonly wire: Wire,
@@ -78,8 +80,18 @@ export class Talk {
     private readonly now: () => number = Date.now,
   ) {}
 
-  /** Answers one message. Never rejects: what fails is logged, and the person is told. */
-  async take(chat: number, desk: Desk, arrival: Arrival): Promise<void> {
+  /**
+   * Answers one message. Never rejects: what fails is logged, and the person is told. A chat's messages are answered one at a
+   * time, in the order they came, so a reply never overtakes the one before it and each is read knowing what the last one did.
+   */
+  take(chat: number, desk: Desk, arrival: Arrival): Promise<void> {
+    const turn = (this.turns.get(chat) ?? Promise.resolve()).then(() => this.answered(chat, desk, arrival));
+    this.turns.set(chat, turn);
+    void turn.finally(() => this.turns.get(chat) === turn && this.turns.delete(chat));
+    return turn;
+  }
+
+  private async answered(chat: number, desk: Desk, arrival: Arrival): Promise<void> {
     try {
       await this.answer(chat, desk, arrival);
     } catch (err) {
@@ -119,7 +131,9 @@ export class Talk {
         const bytes = await this.fetch(desk, arrival.file);
         if (!bytes) return say(this.lines.tooBig);
         const asset = await desk.keep(bytes, arrival.file.mime, arrival.file.name);
-        const kept = await desk.dump([{ kind: 'asset', asset, mime: arrival.file.mime, name: arrival.file.name }, ...dumpsOf(arrival.caption)]);
+        // Words that ask about the file are answered and not kept; any other words are kept beside it, and may ask for a tree.
+        const beside = arrival.caption.includes('?') && !treeRequest(arrival.caption) ? [] : dumpsOf(arrival.caption);
+        const kept = await desk.dump([{ kind: 'asset', asset, mime: arrival.file.mime, name: arrival.file.name }, ...beside]);
         return this.about(chat, desk, arrival.caption, kept);
       }
       case 'voice': {
@@ -148,9 +162,12 @@ export class Talk {
     const asked = plainAsk(text);
     if (asked) return this.trees(chat, desk, asked);
     if (treeRequest(text)) return this.wire.say(chat, (await desk.dump(dumpsOf(text))).line);
-    if (/https?:\/\//i.test(text)) {
-      const kept = await desk.dump(dumpsOf(text));
-      return this.about(chat, desk, asUrl(text.trim()) ? '' : text, kept);
+    const links = linksIn(text);
+    if (links.urls.length > 0) {
+      // A link is always kept, as a page of its own. Words that ask about it are answered and not kept; any other words are kept beside it.
+      const beside: RawDump[] = links.words && !links.words.includes('?') ? [{ kind: 'text', text: links.words }] : [];
+      const kept = await desk.dump([...links.urls.map((url): RawDump => ({ kind: 'link', url })), ...beside]);
+      return this.about(chat, desk, links.words, kept);
     }
 
     let reading: Reading;
@@ -172,13 +189,13 @@ export class Talk {
       case 'answer':
         return this.told(chat, memory, text, reply || 'Okay.');
       case 'save':
-        return this.told(chat, memory, text, reply, await desk.dump(dumpsOf(waited ?? text)));
+        return this.told(chat, memory, text, reply, () => desk.dump(dumpsOf(waited ?? text)));
       case 'both':
-        return this.told(chat, memory, text, reply, await desk.dump([{ kind: 'text', text: `${(waited ?? text).trim()}\n\n${reply}` }]));
+        return this.told(chat, memory, text, reply, () => desk.dump([{ kind: 'text', text: `${(waited ?? text).trim()}\n\n${reply}` }]));
       case 'tree': {
         const subject = reading.words.trim();
         if (!subject) return this.told(chat, memory, text, reply || 'What should the tree be about?');
-        return this.told(chat, memory, text, reply, await desk.dump([{ kind: 'text', text: `Make a tree about ${subject}` }]));
+        return this.told(chat, memory, text, reply, () => desk.dump([{ kind: 'text', text: `Make a tree about ${subject}` }]));
       }
       case 'list':
       case 'latest':
@@ -191,11 +208,19 @@ export class Talk {
     }
   }
 
-  /** Momo's reply, then what was kept and where, and both remembered for the next message. */
-  private async told(chat: number, memory: Memory, text: string, reply: string, kept?: Kept): Promise<void> {
-    const whole = [reply, kept?.line].filter(Boolean).join('\n\n');
-    memory.said = [...memory.said, { who: 'user' as const, text }, { who: 'momo' as const, text: whole }].slice(-SAID_KEPT);
-    await this.wire.say(chat, whole);
+  /**
+   * Momo's reply at once, then what was kept and where as a second message once it is filed, which takes Intake some seconds.
+   * Both are remembered for the next message.
+   */
+  private async told(chat: number, memory: Memory, text: string, reply: string, keep?: () => Promise<Kept>): Promise<void> {
+    const remember = (momo: string) => (memory.said = [...memory.said, { who: 'user' as const, text }, { who: 'momo' as const, text: momo }].slice(-SAID_KEPT));
+    remember(reply);
+    if (reply) await this.wire.say(chat, reply);
+    if (!keep) return;
+    const kept = await keep();
+    memory.said = memory.said.slice(0, -2);
+    remember([reply, kept.line].filter(Boolean).join('\n\n'));
+    await this.wire.say(chat, kept.line);
   }
 
   /** What came with a message is kept already. Momo answers the words sent with it, when there are any; the reply always says what was kept. */
@@ -209,7 +234,7 @@ export class Talk {
     } catch (err) {
       this.wire.log(`Momo could not read the words sent with something kept: ${err instanceof Error ? err.message : String(err)}`);
     }
-    return this.told(chat, memory, asked, reply, kept);
+    return this.told(chat, memory, asked, [reply, kept.line].filter(Boolean).join('\n\n'));
   }
 
   /** Something asked of the trees the person has. */
@@ -294,6 +319,14 @@ export class Talk {
       return { text: '', note: HEARD_FAILED };
     }
   }
+}
+
+/** The web addresses in a message, three at most, and the words round them. */
+function linksIn(text: string): { urls: string[]; words: string } {
+  const found = [...text.matchAll(/https?:\/\/[^\s<>"]+/gi)].map((m) => m[0].replace(/[.,;:!?)\]]+$/, ''));
+  const urls = [...new Set(found.flatMap((url) => asUrl(url) ?? []))].slice(0, 3);
+  const words = urls.length === 0 ? text.trim() : found.reduce((rest, url) => rest.replace(url, ' '), text).replace(/\s+/g, ' ').trim();
+  return { urls, words };
 }
 
 /** What a text becomes when dropped, as the web page sends it: a link when it is one web address and nothing else, otherwise a text. */

@@ -82,7 +82,7 @@ Write in the language the user wrote. Card and tree names stay as written.
 
 # Rules
 - ${MOMO.knows}
-- A question about what they have saved is answered only from "Their trees" and "From their mind palace" below. Call a card saved only when it says saved. If nothing there answers it, say so. Never invent a card or a tree.
+- A question about what they have saved is answered only from "Their trees", "In the tree" and "From their mind palace" below. A saved card may be in no tree. Call a card saved only when it says saved. If nothing there answers it, say so. Never invent a card or a tree.
 - You cannot look at the web from here. For news, prices, weather or anything that changes, say so and tell what you do know.
 - When "Waiting on" is given, you asked whether to keep that earlier message. If this message answers that question, set "earlier" to true: "save" when they want it kept, "answer" with a short friendly line when they do not. If this message is about something else, read it for itself and leave "earlier" false.
 - When "Already kept" is given, what came with this message is kept whatever you choose. Choose "answer": if their words ask something, answer it from what "Already kept" says and what you know; otherwise say a few words of your own about it. Say only what "Already kept" says about a link, picture or file.
@@ -92,8 +92,11 @@ Write in the language the user wrote. Card and tree names stay as written.
 /** What Momo is told with a message: the trees, the cards the message's words find, and the cards of any tree it names. */
 export function chatContext(mind: Mindstorm, text: string): string {
   const trees = treeLines(mind);
-  if (trees.length === 0) return '[Their trees]\nNone yet.';
-  const parts = [`[Their trees, newest first]\n${trees.slice(0, TREES_TOLD).map((tree) => `- ${tree.title}: ${tree.line}`).join('\n')}${trees.length > TREES_TOLD ? `\nAnd ${trees.length - TREES_TOLD} more.` : ''}`];
+  const parts = [
+    trees.length === 0
+      ? '[Their trees]\nNone yet.'
+      : `[Their trees, newest first]\n${trees.slice(0, TREES_TOLD).map((tree) => `- ${tree.title}: ${tree.line}`).join('\n')}${trees.length > TREES_TOLD ? `\nAnd ${trees.length - TREES_TOLD} more.` : ''}`,
+  ];
 
   const asked = new Set(tokenize(text).filter((term) => term !== 'tree'));
   const named = trees.filter((tree) => tokenize(tree.title).some((term) => asked.has(term))).slice(0, NAMED_TREES);
