@@ -1403,6 +1403,17 @@ private:
     /// them is a little larger. Each floats on the side of the tree its
     /// card stands on, about as high as its layer.
     CoverPlan coverPlan(const Tree& tree) const;
+    /// AGENT: the first picture a card of the service's shows that has not failed to come, for its cover: none for any
+    /// other card.
+    std::optional<std::string> coverSource(const std::string& noteID) const;
+    /// AGENT: that picture, `size` m, cut to fill it, for a cover: null until it has come (`coverPicturesCame`).
+    EntityRef coverFace(const std::string& noteID, Vec2 size);
+
+public:
+    /// AGENT: pictures the service's cards show have come: covers waiting for them show them now.
+    void coverPicturesCame(const std::vector<std::string>& noteIDs);
+
+private:
 
     /// A cover, as `makeCover` gives it: the Swift's
     /// `(entity: Entity, tilts: [Entity], box: (center: SIMD3<Float>, size: SIMD3<Float>))`.

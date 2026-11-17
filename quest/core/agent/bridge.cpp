@@ -201,10 +201,13 @@ void Bridge::frame(double t) {
     }
     Planted* standingTree = model.tree ? plantedOf(*model.tree) : nullptr;
     for (auto& [src, image] : arrived) {
-        for (const std::string& noteID : cards::picture(src, image)) {
+        std::vector<std::string> shown = cards::picture(src, image);
+        for (const std::string& noteID : shown) {
             std::string nodeId = noteID.substr(std::string("agent-").size());
             if (standingTree && standingTree->local.count(nodeId)) redraw(standingTree->local[nodeId]);
         }
+        // A tree put away shows its cards' pictures round it as they come.
+        if (image && !shown.empty()) model.coverPicturesCame(shown);
     }
     std::vector<std::pair<std::string, bool>> finished;
     {
