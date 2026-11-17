@@ -3,7 +3,7 @@
 One prepared tree, "Brainstorming in a headset", for recording the film. It is the walkthrough board made real: 31 rounds of asking, 154 cards, each round a layer of the tree.
 
 - You go to any round from a page on the Mac. The tree then stands on the headset as it was just before that round, and you record from there.
-- You talk to Momo as usual. Momo hears you and answers in her own words. What the Scout brings is fixed: the round's cards, in the same order every time, under the same "Scout is searching" labels as a real search.
+- Each round is a fixed take: the same cards at the same moments, the same labels of the agents at work, and Momo saying the same lines, every time. You start it by saying the round's line in the headset, or with one Play button on the page, and a bar on the page moves through it like a film's.
 - Nothing in the app is special-cased. The cards are ordinary cards (pictures, artworks, papers, notes, links), drawn by the app's own card system.
 
 ![The control page: the rounds in recording order, the chart, and the round that is picked](docs/control-page.jpg)
@@ -119,6 +119,7 @@ What differs from the Mac:
 | Momo's voice | needs the OpenAI key on the Mac | uses the keys set on Fly |
 | Empty stage | the page starts the app again on the headset itself | the page cannot reach the headset: after pressing it, close the app on the headset and open it |
 | The stage after the service restarts | kept in `agents/data-demo` | begins again with the showcase trees and no walkthrough tree (it has no volume) |
+| The lines you wrote over Momo's | kept in `agents/data-demo` with their recordings | lost when the service restarts, as it has no volume. The page keeps a copy in the browser you wrote them in, sends them again when it next opens, and Momo records them again. Use Save to script to keep them for good. The data folder is one path (`MIND_PALACE_DATA`), so a volume mounted there would keep them with no change to the code |
 | Who can reach it | this Mac and its network | anyone with the address and the key |
 
 Everything else is the same code: the rounds, the page, the showcase trees, Show whole.
@@ -127,14 +128,25 @@ Everything else is the same code: the rounds, the page, the showcase trees, Show
 
 1. On the page, click a round: on the chart, or in the list on the left, which is the recording order. The right column shows what to do and say in it, the card it is asked from, and the cards that will arrive.
 2. Press **Go to this round**. The bar counts the rounds as they are built on the headset: about half a second each, and 13 seconds for the whole tree. When it is done the headset stands on the layer where the round begins, with the round's card not yet opened.
-3. Start recording. Do the steps under "You do", then say the line under "You say", or say it in your own words. Whatever you ask next brings this round: Momo says a few words, the Scout's labels run under her, the cards land dashed as suggestions, and Momo tells you about them.
-4. For the next take of the same round, press **Set this round up again**.
+3. Start recording. Do the steps under "You do", then say the line under "You say", or say it in your own words. Whatever you say next starts this round's take: Momo answers, the Scout's labels run under her, the cards land dashed as suggestions at the pace of a real search, and she tells you about them as they land and wraps up at the end. Or press **Play** on the page, which runs the same take without a word from you.
+4. For the next take of the same round, press **Set this round up again**, or drag the bar back to the start.
+
+### A round's take
+
+The right column shows the picked round's take:
+
+- **Play** runs it on the headset from where the bar is: the scene, Momo's voice with its captions, and the agents' labels together. While it runs the button is **Pause**. A paused take stays exactly as it was at that moment.
+- **The bar** shows the take's length and where it is. Its three rows mark when Momo speaks, when the agents work and when cards land. It is for jumping to a moment, not for recording while you drag: the bar moves freely on the page, and when you let go, or click on it, the headset is brought to that moment once. The cards that had landed by then stand, later ones are taken away, and the labels are that moment's. The service answers a jump in a few thousandths of a second, and the headset hangs and removes the cards over about a second. If the take was running it goes on from there, and Momo takes her line up at that very point. The arrow keys move it a second at a time, and each line's time is a button that jumps to it.
+- **What Momo says** lists her lines in order, each in a box: her answer as the search starts, the first card as it lands, later cards gathered into one remark, and her wrap-up. These are the moments she speaks at in a real round, no more and no fewer. A round you start with a pinch or by tapping a question has no answer line, since nothing was said.
+- **Write over any line** and click outside the box. Momo then says exactly your words: they are recorded in her voice (a few seconds; the line shows "Recording these words…"), and the bar follows the recording's new length. "Back to Momo's own words" undoes it. An empty box means she says nothing there.
+- **Save to script** downloads `lines.json` with every line as Momo says it now, your words among them. That file is how your wording reaches the repository: put it in place of `agents/demo/lines.json` and commit it. Copy the recordings the service made of your words too, from `demo-voice` in its data folder into `agents/demo/voice`; without them each copy of the demo records those lines itself when it first needs them. Until you save, your words are kept by the service while it runs and in the browser you wrote them in.
+
+How long a round takes is mostly Momo: the found cards land 3 to 6.5 seconds in, a written idea from 13 seconds, a made picture at about 30, and she talks for 30 to 50 seconds. The page shows each take's length.
 
 Three more controls:
 
-- **Play it now, without a word** plays the round with no voice: the headset goes to the card and the round arrives. Use it when you do not want Momo in the take, or when she answers a line without starting a search.
 - **Empty stage** takes the tree away, for recording Round 1, and starts the app again on the headset (see below). **Whole tree** builds everything.
-- **Rounds are scripted**, off: the next request is answered by the real Scout, live. On again: the next request brings the next round.
+- **Rounds are scripted**, off: the next request is answered by the real Scout, live, and Momo speaks for herself. On again: the next request starts the next round's take.
 - **4 other trees in the forest**, off: the showcase trees (below) are taken out, and the headset's app is started again so it lets go of them.
 
 ### Recording Round 1
@@ -145,17 +157,21 @@ Round 1 starts the tree, so the stage must be empty. Press **Empty stage**. A he
 agents/demo/headset.sh restart
 ```
 
-Then say the line. "Start a tree on ..." always works, and so does the line as written ("let's jam on how we brainstorm with VR headset"): a note Momo is given in demo mode tells her that it asks for a tree, and gives her the tree's subject, "How we brainstorm with a VR headset", so the first card reads the same in every take. However the tree is started, it is named "Brainstorming in a headset".
+Then say the line, or press Play. On an empty stage whatever you say starts the tree and Round 1's take with it: if Momo starts no tree herself within a second and a half of answering, the service starts it for her. The first card always reads "How we brainstorm with a VR headset", and the tree is named "Brainstorming in a headset". Round 1's bar cannot go back to before the tree exists, since a headset keeps a tree that is deleted: its start is the tree with its first card alone.
 
 ## What is fixed and what is live
 
 | Fixed by the script | Live |
 |---|---|
-| Which cards a round brings, their words, pictures and order | Momo's hearing and everything she says |
-| The step labels ("Checking what you already have", "Searching Wikimedia Commons", "Making a picture of ...") | What she does when the open card is not one a round waits on |
-| That what you say with a round's card open brings that round, even put as a question or one word | |
+| Which cards a round brings, their words, pictures and order, and the moment each lands | Momo's hearing: she still hears you, and that starts the take |
+| The step labels ("Checking what you already have", "Searching Wikimedia Commons", "Making a picture of ...") and when each shows | What she says and does when the open card is not one a round waits on |
+| What Momo says in a round, and when: her written lines, said from recordings | Everything she says with "Rounds are scripted" off |
 | The questions offered under the card a round is asked from | The questions under every other card |
 | Each card's look | Anything you ask after the last round, or with scripting off |
+
+Momo's lines were written by Momo herself: each round's line was put to the real Momo with the tree as it stands at that round, and she was then told of the round's cards in the very notes a real round gives her, at the moments this take lands them (`scripts/demo-lines.ts`). Her words are in `agents/demo/lines.json`, and each line's recording in `agents/demo/voice/`, so every copy of the demo says the same. Where many cards land at once she was asked to count them and name her favourite, as the demo has always asked, where a live round asks for every name.
+
+While a round can start or is playing, Momo's own live voice is kept from the headset and she is told nothing of the cards, so the recorded lines are the only voice heard. With no round waiting on the open card she speaks for herself as ever.
 
 How a request finds its round:
 
@@ -177,8 +193,10 @@ Momo's own rule is that a question gets an answer and no cards, and half the wal
 | An old tree stays on the headset after Empty stage | Start the app again: `agents/demo/headset.sh restart`. |
 | The app on the headset shows your real trees, not the demo | It is joined to the hosted service. Run `agents/demo/headset.sh`. |
 | After the recording, the app shows nothing and Momo does not answer | It is still looking for the demo on this Mac. Run `agents/demo/headset.sh back`. |
-| Momo answers but no cards come | The card you had open is not the one the round is asked from (the page names it under "Asked from"). Open that card and say it again, or press Play it now, without a word. |
-| Momo reads out a row of card titles | She tells of the first card, then of the others in one line, then says which she would open: about 30 to 40 seconds a round. Saying "Hey Momo" stops her. |
+| You said the line and nothing happened | The card you had open is not the one the round is asked from (the page names it under "Asked from"). Open that card and say it again, or press Play. |
+| Play says the tree is not set up for the round | A take hangs its cards on the tree as it stands just before its round. Press Go to this round first. |
+| A line says "Recording these words…" for long | The voice did not answer. Click in the box and out again, or check `OPENAI_API_KEY`. Until it is recorded the line is not heard. |
+| Momo says a line you want changed | Write over it in its box on the page. |
 | The wrong round arrived | Press Go to this round. |
 | The page says the service is not answering | The service stopped: `cd agents && npm run demo`. The tree is kept in `agents/data-demo` and is taken up where it stood. |
 
@@ -235,7 +253,8 @@ The file was generated from the walkthrough board by `sketches/walkthrough/gen/d
 ## How it works
 
 - `agents/src/demo/script.ts` reads and checks the script. `cards.ts` makes each card the item and node the service keeps, so the usual rules choose its look.
-- `director.ts` does the rest. **Going to a round** deletes the tree's cards and builds the earlier rounds again, kept. A headset decides its own layers from what is asked on it, and cards that all arrive at once land on one layer, so the director takes the headset through the rounds in order: it goes to a round's card, waits for the headset to open it, adds the round's cards, and waits for the headset to give them their layer. **Playing a round** is the Scout role replaced: `Pipeline.runScout` runs as ever (the run's label, the deliveries, the closing line, Momo's narration), and the director hands it the round's cards in place of a search.
+- `take.ts` makes a round its take: the schedule of labels and deliveries from the kinds of cards the round brings, with Momo's lines placed on it. `lines.ts` holds her lines and their recordings, and what you wrote over them.
+- `director.ts` does the rest. **Going to a round** deletes the tree's cards and builds the earlier rounds again, kept. A headset decides its own layers from what is asked on it, and cards that all arrive at once land on one layer, so the director takes the headset through the rounds in order: it goes to a round's card, waits for the headset to open it, adds the round's cards, and waits for the headset to give them their layer. **Playing a round** is the Scout role replaced: `Pipeline.runScout` runs as ever (the run's label, the deliveries as picks, the Renderer), and the director runs the round's take inside it: each label for its time, each delivery at its moment, and each of Momo's lines sent to the headset's voice socket from its recording, a tenth of a second at a time, so a pause is heard at once. **Moving the bar** makes the tree match the moment: cards landed by then are hung, later ones deleted, which a headset follows card by card.
 - The service's own code changed in five small places: `--demo` in `main.ts`; the director's wiring, the page's routes under `/api/demo` and the page at `/demo` in `server.ts`; `stage`, `go` and `forget` on `Pipeline`; a round's limits as a parameter of `admit` (a prepared round holds up to 13 cards, a live one 10); and `extra` instructions for the live voice.
 - The page is `agents/client/demo.html`, `demo.css` and `js/demo.js`.
 - On Fly it is `agents/Dockerfile.demo`, `fly.demo.toml` and `deploy/demo.sh` with `deploy/demo-secrets.ts`. `MIND_PALACE_DEMO_RESTART=off` in the image tells the service it cannot start a headset's app.

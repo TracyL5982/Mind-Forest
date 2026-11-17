@@ -38,6 +38,17 @@ const demoDir = env.MIND_PALACE_DEMO ?? join(root, 'demo');
 const dataDir = env.MIND_PALACE_DATA ?? join(root, demo ? (fake ? 'data-demo-fake' : 'data-demo') : fake ? 'data-fake' : 'data');
 const number = (name: string, fallback: number) => (env[name]?.trim() ? Number(env[name]) : fallback);
 
+/**
+ * Says one of Momo's written lines for the demo, as 16-bit mono PCM at the live voice's rate: OpenAI's speech model in Momo's
+ * voice, which reads the words as they are written. Without the key a take plays with her words shown and no sound.
+ */
+function demoSpeak(): ((text: string) => Promise<Uint8Array>) | undefined {
+  const apiKey = env.OPENAI_API_KEY;
+  if (fake || !apiKey) return undefined;
+  const speak = openaiSpeech(fetch, { apiKey, model: env.MIND_PALACE_VOICE_MODEL, voice: env.MIND_PALACE_VOICE, format: 'pcm', firstByteMs: 30_000 });
+  return async (text) => new Uint8Array(await new Response(await speak(text, AbortSignal.timeout(60_000))).arrayBuffer());
+}
+
 /** The showcase trees of the demo's folder that hold together; one that does not is said and left out. */
 function showcase() {
   const { trees, problems } = loadShowcase(join(demoDir, 'showcase'));
@@ -255,7 +266,7 @@ if (ledger) {
     // One program at a time may read a bot's messages, so the offline stand-in leaves the bot to the real service.
     // The demo is a stage, not the user's own space: nothing sent to the bot lands in it.
     telegram: !fake && !demo && env.TELEGRAM_BOT_TOKEN ? { token: env.TELEGRAM_BOT_TOKEN } : undefined,
-    ...(demo ? { demo: { script: loadScript(join(demoDir, 'script.json')), mediaDir: join(demoDir, 'media'), showcase: showcase(), restart: restartHeadset() } } : {}),
+    ...(demo ? { demo: { script: loadScript(join(demoDir, 'script.json')), mediaDir: join(demoDir, 'media'), showcase: showcase(), restart: restartHeadset(), voice: env.MIND_PALACE_VOICE || SPEECH_VOICE, speak: demoSpeak() } } : {}),
     log,
   });
   console.log(`Mind Palace agents${fake ? ' (fake roles, no model)' : ''}${demo ? ', the demo' : ''}`);

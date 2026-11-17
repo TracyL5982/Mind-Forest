@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { momoNote, wavesOf } from '../src/demo/director.ts';
+import { momoNote } from '../src/demo/director.ts';
 import { itemOf, nodeOf as nodeOfCard } from '../src/demo/cards.ts';
+import { schedule } from '../src/demo/take.ts';
 import { loadScript } from '../src/demo/script.ts';
 import { loadShowcase, type Showcase } from '../src/demo/showcase.ts';
 import { startServer, type Running } from '../src/node/server.ts';
@@ -15,9 +16,15 @@ import { startServer, type Running } from '../src/node/server.ts';
 /** The demo with stand-in roles and no waits: the walkthrough's own script and pictures, as `npm run demo:fake` runs them. */
 const demoDir = join(import.meta.dirname, '../demo');
 const script = loadScript(join(demoDir, 'script.json'));
-const quick = { stand: 400, open: 400, land: 400, breath: 0, step: 0, rejoin: 1500 };
+/** A take's clock runs 400 times as fast, so a round of 45 s is over in a tenth of one. */
+const quick = { stand: 400, open: 400, land: 400, breath: 0, step: 0, rate: 400, rejoin: 1500 };
 
-async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-demo-')), restart?: () => Promise<string>, showcase?: Showcase[]): Promise<Running> {
+/** Each boot of the demo copies its pictures into its data folder, about 20 MB: every folder made here is removed when the tests end. */
+const made: string[] = [];
+process.on('exit', () => made.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+const fresh = () => (made.push(mkdtempSync(join(tmpdir(), 'mp-demo-'))), made.at(-1)!);
+
+async function boot(dataDir = fresh(), restart?: () => Promise<string>, showcase?: Showcase[]): Promise<Running> {
   return startServer({
     port: 0, host: '127.0.0.1', dataDir, clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
     demo: { script, mediaDir: join(demoDir, 'media'), pace: quick, restart, showcase },
@@ -65,7 +72,7 @@ test('the script holds together: every round is asked from a card an earlier rou
   assert.equal(script.phases[0]!.head, 'root');
   const titles = script.phases.flatMap((phase) => phase.cards.map((card) => card.title.toLowerCase()));
   assert.equal(new Set(titles).size, titles.length, 'two cards share a title, and the round rules would leave one out');
-  for (const phase of script.phases) for (const wave of wavesOf(phase)) assert.ok(wave.labels.every((label) => label.split(' ').length <= 9), `a step label of ${phase.id} is too long`);
+  for (const phase of script.phases) for (const step of schedule(phase).steps) assert.ok(step.label.split(' ').length <= 9, `a step label of ${phase.id} is too long`);
 });
 
 test('going to a round builds every round before it, kept, and leaves it the next', async () => {
@@ -166,7 +173,7 @@ test('the questions under a round\'s card are the script\'s, and the stage can b
 });
 
 test('a data folder kept from an earlier run is taken up where it stood', async () => {
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-demo-'));
+  const dataDir = fresh();
   const first = await boot(dataDir);
   await first.demo!.goto('f2');
   await first.close();
