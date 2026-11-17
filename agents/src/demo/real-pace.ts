@@ -95,16 +95,17 @@ export function realSchedule(phase: ScriptPhase, under: string): Schedule {
   }
 
   /** One search of a source, with its fetch and its reading, and what lands when it has been read. */
-  const search = (from: number, source: string, cards: ScriptCard[], words: string): number => {
-    const searched = from + between(0.2, cards.length > 0 ? 2.6 : 3.4, 2);
+  const search = (from: number, source: string, cards: ScriptCard[], words: string, quick = false): number => {
+    // The search that brings the round's first find is a quick one, so that card lands near 3 s, as in a real run.
+    const searched = from + between(0.2, quick ? 0.9 : cards.length > 0 ? 2.6 : 3.4, 2);
     steps.push({ label: short(`Searching ${source} for ${words}`), at: from, end: searched });
     let fetched = searched;
     if (PICTURED.has(source)) {
-      fetched = searched + between(0.1, 2.2, 1.5);
+      fetched = searched + between(0.1, quick ? 0.6 : 2.2, 1.5);
       steps.push({ label: `Fetching 8 pictures from ${source}`, at: searched, end: fetched });
     }
     const results = rnd() < 0.65 ? 8 : 2 + Math.floor(rnd() * 6);
-    const read = fetched + between(0.7, 4.2, 1.6);
+    const read = fetched + between(0.7, quick ? 1.6 : 4.2, 1.6);
     steps.push({ label: `Reading ${Math.max(results, cards.length)} results from ${source}`, at: fetched, end: read });
     if (cards.length > 0) drops.push({ at: read, cards: cards.map((card) => card.id) });
     return read;
@@ -115,7 +116,7 @@ export function realSchedule(phase: ScriptPhase, under: string): Schedule {
   // searched besides brings nothing, as most real readings do.
   const first = [...new Map(deliveries.map((d): [string, typeof d] => [d.source, d])).values()].slice(0, 3);
   const searched = new Set(first.map((d) => d.source));
-  for (const delivery of first) search(chosen, delivery.source, delivery.cards, queryOf(delivery.cards[0]!.title));
+  for (const [n, delivery] of first.entries()) search(chosen, delivery.source, delivery.cards, queryOf(delivery.cards[0]!.title), n === 0);
   for (let n = first.length; n < 3; n++) {
     const source = other(searched);
     searched.add(source);

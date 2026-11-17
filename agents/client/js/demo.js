@@ -215,17 +215,19 @@ let moving = false;
 const clock = (ms) => `${Math.floor(ms / 60000)}:${(Math.floor(ms / 1000) % 60).toString().padStart(2, '0')}`;
 const kept = () => {
   try {
-    return JSON.parse(localStorage.getItem('mp-demo-lines') ?? '{}');
+    const all = JSON.parse(localStorage.getItem('mp-demo-lines') ?? '{}');
+    // A copy from before there were two paces holds the fast takes' lines alone.
+    return 'fast' in all || 'real' in all ? { fast: {}, real: {}, ...all } : { fast: all, real: {} };
   } catch {
-    return {};
+    return { fast: {}, real: {} };
   }
 };
-const keep = (round, line, text) => {
+const keep = (pace, round, line, text) => {
   const all = kept();
-  all[round] = { ...all[round] };
-  if (text === null) delete all[round][line];
-  else all[round][line] = text;
-  if (Object.keys(all[round]).length === 0) delete all[round];
+  all[pace][round] = { ...all[pace][round] };
+  if (text === null) delete all[pace][round][line];
+  else all[pace][round][line] = text;
+  if (Object.keys(all[pace][round]).length === 0) delete all[pace][round];
   try {
     localStorage.setItem('mp-demo-lines', JSON.stringify(all));
   } catch {
@@ -245,6 +247,7 @@ async function loadTake() {
   if (!round) return;
   try {
     const got = await api(`/api/demo/take?round=${encodeURIComponent(round)}`);
+    // The take is the loaded pace's: its length, its marks and its lines.
     if (round !== picked) return;
     take = got;
     drawTake();
@@ -318,7 +321,8 @@ function drawTake() {
   $('take').replaceChildren(
     el('div', { class: 'part-name', text: 'The take' }),
     el('div', { class: 'take-top' },
-      el('button', { class: 'btn primary play', id: 'play', type: 'button', onclick: toggle }),
+      el('button', { class: 'btn play', id: 'play-fast', type: 'button', onclick: () => toggle('fast') }),
+      el('button', { class: 'btn play', id: 'play-real', type: 'button', onclick: () => toggle('real') }),
       el('div', { class: 'take-time', id: 'take-time' })),
     bar,
     el('div', { class: 'bar-legend' }, el('span', { class: 'k-line', text: 'Momo speaks' }), el('span', { class: 'k-step', text: 'Agents at work' }), el('span', { class: 'k-drop', text: 'Cards land' })),
@@ -328,8 +332,8 @@ function drawTake() {
     lines.length > 0 ? el('div', { class: 'save' },
       el('button', { class: 'btn', type: 'button', onclick: () => saveScript().catch((err) => (($('problem').hidden = false), ($('problem').textContent = `The lines were not saved: ${err.message}`))), text: 'Save to script' }),
       el('div', { class: 'hint', text: status?.lines?.edited
-        ? `Downloads lines.json with every round's lines as Momo says them now, your ${status.lines.edited} edited line${status.lines.edited === 1 ? '' : 's'} among them. Put it in the repository as agents/demo/lines.json and commit it, with the recordings the service made (demo-voice in its data folder, into agents/demo/voice). Until then your words are kept by this service while it runs, and in this browser.`
-        : 'Downloads lines.json with every round\'s lines as Momo says them now. Nothing is edited, so it is the file the repository has.' })) : null);
+        ? `Downloads lines.json with every round's lines as Momo says them now, at both paces, your ${status.lines.edited} edited line${status.lines.edited === 1 ? '' : 's'} among them. Put it in the repository as agents/demo/lines.json and commit it, with the recordings the service made (demo-voice in its data folder, into agents/demo/voice). Until then your words are kept by this service while it runs, and in this browser.`
+        : 'Downloads lines.json with every round\'s lines as Momo says them now, at both paces. Nothing is edited, so it is the file the repository has.' })) : null);
   tick();
 }
 
@@ -341,25 +345,45 @@ function tick() {
   $('bar').setAttribute('aria-valuenow', String(Math.round(at / 1000)));
   $('take-time').textContent = `${clock(at)} of ${clock(take.ms)}`;
   const playing = heard.playing && !drag;
-  const play = $('play');
-  play.textContent = playing ? 'Pause' : at >= take.ms - 50 ? 'Play again' : at > 0 ? 'Play from here' : 'Play';
-  play.disabled = busy();
+  // Two buttons, one for each pace. The loaded pace's is the bright one, and is Play or Pause; the other's loads its own take.
+  for (const which of ['fast', 'real']) {
+    const button = $(`play-${which}`);
+    const loaded = which === mode();
+    button.classList.toggle('primary', loaded);
+    button.textContent = loaded && playing ? 'Pause' : loaded && at > 0 && at < take.ms - 50 ? `Play ${MODE_NAME[which]} from here` : `Play ${MODE_NAME[which]}`;
+    button.disabled = busy();
+    button.title = loaded ? `The ${MODE_NAME[which]} take is loaded: the bar, the marks and the lines below are its own.` : `Loads the ${MODE_NAME[which]} take of this round, with its own bar and lines, and plays it from the start.`;
+  }
   const now = take.lines.find((line) => line.ms > 0 && line.at <= at && at < line.at + line.ms);
   for (const node of document.querySelectorAll('.line')) node.dataset.now = String(Boolean(now) && node.querySelector('textarea').dataset.line === now.id);
   $('take-hint').textContent = status?.devices
-    ? `Plays this round on the headset at the pace of a real one: the scene, Momo and the agents' labels together, ${Math.round(take.ms / 1000)} s in all. Saying the line in the headset starts the same take. Drag or click the bar to jump: the headset goes to that moment when you let go.`
-    : 'No headset is joined: the take still runs here, and the tree follows it.';
+    ? `Loaded: the ${MODE_NAME[take.mode]} take, ${Math.round(take.ms / 1000)} s. ${take.mode === 'real' ? 'Cards and labels come as in a real round: in bursts, with searches that bring nothing.' : 'Quick and tidy: the found cards are in within a few seconds.'} Saying the line in the headset starts the loaded take, the ${MODE_NAME[take.mode]} one. Drag or click the bar to jump: the headset goes to that moment when you let go.`
+    : `Loaded: the ${MODE_NAME[take.mode]} take, ${Math.round(take.ms / 1000)} s. No headset is joined: the take still runs here, and the tree follows it.`;
 }
 function frames() {
   tick();
   requestAnimationFrame(frames);
 }
 
-async function toggle() {
-  if (busy() || !take) return;
-  const at = position();
-  if (heard.playing) status = await api('/api/demo/pause', {});
+/** The two paces a take plays at, as the page names them. */
+const MODE_NAME = { fast: 'fast', real: 'real speed' };
+const mode = () => status?.mode ?? 'fast';
+
+/**
+ * One of the two Play buttons. Pressed for the pace that is loaded, it plays from where the bar is, or pauses. Pressed for the
+ * other pace, it loads that pace's take, whose length, marks and lines are its own, and plays it from the start.
+ */
+async function toggle(which) {
+  if (busy() || !take || moving) return;
+  if (which !== mode()) {
+    status = await api('/api/demo/mode', { mode: which });
+    heard = { at: 0, when: performance.now(), playing: false };
+    await loadTake();
+    heard = { at: 0, when: performance.now(), playing: true };
+    status = await api('/api/demo/play', { round: picked, at: 0 });
+  } else if (heard.playing) status = await api('/api/demo/pause', {});
   else {
+    const at = position();
     heard = { at: at >= take.ms - 50 ? 0 : at, when: performance.now(), playing: true };
     status = await api('/api/demo/play', { round: picked, at: at >= take.ms - 50 ? 0 : Math.round(at) });
   }
@@ -435,9 +459,10 @@ async function saveScript() {
 async function write(line, text) {
   const round = picked;
   try {
-    take = await api('/api/demo/line', { round, line, text });
+    const pace = take.mode;
+    take = await api('/api/demo/line', { round, line, text, mode: pace });
     const now = take.lines.find((l) => l.id === line);
-    keep(round, line, now?.edited ? now.text : null);
+    keep(pace, round, line, now?.edited ? now.text : null);
     if (round === picked) drawTake();
     if (voice && take.lines.some((l) => l.text && !l.recorded && l.closest === null)) setTimeout(() => picked === round && loadTake(), 1500);
   } catch (err) {
@@ -456,15 +481,17 @@ function hear() {
 /** A service that holds none of the user's lines, while this page has a copy of some, lost them on starting again: they are sent again. */
 async function restoreLines() {
   const mine = kept();
-  if (status.lines?.edited !== 0 || Object.keys(mine).length === 0) return;
+  if (status.lines?.edited !== 0 || Object.keys(mine.fast).length + Object.keys(mine.real).length === 0) return;
   let sent = 0;
-  for (const [round, lines] of Object.entries(mine)) {
-    for (const [line, text] of Object.entries(lines)) {
-      try {
-        await api('/api/demo/line', { round, line, text });
-        sent++;
-      } catch {
-        keep(round, line, null);
+  for (const pace of ['fast', 'real']) {
+    for (const [round, lines] of Object.entries(mine[pace])) {
+      for (const [line, text] of Object.entries(lines)) {
+        try {
+          await api('/api/demo/line', { round, line, text, mode: pace });
+          sent++;
+        } catch {
+          keep(pace, round, line, null);
+        }
       }
     }
   }
@@ -558,7 +585,9 @@ function watch(soon = false) {
       hear();
       if (rest(status) !== before) {
         draw();
-        if (take && status.take?.round === take.round && status.take.ms !== take.ms && !document.activeElement?.matches?.('.line textarea')) loadTake();
+        // The loaded pace changed elsewhere, or a line's recording changed the take's length: the panel shows the take as it is now.
+        const stale = take && (status.mode !== take.mode || (status.take?.round === take.round && status.take.ms !== take.ms));
+        if (stale && !document.activeElement?.matches?.('.line textarea')) loadTake();
       }
     } catch (err) {
       $('problem').hidden = false;

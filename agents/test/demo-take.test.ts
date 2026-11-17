@@ -6,7 +6,7 @@ import { WebSocket } from 'ws';
 import { Lines, recordingName, type LinesFile } from '../src/demo/lines.ts';
 import { loadScript, type ScriptPhase } from '../src/demo/script.ts';
 import { compare, record as recordLine, sentences, wavOf } from '../src/demo/momo-voice.ts';
-import { momentAt, planLines, REAL, schedule, takeOf, type Line } from '../src/demo/take.ts';
+import { MODES, momentAt, planLines, REAL, schedule, takeOf, type Line } from '../src/demo/take.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { demoData } from './demo-data.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
@@ -406,6 +406,8 @@ test('the user\'s words over a line are what Momo says; her live voice is kept f
     void run.demo!.playTake('n3');
     await until(() => run.demo!.status().take?.playing === true);
     await until(() => run.demo!.status().take?.playing === false, 10000);
+    // The last line's sound may still be on its way as the take ends.
+    await until(() => s.voice.slice(heardBefore).some((m) => m.t === 'done' && m.id?.endsWith('-wrap')));
     const lastSaid = s.voice.slice(heardBefore).filter((m) => m.t === 'text').at(-1)!;
     assert.equal(lastSaid.text, 'Her closest wording.', 'the caption is what is heard');
     assert.equal(bytesOf(s.voice.slice(heardBefore), 'wrap'), 'Her closest wording.'.length * 2400, 'and what is heard is her closest take, whole');
@@ -523,6 +525,119 @@ test('played on a headset, every agent\'s label has ended before the wrap-up is 
     // The take sends the headset nothing about the conversation: whether it stays open after a line, and what her mark shows then, is the headset's.
     assert.equal(order.filter((m) => m.kind === 'name').length, 0);
     assert.equal(run.demo!.status().rounds.find((r) => r.id === 'n3')!.state, 'played');
+  } finally {
+    await s.close();
+  }
+});
+
+// ---- two paces
+
+test('at both paces, in every round, Momo speaks of a card only once it has landed, and wraps up only once every agent is done', async () => {
+  const said = new Lines({ demoDir, dataDir: temp('mp-demo-data-'), voice: 'marin', log: () => {} });
+  for (const mode of MODES) {
+    for (const phase of script.phases) {
+      const sched = schedule(phase, 'the card', mode);
+      assert.deepEqual(sched.drops.flatMap((drop) => drop.cards).sort(), phase.cards.map((card) => card.id).sort(), `${mode} ${phase.id}: every card lands once`);
+      assert.ok(sched.steps.every((step) => step.end > step.at && step.end <= sched.settled), `${mode} ${phase.id}: every label has ended when the agents are said to be done`);
+      const landsAt = new Map(sched.drops.flatMap((drop) => drop.cards.map((id): [string, number] => [id, drop.at])));
+      // The lines as they are recorded, where the round has them at this pace, and as the plan gives them with short and with long lines.
+      const recorded = said.of(phase.id, mode);
+      const plans: [string, Line[], (text: string) => number][] = [
+        ['short lines', await planLines(phase, 'the card', async ({ kind }) => ({ text: `${kind}.`, ms: 3000 }), mode), () => 3000],
+        ['long lines', await planLines(phase, 'the card', async ({ kind }) => ({ text: `${kind}.`, ms: 14_000 }), mode), () => 14_000],
+        ...(recorded.length > 0 ? [['the recorded lines', recorded, (text: string) => said.ms(text)] as [string, Line[], (text: string) => number]] : []),
+      ];
+      for (const [name, lines, lengthOf] of plans) {
+        const take = takeOf(phase, lines, lengthOf, 'the card', mode);
+        for (const line of take.lines) {
+          for (const id of line.cards) assert.ok(landsAt.has(id) && line.at >= landsAt.get(id)!, `${mode} ${phase.id}, ${name}: "${line.id}" starts at ${line.at}, before a card it speaks of lands at ${landsAt.get(id)}`);
+        }
+        const wrap = take.lines.find((line) => line.kind === 'wrap');
+        if (wrap) assert.ok(wrap.at >= take.settled && take.lines.at(-1) === wrap, `${mode} ${phase.id}, ${name}: the wrap-up waits for every agent, and is the last thing said`);
+        if (phase.cards.length > 0 && lines.length > 0) assert.deepEqual(take.lines.flatMap((line) => line.cards).sort(), phase.cards.map((card) => card.id).sort(), `${mode} ${phase.id}, ${name}: between them the lines tell of every card once`);
+      }
+    }
+  }
+});
+
+test('a round at real pace is the same every time, and comes as a real round does: in bursts, with searches that bring nothing, over the span of a real run', () => {
+  const sizes = new Set<number>();
+  let empty = 0;
+  for (const phase of script.phases.filter((p) => p.cards.length > 0)) {
+    const sched = schedule(phase, 'the card', 'real');
+    assert.deepEqual(schedule(phase, 'the card', 'real'), sched, `${phase.id}: the same schedule each time`);
+    for (const drop of sched.drops) sizes.add(drop.cards.length);
+    const labels = sched.steps.map((step) => step.label);
+    assert.ok(labels.includes('Choosing where to look first') && labels.some((label) => label.startsWith('Thinking of directions for ')), `${phase.id}: the Scout chooses and thinks, as in every real run`);
+    const thinking = sched.steps.find((step) => step.label.startsWith('Thinking of directions for '))!;
+    assert.ok(thinking.end - thinking.at >= 19_000 && thinking.end - thinking.at <= 36_000, `${phase.id}: it thinks for as long as a real run does`);
+    const searches = sched.steps.filter((step) => step.label.startsWith('Searching '));
+    assert.ok(searches.length >= 3 && searches.every((step) => / for \S/.test(step.label)), `${phase.id}: three searches or more, each for some words`);
+    const readings = sched.steps.filter((step) => step.label.startsWith('Reading '));
+    const barren = readings.filter((step) => !sched.drops.some((drop) => drop.at === step.end));
+    empty += barren.length;
+    assert.ok(barren.length >= 1, `${phase.id}: at least one reading brings nothing`);
+    // Every label names a source the service has, and none it does not.
+    for (const step of sched.steps) {
+      assert.ok(!/Writing an idea down|The Met|Library of Congress|Wellcome|NASA|MASP/.test(step.label), `${phase.id}: "${step.label}" is not a label the service shows`);
+      assert.ok(step.label.split(' ').length <= 9, `${phase.id}: "${step.label}" is too long`);
+    }
+    const first = sched.drops[0]!.at;
+    if (phase.cards.some((card) => card.origin !== 'generated')) assert.ok(first >= 1000 && first <= 7000, `${phase.id}: the first card lands at ${first}, near the 3 s of a real run`);
+    assert.ok(sched.end >= 14_000 && sched.end <= 40_000, `${phase.id}: the run lasts ${sched.end}, as a real one does`);
+  }
+  assert.ok(sizes.has(1) && [...sizes].some((n) => n >= 5) && [...sizes].some((n) => n === 2 || n === 3), `cards come one at a time, a few at a time and many at once (${[...sizes].sort()})`);
+  assert.ok(empty >= 30, 'and many searches bring nothing');
+  // The fast pace keeps its own labels to the service's wording too.
+  for (const phase of script.phases) {
+    for (const step of schedule(phase, 'the card', 'fast').steps) assert.ok(!/Writing an idea down|The Met|Library of Congress|Wellcome|NASA|MASP/.test(step.label) && (!step.label.startsWith('Searching ') || / for \S/.test(step.label)), `fast ${phase.id}: "${step.label}"`);
+  }
+});
+
+test('the page loads a pace: its take, its lines and its edits are its own, a spoken line starts it, and the file to save holds both', { timeout: 30000 }, async () => {
+  const s = await stage(300);
+  try {
+    const { run } = s;
+    const token = { Authorization: 'Bearer secret', 'Content-Type': 'application/json' };
+    const post = async (path: string, body: object) => (await fetch(`${run.url}${path}`, { method: 'POST', headers: token, body: JSON.stringify(body) })).json() as Promise<Record<string, unknown>>;
+    await run.demo!.goto('n3');
+    assert.equal(run.demo!.status().mode, 'fast', 'until a pace is chosen, takes are the fast ones');
+    const fast = run.demo!.shown('n3');
+    await run.demo!.seek('n3', 4000);
+    assert.equal(((await post('/api/demo/mode', { mode: 'real' })) as { mode: string; take: unknown }).mode, 'real');
+    assert.equal(run.demo!.status().take, null, 'the bar goes back to the start: a moment of one take is not a moment of the other');
+    assert.equal(((await post('/api/demo/mode', { mode: 'slow' })) as { error?: string }).error, 'a mode is "fast" or "real"');
+    const real = run.demo!.shown('n3');
+    assert.deepEqual([fast.mode, real.mode], ['fast', 'real']);
+    assert.ok(real.end !== fast.end && real.ms !== fast.ms, 'the real take has its own length');
+    assert.ok(real.lines.every((line) => /at real pace/.test(line.text)) && fast.lines.every((line) => !/at real pace/.test(line.text)), 'and its own lines');
+    assert.notDeepEqual(real.drops, fast.drops);
+
+    // An edit is the loaded pace's alone.
+    await post('/api/demo/line', { round: 'n3', line: 'wrap', text: 'A wrap-up for the real take.' });
+    assert.equal(run.demo!.shown('n3', 'real').lines.at(-1)!.text, 'A wrap-up for the real take.');
+    assert.ok(run.demo!.shown('n3', 'fast').lines.every((line) => !line.edited));
+    const file = (await (await fetch(`${run.url}/api/demo/lines.json`, { headers: token })).json()) as LinesFile;
+    assert.equal(file.real.n3!.at(-1)!.text, 'A wrap-up for the real take.');
+    assert.ok(!file.rounds.n3!.some((line) => line.text === 'A wrap-up for the real take.'), 'Save to script holds both paces, each with its own words');
+
+    // Played, the round's cards land in the real take's deliveries, and its lines are said.
+    void run.demo!.playTake('n3');
+    await until(() => run.demo!.status().take?.playing === true);
+    await until(() => run.demo!.status().take?.playing === false, 20000);
+    await until(() => s.voice.filter((m) => m.t === 'done').length === real.lines.length);
+    assert.deepEqual(under(run, 'Llull’s ring'), round('n3').cards.map((card) => card.title).sort());
+    const texts = s.voice.filter((m) => m.t === 'text').map((m) => m.text);
+    assert.deepEqual(texts, run.demo!.shown('n3').lines.map((line) => line.text));
+    assert.equal(texts.at(-1), 'A wrap-up for the real take.');
+
+    // A line said in the headset starts the pace that is loaded.
+    await run.demo!.goto('n3');
+    const ring = [...run.mind.nodes.values()].find((node) => run.mind.item(node.itemId).title === 'Llull’s ring')!;
+    void run.pipeline.more(ring.id);
+    await until(() => run.demo!.status().take?.playing === true);
+    assert.equal(run.demo!.status().take!.ms, run.demo!.shown('n3', 'real').ms, 'the take that runs is the real one');
+    await run.demo!.pause();
   } finally {
     await s.close();
   }

@@ -389,10 +389,10 @@ export class Director {
   }
 
   /** A round's take as it would play now: the user's words where they wrote any, each line as long as its recording. */
-  private timeline(round: string): Take {
+  private timeline(round: string, mode: Mode = this.mode): Take {
     const { lines } = this.deps;
     const phase = this.phase(round);
-    return takeOf(phase, lines.of(round, this.mode), (text) => lines.ms(text), this.titleOfHead(phase), this.mode);
+    return takeOf(phase, lines.of(round, mode), (text) => lines.ms(text), this.titleOfHead(phase), mode);
   }
 
   /**
@@ -414,10 +414,10 @@ export class Director {
   }
 
   /** A round's take for the page. */
-  shown(round: string): TakeShown {
+  shown(round: string, mode: Mode = this.mode): TakeShown {
     const { lines } = this.deps;
-    const take = this.timeline(round);
-    const shown = new Map(lines.of(round, this.mode).map((line): [string, LineShown] => [line.id, line]));
+    const take = this.timeline(round, mode);
+    const shown = new Map(lines.of(round, mode).map((line): [string, LineShown] => [line.id, line]));
     return { ...take, lines: take.lines.map((line) => ({ ...line, written: shown.get(line.id)!.written, edited: shown.get(line.id)!.edited, recorded: lines.recorded(line.text), voice: lines.voice(line.text), closest: lines.closest(line.text) })) };
   }
 
@@ -425,15 +425,15 @@ export class Director {
    * Writes the user's words over one of Momo's lines, or with `null` goes back to her own, and has the new words recorded. A take
    * that is running goes on with the words it began with.
    */
-  setLine(round: string, line: string, text: string | null): TakeShown {
+  setLine(round: string, line: string, text: string | null, mode: Mode = this.mode): TakeShown {
     this.phase(round);
-    if (!this.deps.lines.edit(round, line, text, this.mode)) throw new Error(`round ${round} has no line called ${line}`);
-    for (const said of this.deps.lines.of(round, this.mode)) {
+    if (!this.deps.lines.edit(round, line, text, mode)) throw new Error(`round ${round} has no line called ${line}`);
+    for (const said of this.deps.lines.of(round, mode)) {
       // Writing a line, even the same words again, has her try it afresh.
       if (said.id === line) this.deps.lines.again(said.text);
       void this.deps.lines.audio(said.text, said.kind);
     }
-    return this.shown(round);
+    return this.shown(round, mode);
   }
 
   /** The script as the page draws it: the chart, and each round with its line, its card and what it brings. */
