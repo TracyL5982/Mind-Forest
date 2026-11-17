@@ -22,7 +22,8 @@ export type VoiceFrame =
   | { t: 'over'; turn: number }
   | { t: 'heard'; turn: number; text: string; final: boolean }
   | { t: 'quiet'; turn: number }
-  | { t: 'text'; id: string; text: string; kind: SayKind }
+  // `ms` and `from`: a recording's whole length, and how far into it its sound starts, so its words can be shown as it is heard.
+  | { t: 'text'; id: string; text: string; kind: SayKind; ms?: number; from?: number }
   | { t: 'audio'; id: string; pcm: string }
   | { t: 'done'; id: string; usage?: Usage }
   /** The check of the sound that woke the device: whether it was the name. On `false` the device closes what the wake opened. */

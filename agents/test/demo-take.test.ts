@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { Lines, recordingName, type LinesFile } from '../src/demo/lines.ts';
-import { upTo } from '../src/demo/director.ts';
 import { loadScript, type ScriptPhase } from '../src/demo/script.ts';
 import { compare, record as recordLine, sentences, wavOf } from '../src/demo/momo-voice.ts';
 import { MODES, momentAt, planLines, REAL, schedule, takeOf, type Line } from '../src/demo/take.ts';
@@ -247,6 +246,7 @@ const saidOf = (voice: Seen[]) => {
   for (const m of voice) if (m.t === 'text') lines.set(m.id!, m.text!);
   return [...lines.values()];
 };
+const bytesOfId = (voice: Seen[], id: string) => voice.filter((m) => m.t === 'audio' && m.id === id).reduce((n, m) => n + Buffer.from(m.pcm!, 'base64').length, 0);
 const bytesOf = (voice: Seen[], id: string) => voice.filter((m) => m.t === 'audio' && m.id?.endsWith(`-${id}`)).reduce((n, m) => n + Buffer.from(m.pcm!, 'base64').length, 0);
 
 test('Play runs a round\'s take on the headset: its labels, its cards as picks in their deliveries, and each of Momo\'s lines said exactly', { timeout: 30000 }, async () => {
@@ -279,26 +279,14 @@ test('Play runs a round\'s take on the headset: its labels, its cards as picks i
     assert.ok(labels.some((label) => /^(Looking into|Finding more for)/.test(label)), 'under the run\'s own label');
 
     const said = saidOf(s.voice);
-    // Her words come as their sound does: the headset shows the share of a line it has played out of what it was sent, and a
-    // recording is sent a quarter of a second ahead, so a whole line sent at once would stand there from its first word.
+    // A line's words go once, whole, with its recording's length, so the headset shows them as it hears them: the sound itself
+    // goes only a quarter of a second ahead, which would otherwise read as the line nearly over from its first word.
     for (const id of new Set(s.voice.filter((m) => m.t === 'audio').map((m) => m.id!))) {
-      const frames = s.voice.filter((m) => m.id === id && (m.t === 'text' || m.t === 'audio'));
-      const whole = frames.filter((m) => m.t === 'text').at(-1)!.text!;
-      const sound = frames.filter((m) => m.t === 'audio').reduce((n, m) => n + Buffer.from(m.pcm!, 'base64').length, 0);
-      let sent = 0;
-      let words = '';
-      for (const m of frames) {
-        if (m.t === 'audio') sent += Buffer.from(m.pcm!, 'base64').length;
-        else {
-          assert.ok(whole.startsWith(m.text!) && m.text!.length >= words.length, 'her words only grow, and are the line\'s own');
-          words = m.text!;
-          // No more of the line than the sound sent with it, the piece that follows these words included, and one word over.
-          const share = Math.min(1, (sent + 4800) / sound);
-          assert.ok(words.length <= Math.max(upTo(whole, share).length, upTo(whole, 0).length), `the words keep to the sound: ${words.length} of ${whole.length} at ${share.toFixed(2)}`);
-        }
-      }
+      const texts = s.voice.filter((m) => m.id === id && m.t === 'text');
+      assert.equal(texts.length, 1, 'a line\'s words are sent once');
+      assert.equal((texts[0] as { ms?: number }).ms, Math.round(bytesOfId(s.voice, id) / 48), 'with the length of its sound');
+      assert.equal((texts[0] as { from?: number }).from, 0);
     }
-    assert.deepEqual(said, take.lines.map((line) => line.text), 'Momo says every line, in order, in the words as written');
     // The last line's sound may still be on its way as the take ends.
     await until(() => s.voice.filter((m) => m.t === 'done').length === take.lines.length);
     for (const line of take.lines) assert.equal(bytesOf(s.voice, line.id), line.text.length * 2400, `all of the recording of ${line.id} was sent`);
@@ -742,13 +730,4 @@ test('a line is recorded by the realtime model as Momo, a take kept only when it
   assert.ok('unsaid' in unsaid);
   assert.deepEqual([unsaid.closest, unsaid.own, unsaid.takes, stubborn.sessions()], ['Nine landed, my favourite is Linux.', true, 5, 5], 'a line of one sentence has no sentences to try: five takes, and it is not ready');
   assert.equal(await heardAs(wavOf(unsaid.pcm!)), 'Nine landed, my favourite is Linux.');
-});
-
-test('the words of a line said so far are whole words, never fewer than the first, and all of it at its end', () => {
-  const line = 'Nice, that is a rich rabbit hole.';
-  assert.equal(upTo(line, 0), 'Nice,');
-  assert.equal(upTo(line, 0.5), 'Nice, that is a');
-  assert.equal(upTo(line, 0.99), 'Nice, that is a rich rabbit');
-  assert.equal(upTo(line, 1), line);
-  assert.equal(upTo('Sure.', 0.2), 'Sure.');
 });
