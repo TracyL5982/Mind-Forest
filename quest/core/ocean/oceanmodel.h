@@ -1287,6 +1287,9 @@ private:
     Vec3 facePoint(const CardView& c, Vec2 at) const;
     /// Pinches the open card by flag, as a hand would: held `hold` s at the path's start, then drawn along it over `over` s.
     void pinchByFlag(const std::vector<Vec2>& path, double hold, double over);
+    /// NOTE(port): added for Quest. Logs where each card on the layer you work on is headed, and the room it takes there
+    /// (`-placesAt`), for checking an arrangement without pictures.
+    void logPlaces() const;
     bool cardGestures = false;
 
     void moveLayer(int direction);

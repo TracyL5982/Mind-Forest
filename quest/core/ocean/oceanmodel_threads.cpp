@@ -54,7 +54,8 @@ std::optional<OceanModel::Reach> OceanModel::openBox(const TreeNode* node, float
 Vec2 OceanModel::nudge(const TreeNode& n, const Tree& tree) const {
     std::optional<int> focus = tree.focus();
     const TreeNode* current = focus ? find(tree, *focus) : nullptr;
-    if (!(current && n.id != current->id && n.parent != current->id)) return Vec2::zero();
+    // (AGENT: what is condensed round a card opened where it stands lies under it, and moves out like the rest.)
+    if (!(current && n.id != current->id && (n.parent != current->id || tree.condensed(n)))) return Vec2::zero();
     std::optional<Tree::Place> me = tree.shown(n), it = tree.shown(*current);
     if (!me || !it) return Vec2::zero();
     if (me->depth == it->depth) {

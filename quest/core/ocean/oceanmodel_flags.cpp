@@ -501,6 +501,8 @@ void OceanModel::runFlags() {
         m.pinchByFlag({a, b}, 0.6, 0.5);
     });
     at("tapAt", [](OceanModel& m) { m.pinchByFlag({{0, 0}, {0, 0}}, 0.1, 0); });
+    at("placesAt", [](OceanModel& m) { m.logPlaces(); });
+    at("placesAgainAt", [](OceanModel& m) { m.logPlaces(); });
     // `-acrossPictureAt t` drags across the open card's picture, from 0.2 to 0.55 of its width, as a hand marking a stretch
     // of a video or drawing on a picture does with the pen up; `-acrossPictureAgainAt t` from 0.7 to 0.9, too far from the
     // first to take it by an end.
@@ -806,4 +808,20 @@ void OceanModel::runDemo() {
     at(2.8, [](OceanModel& m) {
         if (!m.shelf.empty()) m.unfold(m.shelf.front().uid);
     });
+}
+
+/// `[ocean] place <x> <y> <half width> <down> <up> <open> <title>`, m on the layer you work on: where each card there is
+/// headed, its step aside included, and how far it reaches from that point. An open card reaches over the rows under it.
+void OceanModel::logPlaces() const {
+    if (!(tree && catalog)) return;
+    int top = tree->standDepth();
+    for (const auto& [id, n] : tree->nodes) {
+        const CardRef& c = card(id);
+        std::optional<Tree::Place> shown = tree->shown(n);
+        if (!(c && shown && shown->depth == top && !n.chip && c->alpha.target() > 0)) continue;
+        Vec2 at = rest(n, *tree).xy + c->nudge.target();
+        bool open = c->openMix.target() > 0.5f;
+        Reach reach = open ? openReach(n) : Reach{c->smallBody * (-c->scale.target() / 2), c->smallBody * (c->scale.target() / 2)};
+        logLine(fmt("[ocean] place %.4f %.4f %.4f %.4f %.4f %d ", at.x, at.y, reach.hi.x, -reach.lo.y, reach.hi.y, open ? 1 : 0) + catalog->title(n.ref));
+    }
 }

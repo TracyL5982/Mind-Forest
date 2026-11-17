@@ -232,7 +232,8 @@ public:
     int standDepth() const;
 
     /// How far a group is drawn in: open, its cards stand at their full distance round the open card.
-    float spread(int head) const { return focused && current == head ? 1 : Branching::closed; }
+    /// AGENT: a card opened where it stands (`open`) leaves its group open too: the group is still the one you work on.
+    float spread(int head) const { return focused && layer(current) == head ? 1 : Branching::closed; }
 
     // NOTE(port): added for Quest. The welcome tree is a walk (oceanmodel_guide.cpp), and every step of it
     // should look like the last: a card taken comes to the middle of its layer (any other tree's keeps most

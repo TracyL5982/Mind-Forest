@@ -734,7 +734,8 @@ Box Tree::foot(const TreeNode& c, float scale, int level) const {
 /// card that has been asked about is given the room its huddle needs;
 /// on any other, the group is as it was before that card was asked.
 std::vector<Box> Tree::boxes(const TreeNode& h, int top) const {
-    bool open = focused && current == h.id;
+    // (AGENT: as open with one of its cards opened where it stands, so the groups stand where they did; see `spread`.)
+    bool open = focused && layer(current) == h.id;
     float s = spread(h.id);
     std::vector<Box> out;
     if (open) {

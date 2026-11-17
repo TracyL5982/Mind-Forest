@@ -829,7 +829,9 @@ OceanModel::Look OceanModel::style(const TreeNode& n, const Tree& tree) const {
     if (n.chip) return Look{1, beside ? 1.f : 0.f, 0, beside};
     if (at.depth == tree.standDepth()) {
         // On the layer you work on: with nothing in focus every card is whole; with one, the other groups stand back a little.
-        if (!focus || beside || n.id == tree.stand) return Look{1, 1, 0, true};
+        // AGENT: the group of a card opened where it stands is its own group, so it stays whole.
+        bool group = focus && n.parent == tree.layer(*focus);
+        if (!focus || beside || group || n.id == tree.stand) return Look{1, 1, 0, true};
         return Look{0.8f, 1, 0, true};
     }
     // On an earlier layer: the path's own card is a step, shown as its number and name; the rest small.
@@ -943,9 +945,9 @@ void OceanModel::restyle(bool stirring) {
             c.openMix.go(look.open, now, Pace::grow, Ease::out);
         }
         setHit(c, look);
-        // A condensed group moves aside as one, with the card it stands on.
+        // A condensed group moves aside as one, with the card it stands on, unless that card is the open one.
         const TreeNode* mover = &n;
-        while (tree.condensed(*mover) && mover->parent) {
+        while (tree.condensed(*mover) && mover->parent && std::optional<int>(*mover->parent) != focus) {
             const TreeNode* host = find(tree, *mover->parent);
             if (!host) break;
             mover = host;
