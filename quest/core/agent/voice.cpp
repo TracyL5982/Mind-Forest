@@ -745,7 +745,10 @@ void Voice::openLive(double now) {
             else if (t == "over") deliver(LiveOver{m["turn"].integer(0)});
             else if (t == "heard") deliver(LiveHeard{m["turn"].integer(0), m["text"].string(""), m["final"].boolean(false)});
             else if (t == "quiet") deliver(LiveQuiet{m["turn"].integer(0)});
-            else if (t == "text") deliver(LiveText{m["id"].string(""), m["text"].string(""), m["kind"].string("") == "results"});
+            else if (t == "text") {
+                deliver(LiveText{m["id"].string(""), m["text"].string(""), m["kind"].string("") == "results",
+                                 std::max(0.0, m["ms"].number(0)) / 1000, std::max(0.0, m["from"].number(0)) / 1000});
+            }
             else if (t == "done") deliver(LiveDone{m["id"].string("")});
             else if (t == "failed") deliver(LiveFailed{m["why"].string("")});
             else if (t == "name") deliver(LiveNamed{m["ok"].boolean(true)});
@@ -832,8 +835,14 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                        bool begins = !live || live->id != t.id;
                        LiveReply& r = liveReply(t.id);
                        r.text = t.text;
+                       r.length = t.length;
+                       r.from = t.from;
                        spoken = t.text;
-                       if (sounding && sounding->number == r.player) sounding->text = t.text;
+                       if (sounding && sounding->number == r.player) {
+                           sounding->text = t.text;
+                           sounding->length = t.length;
+                           sounding->from = t.from;
+                       }
                        if (begins && t.results && std::holds_alternative<Idle>(turn)) {
                            shown.userText.clear();
                            shown.userFinal = false;
@@ -909,6 +918,8 @@ bool Voice::startPlayer(LiveReply& r) {
     sounding->unheard = unheard;
     sounding->rate = ready->rate;
     sounding->text = r.text;
+    sounding->length = r.length;
+    sounding->from = r.from;
     shown.momoText.clear();
     send(ReplyStreams{});
     if (!r.held.empty()) sounding->write(r.held.data(), r.held.size());
@@ -1014,7 +1025,12 @@ void Voice::show() {
     if (shown.state == S::responding && sounding) {
         size_t at = size_t(sounding->played * 50);
         if (at < sounding->loudness.size()) shown.level = levelOf(sounding->loudness[at]);
-        double heard = sounding->written ? sounding->played * sounding->rate / double(sounding->written) : 0;
+        // How far the voice is: into the whole recording, a little ahead, when the service said how long it is; otherwise
+        // the share of the sound come so far that has been heard, which a recording sent just ahead of its playing would
+        // put near the whole of it from the start.
+        double heard = sounding->length > 0 ? (sounding->from + sounding->played + wordsAhead) / sounding->length
+                       : sounding->written ? sounding->played * sounding->rate / double(sounding->written)
+                                           : 0;
         // More audio than words may have come, so what is shown only grows.
         std::string words = revealed(sounding->text, heard);
         if (words.size() > shown.momoText.size()) shown.momoText = words;

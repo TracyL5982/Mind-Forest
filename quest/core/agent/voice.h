@@ -71,6 +71,9 @@ public:
     static constexpr double longestThought = 20;
     /// Seconds the caption says how to ask Momo without the microphone, once the user refuses it.
     static constexpr double refusalShown = 10;
+    /// s Momo's words run ahead of her voice, when the service says how long a reply's recording is (a demo take's line).
+    /// The user, 2026-11-17: "I'd rather transcript to be a little ahead of realtime speech than being laggy".
+    static constexpr double wordsAhead = 0.3;
 
     /// nullopt while it does not listen: until the model is ready and sound comes, while the microphone is down, and
     /// for good once the user refuses it.
@@ -154,6 +157,8 @@ private:
         std::string id;
         std::string text;
         bool results = false;       // what a piece of work brought, not the answer to what was just said
+        double length = 0;          // s: the whole recording's, when the text came whole with it (`ms`); 0 for the live voice
+        double from = 0;            // s into the recording its sound starts at (`from`): past 0 when the take began mid-line
     };
     struct LiveDone {
         std::string id;
@@ -237,6 +242,7 @@ private:
     struct LiveReply {
         std::string id;
         std::string text;
+        double length = 0, from = 0;    // as its text came (LiveText)
         int player = 0;             // the number of the player its first sound started; 0 before it
         /// Its sound while an earlier reply still plays out, so the two are heard one after the other.
         std::vector<int16_t> held;
@@ -262,6 +268,9 @@ private:
         std::shared_ptr<Unheard> unheard;   // the player, when muted
         int rate = 0;
         std::string text;           // what the response says, all of it so far
+        /// s: its whole recording, and where in it the sound starts, when the service said (a demo take's line): its words
+        /// then show by how far into that the voice is. 0: by how much of the sound come so far has been heard.
+        double length = 0, from = 0;
         size_t written = 0;
         /// Seconds of it heard by now, as far as the frame clock tells: never ahead of what was written.
         double played = 0;

@@ -1023,6 +1023,56 @@ TEST(presenceRevealsWordsWithoutSpacesAWholeCharacterAtATime) {
     CHECK(said.compare(0, half.size(), half) == 0 && (uint8_t(said[half.size()]) & 0xC0) != 0x80, "a prefix that ends on a whole character");
 }
 
+namespace {
+
+/// A demo take's line as the service sends it: its words once, whole, with the recording's length and where its sound
+/// starts; then the sound a tenth of a second at a time, kept a quarter of a second ahead of its playing, for `seconds`.
+std::string playRecordedLine(Talking& t, const std::string& id, const std::string& said, double ms, double from, double seconds) {
+    t.serviceSays(Json::object().set("t", "text").set("id", id).set("text", said).set("kind", "results").set("ms", ms).set("from", from).dump());
+    std::vector<int16_t> tenth(2400, 3000);
+    double sent = 0, at = 0;
+    while (at < seconds - 1e-9) {
+        while (sent < at + 0.25) {
+            t.serviceSays(audioFrame(id, tenth));
+            sent += 0.1;
+        }
+        t.frame(1.0 / 90);
+        at += 1.0 / 90;
+    }
+    return t.voice.presence().momoText;
+}
+
+/// How many characters of `said` are `share` of it.
+double charactersOf(const std::string& said, double share) { return share * double(said.size()); }
+
+}  // namespace
+
+TEST(aRecordedLinesWordsShowByHowFarIntoItHerVoiceIsALittleAhead) {
+    const std::string said = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen "
+                             "eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four";
+    {
+        Talking t(true);
+        t.askLive();
+        std::string shown = playRecordedLine(t, "d1", said, 4000, 0, 1);
+        double wanted = charactersOf(said, (1 + Voice::wordsAhead) / 4);
+        CHECK(said.compare(0, shown.size(), shown) == 0, "a prefix of the line: \"%s\"", shown.c_str());
+        CHECK(double(shown.size()) <= wanted && double(shown.size()) > wanted - 14,
+              "1 s into a 4 s recording, its first (1 + %.1f) / 4: %zu characters for %.0f", Voice::wordsAhead, shown.size(), wanted);
+        shown = playRecordedLine(t, "d1", said, 4000, 0, 2);
+        wanted = charactersOf(said, (3 + Voice::wordsAhead) / 4);
+        CHECK(double(shown.size()) <= wanted && double(shown.size()) > wanted - 14, "and at 3 s, (3 + %.1f) / 4: %zu for %.0f",
+              Voice::wordsAhead, shown.size(), wanted);
+    }
+    {
+        // The take began mid-line: the sound starts 2 s into the recording, and so do the words.
+        Talking t(true);
+        t.askLive();
+        std::string shown = playRecordedLine(t, "d2", said, 4000, 2000, 0.5);
+        double wanted = charactersOf(said, (2.5 + Voice::wordsAhead) / 4);
+        CHECK(double(shown.size()) <= wanted && double(shown.size()) > wanted - 14, "from 2 s in: %zu for %.0f", shown.size(), wanted);
+    }
+}
+
 TEST(aReplyThatHasComeIsComingUntilItSoundsAndThinkingAloneIsNot) {
     Talking t(true);
     t.askLive();
