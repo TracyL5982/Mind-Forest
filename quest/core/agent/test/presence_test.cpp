@@ -3,6 +3,7 @@
 #include "support.h"
 
 #include <cmath>
+#include <map>
 
 #include "../presence_look.h"
 
@@ -222,6 +223,59 @@ TEST(aLongReplyScrollsAndOnlyTheLastTwoLinesRest) {
     for (const Caption::Line& l : c.lines()) {
         CHECK(l.toOpacity > 0 || l.opacity < 0.05f, "an older line \"%s\" still shows at %.2f", l.text.c_str(), double(l.opacity));
     }
+}
+
+namespace {
+
+/// Says `text` into the caption a word every `each` s, as Momo's voice shows it.
+void sayWords(Caption& c, const std::string& asked, const std::string& text, double each) {
+    std::string spoken;
+    for (size_t at = 0; at < text.size();) {
+        size_t end = text.find(' ', at);
+        spoken = text.substr(0, end == std::string::npos ? text.size() : end);
+        run(c, say(S::responding, asked, spoken), each);
+        at = end == std::string::npos ? text.size() : end + 1;
+    }
+}
+
+}  // namespace
+
+TEST(momosNextLineKeepsTheEndOfHerLastAboveItUntilItsWordsPushItOut) {
+    Caption c = caption();
+    run(c, say(S::listening, "Why?"), 0.3);
+    sayWords(c, "Why?", "It pulls the background away while the subject stays the same size", 0.35);
+    // Her voice ends; the next line begins 0.35 s later.
+    run(c, say(S::working, "Why?", "It pulls the background away while the subject stays the same size"), 0.35);
+    run(c, say(S::responding, "Why?", "Two"), 0.5);
+    auto rest = resting(c);
+    CHECK(rest.size() == 2 && rest[0]->text == "stays the same size" && rest[1]->text == "Two",
+          "the last line's end stays above the new words: \"%s\" over \"%s\"", rest.size() > 0 ? rest[0]->text.c_str() : "",
+          rest.size() > 1 ? rest[1]->text.c_str() : "");
+    const Caption::Line* asked = shown(c, "Why?");
+    CHECK(!asked || asked->toOpacity == 0, "and the question is not shown again");
+    sayWords(c, "Why?", "Two more cards came in from the museum", 0.35);
+    run(c, say(S::responding, "Why?", "Two more cards came in from the museum"), 0.5);
+    rest = resting(c);
+    CHECK(rest.size() == 2 && rest[0]->text == "Two more cards came" && rest[1]->text == "in from the museum", "then pushed out by them");
+}
+
+TEST(wordsThatComeAllAtOnceShowEachLineInTurnNonePassedOver) {
+    Caption c = caption();
+    run(c, say(S::listening, "Why?"), 0.3);
+    run(c, say(S::thinking, "Why?"), 0.3);
+    const std::string reply = "It pulls the background away while the subject stays the same size so the room stretches";
+    std::map<std::string, float> inSight;
+    for (double t = 0; t < 12; t += frame) {
+        run(c, say(S::responding, "Why?", reply), frame);
+        for (const Caption::Line& l : c.lines()) {
+            if (l.toOpacity > 0 && l.opacity > 0.5f * l.toOpacity) inSight[l.text] += float(frame);
+        }
+    }
+    for (const char* row : {"It pulls the", "background away", "while the subject", "stays the same size", "so the room", "stretches"}) {
+        CHECK(inSight[row] >= Caption::shownAtLeast - 0.05f, "\"%s\" was in sight %.2f s", row, double(inSight[row]));
+    }
+    auto rest = resting(c);
+    CHECK(rest.size() == 2 && rest[0]->text == "so the room" && rest[1]->text == "stretches", "and the last words rest at the bottom");
 }
 
 TEST(theReplyLingersThenFadesAndNoHintFollowsATurnWithWords) {

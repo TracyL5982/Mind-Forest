@@ -163,6 +163,9 @@ public:
     static constexpr double linger = 6;         // s a turn's words stay once it is over
     static constexpr double hintFor = 10;       // s the hint stays
     static constexpr float upper = 0.6f;        // how much of itself the upper line shows
+    /// s a line shows at the least before it rises out of sight: when words come faster than lines can rest, the newer
+    /// ones wait their turn, so that no word is lost (the lead, WS68; how long, my choice).
+    static constexpr float shownAtLeast = 1.5f;
 
     enum class Part { hint, listening, user, thinking, momo, notice };
 
@@ -179,6 +182,7 @@ public:
         bool seen = false;
         bool gone = false;      // no longer wanted, and fading
         float there = 0;        // 0 gone … 1: how much of its bar shows, which comes and goes as the line does
+        float shown = 0;        // s it has rested in sight
     };
 
     using Measure = std::function<float(const std::string&, Speaker)>;
@@ -215,6 +219,7 @@ private:
     Presence::State state = Presence::State::off;
     int turn = 0;
     std::string user, momo, hint, hintName;
+    std::string spent;                      // the user's words, once Momo has said a line to them and begun another
     bool userFinal = false;
     double quietSince = -1e9;               // when the last turn ended
     std::optional<double> hintFrom;
@@ -224,9 +229,15 @@ private:
     std::vector<Entry> history;             // the last turn's lines, until the new one pushes them out
     double historyUntil = 0;
     std::vector<Entry> entries;             // this turn's, wrapped
+    int first = 0;                          // of the history and the entries, the first that has not risen out of sight
     std::vector<Line> lines_;
 
     void startTurn(double now);
+    /// Momo begins another line in the same turn: what rests of the last, and what waits to, stays above its words, which
+    /// push it out (the lead, WS68: no word lost).
+    void nextLine(double now);
+    /// Keeps, of the lines, those from `from` on that are the user's or Momo's, above the next words, for `linger`.
+    void keep(size_t from, size_t to, double now);
     void wrap();
     float wordWidth(const std::string& word, Speaker who);
     static Speaker speaker(Part part);
