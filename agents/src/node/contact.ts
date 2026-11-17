@@ -2,7 +2,8 @@ import type { Id, Item } from '../core/domain.ts';
 import type { Filed } from '../core/pipeline.ts';
 import type { RawDump } from '../core/roles/types.ts';
 import type { Mindstorm } from '../core/state.ts';
-import type { Ask, TreeLine } from './tree-asks.ts';
+import type { Heard, KeptThing, Reading } from './momo-chat.ts';
+import type { TreeLine } from './tree-asks.ts';
 
 /** A handoff as a contact sends it: one Markdown file that travels alone. */
 export interface Delivery {
@@ -37,8 +38,10 @@ export type Arrival =
 
 /** What a contact asks of the service. Each of these rejects with `Declined` when the service has a reason to tell the person. */
 export interface Desk {
-  /** What the paired person sent, read as a drop on the web page is. Resolves once Intake has filed it, with the words that say where it went. */
-  dump(dumps: RawDump[]): Promise<string>;
+  /** What the paired person sent, read as a drop on the web page is. Resolves once Intake has filed it, with what was kept and where. */
+  dump(dumps: RawDump[]): Promise<Kept>;
+  /** Momo's reading of a message: whether to answer, keep it, do both or ask, and what Momo says. */
+  read(heard: Heard): Promise<Reading>;
   /** Why a file of this size cannot be kept, before it is fetched, or null when it can. */
   fits(bytes: number): string | null;
   /** Keeps a file that arrived, as an upload does, and returns its asset id. */
@@ -51,12 +54,18 @@ export interface Desk {
   latest(): Delivery | null;
   /** The trees, the newest first. */
   trees(): TreeLine[];
-  /** What a message that plain rules did not read asks of the trees, or null when it is a drop. */
-  ask(text: string): Promise<Ask | null>;
   /** The trees a few words mean, by name first, then by what is in them, best first. */
   match(words: string): Promise<TreeLine[]>;
   /** Makes one tree's handoff. The file reaches the paired person as every handoff does, through `Channel.deliver`. */
   handoff(treeId: Id): Promise<void>;
+}
+
+/** What a drop came to. */
+export interface Kept {
+  /** What was kept and where it went, in Momo's words. */
+  line: string;
+  /** Each thing kept, as Intake read it. */
+  things: KeptThing[];
 }
 
 export interface ContactStatus {
@@ -88,20 +97,21 @@ export interface Channel {
 }
 
 const MAX_LISTED = 10;
-const NOTHING_ADDED = 'Nothing was added. To grow a tree, send “make a tree about …”, or add “start a tree on this” to what you send.';
+const NOTHING_ADDED = 'I didn’t keep anything from that. To grow a tree, send “make a tree about …”, or add “start a tree on this” to what you send.';
 
-/** Where a drop went, in the words a contact replies with: a new tree, under a card, or the knowledge base. */
-export function whereItWent(mind: Mindstorm, filed: Filed): string {
-  if (filed.items.length === 0) return NOTHING_ADDED;
-  if (filed.items.length === 1) return `Added ${quoted(filed.items[0]!)}. It ${place(mind, filed, filed.items[0]!)}.`;
+/** What a drop came to, with where it went in the words Momo replies with: a new tree, under a card, or the knowledge base. */
+export function whereItWent(mind: Mindstorm, filed: Filed): Kept {
+  const things = filed.items.map((item) => ({ title: item.title, says: item.summary || item.text }));
+  if (filed.items.length === 0) return { line: NOTHING_ADDED, things };
+  if (filed.items.length === 1) return { line: `I’ve kept ${quoted(filed.items[0]!)}. It ${place(mind, filed, filed.items[0]!)}.`, things };
   const lines = filed.items.slice(0, MAX_LISTED).map((item) => `${quoted(item)} ${place(mind, filed, item)}.`);
   const more = filed.items.length > MAX_LISTED ? [`And ${filed.items.length - MAX_LISTED} more.`] : [];
-  return [`Added ${filed.items.length} things.`, ...lines, ...more].join('\n');
+  return { line: [`I’ve kept ${filed.items.length} things.`, ...lines, ...more].join('\n'), things };
 }
 
 function place(mind: Mindstorm, filed: Filed, item: Item): string {
   const node = filed.nodeIds.map((id) => mind.nodes.get(id)).find((n) => n?.itemId === item.id);
-  if (!node) return 'is in your knowledge base';
+  if (!node) return 'is in your knowledge base, in no tree yet';
   const tree = clip(mind.trees.get(node.treeId)?.title ?? 'a tree');
   if (node.parent === null) return `started the tree “${tree}”`;
   return `went under “${clip(mind.itemOf(node.parent).title)}” in “${tree}”`;

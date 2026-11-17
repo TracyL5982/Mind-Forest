@@ -30,17 +30,27 @@ Mind Palace can be a Telegram contact. Anything you send or share to it goes int
 
 Then:
 
-- Send a thought, a link, a photo, a video, a file or a voice note. What you write with it is the instruction: "start a tree on this" grows a tree from it. Mind Palace answers with what it added and where it went, a tree or your knowledge base.
+- Talk to Momo. The bot is the same Momo as in the headset (`src/core/momo.ts` holds who Momo is for both), and Momo reads each message and decides what it is for (`src/node/momo-chat.ts`, one quick model call):
+  - Talk is answered and nothing is kept: "who are you", "what have I saved about heat pumps?".
+  - A thought is kept, with a word of Momo's own: "heat pumps work below freezing now".
+  - A question worth keeping is answered, and kept with its answer: "why do heat pumps fail in the cold?".
+  - When Momo can't tell, it asks ("want me to keep that, or were you just telling me?"), and your next message settles it.
+- Momo's reply comes first, in about a second. Whenever something is kept, a second message says what was kept and where, a tree or your knowledge base, once it is filed (about ten seconds). A chat's messages are answered in order.
+- A link, photo, video or file is always kept. Words sent with it that ask something are answered from what Mind Palace read of it; other words are kept beside it, and "start a tree on this" grows a tree from it.
+- Momo knows your trees and finds your cards by the message's words, so it answers about what you saved. It cannot look at the web from Telegram, and it starts no search there.
+- Momo remembers a chat's last six lines for 30 minutes, in memory. A restart forgets them, and the next message is read on its own.
+- When the model does not answer, the message is kept as it was before Momo read them.
+- Anyone else who writes to the bot gets one fixed line from Momo that says the bot is paired with someone else, at most 6 times in 10 minutes, and no model is asked.
 - A voice note is written out by `OPENAI_API_KEY`'s transcription model, and its words are added. Without that key the recording itself is added.
 - Every handoff the service makes (Handoff on the web page, or asking for one, as "hand this off" on the headset) comes to the chat as a message and one file, `<tree>-handoff-<date>.md`. It names no other file: each picture is described in words, with the address it came from. Share it into Claude, ChatGPT, Muse or any agent that takes a file. `/handoff` or "send me the handoff" sends the latest again.
 - Ask about your trees in plain words. "List my trees" or "what trees do I have" names them, newest first, with a line each. "Hand off the solar tree" or "send me the handoff for solar panels" answers "Packing …" and sends that tree's file. When several trees fit, it lists them and a number or a name picks one; when none does, it says so and lists your trees. "Find the tree about heat pumps" gives the matches, and "yes" or a number sends the handoff. A voice note asks the same way.
-- A name that is one tree's is matched with no model call. Words no name holds go to the quick model, which matches them against each tree's name and cards (`src/node/tree-asks.ts`). A message is read by the model only when it is short and names trees or a handoff, so a thought is never held up.
+- A name that is one tree's is matched with no model call. Words no name holds go to the quick model, which matches them against each tree's name and cards (`src/node/tree-asks.ts`). Words the plain rules do not read ("could I get my film tree packaged up for Claude") are read by Momo with every other message.
 - `/unpair` in the chat ends the pairing.
 
 Limits:
 
 - A bot can take files up to 20 MB. Drop larger ones on the web page.
-- Only the paired Telegram account is heard. Anyone else who finds the bot gets no reply.
+- Only the paired Telegram account is heard. Anyone else who finds the bot gets one fixed line.
 - Only one program may read a bot's messages at a time. A second one is told so by Telegram and waits, and its log says so once. `npm run dev:fake` leaves the bot alone.
 - Telegram's chats with bots are not end-to-end encrypted.
 - The service reads the bot by asking Telegram for new messages, so your Mac needs no public address.

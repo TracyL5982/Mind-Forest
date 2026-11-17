@@ -75,8 +75,12 @@ const SINGLE: { field: 'video' | 'video_note' | 'audio' | 'document'; mime: stri
   { field: 'document', mime: 'application/octet-stream', stem: 'file', ext: '' },
 ];
 
-const PAIRED = 'Paired. Anything you send here goes into your mindstorm: a thought, a link, a photo, a video, a file or a voice note. Add “start a tree on this” to grow a tree. “List my trees” names them and “hand off <a tree>” sends its handoff: one file to share with any agent. /handoff sends the latest again.';
-const UNPAIRED = 'Unpaired. Nothing you send here is heard until you pair again on the web page.';
+const PAIRED = 'We’re paired. I’m Momo, the voice of your Mind Palace. Tell me anything: a thought, a link, a photo, a video, a file or a voice note. I’ll keep it or talk it over, whichever fits, and I’ll always say what I kept. Add “start a tree on this” and I’ll grow a tree. “List my trees” names them and “hand off <a tree>” sends its handoff: one file to share with any agent. /handoff sends the latest again.';
+const UNPAIRED = 'Okay, we’re unpaired. I won’t hear anything here until you pair me again on the web page.';
+/** The one line a chat that is not the owner's gets. */
+const STRANGER = 'Hi, I’m Momo, the voice of a Mind Palace. I only talk with the person this palace belongs to. If that’s you, pair me on the Mind Palace web page: Settings, then Pair under Telegram.';
+/** Replies one unpaired chat gets in ten minutes, so the bot cannot be made to send without end. */
+export const STRANGER_REPLIES = 6;
 const FOR_AGENT = 'For your agent: this file is a Mind Palace handoff. It holds the goal, the outline, what to do next and the open questions, with each picture described in words. Read it and continue the work.';
 
 class BotError extends Error {
@@ -268,7 +272,7 @@ export class Bot implements Wire {
 
 /**
  * Mind Palace as its owner's Telegram contact, on their Mac. Only the account paired from the web page is heard; anyone else gets
- * no reply at all.
+ * one fixed line that says so.
  */
 export class Telegram implements Channel {
   private readonly now: () => number;
@@ -276,6 +280,7 @@ export class Telegram implements Channel {
   private readonly bot: Bot;
   private readonly talk: Talk;
   private code: { value: string; expires: number } | null = null;
+  private readonly strangers = new Map<number, number[]>();
 
   constructor(private readonly opts: TelegramOptions) {
     this.now = opts.now ?? Date.now;
@@ -327,7 +332,11 @@ export class Telegram implements Channel {
     const arrival = read(message);
     if (arrival.kind === 'start' && this.redeem(arrival.code, message)) return this.bot.say(message.chat.id, PAIRED);
     const paired = this.kept.value.paired;
-    if (!paired || message.from?.id !== paired.userId || message.chat.id !== paired.chatId) return;
+    if (!paired || message.from?.id !== paired.userId || message.chat.id !== paired.chatId) {
+      // A stranger costs no model call: one fixed line, in a private chat only, a few times in ten minutes.
+      if (message.chat.type === 'private' && allowed(this.strangers, message.chat.id, STRANGER_REPLIES, this.now())) await this.bot.say(message.chat.id, STRANGER);
+      return;
+    }
     if (arrival.kind === 'unpair') {
       this.unpair();
       return this.bot.say(message.chat.id, UNPAIRED);
@@ -343,6 +352,25 @@ export class Telegram implements Channel {
     this.kept.patch({ paired: { userId: message.from.id, chatId: message.chat.id, name: nameOf(message.from) } });
     return true;
   }
+}
+
+const WINDOW_MS = 10 * 60 * 1000;
+/** Chats counted at once. Past this, counts that have run out are cleared; if none have, a new chat is not counted and gets no reply. */
+const MAX_COUNTED = 2000;
+
+/**
+ * Counts one more for the chat now, and says whether it is still within `most` in the last ten minutes. A chat's count is never
+ * dropped while it holds: with too many chats counted, a chat not yet counted is refused instead.
+ */
+export function allowed(counts: Map<number, number[]>, chat: number, most: number, now: number): boolean {
+  const recent = (counts.get(chat) ?? []).filter((at) => at > now - WINDOW_MS);
+  if (recent.length >= most) return false;
+  if (!counts.has(chat) && counts.size >= MAX_COUNTED) {
+    for (const [other, times] of counts) if (times.every((at) => at <= now - WINDOW_MS)) counts.delete(other);
+    if (counts.size >= MAX_COUNTED) return false;
+  }
+  counts.set(chat, [...recent, now]);
+  return true;
 }
 
 /** What a Telegram account is called: its names, or its username. */
