@@ -440,8 +440,11 @@ void OceanModel::drawThreads(double now, float dt) {
         Strand strand = had ? *had : Strand{rest - mid};
         ease(strand, rest - mid, dt);
         // Never so far that the thread doubles back.
-        if (length(strand.p) > 0.45f * len) strand.p = normalize(strand.p) * 0.45f * len;
-        if (length(strand.v) > 0.01f || distance(strand.p, rest - mid) > 0.002f) swinging = true;
+        bool held = length(strand.p) > 0.45f * len;
+        if (held) strand.p = normalize(strand.p) * 0.45f * len;
+        // AGENT: held back short of a rest it can't reach, it is still once it stops moving. (It swung on toward that rest
+        // for ever, and the scene never came to rest, so the shelf was never written down.)
+        if (held ? !had || distance(strand.p, had->p) > 0.0002f : length(strand.v) > 0.01f || distance(strand.p, rest - mid) > 0.002f) swinging = true;
         live.set(key, strand);
         item.thread.via = mid + strand.p;
         const Threads::Thread whole = item.thread;

@@ -1,6 +1,6 @@
 // Runs the Mac preview against the fake service on a fresh copy of a data folder (standin.mjs) and checks the rule for
 // opening a card and starting a layer, from the preview's log and from what it sends the service:
-//   1. a pinch on a card of the service's tree opens it where it stands: no layer starts, and neither a focus nor an ask
+//   1. a pinch on a card of the root's layer opens it where it stands: no layer starts, and neither a focus nor an ask
 //      reaches the service; the other cards stay where they were or step straight out from it, none is left under it,
 //      and no two cards come to overlap
 //   2. a question picked under it is a conversation about it: it is kept, leads a layer of its own, the service hears
@@ -41,7 +41,8 @@ const run = stand.launch(shots, 'layers', end, [
 ]);
 try {
   await until(run.log, /^\[agent\] connected/);
-  stand.inject({ t: 'navigate', treeId: tree.id, yours: true });
+  // To the root: a tree is gone to as it stands, which for a tree with branches is its deepest layer.
+  stand.inject({ t: 'navigate', treeId: tree.id, nodeId: root.id, yours: true });
   await run.done;
 
   // `[ocean] layers: root > [asked] | in focus: … | n on this layer in g groups, …`: the layers in line, the one stood on in brackets.
@@ -61,7 +62,10 @@ try {
 
   const open = last(opened, asked);
   check(find(run.log, /^\[agent\] opened /, opened), `1. a pinch on the suggestion opens it where it stands (${find(run.log, /^\[agent\] opened /, opened)?.line})`);
-  check(open && open.route.length === 1 && open.stands === 0, `1. and no layer starts: one layer, the root's, still stands (${open?.route.length} layers)`);
+  // (A tree with branches keeps the layers it stood on in line ahead of the root's, as any tree stepped back in does.)
+  const was = last(went?.at ?? 0, opened);
+  check(open && was && open.route.join(' > ') === was.route.join(' > ') && open.stands === 0,
+    `1. and no layer starts: the root's layer still stands, the same ${open?.route.length} in line (${was?.route.length} before)`);
   const made = room(places(run.log, 'placesAt'), places(run.log, 'placesAgainAt'));
   check(made.open && made.openMoved < 0.005, `1. the open card grows where it stood (it moved ${made.openMoved.toFixed(3)} m)`);
   check(made.open && made.others.length >= 3 && made.inward.length === 0,
