@@ -56,8 +56,10 @@ std::optional<OceanModel::Reach> OceanModel::openBox(const TreeNode* node, float
 Vec2 OceanModel::nudge(const TreeNode& n, const Tree& tree) const {
     std::optional<int> focus = tree.focus();
     const TreeNode* current = focus ? find(tree, *focus) : nullptr;
-    // AGENT: round a card opened where it stands, which leads no group, its layer makes room together (`makeRoom`).
-    if (current && !current->head && n.id != current->id) {
+    // AGENT: round a card opened where it stands, and on a tree the agent service grows, the layer makes room together. A card
+    // opened where it stands grows where it stood, stepped aside or not (`stood`); one that leads its layer stands at its place.
+    if (current && roomy(tree) && n.id == current->id) return stood(tree);
+    if (current && roomy(tree)) {
         std::optional<Tree::Place> me = tree.shown(n), it = tree.shown(*current);
         if (me && it && me->depth == it->depth) {
             std::map<int, Vec2> room = makeRoom(tree);
@@ -88,7 +90,22 @@ Vec2 OceanModel::nudge(const TreeNode& n, const Tree& tree) const {
     return move * (s.depth / Stage::focus) / Stage::gather(behind);
 }
 
-// AGENT: added for the agents' trees, where a pinch opens a card where it stands (agent::Bridge::opens).
+// AGENT: added for the agents' trees, where a pinch opens a card where it stands (agent::Bridge::opens), and a card's own cards
+// come with their own cards condensed round them (huddles), which the places on its rings were not made to hold.
+bool OceanModel::roomy(const Tree& tree) const {
+    std::optional<int> focus = tree.focus();
+    const TreeNode* current = focus ? find(tree, *focus) : nullptr;
+    return current && (!current->head || !tree.grows);
+}
+
+Vec2 OceanModel::stood(const Tree& tree) const {
+    std::optional<int> focus = tree.focus();
+    const TreeNode* current = focus ? find(tree, *focus) : nullptr;
+    if (!current || current->head) return Vec2::zero();
+    const CardRef& c = card(current->id);
+    return c ? c->nudge.target() : Vec2::zero();
+}
+
 std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree) const {
     std::map<int, Vec2> out;
     std::optional<int> focus = tree.focus();
@@ -123,9 +140,8 @@ std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree) const {
         units[at->second].members.push_back(n.id);
     }
     Reach reach = openReach(*current);
-    const Vec2 margin{0.025f, 0.035f};
-    const Box open(it->xy + reach.lo - margin, it->xy + reach.hi + margin);
-    const Vec2 middle = it->xy;
+    const Vec2 margin{0.025f, 0.035f}, middle = it->xy + stood(tree);
+    const Box open(middle + reach.lo - margin, middle + reach.hi + margin);
     const float pad = 0.012f, infinity = std::numeric_limits<float>::infinity();
     auto centre = [](const Box& b) { return (b.lo + b.hi) / 2; };
     // Straight out from the open card's middle, through `b`'s.
@@ -140,9 +156,8 @@ std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree) const {
         };
         return std::max(0.f, std::min(axis(b.lo.x, b.hi.x, o.lo.x, o.hi.x, d.x), axis(b.lo.y, b.hi.y, o.lo.y, o.hi.y, d.y))) + 0.001f;
     };
-    // Out from under the open card, straight away from it; then of two cards that touch once either has moved, the one
-    // farther from the open card goes on out past the other. Everything moves outward, so the arrangement keeps its shape
-    // round the open card, and what was not moved is left as it was.
+    // Out from under the open card, straight away from it; then of two cards that touch, the one farther from the open card
+    // goes on out past the other. Everything moves outward, so the arrangement keeps its shape round the open card.
     for (int round = 0; round < 60; round++) {
         bool moved = false;
         for (Unit& u : units) {
@@ -153,8 +168,7 @@ std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree) const {
         }
         for (size_t i = 0; i < units.size(); i++) {
             for (size_t j = i + 1; j < units.size(); j++) {
-                bool still = units[i].aside == Vec2::zero() && units[j].aside == Vec2::zero();
-                if (still || !units[i].now().hits(units[j].now(), pad)) continue;
+                if (!units[i].now().hits(units[j].now(), pad)) continue;
                 bool iFarther = distance(centre(units[i].now()), middle) >= distance(centre(units[j].now()), middle);
                 Unit& far = iFarther ? units[i] : units[j];
                 const Unit& near = iFarther ? units[j] : units[i];

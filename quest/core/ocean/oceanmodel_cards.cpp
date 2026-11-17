@@ -579,17 +579,18 @@ void OceanModel::buildRows(CardView& c) {
     c.rowsDown = std::max(0.f, -y - down);
     c.changed();
     // (The rows are part of what the cards round it keep clear of.)
-    if (tree && tree->focus() == c.id) stepAside(time);
+    if (tree && tree->focus() == c.id) stepAside(time, Pace::grow, Ease::out);
 }
 
-void OceanModel::stepAside(double now) {
+void OceanModel::stepAside(double now, float pace, Ease ease) {
     const TreeNode* current = tree && tree->focus() ? find(*tree, *tree->focus()) : nullptr;
-    if (!(current && !current->head)) return;
+    if (!(current && roomy(*tree))) return;
     const Tree& tree = *this->tree;
     for (const auto& [id, n] : tree.nodes) {
         const CardRef& c = card(id);
-        if (!c || id == current->id) continue;
-        // A condensed group moves as one, with the card it stands on, unless that is the open card.
+        if (!c) continue;
+        // A condensed group moves as one, with the card it stands on, unless that is the open card. (The open card itself
+        // goes back from wherever it had stepped aside to: `nudge` has it stay.)
         const TreeNode* mover = &n;
         while (tree.condensed(*mover) && mover->parent && *mover->parent != current->id) {
             const TreeNode* host = find(tree, *mover->parent);
@@ -597,8 +598,7 @@ void OceanModel::stepAside(double now) {
             mover = host;
         }
         Vec2 aside = style(n, tree).alpha > 0 ? nudge(*mover, tree) : Vec2::zero();
-        // As it grows, not after.
-        if (distance(c->nudge.target(), aside) > 0.004f) c->nudge.go(aside, now, Pace::grow, Ease::out);
+        if (distance(c->nudge.target(), aside) > 0.004f) c->nudge.go(aside, now, pace, ease);
     }
 }
 
@@ -918,7 +918,7 @@ void OceanModel::restyle(bool stirring) {
     focusLevel.go(float(tree.standDepth()), now, Pace::step, Ease::glide);
     float pace = moving ? Pace::step : Pace::grow;
     Ease ease = moving ? Ease::glide : Ease::out;
-    bool inPlace = current && !current->head;
+    bool together = roomy(tree);
     touch(now + double(Pace::step));
     // (In the order of their ids; a Swift dictionary has none.)
     for (const auto& [nid, n] : tree.nodes) {
@@ -969,9 +969,9 @@ void OceanModel::restyle(bool stirring) {
             c.openMix.go(look.open, now, Pace::grow, Ease::out);
         }
         setHit(c, look);
-        // A condensed group moves aside as one, with the card it stands on. (AGENT: round a card opened where it stands,
-        // every card steps aside together once its rows are built, below: `stepAside`.)
-        if (!inPlace) {
+        // A condensed group moves aside as one, with the card it stands on. (AGENT: where the layer makes room together, every
+        // card steps aside at once, once the open card's rows are built, below: `stepAside`.)
+        if (!together) {
             const TreeNode* mover = &n;
             while (tree.condensed(*mover) && mover->parent) {
                 const TreeNode* host = find(tree, *mover->parent);
@@ -1011,7 +1011,8 @@ void OceanModel::restyle(bool stirring) {
     if (focus) {
         if (CardRef c = card(*focus); c && c->openBuilt) buildRows(*c);
     }
-    stepAside(now);
+    // As the card grows, not after; with the layers, when they move.
+    stepAside(now, moving ? Pace::step : Pace::grow, moving ? Ease::glide : Ease::out);
     // The open card's video plays; nothing else does.
     std::optional<int> film;
     if (current && !pressing) {

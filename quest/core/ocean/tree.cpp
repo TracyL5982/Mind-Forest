@@ -809,6 +809,13 @@ std::vector<Box> Tree::boxes(const TreeNode& h, int top) const {
             : Box::centerSize(Vec2::zero(), catalog->smallSize(c.ref));
         out.push_back(own.moved(c.xy * s));
     }
+    // AGENT: a group of a tree the agent service grows is parted as the one box round all its cards, so no two groups' cards
+    // interleave and lay their panes over each other. (Kai's groups are few and small, and pack between each other's cards.)
+    if (!grows && out.size() > 1) {
+        Box all = out.front();
+        for (const Box& b : out) all = all.joined(b);
+        out = {all};
+    }
     return out;
 }
 

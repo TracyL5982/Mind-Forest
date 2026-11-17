@@ -34,17 +34,17 @@ export const until = async (log, pattern, after = 0, seconds = 30) => {
 };
 
 /**
- * The `[ocean] place x y half down up open g<group>[c] title` lines the preview logs when the flag `name` runs (`-placesAt`), or
- * from the line at index `from`: where each card on the layer you work on is headed, the box it takes there, m, the card
- * leading the group it shows in, and whether it shows condensed onto another card.
+ * The `[ocean] place x y half down up open g<group>[c] r<x>,<y> title` lines the preview logs when the flag `name` runs
+ * (`-placesAt`), or from the line at index `from`: where each card on the layer you work on is headed, the box it takes there,
+ * m, the card leading the group it shows in, whether it shows condensed onto another card, and where it rests.
  */
 export function places(log, name, from = log.findIndex((l) => l.line === `[ocean] -${name} runs`)) {
   const out = [];
   for (let i = from + 1; from >= 0 && i < log.length; i++) {
-    const m = /^\[ocean\] place (\S+) (\S+) (\S+) (\S+) (\S+) (\d) g(-?\d+)(c?) (.*)$/.exec(log[i].line);
+    const m = /^\[ocean\] place (\S+) (\S+) (\S+) (\S+) (\S+) (\d) g(-?\d+)(c?) r(\S+),(\S+) (.*)$/.exec(log[i].line);
     if (!m) break;
     const [x, y, half, down, up] = m.slice(1, 6).map(Number);
-    out.push({ x, y, lo: [x - half, y - down], hi: [x + half, y + up], open: m[6] === '1', group: Number(m[7]), condensed: m[8] === 'c', title: m[9] });
+    out.push({ x, y, lo: [x - half, y - down], hi: [x + half, y + up], open: m[6] === '1', group: Number(m[7]), condensed: m[8] === 'c', rest: [Number(m[9]), Number(m[10])], title: m[11] });
   }
   return out;
 }
@@ -61,7 +61,9 @@ export function room(was, now) {
   const openThen = open && then(open);
   const others = now.filter((p) => !p.open);
   const moved = others.filter((p) => then(p) && Math.hypot(p.x - then(p).x, p.y - then(p).y) >= 0.005);
-  const inward = moved.filter((p) => open && (p.x - then(p).x) * (then(p).x - open.x) + (p.y - then(p).y) * (then(p).y - open.y) <= 0);
+  // Towards it: nearer the open card than its own resting place. (A card that had stepped aside for another reason and goes
+  // back to where it rests is not.)
+  const inward = moved.filter((p) => open && Math.hypot(p.x - open.x, p.y - open.y) < Math.hypot(p.rest[0] - open.x, p.rest[1] - open.y) - 0.005);
   const under = others.filter((p) => open && overlap(p, open));
   const crowded = [];
   for (let i = 0; i < others.length; i++) {
@@ -74,13 +76,12 @@ export function room(was, now) {
 }
 
 /**
- * How a layer stands (`places` of it), led by the card titled `lead`: how far that card is from the middle of its own group's
- * cards, as a share of their half spread; cards that overlap; and groups whose cards' boxes overlap, which puts their panes over
- * each other at one depth.
+ * How a layer stands (`places` of it) with the card that leads it open: how far that card is from the middle of its own group's
+ * cards, as a share of their half spread; cards that overlap; and groups whose panes overlap.
  */
-export function layer(placed, lead) {
+export function layer(placed) {
   const overlap = (a, b, by = 0.003) => a.lo[0] < b.hi[0] - by && b.lo[0] < a.hi[0] - by && a.lo[1] < b.hi[1] - by && b.lo[1] < a.hi[1] - by;
-  const head = placed.find((p) => p.title === lead);
+  const head = placed.find((p) => p.open);
   const box = (cards) => ({ lo: [Math.min(...cards.map((c) => c.lo[0])), Math.min(...cards.map((c) => c.lo[1]))], hi: [Math.max(...cards.map((c) => c.hi[0])), Math.max(...cards.map((c) => c.hi[1]))] });
   // Its own cards, without what is condensed onto them.
   const own = head ? placed.filter((p) => p !== head && p.group === head.group && !p.condensed) : [];
@@ -96,10 +97,31 @@ export function layer(placed, lead) {
   for (let i = 0; i < placed.length; i++) {
     for (let j = i + 1; j < placed.length; j++) if (overlap(placed[i], placed[j])) crowded.push(`"${placed[i].title}" / "${placed[j].title}"`);
   }
-  const groups = [...new Set(placed.map((p) => p.group))].map((g) => ({ g, ...box(placed.filter((p) => p.group === g)) }));
+  // A group's pane is the hull of its cards' corners with a margin all round (`PaneMesh::outline`, 9 cm): two panes overlap
+  // when the hulls of their cards, each that much larger, meet.
+  const pad = 0.09;
+  const hull = (cards) => {
+    const pts = cards.flatMap((c) => [[c.lo[0] - pad, c.lo[1] - pad], [c.hi[0] + pad, c.lo[1] - pad], [c.hi[0] + pad, c.hi[1] + pad], [c.lo[0] - pad, c.hi[1] + pad]]);
+    pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const turn = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const half = (list) => list.reduce((h, p) => {
+      while (h.length > 1 && turn(h[h.length - 2], h[h.length - 1], p) <= 0) h.pop();
+      return [...h, p];
+    }, []);
+    const lower = half(pts), upper = half([...pts].reverse());
+    return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+  };
+  // Two convex outlines meet unless some edge of one has the other wholly outside it.
+  const meet = (a, b) => ![a, b].some((poly) => poly.some((p, k) => {
+    const q = poly[(k + 1) % poly.length], n = [q[1] - p[1], p[0] - q[0]];
+    const side = (pts) => pts.map((r) => (r[0] - p[0]) * n[0] + (r[1] - p[1]) * n[1]);
+    const mine = side(poly), theirs = side(poly === a ? b : a);
+    return Math.max(...theirs) < Math.min(...mine) - 1e-6 || Math.min(...theirs) > Math.max(...mine) + 1e-6;
+  }));
+  const groups = [...new Set(placed.map((p) => p.group))].map((g) => ({ g, outline: hull(placed.filter((p) => p.group === g)) }));
   const panes = [];
   for (let i = 0; i < groups.length; i++) {
-    for (let j = i + 1; j < groups.length; j++) if (overlap(groups[i], groups[j], 0)) panes.push(`${groups[i].g} / ${groups[j].g}`);
+    for (let j = i + 1; j < groups.length; j++) if (meet(groups[i].outline, groups[j].outline)) panes.push(`${groups[i].g} / ${groups[j].g}`);
   }
   return { head, own, off, crowded, groups: groups.length, panes };
 }
