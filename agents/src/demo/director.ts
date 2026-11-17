@@ -98,6 +98,12 @@ The user is recording a walkthrough of one tree, and each thing they say is a ta
 - With no such line, everything is as above.
 - A round here lands many cards at once. At [More cards landed] with more than two cards, never say their titles one after another: say how many came and name the one you like best, in one short line.`;
 
+/**
+ * The pace takes are loaded at before one is chosen on the page, and so the pace a line said in the headset starts then. One of
+ * the choices that are the user's to make.
+ */
+export const SPOKEN_FIRST: Mode = 'fast';
+
 /** What a set-up round is recorded as: never the user's doing, so an undo does not take one back. */
 const DEMO: Origin = { by: 'user', role: 'demo' };
 /** What the page is told when the app is left showing a tree that is gone. */
@@ -177,7 +183,7 @@ export class Director {
   private rolling: Rolling | null = null;
   private cursor: { round: string; ms: number } | null = null;
   /** The pace takes are loaded at: the one last chosen on the page. A line said in the headset starts a take at it. */
-  private mode: Mode = 'fast';
+  private mode: Mode = SPOKEN_FIRST;
   /** The take the Scout is about to be asked for, from the page: its round, and the moment it starts from. */
   private pending: { phase: string; from: number } | null = null;
   /** The labels held up at a moment the take is paused on, each ended by calling it. */

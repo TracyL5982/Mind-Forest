@@ -19,6 +19,23 @@ import type { Drop, Schedule, Step } from './take.ts';
  * - The Renderer lays a found card out at once, and takes 5 to 23 over a written one.
  */
 
+/**
+ * Three choices that are the user's to make, each kept as one switch.
+ *
+ * `PICTURES`: how a round's made pictures come when it has more than one. A real run made one picture, so three were never
+ * measured. `beside`: all are begun as the directions end, a few seconds apart, and the last lands near 60 s. `after`: each is
+ * begun when the one before it lands, and the last of three lands near 100 s.
+ */
+export const PICTURES: 'beside' | 'after' = 'beside';
+/**
+ * `SMALL_ROUNDS_FULL`: whether a round that brings three cards or fewer still runs the span of a real run, about 25 s of thinking
+ * with searches that bring nothing, as a real round does whatever it brings. Off, such a round ends a few seconds after its
+ * last card, with one wave of searches.
+ */
+export const SMALL_ROUNDS_FULL = true;
+/** A round with this many cards or fewer is a small one. */
+export const SMALL_ROUND = 3;
+
 /** The sources the service has, as its labels name them. */
 const SOURCES = ['museum collections', 'Wikimedia Commons', 'Europeana', 'research papers', 'books', 'Internet Archive', 'Unsplash', 'Are.na', 'film and television', 'the web'] as const;
 /** The sources whose results are pictures, fetched before they are read. */
@@ -51,8 +68,8 @@ export function sourceOf(card: ScriptCard): string {
 
 /** Two to four words a search for these words would be made with, as the Scout writes its own. */
 export function queryOf(text: string, most = 3): string {
-  const words = text.replace(/[’']s\b/g, '').replace(/[^\p{L}\p{N}\s-]+/gu, ' ').split(/\s+/).filter((word) => word.length > 2 && !STOP.has(word.toLowerCase()));
-  return words.slice(0, most).join(' ') || 'ideas';
+  const words = text.replace(/^\s*hey momo,?\s*/i, '').replace(/[’']s\b/g, '').replace(/[^\p{L}\p{N}\s-]+/gu, ' ').split(/\s+/).filter((word) => word.length > 2 && !STOP.has(word.toLowerCase()));
+  return words.slice(0, most).join(' ').toLowerCase() || 'ideas';
 }
 
 const short = (label: string) => label.split(' ').slice(0, 7).join(' ');
@@ -124,9 +141,10 @@ export function realSchedule(phase: ScriptPhase, under: string): Schedule {
   }
 
   // The Scout thinks of directions throughout, and what it writes itself lands out of that thinking.
-  const thought = began + between(19, 36, 1.3);
+  const full = SMALL_ROUNDS_FULL || phase.cards.length > SMALL_ROUND;
+  const thought = began + (full ? between(19, 36, 1.3) : between(7, 11));
   steps.push({ label: short(`Thinking of directions for ${under}`), at: began, end: thought });
-  let wrote = began + between(10, 22, 1.2);
+  let wrote = began + (full ? between(10, 22, 1.2) : between(4, 6));
   for (const card of written) {
     drops.push({ at: Math.min(wrote, thought - 400), cards: [card.id] });
     wrote += between(1.2, 5.5, 2);
@@ -134,8 +152,8 @@ export function realSchedule(phase: ScriptPhase, under: string): Schedule {
 
   // The second wave: the deliveries the first did not bring, each from a search of its own, with one or two that bring nothing.
   const later = deliveries.filter((d) => !first.includes(d));
-  const again = later.length + 1 + Math.floor(rnd() * 2);
-  let from = Math.max(chosen + 9000, Math.min(thought - 9000, began + between(15, 24)));
+  const again = full ? later.length + 1 + Math.floor(rnd() * 2) : later.length;
+  let from = full ? Math.max(chosen + 9000, Math.min(thought - 9000, began + between(15, 24))) : chosen + between(3, 5);
   let lastRead = 0;
   for (let n = 0; n < again; n++) {
     const delivery = later[n];
@@ -156,7 +174,7 @@ export function realSchedule(phase: ScriptPhase, under: string): Schedule {
     const made = making + between(22, 26);
     labels.push({ label: short(`Making a picture of ${card.title}`), at: making, end: made });
     drops.push({ at: made, cards: [card.id] });
-    making += between(3, 5);
+    making = PICTURES === 'beside' ? making + between(3, 5) : made + between(0.2, 1);
   }
   steps.push(...labels);
 
