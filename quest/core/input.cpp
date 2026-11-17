@@ -153,6 +153,8 @@ Input::Input(PalaceScene* scene) : scene(scene) {
         white.opacity = 0.9f;
         white.writesDepth = false;
         white.cull = false;
+        // The pointer shows over Momo (the user's choice, 2026-11-17), still behind what stands in front of it.
+        white.overOnTop = true;
         h.dot = Entity::make(disc(1, 24), {white});
         h.dot->isEnabled = false;
         overlay->addChild(h.dot);
@@ -169,7 +171,9 @@ Input::Input(PalaceScene* scene) : scene(scene) {
             const uint32_t quad[6] = {0, 1, 2, 1, 3, 2};
             for (int i = 0; i < 6; i++) idx[i] = quad[i];
         });
-        h.ray = Entity::make(h.rayMesh, {Material::line()});
+        Material line = Material::line();
+        line.overOnTop = true;
+        h.ray = Entity::make(h.rayMesh, {line});
         h.ray->isEnabled = false;
         overlay->addChild(h.ray);
     }
