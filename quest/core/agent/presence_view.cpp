@@ -31,6 +31,12 @@ constexpr float apart = 0.008f;         // m between the words' bars and what is
 constexpr float behind = 0.002f;        // m the bars stand behind their words
 constexpr float reach = 0.07f;          // s, about, a bar takes to reach its words' new length
 constexpr float feather = 0.0007f;      // m: Momo's edges soften over about one of the headset's pixels at its distance
+// An agent's line (the user, 2026-11-17: "the agent indicator flicker a lot and there is a flash of that agent state block
+// whenever there is an update of agent status, make the transition smoother, no flash, no flicker"): its bar and its
+// words come, change and go together, quickly and quietly.
+constexpr float agentAppear = 0.07f;    // s, about: a line fades in once its words are drawn, its bar with them (95% by 0.2 s)
+constexpr float agentRise = 0.35f;      // of an agent's line: how far below its place it rises from as it fades in
+constexpr float agentCrossFade = 0.18f; // s new words take to cross-fade over the old
 
 const Color userInk = Color::hex(0xECEBE6);     // the web client's ink
 const Color momoInk = Color::hex(0xF2C27A);     // and its amber, the agent's colour
@@ -325,7 +331,7 @@ EntityRef PresenceView::picture(const std::string& text, Speaker who, size_t nam
     return Entity::make(Mesh::generatePlane(piece->size.x, piece->size.y), {m});
 }
 
-void PresenceView::write(const std::string& text, Speaker who, size_t name, float y, float opacity, Words& w) {
+float PresenceView::write(const std::string& text, Speaker who, size_t name, float y, float opacity, Words& w, float crossFade, float dt) {
     if (text != w.comingText && w.coming) {
         w.coming->removeFromParent();
         w.coming = nullptr;
@@ -341,7 +347,15 @@ void PresenceView::write(const std::string& text, Speaker who, size_t name, floa
         // Laid over the old picture only once its pixels are there: before then the renderer would show a placeholder.
         if (drawn && !w.coming->parent) group->addChild(w.coming);
         if (w.coming->parent && t->gl != 0 && t->fadeFrom == 0) {
-            if (w.shown) w.shown->removeFromParent();
+            if (w.leaving) w.leaving->removeFromParent();
+            w.leaving = nullptr;
+            if (w.shown && crossFade > 0) {
+                w.leaving = w.shown;
+                w.leavingWidth = w.width;
+                w.mix = 0;
+            } else if (w.shown) {
+                w.shown->removeFromParent();
+            }
             w.shown = w.coming;
             w.text = w.comingText;
             w.width = w.comingWidth;
@@ -356,9 +370,20 @@ void PresenceView::write(const std::string& text, Speaker who, size_t name, floa
         e->position = {left + width / 2 - pad / Art::ppm, y, 0};
         e->opacity = o;
     };
-    if (w.shown) lay(w.shown, w.width, o);
-    // The new picture shows as the old one does; with nothing under it yet, it is drawn just enough to be sent to the GPU.
-    if (w.coming && w.coming->parent) lay(w.coming, w.comingWidth, w.shown ? o : 0.004f);
+    if (w.leaving) {
+        w.mix = std::min(1.f, w.mix + dt / std::max(crossFade, 1e-3f));
+        if (w.mix >= 1) {
+            w.leaving->removeFromParent();
+            w.leaving = nullptr;
+        }
+    }
+    float in = w.leaving ? smooth(w.mix) : 1;
+    if (w.shown) lay(w.shown, w.width, o * in);
+    if (w.leaving) lay(w.leaving, w.leavingWidth, o * (1 - in));
+    // The new picture shows as the old one does, or (cross-fading) hardly at all until its turn; with nothing under it
+    // yet, it is drawn just enough to be sent to the GPU.
+    if (w.coming && w.coming->parent) lay(w.coming, w.comingWidth, w.shown && crossFade <= 0 ? o : 0.004f);
+    return o;
 }
 
 void PresenceView::frame(const Presence& presence, const std::string& name, const Mat4& head, double now) {
@@ -381,6 +406,7 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
                                      if (wanted(w.key)) return false;
                                      if (w.shown) w.shown->removeFromParent();
                                      if (w.coming) w.coming->removeFromParent();
+                                     if (w.leaving) w.leaving->removeFromParent();
                                      return true;
                                  }),
                   all.end());
@@ -397,7 +423,8 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
     auto back = [&](Words& w, float wide, float y, float tall, float there) {
         if (w.bar < 0) w.bar = wide;
         else ease(w.bar, wide, reach, dt);
-        float shown = w.shown ? w.width - 2 * pad / Art::ppm : 0;
+        // Never shorter than the words on it, the old ones too while they fade.
+        float shown = std::max(w.shown ? w.width : 0, w.leaving ? w.leavingWidth : 0) - (w.shown || w.leaving ? 2 * pad / Art::ppm : 0);
         bars.push_back(Bar{edge, edge + std::max(w.bar, shown) + 2 * inset, y - tall / 2, y + tall / 2, there});
     };
     for (const Caption::Line& line : caption.lines()) {
@@ -419,13 +446,39 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
     auto keyOf = [](const std::string& role) { return int(std::hash<std::string>{}(role) & 0x7FFFFFFF); };
     for (const Roster::Line& line : roster.lines()) {
         Words& w = wordsFor(agents, keyOf(line.role));
-        if (w.shown) ease(w.appear, 1, 0.08f, dt);
-        write(line.text, Speaker::agent, line.name, agentsFrom + line.y * small, line.opacity, w);
-        back(w, line.width, agentsFrom + line.y * small, small, line.opacity);
+        // It shows only once its words are drawn: then its words and its bar fade in together, on one curve, as it
+        // rises the last little way into its place; new words cross-fade over the old on a bar that stays.
+        if (w.shown) ease(w.appear, 1, agentAppear, dt);
+        float y = agentsFrom + (line.y - agentRise * (1 - w.appear)) * small;
+        float solid = write(line.text, Speaker::agent, line.name, y, line.opacity, w, agentCrossFade, dt);
+        back(w, line.width, y, small, solid);
     }
     keep(agents, [&](int key) {
         return std::any_of(roster.lines().begin(), roster.lines().end(), [&](const Roster::Line& l) { return keyOf(l.role) == key; });
     });
+
+    // `-presenceLog`: each frame, each agent's line as it is drawn: how solid its bar is, how solid its words, and whether
+    // its new words are waiting for their picture or showing over the old, to measure how it changes.
+    static const bool logged = Flags::has("presenceLog");
+    if (logged && !roster.lines().empty()) {
+        std::string out = fmt("[presence] t %.3f", now);
+        for (const Roster::Line& line : roster.lines()) {
+            const Words* w = nullptr;
+            for (const Words& x : agents) {
+                if (x.key == keyOf(line.role)) w = &x;
+            }
+            if (!w) continue;
+            // (Each agent's line has the next of the bars, after the words' own.)
+            size_t at = size_t(&line - roster.lines().data()) + bars.size() - roster.lines().size();
+            float barAlpha = at < bars.size() ? bars[at].alpha : 0;
+            // `over`: the other words showing as well, the old fading out or the new laid over before their turn.
+            float words = w->shown ? w->shown->opacity.value_or(1) : 0;
+            float over = w->leaving ? w->leaving->opacity.value_or(1) : w->coming && w->coming->parent ? w->coming->opacity.value_or(1) : 0;
+            out += fmt(" | %s bar %.2f words %.2f over %.2f%s y %.2f \"%s\"", line.role.c_str(), double(barAlpha), double(words), double(over),
+                       w->coming && !w->coming->parent ? " waiting" : "", double(line.y), w->text.c_str());
+        }
+        logLine(out);
+    }
 
     draw();
 }

@@ -240,6 +240,9 @@ private:
 class Roster {
 public:
     static constexpr const char* finished = "finished working";
+    /// s new words must stand before they are shown, and s a line's words stay before they change again: steps that
+    /// come and go faster than that are passed over for the latest.
+    static constexpr float settleWords = 0.15f, holdWords = 0.4f;
 
     struct Line {
         std::string role;           // whose: a line keeps it while its words change
@@ -250,6 +253,9 @@ public:
         float opacity = 0;
         float toY = 0, toOpacity = 0, ySpeed = 0;
         AgentLine from;             // what it says, as the voice gave it
+        float since = 0;            // when it was last given words, s on the roster's own clock
+        std::optional<AgentLine> next;  // words waiting their turn (see `settleWords`)
+        float nextSince = 0;            // and since when
     };
 
     using Measure = std::function<float(const std::string&)>;
@@ -267,6 +273,7 @@ private:
     Measure measure;
     float most;
     std::vector<Line> lines_;
+    float clock = 0;
 
     void write(Line& line, const AgentLine& agent) const;
 };

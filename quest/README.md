@@ -126,7 +126,11 @@ them meanwhile. While any
 agent works, Momo wears a monocle, in fine lines round the eye on your left, and its eyes glance about, and above
 the words a small line for each agent at work says what it is doing (`Scout · Searching museum collections for dancing
 people`, Momo's own web searches as `Momo (librarian) · …`); when an agent's last step ends its line says `finished
-working` for 3 s and goes. A picture still being made keeps the Scout's line and the monocle until it lands. Nothing
+working` for 3 s and goes. A line shows once its words are drawn, its bar and words fading in together as it rises the
+last little way into place (about 0.2 s); new words wait until they have stood 0.15 s and the old have stood 0.4 s
+(steps that come and go faster are passed over for the latest), then cross-fade over the old in 0.18 s on a bar that
+stays; a line that ends fades as the others glide into its place (`-presenceLog` logs each frame of it). A picture still
+being made keeps the Scout's line and the monocle until it lands. Nothing
 else marks the agent's work: no word or light on the cards. Momo stays where it is while you look about and glides
 round once you have turned away from it; `-presenceDemo` plays every state and look on a 38 s loop with made-up words
 and agents, without the service. The first time, the headset

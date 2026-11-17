@@ -473,6 +473,7 @@ void Roster::write(Line& line, const AgentLine& agent) const {
 }
 
 void Roster::update(const std::vector<AgentLine>& agents, float dt) {
+    if (dt > 0) clock += dt;
     for (Line& l : lines_) l.toOpacity = 0;
     for (size_t i = 0; i < agents.size(); i++) {
         const AgentLine& a = agents[i];
@@ -481,12 +482,22 @@ void Roster::update(const std::vector<AgentLine>& agents, float dt) {
             Line l;
             l.role = a.role;
             write(l, a);
-            // It rises into its place as it comes.
-            l.y = float(i) - 0.45f;
+            l.since = clock;
+            // (The view has it rise the last little way into its place as its words come: presence_view.cpp.)
+            l.y = float(i);
             lines_.push_back(std::move(l));
             found = lines_.end() - 1;
-        } else if (!(found->from == a)) {
-            write(*found, a);
+        } else if (found->from == a) {
+            found->next.reset();
+        } else if (!(found->next && *found->next == a)) {
+            // New words for a line wait until they have stood a moment, and until the line's words have stood a while.
+            found->next = a;
+            found->nextSince = clock;
+        }
+        if (found->next && clock - found->nextSince >= settleWords && clock - found->since >= holdWords) {
+            write(*found, *found->next);
+            found->since = clock;
+            found->next.reset();
         }
         found->toY = float(i);
         found->toOpacity = 1;
@@ -495,7 +506,7 @@ void Roster::update(const std::vector<AgentLine>& agents, float dt) {
     for (Line& l : lines_) {
         l.y = damp(l.y, l.toY, l.ySpeed, 0.2f, 20, dt);
         // A line that goes, goes quickly, so the lines above can take its place without the two standing together.
-        ease(l.opacity, l.toOpacity, l.toOpacity > l.opacity ? 0.15f : 0.07f, dt);
+        ease(l.opacity, l.toOpacity, l.toOpacity > l.opacity ? 0.08f : 0.07f, dt);
     }
     std::erase_if(lines_, [](const Line& l) { return l.toOpacity == 0 && l.opacity < 0.01f; });
 }

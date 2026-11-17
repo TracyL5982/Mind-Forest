@@ -555,3 +555,23 @@ TEST(aLineThatGoesFadesAndTheLinesAboveTakeItsPlace) {
     const Roster::Line* rest = line(r, "scout");
     CHECK(rest && std::fabs(rest->y) < 0.02f && rest->opacity > 0.95f, "the Scout's line has come down into its place");
 }
+
+TEST(aLinesWordsChangeAtMostEveryHoldTheLatestWinning) {
+    Roster r = roster();
+    auto step = [](const char* words) { return AgentLine{"scout", "Scout", words, false}; };
+    run(r, {step("Looking into dancing people")}, 1);
+    run(r, {step("Searching museum collections")}, 0.1f);
+    const Roster::Line* l = line(r, "scout");
+    CHECK(l && l->text == "Scout · Looking into dancing people", "new words wait a moment, in case more come: \"%s\"", l ? l->text.c_str() : "");
+    run(r, {step("Searching museum collections")}, 0.1f);
+    l = line(r, "scout");
+    CHECK(l && l->text == "Scout · Searching museum collections", "then show: \"%s\"", l ? l->text.c_str() : "");
+    run(r, {step("Making a picture")}, 0.1f);
+    run(r, {step("Laying out 2 cards")}, 0.1f);
+    l = line(r, "scout");
+    CHECK(l && l->text == "Scout · Searching museum collections", "two more steps within 0.4 s: the words stay: \"%s\"", l ? l->text.c_str() : "");
+    run(r, {step("Laying out 2 cards")}, 0.3f);
+    l = line(r, "scout");
+    CHECK(l && l->text == "Scout · Laying out 2 cards", "then the latest, the step between passed over: \"%s\"", l ? l->text.c_str() : "");
+    CHECK(l && l->opacity > 0.99f, "and the line never fades as its words change");
+}
