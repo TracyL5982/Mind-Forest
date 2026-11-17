@@ -16,8 +16,9 @@
 // With --demo as well, the stand-in runs the walkthrough demo on the data folder (which should hold its tree), so the tree
 // reaches the preview the other way: the demo sets it up again round by round for the preview as it joins, each round's card
 // opened where it stands before its cards arrive round it. The walk waits for that and then checks every layer as above.
-// Then a second preview, set up the same way, is taken to the tree's first card and to the card of its last round, and on
-// each layer, once it has settled, everything drawn is looked at along the eye's sight lines (`-depthAuditEvery`): no two
+// Then a second preview, set up the same way, is taken to a card at every layer depth of each tree, and on each layer, once
+// it has settled, everything drawn (that layer and every layer in line behind it) is looked at along the eye's sight lines
+// (`-depthAuditEvery`): no two
 // surfaces of different things, one of them writing depth, may lie within 0.05 mm of each other, where the headset's depth
 // buffer could not keep them apart. Every pair within 2 mm is printed. (The pieces of one card are stacked 0.3 mm and more
 // apart on purpose; they are reported, not held to it.)
@@ -109,21 +110,33 @@ try {
     await until(run.log, /^\[agent\] connected/);
     await ready;
     await read();
-    const walkthrough = trees.find((t) => /headset/.test(t.title)) ?? trees[0];
-    const own = before.nodes.filter((n) => n.treeId === walkthrough.id);
-    // The last round's cards are the newest; the card they hang from is where the walkthrough ends.
-    const last = own.filter((n) => n.parent).at(-1);
-    for (const [where, node] of [['its first card', own.find((n) => !n.parent)], ['the card of its last round', own.find((n) => n.id === last.parent)]]) {
-      stand.inject({ t: 'navigate', treeId: walkthrough.id, nodeId: node.id, yours: true });
-      const went = await until(run.log, new RegExp(`^\\[agent\\] went to .*\\(${escape(node.id)}\\)`), run.at() - 0.5, 20);
-      // The first look that starts once the layer has settled (2.5 s), to its end.
-      const start = went && (await until(run.log, /^\[ocean\] depth: of /, went.at + 2.5, 20));
-      const done = start && (await until(run.log, /^\[ocean\] depth: done$/, start.at, 20));
-      const said = start && done ? run.log.slice(run.log.indexOf(start), run.log.indexOf(done) + 1).map((l) => l.line) : [];
-      const near = said.map((l) => /^\[ocean\] depth: (.*): (\d+) sight lines, closest ([\d.]+) mm$/.exec(l)).filter(Boolean).filter((m) => m[1] !== 'within one card' && Number(m[3]) < FIGHT_MM);
-      for (const l of said) console.log(`     ${l}`);
-      check(said.length > 0 && near.length === 0, `"${walkthrough.title}", ${where}: nothing drawn within ${FIGHT_MM} mm of anything else along the eye's sight (${near.map((m) => `${m[1]} at ${m[3]} mm`).join('; ') || 'none'})`);
+    // Every layer depth of every tree: the card with the most cards under it, of those at each depth, gone to, so its layer
+    // stands with every layer in line behind it.
+    let smallest = { mm: Infinity, what: 'nothing' };
+    for (const tree of trees) {
+      const depth = (n) => (n.parent ? 1 + depth(before.nodes.find((p) => p.id === n.parent)) : 0);
+      const under = (n) => before.nodes.filter((c) => c.parent === n.id).length;
+      const byDepth = new Map();
+      for (const n of before.nodes.filter((x) => x.treeId === tree.id && under(x) > 0)) {
+        const d = depth(n);
+        if (!byDepth.has(d) || under(n) > under(byDepth.get(d))) byDepth.set(d, n);
+      }
+      for (const [d, node] of [...byDepth.entries()].sort((a, b) => a[0] - b[0])) {
+        stand.inject({ t: 'navigate', treeId: tree.id, nodeId: node.id, yours: true });
+        const went = await until(run.log, new RegExp(`^\\[agent\\] went to .*\\(${escape(node.id)}\\)`), run.at() - 0.5, 20);
+        // The first look that starts once the layer has settled (2.5 s), to its end.
+        const start = went && (await until(run.log, /^\[ocean\] depth: of /, went.at + 2.5, 20));
+        const done = start && (await until(run.log, /^\[ocean\] depth: done$/, start.at, 20));
+        const said = start && done ? run.log.slice(run.log.indexOf(start), run.log.indexOf(done) + 1).map((l) => l.line) : [];
+        const pairs = said.map((l) => /^\[ocean\] depth: (.*): (\d+) sight lines, closest ([\d.]+) mm$/.exec(l)).filter(Boolean).filter((m) => m[1] !== 'within one card');
+        const near = pairs.filter((m) => Number(m[3]) < FIGHT_MM);
+        for (const m of pairs) if (Number(m[3]) < smallest.mm) smallest = { mm: Number(m[3]), what: `${m[1]}, on the layer of "${items.get(node.itemId).title}" in "${tree.title}"` };
+        const nearest = pairs.reduce((a, m) => Math.min(a, Number(m[3])), Infinity);
+        check(said.length > 0 && near.length === 0,
+          `"${tree.title}", layer ${d} ("${items.get(node.itemId).title}"): nothing within ${FIGHT_MM} mm of anything else; nearest ${Number.isFinite(nearest) ? `${nearest} mm` : 'over 2 mm'} (${near.map((m) => `${m[1]} at ${m[3]} mm`).join('; ') || 'clear'})`);
+      }
     }
+    console.log(`smallest gap between two different things drawn: ${smallest.mm} mm (${smallest.what})`);
     writeFileSync(join(shots, 'log-depth.txt'), run.log.map((l) => `${l.at.toFixed(2).padStart(7)} ${l.line}`).join('\n'));
   }
   for (const tree of process.argv.includes('--walk') ? [] : trees) {

@@ -1158,9 +1158,12 @@ private:
     /// How far aside (on its own sheet) a card must move so it doesn't sit
     /// under the open card, or behind it. (`nudge(for:in:)`)
     Vec2 nudge(const TreeNode& n, const Tree& tree) const;
-    /// AGENT: round the open card, how far each card on its layer moves aside, by node id: what lies under the open card goes
-    /// straight out from it, and of two cards that touch, the one farther out goes on past the other.
-    std::map<int, Vec2> makeRoom(const Tree& tree) const;
+    /// AGENT: how far each card on the layer at `depth` moves aside, by node id, on the open card's layer or one behind it in
+    /// line: what lies under the open card (or, behind, the card the path left the layer by) goes straight out from it, and of
+    /// two cards that touch, the one farther out goes on past the other.
+    std::map<int, Vec2> makeRoom(const Tree& tree, int depth) const;
+    /// How far a card of a layer behind moves out from behind the open card (Kai's step aside), in its own layer's measure.
+    Vec2 outFromBehind(const TreeNode& n, const Tree& tree) const;
     /// AGENT: whether the layer of the open card makes room together round it (`makeRoom`): round a card opened where it stands,
     /// and on any tree the agent service grows.
     bool roomy(const Tree& tree) const;

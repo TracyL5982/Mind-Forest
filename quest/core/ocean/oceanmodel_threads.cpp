@@ -60,9 +60,11 @@ Vec2 OceanModel::nudge(const TreeNode& n, const Tree& tree) const {
     // opened where it stands grows where it stood, stepped aside or not (`stood`); one that leads its layer stands at its place.
     if (current && roomy(tree) && n.id == current->id) return stood(tree);
     if (current && roomy(tree)) {
+        // So does every layer in line behind it, round the card the path left it by: a layer that stops making room as you
+        // go on from it would lay its cards over each other again.
         std::optional<Tree::Place> me = tree.shown(n), it = tree.shown(*current);
-        if (me && it && me->depth == it->depth) {
-            std::map<int, Vec2> room = makeRoom(tree);
+        if (me && it && me->depth <= it->depth) {
+            std::map<int, Vec2> room = makeRoom(tree, me->depth);
             auto aside = room.find(n.id);
             return aside != room.end() ? aside->second : Vec2::zero();
         }
@@ -80,8 +82,15 @@ Vec2 OceanModel::nudge(const TreeNode& n, const Tree& tree) const {
         Vec2 margin{0.025f, 0.035f};
         return clear(me->xy, it->xy + reach.lo - room.hi - margin, it->xy + reach.hi - room.lo + margin);
     }
-    // An earlier layer: the path's own card keeps its place; the rest move out from behind.
-    if (n.head && routeIndex(tree, n.id) >= 0) return Vec2::zero();
+    return outFromBehind(n, tree);
+}
+
+/// An earlier layer: the path's own card keeps its place; the rest move out from behind the open card.
+Vec2 OceanModel::outFromBehind(const TreeNode& n, const Tree& tree) const {
+    std::optional<int> focus = tree.focus();
+    const TreeNode* current = focus ? find(tree, *focus) : nullptr;
+    std::optional<Tree::Place> me = tree.shown(n);
+    if (!current || !me || (n.head && routeIndex(tree, n.id) >= 0)) return Vec2::zero();
     std::optional<Reach> box = openBox(current, 0.05f);
     if (!box) return Vec2::zero();
     float behind = focusLevel.target() - float(me->depth);
@@ -106,12 +115,25 @@ Vec2 OceanModel::stood(const Tree& tree) const {
     return c ? c->nudge.target() : Vec2::zero();
 }
 
-std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree) const {
+std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree, int depth) const {
     std::map<int, Vec2> out;
     std::optional<int> focus = tree.focus();
     const TreeNode* current = focus ? find(tree, *focus) : nullptr;
-    std::optional<Tree::Place> it = current ? tree.shown(*current) : std::nullopt;
-    if (!it) return out;
+    std::optional<Tree::Place> open = current ? tree.shown(*current) : std::nullopt;
+    if (!open || depth > open->depth) return out;
+    // What the layer makes room round, and keeps where it is: the open card on its own layer; on a layer behind, the card
+    // the path left it by, whose next layer hangs from it (none on a layer it does not show on).
+    const bool own = depth == open->depth;
+    const TreeNode* still = current;
+    if (!own) {
+        still = nullptr;
+        for (int id : tree.route) {
+            const TreeNode* r = find(tree, id);
+            std::optional<Tree::Place> at = r ? tree.shown(*r) : std::nullopt;
+            if (r && at && at->depth == depth && routeIndex(tree, id) >= 0) still = r;
+        }
+    }
+    std::optional<Tree::Place> it = still ? tree.shown(*still) : std::nullopt;
     // A card, or a group condensed onto one, which moves as one. What is condensed onto the open card moves on its own.
     struct Unit {
         Box rest;
@@ -123,11 +145,11 @@ std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree) const {
     std::map<int, size_t> unitOf;        // by the card the unit stands on
     for (const auto& [id, n] : tree.nodes) {
         std::optional<Tree::Place> me = tree.shown(n);
-        if (n.id == current->id || n.chip || !me || me->depth != it->depth) continue;
+        if ((still && n.id == still->id) || n.chip || !me || me->depth != depth) continue;
         Look look = style(n, tree);
         if (look.alpha <= 0) continue;
         const TreeNode* mover = &n;
-        while (tree.condensed(*mover) && mover->parent && *mover->parent != current->id) {
+        while (tree.condensed(*mover) && mover->parent && !(still && *mover->parent == still->id)) {
             const TreeNode* host = find(tree, *mover->parent);
             if (!host) break;
             mover = host;
@@ -135,16 +157,23 @@ std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree) const {
         const CardRef& c = card(n.id);
         Box b = Box::centerSize(me->xy, (c ? c->smallBody : catalog->smallSize(n.ref)) * look.scale);
         auto [at, made] = unitOf.try_emplace(mover->id, units.size());
-        if (made) units.push_back(Unit{b});
+        // On a layer behind, each starts from where it steps out from behind the open card, as on Kai's trees.
+        if (made) units.push_back(Unit{b, own ? Vec2::zero() : outFromBehind(*mover, tree)});
         else units[at->second].rest = units[at->second].rest.joined(b);
         units[at->second].members.push_back(n.id);
     }
-    Reach reach = openReach(*current);
-    const Vec2 margin{0.025f, 0.035f}, middle = it->xy + stood(tree);
-    const Box open(middle + reach.lo - margin, middle + reach.hi + margin);
+    const Vec2 margin{0.025f, 0.035f}, middle = it ? it->xy + (own ? stood(tree) : Vec2::zero()) : Vec2::zero();
+    Box keep(middle, middle);
+    if (it && own) {
+        Reach reach = openReach(*current);
+        keep = Box(middle + reach.lo - margin, middle + reach.hi + margin);
+    } else if (it) {
+        const CardRef& c = card(still->id);
+        keep = Box::centerSize(middle, (c ? c->smallBody : catalog->smallSize(still->ref)) * style(*still, tree).scale).grown(0.012f);
+    }
     const float pad = 0.012f, huddleGap = 0.075f, infinity = std::numeric_limits<float>::infinity();
     auto centre = [](const Box& b) { return (b.lo + b.hi) / 2; };
-    // Straight out from the open card's middle, through `b`'s.
+    // Straight out from the middle of what is kept, through `b`'s.
     auto outward = [&](const Box& b) {
         Vec2 d = centre(b) - middle;
         return length(d) > 1e-4f ? d / length(d) : Vec2{1, 0};
@@ -156,14 +185,14 @@ std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree) const {
         };
         return std::max(0.f, std::min(axis(b.lo.x, b.hi.x, o.lo.x, o.hi.x, d.x), axis(b.lo.y, b.hi.y, o.lo.y, o.hi.y, d.y))) + 0.001f;
     };
-    // Out from under the open card, straight away from it; then of two cards that touch, the one farther from the open card
-    // goes on out past the other. Everything moves outward, so the arrangement keeps its shape round the open card.
+    // Out from under what is kept, straight away from it; then of two cards that touch, the one farther from it goes on out
+    // past the other. Everything moves outward, so the arrangement keeps its shape round it.
     for (int round = 0; round < 60; round++) {
         bool moved = false;
         for (Unit& u : units) {
-            if (!u.now().hits(open, 0)) continue;
+            if (!it || !u.now().hits(keep, 0)) continue;
             Vec2 d = outward(u.now());
-            u.aside += d * clearAlong(u.now(), open, d);
+            u.aside += d * clearAlong(u.now(), keep, d);
             moved = true;
         }
         for (size_t i = 0; i < units.size(); i++) {

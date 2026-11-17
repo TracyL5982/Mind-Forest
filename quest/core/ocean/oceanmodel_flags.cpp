@@ -882,6 +882,7 @@ void OceanModel::depthAudit() const {
         name(c->stepHolder, "step (" + title + ")");
         name(c->badge, "badge (" + title + ")");
         name(c->markHolder, "mark (" + title + ")");
+        for (const EntityRef& g : c->glowPieces()) name(g, "glow (" + title + ")");
     }
     whose.clear();
     if (panes) name(panes->entity, "pane");
@@ -911,6 +912,8 @@ void OceanModel::depthAudit() const {
                 Surface s;
                 auto found = what.find(e.get());
                 s.label = found != what.end() ? found->second.first : (e->name.empty() ? "other" : e->name);
+                // (A card's rim of light where a look rests on it is drawn in its own material.)
+                if (m.kind == Material::Kind::hoverGlow) s.label = "rim" + (s.label.find(" (") != std::string::npos ? s.label.substr(s.label.find(" (")) : std::string());
                 s.owner = found != what.end() ? found->second.second : fmt("other %p", static_cast<const void*>(e.get()));
                 s.kind = s.label.substr(0, s.label.find(" ("));
                 s.writesDepth = m.writesDepth;
