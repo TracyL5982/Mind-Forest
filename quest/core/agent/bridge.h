@@ -57,6 +57,13 @@ public:
     /// the user would say it, so the service makes it, rooted on that piece, and it stands when it comes (`changed`).
     /// False when the service can't be reached.
     bool treeFrom(const Ref& ref);
+    /// Whether a tree is one of the service's.
+    bool serves(const Tree& tree);
+    /// One of the headset's own pieces brought into the standing tree, which is the service's: it goes to the service as a
+    /// kept card of the user's under the card in focus, as Kai's trees take one, and comes back drawn in progress until the
+    /// service chooses its look, with Momo's rows as every card of the tree. Already on the tree, it is not added again.
+    /// False when the service can't be reached, or the piece is not of the headset's library.
+    bool addPiece(const Ref& ref);
     /// Send on a service card gone into, with something marked on it: `question` ("Tell me more about these parts: …"), a
     /// conversation about the card, as a picked question is.
     void tellMore(int nodeID, const std::string& question);

@@ -355,6 +355,9 @@ private:
 /// A direct change, sent in a `commands` message and applied as one undoable set.
 class Command {
 public:
+    /// Hangs an item already in the mindstorm under `parent` as a kept card of the user's, after the siblings before
+    /// `order`. Its look is the service's to choose: it is drawn in progress (`composing`) until the Renderer's lands.
+    static Command addNode(const NodeId& id, const TreeId& treeId, const ItemId& itemId, const NodeId& parent, double order);
     /// Removes the node and everything under it.
     static Command deleteNode(const NodeId& id);
     /// Moves the node and everything under it. `treeId` moves it into another tree.

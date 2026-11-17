@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <initializer_list>
+#include <random>
 
 #include "base.h"
 #include "platform.h"
@@ -11,6 +12,32 @@
 
 namespace agent {
 namespace {
+
+/// A node made here, named as the service names its own: a random UUID.
+NodeId newNodeId() {
+    static std::mt19937_64 random{std::random_device{}()};
+    uint64_t a = random(), b = random();
+    return NodeId{fmt("%08x-%04x-4%03x-%04x-%012llx", unsigned(a >> 32), unsigned(a >> 16) & 0xffffu, unsigned(a) & 0xfffu,
+                      0x8000u | unsigned(b >> 48 & 0x3fff), static_cast<unsigned long long>(b & 0xffffffffffffULL))};
+}
+
+/// The service's item for one of the headset's own pieces, as its library import names them (agents/src/node/library.ts):
+/// `library:film:12`, `library:work:met-436535`, `library:note:…`, `library:tag:…`. None for a card of the service's own.
+std::optional<ItemId> libraryItem(const Ref& ref, const Catalog& catalog) {
+    switch (ref.kind) {
+    case Ref::Kind::film: return ItemId{"library:film:" + std::to_string(ref.index)};
+    case Ref::Kind::work: {
+        auto w = std::find_if(catalog.works.begin(), catalog.works.end(), [&](const Work& x) { return x.index == ref.index; });
+        if (w == catalog.works.end()) return std::nullopt;
+        return ItemId{"library:work:" + w->id};
+    }
+    case Ref::Kind::note:
+        if (ref.id.rfind("agent-", 0) == 0) return std::nullopt;
+        return ItemId{"library:note:" + ref.id};
+    case Ref::Kind::tag: return ItemId{"library:tag:" + ref.id};
+    }
+    return std::nullopt;
+}
 
 /// The platform's WebSocket as the client's transport.
 class PlatformTransport : public Transport {
@@ -827,6 +854,31 @@ bool Bridge::treeFrom(const Ref& ref) {
     if (!client.send(Outbound::utter(words, true, scene()))) return false;
     if (voice) voice->asked(words);
     logLine("[agent] asked for a tree about " + title);
+    return true;
+}
+
+bool Bridge::serves(const Tree& tree) { return plantedOf(tree) != nullptr; }
+
+bool Bridge::addPiece(const Ref& ref) {
+    Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
+    std::optional<ItemId> item = libraryItem(ref, *model.catalog);
+    if (!p || !item) return false;
+    std::string title = model.catalog->title(ref);
+    // Under the card in focus, as Kai's own trees take a piece brought in.
+    int at = p->service.count(p->tree->current) ? p->tree->current : p->tree->root;
+    if (!p->service.count(at)) return false;
+    NodeId parent{p->service[at]};
+    const Node* under = client.mirror().node(parent);
+    if (!under) return false;
+    for (const Node* n : client.mirror().treeNodes(under->treeId)) {
+        if (n->itemId != *item) continue;
+        logLine("[agent] " + title + " is already on \"" + p->tree->title + "\", so it is not added again");
+        return true;
+    }
+    double order = 0;
+    for (const Node* n : client.mirror().children(parent)) order = std::max(order, n->order + 1);
+    if (!client.send(Outbound::commands("Add " + title, {Command::addNode(newNodeId(), under->treeId, *item, parent, order)}))) return false;
+    logLine("[agent] added " + title + " (" + item->value + ") to \"" + p->tree->title + "\" under " + parent.value);
     return true;
 }
 

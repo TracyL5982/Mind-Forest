@@ -598,6 +598,22 @@ Dump Dump::asset(const std::string& asset, const std::string& mime, const std::o
     return Dump(std::move(j));
 }
 
+Command Command::addNode(const NodeId& id, const TreeId& treeId, const ItemId& itemId, const NodeId& parent, double order) {
+    Json view = Json::object().set("component", "note").set("props", Json::object()).set("by", "default").set("composing", true);
+    Json node = Json::object()
+                    .set("id", id.value)
+                    .set("treeId", treeId.value)
+                    .set("itemId", itemId.value)
+                    .set("parent", parent.value)
+                    .set("status", "kept")
+                    .set("why", "")
+                    .set("importance", 1)
+                    .set("origin", Json::object().set("by", "user"))
+                    .set("view", std::move(view))
+                    .set("order", order);
+    return Command(Json::object().set("type", "addNode").set("node", std::move(node)));
+}
+
 Command Command::deleteNode(const NodeId& id) { return Command(Json::object().set("type", "deleteNode").set("id", id.value)); }
 
 Command Command::moveNode(const NodeId& id, const NodeId& parent, const std::optional<TreeId>& treeId, std::optional<double> order) {
