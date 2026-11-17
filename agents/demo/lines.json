@@ -1402,6 +1402,329 @@
     "cards": [],
     "text": "I’d look at the paper first, because that “separate trees, one network” result beautifully echoes a single neuron gathering signals through many branches. If you want, we can open that one and then pull a follow-up layer, like other examples of hidden biological networks."
    }
+  ],
+  "pi": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Let’s spin that into a fresh layer on this idea."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "janus-zoom-beads"
+    ],
+    "text": "The first thing that landed is a picture card called “Two hands set the zoom.” It shows that spreading your hands pulls things nearer, and the readout says 19 percent with a chain of beads underneath."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [
+     "go-go-1996",
+     "nasa-view"
+    ],
+    "text": "I’d look at “The go-go interaction technique” first, because it directly tackles the core problem you just hit: how to extend reach without breaking the sense of control. Then we can open that card and see what interaction patterns it suggests for your VR workspace."
+   }
+  ],
+  "pd": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Nice prompt—let’s pull in another historical angle around this setup."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "austin-chironomia"
+    ],
+    "text": "First up, there’s “Chironomia” by Gilbert Austin from 1806. It maps gestures into positions on a sphere around a speaker, which is a surprisingly early way to structure movement in a kind of virtual space."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [
+     "guidonian-hand"
+    ],
+    "text": "I’d start with “Chironomia” because it feels closest to the headset idea, turning motion into a structured space. Next, we could open the other card and compare how mapping onto hands versus a sphere changes how we think about control."
+   }
+  ],
+  "bw": [
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "reference-desk"
+    ],
+    "text": "First up is an artwork called “Information desk,” showing the Public Catalog Room at the New York Public Library. It’s a lovely reference point for organized knowledge in a physical space, which is a fun contrast to your sticky-note universe."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d start with the “Information desk” card because it frames a tidy, real-world catalog system, which is a neat mirror for how you’re organizing ideas here. Next, we can add a layer that pulls in other examples of catalog-style interfaces to spark feature ideas."
+   }
+  ],
+  "bp": [
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "trade-cards"
+    ],
+    "text": "A cigarette card titled “Phalarope” from 1889, with one picture, one name, and one size. It’s a neat little snapshot format—simple and self-contained."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [
+     "otlet-mundaneum",
+     "herbarium-sheet"
+    ],
+    "text": "I’d look at “A catalogue of everything” first, because a card repertory feels like a tidy ancestor of your FigJam themes. If you want, we can go deeper into how those systems organize ideas and compare them to your VR workflow."
+   }
+  ],
+  "bi": [
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "put-that-there-1980"
+    ],
+    "text": "First up, there’s a paper called “Put-that-there” from 1980. You speak a command and point at a wall-sized screen, and your hand movement tells the system what “that” and “there” refer to. It’s this neat early blend of voice plus gesture in a single action."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d start with “Put-that-there” because it maps really cleanly to what you’re doing: voice and gesture working together like a natural interface. Next, you could either keep that card as a reference or ask for more examples of early voice-and-gesture systems to compare."
+   }
+  ],
+  "bv": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Let me check what you’ve already got saved about that."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "nipper"
+    ],
+    "text": "The first card is an artwork called “His Master’s Voice” by Francis Barraud from 1898. It shows Nipper listening, which is such a simple, iconic little moment."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d start with that “His Master’s Voice” card, because the “Nipper listens” idea is a neat metaphor for how a system takes in signals and meaning. If you want, we can spin a new layer from it, like how listening shows up in interfaces or collaboration."
+   }
+  ],
+  "bn": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Let me talk through what the card highlights, then we can zoom in if you want."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [
+     "manicule"
+    ],
+    "text": "I’d start with “Manicule” because a pointing hand in a margin is basically the original UI cue: it shows how people guided attention long before screens. If you like that angle, we can look for more examples of early annotation marks and what they meant."
+   }
+  ],
+  "bh": [
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "note-where"
+    ],
+    "text": "Nice, this one is a clean little split of responsibilities: the headset handles drawing and listening, while the Mac does the thinking and remembering. It’s a simple architecture that keeps the experience responsive without overloading the headset."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d start with “What runs where” because it gives a crisp map of responsibilities between devices, which is the backbone for everything else. If you want, we can add a new layer next that explores failure modes, like what happens when the Mac drops out or the headset loses tracking."
+   }
+  ],
+  "f15": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Okay, I’ll spin a fresh layer of ideas around that."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "mnemosyne"
+    ],
+    "text": "First up, there’s a card called “Mnemosyne,” an artwork by Dante Gabriel Rossetti from around 1876 to 1881. It’s about Memory, the mother of the nine Muses."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [
+     "ricci-portrait",
+     "yggdrasil"
+    ],
+    "text": "I’d open the “Matteo Ricci” card first, because it ties directly to the memory palace idea in a very concrete way. Then, if you want, we can keep going with more examples of visual systems for organizing thought."
+   }
+  ],
+  "n3": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Nice, let’s build a fresh layer on that idea and see what patterns we can use."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "slice-of-heartland"
+    ],
+    "text": "First up, there’s a card from your own collection: “Slice of Heartland.” It’s a film that shows a tree as 100 cross-sections, one poster for each slice. It sounds like a neat way to think about structure over time."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "waves-of-grain",
+     "tree-ct",
+     "linux-file-system",
+     "note-tree-grows",
+     "paper-peepshow",
+     "multiplane-camera"
+    ],
+    "text": "Six more landed; I’d start with “Linux file system,” since it’s a clean metaphor: one root, and everything hangs from it."
+   },
+   {
+    "id": "more-2",
+    "kind": "more",
+    "cards": [
+     "priestley-chart",
+     "darwin-tree",
+     "sea-fan"
+    ],
+    "text": "Three more arrived; I’d go for “A New Chart of History” first, because it lays time out in a single line."
+   },
+   {
+    "id": "more-3",
+    "kind": "more",
+    "cards": [
+     "gen-idea-time"
+    ],
+    "text": "One more landed: “By time,” which frames each ask as a new layer, with the latest one highlighted."
+   },
+   {
+    "id": "more-4",
+    "kind": "more",
+    "cards": [
+     "gen-idea-branches"
+    ],
+    "text": "Another one landed: “By branches,” where each question forks into its own colored path."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [
+     "gen-idea-depth"
+    ],
+    "text": "I’d start with “Linux file system” because it gives you a simple spine: one root, clear branches, and a place for everything to hang. Then we could try “By branches” or “By depth” as your main view, and keep the other metaphors as alternate lenses when you want to reorganize."
+   }
+  ],
+  "f4": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Okay, let’s spin up a new layer here and see what it brings."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "note-layers"
+    ],
+    "text": "First up, there’s your own note called “Layers and Their Relationships.” It’s a nice fit, because it keeps the focus on how layers relate to each other rather than just stacking them. I’d start there and see what it suggests about distance and structure."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "note-a2"
+    ],
+    "text": "One more landed: “Layer study A2,” the version you chose on 12 November."
+   },
+   {
+    "id": "more-2",
+    "kind": "more",
+    "cards": [
+     "sketch-minimap"
+    ],
+    "text": "Another card just arrived: “Six looks for the minimap,” showing one journey drawn six ways—rows, book, lotus, tree, territory, and metro."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [
+     "sketch-fog"
+    ],
+    "text": "I’d look at “Layers and Their Relationships” first, since it’s your own framing and it lines up with the idea of distance as structure. After that, we could open “Yours, and not yours yet” to get a quick sense of what’s solid versus suggested, then keep whatever feels like it belongs in this layer."
+   }
+  ],
+  "px": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Nice, let’s spin up a fresh layer you can actually play with."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "janus-dots-room"
+    ],
+    "text": "First up, there’s “Every film a dot round you.” It’s an earlier prototype with a few hundred films as dots on a single sphere, hanging in your own room. It’s a neat, spatial way to browse your watching universe."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "janus-three-open"
+    ],
+    "text": "There’s also “Three films opened in one lasso,” where a line around a few dots groups them, and each film opens in its own pane."
+   },
+   {
+    "id": "more-2",
+    "kind": "more",
+    "cards": [
+     "sketch-dial"
+    ],
+    "text": "And one more: “Glass easels and a dial,” a working room where one dial moves from the focused film, through its stack, to everything."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [
+     "sketch-index",
+     "sketch-pull"
+    ],
+    "text": "I’d start with “Open, fill, pull” because it sounds like the most hands-on way to feel the minimap’s flow—open something, see the context bloom, then dive. Next step, we could open that one and sketch a quick trial flow for how you’d move and select."
+   }
   ]
  }
 }
