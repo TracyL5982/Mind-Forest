@@ -556,8 +556,10 @@ test('a link or a photo is always kept, and Momo answers what is asked about it 
 
   assert.match((await tell(bot, 'https://example.com/heat-pumps is this any good?'))[0]!.text, /^Looks like a solid explainer on defrost cycles\.\n\nI’ve kept “/);
   assert.equal(items(b.run).length, 1, 'kept once, whatever Momo chose');
-  assert.match(asked[0]!.user, /\[Already kept\]\n- "/);
-  assert.match(asked[0]!.user, /Message: """\nis this any good\?\n"""$/);
+  assert.match(asked[0]!.user, /\[Sent with\]\na link, kept on its own\./, 'first, whether the words say which tree it goes in');
+  const about = asked.find((req) => /\[Already kept\]/.test(req.user))!;
+  assert.match(about.user, /\[Already kept\]\n- "/);
+  assert.match(about.user, /Message: """\nis this any good\?\n"""$/);
   assert.deepEqual(items(b.run).map((i) => [i.kind, i.source.url]), [['link', 'https://example.com/heat-pumps']], 'the link is kept as a page, and the question about it is not kept');
   await tell(bot, 'Read https://example.com/defrost, the best piece on defrost cycles.');
   assert.deepEqual(items(b.run).slice(1).map((i) => i.kind).sort(), ['link', 'text'], 'words that say something are kept beside their link');
@@ -567,7 +569,7 @@ test('a link or a photo is always kept, and Momo answers what is asked about it 
   let sent = bot.sent.length;
   bot.push(ADA, { photo: [{ file_id: 'coil', width: 800, height: 600 }], caption: 'what is this part?' });
   assert.match((await next(bot, sent, 1))[0]!.text, /^Looks like a solid explainer on defrost cycles\.\n\nI’ve kept /);
-  assert.match(asked[1]!.user, /\[Already kept\]/);
+  assert.ok(asked.slice(1).some((req) => /\[Already kept\]/.test(req.user)));
 
   const calls = asked.length;
   sent = bot.sent.length;
@@ -715,4 +717,77 @@ test('in the demo what Telegram brings while a take plays waits for the take to 
   const reply = await bot.reply(ADA.id, /^I’ve kept “Sourdough/);
   assert.equal(items(b.run).slice(count).filter((item) => /Sourdough/.test(item.title)).length, 1, 'and it is filed once the take is over');
   assert.match(reply.text, /knowledge base|went under/);
+});
+
+/** The Filer's answer for what is put in a tree: under the card titled `card` when given, or under none, so the first card. */
+function filing(model: FakeModel, card?: string): void {
+  model.on('filer', (req) => {
+    const items = [...req.user.matchAll(/^- item (\S+) /gm)].map((m) => m[1]!);
+    const node = card ? new RegExp(`^- node (\\S+) \\(depth \\d+\\) "${card}"`, 'm').exec(req.user)?.[1] ?? '' : '';
+    return { placements: items.map((itemId) => ({ itemId, parentNodeId: node, strength: node ? 0.9 : 0, why: node ? 'it is about the starter' : '' })) };
+  });
+}
+
+const kept = (run: Running, title: RegExp) => [...run.mind.nodes.values()].filter((node) => title.test(run.mind.item(node.itemId).title));
+
+test('words that name a tree put what is sent in that tree, kept, where the Filer finds it fits, and the words that asked are not kept', async () => {
+  const bot = await stand();
+  const { model } = momo((message) => (/sourdough tree/.test(message) ? { does: 'add', words: 'sourdough', keep: 'Longer cold proof opens the crumb', reply: 'Good one.' } : {}));
+  filing(model, 'Starter');
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+  grow(b.run, 'Sourdough', ['Sourdough', 'Starter', 'Baking times']);
+  const said = await tell(bot, 'add this to my sourdough tree: longer cold proof opens the crumb', 2);
+  assert.equal(said[0]!.text, 'Good one.');
+  assert.match(said[1]!.text, /^I’ve kept “.*”\. It went under “Starter” in “Sourdough”\.$/);
+  const [node] = kept(b.run, /cold proof/i);
+  assert.ok(node, 'the note is kept');
+  assert.equal(node.status, 'kept', 'kept, since they asked for it to go there');
+  assert.equal(b.run.mind.itemOf(node.parent!).title, 'Starter');
+  assert.ok(items(b.run).every((item) => !/add this to my/i.test(`${item.title} ${item.text}`)), 'the words that asked are not kept');
+});
+
+test('a photo whose caption only says which tree puts the photo there, under its first card when no card fits, and keeps no caption', async () => {
+  const bot = await stand();
+  const { model } = momo((message) => (/sourdough tree/.test(message) ? { does: 'add', words: 'sourdough', keep: '', reply: '' } : {}));
+  filing(model);
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+  grow(b.run, 'Sourdough', ['Sourdough', 'Starter']);
+  bot.file('loaf', new Uint8Array([1, 2, 3]));
+  const count = items(b.run).length;
+  bot.push(ADA, { photo: [{ file_id: 'loaf', width: 800, height: 600 }], caption: 'put this in my sourdough tree' });
+  const reply = await bot.reply(ADA.id, /^I’ve kept “photo-/);
+  assert.match(reply.text, /went under “Sourdough” in “Sourdough”\.$/);
+  const made = items(b.run).slice(count);
+  assert.deepEqual(made.map((item) => item.kind), ['image'], 'the photo alone: the caption is not a note of its own');
+});
+
+test('when the words fit several trees Momo asks which, and the pick puts it there; another message keeps it as anywhere, and none found offers all', async () => {
+  const bot = await stand();
+  const { model } = momo((message) =>
+    /sourdough tree/.test(message) ? { does: 'add', words: 'sourdough', keep: 'Rye takes longer to rise' } : /film tree/.test(message) ? { does: 'add', words: 'cinema of the 1970s', keep: 'Jaws used a mechanical shark' } : { does: 'answer', reply: 'Okay.' },
+  );
+  filing(model);
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+  grow(b.run, 'Sourdough bread', ['Sourdough bread', 'Crumb']);
+  grow(b.run, 'Sourdough starter', ['Sourdough starter', 'Feeding']);
+  const count = items(b.run).length;
+
+  const [asked] = await tell(bot, 'put this in my sourdough tree: rye takes longer to rise');
+  assert.match(asked!.text, /^Which one should it go in\?\n1\. Sourdough (bread|starter)/);
+  assert.match(asked!.text, /\nSend me its number\.$/);
+  assert.equal(items(b.run).length, count, 'nothing is kept before the pick');
+  const second = /\n2\. (Sourdough \w+)/.exec(asked!.text)![1]!;
+  const [placed] = await tell(bot, '2');
+  assert.match(placed!.text, new RegExp(`went under “${second}” in “${second}”\\.$`));
+
+  await tell(bot, 'put this in my sourdough tree: rye takes longer to rise');
+  const [first, then] = await tell(bot, 'thanks', 2);
+  assert.match(first!.text, /It is in your knowledge base, in no tree yet\.$/, 'what waited is kept as anywhere');
+  assert.equal(then!.text, 'Okay.');
+
+  const [none] = await tell(bot, 'add to my film tree: Jaws used a mechanical shark');
+  assert.match(none!.text, /^I can’t find a tree for “cinema of the 1970s”\. Which one should it go in\?\n1\. /);
 });

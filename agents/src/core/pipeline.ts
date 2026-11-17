@@ -16,6 +16,7 @@ import {
   type Scene,
   type Scope,
   type Playback,
+  type PlaceRequest,
   type Settings,
   type TreeRequest,
   type Turn,
@@ -136,14 +137,14 @@ export class Pipeline {
    * Anything dropped into the mindstorm joins the knowledge base: Intake reads it, and the Filer hangs it under a card only when it
    * plainly belongs there. A drop whose words ask for a tree ("start a tree on this", "make a tree about …") becomes one instead.
    */
-  async dump(dumps: RawDump[]): Promise<Filed> {
+  async dump(dumps: RawDump[], into?: PlaceRequest): Promise<Filed> {
     const asked = askedForTree(dumps);
     if (asked.request && asked.dumps.length === 0) return this.makeTree(asked.request.title, asked.request.title ? [] : this.dropped);
     return this.work('intake', dumps.length === 1 ? 'Reading what you dropped' : `Reading the ${dumps.length} things you dropped`, undefined, async () => {
       const items = await this.deps.roles.intake(this.ctx, asked.dumps);
       if (items.length === 0) return NOTHING;
       this.dropped = asked.request ? [] : items.map((i) => i.id);
-      return this.file(items, asked.request);
+      return this.file(items, asked.request, into);
     });
   }
 
@@ -409,12 +410,12 @@ export class Pipeline {
   // ---- content flow
 
   /** Adds what is new of `items` to the knowledge base and places them as the Filer says. A tree the user asked for gets its first round. */
-  private file(items: Item[], request?: TreeRequest): Promise<Filed> {
+  private file(items: Item[], request?: TreeRequest, into?: PlaceRequest): Promise<Filed> {
     const { mind } = this.deps;
     const named = items.length === 1 ? `"${items[0]!.title}"` : `${items.length} items`;
     const doing = items.length === 1 ? label(request ? 'Starting a tree with' : 'Finding a place for', items[0]!.title) : request ? `Starting a tree with ${items.length} things` : `Finding places for ${items.length} things`;
     return this.work('filer', doing, undefined, async () => {
-      const placing = await this.deps.roles.filer(this.ctx, items, request);
+      const placing = await this.deps.roles.filer(this.ctx, items, request, into);
       const fresh = items.filter((item) => !mind.items.has(item.id)).map((item): Command => ({ type: 'addItem', item }));
       const set = this.apply(AGENT('filer'), request ? `Start a tree with ${named}` : `Add ${named}`, admit(mind, [...fresh, ...placing], this.deps.round));
       if (!set) return NOTHING;

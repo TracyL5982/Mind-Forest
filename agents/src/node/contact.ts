@@ -38,8 +38,11 @@ export type Arrival =
 
 /** What a contact asks of the service. Each of these rejects with `Declined` when the service has a reason to tell the person. */
 export interface Desk {
-  /** What the paired person sent, read as a drop on the web page is. Resolves once Intake has filed it, with what was kept and where. */
-  dump(dumps: RawDump[]): Promise<Kept>;
+  /**
+   * What the paired person sent, read as a drop on the web page is. Resolves once Intake has filed it, with what was kept and where.
+   * `into` is the tree they asked for it to go in, with their words that named it.
+   */
+  dump(dumps: RawDump[], into?: { tree: Id; words: string }): Promise<Kept>;
   /** Momo's reading of a message: whether to answer, keep it, do both or ask, and what Momo says. */
   read(heard: Heard): Promise<Reading>;
   /** Why a file of this size cannot be kept, before it is fetched, or null when it can. */

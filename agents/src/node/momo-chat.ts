@@ -34,6 +34,8 @@ export interface Heard {
   waiting?: string;
   /** What came with this message and is kept whatever Momo decides. The words are then only answered. */
   kept?: readonly KeptThing[];
+  /** What this message's words came with, not kept yet, such as "a photo": the words may say which tree it goes in. */
+  sentWith?: string;
 }
 
 /**
@@ -43,16 +45,20 @@ export interface Heard {
  * - `both`: answers, and the question is kept with its answer.
  * - `ask`: cannot tell whether to keep it, so asks. The next message settles it.
  * - `tree`: starts a new tree about `words`.
+ * - `add`: keeps what was sent in one of the person's trees, the one `words` names (by the tree or one of its cards); `keep` is what
+ *   to keep, without the words that asked for it to go there.
  * - `list`, `find`, `handoff`, `latest`: what the message asks of the trees the person has (`tree-asks.ts`).
  */
 export const Reading = z.object({
-  does: z.enum(['answer', 'save', 'both', 'ask', 'tree', 'list', 'find', 'handoff', 'latest']),
+  does: z.enum(['answer', 'save', 'both', 'ask', 'tree', 'add', 'list', 'find', 'handoff', 'latest']),
   /** What Momo says. It never says that something was kept: the service says what was kept and where. */
   reply: z.string(),
   /** What a tree is to be about, or what names the tree asked for. */
   words: z.string(),
   /** True when this message answers Momo's question about the earlier one, so that one is what is kept or let go. */
   earlier: z.boolean(),
+  /** For `add`: what to keep, without the words that asked for it to go in a tree. */
+  keep: z.string().default(''),
 });
 export type Reading = z.infer<typeof Reading>;
 
@@ -78,6 +84,7 @@ Write in the language the user wrote. Card and tree names stay as written.
 - "both": a real question about the world that is worth keeping with its answer: how something works, why something happens, what something is. "reply" is your answer. Do not say it is saved: Mind Palace adds that line.
 - "ask": you cannot tell whether they want it kept. "reply" is one short question, such as "Want me to keep that, or were you just telling me?". Only when you are really unsure, and never when "Waiting on" is given below.
 - "tree": they ask you to start, make or grow a new tree. "words" is what it is about. "reply" is one short, lively line.
+- "add": they want what they send kept in one of their trees that is already there, and they name it, by the tree or by one of its cards ("add this to my brainstorming tree", "put this under the Warburg card"). "words" is what names that tree or card, as they wrote it. "keep" is what to keep, in their words, without the words that ask for it to go there; empty when there is nothing else, as when the message is only that and what it came with is the thing to add. "reply" is a few words of your own. Not for a new tree: that is "tree".
 - "list": they want to see their trees. "find": they want to know which tree of theirs is about something, and "words" is that something. "handoff": they want the handoff file of one tree, to export it or give it to another agent, and "words" is what names the tree. "latest": they want the last handoff sent again. For these four "reply" is empty.
 
 # Rules
@@ -86,6 +93,8 @@ Write in the language the user wrote. Card and tree names stay as written.
 - You cannot look at the web from here. For news, prices, weather or anything that changes, say so and tell what you do know.
 - When "Waiting on" is given, you asked whether to keep that earlier message. If this message answers that question, set "earlier" to true: "save" when they want it kept, "answer" with a short friendly line when they do not. If this message is about something else, read it for itself and leave "earlier" false.
 - When "Already kept" is given, what came with this message is kept whatever you choose. Choose "answer": if their words ask something, answer it from what "Already kept" says and what you know; otherwise say a few words of your own about it. Say only what "Already kept" says about a link, picture or file.
+- When "Sent with" is given, the message came with that, and it is kept on its own. If the words say which of their trees it goes in, choose "add", with "keep" holding only other words worth keeping. Otherwise read the words as ever.
+- "keep" is empty unless "add" is chosen.
 - "words" is empty unless a line above says what it holds. It never holds "tree", "handoff" or the words that asked. "earlier" is false unless the rule above sets it.`;
 }
 
@@ -124,6 +133,7 @@ export function readMessage(model: ModelClient, about: { name: string; today: st
   const parts = [about.context];
   if (heard.said.length > 0) parts.push(`[The chat so far]\n${heard.said.map((s) => `${s.who === 'user' ? 'User' : about.name}: ${clip(s.text, 500)}`).join('\n')}`);
   if (heard.waiting) parts.push(`[Waiting on]\nYou asked whether to keep this earlier message: """${clip(heard.waiting, 1000)}"""`);
+  if (heard.sentWith) parts.push(`[Sent with]\n${heard.sentWith}, kept on its own.`);
   if (heard.kept?.length) parts.push(`[Already kept]\n${heard.kept.map((k) => `- "${clip(k.title, 80)}"${k.says ? `: ${clip(k.says, 600)}` : ''}`).join('\n')}`);
   parts.push(`Message: """\n${heard.text.trim().slice(0, MAX_MESSAGE)}\n"""`);
   return model.json({ role: ROLE, system: system(about.name, about.today), user: parts.join('\n\n'), schema: Reading, quick: true });

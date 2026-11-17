@@ -349,11 +349,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   };
   const hear = opts.transcribe;
   const desk: Desk = {
-    dump: async (dumps) => {
+    dump: async (dumps, into) => {
       // In the demo a take is not interrupted: what comes in while one plays is filed once it ends.
       await director?.untilTaken();
       admit();
-      return whereItWent(mind, await fromContact.run(true, () => pipeline.dump(dumps)));
+      return whereItWent(mind, await fromContact.run(true, () => pipeline.dump(dumps, into && { treeId: into.tree, words: into.words })));
     },
     fits,
     keep: async (bytes, mime, name) => {
