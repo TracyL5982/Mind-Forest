@@ -59,6 +59,8 @@ struct Host {
     std::vector<std::shared_ptr<Player>> players;
     platform::MicrophoneEvents microphone;
     int opens = 0;
+    /// The app is in front again, until the voice is told.
+    bool resumed = false;
     /// As the Mac preview's microphone, which hears the chime; false is the headset's, which does not.
     bool hearsOwnSounds = true;
     /// The mixer's: the sounds played, by name, in order, and the level each loop was last asked for.
@@ -298,6 +300,7 @@ StreamRef playStream(int rate, std::function<void(bool)> done) {
     return player;
 }
 bool microphoneHearsOwnSounds() { return host.hearsOwnSounds; }
+bool resumed() { return std::exchange(host.resumed, false); }
 MicrophoneRef openMicrophone(MicrophoneEvents events) {
     host.opens++;
     host.microphone = std::move(events);
@@ -485,6 +488,33 @@ TEST(voiceOpensTheMicrophoneAgainAfterItFails) {
     CHECK_EQ(host.opens, 3);
     t.hear(Sound().quiet(0.5).say("command").quiet(2));
     CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(1));
+}
+
+TEST(voiceOpensTheMicrophoneAgainAsSoonAsTheAppIsInFront) {
+    Talking t(false);
+    t.hear(Sound().quiet(0.5));
+    CHECK_EQ(host.opens, 1);
+    // Started while the headset is not worn: the system will not let it record, so each try fails and the waits grow.
+    host.microphone.failed("AudioRecord did not start recording");
+    t.frame();
+    t.frame(1.1);
+    CHECK_EQ(host.opens, 2);
+    host.microphone.failed("AudioRecord did not start recording");
+    t.frame();
+    t.frame(0.5);
+    CHECK_EQ(host.opens, 2);
+    host.resumed = true;
+    t.frame(0.1);
+    CHECK_EQ(host.opens, 3);
+    t.hear(Sound().quiet(0.5).say("command").quiet(2));
+    CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(1));
+    host.resumed = true;
+    t.frame();
+    CHECK_EQ(host.opens, 3);
+    host.microphone.failed("AudioRecord stopped recording");
+    t.frame();
+    t.frame(1.1);
+    CHECK_EQ(host.opens, 4);
 }
 
 TEST(voiceStillSpeaksWhileTheMicrophoneIsDown) {

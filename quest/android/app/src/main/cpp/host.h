@@ -28,6 +28,7 @@ extern bool roomSettled;
 extern bool readRoomAsked;          // the scene asked for the room to be read again
 extern int heldTable;               // the table the scene is kept fixed to (0: none)
 extern bool recentred;              // the headset's own bearings were set anew; cleared when the scene has been told
+extern bool resumed;                // the app is in front again; cleared when the scene has been told
 /// Once a frame, with the GL context current: latches every video's newest frame.
 void tickVideos();
 }

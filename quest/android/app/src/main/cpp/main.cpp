@@ -637,6 +637,9 @@ void run() {
             if (event.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
                 state = ((XrEventDataSessionStateChanged*)&event)->state;
                 logLine(fmt("[xr] session state %d", int(state)));
+                // In front: the system lets the app use the microphone again, which it refuses an app put aside or
+                // started while the headset is not worn.
+                if (state == XR_SESSION_STATE_FOCUSED) host::resumed = true;
                 if (state == XR_SESSION_STATE_READY) {
                     XrSessionBeginInfo begin{XR_TYPE_SESSION_BEGIN_INFO};
                     begin.primaryViewConfigurationType = viewType;

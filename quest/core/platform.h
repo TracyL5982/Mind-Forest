@@ -123,6 +123,9 @@ void carryScene(const Mat4& t);
 void holdTo(int table);
 /// True once, after the user has recentred the headset (held its menu button).
 bool recentred();
+/// True once each time the app is in front again (the headset put back on, or the app brought back): what the system
+/// refused it while it was not, such as the microphone, may be asked for again.
+bool resumed();
 
 // MARK: - Video
 

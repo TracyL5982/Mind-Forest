@@ -37,6 +37,7 @@ bool roomSettled = false;
 bool readRoomAsked = false;
 int heldTable = 0;
 bool recentred = false;
+bool resumed = false;
 
 void useAssets(JNIEnv* env, jobject manager) {
     // MainActivity keeps the AssetManager for the life of the process; the global reference keeps it here too.
@@ -137,6 +138,12 @@ void holdTo(int table) { host::heldTable = table; }
 bool recentred() {
     bool was = host::recentred;
     host::recentred = false;
+    return was;
+}
+
+bool resumed() {
+    bool was = host::resumed;
+    host::resumed = false;
     return was;
 }
 
