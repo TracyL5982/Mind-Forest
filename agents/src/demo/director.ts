@@ -12,7 +12,8 @@ import type { Lines, LineShown } from './lines.ts';
 import type { Voice } from './momo-voice.ts';
 import type { DemoScript, ScriptCard, ScriptPhase } from './script.ts';
 import { inLayers, type Showcase } from './showcase.ts';
-import { momentAt, takeOf, type Take, type TimedLine } from './take.ts';
+import { layingOut } from './real-pace.ts';
+import { momentAt, takeOf, type Mode, type Take, type TimedLine } from './take.ts';
 
 /**
  * The demo: one prepared tree, grown round by round.
@@ -121,6 +122,8 @@ export interface DemoStatus {
   showcase: { on: boolean; trees: { id: string; title: string; cards: number }[] };
   /** The take the bar shows: its round, how long it is, where it is, and whether it is running. Null before any round was played or moved in. */
   take: { round: string; ms: number; at: number; playing: boolean } | null;
+  /** The pace takes are loaded at: `fast`, or `real` for the pace of a real round. */
+  mode: Mode;
   /** Lines of Momo's being recorded now, and how many lines hold the user's own words. */
   lines: { recording: number; edited: number };
 }
@@ -173,6 +176,8 @@ export class Director {
   /** The take that is running, and where the last one was left: paused, moved to, or over. */
   private rolling: Rolling | null = null;
   private cursor: { round: string; ms: number } | null = null;
+  /** The pace takes are loaded at: the one last chosen on the page. A line said in the headset starts a take at it. */
+  private mode: Mode = 'fast';
   /** The take the Scout is about to be asked for, from the page: its round, and the moment it starts from. */
   private pending: { phase: string; from: number } | null = null;
   /** The labels held up at a moment the take is paused on, each ended by calling it. */
@@ -372,6 +377,7 @@ export class Director {
         : this.cursor
           ? { round: this.cursor.round, ms: this.timeline(this.cursor.round).ms, at: Math.round(this.cursor.ms), playing: false }
           : null,
+      mode: this.mode,
       lines: { recording: this.deps.lines.busy, edited: this.deps.lines.edited },
     };
   }
@@ -386,7 +392,20 @@ export class Director {
   private timeline(round: string): Take {
     const { lines } = this.deps;
     const phase = this.phase(round);
-    return takeOf(phase, lines.of(round), (text) => lines.ms(text), this.titleOfHead(phase));
+    return takeOf(phase, lines.of(round, this.mode), (text) => lines.ms(text), this.titleOfHead(phase), this.mode);
+  }
+
+  /**
+   * Loads takes at a pace. A take that is running is ended, and the bar goes back to the start, since a moment of one pace's
+   * take is not a moment of the other's.
+   */
+  setMode(mode: Mode): void {
+    if (mode === this.mode) return;
+    if (this.rolling) this.deps.pipeline.forget();
+    this.halt();
+    this.cursor = null;
+    this.mode = mode;
+    this.deps.log(`[demo] takes are loaded at ${mode === 'real' ? 'real pace' : 'the fast pace'}`);
   }
 
   /** The lines as they are said now, as a `lines.json` to put in the repository. */
@@ -398,7 +417,7 @@ export class Director {
   shown(round: string): TakeShown {
     const { lines } = this.deps;
     const take = this.timeline(round);
-    const shown = new Map(lines.of(round).map((line): [string, LineShown] => [line.id, line]));
+    const shown = new Map(lines.of(round, this.mode).map((line): [string, LineShown] => [line.id, line]));
     return { ...take, lines: take.lines.map((line) => ({ ...line, written: shown.get(line.id)!.written, edited: shown.get(line.id)!.edited, recorded: lines.recorded(line.text), voice: lines.voice(line.text), closest: lines.closest(line.text) })) };
   }
 
@@ -408,8 +427,8 @@ export class Director {
    */
   setLine(round: string, line: string, text: string | null): TakeShown {
     this.phase(round);
-    if (!this.deps.lines.edit(round, line, text)) throw new Error(`round ${round} has no line called ${line}`);
-    for (const said of this.deps.lines.of(round)) {
+    if (!this.deps.lines.edit(round, line, text, this.mode)) throw new Error(`round ${round} has no line called ${line}`);
+    for (const said of this.deps.lines.of(round, this.mode)) {
       // Writing a line, even the same words again, has her try it afresh.
       if (said.id === line) this.deps.lines.again(said.text);
       void this.deps.lines.audio(said.text, said.kind);
@@ -670,6 +689,7 @@ export class Director {
   /** Shows the labels of one moment for as long as the take rests there. */
   private hold(take: Take, ms: number, head: Id): void {
     for (const step of momentAt(take, ms).steps) {
+      if (step.role === 'renderer') continue;
       void this.deps.pipeline.ctx.step('scout', step.label, () => new Promise<void>((end) => this.held.push(end)), { nodeId: head }).catch(() => {});
     }
   }
@@ -733,7 +753,8 @@ export class Director {
     }
 
     for (const step of take.steps) {
-      if (step.end <= from) continue;
+      // The Renderer's label is the pipeline's own, shown when a delivery lands.
+      if (step.role === 'renderer' || step.end <= from) continue;
       at(step.at, () => {
         const shown = new Promise<void>((done) => {
           ends.add(done);
@@ -877,12 +898,23 @@ export class Director {
         // The script's cards come with their looks. Anything else is the Renderer's as ever.
         const others = input.nodeIds.filter((id) => !/^(demo|show)-/.test(ctx.mind.nodes.get(id)?.itemId ?? ''));
         if (others.length === 0) {
-          await pause(Math.min(600, this.pace.step / 2));
+          await pause(this.laying(input.nodeIds));
           return [];
         }
         return real.renderer(ctx, { ...input, nodeIds: others });
       },
     };
+  }
+
+  /**
+   * How long the Renderer is shown laying these cards out. In a fast take, 0.6 s. At real pace, what the take's schedule gives
+   * the delivery: nothing to speak of for a found card, whose look is settled by rule, and seconds for one that was written.
+   */
+  private laying(nodeIds: readonly Id[]): number {
+    const rolling = this.rolling;
+    if (!rolling || this.mode !== 'real') return Math.min(600, this.pace.step / 2);
+    const cards = rolling.phase.cards.filter((card) => nodeIds.includes(this.nodes.get(card.id) ?? '')).map((card) => card.id);
+    return layingOut(rolling.take, cards) / Math.max(0.01, this.pace.rate);
   }
 
   private titleOfHead(phase: ScriptPhase): string {

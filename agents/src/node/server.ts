@@ -553,6 +553,12 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         void director.playTake(typeof round === 'string' ? round : undefined, typeof at === 'number' ? at : undefined).catch(() => {});
         return json(res, 202, director.status());
       }
+      if (req.method === 'POST' && path === '/api/demo/mode') {
+        const { mode } = await posted();
+        if (mode !== 'fast' && mode !== 'real') return json(res, 400, { error: 'a mode is "fast" or "real"' });
+        director.setMode(mode);
+        return json(res, 200, director.status());
+      }
       if (req.method === 'POST' && path === '/api/demo/pause') {
         await director.pause().catch(() => {});
         return json(res, 200, director.status());

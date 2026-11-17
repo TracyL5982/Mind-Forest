@@ -10,7 +10,7 @@
  *
  * It writes `demo/lines.json`, one recording per line in `demo/voice/`, and `demo/voice/voices.json`, which says which voice each
  * recording is in. A round that is written already is left as it is.
- * Usage: node --no-warnings --import tsx scripts/demo-lines.ts [--only r1,n2] [--again] [--check]
+ * Usage: node --no-warnings --import tsx scripts/demo-lines.ts [--mode real] [--only r1,n2] [--again] [--check]
  *   --again   writes the named rounds afresh.
  *   --check   has every recording written out again from its sound, and says where the words differ from the line.
  */
@@ -22,7 +22,7 @@ import { spokenName } from '../src/core/wake.ts';
 import { LinesFile, recordingName } from '../src/demo/lines.ts';
 import { loadScript, type ScriptPhase } from '../src/demo/script.ts';
 import { compare, record as recordLine, wavOf, type Voice, type VoiceOptions } from '../src/demo/momo-voice.ts';
-import { planLines, type Line, type LineKind } from '../src/demo/take.ts';
+import { planLines, type Line, type LineKind, type Mode } from '../src/demo/take.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { loadEnv } from '../src/node/env.ts';
@@ -36,6 +36,8 @@ const demoDir = join(root, 'demo');
 const env = loadEnv();
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(name);
+/** The pace whose takes are written: the fast ones, or with `--mode real` those at the pace of a real round. */
+const mode: Mode = args.includes('--mode') && args[args.indexOf('--mode') + 1] === 'real' ? 'real' : 'fast';
 const only = args.includes('--only') ? new Set((args[args.indexOf('--only') + 1] ?? '').split(',')) : null;
 if (!env.OPENAI_API_KEY) {
   console.error('OPENAI_API_KEY is not set: Momo cannot be asked or recorded.');
@@ -150,7 +152,9 @@ async function keep(text: string, kind: LineKind, own: Uint8Array, likely: strin
 
 const script = loadScript(join(demoDir, 'script.json'));
 const file = join(demoDir, 'lines.json');
-const lines: LinesFile = existsSync(file) ? LinesFile.parse(JSON.parse(readFileSync(file, 'utf8'))) : { version: 1, voice, rounds: {} };
+const lines: LinesFile = existsSync(file) ? LinesFile.parse(JSON.parse(readFileSync(file, 'utf8'))) : { version: 1, voice, rounds: {}, real: {} };
+/** The rounds' lines at the pace this run works on. */
+const rounds = mode === 'real' ? lines.real : lines.rounds;
 if (lines.voice !== voice) {
   console.error(`demo/lines.json was recorded in the voice "${lines.voice}", and this run would record in "${voice}". Delete it and demo/voice to change voices.`);
   process.exit(1);
@@ -160,7 +164,7 @@ if (flag('--check')) {
   // Each recording is written out again from its sound alone, and the words are compared with the line as it is written.
   const titles = new Map(script.phases.map((phase): [string, string] => [phase.id, phase.cards.map((card) => card.title).join(', ')]));
   const count = { exact: 0, close: 0, differs: 0 };
-  for (const [round, said] of Object.entries(lines.rounds)) {
+  for (const [round, said] of Object.entries(rounds)) {
     if (only && !only.has(round)) continue;
     for (const line of said) {
       const recording = join(voiceDir, recordingName(voice, line.text));
@@ -185,7 +189,7 @@ const twice = async (wav: Uint8Array, likely: string) => {
 let heardLine = '';
 if (flag('--retake')) {
   // Every line with no recording in her realtime voice is put to her again, or with --lines, the lines named.
-  for (const [round, said] of Object.entries(lines.rounds)) {
+  for (const [round, said] of Object.entries(rounds)) {
     if (only && !only.has(round)) continue;
     const likely = script.phases.find((phase) => phase.id === round)?.cards.map((card) => card.title).join(', ') ?? '';
     for (const line of said) {
@@ -237,7 +241,7 @@ async function write(phase: ScriptPhase): Promise<Line[]> {
       const kept = await keep(said.text, kind, said.pcm, likely);
       console.log(`  ${kind.padEnd(6)} ${(kept.ms / 1000).toFixed(1).padStart(5)} s  ${kept.how}: ${kept.text}`);
       return { text: kept.text, ms: kept.ms };
-    });
+    }, mode);
   } finally {
     momo.close();
   }
@@ -246,9 +250,9 @@ async function write(phase: ScriptPhase): Promise<Line[]> {
 try {
   for (const phase of script.phases) {
     if (only && !only.has(phase.id)) continue;
-    if (lines.rounds[phase.id] && !flag('--again')) continue;
+    if (rounds[phase.id] && !flag('--again')) continue;
     console.log(`${phase.id}: ${phase.title} (${phase.say ? `"${phase.say}"` : phase.ask ? `the question "${phase.ask}" picked` : 'no words'}, ${phase.cards.length} cards)`);
-    lines.rounds[phase.id] = await write(phase);
+    rounds[phase.id] = await write(phase);
     writeFileSync(file, `${JSON.stringify(lines, null, 1)}\n`);
     writeFileSync(voicesFile, `${JSON.stringify(voices, null, 1)}\n`);
     console.log(`  so far $${spent.dollars.toFixed(2)} on the realtime model`);
@@ -258,7 +262,7 @@ try {
   rmSync(dataDir, { recursive: true, force: true });
 }
 // A recording no line's words name any more is of a line that was written again: it goes, with its entry.
-const named = new Set(Object.values(lines.rounds).flatMap((said) => said.map((line) => recordingName(voice, line.text))));
+const named = new Set([...Object.values(lines.rounds), ...Object.values(lines.real)].flatMap((said) => said.map((line) => recordingName(voice, line.text))));
 for (const old of readdirSync(voiceDir)) if (old.endsWith('.pcm') && !named.has(old)) rmSync(join(voiceDir, old));
 for (const old of Object.keys(voices)) if (!named.has(old)) delete voices[old];
 writeFileSync(voicesFile, `${JSON.stringify(voices, null, 1)}\n`);

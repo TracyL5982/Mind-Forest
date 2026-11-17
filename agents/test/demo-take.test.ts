@@ -39,11 +39,15 @@ const record = async (text: string) =>
 
 test('a round\'s schedule lands every card once, the user\'s own first, then each source, then what is made, under the labels of that work', () => {
   for (const phase of script.phases) {
-    const sched = schedule(phase);
+    const sched = schedule(phase, 'the card');
     assert.deepEqual(sched.drops.flatMap((drop) => drop.cards).sort(), phase.cards.map((card) => card.id).sort(), `${phase.id}: every card lands once`);
     assert.ok(sched.drops.every((drop, n) => n === 0 || drop.at >= sched.drops[n - 1]!.at), `${phase.id}: deliveries are in order`);
     assert.ok(sched.steps.every((step) => step.end > step.at && step.end <= sched.end), `${phase.id}: every label ends by the run's end`);
-    for (const drop of sched.drops) assert.ok(sched.steps.some((step) => step.end === drop.at), `${phase.id}: a label ends as its cards land`);
+    // A found or a made card lands as its label ends. What the Scout writes itself has no label of its own: it lands while "Thinking of directions" is up.
+    for (const drop of sched.drops) {
+      const written = drop.cards.every((id) => phase.cards.find((card) => card.id === id)!.origin === 'generated' && !phase.cards.find((card) => card.id === id)!.image);
+      assert.ok(written ? sched.steps.some((step) => /^Thinking of directions/.test(step.label) && step.at < drop.at && drop.at <= step.end) : sched.steps.some((step) => step.end === drop.at), `${phase.id}: a label ends as its cards land`);
+    }
   }
   const n3 = round('n3');
   const sched = schedule(n3);
@@ -111,7 +115,8 @@ const silentOf = (demoDir: string, dataDir: string) => new Lines({ demoDir, data
 
 async function linesFolder(rounds: string[]): Promise<string> {
   const dir = temp('mp-demo-lines-');
-  const file: LinesFile = { version: 1, voice: 'test-voice', rounds: {} };
+  const file: LinesFile = { version: 1, voice: 'test-voice', rounds: {}, real: {} };
+  for (const id of rounds) file.real[id] = await planLines(round(id), 'the card', async ({ kind, cards }) => ({ text: `${kind} at real pace: ${cards.map((card) => card.title).join(', ') || 'no card'}.`, ms: 4000 }), 'real');
   for (const id of rounds) file.rounds[id] = await plan(round(id));
   writeFileSync(join(dir, 'lines.json'), JSON.stringify(file));
   return dir;
@@ -268,6 +273,8 @@ test('Play runs a round\'s take on the headset: its labels, its cards as picks i
 
     const said = s.voice.filter((m) => m.t === 'text').map((m) => m.text);
     assert.deepEqual(said, take.lines.map((line) => line.text), 'Momo says every line, in order, in the words as written');
+    // The last line's sound may still be on its way as the take ends.
+    await until(() => s.voice.filter((m) => m.t === 'done').length === take.lines.length);
     for (const line of take.lines) assert.equal(bytesOf(s.voice, line.id), line.text.length * 2400, `all of the recording of ${line.id} was sent`);
     assert.equal(s.voice.filter((m) => m.t === 'done').length, take.lines.length);
     assert.deepEqual([...s.spoken].sort(), take.lines.map((line) => line.text).sort(), 'each line was recorded once, before the take began');
