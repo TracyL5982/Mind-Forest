@@ -15,12 +15,13 @@
 namespace cards {
 
 namespace face {
-constexpr int W = 210, H = 146;
+/// The sizing spec's 210 by 146 mm, in px of `Art::type` mm.
+constexpr int W = int(210 / Art::type + 0.001f), H = int(146 / Art::type + 0.001f);
 /// The frame: 1 px border and 13 px padding above and below with 2 px to spare, and 15 px each side.
 constexpr int TOP = 14, BOTTOM = 16, LEFT = 16, COL = W - SIDES;
 constexpr int TITLE = 24, BODY = 22, META = 18, CUE = 18, GAP = 6;
 /// The pixels a px a face is laid out and drawn at (cards::ocean::smallScale): its lines are counted there.
-constexpr float K = 2;
+constexpr float K = Art::ppm / 1000 * Art::type;
 /// The most lines a title takes on the face. A longer one is cut there, at a whole word (a character in
 /// Chinese), and ends with an ellipsis: the one place a face draws one. The opened card has it whole.
 constexpr int TITLE_LINES = 2;
@@ -106,9 +107,9 @@ struct Col {
     void say(const std::string& s, const Setting& t, int n, float x, float y, float width, Color color) const;
     void gap(float px) { y += px; }
     /// The title first, at `atX` in `column` px (the face's column if not given): whole in up to `most` lines,
-    /// or its first ones cut with an ellipsis (`titled`). The face goes on under it. False when the face had
-    /// already ended.
-    bool title(const std::string& s, float atX = -1, float column = -1, int most = face::TITLE_LINES);
+    /// or its first ones cut with an ellipsis (`titled`), and in no more than leave `keep` px under it, though never
+    /// under one. The face goes on under it. False when the face had already ended.
+    bool title(const std::string& s, float atX = -1, float column = -1, int most = face::TITLE_LINES, float keep = 0);
     /// The item's lines over the structure, in order and whole, 6 px under what came before (or, first on the
     /// face, 6 px over what follows), each keeping the cue's row free under it. A line that does not fit ends
     /// the face: it is held back, and so is everything under it. False then.
