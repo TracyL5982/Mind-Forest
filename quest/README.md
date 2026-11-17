@@ -107,9 +107,13 @@ close the conversation, before Momo says or does anything (`agents/DECISIONS.md`
 chimes and records until you pause for 1.2 s; the service transcribes that and acts on it, and its reply is spoken
 when the service has a voice. Momo sits low in front of you, drawn as in CurioCity (ClandestineOperation's
 `AgentVisual`, with the values its scene gives it): three rings of Perlin noise in cyan, magenta and yellow, added into
-one white ring as wide as two lines of its words, with two tall white eyes that blink and dart. The words are beside
-it: yours in white as the voice hears them, then `Thinking…`, then Momo's reply in amber as it is spoken. The ring
-wobbles with your voice as you speak, and with Momo's as it speaks, when it also parts into coloured fringes. From the
+one white ring a fifth larger than CurioCity's, with two tall white eyes that blink and
+dart, and nothing behind it. The words are beside
+it: yours in white as the voice hears them, then `Thinking…`, then Momo's reply in amber as it is spoken. Each line
+of words stands on a bar of its own in the labels' ink, hard-edged and square-cornered as the ocean's labels are,
+hugging its words; the bars of two lines meet, and a bar comes, rises and goes with its line. The ring
+wobbles with your voice as you speak, 0.6 as far and as fast as with Momo's as it speaks (`Face::userMorph`), when it
+also parts into coloured fringes. From the
 moment your turn is sent until Momo answers, three bubbles form at its upper right: each swells up small at the base,
 and as the next forms it eases the others one place out, growing, until the first is the largest at the far end, all
 settled by 1.1 s; then each circles its own place, so the three turn through a line and a triangle. Once begun they

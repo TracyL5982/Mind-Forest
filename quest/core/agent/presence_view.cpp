@@ -16,12 +16,22 @@ constexpr float statusType = 0.015f;    // m: a word on what is happening, a lit
 constexpr float agentType = 0.0115f;    // m: an agent's line, small, above the words
 constexpr float most = 0.3f;            // m: the widest a line may be, some 35 characters
 constexpr float pad = 6;                // px round the words in their picture
+constexpr float curio = 1.08f;          // CurioCity's line, of the type's own line height: its Momo is one such line in radius
+constexpr float larger = 1.2f;          // Momo's size, of CurioCity's. Kai, 2026-11-16: "Momo is too small +20% size"
+// The bars under the words. A line's bar is as tall as the step to the next line, so two lines' bars meet with no gap
+// and no overlap; the steps are set so the words keep some 2 mm of ink above their capitals' line and under their tails.
+constexpr float pitch = 1.2f;           // from one line of words to the next, of the type's own line height
+constexpr float agentPitch = 1.25f;     // and from one agent's line to the next
+constexpr float inset = 0.008f;         // m from a bar's end to its words, at either end
+constexpr float apart = 0.008f;         // m between the words' bars and what is above them: the agents' bars, or under those, the bubbles
+constexpr float behind = 0.002f;        // m the bars stand behind their words
+constexpr float reach = 0.07f;          // s, about, a bar takes to reach its words' new length
 constexpr float feather = 0.0007f;      // m: Momo's edges soften over about one of the headset's pixels at its distance
 
 const Color userInk = Color::hex(0xECEBE6);     // the web client's ink
 const Color momoInk = Color::hex(0xF2C27A);     // and its amber, the agent's colour
 const Color statusInk = Color::hex(0xA3A39C);   // and its quieter ink, for what is not said
-const Vec3 night = Color::hex(0x0B0D11).linear();
+const Vec3 ink = Art::ink.linear();             // the dark of the ocean's labels
 const Vec3 white{1, 1, 1};
 /// CurioCity's three rings: cyan, magenta and yellow at its colour intensity, set as its display shows them.
 const Vec3 rings[3] = {Color(0, Face::colorIntensity, Face::colorIntensity, 1).linear(),
@@ -221,28 +231,16 @@ struct Pen {
         stitch(base, n, 4, false);
     }
 
-    /// A dark rectangle whose edges soften to nothing over `soft`, rounded at the corners: it stands behind the words.
-    void mist(float left, float right, float bottom, float top, float soft, float z, float alpha) {
-        constexpr int steps = 6;
-        if (alpha < 0.002f || !room(8 * (steps + 1), 6 + 24 * (steps + 1))) return;
-        const Vec2 corners[] = {{right, top}, {left, top}, {left, bottom}, {right, bottom}};
+    /// A flat bar of the labels' ink, its edges hard and its corners square: it stands behind a line of words.
+    void bar(float left, float right, float bottom, float top, float z, float alpha) {
+        if (alpha < 0.002f || right <= left || top <= bottom || !room(4, 6)) return;
         int base = nv;
-        for (int q = 0; q < 4; q++) {
-            for (int s = 0; s <= steps; s++) {
-                float a = (float(q) + float(s) / float(steps)) * pi / 2;
-                Vec2 c = corners[q];
-                put({c.x, c.y, z}, night, alpha);
-                put({c.x + std::cos(a) * soft, c.y + std::sin(a) * soft, z}, night, 0);
-            }
-        }
-        int around = 4 * (steps + 1);
-        for (int i = 0; i < around; i++) {
-            int a = base + 2 * i, b = base + 2 * ((i + 1) % around);
-            triangle(a, a + 1, b + 1);
-            triangle(a, b + 1, b);
-        }
-        triangle(base, base + 2 * (steps + 1), base + 4 * (steps + 1));
-        triangle(base, base + 4 * (steps + 1), base + 6 * (steps + 1));
+        put({left, bottom, z}, ink, alpha);
+        put({right, bottom, z}, ink, alpha);
+        put({right, top, z}, ink, alpha);
+        put({left, top, z}, ink, alpha);
+        triangle(base, base + 1, base + 2);
+        triangle(base, base + 2, base + 3);
     }
 };
 
@@ -281,10 +279,13 @@ void fill(const LowLevelMeshRef& mesh, std::vector<uint32_t>& scratch, const Bou
 PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& lineMaterial, EntityRef parent)
     : art(art), caption([art](const std::string& s, Speaker who) { return art->width(s, typeface(*art, who)) / Art::ppm; }, most),
       roster([art](const std::string& s) { return art->width(s, typeface(*art, Speaker::agent)) / Art::ppm; }, most),
-      light(mesh(1400, 5600)), mist(mesh(64, 192)), scratch(5600),
-      step(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm * 1.08f),
-      small(std::ceil(typeface(*art, Speaker::agent).lineHeight()) / Art::ppm * 1.12f), size(step) {
-    // The ocean's dust is seen through and drawn after everything else, so the mist says where it stands; Momo's light
+      light(mesh(1400, 5600)), backing(mesh(96, 144)), scratch(5600),
+      step(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm * pitch),
+      small(std::ceil(typeface(*art, Speaker::agent).lineHeight()) / Art::ppm * agentPitch),
+      size(std::ceil(typeface(*art, Speaker::user).lineHeight()) / Art::ppm * curio * larger),
+      // CurioCity's gap, half Momo's radius past its edge: room for the ring to swell and bend without reaching a bar.
+      edge(size * 1.5f) {
+    // The ocean's dust is seen through and drawn after everything else, so the bars say where they stand; Momo's light
     // does not, or a fading part of it would hide the words. Momo is light added to what is behind it, as CurioCity
     // draws it, so its three rings sum to white.
     Material dark = lineMaterial;
@@ -292,7 +293,7 @@ PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& lineMateria
     Material added = lineMaterial;
     added.additive = true;
     group->name = "presence";
-    group->addChild(Entity::make(mist, {dark}));
+    group->addChild(Entity::make(backing, {dark}));
     group->addChild(Entity::make(light, {added}));
     group->isEnabled = false;
     parent->addChild(group);
@@ -343,7 +344,7 @@ void PresenceView::write(const std::string& text, Speaker who, size_t name, floa
     }
     // The opacities are as bright as they look; blending is in linear light, where a tenth looks like a third.
     float o = std::pow(opacity * w.appear, 2.2f);
-    float left = size * 1.5f;   // CurioCity's gap: half Momo's radius past its edge
+    float left = edge + inset;  // where the words begin, inside their bar
     auto lay = [&](const EntityRef& e, float width, float o) {
         e->position = {left + width / 2 - pad / Art::ppm, y, 0};
         e->opacity = o;
@@ -383,10 +384,20 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
         all.push_back(Words{key, ""});
         return all.back();
     };
+    // Each line stands on a bar that hugs it: as long as its words and the inset at either end, never shorter than the
+    // words now on it, and reaching a new length quickly but not at once as the words come.
+    bars.clear();
+    auto back = [&](Words& w, float wide, float y, float tall, float there) {
+        if (w.bar < 0) w.bar = wide;
+        else ease(w.bar, wide, reach, dt);
+        float shown = w.shown ? w.width - 2 * pad / Art::ppm : 0;
+        bars.push_back(Bar{edge, edge + std::max(w.bar, shown) + 2 * inset, y - tall / 2, y + tall / 2, there});
+    };
     for (const Caption::Line& line : caption.lines()) {
         Words& w = wordsFor(words, line.key);
         if (w.shown) ease(w.appear, 1, 0.08f, dt);
         write(line.text, line.who, 0, line.y * step, line.opacity, w);
+        back(w, line.width, line.y * step, step, line.there);
     }
     keep(words, [&](int key) {
         return std::any_of(caption.lines().begin(), caption.lines().end(), [&](const Caption::Line& l) { return l.key == key; });
@@ -396,40 +407,33 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
     int rows = caption.resting();
     float top = float(rows) * step / 2;
     // While Momo thinks, its bubbles hang where the lowest lines would be, so the lines stand above them for that while.
-    float above = face.look().dots > 0.5f ? Face::bubblesTop * size / Face::radius + small * 0.6f : 0;
-    ease(agentsFrom, std::max(rows > 0 ? top + small * 0.75f : 0, above), 0.18f, dt);
+    float above = face.look().dots > 0.5f ? Face::bubblesTop * size / Face::radius + apart + small / 2 : 0;
+    ease(agentsFrom, std::max(rows > 0 ? top + apart + small / 2 : 0, above), 0.18f, dt);
     auto keyOf = [](const std::string& role) { return int(std::hash<std::string>{}(role) & 0x7FFFFFFF); };
     for (const Roster::Line& line : roster.lines()) {
         Words& w = wordsFor(agents, keyOf(line.role));
         if (w.shown) ease(w.appear, 1, 0.08f, dt);
         write(line.text, Speaker::agent, line.name, agentsFrom + line.y * small, line.opacity, w);
+        back(w, line.width, agentsFrom + line.y * small, small, line.opacity);
     }
     keep(agents, [&](int key) {
         return std::any_of(roster.lines().begin(), roster.lines().end(), [&](const Roster::Line& l) { return keyOf(l.role) == key; });
     });
 
-    int lines = roster.resting();
-    bool misted = rows > 0 || lines > 0;
-    ease(mistWidth, std::max(caption.width(), roster.width()), 0.18f, dt);
-    ease(mistBottom, -std::max(float(std::max(1, rows)) * step / 2, size) - 0.012f, 0.18f, dt);
-    ease(mistTop, std::max(lines > 0 ? agentsFrom + (float(lines) - 0.5f) * small : float(std::max(1, rows)) * step / 2, size) + 0.012f, 0.18f, dt);
-    ease(misty, misted ? 1.f : 0.f, misted ? 0.15f : 0.3f, dt);
     draw();
 }
 
 void PresenceView::draw() {
     const Face::Look& l = face.look();
     // Both meshes say they stand behind the words, so the renderer, which draws what is seen through farthest first,
-    // draws them before the words. The mist is written again only while it changes.
-    Vec4 mistNow{mistWidth, mistBottom, mistTop, misty};
-    if (std::fabs(mistNow.x - mistDrawn.x) + std::fabs(mistNow.y - mistDrawn.y) + std::fabs(mistNow.z - mistDrawn.z) +
-            std::fabs(mistNow.w - mistDrawn.w) > 1e-4f) {
-        mistDrawn = mistNow;
-        fill(mist, scratch, BoundingBox{{-0.08f, -0.08f, -0.065f}, {0.36f, 0.08f, -0.055f}}, [&](Pen& pen) {
-            pen.mist(-size - 0.006f, size * 1.5f + mistWidth + 0.014f, mistBottom, mistTop, 0.026f, -0.03f, 0.8f * misty);
+    // draws them before the words. The bars are written again only while they change.
+    if (bars != barsDrawn) {
+        barsDrawn = bars;
+        fill(backing, scratch, BoundingBox{{0, -0.08f, -0.065f}, {0.42f, 0.16f, -0.055f}}, [&](Pen& pen) {
+            for (const Bar& b : bars) pen.bar(b.left, b.right, b.bottom, b.top, -behind, b.alpha);
         });
     }
-    fill(light, scratch, BoundingBox{{-0.08f, -0.08f, -0.045f}, {0.08f, 0.1f, -0.035f}}, [&](Pen& pen) {
+    fill(light, scratch, BoundingBox{{-0.1f, -0.1f, -0.045f}, {0.1f, 0.12f, -0.035f}}, [&](Pen& pen) {
         float shown = l.shown;
         if (shown < 0.003f) return;
         // CurioCity's centimetres to metres, with the swell of a voice.

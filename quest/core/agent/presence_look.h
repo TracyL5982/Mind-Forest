@@ -55,8 +55,8 @@ private:
 /// How Momo looks, apart from drawing it (presence_view.cpp draws it): CurioCity's Momo, from ClandestineOperation's
 /// Assets/Scripts/AgentVisual (AgentRing, AgentNoiseDisc) and AgentSphere, with the values its Scene.scene gives them.
 /// Three hollow rings, cyan, magenta and yellow, each bent by Perlin noise, add up to one white ring, with two white
-/// eyes in the middle that blink and dart. A voice makes the rings wobble further and faster, and Momo's own voice
-/// draws them apart into coloured fringes. Two looks are Momo's own: thinking, three bubbles form at its upper right,
+/// eyes in the middle that blink and dart. A voice makes the rings wobble further and faster, the user's less than
+/// Momo's own, and Momo's own voice draws them apart into coloured fringes. Two looks are Momo's own: thinking, three bubbles form at its upper right,
 /// each new one swelling at the base and easing the others out, growing, then all three circle as they hang there;
 /// while any agent works it wears a monocle, and its eyes glance about, slower and wider than they dart.
 class Face {
@@ -79,6 +79,9 @@ public:
     static constexpr float attack = 18, release = 6;    // AgentSphere's envelope: how fast it follows a voice up, and down
     static constexpr float speakPulse = 0.18f;          // AgentSphere: it swells this much at full voice
     // Momo's own.
+    // How far the user's voice bends the ring and hurries it, of what Momo's own voice does. Kai, 2026-11-16: "Momo
+    // morphs a bit too much when you speak", 40% less, and only then. The swell (speakPulse) is as it was.
+    static constexpr float userMorph = 0.6f;
     static constexpr float glanceMin = 0.9f, glanceMax = 1.6f;  // s between glances while searching
     static constexpr float glanceAmount = 0.55f;        // as far as the eyes go to either side, past where darts mostly go
     static constexpr float glanceToMonocle = 0.22f;     // and toward the monocle's side, so it stays between the ring and the other eye
@@ -148,7 +151,8 @@ enum class Speaker { user, momo, status, agent };
 
 /// The words beside Momo: what the user says while they say it, then "Thinking…", then Momo's words as they are
 /// spoken. They wrap to a width; the last two lines rest beside Momo, the upper one fainter, and an older line rises and
-/// fades as a new one comes. A turn's words stay a while after it ends, then fade.
+/// fades as a new one comes. A turn's words stay a while after it ends, then fade. Each line stands on a bar of its own
+/// (presence_view.h), which is all there while its line is, however faint the words.
 class Caption {
 public:
     static constexpr int rows = 2;              // lines at rest
@@ -170,6 +174,7 @@ public:
         bool yields = false;    // it takes another line's place, and shows only once that one has gone
         bool seen = false;
         bool gone = false;      // no longer wanted, and fading
+        float there = 0;        // 0 gone … 1: how much of its bar shows, which comes and goes as the line does
     };
 
     using Measure = std::function<float(const std::string&, Speaker)>;

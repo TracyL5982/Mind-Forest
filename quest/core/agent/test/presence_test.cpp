@@ -351,10 +351,14 @@ TEST(quietMomoIsAWhiteRingAndItsOwnVoicePartsItIntoColour) {
     run(f, say(S::waiting, "", "", true, 0.9f), 1);
     CHECK(f.look().voice < 0.01f, "the room's noise does not move it: %.2f", double(f.look().voice));
     run(f, say(S::listening, "", "", true, 0.9f), 0.5f);
-    CHECK(f.look().distortion > 5 && f.look().scale > 1.1f, "listening, the ring moves with the user's voice: %.2f", double(f.look().distortion));
+    float bent = f.look().distortion - Face::quietDistortion;
+    CHECK(bent > 1.5f && f.look().scale > 1.1f, "listening, the ring moves with the user's voice: %.2f", double(f.look().distortion));
     CHECK(f.look().divergence < 0.05f, "and stays white: %.3f", double(f.look().divergence));
     run(f, say(S::responding, "", "", true, 0.9f), 0.5f);
     CHECK(f.look().divergence > 1, "Momo's own voice parts it into colour: %.2f", double(f.look().divergence));
+    float own = f.look().distortion - Face::quietDistortion;
+    CHECK(f.look().distortion > 5 && std::fabs(bent / own - Face::userMorph) < 0.05f,
+          "and bends it all the way, the user's %.1f as far: %.2f against %.2f", double(Face::userMorph), double(bent), double(own));
     run(f, say(S::responding, "", "", true, 0), 1.f / 18);
     CHECK(f.look().voice > 0.5f, "and falls away slower than it rose (%.2f), as AgentSphere's envelope does", double(f.look().voice));
     run(f, say(S::responding), 1.5f);

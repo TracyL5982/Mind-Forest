@@ -12,7 +12,7 @@ One prepared tree, "Brainstorming in a headset", for recording the film. It is t
 
 ## Where it is
 
-The demo is on the branch `demo/walkthrough`, which holds `tracy/agents` as it stood late on 2026-11-16 (867dcc1: the fist, the knife, the welcome walk's lessons and the looser "Hi Momo") and adds the demo to the service. The app's own code is the same as on `tracy/agents`.
+The demo is on the branch `demo/walkthrough`, which holds `tracy/agents` as it stood late on 2026-11-16 (a817e83: the fist, the knife, the welcome walk's lessons, the looser "Hi Momo" and Momo's new look) and adds the demo to the service. The app's own code is the same as on `tracy/agents`.
 
 - **On Kai's Mac** it is already checked out, in a second folder beside the main one, so the main folder and the work under way in it are left alone:
 
@@ -20,7 +20,7 @@ The demo is on the branch `demo/walkthrough`, which holds `tracy/agents` as it s
   cd <the demo's folder>
   ```
 
-  Every command below is run from that folder. A release APK built from it on 2026-11-16 is at `quest/android/app/build/outputs/apk/release/app-release.apk`; it was installed on Kai's headset that day.
+  Every command below is run from that folder. A release APK built from it on 2026-11-16 is at `quest/android/app/build/outputs/apk/release/app-release.apk`. An earlier build from this branch, without Momo's new look, was installed on Kai's headset that afternoon for the test below.
 
 - **On another Mac:**
 

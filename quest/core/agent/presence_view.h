@@ -1,8 +1,9 @@
 // Momo in the scene, low in view: CurioCity's Momo, a white ring with two eyes, the words of the conversation beside
 // it, the user's in white and Momo's in amber, and above them a small line for each agent at work. presence_look.h
-// says how it moves; this draws it: Momo in light added to what is behind it, and a soft dark mist behind the words so
-// they read against the room, each a mesh written every frame, and each line of words as a picture of its own, drawn
-// again only when its words change.
+// says how it moves; this draws it: Momo in light added to what is behind it, with nothing behind Momo itself, and
+// under each line of words a bar of the labels' ink with hard edges and square corners, as the ocean's own labels
+// have, so the words read against the room. Momo is a mesh written every frame, the bars one written while they
+// change, and each line of words a picture of its own, drawn again only when its words change.
 #pragma once
 #include <memory>
 #include <string>
@@ -41,6 +42,12 @@ private:
         EntityRef coming;
         float comingWidth = 0;
         float appear = 0;           // eases in once there is a picture to show
+        float bar = -1;             // m: how long its bar is, on its way to the words' length; -1 before it has one
+    };
+    /// The bar under one line of words, in Momo's plane, m.
+    struct Bar {
+        float left, right, bottom, top, alpha;
+        bool operator==(const Bar&) const = default;
     };
 
     std::shared_ptr<Art> art;
@@ -49,15 +56,15 @@ private:
     Face face;
     Caption caption;
     Roster roster;
-    LowLevelMeshRef light, mist;
+    LowLevelMeshRef light, backing;
     std::vector<uint32_t> scratch;  // a mesh's indices, before they are known to have changed
-    float step;                     // m from one line of words to the next
-    float small;                    // m from one agent's line to the next
-    float size;                     // m: Momo's radius, one line of its words, as in CurioCity
+    float step;                     // m from one line of words to the next, and how tall its bar is
+    float small;                    // m from one agent's line to the next, and how tall its bar is
+    float size;                     // m: Momo's radius, a fifth more than CurioCity's, which is one line of its words
+    float edge;                     // m right of Momo's middle to where the bars begin
     std::vector<Words> words, agents;
     double last = -1;
-    float mistWidth = 0, mistBottom = 0, mistTop = 0, misty = 0;
-    Vec4 mistDrawn{-1, -1, -1, -1};
+    std::vector<Bar> bars, barsDrawn;   // this frame's, and those the mesh holds
     float agentsFrom = 0;           // m up from Momo's middle to its lowest agent's line, eased
 
     void draw();

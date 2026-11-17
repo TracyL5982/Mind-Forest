@@ -149,9 +149,10 @@ void Face::update(const Presence& p, float dt) {
     float k = heard > l.voice ? attack : release;
     l.voice += (heard - l.voice) * std::min(1.f, k * dt);
     ease(colour, p.state == S::responding ? 1.f : 0.f, 0.15f, dt);
-    // AgentRing.update.
-    l.time = std::fmod(l.time + (quietSpeed + (loudSpeed - quietSpeed) * l.voice) * dt, 256.f);
-    l.distortion = quietDistortion + (loudDistortion - quietDistortion) * l.voice;
+    // AgentRing.update, but the user's voice moves the ring `userMorph` as far as Momo's own does.
+    float moved = l.voice * (userMorph + (1 - userMorph) * colour);
+    l.time = std::fmod(l.time + (quietSpeed + (loudSpeed - quietSpeed) * moved) * dt, 256.f);
+    l.distortion = quietDistortion + (loudDistortion - quietDistortion) * moved;
     l.divergence = colour * std::pow(l.voice, std::max(0.01f, divergenceExponent)) * divergence;
     l.scale += (1 + speakPulse * l.voice - l.scale) * std::min(1.f, 12 * dt);
 
@@ -430,6 +431,7 @@ void Caption::place(float dt) {
         // A line that is gone, or replaced, goes quickly, so the one in its place is not kept waiting.
         float tau = l.toOpacity > l.opacity ? 0.1f : l.seen ? 0.12f : 0.05f;
         ease(l.opacity, l.toOpacity, tau, dt);
+        ease(l.there, l.toOpacity > 0 ? 1.f : 0.f, tau, dt);
     }
     lines_.erase(std::remove_if(lines_.begin(), lines_.end(), [](const Line& l) { return l.toOpacity == 0 && l.opacity < 0.01f; }),
                  lines_.end());
