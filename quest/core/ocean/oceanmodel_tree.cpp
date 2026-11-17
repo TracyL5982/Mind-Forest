@@ -121,20 +121,24 @@ void OceanModel::take(int id) {
     const TreeNode* node = find(*tree, id);
     if (!node || pressing) return;
     guideDid("ask");
+    // AGENT: in a tree the agent service grows, a click opens the card clicked, to show it in detail, folded onto another or
+    // not; a layer starts from it only with a long pinch or a conversation about it (agent::Bridge). So it has its note and
+    // no chord, and as no layer of cards comes to sound the layer's notes in turn, the note is the card's own on its layer.
+    if (agentBridge && agentBridge->serves(*tree)) {
+        soundCard(id);
+        if (agentBridge->opens(id)) {
+            restyle();
+            return;
+        }
+    }
     int target = id;
     if (tree->condensed(*node) && !node->head && node->parent) target = *node->parent;
     const TreeNode* asked = find(*tree, target);
     bool fresh = asked ? asked->children.empty() : true;
     // The card's own note now; its new layer's chord a moment later, as it rises (`updateSound`).
-    // AGENT: in a tree the agent service grows, a pinch opens a card where it stands, to show its details; a layer
-    // starts from it only when there is a conversation about it (agent::Bridge::ask). So it has its note and no chord,
-    // and as no layer of cards comes to sound the layer's notes in turn, the note is the card's own on its layer.
-    if (agentBridge && agentBridge->serves(*tree)) soundCard(target);
-    else if (const CardRef& c = card(target)) soundAt("take", c->position);
-    else sound("take");
-    if (agentBridge && agentBridge->opens(target)) {
-        restyle();
-        return;
+    if (!(agentBridge && agentBridge->serves(*tree))) {
+        if (const CardRef& c = card(target)) soundAt("take", c->position);
+        else sound("take");
     }
     soundLayerAfter = 0.14;
     Tree::Change moved = tree->focus(target);
