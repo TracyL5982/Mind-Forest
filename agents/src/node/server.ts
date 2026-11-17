@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { extname, join, normalize, resolve } from 'node:path';
+import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { Readable, type Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { ModelClient, Tools } from '../core/ports.ts';
@@ -18,7 +18,7 @@ import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '.
 import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
-import { HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, heardMs, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
+import { SPEECH_VOICE, HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, heardMs, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
 import { checkName } from './wake-check.ts';
 import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
@@ -27,6 +27,7 @@ import { followingIn, openInstagram, type InstagramLibrary } from './instagram.t
 import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
 import { Director, momoNote, type Pace } from '../demo/director.ts';
+import { Lines } from '../demo/lines.ts';
 import type { DemoScript } from '../demo/script.ts';
 import type { Showcase } from '../demo/showcase.ts';
 
@@ -79,7 +80,18 @@ export interface ServerOptions {
   /** Hosted mode: the largest file one upload may be, and what this space's uploads may come to in all, in bytes. */
   uploads?: { file: number; total: number };
   /** The demo: one prepared tree played round by round, with a page to go to any round (src/demo, agents/demo/README.md). */
-  demo?: { script: DemoScript; mediaDir: string; showcase?: Showcase[]; pace?: Partial<Pace>; restart?: () => Promise<string> };
+  demo?: {
+    script: DemoScript;
+    mediaDir: string;
+    showcase?: Showcase[];
+    pace?: Partial<Pace>;
+    restart?: () => Promise<string>;
+    /** The folder Momo's written lines and their recordings are in (`lines.json`, `voice/`). Beside the media folder when not given. */
+    linesDir?: string;
+    /** The voice the lines are recorded in, and what records one: 16-bit mono PCM at the live voice's rate. */
+    voice?: string;
+    speak?: (text: string) => Promise<Uint8Array>;
+  };
   log?: (line: string) => void;
 }
 
@@ -246,7 +258,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (message.t === 'change') broadcast({ ...message, undo: pipeline.undoLabel() }, asker?.ws);
     else if (message.t === 'navigate') broadcast(message, asker?.ws);
     else broadcast(message);
-    asker?.voice?.observed(message);
+    // A take says its own lines: Momo is told nothing of its cards, or she would tell of them again in words of her own.
+    if (!director?.directing()) asker?.voice?.observed(message);
   };
 
   const liveRoles = meter ? metered(opts.roles, meter) : opts.roles;
@@ -298,6 +311,15 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       devices: () => [...sockets].filter((ws) => ws.readyState === ws.OPEN && plays.get(ws)?.embeds === false).length,
       forgetVoices: () => {
         for (const voice of voices.values()) voice.close();
+      },
+      lines: new Lines({ demoDir: opts.demo.linesDir ?? dirname(opts.demo.mediaDir), dataDir: opts.dataDir, voice: opts.demo.voice ?? SPEECH_VOICE, speak: opts.demo.speak, log }),
+      // A take's lines go to the headset as the live voice's do, on the socket its voice is open on.
+      momo: (frame) => {
+        const ws = device();
+        const live = ws && liveOf.get(ws);
+        if (!live || live.readyState !== live.OPEN) return false;
+        live.send(JSON.stringify(frame));
+        return true;
       },
       // Only the app on a headset can be started again from here. The Mac preview joins as a device too, and a headset on the
       // cable that is not the one joined must be left as it is.
@@ -513,9 +535,35 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         void director.goto(String(round ?? '')).catch(() => {});
         return json(res, 202, director.status());
       }
+      if (req.method === 'GET' && path === '/api/demo/take') {
+        try {
+          return json(res, 200, director.shown(url.searchParams.get('round') ?? ''));
+        } catch (err) {
+          return json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+        }
+      }
       if (req.method === 'POST' && path === '/api/demo/play') {
-        void director.play().catch(() => {});
+        const { round, at } = await posted();
+        // The take runs for the length of a real round: the page reads where it is from the status.
+        void director.playTake(typeof round === 'string' ? round : undefined, typeof at === 'number' ? at : undefined).catch(() => {});
         return json(res, 202, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/pause') {
+        director.pause();
+        return json(res, 200, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/seek') {
+        const { round, at } = await posted();
+        await director.seek(String(round ?? ''), Number(at) || 0).catch(() => {});
+        return json(res, 200, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/line') {
+        const { round, line, text } = await posted();
+        try {
+          return json(res, 200, director.setLine(String(round ?? ''), String(line ?? ''), typeof text === 'string' ? text : null));
+        } catch (err) {
+          return json(res, 404, { error: err instanceof Error ? err.message : String(err) });
+        }
       }
       if (req.method === 'POST' && path === '/api/demo/scripted') {
         director.setScripted((await posted()).on !== false);
@@ -644,6 +692,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           counted(frame.pcm, RATE);
           const why = meter?.refused('voiceMs');
           if (why) return cut(why, frame.id);
+        }
+        // While a round's take is what the headset hears, Momo's own words are kept from it; her reply over, the take is seen to.
+        if (director?.mutes()) {
+          if (frame.t === 'text' || frame.t === 'audio') return;
+          if (frame.t === 'done') director.replied();
         }
         if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame));
       },

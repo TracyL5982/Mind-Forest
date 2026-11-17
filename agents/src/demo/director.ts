@@ -6,9 +6,12 @@ import type { Pipeline } from '../core/pipeline.ts';
 import type { Assets } from '../core/ports.ts';
 import type { RoleContext, Roles } from '../core/roles/types.ts';
 import type { Mindstorm } from '../core/state.ts';
+import type { VoiceFrame } from '../node/live.ts';
 import { itemOf, nodeOf, type Making } from './cards.ts';
+import type { Lines, LineShown } from './lines.ts';
 import type { DemoScript, ScriptCard, ScriptPhase } from './script.ts';
 import { inLayers, type Showcase } from './showcase.ts';
+import { momentAt, takeOf, type Take, type TimedLine } from './take.ts';
 
 /**
  * The demo: one prepared tree, grown round by round.
@@ -16,11 +19,13 @@ import { inLayers, type Showcase } from './showcase.ts';
  * - Going to a round sets the tree up as it stands just before that round: every earlier round built, its cards kept. A headset is
  *   taken through the rounds in order, each card opened before its cards are added, because a headset makes its layers itself from
  *   what is asked on it, and cards that all arrive at once land on one layer.
- * - Playing a round is the Scout's work, scripted. The user asks as usual, by voice or by hand, and Momo answers as usual; when the
- *   Scout is run, the round's cards come in its place, under the same step labels, and Momo tells of them as they land.
+ * - Playing a round is the Scout's work, scripted, as one take (`take.ts`): a fixed timeline of the labels the agents show, the
+ *   cards that land and what Momo says, each at the moment it would come in a real round. The page's Play, or the round's line
+ *   said in the headset, runs it; it can be paused, and moved to any moment, where the tree is made to stand as it stood then.
  *
- * Nothing of the live system is changed by it but what the Scout brings, the questions offered under a round's card, and the
- * Renderer, which is given nothing to choose because each card comes with its look.
+ * Nothing of the live system is changed by it but what the Scout brings, the questions offered under a round's card, the
+ * Renderer, which is given nothing to choose because each card comes with its look, and Momo's voice, which says the take's
+ * written lines from their recordings in place of words of her own.
  */
 
 /**
@@ -38,11 +43,13 @@ export interface Pace {
   breath: number;
   /** One step of a round that is played: a search, a reading, a picture being made. */
   step: number;
+  /** How fast a take's clock runs: 1 is the pace of a real round. Tests run it faster. */
+  rate: number;
   /** The longest wait for the app to join again after it is started again on the headset. */
   rejoin: number;
 }
 
-export const PACE: Pace = { stand: 9000, open: 4000, land: 3000, breath: 220, step: 1500, rejoin: 25000 };
+export const PACE: Pace = { stand: 9000, open: 4000, land: 3000, breath: 220, step: 1500, rate: 1, rejoin: 25000 };
 
 export interface DirectorDeps {
   script: DemoScript;
@@ -63,6 +70,10 @@ export interface DirectorDeps {
   devices: () => number;
   /** Ends every live conversation, so Momo starts a take with nothing said before it. */
   forgetVoices: () => void;
+  /** What Momo says in each round, written down, with its recordings. */
+  lines: Lines;
+  /** Sends the headset a piece of Momo's voice, as the live voice does. False when no headset has its voice open. */
+  momo?: (frame: VoiceFrame) => boolean;
   /**
    * Starts the app again on the headset, joined to this service as before, and resolves with a line for the log. A headset
    * keeps a tree standing after the service deletes it, so this is the only way to an empty stage there. Absent where the host
@@ -79,9 +90,9 @@ export interface DirectorDeps {
  * user is (`takeNote`), since by her own rules a question gets an answer and no cards, and half the walkthrough's lines are questions.
  */
 export const momoNote = (script: DemoScript) => `# Recording a walkthrough
-The user is recording a walkthrough of one tree, and each thing they say is a take. So, only here:
-- With no tree open, "let's jam on…", "let's brainstorm…" or a subject alone asks for a tree: call start_tree with the subject, and ask nothing first. The walkthrough's own subject is "${script.topic}": when that is what they mean, in whatever words, give start_tree exactly those words.
-- A [Where the user is] note may end with a line that begins "Recording:". It says what the next thing the user says asks for with that card open, and it comes before the rules above. When it says a new layer: say a few lively words of your own and call find_new on the open card, their words as the need, even when they put it as a question, a reaction or a single word ("So which ones do we keep?", "that's cool, but…", "Layers?"), and ask nothing back. Only "more of this" and "more like this" stay more_like_this. When it says to answer aloud: answer from the card in a sentence or two, and call no tool.
+The user is recording a walkthrough of one tree, and each thing they say is a take. Your words for each take are written and recorded already, and the recording is played for you. So, only here:
+- With no tree open, "let's jam on…", "let's brainstorm…" or a subject alone asks for a tree: call start_tree with the subject at once, ask nothing, and say nothing yourself. The walkthrough's own subject is "${script.topic}": when that is what they mean, in whatever words, give start_tree exactly those words.
+- A [Where the user is] note may end with a line that begins "Recording:". It says what the next thing the user says asks for with that card open, and it comes before the rules above. When it says a new layer: call find_new on the open card at once, their words as the need, even when they put it as a question, a reaction or a single word ("So which ones do we keep?", "that's cool, but…", "Layers?"), ask nothing back and say nothing yourself. Only "more of this" and "more like this" stay more_like_this. When it says to answer aloud: say nothing and call no tool, because your answer is recorded.
 - With no such line, everything is as above.
 - A round here lands many cards at once. At [More cards landed] with more than two cards, never say their titles one after another: say how many came and name the one you like best, in one short line.`;
 
@@ -107,6 +118,25 @@ export interface DemoStatus {
   problem: string | null;
   /** The showcase trees: whether they stand in the forest, and each by name with the number of its cards. */
   showcase: { on: boolean; trees: { id: string; title: string; cards: number }[] };
+  /** The take the bar shows: its round, how long it is, where it is, and whether it is running. Null before any round was played or moved in. */
+  take: { round: string; ms: number; at: number; playing: boolean } | null;
+  /** Lines of Momo's being recorded now, and how many lines hold the user's own words. */
+  lines: { recording: number; edited: number };
+}
+
+/** A take as the page draws it: the timeline, with each of Momo's lines as it is written and whether its recording exists. */
+export interface TakeShown extends Take {
+  lines: (TimedLine & Pick<LineShown, 'written' | 'edited'> & { recorded: boolean })[];
+}
+
+/** A take that is running. */
+interface Rolling {
+  phase: ScriptPhase;
+  take: Take;
+  /** Where the take is now, in its own ms. */
+  now: () => number;
+  /** Ends it where it is. */
+  stop: () => void;
 }
 
 export class Director {
@@ -135,6 +165,21 @@ export class Director {
   /** The showcase trees, and whether they stand in the forest. */
   private readonly shows: Showcase[];
   private showing = true;
+  /** The take that is running, and where the last one was left: paused, moved to, or over. */
+  private rolling: Rolling | null = null;
+  private cursor: { round: string; ms: number } | null = null;
+  /** The take the Scout is about to be asked for, from the page: its round, and the moment it starts from. */
+  private pending: { phase: string; from: number } | null = null;
+  /** The labels held up at a moment the take is paused on, each ended by calling it. */
+  private held: (() => void)[] = [];
+  /** The round the user's next words ask for, as Momo was last told with where they are. */
+  private listening: { phase: ScriptPhase; at: number } | null = null;
+  /** Until when Momo is told nothing of what a take did, so the run's end is not told in words of her own. */
+  private quiet = 0;
+  private plays = 0;
+  /** The newest move asked for: an older one still waiting gives way to it. */
+  private moves = 0;
+  private moving: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: DirectorDeps) {
     this.pace = { ...PACE, ...deps.pace };
@@ -317,7 +362,44 @@ export class Director {
       rounds: this.script.phases.map((phase) => ({ id: phase.id, state: this.playing.has(phase.id) ? 'playing' : (this.built.get(phase.id) ?? 'waiting') })),
       problem: this.problem,
       showcase: { on: this.showing, trees: this.shows.map(({ tree }) => ({ id: tree.id, title: tree.title, cards: tree.cards.length })) },
+      take: this.rolling
+        ? { round: this.rolling.phase.id, ms: this.rolling.take.ms, at: Math.round(Math.min(this.rolling.now(), this.rolling.take.ms)), playing: true }
+        : this.cursor
+          ? { round: this.cursor.round, ms: this.timeline(this.cursor.round).ms, at: Math.round(this.cursor.ms), playing: false }
+          : null,
+      lines: { recording: this.deps.lines.busy, edited: this.deps.lines.edited },
     };
+  }
+
+  private phase(id: string): ScriptPhase {
+    const phase = this.script.phases.find((p) => p.id === id);
+    if (!phase) throw new Error(`the script has no round called ${id}`);
+    return phase;
+  }
+
+  /** A round's take as it would play now: the user's words where they wrote any, each line as long as its recording. */
+  private timeline(round: string): Take {
+    const { lines } = this.deps;
+    return takeOf(this.phase(round), lines.of(round), (text) => lines.ms(text));
+  }
+
+  /** A round's take for the page. */
+  shown(round: string): TakeShown {
+    const { lines } = this.deps;
+    const take = this.timeline(round);
+    const shown = new Map(lines.of(round).map((line): [string, LineShown] => [line.id, line]));
+    return { ...take, lines: take.lines.map((line) => ({ ...line, written: shown.get(line.id)!.written, edited: shown.get(line.id)!.edited, recorded: lines.recorded(line.text) })) };
+  }
+
+  /**
+   * Writes the user's words over one of Momo's lines, or with `null` goes back to her own, and has the new words recorded. A take
+   * that is running goes on with the words it began with.
+   */
+  setLine(round: string, line: string, text: string | null): TakeShown {
+    this.phase(round);
+    if (!this.deps.lines.edit(round, line, text)) throw new Error(`round ${round} has no line called ${line}`);
+    for (const said of this.deps.lines.of(round)) void this.deps.lines.audio(said.text);
+    return this.shown(round);
   }
 
   /** The script as the page draws it: the chart, and each round with its line, its card and what it brings. */
@@ -361,6 +443,8 @@ export class Director {
     this.busy = target ? `Setting up for "${target.title}"` : 'Building the whole tree';
     this.problem = null;
     try {
+      this.halt();
+      this.cursor = null;
       this.deps.forgetVoices();
       this.deps.pipeline.forget();
       for (const resume of [...this.waiting.values()].flatMap((set) => [...set])) resume();
@@ -415,34 +499,299 @@ export class Director {
     return Boolean(this.deps.restart);
   }
 
+  // ---- a round as a take
+
+  /** Ends the take that is running where it is, and takes down the labels held at a paused moment. */
+  private halt(): void {
+    this.pending = null;
+    this.rolling?.stop();
+    for (const end of this.held.splice(0)) end();
+  }
+
   /**
-   * Plays the next round without a word said: its card is gone to, then the Scout is asked for more on it, which brings the round.
-   * For a take where the voice is not wanted, and for when Momo answers a line without starting a search.
+   * Whether the tree stands as a round's take needs: every round before it built, and none after it. A take played anywhere
+   * else would hang its cards among the wrong ones.
    */
-  async play(): Promise<void> {
+  private ready(phase: ScriptPhase): void {
+    const at = this.script.phases.indexOf(phase);
+    const before = this.script.phases.slice(0, at).find((p) => p.cards.length > 0 && !this.built.has(p.id));
+    const after = this.script.phases.slice(at + 1).find((p) => p.cards.length > 0 && this.built.has(p.id));
+    if (before || after) throw new Error(`The tree is not set up for "${phase.title}": press Go to this round first.`);
+  }
+
+  private headOf(phase: ScriptPhase): Id | null {
+    const head = phase.head === 'root' ? this.root : this.nodes.get(phase.head);
+    return head && this.deps.mind.nodes.has(head) ? head : null;
+  }
+
+  /**
+   * Plays a round's take on the headset from a moment of it: the scene, Momo's voice and the agents' labels together, at the
+   * pace of a real round. With no round named it is the one the bar is on, or the next. With no moment named it goes on from
+   * where the bar is, or from the start when the take was over.
+   */
+  async playTake(round?: string, from?: number): Promise<void> {
     this.problem = null;
     try {
-      const phase = this.script.phases.slice(this.armed).find((p) => !this.built.has(p.id) && p.cards.length > 0);
+      const phase = round ? this.phase(round) : this.cursor ? this.phase(this.cursor.round) : this.script.phases.slice(this.armed).find((p) => !this.built.has(p.id));
       if (!phase) throw new Error('Every round is built: go to an earlier round to play again.');
-      if (phase.head === 'root' && (!this.root || !this.deps.mind.nodes.has(this.root))) {
+      this.ready(phase);
+      const take = this.timeline(phase.id);
+      let at = Math.max(0, Math.min(from ?? (this.cursor?.round === phase.id ? this.cursor.ms : 0), take.ms));
+      if (at >= take.ms - 50) at = 0;
+      this.halt();
+      // Every line is recorded before the take begins, so none starts late for want of its recording.
+      await Promise.all(take.lines.map((line) => this.deps.lines.audio(line.text)));
+      if (phase.head === 'root' && !this.headOf(phase)) {
         // The tree's own first round follows from starting it, as it does when the user asks for a tree.
+        this.pending = { phase: phase.id, from: 0 };
         await this.deps.asDevice(() => this.deps.pipeline.makeTree(this.script.topic));
         return;
       }
-      const head = phase.head === 'root' ? this.root : this.nodes.get(phase.head);
-      if (!head || !this.deps.mind.nodes.has(head)) throw new Error(`"${phase.title}" is asked from a card that is not in the tree yet: go to the round first.`);
-      if (this.deps.devices() > 0) {
-        const there = this.hears([`questions:${head}`, `focus:${head}`], this.pace.open);
-        this.deps.asDevice(() => this.deps.pipeline.go(head));
-        await there;
-        await pause(this.pace.breath);
+      const head = await this.stand(phase, take, at);
+      if (phase.cards.length === 0) {
+        await this.roll(this.deps.pipeline.ctx, phase, head, undefined, at);
+        return;
       }
+      this.pending = { phase: phase.id, from: at };
       await this.deps.asDevice(() => this.deps.pipeline.more(head, phase.ask));
     } catch (err) {
+      this.pending = null;
       this.problem = err instanceof Error ? err.message : String(err);
       this.deps.log(`[demo] could not play: ${this.problem}`);
       throw err;
     }
+  }
+
+  /** Stops the take where it is. The tree stays as it stands at that moment, with that moment's labels. */
+  pause(): void {
+    const was = this.rolling;
+    if (!was) return;
+    this.halt();
+    // The run the take rode on is over without a word: what it would announce is not said.
+    this.deps.pipeline.forget();
+    const head = this.headOf(was.phase);
+    if (head && this.cursor) this.hold(was.take, this.cursor.ms, head);
+  }
+
+  /**
+   * Moves a round's take to a moment, as dragging a film's bar does, and leaves it paused there: the cards that had landed by
+   * then stand, later ones are taken away, and the labels are that moment's. Moves asked for while one is under way are done in
+   * order, and only the newest of those waiting is done.
+   */
+  seek(round: string, ms: number): Promise<void> {
+    const phase = this.phase(round);
+    const move = ++this.moves;
+    this.moving = this.moving
+      .catch(() => {})
+      .then(async () => {
+        if (move !== this.moves) return;
+        this.problem = null;
+        try {
+          this.ready(phase);
+          if (this.rolling) this.deps.pipeline.forget();
+          this.halt();
+          const take = this.timeline(phase.id);
+          const at = Math.max(0, Math.min(ms, take.ms));
+          this.cursor = { round: phase.id, ms: at };
+          if (phase.head === 'root' && !this.headOf(phase)) return;
+          this.hold(take, at, await this.stand(phase, take, at));
+        } catch (err) {
+          this.problem = err instanceof Error ? err.message : String(err);
+          throw err;
+        }
+      });
+    return this.moving;
+  }
+
+  /**
+   * Makes the tree stand as it does at one moment of a take: the headset on the round's card, the cards that have landed by then
+   * hung on it as suggestions, and those that land later taken away. Returns the round's card.
+   */
+  private async stand(phase: ScriptPhase, take: Take, ms: number): Promise<Id> {
+    const { mind, pipeline } = this.deps;
+    const head = this.headOf(phase);
+    if (!head) throw new Error(`"${phase.title}" is asked from a card that is not in the tree yet: press Go to this round first.`);
+    if (this.deps.devices() > 0 && this.at !== head) {
+      const there = this.hears([`questions:${head}`, `focus:${head}`], this.pace.open);
+      this.deps.asDevice(() => pipeline.go(head));
+      await there;
+      await pause(this.pace.breath);
+      this.at = head;
+    }
+    const landed = new Set(momentAt(take, ms).cards);
+    const early: Command[] = [];
+    for (const card of phase.cards) {
+      const node = this.nodes.get(card.id);
+      if (landed.has(card.id) || !node) continue;
+      this.nodes.delete(card.id);
+      if (mind.nodes.has(node)) early.push({ type: 'deleteNode', id: node });
+    }
+    if (early.length > 0) this.deps.asDevice(() => pipeline.stage(DEMO, 'Demo: back in the take', early));
+    const order = take.drops.flatMap((drop) => drop.cards);
+    const due = phase.cards.filter((card) => landed.has(card.id)).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+    const late = this.commandsFor(mind, due, head, 'pick', 0);
+    if (late.length > 0) this.deps.asDevice(() => pipeline.stage(DEMO, 'Demo: on in the take', late));
+    this.mark(phase);
+    return head;
+  }
+
+  /** A round counts as played once all its cards stand, and as waiting again once one is taken back. */
+  private mark(phase: ScriptPhase, over = false): void {
+    const at = this.script.phases.indexOf(phase);
+    const whole = phase.cards.length > 0 ? phase.cards.every((card) => this.nodes.has(card.id)) : over;
+    if (whole) {
+      this.built.set(phase.id, 'played');
+      if (at >= this.armed) this.armed = at + 1;
+      while (this.armed < this.script.phases.length && this.built.has(this.script.phases[this.armed]!.id)) this.armed++;
+    } else {
+      this.built.delete(phase.id);
+      this.armed = Math.min(this.armed, at);
+    }
+  }
+
+  /** Shows the labels of one moment for as long as the take rests there. */
+  private hold(take: Take, ms: number, head: Id): void {
+    for (const step of momentAt(take, ms).steps) {
+      void this.deps.pipeline.ctx.step('scout', step.label, () => new Promise<void>((end) => this.held.push(end)), { nodeId: head }).catch(() => {});
+    }
+  }
+
+  /**
+   * One take running, from a moment of it: each label shown from its start to its end, each delivery of cards landed as the
+   * run's picks, and each of Momo's lines said, all on the take's own clock. Resolves when the take is over or is stopped.
+   */
+  private roll(ctx: RoleContext, phase: ScriptPhase, anchor: Id, deliver: ((commands: Command[]) => void) | undefined, from: number): Promise<Command[]> {
+    this.halt();
+    const take = this.timeline(phase.id);
+    const play = ++this.plays;
+    const rate = Math.max(0.01, this.pace.rate);
+    const wall = Date.now();
+    const now = () => from + (Date.now() - wall) * rate;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const ends = new Set<() => void>();
+    let stopped = false;
+    let finish!: () => void;
+    const over = new Promise<void>((done) => (finish = done));
+    const at = (ms: number, act: () => void) => {
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        if (!stopped) act();
+      }, Math.max(0, (ms - now()) / rate));
+      timers.add(timer);
+    };
+    const end = (ms: number) => {
+      stopped = true;
+      for (const timer of timers) clearTimeout(timer);
+      for (const done of ends) done();
+      this.cursor = { round: phase.id, ms: Math.max(0, Math.min(ms, take.ms)) };
+      this.rolling = null;
+      this.playing.delete(phase.id);
+      this.quiet = Date.now() + 500;
+      finish();
+    };
+    this.rolling = { phase, take, now, stop: () => end(now()) };
+    this.pending = null;
+    this.listening = null;
+    this.cursor = null;
+    this.playing.add(phase.id);
+    this.deps.log(`[demo] playing "${phase.title}" under "${ctx.mind.itemOf(anchor).title}" from ${(from / 1000).toFixed(1)} of ${(take.ms / 1000).toFixed(1)} s`);
+    if (phase.head === 'root') {
+      this.root = anchor;
+      // The tree is named as a set-up names it, whatever words started it, so its cover reads the same after every take.
+      const tree = ctx.mind.tree(ctx.mind.node(anchor).treeId);
+      if (tree.title !== this.script.title) this.deps.pipeline.stage(DEMO, 'Demo: name the tree', [{ type: 'renameTree', id: tree.id, title: this.script.title }]);
+    }
+
+    for (const step of take.steps) {
+      if (step.end <= from) continue;
+      at(step.at, () => {
+        const shown = new Promise<void>((done) => {
+          ends.add(done);
+          at(step.end, done);
+        });
+        void ctx.step('scout', step.label, () => shown, { nodeId: anchor }).catch(() => {});
+      });
+    }
+    let rank = take.drops.filter((drop) => drop.at <= from).reduce((n, drop) => n + drop.cards.length, 0);
+    for (const drop of take.drops) {
+      if (drop.at <= from) continue;
+      const cards = drop.cards.map((id) => phase.cards.find((card) => card.id === id)!);
+      const first = rank;
+      rank += cards.length;
+      at(drop.at, () => {
+        const commands = this.commandsFor(ctx.mind, cards, anchor, 'pick', first);
+        if (deliver) deliver(commands);
+        else if (commands.length > 0) this.deps.pipeline.stage(DEMO, `Demo: ${phase.title}`, commands);
+        this.mark(phase);
+      });
+    }
+    for (const line of take.lines) {
+      if (line.ms === 0 || line.at + line.ms <= from) continue;
+      at(line.at, () => void this.say(play, line, Math.max(0, from - line.at), rate, () => stopped));
+    }
+    at(take.ms, () => {
+      this.mark(phase, true);
+      end(take.ms);
+    });
+    return over.then(() => []);
+  }
+
+  /**
+   * One of Momo's lines said on the headset from its recording: its words for the caption, then its sound a tenth of a second
+   * at a time, kept a quarter of a second ahead of the clock, so a take that is stopped falls silent at once.
+   */
+  private async say(play: number, line: TimedLine, offset: number, rate: number, stopped: () => boolean): Promise<void> {
+    const send = this.deps.momo;
+    if (!send) return;
+    const id = `take-${play}-${line.id}`;
+    if (!send({ t: 'text', id, text: line.text, kind: line.kind === 'answer' ? 'reply' : 'results' })) return;
+    const pcm = await this.deps.lines.audio(line.text);
+    if (pcm) {
+      const piece = BYTES_PER_MS * 100;
+      const began = Date.now();
+      for (let at = Math.floor((offset * BYTES_PER_MS) / 2) * 2; at < pcm.length && !stopped(); at += piece) {
+        send({ t: 'audio', id, pcm: Buffer.from(pcm.subarray(at, at + piece)).toString('base64') });
+        const ahead = (at + piece) / BYTES_PER_MS - offset - (Date.now() - began) * rate;
+        if (ahead > 250) await pause((ahead - 250) / rate);
+      }
+    }
+    send({ t: 'done', id });
+  }
+
+  /**
+   * Whether Momo's own voice is kept from the headset now: while a take runs or is about to, and from when she is told that the
+   * user's next words ask for a round, since the round's recorded lines are what is heard. On an empty stage the next words
+   * start the tree, which is the first round.
+   */
+  mutes(): boolean {
+    if (!this.scripted) return false;
+    if (this.rolling || this.pending) return true;
+    if (this.listening && Date.now() - this.listening.at < 60_000) return true;
+    return this.awaitsTree();
+  }
+
+  private awaitsTree(): boolean {
+    return this.built.size === 0 && this.headOf(this.script.phases[0]!) === null;
+  }
+
+  /** Whether Momo is told nothing of what the agents do now: a take says its own lines, and its run's end is not hers to tell. */
+  directing(): boolean {
+    return this.rolling !== null || this.pending !== null || Date.now() < this.quiet;
+  }
+
+  /**
+   * Momo finished a reply that was kept from the headset. If the user's words were to bring a round and she started no search,
+   * the take starts anyway, so a take never hangs on what the live model chose to do.
+   */
+  replied(): void {
+    const round = this.listening?.phase ?? (this.awaitsTree() ? this.script.phases[0] : undefined);
+    if (!round || !this.scripted) return;
+    const timer = setTimeout(() => {
+      if (this.rolling || this.pending || this.built.has(round.id)) return;
+      this.deps.log(`[demo] Momo started nothing for "${round.title}", so its take is started for her`);
+      void this.playTake(round.id, 0).catch(() => {});
+    }, 1500);
+    timer.unref?.();
   }
 
   /**
@@ -450,12 +799,15 @@ export class Director {
    * that waits on that card. A round with cards is a new layer on it; a round that brings nothing is answered aloud from it.
    */
   takeNote(focus: Id | undefined): string {
+    this.listening = null;
     if (!this.scripted || !focus) return '';
     const here = this.script.phases.filter(
       (phase) => !this.built.has(phase.id) && !this.playing.has(phase.id) && (phase.head === 'root' ? this.root === focus : this.nodes.get(phase.head) === focus),
     );
     if (here.length === 0) return '';
-    return here.some((phase) => phase.cards.length > 0)
+    const withCards = here.find((phase) => phase.cards.length > 0);
+    this.listening = { phase: withCards ?? here[0]!, at: Date.now() };
+    return withCards
       ? '\nRecording: with this card open, the next thing the user says asks for a new layer on it.'
       : '\nRecording: with this card open, the next thing the user says is a question to answer aloud from this card.';
   }
@@ -477,8 +829,10 @@ export class Director {
     return {
       ...real,
       scout: (ctx, input) => {
-        const phase = this.scripted && !this.inShowcase(input.anchor) ? this.choose(input.anchor, input.need) : undefined;
-        return phase ? this.bring(ctx, phase, input.anchor, input.deliver) : real.scout(ctx, input);
+        // The page's Play names its round and the moment it starts from; a request made on the headset finds its round, from the start.
+        const asked = this.pending;
+        const phase = asked ? this.phase(asked.phase) : this.scripted && !this.inShowcase(input.anchor) ? this.choose(input.anchor, input.need) : undefined;
+        return phase ? this.roll(ctx, phase, input.anchor, input.deliver, asked?.from ?? 0) : real.scout(ctx, input);
       },
       questions: async (ctx, input) => {
         // Under the card a round is asked from, the questions the script offers; anywhere else, the live ones.
@@ -526,40 +880,6 @@ export class Director {
     return open.find((phase) => index(phase) >= this.armed && phase.cards.length > 0 && phase.head !== 'root') ?? open.find((phase) => phase.cards.length > 0 && phase.head !== 'root');
   }
 
-  /** One round played: the steps a Scout run shows, with the round's cards landing as its picks, the user's own things first. */
-  private async bring(ctx: RoleContext, phase: ScriptPhase, anchor: Id, deliver?: (commands: Command[]) => void): Promise<Command[]> {
-    this.playing.add(phase.id);
-    this.deps.log(`[demo] playing "${phase.title}" under "${ctx.mind.itemOf(anchor).title}"`);
-    const step = (label: string, ms: number) => ctx.step('scout', label, () => pause(ms), { nodeId: anchor });
-    try {
-      if (phase.head === 'root') {
-        this.root = anchor;
-        // The tree is named as a set-up names it, whatever words started it, so its cover reads the same after every take.
-        const tree = ctx.mind.tree(ctx.mind.node(anchor).treeId);
-        if (tree.title !== this.script.title) this.deps.pipeline.stage(DEMO, 'Demo: name the tree', [{ type: 'renameTree', id: tree.id, title: this.script.title }]);
-      }
-      const waves = wavesOf(phase);
-      let rank = 0;
-      let last: Command[] = [];
-      if (waves.length > 0) await step('Choosing where to look first', this.pace.step * 0.6);
-      else await step('Checking what you already have', this.pace.step);
-      for (const [n, wave] of waves.entries()) {
-        for (const label of wave.labels) await step(label, this.pace.step * wave.weight);
-        const commands = this.commandsFor(ctx.mind, wave.cards, anchor, 'pick', rank);
-        rank += wave.cards.length;
-        if (n < waves.length - 1 && deliver) deliver(commands);
-        else last = [...last, ...commands];
-      }
-      this.built.set(phase.id, 'played');
-      const at = this.script.phases.indexOf(phase);
-      if (at >= this.armed) this.armed = at + 1;
-      while (this.armed < this.script.phases.length && this.built.has(this.script.phases[this.armed]!.id)) this.armed++;
-      return last;
-    } finally {
-      this.playing.delete(phase.id);
-    }
-  }
-
   // ---- setting the tree up
 
   /** The trees this demo made, in this run or one before it: any that holds a card of the script. */
@@ -582,6 +902,7 @@ export class Director {
     this.nodes.clear();
     this.built.clear();
     this.playing.clear();
+    this.listening = null;
     this.at = null;
     this.leading.clear();
     if (!own) this.root = null;
@@ -721,48 +1042,8 @@ export class Director {
   }
 }
 
-interface Wave {
-  /** The steps shown before the cards land. */
-  labels: string[];
-  /** How long each step lasts, as a share of the pace's step. */
-  weight: number;
-  cards: ScriptCard[];
-}
-
-/**
- * A round's cards in the order a Scout run brings them: what the user already has first, then what each source outside gave,
- * then what the agents made, each under the label the live Scout shows for that work.
- */
-export function wavesOf(phase: ScriptPhase): Wave[] {
-  const waves: Wave[] = [];
-  const own = phase.cards.filter((card) => card.origin === 'ocean');
-  if (own.length > 0) waves.push({ labels: ['Checking what you already have'], weight: 1, cards: own });
-  const outside = phase.cards.filter((card) => card.origin === 'external');
-  const bySource = new Map<string, ScriptCard[]>();
-  for (const card of outside) {
-    const source = card.kind === 'paper' ? 'research papers' : (sourceName(card) ?? 'the web');
-    bySource.set(source, [...(bySource.get(source) ?? []), card]);
-  }
-  // A run searches a few sources, not a dozen: the largest keep their names, and the rest are the web's.
-  const named = [...bySource].sort((a, b) => b[1].length - a[1].length);
-  const kept = named.slice(0, 2);
-  const rest = named.slice(2).flatMap(([, cards]) => cards);
-  if (rest.length > 0) kept.push(['the web', rest]);
-  for (const [source, cards] of kept) {
-    waves.push({ labels: [`Searching ${source}`, `Reading ${cards.length} result${cards.length === 1 ? '' : 's'} from ${source}`], weight: 0.8, cards: outside.filter((card) => cards.includes(card)) });
-  }
-  const made = phase.cards.filter((card) => card.origin === 'generated');
-  for (const card of made.slice(0, 1)) waves.push({ labels: [card.image ? `Making a picture of ${card.title}`.slice(0, 60) : 'Writing an idea down'], weight: 1.2, cards: made });
-  return waves;
-}
-
-/** The source's name as a step would say it: short, and a museum by its own name. */
-function sourceName(card: ScriptCard): string | undefined {
-  const from = (card.from ?? card.holder ?? '').replace(/,? via .*$/i, '').replace(/,.*$/, '').trim();
-  if (!from) return undefined;
-  if (/wikimedia|commons/i.test(from)) return 'Wikimedia Commons';
-  return from.length <= 34 ? from : undefined;
-}
+/** 16-bit mono at 24 kHz, the live voice's own format. */
+const BYTES_PER_MS = 48;
 
 function pause(ms: number): Promise<void> {
   return ms > 0 ? new Promise((done) => setTimeout(done, ms)) : Promise.resolve();

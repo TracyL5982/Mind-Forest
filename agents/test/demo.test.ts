@@ -6,7 +6,8 @@ import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { momoNote, wavesOf } from '../src/demo/director.ts';
+import { momoNote } from '../src/demo/director.ts';
+import { schedule } from '../src/demo/take.ts';
 import { loadScript } from '../src/demo/script.ts';
 import { loadShowcase, type Showcase } from '../src/demo/showcase.ts';
 import { startServer, type Running } from '../src/node/server.ts';
@@ -14,7 +15,8 @@ import { startServer, type Running } from '../src/node/server.ts';
 /** The demo with stand-in roles and no waits: the walkthrough's own script and pictures, as `npm run demo:fake` runs them. */
 const demoDir = join(import.meta.dirname, '../demo');
 const script = loadScript(join(demoDir, 'script.json'));
-const quick = { stand: 400, open: 400, land: 400, breath: 0, step: 0, rejoin: 1500 };
+/** A take's clock runs 400 times as fast, so a round of 45 s is over in a tenth of one. */
+const quick = { stand: 400, open: 400, land: 400, breath: 0, step: 0, rate: 400, rejoin: 1500 };
 
 async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-demo-')), restart?: () => Promise<string>, showcase?: Showcase[]): Promise<Running> {
   return startServer({
@@ -64,7 +66,7 @@ test('the script holds together: every round is asked from a card an earlier rou
   assert.equal(script.phases[0]!.head, 'root');
   const titles = script.phases.flatMap((phase) => phase.cards.map((card) => card.title.toLowerCase()));
   assert.equal(new Set(titles).size, titles.length, 'two cards share a title, and the round rules would leave one out');
-  for (const phase of script.phases) for (const wave of wavesOf(phase)) assert.ok(wave.labels.every((label) => label.split(' ').length <= 9), `a step label of ${phase.id} is too long`);
+  for (const phase of script.phases) for (const step of schedule(phase).steps) assert.ok(step.label.split(' ').length <= 9, `a step label of ${phase.id} is too long`);
 });
 
 test('going to a round builds every round before it, kept, and leaves it the next', async () => {
