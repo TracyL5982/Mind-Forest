@@ -11,6 +11,8 @@ import type { JsonRequest } from '../src/core/ports.ts';
 import { makeItem, makeNode } from '../src/core/roles/types.ts';
 import { instructions } from '../src/node/live.ts';
 import type { Reading } from '../src/node/momo-chat.ts';
+import { loadScript } from '../src/demo/script.ts';
+import { ownBot, ownerSecret, pairingIn } from '../src/node/telegram.ts';
 import { ADA, BOT_TOKEN as TOKEN, EVE, FakeBot, type Person, type Sent } from './fake-bot.ts';
 import { tempDir } from './temp.ts';
 
@@ -554,8 +556,10 @@ test('a link or a photo is always kept, and Momo answers what is asked about it 
 
   assert.match((await tell(bot, 'https://example.com/heat-pumps is this any good?'))[0]!.text, /^Looks like a solid explainer on defrost cycles\.\n\nI’ve kept “/);
   assert.equal(items(b.run).length, 1, 'kept once, whatever Momo chose');
-  assert.match(asked[0]!.user, /\[Already kept\]\n- "/);
-  assert.match(asked[0]!.user, /Message: """\nis this any good\?\n"""$/);
+  assert.match(asked[0]!.user, /\[Sent with\]\na link, kept on its own\./, 'first, whether the words say which tree it goes in');
+  const about = asked.find((req) => /\[Already kept\]/.test(req.user))!;
+  assert.match(about.user, /\[Already kept\]\n- "/);
+  assert.match(about.user, /Message: """\nis this any good\?\n"""$/);
   assert.deepEqual(items(b.run).map((i) => [i.kind, i.source.url]), [['link', 'https://example.com/heat-pumps']], 'the link is kept as a page, and the question about it is not kept');
   await tell(bot, 'Read https://example.com/defrost, the best piece on defrost cycles.');
   assert.deepEqual(items(b.run).slice(1).map((i) => i.kind).sort(), ['link', 'text'], 'words that say something are kept beside their link');
@@ -565,7 +569,7 @@ test('a link or a photo is always kept, and Momo answers what is asked about it 
   let sent = bot.sent.length;
   bot.push(ADA, { photo: [{ file_id: 'coil', width: 800, height: 600 }], caption: 'what is this part?' });
   assert.match((await next(bot, sent, 1))[0]!.text, /^Looks like a solid explainer on defrost cycles\.\n\nI’ve kept /);
-  assert.match(asked[1]!.user, /\[Already kept\]/);
+  assert.ok(asked.slice(1).some((req) => /\[Already kept\]/.test(req.user)));
 
   const calls = asked.length;
   sent = bot.sent.length;
@@ -618,4 +622,172 @@ test('a chat\'s messages are answered in the order they came, each read knowing 
   const replies = (await next(bot, sent, 3)).map((m) => m.text.split('“')[0]);
   assert.deepEqual(replies, ['One.', 'I’ve kept ', 'Two.'], 'the second is not answered until the first is kept');
   assert.match(asked[1]!.user, /Momo: One\. I’ve kept “/, 'and Momo knows the first was kept');
+});
+
+test("the owner's bot is read by one program: the Mac's service, the demo only when switched on, and never the offline stand-in", () => {
+  const env = { TELEGRAM_BOT_TOKEN: TOKEN };
+  assert.equal(ownBot(env, { fake: false, demo: false }), TOKEN, "the user's own service");
+  assert.equal(ownBot(env, { fake: true, demo: false }), undefined, 'the offline stand-in');
+  assert.equal(ownBot(env, { fake: false, demo: true }), undefined, 'a demo run on the Mac, beside the service that reads it');
+  assert.equal(ownBot({ ...env, MIND_PALACE_DEMO_TELEGRAM: 'on' }, { fake: false, demo: true }), TOKEN, 'the demo on Fly');
+  assert.equal(ownBot({ MIND_PALACE_DEMO_TELEGRAM: 'on' }, { fake: false, demo: true }), undefined, 'no token, no bot');
+});
+
+const demoDir = join(import.meta.dirname, '../demo');
+const demoScript = loadScript(join(demoDir, 'script.json'));
+const demo = (rate = 400): ServerOptions['demo'] => ({ script: demoScript, mediaDir: join(demoDir, 'media'), pace: { stand: 400, open: 400, land: 400, breath: 0, step: 0, rate, rejoin: 1500 } });
+const until = async (check: () => boolean, ms = 8000): Promise<void> => {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) throw new Error(`it did not happen in ${ms} ms`);
+    await new Promise((r) => setTimeout(r, 10));
+  }
+};
+
+test('the demo reads the bot as the Mac does: what the paired account sends is kept through the same path, and Momo answers it', async () => {
+  const bot = await stand();
+  const b = await boot(bot, { demo: demo() });
+  await pair(b, bot);
+  const count = items(b.run).length;
+  bot.push(ADA, { text: 'Sourdough rises slowly in winter' });
+  const reply = await bot.reply(ADA.id, /^I’ve kept “/);
+  const made = items(b.run).slice(count);
+  assert.equal(made.length, 1);
+  assert.match(made[0]!.title, /Sourdough/);
+  assert.equal(made[0]!.source.from, 'paste', 'kept as a drop on the web page is');
+  assert.equal(reply.text, `I’ve kept “${made[0]!.title}”. It is in your knowledge base, in no tree yet.`);
+});
+
+test("a service given its owner's pairing hears that account from the start, with no code, and anyone else still gets the one line", async () => {
+  const bot = await stand();
+  const owner = { userId: ADA.id, chatId: ADA.id, name: 'Ada Lovelace' };
+  const b = await boot(bot, { telegram: { token: TOKEN, owner } });
+  bot.push(ADA, { text: 'Sourdough rises slowly in winter' });
+  await bot.reply(ADA.id, /^I’ve kept “Sourdough/);
+  assert.equal((await status(b.run)).paired, 'Ada Lovelace');
+  bot.push(EVE, { text: 'let me in' });
+  await bot.reply(EVE.id, /only talk with the person this palace belongs to/);
+  assert.equal(items(b.run).filter((item) => /let me in/.test(item.title)).length, 0, 'nothing a stranger sends is kept');
+  assert.deepEqual(pairingIn(join(b.dataDir, 'telegram.json')), owner, 'and the pairing is kept as one made with a code is');
+});
+
+test("the Mac's pairing goes up as one secret value that decodes to it, and a missing or unreadable one to no pairing", () => {
+  const owner = { userId: 111, chatId: 111, name: 'Ada "A." Lovelace: notes' };
+  const value = ownerSecret.encode(owner);
+  assert.match(value, /^[A-Za-z0-9_-]+$/, 'nothing in it needs quoting in fly secrets import');
+  assert.deepEqual(ownerSecret.decode(value), owner);
+  assert.equal(ownerSecret.decode(undefined), null);
+  assert.equal(ownerSecret.decode('not a pairing'), null);
+  assert.equal(ownerSecret.decode(Buffer.from('{"userId":"x"}').toString('base64url')), null);
+  assert.equal(pairingIn(join(tempDir('mp-'), 'no-such-telegram.json')), null);
+});
+
+test('in the demo a tree started from Telegram is grown by the real Scout, then and when asked on later, and takes no round of the script', async () => {
+  const bot = await stand();
+  const b = await boot(bot, { demo: demo() });
+  await pair(b, bot);
+  bot.push(ADA, { text: 'Make a tree about volcanoes' });
+  await bot.reply(ADA.id, /started the tree/);
+  const root = [...b.run.mind.nodes.values()].find((node) => node.parent === null && /volcano/i.test(b.run.mind.tree(node.treeId).title))!;
+  assert.ok(root, 'the tree stands');
+  const picks = () => b.run.mind.children(root.id).map((node) => node.itemId);
+  await until(() => picks().length > 0);
+  assert.deepEqual(picks().filter((id) => id.startsWith('demo-')), [], 'no card of the script under it');
+  const had = picks().length;
+  await b.run.pipeline.ask(root.id, 'more about lava');
+  await until(() => picks().length > had);
+  assert.deepEqual(picks().filter((id) => id.startsWith('demo-')), [], 'nor when asked on later, from the headset');
+  assert.equal(b.run.demo!.status().take, null, 'no take was played');
+});
+
+test('in the demo what Telegram brings while a take plays waits for the take to end, then is filed as ever', async () => {
+  const bot = await stand();
+  const b = await boot(bot, { demo: demo(25) });
+  await pair(b, bot);
+  await b.run.demo!.goto('n2');
+  const playing = b.run.demo!.playTake('n2');
+  await until(() => b.run.demo!.directing());
+  const count = items(b.run).length;
+  await bot.read(bot.push(ADA, { text: 'Sourdough rises slowly in winter' }));
+  await new Promise((r) => setTimeout(r, 300));
+  assert.ok(b.run.demo!.directing(), 'the take is still playing');
+  assert.equal(items(b.run).filter((item) => /Sourdough/.test(item.title)).length, 0, 'nothing is filed during the take');
+  await playing;
+  await until(() => !b.run.demo!.directing(), 30_000);
+  const reply = await bot.reply(ADA.id, /^I’ve kept “Sourdough/);
+  assert.equal(items(b.run).slice(count).filter((item) => /Sourdough/.test(item.title)).length, 1, 'and it is filed once the take is over');
+  assert.match(reply.text, /knowledge base|went under/);
+});
+
+/** The Filer's answer for what is put in a tree: under the card titled `card` when given, or under none, so the first card. */
+function filing(model: FakeModel, card?: string): void {
+  model.on('filer', (req) => {
+    const items = [...req.user.matchAll(/^- item (\S+) /gm)].map((m) => m[1]!);
+    const node = card ? new RegExp(`^- node (\\S+) \\(depth \\d+\\) "${card}"`, 'm').exec(req.user)?.[1] ?? '' : '';
+    return { placements: items.map((itemId) => ({ itemId, parentNodeId: node, strength: node ? 0.9 : 0, why: node ? 'it is about the starter' : '' })) };
+  });
+}
+
+const kept = (run: Running, title: RegExp) => [...run.mind.nodes.values()].filter((node) => title.test(run.mind.item(node.itemId).title));
+
+test('words that name a tree put what is sent in that tree, kept, where the Filer finds it fits, and the words that asked are not kept', async () => {
+  const bot = await stand();
+  const { model } = momo((message) => (/sourdough tree/.test(message) ? { does: 'add', words: 'sourdough', keep: 'Longer cold proof opens the crumb', reply: 'Good one.' } : {}));
+  filing(model, 'Starter');
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+  grow(b.run, 'Sourdough', ['Sourdough', 'Starter', 'Baking times']);
+  const said = await tell(bot, 'add this to my sourdough tree: longer cold proof opens the crumb', 2);
+  assert.equal(said[0]!.text, 'Good one.');
+  assert.match(said[1]!.text, /^I’ve kept “.*”\. It went under “Starter” in “Sourdough”\.$/);
+  const [node] = kept(b.run, /cold proof/i);
+  assert.ok(node, 'the note is kept');
+  assert.equal(node.status, 'kept', 'kept, since they asked for it to go there');
+  assert.equal(b.run.mind.itemOf(node.parent!).title, 'Starter');
+  assert.ok(items(b.run).every((item) => !/add this to my/i.test(`${item.title} ${item.text}`)), 'the words that asked are not kept');
+});
+
+test('a photo whose caption only says which tree puts the photo there, under its first card when no card fits, and keeps no caption', async () => {
+  const bot = await stand();
+  const { model } = momo((message) => (/sourdough tree/.test(message) ? { does: 'add', words: 'sourdough', keep: '', reply: '' } : {}));
+  filing(model);
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+  grow(b.run, 'Sourdough', ['Sourdough', 'Starter']);
+  bot.file('loaf', new Uint8Array([1, 2, 3]));
+  const count = items(b.run).length;
+  bot.push(ADA, { photo: [{ file_id: 'loaf', width: 800, height: 600 }], caption: 'put this in my sourdough tree' });
+  const reply = await bot.reply(ADA.id, /^I’ve kept “photo-/);
+  assert.match(reply.text, /went under “Sourdough” in “Sourdough”\.$/);
+  const made = items(b.run).slice(count);
+  assert.deepEqual(made.map((item) => item.kind), ['image'], 'the photo alone: the caption is not a note of its own');
+});
+
+test('when the words fit several trees Momo asks which, and the pick puts it there; another message keeps it as anywhere, and none found offers all', async () => {
+  const bot = await stand();
+  const { model } = momo((message) =>
+    /sourdough tree/.test(message) ? { does: 'add', words: 'sourdough', keep: 'Rye takes longer to rise' } : /film tree/.test(message) ? { does: 'add', words: 'cinema of the 1970s', keep: 'Jaws used a mechanical shark' } : { does: 'answer', reply: 'Okay.' },
+  );
+  filing(model);
+  const b = await boot(bot, { model });
+  await pair(b, bot);
+  grow(b.run, 'Sourdough bread', ['Sourdough bread', 'Crumb']);
+  grow(b.run, 'Sourdough starter', ['Sourdough starter', 'Feeding']);
+  const count = items(b.run).length;
+
+  const [asked] = await tell(bot, 'put this in my sourdough tree: rye takes longer to rise');
+  assert.match(asked!.text, /^Which one should it go in\?\n1\. Sourdough (bread|starter)/);
+  assert.match(asked!.text, /\nSend me its number\.$/);
+  assert.equal(items(b.run).length, count, 'nothing is kept before the pick');
+  const second = /\n2\. (Sourdough \w+)/.exec(asked!.text)![1]!;
+  const [placed] = await tell(bot, '2');
+  assert.match(placed!.text, new RegExp(`went under “${second}” in “${second}”\\.$`));
+
+  await tell(bot, 'put this in my sourdough tree: rye takes longer to rise');
+  const [first, then] = await tell(bot, 'thanks', 2);
+  assert.match(first!.text, /It is in your knowledge base, in no tree yet\.$/, 'what waited is kept as anywhere');
+  assert.equal(then!.text, 'Okay.');
+
+  const [none] = await tell(bot, 'add to my film tree: Jaws used a mechanical shark');
+  assert.match(none!.text, /^I can’t find a tree for “cinema of the 1970s”\. Which one should it go in\?\n1\. /);
 });

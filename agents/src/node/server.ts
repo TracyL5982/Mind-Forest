@@ -263,6 +263,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   };
 
   const liveRoles = meter ? metered(opts.roles, meter) : opts.roles;
+  /** Work that came from the person's own contact (their Telegram), carried into the runs it starts, so the demo can tell it apart. */
+  const fromContact = new AsyncLocalStorage<true>();
   /** The demo's director, made once the pipeline it directs is. Its roles are asked for at each call, so they find it. */
   let director: Director | null = null;
   const pipeline = new Pipeline({
@@ -323,6 +325,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       },
       // Only the app on a headset can be started again from here. The Mac preview joins as a device too, and a headset on the
       // cable that is not the one joined must be left as it is.
+      fromContact: () => fromContact.getStore() === true,
       restart:
         opts.demo.restart &&
         (() => ([...sockets].some((ws) => ws.readyState === ws.OPEN && headsets.has(ws)) ? opts.demo!.restart!() : Promise.reject(new Error('what joined is not the app on a headset')))),
@@ -346,9 +349,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   };
   const hear = opts.transcribe;
   const desk: Desk = {
-    dump: async (dumps) => {
+    dump: async (dumps, into) => {
+      // In the demo a take is not interrupted: what comes in while one plays is filed once it ends.
+      await director?.untilTaken();
       admit();
-      return whereItWent(mind, await pipeline.dump(dumps));
+      return whereItWent(mind, await fromContact.run(true, () => pipeline.dump(dumps, into && { treeId: into.tree, words: into.words })));
     },
     fits,
     keep: async (bytes, mime, name) => {

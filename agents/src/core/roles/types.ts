@@ -143,6 +143,12 @@ export interface TreeRequest {
   title: string;
 }
 
+/** A tree the person asked for what they sent to go in, and their words that named it: the tree, or one of its cards. */
+export interface PlaceRequest {
+  treeId: Id;
+  words: string;
+}
+
 export interface Roles {
   /** `dropped` is what the user dropped last, so "start a tree on this" can mean it. */
   conductor(ctx: RoleContext, input: { utterance: string; scene: Scene; history: Turn[]; dropped?: Id[] }): Promise<Conducted>;
@@ -150,10 +156,10 @@ export interface Roles {
   intake(ctx: RoleContext, dumps: RawDump[]): Promise<Item[]>;
   /**
    * Places what was dropped. Every item joins the knowledge base whether placed or not; the pipeline adds those that are new.
-   * Asked for a tree, the items become one new tree. Otherwise an item with a strong fit under a card of a tree is hung there as a pick,
-   * and the rest are placed nowhere. Returns createTree and addNode commands.
+   * Asked for a tree, the items become one new tree. Asked to put them in a tree (`into`), they go in that tree. Otherwise an item with
+   * a strong fit under a card of a tree is hung there as a pick, and the rest are placed nowhere. Returns createTree and addNode commands.
    */
-  filer(ctx: RoleContext, items: Item[], request?: TreeRequest): Promise<Command[]>;
+  filer(ctx: RoleContext, items: Item[], request?: TreeRequest, into?: PlaceRequest): Promise<Command[]>;
   /**
    * Brings content to the anchor: what the user already has that is strongly tied to it, and new content.
    * New picks join the anchor's round and none is taken away here. Near the cap, the picks already there come back rated against the

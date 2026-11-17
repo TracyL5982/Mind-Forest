@@ -29,6 +29,11 @@ export interface TelegramOptions extends BotOptions {
   desk: Desk;
   /** Where the pairing and the read position are kept. */
   file: string;
+  /**
+   * The account paired at start when the file holds none: the demo on Fly, which keeps no file between deploys, is paired so to the
+   * account its owner paired on their Mac (`ownerSecret`).
+   */
+  owner?: Paired;
   now?: () => number;
 }
 
@@ -37,6 +42,7 @@ export const Position = z.object({ bot: z.number().nullable().default(null), off
 type Position = z.infer<typeof Position>;
 
 const Paired = z.object({ userId: z.number(), chatId: z.number(), name: z.string() });
+export type Paired = z.infer<typeof Paired>;
 /** The bot the read position and the pairing belong to. A new token for another bot starts both afresh. */
 const Saved = Position.extend({ paired: Paired.nullable().default(null) });
 
@@ -88,6 +94,37 @@ class BotError extends Error {
     super(message);
   }
 }
+
+/**
+ * The owner's bot token when this service is the one to read it. One program at a time may read a bot, and the user's own service
+ * on their Mac reads it, so the offline stand-in never does, and the demo only when MIND_PALACE_DEMO_TELEGRAM is on: the demo on
+ * Fly, while the Mac's service is started without the token.
+ */
+export function ownBot(env: Record<string, string | undefined>, run: { fake: boolean; demo: boolean }): string | undefined {
+  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token || run.fake) return undefined;
+  return !run.demo || env.MIND_PALACE_DEMO_TELEGRAM === 'on' ? token : undefined;
+}
+
+/** The account a service's kept file is paired to, or null when it holds none or cannot be read. */
+export function pairingIn(file: string): Paired | null {
+  return new Kept(file, Saved).value.paired;
+}
+
+/**
+ * A pairing as one secret value, for the demo's MIND_PALACE_TELEGRAM_OWNER: base64url of its JSON, so nothing in it needs quoting.
+ * A value that does not decode to a pairing gives null, and the demo then hears no one.
+ */
+export const ownerSecret = {
+  encode: (paired: Paired): string => Buffer.from(JSON.stringify(paired)).toString('base64url'),
+  decode: (value: string | undefined): Paired | null => {
+    try {
+      return value?.trim() ? Paired.parse(JSON.parse(Buffer.from(value.trim(), 'base64url').toString('utf8'))) : null;
+    } catch {
+      return null;
+    }
+  },
+};
 
 /** A small record kept in one file, written whole each time it changes. A file that does not read starts afresh. */
 export class Kept<T extends object> {
@@ -285,6 +322,7 @@ export class Telegram implements Channel {
   constructor(private readonly opts: TelegramOptions) {
     this.now = opts.now ?? Date.now;
     this.kept = new Kept(opts.file, Saved);
+    if (opts.owner && !this.kept.value.paired) this.kept.patch({ paired: opts.owner });
     this.bot = new Bot({ tokenFrom: 'TELEGRAM_BOT_TOKEN in ~/.muse-garden.env', ...opts }, this.kept, (message) => this.receive(message), () => {
       opts.log('[telegram] the bot token is for another bot now, so the old pairing is gone. Pair again on the web page.');
       this.kept.patch({ paired: null });

@@ -2,12 +2,20 @@ import { z } from 'zod';
 import type { Command, Id, Item, Node, Tree } from '../domain.ts';
 import { MINDSTORM } from '../round.ts';
 import { tokenize } from '../search.ts';
-import { AGENT, idFrom, makeNode, pickStatus, type RoleContext, type Roles, type TreeRequest } from './types.ts';
+import { AGENT, idFrom, makeNode, pickStatus, type PlaceRequest, type RoleContext, type Roles, type TreeRequest } from './types.ts';
 
 const ROLE = 'filer';
 const MAX_TREES = 8;
 const MAX_PARENTS = 12;
 const MAX_ITEMS = 40;
+
+/**
+ * Where something the person asked to put in a tree goes: under the card of that tree it fits best, the tree's first card when none
+ * fits ('fit'), or always under its first card ('root'). The lead's call, told to the user, 2026-11-17.
+ */
+const INTO_TREE: 'fit' | 'root' = 'fit';
+/** Whether what the person put in a tree is kept there, since they asked for it, or hung as a suggestion. The lead's call, 2026-11-17. */
+const PLACED_KEPT = true;
 
 const Answer = z.object({
   placements: z.array(
@@ -35,12 +43,70 @@ interface Shortlisted {
   parents: Node[];
 }
 
-export const filer: Roles['filer'] = async (ctx, items, request) => {
+export const filer: Roles['filer'] = async (ctx, items, request, into) => {
   if (items.length === 0) return [];
   const batch = new Map(items.map((i) => [i.id, i]));
+  if (into && !request) return emit(ctx, items, batch, await placeInto(ctx, items, batch, into), PLACED_KEPT);
   const placements = request ? grow(items, batch, request) : await place(ctx, items, batch);
   return emit(ctx, items, batch, placements, Boolean(request));
 };
+
+/**
+ * Asked to put what was sent in a tree: each item goes under the card of that tree it fits best, the card the person's words name
+ * when they name one, and under the tree's first card when none fits, the model does not answer, or `INTO_TREE` says so. A tree
+ * that is gone holds nothing, and what was sent stays in the knowledge base.
+ */
+async function placeInto(ctx: RoleContext, items: Item[], batch: ReadonlyMap<Id, Item>, into: PlaceRequest): Promise<Map<Id, Placement>> {
+  const tree = ctx.mind.trees.get(into.treeId);
+  if (!tree) return new Map();
+  const out = new Map<Id, Placement>(items.map((item) => [item.id, { at: 'card', parent: tree.rootId, why: 'where you put it' }]));
+  if (INTO_TREE === 'root') return out;
+  const named = new Set(tokenize(into.words));
+  const nodeScore = new Map<Id, number>();
+  for (const item of items) {
+    for (const hit of ctx.mind.search(`${item.title} ${item.tags.join(' ')} ${oneLine(item.summary, 300)}`, { limit: 20, placed: true })) {
+      for (const node of ctx.mind.nodesOfItem(hit.id)) if (node.treeId === tree.id) nodeScore.set(node.id, (nodeScore.get(node.id) ?? 0) + hit.coverage);
+    }
+  }
+  const words = (node: Node) => tokenize(ctx.mind.itemOf(node.id).title).filter((term) => named.has(term)).length;
+  const parents = ctx.mind
+    .treeNodes(tree.id)
+    .filter((n) => n.status === 'kept')
+    .sort((a, b) => words(b) - words(a) || (nodeScore.get(b.id) ?? 0) - (nodeScore.get(a.id) ?? 0) || ctx.mind.depth(a.id) - ctx.mind.depth(b.id))
+    .slice(0, MAX_PARENTS);
+  try {
+    const answer = await ctx.model.json({ role: ROLE, system: SYSTEM, user: promptInto(ctx, items, tree, parents, into.words), schema: Answer, effort: 'medium' });
+    for (const p of answer.placements) {
+      const item = batch.get(idFrom(p.itemId));
+      const parent = ctx.mind.nodes.get(idFrom(p.parentNodeId));
+      if (item && parent?.treeId === tree.id && parent.status === 'kept') out.set(item.id, { at: 'card', parent: parent.id, why: oneLine(p.why, 60) || 'where you put it' });
+    }
+  } catch (err) {
+    ctx.note(ROLE, `the model did not answer (${message(err)}), so what was put in "${tree.title}" goes under its first card`);
+  }
+  return out;
+}
+
+function promptInto(ctx: RoleContext, items: Item[], tree: Tree, parents: Node[], words: string): string {
+  const itemLines = items.map((i) => `- item ${i.id} (${i.kind}) "${oneLine(i.title, 100)}". ${oneLine(i.summary || i.text, 240)}`);
+  const cardLines = parents.map((n) => {
+    const item = ctx.mind.itemOf(n.id);
+    return `- node ${n.id} (depth ${ctx.mind.depth(n.id)}) "${oneLine(item.title, 80)}": ${oneLine(item.summary || item.text, 120)}`;
+  });
+  return [
+    'Just dropped in:',
+    itemLines.join('\n'),
+    '',
+    `The user asked for these to go in their tree "${oneLine(tree.title, 80)}", in their words: "${oneLine(words, 120)}". Its cards:`,
+    cardLines.join('\n'),
+    '',
+    'Place each item under the card of this tree it fits best: the card their words name, when they name one. Leave parentNodeId empty when no card fits better than the tree\'s first card.',
+    'Return one placement for every item, using the ids exactly as written.',
+    '- parentNodeId: the card it goes under. Empty when none fits better than the first card.',
+    '- strength: how well it fits there, from 0 to 1.',
+    '- why: why it sits there, in under eight words.',
+  ].join('\n');
+}
 
 const SYSTEM =
   'You are the Filer of a spatial brainstorming app. Everything the user drops in joins their knowledge base. You decide whether a new item also belongs under one card of the trees they are growing.';

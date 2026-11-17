@@ -105,8 +105,8 @@ export const fakeRoles: Roles = {
   },
 
   /** A tree the user asked for is grown as the real Filer grows it, which needs no model. Otherwise a card that shares most of an item's title words is a strong fit. */
-  async filer(ctx, items, request) {
-    if (request) return filer(ctx, items, request);
+  async filer(ctx, items, request, into) {
+    if (request || into) return filer(ctx, items, request, into);
     const commands: Command[] = [];
     for (const item of items) {
       const hit = ctx.mind.search(`${item.title} ${item.tags.join(' ')}`, { limit: 1, placed: true })[0];

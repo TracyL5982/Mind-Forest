@@ -71,6 +71,11 @@ interface Memory {
  */
 export class Talk {
   private readonly chats = new Map<number, Memory>();
+  /**
+   * What waits for its person to pick the tree it goes in, apart from what is remembered of the chat so it outlasts it: kept as it
+   * would have been anywhere once their next message picks no tree. In memory only: a restart loses it.
+   */
+  private readonly held = new Map<number, { dumps: RawDump[]; words: string }>();
   /** The message each chat is on, which its next one waits for. */
   private readonly turns = new Map<number, Promise<void>>();
 
@@ -118,6 +123,7 @@ export class Talk {
   }
 
   private async answer(chat: number, desk: Desk, arrival: Arrival): Promise<void> {
+    await this.unheld(chat, desk, arrival);
     const say = (text: string) => this.wire.say(chat, text);
     switch (arrival.kind) {
       case 'start':
@@ -131,9 +137,13 @@ export class Talk {
         const bytes = await this.fetch(desk, arrival.file);
         if (!bytes) return say(this.lines.tooBig);
         const asset = await desk.keep(bytes, arrival.file.mime, arrival.file.name);
+        const thing: RawDump = { kind: 'asset', asset, mime: arrival.file.mime, name: arrival.file.name };
+        // Words that say which tree it goes in put it there, and are not kept as a note of their own.
+        const placing = await this.placing(chat, desk, arrival.caption, sentWith(arrival.file.mime));
+        if (placing) return this.putIn(chat, desk, this.memory(chat), arrival.caption, placing.reply.trim(), [thing, ...dumpsOf(placing.keep)], placing.words.trim());
         // Words that ask about the file are answered and not kept; any other words are kept beside it, and may ask for a tree.
         const beside = arrival.caption.includes('?') && !treeRequest(arrival.caption) ? [] : dumpsOf(arrival.caption);
-        const kept = await desk.dump([{ kind: 'asset', asset, mime: arrival.file.mime, name: arrival.file.name }, ...beside]);
+        const kept = await desk.dump([thing, ...beside]);
         return this.about(chat, desk, arrival.caption, kept);
       }
       case 'voice': {
@@ -158,15 +168,24 @@ export class Talk {
   private async words(chat: number, desk: Desk, text: string): Promise<void> {
     const memory = this.memory(chat);
     const picked = this.picked(memory, text);
+    const held = this.held.get(chat);
+    if (picked && held) {
+      this.held.delete(chat);
+      memory.offer = undefined;
+      return this.told(chat, memory, text, '', () => desk.dump(held.dumps, { tree: picked.id, words: held.words }));
+    }
     if (picked) return this.pack(chat, desk, picked);
     const asked = plainAsk(text);
     if (asked) return this.trees(chat, desk, asked);
     if (treeRequest(text)) return this.wire.say(chat, (await desk.dump(dumpsOf(text))).line);
     const links = linksIn(text);
     if (links.urls.length > 0) {
+      const urls = links.urls.map((url): RawDump => ({ kind: 'link', url }));
+      const placing = await this.placing(chat, desk, links.words, urls.length === 1 ? 'a link' : `${urls.length} links`);
+      if (placing) return this.putIn(chat, desk, memory, text, placing.reply.trim(), [...urls, ...dumpsOf(placing.keep)], placing.words.trim());
       // A link is always kept, as a page of its own. Words that ask about it are answered and not kept; any other words are kept beside it.
       const beside: RawDump[] = links.words && !links.words.includes('?') ? [{ kind: 'text', text: links.words }] : [];
-      const kept = await desk.dump([...links.urls.map((url): RawDump => ({ kind: 'link', url })), ...beside]);
+      const kept = await desk.dump([...urls, ...beside]);
       return this.about(chat, desk, links.words, kept);
     }
 
@@ -192,6 +211,12 @@ export class Talk {
         return this.told(chat, memory, text, reply, () => desk.dump(dumpsOf(waited ?? text)));
       case 'both':
         return this.told(chat, memory, text, reply, () => desk.dump([{ kind: 'text', text: `${(waited ?? text).trim()}\n\n${reply}` }]));
+      case 'add': {
+        // What to keep, without the words that asked for it to go in a tree; the earlier message when this answers Momo's question about it.
+        const keep = (waited ?? reading.keep).trim();
+        if (!keep) return this.told(chat, memory, text, reply || 'What should I put there?');
+        return this.putIn(chat, desk, memory, text, reply, dumpsOf(keep), reading.words.trim());
+      }
       case 'tree': {
         const subject = reading.words.trim();
         if (!subject) return this.told(chat, memory, text, reply || 'What should the tree be about?');
@@ -235,6 +260,42 @@ export class Talk {
       this.wire.log(`Momo could not read the words sent with something kept: ${err instanceof Error ? err.message : String(err)}`);
     }
     return this.told(chat, memory, asked, [reply, kept.line].filter(Boolean).join('\n\n'));
+  }
+
+  /**
+   * What was sent goes in the tree its words name, where the Filer finds it fits. When Momo cannot tell which tree, she asks, offering
+   * the closest trees, or all of them when none is close, and it waits for the pick. With no trees at all, it is kept as anywhere.
+   */
+  private async putIn(chat: number, desk: Desk, memory: Memory, text: string, reply: string, dumps: RawDump[], words: string): Promise<void> {
+    const found = words ? await desk.match(words) : [];
+    if (found.length === 1) return this.told(chat, memory, text, reply, () => desk.dump(dumps, { tree: found[0]!.id, words }));
+    const trees = found.length > 1 ? found : desk.trees();
+    if (trees.length === 0) return this.told(chat, memory, text, reply, () => desk.dump(dumps));
+    this.held.set(chat, { dumps, words });
+    const question = found.length > 1 ? 'Which one should it go in?' : words ? `I can’t find a tree for “${words}”. Which one should it go in?` : 'Which tree should it go in?';
+    return this.told(chat, memory, text, `${question}\n${this.offer(chat, trees, found.length > 1 ? MAX_OFFERED : MAX_LISTED)}\nSend me its number.`);
+  }
+
+  /** Momo's reading of the words sent with a photo, file or link, when they say which tree it goes in. Null otherwise. */
+  private async placing(chat: number, desk: Desk, words: string, came: string): Promise<Reading | null> {
+    const asked = words.trim();
+    if (!asked || treeRequest(asked)) return null;
+    try {
+      const reading = await desk.read({ text: asked, said: this.memory(chat).said, sentWith: came });
+      return reading.does === 'add' ? reading : null;
+    } catch (err) {
+      if (err instanceof Declined) throw err;
+      this.wire.log(`Momo could not read the words sent with something: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  /** What waits for a tree to be picked is kept as anywhere when this message picks none, so nothing the person sent is lost. */
+  private async unheld(chat: number, desk: Desk, arrival: Arrival): Promise<void> {
+    const held = this.held.get(chat);
+    if (!held || (arrival.kind === 'text' && this.picked(this.memory(chat), arrival.text))) return;
+    this.held.delete(chat);
+    await this.wire.say(chat, (await desk.dump(held.dumps)).line);
   }
 
   /** Something asked of the trees the person has. */
@@ -327,6 +388,11 @@ function linksIn(text: string): { urls: string[]; words: string } {
   const urls = [...new Set(found.flatMap((url) => asUrl(url) ?? []))].slice(0, 3);
   const words = urls.length === 0 ? text.trim() : found.reduce((rest, url) => rest.replace(url, ' '), text).replace(/\s+/g, ' ').trim();
   return { urls, words };
+}
+
+/** What a file is called when Momo is told what words came with. */
+function sentWith(mime: string): string {
+  return mime.startsWith('image/') ? 'a photo' : mime.startsWith('video/') ? 'a video' : mime.startsWith('audio/') ? 'a recording' : 'a file';
 }
 
 /** What a text becomes when dropped, as the web page sends it: a link when it is one web address and nothing else, otherwise a text. */
