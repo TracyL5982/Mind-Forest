@@ -15,10 +15,12 @@ COPY client ./client
 COPY demo ./demo
 # No volume: the tree is built again on demand, so a restart begins with the showcase trees and an empty stage.
 # No adb here, so the page cannot start the headset's app again: MIND_PALACE_DEMO_RESTART says so.
+# The owner's bot is read here, so what they send it lands in the demo; their Mac's service is started without it meanwhile.
 ENV MIND_PALACE_DATA=/app/data \
     MIND_PALACE_HOST=0.0.0.0 \
     MIND_PALACE_PORT=8080 \
     MIND_PALACE_ENV=/app/no-env-file \
-    MIND_PALACE_DEMO_RESTART=off
+    MIND_PALACE_DEMO_RESTART=off \
+    MIND_PALACE_DEMO_TELEGRAM=on
 EXPOSE 8080
 CMD ["node", "--no-warnings", "--import", "tsx", "src/node/main.ts", "--demo"]

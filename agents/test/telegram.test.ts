@@ -11,6 +11,8 @@ import type { JsonRequest } from '../src/core/ports.ts';
 import { makeItem, makeNode } from '../src/core/roles/types.ts';
 import { instructions } from '../src/node/live.ts';
 import type { Reading } from '../src/node/momo-chat.ts';
+import { loadScript } from '../src/demo/script.ts';
+import { ownBot } from '../src/node/telegram.ts';
 import { ADA, BOT_TOKEN as TOKEN, EVE, FakeBot, type Person, type Sent } from './fake-bot.ts';
 import { tempDir } from './temp.ts';
 
@@ -618,4 +620,30 @@ test('a chat\'s messages are answered in the order they came, each read knowing 
   const replies = (await next(bot, sent, 3)).map((m) => m.text.split('“')[0]);
   assert.deepEqual(replies, ['One.', 'I’ve kept ', 'Two.'], 'the second is not answered until the first is kept');
   assert.match(asked[1]!.user, /Momo: One\. I’ve kept “/, 'and Momo knows the first was kept');
+});
+
+test("the owner's bot is read by one program: the Mac's service, the demo only when switched on, and never the offline stand-in", () => {
+  const env = { TELEGRAM_BOT_TOKEN: TOKEN };
+  assert.equal(ownBot(env, { fake: false, demo: false }), TOKEN, "the user's own service");
+  assert.equal(ownBot(env, { fake: true, demo: false }), undefined, 'the offline stand-in');
+  assert.equal(ownBot(env, { fake: false, demo: true }), undefined, 'a demo run on the Mac, beside the service that reads it');
+  assert.equal(ownBot({ ...env, MIND_PALACE_DEMO_TELEGRAM: 'on' }, { fake: false, demo: true }), TOKEN, 'the demo on Fly');
+  assert.equal(ownBot({ MIND_PALACE_DEMO_TELEGRAM: 'on' }, { fake: false, demo: true }), undefined, 'no token, no bot');
+});
+
+test('the demo reads the bot as the Mac does: what the paired account sends is kept through the same path, and Momo answers it', async () => {
+  const demoDir = join(import.meta.dirname, '../demo');
+  const script = loadScript(join(demoDir, 'script.json'));
+  const pace = { stand: 400, open: 400, land: 400, breath: 0, step: 0, rate: 400, rejoin: 1500 };
+  const bot = await stand();
+  const b = await boot(bot, { demo: { script, mediaDir: join(demoDir, 'media'), pace } });
+  await pair(b, bot);
+  const count = items(b.run).length;
+  bot.push(ADA, { text: 'Sourdough rises slowly in winter' });
+  const reply = await bot.reply(ADA.id, /^I’ve kept “/);
+  const made = items(b.run).slice(count);
+  assert.equal(made.length, 1);
+  assert.match(made[0]!.title, /Sourdough/);
+  assert.equal(made[0]!.source.from, 'paste', 'kept as a drop on the web page is');
+  assert.equal(reply.text, `I’ve kept “${made[0]!.title}”. It is in your knowledge base, in no tree yet.`);
 });

@@ -89,6 +89,17 @@ class BotError extends Error {
   }
 }
 
+/**
+ * The owner's bot token when this service is the one to read it. One program at a time may read a bot, and the user's own service
+ * on their Mac reads it, so the offline stand-in never does, and the demo only when MIND_PALACE_DEMO_TELEGRAM is on: the demo on
+ * Fly, while the Mac's service is started without the token.
+ */
+export function ownBot(env: Record<string, string | undefined>, run: { fake: boolean; demo: boolean }): string | undefined {
+  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token || run.fake) return undefined;
+  return !run.demo || env.MIND_PALACE_DEMO_TELEGRAM === 'on' ? token : undefined;
+}
+
 /** A small record kept in one file, written whole each time it changes. A file that does not read starts afresh. */
 export class Kept<T extends object> {
   value: T;

@@ -11,13 +11,17 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { loadEnv } from '../src/node/env.ts';
 
-/** What the demo reads from its environment. No Telegram: the demo is a stage, and nothing sent to a bot lands in it. */
+/**
+ * What the demo reads from its environment. The owner's bot is read there only while the demo is filmed with Telegram, and then the
+ * Mac's own service must be started without it (src/node/telegram.ts, ownBot): one program at a time may read a bot.
+ */
 const PASSED = [
   'MODEL_API_KEY', 'MUSE_LLM_BASE_URL', 'MUSE_LLM_MODEL', 'MIND_PALACE_QUICK_MODEL',
   'OPENAI_API_KEY', 'YOUTUBE_API_KEY', 'TMDB_API_KEY', 'EUROPEANA_API_KEY', 'GUARDIAN_API_KEY', 'UNSPLASH_ACCESS_KEY', 'FAL_KEY',
   'MIND_PALACE_LIVE', 'MIND_PALACE_LIVE_MODEL', 'MIND_PALACE_LIVE_TURN', 'MIND_PALACE_LIVE_EFFORT', 'MIND_PALACE_LIVE_PAUSE',
   'MIND_PALACE_VOICE', 'MIND_PALACE_VOICE_MODEL', 'MIND_PALACE_HEARING_MODEL',
   'MIND_PALACE_WEB_MODEL', 'MIND_PALACE_WEB_EFFORT', 'MIND_PALACE_SEARCH_MODEL', 'MIND_PALACE_MAPS',
+  'TELEGRAM_BOT_TOKEN',
 ];
 
 const app = process.argv[2];
