@@ -430,8 +430,11 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
     for (const Caption::Line& line : caption.lines()) {
         Words& w = wordsFor(words, line.key);
         if (w.shown) ease(w.appear, 1, 0.08f, dt);
-        write(line.text, line.who, 0, line.y * step, line.opacity, w);
-        back(w, line.width, line.y * step, step, line.there);
+        float solid = write(line.text, line.who, 0, line.y * step, line.opacity, w);
+        // Words on what is happening ("Listening…", "Thinking…", the hint, a notice) come and go with their bar, on one
+        // curve, and their bar shows only once they are drawn, as an agent's line does (the lead, 2026-11-17); spoken
+        // words keep their bar as they were.
+        back(w, line.width, line.y * step, step, line.who == Speaker::status ? solid : line.there);
     }
     keep(words, [&](int key) {
         return std::any_of(caption.lines().begin(), caption.lines().end(), [&](const Caption::Line& l) { return l.key == key; });
@@ -460,6 +463,21 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
     // `-presenceLog`: each frame, each agent's line as it is drawn: how solid its bar is, how solid its words, and whether
     // its new words are waiting for their picture or showing over the old, to measure how it changes.
     static const bool logged = Flags::has("presenceLog");
+    // (And each word on what is happening, "Listening…" and the like: the caption's bars come first, in its lines' order.)
+    if (logged) {
+        std::string out;
+        for (size_t i = 0; i < caption.lines().size() && i < bars.size(); i++) {
+            const Caption::Line& line = caption.lines()[i];
+            if (line.who != Speaker::status) continue;
+            const Words* w = nullptr;
+            for (const Words& x : words) {
+                if (x.key == line.key) w = &x;
+            }
+            if (w) out += fmt(" | status bar %.2f words %.2f over 0.00 y %.2f \"%s\"", double(bars[i].alpha), double(w->shown ? w->shown->opacity.value_or(1) : 0),
+                              double(line.y), w->text.c_str());
+        }
+        if (!out.empty()) logLine(fmt("[presence] t %.3f", now) + out);
+    }
     if (logged && !roster.lines().empty()) {
         std::string out = fmt("[presence] t %.3f", now);
         for (const Roster::Line& line : roster.lines()) {

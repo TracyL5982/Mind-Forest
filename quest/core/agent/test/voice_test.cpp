@@ -728,7 +728,7 @@ TEST(livePlaysMomosVoiceAsItArrives) {
     t.frame();
     CHECK_EQ(t.voice.saying(), "");
     t.hear(Sound().quiet(0.3));
-    CHECK(t.shows() == Presence::State::open, "then Momo hears the user without its name");
+    CHECK(t.voice.state() == Listener::State::open && t.shows() == Presence::State::waiting, "then Momo hears the user without its name, and shows idle");
     CHECK_EQ(host.players.size(), size_t(1));
 }
 
@@ -868,7 +868,7 @@ TEST(liveThinkingKeepsTheConversationOpen) {
     t.serviceSays(R"({"t":"over","turn":2})");
     t.frame(0.5);
     t.serviceSays(R"({"t":"quiet","turn":2})");
-    CHECK(t.shows() == Presence::State::open, "no answer is coming");
+    CHECK(t.voice.state() == Listener::State::open && t.shows() == Presence::State::waiting, "no answer is coming: open, showing idle");
     t.hear(Sound().quiet(8.5));
     CHECK(t.voice.state() == Listener::State::waiting, "then the 8 s count runs, and the conversation closes");
 }
@@ -986,7 +986,8 @@ TEST(presenceFollowsALiveTurn) {
     CHECK(!host.players.empty() && host.players[0]->finished, "finished");
     host.players[0]->done(true);
     t.frame();
-    CHECK(t.shows() == S::open, "open once Momo is done, while the work goes on: Momo hears the user without its name");
+    CHECK(t.voice.state() == Listener::State::open, "open once Momo is done, while the work goes on: Momo hears the user without its name");
+    CHECK(t.shows() == S::working, "and, nobody speaking, Momo shows the work, not listening");
     CHECK_EQ(t.voice.presence().momoText, "");
     CHECK(t.voice.presence().agents == std::vector<AgentLine>({{"scout", "Scout", "Looking for films with a slow…", false}}), "the Scout's line");
     t.voice.activity(started("a2", "Reading three articles about it", "Reading 3 articles"));
@@ -999,7 +1000,7 @@ TEST(presenceFollowsALiveTurn) {
     t.voice.activity(ended("a2"));
     t.voice.activity(ended("a1"));
     t.frame();
-    CHECK(t.shows() == S::open, "still open once the work is done");
+    CHECK(t.voice.state() == Listener::State::open && t.shows() == S::waiting, "still open once the work is done, and Momo shows idle");
     CHECK(t.voice.presence().agents == std::vector<AgentLine>({{"scout", "Scout", "", true}}), "the Scout finished working");
     t.frame(Crew::finishedFor);
     CHECK(t.voice.presence().agents.empty(), "and its line gone 3 s later");
@@ -1050,7 +1051,8 @@ TEST(presenceQuietEndsThinking) {
     t.serviceSays(R"({"t":"quiet","turn":2})");
     CHECK(t.shows() == S::thinking, "quiet for another turn does not end this one");
     t.serviceSays(R"({"t":"quiet","turn":1})");
-    CHECK(t.shows() == S::open, "open: no reply is coming, and the user may go on");
+    CHECK(t.voice.state() == Listener::State::open, "open: no reply is coming, and the user may go on");
+    CHECK(t.shows() == S::waiting, "and, nobody speaking, Momo shows idle");
     CHECK(!t.looping(), "the loop stopped");
     t.frame(1);
     CHECK(!t.looping() && t.played().size() == 2, "and nothing more plays");
@@ -1063,7 +1065,7 @@ TEST(presenceThinksNoLongerThanItsCap) {
     t.frame(Voice::longestThought - 0.2);
     CHECK(t.shows() == Presence::State::thinking, "thinking");
     t.frame(0.3);
-    CHECK(t.shows() == Presence::State::open, "not past the cap");
+    CHECK(t.voice.state() == Listener::State::open && t.shows() == Presence::State::waiting, "not past the cap: open, showing idle");
 }
 
 TEST(presenceTalkingWhileThinkingStopsTheLoop) {
@@ -1126,7 +1128,7 @@ TEST(presenceMutedMakesNoSoundYetTakesTheTime) {
     t.frame(0.4);
     CHECK(t.shows() == S::responding, "still");
     t.frame(0.2);
-    CHECK(t.shows() == S::open, "then open");
+    CHECK(t.voice.state() == Listener::State::open && t.shows() == S::waiting, "then open, showing idle");
     t.voice.asked("What else is like this?");
     t.frame(1);
     CHECK_EQ(host.plays.size(), size_t(0));
@@ -1199,4 +1201,56 @@ TEST(liveOpensOnlyWhileTheHelloOffersIt) {
     CHECK_EQ(host.sockets.size(), size_t(2));
     t.frame(0.2);
     CHECK_EQ(host.sockets.size(), size_t(3));
+}
+
+namespace {
+
+/// Momo says something on a live voice and is done: the conversation is open, and nobody speaks.
+void openedByMomo(Talking& t) {
+    t.goLive();
+    t.hear(Sound().quiet(0.5));
+    t.serviceSays(audioFrame("a1", aSecondOfVoice()));
+    t.serviceSays(R"({"t":"done","id":"a1"})");
+    t.frame(1.2);
+    if (!host.players.empty()) host.players[0]->done(true);
+    t.frame();
+}
+
+}  // namespace
+
+// The user, 2026-11-17: "listening should only show when USER IS TALKING, if mic is open but user is not talking, mic
+// stays open but momo appears idle".
+TEST(openAndSilentShowsIdle) {
+    using S = Presence::State;
+    Talking t(true);
+    openedByMomo(t);
+    CHECK(t.voice.state() == Listener::State::open, "the conversation is open: the user may answer without the name");
+    CHECK(t.shows() == S::waiting, "and Momo shows idle, not listening");
+    CHECK(t.voice.presence().level == 0, "its ring not moved by the room");
+    t.hear(Sound().quiet(2));
+    CHECK(t.voice.state() == Listener::State::open && t.shows() == S::waiting, "2 s on, nobody speaking: still open, still idle");
+}
+
+TEST(openAndSilentWithAnAgentWorkingShowsWorking) {
+    using S = Presence::State;
+    Talking t(true);
+    openedByMomo(t);
+    t.voice.activity(started("w1", "Looking for films with a slow dolly zoom"));
+    t.frame();
+    CHECK(t.voice.state() == Listener::State::open, "the conversation is open");
+    CHECK(t.shows() == S::working, "and Momo shows the work, not listening");
+}
+
+TEST(openAndTheUserSpeakingShowsListening) {
+    using S = Presence::State;
+    Talking t(true);
+    openedByMomo(t);
+    bool listened = false;
+    float loudest = 0;
+    t.hear(Sound().say("more"), [&] {
+        if (t.shows() == S::listening) listened = true;
+        loudest = std::max(loudest, t.voice.presence().level);
+    });
+    CHECK(listened, "speaking in the open conversation, without the name, Momo listens");
+    CHECK(loudest > 0, "its ring moved by the voice (%.2f)", double(loudest));
 }

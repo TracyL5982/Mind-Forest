@@ -489,11 +489,19 @@ void Roster::update(const std::vector<AgentLine>& agents, float dt) {
             found = lines_.end() - 1;
         } else if (found->from == a) {
             found->next.reset();
+        } else if (a.finished && found->lastStep && !(found->from == *found->lastStep)) {
+            // The run ended on a step not yet shown: that step first, for its while, then "finished working" (the lead,
+            // 2026-11-17: the last step of a run is shown before the line moves on). It has stood its moment already.
+            if (!(found->next && *found->next == *found->lastStep)) {
+                found->next = found->lastStep;
+                found->nextSince = clock - settleWords;
+            }
         } else if (!(found->next && *found->next == a)) {
             // New words for a line wait until they have stood a moment, and until the line's words have stood a while.
             found->next = a;
             found->nextSince = clock;
         }
+        if (!a.finished) found->lastStep = a;
         if (found->next && clock - found->nextSince >= settleWords && clock - found->since >= holdWords) {
             write(*found, *found->next);
             found->since = clock;
@@ -501,6 +509,14 @@ void Roster::update(const std::vector<AgentLine>& agents, float dt) {
         }
         found->toY = float(i);
         found->toOpacity = 1;
+    }
+    // A line whose agent has gone fades with its newest words, never a step held back.
+    for (Line& l : lines_) {
+        if (l.toOpacity == 0 && l.next) {
+            write(l, *l.next);
+            l.since = clock;
+            l.next.reset();
+        }
     }
     if (!(dt > 0)) return;
     for (Line& l : lines_) {

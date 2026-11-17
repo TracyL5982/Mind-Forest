@@ -256,6 +256,7 @@ public:
         float since = 0;            // when it was last given words, s on the roster's own clock
         std::optional<AgentLine> next;  // words waiting their turn (see `settleWords`)
         float nextSince = 0;            // and since when
+        std::optional<AgentLine> lastStep;  // the newest step it was given, shown or not, for the end of a run
     };
 
     using Measure = std::function<float(const std::string&)>;
