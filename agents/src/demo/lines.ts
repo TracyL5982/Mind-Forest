@@ -20,6 +20,8 @@ export const LinesFile = z.object({
   rounds: z.record(z.string(), z.array(StoredLine)),
   /** The lines of the takes at real pace, by round: their cards land at other moments, so her remarks are others. */
   real: z.record(z.string(), z.array(StoredLine)).default({}),
+  /** Lines she says as written outside any round, as the daily tree's: each is recorded, and kept, as a round's line is. */
+  said: z.array(z.string()).optional(),
 });
 export type LinesFile = z.infer<typeof LinesFile>;
 
@@ -60,6 +62,8 @@ export interface LinesOptions {
 
 export class Lines {
   private readonly written: Record<Mode, LinesFile['rounds']>;
+  /** The lines said outside any round, kept so the file given back holds them. */
+  private readonly said: string[];
   private edits: Edits = { fast: {}, real: {} };
   private readonly editsFile: string;
   private readonly made: string;
@@ -75,6 +79,7 @@ export class Lines {
     const file = join(opts.demoDir, 'lines.json');
     const kept = existsSync(file) ? LinesFile.parse(JSON.parse(readFileSync(file, 'utf8'))) : null;
     this.written = { fast: kept?.rounds ?? {}, real: kept?.real ?? {} };
+    this.said = kept?.said ?? [];
     this.editsFile = join(opts.dataDir, 'demo-lines.json');
     this.made = join(opts.dataDir, 'demo-voice');
     mkdirSync(this.made, { recursive: true });
@@ -111,7 +116,7 @@ export class Lines {
    */
   file(): LinesFile {
     const said = (mode: Mode) => Object.fromEntries(Object.keys(this.written[mode]).map((round) => [round, this.of(round, mode).map(({ id, kind, cards, text }) => ({ id, kind, cards, text }))]));
-    return { version: 1, voice: this.opts.voice, rounds: said('fast'), real: said('real') };
+    return { version: 1, voice: this.opts.voice, rounds: said('fast'), real: said('real'), ...(this.said.length > 0 ? { said: this.said } : {}) };
   }
 
   /** Whether the service holds any words of the user's. The page sends its own copy again when it holds none, as after a restart with no volume. */

@@ -85,10 +85,15 @@ export function loadShowcase(dir: string): { trees: Showcase[]; problems: string
 
 /** The tree's cards with each card after the one it hangs from, a layer at a time, in the order they are written. */
 export function inLayers(tree: ShowTree): ShowCard[] {
-  const out: ShowCard[] = [];
+  return layersOf(tree).flat();
+}
+
+/** A tree's cards a layer at a time: those under its first card, then those under them, and so on, each in its file's order. */
+export function layersOf(tree: ShowTree): ShowCard[][] {
+  const out: ShowCard[][] = [];
   let layer = tree.cards.filter((card) => card.parent === 'root');
   while (layer.length > 0) {
-    out.push(...layer);
+    out.push(layer);
     const ids = new Set(layer.map((card) => card.id));
     layer = tree.cards.filter((card) => ids.has(card.parent));
   }

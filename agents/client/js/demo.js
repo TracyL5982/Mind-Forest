@@ -531,9 +531,40 @@ function drawBar() {
   $('problem').textContent = status.problem ?? '';
 }
 
+// ---- the daily tree
+
+function drawDaily() {
+  const daily = status.daily;
+  $('daily').hidden = !daily || daily.trees.length === 0;
+  if (!daily || daily.trees.length === 0) return;
+  const pick = $('daily-tree');
+  if (pick.options.length !== daily.trees.length) {
+    pick.replaceChildren(...daily.trees.map((tree) => el('option', { value: tree.id, text: tree.title })));
+    pick.value = daily.armed ?? (daily.trees.some((tree) => tree.id === 'constellations') ? 'constellations' : daily.trees[0].id);
+  }
+  const armed = daily.trees.find((tree) => tree.id === daily.armed);
+  const name = armed ? `“${armed.title}”` : '';
+  $('daily-arm').textContent = armed ? 'Arm again' : 'Arm';
+  $('daily-arm').disabled = busy() || !status.showcase?.on;
+  $('daily-send').disabled = busy() || !armed || !daily.canSend;
+  $('daily-grow').disabled = busy() || !armed || daily.grown;
+  $('daily-state').textContent = !status.showcase?.on
+    ? 'Switch the other trees on: the daily tree is one of them.'
+    : !armed
+      ? 'Pick a tree and arm it: it leaves the forest until it grows.'
+      : daily.grown
+        ? busy() ? `${name} is growing on the headset.` : `${name} has grown. Arm again for another take.`
+        : daily.sent && daily.onJoin
+          ? `Message sent. ${name} grows about 2 s after a headset joins, or at once with Grow now.`
+          : daily.sent
+            ? `Message sent, and a headset joined: ${name} grows in a moment.`
+            : `${name} is out of the forest. Send Momo's message, then put the headset on.${daily.canSend ? '' : ' No Telegram account is paired with this service, so the message cannot be sent from here.'}`;
+}
+
 function draw() {
   if (!outline || !status) return;
   drawBar();
+  drawDaily();
   drawOrder();
   drawChart();
   drawDetail();
@@ -602,6 +633,20 @@ $('go-end').addEventListener('click', () => go('end'));
 $('scripted').addEventListener('change', async (event) => {
   status = await api('/api/demo/scripted', { on: event.target.checked });
   draw();
+});
+$('daily-arm').addEventListener('click', async () => {
+  status = await api('/api/demo/daily/arm', { tree: $('daily-tree').value });
+  draw();
+  watch(true);
+});
+$('daily-send').addEventListener('click', async () => {
+  status = await api('/api/demo/daily/send', {});
+  draw();
+});
+$('daily-grow').addEventListener('click', async () => {
+  status = await api('/api/demo/daily/grow', {});
+  draw();
+  watch(true);
 });
 $('showcase').addEventListener('change', async (event) => {
   status = await api('/api/demo/showcase', { on: event.target.checked });

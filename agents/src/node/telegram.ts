@@ -260,10 +260,17 @@ export class Bot implements Wire {
 
   /** A reply that never throws. A reply that fails is logged. */
   async say(chat: number, text: string): Promise<void> {
+    await this.post(chat, text);
+  }
+
+  /** A plain message, true once Telegram took it. One that fails is logged. */
+  async post(chat: number, text: string): Promise<boolean> {
     try {
       await this.call('sendMessage', { chat_id: chat, text, link_preview_options: { is_disabled: true } });
+      return true;
     } catch (err) {
-      this.log(`a reply could not be sent: ${this.hide(err)}`);
+      this.log(`a message could not be sent: ${this.hide(err)}`);
+      return false;
     }
   }
 
@@ -360,6 +367,15 @@ export class Telegram implements Channel {
     } catch (err) {
       this.bot.log(`the handoff could not be sent: ${this.bot.hide(err)}`);
     }
+  }
+
+  async tell(text: string): Promise<boolean> {
+    const paired = this.kept.value.paired;
+    if (!paired) {
+      this.bot.log('a message of the service was not sent: no account is paired');
+      return false;
+    }
+    return this.bot.post(paired.chatId, text);
   }
 
   close(): Promise<void> {

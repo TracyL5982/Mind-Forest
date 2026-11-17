@@ -96,6 +96,8 @@ export interface Channel {
   unpair(): void;
   /** Sends a handoff to the paired person. Never rejects; does nothing when no one is paired. */
   deliver(handoff: Delivery): Promise<void>;
+  /** Sends a message of the service's own to the paired person. Never rejects: false when no one is paired, or it was not taken. */
+  tell?(text: string): Promise<boolean>;
   close(): Promise<void>;
 }
 

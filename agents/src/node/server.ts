@@ -326,6 +326,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       // Only the app on a headset can be started again from here. The Mac preview joins as a device too, and a headset on the
       // cable that is not the one joined must be left as it is.
       fromContact: () => fromContact.getStore() === true,
+      // The contact is made below: by the time the page asks, it is there.
+      owner: {
+        paired: () => Boolean(telegram?.tell && telegram.status().paired),
+        tell: (text) => telegram?.tell?.(text) ?? Promise.resolve(false),
+      },
       restart:
         opts.demo.restart &&
         (() => ([...sockets].some((ws) => ws.readyState === ws.OPEN && headsets.has(ws)) ? opts.demo!.restart!() : Promise.reject(new Error('what joined is not the app on a headset')))),
@@ -595,6 +600,20 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       }
       if (req.method === 'POST' && path === '/api/demo/showcase') {
         void director.setShowcase((await posted()).on !== false).catch(() => {});
+        return json(res, 202, director.status());
+      }
+      // The daily tree: arm it (a headset may be started again, which the page follows on the status), send Momo's message, grow it.
+      if (req.method === 'POST' && path === '/api/demo/daily/arm') {
+        const { tree } = await posted();
+        void director.armDaily(typeof tree === 'string' && tree ? tree : undefined).catch(() => {});
+        return json(res, 202, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/daily/send') {
+        await director.sendDaily().catch(() => {});
+        return json(res, 200, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/daily/grow') {
+        void director.growDaily().catch(() => {});
         return json(res, 202, director.status());
       }
       return json(res, 404, { error: 'not found' });

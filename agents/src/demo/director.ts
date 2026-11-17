@@ -11,7 +11,7 @@ import { itemOf, nodeOf, type Making } from './cards.ts';
 import type { Lines, LineShown } from './lines.ts';
 import type { Voice } from './momo-voice.ts';
 import type { DemoScript, ScriptCard, ScriptPhase } from './script.ts';
-import { inLayers, type Showcase } from './showcase.ts';
+import { inLayers, layersOf, type Showcase } from './showcase.ts';
 import { layingOut } from './real-pace.ts';
 import { momentAt, takeOf, type Mode, type Take, type TimedLine } from './take.ts';
 
@@ -49,9 +49,21 @@ export interface Pace {
   rate: number;
   /** The longest wait for the app to join again after it is started again on the headset. */
   rejoin: number;
+  /** How long the daily tree takes to grow, from its first card to its last layer. */
+  grow: number;
+  /** How long after a headset joins the daily tree starts to grow, once Momo's message is sent. */
+  growAfterJoin: number;
 }
 
-export const PACE: Pace = { stand: 9000, open: 4000, land: 3000, breath: 220, step: 1500, rate: 1, rejoin: 25000 };
+export const PACE: Pace = { stand: 9000, open: 4000, land: 3000, breath: 220, step: 1500, rate: 1, rejoin: 25000, grow: 5000, growAfterJoin: 2000 };
+
+/**
+ * The daily tree shot of the film, in the user's words: Momo's message on the phone, and then, with the headset on, one of the
+ * showcase trees grows anew and she says the line. Both are these words.
+ */
+export const DAILY_WORDS = 'Hi there! I grew a new tree today on the topics you love!';
+/** The showcase tree the daily tree is unless the page picks another: the user's "rightmost tree", by the lead's reading. */
+export const DAILY_TREE = 'constellations';
 
 export interface DirectorDeps {
   script: DemoScript;
@@ -82,6 +94,11 @@ export interface DirectorDeps {
    * cannot do it; then the page says to do it by hand.
    */
   restart?: () => Promise<string>;
+  /**
+   * The person's own contact (their Telegram): whether an account is paired with this service, and a message of the service's
+   * own sent to it, true once it was taken. Absent where the service reads no bot.
+   */
+  owner?: { paired: () => boolean; tell: (text: string) => Promise<boolean> };
   /** Whether the work under way came from the person's own contact (their Telegram), not from the headset or the page. */
   fromContact?: () => boolean;
   log: (line: string) => void;
@@ -108,6 +125,8 @@ export const SPOKEN_FIRST: Mode = 'fast';
 
 /** What a set-up round is recorded as: never the user's doing, so an undo does not take one back. */
 const DEMO: Origin = { by: 'user', role: 'demo' };
+/** The daily tree's layers, which arrive on a headset as an agent's cards do: one after another, a note each. */
+const GROWN: Origin = { by: 'agent', role: 'demo' };
 /** What the page is told when the app is left showing a tree that is gone. */
 const STALE = 'The app still shows a tree that is gone. Start it again: close it on the headset and open it. From a Mac with the headset on the cable: agents/demo/headset.sh restart, or agents/demo/headset.sh fly for the demo on Fly';
 const MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4' };
@@ -134,6 +153,12 @@ export interface DemoStatus {
   mode: Mode;
   /** Lines of Momo's being recorded now, and how many lines hold the user's own words. */
   lines: { recording: number; edited: number };
+  /**
+   * The daily tree: the showcase tree it can be, which one is armed (taken out of the forest, to grow again), whether Momo's
+   * message went to the phone, whether it has grown, whether a headset joining will still start it, and whether this service
+   * can send the message at all.
+   */
+  daily: { trees: { id: string; title: string }[]; armed: string | null; sent: boolean; grown: boolean; onJoin: boolean; canSend: boolean };
 }
 
 /** A take as the page draws it: the timeline, with each of Momo's lines as it is written and whether its recording exists. */
@@ -200,6 +225,8 @@ export class Director {
   private moving: Promise<void> = Promise.resolve();
   /** Trees started from the person's contact: no round of the script plays under them (the user's choice, 2026-11-17). */
   private outside = new Set<Id>();
+  /** The daily tree once armed: which showcase tree, whether Momo's message went, whether it grew, and whether a join started it. */
+  private daily: { tree: string; sent: boolean; grown: boolean; auto: boolean } | null = null;
 
   constructor(private readonly deps: DirectorDeps) {
     this.pace = { ...PACE, ...deps.pace };
@@ -244,6 +271,8 @@ export class Director {
     if (existsSync(shown)) this.showing = JSON.parse(readFileSync(shown, 'utf8')).on !== false;
     const outside = join(this.deps.dataDir, 'demo-outside.json');
     if (existsSync(outside)) this.outside = new Set(JSON.parse(readFileSync(outside, 'utf8')) as Id[]);
+    const daily = join(this.deps.dataDir, 'demo-daily.json');
+    if (existsSync(daily)) this.daily = JSON.parse(readFileSync(daily, 'utf8')) as typeof this.daily;
     this.plant();
   }
 
@@ -284,43 +313,156 @@ export class Director {
    */
   private plant(): boolean {
     const { mind, pipeline } = this.deps;
-    const wanted = new Map(this.showing ? this.shows.map((show): [Id, Showcase] => [this.showId(show), show]) : []);
+    // The daily tree, once armed, stays out of the forest until it grows.
+    const held = this.daily && !this.daily.grown ? this.daily.tree : null;
+    const wanted = new Map(this.showing ? this.shows.filter((show) => show.tree.id !== held).map((show): [Id, Showcase] => [this.showId(show), show]) : []);
     const gone = [...mind.trees.keys()].filter((id) => id.startsWith('show-') && !wanted.has(id));
     if (gone.length > 0) this.deps.asDevice(() => pipeline.stage(DEMO, 'Demo: take the showcase trees down', gone.map((id): Command => ({ type: 'deleteTree', id }))));
     let n = 0;
     for (const [treeId, show] of wanted) {
       n++;
       if (mind.trees.has(treeId)) continue;
-      const { tree } = show;
-      const set = `show-${tree.id}`;
-      const making: Making = { ...this.making, media: (file) => this.media.get(`${tree.id}/${file}`) };
       // The trees are a few minutes apart, the first written the oldest, so the forest orders them the same way each time.
-      const at = new Date(Date.now() - (this.shows.length - n + 1) * 60_000).toISOString();
-      const rootId = `${treeId}-root`;
-      const first: Item = {
-        id: `${set}-root-${createHash('sha1').update(tree.topic).digest('hex').slice(0, 8)}`,
-        kind: 'text', title: tree.topic, text: tree.topic, summary: '', tags: [], data: {},
-        source: { from: 'voice', capturedAt: at }, origin: { by: 'user' }, archived: false, revision: 0,
-      };
-      const root = nodeOf({ id: 'root', kind: 'note', origin: 'ocean', title: first.title, text: '' }, first, { id: rootId, treeId, parent: rootId, status: 'kept', order: 0, rank: 0 }, making);
-      const commands: Command[] = [
-        ...(mind.items.has(first.id) ? [] : [{ type: 'addItem', item: first } as Command]),
-        { type: 'createTree', tree: { id: treeId, title: tree.title, rootId, digest: '', createdAt: at }, root: { ...root, parent: null, why: '', origin: { by: 'user' }, importance: 1 } },
-      ];
-      const placed = new Map<string, number>();
-      for (const card of inLayers(tree)) {
+      const { first, layers } = this.planting(show, new Date(Date.now() - (this.shows.length - n + 1) * 60_000).toISOString());
+      // Planted as nobody's request: a headset puts such a tree away on its desk, where one it asked for would stand.
+      pipeline.stage(DEMO, `Demo: the showcase tree "${show.tree.title}"`, [...first, ...layers.flat()]);
+      this.deps.log(`[demo] the showcase tree "${show.tree.title}" stands in the forest: ${show.tree.cards.length} cards`);
+    }
+    return gone.length > 0;
+  }
+
+  /**
+   * A showcase tree as commands: its first card with the tree, made at `at`, and then each layer of its cards, kept, in order.
+   * Each item is added with the first command that needs it.
+   */
+  private planting(show: Showcase, at: string): { first: Command[]; layers: Command[][] } {
+    const { mind } = this.deps;
+    const { tree } = show;
+    const treeId = this.showId(show);
+    const set = `show-${tree.id}`;
+    const making: Making = { ...this.making, media: (file) => this.media.get(`${tree.id}/${file}`) };
+    const rootId = `${treeId}-root`;
+    const top: Item = {
+      id: `${set}-root-${createHash('sha1').update(tree.topic).digest('hex').slice(0, 8)}`,
+      kind: 'text', title: tree.topic, text: tree.topic, summary: '', tags: [], data: {},
+      source: { from: 'voice', capturedAt: at }, origin: { by: 'user' }, archived: false, revision: 0,
+    };
+    const root = nodeOf({ id: 'root', kind: 'note', origin: 'ocean', title: top.title, text: '' }, top, { id: rootId, treeId, parent: rootId, status: 'kept', order: 0, rank: 0 }, making);
+    const first: Command[] = [
+      ...(mind.items.has(top.id) ? [] : [{ type: 'addItem', item: top } as Command]),
+      { type: 'createTree', tree: { id: treeId, title: tree.title, rootId, digest: '', createdAt: at }, root: { ...root, parent: null, why: '', origin: { by: 'user' }, importance: 1 } },
+    ];
+    const added = new Set<string>();
+    const placed = new Map<string, number>();
+    const layers = layersOf(tree).map((cards) =>
+      cards.flatMap((card): Command[] => {
         const item = itemOf(card, making, set);
-        if (!mind.items.has(item.id) && !commands.some((c) => c.type === 'addItem' && c.item.id === item.id)) commands.push({ type: 'addItem', item });
+        const adding: Command[] = mind.items.has(item.id) || added.has(item.id) ? [] : [{ type: 'addItem', item }];
+        added.add(item.id);
         const parent = card.parent === 'root' ? rootId : `${treeId}-${card.parent}`;
         const order = placed.get(parent) ?? 0;
         placed.set(parent, order + 1);
-        commands.push({ type: 'addNode', node: nodeOf(card, item, { id: `${treeId}-${card.id}`, treeId, parent, status: 'kept', order, rank: order }, making) });
+        return [...adding, { type: 'addNode', node: nodeOf(card, item, { id: `${treeId}-${card.id}`, treeId, parent, status: 'kept', order, rank: order }, making) }];
+      }),
+    );
+    return { first, layers };
+  }
+
+  // ---- the daily tree
+
+  private keepDaily(): void {
+    writeFileSync(join(this.deps.dataDir, 'demo-daily.json'), JSON.stringify(this.daily));
+  }
+
+  /**
+   * Arms the daily tree: the showcase tree named is taken out of the forest, to grow again, and the other trees stand. Arming
+   * again is a new take: the tree is taken down whether it grew or not, and a tree armed before comes back. A headset keeps a
+   * tree that is gone, so it is started again, as for the showcase switch.
+   */
+  async armDaily(tree: string = DAILY_TREE): Promise<void> {
+    this.problem = null;
+    if (!this.shows.some((show) => show.tree.id === tree)) this.refuse(`There is no showcase tree called ${tree}.`);
+    if (!this.showing) this.refuse('The other trees are switched off, and the daily tree is one of them: switch them on first.');
+    this.daily = { tree, sent: false, grown: false, auto: false };
+    this.keepDaily();
+    this.deps.log(`[demo] the daily tree is armed: "${this.titleOfShow(tree)}" is out of the forest until it grows`);
+    if (this.plant() && this.deps.devices() > 0) {
+      this.busy = 'Starting the app again on the headset, which keeps showing the tree that was taken out';
+      try {
+        await this.startAgain(() => true);
+      } finally {
+        this.busy = null;
       }
-      // Planted as nobody's request: a headset puts such a tree away on its desk, where one it asked for would stand.
-      pipeline.stage(DEMO, `Demo: the showcase tree "${tree.title}"`, commands);
-      this.deps.log(`[demo] the showcase tree "${tree.title}" stands in the forest: ${tree.cards.length} cards`);
     }
-    return gone.length > 0;
+  }
+
+  /** Momo's message about the daily tree goes to the person's phone, through their own bot. */
+  async sendDaily(): Promise<void> {
+    const daily = this.daily;
+    this.problem = null;
+    if (!daily) this.refuse('Arm the daily tree first.');
+    const { owner } = this.deps;
+    if (!owner?.paired()) this.refuse("Momo's message cannot be sent: no Telegram account is paired with this service.");
+    if (!(await owner.tell(DAILY_WORDS))) this.refuse("Telegram did not take Momo's message: the service's log says why. Press Send again.");
+    daily.sent = true;
+    this.keepDaily();
+    this.deps.log("[demo] Momo's daily tree message went to the paired phone");
+  }
+
+  /**
+   * Grows the daily tree: its first card stands as a tree the headset asked for, so it stands in front of the user and not on the
+   * desk, and its layers land after it, kept, on a fixed timetable over `pace.grow`. Momo says her line from its recording as it
+   * begins, and is told nothing of the growing, so no remark of her own talks over it; no agent is at work, so no status shows.
+   */
+  async growDaily(): Promise<void> {
+    const daily = this.daily;
+    if (!daily) this.refuse('Arm the daily tree first.');
+    const show = this.shows.find((s) => s.tree.id === daily.tree);
+    if (!show) this.refuse(`The daily tree "${daily.tree}" is no longer among the showcase trees: arm another.`);
+    if (!this.showing) this.refuse('The other trees are switched off, and the daily tree is one of them: switch them on first.');
+    const treeId = this.showId(show);
+    if (daily.grown || this.deps.mind.trees.has(treeId)) this.refuse(`"${show.tree.title}" has grown already: arm it again for another take.`);
+    daily.grown = true;
+    daily.auto = true;
+    this.keepDaily();
+    this.problem = null;
+    const { title } = show.tree;
+    this.busy = `"${title}" grows on the headset`;
+    // Momo is told nothing of the growing, so no remark of hers talks over her line, until a moment after it ends.
+    this.quiet = Number.POSITIVE_INFINITY;
+    let said = Date.now();
+    const spoken = this.deps.lines.ms(DAILY_WORDS);
+    try {
+      const { first, layers } = this.planting(show, new Date().toISOString());
+      const { pipeline } = this.deps;
+      // A headset stands a tree it asked for once the one standing is put away, and says so: the cards wait for that, since a
+      // card that lands on a tree that is not standing is simply there when it stands.
+      const rootId = `${treeId}-root`;
+      const stood = this.deps.devices() > 0 ? this.hears([`focus:${rootId}`], this.pace.stand) : null;
+      this.deps.asDevice(() => pipeline.stage(DEMO, `Demo: Momo grew "${title}" today`, first));
+      if (stood && !(await stood)) this.deps.log(`[demo] "${title}" was not seen to stand in time: it grows anyway`);
+      said = Date.now();
+      void this.say(++this.plays, { id: 'daily', kind: 'answer', cards: [], text: DAILY_WORDS, at: 0, ms: spoken }, 0, 1, () => this.daily !== daily);
+      for (const [n, layer] of layers.entries()) {
+        await pause(this.pace.grow / layers.length);
+        if (this.daily !== daily) return;
+        this.deps.asDevice(() => pipeline.stage(GROWN, `Demo: "${title}" grows, layer ${n + 1} of ${layers.length}`, layer));
+      }
+      this.deps.log(`[demo] the daily tree "${title}" grew: ${show.tree.cards.length} cards in ${layers.length} layers`);
+    } finally {
+      this.quiet = Math.max(Date.now(), said + spoken) + 500;
+      this.busy = null;
+    }
+  }
+
+  /** Says on the page why what was asked is not done, and stops. */
+  private refuse(why: string): never {
+    this.problem = why;
+    throw new Error(why);
+  }
+
+  private titleOfShow(id: string): string {
+    return this.shows.find((show) => show.tree.id === id)?.tree.title ?? id;
   }
 
   /**
@@ -410,6 +552,14 @@ export class Director {
           : null,
       mode: this.mode,
       lines: { recording: this.deps.lines.busy, edited: this.deps.lines.edited },
+      daily: {
+        trees: this.shows.map(({ tree }) => ({ id: tree.id, title: tree.title })),
+        armed: this.daily?.tree ?? null,
+        sent: this.daily?.sent ?? false,
+        grown: this.daily?.grown ?? false,
+        onJoin: Boolean(this.daily?.sent && !this.daily.grown && !this.daily.auto),
+        canSend: this.deps.owner?.paired() ?? false,
+      },
     };
   }
 
@@ -1018,6 +1168,16 @@ export class Director {
    */
   joined(): void {
     for (const resume of [...(this.waiting.get('joined') ?? [])]) resume();
+    // Put on after Momo's message went: the daily tree grows, once for each time it is armed. The walkthrough's tree is not set
+    // up again for this headset then, since that takes its view to the walkthrough's cards.
+    const daily = this.daily;
+    if (daily?.sent && !daily.grown && !daily.auto) {
+      daily.auto = true;
+      this.keepDaily();
+      this.deps.log(`[demo] a headset joined after Momo's message: the daily tree grows in ${Math.round(this.pace.growAfterJoin / 100) / 10} s`);
+      setTimeout(() => void this.growDaily().catch((err) => this.deps.log(`[demo] the daily tree did not grow: ${err instanceof Error ? err.message : String(err)}`)), this.pace.growAfterJoin);
+      return;
+    }
     if (this.busy || this.built.size === 0) return;
     const at = this.script.phases[this.armed]?.id ?? 'end';
     this.deps.log('[demo] a headset joined: setting the tree up again for it');

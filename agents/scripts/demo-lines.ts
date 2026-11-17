@@ -10,9 +10,11 @@
  *
  * It writes `demo/lines.json`, one recording per line in `demo/voice/`, and `demo/voice/voices.json`, which says which voice each
  * recording is in. A round that is written already is left as it is.
- * Usage: node --no-warnings --import tsx scripts/demo-lines.ts [--mode real] [--only r1,n2] [--again] [--check]
+ * Usage: node --no-warnings --import tsx scripts/demo-lines.ts [--mode real] [--only r1,n2] [--again] [--check] [--retake [--lines r1:a1]]
  *   --again   writes the named rounds afresh.
  *   --check   has every recording written out again from its sound, and says where the words differ from the line.
+ *   --retake  puts each line with no recording in her realtime voice to her again, as written. The lines said outside any
+ *             round (`said` in lines.json, as the daily tree's) are among them; `--retake --only said` records those alone.
  */
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -209,6 +211,21 @@ if (flag('--retake')) {
       console.log(`${round} ${line.id}: in her realtime voice, ${again.takes} take${again.takes === 1 ? '' : 's'} (${(again.pcm.length / 48_000).toFixed(1)} s)`);
     }
   }
+  // The lines said outside any round, as written: each take must be heard as written twice over.
+  for (const text of only && !only.has('said') ? [] : (lines.said ?? [])) {
+    const recording = recordingName(voice, text);
+    if (voices[recording] === 'realtime' && existsSync(join(voiceDir, recording))) continue;
+    heardLine = text;
+    const again = await recordLine({ ...voiceOptions, hear: twice }, text, 'answer', '');
+    if ('unsaid' in again) {
+      console.log(`said: she did not say it as written in ${again.takes} takes, so IT HAS NO RECORDING. Closest: ${again.closest}\n  ${text}`);
+      continue;
+    }
+    writeFileSync(join(voiceDir, recording), again.pcm);
+    voices[recording] = 'realtime';
+    writeFileSync(voicesFile, `${JSON.stringify(voices, null, 1)}\n`);
+    console.log(`said: in her realtime voice, ${again.takes} take${again.takes === 1 ? '' : 's'} (${(again.pcm.length / 48_000).toFixed(1)} s): ${text}`);
+  }
   console.log(`$${spent.dollars.toFixed(2)} on the realtime model, ${spent.heard} transcriptions`);
   process.exit(0);
 }
@@ -261,8 +278,12 @@ try {
   await run.close();
   rmSync(dataDir, { recursive: true, force: true });
 }
-// A recording no line's words name any more is of a line that was written again: it goes, with its entry.
-const named = new Set([...Object.values(lines.rounds), ...Object.values(lines.real)].flatMap((said) => said.map((line) => recordingName(voice, line.text))));
+// A recording no line's words name any more is of a line that was written again: it goes, with its entry. The lines said outside
+// any round are named too.
+const named = new Set([
+  ...[...Object.values(lines.rounds), ...Object.values(lines.real)].flatMap((said) => said.map((line) => recordingName(voice, line.text))),
+  ...(lines.said ?? []).map((text) => recordingName(voice, text)),
+]);
 for (const old of readdirSync(voiceDir)) if (old.endsWith('.pcm') && !named.has(old)) rmSync(join(voiceDir, old));
 for (const old of Object.keys(voices)) if (!named.has(old)) delete voices[old];
 writeFileSync(voicesFile, `${JSON.stringify(voices, null, 1)}\n`);

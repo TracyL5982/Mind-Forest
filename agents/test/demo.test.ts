@@ -5,13 +5,15 @@ import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { momoNote } from '../src/demo/director.ts';
+import { DAILY_TREE, DAILY_WORDS, momoNote } from '../src/demo/director.ts';
 import { itemOf, nodeOf as nodeOfCard } from '../src/demo/cards.ts';
 import { schedule } from '../src/demo/take.ts';
 import { loadScript } from '../src/demo/script.ts';
 import { demoData } from './demo-data.ts';
 import { loadShowcase, type Showcase } from '../src/demo/showcase.ts';
 import { startServer, type Running } from '../src/node/server.ts';
+import { recordingName } from '../src/demo/lines.ts';
+import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 
 /** The demo with stand-in roles and no waits: the walkthrough's own script and pictures, as `npm run demo:fake` runs them. */
 const demoDir = join(import.meta.dirname, '../demo');
@@ -341,6 +343,174 @@ test('a showcase tree is stood whole on a headset by taking it to one card under
   } finally {
     await run.close();
   }
+});
+
+// ---- the daily tree
+
+interface Frame {
+  t: string;
+  yours?: boolean;
+  set?: { origin: { by: string; role?: string }; commands: { type: string; tree?: { id: string; rootId: string }; node?: { id: string; parent: string | null; status: string } }[] };
+  id?: string;
+  text?: string;
+  kind?: string;
+  ms?: number;
+  from?: number;
+}
+
+/**
+ * The demo for the daily tree's shot: the small showcase tree, the owner's bot with their account paired (or none), and Momo's
+ * voice, whose lines are recorded by a stand-in as sound as long as their words.
+ */
+async function dailyDemo(paired = true) {
+  const bot = await new FakeBot().start();
+  const { trees } = loadShowcase(showcaseFolder());
+  const run = await startServer({
+    port: 0, host: '127.0.0.1', dataDir: fresh(), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
+    live: { open: () => ({ send: () => {}, close: () => {} }), options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } },
+    telegram: { token: BOT_TOKEN, api: bot.url, pollSeconds: 0, conflictMs: 100, retryMs: 20, ...(paired ? { owner: { userId: ADA.id, chatId: ADA.id, name: 'Ada Lovelace' } } : {}) },
+    demo: {
+      script, mediaDir: join(demoDir, 'media'), showcase: trees, pace: { ...quick, grow: 300, growAfterJoin: 60 },
+      voice: 'test-voice', record: async (text) => ({ pcm: new Uint8Array(text.length * 48 * 50), takes: 1 }),
+    },
+  });
+  return { run, bot, close: async () => (await run.close(), await bot.close()) };
+}
+
+/**
+ * A headset as the app joins, with its voice's socket open: what its connection and its voice are sent. As the app does, it
+ * says a tree it asked for stands, by its first card, and that a card it is taken to is open.
+ */
+async function wearing(run: Running): Promise<{ seen: Frame[]; voice: Frame[]; off: () => void }> {
+  const seen: Frame[] = [];
+  const voice: Frame[] = [];
+  const ws = new WebSocket(`${run.url.replace('http', 'ws')}/ws?token=secret`, { headers: { 'user-agent': 'okhttp/4.12.0' } });
+  ws.on('message', (raw) => {
+    const m = JSON.parse(String(raw)) as Frame & { nodeId?: string; connection?: string };
+    seen.push(m);
+    const made = m.t === 'change' && m.yours ? m.set!.commands.find((c) => c.type === 'createTree') : undefined;
+    if (made) ws.send(JSON.stringify({ t: 'focus', nodeId: made.tree!.rootId }));
+    if (m.t === 'navigate' && m.nodeId) ws.send(JSON.stringify({ t: 'questions', nodeId: m.nodeId }));
+  });
+  await new Promise((open) => ws.on('open', open));
+  const had = run.demo!.status().devices;
+  ws.send(JSON.stringify({ t: 'client', media: { embeds: false, files: ['mp4'] } }));
+  while (run.demo!.status().devices === had || !seen.some((m) => m.t === 'hello')) await new Promise((r) => setTimeout(r, 5));
+  const live = new WebSocket(`${run.url.replace('http', 'ws')}/live?token=secret&connection=${(seen.find((m) => m.t === 'hello') as { connection?: string }).connection}`);
+  live.on('message', (raw) => voice.push(JSON.parse(String(raw)) as Frame));
+  await new Promise((open) => live.on('open', open));
+  return { seen, voice, off: () => (live.close(), ws.close()) };
+}
+
+/** Resolves once `ok` holds; fails after five seconds. */
+async function soon(ok: () => boolean, ms = 5000): Promise<void> {
+  const end = Date.now() + ms;
+  while (!ok()) {
+    if (Date.now() > end) throw new Error('timed out');
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
+const dailyTree = (run: Running) => [...run.mind.trees.values()].find((tree) => tree.id.startsWith('show-mini-'));
+
+test('the daily tree is armed out of the forest, and grows back as the headset\'s own tree, a layer at a time, as Momo says her line', async () => {
+  const { run, close } = await dailyDemo();
+  let headset: Awaited<ReturnType<typeof wearing>> | null = null;
+  try {
+    assert.equal(DAILY_TREE, 'constellations', "the rightmost of the showcase trees is the page's first pick");
+    assert.deepEqual(run.demo!.status().daily, { trees: [{ id: 'mini', title: 'Seed spirals' }], armed: null, sent: false, grown: false, onJoin: false, canSend: true });
+    await assert.rejects(run.demo!.armDaily('nothing'), /no showcase tree called nothing/);
+    await assert.rejects(run.demo!.growDaily(), /Arm the daily tree first/);
+    await run.demo!.armDaily('mini');
+    assert.equal(dailyTree(run), undefined, 'armed, it leaves the forest');
+    assert.equal(run.demo!.status().daily.armed, 'mini');
+
+    headset = await wearing(run);
+    const from = headset.seen.length;
+    await run.demo!.growDaily();
+    const tree = dailyTree(run)!;
+    assert.ok(tree, 'grown, it stands in the forest again');
+    assert.ok([...run.mind.nodes.values()].filter((node) => node.treeId === tree.id).every((node) => node.status === 'kept'), 'its cards are kept');
+    // Its first card comes first, as a tree the headset asked for, so it stands there; then each layer, deepest last, each as an
+    // agent's cards come, one after another with a note each.
+    await soon(() => headset!.seen.slice(from).filter((m) => m.t === 'change').length >= 3);
+    const changes = headset.seen.slice(from).filter((m) => m.t === 'change');
+    assert.ok(changes.every((m) => m.yours), "every change of its growing is the headset's own");
+    assert.equal(changes[0]!.set!.commands.find((c) => c.type === 'createTree')?.tree?.id, tree.id);
+    const layers = changes.slice(1).map((m) => m.set!.commands.filter((c) => c.type === 'addNode').map((c) => c.node!.id.replace(`${tree.id}-`, '')));
+    assert.deepEqual(layers, [['cone', 'idea'], ['vogel']]);
+    assert.ok(changes.slice(1).every((m) => m.set!.origin.by === 'agent' && m.set!.origin.role === 'demo'));
+    assert.equal(headset.seen.slice(from).filter((m) => m.t === 'activity').length, 0, 'no agent is shown at work');
+    // Momo's line is said as written, its caption with its length, from its start.
+    await soon(() => headset!.voice.some((m) => m.t === 'done' && m.id?.endsWith('-daily')));
+    const said = headset.voice.find((m) => m.t === 'text' && m.id?.endsWith('-daily'))!;
+    assert.deepEqual({ text: said.text, kind: said.kind, ms: said.ms, from: said.from }, { text: DAILY_WORDS, kind: 'reply', ms: DAILY_WORDS.length * 50, from: 0 });
+    assert.ok(headset.voice.some((m) => m.t === 'audio' && m.id === said.id));
+    assert.equal(run.demo!.status().busy, null);
+    assert.equal(run.demo!.status().daily.grown, true);
+    await assert.rejects(run.demo!.growDaily(), /has grown already: arm it again/);
+
+    // Armed again for another take, it leaves the forest once more. The headset keeps a tree that is gone, and this service
+    // cannot start its app again, so the page says to.
+    await run.demo!.armDaily('mini');
+    assert.equal(dailyTree(run), undefined);
+    assert.deepEqual({ sent: run.demo!.status().daily.sent, grown: run.demo!.status().daily.grown }, { sent: false, grown: false });
+    assert.match(run.demo!.status().problem ?? '', /headset\.sh restart/);
+  } finally {
+    headset?.off();
+    await close();
+  }
+});
+
+test("Momo's message goes to the paired phone, and the next headset to join grows the daily tree, once for each time it is armed", async () => {
+  const { run, bot, close } = await dailyDemo();
+  const worn: Awaited<ReturnType<typeof wearing>>[] = [];
+  try {
+    await assert.rejects(run.demo!.sendDaily(), /Arm the daily tree first/);
+    await run.demo!.armDaily('mini');
+    // Joined before the message went, a headset grows nothing.
+    worn.push(await wearing(run));
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(dailyTree(run), undefined);
+    worn.pop()!.off();
+
+    await run.demo!.sendDaily();
+    assert.deepEqual(bot.sent.map(({ method, chat, text }) => ({ method, chat, text })), [{ method: 'sendMessage', chat: ADA.id, text: DAILY_WORDS }]);
+    assert.deepEqual({ sent: run.demo!.status().daily.sent, onJoin: run.demo!.status().daily.onJoin }, { sent: true, onJoin: true });
+    worn.push(await wearing(run));
+    await soon(() => run.demo!.status().daily.grown && run.demo!.status().busy === null);
+    const tree = dailyTree(run)!;
+    assert.equal([...run.mind.nodes.values()].filter((node) => node.treeId === tree.id).length, 4, 'its first card and its three');
+    assert.equal(run.demo!.status().daily.onJoin, false);
+    // Put on again, the headset grows it no more.
+    worn.pop()!.off();
+    worn.push(await wearing(run));
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(dailyTree(run)!.id, tree.id);
+    assert.equal(run.demo!.status().problem, null);
+  } finally {
+    for (const one of worn) one.off();
+    await close();
+  }
+
+  // With no account paired, the message is not sent, and the page says why.
+  const lone = await dailyDemo(false);
+  try {
+    assert.equal(lone.run.demo!.status().daily.canSend, false);
+    await lone.run.demo!.armDaily('mini');
+    await assert.rejects(lone.run.demo!.sendDaily(), /no Telegram account is paired/);
+    assert.match(lone.run.demo!.status().problem ?? '', /no Telegram account is paired/);
+    assert.equal(lone.bot.sent.length, 0);
+  } finally {
+    await lone.close();
+  }
+});
+
+test("the daily tree's line is kept in the demo folder in Momo's realtime voice, so it is said as written and never by another voice", () => {
+  const lines = JSON.parse(readFileSync(join(demoDir, 'lines.json'), 'utf8')) as { voice: string; said?: string[] };
+  assert.deepEqual(lines.said, [DAILY_WORDS]);
+  const voices = JSON.parse(readFileSync(join(demoDir, 'voice', 'voices.json'), 'utf8')) as Record<string, string>;
+  assert.equal(voices[recordingName(lines.voice, DAILY_WORDS)], 'realtime');
 });
 
 test('the showcase trees of the demo folder all hold together, and each is a tree with forks and depth, not a stick', () => {
