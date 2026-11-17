@@ -460,6 +460,9 @@ std::optional<Material> Art::glowLook() {
     Material m = Material::unlit(Color::white());
     m.texture = texture;
     m.transparent = true;
+    // NOTE(port): changed for Quest. Light, as the rim of a look is: it hides nothing. The bands of two cards side by side lie
+    // at one depth where they meet, and written into the depth buffer they fought over which showed, which flickers.
+    m.writesDepth = false;
     m.opacity = 1.0f;
     glowMaterial = m;
     return m;
