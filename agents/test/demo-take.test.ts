@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -12,6 +12,10 @@ import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running } from '../src/node/server.ts';
 
 const demoDir = join(import.meta.dirname, '../demo');
+/** Each boot of the demo copies its pictures into its data folder, about 20 MB: every folder made here is removed when the tests end. */
+const made: string[] = [];
+const temp = (prefix: string) => (made.push(mkdtempSync(join(tmpdir(), prefix))), made.at(-1)!);
+process.on('exit', () => made.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 const script = loadScript(join(demoDir, 'script.json'));
 const round = (id: string): ScriptPhase => script.phases.find((phase) => phase.id === id)!;
 const titlesOf = (phase: ScriptPhase, ids: string[]) => ids.map((id) => phase.cards.find((card) => card.id === id)!.title).sort();
@@ -97,7 +101,7 @@ test('on the timeline a remark starts as its cards land, never over the line bef
 // ---- the written lines
 
 async function linesFolder(rounds: string[]): Promise<string> {
-  const dir = mkdtempSync(join(tmpdir(), 'mp-demo-lines-'));
+  const dir = temp('mp-demo-lines-');
   const file: LinesFile = { version: 1, voice: 'test-voice', rounds: {} };
   for (const id of rounds) file.rounds[id] = await plan(round(id));
   writeFileSync(join(dir, 'lines.json'), JSON.stringify(file));
@@ -106,7 +110,7 @@ async function linesFolder(rounds: string[]): Promise<string> {
 
 test('the user\'s words over a line win, are kept across a restart, and go back to Momo\'s own; each wording is recorded once', async () => {
   const dir = await linesFolder(['n3']);
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-demo-data-'));
+  const dataDir = temp('mp-demo-data-');
   const spoken: string[] = [];
   const open = () => new Lines({ demoDir: dir, dataDir, voice: 'test-voice', speak: async (text) => (spoken.push(text), speak(text)), log: () => {} });
   const lines = open();
@@ -137,7 +141,7 @@ test('the user\'s words over a line win, are kept across a restart, and go back 
   again.edit('n3', 'answer', written);
   assert.equal(again.edited, 0, 'Momo\'s own words written back are no edit');
 
-  const silent = new Lines({ demoDir: dir, dataDir: mkdtempSync(join(tmpdir(), 'mp-demo-data-')), voice: 'test-voice', log: () => {} });
+  const silent = new Lines({ demoDir: dir, dataDir: temp('mp-demo-data-'), voice: 'test-voice', log: () => {} });
   assert.equal(await silent.audio(written), null, 'with no voice a line has no sound');
 });
 
@@ -166,7 +170,7 @@ interface Stage {
 async function stage(rate: number, rounds = ['n3']): Promise<Stage> {
   const spoken: string[] = [];
   const run = await startServer({
-    port: 0, host: '127.0.0.1', dataDir: mkdtempSync(join(tmpdir(), 'mp-demo-')), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
+    port: 0, host: '127.0.0.1', dataDir: temp('mp-demo-'), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
     live: { open: () => ({ send: () => {}, close: () => {} }), options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } },
     demo: {
       script, mediaDir: join(demoDir, 'media'), linesDir: await linesFolder(rounds), voice: 'test-voice', speak: async (text) => (spoken.push(text), speak(text)),
@@ -355,6 +359,12 @@ test('the user\'s words over a line are what Momo says; her live voice is kept f
     assert.ok(s.voice.some((m) => m.t === 'text' && m.text === 'Look at this one first.'), 'the user\'s words are said');
     assert.ok(s.spoken.includes('Look at this one first.') && !s.spoken.some((text) => text.startsWith('first: ')), 'and only they were recorded for that line');
     assert.equal(run.demo!.mutes(), false, 'the round played, Momo is herself again');
+
+    // Save to script: the lines as they are said now, the user's words among them, in the file the repository keeps.
+    const file = (await (await fetch(`${run.url}/api/demo/lines.json`, { headers: token })).json()) as LinesFile;
+    assert.deepEqual([file.version, file.voice, file.rounds.n3!.find((line) => line.id === 'first')!.text], [1, 'test-voice', 'Look at this one first.']);
+    assert.deepEqual(Object.keys(file.rounds.n3![0]!).sort(), ['cards', 'id', 'kind', 'text']);
+    writeFileSync(join(temp('mp-demo-lines-'), 'lines.json'), JSON.stringify(file));
 
     // The page's own calls: move, play from a moment, pause.
     await run.demo!.goto('n3');

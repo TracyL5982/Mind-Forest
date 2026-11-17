@@ -209,8 +209,7 @@ let take = null;
 let heard = { at: 0, when: 0, playing: false };
 /** A drag of the bar: where it is, and whether the take was running when it began. */
 let drag = null;
-/** The newest moment asked for while a move is still being answered: only it is sent next. */
-let moveNext = null;
+/** A move the headset is being brought to: the bar stays where it was put until the service has answered. */
 let moving = false;
 
 const clock = (ms) => `${Math.floor(ms / 60000)}:${(Math.floor(ms / 1000) % 60).toString().padStart(2, '0')}`;
@@ -275,9 +274,7 @@ function drawTake() {
     const step = event.key === 'ArrowRight' ? 1000 : event.key === 'ArrowLeft' ? -1000 : 0;
     if (!step) return;
     event.preventDefault();
-    const at = Math.max(0, Math.min(take.ms, position() + step));
-    heard = { at, when: performance.now(), playing: false };
-    move(at);
+    if (!moving) void move(position() + step);
   });
   const lines = take.lines.map((line) => {
     const about = line.kind === 'first' || line.kind === 'more' ? line.cards.map((id) => titles.get(id) ?? id).join(', ') : '';
@@ -300,7 +297,12 @@ function drawTake() {
     el('div', { class: 'bar-legend' }, el('span', { class: 'k-line', text: 'Momo speaks' }), el('span', { class: 'k-step', text: 'Agents at work' }), el('span', { class: 'k-drop', text: 'Cards land' })),
     el('div', { class: 'hint', id: 'take-hint' }),
     lines.length > 0 ? el('div', { class: 'part-name lines-name', text: 'What Momo says, in order. Write over any line and she says your words.' }) : el('div', { class: 'hint', text: 'This round has no lines of Momo’s written down yet (agents/demo/lines.json), so its take plays without her.' }),
-    ...lines);
+    ...lines,
+    lines.length > 0 ? el('div', { class: 'save' },
+      el('button', { class: 'btn', type: 'button', onclick: () => saveScript().catch((err) => (($('problem').hidden = false), ($('problem').textContent = `The lines were not saved: ${err.message}`))), text: 'Save to script' }),
+      el('div', { class: 'hint', text: status?.lines?.edited
+        ? `Downloads lines.json with every round's lines as Momo says them now, your ${status.lines.edited} edited line${status.lines.edited === 1 ? '' : 's'} among them. Put it in the repository as agents/demo/lines.json and commit it, with the recordings the service made (demo-voice in its data folder, into agents/demo/voice). Until then your words are kept by this service while it runs, and in this browser.`
+        : 'Downloads lines.json with every round\'s lines as Momo says them now. Nothing is edited, so it is the file the repository has.' })) : null);
   tick();
 }
 
@@ -318,7 +320,7 @@ function tick() {
   const now = take.lines.find((line) => line.ms > 0 && line.at <= at && at < line.at + line.ms);
   for (const node of document.querySelectorAll('.line')) node.dataset.now = String(Boolean(now) && node.querySelector('textarea').dataset.line === now.id);
   $('take-hint').textContent = status?.devices
-    ? `Plays this round on the headset at the pace of a real one: the scene, Momo and the agents' labels together, ${Math.round(take.ms / 1000)} s in all. Saying the line in the headset starts the same take.`
+    ? `Plays this round on the headset at the pace of a real one: the scene, Momo and the agents' labels together, ${Math.round(take.ms / 1000)} s in all. Saying the line in the headset starts the same take. Drag or click the bar to jump: the headset goes to that moment when you let go.`
     : 'No headset is joined: the take still runs here, and the tree follows it.';
 }
 function frames() {
@@ -339,30 +341,30 @@ async function toggle() {
   watch(true);
 }
 
-/** Moves the take on the headset. While one move is being answered, only the newest moment asked for waits behind it. */
-async function move(at) {
-  moveNext = Math.round(at);
-  if (moving) return;
+/**
+ * Brings the headset to a moment of the take, once: the bar itself moves freely on the page, and the headset follows when it
+ * is let go, or clicked on. A take that was running goes on from there.
+ */
+async function move(at, play = false) {
+  const to = Math.round(Math.max(0, Math.min(take.ms, at)));
+  heard = { at: to, when: performance.now(), playing: false };
   moving = true;
   try {
-    while (moveNext !== null) {
-      const to = moveNext;
-      moveNext = null;
-      status = await api('/api/demo/seek', { round: picked, at: to });
-      // A drag is followed about four times a second, which is as fast as a headset hangs cards and takes them away.
-      if (drag) await new Promise((done) => setTimeout(done, 220));
+    status = await api('/api/demo/seek', { round: picked, at: to });
+    if (play && to < take.ms - 50) {
+      heard = { at: to, when: performance.now(), playing: true };
+      status = await api('/api/demo/play', { round: picked, at: to });
     }
   } finally {
     moving = false;
   }
-  if (!drag) {
-    hear();
-    draw();
-  }
+  hear();
+  draw();
+  watch(true);
 }
 
 function grab(event) {
-  if (!take || busy()) return;
+  if (!take || busy() || moving) return;
   const bar = $('bar');
   const where = (e) => {
     const box = bar.getBoundingClientRect();
@@ -370,28 +372,16 @@ function grab(event) {
   };
   drag = { at: where(event), was: heard.playing };
   bar.setPointerCapture(event.pointerId);
-  move(drag.at);
-  const onMove = (e) => {
-    drag.at = where(e);
-    move(drag.at);
-  };
-  const onUp = async (e) => {
+  // A take that is running is paused at once, so nothing more lands while the bar is held.
+  if (drag.was) void api('/api/demo/pause', {}).catch(() => {});
+  const onMove = (e) => (drag.at = where(e));
+  const onUp = () => {
     bar.removeEventListener('pointermove', onMove);
     bar.removeEventListener('pointerup', onUp);
     bar.removeEventListener('pointercancel', onUp);
     const { at, was } = drag;
-    heard = { at, when: performance.now(), playing: false };
     drag = null;
-    // The headset settles on exactly this moment, and a take that was running goes on from it.
-    await move(at);
-    while (moving) await new Promise((done) => setTimeout(done, 30));
-    if (was && at < take.ms - 50) {
-      heard = { at, when: performance.now(), playing: true };
-      status = await api('/api/demo/play', { round: picked, at: Math.round(at) });
-      hear();
-      watch(true);
-    }
-    void e;
+    void move(at, was);
   };
   bar.addEventListener('pointermove', onMove);
   bar.addEventListener('pointerup', onUp);
@@ -399,9 +389,19 @@ function grab(event) {
 }
 
 function jump(at) {
-  if (busy()) return;
-  heard = { at, when: performance.now(), playing: false };
-  move(at);
+  if (busy() || moving) return;
+  void move(at);
+}
+
+/** The lines as they are said now, the user's words where they wrote any, as a lines.json to put in the repository in place of agents/demo/lines.json. */
+async function saveScript() {
+  const res = await fetch('/api/demo/lines.json', { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`The service answered ${res.status}.`);
+  const link = el('a', { href: URL.createObjectURL(await res.blob()), download: 'lines.json' });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 /** Writes the user's words over a line, or with `null` goes back to Momo's own. The service records them, and the take is drawn again. */

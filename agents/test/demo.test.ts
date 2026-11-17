@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -18,7 +18,12 @@ const script = loadScript(join(demoDir, 'script.json'));
 /** A take's clock runs 400 times as fast, so a round of 45 s is over in a tenth of one. */
 const quick = { stand: 400, open: 400, land: 400, breath: 0, step: 0, rate: 400, rejoin: 1500 };
 
-async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-demo-')), restart?: () => Promise<string>, showcase?: Showcase[]): Promise<Running> {
+/** Each boot of the demo copies its pictures into its data folder, about 20 MB: every folder made here is removed when the tests end. */
+const made: string[] = [];
+process.on('exit', () => made.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+const fresh = () => (made.push(mkdtempSync(join(tmpdir(), 'mp-demo-'))), made.at(-1)!);
+
+async function boot(dataDir = fresh(), restart?: () => Promise<string>, showcase?: Showcase[]): Promise<Running> {
   return startServer({
     port: 0, host: '127.0.0.1', dataDir, clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
     demo: { script, mediaDir: join(demoDir, 'media'), pace: quick, restart, showcase },
@@ -167,7 +172,7 @@ test('the questions under a round\'s card are the script\'s, and the stage can b
 });
 
 test('a data folder kept from an earlier run is taken up where it stood', async () => {
-  const dataDir = mkdtempSync(join(tmpdir(), 'mp-demo-'));
+  const dataDir = fresh();
   const first = await boot(dataDir);
   await first.demo!.goto('f2');
   await first.close();

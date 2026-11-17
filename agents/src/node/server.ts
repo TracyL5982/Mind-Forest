@@ -542,6 +542,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           return json(res, 404, { error: err instanceof Error ? err.message : String(err) });
         }
       }
+      if (req.method === 'GET' && path === '/api/demo/lines.json') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Disposition': 'attachment; filename="lines.json"', 'Cache-Control': 'no-store' });
+        res.end(`${JSON.stringify(director.linesFile(), null, 1)}\n`);
+        return;
+      }
       if (req.method === 'POST' && path === '/api/demo/play') {
         const { round, at } = await posted();
         // The take runs for the length of a real round: the page reads where it is from the status.

@@ -384,6 +384,11 @@ export class Director {
     return takeOf(phase, lines.of(round), (text) => lines.ms(text), this.titleOfHead(phase));
   }
 
+  /** The lines as they are said now, as a `lines.json` to put in the repository. */
+  linesFile(): unknown {
+    return this.deps.lines.file();
+  }
+
   /** A round's take for the page. */
   shown(round: string): TakeShown {
     const { lines } = this.deps;
@@ -777,8 +782,7 @@ export class Director {
   mutes(): boolean {
     if (!this.scripted) return false;
     if (this.rolling || this.pending) return true;
-    if (this.listening && Date.now() - this.listening.at < 60_000) return true;
-    return this.awaitsTree();
+    return this.listening !== null || this.awaitsTree();
   }
 
   private awaitsTree(): boolean {

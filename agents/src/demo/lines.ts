@@ -25,6 +25,8 @@ export type Edits = z.infer<typeof Edits>;
 
 /** 16-bit mono at 24 kHz, the live voice's own format. */
 const BYTES_PER_MS = 48;
+/** A Git LFS pointer file is about 130 bytes; the shortest recording, a word, is tens of thousands. */
+const LFS_POINTER = 1000;
 /** A line is a few sentences. Longer is cut, so one box cannot ask for minutes of speech. */
 export const MAX_LINE = 1200;
 
@@ -76,6 +78,14 @@ export class Lines {
     });
   }
 
+  /**
+   * Every round's lines as they are said now, as the file `demo/lines.json` is written: the user's words in place of Momo's
+   * where they wrote any. Put in the repository, it makes those words every copy's.
+   */
+  file(): LinesFile {
+    return { version: 1, voice: this.opts.voice, rounds: Object.fromEntries(Object.keys(this.written).map((round) => [round, this.of(round).map(({ id, kind, cards, text }) => ({ id, kind, cards, text }))])) };
+  }
+
   /** Whether the service holds any words of the user's. The page sends its own copy again when it holds none, as after a restart with no volume. */
   get edited(): number {
     return Object.values(this.edits).reduce((n, round) => n + Object.keys(round).length, 0);
@@ -100,27 +110,28 @@ export class Lines {
     return recordingName(this.opts.voice, text);
   }
 
-  private file(text: string): string | null {
+  private kept(text: string): string | null {
     const name = this.name(text);
-    return [join(this.opts.demoDir, 'voice', name), join(this.made, name)].find((path) => existsSync(path)) ?? null;
+    // A recording not yet fetched from Git LFS is a few lines of text in its place: that is no recording.
+    return [join(this.opts.demoDir, 'voice', name), join(this.made, name)].find((path) => existsSync(path) && statSync(path).size > LFS_POINTER) ?? null;
   }
 
   /** How long the line takes to say: its recording's own length, or a reading of its words while there is none. */
   ms(text: string): number {
     if (!text.trim()) return 0;
-    const file = this.file(text);
+    const file = this.kept(text);
     return file ? Math.round(statSync(file).size / BYTES_PER_MS) : spokenFor(text);
   }
 
   /** Whether the line has a recording, so it is said exactly and its length is its own. */
   recorded(text: string): boolean {
-    return !text.trim() || this.file(text) !== null;
+    return !text.trim() || this.kept(text) !== null;
   }
 
   /** The line in Momo's voice. Made once and kept; null when the service has no voice, or the voice did not answer. */
   audio(text: string): Promise<Uint8Array | null> {
     if (!text.trim()) return Promise.resolve(null);
-    const file = this.file(text);
+    const file = this.kept(text);
     if (file) return Promise.resolve(new Uint8Array(readFileSync(file)));
     const speak = this.opts.speak;
     if (!speak) return Promise.resolve(null);

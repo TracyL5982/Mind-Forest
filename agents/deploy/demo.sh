@@ -12,6 +12,8 @@ FLY=${FLY:-fly}
 APP=${FLY_DEMO_APP:-mind-palace-walkthrough}
 # The pictures are in Git LFS: a checkout without them holds short text files in their place, and the trees would be blank.
 if head -c 60 demo/media/t080.jpg | grep -q 'git-lfs'; then echo "The demo's pictures are not here yet. Run: git lfs pull" >&2; exit 1; fi
+# Momo's recorded lines come the same way. Without them she would record every line afresh on Fly, and sound a little different there.
+if ls demo/voice/*.pcm >/dev/null 2>&1 && head -c 60 "$(ls demo/voice/*.pcm | head -1)" | grep -q 'git-lfs'; then echo "Momo's recorded lines are not here yet. Run: git lfs pull" >&2; exit 1; fi
 if [ "${1:-}" = setup ]; then
   "$FLY" apps create "$APP"
   # fly 0.4.53's first deploy failed to give the app its addresses, so they are allocated here (as deploy/setup.sh does).
