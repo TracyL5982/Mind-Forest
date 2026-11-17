@@ -109,7 +109,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Nice, let’s build a fresh layer around that organizing question."
+    "text": "Let’s spin that into a new layer of ideas around this."
    },
    {
     "id": "first",
@@ -117,13 +117,12 @@
     "cards": [
      "slice-of-heartland"
     ],
-    "text": "First up, “Slice of Heartland.” It’s a film in your own cards, described as a tree drawn as 100 cross-sections, with one poster for each. It sounds like a really visual way to show structure."
+    "text": "First up, there’s a card called “Slice of Heartland.” It’s a film idea where a tree is shown as 100 cross-sections, each one as a poster. It’s a neat way to keep a big structure readable, one slice at a time."
    },
    {
     "id": "more-1",
     "kind": "more",
     "cards": [
-     "waves-of-grain",
      "tree-ct",
      "linux-file-system",
      "note-tree-grows",
@@ -133,7 +132,7 @@
      "multiplane-camera",
      "paper-peepshow"
     ],
-    "text": "Nine more came in, and my favorite is the “Linux file system” picture—one root with everything hanging from it is a clean mental model for keeping lots of pieces tidy."
+    "text": "Eight more arrived, and my favorite is the “Linux file system” picture—one root with everything hanging from it, super clear for navigation."
    },
    {
     "id": "more-2",
@@ -141,7 +140,7 @@
     "cards": [
      "gen-idea-time"
     ],
-    "text": "One more arrived: “By time,” which shows each request as a new layer, with older ones fading back and the newest one lit."
+    "text": "One more popped in: “By time.”"
    },
    {
     "id": "more-3",
@@ -149,7 +148,7 @@
     "cards": [
      "gen-idea-branches"
     ],
-    "text": "Another one landed: “By branches,” where each question forks into its own path, growing alongside the others."
+    "text": "And another: “By branches.”"
    },
    {
     "id": "wrap",
@@ -157,7 +156,7 @@
     "cards": [
      "gen-idea-depth"
     ],
-    "text": "I’d start with “By depth,” because it keeps your focus on the newest layer while still showing the older context behind it, which feels perfect for a busy idea space. If you like that view, we can open it and use it as the default way to organize the ring."
+    "text": "I’d start with “By branches” because it turns questions into clear forks, which fits a combinatorial ring nicely. Next, we could open it and see how that branching view might guide how you group and move through your ideas."
    }
   ],
   "f1": [
@@ -1587,7 +1586,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Nice, let’s build a fresh layer on that idea and see what patterns we can use."
+    "text": "Nice prompt—let’s spin a new layer around that and see what structures help."
    },
    {
     "id": "first",
@@ -1595,20 +1594,19 @@
     "cards": [
      "slice-of-heartland"
     ],
-    "text": "First up, there’s a card from your own collection: “Slice of Heartland.” It’s a film that shows a tree as 100 cross-sections, one poster for each slice. It sounds like a neat way to think about structure over time."
+    "text": "First up, there’s a film card called \"Slice of Heartland.\" It’s described as a tree drawn as 100 cross-sections, with one poster for each slice. It sounds like a neat way to show structure over time."
    },
    {
     "id": "more-1",
     "kind": "more",
     "cards": [
-     "waves-of-grain",
      "tree-ct",
      "linux-file-system",
      "note-tree-grows",
      "paper-peepshow",
      "multiplane-camera"
     ],
-    "text": "Six more landed; I’d start with “Linux file system,” since it’s a clean metaphor: one root, and everything hangs from it."
+    "text": "Five more just arrived, and my favorite is the \"Linux file system\" picture—one root with everything branching from it."
    },
    {
     "id": "more-2",
@@ -1618,7 +1616,7 @@
      "darwin-tree",
      "sea-fan"
     ],
-    "text": "Three more arrived; I’d go for “A New Chart of History” first, because it lays time out in a single line."
+    "text": "Three more appeared, and I’d start with \"A New Chart of History\"—empires laid out as bars on a single timeline."
    },
    {
     "id": "more-3",
@@ -1626,7 +1624,7 @@
     "cards": [
      "gen-idea-time"
     ],
-    "text": "One more landed: “By time,” which frames each ask as a new layer, with the latest one highlighted."
+    "text": "There’s also a new picture called \"By time,\" where every ask becomes a new layer, the earlier ones fade back, and the latest is lit."
    },
    {
     "id": "more-4",
@@ -1634,7 +1632,7 @@
     "cards": [
      "gen-idea-branches"
     ],
-    "text": "Another one landed: “By branches,” where each question forks into its own colored path."
+    "text": "Another one is the picture \"By branches,\" where each question forks the path and each branch grows alongside the others in its own color."
    },
    {
     "id": "wrap",
@@ -1642,7 +1640,7 @@
     "cards": [
      "gen-idea-depth"
     ],
-    "text": "I’d start with “Linux file system” because it gives you a simple spine: one root, clear branches, and a place for everything to hang. Then we could try “By branches” or “By depth” as your main view, and keep the other metaphors as alternate lenses when you want to reorganize."
+    "text": "I’d start with \"By time\" because it gives you a clean, readable sense of how layers build up without turning into spaghetti. Next step, we could keep one of the organizing diagrams as a reference and then try mapping one of your current ideas onto it as a test."
    }
   ],
   "f4": [

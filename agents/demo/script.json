@@ -686,21 +686,6 @@
      "h": 523
     },
     {
-     "id": "waves-of-grain",
-     "origin": "ocean",
-     "title": "Waves of Grain",
-     "text": "A block of wood planed away, layer by layer",
-     "why": "wood planed away, layer by layer",
-     "date": "2013",
-     "credit": "In copyright",
-     "by": "Keith Skretch",
-     "href": "https://vimeo.com/76973207",
-     "kind": "film",
-     "image": "waves-of-grain.jpg",
-     "w": 1000,
-     "h": 562
-    },
-    {
      "id": "tree-ct",
      "origin": "ocean",
      "title": "WoodSwimmer",
@@ -712,11 +697,12 @@
      "holder": "PLOS ONE 17(9): e0274168",
      "from": "PLOS ONE (open access)",
      "licence": "Creative Commons Attribution License",
-     "href": "https://aeon.co/videos/a-dazzling-slice-by-slice-exploration-of-wood-exposes-hidden-patterns-and-hues",
+     "href": "https://www.youtube.com/watch?v=3OLZ8VrH6AA",
      "kind": "film",
      "image": "tree-ct.jpg",
      "w": 1000,
-     "h": 583
+     "h": 583,
+     "video": "woodswimmer.mp4"
     },
     {
      "id": "gen-idea-branches",

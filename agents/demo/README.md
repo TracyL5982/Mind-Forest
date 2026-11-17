@@ -1,6 +1,6 @@
 # The walkthrough demo
 
-One prepared tree, "Brainstorming in a headset", for recording the film. It is the walkthrough board made real: 31 rounds of asking, 154 cards, each round a layer of the tree.
+One prepared tree, "Brainstorming in a headset", for recording the film. It is the walkthrough board made real: 31 rounds of asking, 153 cards, each round a layer of the tree.
 
 - You go to any round from a page on the Mac. The tree then stands on the headset as it was just before that round, and you record from there.
 - Each round is a fixed take: the same cards at the same moments, the same labels of the agents at work, and Momo saying the same lines, every time. You start it by saying the round's line in the headset, or with one Play button on the page, and a bar on the page moves through it like a film's.
