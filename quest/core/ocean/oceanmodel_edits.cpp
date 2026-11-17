@@ -3,7 +3,7 @@
 //
 // A highlight is words of one run of the content's text, found again by its words and which of their appearances it is.
 // A line is points 0 to 1 across and down the whole content, however far it is scrolled. Both are drawn where the
-// content now stands in its window, as two meshes: see-through amber behind the words, white lines over them.
+// content now stands in its window, as two meshes: see-through amber behind the words, red lines over them.
 #include "oceanmodel.h"
 
 #include <cmath>
@@ -67,7 +67,8 @@ void OceanModel::buildEdits(CardView& c) {
     }
     c.highlights = art->swatch(amber, {0.001f, 0.001f}, highlightOpacity);
     c.highlights->position.z = 0.0042f;
-    c.lines = art->swatch(Color::white(), {0.001f, 0.001f});
+    // The user's own lines are in the accent, as Kai's marker draws on a picture (`drawInk`): what you marked.
+    c.lines = art->swatch(Art::hot, {0.001f, 0.001f});
     c.lines->position.z = 0.0046f;
     for (const EntityRef& e : {c.highlights, c.lines}) {
         e->isEnabled = false;
@@ -256,7 +257,7 @@ void OceanModel::drawEdits(CardView& c) {
             positions.insert(positions.end(), {a, b, cc, d});
             indices.insert(indices.end(), {n, n + 1, n + 2, n, n + 2, n + 3});
         }
-    } amberMesh, whiteMesh;
+    } amberMesh, redMesh;
     for (const CardEdit& e : shown) {
         if (e.kind == CardEdit::Kind::stretch) continue;
         if (e.kind == CardEdit::Kind::highlight) {
@@ -281,10 +282,10 @@ void OceanModel::drawEdits(CardView& c) {
             Vec3 dir = n > 1e-6f ? along / n : Vec3{1, 0, 0};
             Vec3 side = Vec3{-dir.y, dir.x, 0} * (lineWide / Art::ppm / 2);
             Vec3 ext = dir * (lineWide / Art::ppm / 2);
-            whiteMesh.quad(p - ext - side, q + ext - side, q + ext + side, p - ext + side);
+            redMesh.quad(p - ext - side, q + ext - side, q + ext + side, p - ext + side);
         }
     }
-    for (auto [entity, mesh] : {std::pair{c.highlights, &amberMesh}, std::pair{c.lines, &whiteMesh}}) {
+    for (auto [entity, mesh] : {std::pair{c.highlights, &amberMesh}, std::pair{c.lines, &redMesh}}) {
         entity->isEnabled = !mesh->indices.empty();
         if (mesh->indices.empty()) continue;
         std::vector<Vec2> uvs(mesh->positions.size(), Vec2::zero());
