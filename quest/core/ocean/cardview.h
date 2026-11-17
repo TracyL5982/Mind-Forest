@@ -153,6 +153,8 @@ private:
     float shownGlow = -1;
 
 public:
+    /// NOTE(port): added for Quest. Its glows, to tell them apart in a look at what is drawn (`OceanModel::depthAudit`).
+    const std::vector<EntityRef>& glowPieces() const { return glows; }
     std::vector<Ask> asks;              // the questions offered beside it when open
     std::string rowsKey;                // what the column under it says now
     float rowsDown = 0;                 // and how far down that column reaches, m
