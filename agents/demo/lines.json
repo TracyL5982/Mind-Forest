@@ -831,5 +831,577 @@
     "text": "I’d open the “Net transfer of carbon…” paper first, because it mirrors the neuron’s logic: separate bodies, one network. If you want, we can go deeper into the shared-network angle, or pivot to the visual tree analogies."
    }
   ]
+ },
+ "real": {
+  "r1": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Fun idea—let’s spin up a space for that and see what kinds of angles we can explore."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "warburg-library"
+    ],
+    "text": "First up, you’ve got “Warburg’s reading room,” a picture from your own cards. It shows picture panels standing along the shelves of his library. It’s a neat reminder that a brainstorming space can be visual and spatial, not just a blank page."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "figjam",
+     "bobardi-easels",
+     "architects-table",
+     "vam-O1260839",
+     "warburg-atlas",
+     "studio-wall",
+     "confucius-apricot",
+     "darwin-sandwalk",
+     "krokos-2019",
+     "data-mountain-1998",
+     "space-to-think-2010"
+    ],
+    "text": "Eleven more just landed, and my favorite is “Data mountain” because it nails how spatial placement becomes memory, which is perfect for VR brainstorming."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d open “Space to think” first, because it shows how layout itself becomes a kind of memory, which is really the superpower of a headset. Next, we can add a layer of concrete VR brainstorming patterns to try."
+   }
+  ],
+  "n2": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Nice angle—let’s build out some fresh analogies around that idea."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "t080"
+    ],
+    "text": "First up, there’s a card showing a disc packed with hundreds of small images in one circle. It’s all visible at once, but there’s no path through it—more like a dense snapshot than a journey."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "t125",
+     "t049",
+     "moma-445074",
+     "t023",
+     "t021",
+     "cordier-canon",
+     "nolli-rome",
+     "llull-figure"
+    ],
+    "text": "Eight more just arrived, and my favorite is “Llull’s ring,” with nine ideas joined to each other for combination thinking."
+   },
+   {
+    "id": "more-2",
+    "kind": "more",
+    "cards": [
+     "haeckel-corals",
+     "mendeleev-table"
+    ],
+    "text": "Two more landed: “Corals” and the “Periodic table.”"
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d start with “Llull’s ring” because it turns ideas into a system of combinations, which feels perfect for VR navigation. Next, you could open that one and then we can find more examples of combinatorial thinking spaces."
+   }
+  ],
+  "mo": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Nice, let’s riff on that vibe and pull in some fresh angles around it."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "t047"
+    ],
+    "text": "First up, there’s “A flower of nodes,” and it’s a picture from your own cards. It shows one stalk fanning into hundreds of colored dots, a network drawn like a flower."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "t122",
+     "t124",
+     "t082",
+     "t123",
+     "t128",
+     "t109",
+     "t094",
+     "t108",
+     "t002",
+     "t120",
+     "cajal-neurons",
+     "lena-delta"
+    ],
+    "text": "A dozen more just arrived, and I’d start with “Abstract 01” by Marius Watz—it sounds like a grown, thread-like structure that really fits your bursting ideas theme."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d look at “Abstract 01” first because those threads and dots feel closest to the burst of ideas in your poster. If you want, I can help you keep a couple of the strongest matches or pull more like that one."
+   }
+  ],
+  "f1": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Nice angle—let’s build a layer around that concern and see what it reveals."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "vam-O1361001"
+    ],
+    "text": "The first thing that landed is “Underground map” by Harry Beck from 1934, and it’s one of your own cards. It’s a picture, and it’s a neat fit for thinking about how to keep orientation without relying on realistic space."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "aic-14929",
+     "t011",
+     "t012",
+     "ammassalik-map",
+     "pocket-globe",
+     "wim-1995"
+    ],
+    "text": "Six more came in, and my favorite is “Virtual reality on a WIM,” because the whole-room model in your hand is a clever way to stay oriented."
+   },
+   {
+    "id": "more-2",
+    "kind": "more",
+    "cards": [
+     "stick-chart"
+    ],
+    "text": "One more landed: “Stick chart,” showing swells and islands mapped with sticks and shells."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d look at “Virtual reality on a WIM” first, because the idea of holding a whole-room model in your hand feels like a clean, practical anchor against getting lost. If you want, we can open that one next and see how it might translate into your headset workflow."
+   }
+  ],
+  "f2": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Let’s unpack that idea in a simple, visual way."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "quipu"
+    ],
+    "text": "First up, there’s an artwork called “Khipu.” It’s described as a record made in branches, with cords tied onto other cords like a kind of branching structure."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "cone-trees-1991"
+    ],
+    "text": "There’s also a paper called “Cone Trees,” which shows a 3D tree of files where each branch is a cone and the path rotates forward when you pick one."
+   },
+   {
+    "id": "more-2",
+    "kind": "more",
+    "cards": [
+     "llull-tree"
+    ],
+    "text": "Another one is the artwork “Tree of Science,” where each branch is a field of knowledge and each root is a shared principle."
+   },
+   {
+    "id": "more-3",
+    "kind": "more",
+    "cards": [
+     "encyclopedie-tree",
+     "haeckel-tree"
+    ],
+    "text": "Two more: “The Encyclopédie as a tree,” with memory, reason, and imagination as its big boughs, and “Pedigree of Man,” where each branch shows a line of descent splitting at each fork."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [
+     "gen-kind-path"
+    ],
+    "text": "I’d start with “Kind or path?” because it neatly separates branches as categories from branches as choices you follow, which is perfect for brainstorming. If you like, we can keep one or two of these and build a small example around them."
+   }
+  ],
+  "f3": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Nice, let’s build on that for a moment."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "moma-205998"
+    ],
+    "text": "First up, there’s “Double Transparency,” a picture made from two painted sheets layered so they create a third image when you look through them together. It’s a neat metaphor for your cross-sections: each layer stays itself, but the combination becomes something new."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "janus-depth-layers",
+     "mri-slices",
+     "nakanishi-layers",
+     "anatomical-flap"
+    ],
+    "text": "Four more just arrived, and I’d start with “Layer Drawings” because each clear sheet turns time into a physical layer."
+   },
+   {
+    "id": "more-2",
+    "kind": "more",
+    "cards": [
+     "engelbrecht-theatre",
+     "soane-picture-room"
+    ],
+    "text": "Two more popped in: “Paper theatre” and “Soane’s Picture Room.”"
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [
+     "sketch-blend"
+    ],
+    "text": "I’d look at “Layers blending” first, because it gives you a clean rule for how old layers collapse into a single plane. Want to pick one of these and sketch a tiny rule for how it behaves in your poster series?"
+   }
+  ],
+  "f5": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Nice, that’s a perfect rabbit hole for this card—let me pull in a fresh layer of ideas."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "met-337061"
+    ],
+    "text": "First up, there’s a picture card titled “Astronomicum Caesareum” from 1540, with woodcuts by Michael Ostendorfer. It’s a lovely historical anchor point for spatial ideas—like a reminder that careful layout has been helping people think for centuries."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "janus-gallery",
+     "dresler-2017",
+     "maguire-2000",
+     "lukasa",
+     "fludd-theatre",
+     "ramelli-bookwheel"
+    ],
+    "text": "Six more just arrived, and my favorite is the paper “Mnemonic Training Reshapes Brain Networks to Support Superior Memory,” because it shows how practice can change recall for months."
+   },
+   {
+    "id": "more-2",
+    "kind": "more",
+    "cards": [
+     "worm-cabinet"
+    ],
+    "text": "One more landed too: “Ole Worm's cabinet,” the frontispiece of his museum catalogue."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d start with the memory-palace training paper, because it ties practice directly to lasting changes in recall and brain networks, which feels very relevant to your “Data mountain” idea. If you want, we can pull a tighter thread next, like comparing that with the taxi-driver hippocampus study, or leaning into the historical “memory theatre” angle."
+   }
+  ],
+  "f7": [
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "bobardi-row"
+    ],
+    "text": "There’s a picture called “Portraits standing on glass, MASP,” and it’s from your own cards. It notes that visitors can walk behind the pictures, which gives the display this lovely, almost stage-like depth."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "casa-de-vidro",
+     "padua-theatre",
+     "mission-control",
+     "drafting-room"
+    ],
+    "text": "Four more popped in, and my favorite is “Casa de Vidro” because a glass house in the trees sounds like a perfect echo of that see-through display idea."
+   },
+   {
+    "id": "more-2",
+    "kind": "more",
+    "cards": [
+     "gubbio-studiolo",
+     "jerome-study"
+    ],
+    "text": "Two more arrived: “Studiolo from Gubbio” and “Saint Jerome in His Study.”"
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d start with “Casa de Vidro” because the glass house in the trees feels like a clean metaphor for transparent thinking in a shared space. If you want, we can build a new layer that focuses on how people move around and behind the work."
+   }
+  ],
+  "f6": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Nice angle—let’s spin up a new layer around that and see who shows up."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "met-816189"
+    ],
+    "text": "First up, there’s a picture called “Abiding nowhere, the awakened mind arises” by Musō Soseki, from the 14th century. It’s one of your own cards, and it drops right into that “insight in nature” mood."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "plato-academy-mosaic",
+     "newton-apple-tree",
+     "bodhi-tree",
+     "newton-prism"
+    ],
+    "text": "Four more just arrived, and I’d start with “Plato’s Academy, mosaic from Pompeii”—philosophers gathering under a tree feels like the perfect match."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d open the “Plato’s Academy” mosaic first because it echoes your prompt almost literally: big thinking happening in the shade. If you want to keep going, we can add another layer focused on myths versus historical anecdotes."
+   }
+  ],
+  "pg": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Nice moment to pause and choose—let me think about how to handle that here."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "hand-shadows"
+    ],
+    "text": "The first card is a bird in flight, an artwork by Henry Bursill from Hand Shadows published in 1859. It's available through Project Gutenberg via the gutenberg.pglaf.org mirror."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "met-760748",
+     "string-figures"
+    ],
+    "text": "Two more just arrived. One is Figures for Chinese Shadow Puppets by Juan Lawrence from your own cards, and the other is A Sunset by Caroline Furness Jayne from Internet Archive."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [
+     "gen-gestures"
+    ],
+    "text": "I’d look at “Our nine gestures” first, because it sounds like a practical guide to how the app understands movement, which could help you decide what’s worth keeping. If you like, we can keep that one and then compare it with one historical example."
+   }
+  ],
+  "fb": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Let’s build from what’s already on that board and grow the next layer."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "note-agents"
+    ],
+    "text": "First up, there’s a note called “Agent system.” It’s about having one voice that covers eight roles, which is a neat way to keep things consistent while still giving the system range."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "note-sources",
+     "note-cards",
+     "note-hosting"
+    ],
+    "text": "Three more arrived, and I’d start with “Card program”—28 card types and 14 arrangements sounds like a strong backbone for building."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d open “Card program” first, because those 28 card types and 14 arrangements give you a clear structure to build around. Next, we could pull out a simple flow from it—like how a user moves from idea to theme to feature—and sketch that as a first pass."
+   }
+  ],
+  "rz": [
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "aic-60126"
+    ],
+    "text": "First up, there’s a picture called “Full Moon” by N. W. Pease from the mid-1800s, and it’s from your own cards. It feels like a lovely companion to the Celestial Globe, like another small window into how people pictured the sky."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "zeiss-planetarium",
+     "star-atlas"
+    ],
+    "text": "Two more landed: “Zeiss star projector, Fernbank Science Center” and “The northern sky” by Andreas Cellarius."
+   },
+   {
+    "id": "more-2",
+    "kind": "more",
+    "cards": [
+     "orrery"
+    ],
+    "text": "And one more landed: “A Philosopher Lecturing on the Orrery” by Joseph Wright of Derby."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d start with “The northern sky”—those old star atlases are such a rich mix of science and imagination. If you want, we can keep going with more like that, or we can just keep the ones that feel most useful."
+   }
+  ],
+  "ry": [
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "p15"
+    ],
+    "text": "First up is “Hanging Colors,” a picture from your own cards. It’s about architecture portfolio projects and tips for high school students, which is a neat angle to pair with the idea of walking among ideas."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "t017",
+     "t018",
+     "t019",
+     "t031",
+     "t020",
+     "sea-glass"
+    ],
+    "text": "Six more came in, and I’d start with “Sea glass, Glass Beach, California”—there’s something wonderfully reflective about it."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d look first at “Sea glass, Glass Beach, California,” because it echoes your bubbles as ideas shaped by time and movement. Next, we could open that card to see how it shifts the mood of your memory palace, or pull one more layer of related materials."
+   }
+  ],
+  "r10": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Let me answer that aloud from what I know. Nice prompt—let’s spin that into a new layer around this card."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "cma-120225"
+    ],
+    "text": "The first card is a picture called “Fireworks at Ryōgoku” by Utagawa Hiroshige from 1858, and it’s from your own cards. It’s a lovely surprise angle—very evocative for thinking about coordinated motion and spectacle."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "moma-79802",
+     "haeckel-radiolaria",
+     "fireflies",
+     "murmuration",
+     "bioluminescence"
+    ],
+    "text": "Five more came in, and my favorite is “Starlings at dusk”—there’s something mesmerizing about that kind of collective movement."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d open “Starlings at dusk” first, because it’s the closest match to that idea of a flock turning as one. If you want, we can keep one or two of these and build another layer focused on movement metaphors."
+   }
+  ],
+  "rw": [
+   {
+    "id": "answer",
+    "kind": "answer",
+    "cards": [],
+    "text": "Nice, let’s pull in a fresh layer around that and see what turns up."
+   },
+   {
+    "id": "first",
+    "kind": "first",
+    "cards": [
+     "cma-164896"
+    ],
+    "text": "First up, there’s a picture titled \"Traveler on a Road in a Forest\" by Maxime Lalanne from 1866, coming from your own cards. It sounds like a quiet, wandering scene, which is a lovely counterpoint to that branching, signal-gathering neuron."
+   },
+   {
+    "id": "more-1",
+    "kind": "more",
+    "cards": [
+     "tohaku-pines",
+     "simard-1997",
+     "pando",
+     "great-banyan",
+     "kelp-forest"
+    ],
+    "text": "Five more arrived, and I’d start with the paper about trees passing carbon through fungal networks—it’s a mind-bending “separate trees, one network” idea."
+   },
+   {
+    "id": "wrap",
+    "kind": "wrap",
+    "cards": [],
+    "text": "I’d look at the paper first, because that “separate trees, one network” result beautifully echoes a single neuron gathering signals through many branches. If you want, we can open that one and then pull a follow-up layer, like other examples of hidden biological networks."
+   }
+  ]
  }
 }
