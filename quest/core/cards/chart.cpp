@@ -302,9 +302,11 @@ void paint(const Pen& pen, const Plot& p, float x, float y, const Look& look) {
 /// The title, the shape of the series with no words, and one meta line: how many and from what to what.
 void lay(Col& c, const Item& item, const Json& props) {
     Series s = series(props);
+    // The shape is at least 3.8 cm tall, however large the words are set.
+    constexpr float least = 38 / Art::type;
     if (!c.title(item.titleOrUntitled())) return;
     // The item's lines and the heads row over the shape come first; the shape takes what is left, or is left out.
-    if (!(c.above(props) && c.heads(props)) || c.room() - 2 * face::GAP - face::META < 38) {
+    if (!(c.above(props) && c.heads(props)) || c.room() - 2 * face::GAP - face::META < least) {
         c.more = true;
         c.cue(cueMore(c.words));
         return;
