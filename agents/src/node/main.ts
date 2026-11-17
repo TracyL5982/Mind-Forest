@@ -42,13 +42,12 @@ const number = (name: string, fallback: number) => (env[name]?.trim() ? Number(e
 
 /**
  * Records one of Momo's written lines for the demo, as 16-bit mono PCM at the live voice's rate: the realtime model itself, as
- * Momo, saying the line, kept once it is heard to be the words as written (`demo/momo-voice.ts`). Without the key a take plays
- * with her words shown and no sound.
+ * Momo, saying the line, kept once it is heard to be the words as written (`demo/momo-voice.ts`). No other voice is used.
+ * Without the key a take plays with her words shown and no sound.
  */
 function demoRecord(): LinesOptions['record'] {
   const apiKey = env.OPENAI_API_KEY;
   if (fake || !apiKey) return undefined;
-  const speech = openaiSpeech(fetch, { apiKey, model: env.MIND_PALACE_VOICE_MODEL, voice: env.MIND_PALACE_VOICE, format: 'pcm', firstByteMs: 30_000 });
   const hear = openaiTranscribe(fetch, { apiKey, model: env.MIND_PALACE_HEARING_MODEL });
   const model = env.MIND_PALACE_LIVE_MODEL || 'gpt-realtime-2.1';
   return (text, kind) =>
@@ -59,7 +58,6 @@ function demoRecord(): LinesOptions['record'] {
         voice: env.MIND_PALACE_VOICE || SPEECH_VOICE,
         name: 'Momo',
         hear: (wav, likely) => hear(wav, 'audio/wav', { name: 'Momo', words: likely }),
-        speak: async (line) => new Uint8Array(await new Response(await speech(line, AbortSignal.timeout(60_000))).arrayBuffer()),
         log,
       },
       text,

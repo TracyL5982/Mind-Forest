@@ -4,23 +4,39 @@ import type { LineKind } from './take.ts';
 /**
  * Momo's recorded lines in the voice the headset hears live: the realtime model itself, as Momo, saying a given line. The model
  * cannot be held to a text word for word, so each take is written out again from its sound and kept only when its words are the
- * line's. After five takes that are not, the speech model reads the line, which is exact but is not her live voice, and the line
- * is marked so.
+ * line's: five takes of the whole line, then the line a sentence at a time, the sentences joined at their pauses. No other voice
+ * ever stands in. A line she does not say as written is not ready, and comes back with the closest thing she did say, so the
+ * user can take her wording in its place.
  */
 
-/** Which voice a recording is in: the realtime model, as the headset hears Momo live, or the speech model reading the words. */
-export type Voice = 'realtime' | 'speech';
+/** Which voice a recording is in. There is one: the realtime model's, as the headset hears Momo live. */
+export type Voice = 'realtime';
 
+/** A line recorded: its sound, said as written. */
 export interface Recorded {
   pcm: Uint8Array;
-  by: Voice;
-  /** How many takes the realtime model made of it. */
+  /** How many takes the realtime model made for it. */
+  takes: number;
+}
+
+/**
+ * A line she did not say as written. `closest` is the nearest wording she did say, and `pcm` its recording when that take's
+ * sound holds exactly those words, so taking her wording needs no new take.
+ */
+export interface Unsaid {
+  unsaid: true;
+  closest: string;
+  pcm?: Uint8Array;
   takes: number;
 }
 
 /** 16-bit mono at 24 kHz. */
 const BYTES_PER_SECOND = 48_000;
 const TAKES = 5;
+/** Takes of one sentence, when a line is recorded a sentence at a time. */
+const SENTENCE_TAKES = 4;
+/** The pause between two sentences joined into one line. */
+const PAUSE_MS = 280;
 
 const MOMENT: Record<LineKind, string> = {
   answer: 'your answer to what the user just asked, said as you start looking for things',
@@ -114,8 +130,6 @@ export interface VoiceOptions {
   name: string;
   /** Writes a recording out from its sound, told the words it is likely to hold. */
   hear: (wav: Uint8Array, likely: string) => Promise<string>;
-  /** The speech model reading the words, for a line the realtime model did not say as written in five takes. */
-  speak: (text: string) => Promise<Uint8Array>;
   /** Told what each realtime take cost, in dollars. */
   spent?: (dollars: number) => void;
   log: (line: string) => void;
@@ -159,25 +173,69 @@ export function realtimeTake(opts: Pick<VoiceOptions, 'open' | 'model' | 'voice'
   });
 }
 
+/** How many of a line's words a hearing gets wrong, as a share: 0 is the line itself. */
+function apart(line: string, heard: string): number {
+  const [a, b] = [plain(line), plain(heard)];
+  return distance(a.join(' '), b.join(' ')) / Math.max(1, a.join(' ').length);
+}
+
+/** The line's sentences, each as it would be said alone. A line of one sentence is itself. */
+export function sentences(text: string): string[] {
+  return text.split(/(?<=[.!?…])["”’)]*\s+(?=["“‘(]*[\p{Lu}\p{N}])/u).map((part) => part.trim()).filter(Boolean);
+}
+
 /**
- * Records a line in Momo's live voice: up to five takes by the realtime model, each written out from its sound, the first whose
- * words are the line's kept. When none is, the speech model reads it.
+ * Records a line in Momo's live voice, said as written.
+ * 1. Up to five takes of the whole line, each written out from its sound: the first whose words are the line's is kept.
+ * 2. If none is, the line a sentence at a time, up to four takes of each, the sentences joined with a short pause: a short
+ *    sentence is said as written far more often than a long line.
+ * 3. If a sentence still is not, the line is not ready. Nothing stands in for it. It comes back with the closest wording she said.
  */
-export async function record(opts: VoiceOptions, text: string, kind: LineKind, likely = ''): Promise<Recorded> {
+export async function record(opts: VoiceOptions, text: string, kind: LineKind, likely = ''): Promise<Recorded | Unsaid> {
   let takes = 0;
-  for (; takes < TAKES; ) {
+  let closest: { apart: number; text: string; pcm?: Uint8Array } | null = null;
+  /** One take, heard: its sound when it is the words asked for, else null, with the take noted if it is the closest so far. */
+  const attempt = async (words: string, whole: boolean): Promise<Uint8Array | null> => {
     takes++;
     try {
-      const { pcm } = await realtimeTake(opts, text, kind);
+      const { pcm, said } = await realtimeTake(opts, words, kind);
       if (pcm.length < BYTES_PER_SECOND / 4) throw new Error('the take holds no sound');
       const heard = await opts.hear(wavOf(pcm), likely);
-      const how = compare(text, heard);
-      if (how !== 'differs') return { pcm, by: 'realtime', takes };
+      if (compare(words, heard) !== 'differs') return pcm;
       opts.log(`[demo] take ${takes} of a line was not as written; heard: ${heard.slice(0, 160)}`);
+      if (whole) {
+        // What she says she said is offered when the sound bears it out: then its recording is ready too.
+        const own = said && compare(said, heard) !== 'differs';
+        const far = apart(text, own ? said : heard);
+        if (!closest || far < closest.apart) closest = { apart: far, text: (own ? said : heard).replace(/\s+/g, ' ').trim(), ...(own ? { pcm } : {}) };
+      }
     } catch (err) {
       opts.log(`[demo] take ${takes} of a line failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+    return null;
+  };
+
+  for (let n = 0; n < TAKES; n++) {
+    const pcm = await attempt(text, true);
+    if (pcm) return { pcm, takes };
   }
-  opts.log(`[demo] the realtime voice did not say a line as written in ${TAKES} takes, so the speech model reads it: ${text.slice(0, 80)}`);
-  return { pcm: await opts.speak(text), by: 'speech', takes };
+  const parts = sentences(text);
+  if (parts.length > 1) {
+    const said: Uint8Array[] = [];
+    for (const part of parts) {
+      let pcm: Uint8Array | null = null;
+      for (let n = 0; n < SENTENCE_TAKES && !pcm; n++) pcm = await attempt(part, false);
+      if (!pcm) break;
+      said.push(pcm);
+    }
+    if (said.length === parts.length) {
+      const pause = new Uint8Array(Math.round((PAUSE_MS * BYTES_PER_SECOND) / 1000 / 2) * 2);
+      const joined = Buffer.concat(said.flatMap((pcm, n) => (n === 0 ? [pcm] : [pause, pcm])));
+      opts.log(`[demo] a line was recorded a sentence at a time, ${parts.length} sentences in ${takes} takes: ${text.slice(0, 80)}`);
+      return { pcm: new Uint8Array(joined), takes };
+    }
+  }
+  opts.log(`[demo] Momo did not say a line as written in ${takes} takes, so it is not ready: ${text.slice(0, 80)}`);
+  const found = closest as { apart: number; text: string; pcm?: Uint8Array } | null;
+  return { unsaid: true, closest: found?.text ?? '', ...(found?.pcm ? { pcm: found.pcm } : {}), takes };
 }

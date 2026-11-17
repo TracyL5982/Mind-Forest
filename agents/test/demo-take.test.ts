@@ -3,9 +3,9 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
-import { Lines, type LinesFile } from '../src/demo/lines.ts';
+import { Lines, recordingName, type LinesFile } from '../src/demo/lines.ts';
 import { loadScript, type ScriptPhase } from '../src/demo/script.ts';
-import { compare, record as recordLine, wavOf } from '../src/demo/momo-voice.ts';
+import { compare, record as recordLine, sentences, wavOf } from '../src/demo/momo-voice.ts';
 import { momentAt, planLines, REAL, schedule, takeOf, type Line } from '../src/demo/take.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { demoData } from './demo-data.ts';
@@ -26,8 +26,14 @@ async function plan(phase: ScriptPhase, ms = 4000): Promise<Line[]> {
 
 /** The stand-in voice: 24 kHz PCM, 50 ms for each character, so a line's length follows from its words. */
 const speak = async (text: string) => new Uint8Array(text.length * 48 * 50);
-/** It records as the service's recorder does, and says which voice the recording is in: here the speech model's for a line that says so. */
-const record = async (text: string) => ({ pcm: await speak(text), by: /speech model/.test(text) ? ('speech' as const) : ('realtime' as const) });
+/**
+ * It records as the service's recorder does. A line with "tongue twister" in it is one she does not say as written: it comes
+ * back not ready, with her closest wording and that wording's own take.
+ */
+const record = async (text: string) =>
+  /tongue twister/.test(text)
+    ? { unsaid: true as const, closest: 'Her closest wording.', pcm: await speak('Her closest wording.'), takes: 9 }
+    : { pcm: await speak(text), takes: 1 };
 
 // ---- the timeline
 
@@ -101,6 +107,8 @@ test('on the timeline a remark starts as its cards land, never over the line bef
 
 // ---- the written lines
 
+const silentOf = (demoDir: string, dataDir: string) => new Lines({ demoDir, dataDir, voice: 'test-voice', log: () => {} });
+
 async function linesFolder(rounds: string[]): Promise<string> {
   const dir = temp('mp-demo-lines-');
   const file: LinesFile = { version: 1, voice: 'test-voice', rounds: {} };
@@ -131,18 +139,28 @@ test('the user\'s words over a line win, are kept across a restart, and go back 
   await lines.audio('Let me pull some threads on that.');
   assert.deepEqual(spoken, [written, 'Let me pull some threads on that.']);
   assert.equal(lines.edit('n3', 'no-such-line', 'x'), false);
-  // Which voice a recording is in is kept with it: the realtime voice, or the speech model's when she did not say the words as written.
+  // A line she does not say as written is not ready: it has no recording, nothing stands in for it, and her closest wording is offered with its own take.
   assert.deepEqual([lines.voice(written), lines.voice('Let me pull some threads on that.'), lines.voice('Never recorded.')], ['realtime', 'realtime', null]);
-  lines.edit('n3', 'first', 'A line the speech model reads.');
-  await lines.audio('A line the speech model reads.', 'first');
-  assert.equal(lines.voice('A line the speech model reads.'), 'speech');
+  lines.edit('n3', 'first', 'A tongue twister of a line.');
+  assert.equal(await lines.audio('A tongue twister of a line.', 'first'), null);
+  assert.deepEqual([lines.recorded('A tongue twister of a line.'), lines.closest('A tongue twister of a line.'), lines.closest(written)], [false, 'Her closest wording.', null]);
+  assert.deepEqual([lines.recorded('Her closest wording.'), lines.voice('Her closest wording.')], [true, 'realtime'], 'taking her wording needs no new take');
+  await lines.audio('A tongue twister of a line.', 'first');
+  assert.equal(spoken.filter((text) => /tongue twister/.test(text)).length, 1, 'it is not tried again by itself');
+  lines.again('A tongue twister of a line.');
+  await lines.audio('A tongue twister of a line.', 'first');
+  assert.equal(spoken.filter((text) => /tongue twister/.test(text)).length, 2, 'but is when asked');
+  // A recording that is not noted as the realtime voice's, as one left from before, is no recording: it is never played.
+  writeFileSync(join(dataDir, 'demo-voice', recordingName('test-voice', 'Left from before.')), new Uint8Array(48_000));
+  assert.deepEqual([lines.recorded('Left from before.'), await silentOf(dir, dataDir).audio('Left from before.')], [false, null]);
 
   const again = open();
   assert.equal(again.of('n3')[0]!.text, 'Let me pull some threads on that.', 'the data folder keeps the user\'s words');
   assert.equal(again.edited, 2);
+  const made = spoken.length;
   await again.audio('Let me pull some threads on that.');
-  assert.equal(spoken.length, 3, 'and their recording');
-  assert.deepEqual([again.voice('Let me pull some threads on that.'), again.voice('A line the speech model reads.')], ['realtime', 'speech'], 'and which voice each is in');
+  assert.equal(spoken.length, made, 'and their recording');
+  assert.equal(again.voice('Let me pull some threads on that.'), 'realtime');
   again.edit('n3', 'first', null);
   again.edit('n3', 'answer', null);
   assert.deepEqual([again.of('n3')[0]!.text, again.edited], [written, 0]);
@@ -368,6 +386,22 @@ test('the user\'s words over a line are what Momo says; her live voice is kept f
     assert.ok(s.spoken.includes('Look at this one first.') && !s.spoken.some((text) => text.startsWith('first: ')), 'and only they were recorded for that line');
     assert.equal(run.demo!.mutes(), false, 'the round played, Momo is herself again');
 
+    // A line she does not say as written is not ready: the page is told so with her closest wording, and the round's take is not played.
+    await run.demo!.goto('n3');
+    await post('/api/demo/line', { round: 'n3', line: 'wrap', text: 'A tongue twister of a wrap-up.' });
+    await until(() => run.demo!.shown('n3').lines.at(-1)!.closest !== null);
+    const unready = run.demo!.shown('n3').lines.at(-1)!;
+    assert.deepEqual([unready.closest, unready.recorded, unready.voice], ['Her closest wording.', false, null]);
+    const heardBefore = s.voice.length;
+    await assert.rejects(run.demo!.playTake('n3'), /has not said one of this round's lines as written/);
+    assert.match(run.demo!.status().problem!, /take her wording for that line or reword it/);
+    assert.equal(s.voice.length, heardBefore, 'nothing of the take was said');
+    // One click takes her wording: it is the line's text, its recording is there, and the take plays.
+    await post('/api/demo/line', { round: 'n3', line: 'wrap', text: 'Her closest wording.' });
+    const taken = run.demo!.shown('n3').lines.at(-1)!;
+    assert.deepEqual([taken.text, taken.recorded, taken.closest], ['Her closest wording.', true, null]);
+    await post('/api/demo/line', { round: 'n3', line: 'wrap', text: null });
+
     // Save to script: the lines as they are said now, the user's words among them, in the file the repository keeps.
     const file = (await (await fetch(`${run.url}/api/demo/lines.json`, { headers: token })).json()) as LinesFile;
     assert.deepEqual([file.version, file.voice, file.rounds.n3!.find((line) => line.id === 'first')!.text], [1, 'test-voice', 'Look at this one first.']);
@@ -444,18 +478,30 @@ function realtime(takes: string[]) {
 /** The stand-in listener writes a take out as the words that made it. */
 const heardAs = async (wav: Uint8Array) => new TextDecoder().decode(wav.subarray(44)).trim();
 
-test('a line is recorded by the realtime model as Momo, a take kept only when it is heard as written; after five that are not, the speech model reads it', async () => {
+test('a line is recorded by the realtime model as Momo, a take kept only when it is heard as written; then a sentence at a time; and never by another voice', async () => {
   const line = 'Nine more landed, and my favourite is “Linux file system”.';
   const model = realtime(['Nine more just landed and I love the Linux one.', 'Nine more landed, and my favorite is Linux file system.']);
-  let spoke = 0;
-  const options = { open: model.open, model: 'gpt-realtime-2.1', voice: 'marin', name: 'Momo', hear: heardAs, speak: async (text: string) => (spoke++, new TextEncoder().encode(`speech: ${text}`)), log: () => {} };
+  const options = { open: model.open, model: 'gpt-realtime-2.1', voice: 'marin', name: 'Momo', hear: heardAs, log: () => {} };
   const kept = await recordLine(options, line, 'more');
-  assert.deepEqual([kept.by, kept.takes, model.sessions(), spoke], ['realtime', 2, 2, 0], 'the first take changed the words and was not kept; the second was');
+  assert.ok(!('unsaid' in kept));
+  assert.deepEqual([kept.takes, model.sessions()], [2, 2], 'the first take changed the words and was not kept; the second was');
   assert.equal(await heardAs(wavOf(kept.pcm)), 'Nine more landed, and my favorite is Linux file system.');
   assert.match(model.asked[0]!, /^The moment: more cards have just landed.*\nYour line: """Nine more landed, and my favourite is “Linux file system”\."""$/s, 'she is given the line and the moment it is said at');
 
-  const stubborn = realtime(['Something else.', 'Something else.', 'Something else.', 'Something else.', 'Something else.', line]);
-  const read = await recordLine({ ...options, open: stubborn.open }, line, 'more');
-  assert.deepEqual([read.by, read.takes, stubborn.sessions(), spoke], ['speech', 5, 5, 1], 'five takes, then the speech model, and the recording says so');
-  assert.equal(new TextDecoder().decode(read.pcm), `speech: ${line}`);
+  // Two sentences she will not say in one go: each is said alone, and the two takes are joined at a pause.
+  const two = 'I’d open the paper first. Want to keep that one?';
+  const pieces = realtime(['x', 'x', 'x', 'x', 'x', 'I’d open the paper first.', 'Want to keep it?', 'Want to keep that one?']);
+  const joined = await recordLine({ ...options, open: pieces.open }, two, 'wrap');
+  assert.ok(!('unsaid' in joined));
+  assert.deepEqual([joined.takes, sentences(two)], [8, ['I’d open the paper first.', 'Want to keep that one?']]);
+  const bytes = (said: string) => new TextEncoder().encode(said.padEnd(20_000, ' ')).length;
+  assert.equal(joined.pcm.length, bytes('I’d open the paper first.') + bytes('Want to keep that one?') + 13_440, 'the two takes with 280 ms of quiet between them');
+  assert.match(pieces.asked[5]!, /Your line: """I’d open the paper first\."""$/);
+
+  // A line she never says as written is not ready. Her closest wording comes back, with its take when the sound bears it out.
+  const stubborn = realtime(['Nine landed, my favourite is Linux.', 'Something else entirely.', 'x', 'x', 'x']);
+  const unsaid = await recordLine({ ...options, open: stubborn.open }, line, 'more');
+  assert.ok('unsaid' in unsaid);
+  assert.deepEqual([unsaid.closest, unsaid.takes, stubborn.sessions()], ['Nine landed, my favourite is Linux.', 5, 5], 'a line of one sentence has no sentences to try: five takes, and it is not ready');
+  assert.equal(await heardAs(wavOf(unsaid.pcm!)), 'Nine landed, my favourite is Linux.');
 });

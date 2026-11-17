@@ -127,8 +127,11 @@ export interface DemoStatus {
 
 /** A take as the page draws it: the timeline, with each of Momo's lines as it is written and whether its recording exists. */
 export interface TakeShown extends Take {
-  /** `voice`: which voice the line's recording is in, the realtime model's or the speech model's, or null while it has none. */
-  lines: (TimedLine & Pick<LineShown, 'written' | 'edited'> & { recorded: boolean; voice: Voice | null })[];
+  /**
+   * `voice`: the voice the line's recording is in, or null while it has none. `closest`: for a line Momo did not say as
+   * written, the closest wording she did say; such a line is not ready, and its take is not played.
+   */
+  lines: (TimedLine & Pick<LineShown, 'written' | 'edited'> & { recorded: boolean; voice: Voice | null; closest: string | null })[];
 }
 
 /** A take that is running. */
@@ -396,7 +399,7 @@ export class Director {
     const { lines } = this.deps;
     const take = this.timeline(round);
     const shown = new Map(lines.of(round).map((line): [string, LineShown] => [line.id, line]));
-    return { ...take, lines: take.lines.map((line) => ({ ...line, written: shown.get(line.id)!.written, edited: shown.get(line.id)!.edited, recorded: lines.recorded(line.text), voice: lines.voice(line.text) })) };
+    return { ...take, lines: take.lines.map((line) => ({ ...line, written: shown.get(line.id)!.written, edited: shown.get(line.id)!.edited, recorded: lines.recorded(line.text), voice: lines.voice(line.text), closest: lines.closest(line.text) })) };
   }
 
   /**
@@ -406,7 +409,11 @@ export class Director {
   setLine(round: string, line: string, text: string | null): TakeShown {
     this.phase(round);
     if (!this.deps.lines.edit(round, line, text)) throw new Error(`round ${round} has no line called ${line}`);
-    for (const said of this.deps.lines.of(round)) void this.deps.lines.audio(said.text, said.kind);
+    for (const said of this.deps.lines.of(round)) {
+      // Writing a line, even the same words again, has her try it afresh.
+      if (said.id === line) this.deps.lines.again(said.text);
+      void this.deps.lines.audio(said.text, said.kind);
+    }
     return this.shown(round);
   }
 
@@ -549,6 +556,9 @@ export class Director {
       this.halt();
       // Every line is recorded before the take begins, so none starts late for want of its recording.
       await Promise.all(take.lines.map((line) => this.deps.lines.audio(line.text, line.kind)));
+      // A line she did not say as written is not ready. The take is not played with a gap where it should be, nor with other words.
+      const unready = take.lines.find((line) => this.deps.lines.closest(line.text) !== null);
+      if (unready) throw new Error(`Momo has not said one of this round's lines as written, so its take is not ready: "${unready.text.slice(0, 70)}…". On the page, take her wording for that line or reword it.`);
       if (phase.head === 'root' && !this.headOf(phase)) {
         // The tree's own first round follows from starting it, as it does when the user asks for a tree.
         this.pending = { phase: phase.id, from: 0 };

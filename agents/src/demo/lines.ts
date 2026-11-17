@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { Recorded, Voice } from './momo-voice.ts';
+import type { Recorded, Unsaid, Voice } from './momo-voice.ts';
 import { spokenFor, type Line, type LineKind } from './take.ts';
 
 /**
@@ -47,10 +47,10 @@ export interface LinesOptions {
   dataDir: string;
   voice: string;
   /**
-   * Records a line in Momo's voice, as 16-bit mono PCM at 24 kHz, and says which voice it is in: the realtime model's, as she is
-   * heard live, or the speech model's when the realtime model did not say the words as written. Absent when the service has no voice.
+   * Records a line in Momo's live voice, as 16-bit mono PCM at 24 kHz, said as written, or says that she did not say it so and
+   * what she said closest to it (`momo-voice.ts`). Absent when the service has no voice.
    */
-  record?: (text: string, kind: LineKind) => Promise<Pick<Recorded, 'pcm' | 'by'>>;
+  record?: (text: string, kind: LineKind) => Promise<Recorded | Unsaid>;
   log: (line: string) => void;
 }
 
@@ -63,6 +63,8 @@ export class Lines {
   /** Which voice each recording is in, by its file's name: the repository's, and those made here. */
   private readonly voices: Record<string, Voice>;
   private readonly voicesFile: string;
+  /** Lines she did not say as written, by their words, with the closest wording she did say. */
+  private readonly unsaid = new Map<string, string>();
 
   constructor(private readonly opts: LinesOptions) {
     const file = join(opts.demoDir, 'lines.json');
@@ -121,7 +123,9 @@ export class Lines {
 
   private kept(text: string): string | null {
     const name = this.name(text);
-    // A recording not yet fetched from Git LFS is a few lines of text in its place: that is no recording.
+    // Only a recording noted as the realtime voice's is one: any other file is from before, and is never played. A recording
+    // not yet fetched from Git LFS is a few lines of text in its place, which is no recording either.
+    if (this.voices[name] !== 'realtime') return null;
     return [join(this.opts.demoDir, 'voice', name), join(this.made, name)].find((path) => existsSync(path) && statSync(path).size > LFS_POINTER) ?? null;
   }
 
@@ -137,9 +141,22 @@ export class Lines {
     return !text.trim() || this.kept(text) !== null;
   }
 
-  /** Which voice the line's recording is in, or null while it has none. A recording from before voices were noted is the speech model's. */
+  /** Which voice the line's recording is in, or null while it has none. */
   voice(text: string): Voice | null {
-    return this.kept(text) ? (this.voices[this.name(text)] ?? 'speech') : null;
+    return this.kept(text) ? 'realtime' : null;
+  }
+
+  /**
+   * The closest wording Momo said, for a line she did not say as written, or null when the line is recorded, was not tried, or
+   * is being tried now. Such a line is not ready: nothing is said in its place.
+   */
+  closest(text: string): string | null {
+    return this.kept(text) || this.rendering.has(this.name(text)) ? null : (this.unsaid.get(text) ?? null);
+  }
+
+  /** Lets a line she did not say as written be tried again. */
+  again(text: string): void {
+    this.unsaid.delete(text);
   }
 
   /** The line in Momo's voice. Made once and kept; null when the service has no voice, or the voice did not answer. */
@@ -148,18 +165,28 @@ export class Lines {
     const file = this.kept(text);
     if (file) return Promise.resolve(new Uint8Array(readFileSync(file)));
     const record = this.opts.record;
-    if (!record) return Promise.resolve(null);
+    if (!record || this.unsaid.has(text)) return Promise.resolve(null);
     const name = this.name(text);
     let making = this.rendering.get(name);
     if (!making) {
+      const keep = (file: string, pcm: Uint8Array) => {
+        writeFileSync(join(this.made, `${file}.tmp`), pcm);
+        renameSync(join(this.made, `${file}.tmp`), join(this.made, file));
+        this.voices[file] = 'realtime';
+        writeFileSync(this.voicesFile, JSON.stringify({ ...read(this.voicesFile), [file]: 'realtime' }, null, 1));
+      };
       making = record(text, kind).then(
-        ({ pcm, by }) => {
-          writeFileSync(join(this.made, `${name}.tmp`), pcm);
-          renameSync(join(this.made, `${name}.tmp`), join(this.made, name));
-          this.voices[name] = by;
-          writeFileSync(this.voicesFile, JSON.stringify({ ...read(this.voicesFile), [name]: by }, null, 1));
-          this.opts.log(`[demo] Momo's line recorded in ${by === 'realtime' ? 'her realtime voice' : 'the speech model\'s voice'}, ${(pcm.length / BYTES_PER_MS / 1000).toFixed(1)} s: ${text.slice(0, 70)}`);
-          return pcm;
+        (made) => {
+          if ('unsaid' in made) {
+            this.unsaid.set(text, made.closest);
+            // Her closest wording's own take is kept under those words, so taking her wording needs no new recording.
+            if (made.pcm && made.closest) keep(this.name(made.closest), made.pcm);
+            this.opts.log(`[demo] Momo did not say a line as written, so it is not ready. Closest: ${made.closest.slice(0, 90)}`);
+            return null;
+          }
+          keep(name, made.pcm);
+          this.opts.log(`[demo] Momo's line recorded in her realtime voice, ${(made.pcm.length / BYTES_PER_MS / 1000).toFixed(1)} s, ${made.takes} take${made.takes === 1 ? '' : 's'}: ${text.slice(0, 70)}`);
+          return made.pcm;
         },
         (err) => {
           this.opts.log(`[demo] Momo's line could not be recorded (${err instanceof Error ? err.message : String(err)}): ${text.slice(0, 70)}`);

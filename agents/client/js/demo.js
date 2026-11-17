@@ -249,7 +249,7 @@ async function loadTake() {
     take = got;
     drawTake();
     // A line still being recorded is asked after again, since the take's length follows its recording's.
-    if (voice && take.lines.some((line) => line.text && !line.recorded)) setTimeout(() => picked === round && !document.activeElement?.matches?.('.line textarea') && loadTake(), 1500);
+    if (voice && take.lines.some((line) => line.text && !line.recorded && line.closest === null)) setTimeout(() => picked === round && !document.activeElement?.matches?.('.line textarea') && loadTake(), 1500);
   } catch (err) {
     $('take').replaceChildren(el('div', { class: 'hint', text: err.message }));
   }
@@ -285,10 +285,16 @@ function drawTake() {
       el('div', { class: 'line-name' }, el('button', { class: 'line-at', type: 'button', title: 'Move the take to this line', onclick: () => jump(line.at), text: clock(line.at) }), el('span', { text: LINE_NAME[line.kind] }), about ? el('span', { class: 'line-about', title: about, text: about }) : null),
       box,
       el('div', { class: 'line-foot' },
-        el('span', { class: line.recorded && line.voice === 'speech' ? 'by-speech' : '', text: !line.text.trim() ? 'Empty: Momo says nothing here.'
-          : !line.recorded ? (voice ? 'Momo is recording these words in her realtime voice…' : "Momo's voice is off, so this line is not heard")
-          : line.voice === 'realtime' ? `${(line.ms / 1000).toFixed(1)} s, in Momo's realtime voice`
-          : `${(line.ms / 1000).toFixed(1)} s, read by the speech model, not her realtime voice: she did not say these words as written in five takes. Rewording the line gets her to try again.` }),
+        line.closest !== null
+          ? el('span', { class: 'unsaid' },
+              'Not ready: Momo did not say this line as written, and nothing else is ever said in its place. This round’s take will not play until the line is ready. ',
+              line.closest ? `The closest she said: “${line.closest}” ` : '',
+              line.closest ? el('button', { class: 'link', type: 'button', title: 'Makes her wording this line’s text. Its recording is ready.', onclick: () => write(line.id, line.closest), text: 'Use her wording' }) : null,
+              ' ',
+              el('button', { class: 'link', type: 'button', title: 'Has her try these same words again.', onclick: () => write(line.id, line.text), text: 'Try again' }))
+          : el('span', { text: !line.text.trim() ? 'Empty: Momo says nothing here.'
+            : !line.recorded ? (voice ? 'Momo is recording these words in her realtime voice… A long line can take a minute.' : "Momo's voice is off, so this line is not heard")
+            : `${(line.ms / 1000).toFixed(1)} s, in Momo's realtime voice` }),
         line.edited ? el('button', { class: 'link', type: 'button', title: line.written, onclick: () => write(line.id, null), text: 'Back to Momo’s own words' }) : null));
   });
   $('take').replaceChildren(
@@ -415,7 +421,7 @@ async function write(line, text) {
     const now = take.lines.find((l) => l.id === line);
     keep(round, line, now?.edited ? now.text : null);
     if (round === picked) drawTake();
-    if (voice && take.lines.some((l) => l.text && !l.recorded)) setTimeout(() => picked === round && loadTake(), 1500);
+    if (voice && take.lines.some((l) => l.text && !l.recorded && l.closest === null)) setTimeout(() => picked === round && loadTake(), 1500);
   } catch (err) {
     $('problem').hidden = false;
     $('problem').textContent = `The line was not saved: ${err.message}`;

@@ -6,7 +6,7 @@
  * which cards have landed by the time she is free for the next remark.
  *
  * Each recording is written out again from its sound. One whose words are not the text's is recorded again by asking her to say
- * the line as written (`momo-voice.ts`), and after five such takes the speech model reads it.
+ * the line as written (`momo-voice.ts`). If she does not, the closest wording she did say becomes the line. No other voice is used.
  *
  * It writes `demo/lines.json`, one recording per line in `demo/voice/`, and `demo/voice/voices.json`, which says which voice each
  * recording is in. A round that is written already is left as it is.
@@ -28,7 +28,7 @@ import { fakeRoles } from '../src/fake/roles.ts';
 import { loadEnv } from '../src/node/env.ts';
 import { cost, instructions, type RealtimeEvent, type Usage } from '../src/node/live.ts';
 import { startServer } from '../src/node/server.ts';
-import { openaiRealtime, openaiSpeech, openaiTranscribe, SPEECH_VOICE } from '../src/node/speech-openai.ts';
+import { openaiRealtime, openaiTranscribe, SPEECH_VOICE } from '../src/node/speech-openai.ts';
 import { DEFAULT_SETTINGS } from '../src/core/roles/types.ts';
 
 const root = resolve(import.meta.dirname, '..');
@@ -58,7 +58,7 @@ The user is recording a walkthrough of one tree, and each thing they say is a ta
 - A round here lands many cards at once. At [More cards landed] with more than two cards, never say their titles one after another: say how many came and name the one you like best, in one short line.`;
 const STARTED = JSON.stringify({ started: true, note: 'Started. Cards will land over the next seconds and you will get a note as each does. Describe none until then.' });
 
-const spent = { responses: 0, dollars: 0, seconds: 0, heard: 0, own: 0, retaken: 0, takes: 0, speech: 0 };
+const spent = { responses: 0, dollars: 0, seconds: 0, heard: 0, own: 0, retaken: 0, takes: 0, reworded: 0 };
 /** The most this run may spend on the realtime model, in dollars, by its own count. */
 const BUDGET = 12;
 
@@ -104,12 +104,10 @@ function conversation() {
   };
 }
 
-const speech = openaiSpeech(fetch, { apiKey, model: env.MIND_PALACE_VOICE_MODEL, voice, format: 'pcm', firstByteMs: 30_000 });
 const transcribe = openaiTranscribe(fetch, { apiKey, model: env.MIND_PALACE_HEARING_MODEL });
 const hear = async (wav: Uint8Array, likely: string) => (spent.heard++, transcribe(wav, 'audio/wav', { name, words: likely }));
 const voiceOptions: VoiceOptions = {
   open: openaiRealtime({ apiKey, model }), model, voice, name, hear,
-  speak: async (text) => new Uint8Array(await new Response(await speech(text, AbortSignal.timeout(60_000))).arrayBuffer()),
   spent: (dollars) => (spent.dollars += dollars),
   log: (line) => console.log(`    ${line}`),
 };
@@ -119,29 +117,35 @@ const voicesFile = join(voiceDir, 'voices.json');
 const voices: Record<string, Voice> = existsSync(voicesFile) ? JSON.parse(readFileSync(voicesFile, 'utf8')) : {};
 
 /**
- * Keeps a line's recording. What she said aloud in the conversation is kept when its sound holds the words of the text; otherwise
- * she is asked to say the line as written, and after five takes of that the speech model reads it.
+ * Keeps a line's recording, and gives the line's words. What she said aloud in the conversation is kept when its sound holds the
+ * words of the text. Otherwise she is asked to say the line as written; and if she does not, the closest wording she did say,
+ * with its own take, is the line.
  */
-async function keep(text: string, kind: LineKind, own: Uint8Array, likely: string): Promise<{ ms: number; by: Voice; how: string }> {
+async function keep(text: string, kind: LineKind, own: Uint8Array, likely: string): Promise<{ text: string; ms: number; how: string }> {
   let pcm = own;
-  let by: Voice = 'realtime';
   let how = 'her own answer';
   const heard = own.length > 12_000 ? await hear(wavOf(own), likely) : '';
   if (compare(text, heard) === 'differs') {
     console.log(`    her answer's sound was not its text; heard: ${heard.slice(0, 140)}`);
     const again = await recordLine(voiceOptions, text, kind, likely);
-    pcm = again.pcm;
-    by = again.by;
     spent.takes += again.takes;
-    how = again.by === 'realtime' ? `said again as written, take ${again.takes}` : 'the speech model, after five takes';
-    if (again.by === 'realtime') spent.retaken++;
-    else spent.speech++;
+    if ('unsaid' in again) {
+      if (!again.pcm || !again.closest) throw new Error(`she did not say this line as written, nor any wording of it twice the same: ${text}`);
+      text = again.closest;
+      pcm = again.pcm;
+      how = `her closest wording, after ${again.takes} takes`;
+      spent.reworded++;
+    } else {
+      pcm = again.pcm;
+      how = `said again as written, ${again.takes} take${again.takes === 1 ? '' : 's'}`;
+      spent.retaken++;
+    }
   } else spent.own++;
   const file = recordingName(voice, text);
   writeFileSync(join(voiceDir, file), pcm);
-  voices[file] = by;
+  voices[file] = 'realtime';
   spent.seconds += pcm.length / 48_000;
-  return { ms: pcm.length / 48, by, how };
+  return { text, ms: pcm.length / 48, how };
 }
 
 const script = loadScript(join(demoDir, 'script.json'));
@@ -164,7 +168,7 @@ if (flag('--check')) {
       const heard = await hear(wavOf(new Uint8Array(readFileSync(recording))), titles.get(round) ?? '');
       const how = compare(line.text, heard);
       count[how]++;
-      if (how !== 'exact') console.log(`${round} ${line.id} (${voices[recordingName(voice, line.text)] ?? 'speech'}): ${how}\n  written: ${line.text}\n  heard:   ${heard}`);
+      if (how !== 'exact') console.log(`${round} ${line.id} (${voices[recordingName(voice, line.text)] ?? 'NOT THE REALTIME VOICE'}): ${how}\n  written: ${line.text}\n  heard:   ${heard}`);
     }
   }
   console.log(`${count.exact} recordings were heard word for word as written, ${count.close} with only a spelling by ear or a space apart, ${count.differs} with a word added, dropped or changed (${spent.heard} transcriptions)`);
@@ -191,14 +195,14 @@ if (flag('--retake')) {
       if (!line.text || (chosen ? !named : voices[recording] === 'realtime' && existsSync(join(voiceDir, recording)))) continue;
       // A named line is one whose recording was heard two ways: its new take must be heard as written twice over.
       const again = await recordLine(named ? { ...voiceOptions, hear: twice } : voiceOptions, line.text, line.kind, likely);
-      if (named && again.by === 'speech') {
-        console.log(`${round} ${line.id}: no take of five was heard as written twice over; her recording is left as it was`);
+      if ('unsaid' in again) {
+        console.log(`${round} ${line.id}: she did not say it as written in ${again.takes} takes; ${existsSync(join(voiceDir, recording)) ? 'her recording is left as it was' : 'IT HAS NO RECORDING'}. Closest: ${again.closest}`);
         continue;
       }
       writeFileSync(join(voiceDir, recording), again.pcm);
-      voices[recording] = again.by;
+      voices[recording] = 'realtime';
       writeFileSync(voicesFile, `${JSON.stringify(voices, null, 1)}\n`);
-      console.log(`${round} ${line.id}: ${again.by === 'realtime' ? `in her realtime voice, take ${again.takes}` : 'still read by the speech model, after five takes'} (${(again.pcm.length / 48_000).toFixed(1)} s)`);
+      console.log(`${round} ${line.id}: in her realtime voice, ${again.takes} take${again.takes === 1 ? '' : 's'} (${(again.pcm.length / 48_000).toFixed(1)} s)`);
     }
   }
   console.log(`$${spent.dollars.toFixed(2)} on the realtime model, ${spent.heard} transcriptions`);
@@ -231,8 +235,8 @@ async function write(phase: ScriptPhase): Promise<Line[]> {
       if (!said.text && kind === 'answer') said = await momo.ask();
       if (!said.text) return { text: '', ms: 0 };
       const kept = await keep(said.text, kind, said.pcm, likely);
-      console.log(`  ${kind.padEnd(6)} ${(kept.ms / 1000).toFixed(1).padStart(5)} s  ${kept.how}: ${said.text}`);
-      return { text: said.text, ms: kept.ms };
+      console.log(`  ${kind.padEnd(6)} ${(kept.ms / 1000).toFixed(1).padStart(5)} s  ${kept.how}: ${kept.text}`);
+      return { text: kept.text, ms: kept.ms };
     });
   } finally {
     momo.close();
@@ -260,6 +264,6 @@ for (const old of Object.keys(voices)) if (!named.has(old)) delete voices[old];
 writeFileSync(voicesFile, `${JSON.stringify(voices, null, 1)}\n`);
 console.log(
   `${spent.responses} answers from the realtime model, $${spent.dollars.toFixed(2)} by its own count; ${spent.own} lines kept as she answered, ${spent.retaken} said again as written ` +
-    `(${spent.takes} takes for those and the next), ${spent.speech} read by the speech model; ${spent.seconds.toFixed(0)} s of voice; ${spent.heard} transcriptions`,
+    `(${spent.takes} takes for those and the next), ${spent.reworded} given her closest wording; ${spent.seconds.toFixed(0)} s of voice; ${spent.heard} transcriptions`,
 );
 process.exit(0);
