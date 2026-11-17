@@ -70,7 +70,11 @@ The Quest 3 has no eye tracking, so:
 
 The agents (`agents/`, a service on the Mac) can grow the ocean's trees: your mindstorm's trees stand in the desk's
 forest, a pinch on a card opens it and the Scout's picks come up round it with dashed threads, a pinch on a pick keeps
-it, and the knife deletes. Palms together closes a tree; it is handed off by voice ("hand this off"). Under an open
+it, and the knife deletes. A piece of the ocean brought in with no tree standing asks Momo for a tree about it ("Make a
+tree about Dracula"), and the service's tree, rooted on that piece of your library, stands when it comes. Brought into
+one of the service's trees, it goes to the service as a kept card under the card in focus (`commands`, `addNode`),
+drawn in progress until the service chooses its look, with Momo's rows like every card there
+(`desktop/test/ocean_tree_check.mjs`). Palms together closes a tree; it is handed off by voice ("hand this off"). Under an open
 card stand at most three suggested questions as pills, and a pinch held still on it, while a ring fills round the pinch,
 asks for more like it. Gone into, the card has Kai's pen, eraser and Send: with the pen up a drag highlights words or
 draws on the card, or along a video marks a stretch of it, which the service keeps with the card; one press of the
