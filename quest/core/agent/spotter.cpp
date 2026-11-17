@@ -166,7 +166,11 @@ std::unique_ptr<Spotter> Spotter::make(const std::string& modelDir, const std::s
     config.model_config.model_type = "";
     config.model_config.modeling_unit = "bpe";
     config.model_config.bpe_vocab = "";
-    config.max_active_paths = 4;
+    // The search keeps 32 readings of the sound alive, not 4: with 4 the name's own reading was often dropped before
+    // its end, most of all when the request ran straight on from it ("hi Momo what is this"). At these settings it
+    // also wakes on one near miss in eight, so the service checks what woke it before Momo acts (agents/DECISIONS.md
+    // 69 and 70).
+    config.max_active_paths = 32;
     config.num_trailing_blanks = 1;
     config.keywords_score = 1.5f;
     config.keywords_threshold = 0.05f;

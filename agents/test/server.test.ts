@@ -264,7 +264,7 @@ test('recorded speech is transcribed with the name and the card titles as hints,
     headers: { Authorization: 'Bearer secret', 'Content-Type': 'audio/webm;codecs=opus' },
     body: new Uint8Array([1, 2, 3]),
   });
-  assert.deepEqual(await res.json(), { text: 'Undo that, I meant the sourdough tree' });
+  assert.deepEqual(await res.json(), { text: 'Undo that, I meant the sourdough tree', named: true });
   assert.equal(asked[0]!.mime, 'audio/webm;codecs=opus');
   assert.equal(asked[0]!.hints.name, 'Momo');
   assert.match(asked[0]!.hints.words, /sourdough/i);
@@ -276,6 +276,20 @@ test('recorded speech is transcribed with the name and the card titles as hints,
   assert.equal((await p.until((m) => m.t === 'hello')).hearing, 'browser');
   p.ws.close();
   await plain.close();
+});
+
+test('a recording that a wake began is made nothing of unless it begins with the name; one the user began by hand is taken as it is', async () => {
+  let heard = '';
+  const { run } = await boot(undefined, { transcribe: async () => heard });
+  const post = async (query: string) => (await fetch(`${run.url}/api/transcribe${query}`, { method: 'POST', headers: { Authorization: 'Bearer secret', 'Content-Type': 'audio/wav' }, body: new Uint8Array([1, 2, 3]) })).json();
+  heard = 'Hey mama, are you coming tonight?';
+  assert.deepEqual(await post('?woke=1'), { text: '', named: false }, 'the spotter woke on what only sounded like the name');
+  assert.deepEqual(await post(''), { text: 'Hey mama, are you coming tonight?', named: true }, 'a press of the microphone needs no name');
+  heard = 'Hi, Mo-mo. Show me more like this.';
+  assert.deepEqual(await post('?woke=1&tree=t1'), { text: 'Show me more like this.', named: true });
+  heard = 'So I said to her, and then she said, well, hey Momo is a funny name for it.';
+  assert.deepEqual(await post('?woke=1'), { text: '', named: false }, 'the name far into the recording is not what woke it');
+  await run.close();
 });
 
 test('the agent is called Momo until renamed, and a leading "hey" and its name are dropped from what it acts on', async () => {

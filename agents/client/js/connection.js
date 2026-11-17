@@ -117,8 +117,10 @@ export class Connection {
     return `/api/speak?token=${encodeURIComponent(this.token)}&text=${encodeURIComponent(text)}`;
   }
 
-  async transcribe(blob, treeId) {
-    const reply = await fetch(`/api/transcribe${treeId ? `?tree=${encodeURIComponent(treeId)}` : ''}`, {
+  /** `woke`: the recording began with what the page's spotter took for the name, so the service checks that it was (and answers '' if not). */
+  async transcribe(blob, treeId, { woke = false } = {}) {
+    const query = new URLSearchParams({ ...(treeId ? { tree: treeId } : {}), ...(woke ? { woke: '1' } : {}) }).toString();
+    const reply = await fetch(`/api/transcribe${query ? `?${query}` : ''}`, {
       method: 'POST',
       headers: { ...this.auth(), 'Content-Type': blob.type.split(';')[0] || 'audio/webm' },
       body: blob,

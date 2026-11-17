@@ -88,6 +88,10 @@ private:
 
 namespace platform {
 
+// The talking source (VOICE_COMMUNICATION) was measured, worn: the chime alone leaves the microphone silent, and a word
+// said over it is heard (agents/DECISIONS.md 71). The recognizer's source, asked for to compare, was not measured worn.
+bool microphoneHearsOwnSounds() { return Flags::string("micSource").value_or("") == "recognition"; }
+
 MicrophoneRef openMicrophone(MicrophoneEvents events) {
     int64_t handle = nextHandle++;
     {

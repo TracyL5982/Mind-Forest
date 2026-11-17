@@ -80,6 +80,7 @@ private:
                            [&](Respell& r) { retired.push_back(listener->respell(std::move(r.spotter))); },
                            [&](SetMode& m) { listener->setMode(m.mode); },
                            [&](TurnOver&) { listener->turnOver(); },
+                           [&](NotNamed&) { listener->notNamed(); },
                            [&](ReplyStreams&) { listener->replyStreams(); },
                            [&](MomoThinks& m) { listener->momoThinks(m.thinking); },
                        },
@@ -456,7 +457,8 @@ void Voice::transcribe(const std::string& wav) {
     platform::Request request;
     request.method = "POST";
     std::optional<TreeId> tree = scene().treeId;
-    request.url = client.address().http + "/api/transcribe" + (tree ? "?tree=" + queryEscape(tree->value) : "");
+    // `woke=1`: the recording began with what the spotter took for the name, and the service checks that it was.
+    request.url = client.address().http + "/api/transcribe?woke=1" + (tree ? "&tree=" + queryEscape(tree->value) : "");
     request.headers = {{"Authorization", "Bearer " + client.address().token}, {"Content-Type", "audio/wav"}};
     request.body = wav;
     request.timeout = 60;
@@ -469,6 +471,7 @@ void Voice::transcribe(const std::string& wav) {
             std::optional<Json> j = Json::parse(r.body);
             t.ok = j && (*j)["text"].isString();
             if (t.ok) t.text = (*j)["text"].string();
+            if (t.ok) t.named = (*j)["named"].boolean(true);
         }
         if (!t.ok) t.why = r.error.empty() ? fmt("status %d", r.status) : r.error;
         std::lock_guard<std::mutex> g(b->lock);
@@ -497,11 +500,20 @@ void Voice::frame(double now) {
                            logLine("[voice] heard " + w.keyword);
                            if (!muted && audio::on()) {
                                audio::play("momo_chime");
-                               send(ChimeStarted{});
-                               chimeEnds = clock + audio::seconds("momo_chime");
+                               // Only where the microphone hears the chime is the listener told of it, and deaf to
+                               // words while it plays: on the headset it does not, and a short word said just after
+                               // the name ("hi Momo… undo") would be lost in that stretch (agents/DECISIONS.md 71).
+                               if (platform::microphoneHearsOwnSounds()) {
+                                   send(ChimeStarted{});
+                                   chimeEnds = clock + audio::seconds("momo_chime");
+                               }
                            }
                            turnTo(Listening{});
                            if (tutoring && tutoring->woke) tutoring->woke();        // GUIDE
+                           // The spotter also wakes on what only sounds like the name, so the service checks the sound
+                           // that woke it. Nothing waits for the answer here: Momo's own doings wait there. A recording
+                           // is checked where it is transcribed.
+                           if (!tutoring) sendLive(Json::object().set("t", "name").set("pcm", base64Encode(pcm16(w.sound))));
                        },
                        [&](Listener::Began&) {
                            turnTo(Listening{});
@@ -608,6 +620,7 @@ void Voice::frame(double now) {
             continue;
         }
         if (!t.ok) logLine("[voice] the recording could not be turned into text (" + t.why + ")");
+        else if (!t.named) logLine("[voice] the service did not find the name in what woke the headset, so nothing is made of it");
         else if (text.empty()) logLine("[voice] nothing was heard after the name");
         else if (!client.send(Outbound::utter(text, true, scene()))) logLine("[voice] not connected, so \"" + text + "\" was not sent");
         else sent = true;
@@ -735,6 +748,7 @@ void Voice::openLive(double now) {
             else if (t == "text") deliver(LiveText{m["id"].string(""), m["text"].string(""), m["kind"].string("") == "results"});
             else if (t == "done") deliver(LiveDone{m["id"].string("")});
             else if (t == "failed") deliver(LiveFailed{m["why"].string("")});
+            else if (t == "name") deliver(LiveNamed{m["ok"].boolean(true)});
             else if (t == "audio") {
                 std::optional<std::vector<int16_t>> pcm = samplesOf(m["pcm"].string(""));
                 if (pcm) deliver(LiveAudio{m["id"].string(""), std::move(*pcm)});
@@ -779,6 +793,17 @@ void Voice::heardLive(LiveFrame& frame, double now) {
                    },
                    [&](LiveQuiet& q) {
                        if (q.turn == wordsOf) endThinking();
+                   },
+                   [&](LiveNamed& n) {
+                       if (n.ok) return;
+                       // What woke the headset only sounded like the name: the conversation it opened closes, and
+                       // nothing the service made of it comes.
+                       logLine("[voice] the service did not find the name in what woke the headset, so the conversation closes");
+                       streaming.reset();
+                       send(NotNamed{});
+                       shown.userText.clear();
+                       shown.userFinal = false;
+                       if (!std::holds_alternative<Idle>(turn)) turnTo(Idle{});
                    },
                    [&](LiveFailed& f) {
                        logLine("[voice] the live voice failed: " + f.why);

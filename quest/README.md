@@ -99,8 +99,11 @@ trees stay in their file, out of view, until it is started without the service. 
 nothing costs money.
 
 Talking to it works as in the web client. The headset listens on the device for "hey Momo" or "hi Momo" (the
-service's agent name), and nothing it hears leaves the headset unless it began with the name, or came in the
-conversation the name opened (below). After the name it
+service's agent name), and nothing it hears leaves the headset unless it began with what its spotter took for the
+name, or came in the conversation that opened (below). The spotter is set to miss the name seldom, and so also wakes
+on about one near miss in eight ("hey mama", "hey Mo, more"): with each wake the second of sound that woke it goes to
+the service, which writes it down and, unless it holds "hey" or "hi" and the name, drops the turn and has the headset
+close the conversation, before Momo says or does anything (`agents/DECISIONS.md` 70; the chime has played by then). After the name it
 chimes and records until you pause for 1.2 s; the service transcribes that and acts on it, and its reply is spoken
 when the service has a voice. Momo sits low in front of you, drawn as in CurioCity (ClandestineOperation's
 `AgentVisual`, with the values its scene gives it): three rings of Perlin noise in cyan, magenta and yellow, added into
@@ -134,7 +137,11 @@ under Momo's last words and the ring follows your voice. Momo's own voice is kep
 platform's echo cancelling: the microphone reads Android's VOICE_COMMUNICATION source with AcousticEchoCanceler on, and
 the log says which it got. `-echoCheck <reply.wav>` measures it with no service: a recorded reply plays 10 times while
 you stay quiet (each turn begun is a false barge-in), then 10 times you talk over it (each logs how long after your
-first word Momo stopped). The log says how long after your last word the turn ended and Momo answered. Without `/live`, or while it is closed (it is tried again every 5 s while hello offers it),
+first word Momo stopped). `-chimeCheck` asks the same of the chime that says the name was heard: it plays 12 times
+while you stay quiet (each turn begun is the chime taken for you), then 8 times while you say a short word over each
+(each turn begun is you heard through it); worn, the chime alone left the microphone silent and every word was heard,
+so on the headset the listener is not made deaf while the chime plays (`agents/DECISIONS.md` 71). It must be worn: lying
+on a desk the microphone gives near silence whatever plays. The log says how long after your last word the turn ended and Momo answered. Without `/live`, or while it is closed (it is tried again every 5 s while hello offers it),
 everything is as above. The voice says what it is doing and the orb shows it: waiting, listening from the name,
 sent for 0.4 s as your turn ends, thinking until the first sound of Momo's answer (or word that none is coming, at
 most 20 s), responding while Momo speaks, open while the conversation is, working while the agent works after it,

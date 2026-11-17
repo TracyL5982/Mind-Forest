@@ -6,6 +6,14 @@
 // First it plays `plays` times while the user stays quiet: each turn the listener begins is Momo taken for the user, a
 // false barge-in, and stops the reply as a real one would. Then `plays` times while the user talks over it: each logs
 // how long after the first word Momo stopped. Momo's caption says which half it is in; the log ("[echo]") has the counts.
+//
+// `-chimeCheck`: the same question of the chime that says the name was heard. The conversation is open with nothing
+// telling the listener that the chime plays, and the chime plays `chimes` times through the app's own sounds while the
+// room stays quiet. Each turn the listener begins is the chime taken for the user. Then it plays `chimesTalked` times
+// more while the user says a short word over each ("undo", "more"): each turn begun is the user heard through the chime,
+// and its loudness shows the microphone hears a voice at all, without which the quiet half proves nothing. The log
+// ("[chime]") has how loud each reached the microphone, beside the room just before it and the level that counts as
+// words (agents/DECISIONS.md 71).
 #pragma once
 #include <cstdint>
 #include <memory>
@@ -14,6 +22,7 @@
 #include <variant>
 #include <vector>
 
+#include "listener.h"
 #include "platform.h"
 #include "presence.h"
 #include "presence_view.h"
@@ -27,6 +36,8 @@ public:
     /// The check `-echoCheck` asks for, or null.
     static std::shared_ptr<EchoCheck> fromFlags(OceanModel& model);
     EchoCheck(OceanModel& model, std::vector<int16_t> reply, int rate);
+    /// The check of the chime.
+    explicit EchoCheck(OceanModel& model);
     ~EchoCheck();
     EchoCheck(const EchoCheck&) = delete;
     EchoCheck& operator=(const EchoCheck&) = delete;
@@ -35,6 +46,14 @@ public:
     void frame(double now);
 
     static constexpr int plays = 10;
+    /// `-chimeCheck`: how many times the chime plays, and the seconds between, under the 8 s after which the
+    /// conversation would close.
+    static constexpr int chimes = 12;
+    /// And how many times more, while the user says a word over each.
+    static constexpr int chimesTalked = 8;
+    static constexpr double chimeGap = 4;
+    /// Seconds after a chime begins in which a turn begun is the chime's doing, and its loudness is read.
+    static constexpr double chimeHeardFor = 1.5;
     /// Seconds between one play and the next, under the 8 s after which the conversation would close.
     static constexpr double gap = 2;
     /// Seconds between the halves, to read that the user is to talk now.
@@ -79,6 +98,18 @@ private:
     int early = 0;                  // the talking half: plays begun while the user still talked
     std::unique_ptr<PresenceView> view;
     Presence presence;
+    /// `-chimeCheck`: the chime plays, not a reply.
+    bool chime = false;
+    int chimeStarts = 0;            // quiet chimes that began a turn
+    int talkedStarts = 0;           // chimes talked over that began a turn
+    bool chimeBegan = false;        // the one playing did
+    double chimeBeganAfter = 0;     // and how long after it began to play, s
+    std::vector<float> talkedLoudest;   // each talked-over chime's loudest tenth of a second
+    bool chimeTalking() const { return played > chimes; }
+    std::vector<float> chimeLoudest;    // each chime's loudest tenth of a second at the microphone, RMS
+    std::vector<float> roomLoudest;     // and the room's in the second before it
+    void chimeFrame(double now, const std::vector<Listener::Event>& events);
+    void openConversation();
 
     bool talkingHalf() const { return played > plays; }
     /// Seconds before the next play: longer once the quiet half is over, to read that the user is to talk now.

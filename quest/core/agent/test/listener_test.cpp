@@ -105,6 +105,29 @@ TEST(listenerTakesAQuickCommandSaidStraightAfterItsName) {
     CHECK(recorded[0].second <= spoken + second * 15 / 10, "handed over %.2f s after \"more\"", double(recorded[0].second - spoken) / second);
 }
 
+// A speaker who does not stop after the name leaves no dip in the sound between it and the request.
+TEST(listenerRecordsARequestSaidStraightOnFromItsName) {
+    for (const char* clip : {"straight", "straight-hi"}) {
+        Listener listener(spotterFor("momo"));
+        Sound sound;
+        sound.quiet(1);
+        size_t phrase = sound.size();
+        sound.say(clip);
+        size_t spoken = sound.size();
+        sound.quiet(3);
+        std::vector<Said> heard = hearAll(listener, sound);
+        CHECK_EQ(only<Listener::Woke>(heard).size(), size_t(1));
+        CHECK_EQ(only<Listener::NothingSaid>(heard).size(), size_t(0));
+        auto recorded = only<Listener::Recorded>(heard);
+        CHECK_EQ(recorded.size(), size_t(1));
+        if (recorded.empty()) continue;
+        long begins = long(recorded[0].second) - long(samplesIn(recorded[0].first));
+        CHECK(begins <= long(phrase), "%s: the recording begins %.2f s into the name", clip, double(begins - long(phrase)) / second);
+        CHECK(recorded[0].second >= spoken + second && recorded[0].second <= spoken + second * 15 / 10, "%s: handed over %.2f s after the request",
+              clip, double(long(recorded[0].second) - long(spoken)) / second);
+    }
+}
+
 TEST(listenerEndsTheRecordingOnAPauseOfOnePointTwoSeconds) {
     Listener listener(spotterFor("momo"));
     Sound sound;
@@ -312,6 +335,77 @@ TEST(listenerStreamsWhatFollowsItsNameUntilTheTurnIsOver) {
     CHECK_EQ(only<Listener::Woke>(next).size(), size_t(0));
     CHECK_EQ(only<Listener::Began>(next).size(), size_t(1));
     CHECK(!only<Listener::Streamed>(next).empty(), "the next turn streams without the name");
+}
+
+TEST(listenerStreamsARequestSaidStraightOnFromItsNameWhole) {
+    for (const char* clip : {"straight", "straight-hi"}) {
+        Listener listener(spotterFor("momo"));
+        listener.setMode(Listener::Mode::stream);
+        Sound sound;
+        sound.quiet(1);
+        size_t phrase = sound.size();
+        sound.say(clip);
+        size_t spoken = sound.size();
+        sound.quiet(2);
+        std::vector<Said> heard = hearAll(listener, sound);
+        auto woke = only<Listener::Woke>(heard);
+        auto began = only<Listener::Began>(heard);
+        CHECK_EQ(woke.size(), size_t(1));
+        CHECK_EQ(began.size(), size_t(1));
+        if (woke.empty() || began.empty()) continue;
+        CHECK(woke[0].second < spoken, "%s: the name is spotted while the request is still being said", clip);
+        CHECK_EQ(began[0].second, woke[0].second);
+        CHECK(listener.state() == Listener::State::hearing, "%s: the turn streams until the service says it is over", clip);
+        auto pieces = only<Listener::Streamed>(heard);
+        long begins = long(sound.size() / Listener::pieceLength * Listener::pieceLength) - long(samplesIn(pieces));
+        CHECK(begins <= long(phrase) && begins >= long(phrase) - long(second * 3 / 10), "%s: it begins %.2f s from the name, so none of the request is cut",
+              clip, double(begins - long(phrase)) / second);
+    }
+}
+
+// The spotter also wakes on what only sounds like the name, so the service checks the sound of each wake.
+TEST(listenerHandsOverTheSoundThatWokeIt) {
+    for (const char* clip : {"hey-momo", "straight"}) {
+        Listener listener(spotterFor("momo"));
+        listener.setMode(Listener::Mode::stream);
+        Sound sound;
+        sound.say("before").quiet(1);
+        size_t phrase = sound.size();
+        sound.say(clip).quiet(2);
+        auto woke = only<Listener::Woke>(hearAll(listener, sound));
+        CHECK_EQ(woke.size(), size_t(1));
+        if (woke.empty()) continue;
+        long begins = long(woke[0].second) - long(woke[0].first.sound.size());
+        CHECK(begins <= long(phrase) && begins >= long(phrase) - long(second * 3 / 10), "%s: the sound begins %.2f s from the name, and nothing said before it is in it",
+              clip, double(begins - long(phrase)) / second);
+        CHECK(woke[0].first.sound.size() <= second * 2, "%s: %.2f s of sound", clip, double(woke[0].first.sound.size()) / second);
+    }
+}
+
+TEST(listenerClosesWhatAWakeOpenedWhenItWasNotTheName) {
+    Listener listener(spotterFor("momo"));
+    listener.setMode(Listener::Mode::stream);
+    // Told before anything is said, the conversation closes and what follows is not streamed.
+    hearAll(listener, Sound().quiet(1).say("hey-momo").quiet(1));
+    CHECK(listener.state() == Listener::State::open, "the name opened the conversation");
+    listener.notNamed();
+    CHECK(listener.state() == Listener::State::waiting, "it waits for its name again");
+    std::vector<Said> after = hearAll(listener, Sound().say("also").quiet(1));
+    CHECK_EQ(only<Listener::Began>(after).size(), size_t(0));
+    CHECK_EQ(only<Listener::Streamed>(after).size(), size_t(0));
+    // Told while a turn streams, the turn stops.
+    hearAll(listener, Sound().quiet(1).say("command"));
+    CHECK(listener.state() == Listener::State::hearing, "a turn streams");
+    listener.notNamed();
+    CHECK(listener.state() == Listener::State::waiting, "the turn is dropped");
+    CHECK_EQ(only<Listener::Streamed>(hearAll(listener, Sound().say("also").quiet(1))).size(), size_t(0));
+    // And its name still wakes it.
+    CHECK_EQ(only<Listener::Woke>(hearAll(listener, Sound().quiet(1).say("hey-momo").quiet(1))).size(), size_t(1));
+    // Recording, there is nothing to close: the service checks the recording itself.
+    Listener recorder(spotterFor("momo"));
+    hearAll(recorder, Sound().quiet(1).say("command"));
+    recorder.notNamed();
+    CHECK(recorder.state() == Listener::State::hearing, "a recording goes on");
 }
 
 TEST(listenerClosesTheConversationAfterEightSecondsOfQuiet) {

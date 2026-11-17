@@ -9,7 +9,7 @@ import type { ModelClient, Tools } from '../core/ports.ts';
 import { Pipeline, type Outbound } from '../core/pipeline.ts';
 import { DEFAULT_SETTINGS, type Handoff, type Playback, type Roles, type Settings } from '../core/roles/types.ts';
 import { Mindstorm } from '../core/state.ts';
-import { spokenName, withoutWakePhrase } from '../core/wake.ts';
+import { saysWakePhrase, spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
 import { Declined, whereItWent, type Channel, type Delivery, type Desk } from './contact.ts';
 import { matchTrees, modelAsk, treeLines } from './tree-asks.ts';
@@ -18,6 +18,7 @@ import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame }
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
 import { HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, heardMs, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
+import { checkName } from './wake-check.ts';
 import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
 import { Telegram, type TelegramOptions } from './telegram.ts';
@@ -56,6 +57,8 @@ export interface ServerOptions {
   speak?: Speak;
   /** Turns recorded speech into text, told the card titles. When present the client records instead of using the browser's recognition. */
   transcribe?: Transcribe;
+  /** False takes every wake for the name: the check of what woke a device (DECISIONS 70) is off. It needs `transcribe`. */
+  wakeCheck?: boolean;
   /** Momo's real-time voice on `/live`: the realtime model, how it is set up, and its web answers. Without it `/live` is refused. */
   live?: { open: OpenRealtime; options: LiveOptions; webAnswer?: WebAnswer };
   settings?: Partial<Settings>;
@@ -126,6 +129,8 @@ export interface Running {
 
 const MAX_UPLOAD = 300 * 1024 * 1024;
 const MAX_SPOKEN = 1200;
+/** A recording that a wake began holds the name within its first characters: the device starts it a tenth of a second before the name. */
+const WAKE_WITHIN = 48;
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -372,7 +377,13 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       const heard = opts.transcribe
         ? await opts.transcribe(audio, mime, { name: spokenName(settings.agentName), words: likelyWords(mind, url.searchParams.get('tree')) })
         : await opts.model.transcribe({ audio, mime });
-      return json(res, 200, { text: withoutWakePhrase(heard, settings.agentName).trim() });
+      // `woke=1`: the recording began with what the device's spotter took for the name, which also wakes on things that only
+      // sound like it. Unless the words begin with the name, nothing was said to Momo (DECISIONS 70).
+      if (url.searchParams.get('woke') === '1' && opts.transcribe && opts.wakeCheck !== false && !saysWakePhrase(heard.slice(0, WAKE_WITHIN), settings.agentName)) {
+        log(`[voice] a recording did not begin with the name, so nothing is made of it${meter ? '' : `: ${heard.slice(0, 80)}`}`);
+        return json(res, 200, { text: '', named: false });
+      }
+      return json(res, 200, { text: withoutWakePhrase(heard, settings.agentName).trim(), named: true });
     }
     if (req.method === 'GET' && path === '/api/speak') {
       const why = meter?.refused('voiceMs');
@@ -513,6 +524,18 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           if (own && own.readyState === own.OPEN) own.send(JSON.stringify({ t: 'activity', activity }));
         },
         spent: (dollars) => meter?.spent(dollars),
+        ...(opts.transcribe && opts.wakeCheck !== false
+          ? {
+              named: async (pcm: Uint8Array) => {
+                const ms = (pcm.length / 2 / 16000) * 1000;
+                meter?.spent((ms / 60_000) * HEARING_DOLLARS_PER_MINUTE);
+                const { ok, heard } = await checkName(opts.transcribe!, pcm, spokenName(settings.agentName));
+                // What was not said to Momo is not written into a log others keep.
+                log(`[live] the sound of the wake was written down${ok || !meter ? ` as: ${heard}` : ', and is not the name'}`);
+                return ok;
+              },
+            }
+          : {}),
         log,
       },
       (frame) => {
@@ -585,6 +608,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         counted(frame.pcm, 16000);
         const why = meter?.refused('voiceMs');
         if (why) return cut(why);
+      }
+      if (frame.t === 'name') {
+        // Past the day's share the turn itself is refused, with its reason said aloud: the check is not spent on it.
+        if (meter?.refused('voiceMs')) return void (ws.readyState === ws.OPEN && ws.send(JSON.stringify({ t: 'name', ok: true } satisfies VoiceFrame)));
+        counted(frame.pcm, 16000);
       }
       voice.heard(frame);
     });

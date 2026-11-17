@@ -1,8 +1,10 @@
 // The agent's ears on the device. It waits for its name ("hey Momo", "hi Momo"), then records until the speaker pauses and
 // hands that recording over, or, streaming, opens a conversation. Before the name it keeps only the last three seconds of
-// sound, so the words just after the name are not lost, and nothing it hears leaves the device unless it began with the
-// name or came while the conversation the name opened was open. The rules are the web client's
-// (agents/client/js/wake-worker.js and wake.js; agents/DECISIONS.md 38).
+// sound, so the words just after the name are not lost, and nothing it hears leaves the device unless it began with
+// what the spotter took for the name, or came while the conversation that opened was open. The spotter is set to miss
+// the name seldom, so it also wakes on about one near miss in eight: the sound of each wake goes to the service, which
+// checks it and has what was not the name dropped (`notNamed`). The rules are the web client's
+// (agents/client/js/wake-worker.js and wake.js; agents/DECISIONS.md 38, 69 and 70).
 //
 // Streaming, the name opens a conversation, and so does Momo's voice. While it is open no name is needed: speech begins
 // a turn, whether Momo is speaking or not, and the turn streams until the service says it is over. The conversation
@@ -41,6 +43,9 @@ public:
 
     struct Woke {
         std::string keyword;
+        /// The sound it took for its name, from a tenth of a second before it to where it was spotted: the service
+        /// checks it, since the spotter also wakes on things that only sound like the name (agents/DECISIONS.md 70).
+        std::vector<float> sound;
     };
     /// Streaming, a turn begins: `Streamed` pieces follow, from just before its first word. It begins on the first words
     /// after the name, or on any words while the conversation is open.
@@ -78,6 +83,9 @@ public:
     void setMode(Mode mode);
     /// Streaming, the turn is over: the conversation stays open.
     void turnOver();
+    /// Streaming, the service checked the sound of the last wake and it was not the name: the conversation it opened
+    /// closes at once, with any turn begun in it, and the name is listened for again.
+    void notNamed();
     /// A reply would play. True when it may now. From then nothing is heard until `replyEnded`, nor for 300 ms after,
     /// while its echo fades. While the user is being recorded it waits, so it is not recorded into what they say:
     /// `Speak` comes as the recording ends.
@@ -89,8 +97,9 @@ public:
     /// Momo thinks, or its reply is on its way, or neither any more. While it does, the open conversation stays open as
     /// if Momo were talking, so the user may still talk without the name.
     void momoThinks(bool thinking);
-    /// The chime that says the name was heard started, or ended. Sound is still heard while it plays and for 300 ms
-    /// after, but is not taken for words.
+    /// The chime that says the name was heard started, or ended, on a host whose microphone hears it (not the Quest:
+    /// agents/DECISIONS.md 71). Sound is still heard while it plays and for 300 ms after, but is not taken for words,
+    /// so a short word said in that stretch is lost.
     void chimeStarted();
     void chimeEnded();
     /// Listens for another name from now on. The spotter it listened with before, to be let go.

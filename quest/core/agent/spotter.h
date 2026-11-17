@@ -1,5 +1,5 @@
 // The keyword spotter that hears the agent's name on the device: sherpa-onnx's (Apache-2.0, v1.13.8, its C API) with the
-// gigaspeech 3.3M keyword model, tuned as the web client is (agents/DECISIONS.md 38). quest/tools/fetch-voice.sh fetches both.
+// gigaspeech 3.3M keyword model, tuned as the web client is (agents/DECISIONS.md 38, 69 and 70). quest/tools/fetch-voice.sh fetches both.
 #pragma once
 #include <map>
 #include <memory>

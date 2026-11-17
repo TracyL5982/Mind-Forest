@@ -150,6 +150,7 @@ const shared = {
         }
       : undefined,
   transcribe: !fake && env.OPENAI_API_KEY ? openaiTranscribe(fetch, { apiKey: env.OPENAI_API_KEY, model: env.MIND_PALACE_HEARING_MODEL }) : undefined,
+  wakeCheck: env.MIND_PALACE_WAKE_CHECK !== 'off',
   // MIND_PALACE_INSTAGRAM_READ=off searches what is kept without reading Instagram.
   instagram:
     env.META_IG_TOKEN && env.META_IG_USER_ID

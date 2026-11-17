@@ -1,6 +1,7 @@
 // Talking to the agent on the headset, as in the web client: its name wakes it ("hey Momo"), what follows is recorded,
 // transcribed by the service (POST /api/transcribe) and sent as an `utter`, and the agent's replies (`say`) are heard
-// through the service's voice (GET /api/speak). Nothing it hears leaves the headset unless it began with the name.
+// through the service's voice (GET /api/speak). Nothing it hears leaves the headset unless it began with what
+// its spotter took for the name; the service checks the sound of each wake, and drops what was not the name.
 //
 // When the service has a live voice (hello's `live`, and its /live socket), the words go another way: the name opens a
 // conversation, and while it is open whatever the user says streams to the service as a turn, until the service says the
@@ -109,17 +110,20 @@ private:
         Listener::Mode mode;
     };
     struct TurnOver {};
+    struct NotNamed {};
     struct ReplyStreams {};
     struct MomoThinks {
         bool thinking = false;
     };
-    using Command = std::variant<Done, AskToSpeak, ReplyEnded, ChimeStarted, ChimeEnded, Respell, SetMode, TurnOver, ReplyStreams, MomoThinks>;
+    using Command = std::variant<Done, AskToSpeak, ReplyEnded, ChimeStarted, ChimeEnded, Respell, SetMode, TurnOver, NotNamed, ReplyStreams, MomoThinks>;
     /// The listener and what crosses to it: the sound thread hears; the frame thread sends commands and takes events.
     struct Ears;
     struct Transcript {
         bool ok = false;
         std::string text;
         std::string why;
+        /// The service found the name at the start of the recording. Without it, what woke the headset was not the name.
+        bool named = true;
     };
     struct Fetched {
         int reply = 0;
@@ -154,13 +158,17 @@ private:
     struct LiveDone {
         std::string id;
     };
+    /// The service's check of the sound that woke the headset: whether it was the name (agents/DECISIONS.md 70).
+    struct LiveNamed {
+        bool ok = true;
+    };
     struct LiveFailed {
         std::string why;
     };
     struct LiveClosed {
         std::string why;
     };
-    using LiveFrame = std::variant<LiveReady, LiveOver, LiveHeard, LiveQuiet, LiveAudio, LiveText, LiveDone, LiveFailed, LiveClosed>;
+    using LiveFrame = std::variant<LiveReady, LiveOver, LiveHeard, LiveQuiet, LiveAudio, LiveText, LiveDone, LiveNamed, LiveFailed, LiveClosed>;
     /// Which socket said it: one closed or replaced is not listened to.
     struct FromLive {
         int socket = 0;

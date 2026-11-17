@@ -59,6 +59,8 @@ struct Host {
     std::vector<std::shared_ptr<Player>> players;
     platform::MicrophoneEvents microphone;
     int opens = 0;
+    /// As the Mac preview's microphone, which hears the chime; false is the headset's, which does not.
+    bool hearsOwnSounds = true;
     /// The mixer's: the sounds played, by name, in order, and the level each loop was last asked for.
     std::vector<std::string> sounds;
     std::map<std::string, float> levels;
@@ -295,6 +297,7 @@ StreamRef playStream(int rate, std::function<void(bool)> done) {
     host.players.push_back(player);
     return player;
 }
+bool microphoneHearsOwnSounds() { return host.hearsOwnSounds; }
 MicrophoneRef openMicrophone(MicrophoneEvents events) {
     host.opens++;
     host.microphone = std::move(events);
@@ -329,7 +332,7 @@ TEST(voiceSendsWhatFollowsTheNameAsAnUtter) {
     if (posts.empty()) return;
     const platform::Request& r = posts[0].request;
     CHECK_EQ(r.method, "POST");
-    CHECK_EQ(r.url, "http://127.0.0.1:8790/api/transcribe?tree=t1");
+    CHECK_EQ(r.url, "http://127.0.0.1:8790/api/transcribe?woke=1&tree=t1");
     CHECK(hasHeader(r, "Authorization", "Bearer tok") && hasHeader(r, "Content-Type", "audio/wav"), "the token in a header, the body a WAV");
     CHECK(readWav(r.body).has_value(), "a 16 kHz mono WAV");
     CHECK(t.voice.state() == Listener::State::working, "working while it is transcribed");
@@ -439,6 +442,30 @@ TEST(voiceSendsNothingWhenOnlyItsChimeFollowsTheName) {
     CHECK(t.voice.state() == Listener::State::waiting, "listening for the name again");
 }
 
+// On the headset the microphone does not hear the chime (`-chimeCheck`, agents/DECISIONS.md 71), so the listener is not
+// made deaf while it plays, and a short word said just after the name is kept. Where the microphone does hear it, as in
+// the Mac preview, the word is lost in the chime, the price of not taking the chime itself for words: "more" after a
+// pause of 0.5 to 0.9 s, which is when the chime plays.
+TEST(voiceKeepsAShortWordSaidAsTheChimePlaysWhereTheMicrophoneDoesNotHearIt) {
+    for (bool hears : {false, true}) {
+        Talking t(false);
+        host.hearsOwnSounds = hears;
+        t.hear(Sound().quiet(1).say("hey-momo").quiet(0.6).say("more").quiet(9));
+        CHECK(t.played().size() >= 1 && t.played()[0] == "momo_chime", "the chime plays either way");
+        CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(hears ? 0 : 1));
+    }
+}
+
+TEST(liveBeginsATurnOnAShortWordSaidAsTheChimePlaysWhereTheMicrophoneDoesNotHearIt) {
+    for (bool hears : {false, true}) {
+        Talking t(true);
+        host.hearsOwnSounds = hears;
+        t.goLive();
+        t.hear(Sound().quiet(1).say("hey-momo").quiet(0.6).say("more").quiet(1.5));
+        CHECK_EQ(t.liveSent("start").size(), size_t(hears ? 0 : 1));
+    }
+}
+
 TEST(voiceOpensTheMicrophoneAgainAfterItFails) {
     Talking t(false);
     t.hear(Sound().quiet(0.5));
@@ -544,8 +571,9 @@ TEST(liveSendsNothingBeforeTheName) {
     CHECK_EQ(t.liveSent().size(), size_t(0));
     CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(0));
     t.hear(Sound().say("hey-momo").quiet(2.5));
-    CHECK_EQ(t.liveSent().size(), size_t(0));
-    CHECK(t.voice.state() == Listener::State::open, "the name alone opens the conversation and sends nothing");
+    CHECK_EQ(t.liveSent("name").size(), size_t(1));
+    CHECK_EQ(t.liveSent().size(), size_t(1));
+    CHECK(t.voice.state() == Listener::State::open, "the name alone opens the conversation and sends only its own sound, to be checked");
     t.hear(Sound().say("more").quiet(0.5));
     CHECK_EQ(t.liveSent("start").size(), size_t(1));
 }
@@ -565,7 +593,8 @@ TEST(liveStreamsWhatFollowsTheNameUntilTheTurnIsOver) {
         CHECK_EQ(starts[0]["scene"]["focus"].string(""), "n1");
         CHECK_EQ(starts[0]["scene"]["treeId"].string(""), "t1");
     }
-    CHECK(!host.sockets[0]->sent.empty() && tOf(host.sockets[0]->sent.front()) == "start", "the start comes before any sound");
+    CHECK(host.sockets[0]->sent.size() > 1 && tOf(host.sockets[0]->sent[0]) == "name" && tOf(host.sockets[0]->sent[1]) == "start",
+          "the sound of the wake goes first, to be checked, and the start comes before any sound of the turn");
     std::vector<int16_t> sent = t.streamed();
     CHECK(!sent.empty() && sent.size() <= heard.size(), "%zu samples sent of %zu heard", sent.size(), heard.size());
     if (sent.empty() || sent.size() > heard.size()) return;
@@ -577,7 +606,7 @@ TEST(liveStreamsWhatFollowsTheNameUntilTheTurnIsOver) {
     CHECK_EQ(wrong, size_t(0));
     size_t frames = t.liveSent("audio").size();
     t.hear(Sound().quiet(1));
-    CHECK_EQ(t.liveSent().size(), frames + 1);
+    CHECK_EQ(t.liveSent().size(), frames + 2);
     CHECK(t.voice.state() == Listener::State::open, "the conversation stays open, and nothing goes out while nobody talks");
     t.hear(Sound().say("more").quiet(1));
     auto again = t.liveSent("start");
@@ -585,6 +614,64 @@ TEST(liveStreamsWhatFollowsTheNameUntilTheTurnIsOver) {
     if (again.size() == 2) CHECK_EQ(again[1]["turn"].integer(0), 2);
     CHECK(t.liveSent("audio").size() > frames, "the next words stream without the name");
     CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(0));
+}
+
+// The spotter also wakes on what only sounds like the name, so the service checks the sound of each wake
+// (agents/DECISIONS.md 70).
+TEST(liveSendsTheSoundOfAWakeToBeChecked) {
+    Talking t(true);
+    t.goLive();
+    Sound sound = Sound().quiet(1).say("hey-momo").quiet(1);
+    t.hear(sound);
+    auto names = t.liveSent("name");
+    CHECK_EQ(names.size(), size_t(1));
+    CHECK_EQ(t.liveSent().size(), size_t(1));
+    if (names.empty()) return;
+    std::string bytes = base64Decode(names[0]["pcm"].string("")).value_or("");
+    double seconds = double(bytes.size()) / 2 / second;
+    CHECK(seconds >= 0.5 && seconds <= 2, "%.2f s of sound: the name, and no more than was heard since a moment before it", seconds);
+    CHECK(t.voice.state() == Listener::State::open, "the conversation opens at once, without waiting for the check");
+    t.serviceSays(R"({"t":"name","ok":true})");
+    CHECK(t.voice.state() == Listener::State::open, "and stays open when it was the name");
+}
+
+TEST(liveClosesWhatAWakeOpenedWhenTheServiceSaysItWasNotTheName) {
+    Talking t(true);
+    t.goLive();
+    t.hear(Sound().quiet(1).say("hey-momo").quiet(1));
+    t.serviceSays(R"({"t":"name","ok":false})");
+    t.hear(Sound().quiet(0.2));
+    CHECK(t.voice.state() == Listener::State::waiting, "it waits for its name again");
+    CHECK(t.shows() == Presence::State::waiting, "and shows that it does");
+    t.hear(Sound().say("also").quiet(1));
+    CHECK_EQ(t.liveSent("start").size(), size_t(0));
+
+    // Said while a turn streams, the turn stops going out.
+    t.hear(whole(Sound().quiet(1).say("command")));
+    CHECK_EQ(t.liveSent("start").size(), size_t(1));
+    CHECK(t.voice.state() == Listener::State::hearing, "a turn streams");
+    size_t frames = t.liveSent("audio").size();
+    t.serviceSays(R"({"t":"name","ok":false})");
+    t.hear(Sound().say("also").quiet(1));
+    CHECK_EQ(t.liveSent("audio").size(), frames);
+    CHECK(t.voice.state() == Listener::State::waiting, "it waits for its name again");
+    CHECK(t.shows() == Presence::State::waiting, "and shows that it does");
+    CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(0));
+}
+
+TEST(voiceMakesNothingOfARecordingTheServiceFindsNoNameIn) {
+    Talking t(false);
+    t.hear(Sound().quiet(1).say("command").quiet(2));
+    auto posts = t.fetchesTo("/api/transcribe");
+    CHECK_EQ(posts.size(), size_t(1));
+    if (posts.empty()) return;
+    CHECK(posts[0].request.url.find("woke=1") != std::string::npos, "the service is told a wake began the recording (%s)", posts[0].request.url.c_str());
+    posts[0].done(ok(R"({"text":"","named":false})"));
+    t.frame();
+    CHECK_EQ(t.utters().size(), size_t(0));
+    t.hear(Sound().quiet(0.6));
+    CHECK(t.voice.state() == Listener::State::waiting, "listening for the name again");
+    CHECK(t.shows() != Presence::State::thinking, "and Momo does not think about it");
 }
 
 TEST(livePlaysMomosVoiceAsItArrives) {
@@ -700,9 +787,9 @@ TEST(liveClosesTheConversationAfterEightSecondsOfQuiet) {
     if (woke && closed) CHECK(*closed - *woke >= 7.95 && *closed - *woke <= 8.4, "for %.2f s", *closed - *woke);
     CHECK(t.shows() == S::waiting, "waiting for the name again once nobody has talked for 8 s");
     CHECK(t.voice.state() == Listener::State::waiting, "the listener too");
-    CHECK_EQ(t.liveSent().size(), size_t(0));
+    CHECK_EQ(t.liveSent().size(), t.liveSent("name").size());
     t.hear(Sound().say("more").quiet(1));
-    CHECK_EQ(t.liveSent().size(), size_t(0));
+    CHECK_EQ(t.liveSent().size(), t.liveSent("name").size());
 }
 
 TEST(liveOffUsesTheOldPath) {
