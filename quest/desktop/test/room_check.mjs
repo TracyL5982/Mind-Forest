@@ -1,14 +1,15 @@
 // Runs the Mac preview against the fake service on a fresh copy of a data folder (standin.mjs) and opens, where it stands,
-// every card that hangs from the root of each tree, one preview each, its clock a frame at a time. Each time it checks,
+// every card with no cards under it that hangs from the root of each tree, one preview each, its clock a frame at a time. Each time it checks,
 // from where the cards are headed before the pinch and after (`-placesAt`, standin.mjs `room`), that:
 //   - the open card grows where it stood;
 //   - the other cards stay, or step straight out from it;
 //   - none is left under it;
 //   - no two cards overlap that did not before.
 //
-// With --walk it stands instead, in one preview, every layer of each tree, as the demo stands a tree that arrives whole: for each
-// card with cards under it, it takes the preview to one of them. Then it goes to each such card, which opens leading its layer,
-// and checks that layer (standin.mjs `layer`):
+// With --walk it checks first that each tree arrives as a tree: every card with cards under it leads their layer. Then it stands,
+// in one preview, every layer of each tree, as the demo stood a tree that arrives whole: for each card with cards under it, it
+// takes the preview to one of them. Then it goes to each such card, which opens leading its layer, and checks that layer
+// (standin.mjs `layer`):
 //   - the card that leads it stands in the middle of its cards, not off to one side of them;
 //   - no two cards on it overlap;
 //   - no two of its groups overlap, so no two panes lie over each other at one depth.
@@ -65,6 +66,14 @@ try {
     if (ready) {
       check(await ready, 'the demo set its tree up again for the preview, round by round');
       await read();
+    } else {
+      // `[agent] tree "<title>": <n> cards, <l> layers, <k> cards leading one`, as each tree is planted whole.
+      for (const tree of trees) {
+        const planted = await until(run.log, new RegExp(`^\\[agent\\] tree "${escape(tree.title)}": (\\d+) cards, (\\d+) layers, (\\d+) cards leading one`), 0, 5);
+        const branches = before.nodes.filter((n) => n.treeId === tree.id && before.nodes.some((c) => c.parent === n.id)).length;
+        const leading = planted ? Number(/(\d+) cards leading one/.exec(planted.line)[1]) : -1;
+        check(leading === branches, `"${tree.title}" arrives as a tree: ${leading} of its ${branches} cards with cards lead their layer${planted ? ` (${planted.line.replace(/^.*: /, '')})` : ''}`);
+      }
     }
     for (const tree of trees) {
       // Nearest the root first, so a card is stood before the cards under it.
@@ -140,7 +149,8 @@ try {
     writeFileSync(join(shots, 'log-depth.txt'), run.log.map((l) => `${l.at.toFixed(2).padStart(7)} ${l.line}`).join('\n'));
   }
   for (const tree of process.argv.includes('--walk') ? [] : trees) {
-    for (const card of before.nodes.filter((n) => n.parent === tree.rootId)) {
+    // (A card with cards under it is a branch, which a pinch goes into rather than opening where it stands.)
+    for (const card of before.nodes.filter((n) => n.parent === tree.rootId && !before.nodes.some((c) => c.parent === n.id))) {
       // The headset names a card by its library piece when it is one; a work of the library is not named by flag here.
       const library = items.get(card.itemId)?.source?.from === 'library' ? items.get(card.itemId).data?.library : null;
       if (library && library.kind !== 'film') {
@@ -151,7 +161,8 @@ try {
       const run = stand.launch(shots, `room-${card.id.slice(0, 8)}`, 10.5,
         ['-placesAt', '7', '-pickRef', ref, '-pickAt', '8', '-placesAgainAt', '10', '-shotEvery', '100'], { realtime: false });
       await until(run.log, /^\[agent\] connected/);
-      stand.inject({ t: 'navigate', treeId: tree.id, yours: true });
+      // To the root: a tree is gone to as it stands, which for a tree with branches is its deepest layer.
+      stand.inject({ t: 'navigate', treeId: tree.id, nodeId: tree.rootId, yours: true });
       await run.done;
       const made = room(places(run.log, 'placesAt'), places(run.log, 'placesAgainAt'));
       const trouble = [

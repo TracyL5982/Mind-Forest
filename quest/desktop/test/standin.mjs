@@ -238,7 +238,8 @@ export async function standIn(name, source, { demo = false } = {}) {
     const began = Date.now();
     const args = ['-agent', `ws://127.0.0.1:${proxyPort}`, '-agentToken', token, '-cards', '-mute', '-agentVoice', 'off', '-dataDir', previewData, ...(realtime ? ['-realtime'] : []),
       '-shot', join(shots, `${name}.png`), '-shotAt', String(seconds), '-shotEvery', '2', ...extra];
-    const preview = spawn(join(quest, 'desktop/preview'), args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    // (`PREVIEW=<path>` runs another build of the preview, an older one to compare with.)
+    const preview = spawn(process.env.PREVIEW ?? join(quest, 'desktop/preview'), args, { stdio: ['ignore', 'ignore', 'pipe'] });
     started.push(preview);
     let partial = '';
     preview.stderr.on('data', (chunk) => {

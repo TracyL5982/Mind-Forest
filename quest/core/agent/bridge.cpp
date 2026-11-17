@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <functional>
 #include <initializer_list>
 #include <random>
+#include <set>
 
 #include "base.h"
 #include "platform.h"
@@ -140,7 +142,11 @@ Bridge::Bridge(OceanModel& model, Address address, std::shared_ptr<Transport> tr
     if (Flags::string("agentVoice").value_or("on") != "off") voice = std::make_unique<Voice>(client, [this] { return scene(); }, Flags::string("wakeClip"), Flags::has("mute"));
     if (Flags::string("agentType") && Flags::number("agentTypeAt") > 0) typeAt = Flags::number("agentTypeAt");
     std::string file = plotsFile();
-    if (!file.empty()) plots = ShelfPlots::parse(platform::readFile(file).value_or("")).services[client.address().http];
+    if (!file.empty()) {
+        ShelfPlots kept = ShelfPlots::parse(platform::readFile(file).value_or(""));
+        plots = kept.services[client.address().http];
+        stands = kept.stands[client.address().http];
+    }
 }
 
 void Bridge::frame(double t) {
@@ -245,8 +251,9 @@ void Bridge::synced(const Delta& delta) {
     logLine(fmt("[agent] connected: %d trees, %d cards", int(client.mirror().trees().size()), int(client.mirror().nodes().size())));
     // The headset shows no player from another site, and its player takes these files (Android's MediaPlayer).
     client.send(Outbound::client(Media{false, {"mp4", "m4a", "mp3"}}));
-    // A tree deleted at the service while the headset was away leaves no plot behind.
+    // A tree deleted at the service while the headset was away leaves no plot behind, and no place stood on.
     for (auto s = plots.begin(); s != plots.end();) s = client.mirror().tree(TreeId{s->first}) ? std::next(s) : plots.erase(s);
+    for (auto s = stands.begin(); s != stands.end();) s = client.mirror().tree(TreeId{s->first}) ? std::next(s) : stands.erase(s);
     changed(delta, false, false);
     if (dump) {
         client.send(Outbound::dump({Dump::text(*dump)}));
@@ -266,6 +273,7 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
         logLine("[agent] tree \"" + gone.title + "\" was deleted at the service");
         trees.erase(p);
         plots.erase(gone.id.value);
+        stands.erase(gone.id.value);
         model.shelfDirty = true;
     }
 
@@ -350,17 +358,23 @@ void Bridge::changed(const Delta& delta, bool animate, bool yours) {
     }
 
     for (auto& [p, ids] : arrived) {
-        if (!standing(*p)) continue;
-        // Suggestions for the card open where it stands come from a conversation about it, so it starts its layer.
-        std::optional<int> opened = p->tree->focus();
-        if (opened && !p->tree->nodes[*opened].head) {
-            for (int id : ids) {
-                if (p->tree->nodes[id].parent != *opened) continue;
+        // A card that gets cards is a branch: it leads their layer, as every card with cards does on Kai's trees. Those for the
+        // card open where it stands on the standing tree come from a conversation about it, so it is gone into; any other card
+        // becomes a branch where it is.
+        std::optional<int> opened = standing(*p) ? p->tree->focus() : std::nullopt;
+        std::set<int> parents;
+        for (int id : ids) {
+            if (std::optional<int> parent = p->tree->nodes[id].parent) parents.insert(*parent);
+        }
+        for (int parent : parents) {
+            if (opened && parent == *opened && !p->tree->nodes[parent].head) {
                 Tree::Change moved = p->tree->focus(*opened);
                 model.arrive(moved.added);
-                break;
+            } else {
+                p->tree->lead(parent);
             }
         }
+        if (!standing(*p)) continue;
         model.arrive(ids, animate ? 0.1 : 0.0);
         logLine(fmt("[agent] %d new cards", int(ids.size())));
         touched = true;
@@ -409,7 +423,41 @@ Bridge::Planted* Bridge::plant(const TreeInfo& info) {
         if (n->id == root->id) continue;
         count += graft(p, *n) ? 1 : 0;
     }
-    logLine(fmt("[agent] tree \"%s\": %d cards", info.title.c_str(), count));
+    // A tree that arrives whole is a tree as it would be had it grown here: every card with cards leads their layer, nearest
+    // the root first.
+    std::vector<int> ids;
+    for (const auto& [id, n] : tree->nodes) ids.push_back(id);
+    std::stable_sort(ids.begin(), ids.end(), [&](int a, int b) { return tree->generation(a) < tree->generation(b); });
+    int layers = 1, leading = 0;
+    for (int id : ids) {
+        if (tree->lead(id)) {
+            leading++;
+            layers = std::max(layers, tree->generation(id) + 1);
+        }
+    }
+    // It stands as a saved tree of Kai's is taken off the desk, on the layer the user last stood on (`stands`). One nobody has
+    // stood in stands on its deepest layer, as a tree grown here stands on its newest, every branch a layer behind it and
+    // none folded onto the one it stands on; of layers as deep, the first reached taking at each fork the first card in the
+    // service's order. The same every time.
+    int at = tree->root;
+    auto last = stands.find(info.id.value);
+    auto stood = last != stands.end() ? p.local.find(last->second) : p.local.end();
+    if (stood != p.local.end()) {
+        at = stood->second;
+        while (!tree->nodes[at].head && tree->nodes[at].parent) at = *tree->nodes[at].parent;
+    } else {
+        std::function<void(int)> deepest = [&](int id) {
+            const TreeNode& n = tree->nodes[id];
+            if (!n.head) return;
+            if (tree->generation(id) > tree->generation(at)) at = id;
+            for (int c : n.children) deepest(c);
+        };
+        deepest(tree->root);
+    }
+    standGroup(*tree, at);
+    logLine(fmt("[agent] tree \"%s\": %d cards, %d layers, %d cards leading one; it stands on layer %d, of %s (%s)%s", info.title.c_str(),
+                count, layers, leading, tree->generation(at) + 1, model.catalog->title(tree->nodes[at].ref).c_str(),
+                p.service[at].c_str(), stood != p.local.end() ? ", where it was left" : ""));
     return &p;
 }
 
@@ -712,10 +760,11 @@ void Bridge::goOn() {
         p = holding(to.nodeId->value);
         if (p) id = p->local[to.nodeId->value];
     } else if (to.treeId) {
+        // A tree is gone to as it stands: on the layer it was left on, its deepest when it came whole.
         auto found = trees.find(to.treeId->value);
         if (found != trees.end()) {
             p = &found->second;
-            id = p->tree->root;
+            id = p->tree->stand;
         }
     }
     if (!p) {
@@ -742,9 +791,11 @@ void Bridge::goOn() {
 void Bridge::bring(Planted& p, int id) {
     Tree& t = *p.tree;
     const TreeNode& n = t.nodes[id];
+    // A card is gone to in its group: one that leads a layer stands it, and any other stands its group's first (where
+    // several groups share a layer, the one it is in) and opens.
     if (n.head) {
         t.focus(id);
-    } else if (t.condensed(n) || !opens(id)) {
+    } else if (t.condensed(n) || *n.parent != t.stand || !opens(id)) {
         standGroup(t, *n.parent);
         t.open(id);
     }
@@ -1002,11 +1053,15 @@ void Bridge::saveShelf() {
         } else if (standing(p) && model.standingPlot) {
             plots[id] = *model.standingPlot;
         }
+        // The layer stood on, for the tree the user is in: a tree only ever put away keeps the place it was left at.
+        auto stood = p.service.find(p.tree->stand);
+        if (standing(p) && stood != p.service.end()) stands[id] = stood->second;
     }
     std::string file = plotsFile();
     if (file.empty()) return;
     ShelfPlots kept = ShelfPlots::parse(platform::readFile(file).value_or(""));
     kept.services[client.address().http] = plots;
+    kept.stands[client.address().http] = stands;
     platform::writeFile(file, kept.text());
 }
 

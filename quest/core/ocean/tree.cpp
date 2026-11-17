@@ -343,6 +343,18 @@ void Tree::placeRound(int id, Vec2 was) {
     }
 }
 
+bool Tree::lead(int id) {
+    TreeNode* n = find(nodes, id);
+    if (!n || n->children.empty()) return false;
+    if (n->head) return true;
+    Vec2 was = n->xy;
+    n->head = true;
+    n->chip = false;
+    placeRound(id, was);
+    relayout();
+    return true;
+}
+
 /// Steps out of the card in focus: it closes, and its group draws in.
 std::vector<TreeNode> Tree::unfocus() {
     if (!focused) return {};

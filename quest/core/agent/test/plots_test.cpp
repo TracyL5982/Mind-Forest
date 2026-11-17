@@ -23,3 +23,19 @@ TEST(aPlotThatCantBeReadIsForgottenAndTheRestKept) {
     CHECK(ShelfPlots::parse(R"({"version":1,"services":{"s":{"ok":[-39,24]}}})").services.empty(), "nor the old file of shelf places");
     CHECK(ShelfPlots::parse("").services.empty(), "nor no file");
 }
+
+TEST(whereTheUserLastStoodInEachTreeComesBackBesideThePlots) {
+    ShelfPlots saved;
+    saved.services["http://127.0.0.1:8787"] = {{"t-lenses", Vec2{-0.9f, 1.6f}}};
+    saved.stands["http://127.0.0.1:8787"] = {{"t-lenses", "n-wide-angle"}, {"t-jaws", "n-dolly"}};
+    saved.stands["http://127.0.0.1:8799"] = {{"t-other", "n-root"}};
+    ShelfPlots read = ShelfPlots::parse(saved.text());
+    const Stands& home = read.stands["http://127.0.0.1:8787"];
+    CHECK(home.size() == 2 && home.at("t-lenses") == "n-wide-angle" && home.at("t-jaws") == "n-dolly", "each tree stands where it was left");
+    CHECK(read.stands["http://127.0.0.1:8799"].at("t-other") == "n-root", "another service's are kept apart");
+    CHECK(read.services["http://127.0.0.1:8787"].count("t-lenses"), "and the plots are read as before");
+    ShelfPlots older = ShelfPlots::parse(R"({"version":2,"services":{"s":{"ok":[1,2]}}})");
+    CHECK(older.services["s"].count("ok") && older.stands.empty(), "a file from before stands were kept remembers its plots and no stands");
+    ShelfPlots odd = ShelfPlots::parse(R"({"version":2,"services":{},"stands":{"s":{"ok":"n-1","number":3,"list":["n-2"]}}})");
+    CHECK(odd.stands["s"].size() == 1 && odd.stands["s"].at("ok") == "n-1", "only a card named by a string is read");
+}

@@ -299,6 +299,10 @@ public:
     /// AGENT: the cards already hanging from `id`, a card that has just come to lead its layer from where it stood at `was`,
     /// placed round it again in its own frame, each in the first free place on its ring as if it came now (`focus`).
     void placeRound(int id, Vec2 was);
+    /// AGENT: makes `id`, a card with cards under it, the first card of their group on the layer after its own: a branch, as
+    /// `settle` makes every such card of an older tree. Its cards are placed round it (`placeRound`). Nothing changes for a
+    /// card that leads already, or has no cards. Whether it leads now.
+    bool lead(int id);
 
     /// Steps out of the card in focus: it closes, and its group draws in.
     std::vector<TreeNode> unfocus();

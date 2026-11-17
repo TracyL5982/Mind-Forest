@@ -52,6 +52,9 @@ const fits = (n) => n.status === 'pick' && own(n) && childrenOf(before, n.id).le
 const tree = before.trees.find((t) => own(node(t.rootId)) && childrenOf(before, t.rootId).some(fits));
 if (!tree) throw new Error('no tree here has a root of the user\'s own and a long suggestion of theirs under it');
 const root = node(tree.rootId);
+// Each preview is taken to a tree's root, whose layer stands then: a tree gone to as a tree stands as it was left, which for one
+// with branches is its deepest layer.
+const rootOf = (treeId) => before.trees.find((t) => t.id === treeId).rootId;
 const pick = childrenOf(before, root.id).find(fits);
 // Another card of the same tree, untouched by the rest, for the picture of the ring.
 const other = childrenOf(before, root.id).find((n) => n.id !== pick.id && n.status === 'pick' && own(n) && childrenOf(before, n.id).length === 0);
@@ -73,7 +76,7 @@ const run = stand.launch(shots, 'edit', T.end, [
 ]);
 try {
   await until(run.log, /^\[agent\] connected/);
-  stand.inject({ t: 'navigate', treeId: tree.id, yours: true });
+  stand.inject({ t: 'navigate', treeId: tree.id, nodeId: root.id, yours: true });
   const opened = await until(run.log, /^\[agent\] opened /);
   // The service's own questions come first, then 4 in their place, as an older card's could be.
   await until(run.log, new RegExp(`^\\[agent\\] \\d questions for ${escape(title)}`), opened.at);
@@ -139,7 +142,7 @@ try {
   // Another preview, as after a restart or on a second headset: it draws a line there, and an undo at the service takes it back.
   const second = stand.launch(shots, 'again', 18, ['-pickRef', `note:agent-${pick.id}`, '-pickAt', '8', '-zoomAt', '9.5', '-toolAt', '11', '-tool', 'pen', '-drawAt', '12']);
   await until(second.log, /^\[agent\] connected/);
-  stand.inject({ t: 'navigate', treeId: tree.id, yours: true });
+  stand.inject({ t: 'navigate', treeId: tree.id, nodeId: root.id, yours: true });
   const shownAgain = await until(second.log, /^\[cards\] opened with \d+ edits/);
   check(shownAgain && /^\[cards\] opened with 3 edits/.test(shownAgain.line), `8. a second preview opens the card with its edits (${shownAgain?.line})`);
   const drawnThere = await until(second.log, /^\[cards\] drew a line/);
@@ -157,7 +160,7 @@ try {
   const video = stand.launch(shots, 'stretch', 26, ['-pickRef', filmRef, '-pickAt', '8', '-zoomAt', '9.5', '-toolAt', '11', '-tool', 'pen',
     '-acrossPictureAt', '12', '-acrossPictureAgainAt', '14.5', '-toolAt2', '21', '-tool2', 'send']);
   await until(video.log, /^\[agent\] connected/);
-  stand.inject({ t: 'navigate', treeId: film.treeId, yours: true });
+  stand.inject({ t: 'navigate', treeId: film.treeId, nodeId: rootOf(film.treeId), yours: true });
   const stretches = () => video.sent('commands').flatMap((m) => m.commands).filter((c) => c.type === 'addEdit' && c.id === film.id && c.edit.kind === 'stretch');
   for (let i = 0; i < 400 && stretches().length < 2; i++) await later(0.1);
   const [first, again] = stretches().map((c) => c.edit);
@@ -183,7 +186,7 @@ try {
   const drawing = stand.launch(shots, 'picture', 18, ['-pickRef', `note:agent-${still.id}`, '-pickAt', '8', '-zoomAt', '9.5', '-toolAt', '11', '-tool', 'pen',
     '-acrossPictureAt', '12', '-acrossPictureAgainAt', '14.5']);
   await until(drawing.log, /^\[agent\] connected/);
-  stand.inject({ t: 'navigate', treeId: still.treeId, yours: true });
+  stand.inject({ t: 'navigate', treeId: still.treeId, nodeId: rootOf(still.treeId), yours: true });
   await drawing.done;
   const lines = drawing.sent('commands').flatMap((m) => m.commands).filter((c) => c.type === 'addEdit' && c.id === still.id);
   const onPicture = await settled(still.id, (e) => e.length === 2);
@@ -195,7 +198,7 @@ try {
   // as it fills, 0.3 s into the hold.
   const ring = stand.launch(shots, 'ring', 12, ['-pickRef', `note:agent-${(other ?? pick).id}`, '-pickAt', '8', '-zoomAt', '9.5', '-longPinchAt', '11.7'], { realtime: false });
   await until(ring.log, /^\[agent\] connected/);
-  stand.inject({ t: 'navigate', treeId: tree.id, yours: true });
+  stand.inject({ t: 'navigate', treeId: tree.id, nodeId: root.id, yours: true });
   await ring.done;
   check(find(ring.log, /^\[cards\] the ring fills$/) && !find(ring.log, /^\[cards\] a long pinch/), `the picture ${join(shots, 'ring.png')} is taken while the ring fills`);
   writeFileSync(join(shots, 'log-again.txt'), second.log.map((l) => `${l.at.toFixed(2).padStart(6)} ${l.line}`).join('\n'));

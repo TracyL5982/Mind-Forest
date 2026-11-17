@@ -3,11 +3,12 @@
 // words, answers every reply with reply.mp3 (3.6 s of silence from ffmpeg's anullsrc, so no voice is heard), and sends:
 //   2 s after hello       navigate to the copy's tree, which hangs on the shelf
 //   1.5 s after the name  navigate to a card two layers up in the copy, while the user is recorded (-wakeClip)
-//   0.3 s after the utter navigate to a card the copy hangs from a card that leads no layer (added to the copy)
+//   0.3 s after the utter navigate to a card the copy hangs from a suggestion (added to the copy), which makes the
+//                         suggestion a branch: it leads a layer, beside the kept card's
 //   1.5 s after the utter a reply, and with it a navigate to a card of the first tree
 //   12 s after the utter  navigate to a card that is not there
 //   14 s after the utter  a reply whose sound never comes, and with it a navigate, which goes after 20 s anyway
-// Each card gone to must open on its parent's layer, a tree's root on its own. The preview runs with -mute, which
+// Each card gone to must open on its parent's layer; a tree stands as it came, on its deepest layer. The preview runs with -mute, which
 // plays the voice's chime and every other sound at no volume, so nothing is heard.
 //
 //   quest/desktop/build.sh && node quest/desktop/test/navigate_check.mjs [--shots <folder>] [--port <port>]
@@ -184,9 +185,17 @@ function finish(why) {
   const check = (ok, what) => checks.push({ ok: Boolean(ok), what });
   if (why) check(false, why);
 
+  // A tree that comes whole stands on its deepest layer: the one led by a card whose cards lie furthest from the root.
   const toTree = when('service', /navigate","treeId/);
-  const standsOlder = when('preview', wentTo(older.rootId), toTree);
-  check(standsOlder && standsOlder - toTree < 3, `navigate to a tree on the shelf stands it at its root (${seconds(standsOlder, toTree)})`);
+  const depthOf = (id) => (parentOf(id) ? 1 + depthOf(parentOf(id)) : 0);
+  const copied = snapshot.nodes.filter((n) => n.treeId === older.id);
+  const furthest = Math.max(...copied.map((n) => depthOf(n.id)));
+  const deepLeads = new Set(copied.filter((n) => depthOf(n.id) === furthest).map((n) => n.parent));
+  const standsOlder = log.find((l) => {
+    const m = l.who === 'preview' && l.at > toTree && new RegExp(` in "${escape(older.title)}" \\((.+)\\), on the layer of (.+)$`).exec(l.line);
+    return m && m[1] === m[2] && deepLeads.has(m[1]);
+  })?.at;
+  check(standsOlder && standsOlder - toTree < 3, `navigate to a tree on the shelf stands it as it came, on its deepest layer (${seconds(standsOlder, toTree)})`);
 
   const woke = when('preview', /heard HEY_MOMO/);
   const recorded = when('preview', /recorded/);
@@ -201,7 +210,7 @@ function finish(why) {
   check(doneSpeaking && atNear && atNear >= doneSpeaking, `a navigate sent with a reply waits until the reply has played (${seconds(atNear, doneSpeaking)} after it ended)`);
 
   const toUnder = when('service', new RegExp(`navigate","nodeId":"${under}`));
-  check(when('preview', wentTo(under), toUnder), "a card hanging from one that leads no layer opens on its parent's layer, which stands first");
+  check(when('preview', wentTo(under), toUnder), "a card under a suggestion, which leads a layer beside the kept card's, opens there, its group standing first");
 
   const missing = when('service', /not-a-card/);
   check(when('preview', /nothing here to go to/, missing), 'a navigate to a card that is not there is let go');

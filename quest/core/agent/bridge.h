@@ -124,6 +124,8 @@ private:
     std::optional<double> typeAt;
     /// Where each of this service's trees stands on the desk, by service tree id: read at launch, written with the shelf.
     Plots plots;
+    /// Which layer the user last stood on in each, by the service card leading it: read at launch, written with the shelf.
+    Stands stands;
     double now = 0;
 
     void synced(const Delta& delta);
