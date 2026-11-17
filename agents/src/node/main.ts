@@ -52,7 +52,8 @@ function showcase() {
  */
 function restartHeadset(): (() => Promise<string>) | undefined {
   const script = join(root, 'demo', 'headset.sh');
-  if (!existsSync(script)) return undefined;
+  // On Fly there is no adb and no headset on a cable: MIND_PALACE_DEMO_RESTART=off says so, and the page then says what to do.
+  if (env.MIND_PALACE_DEMO_RESTART === 'off' || !existsSync(script)) return undefined;
   return () =>
     new Promise((done, failed) => {
       const given = { ...process.env, MIND_PALACE_DATA: resolve(dataDir), MIND_PALACE_PORT: String(env.MIND_PALACE_PORT ?? 8787) };

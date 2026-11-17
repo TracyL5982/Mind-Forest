@@ -1,0 +1,24 @@
+# The walkthrough demo as a service of its own on Fly (agents/demo/README.md, "On Fly, without the Mac"): one prepared tree
+# played round by round, the showcase trees, and the page that goes to any round. Built on Fly's remote builder from the agents
+# folder by deploy/demo.sh, with Dockerfile.demo.dockerignore saying what goes up. It is not the judging service and shares
+# nothing with it.
+FROM node:22.13.0-bookworm-slim
+WORKDIR /app
+COPY package.json package-lock.json ./
+# tsx runs the TypeScript as on the Mac, so the dev dependencies come along.
+RUN npm ci --no-audit --no-fund
+COPY tsconfig.json ./
+COPY src ./src
+# The control page and the web client, whole.
+COPY client ./client
+# The script, the showcase trees and their pictures.
+COPY demo ./demo
+# No volume: the tree is built again on demand, so a restart begins with the showcase trees and an empty stage.
+# No adb here, so the page cannot start the headset's app again: MIND_PALACE_DEMO_RESTART says so.
+ENV MIND_PALACE_DATA=/app/data \
+    MIND_PALACE_HOST=0.0.0.0 \
+    MIND_PALACE_PORT=8080 \
+    MIND_PALACE_ENV=/app/no-env-file \
+    MIND_PALACE_DEMO_RESTART=off
+EXPOSE 8080
+CMD ["node", "--no-warnings", "--import", "tsx", "src/node/main.ts", "--demo"]

@@ -30,6 +30,8 @@ async function api(path, body) {
 let outline = null;
 let status = null;
 let voice = false;
+/** Whether the service can start the headset's app again itself (on a Mac with the headset on adb), or the user must. */
+let restarts = true;
 /** The round the right-hand column shows. */
 let picked = null;
 /** The set-up the page asked for, so the bar says where it is going. */
@@ -174,7 +176,9 @@ function drawDetail() {
         : n === 0 ? 'Going here takes the tree away, so the round can start it.'
         : `Going here builds the ${n} round${n === 1 ? '' : 's'} before it${status?.devices ? ', one after another on the headset' : ''}, and leaves this one to be played.` }),
       // A headset keeps a tree it has standing even when the service deletes it: only starting the app again clears its stage.
-      n === 0 && status?.devices ? el('div', { class: 'hint' }, 'A headset keeps showing a tree that is gone, so going here also starts the app again on it (a couple of seconds). To do that by hand, from the repository:', el('code', { class: 'cmd', text: 'agents/demo/headset.sh restart' })) : null),
+      n === 0 && status?.devices ? (restarts
+        ? el('div', { class: 'hint' }, 'A headset keeps showing a tree that is gone, so going here also starts the app again on it (a couple of seconds). To do that by hand, from the repository:', el('code', { class: 'cmd', text: 'agents/demo/headset.sh restart' }))
+        : el('div', { class: 'hint', text: 'A headset keeps showing a tree that is gone, and this service cannot reach the headset to start its app again. After going here, close the app on the headset and open it: it joins again by itself, with nothing standing.' })) : null),
   ];
   if (round.do.length > 0) kids.push(part('You do', el('ol', { class: 'steps' }, round.do.map((step) => el('li', { text: step })))));
   if (round.say) kids.push(part('You say', el('div', { class: 'say', text: round.say }), ...round.sayAlso.map((line) => el('div', { class: 'also', text: `Or: ${line}` }))));
@@ -298,6 +302,7 @@ try {
   outline = all.outline;
   status = all.status;
   voice = all.voice;
+  restarts = all.restarts !== false;
   picked = nextId() ?? outline.rounds[0].id;
   draw();
   watch();

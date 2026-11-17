@@ -1,0 +1,10 @@
+*
+!package.json
+!package-lock.json
+!tsconfig.json
+!src
+!client
+!demo
+demo/docs
+demo/showcase/*/sheet.jpg
+demo/showcase/__pycache__

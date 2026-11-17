@@ -88,7 +88,7 @@ The user is recording a walkthrough of one tree, and each thing they say is a ta
 /** What a set-up round is recorded as: never the user's doing, so an undo does not take one back. */
 const DEMO: Origin = { by: 'user', role: 'demo' };
 /** What the page is told when the app is left showing a tree that is gone. */
-const STALE = 'The app still shows the old tree. Start it again; on the headset: agents/demo/headset.sh restart';
+const STALE = 'The app still shows a tree that is gone. Start it again: close it on the headset and open it. From a Mac with the headset on the cable: agents/demo/headset.sh restart, or agents/demo/headset.sh fly for the demo on Fly';
 const MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4' };
 const plain = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
@@ -408,6 +408,11 @@ export class Director {
       return;
     }
     if (!(await joined) && going()) this.problem = 'The app was started again on the headset, but it has not joined: run agents/demo/headset.sh';
+  }
+
+  /** Whether this service can start the headset's app again itself. Where it cannot (on Fly), the page says to do it by hand. */
+  get restarts(): boolean {
+    return Boolean(this.deps.restart);
   }
 
   /**

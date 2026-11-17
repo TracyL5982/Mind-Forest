@@ -81,6 +81,48 @@ When the recording is over, put the app back on the hosted service, or it will g
 agents/demo/headset.sh back
 ```
 
+## On Fly, without the Mac
+
+The same demo can run as a small service of its own on Fly, so that nothing has to run on a Mac while you record: the headset joins it over Wi-Fi, and the control page opens in any browser. It is another Fly app (`mind-palace-walkthrough`), beside the judging service and sharing nothing with it. As of 2026-11-16 it is written and tried on a Mac laid out as its image would be, and **not deployed**: Kai's Mac has no Fly login.
+
+**To put it there** (on the Mac that deploys the judging service, logged in to Fly, with the keys in `~/.muse-garden.env`):
+
+```bash
+git fetch origin && git switch demo/walkthrough && git lfs pull
+```
+
+```bash
+cd agents && npm install && deploy/demo.sh setup
+```
+
+`setup` makes the app the first time; later deploys are `deploy/demo.sh` alone (after a change to the code, the script or the trees). The keys go up from that Mac's env file, none printed, and without the Telegram ones. The demo's own address and key are written to `~/.mind-palace/demo.properties`: send that file to whoever records, to keep at the same place on their Mac.
+
+**To use it** (on a Mac that has `~/.mind-palace/demo.properties`):
+
+```bash
+agents/demo/headset.sh fly-page
+```
+
+opens the control page, and with the headset on the cable, once:
+
+```bash
+agents/demo/headset.sh fly
+```
+
+starts the app joined to the demo on Fly. The app remembers it: from then on it joins by itself over Wi-Fi whenever it is opened, with no cable and no Mac. `agents/demo/headset.sh back` returns it to the judging service, as after a recording on the Mac. The judging copy of the app, "Mind Palace", is never touched: it always joins the judging service.
+
+What differs from the Mac:
+
+| | On the Mac | On Fly |
+|---|---|---|
+| While recording | the Mac runs `npm run demo`, the headset on its cable or Wi-Fi adb | nothing runs on a Mac |
+| Momo's voice | needs the OpenAI key on the Mac | uses the keys set on Fly |
+| Empty stage | the page starts the app again on the headset itself | the page cannot reach the headset: after pressing it, close the app on the headset and open it |
+| The stage after the service restarts | kept in `agents/data-demo` | begins again with the showcase trees and no walkthrough tree (it has no volume) |
+| Who can reach it | this Mac and its network | anyone with the address and the key |
+
+Everything else is the same code: the rounds, the page, the showcase trees, Show whole.
+
 ## Recording a round
 
 1. On the page, click a round: on the chart, or in the list on the left, which is the recording order. The right column shows what to do and say in it, the card it is asked from, and the cards that will arrive.
@@ -196,6 +238,7 @@ The file was generated from the walkthrough board by `sketches/walkthrough/gen/d
 - `director.ts` does the rest. **Going to a round** deletes the tree's cards and builds the earlier rounds again, kept. A headset decides its own layers from what is asked on it, and cards that all arrive at once land on one layer, so the director takes the headset through the rounds in order: it goes to a round's card, waits for the headset to open it, adds the round's cards, and waits for the headset to give them their layer. **Playing a round** is the Scout role replaced: `Pipeline.runScout` runs as ever (the run's label, the deliveries, the closing line, Momo's narration), and the director hands it the round's cards in place of a search.
 - The service's own code changed in five small places: `--demo` in `main.ts`; the director's wiring, the page's routes under `/api/demo` and the page at `/demo` in `server.ts`; `stage`, `go` and `forget` on `Pipeline`; a round's limits as a parameter of `admit` (a prepared round holds up to 13 cards, a live one 10); and `extra` instructions for the live voice.
 - The page is `agents/client/demo.html`, `demo.css` and `js/demo.js`.
+- On Fly it is `agents/Dockerfile.demo`, `fly.demo.toml` and `deploy/demo.sh` with `deploy/demo-secrets.ts`. `MIND_PALACE_DEMO_RESTART=off` in the image tells the service it cannot start a headset's app.
 - `agents/demo/headset.sh` is the headset's side: it runs `quest/tools/agent.sh` and `judging.sh` for the everyday copy with the demo's data folder. The service runs its `restart` itself for an empty stage (`restartHeadset` in `main.ts`), with adb on this Mac.
 
 ## What has and has not been tried

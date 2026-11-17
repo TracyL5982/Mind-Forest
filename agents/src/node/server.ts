@@ -499,7 +499,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           return {};
         }
       };
-      if (req.method === 'GET' && path === '/api/demo') return json(res, 200, { outline: director.outline(), status: director.status(), voice: Boolean(opts.live) });
+      if (req.method === 'GET' && path === '/api/demo') return json(res, 200, { outline: director.outline(), status: director.status(), voice: Boolean(opts.live), restarts: director.restarts });
       if (req.method === 'GET' && path === '/api/demo/status') return json(res, 200, director.status());
       if (req.method === 'POST' && path === '/api/demo/goto') {
         const { round } = await posted();
