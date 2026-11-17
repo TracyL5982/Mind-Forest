@@ -679,32 +679,62 @@ double OceanModel::settledAt(const CardView& c) const {
 }
 
 void OceanModel::holdPress() {
-    CardRef c = cardGestures && tree && tree->focus() ? card(*tree->focus()) : nullptr;
-    if (!(c && c->holdRing && art)) return;
+    // A pinch held still on a card for `holdFor`, once it has settled: a long pinch. On the open card as it always was; AGENT:
+    // and on a closed card of the service's (the user's rule, 2026-11-17: "long pinch on a card should start a new layer").
+    // A ring fills round the pinch from 0.08 s. Moved more than 2 cm first it is a drag; let go before, a click.
+    CardRef open = cardGestures && tree && tree->focus() ? card(*tree->focus()) : nullptr;
+    CardRef held = cardGestures && tree && press && press->pick.kind == Pick::Kind::card ? card(press->pick.index) : nullptr;
+    bool onOpen = held && open && held == open && open->openBuilt;
+    bool served = agentBridge && tree && agentBridge->serves(*tree);
     int step = -1;
-    if (c->openBuilt && !penOn && press && !press->cancelled && press->claim == Press::Claim::open && press->pick.kind == Pick::Kind::card &&
-        press->pick.index == c->id && length(press->at - press->start) <= 0.02f) {
-        double settled = settledAt(*c), held = time - std::max(press->began, settled);
+    if (held && art && !penOn && !press->cancelled && press->claim == Press::Claim::open && length(press->at - press->start) <= 0.02f &&
+        (onOpen ? held->holdRing != nullptr : served)) {
+        double settled = settledAt(*held), long_ = time - std::max(press->began, settled);
         // A quick pinch, a tap, never shows it.
-        if (time >= settled && held >= 0.08) step = std::min(Art::holdSteps, int(held / holdFor * Art::holdSteps));
-        if (time >= settled && held >= holdFor) {
+        if (time >= settled && long_ >= 0.08) step = std::min(Art::holdSteps, int(long_ / holdFor * Art::holdSteps));
+        if (time >= settled && long_ >= holdFor) {
             step = -1;
             press->claim = Press::Claim::spent;
-            logLine("[cards] a long pinch: more like " + (catalog ? catalog->title(c->ref) : std::string("this card")));
-            agentBridge->moreLike(c->id);
+            logLine("[cards] a long pinch on " + (catalog ? catalog->title(held->ref) : std::string("a card")) + (onOpen ? "" : ", closed"));
+            agentBridge->longPinch(held->id);
         }
     }
-    if (step == c->holdShown) return;
-    if ((step >= 0) != (c->holdShown >= 0)) logLine(step >= 0 ? "[cards] the ring fills" : "[cards] the ring goes");
-    c->holdShown = step;
-    c->holdRing->isEnabled = step >= 0;
-    if (step >= 0) {
-        if (std::optional<Piece> piece = art->holdRing(step)) art->shade(c->holdRing, piece->texture, 0);
-        Vec2 at = onCard(*c, press->start);
-        c->holdRing->position = {at.x, at.y, 0.008f};
+    // The open card's ring is its own; a closed card's is made for it the first time.
+    auto ring = [&](const CardRef& c, EntityRef& entity, int& shown, int at, const EntityRef& holder, Vec2 spot) {
+        if (at == shown) return;
+        if ((at >= 0) != (shown >= 0)) logLine(at >= 0 ? "[cards] the ring fills" : "[cards] the ring goes");
+        shown = at;
+        if (!entity && at >= 0) {
+            std::optional<Piece> piece = art->holdRing(0);
+            if (!piece) return;
+            entity = art->quad(*piece);
+            holder->addChild(entity);
+        }
+        if (!entity) return;
+        entity->isEnabled = at >= 0;
+        if (at >= 0) {
+            if (std::optional<Piece> piece = art->holdRing(at)) art->shade(entity, piece->texture, 0);
+            entity->position = {spot.x, spot.y, 0.008f};
+        }
+        c->changed();
+        touch(time + 0.1);
+    };
+    if (open && open->holdRing && art) {
+        ring(open, open->holdRing, open->holdShown, onOpen ? step : -1, open->openHolder, onOpen && press ? onCard(*open, press->start) : Vec2::zero());
     }
-    c->changed();
-    touch(time + 0.1);
+    // AGENT: a closed card's, where the pinch holds it.
+    if (art) {
+        for (auto& [id, c] : cards) {
+            bool here = held && c == held && !onOpen;
+            if (!here && c->pressShown < 0) continue;
+            Vec2 spot = Vec2::zero();
+            if (here) {
+                Vec3 p = c->smallHolder->convertFrom(press->start, nullptr);
+                spot = {p.x, p.y};
+            }
+            ring(c, c->pressRing, c->pressShown, here ? step : -1, c->smallHolder, spot);
+        }
+    }
 }
 
 void OceanModel::repaintCards() {
@@ -844,7 +874,8 @@ OceanModel::Look OceanModel::style(const TreeNode& n, const Tree& tree) const {
     // Put away: gathered small into the card it came back to.
     if (!at.visible) return Look{0.15f, 0, 0, false};
     // In a condensed group: as small as its place there makes it. A pinch on it goes to the group's layer.
-    if (tree.condensed(n)) return Look{at.scale, 1, 0, true};
+    // AGENT: (c) folded onto a branch opened where it stands, it folds away while that is open (`openFoldsAway`).
+    if (tree.condensed(n)) return Look{at.scale, openFoldsAway && foldedOntoOpen(n, tree) ? 0.f : 1.f, 0, true};
     std::optional<int> focus = tree.focus();
     if (focus == n.id) return Look{1, 1, 1, true};
     bool beside = focus.has_value() && n.parent == focus;
@@ -860,6 +891,18 @@ OceanModel::Look OceanModel::style(const TreeNode& n, const Tree& tree) const {
     // On an earlier layer: the path's own card is a step, shown as its number and name; the rest small.
     if (n.head && routeIndex(tree, n.id) >= 0 && tree.generation(n.id) == at.depth) return Look{1.2f, 1, 0, true, 0, 1};
     return Look{0.62f, 1, 0, true};
+}
+
+bool OceanModel::foldedOntoOpen(const TreeNode& n, const Tree& tree) const {
+    std::optional<int> focus = tree.focus();
+    const TreeNode* open = focus ? find(tree, *focus) : nullptr;
+    // A branch opened where it stands: one that leads a layer beyond the one you stand on, and is open on it.
+    if (!(open && open->head && *focus != tree.stand && tree.generation(*focus) > tree.standDepth())) return false;
+    for (const TreeNode* up = &n; up && up->parent; up = find(tree, *up->parent)) {
+        if (*up->parent == *focus) return true;
+        if (!tree.condensed(*find(tree, *up->parent))) return false;
+    }
+    return false;
 }
 
 void OceanModel::setHit(CardView& c, const Look& look) {

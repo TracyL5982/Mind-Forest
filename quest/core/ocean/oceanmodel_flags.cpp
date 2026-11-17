@@ -445,9 +445,10 @@ void OceanModel::runFlags() {
             }
         });
     }
-    // AGENT: `-script "back|note:agent-x|…" -scriptAt <s> [-scriptEvery <s>]`: one step after another, a step back a layer as
-    // the fist takes one, or a pinch on a named card. Each pinch says whether the card was in sight, on which layer, and which
-    // layer stands after it, by the card that leads it (`[ocean] script: …`), for walking a tree by hand.
+    // AGENT: `-script "back|note:agent-x|hold:note:agent-x|…" -scriptAt <s> [-scriptEvery <s>]`: one step after another, a step
+    // back a layer as the fist takes one, a pinch on a named card (a click), or a long pinch on one (`hold:`, held 0.9 s). Each
+    // says whether the card was in sight, on which layer, and which layer stands after it, by the card that leads it
+    // (`[ocean] script: …`), for walking a tree by hand.
     if (std::optional<std::string> script = Flags::string("script")) {
         std::vector<std::string> steps{""};
         for (char ch : *script) {
@@ -462,20 +463,40 @@ void OceanModel::runFlags() {
                     logLine(fmt("[ocean] script: back, now on layer %d", tree->standDepth() + 1));
                     return;
                 }
-                std::optional<Ref> ref = Ref::make(step);
+                bool hold = step.rfind("hold:", 0) == 0;
+                std::string key = hold ? step.substr(5) : step;
+                std::optional<Ref> ref = Ref::make(key);
                 std::optional<TreeNode> n = ref ? tree->node(*ref) : std::nullopt;
                 if (!n) {
-                    logLine("[ocean] script: " + step + " is not in the tree");
+                    logLine("[ocean] script: " + key + " is not in the tree");
                     return;
                 }
                 std::optional<Tree::Place> shown = tree->shown(*n);
                 bool seen = shown && style(*n, *tree).alpha > 0.05f;
                 int on = tree->standDepth() + 1;
-                take(n->id);
-                const TreeNode* leads = find(*tree, tree->stand);
-                logLine(fmt("[ocean] script: pinched %s, %s on layer %d while layer %d stood; now on layer %d, of %s", step.c_str(),
-                            seen ? "in sight" : "out of sight", shown ? shown->depth + 1 : 0, on, tree->standDepth() + 1,
-                            leads ? leads->ref.key().c_str() : "nothing"));
+                std::string where = fmt("%s on layer %d while layer %d stood", seen ? "in sight" : "out of sight", shown ? shown->depth + 1 : 0, on);
+                auto said = [this, key, where](const char* did) {
+                    const TreeNode* leads = tree ? find(*tree, tree->stand) : nullptr;
+                    logLine(fmt("[ocean] script: %s %s, %s; now on layer %d, of %s", did, key.c_str(), where.c_str(), tree ? tree->standDepth() + 1 : 0,
+                                leads ? leads->ref.key().c_str() : "nothing"));
+                };
+                if (!hold) {
+                    take(n->id);
+                    said("pinched");
+                    return;
+                }
+                // Held still on the card where it is, as a hand holds a pinch, and let go.
+                CardRef c = card(n->id);
+                if (!c) {
+                    logLine("[ocean] script: " + key + " has no card to hold");
+                    return;
+                }
+                Vec3 at = c->root->transformMatrix(nullptr).position();
+                pinchChanged(c->root, at, at);
+                after(0.9, [this, id = n->id, at, said] {
+                    if (press && press->pick.kind == Pick::Kind::card && press->pick.index == id) pinchEnded(at);
+                    said("held");
+                });
             });
         }
     }

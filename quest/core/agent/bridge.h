@@ -52,6 +52,9 @@ public:
         bool elsewhere = false;     // on another host: never with the service's token
     };
     std::optional<Video> video(int nodeID);
+    /// A long pinch on a card of a service tree, open or closed (the user's rule, 2026-11-17): one with cards under it is gone
+    /// into, its layer standing, and nothing is asked; one with none starts a layer on it and asks for more like it (`moreLike`).
+    void longPinch(int nodeID);
     /// A click on a card off the layer you stand on brings the layer it lies on to stand first (the lead's call, 2026-11-17).
     /// False would open it where it is, on its own layer, without moving: not built out or checked.
     static constexpr bool clickStands = true;
