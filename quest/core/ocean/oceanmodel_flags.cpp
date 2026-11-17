@@ -810,9 +810,10 @@ void OceanModel::runDemo() {
     });
 }
 
-/// `[ocean] place <x> <y> <half width> <down> <up> <open> g<group>[c] r<x>,<y> <title>`, m on the layer you work on: where each
+/// `[ocean] place <x> <y> <half width> <down> <up> <open> g<group>[c<card>] i<id> r<x>,<y> <title>`, m on the layer you work on: where each
 /// card there is headed, its step aside included, how far it reaches from that point, the card that leads the group it shows
-/// in (its pane), with `c` when it shows condensed onto another card of that group, and where it rests without stepping aside.
+/// in (its pane), with `c<card>` when it shows condensed onto another card of that group, and where it rests without stepping
+/// aside.
 /// An open card reaches over the rows under it. Then `[ocean] places: <n>`.
 void OceanModel::logPlaces() const {
     if (!(tree && catalog)) return;
@@ -830,8 +831,8 @@ void OceanModel::logPlaces() const {
         while (tree->condensed(*m) && m->parent && find(*tree, *m->parent)) m = find(*tree, *m->parent);
         int group = m->head && tree->generation(m->id) == top ? m->id : m->parent.value_or(m->id);
         Vec2 home = rest(n, *tree).xy;
-        logLine(fmt("[ocean] place %.4f %.4f %.4f %.4f %.4f %d g%d%s r%.4f,%.4f ", at.x, at.y, reach.hi.x, -reach.lo.y, reach.hi.y, open ? 1 : 0,
-                    group, m != &n ? "c" : "", home.x, home.y) +
+        logLine(fmt("[ocean] place %.4f %.4f %.4f %.4f %.4f %d g%d%s i%d r%.4f,%.4f ", at.x, at.y, reach.hi.x, -reach.lo.y, reach.hi.y,
+                    open ? 1 : 0, group, m != &n ? fmt("c%d", m->id).c_str() : "", id, home.x, home.y) +
                 catalog->title(n.ref));
     }
     logLine(fmt("[ocean] places: %d", count));

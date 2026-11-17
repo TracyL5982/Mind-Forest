@@ -34,17 +34,18 @@ export const until = async (log, pattern, after = 0, seconds = 30) => {
 };
 
 /**
- * The `[ocean] place x y half down up open g<group>[c] r<x>,<y> title` lines the preview logs when the flag `name` runs
- * (`-placesAt`), or from the line at index `from`: where each card on the layer you work on is headed, the box it takes there,
- * m, the card leading the group it shows in, whether it shows condensed onto another card, and where it rests.
+ * The `[ocean] place x y half down up open g<group>[c<card>] i<id> r<x>,<y> title` lines the preview logs when the flag `name`
+ * runs (`-placesAt`), or from the line at index `from`: where each card on the layer you work on is headed, the box it takes
+ * there, m, the card leading the group it shows in, the card it shows condensed onto if any, its id, and where it rests.
  */
 export function places(log, name, from = log.findIndex((l) => l.line === `[ocean] -${name} runs`)) {
   const out = [];
   for (let i = from + 1; from >= 0 && i < log.length; i++) {
-    const m = /^\[ocean\] place (\S+) (\S+) (\S+) (\S+) (\S+) (\d) g(-?\d+)(c?) r(\S+),(\S+) (.*)$/.exec(log[i].line);
+    const m = /^\[ocean\] place (\S+) (\S+) (\S+) (\S+) (\S+) (\d) g(-?\d+)(?:c(-?\d+))? i(-?\d+) r(\S+),(\S+) (.*)$/.exec(log[i].line);
     if (!m) break;
     const [x, y, half, down, up] = m.slice(1, 6).map(Number);
-    out.push({ x, y, lo: [x - half, y - down], hi: [x + half, y + up], open: m[6] === '1', group: Number(m[7]), condensed: m[8] === 'c', rest: [Number(m[9]), Number(m[10])], title: m[11] });
+    out.push({ x, y, lo: [x - half, y - down], hi: [x + half, y + up], open: m[6] === '1', group: Number(m[7]), condensed: m[8] !== undefined,
+      onto: m[8] === undefined ? null : Number(m[8]), id: Number(m[9]), rest: [Number(m[10]), Number(m[11])], title: m[12] });
   }
   return out;
 }
@@ -122,6 +123,14 @@ export function layer(placed) {
   const panes = [];
   for (let i = 0; i < groups.length; i++) {
     for (let j = i + 1; j < groups.length; j++) if (meet(groups[i].outline, groups[j].outline)) panes.push(`${groups[i].g} / ${groups[j].g}`);
+  }
+  // A card's own condensed group has a pane of its own over the layer's, 3 to 4 cm round it: two such panes should not meet
+  // either. (Each is the hull of the card and what is condensed onto it.)
+  const huddles = [...new Set(placed.filter((p) => p.onto !== null).map((p) => p.onto))].map((h) => ({
+    h, outline: hull(placed.filter((p) => p.id === h || p.onto === h).map((c) => ({ lo: [c.lo[0] + pad - 0.035, c.lo[1] + pad - 0.035], hi: [c.hi[0] - pad + 0.035, c.hi[1] - pad + 0.035] }))),
+  }));
+  for (let i = 0; i < huddles.length; i++) {
+    for (let j = i + 1; j < huddles.length; j++) if (meet(huddles[i].outline, huddles[j].outline)) panes.push(`huddles ${huddles[i].h} / ${huddles[j].h}`);
   }
   return { head, own, off, crowded, groups: groups.length, panes };
 }

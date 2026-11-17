@@ -142,7 +142,7 @@ std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree) const {
     Reach reach = openReach(*current);
     const Vec2 margin{0.025f, 0.035f}, middle = it->xy + stood(tree);
     const Box open(middle + reach.lo - margin, middle + reach.hi + margin);
-    const float pad = 0.012f, infinity = std::numeric_limits<float>::infinity();
+    const float pad = 0.012f, huddleGap = 0.075f, infinity = std::numeric_limits<float>::infinity();
     auto centre = [](const Box& b) { return (b.lo + b.hi) / 2; };
     // Straight out from the open card's middle, through `b`'s.
     auto outward = [&](const Box& b) {
@@ -168,12 +168,14 @@ std::map<int, Vec2> OceanModel::makeRoom(const Tree& tree) const {
         }
         for (size_t i = 0; i < units.size(); i++) {
             for (size_t j = i + 1; j < units.size(); j++) {
-                if (!units[i].now().hits(units[j].now(), pad)) continue;
+                // (A card with others condensed onto it has a pane of its own round them, which keeps more room.)
+                float gap = units[i].members.size() > 1 || units[j].members.size() > 1 ? huddleGap : pad;
+                if (!units[i].now().hits(units[j].now(), gap)) continue;
                 bool iFarther = distance(centre(units[i].now()), middle) >= distance(centre(units[j].now()), middle);
                 Unit& far = iFarther ? units[i] : units[j];
                 const Unit& near = iFarther ? units[j] : units[i];
                 Vec2 d = outward(far.now());
-                far.aside += d * clearAlong(far.now(), near.now().grown(pad), d);
+                far.aside += d * clearAlong(far.now(), near.now().grown(gap), d);
                 moved = true;
             }
         }
