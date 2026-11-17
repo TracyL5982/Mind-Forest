@@ -32,7 +32,8 @@ public:
 
 private:
     /// One line of words on screen. New words are drawn into a second picture laid over the first, and the first
-    /// goes only once the second is on the GPU, so a line never blinks as its words change.
+    /// goes only once the second is on the GPU, so a line never blinks as its words change. An agent's line goes from
+    /// the old words to the new by a cross-fade (`leaving`).
     struct Words {
         int key;
         std::string text;
@@ -43,6 +44,9 @@ private:
         float comingWidth = 0;
         float appear = 0;           // eases in once there is a picture to show
         float bar = -1;             // m: how long its bar is, on its way to the words' length; -1 before it has one
+        EntityRef leaving;          // the words before, fading out as `shown` fades in
+        float leavingWidth = 0;
+        float mix = 1;              // how far from `leaving` to `shown`, 0 … 1
     };
     /// The bar under one line of words, in Momo's plane, m.
     struct Bar {
@@ -69,7 +73,9 @@ private:
     float agentsFrom = 0;           // m up from the group's middle to its lowest agent's line, eased
 
     void draw();
-    void write(const std::string& text, Speaker who, size_t name, float y, float opacity, Words& w);
+    /// Lays a line's words at `y`. `crossFade` s, when more than 0, goes from the old words to the new by a cross-fade;
+    /// otherwise the new take the old's place at once. Returns how solid the line is drawn, as its bar should be.
+    float write(const std::string& text, Speaker who, size_t name, float y, float opacity, Words& w, float crossFade = 0, float dt = 0);
     EntityRef picture(const std::string& text, Speaker who, size_t name, float& width) const;
 };
 
