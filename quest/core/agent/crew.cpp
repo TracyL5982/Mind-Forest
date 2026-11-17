@@ -53,6 +53,7 @@ std::vector<AgentLine> Crew::lines(const std::string& momo) const {
     std::vector<AgentLine> out;
     for (const Agent& g : agents) {
         if (g.open.empty() && !g.finishedAt) continue;
+        // Its newest step still going (the user's choice, 2026-11-17, over the oldest, steadier one).
         out.push_back(AgentLine{g.role, agentName(g.role, momo), g.open.empty() ? "" : g.open.back().label, g.open.empty()});
     }
     return out;

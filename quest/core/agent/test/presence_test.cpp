@@ -692,3 +692,32 @@ TEST(aLineStaysInItsPlaceBetweenItsAgentsSteps) {
     CHECK(l && l->toY == y, "where it was");
     CHECK(least > 0.99f, "and it never left: %.2f at the least", double(least));
 }
+
+TEST(theTopLineSaysHowManyWaitTheCountChangingAtMostEveryHold) {
+    Roster r = roster();
+    AgentLine intake{"intake", "Intake", "Reading what you dropped", false}, filer{"filer", "Filer", "Filing a link", false},
+        scout{"scout", "Scout", "Searching", false}, renderer{"renderer", "Renderer", "Laying out a card", false},
+        organizer{"organizer", "Organizer", "Reorganizing your cards", false};
+    run(r, {intake, filer, scout, renderer, organizer}, 0.5f);
+    const Roster::Line *top = line(r, "scout"), *low = line(r, "intake");
+    CHECK(top && top->toY == 2 && top->text == "Scout · Searching · +2 more", "two wait: \"%s\"", top ? top->text.c_str() : "");
+    CHECK(low && low->text == "Intake · Reading what you dropped", "said once, on the top line");
+    CHECK(top && top->width <= 0.2f, "still one line");
+    renderer.step.clear();
+    renderer.finished = true;
+    run(r, {intake, filer, scout, renderer, organizer}, 0.6f);
+    top = line(r, "scout");
+    CHECK(top && top->text == "Scout · Searching · +2 more", "one done while waiting: the count stays its while: \"%s\"",
+          top ? top->text.c_str() : "");
+    run(r, {intake, filer, scout, renderer, organizer}, Roster::holdWords - 0.6f);
+    top = line(r, "scout");
+    CHECK(top && top->text == "Scout · Searching · +1 more", "then says one: \"%s\"", top ? top->text.c_str() : "");
+    intake.step.clear();
+    intake.finished = true;
+    run(r, {intake, filer, scout, renderer, organizer}, 2 * Roster::holdWords + 0.3f);
+    const Roster::Line *came = line(r, "organizer");
+    top = line(r, "scout");
+    CHECK(came && came->toY == 2 && came->text == "Organizer · Reorganizing your cards", "the last at work takes a place, on top: \"%s\"",
+          came ? came->text.c_str() : "");
+    CHECK(top && top->text == "Scout · Searching", "and nobody waits: \"%s\"", top ? top->text.c_str() : "");
+}

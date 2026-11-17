@@ -242,14 +242,13 @@ class Roster {
 public:
     static constexpr const char* finished = "finished working";
     /// s new words must stand before they are shown, and s a line's words stay before they change again, even past the
-    /// end of their step: steps that come and go faster are passed over for the latest. The user's rule (2026-11-17):
-    /// "each line stays at least about 1.5 s, at most 3 lines show, and a line changes its words in place".
+    /// end of their step, and on into Momo's wrap-up: steps that come and go faster are passed over for the latest. The
+    /// user's rule (2026-11-17): "each line stays at least about 1.5 s, at most 3 lines show, and a line changes its
+    /// words in place"; and a held label finishes its 1.5 s even into Momo's wrap-up.
     static constexpr float settleWords = 0.15f, holdWords = 1.5f;
-    /// s a line's words stay once no agent is at work, so as Momo wraps up. Whether a label held past its step may show
-    /// on into her wrap-up is the user's to say (WS64, point 4, asked 2026-11-17); until then, the same as at work.
-    static constexpr float holdOnceNoneWork = holdWords;
-    /// At most this many lines show. An agent beyond them waits for a place: a line that has said "finished working"
-    /// for `holdWords` gives its place up to one at work (the lead's call, WS64, point 1).
+    /// At most this many lines show. An agent at work beyond them waits for a place: a line that has said "finished
+    /// working" for `holdWords` gives its place up to one (the lead's call, WS64). The top line ends with how many wait,
+    /// " · +2 more" (the user: "need to show '+1 more' count"): part of its words, so changing at most every `holdWords`.
     static constexpr int mostLines = 3;
 
     struct Line {
@@ -262,6 +261,7 @@ public:
         float toY = 0, toOpacity = 0, ySpeed = 0;
         AgentLine from;             // what it says, as the voice gave it
         float since = 0;            // when it was last given words, s on the roster's own clock
+        int more = 0;               // how many agents wait for a place, said at its end
         std::optional<AgentLine> next;  // words waiting their turn (see `settleWords`)
         float nextSince = 0;            // and since when
         std::optional<AgentLine> lastStep;  // the newest step it was given, shown or not, for the end of a run
@@ -286,10 +286,12 @@ private:
     float most;
     std::vector<Line> lines_;
     float clock = 0;
+    int waiting = 0, told = 0;                  // agents at work without a place: now, and once that has stood a moment
+    float waitingSince = 0;
 
     void write(Line& line, const AgentLine& agent) const;
-    /// Gives `line` what its agent is doing now, and changes its words when it is their time (`hold`).
-    void give(Line& line, const AgentLine& agent, float hold);
+    /// Gives `line` what its agent is doing now, and changes its words when it is their time.
+    void give(Line& line, const AgentLine& agent);
     /// `line` gives its place up, and fades with its newest words, never a step held back.
     void let(Line& line);
 };
