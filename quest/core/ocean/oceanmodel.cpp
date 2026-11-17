@@ -716,6 +716,35 @@ void OceanModel::feelHologram() {
         leaveHologram();
         return;
     }
+    // Whether a fingertip can be seen: within so many degrees of where the head looks.
+    std::optional<Mat4> head = platform::head();
+    auto seen = [&](Vec3 tip, float degrees) {
+        if (!head) return true;
+        Vec3 to = tip - head->position();
+        return length(to) > 1e-4f && dot(normalize(to), head->forward()) >= std::cos(degrees * floatPi / 180);
+    };
+    // The hand on it, its fingertip gone from view (or no longer tracked, which out of view it often is): it holds
+    // nothing from that moment, and lets go once it has stayed out of view a while; back in view before then, it goes on
+    // as it was.
+    if (holoTouching && holoHand >= 0) {
+        std::optional<Hands::Pointer> on = hands->pointer(holoHand);
+        if (!on || !seen(on->tip, holoKeepAngle)) {
+            if (!holoUnseen) {
+                logLine("[ocean] the finger on the small tree is out of view: it holds nothing");
+                holoUnseen = now;
+                hands->quiet = false;
+                // (The hold is the small tree's own: while a hand is on it the hands are quiet and set none of theirs.)
+                hands->busyUntil = std::min(hands->busyUntil, mediaTime());
+            }
+            if (now - *holoUnseen >= holoUnseenFor) {
+                logLine("[ocean] the finger on the small tree is out of view: it lets go");
+                leaveHologram();
+            }
+            return;
+        }
+        if (holoUnseen) logLine(fmt("[ocean] the finger on the small tree is back in view after %.2f s: it goes on", now - *holoUnseen));
+        holoUnseen = std::nullopt;
+    }
     // A hand that is carrying the tree, or a pinch that is dragging a card, passes by without waking it.
     bool passing = !holoTouching && (press.has_value() || hands->carrying());
     float margin = holoTouching ? 0.075f : 0.035f;
@@ -747,6 +776,8 @@ void OceanModel::feelHologram() {
         if (!closest || length(off) < closest->gap) closest = Closest{length(off), off};
         if (!(!passing && (holoTouching || !hands->grabbing(hand)))) continue;
         if (!(aside < hologram->width() + margin && p.y > -margin && p.y < hologram->top() + margin)) continue;
+        // Out of view, a fingertip in the zone does nothing and holds nothing.
+        if (!seen(tip, holoTouching && hand == holoHand ? holoKeepAngle : holoTakeAngle)) continue;
         if (!best || aside < best->aside) best = Best{aside, hand};
     }
     nearestTip = closest ? fmt("nearest fingertip %d cm aside of the small tree, %d cm above or below it", int(closest->off.x * 100), int(closest->off.y * 100))
@@ -790,6 +821,7 @@ void OceanModel::feelHologram() {
 }
 
 void OceanModel::leaveHologram() {
+    holoUnseen = std::nullopt;
     if (!(holoTouching || hands->quiet)) return;
     holoTouching = false;
     holoHand = -1;

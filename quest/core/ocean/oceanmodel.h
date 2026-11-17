@@ -759,6 +759,14 @@ private:
     bool holoArmed = false;                             // that hand has been open since it arrived: its next pinch picks
     double holoRest = 0.0;                              // no hand counts before this: the one that just picked is still there
     std::optional<double> holoLeft;                     // when the hand last came away
+    // NOTE(port): added for Quest. The small tree stands at about lap height, out of view while you look ahead, and a hand
+    // resting there took it and stilled every other input unseen. The user, 2026-11-17: "if I can see the finger, I can
+    // interact with the tree, if not, then no blocking and no interaction". Degrees from where the head looks, and a time:
+    // tune them here (see `feelHologram`).
+    static constexpr float holoTakeAngle = 40;          // an index fingertip in its zone takes it only within this
+    static constexpr float holoKeepAngle = 50;          // the hand on it keeps it while its fingertip is within this
+    static constexpr double holoUnseenFor = 0.5;        // s that fingertip may be past it, holding nothing, before it lets go
+    std::optional<double> holoUnseen;                   // since when the hand on it has been past `holoKeepAngle`
     std::optional<Label> holoLabel;
     /// Small things on their way in or out: nothing appears or goes in one frame.
     /// (The Swift's `(entity: Entity, alpha: Tween<Float>, remove: Bool)`.)
