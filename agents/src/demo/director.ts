@@ -37,9 +37,11 @@ export interface Pace {
   breath: number;
   /** One step of a round that is played: a search, a reading, a picture being made. */
   step: number;
+  /** The longest wait for the app to join again after it is started again on the headset. */
+  rejoin: number;
 }
 
-export const PACE: Pace = { stand: 9000, open: 4000, land: 3000, breath: 220, step: 1500 };
+export const PACE: Pace = { stand: 9000, open: 4000, land: 3000, breath: 220, step: 1500, rejoin: 25000 };
 
 export interface DirectorDeps {
   script: DemoScript;
@@ -58,6 +60,12 @@ export interface DirectorDeps {
   devices: () => number;
   /** Ends every live conversation, so Momo starts a take with nothing said before it. */
   forgetVoices: () => void;
+  /**
+   * Starts the app again on the headset, joined to this service as before, and resolves with a line for the log. A headset
+   * keeps a tree standing after the service deletes it, so this is the only way to an empty stage there. Absent where the host
+   * cannot do it; then the page says to do it by hand.
+   */
+  restart?: () => Promise<string>;
   log: (line: string) => void;
   pace?: Partial<Pace>;
 }
@@ -66,15 +74,17 @@ export interface DirectorDeps {
  * What Momo is told beside her own instructions while the demo runs. Her words stay her own: this only makes a request a take,
  * so a line of the walkthrough starts a search without a question back.
  */
-export const MOMO_NOTE = `# Recording a walkthrough
+export const momoNote = (script: DemoScript) => `# Recording a walkthrough
 The user is recording a walkthrough of one tree, and each thing they say is a take. So, only here:
-- With no tree open, "let's jam on…", "let's brainstorm…" or a subject alone asks for a tree: call start_tree with the subject, and ask nothing first.
+- With no tree open, "let's jam on…", "let's brainstorm…" or a subject alone asks for a tree: call start_tree with the subject, and ask nothing first. The walkthrough's own subject is "${script.topic}": when that is what they mean, in whatever words, give start_tree exactly those words.
 - With a card open, what the user says about what is in view is a request for the next layer on that card, even when it is a reaction or a single word ("that's cool, but…", "Layers?", "Show me."): call find_new on the open card, their words as the need. "More of this" and "more like this" are more_like_this. Do not ask which card, nor whether to start a tree.
 - A question about what they already have ("do I have anything on…") is look_up_mindstorm as ever, and a question the open card itself answers, you answer from the card.
 Everything else is as above: a few lively words of your own as you call the tool, then tell of the cards as their notes land.`;
 
 /** What a set-up round is recorded as: never the user's doing, so an undo does not take one back. */
 const DEMO: Origin = { by: 'user', role: 'demo' };
+/** What the page is told when the app is left showing a tree that is gone. */
+const STALE = 'The app still shows the old tree. Start it again; on the headset: agents/demo/headset.sh restart';
 const MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.mp4': 'video/mp4' };
 const plain = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
@@ -219,7 +229,9 @@ export class Director {
       for (const resume of [...this.waiting.values()].flatMap((set) => [...set])) resume();
       // With rounds to build, the tree stays and only its cards go: a headset keeps the tree it has standing, where a tree
       // deleted under it would be left behind as a cover on its desk. An empty stage has no tree at all.
-      this.clear(upTo > 0);
+      const gone = this.clear(upTo > 0);
+      if (gone && this.deps.devices() > 0) await this.startAgain(going);
+      if (!going()) return;
       this.round++;
       for (let n = 0; n < upTo && going(); n++) {
         this.busy = `${target ? `Setting up for "${target.title}"` : 'Building the whole tree'}: round ${n + 1} of ${upTo}`;
@@ -239,6 +251,26 @@ export class Director {
     } finally {
       if (going()) this.busy = null;
     }
+  }
+
+  /**
+   * A headset keeps a deleted tree standing, and keeps its cover once it is put away: the app is started again there, and the
+   * set-up waits for it to join. Where that cannot be done, or fails, the page says what to do by hand.
+   */
+  private async startAgain(going: () => boolean): Promise<void> {
+    if (!this.deps.restart) {
+      this.problem = STALE;
+      return;
+    }
+    this.busy = 'Starting the app again on the headset, for an empty stage';
+    const joined = this.hears(['joined'], this.pace.rejoin);
+    try {
+      this.deps.log(`[demo] ${await this.deps.restart()}`);
+    } catch (err) {
+      if (going()) this.problem = `${STALE} (it was not done from here: ${err instanceof Error ? err.message : String(err)})`;
+      return;
+    }
+    if (!(await joined) && going()) this.problem = 'The app was started again on the headset, but it has not joined: run agents/demo/headset.sh';
   }
 
   /**
@@ -343,7 +375,12 @@ export class Director {
     this.deps.log(`[demo] playing "${phase.title}" under "${ctx.mind.itemOf(anchor).title}"`);
     const step = (label: string, ms: number) => ctx.step('scout', label, () => pause(ms), { nodeId: anchor });
     try {
-      if (phase.head === 'root') this.root = anchor;
+      if (phase.head === 'root') {
+        this.root = anchor;
+        // The tree is named as a set-up names it, whatever words started it, so its cover reads the same after every take.
+        const tree = ctx.mind.tree(ctx.mind.node(anchor).treeId);
+        if (tree.title !== this.script.title) this.deps.pipeline.stage(DEMO, 'Demo: name the tree', [{ type: 'renameTree', id: tree.id, title: this.script.title }]);
+      }
       const waves = wavesOf(phase);
       let rank = 0;
       let last: Command[] = [];
@@ -376,8 +413,11 @@ export class Director {
     return [...ids];
   }
 
-  /** Takes the rounds out of the tree. `keep` leaves the tree and its first card standing; without it the tree goes too. */
-  private clear(keep: boolean): void {
+  /**
+   * Takes the rounds out of the tree. `keep` leaves the tree and its first card standing; without it the tree goes too.
+   * True when a tree was deleted.
+   */
+  private clear(keep: boolean): boolean {
     const { mind } = this.deps;
     const own = keep && this.root && mind.nodes.has(this.root) ? mind.node(this.root).treeId : null;
     const commands = this.trees().flatMap((id): Command[] => (id === own ? mind.children(this.root!).map((child): Command => ({ type: 'deleteNode', id: child.id })) : [{ type: 'deleteTree', id }]));
@@ -389,6 +429,7 @@ export class Director {
     this.leading.clear();
     if (!own) this.root = null;
     this.armed = 0;
+    return commands.some((command) => command.type === 'deleteTree');
   }
 
   /**
@@ -396,6 +437,7 @@ export class Director {
    * again for it, as it stands. Called when a connection says it is a headset.
    */
   joined(): void {
+    for (const resume of [...(this.waiting.get('joined') ?? [])]) resume();
     if (this.busy || this.built.size === 0) return;
     const at = this.script.phases[this.armed]?.id ?? 'end';
     this.deps.log('[demo] a headset joined: setting the tree up again for it');

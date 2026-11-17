@@ -6,20 +6,33 @@ import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { wavesOf } from '../src/demo/director.ts';
+import { momoNote, wavesOf } from '../src/demo/director.ts';
 import { loadScript } from '../src/demo/script.ts';
 import { startServer, type Running } from '../src/node/server.ts';
 
 /** The demo with stand-in roles and no waits: the walkthrough's own script and pictures, as `npm run demo:fake` runs them. */
 const demoDir = join(import.meta.dirname, '../demo');
 const script = loadScript(join(demoDir, 'script.json'));
-const quick = { stand: 400, open: 400, land: 400, breath: 0, step: 0 };
+const quick = { stand: 400, open: 400, land: 400, breath: 0, step: 0, rejoin: 1500 };
 
-async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-demo-'))): Promise<Running> {
+async function boot(dataDir = mkdtempSync(join(tmpdir(), 'mp-demo-')), restart?: () => Promise<string>): Promise<Running> {
   return startServer({
     port: 0, host: '127.0.0.1', dataDir, clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
-    demo: { script, mediaDir: join(demoDir, 'media'), pace: quick },
+    demo: { script, mediaDir: join(demoDir, 'media'), pace: quick, restart },
   });
+}
+
+/**
+ * A connection that says it is a device, as the app does on joining: it plays files and embeds nothing. The app on a headset
+ * joins through OkHttp, which names itself; the Mac preview (`app: false`) does not.
+ */
+async function headset(run: Running, app = true): Promise<WebSocket> {
+  const ws = new WebSocket(`${run.url.replace('http', 'ws')}/ws?token=secret`, app ? { headers: { 'user-agent': 'okhttp/4.12.0' } } : {});
+  await new Promise((open) => ws.on('open', open));
+  const had = run.demo!.status().devices;
+  ws.send(JSON.stringify({ t: 'client', media: { embeds: false, files: ['mp4'] } }));
+  while (run.demo!.status().devices === had) await new Promise((r) => setTimeout(r, 5));
+  return ws;
 }
 
 const cardsOf = (id: string) => script.phases.find((phase) => phase.id === id)!.cards;
@@ -143,5 +156,69 @@ test('a data folder kept from an earlier run is taken up where it stood', async 
     assert.equal(again.demo!.status().rounds.filter((round) => round.state === 'built').length, before('f2').length);
   } finally {
     await again.close();
+  }
+});
+
+test('an empty stage starts the app again on a headset that showed the tree, and where that cannot be done the page is told', async () => {
+  // A headset keeps a tree standing after the service deletes it: only the app started again shows nothing.
+  let restarts = 0;
+  let worn: WebSocket | null = null;
+  let run: Running;
+  const restart = async () => {
+    restarts++;
+    worn?.close();
+    worn = await headset(run);
+    return 'started again';
+  };
+  run = await boot(undefined, restart);
+  try {
+    worn = await headset(run);
+    await run.demo!.goto('n2');
+    assert.equal(restarts, 0, 'a set-up that keeps the tree leaves the app running');
+    await run.demo!.goto('r1');
+    assert.equal(restarts, 1);
+    assert.equal(run.mind.trees.size, 0);
+    assert.equal(run.demo!.status().problem, null);
+    assert.equal(run.demo!.status().busy, null);
+    // Nothing was standing this time, so nothing is started again.
+    await run.demo!.goto('r1');
+    assert.equal(restarts, 1);
+    // The Mac preview is a device too, but no app on a headset: it is not started again from here, and the page says so.
+    worn.close();
+    worn = await headset(run, false);
+    await run.demo!.goto('n2');
+    await run.demo!.goto('r1');
+    assert.equal(restarts, 1);
+    assert.match(run.demo!.status().problem ?? '', /not the app on a headset/);
+  } finally {
+    (worn as WebSocket | null)?.close();
+    await run.close();
+  }
+
+  const bare = await boot();
+  const there = await headset(bare);
+  try {
+    await bare.demo!.goto('n2');
+    await bare.demo!.goto('r1');
+    assert.match(bare.demo!.status().problem ?? '', /headset\.sh restart/);
+  } finally {
+    there.close();
+    await bare.close();
+  }
+});
+
+test('the tree a played first round starts is named as a set-up names it, and Momo is given its subject', async () => {
+  const run = await boot();
+  try {
+    await run.pipeline.makeTree(script.topic);
+    await run.pipeline.idle();
+    const tree = [...run.mind.trees.values()][0]!;
+    assert.equal(tree.title, script.title);
+    assert.equal(run.mind.item(run.mind.node(tree.rootId).itemId).title, script.topic);
+    assert.deepEqual(run.mind.children(tree.rootId).map((node) => run.mind.item(node.itemId).title).sort(), cardsOf('r1').map((card) => card.title).sort());
+    assert.equal(run.demo!.status().rounds[0]!.state, 'played');
+    assert.ok(momoNote(script).includes(`"${script.topic}"`));
+  } finally {
+    await run.close();
   }
 });

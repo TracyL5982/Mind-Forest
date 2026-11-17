@@ -25,7 +25,7 @@ import { Telegram, type TelegramOptions } from './telegram.ts';
 import { followingIn, openInstagram, type InstagramLibrary } from './instagram.ts';
 import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
-import { Director, MOMO_NOTE, type Pace } from '../demo/director.ts';
+import { Director, momoNote, type Pace } from '../demo/director.ts';
 import type { DemoScript } from '../demo/script.ts';
 
 export interface ServerOptions {
@@ -77,7 +77,7 @@ export interface ServerOptions {
   /** Hosted mode: the largest file one upload may be, and what this space's uploads may come to in all, in bytes. */
   uploads?: { file: number; total: number };
   /** The demo: one prepared tree played round by round, with a page to go to any round (src/demo, agents/demo/README.md). */
-  demo?: { script: DemoScript; mediaDir: string; pace?: Partial<Pace> };
+  demo?: { script: DemoScript; mediaDir: string; pace?: Partial<Pace>; restart?: () => Promise<string> };
   log?: (line: string) => void;
 }
 
@@ -206,6 +206,8 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   const sockets = new Set<WebSocket>();
   /** What each connection said it can play. A connection that has not said is taken to be a browser. */
   const plays = new Map<WebSocket, Playback>();
+  /** The connections made by the app on a headset, which joins through OkHttp and says so. The Mac preview is not one. */
+  const headsets = new WeakSet<WebSocket>();
   const playback = (): Playback => {
     const said = [...plays.values()];
     const files = said.length === 0 ? [] : said.map((p) => p.files).reduce((both, next) => both.filter((ext) => next.includes(ext)));
@@ -294,6 +296,11 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       forgetVoices: () => {
         for (const voice of voices.values()) voice.close();
       },
+      // Only the app on a headset can be started again from here. The Mac preview joins as a device too, and a headset on the
+      // cable that is not the one joined must be left as it is.
+      restart:
+        opts.demo.restart &&
+        (() => ([...sockets].some((ws) => ws.readyState === ws.OPEN && headsets.has(ws)) ? opts.demo!.restart!() : Promise.reject(new Error('what joined is not the app on a headset')))),
       log,
       pace: opts.demo.pace,
     });
@@ -612,7 +619,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
             }
           : {}),
         log,
-        ...(director ? { extra: () => MOMO_NOTE } : {}),
+        ...(opts.demo ? { extra: () => momoNote(opts.demo!.script) } : {}),
       },
       (frame) => {
         if (frame.t === 'audio') {
@@ -694,9 +701,10 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     });
   });
 
-  wss.on('connection', (ws: WebSocket) => {
+  wss.on('connection', (ws: WebSocket, req?: IncomingMessage) => {
     ws.on('error', (err) => log(`[ws] socket closed: ${err.message}`));
     sockets.add(ws);
+    if (/okhttp/i.test(String(req?.headers['user-agent'] ?? ''))) headsets.add(ws);
     const connection = randomUUID();
     connections.set(connection, ws);
     ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, maps, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser', live: Boolean(opts.live), connection }));

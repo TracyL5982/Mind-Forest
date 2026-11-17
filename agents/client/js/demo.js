@@ -162,7 +162,7 @@ function drawDetail() {
         : n === 0 ? 'Going here takes the tree away, so the round can start it.'
         : `Going here builds the ${n} round${n === 1 ? '' : 's'} before it${status?.devices ? ', one after another on the headset' : ''}, and leaves this one to be played.` }),
       // A headset keeps a tree it has standing even when the service deletes it: only starting the app again clears its stage.
-      n === 0 && status?.devices ? el('div', { class: 'hint' }, 'A headset that already showed the tree keeps it until the app is started again. From the repository:', el('code', { class: 'cmd', text: 'MIND_PALACE_DATA=agents/data-demo quest/tools/agent.sh usb' })) : null),
+      n === 0 && status?.devices ? el('div', { class: 'hint' }, 'A headset keeps showing a tree that is gone, so going here also starts the app again on it (a couple of seconds). To do that by hand, from the repository:', el('code', { class: 'cmd', text: 'agents/demo/headset.sh restart' })) : null),
   ];
   if (round.do.length > 0) kids.push(part('You do', el('ol', { class: 'steps' }, round.do.map((step) => el('li', { text: step })))));
   if (round.say) kids.push(part('You say', el('div', { class: 'say', text: round.say }), ...round.sayAlso.map((line) => el('div', { class: 'also', text: `Or: ${line}` }))));

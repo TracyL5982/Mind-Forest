@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +36,25 @@ const demo = args.has('--demo');
 const demoDir = env.MIND_PALACE_DEMO ?? join(root, 'demo');
 const dataDir = env.MIND_PALACE_DATA ?? join(root, demo ? (fake ? 'data-demo-fake' : 'data-demo') : fake ? 'data-fake' : 'data');
 const number = (name: string, fallback: number) => (env[name]?.trim() ? Number(env[name]) : fallback);
+
+/**
+ * Starts the app again on a headset this Mac reaches by adb, joined to this service: what the demo's empty stage needs, since a
+ * headset keeps a tree the service deleted. It is the repository's own script (agents/demo/headset.sh restart), given this
+ * service's data folder and port and none of its keys. Undefined where the script is not there.
+ */
+function restartHeadset(): (() => Promise<string>) | undefined {
+  const script = join(root, 'demo', 'headset.sh');
+  if (!existsSync(script)) return undefined;
+  return () =>
+    new Promise((done, failed) => {
+      const given = { ...process.env, MIND_PALACE_DATA: resolve(dataDir), MIND_PALACE_PORT: String(env.MIND_PALACE_PORT ?? 8787) };
+      execFile('bash', [script, 'restart'], { env: given, timeout: 40_000 }, (err, stdout, stderr) => {
+        const said = `${stdout}\n${stderr}`.split('\n').map((line) => line.trim()).filter(Boolean).at(-1) ?? '';
+        if (err) failed(new Error(said || err.message));
+        else done(said || 'the app was started again on the headset');
+      });
+    });
+}
 const log = (line: string) => console.log(line);
 
 const ledger = hosted
@@ -225,7 +246,7 @@ if (ledger) {
     // One program at a time may read a bot's messages, so the offline stand-in leaves the bot to the real service.
     // The demo is a stage, not the user's own space: nothing sent to the bot lands in it.
     telegram: !fake && !demo && env.TELEGRAM_BOT_TOKEN ? { token: env.TELEGRAM_BOT_TOKEN } : undefined,
-    ...(demo ? { demo: { script: loadScript(join(demoDir, 'script.json')), mediaDir: join(demoDir, 'media') } } : {}),
+    ...(demo ? { demo: { script: loadScript(join(demoDir, 'script.json')), mediaDir: join(demoDir, 'media'), restart: restartHeadset() } } : {}),
     log,
   });
   console.log(`Mind Palace agents${fake ? ' (fake roles, no model)' : ''}${demo ? ', the demo' : ''}`);

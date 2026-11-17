@@ -12,7 +12,7 @@ One prepared tree, "Brainstorming in a headset", for recording the film. It is t
 
 ## Where it is
 
-The demo is on the branch `demo/walkthrough`, cut from `tracy/agents` as it stood on 2026-11-16 (8204c58).
+The demo is on the branch `demo/walkthrough`, which holds `tracy/agents` as it stood late on 2026-11-16 (867dcc1: the fist, the knife, the welcome walk's lessons and the looser "Hi Momo") and adds the demo to the service. The app's own code is the same as on `tracy/agents`.
 
 - **On Kai's Mac** it is already checked out, in a second folder beside the main one, so the main folder and the work under way in it are left alone:
 
@@ -20,7 +20,7 @@ The demo is on the branch `demo/walkthrough`, cut from `tracy/agents` as it stoo
   cd <the demo's folder>
   ```
 
-  Every command below is run from that folder. A release APK built from it on 2026-11-16 is at `quest/android/app/build/outputs/apk/release/app-release.apk`.
+  Every command below is run from that folder. A release APK built from it on 2026-11-16 is at `quest/android/app/build/outputs/apk/release/app-release.apk`; it was installed on Kai's headset that day.
 
 - **On another Mac:**
 
@@ -37,25 +37,23 @@ The demo is on the branch `demo/walkthrough`, cut from `tracy/agents` as it stoo
    cd agents && npm install
    ```
 
-3. **The app on the headset.** With the headset on the cable, from the repository's root:
+3. **The app on the headset.** The demo needs nothing special in the app: any copy that is up to date with `tracy/agents` will do. It is recorded on the everyday copy, "Mind Palace Ocean", which is the one kept up to date. To build and install it from this folder, with the headset on the cable, from the repository's root:
 
    ```bash
-   QUEST_APP_SUFFIX=.agents quest/tools/run.sh --build --release
+   quest/tools/run.sh --build --release
    ```
 
-   ```bash
-   QUEST_APP_SUFFIX=.agents quest/tools/push_media.sh
-   ```
-
-   The first builds and installs "Mind Palace Ocean (agents)". The second sends its sounds, fonts and library (about 700 MB, once). Both need two folders git does not hold: `quest/vendor` (`quest/tools/fetch-voice.sh` downloads it, 78 MB) and `media-src/quest/works-small` (`quest/tools/works_small.sh` makes it). In the second folder on Kai's Mac both are links to the main folder's.
+   That installs over the copy already there and keeps its files (on Kai's headset this was done on 2026-11-16). A headset that never had the app also needs its sounds, fonts and library, about 900 MB, once: `quest/tools/push_media.sh`. Both need two folders git does not hold: `quest/vendor` (`quest/tools/fetch-voice.sh` downloads it, 78 MB) and `media-src/quest/works-small` (`quest/tools/works_small.sh` makes it). In the second folder on Kai's Mac both are links to the main folder's.
 
    To build the APK without a headset:
 
    ```bash
-   source quest/tools/env.sh && cd quest/android && ./gradlew assembleRelease -PoceanScene=ON -PappSuffix=.agents
+   source quest/tools/env.sh && cd quest/android && ./gradlew assembleRelease -PoceanScene=ON
    ```
 
-   It lands in `quest/android/app/build/outputs/apk/release/app-release.apk`, and installs with `adb install -r`. This branch carries one small change to `quest/android/app/build.gradle.kts` so that a release build works on a Mac without the judging build's keys.
+   It lands in `quest/android/app/build/outputs/apk/release/app-release.apk`, and installs with `adb install -r`.
+
+   Kai's headset holds other copies too. "Mind Palace Ocean (agents)" there is an older build signed on another Mac, which a build from this Mac cannot be installed over: the demo does not use it. Another copy is used by naming its suffix, for example `QUEST_APP_SUFFIX=.film` before the commands here for the filming copy.
 
 ## Each recording session
 
@@ -70,35 +68,41 @@ The demo is on the branch `demo/walkthrough`, cut from `tracy/agents` as it stoo
 2. **Join the headset**, from the repository's root, with the headset on the cable:
 
    ```bash
-   MIND_PALACE_DATA=agents/data-demo quest/tools/agent.sh usb
+   agents/demo/headset.sh
    ```
 
-   Use `wifi` in place of `usb` to go cable-free after that (the cable is needed once). The page's "Headset joined" light turns green.
+   It starts the app on the headset joined to the demo service, and the page's "Headset joined" light turns green. To go cable-free after that, run `agents/demo/headset.sh wifi` (the cable is needed this once), and `agents/demo/headset.sh resume` after the headset slept.
 
 3. **Open the control page** on the Mac: the `demo` address the service printed (`http://localhost:8787/demo#token=...`).
+
+When the recording is over, put the app back on the hosted service, or it will go on looking for the demo on this Mac each time it is opened:
+
+```bash
+agents/demo/headset.sh back
+```
 
 ## Recording a round
 
 1. On the page, click a round: on the chart, or in the list on the left, which is the recording order. The right column shows what to do and say in it, the card it is asked from, and the cards that will arrive.
-2. Press **Go to this round**. The bar counts the rounds as they are built on the headset (under a second each on the Mac preview; the whole tree took 13 seconds there). When it is done the headset stands on the layer where the round begins, with the round's card not yet opened.
+2. Press **Go to this round**. The bar counts the rounds as they are built on the headset: about half a second each, and 13 seconds for the whole tree. When it is done the headset stands on the layer where the round begins, with the round's card not yet opened.
 3. Start recording. Do the steps under "You do", then say the line under "You say", or say it in your own words. Whatever you ask next brings this round: Momo says a few words, the Scout's labels run under her, the cards land dashed as suggestions, and Momo tells you about them.
 4. For the next take of the same round, press **Set this round up again**.
 
 Three more controls:
 
 - **Play it now, without a word** plays the round with no voice: the headset goes to the card and the round arrives. Use it when you do not want Momo in the take, or when she answers a line without starting a search.
-- **Empty stage** takes the tree away, for recording Round 1. **Whole tree** builds everything.
+- **Empty stage** takes the tree away, for recording Round 1, and starts the app again on the headset (see below). **Whole tree** builds everything.
 - **Rounds are scripted**, off: the next request is answered by the real Scout, live. On again: the next request brings the next round.
 
 ### Recording Round 1
 
-Round 1 starts the tree, so the stage must be empty. Press **Empty stage**. A headset that already showed the tree keeps it standing until the app is started again, so start it again:
+Round 1 starts the tree, so the stage must be empty. Press **Empty stage**. A headset keeps showing a tree after it is deleted, so the service also starts the app again on the headset, which takes about two seconds: you will see the app close and open with nothing standing. If the page says it could not, do it by hand:
 
 ```bash
-MIND_PALACE_DATA=agents/data-demo quest/tools/agent.sh usb
+agents/demo/headset.sh restart
 ```
 
-Then say the line. "Start a tree on ..." always works; the line as written ("let's jam on how we brainstorm with VR headset") relies on a note Momo is given in demo mode, which has not been tried with the live voice yet.
+Then say the line. "Start a tree on ..." always works; the line as written ("let's jam on how we brainstorm with VR headset") relies on a note Momo is given in demo mode, which has not been tried with the live voice yet. The note also gives her the tree's subject, "How we brainstorm with a VR headset", so the first card reads the same in every take. However the tree is started, it is named "Brainstorming in a headset".
 
 ## What is fixed and what is live
 
@@ -121,10 +125,12 @@ A stray request therefore also brings the next round. If that happens, go to the
 
 | What you see | What to do |
 |---|---|
-| "No headset joined" | Run the `agent.sh usb` line again. After the headset slept: `quest/tools/agent.sh resume`. |
+| "No headset joined" | Run `agents/demo/headset.sh` again. On Wi-Fi, after the headset slept: `agents/demo/headset.sh resume`. |
 | "Momo's voice off" | `OPENAI_API_KEY` is missing from `~/.muse-garden.env`. Add it and start the service again. |
 | The headset shows the tree flat, on one layer | It joined after the tree was built. It is set up again by itself a second after joining; if not, press Go to this round. |
-| An old tree stays on the headset after Empty stage | Start the app again (the `agent.sh usb` line). |
+| An old tree stays on the headset after Empty stage | Start the app again: `agents/demo/headset.sh restart`. |
+| The app on the headset shows your real trees, not the demo | It is joined to the hosted service. Run `agents/demo/headset.sh`. |
+| After the recording, the app shows nothing and Momo does not answer | It is still looking for the demo on this Mac. Run `agents/demo/headset.sh back`. |
 | Momo answers but no cards come | Press Play it now, without a word. |
 | The wrong round arrived | Press Go to this round. |
 | The page says the service is not answering | The service stopped: `cd agents && npm run demo`. The tree is kept in `agents/data-demo` and is taken up where it stood. |
@@ -162,18 +168,30 @@ The file was generated from the walkthrough board by `sketches/walkthrough/gen/d
 - `director.ts` does the rest. **Going to a round** deletes the tree's cards and builds the earlier rounds again, kept. A headset decides its own layers from what is asked on it, and cards that all arrive at once land on one layer, so the director takes the headset through the rounds in order: it goes to a round's card, waits for the headset to open it, adds the round's cards, and waits for the headset to give them their layer. **Playing a round** is the Scout role replaced: `Pipeline.runScout` runs as ever (the run's label, the deliveries, the closing line, Momo's narration), and the director hands it the round's cards in place of a search.
 - The service's own code changed in five small places: `--demo` in `main.ts`; the director's wiring, the page's routes under `/api/demo` and the page at `/demo` in `server.ts`; `stage`, `go` and `forget` on `Pipeline`; a round's limits as a parameter of `admit` (a prepared round holds up to 13 cards, a live one 10); and `extra` instructions for the live voice.
 - The page is `agents/client/demo.html`, `demo.css` and `js/demo.js`.
+- `agents/demo/headset.sh` is the headset's side: it runs `quest/tools/agent.sh` and `judging.sh` for the everyday copy with the demo's data folder. The service runs its `restart` itself for an empty stage (`restartHeadset` in `main.ts`), with adb on this Mac.
 
 ## What has and has not been tried
 
-Tried, on 2026-11-16, with the Mac preview of the app (built from this branch) joined to the service running stand-in roles: going forward and back between rounds in one session, the whole tree (31 rounds in 13 seconds, 150 cards, each round on its own layer, branches side by side), playing a round (dashed suggestions arriving in parts under the Scout's labels, below), the offered questions, and the page. The service's tests pass: 673, six of them the demo's.
+**On Kai's headset, 2026-11-16** (a Quest 3 on the cable, lying on a desk and told it was worn; the release build from this branch installed over "Mind Palace Ocean"; the service with the real model and no voice):
+
+- Going to a round: seven rounds built in 3.0 seconds, the whole tree (31 rounds, 150 cards) in 13.0, back from the whole tree to Round 3 in 3.5. Each round stood on its own layer, as the app's own log and pictures of its screen showed.
+- The empty stage: one press, and the app was started again and had joined with nothing standing 1.4 seconds later.
+- Playing a round from the page: Round 1 started the tree and its twelve cards arrived in four parts over ten seconds, dashed, tagged "Suggested", with "Scout" and "Renderer" lines by Momo's mark.
+- A request made on the headset itself: the app was told by a launch flag to hold a pinch on its open card (`-longPinchAt`), which sent "more like this" as a hand does, and the next round arrived there and the view followed.
+- Requests as the headset sends them, from a test connection: a long pinch on "Neurones poster" brought "More of this" in 5 seconds, and the words "so how do we keep the information organized?" with Llull's ring open went through the real Conductor ("Looking at how to keep this information organized.") and brought Round 3 in 8.
+- The service stopped and started again took the tree up where it stood, and the headset joined again by itself.
+
+The Mac preview of the app, built from this branch, showed the same on 2026-11-16 (pictures above and below). The service's tests pass: 704, with one that is skipped without a key; eight of them are the demo's.
 
 ![A round being played: suggestions arriving on dashed threads round the open card](docs/round-played.jpg)
 
 Not tried:
 
-- **A headset.** None was connected. The preview runs the same app code, but timing, memory with 130 pictures, and how 13 cards sit round one card need a look in the headset.
-- **Momo's live voice in demo mode.** This Mac has no OpenAI key. The note that makes each line a take (`MOMO_NOTE` in `director.ts`) has never met the real model.
-- **The film card.** "Disney's multiplane camera" carries its file (from 2:43 of the source); whether the headset plays a film served by the service was not checked.
-- **The mark on the Linux picture.** It is a real stroke on the card; its place was set by calculation.
+- **Momo's live voice in demo mode.** Kai's Mac has no OpenAI key, so on it Momo neither hears nor speaks. The note that makes each line a take (`momoNote` in `director.ts`) has never met the real model.
+- **A person's hands.** Nobody wore the headset: pinching a card open, keeping a pick, tapping an offered question and "Hey Momo" were not done by hand or voice.
+- **The film card.** "Disney's multiplane camera" carries its file (from 2:43 of the source) and shows its poster and play mark on the headset; whether it plays there when the card is gone into was not checked.
+- **The mark on the Linux picture.** It is a real stroke on the card; its place was set by calculation, and it is drawn only once the card is gone into.
+
+Seen on the way, and left as they are: the first card of a tree started by voice reads "From: You pasted this" (the service marks every tree started from a subject that way), where one set up from the page reads "You said this"; and before Round 1 the app shows its own three example asks, which are about films.
 
 The pictures are for the film's planning: many are other people's work, in copyright or of unknown rights (pins, film stills, a paper's figure). The repository is private; clear each one before a public cut.

@@ -74,7 +74,7 @@ If `ocean.json`'s saved trees change, run `npm run saved-trees` before importing
 
 ## The walkthrough demo
 
-`npm run demo` runs the service with one prepared tree, played round by round for recording the film: Momo is live, what the Scout brings is scripted, and a page at `/demo` goes to any round. It keeps its own data folder, `data-demo`. See [demo/README.md](demo/README.md).
+`npm run demo` runs the service with one prepared tree, played round by round for recording the film: Momo is live, what the Scout brings is scripted, and a page at `/demo` goes to any round. It keeps its own data folder, `data-demo`. `demo/headset.sh` joins the app on the headset to it, and `demo/headset.sh back` returns the app to the hosted service. See [demo/README.md](demo/README.md).
 
 ## Check it
 
