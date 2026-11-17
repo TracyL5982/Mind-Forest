@@ -165,18 +165,6 @@ double spokenSeconds(const std::string& text) {
     return std::max(1.0, words / 2.6);
 }
 
-/// The first `share` of the text, ending on a whole word, or on a whole character in words without spaces, as Chinese.
-std::string revealed(const std::string& text, double share) {
-    if (share >= 1) return text;
-    size_t upTo = size_t(std::max(0.0, share) * double(text.size()));
-    if (text.find(' ') == std::string::npos) {
-        while (upTo > 0 && (uint8_t(text[upTo]) & 0xC0) == 0x80) upTo--;
-        return text.substr(0, upTo);
-    }
-    size_t space = text.rfind(' ', upTo);
-    return space == std::string::npos ? "" : text.substr(0, space);
-}
-
 std::string titled(const std::string& name) {
     std::string out = name;
     bool start = true;
@@ -188,6 +176,17 @@ std::string titled(const std::string& name) {
 }
 
 }  // namespace
+
+std::string revealed(const std::string& text, double share) {
+    if (share >= 1) return text;
+    size_t upTo = size_t(std::max(0.0, share) * double(text.size()));
+    if (text.find(' ') == std::string::npos) {
+        while (upTo > 0 && (uint8_t(text[upTo]) & 0xC0) == 0x80) upTo--;
+        return text.substr(0, upTo);
+    }
+    size_t space = text.rfind(' ', upTo);
+    return space == std::string::npos ? "" : text.substr(0, space);
+}
 
 /// Momo's voice played to no one. It ends once the voice has had as long as it takes to hear what was written, which the
 /// voice tells it (`caughtUp`).

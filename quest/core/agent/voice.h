@@ -350,4 +350,8 @@ private:
     bool startPlayer(LiveReply& reply);
 };
 
+/// The first `share` of `text`, ending on a whole word, or on a whole character in words without spaces, as Chinese: as
+/// much of Momo's words as her voice has come to.
+std::string revealed(const std::string& text, double share);
+
 }  // namespace agent

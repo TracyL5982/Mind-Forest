@@ -5,6 +5,7 @@
 
 #include "base.h"
 #include "json.h"
+#include "voice.h"
 #include "platform.h"
 #include "ocean/oceanmodel.h"
 
@@ -78,9 +79,15 @@ std::shared_ptr<PresenceDemo> PresenceDemo::fromFlags(OceanModel& model) {
             demo->take.push_back({end, id, role, ""});
             last = std::max(last, end);
         }
+        for (const Json& l : (*j)["lines"].array()) {
+            double at = takeFrom + l["at"].number() / 1000, ms = l["ms"].number() / 1000;
+            if (ms > 0) demo->said.push_back({at, ms, l["text"].string()});
+            last = std::max(last, at + ms);
+        }
         std::stable_sort(demo->take.begin(), demo->take.end(), [](const Step& a, const Step& b) { return a.at < b.at; });
         demo->length = last + takeAfter;
-        logLine(fmt("[presence] take: %d labels from %s, on a %.1f s loop", n, path->c_str(), demo->length));
+        logLine(fmt("[presence] take: %d labels and %d lines of Momo's from %s, on a %.1f s loop", n, int(demo->said.size()), path->c_str(),
+                    demo->length));
         return demo;
     }
     if (!Flags::has("presenceDemo")) return nullptr;
@@ -161,6 +168,12 @@ void PresenceDemo::frame(double now) {
         at(now, presence);
     } else {
         presence.state = crew.working() ? Presence::State::working : Presence::State::waiting;
+        if (t < takeFrom) presence.momoText.clear();
+        for (const Said& s : said) {
+            if (t < s.at || t >= s.at + s.length) continue;
+            presence.state = Presence::State::responding;
+            presence.momoText = revealed(s.text, (t - s.at + Voice::wordsAhead) / s.length);
+        }
     }
     presence.agents = crew.lines("Momo");
     model.conversing = presence.conversing();
