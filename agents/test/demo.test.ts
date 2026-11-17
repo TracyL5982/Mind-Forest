@@ -7,6 +7,7 @@ import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { momoNote, wavesOf } from '../src/demo/director.ts';
+import { itemOf } from '../src/demo/cards.ts';
 import { loadScript } from '../src/demo/script.ts';
 import { loadShowcase, type Showcase } from '../src/demo/showcase.ts';
 import { startServer, type Running } from '../src/node/server.ts';
@@ -348,4 +349,15 @@ test("no showcase card is a work the headset's library already holds, since a pi
   const { trees } = loadShowcase(join(demoDir, 'showcase'));
   const again = trees.flatMap(({ tree }) => tree.cards.filter((card) => card.href && library.has(card.href)).map((card) => `${tree.id}/${card.id}`));
   assert.deepEqual(again, []);
+});
+
+test('a card with a credit keeps it as data.credit, with its page, as the Scout keeps a source credit line', () => {
+  const making = { media: () => undefined, assetUrl: (id: string) => `/assets/${id}`, now: () => '2026-11-16T00:00:00.000Z' };
+  const { trees } = loadShowcase(join(demoDir, 'showcase'));
+  const cards = [...script.phases.flatMap((phase) => phase.cards), ...trees.flatMap(({ tree }) => tree.cards)].filter((card) => card.credit?.trim());
+  assert.ok(cards.length > 100, `${cards.length} cards with a credit`);
+  for (const card of cards) {
+    const item = itemOf(card, making);
+    assert.deepEqual(item.data.credit, { text: card.credit!.trim(), ...(card.href && { url: card.href }) }, card.id);
+  }
 });

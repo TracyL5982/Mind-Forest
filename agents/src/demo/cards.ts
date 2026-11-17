@@ -79,6 +79,8 @@ export function itemOf(card: ScriptCard, making: Making, set = 'demo'): Item {
     ...(fromOf(card) && { from: fromOf(card) }),
     ...(card.holder && { holder: card.holder }),
     ...(siteOf(card.href) && { site: card.site ?? siteOf(card.href) }),
+    // As a source's credit line is kept on the items the Scout brings (DECISIONS 63), with the page it is on.
+    ...(card.credit?.trim() && { credit: { text: card.credit.trim(), ...(card.href && { url: card.href }) } }),
     ...(card.licence && { licence: card.licence }),
   };
   const base = { title: card.title, summary: card.text.trim(), tags: [card.origin, card.kind], origin, archived: false, revision: 0, id: itemIdOf(card, set) };
