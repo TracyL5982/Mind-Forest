@@ -247,9 +247,12 @@ public:
     /// words in place"; and a held label finishes its 1.5 s even into Momo's wrap-up.
     static constexpr float settleWords = 0.15f, holdWords = 1.5f;
     /// At most this many lines show. An agent at work beyond them waits for a place: a line that has said "finished
-    /// working" for `holdWords` gives its place up to one (the lead's call, WS64). The top line ends with how many wait,
-    /// " · +2 more" (the user: "need to show '+1 more' count"): part of its words, so changing at most every `holdWords`.
+    /// working" for `holdWords` gives its place up to one (the lead's call, WS64). How many wait is a line of its own
+    /// above them, "+2 more" (the user: "I think it makes more sense that '+ n more' is in its own line, above the 3
+    /// agents"): its count, its coming and its going each at most every `holdWords`.
     static constexpr int mostLines = 3;
+    /// The count's line's role, which no agent has.
+    static constexpr const char* tallyRole = "+more";
 
     struct Line {
         std::string role;           // whose: a line keeps it while its words change
@@ -261,13 +264,13 @@ public:
         float toY = 0, toOpacity = 0, ySpeed = 0;
         AgentLine from;             // what it says, as the voice gave it
         float since = 0;            // when it was last given words, s on the roster's own clock
-        int more = 0;               // how many agents wait for a place, said at its end
         std::optional<AgentLine> next;  // words waiting their turn (see `settleWords`)
         float nextSince = 0;            // and since when
         std::optional<AgentLine> lastStep;  // the newest step it was given, shown or not, for the end of a run
         AgentLine given;                    // what it was last given, shown or not
         bool going = false;                 // it has given its place up, and fades
         bool fresh = true;                  // it has no place yet
+        int tally = 0;                      // the count's line: how many agents it says wait; 0 on an agent's line
     };
 
     using Measure = std::function<float(const std::string&)>;
@@ -276,7 +279,7 @@ public:
     void update(const std::vector<AgentLine>& agents, float dt);
     /// Every line that shows or is fading.
     const std::vector<Line>& lines() const { return lines_; }
-    /// How many lines are wanted: what the lines take up, once they have come and gone.
+    /// How many lines are wanted, the count's among them: what the lines take up, once they have come and gone.
     int resting() const;
     /// The widest of the lines wanted, m.
     float width() const;
@@ -287,7 +290,7 @@ private:
     std::vector<Line> lines_;
     float clock = 0;
     int waiting = 0, told = 0;                  // agents at work without a place: now, and once that has stood a moment
-    float waitingSince = 0;
+    float waitingSince = 0, tallySince = -holdWords;    // and since when the count's line last changed
 
     void write(Line& line, const AgentLine& agent) const;
     /// Gives `line` what its agent is doing now, and changes its words when it is their time.

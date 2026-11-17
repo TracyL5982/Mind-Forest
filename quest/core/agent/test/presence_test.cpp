@@ -655,7 +655,7 @@ TEST(atMostThreeLinesShowAnotherAtWorkWaitsForAFinishedLinesPlace) {
     AgentLine intake{"intake", "Intake", "Reading what you dropped", false}, filer{"filer", "Filer", "Filing a link", false},
         scout{"scout", "Scout", "Searching", false}, renderer{"renderer", "Renderer", "Laying out a card", false};
     run(r, {intake, filer, scout, renderer}, 1);
-    CHECK_EQ(r.resting(), Roster::mostLines);
+    CHECK_EQ(r.resting(), Roster::mostLines + 1);   // (and the line that says one waits)
     CHECK(!line(r, "renderer"), "the fourth waits for a place");
     intake.step.clear();
     intake.finished = true;
@@ -693,31 +693,35 @@ TEST(aLineStaysInItsPlaceBetweenItsAgentsSteps) {
     CHECK(least > 0.99f, "and it never left: %.2f at the least", double(least));
 }
 
-TEST(theTopLineSaysHowManyWaitTheCountChangingAtMostEveryHold) {
+TEST(howManyWaitIsALineOfItsOwnAboveTheAgentsChangingAtMostEveryHold) {
     Roster r = roster();
     AgentLine intake{"intake", "Intake", "Reading what you dropped", false}, filer{"filer", "Filer", "Filing a link", false},
         scout{"scout", "Scout", "Searching", false}, renderer{"renderer", "Renderer", "Laying out a card", false},
         organizer{"organizer", "Organizer", "Reorganizing your cards", false};
+    run(r, {intake, filer, scout}, 0.5f);
+    const Roster::Line* top = line(r, "scout");
+    float before = top ? top->y : -1;
     run(r, {intake, filer, scout, renderer, organizer}, 0.5f);
-    const Roster::Line *top = line(r, "scout"), *low = line(r, "intake");
-    CHECK(top && top->toY == 2 && top->text == "Scout · Searching · +2 more", "two wait: \"%s\"", top ? top->text.c_str() : "");
-    CHECK(low && low->text == "Intake · Reading what you dropped", "said once, on the top line");
-    CHECK(top && top->width <= 0.2f, "still one line");
+    const Roster::Line* tally = line(r, Roster::tallyRole);
+    top = line(r, "scout");
+    CHECK(tally && !tally->going && tally->toY == 3 && tally->text == "+2 more", "two wait, said above the three: \"%s\"",
+          tally ? tally->text.c_str() : "none");
+    CHECK(top && top->text == "Scout · Searching" && top->toY == 2 && top->y == before, "the agents' lines as they were, unmoved");
     renderer.step.clear();
     renderer.finished = true;
     run(r, {intake, filer, scout, renderer, organizer}, 0.6f);
-    top = line(r, "scout");
-    CHECK(top && top->text == "Scout · Searching · +2 more", "one done while waiting: the count stays its while: \"%s\"",
-          top ? top->text.c_str() : "");
+    tally = line(r, Roster::tallyRole);
+    CHECK(tally && tally->text == "+2 more", "one done while waiting: the count stays its while: \"%s\"", tally ? tally->text.c_str() : "none");
     run(r, {intake, filer, scout, renderer, organizer}, Roster::holdWords - 0.6f);
-    top = line(r, "scout");
-    CHECK(top && top->text == "Scout · Searching · +1 more", "then says one: \"%s\"", top ? top->text.c_str() : "");
+    tally = line(r, Roster::tallyRole);
+    CHECK(tally && tally->text == "+1 more", "then says one: \"%s\"", tally ? tally->text.c_str() : "none");
     intake.step.clear();
     intake.finished = true;
-    run(r, {intake, filer, scout, renderer, organizer}, 2 * Roster::holdWords + 0.3f);
-    const Roster::Line *came = line(r, "organizer");
-    top = line(r, "scout");
-    CHECK(came && came->toY == 2 && came->text == "Organizer · Reorganizing your cards", "the last at work takes a place, on top: \"%s\"",
+    run(r, {intake, filer, scout, renderer, organizer}, Roster::holdWords + 0.3f);
+    const Roster::Line* came = line(r, "organizer");
+    CHECK(came && came->toY == 2 && came->text == "Organizer · Reorganizing your cards", "the last at work takes a place, on top of the agents: \"%s\"",
           came ? came->text.c_str() : "");
-    CHECK(top && top->text == "Scout · Searching", "and nobody waits: \"%s\"", top ? top->text.c_str() : "");
+    run(r, {intake, filer, scout, renderer, organizer}, Roster::holdWords);
+    tally = line(r, Roster::tallyRole);
+    CHECK(!tally || tally->going, "and with nobody waiting, the count's line goes once it has stood its while");
 }

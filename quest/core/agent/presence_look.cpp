@@ -457,9 +457,8 @@ void Roster::write(Line& line, const AgentLine& agent) const {
     line.from = agent;
     std::string name = agent.name + " · ";
     std::string step = agent.finished ? finished : agent.step;
-    std::string more = line.more > 0 ? " · +" + std::to_string(line.more) + " more" : "";
     line.name = agent.name.size();
-    line.text = name + step + more;
+    line.text = name + step;
     line.width = measure(line.text);
     if (line.width <= most) return;
     // One line, the step cut short at a word, where it must be.
@@ -467,7 +466,7 @@ void Roster::write(Line& line, const AgentLine& agent) const {
     while (!kept.empty()) {
         size_t space = kept.find_last_of(' ');
         kept = space == std::string::npos ? "" : kept.substr(0, space);
-        line.text = name + kept + "…" + more;
+        line.text = name + kept + "…";
         line.width = measure(line.text);
         if (line.width <= most) return;
     }
@@ -518,7 +517,7 @@ void Roster::update(const std::vector<AgentLine>& agents, float dt) {
     // after it finished; its line stays until its last words have had their while and "finished working" its
     // `Crew::finishedFor`. One whose agent went while still at work (the crew is cleared on a new connection) goes at once.
     for (Line& l : lines_) {
-        if (l.going) continue;
+        if (l.going || l.tally) continue;
         const AgentLine* a = agentOf(l.role);
         if (!a && !l.given.finished) {
             let(l);
@@ -541,7 +540,7 @@ void Roster::update(const std::vector<AgentLine>& agents, float dt) {
         if (shown >= mostLines) {
             if (a.finished) continue;
             auto done = std::find_if(lines_.begin(), lines_.end(), [&](const Line& l) {
-                return !l.going && l.from.finished && !l.next && clock - l.since >= holdWords;
+                return !l.going && !l.tally && l.from.finished && !l.next && clock - l.since >= holdWords;
             });
             if (done == lines_.end()) {
                 wait++;
@@ -560,32 +559,47 @@ void Roster::update(const std::vector<AgentLine>& agents, float dt) {
         lines_.push_back(std::move(l));
         shown++;
     }
-    // In the order they began, the first lowest. (The view has a new line rise the last little way into its place as its
-    // words come: presence_view.cpp.)
-    float place = 0;
-    Line* top = nullptr;
-    for (Line& l : lines_) {
-        if (l.going) continue;
-        l.toY = place++;
-        if (l.fresh) l.y = l.toY;
-        l.fresh = false;
-        top = &l;
-    }
-    // How many wait, at the end of the top line. It is part of the line's words: a new count once it has stood a moment,
-    // and the words its while, unless they change now anyway (a line just come takes the count as it is).
+    // How many wait: a line of its own above the agents', there once the count has stood a moment, and changed, come or
+    // gone at most every `holdWords`. (One still fading is waited for.)
     if (wait != waiting) {
         waiting = wait;
         waitingSince = clock;
     }
     if (clock - waitingSince >= settleWords) told = waiting;
+    auto tally = std::find_if(lines_.begin(), lines_.end(), [](const Line& l) { return l.tally > 0; });
+    int said = tally != lines_.end() && !tally->going ? tally->tally : 0;
+    if (told != said && clock - tallySince >= holdWords && !(said == 0 && tally != lines_.end())) {
+        if (told == 0) {
+            let(*tally);
+        } else {
+            if (tally == lines_.end()) {
+                Line l;
+                l.role = tallyRole;
+                l.toOpacity = 1;
+                lines_.push_back(std::move(l));
+                tally = lines_.end() - 1;
+            }
+            tally->tally = told;
+            tally->text = "+" + std::to_string(told) + " more";
+            tally->name = 0;
+            tally->width = measure(tally->text);
+            tally->since = clock;
+        }
+        tallySince = clock;
+    }
+    // In the order they began, the first lowest; the count above them all.
+    float place = 0;
     for (Line& l : lines_) {
-        if (l.going) continue;
-        bool now = l.since == clock;
-        int more = &l != top ? 0 : now ? waiting : told;
-        if (l.more == more || !(now || clock - l.since >= holdWords)) continue;
-        l.more = more;
-        write(l, l.from);
-        l.since = clock;
+        if (l.going || l.tally) continue;
+        l.toY = place++;
+        if (l.fresh) l.y = l.toY;
+        l.fresh = false;
+    }
+    for (Line& l : lines_) {
+        if (l.going || !l.tally) continue;
+        l.toY = place;
+        if (l.fresh) l.y = l.toY;
+        l.fresh = false;
     }
     if (!(dt > 0)) return;
     for (Line& l : lines_) {
