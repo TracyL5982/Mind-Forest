@@ -32,6 +32,8 @@ export const ClientMessage = z.discriminatedUnion('t', [
   z.object({ t: z.literal('organize'), request: Words.min(1), scope: Scope, focus: Id.optional() }),
   z.object({ t: z.literal('handoff'), scope: Scope, note: z.string().optional() }),
   z.object({ t: z.literal('client'), media: z.object({ embeds: z.boolean(), files: z.array(z.string().regex(/^[a-z0-9]{2,5}$/)).max(20) }) }),
+  /** The headset was put on again, still joined: how long it was off, in seconds. */
+  z.object({ t: z.literal('worn'), away: z.number().nonnegative().finite() }),
   z.object({ t: z.literal('settings'), patch: z.object({
     picksMode: z.enum(['provisional', 'immediate']).optional(),
     picksPerRun: z.number().int().min(1).max(8).optional(),

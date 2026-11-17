@@ -51,11 +51,13 @@ export interface Pace {
   rejoin: number;
   /** How long the daily tree takes to grow, from its first card to its last layer. */
   grow: number;
-  /** How long after a headset joins the daily tree starts to grow, once Momo's message is sent. */
+  /** How long after a headset joins, or is put on again, the daily tree starts to grow, once Momo's message is sent. */
   growAfterJoin: number;
+  /** The shortest time off that counts as the headset taken off and put on again: its menu leaves the app for a moment too. */
+  wornAway: number;
 }
 
-export const PACE: Pace = { stand: 9000, open: 4000, land: 3000, breath: 220, step: 1500, rate: 1, rejoin: 25000, grow: 5000, growAfterJoin: 2000 };
+export const PACE: Pace = { stand: 9000, open: 4000, land: 3000, breath: 220, step: 1500, rate: 1, rejoin: 25000, grow: 5000, growAfterJoin: 2000, wornAway: 5000 };
 
 /**
  * The daily tree shot of the film, in the user's words: Momo's message on the phone, and then, with the headset on, one of the
@@ -155,8 +157,8 @@ export interface DemoStatus {
   lines: { recording: number; edited: number };
   /**
    * The daily tree: the showcase tree it can be, which one is armed (taken out of the forest, to grow again), whether Momo's
-   * message went to the phone, whether it has grown, whether a headset joining will still start it, and whether this service
-   * can send the message at all.
+   * message went to the phone, whether it has grown, whether a headset joining or put on again will still start it, and whether
+   * this service can send the message at all.
    */
   daily: { trees: { id: string; title: string }[]; armed: string | null; sent: boolean; grown: boolean; onJoin: boolean; canSend: boolean };
 }
@@ -1168,20 +1170,36 @@ export class Director {
    */
   joined(): void {
     for (const resume of [...(this.waiting.get('joined') ?? [])]) resume();
-    // Put on after Momo's message went: the daily tree grows, once for each time it is armed. The walkthrough's tree is not set
-    // up again for this headset then, since that takes its view to the walkthrough's cards.
-    const daily = this.daily;
-    if (daily?.sent && !daily.grown && !daily.auto) {
-      daily.auto = true;
-      this.keepDaily();
-      this.deps.log(`[demo] a headset joined after Momo's message: the daily tree grows in ${Math.round(this.pace.growAfterJoin / 100) / 10} s`);
-      setTimeout(() => void this.growDaily().catch((err) => this.deps.log(`[demo] the daily tree did not grow: ${err instanceof Error ? err.message : String(err)}`)), this.pace.growAfterJoin);
-      return;
-    }
+    // The walkthrough's tree is not set up again for a headset that grows the daily tree, since that takes its view to the
+    // walkthrough's cards.
+    if (this.growOnReturn('a headset joined')) return;
     if (this.busy || this.built.size === 0) return;
     const at = this.script.phases[this.armed]?.id ?? 'end';
     this.deps.log('[demo] a headset joined: setting the tree up again for it');
     setTimeout(() => void this.goto(at).catch(() => {}), 1200);
+  }
+
+  /**
+   * The headset was put on again after `away` seconds off, still joined: the app stays joined while it is off. A moment off, as
+   * its menu takes, is not taking it off.
+   */
+  worn(away: number): void {
+    if (away * 1000 >= this.pace.wornAway) this.growOnReturn(`the headset was put on again after ${away.toFixed(1)} s off`);
+    else if (this.daily?.sent && !this.daily.auto) this.deps.log(`[demo] the headset was off for ${away.toFixed(1)} s, too short to be put on again: the daily tree waits`);
+  }
+
+  /**
+   * A headset joined, or was put on again, after Momo's message went: the daily tree grows a moment later, once for each time it
+   * is armed. True when it does.
+   */
+  private growOnReturn(how: string): boolean {
+    const daily = this.daily;
+    if (!daily?.sent || daily.grown || daily.auto) return false;
+    daily.auto = true;
+    this.keepDaily();
+    this.deps.log(`[demo] ${how} after Momo's message: the daily tree grows in ${Math.round(this.pace.growAfterJoin / 100) / 10} s`);
+    setTimeout(() => void this.growDaily().catch((err) => this.deps.log(`[demo] the daily tree did not grow: ${err instanceof Error ? err.message : String(err)}`)), this.pace.growAfterJoin);
+    return true;
   }
 
   /** What a kept data folder holds of the tree: the cards that stand, and so which rounds are built. */

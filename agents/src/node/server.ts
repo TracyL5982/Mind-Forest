@@ -844,6 +844,9 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         plays.set(ws, m.media);
         if (director && m.media.embeds === false) director.joined();
         return;
+      case 'worn':
+        director?.worn(m.away);
+        return;
       case 'dump':
         await pipeline.dump(m.dumps);
         return;

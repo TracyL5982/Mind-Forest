@@ -555,9 +555,9 @@ function drawDaily() {
       : daily.grown
         ? busy() ? `${name} is growing on the headset.` : `${name} has grown. Arm again for another take.`
         : daily.sent && daily.onJoin
-          ? `Message sent. ${name} grows about 2 s after a headset joins, or at once with Grow now.`
+          ? `Message sent. ${name} grows about 2 s after the headset is put on, or at once with Grow now.`
           : daily.sent
-            ? `Message sent, and a headset joined: ${name} grows in a moment.`
+            ? `Message sent, and the headset is on: ${name} grows in a moment.`
             : `${name} is out of the forest. Send Momo's message, then put the headset on.${daily.canSend ? '' : ' No Telegram account is paired with this service, so the message cannot be sent from here.'}`;
 }
 

@@ -370,7 +370,7 @@ async function dailyDemo(paired = true) {
     live: { open: () => ({ send: () => {}, close: () => {} }), options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } },
     telegram: { token: BOT_TOKEN, api: bot.url, pollSeconds: 0, conflictMs: 100, retryMs: 20, ...(paired ? { owner: { userId: ADA.id, chatId: ADA.id, name: 'Ada Lovelace' } } : {}) },
     demo: {
-      script, mediaDir: join(demoDir, 'media'), showcase: trees, pace: { ...quick, grow: 300, growAfterJoin: 60 },
+      script, mediaDir: join(demoDir, 'media'), showcase: trees, pace: { ...quick, grow: 300, growAfterJoin: 60, wornAway: 5000 },
       voice: 'test-voice', record: async (text) => ({ pcm: new Uint8Array(text.length * 48 * 50), takes: 1 }),
     },
   });
@@ -381,7 +381,7 @@ async function dailyDemo(paired = true) {
  * A headset as the app joins, with its voice's socket open: what its connection and its voice are sent. As the app does, it
  * says a tree it asked for stands, by its first card, and that a card it is taken to is open.
  */
-async function wearing(run: Running): Promise<{ seen: Frame[]; voice: Frame[]; off: () => void }> {
+async function wearing(run: Running): Promise<{ seen: Frame[]; voice: Frame[]; send: (message: object) => void; off: () => void }> {
   const seen: Frame[] = [];
   const voice: Frame[] = [];
   const ws = new WebSocket(`${run.url.replace('http', 'ws')}/ws?token=secret`, { headers: { 'user-agent': 'okhttp/4.12.0' } });
@@ -399,7 +399,7 @@ async function wearing(run: Running): Promise<{ seen: Frame[]; voice: Frame[]; o
   const live = new WebSocket(`${run.url.replace('http', 'ws')}/live?token=secret&connection=${(seen.find((m) => m.t === 'hello') as { connection?: string }).connection}`);
   live.on('message', (raw) => voice.push(JSON.parse(String(raw)) as Frame));
   await new Promise((open) => live.on('open', open));
-  return { seen, voice, off: () => (live.close(), ws.close()) };
+  return { seen, voice, send: (message) => ws.send(JSON.stringify(message)), off: () => (live.close(), ws.close()) };
 }
 
 /** Resolves once `ok` holds; fails after five seconds. */
@@ -503,6 +503,47 @@ test("Momo's message goes to the paired phone, and the next headset to join grow
     assert.equal(lone.bot.sent.length, 0);
   } finally {
     await lone.close();
+  }
+});
+
+test('a headset that stays joined grows the daily tree when it is put on again after five seconds off, once for each arm', async () => {
+  const { run, close } = await dailyDemo();
+  let headset: Awaited<ReturnType<typeof wearing>> | null = null;
+  try {
+    await run.demo!.armDaily('mini');
+    headset = await wearing(run);
+    const worn = async (away: number) => {
+      headset!.send({ t: 'worn', away });
+      await new Promise((r) => setTimeout(r, 150));
+    };
+    // Before Momo's message, taking it off and on grows nothing.
+    await worn(30);
+    assert.equal(dailyTree(run), undefined);
+    await run.demo!.sendDaily();
+    // A moment off, as the headset's menu takes, is not taking it off.
+    await worn(4.9);
+    assert.equal(dailyTree(run), undefined);
+    assert.equal(run.demo!.status().daily.onJoin, true);
+    headset.send({ t: 'worn', away: 12.3 });
+    await soon(() => run.demo!.status().daily.grown && run.demo!.status().busy === null);
+    const tree = dailyTree(run)!;
+    assert.ok(tree, 'put on again, the tree grows');
+    await soon(() => headset!.seen.some((m) => m.t === 'change' && m.yours && m.set!.commands.some((c) => c.type === 'createTree' && c.tree?.id === tree.id)));
+    // Once for each arm: put on again, nothing more grows; a new arm and message grow it once more.
+    await worn(30);
+    assert.equal(dailyTree(run)!.id, tree.id);
+    assert.equal(run.demo!.status().problem, null);
+    await run.demo!.armDaily('mini');
+    await run.demo!.sendDaily();
+    headset.send({ t: 'worn', away: 8 });
+    await soon(() => run.demo!.status().daily.grown && run.demo!.status().busy === null && dailyTree(run) !== undefined);
+    // A time off that is no time is refused as any message that does not hold together.
+    const from = headset.seen.length;
+    headset.send({ t: 'worn', away: -1 });
+    await soon(() => headset!.seen.slice(from).some((m) => m.t === 'error'));
+  } finally {
+    headset?.off();
+    await close();
   }
 });
 
