@@ -240,6 +240,13 @@ const under = (run: Running, title: string) => {
   const head = [...run.mind.nodes.values()].find((node) => run.mind.item(node.itemId).title === title)!;
   return run.mind.children(head.id).map((node) => run.mind.item(node.itemId).title).sort();
 };
+/** What Momo said, line by line: a line's words come as its sound does, so its last words sent are the line. */
+const saidOf = (voice: Seen[]) => {
+  const lines = new Map<string, string>();
+  for (const m of voice) if (m.t === 'text') lines.set(m.id!, m.text!);
+  return [...lines.values()];
+};
+const bytesOfId = (voice: Seen[], id: string) => voice.filter((m) => m.t === 'audio' && m.id === id).reduce((n, m) => n + Buffer.from(m.pcm!, 'base64').length, 0);
 const bytesOf = (voice: Seen[], id: string) => voice.filter((m) => m.t === 'audio' && m.id?.endsWith(`-${id}`)).reduce((n, m) => n + Buffer.from(m.pcm!, 'base64').length, 0);
 
 test('Play runs a round\'s take on the headset: its labels, its cards as picks in their deliveries, and each of Momo\'s lines said exactly', { timeout: 30000 }, async () => {
@@ -271,8 +278,15 @@ test('Play runs a round\'s take on the headset: its labels, its cards as picks i
     for (const step of take.steps) assert.ok(labels.includes(step.label), `the label "${step.label}" was shown`);
     assert.ok(labels.some((label) => /^(Looking into|Finding more for)/.test(label)), 'under the run\'s own label');
 
-    const said = s.voice.filter((m) => m.t === 'text').map((m) => m.text);
-    assert.deepEqual(said, take.lines.map((line) => line.text), 'Momo says every line, in order, in the words as written');
+    const said = saidOf(s.voice);
+    // A line's words go once, whole, with its recording's length, so the headset shows them as it hears them: the sound itself
+    // goes only a quarter of a second ahead, which would otherwise read as the line nearly over from its first word.
+    for (const id of new Set(s.voice.filter((m) => m.t === 'audio').map((m) => m.id!))) {
+      const texts = s.voice.filter((m) => m.id === id && m.t === 'text');
+      assert.equal(texts.length, 1, 'a line\'s words are sent once');
+      assert.equal((texts[0] as { ms?: number }).ms, Math.round(bytesOfId(s.voice, id) / 48), 'with the length of its sound');
+      assert.equal((texts[0] as { from?: number }).from, 0);
+    }
     // The last line's sound may still be on its way as the take ends.
     await until(() => s.voice.filter((m) => m.t === 'done').length === take.lines.length);
     for (const line of take.lines) assert.equal(bytesOf(s.voice, line.id), line.text.length * 2400, `all of the recording of ${line.id} was sent`);
@@ -363,7 +377,7 @@ test('a take pauses where it is and goes on from there: no card lands while paus
       const resumed = bytesOf(s.voice, line.line.id) - before;
       assert.equal(resumed, whole - Math.floor((line.offset * 48) / 2) * 2, 'the line she was in went on from the very point the take was paused at, not from its start');
     }
-    const starts = s.voice.filter((m) => m.t === 'text' && m.id?.endsWith('-answer'));
+    const starts = [...new Set(s.voice.filter((m) => m.t === 'text' && m.id?.endsWith('-answer')).map((m) => m.id))];
     assert.equal(starts.length, 1, 'her answer, long over, is not said again');
   } finally {
     await s.close();
@@ -446,7 +460,7 @@ test('Play on an empty stage starts the tree and brings the first round, and a r
     await until(() => run.demo!.status().take?.playing === false && run.demo!.status().rounds[0]!.state === 'played', 10000);
     const tree = [...run.mind.trees.values()].find((t) => t.title === script.title)!;
     assert.deepEqual(run.mind.children(tree.rootId).map((node) => run.mind.item(node.itemId).title).sort(), round('r1').cards.map((card) => card.title).sort());
-    assert.deepEqual(s.voice.filter((m) => m.t === 'text').map((m) => m.text), run.demo!.shown('r1').lines.map((line) => line.text));
+    assert.deepEqual(saidOf(s.voice), run.demo!.shown('r1').lines.map((line) => line.text));
 
     await run.demo!.goto('bs');
     assert.deepEqual(run.demo!.shown('bs').lines, [], 'a round with no words and no cards has nothing on its timeline');
@@ -638,7 +652,7 @@ test('the page loads a pace: its take, its lines and its edits are its own, a sp
     await until(() => run.demo!.status().take?.playing === false, 20000);
     await until(() => s.voice.filter((m) => m.t === 'done').length === real.lines.length);
     assert.deepEqual(under(run, 'Llull’s ring'), round('n3').cards.map((card) => card.title).sort());
-    const texts = s.voice.filter((m) => m.t === 'text').map((m) => m.text);
+    const texts = saidOf(s.voice);
     assert.deepEqual(texts, run.demo!.shown('n3').lines.map((line) => line.text));
     assert.equal(texts.at(-1), 'A wrap-up for the real take.');
 

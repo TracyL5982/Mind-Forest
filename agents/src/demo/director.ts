@@ -804,12 +804,18 @@ export class Director {
     if (!send) return;
     const id = `take-${play}-${line.id}`;
     // The caption is what is heard: for a line that is not ready, the wording of her closest take.
-    if (!send({ t: 'text', id, text: this.deps.lines.closest(line.text) ?? line.text, kind: line.kind === 'answer' ? 'reply' : 'results' })) return;
+    const text = this.deps.lines.closest(line.text) ?? line.text;
+    const kind = line.kind === 'answer' ? 'reply' : 'results';
     const pcm = await this.deps.lines.audio(line.text, line.kind);
+    // The headset shows a line's words as it hears them. A live reply's sound comes well ahead of its playing, so the share played
+    // of what has come is the share of the line; a recording goes a quarter of a second ahead, so it is told the recording's
+    // whole length and where in it the sound starts, and shows the share of that.
+    const from = pcm ? Math.floor((offset * BYTES_PER_MS) / 2) * 2 : 0;
+    if (!send(pcm ? { t: 'text', id, text, kind, ms: Math.round(pcm.length / BYTES_PER_MS), from: Math.round(from / BYTES_PER_MS) } : { t: 'text', id, text, kind })) return;
     if (pcm) {
       const piece = BYTES_PER_MS * 100;
       const began = Date.now();
-      for (let at = Math.floor((offset * BYTES_PER_MS) / 2) * 2; at < pcm.length && !stopped(); at += piece) {
+      for (let at = from; at < pcm.length && !stopped(); at += piece) {
         send({ t: 'audio', id, pcm: Buffer.from(pcm.subarray(at, at + piece)).toString('base64') });
         const ahead = (at + piece) / BYTES_PER_MS - offset - (Date.now() - began) * rate;
         if (ahead > 250) await pause((ahead - 250) / rate);
