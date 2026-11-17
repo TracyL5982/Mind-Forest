@@ -5,11 +5,13 @@
  * when it is missing: agents/demo/headset.sh reads that file to join a headset and to open the page. No value is ever printed.
  * Usage: deploy/demo.sh (which pipes this into fly). The app's name is the first argument.
  */
+import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { loadEnv } from '../src/node/env.ts';
+import { ownerSecret, pairingIn } from '../src/node/telegram.ts';
 
 /**
  * What the demo reads from its environment. The owner's bot is read there only while the demo is filmed with Telegram, and then the
@@ -26,6 +28,14 @@ const PASSED = [
 
 const app = process.argv[2];
 if (!app || !/^[a-z0-9-]+$/.test(app)) throw new Error('usage: demo-secrets.ts <fly app name>');
+
+// The demo keeps no file between deploys, so it is paired to the account the owner paired on their Mac: the pairing the Mac's service
+// keeps in the main checkout's data folder (MIND_PALACE_PAIRED names another). With none, nothing is deployed, rather than a demo that hears no one.
+const common = resolve(execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: import.meta.dirname, encoding: 'utf8' }).trim(), '..');
+const pairingFile = process.env.MIND_PALACE_PAIRED ?? join(common, 'agents/data/telegram.json');
+const owner = pairingIn(pairingFile);
+if (!owner) throw new Error(`No Telegram pairing in ${pairingFile}: pair the bot on the Mac first (its Mind Palace page, Settings, then Pair under Telegram), then deploy again.`);
+
 const home = join(homedir(), '.mind-palace');
 const file = join(home, 'demo.properties');
 const server = `https://${app}.fly.dev`;
@@ -39,10 +49,10 @@ if (read('token') !== token || read('server') !== server) writeFileSync(file, `s
 const env = loadEnv();
 if (!env.MODEL_API_KEY?.trim()) throw new Error('MODEL_API_KEY is not in the env file: the demo cannot start without it');
 const lines = PASSED.flatMap((name) => (env[name]?.trim() ? [`${name}=${env[name]!.trim()}`] : []));
-lines.push(`MIND_PALACE_TOKEN=${token}`);
+lines.push(`MIND_PALACE_TOKEN=${token}`, `MIND_PALACE_TELEGRAM_OWNER=${ownerSecret.encode(owner)}`);
 if (lines.some((line) => line.includes('\n'))) throw new Error('a value holds a line break, which fly secrets import cannot read');
 process.stdout.write(`${lines.join('\n')}\n`);
 process.stderr.write(
-  `secrets: ${lines.length} values (${PASSED.filter((n) => env[n]?.trim()).length} from the env file, the demo's key from ${file}); none printed` +
+  `secrets: ${lines.length} values (${PASSED.filter((n) => env[n]?.trim()).length} from the env file, the demo's key from ${file}, the Telegram pairing from ${pairingFile}); none printed` +
     `${env.OPENAI_API_KEY?.trim() ? '' : '. NOTE: no OPENAI_API_KEY, so Momo will neither hear nor speak there'}\n`,
 );

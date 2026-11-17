@@ -12,7 +12,7 @@ import { makeItem, makeNode } from '../src/core/roles/types.ts';
 import { instructions } from '../src/node/live.ts';
 import type { Reading } from '../src/node/momo-chat.ts';
 import { loadScript } from '../src/demo/script.ts';
-import { ownBot } from '../src/node/telegram.ts';
+import { ownBot, ownerSecret, pairingIn } from '../src/node/telegram.ts';
 import { ADA, BOT_TOKEN as TOKEN, EVE, FakeBot, type Person, type Sent } from './fake-bot.ts';
 import { tempDir } from './temp.ts';
 
@@ -646,4 +646,28 @@ test('the demo reads the bot as the Mac does: what the paired account sends is k
   assert.match(made[0]!.title, /Sourdough/);
   assert.equal(made[0]!.source.from, 'paste', 'kept as a drop on the web page is');
   assert.equal(reply.text, `I’ve kept “${made[0]!.title}”. It is in your knowledge base, in no tree yet.`);
+});
+
+test("a service given its owner's pairing hears that account from the start, with no code, and anyone else still gets the one line", async () => {
+  const bot = await stand();
+  const owner = { userId: ADA.id, chatId: ADA.id, name: 'Ada Lovelace' };
+  const b = await boot(bot, { telegram: { token: TOKEN, owner } });
+  bot.push(ADA, { text: 'Sourdough rises slowly in winter' });
+  await bot.reply(ADA.id, /^I’ve kept “Sourdough/);
+  assert.equal((await status(b.run)).paired, 'Ada Lovelace');
+  bot.push(EVE, { text: 'let me in' });
+  await bot.reply(EVE.id, /only talk with the person this palace belongs to/);
+  assert.equal(items(b.run).filter((item) => /let me in/.test(item.title)).length, 0, 'nothing a stranger sends is kept');
+  assert.deepEqual(pairingIn(join(b.dataDir, 'telegram.json')), owner, 'and the pairing is kept as one made with a code is');
+});
+
+test("the Mac's pairing goes up as one secret value that decodes to it, and a missing or unreadable one to no pairing", () => {
+  const owner = { userId: 111, chatId: 111, name: 'Ada "A." Lovelace: notes' };
+  const value = ownerSecret.encode(owner);
+  assert.match(value, /^[A-Za-z0-9_-]+$/, 'nothing in it needs quoting in fly secrets import');
+  assert.deepEqual(ownerSecret.decode(value), owner);
+  assert.equal(ownerSecret.decode(undefined), null);
+  assert.equal(ownerSecret.decode('not a pairing'), null);
+  assert.equal(ownerSecret.decode(Buffer.from('{"userId":"x"}').toString('base64url')), null);
+  assert.equal(pairingIn(join(tempDir('mp-'), 'no-such-telegram.json')), null);
 });

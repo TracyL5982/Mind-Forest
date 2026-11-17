@@ -19,7 +19,7 @@ import { forDevice, Ledger, limitsFrom } from './hosted/ledger.ts';
 import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareCost } from './hosted/overflow.ts';
 import { openInstagram } from './instagram.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
-import { ownBot } from './telegram.ts';
+import { ownBot, ownerSecret } from './telegram.ts';
 import type { LinesOptions } from '../demo/lines.ts';
 import { record as recordLine } from '../demo/momo-voice.ts';
 import { loadScript } from '../demo/script.ts';
@@ -275,6 +275,9 @@ if (ledger) {
   console.log(`  telegram  the owner's bot: ${env.TELEGRAM_BOT_TOKEN && env.MIND_PALACE_ALERT_CHAT ? 'alerts only, never read' : 'off'}; the judges' bot: ${judgeToken ? 'read, a chat per headset' : 'off (MIND_PALACE_JUDGE_BOT_TOKEN is not set)'}`);
 } else {
   const ownToken = ownBot(env, { fake, demo });
+  // The demo keeps no file between deploys, so it is paired to the account its owner paired on their Mac (deploy/demo-secrets.ts).
+  const owner = demo && ownToken ? ownerSecret.decode(env.MIND_PALACE_TELEGRAM_OWNER) : null;
+  if (demo && ownToken && !owner) log('[telegram] the demo has no paired account, so it hears no one: pair the bot on the Mac first, then deploy again');
   const running = await startServer({
     ...shared,
     port,
@@ -282,7 +285,7 @@ if (ledger) {
     dataDir,
     token: env.MIND_PALACE_TOKEN || undefined,
     // One program at a time may read a bot's messages: the offline stand-in never does, and the demo only when told to (ownBot).
-    telegram: ownToken ? { token: ownToken } : undefined,
+    telegram: ownToken ? { token: ownToken, ...(owner && { owner }) } : undefined,
     ...(demo ? { demo: { script: loadScript(join(demoDir, 'script.json')), mediaDir: join(demoDir, 'media'), showcase: showcase(), restart: restartHeadset(), voice: env.MIND_PALACE_VOICE || SPEECH_VOICE, record: demoRecord() } } : {}),
     log,
   });
