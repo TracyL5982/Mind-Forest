@@ -129,7 +129,7 @@ export interface DemoStatus {
 export interface TakeShown extends Take {
   /**
    * `voice`: the voice the line's recording is in, or null while it has none. `closest`: for a line Momo did not say as
-   * written, the closest wording she did say; such a line is not ready, and its take is not played.
+   * written, the closest wording she did say; such a line is not ready, and that take of hers plays for it until it is.
    */
   lines: (TimedLine & Pick<LineShown, 'written' | 'edited'> & { recorded: boolean; voice: Voice | null; closest: string | null })[];
 }
@@ -556,9 +556,6 @@ export class Director {
       this.halt();
       // Every line is recorded before the take begins, so none starts late for want of its recording.
       await Promise.all(take.lines.map((line) => this.deps.lines.audio(line.text, line.kind)));
-      // A line she did not say as written is not ready. The take is not played with a gap where it should be, nor with other words.
-      const unready = take.lines.find((line) => this.deps.lines.closest(line.text) !== null);
-      if (unready) throw new Error(`Momo has not said one of this round's lines as written, so its take is not ready: "${unready.text.slice(0, 70)}…". On the page, take her wording for that line or reword it.`);
       if (phase.head === 'root' && !this.headOf(phase)) {
         // The tree's own first round follows from starting it, as it does when the user asks for a tree.
         this.pending = { phase: phase.id, from: 0 };
@@ -772,7 +769,8 @@ export class Director {
     const send = this.deps.momo;
     if (!send) return;
     const id = `take-${play}-${line.id}`;
-    if (!send({ t: 'text', id, text: line.text, kind: line.kind === 'answer' ? 'reply' : 'results' })) return;
+    // The caption is what is heard: for a line that is not ready, the wording of her closest take.
+    if (!send({ t: 'text', id, text: this.deps.lines.closest(line.text) ?? line.text, kind: line.kind === 'answer' ? 'reply' : 'results' })) return;
     const pcm = await this.deps.lines.audio(line.text, line.kind);
     if (pcm) {
       const piece = BYTES_PER_MS * 100;

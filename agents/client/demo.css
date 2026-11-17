@@ -200,3 +200,4 @@ button, input { font: inherit; color: inherit; }
 .save { display: grid; gap: 6px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
 .line-foot .unsaid { color: var(--danger); }
 .line-foot .unsaid .link { color: var(--ink); }
+.line-foot .unsaid mark { background: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--ink); border-radius: 3px; padding: 0 2px; }

@@ -63,8 +63,9 @@ export class Lines {
   /** Which voice each recording is in, by its file's name: the repository's, and those made here. */
   private readonly voices: Record<string, Voice>;
   private readonly voicesFile: string;
-  /** Lines she did not say as written, by their words, with the closest wording she did say. */
-  private readonly unsaid = new Map<string, string>();
+  /** Lines she did not say as written, by their recording's name, with the closest wording she did say: its take is `<name>.closest`. */
+  private unsaid: Record<string, string> = {};
+  private readonly unsaidFile: string;
 
   constructor(private readonly opts: LinesOptions) {
     const file = join(opts.demoDir, 'lines.json');
@@ -74,6 +75,12 @@ export class Lines {
     mkdirSync(this.made, { recursive: true });
     this.voicesFile = join(this.made, 'voices.json');
     this.voices = { ...read(join(opts.demoDir, 'voice', 'voices.json')), ...read(this.voicesFile) };
+    this.unsaidFile = join(this.made, 'closest.json');
+    try {
+      if (existsSync(this.unsaidFile)) this.unsaid = JSON.parse(readFileSync(this.unsaidFile, 'utf8')) as Record<string, string>;
+    } catch {
+      this.unsaid = {};
+    }
     try {
       if (existsSync(this.editsFile)) this.edits = Edits.parse(JSON.parse(readFileSync(this.editsFile, 'utf8')));
     } catch {
@@ -129,10 +136,16 @@ export class Lines {
     return [join(this.opts.demoDir, 'voice', name), join(this.made, name)].find((path) => existsSync(path) && statSync(path).size > LFS_POINTER) ?? null;
   }
 
-  /** How long the line takes to say: its recording's own length, or a reading of its words while there is none. */
+  /** The closest take she made of a line she did not say as written, which plays until the line is ready. */
+  private stand(text: string): string | null {
+    const file = join(this.made, `${this.name(text)}.closest`);
+    return this.unsaid[this.name(text)] !== undefined && existsSync(file) ? file : null;
+  }
+
+  /** How long the line takes to say: the length of what plays for it, or a reading of its words while nothing does. */
   ms(text: string): number {
     if (!text.trim()) return 0;
-    const file = this.kept(text);
+    const file = this.kept(text) ?? this.stand(text);
     return file ? Math.round(statSync(file).size / BYTES_PER_MS) : spokenFor(text);
   }
 
@@ -148,24 +161,34 @@ export class Lines {
 
   /**
    * The closest wording Momo said, for a line she did not say as written, or null when the line is recorded, was not tried, or
-   * is being tried now. Such a line is not ready: nothing is said in its place.
+   * is being tried now. Such a line is not ready, and until it is, that closest take of hers is what plays for it.
    */
   closest(text: string): string | null {
-    return this.kept(text) || this.rendering.has(this.name(text)) ? null : (this.unsaid.get(text) ?? null);
+    return this.kept(text) || this.rendering.has(this.name(text)) ? null : (this.unsaid[this.name(text)] ?? null);
   }
 
   /** Lets a line she did not say as written be tried again. */
   again(text: string): void {
-    this.unsaid.delete(text);
+    this.forget(this.name(text));
   }
 
-  /** The line in Momo's voice. Made once and kept; null when the service has no voice, or the voice did not answer. */
+  private forget(name: string): void {
+    if (this.unsaid[name] === undefined) return;
+    const { [name]: _gone, ...rest } = this.unsaid;
+    this.unsaid = rest;
+    writeFileSync(this.unsaidFile, JSON.stringify(this.unsaid, null, 1));
+  }
+
+  /**
+   * What plays for the line: its recording in Momo's realtime voice, made once and kept, or, for a line she did not say as
+   * written, the closest take she made of it. Null when the service has no voice, or the voice did not answer.
+   */
   audio(text: string, kind: LineKind = 'answer'): Promise<Uint8Array | null> {
     if (!text.trim()) return Promise.resolve(null);
-    const file = this.kept(text);
+    const file = this.kept(text) ?? this.stand(text);
     if (file) return Promise.resolve(new Uint8Array(readFileSync(file)));
     const record = this.opts.record;
-    if (!record || this.unsaid.has(text)) return Promise.resolve(null);
+    if (!record) return Promise.resolve(null);
     const name = this.name(text);
     let making = this.rendering.get(name);
     if (!making) {
@@ -178,12 +201,19 @@ export class Lines {
       making = record(text, kind).then(
         (made) => {
           if ('unsaid' in made) {
-            this.unsaid.set(text, made.closest);
-            // Her closest wording's own take is kept under those words, so taking her wording needs no new recording.
-            if (made.pcm && made.closest) keep(this.name(made.closest), made.pcm);
-            this.opts.log(`[demo] Momo did not say a line as written, so it is not ready. Closest: ${made.closest.slice(0, 90)}`);
-            return null;
+            if (!made.pcm) {
+              this.opts.log(`[demo] no take of a line came back, so it has no sound yet: ${text.slice(0, 70)}`);
+              return null;
+            }
+            writeFileSync(join(this.made, `${name}.closest`), made.pcm);
+            this.unsaid = { ...this.unsaid, [name]: made.closest };
+            writeFileSync(this.unsaidFile, JSON.stringify(this.unsaid, null, 1));
+            // When the take's sound is exactly her wording, it is that wording's recording too: taking her wording needs no new take.
+            if (made.own && made.closest) keep(this.name(made.closest), made.pcm);
+            this.opts.log(`[demo] Momo did not say a line as written, so it is not ready and her closest take plays for it: ${made.closest.slice(0, 90)}`);
+            return made.pcm;
           }
+          this.forget(name);
           keep(name, made.pcm);
           this.opts.log(`[demo] Momo's line recorded in her realtime voice, ${(made.pcm.length / BYTES_PER_MS / 1000).toFixed(1)} s, ${made.takes} take${made.takes === 1 ? '' : 's'}: ${text.slice(0, 70)}`);
           return made.pcm;
