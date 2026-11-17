@@ -1,6 +1,6 @@
 # The walkthrough demo
 
-One prepared tree, "Brainstorming in a headset", for recording the film. It is the walkthrough board made real: 31 rounds of asking, 149 cards, each round a layer of the tree.
+One prepared tree, "Brainstorming in a headset", for recording the film. It is the walkthrough board made real: 31 rounds of asking, 154 cards, each round a layer of the tree.
 
 - You go to any round from a page on the Mac. The tree then stands on the headset as it was just before that round, and you record from there.
 - You talk to Momo as usual. Momo hears you and answers in her own words. What the Scout brings is fixed: the round's cards, in the same order every time, under the same "Scout is searching" labels as a real search.
@@ -73,7 +73,7 @@ The demo is on the branch `demo/walkthrough`, which holds `tracy/agents` as it s
 
    It starts the app on the headset joined to the demo service, and the page's "Headset joined" light turns green. To go cable-free after that, run `agents/demo/headset.sh wifi` (the cable is needed this once), and `agents/demo/headset.sh resume` after the headset slept.
 
-3. **Open the control page** on the Mac: the `demo` address the service printed (`http://localhost:8787/demo#token=...`).
+3. **Open the control page** on the Mac: the `demo` address the service printed (`http://localhost:8787/demo#token=...`), or `agents/demo/headset.sh page`, which opens it for you.
 
 When the recording is over, put the app back on the hosted service, or it will go on looking for the demo on this Mac each time it is opened:
 
