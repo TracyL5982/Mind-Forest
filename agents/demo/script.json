@@ -1324,6 +1324,17 @@
      "image": "sketch-blend.jpg",
      "w": 1280,
      "h": 800
+    },
+    {
+     "id": "janus-depth-layers",
+     "origin": "ocean",
+     "title": "The sphere pulled into layers",
+     "text": "Zoomed in, the dots that matter come near as bubbles and the rest step back onto farther spheres",
+     "credit": "Your prototype · Janusian Zoom",
+     "kind": "picture",
+     "image": "janus-depth-layers.jpg",
+     "w": 1400,
+     "h": 788
     }
    ]
   },
@@ -1433,6 +1444,28 @@
      "image": "sketch-pull.jpg",
      "w": 1280,
      "h": 800
+    },
+    {
+     "id": "janus-dots-room",
+     "origin": "ocean",
+     "title": "Every film a dot round you",
+     "text": "An earlier prototype of ours: a few hundred films as dots on one sphere, hung in your own room",
+     "credit": "Your prototype · Janusian Zoom",
+     "kind": "picture",
+     "image": "janus-dots-room.jpg",
+     "w": 1400,
+     "h": 788
+    },
+    {
+     "id": "janus-three-open",
+     "origin": "ocean",
+     "title": "Three films opened in one lasso",
+     "text": "A line drawn round a few dots holds them as a group, and each film opens on its own pane",
+     "credit": "Your prototype · Janusian Zoom",
+     "kind": "picture",
+     "image": "janus-three-open.jpg",
+     "w": 1400,
+     "h": 788
     }
    ]
   },
@@ -1577,6 +1610,17 @@
      "venue": "Proceedings of the National Academy of Sciences",
      "href": "https://doi.org/10.1073/pnas.070039597",
      "kind": "paper"
+    },
+    {
+     "id": "janus-gallery",
+     "origin": "ocean",
+     "title": "The same films in a gallery",
+     "text": "The room changes and the dots keep their places: here a lasso holds three scenes side by side",
+     "credit": "Your prototype · Janusian Zoom",
+     "kind": "picture",
+     "image": "janus-gallery.jpg",
+     "w": 1400,
+     "h": 788
     }
    ]
   },
@@ -1853,6 +1897,17 @@
      "venue": "Proceedings of the 9th annual ACM symposium on User interface software and technology  - UIST '96",
      "href": "https://doi.org/10.1145/237091.237102",
      "kind": "paper"
+    },
+    {
+     "id": "janus-zoom-beads",
+     "origin": "ocean",
+     "title": "Two hands set the zoom",
+     "text": "Spreading the hands pulls things nearer: the readout says 19%, with a chain of beads below it",
+     "credit": "Your prototype · Janusian Zoom",
+     "kind": "picture",
+     "image": "janus-zoom-beads.jpg",
+     "w": 1400,
+     "h": 800
     }
    ]
   },
