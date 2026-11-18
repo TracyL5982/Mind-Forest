@@ -397,7 +397,6 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         live.send(JSON.stringify(frame));
         return true;
       },
-      offer: (nodeId, pills) => broadcast({ t: 'questions', nodeId, questions: pills }),
       // Only the app on a headset can be started again from here. The Mac preview joins as a device too, and a headset on the
       // cable that is not the one joined must be left as it is.
       fromContact: () => fromContact.getStore() === true,
@@ -998,8 +997,6 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
 
   async function handle(m: ClientMessage, ws: WebSocket): Promise<void> {
     director?.heard(m);
-    // A pill under one of the demo's diagrams the user steps through: the card turns to that state, and no search is asked for.
-    if (m.t === 'ask' && director?.step(m.nodeId, m.need)) return;
     const full = WRITES.has(m.t) ? noRoom() : null;
     if (full) return decline(ws, full);
     switch (m.t) {
@@ -1036,7 +1033,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         gifts?.focused(m.nodeId);
         return;
       case 'questions':
-        ws.send(JSON.stringify({ t: 'questions', nodeId: m.nodeId, questions: director?.pills(m.nodeId) ?? (await pipeline.questions(m.nodeId)) }));
+        ws.send(JSON.stringify({ t: 'questions', nodeId: m.nodeId, questions: await pipeline.questions(m.nodeId) }));
         return;
       case 'ask':
       case 'more': {
