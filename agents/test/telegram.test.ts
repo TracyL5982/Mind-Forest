@@ -99,7 +99,7 @@ test('a good code pairs one account; a reused or an expired one pairs no one; an
   await b.run.pipeline.idle();
   assert.equal((await status(b.run)).paired, 'Ada Lovelace', 'a used code pairs no one');
   await bot.until(() => bot.sent.filter((s) => s.chat === EVE.id).length === 3);
-  for (const reply of bot.sent.filter((s) => s.chat === EVE.id)) assert.match(reply.text, /^Hi, I’m Momo, the voice of a Mind Palace\. I only talk with the person this palace belongs to\..*pair me on the Mind Palace web page/);
+  for (const reply of bot.sent.filter((s) => s.chat === EVE.id)) assert.match(reply.text, /^Hi, I’m Momo, the voice of a Mind Forest\. I only talk with the person this forest belongs to\..*pair me on the Mind Forest web page/);
   assert.deepEqual(items(b.run), [], 'and nothing it sent was added');
   for (let n = 0; n < 5; n++) await bot.read(bot.push(EVE, { text: 'who are you' }));
   await new Promise((r) => setTimeout(r, 60));
@@ -666,7 +666,7 @@ test("a service given its owner's pairing hears that account from the start, wit
   await bot.reply(ADA.id, /^I’ve kept “Sourdough/);
   assert.equal((await status(b.run)).paired, 'Ada Lovelace');
   bot.push(EVE, { text: 'let me in' });
-  await bot.reply(EVE.id, /only talk with the person this palace belongs to/);
+  await bot.reply(EVE.id, /only talk with the person this forest belongs to/);
   assert.equal(items(b.run).filter((item) => /let me in/.test(item.title)).length, 0, 'nothing a stranger sends is kept');
   assert.deepEqual(pairingIn(join(b.dataDir, 'telegram.json')), owner, 'and the pairing is kept as one made with a code is');
 });

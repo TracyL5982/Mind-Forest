@@ -48,7 +48,7 @@ const MOMENT: Record<LineKind, string> = {
 };
 
 const READING = `# Recording your lines
-You are recording your own lines for a film of Mind Palace. Each message gives one line of yours and the moment you say it at. Say that line aloud, exactly as it is written: every word, in order, nothing before it and nothing after it, and no word changed. Say it as you would at that moment, in your own natural, warm delivery, at your usual pace. A name in quotation marks is a card's title: say it as written.`;
+You are recording your own lines for a film of Mind Forest. Each message gives one line of yours and the moment you say it at. Say that line aloud, exactly as it is written: every word, in order, nothing before it and nothing after it, and no word changed. Say it as you would at that moment, in your own natural, warm delivery, at your usual pace. A name in quotation marks is a card's title: say it as written.`;
 
 const NUMBERS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
 

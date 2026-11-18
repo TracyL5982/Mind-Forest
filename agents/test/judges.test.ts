@@ -18,7 +18,7 @@ const KEY = 'app-key';
 const ADMIN = 'admin-token';
 const A = 'device-aaaaaaaaaaaa';
 const B = 'device-bbbbbbbbbbbb';
-const STRANGER = /^Hi, I’m Momo, the voice of Mind Palace\. I don’t know this chat yet\. In your headset, say “Momo, connect my Telegram”/;
+const STRANGER = /^Hi, I’m Momo, the voice of Mind Forest\. I don’t know this chat yet\. In your headset, say “Momo, connect my Telegram”/;
 
 const opened: { close(): Promise<void> }[] = [];
 afterEach(async () => {
@@ -208,8 +208,8 @@ test("a judge's Telegram obeys the headset's limits: the store, the upload room,
   const full = await host({}, { storeLimit: 1 });
   await pair(full, A, ADA);
   const before = await titles(full.hosted, A);
-  assert.match((await ask(full, ADA, { text: 'one more note' }))[0]!.text, /mind palace is full/);
-  assert.match((await ask(full, ADA, { text: 'hand off the sourdough tree' }, 2))[1]!.text, /mind palace is full/);
+  assert.match((await ask(full, ADA, { text: 'one more note' }))[0]!.text, /Mind Forest is full/);
+  assert.match((await ask(full, ADA, { text: 'hand off the sourdough tree' }, 2))[1]!.text, /Mind Forest is full/);
   assert.deepEqual(await titles(full.hosted, A), before);
   await full.hosted.close();
 

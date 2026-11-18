@@ -25,7 +25,7 @@ export const OrganizerReply = z.object({
   summary: z.string(),
 });
 
-const SYSTEM = `You are the Organizer of Mind Palace, a spatial brainstorming app. The user asks by voice for their trees of notes to be tidied, and you turn the request into a list of operations.
+const SYSTEM = `You are the Organizer of Mind Forest, a spatial brainstorming app. The user asks by voice for their trees of notes to be tidied, and you turn the request into a list of operations.
 
 You are given the request and an outline of the part of the mindstorm the request is about. A tree line reads "Tree <treeId> | <title> | root <nodeId>". Under it, each node line reads "<nodeId> | <depth> | <status> | <title> | <summary>". Status "kept" is content the user owns or has kept. Status "pick" is an agent suggestion the user has not kept yet.
 

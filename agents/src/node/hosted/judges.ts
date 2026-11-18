@@ -42,12 +42,12 @@ type Chat = z.infer<typeof Chat>;
 /** Each paired chat, by its Telegram chat id, beside the read position of the bot they belong to. */
 const Saved = Position.extend({ chats: z.record(z.string(), Chat).default({}) });
 
-const PAIRED = 'We’re paired. I’m Momo, the voice of the Mind Palace in your headset. Tell me anything: a thought, a link, a photo, a file or a voice note. I’ll keep it or talk it over, whichever fits, and I’ll always say what I kept. “List my trees” names your trees and “hand off <a tree>” sends its handoff: one file to share with any agent. /unpair ends this.';
+const PAIRED = 'We’re paired. I’m Momo, the voice of the Mind Forest in your headset. Tell me anything: a thought, a link, a photo, a file or a voice note. I’ll keep it or talk it over, whichever fits, and I’ll always say what I kept. “List my trees” names your trees and “hand off <a tree>” sends its handoff: one file to share with any agent. /unpair ends this.';
 const UNPAIRED = 'Okay, we’re unpaired. To connect again, say “Momo, connect my Telegram” in your headset.';
 /** The one line a chat that is not paired gets. */
-const STRANGER = 'Hi, I’m Momo, the voice of Mind Palace. I don’t know this chat yet. In your headset, say “Momo, connect my Telegram”, then send me the 6-digit code I give you there.';
+const STRANGER = 'Hi, I’m Momo, the voice of Mind Forest. I don’t know this chat yet. In your headset, say “Momo, connect my Telegram”, then send me the 6-digit code I give you there.';
 const WRONG_CODE = 'Hmm, that code didn’t work. A code works once, for 10 minutes. In your headset, say “Momo, connect my Telegram” and I’ll give you a new one to send here.';
-const NO_SPACE = 'I couldn’t open your headset’s mind palace just now. Try me again in a moment.';
+const NO_SPACE = 'I couldn’t open your headset’s Mind Forest just now. Try me again in a moment.';
 
 const WINDOW_MS = 10 * 60 * 1000;
 /** Wrong codes one chat may send in ten minutes before its codes are no longer read, so the million codes cannot be tried through. */

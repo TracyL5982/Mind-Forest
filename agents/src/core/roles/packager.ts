@@ -16,7 +16,7 @@ export const PackagerReply = z.object({
   openQuestions: z.array(z.string()),
 });
 
-const SYSTEM = `You are the Packager of Mind Palace, a spatial brainstorming app. You write the cover notes of a handoff file. The user takes the file to another AI agent, which has no access to the app and must continue the work from the file alone.
+const SYSTEM = `You are the Packager of Mind Forest, a spatial brainstorming app. You write the cover notes of a handoff file. The user takes the file to another AI agent, which has no access to the app and must continue the work from the file alone.
 
 You are given an outline of the trees in the handoff, and the user's instruction for the next agent when there is one. Each outline line is a node: its label, its title and a one-line summary. The label "own" is the user's own content, "kept" is an agent suggestion the user kept, and "suggestion" is an agent suggestion the user has not kept.
 
@@ -246,7 +246,7 @@ function markdown(doc: HandoffJson, title: string, files: Files): string {
   const out: string[] = [
     `# ${title}`,
     '',
-    `This file is a handoff from Mind Palace, a spatial brainstorming app, written on ${doc.createdAt.slice(0, 10)} for an agent that cannot open the app. ${doc.brief}`,
+    `This file is a handoff from Mind Forest, a spatial brainstorming app, written on ${doc.createdAt.slice(0, 10)} for an agent that cannot open the app. ${doc.brief}`,
     '',
   ];
   if (doc.note) out.push("The user's instruction for you:", '', ...quote(doc.note, ''), '');

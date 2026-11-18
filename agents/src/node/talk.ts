@@ -26,8 +26,8 @@ export interface Lines {
 
 export const OWNER_LINES: Lines = {
   hello: 'I’m here, and we’re paired. Tell me anything and I’ll keep it or talk it over, whichever fits. “List my trees” names your trees, “hand off <a tree>” sends its handoff, and /handoff sends the latest again.',
-  tooBig: 'That one’s over 20 MB, more than Telegram lets me take. Drop it on the Mind Palace web page instead.',
-  failed: 'Something went wrong on my side, so I didn’t keep that. Try again, or drop it on the Mind Palace web page.',
+  tooBig: 'That one’s over 20 MB, more than Telegram lets me take. Drop it on the Mind Forest web page instead.',
+  failed: 'Something went wrong on my side, so I didn’t keep that. Try again, or drop it on the Mind Forest web page.',
   noHandoff: 'There’s no handoff yet. Tell me “hand off” and a tree’s name, or ask me in the headset.',
   notHeard: 'I can’t write voice notes out here without OPENAI_API_KEY in ~/.muse-garden.env, so I kept the recording as it is.',
 };

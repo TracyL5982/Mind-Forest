@@ -815,7 +815,7 @@ test('once a space is at its store limit every message that writes is refused, t
     heard!({ type: 'response.done', response: { id: 'r1', status: 'completed' } });
     const answered = () => lines.find((line) => line.includes('[live] save_note('));
     await holds(answered);
-    assert.match(answered()!, /"error":"This headset's mind palace is full/, "Momo's note is refused too");
+    assert.match(answered()!, /"error":"This headset's Mind Forest is full/, "Momo's note is refused too");
   } finally {
     for (const ws of sockets) ws.close();
     await hosted.close();

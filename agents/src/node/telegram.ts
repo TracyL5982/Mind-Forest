@@ -81,13 +81,13 @@ const SINGLE: { field: 'video' | 'video_note' | 'audio' | 'document'; mime: stri
   { field: 'document', mime: 'application/octet-stream', stem: 'file', ext: '' },
 ];
 
-const PAIRED = 'We’re paired. I’m Momo, the voice of your Mind Palace. Tell me anything: a thought, a link, a photo, a video, a file or a voice note. I’ll keep it or talk it over, whichever fits, and I’ll always say what I kept. Add “start a tree on this” and I’ll grow a tree. “List my trees” names them and “hand off <a tree>” sends its handoff: one file to share with any agent. /handoff sends the latest again.';
+const PAIRED = 'We’re paired. I’m Momo, the voice of your Mind Forest. Tell me anything: a thought, a link, a photo, a video, a file or a voice note. I’ll keep it or talk it over, whichever fits, and I’ll always say what I kept. Add “start a tree on this” and I’ll grow a tree. “List my trees” names them and “hand off <a tree>” sends its handoff: one file to share with any agent. /handoff sends the latest again.';
 const UNPAIRED = 'Okay, we’re unpaired. I won’t hear anything here until you pair me again on the web page.';
 /** The one line a chat that is not the owner's gets. */
-const STRANGER = 'Hi, I’m Momo, the voice of a Mind Palace. I only talk with the person this palace belongs to. If that’s you, pair me on the Mind Palace web page: Settings, then Pair under Telegram.';
+const STRANGER = 'Hi, I’m Momo, the voice of a Mind Forest. I only talk with the person this forest belongs to. If that’s you, pair me on the Mind Forest web page: Settings, then Pair under Telegram.';
 /** Replies one unpaired chat gets in ten minutes, so the bot cannot be made to send without end. */
 export const STRANGER_REPLIES = 6;
-const FOR_AGENT = 'For your agent: this file is a Mind Palace handoff. It holds the goal, the outline, what to do next and the open questions, with each picture described in words. Read it and continue the work.';
+const FOR_AGENT = 'For your agent: this file is a Mind Forest handoff. It holds the goal, the outline, what to do next and the open questions, with each picture described in words. Read it and continue the work.';
 
 class BotError extends Error {
   constructor(readonly status: number, message: string) {

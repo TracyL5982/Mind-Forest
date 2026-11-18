@@ -1010,7 +1010,7 @@ interface Open {
 }
 
 const COMPONENTS_SYSTEM =
-  'You are the Renderer of Mind Palace, a canvas for research, brainstorming and memories. You choose the card that presents each piece of text most accurately.';
+  'You are the Renderer of Mind Forest, a canvas for research, brainstorming and memories. You choose the card that presents each piece of text most accurately.';
 
 function componentsPrompt(open: Open[], asked: Asked): string {
   const items = open
@@ -1348,7 +1348,7 @@ function survey(ctx: RoleContext, parents: Node[], look: Look, out: Command[]): 
 }
 
 const COMPOSITES_SYSTEM =
-  'You are the Renderer of Mind Palace, a spatial brainstorming app. You decide whether sibling notes in a tree should be drawn together as one arrangement.';
+  'You are the Renderer of Mind Forest, a spatial brainstorming app. You decide whether sibling notes in a tree should be drawn together as one arrangement.';
 
 function compositesPrompt(ctx: RoleContext, pools: Pool[]): string {
   const line = (node: Node) => {

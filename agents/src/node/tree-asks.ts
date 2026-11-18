@@ -75,7 +75,7 @@ export function treeLines(mind: Mindstorm): TreeLine[] {
 
 const MatchReply = z.object({ matches: z.array(z.number().int()) });
 
-const MATCH_SYSTEM = `You match a person's words to the trees they have in Mind Palace, a brainstorming app. Each tree is listed with a number, its name, what it is about and some of its cards.
+const MATCH_SYSTEM = `You match a person's words to the trees they have in Mind Forest, a brainstorming app. Each tree is listed with a number, its name, what it is about and some of its cards.
 
 Return "matches": the numbers of the trees the words mean, best first. Judge by the name first, then by what is in the tree. Give one number when one tree is clearly meant, several only when the words fit several about equally, and none when no tree fits. Use only the numbers listed.`;
 

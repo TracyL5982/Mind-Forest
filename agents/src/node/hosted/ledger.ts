@@ -70,9 +70,9 @@ export type Refusal = 'off' | 'cap' | 'budget' | 'share' | Metered;
 
 /** What Momo says for each refusal. */
 export const LINES: Record<Refusal, string> = {
-  off: 'Mind Palace is paused for a little while. Your trees are safe, so try again soon.',
-  cap: "Mind Palace has done all it can for today. Your trees are safe; come back tomorrow.",
-  budget: "Mind Palace has done all the thinking it can for today. Your trees are safe; come back tomorrow.",
+  off: 'Mind Forest is paused for a little while. Your trees are safe, so try again soon.',
+  cap: "Mind Forest has done all it can for today. Your trees are safe; come back tomorrow.",
+  budget: "Mind Forest has done all the thinking it can for today. Your trees are safe; come back tomorrow.",
   share: "This headset has reached today's limit, so I can't do more for it until tomorrow. Your trees are all here to browse.",
   voiceMs: "That's all the talking I can do today. Your trees are still here to browse.",
   searches: "That's today's searches used up. I can still talk, and your trees are all here.",
@@ -181,12 +181,12 @@ export class Ledger {
     const fresh = alertsPassed(day.dollars).filter((at) => !day.alerted.includes(at));
     if (fresh.length > 0) {
       day.alerted.push(...fresh);
-      this.opts.alert?.(`Mind Palace judging: today's spend passed $${fresh.at(-1)} ($${day.dollars.toFixed(2)}).`);
+      this.opts.alert?.(`Mind Forest judging: today's spend passed $${fresh.at(-1)} ($${day.dollars.toFixed(2)}).`);
     }
     const cap = this.opts.limits.dollarsPerDay;
     if (cap !== null && day.dollars >= cap && !day.capAlerted) {
       day.capAlerted = true;
-      this.opts.alert?.(`Mind Palace judging: today's spend reached the $${cap} cap. Costly work is refused until midnight Pacific; raise MIND_PALACE_CAP_DOLLARS, or set it to 0 for no cap, and redeploy to lift it.`);
+      this.opts.alert?.(`Mind Forest judging: today's spend reached the $${cap} cap. Costly work is refused until midnight Pacific; raise MIND_PALACE_CAP_DOLLARS, or set it to 0 for no cap, and redeploy to lift it.`);
     }
   }
 

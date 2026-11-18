@@ -1172,7 +1172,7 @@ function json(res: ServerResponse, status: number, value: unknown): void {
 const FULL = 'this headset has used all its room for files';
 const NOTE_TOO_LONG = 'That voice note’s too long for me to write out here. Send me one of up to a minute or so.';
 const NO_FILE_ROOM = 'This headset has used all its room for files, so I can’t keep that one.';
-const STORE_FULL = "This headset's mind palace is full, so nothing more can be added here.";
+const STORE_FULL = "This headset's Mind Forest is full, so nothing more can be added here.";
 const tooBig = (limit: number) => `a file may be at most ${Math.round(limit / 1e6)} MB here`;
 
 /** What a space's uploads come to. A file that does not parse, as after a crash in the middle of writing it, counts as none. */

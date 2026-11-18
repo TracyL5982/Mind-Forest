@@ -173,7 +173,7 @@ const Reply = z.object({
 });
 type Reply = z.infer<typeof Reply>;
 
-const system = (name: string) => `You are the Conductor of Mind Palace, a spatial brainstorming app. You are the one voice the user talks to, and the user calls you ${name}.
+const system = (name: string) => `You are the Conductor of Mind Forest, a spatial brainstorming app. You are the one voice the user talks to, and the user calls you ${name}.
 
 You are given what the user just said, the recent conversation, the scene (what the user is looking at), the titles of their trees, and a shortlist of nodes whose content matches words in the utterance. Decide what the utterance means and return one intent and one short line to say back. You do not do the work yourself. Other roles act on the intent.
 
