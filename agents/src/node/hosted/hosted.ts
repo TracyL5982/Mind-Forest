@@ -4,7 +4,7 @@ import { createServer, STATUS_CODES, type IncomingMessage, type ServerResponse }
 import { join, posix } from 'node:path';
 import type { Duplex } from 'node:stream';
 import { PROTOCOL_VERSION } from '../protocol.ts';
-import { openSpace, type Meter, type ServerOptions, type Space } from '../server.ts';
+import { openSpace, STORE_FULL, type Meter, type ServerOptions, type Space } from '../server.ts';
 import type { InstagramLibrary, InstagramReader } from '../instagram.ts';
 import { publicFetch } from '../public-fetch.ts';
 import { BOT_API } from '../telegram.ts';
@@ -45,6 +45,21 @@ export const MIN_FREE_BYTES = 300e6;
 const PUBLIC_ONLY = publicFetch();
 const VOLUME_FULL = 'The service is nearly out of room, so nothing more can be added for now. Everything here still opens.';
 
+/**
+ * Every line the hosted service says itself (`Meter.recorded`), by its key in demo/lines.json's `said`: each is recorded there in
+ * Momo's realtime voice and shipped with the image (Dockerfile). The rest of what she says is her live voice's own.
+ */
+export const RECORDED_LINES: Record<string, string> = {
+  limitOff: LINES.off,
+  limitCap: LINES.cap,
+  limitBudget: LINES.budget,
+  limitShare: LINES.share,
+  limitVoice: LINES.voiceMs,
+  limitSearches: LINES.searches,
+  storeFull: STORE_FULL,
+  volumeFull: VOLUME_FULL,
+};
+
 export interface HostedOptions {
   port: number;
   host: string;
@@ -81,7 +96,10 @@ export interface HostedOptions {
   mode?: string;
   /** The judges' own Telegram bot, which this service alone reads. Without it no space has Telegram. */
   judgeBot?: Omit<JudgeBotOptions, 'log'>;
-  /** A line in Momo's voice as 16-bit mono PCM at the live voice's rate, for a refusal said without the realtime model. */
+  /**
+   * A line's recording in Momo's realtime voice as 16-bit mono PCM at the live voice's rate, for a refusal said without the realtime
+   * model (`RECORDED_LINES`). It rejects for words it has no recording of: they are then shown with no sound.
+   */
   record?: (text: string) => Promise<Uint8Array>;
   /**
    * Momo's line as a tree a friend shared grows in a headset, recorded in her realtime voice (16-bit mono PCM at the live voice's

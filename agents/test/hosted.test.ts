@@ -11,13 +11,13 @@ import type { Found, JsonRequest, ModelClient, Priority, Tools } from '../src/co
 import type { Roles } from '../src/core/roles/types.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { MIN_FREE_BYTES, PICTURE_DOLLARS, SET_BYTES, spaceOptions, startHosted, telegramAlert, upgradeWhenOpen, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
+import { MIN_FREE_BYTES, PICTURE_DOLLARS, RECORDED_LINES, SET_BYTES, spaceOptions, startHosted, telegramAlert, upgradeWhenOpen, type Hosted, type HostedOptions } from '../src/node/hosted/hosted.ts';
 import { DEFAULT_LIMITS, forDevice, Ledger, LINES, type Limits } from '../src/node/hosted/ledger.ts';
 import { Overflow, Paused } from '../src/node/hosted/overflow.ts';
 import { LiveVoice, type LiveDeps, type VoiceFrame } from '../src/node/live.ts';
 import { SEARCH_DOLLARS } from '../src/node/search-openai.ts';
 import { questWavMs } from '../src/node/speech-openai.ts';
-import { chargedPictures, startServer, type Space } from '../src/node/server.ts';
+import { chargedPictures, startServer, STORE_FULL, type Space } from '../src/node/server.ts';
 import { makeSources } from '../src/node/sources.ts';
 import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 import { MemoryAssets } from './kit.ts';
@@ -27,6 +27,7 @@ import { followingIn, InstagramLibrary, openInstagram, parseList } from '../src/
 import { tempDir } from './temp.ts';
 import { DemoScript } from '../src/demo/script.ts';
 import { loadShowcase } from '../src/demo/showcase.ts';
+import { recordingName, recordingOf } from '../src/demo/lines.ts';
 
 interface Msg {
   t: string;
@@ -415,6 +416,67 @@ test('uploads are capped per file and per device, new devices per hour, and the 
   assert.deepEqual((status.known as string[]).sort(), [A, B]);
   assert.ok((status.open as { device: string }[]).some((s) => s.device === A), 'open spaces by full id');
   await hosted.close();
+});
+
+test("every line the hosted service says itself is recorded in Momo's realtime voice, as written now, and the image ships each recording", () => {
+  const demo = join(import.meta.dirname, '../demo');
+  const lines = JSON.parse(readFileSync(join(demo, 'lines.json'), 'utf8')) as { voice: string; said: Record<string, string> };
+  const voices = JSON.parse(readFileSync(join(demo, 'voice', 'voices.json'), 'utf8')) as Record<string, string>;
+  const dockerfile = readFileSync(join(import.meta.dirname, '../Dockerfile'), 'utf8');
+  const shipped = dockerfile.split('\n').filter((line) => line.startsWith('COPY ') && line.trim().endsWith(' ./demo/voice/')).flatMap((line) => line.split(/\s+/).slice(1, -1));
+  const ignore = readFileSync(join(import.meta.dirname, '../.dockerignore'), 'utf8').split('\n');
+  assert.deepEqual(Object.values(RECORDED_LINES).sort(), [...new Set([...Object.values(LINES).filter((line) => line !== LINES.webAnswers), STORE_FULL])].concat(RECORDED_LINES.volumeFull!).sort(), 'every refusal said aloud: the limits but the web answers, which Momo says in her own words, and a full space');
+  for (const [key, text] of Object.entries(RECORDED_LINES)) {
+    assert.equal(lines.said[key], text, `${key}: lines.json has the words as the service says them`);
+    const name = recordingName(lines.voice, text);
+    assert.equal(voices[name], 'realtime', `${key}: recorded in her realtime voice`);
+    assert.ok(recordingOf(demo, text), `${key}: its recording is there`);
+    assert.ok(shipped.includes(`demo/voice/${name}`) && ignore.includes(`!demo/voice/${name}`), `${key}: the image ships ${name}`);
+  }
+});
+
+test("a refusal is said from its recording, its caption timed to it; words with no recording are shown alone, with no other voice", { timeout: 30000 }, async () => {
+  const demo = join(import.meta.dirname, '../demo');
+  const asked: string[] = [];
+  const shared = { clientDir: '', model: new FakeModel(), roles: fakeRoles, live: { open: (() => ({ send: () => {}, close: () => {} })) as LiveDeps['open'], options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } } };
+  // As main.ts gives it: the demo folder's recording of the words, or none. First the words are ones changed since they were recorded.
+  let words = (text: string) => `${text} (changed)`;
+  const record = async (text: string) => {
+    asked.push(text);
+    const pcm = recordingOf(demo, words(text));
+    if (!pcm) throw new Error('no recording');
+    return pcm;
+  };
+  const { hosted, ledger } = await host({}, { shared, record });
+  try {
+    const c = await connect(hosted, `${KEY}.${A}`);
+    const hello = await c.until((m) => m.t === 'hello');
+    const live = await connect(hosted, `${KEY}.${A}`, `/live?connection=${hello.connection as string}`);
+    await live.until((m) => m.t === 'ready');
+    ledger.setOff(true);
+
+    // Words with no recording: shown for as long as they take to read, with no sound.
+    live.ws.send(JSON.stringify({ t: 'start', turn: 1, scene: { selection: [] } }));
+    const bare = await live.until((m) => m.t === 'text' && m.text === LINES.off);
+    const at = Date.now();
+    await soon(live.until((m) => m.t === 'done' && m.id === bare.id), 15000);
+    assert.equal(live.seen.filter((m) => m.t === 'audio' && m.id === bare.id).length, 0, 'no sound at all');
+    assert.ok((bare.ms as number) >= 1500 && Date.now() - at >= (bare.ms as number) - 200, 'the words stay up as long as they take to read');
+
+    // Its recording: said whole, the caption told how long it is and that it starts at its start.
+    words = (text) => text;
+    live.ws.send(JSON.stringify({ t: 'end' }));
+    live.ws.send(JSON.stringify({ t: 'start', turn: 2, scene: { selection: [] } }));
+    const text = await live.until((m) => m.t === 'text' && m.id !== bare.id && m.text === LINES.off);
+    await live.until((m) => m.t === 'done' && m.id === text.id);
+    const sound = live.seen.filter((m) => m.t === 'audio' && m.id === text.id).reduce((n, m) => n + Buffer.from(m.pcm as string, 'base64').length, 0);
+    assert.equal(sound, recordingOf(demo, LINES.off)!.length, 'the recording, whole');
+    assert.deepEqual([text.ms, text.from], [Math.round(sound / 48), 0]);
+    assert.deepEqual(asked, [LINES.off, LINES.off]);
+    for (const ws of [live.ws, c.ws]) ws.close();
+  } finally {
+    await hosted.close();
+  }
 });
 
 test('a device keeps two voice sockets, and the off switch in the middle of a turn ends it, the answer and the session', { timeout: 20000 }, async () => {

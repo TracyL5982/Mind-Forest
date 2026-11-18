@@ -49,12 +49,22 @@ export function savedLine(demoDir: string, key: string): { text: string; pcm: Ui
   if (!existsSync(file)) return null;
   const lines = LinesFile.parse(JSON.parse(readFileSync(file, 'utf8')));
   const text = lines.said?.[key];
-  if (!text) return null;
-  const name = recordingName(lines.voice, text);
+  const pcm = text ? recordingOf(demoDir, text) : null;
+  return text && pcm ? { text, pcm } : null;
+}
+
+/**
+ * The recording of exactly these words in Momo's realtime voice, as the demo folder keeps it, or null: words that changed since
+ * they were recorded have none. Only a recording `voices.json` names as hers is given, never one in another voice.
+ */
+export function recordingOf(demoDir: string, text: string): Uint8Array | null {
+  const file = join(demoDir, 'lines.json');
+  if (!existsSync(file)) return null;
+  const name = recordingName(LinesFile.parse(JSON.parse(readFileSync(file, 'utf8'))).voice, text);
   const voices = join(demoDir, 'voice', 'voices.json');
   const recording = join(demoDir, 'voice', name);
   if (!existsSync(voices) || read(voices)[name] !== 'realtime' || !existsSync(recording) || statSync(recording).size <= LFS_POINTER) return null;
-  return { text, pcm: new Uint8Array(readFileSync(recording)) };
+  return new Uint8Array(readFileSync(recording));
 }
 
 /** The file a recording of these exact words in this voice is kept in: the same words are the same file, wherever they are said. */

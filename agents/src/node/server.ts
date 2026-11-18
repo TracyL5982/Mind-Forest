@@ -122,7 +122,7 @@ export interface Meter {
   held(): string | null;
   /** A picture was made, on whichever model made it: counted at the price of one. */
   pictured(): void;
-  /** A line said in Momo's voice, as 16-bit mono PCM at the live voice's rate, when it can be made. */
+  /** A line's recording in Momo's realtime voice, as 16-bit mono PCM at the live voice's rate, or null when it has none. */
   recorded(text: string): Promise<Uint8Array | null>;
 }
 
@@ -735,14 +735,21 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
   /** Each connection's `/live` socket, for a line said in Momo's recorded voice there. */
   const liveOf = new Map<WebSocket, WebSocket>();
   let lines = 0;
-  /** A refusal Momo says on the device's `/live` socket from a recording, so a refused device costs no realtime model. */
+  /**
+   * A refusal Momo says on the device's `/live` socket from its recording in her realtime voice, so a refused device costs no
+   * realtime model: its caption with the recording's length, then its sound. Words with no recording are shown alone for as long as
+   * they take to read, and the log says so: no other voice ever says them (the user's rule, 2026-11-18).
+   */
   const sayRecorded = async (live: WebSocket, text: string) => {
     const id = `line-${++lines}`;
     const send = (frame: VoiceFrame) => live.readyState === live.OPEN && live.send(JSON.stringify(frame));
-    send({ t: 'text', id, text, kind: 'reply' });
-    const pcm = await meter?.recorded(text).catch(() => null);
+    const pcm = (await meter?.recorded(text).catch(() => null)) ?? null;
+    if (!pcm) log(`[limits] no recording of “${text}” in Momo's realtime voice: its words are shown with no sound`);
+    const ms = pcm ? Math.round(pcm.length / ((RATE / 1000) * 2)) : Math.max(1500, text.length * 66);
+    send({ t: 'text', id, text, kind: 'reply', ms, from: 0 });
     const piece = (RATE / 10) * 2;
     if (pcm) for (let at = 0; at < pcm.length; at += piece) send({ t: 'audio', id, pcm: Buffer.from(pcm.subarray(at, at + piece)).toString('base64') });
+    else await new Promise((done) => setTimeout(done, ms).unref?.());
     send({ t: 'done', id });
   };
   /** A refusal told to the connection that asked: in Momo's recorded voice when it has `/live`, else as a reply it reads aloud. */
@@ -1172,7 +1179,7 @@ function json(res: ServerResponse, status: number, value: unknown): void {
 const FULL = 'this headset has used all its room for files';
 const NOTE_TOO_LONG = 'That voice note’s too long for me to write out here. Send me one of up to a minute or so.';
 const NO_FILE_ROOM = 'This headset has used all its room for files, so I can’t keep that one.';
-const STORE_FULL = "This headset's Mind Forest is full, so nothing more can be added here.";
+export const STORE_FULL = "This headset's Mind Forest is full, so nothing more can be added here.";
 const tooBig = (limit: number) => `a file may be at most ${Math.round(limit / 1e6)} MB here`;
 
 /** What a space's uploads come to. A file that does not parse, as after a crash in the middle of writing it, counts as none. */

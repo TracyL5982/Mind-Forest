@@ -334,7 +334,8 @@ test("the hosted image ships Momo's line for a shared tree: its build names the 
   const recording = recordingName(lines.voice, lines.said.shared!);
   const dockerfile = readFileSync(join(import.meta.dirname, '../Dockerfile'), 'utf8');
   const ignore = readFileSync(join(import.meta.dirname, '../.dockerignore'), 'utf8');
-  assert.match(dockerfile, new RegExp(`COPY demo/voice/voices\\.json demo/voice/${recording.replace('.', '\\.')} \\./demo/voice/`));
+  const shipped = dockerfile.split('\n').filter((line) => line.startsWith('COPY ') && line.trim().endsWith(' ./demo/voice/')).flatMap((line) => line.split(/\s+/).slice(1, -1));
+  assert.ok(shipped.includes('demo/voice/voices.json') && shipped.includes(`demo/voice/${recording}`));
   assert.ok(ignore.split('\n').includes(`!demo/voice/${recording}`));
   assert.ok(ignore.split('\n').includes('!demo/lines.json'));
 });

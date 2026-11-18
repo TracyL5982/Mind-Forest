@@ -1594,6 +1594,14 @@
   "shared": "A friend just shared a tree with you. I planted it right here!",
   "museCode": "Ready to take this to Muse Code, to have your mind forest built out?",
   "pruned": "Got it—pruning that branch and shifting focus to spatial hierarchy.",
-  "handedOff": "Done. It's handed off to Muse Code, with your default preference settings."
+  "handedOff": "Done. It's handed off to Muse Code, with your default preference settings.",
+  "limitOff": "Mind Forest is paused for a little while. Your trees are safe, so try again soon.",
+  "limitCap": "Mind Forest has done all it can for today. Your trees are safe; come back tomorrow.",
+  "limitBudget": "Mind Forest has done all the thinking it can for today. Your trees are safe; come back tomorrow.",
+  "limitShare": "This headset has reached today's limit, so I can't do more for it until tomorrow. Your trees are all here to browse.",
+  "limitVoice": "That's all the talking I can do today. Your trees are still here to browse.",
+  "limitSearches": "That's today's searches used up. I can still talk, and your trees are all here.",
+  "storeFull": "This headset's Mind Forest is full, so nothing more can be added here.",
+  "volumeFull": "The service is nearly out of room, so nothing more can be added for now. Everything here still opens."
  }
 }

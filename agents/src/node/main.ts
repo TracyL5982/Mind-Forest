@@ -20,7 +20,7 @@ import { Overflow, Paused, SPARE_EFFORTS, SPARE_MODEL, SPARE_QUICK_MODEL, spareC
 import { openInstagram } from './instagram.ts';
 import { openaiSearch, SEARCH_DOLLARS } from './search-openai.ts';
 import { ownBot, ownerSecret } from './telegram.ts';
-import { savedLine, type LinesOptions } from '../demo/lines.ts';
+import { recordingOf, savedLine, type LinesOptions } from '../demo/lines.ts';
 import { record as recordLine } from '../demo/momo-voice.ts';
 import { loadScript } from '../demo/script.ts';
 import { loadShowcase } from '../demo/showcase.ts';
@@ -231,14 +231,13 @@ if (ledger) {
     console.error('Hosted mode needs MIND_PALACE_APP_KEY and MIND_PALACE_ADMIN_TOKEN.');
     process.exit(1);
   }
-  const openaiKey = env.OPENAI_API_KEY;
-  const record =
-    !fake && openaiKey
-      ? async (text: string) => {
-          const speak = openaiSpeech(fetch, { apiKey: openaiKey, model: env.MIND_PALACE_VOICE_MODEL, voice: env.MIND_PALACE_VOICE, format: 'pcm' });
-          return new Uint8Array(await new Response(await speak(text, AbortSignal.timeout(20_000))).arrayBuffer());
-        }
-      : undefined;
+  // The refusals Momo says herself, from their recordings in her realtime voice, which the image ships (Dockerfile). Words with no
+  // recording are shown with no sound: the speech model never says them (the user's rule, 2026-11-18).
+  const record = async (text: string) => {
+    const pcm = recordingOf(join(root, 'demo'), text);
+    if (!pcm) throw new Error(`no recording of “${text}”`);
+    return pcm;
+  };
   // One library of the user's Instagram accounts for every space, on the volume, opened from the list alone: the server needs no
   // Instagram account. Its pictures are made small with macOS's `sips`, which a Linux server lacks, so deploy/instagram.sh copies the
   // Mac's library there, and the server reads Instagram only with MIND_PALACE_INSTAGRAM_READ=on and an account.
