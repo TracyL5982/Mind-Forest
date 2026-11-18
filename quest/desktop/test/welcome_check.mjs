@@ -140,7 +140,7 @@ try {
   const walkOn = (log, name) => {
     check(find(log, /^\[guide\] the welcome tree is opened again: the walk, from step 1$/) && find(log, /^\[guide\] the welcome tree stands$/),
       `${name}: opened from the desk, the walk is on, from step 1`);
-    check(find(log, /^\[guide\] lesson 1, card 1 closed: a hand pinches a card open under it$/), `${name}: card 1 closed, the hand that pinches it open plays under it`);
+    check(find(log, /^\[guide\] lesson 1, card 1 closed: a hand pinches it open, on it$/), `${name}: card 1 closed, the hand that pinches it open plays on it`);
   };
   const eighth = stand.launch(shots, 'launch8-reopened', 24, ['-unfoldWelcomeAt', '6', '-walkOpenAt', '12', '-walkHoldNextAt', '16']);
   await eighth.done;
