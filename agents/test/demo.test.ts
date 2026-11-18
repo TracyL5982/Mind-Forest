@@ -5,13 +5,14 @@ import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { DAILY_TREE, momoNote, sharedMessage } from '../src/demo/director.ts';
+import { DAILY_TREE, momoNote, PRUNED, prunes, sharedMessage } from '../src/demo/director.ts';
 import { itemOf, nodeOf as nodeOfCard } from '../src/demo/cards.ts';
 import { schedule } from '../src/demo/take.ts';
 import { loadScript } from '../src/demo/script.ts';
 import { demoData } from './demo-data.ts';
 import { loadShowcase, type Showcase } from '../src/demo/showcase.ts';
 import { startServer, type Running } from '../src/node/server.ts';
+import type { OpenRealtime, RealtimeEvent } from '../src/node/live.ts';
 import { recordingName } from '../src/demo/lines.ts';
 import { ADA, BOT_TOKEN, FakeBot } from './fake-bot.ts';
 
@@ -381,7 +382,7 @@ async function dailyDemo(paired = true) {
  * A headset as the app joins, with its voice's socket open: what its connection and its voice are sent. As the app does, it
  * says a tree it asked for stands, by its first card, and that a card it is taken to is open.
  */
-async function wearing(run: Running): Promise<{ seen: Frame[]; voice: Frame[]; send: (message: object) => void; off: () => void }> {
+async function wearing(run: Running): Promise<{ seen: Frame[]; voice: Frame[]; send: (message: object) => void; talk: (frame: object) => void; off: () => void }> {
   const seen: Frame[] = [];
   const voice: Frame[] = [];
   const ws = new WebSocket(`${run.url.replace('http', 'ws')}/ws?token=secret`, { headers: { 'user-agent': 'okhttp/4.12.0' } });
@@ -399,7 +400,7 @@ async function wearing(run: Running): Promise<{ seen: Frame[]; voice: Frame[]; s
   const live = new WebSocket(`${run.url.replace('http', 'ws')}/live?token=secret&connection=${(seen.find((m) => m.t === 'hello') as { connection?: string }).connection}`);
   live.on('message', (raw) => voice.push(JSON.parse(String(raw)) as Frame));
   await new Promise((open) => live.on('open', open));
-  return { seen, voice, send: (message) => ws.send(JSON.stringify(message)), off: () => (live.close(), ws.close()) };
+  return { seen, voice, send: (message) => ws.send(JSON.stringify(message)), talk: (frame) => live.send(JSON.stringify(frame)), off: () => (live.close(), ws.close()) };
 }
 
 /** Resolves once `ok` holds; fails after five seconds. */
@@ -629,9 +630,222 @@ test("Send on a tree hands that tree off to the paired chat as a file: a showcas
   }
 });
 
+// ---- the pruned card
+
+/** The script as the lead is changing it: Round 3 asked from the Neurones poster, so Llull's ring can be cut and the rounds go on. */
+const ringless = { ...script, phases: script.phases.map((phase) => (phase.id === 'n3' ? { ...phase, head: 't125' } : phase)) };
+
+/** The walkthrough with Momo's voice, whose lines are recorded by a stand-in as sound as long as their words. */
+async function prunedDemo(open: OpenRealtime = () => ({ send: () => {}, close: () => {} }), rate = quick.rate): Promise<Running> {
+  return startServer({
+    port: 0, host: '127.0.0.1', dataDir: fresh(), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
+    live: { open, options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } },
+    demo: { script: ringless, mediaDir: join(demoDir, 'media'), pace: { ...quick, rate }, voice: 'test-voice', record: async (text) => ({ pcm: new Uint8Array(text.length * 48 * 50), takes: 1 }) },
+  });
+}
+
+test("asking Momo to prune is heard loosely: a word for cutting, with Llull's ring open or named, and no \"don't\"", () => {
+  for (const words of ['prune this', 'Cut this branch.', 'Prune this item and focus on spatial hierarchy', 'can you get rid of that', 'take it out', 'remove it'])
+    assert.equal(prunes(words, true), true, words);
+  for (const words of ['remove Llull’s ring', "Remove Lull's ring and focus on spatial hierarchy.", 'delete the ring', 'prune Llull'])
+    assert.equal(prunes(words, false), true, words);
+  for (const [words, open] of [["don't cut this", true], ['what is this', true], ['focus on spatial hierarchy', true], ['tell me about the ring', false], ['remove the Neurones poster', false], ['prune this', false]] as const)
+    assert.equal(prunes(words, open), false, words);
+});
+
+test("cutting Llull's ring on the headset has Momo say her line once for each set-up, and the rounds after it still play", { timeout: 30000 }, async () => {
+  const run = await prunedDemo();
+  let headset: Awaited<ReturnType<typeof wearing>> | null = null;
+  try {
+    headset = await wearing(run);
+    await run.demo!.goto('n3');
+    const ring = cardsOf('n2').find((card) => card.id === PRUNED.card)!.title;
+    const lines = () => headset!.voice.filter((m) => m.t === 'text' && m.id?.endsWith(`-${PRUNED.said}`));
+    const cut = (title: string) => headset!.send({ t: 'commands', label: 'Cut', commands: [{ type: 'deleteNode', id: nodeOf(run, title)!.id }] });
+
+    // Another card's cut is only a cut.
+    const disc = cardsOf('n2').find((card) => card.id === 't080')!.title;
+    cut(disc);
+    await soon(() => nodeOf(run, disc) === undefined);
+    // The ring's cut takes it away, as any cut does, and she says her line as written, its caption with its length, from its start.
+    const node = nodeOf(run, ring)!.id;
+    cut(ring);
+    await soon(() => headset!.voice.some((m) => m.t === 'done' && m.id?.endsWith(`-${PRUNED.said}`)), 8000);
+    assert.equal(run.mind.nodes.has(node), false);
+    const words = (JSON.parse(readFileSync(join(demoDir, 'lines.json'), 'utf8')) as { said: Record<string, string> }).said[PRUNED.said]!;
+    assert.equal(words, 'Got it—pruning that branch and shifting focus to spatial hierarchy.');
+    const said = lines()[0]!;
+    assert.deepEqual({ text: said.text, kind: said.kind, ms: said.ms, from: said.from }, { text: words, kind: 'reply', ms: words.length * 50, from: 0 });
+    assert.ok(headset.voice.some((m) => m.t === 'audio' && m.id === said.id));
+    // Cut once more, as a second message for the same card would: it is gone already, and nothing more is said.
+    headset.send({ t: 'commands', label: 'Cut', commands: [{ type: 'deleteNode', id: node }] });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(lines().length, 1, 'said once, and not for the other card');
+
+    // The round after it plays as ever, on its own card.
+    const poster = cardsOf('n2').find((card) => card.id === 't125')!.title;
+    await run.demo!.playTake('n3');
+    await over(run);
+    await run.pipeline.idle();
+    const landed = titlesUnder(run, poster);
+    assert.ok(cardsOf('n3').every((card) => landed.includes(card.title)), 'Round 3 lands under the Neurones poster');
+
+    // Set up again, the ring is back, and its cut has her say the line again.
+    await run.demo!.goto('n3');
+    assert.ok(nodeOf(run, ring), 'set up again, the ring is back');
+    cut(ring);
+    await soon(() => lines().length === 2, 8000);
+  } finally {
+    headset?.off();
+    await run.close();
+  }
+});
+
+test("cut while a take's line is being said, the ring's line waits for that line to end", { timeout: 30000 }, async () => {
+  // A take at four times its pace, so its lines last long enough to cut in.
+  const run = await prunedDemo(undefined, 4);
+  let headset: Awaited<ReturnType<typeof wearing>> | null = null;
+  try {
+    headset = await wearing(run);
+    await run.demo!.goto('n3');
+    const ring = nodeOf(run, cardsOf('n2').find((card) => card.id === PRUNED.card)!.title)!.id;
+    void run.demo!.playTake('n3');
+    await soon(() => headset!.voice.some((m) => m.t === 'audio' && m.id?.startsWith('take-')), 8000);
+    const saying = headset.voice.find((m) => m.t === 'audio' && m.id?.startsWith('take-'))!.id!;
+    headset.send({ t: 'commands', label: 'Cut', commands: [{ type: 'deleteNode', id: ring }] });
+    await soon(() => headset!.voice.some((m) => m.t === 'text' && m.id?.endsWith(`-${PRUNED.said}`)), 15000);
+    const ended = headset.voice.findIndex((m) => m.t === 'done' && m.id === saying);
+    const began = headset.voice.findIndex((m) => m.t === 'text' && m.id?.endsWith(`-${PRUNED.said}`));
+    assert.ok(ended >= 0 && ended < began, "her line begins once the take's line in progress is over");
+    assert.ok(!headset.voice.slice(began).some((m) => m.t === 'audio' && m.id === saying), 'nothing of that line comes after');
+    await run.demo!.pause();
+  } finally {
+    headset?.off();
+    await run.close();
+  }
+});
+
+/** The realtime model, spoken for by the test as in live.test.ts: what it was sent, and its events back to Momo's voice. */
+class Realtime {
+  sessions: { sent: RealtimeEvent[]; event: (e: RealtimeEvent) => void }[] = [];
+  open: OpenRealtime = (on) => {
+    const s = { sent: [] as RealtimeEvent[], event: on.event };
+    this.sessions.push(s);
+    return { send: (e) => s.sent.push(e), close: () => {} };
+  };
+  private get last() {
+    return this.sessions.at(-1)!;
+  }
+  /** How many turns it was told began: each clears what it heard. */
+  started() {
+    return this.sessions.flatMap((s) => s.sent).filter((e) => e.type === 'input_audio_buffer.clear').length;
+  }
+  outputs() {
+    return this.last.sent.flatMap((e) => ((e.item as { type?: string } | undefined)?.type === 'function_call_output' ? [e.item as { call_id: string; output: string }] : []));
+  }
+  /** It hears the end of the user's turn, not yet written down. */
+  commits(item: string) {
+    this.last.event({ type: 'input_audio_buffer.speech_stopped', item_id: item });
+    this.last.event({ type: 'input_audio_buffer.committed', item_id: item });
+  }
+  writes(item: string, words: string) {
+    this.last.event({ type: 'conversation.item.input_audio_transcription.completed', item_id: item, transcript: words });
+  }
+  /** Its own answer to the turn begins, and says `words` with 200 ms of sound. */
+  answers(id: string, words: string) {
+    this.last.event({ type: 'response.created', response: { id, metadata: null } });
+    this.last.event({ type: 'response.output_audio_transcript.delta', response_id: id, delta: words });
+    for (let n = 0; n < 2; n++) this.last.event({ type: 'response.output_audio.delta', response_id: id, item_id: `${id}-audio`, delta: Buffer.alloc(4800).toString('base64') });
+  }
+  calls(id: string, call: string, name: string, args: object) {
+    this.last.event({ type: 'response.output_item.added', response_id: id, item: { type: 'function_call', call_id: call, name } });
+    this.last.event({ type: 'response.function_call_arguments.done', response_id: id, call_id: call, arguments: JSON.stringify(args) });
+  }
+  ends(id: string) {
+    this.last.event({ type: 'response.done', response: { id, status: 'completed' } });
+  }
+}
+
+test("asked by voice to prune Llull's ring, the director cuts it as the headset's own cut and Momo says her line; her own answer, held for the words, never reaches the headset", { timeout: 30000 }, async () => {
+  const model = new Realtime();
+  const run = await prunedDemo(model.open);
+  let headset: Awaited<ReturnType<typeof wearing>> | null = null;
+  try {
+    headset = await wearing(run);
+    await run.demo!.goto('n3');
+    const ring = cardsOf('n2').find((card) => card.id === PRUNED.card)!.title;
+    // A card no round is asked from, so what is said there is not a round's request.
+    const corals = cardsOf('n2').find((card) => card.id === 'haeckel-corals')!.title;
+    const of = (id: string) => headset!.voice.filter((m) => (m.t === 'text' || m.t === 'audio') && m.id === id);
+    const lines = () => headset!.voice.filter((m) => m.t === 'done' && m.id?.endsWith(`-${PRUNED.said}`));
+    const turn = async (n: number, open: string) => {
+      const had = model.started();
+      const node = nodeOf(run, open)!;
+      headset!.talk({ t: 'start', turn: n, scene: { focus: node.id, treeId: node.treeId, selection: [] } });
+      await soon(() => model.started() > had);
+    };
+
+    // A question with the ring open: her answer waits for the words, then plays whole.
+    await turn(1, ring);
+    model.commits('i1');
+    model.answers('r1', 'Ramon Llull drew it around 1305.');
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(of('r1').length, 0, 'held for the words');
+    model.writes('i1', 'Who made this?');
+    await soon(() => of('r1').length === 3);
+    model.ends('r1');
+
+    // Asked to prune it, with the ring open: it is cut as the headset cuts, she says her line, her own answer is dropped and
+    // her own tool does nothing.
+    const ringNode = nodeOf(run, ring)!.id;
+    await turn(2, ring);
+    model.commits('i2');
+    model.answers('r2', 'Sure, pruning it now.');
+    model.calls('r2', 'c2', 'organize', { request: 'Delete this card.' });
+    model.writes('i2', 'Hey Momo, prune this and focus on spatial hierarchy.');
+    model.ends('r2');
+    await soon(() => lines().length === 1, 8000);
+    assert.equal(run.mind.nodes.has(ringNode), false);
+    assert.ok(headset.seen.some((m) => m.t === 'change' && m.yours && m.set!.origin.by === 'user' && m.set!.commands.some((c) => c.type === 'deleteNode' && (c as { id?: string }).id === ringNode)), "cut as the headset's own cut");
+    assert.equal(of('r2').length, 0, 'nothing of her own answer');
+    await soon(() => model.outputs().some((o) => o.call_id === 'c2'));
+    assert.match(model.outputs().find((o) => o.call_id === 'c2')!.output, /Already done/);
+
+    // Pruned, nothing is held, and once her line is over her answers are heard.
+    await soon(() => !run.demo!.mutes());
+    await turn(3, corals);
+    model.commits('i3');
+    model.answers('r3', 'Haeckel drew them in 1904.');
+    await soon(() => of('r3').length === 3);
+    model.ends('r3');
+
+    // Set up again, the ring is back and the prune waits again. Words never written down let her answer go after 2 s; then the
+    // ring named with another card open is pruned, the words written down before her answer begins.
+    await run.demo!.goto('n3');
+    assert.ok(nodeOf(run, ring));
+    await turn(4, corals);
+    model.commits('i4');
+    const at = Date.now();
+    model.answers('r4', 'Hmm?');
+    await soon(() => of('r4').length === 3, 4000);
+    assert.ok(Date.now() - at >= 1900, `held ${Date.now() - at} ms, as long as words may take`);
+    model.ends('r4');
+    await turn(5, corals);
+    model.commits('i5');
+    model.writes('i5', 'Remove Llull’s ring.');
+    model.answers('r5', 'Okay, removing it.');
+    model.ends('r5');
+    await soon(() => lines().length === 2, 8000);
+    assert.equal(of('r5').length, 0);
+  } finally {
+    headset?.off();
+    await run.close();
+  }
+});
+
 test("the lines Momo says as a held tree grows are kept in the demo folder in her realtime voice, said as written and never by another voice", () => {
   const lines = JSON.parse(readFileSync(join(demoDir, 'lines.json'), 'utf8')) as { voice: string; said?: Record<string, string> };
-  assert.deepEqual(Object.keys(lines.said ?? {}).sort(), ['daily', 'shared']);
+  assert.deepEqual(Object.keys(lines.said ?? {}).sort(), ['daily', 'pruned', 'shared']);
   const voices = JSON.parse(readFileSync(join(demoDir, 'voice', 'voices.json'), 'utf8')) as Record<string, string>;
   for (const text of Object.values(lines.said!)) assert.equal(voices[recordingName(lines.voice, text)], 'realtime', text);
 });
