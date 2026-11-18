@@ -955,7 +955,7 @@ test("in a judge's starter the walkthrough's own cards read as no one's: no \"yo
   const judged = (id: string) => forJudges(itemOf(card(id), making));
   const credit = (id: string) => (judged(id).data.credit as { text?: string } | undefined)?.text;
   assert.equal(credit('warburg-library'), 'Saved picture · not checked');
-  assert.equal(credit('flower-tree'), 'Photo · sent to Momo on Telegram');
+  assert.equal(credit('flower-tree'), 'Photo · Tracy sent to Momo on Telegram');
   assert.equal(credit('note-tree-grows'), 'Note');
   assert.equal(credit('janus-depth-layers'), 'Prototype · Janusian Zoom');
   assert.equal(judged('figjam').title, 'A FigJam board');

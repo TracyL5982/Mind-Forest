@@ -76,6 +76,8 @@ function pinForJudges(item: Item): Item {
 
 /** The walkthrough's own things, as its credits name them for the film's user, and as they read to a judge (WS102). */
 const OWN_CREDITS: [RegExp, string][] = [
+  // The flower tree's photo, as the user put it for the judges (WS102).
+  [/^Your photo · sent to Momo on Telegram$/, 'Photo · Tracy sent to Momo on Telegram'],
   [/^Your picture\b/, 'Saved picture'],
   [/^Your photo\b/, 'Photo'],
   [/^Your note$/, 'Note'],
