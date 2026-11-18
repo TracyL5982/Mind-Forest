@@ -420,7 +420,7 @@ std::optional<Piece> Art::face(const std::string& name, const ImageRef& picture,
 }
 
 std::optional<Piece> Art::iconButton(const std::string& icon, float size, Color ground, Color mark) {
-    const std::vector<icons::Line>& lines = icon == "marker" ? icons::marker() : icon == "pencil" ? icons::pencil() : icon == "eraser" ? icons::eraser() : icons::send();
+    const std::vector<icons::Line>& lines = icon == "marker" ? icons::marker() : icon == "pencil" ? icons::pencil() : icon == "eraser" ? icons::eraser() : icon == "mic-off" ? icons::micOff() : icons::send();
     float w = px(size);
     std::string key = "icon:" + icon + fmt(":%g:%d,%d,%d:%d,%d", double(size), int(ground.r * 255), int(ground.g * 255), int(ground.b * 255), int(mark.r * 255), int(mark.a * 100));
     return piece(key, w, w, [&](Canvas& ctx, CGSize) {

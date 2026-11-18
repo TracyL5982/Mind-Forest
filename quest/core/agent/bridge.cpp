@@ -824,6 +824,8 @@ void Bridge::showPresence() {
     if (!presenceView) {
         if (!model.art || !model.lineMaterial) return;
         presenceView = std::make_unique<PresenceView>(model.art, *model.lineMaterial, model.root_);
+        // Momo and her note's button take pinches while the microphone is off (WS87).
+        model.microphonePicks(presenceView->momoTarget(), presenceView->noteButton());
     }
     Mat4 head = platform::head().value_or(Mat4::trs(model.stage.origin, Quat::identity(), {1, 1, 1}));
     presenceView->frame(voice->presence(), voice->name(), head, now);

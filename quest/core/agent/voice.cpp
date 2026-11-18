@@ -503,14 +503,31 @@ void Voice::start() {
         });
 }
 
-void Voice::askForMicrophone() {
-    if (microphoneRefusedAt < 0 || microphoneSettingsOnly) return;
-    logLine("[voice] the microphone was not allowed: the user is asked again");
-    listenAgain();
+void Voice::askForMicrophone(bool orSettings) {
+    if (microphoneRefusedAt < 0) return;
+    if (!microphoneSettingsOnly) {
+        logLine("[voice] the microphone was not allowed: the user is asked again");
+        listenAgain();
+        return;
+    }
+    if (!orSettings) return;
+    if (platform::openAppSettings()) {
+        logLine("[voice] the system no longer asks for the microphone: its Settings for this app are opened");
+        return;
+    }
+    logLine("[voice] the system's Settings could not be opened from here: the note says where to switch the microphone on");
+    settingsUnopened = true;
+    noteUntil = clock + refusalShown;
+}
+
+void Voice::showMicrophoneNote() {
+    if (microphoneRefusedAt < 0) return;
+    noteUntil = clock + refusalShown;
 }
 
 void Voice::listenAgain() {
     microphoneRefusedAt = -1;
+    noteUntil = -1;
     microphoneSettingsOnly = false;
     microphoneFailures = 0;
     reopenAt = -1;
@@ -752,6 +769,7 @@ void Voice::frame(double now) {
                 (microphoneSettingsOnly ? ": the system no longer asks, so only its Settings can allow it" : ""));
         askingForMicrophone = false;
         microphoneRefusedAt = now;
+        noteUntil = now + refusalShown;
         if (microphone) microphone->stop();
         microphone.reset();
         ears.reset();
@@ -1268,6 +1286,8 @@ void Voice::endThinking() {
 }
 
 void Voice::asked(const std::string& question) {
+    // (Picked with the microphone off: the note says so, until her reply sounds.)
+    showMicrophoneNote();
     wordsOf = 0;
     shown.momoText.clear();
     shown.userText = question;
@@ -1322,9 +1342,21 @@ void Voice::show() {
     crew.update(clock);
     shown.agents = crew.lines(name());
     shown.notice.clear();
-    if (client.unreachable()) shown.notice = "Can’t reach " + name() + ", retrying";
-    else if (askingForMicrophone) shown.notice = "Allow the microphone to talk to " + name();
-    else if (microphoneRefusedAt >= 0 && clock < microphoneRefusedAt + refusalShown) shown.notice = "No microphone, so type or pick to ask " + name();
+    shown.noticeButton.clear();
+    shown.microphoneOff = microphoneOff();
+    // The note on a microphone that is off gives way to her reply, which is what was asked for.
+    if (speaks) noteUntil = -1;
+    if (client.unreachable()) {
+        shown.notice = "Can’t reach " + name() + ", retrying";
+    } else if (askingForMicrophone) {
+        shown.notice = "Allow the microphone to talk to " + name();
+    } else if (microphoneOff() && clock < noteUntil) {
+        // (Two lines at most, beside Momo. Where the system no longer asks, the way to turn it on, in Meta's own words for
+        // its Settings, takes the place of what is wrong.)
+        shown.notice = microphoneSettingsOnly ? name() + " can’t hear you: turn on the microphone in Settings › Privacy and safety › App permissions"
+                                              : name() + " can’t hear you: the microphone is off";
+        if (!microphoneSettingsOnly || !settingsUnopened) shown.noticeButton = "Allow microphone";
+    }
 }
 
 Voice::LiveReply& Voice::liveReply(const std::string& id) {

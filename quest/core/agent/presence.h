@@ -33,8 +33,13 @@ struct Presence {
     /// One per agent at work or just finished, in the order they began.
     std::vector<AgentLine> agents;
     /// A line about the app itself, which Momo's caption shows in place of the conversation while there is one, Momo
-    /// showing too: the service can't be reached, or why the headset asks for the microphone.
+    /// showing too: the service can't be reached, why the headset asks for the microphone, or (the note on a microphone
+    /// that is off) that Momo can't hear.
     std::string notice;
+    /// The note's button, under its words ("Allow microphone"); empty for none.
+    std::string noticeButton;
+    /// WS87: the microphone is not allowed. Momo shows, quiet, with a "microphone off" mark that a pinch opens the note of.
+    bool microphoneOff = false;
 
     /// The conversation goes on: Momo listens, thinks or speaks. The ocean's own sounds draw back under it.
     bool conversing() const {

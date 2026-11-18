@@ -89,7 +89,7 @@ public:
     static constexpr double sentFor = 0.4;
     /// Seconds Momo thinks at most, should nothing ever end it.
     static constexpr double longestThought = 20;
-    /// Seconds the caption says how to ask Momo without the microphone, once the user refuses it.
+    /// Seconds the note on a microphone that is off shows (`showMicrophoneNote`), and once the user refuses it.
     static constexpr double refusalShown = 10;
     /// s Momo's words run ahead of her voice, when the service says how long a reply's recording is (a demo take's line).
     /// The user, 2026-11-17: "I'd rather transcript to be a little ahead of realtime speech than being laggy".
@@ -115,10 +115,20 @@ public:
     /// the system would ask them again; `settingsOnly`: it has stopped asking, and only its Settings can allow it.
     enum class Hearing { ready, starting, asking, refused, settingsOnly, off };
     Hearing hearing() const;
-    /// GUIDE: the walk's lessons by speaking, where the microphone was refused (its window missed, or answered no): listening
-    /// starts over, and the system asks the user again (WS87). Nothing where it was not refused, or the system no
-    /// longer asks.
-    void askForMicrophone();
+    /// WS87: the one way the microphone is asked for again, by the walk's lessons by speaking as they begin, and by the
+    /// buttons for it (the note's "Allow microphone", the walk's "Open Settings"). Refused (its window missed, or answered
+    /// no), listening starts over and the system asks the user again. Where the system no longer asks, and `orSettings`
+    /// (a button was pressed: a lesson beginning never sends the user out of the app), its Settings for this app open;
+    /// where they can't be, `settingsWontOpen`. Nothing where it is not refused.
+    void askForMicrophone(bool orSettings = false);
+    /// The microphone is not allowed: Momo shows a quiet mark for it.
+    bool microphoneOff() const { return microphoneRefusedAt >= 0; }
+    /// The note by Momo on a microphone that is off: what is wrong, and "Allow microphone", for `refusalShown`, or until
+    /// her reply sounds. It comes from what still works without the microphone (her name can't be heard): a pinch on Momo
+    /// or her mark, a question picked. Nothing while the microphone is allowed.
+    void showMicrophoneNote();
+    /// "Open Settings" could not open them: the words for where to switch the microphone on stand alone.
+    bool settingsWontOpen() const { return settingsUnopened; }
     /// GUIDE: a line of the walk's own, recorded in Momo's voice and carried in the app (`recordedLine`): spoken as a reply
     /// of hers is, through her stream player, with or without the service, its words shown as she says them. How long it
     /// is, s; nothing when there is no such line or its sound can't be read (said in the log).
@@ -249,6 +259,8 @@ private:
     bool askingForMicrophone = false;   // the user is asked to allow it and has not answered
     double microphoneRefusedAt = -1;
     bool microphoneSettingsOnly = false;    // refused, and the system no longer asks
+    bool settingsUnopened = false;          // the system's Settings could not be opened from here
+    double noteUntil = -1;                  // the note on a microphone that is off shows until then
     int microphoneFailures = 0;     // in a row, since sound last came
     double reopenAt = -1;
     std::shared_ptr<const Vocabulary> vocabulary;

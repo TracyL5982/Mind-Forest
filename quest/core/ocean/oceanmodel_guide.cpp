@@ -39,7 +39,7 @@ constexpr double layerBeforeAnswerEnds = 2;
 constexpr int exampleTalk = 1000;
 
 // (`offButtons` is OceanModel::guideOffButtons, which pinchEnded reads.)
-enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109, offButtons = 110, tourSettings = 111 };
+enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109, offButtons = 110, tourSettings = 111, momoNote = 112, allowMicrophone = 113 };
 // The gestures a ghost hand teaches, in the order they are needed, and how long each waits once its moment has come.
 struct Plan {
     const char* id;
@@ -1383,7 +1383,7 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
         }
         // The microphone refused (its window missed at launch, or answered no): as a lesson by speaking begins, the
         // system asks for it again (WS87). Where the system no longer asks, the line says where it is switched on.
-        if (voice && (want == momoStep || want == markStep) && voice->hearing() == agent::Voice::Hearing::refused) voice->askForMicrophone();
+        if (voice && (want == momoStep || want == markStep)) voice->askForMicrophone();
         if (want == exampleTalk) logLine(fmt("[guide] the example cards listen for one asked: Momo's ears are %d", tourHearing()));
         else if (want >= 0) logLine(fmt("[guide] lesson %d waits for words: Momo's ears are %d", want + 1, tourHearing()));
     }
@@ -1462,7 +1462,7 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
         // (The system no longer asks: only its Settings can switch it on. Meta's own words for the way there.)
         note = "Momo can’t hear you yet: the microphone is off\nTurn it on in Settings › Privacy and safety › App permissions › Microphone";
         pill = true;
-        settings = !teach.settingsWontOpen;
+        settings = !(voice && voice->settingsWontOpen());
     } else if (hear == 2) {
         note = "Allow the microphone, so that Momo can hear you";
         pill = waited > 12;
@@ -1754,6 +1754,8 @@ bool OceanModel::pressButton(const EntityRef& entity, int action) {
     case Act::closeSheet:
     case Act::tourSay:
     case Act::tourSettings:
+    case Act::momoNote:
+    case Act::allowMicrophone:
         break;
     default:
         return false;
@@ -2023,8 +2025,25 @@ void OceanModel::showSheet(int row) {
     teach.began = time;
 }
 
+void OceanModel::microphonePicks(const EntityRef& momo, const EntityRef& allow) {
+    picks[momo.get()] = Pick::guide(Act::momoNote);
+    picks[allow.get()] = Pick::guide(Act::allowMicrophone);
+}
+
 void OceanModel::guideAct(int action) {
     static_assert(Act::offButtons == guideOffButtons, "pinchEnded reads the act for off the buttons as guideOffButtons");
+    // Momo's, while the microphone is off: whether the guide is on or not (WS87).
+    if (action == Act::momoNote || action == Act::allowMicrophone) {
+        agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr;
+        if (action == Act::momoNote) {
+            logLine("[presence] Momo is pinched with the microphone off: her note shows");
+            if (voice) voice->showMicrophoneNote();
+        } else {
+            logLine("[presence] the note's Allow microphone is pinched");
+            if (voice) voice->askForMicrophone(true);
+        }
+        return;
+    }
     if (!teach.on) return;
     switch (action) {
     case Act::begin:
@@ -2077,12 +2096,8 @@ void OceanModel::guideAct(int action) {
         // "Open Settings", where the system no longer asks for the microphone: its page for this app comes up over the
         // walk, and back from it with the microphone allowed, Momo listens (agent::Voice). Where it can't be opened, the
         // button goes and the line still says where to look.
-        if (platform::openAppSettings()) {
-            logLine("[guide] the system's Settings are opened, for the microphone");
-        } else {
-            logLine("[guide] the system's Settings could not be opened from here: the line says where they are");
-            teach.settingsWontOpen = true;
-        }
+        logLine("[guide] the walk's Open Settings is pinched");
+        if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) voice->askForMicrophone(true);
         break;
     case Act::tourSkip:
     case Act::tourEnd:

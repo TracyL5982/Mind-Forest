@@ -244,7 +244,7 @@ public:
     // FILM: a person, with nothing behind them: their round picture, `tall` px across (without one, the first letter of the
     // name on a disc), and their name beside it in white, letters `size` m high. `ticked`, a tick of `mark` after the name.
     std::optional<Piece> face(const std::string& name, const ImageRef& picture, float size, float tall, bool ticked = false, Color mark = hot);
-    // A button that is an icon (icons.h: "marker", "eraser", "send") on a rounded
+    // A button that is an icon (icons.h: "marker", "eraser", "send", "mic-off") on a rounded
     // square `size` metres across, the icon in `mark` on `ground`.
     std::optional<Piece> iconButton(const std::string& icon, float size, Color ground, Color mark);
 

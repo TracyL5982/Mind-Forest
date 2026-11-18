@@ -29,6 +29,11 @@ public:
     void frame(const Presence& presence, const std::string& name, const Mat4& head, double now);
     /// How Momo looks this frame, for `-presenceDemo` to tell.
     const Face& looks() const { return face; }
+    /// WS87: what takes a pinch while the microphone is off: Momo herself, with her "microphone off" mark, and the
+    /// note's button under its words. The same two entities for good, for the scene's picks to hold
+    /// (OceanModel::microphonePicks); each takes pinches only while it shows.
+    const EntityRef& momoTarget() const { return target; }
+    const EntityRef& noteButton() const { return button; }
 
 private:
     /// One line of words on screen. New words are drawn into a second picture laid over the first, and the first
@@ -68,11 +73,17 @@ private:
     float edge;                     // m right of the group's middle, where the words are set round, to where the bars begin
     Vec2 middle;                    // m: Momo's middle, up and to the left of the group's (see `grown`)
     std::vector<Words> words, agents;
+    EntityRef target = Entity::make(), button = Entity::make();
+    EntityRef mark, buttonFace;     // what each shows: the mark's picture, and the button's
+    std::string buttonWords;
+    float markShown = 0, buttonShown = 0;
     double last = -1;
     std::vector<Bar> bars, barsDrawn;   // this frame's, and those the mesh holds
     float agentsFrom = 0;           // m up from the group's middle to its lowest agent's line, eased
 
     void draw();
+    /// The mark and the note's button, after the words are laid: the button stands under the note's lowest line.
+    void microphone(const Presence& presence, float dt);
     /// Lays a line's words at `y`. `crossFade` s, when more than 0, goes from the old words to the new by a cross-fade;
     /// otherwise the new take the old's place at once. Returns how solid the line is drawn, as its bar should be.
     float write(const std::string& text, Speaker who, size_t name, float y, float opacity, Words& w, float crossFade = 0, float dt = 0);

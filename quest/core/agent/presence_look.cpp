@@ -139,7 +139,7 @@ void Face::update(const Presence& p, float dt) {
     if (!(dt > 0)) return;
     clock += dt;
     Look& l = look_;
-    bool away = p.state == S::off && p.notice.empty();
+    bool away = p.state == S::off && p.notice.empty() && !p.microphoneOff;
     ease(l.shown, away ? 0.f : 1.f, away ? 0.35f : 0.25f, dt);
 
     // AgentSphere: the level follows the voice up fast and down slower, so the rings breathe and do not flicker. Listening

@@ -13,7 +13,7 @@ import re
 import sys
 from pathlib import Path
 
-ICONS = ["pencil", "eraser", "send"]
+ICONS = ["pencil", "eraser", "send", "mic-off"]
 
 
 def arc(x1, y1, rx, ry, phi, large, sweep, x2, y2, step=0.35):
@@ -153,7 +153,9 @@ def main():
         paths = re.findall(r'd:\s*"([^"]+)"', text)
         if not paths:
             raise SystemExit(f"no paths found for {name}")
-        out.append(f"inline const std::vector<Line>& {name}() {{")
+        # (A C++ name: "mic-off" is micOff.)
+        parts = name.split("-")
+        out.append(f"inline const std::vector<Line>& {parts[0] + ''.join(p.title() for p in parts[1:])}() {{")
         out.append("    static const std::vector<Line> lines{")
         for d in paths:
             for pts, closed in flatten(d):

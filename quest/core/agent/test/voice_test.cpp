@@ -68,6 +68,7 @@ struct Host {
     /// Whether the user lets the app use the microphone, as the system says; and how often its Settings were opened.
     platform::MicrophoneLeave leave = platform::MicrophoneLeave::given;
     int settingsOpened = 0;
+    bool settingsOpen = true;   // whether they can be opened
     /// The mixer's: the sounds played, by name, in order, and the level each loop was last asked for.
     std::vector<std::string> sounds;
     std::map<std::string, float> levels;
@@ -316,6 +317,7 @@ bool microphoneHearsOwnSounds() { return host.hearsOwnSounds; }
 bool resumed() { return std::exchange(host.resumed, false); }
 MicrophoneLeave microphoneLeave() { return host.leave; }
 bool openAppSettings() {
+    if (!host.settingsOpen) return false;
     host.settingsOpened++;
     return true;
 }
@@ -571,11 +573,15 @@ TEST(aRefusedMicrophoneSaysHowToAskMomoWithoutIt) {
     Talking t(true);
     host.microphone.asking();
     t.frame();
+    host.leave = platform::MicrophoneLeave::askable;
     host.microphone.denied();
     t.frame();
-    CHECK_EQ(t.voice.presence().notice, std::string("No microphone, so type or pick to ask Momo"));
+    CHECK_EQ(t.voice.presence().notice, std::string("Momo can’t hear you: the microphone is off"));
+    CHECK_EQ(t.voice.presence().noticeButton, std::string("Allow microphone"));
+    CHECK(t.voice.presence().microphoneOff, "the mark shows");
     t.frame(Voice::refusalShown + 0.1);
-    CHECK(t.voice.presence().notice.empty(), "it goes after %g s", Voice::refusalShown);
+    CHECK(t.voice.presence().notice.empty() && t.voice.presence().noticeButton.empty(), "the note goes after %g s", Voice::refusalShown);
+    CHECK(t.voice.presence().microphoneOff, "the mark stays");
     t.voice.asked("What else did Vermeer paint?");
     t.frame();
     CHECK(t.shows() == Presence::State::sent, "a question picked or typed is still sent and thought about");
@@ -644,6 +650,67 @@ TEST(backFromSettingsWithTheMicrophoneAllowedMomoListensAgain) {
     CHECK(t.voice.hearing() == Voice::Hearing::ready, "it hears");
     t.hear(Sound().quiet(0.5).say("command").quiet(2));
     CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(1));
+}
+
+// WS87: the note on a microphone that is off comes from what still works without it: a pinch on Momo (here, what the
+// scene calls), or a question picked; it gives way to her reply. Its button asks again by the one way there is.
+TEST(theMicrophoneNoteComesFromAPinchOnMomoOrAPickedQuestion) {
+    Talking t(true);
+    t.voice.showMicrophoneNote();
+    t.frame();
+    CHECK(t.voice.presence().notice.empty() && !t.voice.presence().microphoneOff, "nothing while the microphone is allowed");
+    host.leave = platform::MicrophoneLeave::askable;
+    host.microphone.denied();
+    t.frame();
+    t.frame(Voice::refusalShown + 1);
+    CHECK(t.voice.presence().notice.empty(), "the note after the refusal has gone");
+    t.voice.showMicrophoneNote();
+    t.frame();
+    CHECK_EQ(t.voice.presence().notice, std::string("Momo can’t hear you: the microphone is off"));
+    t.frame(Voice::refusalShown + 1);
+    CHECK(t.voice.presence().notice.empty(), "and goes again");
+    t.voice.asked("What else did Vermeer paint?");
+    t.frame(0.5);
+    CHECK_EQ(t.voice.presence().notice, std::string("Momo can’t hear you: the microphone is off"));
+    t.voice.say("He painted few.");
+    t.frame();
+    std::vector<Fetch> speech = t.fetchesTo("/api/speak");
+    CHECK_EQ(speech.size(), size_t(1));
+    if (speech.empty()) return;
+    speech[0].done(ok(""));
+    t.frame(0.1);
+    CHECK(t.shows() == Presence::State::responding, "she answers");
+    CHECK(t.voice.presence().notice.empty(), "and the note gives way to her reply");
+    // "Allow microphone": the system asks again.
+    t.voice.showMicrophoneNote();
+    t.voice.askForMicrophone(true);
+    t.frame();
+    CHECK_EQ(host.opens, 2);
+    CHECK(!t.voice.presence().microphoneOff && t.voice.presence().noticeButton.empty(), "asked again, the mark and the button go");
+}
+
+TEST(whereOnlySettingsCanAllowTheMicrophoneTheNotesButtonOpensThem) {
+    Talking t(true);
+    host.leave = platform::MicrophoneLeave::settingsOnly;
+    host.microphone.denied();
+    t.frame();
+    CHECK_EQ(t.voice.presence().notice,
+             std::string("Momo can’t hear you: turn on the microphone in Settings › Privacy and safety › App permissions"));
+    CHECK_EQ(t.voice.presence().noticeButton, std::string("Allow microphone"));
+    t.voice.askForMicrophone(false);
+    t.frame();
+    CHECK_EQ(host.settingsOpened, 0);
+    t.voice.askForMicrophone(true);
+    t.frame();
+    CHECK_EQ(host.settingsOpened, 1);
+    CHECK_EQ(host.opens, 1);
+    // Where they can't be opened, the words alone say where to switch it on.
+    host.settingsOpen = false;
+    t.voice.askForMicrophone(true);
+    t.frame();
+    CHECK(t.voice.settingsWontOpen(), "they could not be opened");
+    CHECK(t.voice.presence().notice.find("in Settings ›") != std::string::npos && t.voice.presence().noticeButton.empty(),
+          "the note keeps its words and drops its button");
 }
 
 TEST(momoSaysWhileTheServiceCantBeReached) {

@@ -667,7 +667,6 @@ private:
         std::string talkPanelSaid;
         float talkPanelScale = 1;           // larger inside a picture gone into, where everything is
         float talkPanelLift = 0;            // how far up it stands, to keep its button clear of the line under it
-        bool settingsWontOpen = false;      // its "Open Settings" could not open them: the button goes, the line says where
         bool tourStood = false;             // its tree has stood
         bool tourDone[8] = {};              // which lessons the viewer has done
         int tourLessonWas = -2;             // the lesson in focus last frame, and since when it has been
@@ -754,6 +753,10 @@ private:
     void endTour(const char* why);
     void showSheet(int row);
     void guideAct(int action);
+    /// AGENT (WS87): Momo with her "microphone off" mark, and her note's "Allow microphone", take pinches as the guide's
+    /// buttons do (shown pressed, the 1 s rule): a pinch on Momo opens the note, one on the button asks for the
+    /// microphone again (agent::Voice::askForMicrophone). The presence's view keeps both, for good.
+    void microphonePicks(const EntityRef& momo, const EntityRef& allow);
     bool guideReady(const GuideLesson& lesson) const;
     void guideDid(const char* what, float amount = 1);
     /// A place just over the open card, for a few words about it; none if no card is open.

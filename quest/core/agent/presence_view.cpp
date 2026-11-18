@@ -20,6 +20,10 @@ constexpr float most = 0.3f;            // m: the widest an agent's line may be
 // it was (my choice, WS68).
 constexpr float wordsMost = 0.45f;
 constexpr float pad = 6;                // px round the words in their picture
+constexpr float markSize = 0.75f;       // of Momo's radius: the "microphone off" mark's side (WS87)
+constexpr float markOut = 1.15f;        // of Momo's radius: how far right and down of her middle the mark's middle is
+constexpr float buttonType = 0.016f;    // m: the note's button's words
+constexpr float buttonGap = 0.008f;     // m between the note's lowest line and its button
 constexpr float curio = 1.08f;          // CurioCity's line, of the type's own line height: its Momo is one such line in radius
 constexpr float larger = 1.2f;          // Momo's size, of CurioCity's. Kai, 2026-11-16: "Momo is too small +20% size"
 // And half as large again, its words left where they were. Kai, 2026-11-17: "Momo can also grow about 50% larger towards
@@ -317,6 +321,10 @@ PresenceView::PresenceView(std::shared_ptr<Art> art, const Material& lineMateria
     ring->name = "presence Momo";
     group->addChild(bars);
     group->addChild(ring);
+    target->name = "presence Momo's target";
+    button->name = "presence note's button";
+    group->addChild(target);
+    group->addChild(button);
     group->isEnabled = false;
     parent->addChild(group);
 }
@@ -513,7 +521,68 @@ void PresenceView::frame(const Presence& presence, const std::string& name, cons
         logLine(out);
     }
 
+    microphone(presence, dt);
     draw();
+}
+
+namespace {
+/// A picture over everything, as the rest of Momo is.
+EntityRef over(const Piece& piece, const char* name) {
+    Material m = Material::unlit(Color::white());
+    m.texture = piece.texture;
+    m.transparent = true;
+    m.onTop = true;
+    EntityRef e = Entity::make(Mesh::generatePlane(piece.size.x, piece.size.y), {m});
+    e->name = name;
+    return e;
+}
+}  // namespace
+
+void PresenceView::microphone(const Presence& presence, float dt) {
+    // The mark: quiet, white on the labels' ink, a little off Momo's lower right, where her ring is not.
+    if (!mark) {
+        float side = size * markSize;
+        if (std::optional<Piece> piece = art->iconButton("mic-off", side, Art::ink, Color(1, 1, 1, 0.85f))) {
+            mark = over(*piece, "presence microphone off");
+            mark->position = {size * markOut, -size * markOut, 0};
+            target->addChild(mark);
+        }
+    }
+    ease(markShown, presence.microphoneOff ? 1.f : 0.f, 0.2f, dt);
+    if (mark) mark->opacity = std::pow(markShown, 2.2f);
+    // Momo takes a pinch, mark and all, only while the microphone is off.
+    target->position = {middle.x, middle.y, 0};
+    float reach = size * (markOut + markSize / 2) * 2;
+    if (target->collision.empty()) target->collision = {Shape::generateBox({reach, reach, 0.01f})};
+    target->inputTarget = presence.microphoneOff;
+    target->hover = presence.microphoneOff ? Art::hover() : Hover::none();
+
+    // The note's button stands under its lowest line, at the bars' left, as it fades in and out with it.
+    const Caption::Line* low = nullptr;
+    for (const Caption::Line& line : caption.lines()) {
+        if (line.part == Caption::Part::notice && !line.gone && (!low || line.y < low->y)) low = &line;
+    }
+    std::string wanted = low ? presence.noticeButton : "";
+    if (!wanted.empty() && wanted != buttonWords) {
+        if (std::optional<Piece> piece = art->pill(wanted, buttonType)) {
+            if (buttonFace) buttonFace->removeFromParent();
+            buttonFace = over(*piece, "presence note's button words");
+            button->addChild(buttonFace);
+            buttonWords = wanted;
+            button->collision = {Shape::generateBox({piece->size.x, piece->size.y + 0.008f, 0.01f})};
+        }
+    }
+    ease(buttonShown, wanted.empty() ? 0.f : low->opacity, 0.12f, dt);
+    if (buttonFace) {
+        buttonFace->opacity = std::pow(buttonShown, 2.2f);
+        if (low) {
+            BoundingBox b = buttonFace->model->mesh->bounds;
+            float w = b.max.x - b.min.x, h = b.max.y - b.min.y;
+            button->position = {edge + w / 2, low->y * step - step / 2 - buttonGap - h / 2, 0};
+        }
+    }
+    button->inputTarget = !wanted.empty() && buttonShown > 0.5f;
+    button->hover = button->inputTarget ? Art::hover() : Hover::none();
 }
 
 void PresenceView::draw() {
