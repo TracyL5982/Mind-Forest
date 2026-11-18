@@ -2,8 +2,9 @@
 # The welcome walk's Momo lesson, its words scripted (`-guideSay`, `-guideSayAgain`), one preview each on a fresh data folder,
 # with no service: Momo's recorded lines are her voice alone then (media-src/quest/voice). Each run asks what she can do,
 # then, on the layer of example cards that comes, asks something else. Checks that her answer is her recorded one, that
-# its layer comes 2 s before the answer ends, which recorded reply each later request gets, and that once card 6 is taken
-# nothing more is. Exits with how many failed.
+# its layer comes 2 s before the answer ends, which recorded reply each later request gets, that the walk does not move on
+# from her lesson by itself, that taking card 6 lets her go, and that once card 6 is taken nothing more is. Exits with how
+# many failed.
 #   quest/desktop/build.sh && quest/desktop/test/walk_voice_check.sh
 cd "$(dirname "$0")/.."
 DATA="${TMPDIR:-/tmp}/mp-walk-voice-check"
@@ -43,6 +44,29 @@ if [ "$order" = "the example cards listen|said during her answer, let be|its lay
     echo "ok     her ears stay the walk's through her answer, and what is said during it is let be"
 else
     echo "FAILED her ears stay the walk's through her answer: $order"
+    failed=$((failed + 1))
+fi
+# Left alone on the example cards, the walk does not take card 6 itself (WS80: no auto-advance out of Momo's lessons);
+# the others still go on by themselves 15 s after they are done.
+rm -rf "$DATA" && mkdir -p "$DATA"
+log=$(./preview -mute -dataDir "$DATA" -guideDemo tour -guideStep 5 -guideHear ready -guideSayAt 18 -guideSay Hi_Momo_what_can_you_do_for_me \
+    -shot "$DATA/shot.png" -shotAt 56 2>&1)
+if echo "$log" | grep -q "lesson 5 finished" && ! echo "$log" | grep -q "in focus: Step 6 of 8"; then
+    echo "ok     left alone on the example cards 20 s, the walk stays there"
+else
+    echo "FAILED left alone on the example cards, the walk stays there"
+    echo "$log" | grep "\[guide\]\|in focus" | tail -4 | sed 's/^/         /'
+    failed=$((failed + 1))
+fi
+# Taking card 6 while her reply to an example plays: the walk lets her go, and her reply stops there.
+rm -rf "$DATA" && mkdir -p "$DATA"
+log=$(./preview -mute -dataDir "$DATA" -guideDemo tour -guideStep 5 -guideHear ready -guideSayAt 18 -guideSay Hi_Momo_what_can_you_do_for_me \
+    -guideSayAgainAt 38 -guideSayAgain show_me_more_like_this -pickRef note:welcome-mark -pickAt 40 -shot "$DATA/shot.png" -shotAt 44 2>&1)
+order=$(echo "$log" | grep -o "answered with momo-can-more\|the walk left lesson 5: nothing more of Momo's for it\|in focus: Step 6 of 8" | tr '\n' '|')
+if [ "$order" = "answered with momo-can-more|in focus: Step 6 of 8|the walk left lesson 5: nothing more of Momo's for it|" ]; then
+    echo "ok     taking card 6 as she replies: the walk lets her go there"
+else
+    echo "FAILED taking card 6 as she replies: $order"
     failed=$((failed + 1))
 fi
 # Once card 6 is taken (the walk goes on by itself at -guideStep 6), the example cards no longer listen.

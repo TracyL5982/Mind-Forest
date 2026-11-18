@@ -16,6 +16,8 @@ import { chatContext, readMessage } from './momo-chat.ts';
 import { matchTrees, treeLines } from './tree-asks.ts';
 import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '../core/voice-tools.ts';
 import { LiveVoice, RATE, type LiveOptions, type OpenRealtime, type VoiceFrame } from './live.ts';
+import { copyOf, plantingOf, SHARE_BYTES, SHARE_CARDS, type ShareAnswer, type SharedFile, type TreeCopy } from '../core/sharing.ts';
+import { Gifts, type GiftPace } from './gifts.ts';
 import type { Maps } from './geocoder.ts';
 import { ClientMessage, DeviceFrame, PROTOCOL_VERSION } from './protocol.ts';
 import { SPEECH_VOICE, HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, heardMs, spokenMs, questWavMs, type Speak, type Transcribe } from './speech-openai.ts';
@@ -77,6 +79,17 @@ export interface ServerOptions {
   contact?: (desk: Desk) => Channel;
   /** Hosted mode: what this space's device may still do today, and where its use and spend are counted. */
   meter?: Meter;
+  /**
+   * Sharing a tree with a friend (the hosted service): a copy of a tree shared from here goes out through the person's Telegram,
+   * and trees friends shared with them grow here when the headset is next put on, with Momo's recorded `line` for it.
+   */
+  sharing?: {
+    share(copy: TreeCopy, files: SharedFile[]): Promise<ShareAnswer>;
+    /** A tree shared under `code` grew here: its sharer is told. */
+    planted(code: string): void;
+    line?: { text: string; pcm: Uint8Array };
+    pace?: Partial<GiftPace>;
+  };
   /** Hosted mode: the largest file one upload may be, and what this space's uploads may come to in all, in bytes. */
   uploads?: { file: number; total: number };
   /** The demo: one prepared tree played round by round, with a page to go to any round (src/demo, agents/demo/README.md). */
@@ -119,6 +132,11 @@ export interface Space {
   pipeline: Pipeline;
   mind: Mindstorm;
   demo: Director | null;
+  /**
+   * Takes a tree a friend shared, under its code: its files are copied here, and it is held to grow when the headset is next put
+   * on. Or why it could not take it, in a few words ending with a full stop.
+   */
+  receiveShared(code: string, copy: TreeCopy, files: SharedFile[]): Promise<{ ok: true } | { ok: false; why: string }>;
   /** Answers one request. The caller has checked nothing. */
   serve(req: IncomingMessage, res: ServerResponse): Promise<void>;
   upgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void;
@@ -135,6 +153,8 @@ const READING = new Set(['web_answer', 'look_up_mindstorm', 'go_to', 'connect_te
 const WRITES = new Set<ClientMessage['t']>(['dump', 'utter', 'ask', 'more', 'keep', 'undo', 'commands', 'organize', 'handoff']);
 /** `/live` sockets one metered space keeps: a headset reconnecting while its old socket lingers. A newer one closes the oldest. */
 const LIVE_PER_SPACE = 2;
+/** How long Momo's answer to a spoken turn is held at most, while the demo's prune waits, for the turn's words (the lead's call, 2026-11-17). */
+const PRUNE_HOLD_MS = 2000;
 /** What a metered space takes on /api/transcribe: the Quest's own WAV, of about a minute at most. */
 const RECORDING_BYTES = 2_000_000;
 
@@ -258,8 +278,9 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (message.t === 'change') broadcast({ ...message, undo: pipeline.undoLabel() }, asker?.ws);
     else if (message.t === 'navigate') broadcast(message, asker?.ws);
     else broadcast(message);
-    // A take says its own lines: Momo is told nothing of its cards, or she would tell of them again in words of her own.
-    if (!director?.directing()) asker?.voice?.observed(message);
+    // A take says its own lines: Momo is told nothing of its cards, or she would tell of them again in words of her own. Nor of a
+    // shared tree's, which grows with its own line.
+    if (!director?.directing() && !gifts?.growing()) asker?.voice?.observed(message);
   };
 
   const liveRoles = meter ? metered(opts.roles, meter) : opts.roles;
@@ -290,6 +311,59 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     playback,
   });
   pipeline.resume();
+
+  /** The headset joined to this space, the newest: what a shared tree grows on, and where Momo's line for it is said. */
+  const headset = (): WebSocket | undefined => [...sockets].filter((ws) => ws.readyState === ws.OPEN && plays.get(ws)?.embeds === false).at(-1);
+  const sharing = opts.sharing;
+  /** Trees friends shared with this person, held to grow when the headset is next put on (the hosted service). */
+  const gifts: Gifts | null = sharing
+    ? new Gifts({
+        file: join(opts.dataDir, 'shared-trees.json'),
+        pace: sharing.pace,
+        stage: (origin, label, commands) => {
+          const ws = headset();
+          asking.run({ ws, voice: ws && voices.get(ws) }, () => pipeline.stage(origin, label, commands));
+        },
+        watched: () => headset() !== undefined,
+        planted: (treeId) => mind.trees.has(treeId),
+        // Her recorded line on the headset's voice socket, its caption shown as its sound plays; none when the socket is shut.
+        speak: () => {
+          const ws = headset();
+          const live = ws && liveOf.get(ws);
+          const line = sharing.line;
+          if (!line || !live || live.readyState !== live.OPEN) return 0;
+          const id = `shared-${++lines}`;
+          const ms = Math.round(line.pcm.length / ((RATE / 1000) * 2));
+          const send = (frame: VoiceFrame) => live.send(JSON.stringify(frame));
+          send({ t: 'text', id, text: line.text, kind: 'reply', ms, from: 0 });
+          const piece = (RATE / 10) * 2;
+          for (let at = 0; at < line.pcm.length; at += piece) send({ t: 'audio', id, pcm: Buffer.from(line.pcm.subarray(at, at + piece)).toString('base64') });
+          send({ t: 'done', id });
+          return ms;
+        },
+        grew: (gift) => sharing.planted(gift.code),
+        log,
+      })
+    : null;
+  /** A copy of a tree and its files, shared from here, or why it cannot go. */
+  const shareTree = async (treeId: string): Promise<ShareAnswer> => {
+    const copy = copyOf(mind, treeId);
+    if (!copy || !sharing) return { ok: false, reason: 'unavailable', text: 'That tree can’t be shared just now.' };
+    const tooBig: ShareAnswer = { ok: false, reason: 'too-big', text: `That tree is too big to share: ${SHARE_CARDS} cards and ${SHARE_BYTES / 1e6} MB of pictures at most.` };
+    if (copy.nodes.length > SHARE_CARDS) return tooBig;
+    const files: SharedFile[] = [];
+    let bytes = 0;
+    for (const id of copy.assets) {
+      const stored = assets.open(id);
+      if (!stored) continue;
+      if ('bytes' in stored) {
+        bytes += stored.bytes.length;
+        if (bytes > SHARE_BYTES) return tooBig;
+        files.push({ id, mime: stored.mime, bytes: stored.bytes });
+      } else files.push({ id, mime: stored.mime, link: 'file' in stored ? stored.file : stored.url });
+    }
+    return sharing.share(copy, files);
+  };
 
   if (opts.demo) {
     /** The headset the demo is shown on: the newest connection that said it is one, or else the newest client. */
@@ -695,6 +769,57 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       : live.webAnswer;
     /** Audio is counted as 16-bit mono: the device's at 16 kHz, Momo's at the live voice's rate. */
     const counted = (pcm: string, rate: number) => meter?.used('voiceMs', ((pcm.length * 3) / 4 / 2 / rate) * 1000);
+    /**
+     * While the demo's prune waits (`Director.awaitsPrune`), Momo's answer to a spoken turn is held until the turn's words are
+     * written down, `PRUNE_HOLD_MS` at most: words that ask to prune the card have the director cut it and say her line, and her own
+     * answer never reaches the headset (the lead's call, 2026-11-17). The turn being heard, with the card open as it began.
+     */
+    let deciding: { turn: number; focus?: string; held: VoiceFrame[]; timer?: ReturnType<typeof setTimeout> } | null = null;
+    /** The turn the director answered, its words, and the ids of Momo's own answers to it: none reaches the headset, and her tools for it do nothing. */
+    let directed: { turn: number; words: string; ids: Set<string> } | null = null;
+    /** Momo's tools that wait for the turn being heard to be settled, since its words may be written down later than a call waits for them. */
+    const settled: (() => void)[] = [];
+    const settling = () => {
+      for (const done of settled.splice(0)) done();
+    };
+    /** Momo's voice to the headset: kept from it while a take's lines are what it hears. */
+    const toDevice = (frame: VoiceFrame) => {
+      // While a round's take is what the headset hears, Momo's own words are kept from it; her reply over, the take is seen to.
+      if (director?.mutes()) {
+        if (frame.t === 'text' || frame.t === 'audio') return;
+        if (frame.t === 'done') director.replied();
+      }
+      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame));
+    };
+    const settle = (words: string | null) => {
+      const d = deciding;
+      if (!d) return;
+      deciding = null;
+      if (d.timer) clearTimeout(d.timer);
+      if (words !== null && director?.asksToPrune(words, d.focus) && director.pruneAsked()) {
+        directed = { turn: d.turn, words, ids: new Set(d.held.flatMap((f) => ('id' in f ? [f.id] : []))) };
+        log(`[demo] turn ${d.turn} asks to prune the card: it is cut and Momo's line said, and her own answer is dropped`);
+        return settling();
+      }
+      settling();
+      if (words === null && d.held.length > 0) log(`[demo] turn ${d.turn}'s words were not written down in ${PRUNE_HOLD_MS} ms: Momo's answer goes on`);
+      for (const f of d.held) toDevice(f);
+    };
+    const gate = (frame: VoiceFrame) => {
+      if (frame.t === 'heard') {
+        toDevice(frame);
+        if (frame.final && deciding?.turn === frame.turn) settle(frame.text);
+        return;
+      }
+      if (frame.t !== 'text' && frame.t !== 'audio' && frame.t !== 'done') return toDevice(frame);
+      if (directed && (directed.ids.has(frame.id) || (frame.t === 'text' && frame.turn === directed.turn))) {
+        directed.ids.add(frame.id);
+        return;
+      }
+      if (!deciding) return toDevice(frame);
+      deciding.held.push(frame);
+      deciding.timer ??= setTimeout(() => settle(null), PRUNE_HOLD_MS);
+    };
     const voice: LiveVoice = new LiveVoice(
       {
         open: live.open,
@@ -702,7 +827,19 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         name: () => spokenName(settings.agentName),
         words: (scene) => likelyWords(mind, scene.treeId ?? null),
         tools: toolSpecs,
-        call: (name, args, scene, said) => {
+        call: async (name, args, scene, said) => {
+          // A tool Momo calls for the turn the director answered does nothing: the card is cut, and her line said.
+          if (deciding || directed) {
+            const before = directed;
+            const words = await said();
+            if (deciding) {
+              deciding.timer ??= setTimeout(() => settle(null), PRUNE_HOLD_MS);
+              await new Promise<void>((done) => settled.push(done));
+            }
+            if (directed && (words === directed.words || (words === undefined && directed !== before))) {
+              return { done: true, note: 'Already done: the card is cut, and that was said. Say nothing more about it.' };
+            }
+          }
           const why = (READING.has(name) ? null : noRoom()) ?? (SEARCHING.has(name) ? meter?.refused('searches') : null);
           if (why) return Promise.resolve({ error: why });
           return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said, contact: telegram ?? undefined }));
@@ -739,12 +876,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           const why = meter?.refused('voiceMs');
           if (why) return cut(why, frame.id);
         }
-        // While a round's take is what the headset hears, Momo's own words are kept from it; her reply over, the take is seen to.
-        if (director?.mutes()) {
-          if (frame.t === 'text' || frame.t === 'audio') return;
-          if (frame.t === 'done') director.replied();
-        }
-        if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(frame));
+        gate(frame);
       },
     );
     if (own) {
@@ -826,6 +958,12 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         if (meter?.refused('voiceMs')) return void (ws.readyState === ws.OPEN && ws.send(JSON.stringify({ t: 'name', ok: true } satisfies VoiceFrame)));
         counted(frame.pcm, 16000);
       }
+      if (frame.t === 'start') {
+        // A new turn: what Momo was saying is stopped, so an answer held for the turn before goes nowhere.
+        if (deciding?.timer) clearTimeout(deciding.timer);
+        settling();
+        deciding = director?.awaitsPrune() ? { turn: frame.turn, ...(frame.scene.focus ? { focus: frame.scene.focus } : {}), held: [] } : null;
+      }
       voice.heard(frame);
     });
   });
@@ -864,17 +1002,24 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       case 'client':
         plays.set(ws, m.media);
         if (director && m.media.embeds === false) director.joined();
+        else if (m.media.embeds === false) gifts?.returned();
         return;
       case 'worn':
-        director?.worn(m.away);
+        if (director) director.worn(m.away);
+        else gifts?.returned(m.away);
         return;
       case 'share':
-        // So far only the demo shares a tree, with the user as the friend (the film). Between two people it is to come.
-        if (!director) {
+        // The demo shares a tree with the user as the friend (the film); the hosted service, through the person's Telegram, with a
+        // friend who uses it too, and tells the headset how it went. Any other service shares nothing.
+        if (director) {
+          await director.share(m.tree).catch((err) => ws.send(JSON.stringify({ t: 'error', message: `the tree was not shared: ${err instanceof Error ? err.message : String(err)}` })));
+          return;
+        }
+        if (!sharing) {
           ws.send(JSON.stringify({ t: 'error', message: 'sharing a tree with a friend is not ready on this service yet' }));
           return;
         }
-        await director.share(m.tree).catch((err) => ws.send(JSON.stringify({ t: 'error', message: `the tree was not shared: ${err instanceof Error ? err.message : String(err)}` })));
+        ws.send(JSON.stringify({ t: 'shared', tree: m.tree, ...(await shareTree(m.tree).catch((): ShareAnswer => ({ ok: false, reason: 'unavailable', text: 'That tree can’t be shared just now.' }))) }));
         return;
       case 'dump':
         await pipeline.dump(m.dumps);
@@ -884,6 +1029,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         return;
       case 'focus':
         pipeline.focus(m.nodeId);
+        gifts?.focused(m.nodeId);
         return;
       case 'questions':
         ws.send(JSON.stringify({ t: 'questions', nodeId: m.nodeId, questions: await pipeline.questions(m.nodeId) }));
@@ -902,7 +1048,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         pipeline.undo(m.id);
         return;
       case 'commands':
-        pipeline.userCommands(m.label, m.commands);
+        if (pipeline.userCommands(m.label, m.commands)) director?.changed(m.commands);
         return;
       case 'organize':
         await pipeline.organize(m.request, m.scope, m.focus);
@@ -922,6 +1068,15 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     pipeline,
     mind,
     demo: director,
+    async receiveShared(code, copy, files) {
+      if (!gifts) return { ok: false, why: 'this headset does not take shared trees.' };
+      const bytes = files.reduce((n, file) => n + (file.bytes?.length ?? 0), 0);
+      if (opts.volumeFull?.() || !assets.room(bytes)) return { ok: false, why: 'your headset has no room left for its pictures.' };
+      const moved = new Map<string, string>();
+      for (const file of files) moved.set(file.id, (file.bytes ? await assets.put(file.bytes, file.mime, file.name) : await assets.link(file.link!, file.mime, file.name)).id);
+      gifts.hold({ code, title: copy.title, planting: plantingOf(copy, moved, () => randomUUID(), new Date().toISOString()) });
+      return { ok: true };
+    },
     serve,
     upgrade,
     online: () => sockets.size + liveWss.clients.size,

@@ -191,6 +191,8 @@ How a request finds its round:
 
 A stray request therefore also brings the next round. If that happens, go to the round again.
 
+**Pruning Llull's ring.** Once Round 2 has brought Llull's ring, cutting it on the headset (with the knife, or the card's own cut) has Momo say "Got it—pruning that branch and shifting focus to spatial hierarchy." from her recording (`said.pruned` in `lines.json`), once each time the round is set up. Asking her instead ("prune this", "cut this branch", "remove Llull's ring", with the card open or named) cuts it the same way and says the same line. Her own answer and her own tool are left out. To tell, her answers wait until your words are written down, at most 2 s, from when the round brings the card until it is cut. If she is saying a take's line when you cut, the line about pruning waits for it to end. Only a cut of the card itself counts, not a cut above it. With "Rounds are scripted" off, she answers for herself.
+
 Momo's own rule is that a question gets an answer and no cards, and half the walkthrough's lines are questions ("so how do we keep the information organized?"). So while a round waits on the card you have open, she is told so at the start of your turn, and takes whatever you say next as a request for a new layer on it: a few words of her own, then the search. On any other card she is herself: a question is answered aloud, and a request for things to look at brings the next round.
 
 ## When something is off

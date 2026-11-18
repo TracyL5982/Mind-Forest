@@ -535,12 +535,19 @@ std::optional<Inbound> readError(const Json& j, Why& why) {
     return message(f, Rejected{.message = f.string("message")});
 }
 
+std::optional<Inbound> readShared(const Json& j, Why& why) {
+    Fields f(j, why);
+    return message(f, Shared{.tree = f.id<TreeId>("tree"), .ok = f.boolean("ok"), .reason = f.optionalString("reason").value_or(""),
+                             .text = f.optionalString("text").value_or("")});
+}
+
 const std::map<std::string, Reader, std::less<>>& readers() {
     static const std::map<std::string, Reader, std::less<>> table = {
         {"hello", readHello},       {"change", readChange},     {"activity", readActivityMessage},
         {"say", readSay},           {"heard", readHeard},       {"navigate", readNavigate},
         {"handoff", readHandoff},   {"settings", readSettingsMessage},
         {"note", readNote},         {"questions", readQuestions}, {"error", readError},
+        {"shared", readShared},
     };
     return table;
 }

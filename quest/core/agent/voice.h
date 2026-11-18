@@ -129,6 +129,13 @@ public:
     };
     void askLesson(const LessonAsk& ask, const std::string& fallback);
     static constexpr double lessonWait = 4;
+    /// GUIDE: the walk has moved on from a lesson of Momo's (WS80): nothing of hers for it starts after (a transcript
+    /// under way for the walk, a recorded line waiting its turn, the lesson's live answer or its fallback), and what of it
+    /// is playing is cut short with a quick fade (`walkFade`).
+    void leaveWalkTurn();
+    /// s her lines for the walk are fed to the player ahead of being heard, which is how soon a fade can begin; and s the
+    /// fade takes.
+    static constexpr double walkAhead = 0.2, walkFade = 0.12;
     /// A reply has come from the service and has not begun to sound yet: Momo is about to speak. At most `lineWait`.
     bool lineComing() const { return lineAt >= 0 && clock - lineAt < lineWait; }
     static constexpr double lineWait = 5;
@@ -158,6 +165,7 @@ private:
         bool ok = false;
         std::string text;
         std::string why;
+        int walk = -1;              // GUIDE: recorded for the walk's ears, as they were lent then (`tutorEpoch`); -1 when not
         /// The service found the name at the start of the recording. Without it, what woke the headset was not the name.
         bool named = true;
     };
@@ -320,6 +328,11 @@ private:
         /// then show by how far into that the voice is. 0: by how much of the sound come so far has been heard.
         double length = 0, from = 0;
         bool recorded = false;      // GUIDE: a line of the walk's own (`tellRecorded`), not a reply from the service
+        /// GUIDE: hers for the walk (a recorded line, or the lesson's live answer): fed to the player `walkAhead` at a
+        /// time from `queued`, so it can be faded; finished once `ending` and all of it fed.
+        bool walk = false, ending = false, finishedFeeding = false;
+        std::vector<int16_t> queued;
+        size_t fed = 0;
         size_t written = 0;
         /// Seconds of it heard by now, as far as the frame clock tells: never ahead of what was written.
         double played = 0;
@@ -359,6 +372,10 @@ private:
     using Turn = std::variant<Idle, Listening, Open, Sent, Thinking>;
     Turn turn = Idle{};
     std::optional<Tutor> tutoring;      // GUIDE
+    int tutorEpoch = 0;                 // GUIDE: counts each lending or taking back of the ears (WS80)
+    std::string walkReply;              // GUIDE: the id of the lesson's live answer, once it sounds
+    /// GUIDE: feeds the walk's sounding its next `walkAhead` of sound, and finishes it when all is fed.
+    void feedWalk();
     /// The live turn whose words the presence shows, from `heard`; 0 for none.
     int wordsOf = 0;
     /// The agents at work, for their lines and Momo's monocle.
@@ -381,7 +398,7 @@ private:
     void openMicrophone();
     void respell();
     void send(Command command);
-    void transcribe(const std::string& wav);
+    void transcribe(const std::string& wav, int walk = -1);
     void speak(const std::string& text);
     void openLive(double now);
     /// /live closed, or the service has no live voice: the old path from now on, tried again in `liveRetry` while the

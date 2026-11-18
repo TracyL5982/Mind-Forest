@@ -541,7 +541,7 @@ void OceanModel::tendHover(double now) {
     }
 }
 
-void OceanModel::showButtons(Shelved& s, int pressed) {
+void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
     if (!art) return;
     EntityRef holder = s.mover->entity;
     bool again = s.buttons != nullptr;
@@ -565,7 +565,7 @@ void OceanModel::showButtons(Shelved& s, int pressed) {
     EntityRef row = Entity::make();
     row->position = {0, crown + tall / 2, 0.1f};
     for (int b = 0; b < 2; b++) {
-        std::optional<Piece> piece = art->pill(b == pressed ? done[b] : names[b], buttonText);
+        std::optional<Piece> piece = art->pill(b == pressed ? (said.empty() ? std::string(done[b]) : said) : std::string(names[b]), buttonText);
         if (!piece) return;
         float x = (b == 0 ? -1.f : 1.f) * wide / 2;
         EntityRef target = Entity::make();
@@ -590,7 +590,8 @@ void OceanModel::showButtons(Shelved& s, int pressed) {
             }
         }
         EntityRef pill = art->quad(*piece);
-        pill->scale = Vec3::repeating(pillTall / piece->size.y);
+        // (A longer line, why a share was not taken, keeps within its own button's target, a little smaller.)
+        pill->scale = Vec3::repeating(std::min(pillTall / piece->size.y, wide * 0.94f / piece->size.x));
         pill->position = {x, 0, 0.004f};
         row->addChild(pill);
         s.pills[size_t(b)] = pill;
@@ -639,4 +640,25 @@ void OceanModel::letGo(const TreeRef& tree) {
         shelfDirty = true;
         return;
     }
+}
+
+void OceanModel::shareRefused(const Tree& tree, const std::string& reason) {
+    auto i = std::find_if(shelf.begin(), shelf.end(), [&](const Shelved& cover) { return cover.tree.get() == &tree; });
+    if (i == shelf.end()) return;
+    std::string said = reason == "unpaired" ? "Pair Telegram first" : reason == "limit" ? "No more shares today"
+                     : reason == "too-big"  ? "Too big to share"
+                                            : "Try again later";
+    // One tree shows its buttons at a time: another's go.
+    for (Shelved& other : shelf) {
+        if (&other == &*i || !other.buttons) continue;
+        for (const EntityRef& b : other.buttons->children) picks.erase(b.get());
+        other.tilts.erase(std::remove(other.tilts.begin(), other.tilts.end(), other.buttons), other.tilts.end());
+        fadeOut(other.buttons, 0.2f);
+        other.buttons = nullptr;
+        other.pills = {};
+        other.buttonsUntil = -1;
+    }
+    i->buttonsUntil = time + buttonsSay;
+    showButtons(*i, 1, said);
+    logLine("[ocean] Share says: " + said + ", over " + tree.title);
 }

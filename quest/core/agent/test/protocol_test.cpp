@@ -18,6 +18,7 @@ std::string kindOf(const Inbound& message) {
                           [](const Note&) { return std::string("note"); },
                           [](const Questions&) { return std::string("questions"); },
                           [](const Rejected&) { return std::string("error"); },
+                          [](const Shared&) { return std::string("shared"); },
                           [](const Unknown& u) { return "unknown " + u.t; },
                           [](const Malformed& m) { return "malformed " + m.t + ": " + m.why; },
                       },
@@ -373,6 +374,12 @@ TEST(theOtherMessagesRead) {
     CHECK(q && q->nodeId.value == "n1" && q->questions == written, "questions");
     Inbound none = parseInbound(R"({"t":"questions","nodeId":"n1","questions":[]})");
     CHECK(std::get_if<Questions>(&none) && std::get_if<Questions>(&none)->questions.empty(), "no questions");
+    Inbound taken = parseInbound(R"({"t":"shared","tree":"t1","ok":true})");
+    auto* yes = std::get_if<Shared>(&taken);
+    CHECK(yes && yes->tree.value == "t1" && yes->ok && yes->reason.empty(), "shared");
+    Inbound refused = parseInbound(R"({"t":"shared","tree":"t1","ok":false,"reason":"unpaired","text":"Pair Telegram first."})");
+    auto* no = std::get_if<Shared>(&refused);
+    CHECK(no && !no->ok && no->reason == "unpaired" && no->text == "Pair Telegram first.", "shared, refused");
     Inbound note = parseInbound(R"({"t":"note","role":"scout","message":"failed: no network"})");
     auto* n = std::get_if<Note>(&note);
     CHECK(n && n->role == "scout" && n->message == "failed: no network", "note");

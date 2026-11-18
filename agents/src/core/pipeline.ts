@@ -598,8 +598,8 @@ function onlyEdits(p: Patch): boolean {
 }
 
 function isHousekeeping(set: ChangeSet): boolean {
-  // The demo's prepared rounds are set up, not done by the user: an undo never takes one back.
-  return set.origin.role === 'renderer' || set.origin.role === 'archivist' || set.origin.role === 'demo';
+  // The demo's prepared rounds are set up, not done by the user, nor is a tree a friend shared: an undo never takes one back.
+  return set.origin.role === 'renderer' || set.origin.role === 'archivist' || set.origin.role === 'demo' || set.origin.role === 'shared';
 }
 
 /** Whether an item that was there before now has another title, text or data: what a card is drawn from. Its summary and tags are not. */

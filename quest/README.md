@@ -497,8 +497,12 @@ The visionOS app has no sounds of its own yet; these are the Quest's (and the Ma
     as that layer is in front, her ears stay the walk's: one of the cards asked for (loosely, the fullest match
     winning; "what can you do" again is her answer again) gets her recorded reply to it, saying what she would do
     and to ask once the walk is done, with the walk's ring round the card while she says it; anything else gets
-    her one reply to anything else. Taking card 6 ends it. `quest/desktop/test/walk_voice_check.sh` scripts it
-    (`-guideSay`, `-guideSayAgain`). To the sketch, the live
+    her one reply to anything else. Taking card 6 ends it. Neither of her two lessons moves on by itself, as the
+    others do 15 s after they are done: the user takes the next card (WS80). Leaving one, nothing of hers for it starts
+    after (what was said for it and is still being transcribed is let be, never sent to the live Momo; a line waiting
+    its turn, the sketch's live answer and its fallback likewise), and what she is saying fades out over 0.12 s: her
+    lines for the walk are fed to the player 0.2 s ahead so that they can (`Voice::leaveWalkTurn`).
+    `quest/desktop/test/walk_voice_check.sh` scripts it (`-guideSay`, `-guideSayAgain`). To the sketch, the live
     Momo herself: the walk sends what was said, the picture and the layer's cards on /live (the `lesson` frame,
     agents/docs/protocol.md), and she answers and walks through them; where /live is not open, the service says
     `quiet`, or she has made no sound 4 s after, her recorded "Here is a layer from your sketch." instead

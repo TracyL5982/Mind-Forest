@@ -80,6 +80,21 @@ export const MUSE_CODE = 'museCode';
 export const sharedMessage = (title: string) => `A friend shared a tree with you: “${title}”. Put on your headset to see it grow.`;
 /** The showcase tree the daily tree is unless the page picks another: the user's "rightmost tree", by the lead's reading. */
 export const DAILY_TREE = 'constellations';
+/**
+ * The walkthrough's card whose cut Momo answers with a line of her own (the user's ask, 2026-11-17): Llull's ring, which Round 2
+ * brings. Her words are `said.pruned` in demo/lines.json, and these unless it says otherwise.
+ */
+export const PRUNED = { card: 'llull-figure', said: 'pruned', words: 'Got it—pruning that branch and shifting focus to spatial hierarchy.' } as const;
+/** A word for cutting a card away, as the user may put it to Momo. */
+const CUTTING = /\b(?:prune|pruning|cut|cutting|remove|removing|delete|deleting|drop|ditch|trim|chop|get rid of|take (?:it |this |that )?(?:away|out|off))\b/;
+/** Llull's ring by name, as speech may be written down: "Llull's ring", "Lull's ring", "Yule's ring". */
+const NAMED = /\bring\b|\bl+ull?\b/;
+/** Whether the user's words ask to cut away the card, loosely: a word for cutting, with the card open or named, and no "don't". */
+export function prunes(words: string, open: boolean): boolean {
+  const said = words.toLowerCase().replace(/’/g, "'");
+  if (!CUTTING.test(said) || /\b(?:don't|do not|not|never)\b/.test(said)) return false;
+  return open || NAMED.test(said);
+}
 
 export interface DirectorDeps {
   script: DemoScript;
@@ -250,6 +265,12 @@ export class Director {
   private outside = new Set<Id>();
   /** The showcase tree held back to grow, and as what: `ready` once a headset's return may start it, `sent` once the phone was told. */
   private heldTree: (Held & { tree: string; kind: HeldKind; sent: boolean }) | null = null;
+  /** The nodes of the card whose cut Momo answers (`PRUNED`) that she has answered: each set-up hangs it on a node of its own. */
+  private readonly pruned = new Set<Id>();
+  /** Until when a line of hers that no take says is being said, so her own voice is kept from the headset meanwhile. */
+  private saying = 0;
+  /** When each of her recorded lines that is being said now ends on the headset, by its id: a line stopped is over. */
+  private readonly voicing = new Map<string, number>();
 
   constructor(private readonly deps: DirectorDeps) {
     this.pace = { ...PACE, ...deps.pace };
@@ -1085,11 +1106,13 @@ export class Director {
     if (pcm) {
       const piece = BYTES_PER_MS * 100;
       const began = Date.now();
+      this.voicing.set(id, began + Math.max(0, pcm.length / BYTES_PER_MS - offset) / Math.max(0.01, rate));
       for (let at = from; at < pcm.length && !stopped(); at += piece) {
         send({ t: 'audio', id, pcm: Buffer.from(pcm.subarray(at, at + piece)).toString('base64') });
         const ahead = (at + piece) / BYTES_PER_MS - offset - (Date.now() - began) * rate;
         if (ahead > 250) await pause((ahead - 250) / rate);
       }
+      if (stopped()) this.voicing.delete(id);
     }
     send({ t: 'done', id });
   }
@@ -1101,7 +1124,7 @@ export class Director {
    */
   mutes(): boolean {
     if (!this.scripted) return false;
-    if (this.rolling || this.pending) return true;
+    if (this.rolling || this.pending || Date.now() < this.saying) return true;
     return this.listening !== null || this.awaitsTree();
   }
 
@@ -1154,6 +1177,77 @@ export class Director {
   heard(message: { t: string; nodeId?: string }): void {
     if ((message.t !== 'focus' && message.t !== 'questions') || !message.nodeId) return;
     for (const resume of [...(this.waiting.get(`${message.t}:${message.nodeId}`) ?? [])]) resume();
+  }
+
+  /**
+   * A change a client made by hand, done. A cut on the headset (by the knife, or the card's own cut) that took away the card whose
+   * cut Momo answers (`PRUNED`) has her say her line, once for each set-up of it. With rounds not scripted, all she says is live.
+   */
+  changed(commands: readonly Command[]): void {
+    const node = this.nodes.get(PRUNED.card);
+    if (!this.scripted || !node || this.deps.mind.nodes.has(node) || this.pruned.has(node)) return;
+    if (commands.some((command) => command.type === 'deleteNode' && command.id === node)) void this.sayPruned(node);
+  }
+
+  /**
+   * Momo says her line for the cut of `PRUNED`'s card, with nothing of hers live over it and nothing told her until it ends. A line
+   * of hers being said then, as a take's, is not talked over: hers waits for it to end (the lead's call, 2026-11-17).
+   */
+  private async sayPruned(node: Id): Promise<void> {
+    this.pruned.add(node);
+    const line = this.deps.lines.saying(PRUNED.said) ?? PRUNED.words;
+    const spoken = this.deps.lines.ms(line);
+    const take = this.take;
+    const keep = () => {
+      this.saying = Math.max(this.saying, Date.now() + spoken);
+      this.quiet = Math.max(this.quiet, this.saying + 500);
+    };
+    keep();
+    for (let ends = this.lineEnds(); ends > Date.now() && take === this.take; ends = this.lineEnds()) {
+      this.deps.log(`[demo] the card ${PRUNED.card} was cut: Momo's line waits ${ends - Date.now()} ms for the one she is saying`);
+      await pause(ends - Date.now() + 100);
+      keep();
+    }
+    if (take !== this.take) return;
+    this.deps.log(`[demo] the card ${PRUNED.card} was cut: Momo says her line`);
+    await this.say(++this.plays, { id: PRUNED.said, kind: 'answer', cards: [], text: line, at: 0, ms: spoken }, 0, 1, () => take !== this.take);
+  }
+
+  /** When the last of her recorded lines being said now ends, or 0 when none is. */
+  private lineEnds(): number {
+    const now = Date.now();
+    let last = 0;
+    for (const [id, ends] of this.voicing) {
+      if (ends <= now) this.voicing.delete(id);
+      else last = Math.max(last, ends);
+    }
+    return last;
+  }
+
+  /** The node of `PRUNED`'s card while its cut would have Momo say her line: it stands as set up, and she has not said it. */
+  private prunable(): Id | null {
+    const node = this.nodes.get(PRUNED.card);
+    return this.scripted && node && this.deps.mind.nodes.has(node) && !this.pruned.has(node) ? node : null;
+  }
+
+  /** Whether a cut of `PRUNED`'s card would have Momo say her line now, so her answers wait on what the user's words ask. */
+  awaitsPrune(): boolean {
+    return this.prunable() !== null;
+  }
+
+  /** Whether the user's words, said with `focus` open, ask to prune `PRUNED`'s card while its cut would have Momo say her line. */
+  asksToPrune(words: string, focus: Id | undefined): boolean {
+    const node = this.prunable();
+    return node !== null && prunes(words, focus === node);
+  }
+
+  /** The user asked Momo to prune `PRUNED`'s card: it is cut as the headset's own cut is, and she says her line. True once done. */
+  pruneAsked(): boolean {
+    const node = this.prunable();
+    if (!node) return false;
+    const set = this.deps.asDevice(() => this.deps.pipeline.userCommands('Cut', [{ type: 'deleteNode', id: node }]));
+    if (set) void this.sayPruned(node);
+    return set !== null;
   }
 
   // ---- the roles the demo takes over
