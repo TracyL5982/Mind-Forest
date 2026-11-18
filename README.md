@@ -156,4 +156,6 @@ What the repository itself records about third-party material:
 | Sounds | `media-src/quest/sounds` | The project's own, synthesized by `quest/sound/synth.py` |
 | Momo's recorded lines | `media-src/quest/voice`, `agents/demo/voice` | Recorded from the realtime model's voice |
 
-The repository has no licence file of its own.
+## Licence
+
+The project's own code and documents are under the MIT licence in [LICENSE](LICENSE). The films, artworks, pins and other third-party media in the repository are not: each keeps its own rights, as Media and credits above records them, and as each card's own record does for the walkthrough (`agents/demo/script.json`) and the example trees (each `tree.json` in `agents/demo/showcase`).
