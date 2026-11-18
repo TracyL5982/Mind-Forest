@@ -1,4 +1,4 @@
-// FILM: sharing a tree with someone. Not a port: the visionOS app has nothing like it. It builds on the Send and Share
+// FILM: sharing a tree with someone. It builds on the Send and Share
 // buttons tracy/agents put over a tree in the forest (oceanmodel_desk.cpp, `tendHover`), where Share told the service at
 // once and said "Shared".
 //

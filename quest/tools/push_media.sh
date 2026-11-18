@@ -63,7 +63,7 @@ sync_dir "$SMALL" works-small
 [ -f "$REPO_ROOT/media-src/quest/hands/hand-right.bin" ] && sync_dir "$REPO_ROOT/media-src/quest/hands" hands
 # The greeting's lettering (Fraunces 72pt Soft Light and its italic, SIL Open Font License; in git).
 [ -d "$REPO_ROOT/media-src/quest/fonts" ] && sync_dir "$REPO_ROOT/media-src/quest/fonts" fonts
-# The people a tree can be shared with (in git; SNAPCrop's profile pictures, see quest/core/ocean/oceanmodel_share.cpp).
+# The people a tree can be shared with (in git; drawn placeholders for their profile pictures, see quest/core/ocean/oceanmodel_share.cpp).
 [ -d "$REPO_ROOT/media-src/quest/people" ] && sync_dir "$REPO_ROOT/media-src/quest/people" people
 adb shell "du -sh $DEVICE_FILES/media"
 
