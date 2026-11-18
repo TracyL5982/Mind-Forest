@@ -44,7 +44,7 @@ Hold your palms together for a second to close the tree you are in.
 
 **The welcome tree afterwards.** The welcome tree stays in your forest. Once you close it (palms together, or **Close the Tree**) it stands on the desk with your own trees and the five example trees, also after the app is closed and opened again, and you can open it any time to see a lesson again. The **Gestures** button lists every gesture, and **Take the tour** on that sheet begins the lessons from the first. A lesson that is done moves on to the next by itself a few seconds later.
 
-## The hackathon's experience guidelines
+## Experience guidelines
 
 | Guideline | How Mind Forest meets it |
 |---|---|
