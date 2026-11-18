@@ -33,6 +33,18 @@ check "Hand it off" hand_this_off_to_my_coding_agent momo-can-hand
 check "the fuller match wins: more like this, over tree" show_me_more_like_this_tree momo-can-more
 check "what can you do, again: her answer again" what_can_you_do momo-can
 check "anything else" tell_me_about_trains momo-can-other
+# From her answer on, her ears stay the walk's (none given back to the live Momo between her answer and its layer), and
+# what is said while she is still answering is let be.
+rm -rf "$DATA" && mkdir -p "$DATA"
+log=$(./preview -mute -dataDir "$DATA" -guideDemo tour -guideStep 5 -guideHear ready -guideSayAt 18 -guideSay Hi_Momo_what_can_you_do_for_me \
+    -guideSayAgainAt 24 -guideSayAgain show_me_more_like_this -shot "$DATA/shot.png" -shotAt 36 2>&1)
+order=$(echo "$log" | grep -o "the example cards listen\|said during her answer, let be\|its layer comes" | tr '\n' '|')
+if [ "$order" = "the example cards listen|said during her answer, let be|its layer comes|" ]; then
+    echo "ok     her ears stay the walk's through her answer, and what is said during it is let be"
+else
+    echo "FAILED her ears stay the walk's through her answer: $order"
+    failed=$((failed + 1))
+fi
 # Once card 6 is taken (the walk goes on by itself at -guideStep 6), the example cards no longer listen.
 rm -rf "$DATA" && mkdir -p "$DATA"
 log=$(./preview -mute -dataDir "$DATA" -guideDemo tour -guideStep 6 -guideHear ready -guideSayAgainAt 50 -guideSayAgain show_me_more_like_this \

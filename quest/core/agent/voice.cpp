@@ -266,48 +266,118 @@ std::optional<RecordedLine> recordedLine(const std::string& name) {
     return found->second;
 }
 
+std::optional<RecordedSound> recordedSound(const RecordedLine& line, std::string& why) {
+    std::optional<std::string> bytes = platform::readFile(line.path);
+    if (!bytes) {
+        why = "it can't be read (" + line.path + ")";
+        return std::nullopt;
+    }
+    const std::string& s = *bytes;
+    auto u16 = [&](size_t at) { return uint32_t(uint8_t(s[at])) | uint32_t(uint8_t(s[at + 1])) << 8; };
+    auto u32 = [&](size_t at) { return u16(at) | u16(at + 2) << 16; };
+    if (s.size() < 12 || s.compare(0, 4, "RIFF") != 0 || s.compare(8, 4, "WAVE") != 0) {
+        why = "it is not a WAV";
+        return std::nullopt;
+    }
+    RecordedSound out;
+    bool format = false;
+    for (size_t at = 12; at + 8 <= s.size();) {
+        std::string id = s.substr(at, 4);
+        size_t size = u32(at + 4), body = at + 8;
+        if (size > s.size() - body) size = s.size() - body;
+        if (id == "fmt ") {
+            if (size < 16 || u16(body) != 1 || u16(body + 2) != 1 || u16(body + 14) != 16) {
+                why = "it is not 16-bit PCM in one channel";
+                return std::nullopt;
+            }
+            out.rate = int(u32(body + 4));
+            format = true;
+        } else if (id == "data" && format) {
+            out.samples.resize(size / 2);
+            for (size_t i = 0; i < out.samples.size(); i++) out.samples[i] = int16_t(u16(body + 2 * i));
+            if (out.samples.empty() || out.rate <= 0) {
+                why = "it holds no sound";
+                return std::nullopt;
+            }
+            return out;
+        }
+        at = body + size + (size & 1);
+    }
+    why = "it has no sound in it";
+    return std::nullopt;
+}
+
+platform::StreamRef playRecordedAlone(const RecordedLine& line, std::function<void(bool played)> done) {
+    std::string why;
+    std::optional<RecordedSound> sound = recordedSound(line, why);
+    if (!sound) {
+        logLine("[voice] the walk's recorded line can't be played: " + why);
+        return nullptr;
+    }
+    platform::StreamRef player = platform::playStream(sound->rate, std::move(done));
+    if (!player) return nullptr;
+    player->write(sound->samples.data(), sound->samples.size());
+    player->finish();
+    return player;
+}
+
 std::optional<double> Voice::tellRecorded(const std::string& name) {
     std::optional<RecordedLine> r = recordedLine(name);
     if (!r) {
         logLine("[voice] the walk has no recorded line " + name);
         return std::nullopt;
     }
-    pendingRecorded = *r;
+    std::string why;
+    std::optional<RecordedSound> sound = recordedSound(*r, why);
+    if (!sound) {
+        logLine("[voice] the walk's recorded line " + name + " can't be played: " + why);
+        return std::nullopt;
+    }
+    double seconds = double(sound->samples.size()) / sound->rate;
+    pendingRecorded = std::make_pair(*r, std::move(*sound));
     pending.reset();
     if (ears) send(AskToSpeak{});
     else {
-        playRecorded(*r);
+        auto [line, samples] = std::move(*pendingRecorded);
         pendingRecorded.reset();
+        playRecorded(line, samples);
     }
-    return r->seconds;
+    return seconds;
 }
 
-void Voice::playRecorded(const RecordedLine& r) {
-    if (sound) sound->stop();
-    sound.reset();
-    int number = ++reply;
-    spoken = r.text;
-    shown.momoText.clear();
+// As a reply streamed from the service is (`startPlayer`): her stream player, her level from its loudness, her words
+// shown by how far into it she is.
+void Voice::playRecorded(const RecordedLine& line, const RecordedSound& sound) {
     std::weak_ptr<Inbox> box = inbox;
-    if (muted) {
-        sound = std::make_shared<UnheardFile>();
-        unheardReply = UnheardReply{number, clock + r.seconds};
-    } else {
-        sound = play(r.path, [box, number](bool) {
-            if (auto b = box.lock()) {
-                std::lock_guard<std::mutex> g(b->lock);
-                b->played.push_back(number);
-            }
-        });
-    }
-    if (!sound) {
-        spoken.clear();
+    int number = ++players;
+    auto played = [box, number](bool) {
+        if (auto b = box.lock()) {
+            std::lock_guard<std::mutex> g(b->lock);
+            b->streamsPlayed.push_back(number);
+        }
+    };
+    std::shared_ptr<Unheard> unheard = muted ? std::make_shared<Unheard>(played) : nullptr;
+    platform::StreamRef player = unheard ? unheard : platform::playStream(sound.rate, played);
+    if (!player) {
+        logLine("[voice] the walk's recorded line could not be played: no player for it");
+        failedRecordings++;
         send(ReplyEnded{});
         return;
     }
-    soundFrom = clock;
-    soundSeconds = r.seconds;
-    logLine("[voice] speaking the walk's own line: " + spoken);
+    if (sounding) sounding->player->stop();
+    sounding = Sounding{};
+    sounding->number = number;
+    sounding->player = player;
+    sounding->unheard = unheard;
+    sounding->rate = sound.rate;
+    sounding->text = line.text;
+    sounding->length = double(sound.samples.size()) / sound.rate;
+    sounding->recorded = true;
+    shown.momoText.clear();
+    spoken = line.text;
+    sounding->write(sound.samples.data(), sound.samples.size());
+    player->finish();
+    logLine(fmt("[voice] speaking the walk's own line (%.1f s): ", sounding->length) + line.text);
     if (awaiting()) turnTo(Idle{});
 }
 
@@ -509,7 +579,6 @@ void Voice::say(const std::string& text) {
 void Voice::speak(const std::string& text) {
     if (sound) sound->stop();
     sound.reset();
-    soundSeconds = 0;
     int number = ++reply;
     spoken = text;
     platform::Request request;
@@ -621,8 +690,9 @@ void Voice::frame(double now) {
                        },
                        [&](Listener::Speak&) {
                            if (pendingRecorded) {
-                               playRecorded(*pendingRecorded);
+                               auto [line, sound] = std::move(*pendingRecorded);
                                pendingRecorded.reset();
+                               playRecorded(line, sound);
                                return;
                            }
                            if (!pending) return;
@@ -664,7 +734,7 @@ void Voice::frame(double now) {
         microphone.reset();
         ears.reset();
         reopenAt = -1;
-        if (pendingRecorded) playRecorded(*pendingRecorded);
+        if (pendingRecorded) playRecorded(pendingRecorded->first, pendingRecorded->second);
         else if (pending) speak(*pending);
         pending.reset();
         pendingRecorded.reset();
@@ -764,7 +834,6 @@ void Voice::frame(double now) {
     for (int number : played) {
         if (number != reply) continue;
         sound.reset();
-        soundSeconds = 0;
         spoken.clear();
         send(ReplyEnded{});
         logLine("[voice] done speaking");
@@ -778,6 +847,7 @@ void Voice::frame(double now) {
     for (int number : streamsPlayed) {
         if (!sounding || sounding->number != number) continue;
         shown.momoText = sounding->text;
+        if (sounding->recorded) spoken.clear();
         sounding.reset();
         if (live && !live->player && !live->held.empty() && startPlayer(*live)) continue;
         send(ReplyEnded{});
@@ -1134,11 +1204,6 @@ void Voice::show() {
                              turn);
     shown.level = 0;
     if ((shown.state == S::listening || shown.state == S::open) && ears) shown.level = levelOf(ears->loudness);
-    // GUIDE: a recorded line of the walk's, its words a little ahead of her voice, by how far into it she is.
-    if (shown.state == S::responding && sound && soundSeconds > 0) {
-        std::string words = revealed(spoken, (clock - soundFrom + wordsAhead) / soundSeconds);
-        if (words.size() > shown.momoText.size()) shown.momoText = words;
-    }
     if (shown.state == S::responding && sounding) {
         size_t at = size_t(sounding->played * 50);
         if (at < sounding->loudness.size()) shown.level = levelOf(sounding->loudness[at]);

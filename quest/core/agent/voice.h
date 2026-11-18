@@ -42,6 +42,17 @@ struct RecordedLine {
     double seconds = 0;
 };
 std::optional<RecordedLine> recordedLine(const std::string& name);
+/// A recorded line's sound: 16-bit PCM, one channel, at `rate`. Read through the platform, which reads a file inside
+/// the APK as well as one pushed beside it (a media player given the APK's path cannot open it: WS78 on the headset).
+/// Nothing, and why in `why`, when it can't be read.
+struct RecordedSound {
+    std::vector<int16_t> samples;
+    int rate = 0;
+};
+std::optional<RecordedSound> recordedSound(const RecordedLine& line, std::string& why);
+/// GUIDE: a recorded line played alone, where there is no voice to say it as Momo's (no service in this copy): through the
+/// same stream player her replies use. Null when it can't be.
+platform::StreamRef playRecordedAlone(const RecordedLine& line, std::function<void(bool played)> done);
 
 class Voice {
 public:
@@ -104,9 +115,11 @@ public:
     enum class Hearing { ready, starting, asking, refused, off };
     Hearing hearing() const;
     /// GUIDE: a line of the walk's own, recorded in Momo's voice and carried in the app (`recordedLine`): spoken as a reply
-    /// of hers is, with or without the service, its words shown as she says them. How long it is, s; nothing when there
-    /// is no such line.
+    /// of hers is, through her stream player, with or without the service, its words shown as she says them. How long it
+    /// is, s; nothing when there is no such line or its sound can't be read (said in the log).
     std::optional<double> tellRecorded(const std::string& name);
+    /// How many recorded lines could not be played once their turn came: the walk need not wait for one that won't sound.
+    int recordedFailures() const { return failedRecordings; }
     /// GUIDE: the sketch lesson's words, put to the live Momo with what the lesson shows (agents/docs/protocol.md, the
     /// `lesson` frame). She answers as she answers anything. Where she can't be reached, says nothing for the turn
     /// (`quiet`), or has made no sound `lessonWait` s after, the recorded line `fallback` is said instead.
@@ -235,8 +248,9 @@ private:
     int reply = 0;                  // the reply playing or on its way; earlier ones are let go
     platform::SoundRef sound;
     std::string spoken;
-    std::optional<RecordedLine> pendingRecorded;    // a recorded line waiting for the listener's leave to play
-    double soundFrom = 0, soundSeconds = 0;     // a recorded line playing: since when, and how long it is
+    /// GUIDE: a recorded line waiting for the listener's leave to play, its words and its sound.
+    std::optional<std::pair<RecordedLine, RecordedSound>> pendingRecorded;
+    int failedRecordings = 0;
     /// GUIDE: the sketch lesson put to the live Momo: its turn, when, what to say if she doesn't, and her reply's id
     /// once its words come.
     struct Lesson {
@@ -247,7 +261,7 @@ private:
     std::optional<Lesson> lesson;
     std::string lateLesson;         // a lesson's reply that came too late to be heard: its id, and its turn
     int lateTurn = 0;
-    void playRecorded(const RecordedLine& r);
+    void playRecorded(const RecordedLine& line, const RecordedSound& sound);
 
     /// /live: shut until a retry while the last hello offered it, connecting, or ready.
     struct Shut {
@@ -305,6 +319,7 @@ private:
         /// s: its whole recording, and where in it the sound starts, when the service said (a demo take's line): its words
         /// then show by how far into that the voice is. 0: by how much of the sound come so far has been heard.
         double length = 0, from = 0;
+        bool recorded = false;      // GUIDE: a line of the walk's own (`tellRecorded`), not a reply from the service
         size_t written = 0;
         /// Seconds of it heard by now, as far as the frame clock tells: never ahead of what was written.
         double played = 0;

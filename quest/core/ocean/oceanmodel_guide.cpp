@@ -630,6 +630,10 @@ void OceanModel::startTour() {
     });
     teach.welcomed = true;
     teach.tour = 0;
+    teach.answerEnds = 0;
+    teach.layerAt = 0;
+    teach.layerDue = nullptr;
+    teach.askedCard = -1;
     teach.tourStood = false;
     teach.tourCarried = 0;
     teach.tourShown = -1;
@@ -1227,9 +1231,22 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     // about what it heard, or why it hears nothing, stands over the line (inside a picture gone into, over its words).
     bool talking = here && !result && !passing && lesson == at && now >= teach.layerAt &&
                    ((at == momoStep && open && !zoomed) || (at == markStep && teach.tourSent));
-    // On the layer of what Momo can do, once her answer is over, her ears stay the walk's for as long as it is in front:
-    // asked one of its cards, she says what she would do (the user, WS78: not taken out of the welcome tree).
-    bool examples = at == momoStep && here && result && !zoomed && now >= teach.answerEnds;
+    // From her answer to what she can do, and for as long as its layer is in front, her ears stay the walk's: asked one
+    // of its cards, once her answer is over, she says what she would do (the user, WS78: not taken out of the welcome
+    // tree). (Given back between her answer and its layer, a "Hi Momo" said meanwhile opened a turn of the live Momo's
+    // that nothing ended: on the headset she was stuck listening.)
+    bool answered = teach.answerEnds > 0 && (result || now >= teach.layerAt || teach.layerDue);
+    bool examples = at == momoStep && here && !zoomed && answered;
+    // A recorded answer that couldn't be played once its turn came: its layer at once, not after a silence.
+    if (teach.layerDue) {
+        agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr;
+        if (voice && voice->recordedFailures() != teach.failuresAt) {
+            logLine("[guide] her recorded answer could not be played: its layer at once");
+            teach.answerEnds = now;
+            teach.layerAt = now;
+            std::exchange(teach.layerDue, nullptr)();
+        }
+    }
     if ((talking || examples) && !talkAt && over) talkAt = inRoom(*over) + stage.u * 0.084f;
     teach.talkPanelScale = zoomed ? 1.8f : 1;
     tourTalk(examples ? exampleTalk : at, talking || examples, now, talkAt);
@@ -1510,6 +1527,7 @@ void OceanModel::tourAnswer(int lesson, const std::string& words) {
     // a sketch is put to the live Momo, who answers it and walks through what comes, or failing her, her recorded line.
     double answer = 0;          // how long her recorded answer is, where she says one
     if (lesson == momoStep) {
+        if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) teach.failuresAt = voice->recordedFailures();
         answer = sayRecorded("momo-can");
         teach.answerEnds = time + answer;
     } else if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) {
@@ -1554,8 +1572,15 @@ void OceanModel::tourAnswer(int lesson, const std::string& words) {
     };
     double wait = std::max(0.0, answer - layerBeforeAnswerEnds);
     teach.layerAt = time + wait;
-    if (wait > 0) after(wait, arrive);
-    else arrive();
+    teach.layerDue = nullptr;
+    if (wait > 0) {
+        teach.layerDue = arrive;
+        after(wait, [this] {
+            if (auto due = std::exchange(teach.layerDue, nullptr)) due();
+        });
+    } else {
+        arrive();
+    }
 }
 
 double OceanModel::sayRecorded(const std::string& name) {
@@ -1563,9 +1588,10 @@ double OceanModel::sayRecorded(const std::string& name) {
     // No Momo in this copy: her recorded voice alone, with no words shown (the lead, WS78).
     std::optional<agent::RecordedLine> line = agent::recordedLine(name);
     if (!line) return 0;
-    walkSound = platform::playSound(line->path, [](bool) {});
+    walkSound = agent::playRecordedAlone(*line, [](bool) {});
+    if (!walkSound) return 0;
     logLine("[guide] Momo's recorded line, her voice alone: " + line->text);
-    return walkSound ? line->seconds : 0;
+    return line->seconds;
 }
 
 namespace {
@@ -1603,6 +1629,11 @@ const char* exampleAsked(const std::string& said) {
 void OceanModel::tourExample(const std::string& said, double now) {
     // "What can you do" again: her answer again. One of the cards: her reply to it, the card ringed while she says
     // it. Anything else: her reply to anything else.
+    // (Said while she is still answering: let be. She is speaking, and the cards are not there yet.)
+    if (now < teach.answerEnds) {
+        logLine("[guide] said during her answer, let be: " + said);
+        return;
+    }
     const char* card = asksWhatItCan(said) ? nullptr : exampleAsked(said);
     std::string line = asksWhatItCan(said) ? "momo-can" : card ? card : "momo-can-other";
     double seconds = sayRecorded(line);
