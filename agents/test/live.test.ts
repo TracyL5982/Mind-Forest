@@ -262,6 +262,23 @@ test("what the user marked on a card is shown to Momo with the next turn begun o
   }
 });
 
+test("a look that comes while the turn begun on its card is still being heard is shown at once, and one after her answer is asked for waits for the next turn", () => {
+  const { v, model } = voice();
+  const look = { t: 'look' as const, nodeId: 'n1', title: 'Night stairs', box: [0.2, 0.3, 0.4, 0.3] as [number, number, number, number], crop: jpeg('the part'), whole: jpeg('the whole') };
+  v.heard({ t: 'start', turn: 1, scene: SCENE });
+  v.heard({ t: 'audio', pcm: pcm([1, 2, 3, 4]) });
+  v.look({ ...look, nodeId: 'n2' });
+  assert.equal(sights(model).length, 0, "another card's look is not shown in this card's turn");
+  v.look(look);
+  assert.equal(sights(model).length, 1, "this card's is shown at once, while the words are still heard");
+  v.heard({ t: 'end' });
+  assert.equal(model.sent('response.create').length, 1, 'her answer is asked for');
+  v.look({ ...look, crop: jpeg('another part') });
+  assert.equal(sights(model).length, 1, 'a look after that waits');
+  v.heard({ t: 'start', turn: 2, scene: SCENE });
+  assert.deepEqual(sights(model).at(-1)!.images[0], [jpeg('another part'), 'high'], 'and is shown with the next turn on the card');
+});
+
 test("the welcome walk's sketch is shown to Momo before the lesson's words, within five minutes of being sent", () => {
   const { v, model, clock } = voice();
   const lesson = { t: 'lesson' as const, turn: 1, words: 'What is she holding?', picture: 'A woman in blue reads a letter by a window.', cards: [] };

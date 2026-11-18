@@ -790,16 +790,17 @@ export class LiveVoice {
   }
 
   /**
-   * The device left, or the service cut the session for a limit. Nothing of a turn or an answer is kept, as when the session is lost,
-   * so the next session does not cancel its own first answer for one asked of this one.
+   * The headset's look at what the user marked on a picture (WS89): kept until the next, or until the card's marks are gone. One
+   * that comes while the turn begun on that card is still being heard, its answer not yet asked for, is shown at once: the
+   * answer then sees it, as it would had it come first (the lead's call, 2026-11-18).
    */
-  /** The headset's look at what the user marked on a picture (WS89): kept until the next, or until the card's marks are gone. */
   look(look: Look): void {
     if (!look.crop || !look.whole) {
       if (!look.nodeId || this.sight?.nodeId === look.nodeId) this.sight = null;
       return;
     }
     this.sight = { ...(look.nodeId ? { nodeId: look.nodeId } : {}), title: look.title, crop: look.crop, whole: look.whole, at: this.now(), shown: false };
+    if (this.hearing && !this.asked && !this.speaking) this.showSight(this.scene.focus);
   }
 
   /**
@@ -815,6 +816,10 @@ export class LiveVoice {
     this.deps.log(`[live] Momo is shown what is marked on ${s.title}`);
   }
 
+  /**
+   * The device left, or the service cut the session for a limit. Nothing of a turn or an answer is kept, as when the session is lost,
+   * so the next session does not cancel its own first answer for one asked of this one.
+   */
   close(): void {
     for (const timer of [this.idle, this.wake, this.expected?.timer, this.runEnded, this.naming?.timer]) if (timer) clearTimeout(timer);
     this.idle = this.wake = this.expected = this.runEnded = this.naming = null;
