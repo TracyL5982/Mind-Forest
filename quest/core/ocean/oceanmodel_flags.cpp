@@ -130,6 +130,10 @@ void OceanModel::pinchEnded(Vec3 point) {
     if (p.cancelled) {
         // (Every pinch on a button says what came of it.)
         if (button) logLine(fmt("[guide] a pinch on a button (%d) let go: not taken, the hand that made it was busy (a fist, a knife or palms together)", p.pick.index));
+        // AGENT: so does a pinch on Send or Share over a tree, which showed pressed (WS75).
+        if (p.pick.kind == Pick::Kind::coverButton) {
+            logLine(fmt("[ocean] a pinch on %s let go: not taken, the hand that made it was busy (a fist, a knife or palms together)", p.pick.question == 0 ? "Send" : "Share"));
+        }
         marking = std::nullopt;
         return;
     }
@@ -163,7 +167,8 @@ void OceanModel::pinchEnded(Vec3 point) {
         std::optional<Pick> under = over ? pick(over) : std::nullopt;
         bool onIt = under && under->kind == Pick::Kind::coverButton && under->index == p.pick.index && under->question == p.pick.question;
         if (still || onIt) tap(p.pick);
-        else logLine("[ocean] a pinch left its button before it let go");
+        else logLine(fmt("[ocean] a pinch on %s let go: not taken, the ray had left its button (%.0f cm, %.1f s%s)", p.pick.question == 0 ? "Send" : "Share",
+                         double(std::max(moved, p.reach)) * 100, time - p.began, under && under->kind != Pick::Kind::background ? ", on something else" : ""));
         return;
     }
     if (marking) {
