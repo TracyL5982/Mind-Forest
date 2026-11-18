@@ -84,7 +84,7 @@ struct Changed {
 };
 
 /// What the frame thread hears, in the order the service said it.
-using Event = std::variant<Synced, Changed, Activity, Say, Heard, Navigate, Handoff, SettingsChanged, Note, Questions, Rejected, Shared>;
+using Event = std::variant<Synced, Changed, Activity, Say, Heard, Navigate, Handoff, SettingsChanged, Note, Questions, Rejected, Shared, Telegram>;
 
 /// Every member is for the frame thread. Only the host's callbacks come from elsewhere, and
 /// they reach the client only through its queue.

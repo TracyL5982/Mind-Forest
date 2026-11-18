@@ -40,6 +40,9 @@ struct Presence {
     std::string noticeButton;
     /// WS87: the microphone is not allowed. Momo shows, quiet, with a "microphone off" mark that a pinch opens the note of.
     bool microphoneOff = false;
+    /// WS95: the microphone has not been asked for yet (it is, where it is first needed). Momo shows, quiet, unmarked, and
+    /// a pinch on her asks for it.
+    bool microphoneUnasked = false;
 
     /// The conversation goes on: Momo listens, thinks or speaks. The ocean's own sounds draw back under it.
     bool conversing() const {

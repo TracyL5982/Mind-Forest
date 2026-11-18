@@ -265,10 +265,11 @@ struct MicrophoneEvents {
 };
 /// Opens the microphone. Where the user must allow it first (the Quest), sound starts once they have.
 MicrophoneRef openMicrophone(MicrophoneEvents events);
-/// Whether the app may use the microphone, and if not, whether the system would still ask the user (`askable`) or
-/// has stopped asking (`settingsOnly`: the Quest, after two refusals; only its Settings can allow it then). Read it
-/// once the app has asked: before the first ask, the Quest reads as `settingsOnly`.
-enum class MicrophoneLeave { given, askable, settingsOnly };
+/// Whether the app may use the microphone, and if not, whether it has never asked on this install (`unasked`: the
+/// Quest, until the app first opens the microphone; WS95, it asks where the microphone is first needed), whether the
+/// system would still ask the user (`askable`), or has stopped asking (`settingsOnly`: the Quest, after two refusals;
+/// only its Settings can allow it then). A window dismissed without an answer the first time reads as `settingsOnly`.
+enum class MicrophoneLeave { given, unasked, askable, settingsOnly };
 MicrophoneLeave microphoneLeave();
 /// Opens the system's settings for this app, where its permissions are switched on: false where it could not.
 bool openAppSettings();

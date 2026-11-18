@@ -13,7 +13,7 @@ import re
 import sys
 from pathlib import Path
 
-ICONS = ["pencil", "eraser", "send", "mic-off"]
+ICONS = ["pencil", "eraser", "send", "mic-off", "x"]
 
 
 def arc(x1, y1, rx, ry, phi, large, sweep, x2, y2, step=0.35):

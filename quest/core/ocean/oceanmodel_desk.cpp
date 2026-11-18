@@ -538,6 +538,7 @@ void OceanModel::tendHover(double now) {
             logLine("[ocean] Send and Share go from " + s.tree->title);
             if (sharing.uid == s.uid) closePeople(false);       // FILM: the list of people goes with them
             if (sharing.uid == s.uid && sharing.waiting) sharing = Sharing{};     // (AGENT: a late answer brings them back)
+            s.pairFirst = {false, false};                       // (AGENT, WS99: they say what they say again)
             for (const EntityRef& b : s.buttons->children) picks.erase(b.get());
             s.tilts.erase(std::remove(s.tilts.begin(), s.tilts.end(), s.buttons), s.tilts.end());
             fadeOut(s.buttons, 0.2f);
@@ -590,10 +591,12 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
         std::optional<Piece> rest = art->action(actionWords(s, b, false), buttonText, actionAccent(b), actionOn(b), false);
         if (!rest) return;
         // AGENT: why a share was not taken (`shareRefused`) is said in Share's place, as it was; not filled, since it has not
-        // done its work.
+        // done its work. And "Pair Telegram first" in either's (WS99), not filled either, and taking a pinch: it opens the
+        // pairing panel.
         bool refused = b == pressed && !said.empty();
-        pieces[b] = art->action(refused ? said : actionWords(s, b, b == pressed), buttonText, actionAccent(b), actionOn(b), open || (b == pressed && !refused),
-                                rest->size.x * Art::ppm);
+        bool pairFirst = s.pairFirst[size_t(b)];
+        pieces[b] = art->action(pairFirst ? std::string("Pair Telegram first") : refused ? said : actionWords(s, b, b == pressed), buttonText, actionAccent(b),
+                                actionOn(b), !pairFirst && (open || (b == pressed && !refused)), rest->size.x * Art::ppm);
         if (!pieces[b]) return;
         size = pillTall / pieces[b]->size.y;
         wides[b] = pieces[b]->size.x * size;
@@ -614,8 +617,8 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
         target->collision = {Shape::generateBox({wide, reach, 0.04f})};
         // A ray on one lights that one, and neither takes the glow of the tree behind them, which turns a dark label tan
         // (`tendShare` counts a ray on a button as a ray on its tree, since the tree itself is then not what is lit).
-        target->hover = Hover::highlight(Color::white(), b == pressed ? 0 : 0.35f);
-        if (b != pressed && !(b == 1 && sharing.waiting && sharing.uid == s.uid)) picks[target.get()] = Pick::coverButton(s.uid, b);
+        target->hover = Hover::highlight(Color::white(), b == pressed && !s.pairFirst[size_t(b)] ? 0 : 0.35f);
+        if ((b != pressed || s.pairFirst[size_t(b)]) && !(b == 1 && sharing.waiting && sharing.uid == s.uid)) picks[target.get()] = Pick::coverButton(s.uid, b);
         row->addChild(target);
         if (Flags::has("showHitAreas")) {
             if (std::optional<Piece> area = art->piece(fmt("hit-area:%.0fx%.0f", double(wide * Art::ppm), double(reach * Art::ppm)), wide * Art::ppm, reach * Art::ppm,
@@ -655,6 +658,19 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
 void OceanModel::coverButton(int uid, int which) {
     auto i = std::find_if(shelf.begin(), shelf.end(), [&](const Shelved& cover) { return cover.uid == uid; });
     if (i == shelf.end() || !i->tree || !agentBridge) return;
+    // AGENT (WS99): a button that says "Pair Telegram first" opens the pairing panel, on the side away from this tree.
+    if (which >= 0 && which < 2 && i->pairFirst[size_t(which)]) {
+        Vec3 at = i->mover->entity->convertTo(Vec3::zero(), root_.get());
+        openPairing(which == 0 ? "Send said to pair first" : "Share said to pair first", dot(at - stage.origin, stage.r) > 0 ? -1.f : 1.f);
+        return;
+    }
+    // ... and with no Telegram chat paired (the service says so: the hosted one), Send sends nothing, which no one would get,
+    // and says to pair first, as Share does on the service's answer (the user, WS99).
+    if (which == 0 && agentBridge->unpairedTelegram()) {
+        logLine("[ocean] Send pressed over " + i->tree->title + ": no Telegram chat is paired, so nothing is sent");
+        sayPairFirst(*i, 0);
+        return;
+    }
     // AGENT: through Telegram (the hosted service), Share asks at once, with no list: those people are the film's, and a judge
     // shares by forwarding the link the service sends to their own Telegram. It says so when the service answers
     // (`shareTaken`, `shareRefused`); meanwhile it is on and takes no second pinch (the lead, WS88).
@@ -723,6 +739,13 @@ void OceanModel::shareRefused(const Tree& tree, const std::string& reason) {
                      : reason == "not-shared" ? "Not shared"
                                             : "Try again later";
     if (sharing.waiting && sharing.uid == i->uid) sharing = Sharing{};
+    // WS99: not paired: Share says to pair first, and a pinch on it then opens the pairing panel; it stays for that.
+    if (reason == "unpaired") {
+        if (sharing.list) closePeople(false);
+        logLine("[ocean] Share says: Pair Telegram first, over " + tree.title + "; a pinch on it opens the pairing panel");
+        sayPairFirst(*i, 1);
+        return;
+    }
     // One tree shows its buttons at a time: another's go, and the list of people with them. This one's list goes too, and
     // with it whom it was shared with: "Shared with <name>" does not stay when the service would not (WS88).
     if (sharing.list) closePeople(false);

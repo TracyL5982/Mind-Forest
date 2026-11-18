@@ -241,6 +241,7 @@ void Voice::tutor(std::optional<Tutor> t) {
 
 Voice::Hearing Voice::hearing() const {
     if (microphoneRefusedAt >= 0) return microphoneSettingsOnly ? Hearing::settingsOnly : Hearing::refused;
+    if (microphoneUnasked) return Hearing::unasked;
     if (askingForMicrophone) return Hearing::asking;
     if (!ears) return started ? Hearing::off : Hearing::starting;
     return ears->live ? Hearing::ready : Hearing::starting;
@@ -439,7 +440,7 @@ void Voice::renamed(const std::string& name) {
     if (ears && wanted != spelled && wanted != refused) respell();
 }
 
-void Voice::start() {
+void Voice::start(bool ask) {
     started = true;
     std::string tokens = platform::resourcePath("kws/tokens.txt");
     if (tokens.empty()) {
@@ -478,7 +479,7 @@ void Voice::start() {
             made->spotter = Spotter::make(dir, *lines);
             if (!made->spotter) made->why = "the keyword spotter could not be made from " + dir;
         },
-        [this, made, name] {
+        [this, made, name, ask] {
             if (!made->spotter) {
                 logLine("[voice] not listening: " + made->why);
                 return;
@@ -495,15 +496,43 @@ void Voice::start() {
                     if (auto e = weak.lock()) e->heard(samples, count);
                 };
                 microphone = std::make_shared<ClipMicrophone>(std::move(*made->clip), std::move(events));
+                logLine("[voice] listening for \"Hey " + this->name() + "\" in " + *clip);
             } else {
-                openMicrophone();
+                // WS95: the microphone is opened at launch only where it is allowed. Never asked for, it is asked for where
+                // it is first needed; refused on an earlier run, it stays so (its mark shows) until asked for again.
+                platform::MicrophoneLeave leave = platform::microphoneLeave();
+                bool wanted = askWhenLoaded && leave == platform::MicrophoneLeave::unasked;
+                askWhenLoaded = false;
+                if (ask || wanted || leave == platform::MicrophoneLeave::given) {
+                    openMicrophone();
+                    logLine("[voice] listening for \"Hey " + this->name() + "\"");
+                } else if (leave == platform::MicrophoneLeave::unasked) {
+                    microphoneUnasked = true;
+                    logLine("[voice] the microphone has never been asked for: it is asked for where it is first needed");
+                } else {
+                    microphoneRefusedAt = clock;
+                    microphoneSettingsOnly = leave == platform::MicrophoneLeave::settingsOnly;
+                    logLine(std::string("[voice] the microphone was refused before, so the headset does not listen") +
+                            (microphoneSettingsOnly ? ": the system no longer asks, so only its Settings can allow it" : ""));
+                }
             }
-            logLine("[voice] listening for \"Hey " + this->name() + "\"" + (clip ? " in " + *clip : ""));
             if (wanted != spelled) respell();
         });
 }
 
-void Voice::askForMicrophone(bool orSettings) {
+void Voice::askForMicrophone(bool orSettings, const std::string& why) {
+    askingWhy = why;
+    if (microphoneUnasked) {
+        microphoneUnasked = false;
+        logLine("[voice] the microphone is asked for, where it is first needed");
+        openMicrophone();
+        return;
+    }
+    // (Wanted before the listener's model has loaded: asked for once it has, if it was never asked for.)
+    if (!ears && microphoneRefusedAt < 0) {
+        askWhenLoaded = true;
+        return;
+    }
     if (microphoneRefusedAt < 0) return;
     if (!microphoneSettingsOnly) {
         logLine("[voice] the microphone was not allowed: the user is asked again");
@@ -520,7 +549,16 @@ void Voice::askForMicrophone(bool orSettings) {
     noteUntil = clock + refusalShown;
 }
 
-void Voice::showMicrophoneNote() {
+void Voice::askForMicrophoneFirst(const std::string& why) {
+    if (microphoneRefusedAt >= 0) return;
+    askForMicrophone(false, why);
+}
+
+void Voice::addressedWithoutMicrophone() {
+    if (microphoneUnasked) {
+        askForMicrophone();
+        return;
+    }
     if (microphoneRefusedAt < 0) return;
     noteUntil = clock + refusalShown;
 }
@@ -531,7 +569,7 @@ void Voice::listenAgain() {
     microphoneSettingsOnly = false;
     microphoneFailures = 0;
     reopenAt = -1;
-    start();
+    start(true);
 }
 
 void Voice::openMicrophone() {
@@ -597,8 +635,16 @@ void Voice::say(const std::string& text) {
         return;
     }
     if (!serviceSpeaks) {
-        // The reply has come, and nothing will be heard of it.
+        // No voice of the service's (hello's `voice` false: the hosted and demo servers, WS97), and /live not ready: her
+        // words show as her caption for as long as they would take to say, with nothing fetched, as `-mute` shows a reply;
+        // then it ends as a reply heard does (`unheardReply`).
+        if (sound) sound->stop();
+        spoken = text;
+        sound = std::make_shared<UnheardFile>();
+        unheardReply = UnheardReply{++reply, clock + spokenSeconds(text)};
+        shown.momoText = text;
         if (awaiting()) endThinking();
+        logLine("[voice] no voice of the service's, so her words show: " + text);
         return;
     }
     pending = text;
@@ -794,6 +840,12 @@ void Voice::frame(double now) {
     if (back && microphoneRefusedAt >= 0 && platform::microphoneLeave() == platform::MicrophoneLeave::given) {
         logLine("[voice] the app is in front again and the microphone is allowed now, so the headset listens again");
         listenAgain();
+    }
+    // (Never asked for, and allowed in the system's Settings meanwhile: it listens, with nothing to ask.)
+    if (back && microphoneUnasked && platform::microphoneLeave() == platform::MicrophoneLeave::given) {
+        logLine("[voice] the app is in front again and the microphone is allowed now, so the headset listens");
+        microphoneUnasked = false;
+        openMicrophone();
     }
     if (back && ears && !microphone && reopenAt >= 0) {
         logLine("[voice] the app is in front again, so the microphone opens again now");
@@ -1309,8 +1361,8 @@ void Voice::endThinking() {
 }
 
 void Voice::asked(const std::string& question) {
-    // (Picked with the microphone off: the note says so, until her reply sounds.)
-    showMicrophoneNote();
+    // (Picked with the microphone never asked for, it is asked for; off, the note says so, until her reply sounds.)
+    addressedWithoutMicrophone();
     wordsOf = 0;
     shown.momoText.clear();
     shown.userText = question;
@@ -1356,7 +1408,7 @@ void Voice::show() {
         // (Hers for the walk is fed a little at a time: the sound come so far is all that is queued.)
         double come = sounding->walk ? double(std::max(sounding->queued.size(), sounding->written)) : double(sounding->written);
         double heard = sounding->length > 0 ? (sounding->from + sounding->played + wordsAhead) / sounding->length
-                       : come > 0 ? sounding->played * sounding->rate / come
+                       : come > 0 ? (sounding->played + liveAhead) * sounding->rate / come
                                   : 0;
         // More audio than words may have come, so what is shown only grows.
         std::string words = revealed(sounding->text, heard);
@@ -1367,12 +1419,13 @@ void Voice::show() {
     shown.notice.clear();
     shown.noticeButton.clear();
     shown.microphoneOff = microphoneOff();
+    shown.microphoneUnasked = microphoneUnasked;
     // The note on a microphone that is off gives way to her reply, which is what was asked for.
     if (speaks) noteUntil = -1;
     if (client.unreachable()) {
         shown.notice = "Can’t reach " + name() + ", retrying";
     } else if (askingForMicrophone) {
-        shown.notice = "Allow the microphone to talk to " + name();
+        shown.notice = askingWhy.empty() ? "Allow the microphone to talk to " + name() : askingWhy;
     } else if (microphoneOff() && clock < noteUntil) {
         // (Two lines at most, beside Momo. Where the system no longer asks, the way to turn it on, in Meta's own words for
         // its Settings, takes the place of what is wrong.)

@@ -116,6 +116,8 @@ struct Made {
     std::string name = "momo";
     bool live = true;
     bool muted = false;
+    /// Whether the microphone is allowed as the app starts (WS95: never asked for, on a first launch).
+    platform::MicrophoneLeave leave = platform::MicrophoneLeave::given;
 };
 
 /// A voice on a live connection to the scripted session, in the tree "t1" with the card "n1" open.
@@ -127,6 +129,7 @@ struct Talking {
 
     explicit Talking(Made made) : voice(client, [] { return Scene{NodeId{"n1"}, {}, TreeId{"t1"}}; }, std::nullopt, made.muted) {
         host = Host{};
+        host.leave = made.leave;
         client.tick(100);
         transport->socket->events.opened();
         transport->socket->events.text(sessionTexts().front());
@@ -656,7 +659,7 @@ TEST(backFromSettingsWithTheMicrophoneAllowedMomoListensAgain) {
 // scene calls), or a question picked; it gives way to her reply. Its button asks again by the one way there is.
 TEST(theMicrophoneNoteComesFromAPinchOnMomoOrAPickedQuestion) {
     Talking t(true);
-    t.voice.showMicrophoneNote();
+    t.voice.addressedWithoutMicrophone();
     t.frame();
     CHECK(t.voice.presence().notice.empty() && !t.voice.presence().microphoneOff, "nothing while the microphone is allowed");
     host.leave = platform::MicrophoneLeave::askable;
@@ -664,7 +667,7 @@ TEST(theMicrophoneNoteComesFromAPinchOnMomoOrAPickedQuestion) {
     t.frame();
     t.frame(Voice::refusalShown + 1);
     CHECK(t.voice.presence().notice.empty(), "the note after the refusal has gone");
-    t.voice.showMicrophoneNote();
+    t.voice.addressedWithoutMicrophone();
     t.frame();
     CHECK_EQ(t.voice.presence().notice, std::string("Momo can’t hear you: the microphone is off"));
     t.frame(Voice::refusalShown + 1);
@@ -682,7 +685,7 @@ TEST(theMicrophoneNoteComesFromAPinchOnMomoOrAPickedQuestion) {
     CHECK(t.shows() == Presence::State::responding, "she answers");
     CHECK(t.voice.presence().notice.empty(), "and the note gives way to her reply");
     // "Allow microphone": the system asks again.
-    t.voice.showMicrophoneNote();
+    t.voice.addressedWithoutMicrophone();
     t.voice.askForMicrophone(true);
     t.frame();
     CHECK_EQ(host.opens, 2);
@@ -711,6 +714,110 @@ TEST(whereOnlySettingsCanAllowTheMicrophoneTheNotesButtonOpensThem) {
     CHECK(t.voice.settingsWontOpen(), "they could not be opened");
     CHECK(t.voice.presence().notice.find("in Settings ›") != std::string::npos && t.voice.presence().noticeButton.empty(),
           "the note keeps its words and drops its button");
+}
+
+// WS95: nothing asks for the microphone at launch. It is asked for where it is first needed: the walk's lesson by
+// speaking as it begins, the greeting after the walk (only if it never was), and Momo addressed without it.
+TEST(nothingAsksForTheMicrophoneAtLaunch) {
+    Talking t(Made{.leave = platform::MicrophoneLeave::unasked});
+    for (int i = 0; i < 20; i++) t.frame(1);
+    CHECK_EQ(host.opens, 0);
+    CHECK(t.voice.hearing() == Voice::Hearing::unasked, "not asked for yet");
+    const Presence& p = t.voice.presence();
+    CHECK(p.microphoneUnasked && !p.microphoneOff, "Momo shows, unmarked");
+    CHECK(p.notice.empty() && p.noticeButton.empty(), "and says nothing about it");
+}
+
+TEST(theWalksLessonBySpeakingAsksForTheMicrophoneFirst) {
+    Talking t(Made{.leave = platform::MicrophoneLeave::unasked});
+    t.frame(5);
+    t.voice.askForMicrophone();
+    t.frame();
+    CHECK_EQ(host.opens, 1);
+    host.microphone.asking();
+    t.frame();
+    CHECK(t.voice.hearing() == Voice::Hearing::asking, "the system asks");
+    CHECK_EQ(t.voice.presence().notice, std::string("Allow the microphone to talk to Momo"));
+    host.leave = platform::MicrophoneLeave::given;
+    t.hear(Sound().quiet(0.3));
+    CHECK(t.voice.hearing() == Voice::Hearing::ready, "allowed, it hears");
+    CHECK(!t.voice.presence().microphoneUnasked, "and Momo is as ever");
+    t.hear(Sound().quiet(0.5).say("command").quiet(2));
+    CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(1));
+}
+
+TEST(theGreetingAfterTheWalkAsksForTheMicrophoneSayingWhy) {
+    Talking t(Made{.leave = platform::MicrophoneLeave::unasked});
+    t.frame(5);
+    t.voice.askForMicrophoneFirst("Allow the microphone to say “Hey Momo” any time");
+    t.frame();
+    CHECK_EQ(host.opens, 1);
+    host.microphone.asking();
+    t.frame();
+    CHECK_EQ(t.voice.presence().notice, std::string("Allow the microphone to say “Hey Momo” any time"));
+    // Refused there, the next greeting would not ask again: that is for the lessons, and the buttons.
+    host.leave = platform::MicrophoneLeave::askable;
+    host.microphone.denied();
+    t.frame();
+    t.voice.askForMicrophoneFirst("Allow the microphone to say “Hey Momo” any time");
+    t.frame();
+    CHECK_EQ(host.opens, 1);
+    CHECK(t.voice.hearing() == Voice::Hearing::refused, "refused, and not asked again");
+}
+
+TEST(momoAddressedWithoutTheMicrophoneAsksForIt) {
+    Talking t(Made{.leave = platform::MicrophoneLeave::unasked});
+    t.frame(5);
+    t.voice.asked("What else did Vermeer paint?");
+    t.frame();
+    CHECK_EQ(host.opens, 1);
+    CHECK(t.shows() == Presence::State::sent, "the question goes on as ever");
+    CHECK(t.voice.presence().notice.empty(), "no note: it is being asked for");
+    // A pinch on Momo asks as well.
+    Talking u(Made{.leave = platform::MicrophoneLeave::unasked});
+    u.frame(5);
+    u.voice.addressedWithoutMicrophone();
+    u.frame();
+    CHECK_EQ(host.opens, 1);
+}
+
+TEST(wantedBeforeTheListenerHasLoadedItIsAskedForOnceItHas) {
+    std::vector<std::function<void()>> held;
+    asyncHeld = &held;
+    Talking t(Made{.leave = platform::MicrophoneLeave::unasked});
+    asyncHeld = nullptr;
+    t.voice.askForMicrophoneFirst("Allow the microphone to say “Hey Momo” any time");
+    t.frame();
+    CHECK_EQ(host.opens, 0);
+    for (auto& run : held) run();
+    t.frame();
+    CHECK_EQ(host.opens, 1);
+}
+
+TEST(aLaterLaunchWithTheMicrophoneAllowedListensFromTheStart) {
+    Talking t(Made{.leave = platform::MicrophoneLeave::given});
+    CHECK_EQ(host.opens, 1);
+    t.hear(Sound().quiet(0.3));
+    CHECK(t.voice.hearing() == Voice::Hearing::ready, "it hears, nothing asked");
+    CHECK(t.voice.presence().notice.empty(), "and says nothing about it");
+}
+
+TEST(aLaterLaunchWithTheMicrophoneRefusedShowsTheMarkAndAsksNothing) {
+    Talking t(Made{.leave = platform::MicrophoneLeave::askable});
+    for (int i = 0; i < 20; i++) t.frame(1);
+    CHECK_EQ(host.opens, 0);
+    CHECK(t.voice.hearing() == Voice::Hearing::refused, "refused before");
+    CHECK(t.voice.presence().microphoneOff && t.voice.presence().notice.empty(), "the mark, and no note until she is addressed");
+    t.voice.addressedWithoutMicrophone();
+    t.frame();
+    CHECK_EQ(t.voice.presence().noticeButton, std::string("Allow microphone"));
+    CHECK_EQ(host.opens, 0);
+    t.voice.askForMicrophone(true);
+    t.frame();
+    CHECK_EQ(host.opens, 1);
+    Talking u(Made{.leave = platform::MicrophoneLeave::settingsOnly});
+    u.frame(1);
+    CHECK(u.voice.hearing() == Voice::Hearing::settingsOnly, "where the system no longer asks, only Settings can allow it");
 }
 
 TEST(momoSaysWhileTheServiceCantBeReached) {
@@ -1123,7 +1230,7 @@ TEST(presenceFollowsALiveTurn) {
     CHECK(t.voice.presence().searching(), "and the Scout is still at work while Momo speaks: the monocle stays on");
     CHECK(!t.looping(), "the loop stops at once");
     t.serviceSays(R"({"t":"text","id":"r1","text":"Here are three older films with one."})");
-    t.frame(0.5);
+    t.frame(0.2);     // (her live words show `liveAhead` ahead of the sound)
     std::string half = t.voice.presence().momoText;
     CHECK(!half.empty() && half.size() < std::string("Here are three older films with one.").size(), "Momo's words come as they are heard: \"%s\"", half.c_str());
     CHECK(std::fabs(t.voice.presence().level - levelOf(6000 / 32768.f / std::sqrt(2.f))) < 0.02f,
@@ -1164,7 +1271,7 @@ TEST(presenceRevealsWordsWithoutSpacesAWholeCharacterAtATime) {
     const std::string said = "我在找更多关于老地图的东西。";
     t.serviceSays(audioFrame("r1", aSecondOfVoice()));
     t.serviceSays(Json::object().set("t", "text").set("id", "r1").set("text", said).dump());
-    t.frame(0.5);
+    t.frame(0.2);     // (her live words show `liveAhead` ahead of the sound)
     std::string half = t.voice.presence().momoText;
     CHECK(!half.empty() && half.size() < said.size(), "some of it, not all: \"%s\"", half.c_str());
     CHECK(said.compare(0, half.size(), half) == 0 && (uint8_t(said[half.size()]) & 0xC0) != 0x80, "a prefix that ends on a whole character");
@@ -1526,6 +1633,31 @@ TEST(presenceMutedMakesNoSoundYetTakesTheTime) {
     CHECK(old.shows() == Presence::State::responding, "for as long as its words take");
     old.frame(1);
     CHECK(old.shows() != Presence::State::responding, "and then it is over");
+    CHECK_EQ(host.plays.size(), size_t(0));
+}
+
+// WS95 (WS97's finding): with no voice of the service's (hello's `voice` false) and /live not ready, a reply shows as
+// Momo's caption for as long as its words would take to say, with nothing fetched, and ends as a reply heard does.
+TEST(aReplyWithNoVoiceOfTheServicesShowsAsHerCaptionForItsReadingTime) {
+    Talking t(Made{.serviceSpeaks = false});
+    t.hear(Sound().quiet(0.3));
+    t.voice.asked("What else did Vermeer paint?");
+    t.frame(1);
+    CHECK(t.shows() == Presence::State::thinking, "thinking");
+    // Five words: about 1.9 s to say.
+    t.voice.say("He painted few, and slowly.");
+    t.frame();
+    CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(0));
+    CHECK(t.shows() == Presence::State::responding, "her words show, as she would say them");
+    CHECK_EQ(t.voice.presence().momoText, std::string("He painted few, and slowly."));
+    t.hear(Sound().quiet(0.1));
+    CHECK(t.voice.state() != Listener::State::speaking, "nothing yet told to the listener");
+    t.frame(1);
+    CHECK(t.shows() == Presence::State::responding, "for their reading time");
+    t.frame(1);
+    CHECK(t.shows() != Presence::State::responding, "then they are over");
+    t.hear(Sound().quiet(0.1));
+    CHECK(t.voice.state() == Listener::State::speaking, "and the reply's end is told to the listener (its echo, as after one heard)");
     CHECK_EQ(host.plays.size(), size_t(0));
 }
 

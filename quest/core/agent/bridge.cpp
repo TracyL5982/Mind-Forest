@@ -218,6 +218,7 @@ void Bridge::frame(double t) {
                            }
                        },
                        [&](Shared& s) { shareAnswered(s); },
+                       [&](Telegram& t) { telegram(t); },
                    },
                    event);
     }
@@ -1045,6 +1046,34 @@ void Bridge::shareAnswered(const Shared& answer) {
     // button says why, on the tree's cover.
     if (answer.ok && tree && sharesByTelegram()) model.shareTaken(*tree);
     if (!answer.ok && tree) model.shareRefused(*tree, answer.reason);
+}
+
+void Bridge::telegram(const Telegram& t) {
+    bool was = telegramPaired.value_or(false);
+    telegramPaired = t.paired;
+    if (t.paired) {
+        if (!was) logLine("[agent] Telegram: a chat is paired with this headset");
+        model.telegramPaired();
+        return;
+    }
+    // (The code is a secret while it works: the panel shows it, the log says only that one came.)
+    if (!t.code.empty()) {
+        logLine(fmt("[agent] Telegram: a code to pair with @%s, working for %d s", t.bot.c_str(), t.expiresIn));
+        model.pairingCode(t.bot, t.code, t.expiresIn);
+        return;
+    }
+    if (!t.ready) {
+        logLine("[agent] Telegram: the bot has not reached Telegram yet");
+        model.pairingNotReady();
+        return;
+    }
+    logLine(was ? "[agent] Telegram: the chat is no longer paired" : "[agent] Telegram: no chat is paired with this headset");
+}
+
+bool Bridge::askPairing() {
+    bool sent = client.send(Outbound::pair());
+    if (sent) logLine("[agent] asked for a code to pair Telegram with");
+    return sent;
 }
 
 bool Bridge::shareTree(const Tree& tree) {

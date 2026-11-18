@@ -306,6 +306,17 @@ struct Shared {
     std::string reason;
     std::string text;
 };
+/// Pairing with a Telegram chat, on the hosted service: after the hello and on every change whether this headset has a chat
+/// paired (`paired`), and with a code whenever one is given out while none is (the bot's username, the six digits, and the
+/// seconds they still work for). `ready` false: the bot has not reached Telegram yet. The code is a secret while it works:
+/// it is shown on the pairing panel, never logged.
+struct Telegram {
+    bool paired = false;
+    std::string bot;
+    std::string code;
+    int expiresIn = 0;
+    bool ready = true;
+};
 /// A message of a kind this build doesn't know, by its `t`.
 struct Unknown {
     std::string t;
@@ -317,7 +328,7 @@ struct Malformed {
     std::string why;
 };
 
-using Inbound = std::variant<Hello, Change, Activity, Say, Heard, Navigate, Handoff, SettingsChanged, Note, Questions, Rejected, Shared, Unknown, Malformed>;
+using Inbound = std::variant<Hello, Change, Activity, Say, Heard, Navigate, Handoff, SettingsChanged, Note, Questions, Rejected, Shared, Telegram, Unknown, Malformed>;
 
 /// Reads one socket message. Never fails: what can't be read comes back as Unknown or Malformed.
 Inbound parseInbound(const std::string& text);
@@ -421,6 +432,8 @@ public:
     static Outbound look(const std::optional<NodeId>& nodeId, const std::string& title, const std::optional<Seen>& seen);
     /// Share a tree with a friend (the Share button over a tree in the forest).
     static Outbound share(const TreeId& tree);
+    /// The pairing panel asks for the bot and a code to pair with (answered by `telegram`).
+    static Outbound pair();
 
     const Json& json() const { return json_; }
     std::string text() const { return json_.dump(); }

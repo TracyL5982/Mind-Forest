@@ -55,6 +55,8 @@ const WRONG_CODES = 5;
 /** Wrong codes from every chat together in ten minutes before no code is read for a while: many accounts cannot share out the guessing. */
 const WRONG_CODES_IN_ALL = 50;
 const PAUSE_MS = 5 * 60 * 1000;
+/** A code given out is given again, rather than a new one, while it has longer than this to run. */
+const REUSE_MS = 60 * 1000;
 const PAIRING_PAUSED = 'I’ve paused pairing for a few minutes. Send me your code again shortly.';
 
 /**
@@ -105,11 +107,11 @@ export class JudgeTelegram {
       this.desks.set(device, desk);
       return {
         status: () => ({ ready: this.bot.me !== null, paired: this.chatOf(device)?.[1].name ?? null }),
-        pair: () => {
+        pair: (opts) => {
           const me = this.bot.me;
           if (!me) return null;
-          const code = this.codeFor(device);
-          return { link: `https://t.me/${me.username}?start=${code}`, bot: me.username, code };
+          const { code, expires } = this.codeFor(device, opts?.reuse ?? false);
+          return { link: `https://t.me/${me.username}?start=${code}`, bot: me.username, code, expiresIn: Math.max(0, Math.round((expires - this.now()) / 1000)) };
         },
         unpair: () => this.unpair(device),
         deliver: (handoff) => this.deliver(device, handoff),
@@ -246,6 +248,7 @@ export class JudgeTelegram {
     this.talk.forget(chat);
     this.kept.patch({ chats: { ...this.kept.value.chats, [String(chat)]: { device: live.device, userId: from.id, name: nameOf(from) } } });
     this.opts.log(`[telegram] a chat paired with ${live.device.slice(0, 8)}`);
+    this.desks.get(live.device)?.paired?.(true);
     return true;
   }
 
@@ -255,6 +258,7 @@ export class JudgeTelegram {
     this.talk.forget(chat[0]);
     const { [String(chat[0])]: _gone, ...rest } = this.kept.value.chats;
     this.kept.patch({ chats: rest });
+    this.desks.get(device)?.paired?.(false);
   }
 
   private chatOf(device: string): [number, Chat] | undefined {
@@ -262,15 +266,21 @@ export class JudgeTelegram {
     return found && [Number(found[0]), found[1]];
   }
 
-  /** A new six-digit code for the device, in place of any it had. */
-  private codeFor(device: string): string {
+  /**
+   * A new six-digit code for the device, in place of any it had; with `reuse`, the one it has while that has more than a minute
+   * to run (a headset's pairing panel asks for one just after Momo read hers out).
+   */
+  private codeFor(device: string, reuse = false): { code: string; expires: number } {
     const now = this.now();
+    if (reuse) {
+      for (const [code, live] of this.codes) if (live.device === device && live.expires - now > REUSE_MS) return { code, expires: live.expires };
+    }
     for (const [code, live] of this.codes) if (live.device === device || now > live.expires) this.codes.delete(code);
     let code: string;
     do code = String(randomInt(0, 1_000_000)).padStart(6, '0');
     while (this.codes.has(code));
     this.codes.set(code, { device, expires: now + CODE_MS });
-    return code;
+    return { code, expires: now + CODE_MS };
   }
 }
 

@@ -4,6 +4,13 @@ Mind Forest is a place to think in a Meta Quest 3 headset: what you save and wha
 
 It is a native OpenXR app for the headset ([quest/](quest/README.md)) and a TypeScript service that runs the agents ([agents/](agents/README.md)).
 
+<p>
+  <img src="docs/in-use-1.jpg" width="24%" alt="Mind Forest at a café counter: trees of pictures over the table">
+  <img src="docs/in-use-2.jpg" width="24%" alt="Mind Forest outdoors by a lake: a layer of cards open in front of the viewer">
+  <img src="docs/in-use-3.jpg" width="24%" alt="Mind Forest in a shop: layers of cards all round, a hand pinching">
+  <img src="docs/in-use-4.jpg" width="24%" alt="Mind Forest outdoors: a tree open in layers, the forest on the grass">
+</p>
+
 ![A tree in the app: each layer of cards in its own colour, over the library of films and artworks](agents/demo/docs/tree-in-the-app.jpg)
 
 ![Trees put away on the desk, each with its name and its rings](agents/demo/docs/showcase-forest.jpg)
@@ -27,11 +34,11 @@ This is the judging build, one app named "Mind Forest" that joins the hosted ser
 3. **Ask Momo something.** Say "Hey Momo" (or "Hi Momo"), then what you want, such as "start a tree on Dutch still lifes". Momo answers in her own voice. Cards start to arrive round the open card within seconds, and she tells you about them as they land. While the conversation is open you can go on talking without the name, and talk over her.
 4. **Work a tree by hand.** Pinch a card to open it. Pinch and hold a card until the ring fills to start a layer on it and get more like it. Pinch the open card again to go into it, where a pen, an eraser and Send to Momo let you mark part of it and ask about that part.
 5. **Start from the library.** Around the desk lies the library, about 100 film scenes and 750 museum works. With no tree open, pinch one to ask Momo for a tree about it.
-6. **Connect Telegram, hand off, share.** Say "connect my Telegram" and Momo gives you a bot's name and a six-digit code. After that, anything you send the bot lands in your forest. Point at a tree on the desk and two buttons appear: Send posts the tree's handoff file to your chat, and Share posts a link that grows a copy of the tree in a friend's forest.
+6. **Connect Telegram, hand off, share.** Point at a tree on the desk and two buttons appear: Send to Agents and Share with Friends. Until Telegram is connected they say "Pair Telegram first": pinch that, or say "connect my Telegram" to Momo, and a panel shows three steps with the bot's name and a six-digit code to send it from your phone (an X closes the panel). Once connected, anything you send the bot lands in your forest, Send posts the tree's handoff file to your chat, and Share posts a link that grows a copy of the tree in a friend's forest.
 
 Hold your palms together for a second to close the tree you are in.
 
-**The welcome tree afterwards.** The welcome tree is the lesson itself and is not kept in your forest: once you put it away it is gone, and your own trees and the four example trees stand on the desk. To see a gesture again, pinch the **Gestures** button, which lists them all. To take the whole welcome tree again, pinch **Start the guide over** on that sheet.
+**The welcome tree afterwards.** The welcome tree stays in your forest. Once you put it away it stands on the desk with your own trees and the four example trees, also after the app is closed and opened again, and you can open it any time to see a lesson again. The **Gestures** button lists every gesture, and **Start the guide over** on that sheet begins the lessons from the first.
 
 ## The hackathon's experience guidelines
 

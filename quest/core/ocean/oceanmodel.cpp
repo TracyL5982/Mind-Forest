@@ -170,6 +170,7 @@ void OceanModel::update(float dt) {
     if (echoCheck) echoCheck->frame(now);     // AGENT
     tendShare(now);   // FILM: the list of people Share opens, and a shared tree's copy on the wind
     tendCue(now);     // FILM
+    tendPairing(now);   // AGENT (WS99): the pairing panel's code running out, and its going once paired
 
     if (!scheduled.empty()) {
         std::vector<Scheduled> due;

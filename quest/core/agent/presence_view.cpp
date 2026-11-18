@@ -550,12 +550,13 @@ void PresenceView::microphone(const Presence& presence, float dt) {
     }
     ease(markShown, presence.microphoneOff ? 1.f : 0.f, 0.2f, dt);
     if (mark) mark->opacity = std::pow(markShown, 2.2f);
-    // Momo takes a pinch, mark and all, only while the microphone is off.
+    // Momo takes a pinch, mark and all, only while the microphone is off, or not yet asked for (WS95: unmarked then).
+    bool takes = presence.microphoneOff || presence.microphoneUnasked;
     target->position = {middle.x, middle.y, 0};
     float reach = size * (markOut + markSize / 2) * 2;
     if (target->collision.empty()) target->collision = {Shape::generateBox({reach, reach, 0.01f})};
-    target->inputTarget = presence.microphoneOff;
-    target->hover = presence.microphoneOff ? Art::hover() : Hover::none();
+    target->inputTarget = takes;
+    target->hover = takes ? Art::hover() : Hover::none();
 
     // The note's button stands under its lowest line, at the bars' left, as it fades in and out with it.
     const Caption::Line* low = nullptr;

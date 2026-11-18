@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds the judging APK: "Mind Forest", com.kaifengwu.mindpalace.ocean.judge, release-signed with the key in
+# Builds the judging APK: "Mind Forest", com.mindforest.app, release-signed with the key in
 # ~/.mind-palace/keys, joining the service named in ~/.mind-palace/judging.properties by itself, and carrying its media
 # inside, so a judge installs one file and opens it. It installs beside the user's two apps and replaces neither.
 #   tools/judge.sh             build it, check it, and say where it is
@@ -11,7 +11,7 @@ install=0
 STAGE="$QUEST_ROOT/android/app/build/judge-media"
 OUT="$QUEST_ROOT/android/app/build/outputs/apk/judge"
 TOOLS="$ANDROID_HOME/build-tools/34.0.0"
-JUDGE_ID=com.kaifengwu.mindpalace.ocean.judge
+JUDGE_ID=com.mindforest.app
 
 "$QUEST_ROOT/tools/fetch-voice.sh"
 "$QUEST_ROOT/tools/works_small.sh"

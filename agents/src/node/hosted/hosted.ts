@@ -446,6 +446,8 @@ export function spaceOptions(opts: Pick<HostedOptions, 'shared' | 'dataDir' | 'a
     ...(live && answer ? { live: { ...live, webAnswer: (question: string) => forDevice.run(device, () => answer(question)) } } : {}),
     telegram: undefined,
     instagram: undefined,
+    // No reply is read aloud with the speech model: a headset shows the words instead (the user's rule, 2026-11-18).
+    speak: undefined,
     library: opts.following?.library,
     storeLimit: opts.storeLimit ?? 20e6,
     madeLimit: opts.madeLimit ?? 60e6,

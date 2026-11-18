@@ -80,6 +80,28 @@ test('the script holds together: every round is asked from a card an earlier rou
   for (const phase of script.phases) for (const step of schedule(phase).steps) assert.ok(step.label.split(' ').length <= 9, `a step label of ${phase.id} is too long`);
 });
 
+test("the demo reads nothing aloud with the speech model, even given it: a headset is told so and shows the words", async () => {
+  const spoke: string[] = [];
+  const speak = async (text: string) => (spoke.push(text), new ReadableStream<Uint8Array>({ start: (c) => (c.enqueue(new Uint8Array([1, 2, 3])), c.close()) }));
+  const run = await startServer({
+    port: 0, host: '127.0.0.1', dataDir: fresh(), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret', speak,
+    demo: { script, mediaDir: join(demoDir, 'media'), pace: quick },
+  });
+  try {
+    assert.equal((await fetch(`${run.url}/api/speak?token=secret&text=hello`)).status, 404);
+    const ws = new WebSocket(`${run.url.replace('http', 'ws')}/ws?token=secret`);
+    const hello = await new Promise<{ voice?: boolean }>((done) => ws.on('message', (raw) => {
+      const m = JSON.parse(String(raw)) as { t: string; voice?: boolean };
+      if (m.t === 'hello') done(m);
+    }));
+    ws.close();
+    assert.equal(hello.voice, false);
+    assert.deepEqual(spoke, []);
+  } finally {
+    await run.close();
+  }
+});
+
 test('going to a round builds every round before it, kept, and leaves it the next', async () => {
   const run = await boot();
   try {

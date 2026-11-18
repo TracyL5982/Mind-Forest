@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<!-- installLocation auto and excludeFromRecents true: the store's packaging checks ask for both. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    android:installLocation="auto">
 
     <uses-feature android:glEsVersion="0x00030002" android:required="true" />
     <uses-feature android:name="android.hardware.vr.headtracking" android:required="true" android:version="1" />
@@ -52,7 +54,7 @@
         <activity
             android:name=".MainActivity"
             android:configChanges="density|keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|uiMode"
-            android:excludeFromRecents="false"
+            android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTask"
             android:resizeableActivity="false"

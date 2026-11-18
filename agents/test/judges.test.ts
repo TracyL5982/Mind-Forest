@@ -153,6 +153,77 @@ test('a code lasts ten minutes, a new one replaces the last, and five wrong code
   assert.match((await ask(s, ADA, { text: later.code }))[0]!.text, /^We’re paired\./, 'ten minutes on, the chat may try again');
 });
 
+test("a headset's pairing panel: told after its hello that it is not paired, it asks and is given the bot and a code, the same one while it has more than a minute to run; a code given out elsewhere comes to it too, and it is told when a chat pairs and unpairs", { timeout: 20000 }, async () => {
+  const s = await host();
+  await s.bot.until(() => s.bot.calls.some((c) => c.method === 'getUpdates'));
+  const seen: Record<string, unknown>[] = [];
+  const connect = async () => {
+    const ws = new WebSocket(`${s.hosted.url.replace('http', 'ws')}/ws?token=${KEY}.${A}`);
+    ws.on('message', (m) => seen.push(JSON.parse(String(m)) as Record<string, unknown>));
+    await new Promise((ok) => ws.on('open', ok));
+    return ws;
+  };
+  const told = () => seen.filter((m) => m.t === 'telegram') as { t: string; paired: boolean; bot?: string; code?: string; expiresIn?: number }[];
+  const ws = await connect();
+  await s.bot.until(() => told().length === 1);
+  assert.deepEqual(told()[0], { t: 'telegram', paired: false }, 'after its hello, the headset is told it is not paired');
+  assert.ok(seen.findIndex((m) => m.t === 'hello') < seen.findIndex((m) => m.t === 'telegram'), 'the hello first');
+
+  ws.send(JSON.stringify({ t: 'pair' }));
+  await s.bot.until(() => told().length === 2);
+  const given = told()[1]!;
+  assert.equal(given.paired, false);
+  assert.equal(given.bot, 'mind_palace_test_bot');
+  assert.ok(/^\d{6}$/.test(given.code ?? ''), 'a six-digit code');
+  assert.equal(given.expiresIn, 600, 'for ten minutes');
+  s.clock.now += 8 * 60 * 1000;
+  ws.send(JSON.stringify({ t: 'pair' }));
+  await s.bot.until(() => told().length === 3);
+  assert.ok(told()[2]!.code === given.code, 'asked again with two minutes to run, the same code');
+  assert.equal(told()[2]!.expiresIn, 120);
+  s.clock.now += 70 * 1000;
+  ws.send(JSON.stringify({ t: 'pair' }));
+  await s.bot.until(() => told().length === 4);
+  assert.ok(told()[3]!.code !== given.code && /^\d{6}$/.test(told()[3]!.code ?? ''), 'with under a minute to run, a new one');
+  assert.equal(told()[3]!.expiresIn, 600);
+
+  const elsewhere = await invite(s, A);
+  await s.bot.until(() => told().length === 5);
+  assert.ok(told()[4]!.code === elsewhere.code, 'a code given out another way (as Momo gives hers) comes to the headset too');
+
+  const after = s.bot.sent.length;
+  s.bot.push(ADA, { text: elsewhere.code });
+  await s.bot.reply(ADA.id, /^We’re paired\./, 'sendMessage', after);
+  await s.bot.until(() => told().length === 6);
+  assert.deepEqual(told()[5], { t: 'telegram', paired: true }, 'the headset is told the chat paired, with no name');
+  ws.send(JSON.stringify({ t: 'pair' }));
+  await s.bot.until(() => told().length === 7);
+  assert.deepEqual(told()[6], { t: 'telegram', paired: true }, 'asked once paired, no code');
+  const second = await connect();
+  await s.bot.until(() => told().length === 8);
+  assert.deepEqual(told()[7], { t: 'telegram', paired: true }, 'a headset that joins after is told it is paired');
+
+  assert.match((await ask(s, ADA, { text: '/unpair' }))[0]!.text, /^Okay, we’re unpaired\./);
+  await s.bot.until(() => told().length === 10);
+  assert.deepEqual(told().slice(8), [{ t: 'telegram', paired: false }, { t: 'telegram', paired: false }], 'and told when it unpairs, on each connection');
+  ws.close();
+  second.close();
+});
+
+test('a service with no Telegram of a hosted kind tells a headset nothing of pairing, and refuses `pair`', { timeout: 20000 }, async () => {
+  const plain = await startServer({ port: 0, host: '127.0.0.1', dataDir: tempDir('mp-pair-'), clientDir: '', model: new FakeModel(), roles: fakeRoles, token: 'x' });
+  opened.push(plain);
+  const seen: Record<string, unknown>[] = [];
+  const ws = new WebSocket(`${plain.url.replace('http', 'ws')}/ws?token=x`);
+  ws.on('message', (m) => seen.push(JSON.parse(String(m)) as Record<string, unknown>));
+  await new Promise((ok) => ws.on('open', ok));
+  ws.send(JSON.stringify({ t: 'pair' }));
+  for (let i = 0; i < 200 && !seen.some((m) => m.t === 'error'); i++) await new Promise((ok) => setTimeout(ok, 25));
+  ws.close();
+  assert.ok(!seen.some((m) => m.t === 'telegram'), 'no telegram message');
+  assert.deepEqual(seen.find((m) => m.t === 'error'), { t: 'error', message: 'this service has no Telegram to pair with' });
+});
+
 test('each judge reaches only their own headset: drops, trees and handoffs stay in its space, whoever asks', { timeout: 30000 }, async () => {
   const s = await host();
   await pair(s, A, ADA);

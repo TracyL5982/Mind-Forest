@@ -61,6 +61,8 @@ export interface Desk {
   match(words: string): Promise<TreeLine[]>;
   /** Makes one tree's handoff. The file reaches the paired person as every handoff does, through `Channel.deliver`. */
   handoff(treeId: Id): Promise<void>;
+  /** The contact was paired with someone, or is no longer: the service tells its headsets (`telegram`), so a panel showing a code can close. */
+  paired?(paired: boolean): void;
 }
 
 /** What a drop came to. */
@@ -83,6 +85,8 @@ export interface Invite {
   link: string;
   bot: string;
   code?: string;
+  /** Seconds the code still works for. */
+  expiresIn?: number;
 }
 
 /**
@@ -91,8 +95,11 @@ export interface Invite {
  */
 export interface Channel {
   status(): ContactStatus;
-  /** A way to pair that works once, for ten minutes. Null while the contact is not ready. */
-  pair(): Invite | null;
+  /**
+   * A way to pair that works once, for ten minutes. Null while the contact is not ready. `reuse`: the code already given, if it still
+   * has a while to run, so a code someone was just told (Momo reads hers out) is not replaced under them.
+   */
+  pair(opts?: { reuse?: boolean }): Invite | null;
   unpair(): void;
   /** Sends a handoff to the paired person. Never rejects; does nothing when no one is paired. */
   deliver(handoff: Delivery): Promise<void>;

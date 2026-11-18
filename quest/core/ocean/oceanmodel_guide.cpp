@@ -39,7 +39,7 @@ constexpr double layerBeforeAnswerEnds = 2;
 constexpr int exampleTalk = 1000;
 
 // (`offButtons` is OceanModel::guideOffButtons, which pinchEnded reads.)
-enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109, offButtons = 110, tourSettings = 111, momoNote = 112, allowMicrophone = 113 };
+enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109, offButtons = 110, tourSettings = 111, momoNote = 112, allowMicrophone = 113, pairClose = 114, pairPanel = 115 };
 // The gestures a ghost hand teaches, in the order they are needed, and how long each waits once its moment has come.
 struct Plan {
     const char* id;
@@ -1357,6 +1357,8 @@ int OceanModel::tourHearing() const {
     switch (voice->hearing()) {
     case agent::Voice::Hearing::ready: return 0;
     case agent::Voice::Hearing::starting: return 1;
+    // (Not asked for yet: the lesson beginning asks for it.)
+    case agent::Voice::Hearing::unasked: return 1;
     case agent::Voice::Hearing::asking: return 2;
     case agent::Voice::Hearing::refused: return 3;
     case agent::Voice::Hearing::settingsOnly: return 6;
@@ -1381,8 +1383,9 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
         } else if (voice) {
             voice->tutor(std::nullopt);
         }
-        // The microphone refused (its window missed at launch, or answered no): as a lesson by speaking begins, the
-        // system asks for it again (WS87). Where the system no longer asks, the line says where it is switched on.
+        // As a lesson by speaking begins, the microphone is asked for: the first time here, where the lesson's words say
+        // why (WS95: nothing asks at launch), or again where it was refused (its window missed, or answered no; WS87).
+        // Where the system no longer asks, the line says where it is switched on.
         if (voice && (want == momoStep || want == markStep)) voice->askForMicrophone();
         if (want == exampleTalk) logLine(fmt("[guide] the example cards listen for one asked: Momo's ears are %d", tourHearing()));
         else if (want >= 0) logLine(fmt("[guide] lesson %d waits for words: Momo's ears are %d", want + 1, tourHearing()));
@@ -1449,6 +1452,13 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
     }
     // Why nothing is heard, if nothing can be; otherwise what the last turn came to, or after a while a nudge.
     int hear = tourHearing();
+    // The microphone has just come on (allowed at its window, or in Settings): the wait for words begins now, so the way
+    // on without speaking, which stood while Momo could not hear, goes. (The user, 2026-11-18.)
+    if (hear == 0 && teach.talkHearing > 0) {
+        teach.talkSince = now;
+        teach.talkMisses = 0;
+    }
+    teach.talkHearing = hear;
     double waited = now - teach.talkSince;
     std::string note = teach.talkNote;
     bool pill = teach.talkMisses >= 2, settings = false;
@@ -1758,6 +1768,7 @@ bool OceanModel::pressButton(const EntityRef& entity, int action) {
     case Act::tourSettings:
     case Act::momoNote:
     case Act::allowMicrophone:
+    case Act::pairClose:
         break;
     default:
         return false;
@@ -1899,6 +1910,9 @@ void OceanModel::showHome() {
     holder->addChild(card);
     teach.home = holder;
     teach.homeDue = false;
+    // WS95: after the walk, done or skipped, the microphone is asked for if it never was, so that "Hey Momo" works from
+    // here on (a judge who skips the walk included); Momo's caption says why as the system asks.
+    if (agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr) voice->askForMicrophoneFirst("Allow the microphone to say “Hey Momo” any time");
     // (Momo is Kai's name for who answers. In this build the questions it points at are still headed "Ask the gardener".)
     const char* names[3] = {"A tree", "An item", "Momo"};
     for (int k = 0; k < 3; k++) {
@@ -2034,12 +2048,22 @@ void OceanModel::microphonePicks(const EntityRef& momo, const EntityRef& allow) 
 
 void OceanModel::guideAct(int action) {
     static_assert(Act::offButtons == guideOffButtons, "pinchEnded reads the act for off the buttons as guideOffButtons");
+    static_assert(Act::pairClose == OceanModel::pairClose && Act::pairPanel == OceanModel::pairPanel, "the pairing panel's acts");
+    // The pairing panel's, whether the guide is on or not (WS99): its X closes it; a pinch elsewhere on it does nothing.
+    if (action == Act::pairClose) {
+        closePairing("its X");
+        return;
+    }
+    if (action == Act::pairPanel) {
+        logLine("[ocean] a pinch on the pairing panel, off its X: nothing");
+        return;
+    }
     // Momo's, while the microphone is off: whether the guide is on or not (WS87).
     if (action == Act::momoNote || action == Act::allowMicrophone) {
         agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr;
         if (action == Act::momoNote) {
-            logLine("[presence] Momo is pinched with the microphone off: her note shows");
-            if (voice) voice->showMicrophoneNote();
+            logLine("[presence] Momo is pinched without the microphone: it is asked for, or her note shows");
+            if (voice) voice->addressedWithoutMicrophone();
         } else {
             logLine("[presence] the note's Allow microphone is pinched");
             if (voice) voice->askForMicrophone(true);

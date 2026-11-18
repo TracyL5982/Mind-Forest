@@ -53,6 +53,7 @@ std::string kindOf(const Event& event) {
                           [](const Questions&) { return std::string("questions"); },
                           [](const Rejected&) { return std::string("error"); },
                           [](const Shared&) { return std::string("shared"); },
+                          [](const Telegram&) { return std::string("telegram"); },
                       },
                       event);
 }
