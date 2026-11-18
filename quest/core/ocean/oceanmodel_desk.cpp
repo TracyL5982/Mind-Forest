@@ -566,6 +566,9 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
     float d = std::max(0.5f, distance(stage.origin, s.mover->position.target() + stage.u * (crown * k)));
     float degree = std::tan(float(M_PI) / 180) * d / k;          // m of the tree's own measure that a degree takes there
     float tall = actionReach * degree, pillTall = actionTall * degree, gap = actionGap * degree;
+    // AGENT: each target at least `targetWide` by `targetTall` (the lead's aims, WS73), wider outward only, so the two still
+    // meet half way between, and taller upward only, clear of the list Share opens under them.
+    float reach = std::max(actionReach, targetTall) * degree, lift = (reach - tall) / 2;
     // The one pressed says it took, filled with its colour, and takes no press. Share is filled too while its list of
     // people is open: it is on, and a pinch on it shuts the list. A button is never narrower for what it then says.
     std::optional<Piece> pieces[2];
@@ -574,7 +577,11 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
         bool open = b == 1 && sharing.list && sharing.uid == s.uid && sharing.chosen < 0;
         std::optional<Piece> rest = art->action(actionWords(s, b, false), buttonText, actionAccent(b), actionOn(b), false);
         if (!rest) return;
-        pieces[b] = art->action(actionWords(s, b, b == pressed), buttonText, actionAccent(b), actionOn(b), open || b == pressed, rest->size.x * Art::ppm);
+        // AGENT: why a share was not taken (`shareRefused`) is said in Share's place, as it was; not filled, since it has not
+        // done its work.
+        bool refused = b == pressed && !said.empty();
+        pieces[b] = art->action(refused ? said : actionWords(s, b, b == pressed), buttonText, actionAccent(b), actionOn(b), open || (b == pressed && !refused),
+                                rest->size.x * Art::ppm);
         if (!pieces[b]) return;
         size = pillTall / pieces[b]->size.y;
         wides[b] = pieces[b]->size.x * size;
@@ -582,20 +589,24 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
     EntityRef row = Entity::make();
     row->position = {0, crown + tall / 2, 0.1f};
     float left = -(wides[0] + gap + wides[1]) / 2;
+    float reaches[2] = {0, 0};
     for (int b = 0; b < 2; b++) {
         float x = b == 0 ? left + wides[0] / 2 : left + wides[0] + gap + wides[1] / 2;
-        // (Its target: a degree past its outer end, and to the middle of the gap.)
-        float wide = wides[b] + degree + gap / 2, centre = x + (b == 0 ? -1.f : 1.f) * (degree - gap / 2) / 2;
+        // (Its target: from the middle of the gap to a degree past its outer end, or further out, to `targetWide`.)
+        float inner = left + wides[0] + gap / 2;
+        float outer = b == 0 ? std::min(left - degree, inner - targetWide * degree) : std::max(-left + degree, inner + targetWide * degree);
+        float wide = std::abs(outer - inner), centre = (inner + outer) / 2;
+        reaches[b] = wide;
         EntityRef target = Entity::make();
-        target->position = {centre, 0, 0};
-        target->collision = {Shape::generateBox({wide, tall, 0.04f})};
+        target->position = {centre, lift, 0};
+        target->collision = {Shape::generateBox({wide, reach, 0.04f})};
         // A ray on one lights that one, and neither takes the glow of the tree behind them, which turns a dark label tan
         // (`tendShare` counts a ray on a button as a ray on its tree, since the tree itself is then not what is lit).
         target->hover = Hover::highlight(Color::white(), b == pressed ? 0 : 0.35f);
         if (b != pressed) picks[target.get()] = Pick::coverButton(s.uid, b);
         row->addChild(target);
         if (Flags::has("showHitAreas")) {
-            if (std::optional<Piece> area = art->piece(fmt("hit-area:%.0fx%.0f", double(wide * Art::ppm), double(tall * Art::ppm)), wide * Art::ppm, tall * Art::ppm,
+            if (std::optional<Piece> area = art->piece(fmt("hit-area:%.0fx%.0f", double(wide * Art::ppm), double(reach * Art::ppm)), wide * Art::ppm, reach * Art::ppm,
                                                        [](Canvas&, CGSize box) {
                                                            setFill(Color::white(1, 0.22f));
                                                            UIRectFill(CGRect(0, 0, box.width, box.height));
@@ -606,13 +617,13 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
                                                            UIRectFill(CGRect(box.width - 3, 0, 3, box.height));
                                                        })) {
                 EntityRef shown = art->quad(*area);
-                shown->position = {centre, 0, -0.002f};
+                shown->position = {centre, lift, -0.002f};
                 row->addChild(shown);
             }
         }
         EntityRef pill = art->quad(*pieces[b]);
         pill->scale = Vec3::repeating(size);
-        pill->position = {x - centre, 0, 0.004f};
+        pill->position = {x - centre, -lift, 0.004f};
         target->addChild(pill);
         s.pills[size_t(b)] = pill;
     }
@@ -623,8 +634,10 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
     if (!again) fadeIn(row, 0, 0.2f);
     s.buttons = row;
     touch(time + 0.3);
-    logLine(fmt("[ocean] Send and Share over %s: buttons %.0f° and %.0f° wide and %.0f° tall, side by side, their targets %.0f° tall, at %.2f m, on the crown",
-                s.tree->title.c_str(), double(wides[0] / degree), double(wides[1] / degree), double(actionTall), double(actionReach), double(d)));
+    logLine(fmt("[ocean] Send and Share over %s: buttons %.0f° and %.0f° wide and %.0f° tall, side by side, their targets %.0f° and %.0f° wide and %.0f° tall, at %.2f m, "
+                "on the crown",
+                s.tree->title.c_str(), double(wides[0] / degree), double(wides[1] / degree), double(actionTall), double(reaches[0] / degree), double(reaches[1] / degree),
+                double(reach / degree), double(d)));
 }
 
 void OceanModel::coverButton(int uid, int which) {
@@ -677,7 +690,9 @@ void OceanModel::shareRefused(const Tree& tree, const std::string& reason) {
     std::string said = reason == "unpaired" ? "Pair Telegram first" : reason == "limit" ? "No more shares today"
                      : reason == "too-big"  ? "Too big to share"
                                             : "Try again later";
-    // One tree shows its buttons at a time: another's go.
+    // One tree shows its buttons at a time: another's go, and the list of people with them. This one's list goes too, and
+    // with it whom it was shared with: "Shared with <name>" does not stay when the service would not (WS88).
+    if (sharing.list) closePeople(false);
     for (Shelved& other : shelf) {
         if (&other == &*i || !other.buttons) continue;
         for (const EntityRef& b : other.buttons->children) picks.erase(b.get());

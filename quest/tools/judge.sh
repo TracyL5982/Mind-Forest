@@ -18,7 +18,7 @@ JUDGE_ID=com.kaifengwu.mindpalace.ocean.judge
 
 # The media as push_media.sh lays it out on the headset, under assets/media, with the list the app reads it by:
 # the library's, and the app's own (in git): the sounds, Momo's recorded lines for the walk, the guide's hand model, the greeting's two fonts with their
-# notice. Cloned, so the copy takes no room on this Mac.
+# notice, and the pictures of the people a tree can be shared with. Cloned, so the copy takes no room on this Mac.
 rm -rf "$STAGE"
 mkdir -p "$STAGE/media"
 cp -c "$REPO_ROOT/library/ocean.json" "$STAGE/media/"
@@ -26,7 +26,7 @@ for f in "$REPO_ROOT"/library/notes/*; do [ -f "$f" ] && cp -c "$f" "$STAGE/medi
 cp -cR "$REPO_ROOT/library/clips" "$STAGE/media/clips"
 cp -cR "$REPO_ROOT/library/works" "$STAGE/media/works"
 cp -cR "$REPO_ROOT/media-src/quest/works-small" "$STAGE/media/works-small"
-for own in sounds hands fonts voice; do
+for own in sounds hands fonts voice people; do
   [ -n "$(ls -A "$REPO_ROOT/media-src/quest/$own" 2>/dev/null)" ] || { echo "media-src/quest/$own is missing or empty"; exit 1; }
   cp -cR "$REPO_ROOT/media-src/quest/$own" "$STAGE/media/$own"
 done

@@ -272,7 +272,7 @@ export async function standIn(name, source, { demo = false } = {}) {
     preview.stderr.on('data', (chunk) => {
       const lines = (partial + chunk).split('\n');
       partial = lines.pop();
-      for (const line of lines) if (/^\[(agent|ocean|cards|sound)\]/.test(line)) log.push({ at: (Date.now() - began) / 1000, line });
+      for (const line of lines) if (/^\[(agent|ocean|cards|sound|film)\]/.test(line)) log.push({ at: (Date.now() - began) / 1000, line });
     });
     const done = new Promise((resolve) => preview.on('exit', resolve));
     const sent = (t) => fromPreview.filter((m) => m.message.t === t && m.when >= began).map((m) => ({ ...m.message, at: (m.when - began) / 1000 }));
