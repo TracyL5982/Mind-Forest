@@ -263,9 +263,11 @@ The file was generated from the walkthrough board by `sketches/walkthrough/gen/d
 
 The user changed the storyboard on 2026-11-17, in `script.json` itself, so running the generator again would undo it:
 
-- Slice of Heartland moved from Round 3 into Round 1, and Round 2 is asked from it with "Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?". Momo's first words in Round 2 are the user's, at both paces: "Let's map it out. I built a few interactive cards from Darwin's 1837 branching notebook alongside a 3D biotecture model. Sketch on whichever structure clicks!" (`scripts/demo-lines.ts --answer`).
+- Slice of Heartland moved from Round 3 into Round 1, and Round 2 is asked from it with "Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?".
+- Momo opens Round 2 in her own words, as long as the user's example and in its spirit ("Let's map it out. I built a few interactive cards from Darwin's 1837 branching notebook alongside a 3D biotecture model—sketch on whichever structure clicks!"), but claiming only what the cards are: "Let’s map it out: I’m bringing Darwin’s 1837 branching tree sketch and a Biotecture tower drawn like a tree. Sketch on whichever structure clicks." It was the best of her takes, asked for with `scripts/demo-lines.ts --only n2 --openings 3 --steer "<note>"`, and then given to both paces with `--answer`.
 - Darwin's 1837 tree ("I think") moved from Round 3 into Round 2, beside Biotecture, so those words are true of the round.
-- Round 3 is asked from the Neurones poster, not Llull's ring, and comes before "More of this" in the order, so going to Round 3 sets it up without that round's cards.
+- "More of this" is the long pinch on A disc of pictures, a Round 2 card, not on the Neurones poster.
+- Round 3 is asked from the Neurones poster, not Llull's ring, and is drawn on there.
 - "Layers?" is asked from WoodSwimmer, not Slice of Heartland, since two rounds asked from one card put both rounds' cards on one layer.
 
 ## How it works
