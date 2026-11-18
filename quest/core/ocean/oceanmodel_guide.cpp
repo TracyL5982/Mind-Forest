@@ -1246,7 +1246,13 @@ void OceanModel::updateTour(double now, Vec3 eye) {
         words = "Point at card 1 and pinch to open it";
         // (Card 1 looks as card 2 does when it is the one to act on: its tag over it, "Pinch here", and no round of its own.)
         if (CardRef first = tourCard(0); first && first->alpha.target() > 0.5f) {
-            closedAt = first->position + stage.u * (first->half.y + 0.16f);
+            // (Over every card of the layer, not only card 1: in the joined look the picture cards beside it stand taller, and
+            // the line's first words ran in behind one.)
+            float top = first->half.y + 0.09f;
+            for (const auto& [id, c] : cards) {
+                if (c && c->alpha.target() > 0.5f) top = std::max(top, dot(c->position - first->position, stage.u) + c->half.y);
+            }
+            closedAt = first->position + stage.u * (top + 0.07f);
             firstAt = first->position + stage.u * (first->half.y + 0.085f);
             // (The hand that pinches a card open stands under it, a little toward you.)
             if (teach.tourShown == 300 && teach.holder) {
