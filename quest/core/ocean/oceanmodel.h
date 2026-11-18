@@ -890,6 +890,11 @@ private:
     };
     std::optional<Press> press;
     EntityRef releasedOver;             // what the ray of the hand that held the last pinch was on as it let go
+    int pinchHand = -1;                 // the hand the pinch under way is made with (0 left, 1 right), where the input says
+    /// A guide button's pinch let go without the ray's word on where it ends counts if let go this soon, s (WS75).
+    static constexpr double buttonQuickly = 1.0;
+    /// The guide's act for a pinch on one of its cards off its buttons, which does nothing (oceanmodel_guide.cpp).
+    static constexpr int guideOffButtons = 110;
     double time = 0.0;
     double busyUntil = 0.0;
     /// (The Swift's `(at: Double, run: () -> Void)`.)
@@ -1637,6 +1642,7 @@ private:
 public:
     void pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) override;
     void pinchReleasedOver(const EntityRef& entity) override { releasedOver = entity; }
+    void pinchBegan(int hand) override { pinchHand = hand; }
 
     void pinchEnded(Vec3 point) override;
 
