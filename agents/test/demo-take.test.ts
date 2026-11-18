@@ -62,7 +62,7 @@ test('a round\'s schedule lands every card once, the user\'s own first, then eac
   const n3 = round('n3');
   const three = ['gen-idea-time', 'gen-idea-branches', 'gen-idea-depth'];
   assert.deepEqual(n3.first, three);
-  const fast = schedule(n3, 'Sinuous sea fan, False Bay, South Africa');
+  const fast = schedule(n3, 'I think');
   assert.deepEqual(fast.drops[0], { at: REAL.begins + REAL.own, cards: three });
   assert.deepEqual(fast.drops[1], { at: REAL.begins + REAL.plan + REAL.own, cards: n3.cards.filter((card) => card.origin === 'ocean').map((card) => card.id) });
   assert.ok(fast.drops.slice(1).every((drop) => drop.cards.every((id) => !three.includes(id))));
@@ -278,8 +278,8 @@ test('Play runs a round\'s take on the headset: its labels, its cards as picks i
     const played = run.demo!.shown('n3');
     assert.deepEqual(status.take, { round: 'n3', ms: played.ms, at: played.ms, playing: false }, 'over, the bar rests at the end');
     assert.equal(status.rounds.find((r) => r.id === 'n3')!.state, 'played');
-    assert.deepEqual(under(run, 'Sinuous sea fan, False Bay, South Africa'), round('n3').cards.map((card) => card.title).sort());
-    const head = [...run.mind.nodes.values()].find((node) => run.mind.item(node.itemId).title === 'Sinuous sea fan, False Bay, South Africa')!;
+    assert.deepEqual(under(run, 'I think'), round('n3').cards.map((card) => card.title).sort());
+    const head = [...run.mind.nodes.values()].find((node) => run.mind.item(node.itemId).title === 'I think')!;
     assert.ok(run.mind.children(head.id).every((node) => node.status === 'pick'), 'the cards land as suggestions, as a real round\'s do');
 
     const after = s.seen.slice(from);
@@ -320,7 +320,7 @@ test('moving the bar makes the tree stand as it did at that moment, forwards and
     const between = (first!.at + second!.at) / 2;
 
     await run.demo!.seek('n3', between);
-    assert.deepEqual(under(run, 'Sinuous sea fan, False Bay, South Africa'), titlesOf(n3, first!.cards), 'the cards that had landed by then stand');
+    assert.deepEqual(under(run, 'I think'), titlesOf(n3, first!.cards), 'the cards that had landed by then stand');
     assert.deepEqual(run.demo!.status().take, { round: 'n3', ms: take.ms, at: Math.round(between), playing: false });
     assert.equal(run.demo!.status().rounds.find((r) => r.id === 'n3')!.state, 'waiting');
     const held = () => s.seen.filter((m) => m.t === 'activity' && m.activity!.state === 'start').map((m) => m.activity!.label);
@@ -328,26 +328,26 @@ test('moving the bar makes the tree stand as it did at that moment, forwards and
     await until(() => momentAt(take, between).steps.every((step) => held().includes(step.label)));
 
     await run.demo!.seek('n3', take.ms);
-    assert.deepEqual(under(run, 'Sinuous sea fan, False Bay, South Africa'), n3.cards.map((card) => card.title).sort());
+    assert.deepEqual(under(run, 'I think'), n3.cards.map((card) => card.title).sort());
     assert.equal(run.demo!.status().rounds.find((r) => r.id === 'n3')!.state, 'played');
     assert.equal(run.demo!.status().armed, script.phases.indexOf(n3) + 1);
 
     const from = s.seen.length;
     await run.demo!.seek('n3', second!.at);
-    assert.deepEqual(under(run, 'Sinuous sea fan, False Bay, South Africa'), titlesOf(n3, [...first!.cards, ...second!.cards]), 'going back takes the later cards away');
+    assert.deepEqual(under(run, 'I think'), titlesOf(n3, [...first!.cards, ...second!.cards]), 'going back takes the later cards away');
     await until(() => s.seen.slice(from).some((m) => m.t === 'change'));
     const removed = s.seen.slice(from).filter((m) => m.t === 'change').flatMap((m) => m.set!.patches.filter((p) => p.entity === 'node' && p.after === null));
     assert.equal(removed.length, n3.cards.length - first!.cards.length - second!.cards.length, 'and the headset is told of each card taken away');
 
     await run.demo!.seek('n3', 0);
-    assert.deepEqual(under(run, 'Sinuous sea fan, False Bay, South Africa'), []);
+    assert.deepEqual(under(run, 'I think'), []);
     assert.equal(run.demo!.status().armed, script.phases.indexOf(n3));
 
     // Moves asked for faster than they are done: only the newest of those waiting is done.
     void run.demo!.seek('n3', first!.at);
     void run.demo!.seek('n3', second!.at);
     await run.demo!.seek('n3', between);
-    assert.deepEqual(under(run, 'Sinuous sea fan, False Bay, South Africa'), titlesOf(n3, first!.cards));
+    assert.deepEqual(under(run, 'I think'), titlesOf(n3, first!.cards));
 
     await assert.rejects(run.demo!.playTake('f2'), /not set up for .*Go to this round first/, 'a later round is not played over a tree that is not ready for it');
     assert.match(run.demo!.status().problem!, /Go to this round first/);
@@ -400,18 +400,18 @@ test('a take pauses where it is and goes on from there: no card lands while paus
     await run.demo!.goto('n3');
     const n3 = round('n3');
     void run.demo!.playTake('n3');
-    await until(() => under(run, 'Sinuous sea fan, False Bay, South Africa').length > 0);
+    await until(() => under(run, 'I think').length > 0);
     await run.demo!.pause();
     const paused = run.demo!.status().take!;
     assert.equal(paused.playing, false);
     const take = run.demo!.shown('n3');
     assert.ok(paused.at > 0 && paused.at < take.ms);
-    assert.deepEqual(under(run, 'Sinuous sea fan, False Bay, South Africa'), titlesOf(n3, momentAt(take, paused.at).cards), 'the tree is as the take had it at that moment');
+    assert.deepEqual(under(run, 'I think'), titlesOf(n3, momentAt(take, paused.at).cards), 'the tree is as the take had it at that moment');
     // What was on its way to the headset as the take stopped arrives first.
     await new Promise((r) => setTimeout(r, 300));
     const heard = s.voice.length;
     await new Promise((r) => setTimeout(r, 400));
-    assert.deepEqual(under(run, 'Sinuous sea fan, False Bay, South Africa'), titlesOf(n3, momentAt(take, paused.at).cards), 'paused, nothing more lands');
+    assert.deepEqual(under(run, 'I think'), titlesOf(n3, momentAt(take, paused.at).cards), 'paused, nothing more lands');
     assert.equal(s.voice.slice(heard).filter((m) => m.t === 'audio').length, 0, 'and Momo is silent');
     assert.equal(run.demo!.status().take!.at, paused.at);
 
@@ -419,7 +419,7 @@ test('a take pauses where it is and goes on from there: no card lands while paus
     const before = line ? bytesOf(s.voice, line.line.id) : 0;
     void run.demo!.playTake();
     await until(() => run.demo!.status().take?.playing === false && run.demo!.status().take?.at === take.ms, 15000);
-    assert.deepEqual(under(run, 'Sinuous sea fan, False Bay, South Africa'), n3.cards.map((card) => card.title).sort(), 'played on, the rest of the round arrives');
+    assert.deepEqual(under(run, 'I think'), n3.cards.map((card) => card.title).sort(), 'played on, the rest of the round arrives');
     if (line) {
       const whole = line.line.text.length * 2400;
       const resumed = bytesOf(s.voice, line.line.id) - before;
@@ -446,7 +446,7 @@ test('the user\'s words over a line are what Momo says; her live voice is kept f
     assert.equal(run.demo!.status().lines.edited, 1);
 
     // With the round's card open, Momo is told the next words ask for it: from then her own voice is kept from the headset.
-    const darwin = [...run.mind.nodes.values()].find((node) => run.mind.item(node.itemId).title === 'Sinuous sea fan, False Bay, South Africa')!;
+    const darwin = [...run.mind.nodes.values()].find((node) => run.mind.item(node.itemId).title === 'I think')!;
     assert.equal(run.demo!.mutes(), false);
     assert.match(run.demo!.takeNote(darwin.id), /new layer/);
     assert.equal(run.demo!.mutes(), true);
@@ -736,14 +736,14 @@ test('the page loads a pace: its take, its lines and its edits are its own, a sp
     await until(() => run.demo!.status().take?.playing === true);
     await until(() => run.demo!.status().take?.playing === false, 20000);
     await until(() => s.voice.filter((m) => m.t === 'done').length === real.lines.length);
-    assert.deepEqual(under(run, 'Sinuous sea fan, False Bay, South Africa'), round('n3').cards.map((card) => card.title).sort());
+    assert.deepEqual(under(run, 'I think'), round('n3').cards.map((card) => card.title).sort());
     const texts = saidOf(s.voice);
     assert.deepEqual(texts, run.demo!.shown('n3').lines.map((line) => line.text));
     assert.equal(texts.at(-1), 'A wrap-up for the real take.');
 
     // A line said in the headset starts the pace that is loaded.
     await run.demo!.goto('n3');
-    const darwin = [...run.mind.nodes.values()].find((node) => run.mind.item(node.itemId).title === 'Sinuous sea fan, False Bay, South Africa')!;
+    const darwin = [...run.mind.nodes.values()].find((node) => run.mind.item(node.itemId).title === 'I think')!;
     void run.pipeline.ask(darwin.id, round('n3').say);
     await until(() => run.demo!.status().take?.playing === true);
     assert.equal(run.demo!.status().take!.ms, run.demo!.shown('n3', 'real').ms, 'the take that runs is the real one');
