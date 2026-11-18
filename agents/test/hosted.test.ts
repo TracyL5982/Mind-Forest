@@ -364,7 +364,7 @@ test("the hosted service never reads the user's bot, even when handed it, and it
   await bot.close();
 });
 
-test('speech and transcription are refused while off by any spelling of their path, and each call counts as voice and dollars', { timeout: 20000 }, async () => {
+test('nothing is read aloud with the speech model, transcription is refused while off by any spelling of its path, and each call counts as voice and dollars', { timeout: 20000 }, async () => {
   const calls: string[] = [];
   const speak = async () => (calls.push('speak'), new ReadableStream<Uint8Array>({ start: (c) => (c.enqueue(new Uint8Array([1, 2, 3])), c.close()) }));
   const transcribe = async () => (calls.push('transcribe'), 'hello');
@@ -383,12 +383,16 @@ test('speech and transcription are refused while off by any spelling of their pa
   assert.deepEqual(calls, [], 'no speech or transcription while off');
 
   ledger.setOff(false);
-  assert.equal((await fetch(`${hosted.url}/api/speak?text=${'a'.repeat(140)}`, { headers: auth })).status, 200);
+  // Given the speech model, a space still has no voice but Momo's realtime one: a headset is told so, and shows the words.
+  assert.equal((await fetch(`${hosted.url}/api/speak?text=${'a'.repeat(140)}`, { headers: auth })).status, 404);
+  const c = await connect(hosted, `${KEY}.${A}`);
+  assert.equal((await c.until((m) => m.t === 'hello')).voice, false);
+  c.ws.close();
   assert.equal((await fetch(`${hosted.url}/api/transcribe`, wav)).status, 200);
-  assert.deepEqual(calls, ['speak', 'transcribe']);
+  assert.deepEqual(calls, ['transcribe'], 'the speech model is never asked');
   const used = ledger.status().devices[A]!;
-  assert.equal(used.voiceMinutes, Number(((10_000 + 1000) / 60_000).toFixed(3)), '140 characters said is 10 s, and the recording 1 s');
-  assert.ok(used.dollars > 0, 'and both cost');
+  assert.equal(used.voiceMinutes, Number((1000 / 60_000).toFixed(3)), 'the recording is 1 s');
+  assert.ok(used.dollars > 0, 'and it costs');
   await hosted.close();
 });
 

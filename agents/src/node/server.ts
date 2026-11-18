@@ -60,7 +60,11 @@ export interface ServerOptions {
   /** Hosted mode: most bytes one change may store (`MindstormOptions.setBytes`), so a message passes the store limit by at most this. */
   setBytes?: number;
   keys?: Record<string, string | undefined>;
-  /** Reads a reply aloud. Without it the client uses the browser's own voice. */
+  /**
+   * Reads a reply aloud, with the speech model. Without it the client uses the browser's own voice, and a headset shows the words.
+   * The demo never has it, nor do the hosted spaces (`spaceOptions`): no one there hears another voice than Momo's realtime one (the
+   * user's rule, 2026-11-18). The Mac's own service keeps it for its web page.
+   */
   speak?: Speak;
   /** Turns recorded speech into text, told the card titles. When present the client records instead of using the browser's recognition. */
   transcribe?: Transcribe;
@@ -207,7 +211,9 @@ export async function startServer(opts: ServerOptions): Promise<Running> {
   };
 }
 
-export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Promise<Space> {
+export async function openSpace(given: Omit<ServerOptions, 'port' | 'host'>): Promise<Space> {
+  // The demo speaks only in Momo's realtime voice: what would be read aloud with the speech model is shown instead.
+  const opts = given.demo ? { ...given, speak: undefined } : given;
   const log = opts.log ?? (() => {});
   const meter = opts.meter;
   mkdirSync(opts.dataDir, { recursive: true });
