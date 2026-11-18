@@ -13,6 +13,17 @@
 
 /// Stands a tree up out of the ocean.
 void OceanModel::stand(TreeRef t) {
+    // WS101: the welcome tree, however it comes to stand (opened from the desk after a relaunch, after the walk was finished or
+    // ended early), is the walk, as the first time: from step 1, on a fresh welcome tree in the place of the one opened (the
+    // user: "everything should stay the same"). There is still only ever one: the one opened has left the desk.
+    if (t && t->walk() && teach.on && teach.tour < 0 && !teach.standingWalk && !teach.scripted && !teach.demo) {
+        logLine("[guide] the welcome tree is opened again: the walk, from step 1");
+        // (The cover's pictures, on their way up into the tree opened, go quietly: a fresh tree stands in its place.)
+        for (auto& [id, r] : rising) fadeOut(r.thumb, 0.3f);
+        rising.clear();
+        startTour();
+        return;
+    }
     tree = t;
     pressing = false;
     sound("stand");

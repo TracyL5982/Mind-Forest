@@ -722,6 +722,7 @@ private:
         double tourWalkAt = 0;              // `-guideStep`: when the next card is taken
         bool scripted = false;              // the run is driven by flags: the welcome tree does not come by itself
         bool demoStarted = false;
+        bool standingWalk = false;          // WS101: the walk is standing its own tree (`startTour`), not one opened again
         std::optional<std::string> demo;    // `-guideDemo`
         double demoT = -1;                  // `-guideT`
     };

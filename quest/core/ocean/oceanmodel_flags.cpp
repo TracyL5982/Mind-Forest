@@ -805,6 +805,27 @@ void OceanModel::runFlags() {
         if (std::optional<int> id = m.tree ? m.tree->focus() : std::nullopt) m.askMark(*id);
     });
     at("pressAt", [](OceanModel& m) { m.pressTree(false); });
+    // WS101: `-unfoldWelcomeAt <s>` opens the welcome tree from the desk; `-walkOpenAt <s>` pinches the walk's closed card 1
+    // open; `-walkHoldNextAt <s>` holds the next lesson's card till its ring fills, as the walk asks.
+    at("unfoldWelcomeAt", [](OceanModel& m) {
+        for (const Shelved& s : m.shelf) {
+            if (s.tree && s.tree->walk()) {
+                m.unfold(s.uid);
+                return;
+            }
+        }
+        logLine("[guide] -unfoldWelcomeAt: no welcome tree on the desk");
+    });
+    at("walkOpenAt", [](OceanModel& m) {
+        if (m.tree && !m.tree->focused) m.tourOpens(m.tree->root);
+    });
+    at("walkHoldNextAt", [](OceanModel& m) {
+        std::optional<int> next = m.tourNode(m.teach.tour + 1);
+        if (next && m.tourHolds(*next)) {
+            logLine("[cards] a long pinch on the next lesson's card, by flag");
+            m.take(*next);
+        }
+    });
     at("deckAt", [](OceanModel& m) { m.touchHologramByFlag(Flags::integer("deckPick")); });
     // A launch argument can't be negative: `-panLeft` and `-panDown` are the other way.
     at("panAt", [](OceanModel& m) {

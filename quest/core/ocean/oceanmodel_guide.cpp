@@ -661,7 +661,9 @@ void OceanModel::startTour() {
         if (!catalog) return;
         standingSpot = std::nullopt;
         standingPlot = std::nullopt;
+        teach.standingWalk = true;
         stand(std::make_shared<Tree>(Ref::note(tourSteps[0].note), tourTitle, Maker::gardener, catalog));
+        teach.standingWalk = false;
         // WS101: the ring a long pinch fills, drawn in the background now, so it is there the moment card 2 is held.
         if (art) {
             for (int step = 0; step <= Art::holdSteps; step++) art->holdRing(step);
