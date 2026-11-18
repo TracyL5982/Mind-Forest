@@ -254,6 +254,13 @@ Edit `script.json` by hand for small changes, then start the service again. Two 
 
 The file was generated from the walkthrough board by `sketches/walkthrough/gen/demo_inventory.py` in the main folder on Kai's Mac, which is not in git (the board's working files live only there). Run again, it writes into this branch's folder. `demo_phases.json` beside it says which card each round is asked from. Where the board names the card ("Pinch the memory palace paper") that card is the head; where it does not, the head is Claude's choice, and each round's "About this round" on the page says which.
 
+The user changed the storyboard on 2026-11-17, in `script.json` itself, so running the generator again would undo it:
+
+- Slice of Heartland moved from Round 3 into Round 1, and Round 2 is asked from it with "Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?". Momo's first words in Round 2 are the user's, at both paces: "Let's map it out. I built a few interactive cards from Darwin's 1837 branching notebook alongside a 3D biotecture model. Sketch on whichever structure clicks!" (`scripts/demo-lines.ts --answer`).
+- Darwin's 1837 tree ("I think") moved from Round 3 into Round 2, beside Biotecture, so those words are true of the round.
+- Round 3 is asked from the Neurones poster, not Llull's ring, and comes before "More of this" in the order, so going to Round 3 sets it up without that round's cards.
+- "Layers?" is asked from WoodSwimmer, not Slice of Heartland, since two rounds asked from one card put both rounds' cards on one layer.
+
 ## How it works
 
 - `agents/src/demo/script.ts` reads and checks the script. `cards.ts` makes each card the item and node the service keeps, so the usual rules choose its look.
