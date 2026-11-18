@@ -25,6 +25,7 @@
      "bobardi-easels",
      "architects-table",
      "vam-O1260839",
+     "slice-of-heartland",
      "studio-wall",
      "confucius-apricot",
      "darwin-sandwalk",
@@ -41,32 +42,26 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Nice angle—let’s build a fresh layer of related metaphors around that."
-   },
-   {
-    "id": "first",
-    "kind": "first",
-    "cards": [
-     "t080"
-    ],
-    "text": "First up, there’s “A disc of pictures” by Eugene Pylinsky. It’s a circle crammed with hundreds of tiny images you see all at once, with no clear path through them. It feels like a big visual dump, not a journey."
+    "text": "Let's map it out. I built a few interactive cards from Darwin's 1837 branching notebook alongside a 3D biotecture model. Sketch on whichever structure clicks!"
    },
    {
     "id": "wrap",
     "kind": "wrap",
     "cards": [
+     "t080",
      "t125",
      "t049",
      "moma-445074",
      "t023",
      "t021",
+     "darwin-tree",
      "haeckel-corals",
      "mendeleev-table",
      "cordier-canon",
      "nolli-rome",
      "llull-figure"
     ],
-    "text": "That “Neurones poster” sounds like a great next stop—ideas as bursts feels nicely different from a palace or a mountain. After that, we could pull in one more metaphor that’s more about structure, like the grid or the ring, to balance the set."
+    "text": "I’d start with Biotecture, because it’s literally a building that behaves like a tree, roots and all, which makes a lovely bridge between structure and metaphor. Next, we could pick one alternate model, like the ring of Llull’s ring or the branching of Darwin’s notebook, and sketch how ideas move through it in your headset."
    }
   ],
   "mo": [
@@ -109,30 +104,28 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Let’s spin that into a new layer of ideas around this."
+    "text": "Let’s spin up a fresh layer on that and see what structures fit your poster idea."
    },
    {
     "id": "first",
     "kind": "first",
     "cards": [
-     "slice-of-heartland"
+     "tree-ct"
     ],
-    "text": "First up, there’s a card called “Slice of Heartland.” It’s a film idea where a tree is shown as 100 cross-sections, each one as a poster. It’s a neat way to keep a big structure readable, one slice at a time."
+    "text": "First up is a film called WoodSwimmer by Brett Foxwell. It’s described as wood being milled away slice by slice, which feels like a neat metaphor for organizing ideas by revealing structure gradually."
    },
    {
     "id": "more-1",
     "kind": "more",
     "cards": [
-     "tree-ct",
      "linux-file-system",
      "note-tree-grows",
      "priestley-chart",
-     "darwin-tree",
      "sea-fan",
      "multiplane-camera",
      "paper-peepshow"
     ],
-    "text": "Eight more arrived, and my favorite is the “Linux file system” picture—one root with everything hanging from it, super clear for navigation."
+    "text": "Six more landed, and my favorite is the “Linux file system” picture, with one root and everything hanging from it."
    },
    {
     "id": "more-2",
@@ -140,7 +133,7 @@
     "cards": [
      "gen-idea-time"
     ],
-    "text": "One more popped in: “By time.”"
+    "text": "One more landed: a picture called “By time.”"
    },
    {
     "id": "more-3",
@@ -148,7 +141,7 @@
     "cards": [
      "gen-idea-branches"
     ],
-    "text": "And another: “By branches.”"
+    "text": "Another one landed: a picture called “By branches.”"
    },
    {
     "id": "wrap",
@@ -156,7 +149,7 @@
     "cards": [
      "gen-idea-depth"
     ],
-    "text": "I’d start with “By branches” because it turns questions into clear forks, which fits a combinatorial ring nicely. Next, we could open it and see how that branching view might guide how you group and move through your ideas."
+    "text": "I’d look at “By depth” first, since it matches your poster’s burst feeling by putting the newest layer up front and letting older layers step back. Next, we can open that one and see if its language fits your visual style, then shape the others to match."
    }
   ],
   "f1": [
@@ -855,6 +848,7 @@
      "bobardi-easels",
      "architects-table",
      "vam-O1260839",
+     "slice-of-heartland",
      "warburg-atlas",
      "studio-wall",
      "confucius-apricot",
@@ -877,7 +871,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Nice angle—let’s build out some fresh analogies around that idea."
+    "text": "Let's map it out. I built a few interactive cards from Darwin's 1837 branching notebook alongside a 3D biotecture model. Sketch on whichever structure clicks!"
    },
    {
     "id": "first",
@@ -885,7 +879,7 @@
     "cards": [
      "t080"
     ],
-    "text": "First up, there’s a card showing a disc packed with hundreds of small images in one circle. It’s all visible at once, but there’s no path through it—more like a dense snapshot than a journey."
+    "text": "First up, there’s “A disc of pictures” by Eugene Pylinsky, from your own cards. It’s hundreds of small images packed into a single circle so you see everything at once, with no obvious path to follow through it."
    },
    {
     "id": "more-1",
@@ -896,26 +890,20 @@
      "moma-445074",
      "t023",
      "t021",
-     "cordier-canon",
-     "nolli-rome",
-     "llull-figure"
-    ],
-    "text": "Eight more just arrived, and my favorite is “Llull’s ring,” with nine ideas joined to each other for combination thinking."
-   },
-   {
-    "id": "more-2",
-    "kind": "more",
-    "cards": [
+     "llull-figure",
+     "darwin-tree",
      "haeckel-corals",
-     "mendeleev-table"
+     "mendeleev-table",
+     "cordier-canon",
+     "nolli-rome"
     ],
-    "text": "Two more landed: “Corals” and the “Periodic table.”"
+    "text": "There are eleven more, and my favorite is “Biotecture,” a tower drawn like a tree with roots, a building meant to grow."
    },
    {
     "id": "wrap",
     "kind": "wrap",
     "cards": [],
-    "text": "I’d start with “Llull’s ring” because it turns ideas into a system of combinations, which feels perfect for VR navigation. Next, you could open that one and then we can find more examples of combinatorial thinking spaces."
+    "text": "I’d start with “Biotecture” because it frames the tree analogy as something that actually grows over time, which fits your layered poster idea. If you want, we can go deeper on that one’s angle—growth, structure, or how people move through it."
    }
   ],
   "mo": [
@@ -1586,53 +1574,44 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Nice prompt—let’s spin a new layer around that and see what structures help."
+    "text": "Nice angle—let me spin up a fresh layer around that for you."
    },
    {
     "id": "first",
     "kind": "first",
     "cards": [
-     "slice-of-heartland"
+     "tree-ct"
     ],
-    "text": "First up, there’s a film card called \"Slice of Heartland.\" It’s described as a tree drawn as 100 cross-sections, with one poster for each slice. It sounds like a neat way to show structure over time."
+    "text": "First up, there’s a film called WoodSwimmer by Brett Foxwell, from 2022, from your own cards. It’s described as wood milled away, slice by slice, like a very tactile way to think about structure and layers."
    },
    {
     "id": "more-1",
     "kind": "more",
     "cards": [
-     "tree-ct",
      "linux-file-system",
      "note-tree-grows",
+     "priestley-chart",
+     "sea-fan",
      "paper-peepshow",
      "multiplane-camera"
     ],
-    "text": "Five more just arrived, and my favorite is the \"Linux file system\" picture—one root with everything branching from it."
+    "text": "Six more just landed, and my favorite is “A tree grows in two directions”—it’s a neat mental model for keeping ideas tidy without flattening them."
    },
    {
     "id": "more-2",
     "kind": "more",
     "cards": [
-     "priestley-chart",
-     "darwin-tree",
-     "sea-fan"
+     "gen-idea-time"
     ],
-    "text": "Three more appeared, and I’d start with \"A New Chart of History\"—empires laid out as bars on a single timeline."
+    "text": "One more came in, called “By time,” and it shows your layers fading back while the newest one stays lit."
    },
    {
     "id": "more-3",
     "kind": "more",
     "cards": [
-     "gen-idea-time"
-    ],
-    "text": "There’s also a new picture called \"By time,\" where every ask becomes a new layer, the earlier ones fade back, and the latest is lit."
-   },
-   {
-    "id": "more-4",
-    "kind": "more",
-    "cards": [
      "gen-idea-branches"
     ],
-    "text": "Another one is the picture \"By branches,\" where each question forks the path and each branch grows alongside the others in its own color."
+    "text": "Another one popped in called “By branches,” where each question splits into its own colored path beside the others."
    },
    {
     "id": "wrap",
@@ -1640,7 +1619,7 @@
     "cards": [
      "gen-idea-depth"
     ],
-    "text": "I’d start with \"By time\" because it gives you a clean, readable sense of how layers build up without turning into spaghetti. Next step, we could keep one of the organizing diagrams as a reference and then try mapping one of your current ideas onto it as a test."
+    "text": "I’d look at “By depth” first because it matches how your attention actually works in VR, with the newest layer in front and older ones stepping back. If you want, we can keep that one and then compare it with “By branches” to decide which organizing metaphor feels better."
    }
   ],
   "f4": [
