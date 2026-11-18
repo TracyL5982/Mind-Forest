@@ -138,6 +138,13 @@ void OceanModel::pinchEnded(Vec3 point) {
     // began: a line drawn round something comes back to its start, and was taken for a tap on the card (which
     // closes a card gone into). The Swift asks only how far apart the ends are.
     bool still = std::max(moved, p.reach) < 0.035f;
+    // AGENT: a pinch begun on a button over a tree counts if it ends on that same button's target, however far it went on
+    // the way (WS73; a hand's pinch moves its ray), and does nothing anywhere else.
+    if (p.pick.kind == Pick::Kind::coverButton) {
+        if (still || onCoverButton(p.pick, point)) tap(p.pick);
+        else logLine("[ocean] a pinch left its button before it let go");
+        return;
+    }
     if (marking) {
         markEnd();
         if (!still) return;
@@ -527,6 +534,32 @@ void OceanModel::runFlags() {
             return;
         }
         m.coverButton(m.shelf[size_t(i)].uid, Flags::string("coverButton").value_or("send") == "share" ? 1 : 0);
+    });
+    // `-coverPinch send|share -coverPinchAt <s> [-coverPinchMove <m>] [-coverPinchUp <m>]`: a pinch on that button's target, from
+    // its middle, which moves that far (right, and up) before it lets go 0.4 s later, as a hand's pinch moves its ray.
+    at("coverPinchAt", [](OceanModel& m) {
+        int i = m.hoverForced;
+        if (i < 0 || i >= int(m.shelf.size()) || !m.shelf[size_t(i)].buttons) {
+            logLine("[ocean] -coverPinchAt: no tree shows its buttons");
+            return;
+        }
+        int which = Flags::string("coverPinch").value_or("send") == "share" ? 1 : 0;
+        for (const EntityRef& target : m.shelf[size_t(i)].buttons->children) {
+            auto p = m.picks.find(target.get());
+            if (p == m.picks.end() || p->second.question != which) continue;
+            Vec3 start = target->transformMatrix(nullptr).position();
+            Vec3 end = target->convertTo(Vec3{float(Flags::number("coverPinchMove")), float(Flags::number("coverPinchUp")), 0}, static_cast<const Entity*>(nullptr));
+            logLine(fmt("[ocean] -coverPinchAt: a pinch on %s, moving %.3f m right and %.3f m up", which ? "Share" : "Send",
+                        Flags::number("coverPinchMove"), Flags::number("coverPinchUp")));
+            m.pinchChanged(target, start, start);
+            m.after(0.2, [&m, target, end, start] {
+                if (m.press) m.pinchChanged(target, end, start);
+            });
+            m.after(0.4, [&m, end] {
+                if (m.press) m.pinchEnded(end);
+            });
+            return;
+        }
     });
     at("bringAt", [](OceanModel& m) {
         if (m.peek) m.bringIn(m.peek->film);
