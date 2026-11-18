@@ -59,7 +59,7 @@ The service keeps the marks with the card, so they come back on another headset,
 What Share with Friends does depends on the service.
 
 - **On the hosted service**, whose hello says `"share":"telegram"`, it asks at once and stays lit until the service answers. Taken, it says "Sent to your Telegram": the service posts a link in your chat, and a friend who opens it gets a copy of the tree in their own forest. Refused, it says why for 1.8 s, such as "Pair Telegram first", and nothing goes.
-- **On the demo service**, it opens a list of people under itself, each a round picture and a name: the cast of the demo's film. In this repository their pictures are drawn placeholders (`media-src/quest/people`, which `tools/push_media.sh` sends to the headset). Pinching a name shares the tree and the button says "Shared with" and the name. Pinch Share again, or anything else, to shut the list; left alone for 2.5 s it goes with the buttons. A share the demo refuses says "Not shared".
+- **On a service that does not share through Telegram**, it opens a list of people under itself, each a round picture and a name. In this repository their pictures are drawn placeholders (`media-src/quest/people`, which `tools/push_media.sh` sends to the headset). Pinching a name shares the tree and the button says "Shared with" and the name. Pinch Share again, or anything else, to shut the list; left alone for 2.5 s it goes with the buttons. A share the service refuses says "Not shared".
 
 When a share is taken, a copy of the tree's light lifts off the tree, sways, and the wind carries it out of view. The list and the copy are in `core/ocean/oceanmodel_share.cpp`, and the buttons are drawn by `showButtons` in `core/ocean/oceanmodel_desk.cpp`. In the Mac preview: `-hoverCover <i> -hoverCoverAt <s> -coverButton share -coverButtonAt <s> -sharePick 0 -sharePickAt <s>`.
 
@@ -131,7 +131,7 @@ quest/tools/run.sh --log              # follow the app's log
 
 ### The judging build
 
-One APK that a judge installs and opens, with nothing to set up: "Mind Palace", `com.kaifengwu.mindpalace.ocean.judge`.
+One APK that a judge installs and opens, with nothing to set up: "Mind Forest", `com.kaifengwu.mindpalace.ocean.judge`.
 
 ```bash
 quest/tools/judge.sh             # build it and check its id, name, signature and media

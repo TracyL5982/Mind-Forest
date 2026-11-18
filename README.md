@@ -10,7 +10,7 @@ It is a native OpenXR app for the headset ([quest/](quest/README.md)) and a Type
 
 ## The first five minutes in the headset
 
-This is the judging build, one app named "Mind Palace" that joins the hosted service by itself. Hands only, no controllers.
+This is the judging build, one app named "Mind Forest" that joins the hosted service by itself. Hands only, no controllers.
 
 1. **Open the app and allow the microphone and the room.** The app asks for the microphone so you can talk to Momo. The first time you raise a hand it asks to see the room, so the scene can sit at your real desk. Refused, it sits at an assumed desk, and typing and picking still work without the microphone.
 2. **Take the welcome tree.** On a first launch one tree stands alone, "Welcome to Mind Forest". Its eight cards are lessons, each played by a hand drawn on the card:
@@ -30,6 +30,15 @@ This is the judging build, one app named "Mind Palace" that joins the hosted ser
 6. **Connect Telegram, hand off, share.** Say "connect my Telegram" and Momo gives you a bot's name and a six-digit code. After that, anything you send the bot lands in your forest. Point at a tree on the desk and two buttons appear: Send posts the tree's handoff file to your chat, and Share posts a link that grows a copy of the tree in a friend's forest.
 
 Hold your palms together for a second to close the tree you are in.
+
+## The hackathon's experience guidelines
+
+| Guideline | How Mind Forest meets it |
+|---|---|
+| **Hands-first** | Hands only, from the first launch to the last gesture. Controllers do nothing. A ray from each hand aims every pinch, and the rest is grabbing, holding, and palms together. The welcome tree teaches each gesture with a hand drawn on the card |
+| **Seated-optimized** | The scene sits at your desk and you stay in your chair. Open trees stand in front of you and trees put away stand on the desk. Things farther off, such as the library around the desk, are picked with the hand's ray, so nothing asks you to stand, walk or reach far |
+| **Easy to get into and out of** | One app with nothing to set up: it joins its service by itself, and the welcome tree is eight short lessons. One question to Momo is a complete moment, with cards arriving within seconds. Your forest is kept by the service, so taking the headset off loses nothing, and what you send from your phone through Telegram is in the forest when you come back |
+| **Original, not a wrapper** | The headset app is its own C++ on OpenXR with its own renderer, card library, hand input and sound, and no game engine. The service is the project's own too: the agents' roles and pipeline, the trees, the sources, sharing and the handoff file. Third-party services supply the models, the web sources and the Telegram chat. Take the models away and the forest, the trees, the library, every gesture and marking still work, and `npm run dev:fake` runs the whole service on scripted agents. What goes is Momo's voice and new material |
 
 ## How it fits together
 
@@ -63,7 +72,7 @@ flowchart LR
 - **The service** runs the agents, keeps your trees, searches the sources and calls the models. The keys stay on the service and never reach the headset.
 - **Voice.** The headset listens for the name on its own processor and sends nothing before it hears it. After the name, your voice streams to the service, which relays it to a realtime model that is Momo. Momo acts through tools on the service.
 - **Telegram** is how things get in from a phone, and where handoffs and shared trees arrive.
-- **Where the service runs.** On a Mac beside the headset, reached over the USB cable, for development. On Fly.io for judging, with a separate space for each headset and daily limits. A second small Fly app runs the scripted walkthrough used to record the film.
+- **Where the service runs.** On a Mac beside the headset, reached over the USB cable, for development. On Fly.io for judging, with a separate space for each headset and daily limits.
 
 ## What is in the repository
 
@@ -72,11 +81,11 @@ flowchart LR
 | [quest/](quest/README.md) | The headset app: C++ on OpenXR with its own OpenGL ES renderer, the Android project, a Mac preview window, and the tools that build, install and measure it |
 | [agents/](agents/README.md) | The agent service: the roles and the pipeline, Momo's live voice, the Telegram contact, sharing, the hosted mode, and a browser client used during development |
 | [agents/deploy/](agents/deploy/README.md) | Scripts that put the service on Fly.io and operate it |
-| [agents/demo/](agents/demo/README.md) | The scripted walkthrough for recording the film, with four example trees ([showcase/](agents/demo/showcase/README.md)) |
+| [agents/demo/](agents/demo/README.md) | Example content: the four example trees a new forest starts with ([showcase/](agents/demo/showcase/README.md)), and a scripted run of the service |
 | [media-src/](media-src/README.md) | The app's own media that is kept in git: sounds, fonts, the hand model, Momo's recorded lines |
 | `library/` | The library the app shows: the film scenes (`clips`), the museum works (`works`), its index (`ocean.json`), and the tools that built the first two (`tools`). See Media and credits |
 
-The names in the code are older than the product's name. The apps install as "Mind Palace Ocean" and "Mind Palace", and the service's settings begin with `MIND_PALACE_`.
+The names in the code are older than the product's name: package ids say `mindpalace`, and the service's settings begin with `MIND_PALACE_`.
 
 ## Build and run
 
@@ -129,16 +138,7 @@ cd agents && npm test
 quest/core/agent/test/run.sh
 ```
 
-The repository uses Git LFS for the library's films and pictures and the demo's media. Run `git lfs pull` after cloning, or those files are short text stubs.
-
-## Team
-
-The git history has two authors:
-
-- **Xinran Li**: 829 commits
-- **Kaifeng Wu**: 32 commits
-
-Counts are of `git shortlog` at this commit.
+The repository uses Git LFS for the library's films and pictures and the example media. Run `git lfs pull` after cloning, or those files are short text stubs.
 
 ## Media and credits
 
@@ -151,7 +151,7 @@ What the repository itself records about third-party material:
 | Fraunces 72pt Soft Light and its italic | `media-src/quest/fonts` | SIL Open Font License 1.1, copyright 2020 The Fraunces Project Authors. The notice is beside the files |
 | Eraser and send icons | `quest/core/ocean/icons.h` | Lucide, ISC License |
 | Keyword spotter | fetched into `quest/vendor` by `quest/tools/fetch-voice.sh`, not in git | sherpa-onnx (k2-fsa), Apache-2.0 |
-| The walkthrough's pictures and one film | `agents/demo/media` | Many are other people's work, in copyright or of unknown rights. [agents/demo/README.md](agents/demo/README.md) says to clear each one before a public cut |
+| Example pictures and one film | `agents/demo/media` | Many are other people's work, in copyright or of unknown rights |
 | The four example trees | `agents/demo/showcase` | Pinterest pins of unknown rights, and found pictures that are public domain or openly licensed. Each card in `tree.json` records its licence, credit and page |
 | Sounds | `media-src/quest/sounds` | The project's own, synthesized by `quest/sound/synth.py` |
 | Momo's recorded lines | `media-src/quest/voice`, `agents/demo/voice` | Recorded from the realtime model's voice |
