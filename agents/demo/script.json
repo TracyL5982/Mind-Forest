@@ -343,6 +343,24 @@
      "h": 1000
     },
     {
+     "id": "sea-fan",
+     "origin": "external",
+     "title": "Sinuous sea fan, False Bay, South Africa",
+     "text": "",
+     "why": "branching, as a sea fan grows",
+     "credit": "Photo Peter Southwood · CC BY-SA 4.0",
+     "by": "Peter Southwood (photographer)",
+     "date": "6 June 2021",
+     "holder": "Super Fan Reef dive site, False Bay, South Africa",
+     "from": "Wikimedia Commons",
+     "licence": "CC BY-SA 4.0",
+     "href": "https://commons.wikimedia.org/wiki/File:Sinuous_sea_fan_at_Super_Fan_Reef_P6060315.jpg",
+     "kind": "artwork",
+     "image": "sea-fan.jpg",
+     "w": 1000,
+     "h": 750
+    },
+    {
      "id": "t023",
      "origin": "ocean",
      "title": "Walls of coloured balls",
@@ -672,15 +690,15 @@
    "chart": "s47",
    "title": "Round 3 · Draw on a diagram: keep it organized",
    "parent": "n2",
-   "head": "darwin-tree",
+   "head": "sea-fan",
    "say": "Ooh, what about this part—take me deeper here.",
    "sayAlso": [],
    "do": [
-    "Draw on Darwin's notebook tree"
+    "Draw on the sea fan"
    ],
    "momo": "Three ways, each on its own card: by time, by branches, or by what stands in front. Examples are under each.",
    "offers": [],
-   "note": "The user's choice (2026-11-17): asked from Darwin's notebook tree (\"I think\"), which Round 2 brings and Momo's opening names. Kai's Linux picture (with its mark) and his note stand in this panel on the board.",
+   "note": "Asked from the sea fan, a branching thing the user draws on: it comes in Round 2. Llull's ring is pruned in Round 2, so nothing hangs from it. Kai's Linux picture (with its mark) and his note stand in this panel on the board.",
    "first": [
     "gen-idea-time",
     "gen-idea-branches",
@@ -748,24 +766,6 @@
      "image": "gen-idea-branches.jpg",
      "w": 800,
      "h": 640
-    },
-    {
-     "id": "sea-fan",
-     "origin": "external",
-     "title": "Sinuous sea fan, False Bay, South Africa",
-     "text": "",
-     "why": "branching, as a sea fan grows",
-     "credit": "Photo Peter Southwood · CC BY-SA 4.0",
-     "by": "Peter Southwood (photographer)",
-     "date": "6 June 2021",
-     "holder": "Super Fan Reef dive site, False Bay, South Africa",
-     "from": "Wikimedia Commons",
-     "licence": "CC BY-SA 4.0",
-     "href": "https://commons.wikimedia.org/wiki/File:Sinuous_sea_fan_at_Super_Fan_Reef_P6060315.jpg",
-     "kind": "artwork",
-     "image": "sea-fan.jpg",
-     "w": 1000,
-     "h": 750
     },
     {
      "id": "gen-idea-depth",

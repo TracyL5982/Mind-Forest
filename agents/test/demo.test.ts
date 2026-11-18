@@ -96,7 +96,7 @@ test('going to a round builds every round before it, kept, and leaves it the nex
     assert.deepEqual(titlesUnder(run, 'Flower tree').sort(), cardsOf('n2').map((card) => card.title).sort());
     assert.deepEqual(titlesUnder(run, 'Slice of Heartland'), []);
     assert.deepEqual(titlesUnder(run, 'A disc of pictures').sort(), cardsOf('mo').map((card) => card.title).sort());
-    assert.deepEqual(titlesUnder(run, 'I think'), []);
+    assert.deepEqual(titlesUnder(run, 'Sinuous sea fan, False Bay, South Africa'), []);
     // The card's look is chosen with it: a paper is a reference, a picture carries its shape.
     const paper = nodeOf(run, 'Virtual memory palaces: immersion aids recall')!;
     assert.equal(paper.view.component, 'reference');
@@ -117,7 +117,7 @@ test('a request on the card a round is asked from plays that round as the Scout 
   await new Promise((open) => ws.on('open', open));
   try {
     await run.demo!.goto('n3');
-    const head = nodeOf(run, 'I think')!;
+    const head = nodeOf(run, 'Sinuous sea fan, False Bay, South Africa')!;
     await run.pipeline.ask(head.id, 'Ooh, what about this part—take me deeper here.');
     await run.pipeline.idle();
     await over(run);
@@ -268,7 +268,7 @@ test('Momo is told, with where the user is, when the next words said on the open
   const run = await boot();
   try {
     await run.demo!.goto('n3');
-    const darwin = nodeOf(run, 'I think')!;
+    const darwin = nodeOf(run, 'Sinuous sea fan, False Bay, South Africa')!;
     assert.match(run.demo!.takeNote(darwin.id), /^\nRecording: .*new layer/);
     assert.equal(run.demo!.takeNote(nodeOf(run, 'Corals')!.id), '', 'no round waits on this card, so Momo is told nothing more');
     assert.equal(run.demo!.takeNote(undefined), '');
@@ -685,7 +685,7 @@ test("cutting Llull's ring on the headset has Momo say her line once for each se
     assert.equal(lines().length, 1, 'said once, and not for the other card');
 
     // The round after it plays as ever, on its own card.
-    const darwin = cardsOf('n2').find((card) => card.id === 'darwin-tree')!.title;
+    const darwin = cardsOf('n2').find((card) => card.id === 'sea-fan')!.title;
     await run.demo!.playTake('n3');
     await over(run);
     await run.pipeline.idle();
