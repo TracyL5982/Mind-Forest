@@ -624,6 +624,8 @@ private:
         double answerEnds = 0;              // when her recorded answer to "what can you do" ends
         int askedCard = -1;                 // the example card last asked for on its layer, ringed until `askedUntil`
         double askedUntil = 0;
+        std::function<void()> layerDue;      // the answer's layer, while it waits for her answer to near its end
+        int failuresAt = 0;                 // the voice's count of recorded lines that failed, as it was when she began it
         bool tourSent = false;              // the marked part was sent to Momo: what to say about it is waited for
         std::string tourMarkLinks;          // what the card Momo answers a sketch with points to (`tourMarkNote`)
         int tourMarkWork = -1;              // the picture the sketch lesson marks (a work), and the pictures its layer brings
@@ -682,7 +684,7 @@ private:
     /// A line of Momo's recorded ones said: by her voice where she has one, otherwise its sound alone. How long it is, s;
     /// 0 when it can't be said.
     double sayRecorded(const std::string& name);
-    platform::SoundRef walkSound;       // (the sound alone, kept while it plays)
+    platform::StreamRef walkSound;      // (the sound alone, kept while it plays)
     void tourSend();
     void tourMarkNote(const std::string& words);
     std::string tourLine() const;
