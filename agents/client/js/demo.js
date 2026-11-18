@@ -544,21 +544,29 @@ function drawDaily() {
   }
   const armed = daily.trees.find((tree) => tree.id === daily.armed);
   const name = armed ? `“${armed.title}”` : '';
-  $('daily-arm').textContent = armed ? 'Arm again' : 'Arm';
+  // A tree shared from the headset is held back as the daily tree is: its take is begun again by taking it out again.
+  const shared = daily.kind === 'shared';
+  $('daily-arm').textContent = shared ? 'Take out again' : armed ? 'Arm again' : 'Arm';
   $('daily-arm').disabled = busy() || !status.showcase?.on;
-  $('daily-send').disabled = busy() || !armed || !daily.canSend;
+  $('daily-send').disabled = busy() || !armed || shared || !daily.canSend;
   $('daily-grow').disabled = busy() || !armed || daily.grown;
+  $('daily-clear').disabled = busy() || !armed;
+  const again = shared ? 'Take it out again' : 'Arm again';
   $('daily-state').textContent = !status.showcase?.on
     ? 'Switch the other trees on: the daily tree is one of them.'
     : !armed
-      ? 'Pick a tree and arm it: it leaves the forest until it grows.'
+      ? 'Pick a tree and arm it: it leaves the forest until it grows. A tree shared from the headset shows here too.'
       : daily.grown
-        ? busy() ? `${name} is growing on the headset.` : `${name} has grown. Arm again for another take.`
-        : daily.sent && daily.onJoin
-          ? `Message sent. ${name} grows about 2 s after the headset is put on, or at once with Grow now.`
-          : daily.sent
-            ? `Message sent, and the headset is on: ${name} grows in a moment.`
-            : `${name} is out of the forest. Send Momo's message, then put the headset on.${daily.canSend ? '' : ' No Telegram account is paired with this service, so the message cannot be sent from here.'}`;
+        ? busy() ? `${name} is growing on the headset.` : `${name} has grown. ${again} for another take, or Clear.`
+        : shared
+          ? daily.onJoin
+            ? `${name} was shared from the headset${daily.sent ? ', and the phone was told' : ''}. It grows about 2 s after the headset is put on, or at once with Grow now.`
+            : `${name} was shared, and the headset is on: it grows in a moment.`
+          : daily.sent && daily.onJoin
+            ? `Message sent. ${name} grows about 2 s after the headset is put on, or at once with Grow now.`
+            : daily.sent
+              ? `Message sent, and the headset is on: ${name} grows in a moment.`
+              : `${name} is out of the forest. Send Momo's message, then put the headset on.${daily.canSend ? '' : ' No Telegram account is paired with this service, so the message cannot be sent from here.'}`;
 }
 
 function draw() {
@@ -635,9 +643,14 @@ $('scripted').addEventListener('change', async (event) => {
   draw();
 });
 $('daily-arm').addEventListener('click', async () => {
-  status = await api('/api/demo/daily/arm', { tree: $('daily-tree').value });
+  const shared = status.daily?.kind === 'shared';
+  status = await api('/api/demo/daily/arm', shared ? { tree: status.daily.armed, kind: 'shared' } : { tree: $('daily-tree').value });
   draw();
   watch(true);
+});
+$('daily-clear').addEventListener('click', async () => {
+  status = await api('/api/demo/daily/clear', {});
+  draw();
 });
 $('daily-send').addEventListener('click', async () => {
   status = await api('/api/demo/daily/send', {});

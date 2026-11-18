@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
-import { DAILY_TREE, DAILY_WORDS, momoNote } from '../src/demo/director.ts';
+import { DAILY_TREE, momoNote, sharedMessage } from '../src/demo/director.ts';
 import { itemOf, nodeOf as nodeOfCard } from '../src/demo/cards.ts';
 import { schedule } from '../src/demo/take.ts';
 import { loadScript } from '../src/demo/script.ts';
@@ -418,7 +418,7 @@ test('the daily tree is armed out of the forest, and grows back as the headset\'
   let headset: Awaited<ReturnType<typeof wearing>> | null = null;
   try {
     assert.equal(DAILY_TREE, 'constellations', "the rightmost of the showcase trees is the page's first pick");
-    assert.deepEqual(run.demo!.status().daily, { trees: [{ id: 'mini', title: 'Seed spirals' }], armed: null, sent: false, grown: false, onJoin: false, canSend: true });
+    assert.deepEqual(run.demo!.status().daily, { trees: [{ id: 'mini', title: 'Seed spirals' }], armed: null, kind: null, sent: false, grown: false, onJoin: false, canSend: true });
     await assert.rejects(run.demo!.armDaily('nothing'), /no showcase tree called nothing/);
     await assert.rejects(run.demo!.growDaily(), /Arm the daily tree first/);
     await run.demo!.armDaily('mini');
@@ -444,7 +444,8 @@ test('the daily tree is armed out of the forest, and grows back as the headset\'
     // Momo's line is said as written, its caption with its length, from its start.
     await soon(() => headset!.voice.some((m) => m.t === 'done' && m.id?.endsWith('-daily')));
     const said = headset.voice.find((m) => m.t === 'text' && m.id?.endsWith('-daily'))!;
-    assert.deepEqual({ text: said.text, kind: said.kind, ms: said.ms, from: said.from }, { text: DAILY_WORDS, kind: 'reply', ms: DAILY_WORDS.length * 50, from: 0 });
+    const words = run.demo!.words('daily');
+    assert.deepEqual({ text: said.text, kind: said.kind, ms: said.ms, from: said.from }, { text: words, kind: 'reply', ms: words.length * 50, from: 0 });
     assert.ok(headset.voice.some((m) => m.t === 'audio' && m.id === said.id));
     assert.equal(run.demo!.status().busy, null);
     assert.equal(run.demo!.status().daily.grown, true);
@@ -475,7 +476,7 @@ test("Momo's message goes to the paired phone, and the next headset to join grow
     worn.pop()!.off();
 
     await run.demo!.sendDaily();
-    assert.deepEqual(bot.sent.map(({ method, chat, text }) => ({ method, chat, text })), [{ method: 'sendMessage', chat: ADA.id, text: DAILY_WORDS }]);
+    assert.deepEqual(bot.sent.map(({ method, chat, text }) => ({ method, chat, text })), [{ method: 'sendMessage', chat: ADA.id, text: run.demo!.words('daily') }]);
     assert.deepEqual({ sent: run.demo!.status().daily.sent, onJoin: run.demo!.status().daily.onJoin }, { sent: true, onJoin: true });
     worn.push(await wearing(run));
     await soon(() => run.demo!.status().daily.grown && run.demo!.status().busy === null);
@@ -547,11 +548,92 @@ test('a headset that stays joined grows the daily tree when it is put on again a
   }
 });
 
-test("the daily tree's line is kept in the demo folder in Momo's realtime voice, so it is said as written and never by another voice", () => {
-  const lines = JSON.parse(readFileSync(join(demoDir, 'lines.json'), 'utf8')) as { voice: string; said?: string[] };
-  assert.deepEqual(lines.said, [DAILY_WORDS]);
+test('a tree shared from the headset leaves the forest while that headset keeps it, the phone is told, and it grows back with its own line', async () => {
+  const { run, bot, close } = await dailyDemo();
+  let headset: Awaited<ReturnType<typeof wearing>> | null = null;
+  try {
+    headset = await wearing(run);
+    const shown = dailyTree(run)!;
+    const from = headset.seen.length;
+    headset.send({ t: 'share', tree: shown.id });
+    await soon(() => bot.sent.length > 0);
+    assert.deepEqual(bot.sent.map(({ method, chat, text }) => ({ method, chat, text })), [{ method: 'sendMessage', chat: ADA.id, text: sharedMessage('Seed spirals') }]);
+    assert.equal(sharedMessage('Seed spirals'), 'A friend shared a tree with you: “Seed spirals”. Put on your headset to see it grow.');
+    // Out of the forest at once, so the app's next start has it no more; this app is not started again, and keeps showing it.
+    assert.equal(dailyTree(run), undefined);
+    await soon(() => headset!.seen.slice(from).some((m) => m.t === 'change' && m.set!.commands.some((c) => c.type === 'deleteTree')));
+    assert.equal(run.demo!.status().problem, null, 'nothing says to start the app again');
+    assert.deepEqual(
+      (({ armed, kind, sent, grown, onJoin }) => ({ armed, kind, sent, grown, onJoin }))(run.demo!.status().daily),
+      { armed: 'mini', kind: 'shared', sent: true, grown: false, onJoin: true },
+    );
+    // Put on again, it grows back as the headset's own tree, and Momo says the shared tree's line.
+    headset.send({ t: 'worn', away: 20 });
+    await soon(() => run.demo!.status().daily.grown && run.demo!.status().busy === null && dailyTree(run) !== undefined);
+    await soon(() => headset!.voice.some((m) => m.t === 'done' && m.id?.endsWith('-shared')));
+    const said = headset.voice.find((m) => m.t === 'text' && m.id?.endsWith('-shared'))!;
+    assert.equal(said.text, run.demo!.words('shared'));
+    assert.ok(headset.seen.some((m) => m.t === 'change' && m.yours && m.set!.commands.some((c) => c.type === 'createTree' && c.tree?.id === shown.id)));
+    // Taken out again from the page for another take: it waits for the headset at once, and the phone is not told again.
+    await run.demo!.armDaily('mini', 'shared');
+    assert.equal(dailyTree(run), undefined);
+    assert.equal(run.demo!.status().daily.onJoin, true);
+    assert.equal(bot.sent.length, 1);
+    // Cleared, it is back in the forest and nothing waits.
+    run.demo!.clearHeld();
+    assert.ok(dailyTree(run));
+    assert.deepEqual((({ armed, kind, onJoin }) => ({ armed, kind, onJoin }))(run.demo!.status().daily), { armed: null, kind: null, onJoin: false });
+    // Only a showcase tree can be shared in the demo: the headset is told no, and the page says why.
+    const before = headset.seen.length;
+    headset.send({ t: 'share', tree: 'no-such-tree' });
+    await soon(() => headset!.seen.slice(before).some((m) => m.t === 'error'));
+    assert.match(run.demo!.status().problem ?? '', /Only the showcase trees can be shared/);
+    assert.ok(dailyTree(run), 'and nothing is taken out');
+  } finally {
+    headset?.off();
+    await close();
+  }
+
+  // A service that is not the demo shares nothing yet, and says so.
+  const plain = await startServer({ port: 0, host: '127.0.0.1', dataDir: fresh(), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret' });
+  const ws = new WebSocket(`${plain.url.replace('http', 'ws')}/ws?token=secret`);
+  try {
+    const seen: Frame[] = [];
+    ws.on('message', (raw) => seen.push(JSON.parse(String(raw)) as Frame));
+    await new Promise((open) => ws.on('open', open));
+    ws.send(JSON.stringify({ t: 'share', tree: 'any' }));
+    await soon(() => seen.some((m) => m.t === 'error'));
+    assert.match((seen.find((m) => m.t === 'error') as { message?: string }).message ?? '', /not ready on this service yet/);
+  } finally {
+    ws.close();
+    await plain.close();
+  }
+});
+
+test("Send on a tree hands that tree off to the paired chat as a file: a showcase tree, or the walkthrough's", async () => {
+  const { run, bot, close } = await dailyDemo();
+  let headset: Awaited<ReturnType<typeof wearing>> | null = null;
+  try {
+    headset = await wearing(run);
+    await run.demo!.goto('n2');
+    const walkthrough = [...run.mind.trees.values()].find((tree) => !tree.id.startsWith('show-'))!;
+    for (const tree of [dailyTree(run)!, walkthrough]) {
+      const after = bot.sent.length;
+      headset.send({ t: 'handoff', scope: { treeIds: [tree.id], nodeIds: [] } });
+      const file = await bot.reply(ADA.id, /./, 'sendDocument', after);
+      assert.equal(/^## (.+)$/m.exec(file.text)?.[1], tree.title, `the file is "${tree.title}" alone`);
+    }
+  } finally {
+    headset?.off();
+    await close();
+  }
+});
+
+test("the lines Momo says as a held tree grows are kept in the demo folder in her realtime voice, said as written and never by another voice", () => {
+  const lines = JSON.parse(readFileSync(join(demoDir, 'lines.json'), 'utf8')) as { voice: string; said?: Record<string, string> };
+  assert.deepEqual(Object.keys(lines.said ?? {}).sort(), ['daily', 'shared']);
   const voices = JSON.parse(readFileSync(join(demoDir, 'voice', 'voices.json'), 'utf8')) as Record<string, string>;
-  assert.equal(voices[recordingName(lines.voice, DAILY_WORDS)], 'realtime');
+  for (const text of Object.values(lines.said!)) assert.equal(voices[recordingName(lines.voice, text)], 'realtime', text);
 });
 
 test('the showcase trees of the demo folder all hold together, and each is a tree with forks and depth, not a stick', () => {

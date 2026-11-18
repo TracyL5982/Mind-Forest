@@ -1725,7 +1725,8 @@
    }
   ]
  },
- "said": [
-  "Hi there! I grew a new tree today on the topics you love!"
- ]
+ "said": {
+  "daily": "Hi there! I grew a new tree today on the topics you love!",
+  "shared": "A friend just shared a tree with you. I planted it right here!"
+ }
 }

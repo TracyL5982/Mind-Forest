@@ -604,9 +604,13 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
       }
       // The daily tree: arm it (a headset may be started again, which the page follows on the status), send Momo's message, grow it.
       if (req.method === 'POST' && path === '/api/demo/daily/arm') {
-        const { tree } = await posted();
-        void director.armDaily(typeof tree === 'string' && tree ? tree : undefined).catch(() => {});
+        const { tree, kind } = await posted();
+        void director.armDaily(typeof tree === 'string' && tree ? tree : undefined, kind === 'shared' ? 'shared' : 'daily').catch(() => {});
         return json(res, 202, director.status());
+      }
+      if (req.method === 'POST' && path === '/api/demo/daily/clear') {
+        director.clearHeld();
+        return json(res, 200, director.status());
       }
       if (req.method === 'POST' && path === '/api/demo/daily/send') {
         await director.sendDaily().catch(() => {});
@@ -846,6 +850,14 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         return;
       case 'worn':
         director?.worn(m.away);
+        return;
+      case 'share':
+        // So far only the demo shares a tree, with the user as the friend (the film). Between two people it is to come.
+        if (!director) {
+          ws.send(JSON.stringify({ t: 'error', message: 'sharing a tree with a friend is not ready on this service yet' }));
+          return;
+        }
+        await director.share(m.tree).catch((err) => ws.send(JSON.stringify({ t: 'error', message: `the tree was not shared: ${err instanceof Error ? err.message : String(err)}` })));
         return;
       case 'dump':
         await pipeline.dump(m.dumps);
