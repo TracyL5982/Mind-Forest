@@ -823,6 +823,13 @@ export class Director {
       const lead = head ? this.deps.mind.nodes.get(head)?.parent : !target ? this.root : undefined;
       if (lead && this.deps.devices() > 0) this.deps.asDevice(() => this.deps.pipeline.go(lead));
       this.deps.log(`[demo] set up for ${target ? `"${target.title}"` : 'the end'}: ${this.nodes.size} cards in the tree`);
+      // At the walkthrough's last step (set up for its last round, or the whole tree built) Momo asks about Muse Code by
+      // herself, a moment after the headset has come to rest there: once for each set-up, and not when no headset is joined.
+      if (upTo >= this.script.phases.length - 1 && this.scripted && this.deps.devices() > 0 && this.deps.lines.saying(MUSE_CODE)) {
+        setTimeout(() => {
+          if (going() && !this.ending.asked && !this.rolling && !this.pending) void this.askMuseCode().catch(() => {});
+        }, 2000);
+      }
     } catch (err) {
       this.problem = err instanceof Error ? err.message : String(err);
       this.deps.log(`[demo] could not set up: ${this.problem}`);
