@@ -630,9 +630,9 @@ test("Send on a tree hands that tree off to the paired chat as a file: a showcas
   }
 });
 
-test("the lines Momo says as a held tree grows are kept in the demo folder in her realtime voice, said as written and never by another voice", () => {
+test("the lines Momo says outside a round (as a held tree grows, at the walkthrough's end) are kept in the demo folder in her realtime voice, said as written and never by another voice", () => {
   const lines = JSON.parse(readFileSync(join(demoDir, 'lines.json'), 'utf8')) as { voice: string; said?: Record<string, string> };
-  assert.deepEqual(Object.keys(lines.said ?? {}).sort(), ['daily', 'shared']);
+  assert.deepEqual(Object.keys(lines.said ?? {}).sort(), ['daily', 'museCode', 'shared']);
   const voices = JSON.parse(readFileSync(join(demoDir, 'voice', 'voices.json'), 'utf8')) as Record<string, string>;
   for (const text of Object.values(lines.said!)) assert.equal(voices[recordingName(lines.voice, text)], 'realtime', text);
 });
