@@ -836,7 +836,9 @@ void OceanModel::tourShow(int shown) {
         const guide::Gesture* gesture = tourGesture(step.gesture);
         doneAt = gesture ? drawnMiddle(*gesture) : Vec3::zero();
         teach.painter->entity->position = Vec3{picture.center.x, picture.center.y, 0.2f * size + 0.014f} - doneAt * size;
-        teach.painter->entity->orientation = Quat::identity();
+        // WS103: the pull and the push are a hand moving toward you and away: turned a little, as the guide's own lesson turns it
+        // (`showLesson`), so that its depth shows on the card. Face on, the push read as nothing moving.
+        teach.painter->entity->orientation = std::string(step.gesture) == "layers" ? Quat::angleAxis(30 * floatPi / 180, {0, 1, 0}) : Quat::identity();
         teach.painter->entity->scale = Vec3::repeating(size);
         teach.painter->setLine(0.0017f);
         c->openHolder->addChild(teach.painter->entity);
@@ -1121,6 +1123,16 @@ void OceanModel::updateTour(double now, Vec3 eye) {
         }
     }
 
+    // WS103: the pull lesson's safety net: pulled back and no push for 15 s, the walk takes them back to step 3's layer itself,
+    // and the lesson counts as done.
+    if (at == pullStep && teach.tourBeat == 1 && teach.tourPulledAt >= 0 && now - teach.tourPulledAt >= 15 && !busy) {
+        teach.tourBeat = 2;
+        if (std::optional<int> back = tourNode(pullStep)) {
+            logLine("[guide] pulled back and no push for 15 s: back to step 3 by itself");
+            take(*back);
+            return;
+        }
+    }
     // Is this lesson finished? Pulling is only half of its lesson: the other half is being back on its card.
     bool finished = teach.tourDone[at];
     if (at == 0) finished = false;                                              // (its doing is the taking of the next card)
@@ -1312,7 +1324,7 @@ void OceanModel::updateTour(double now, Vec3 eye) {
         toNext = true;
     } else if (at == pullStep && teach.tourBeat >= 1) {
         // (Pulled back, and waiting for the push: said on whatever layer they stand, WS103.)
-        words = "Now push it away to come back";
+        words = "Now push your closed hand away to come back";
     } else if (!here) {
         words = lesson < at ? fmt("Step %d is ahead: push your closed hand away", at + 1) : fmt("Back to the walk: point at card %d, pinch and hold until the ring fills", at + 1);
     } else {
@@ -1480,6 +1492,7 @@ void OceanModel::tourDid(const std::string& did, float amount) {
     // WS103: the pull-and-push lesson: pulled back (beat 1), then pushed forward at least once, wherever the push lands
     // (beat 2, done). A long pull steps two layers back, and one push one forward: nobody is left on an earlier layer.
     if (did == "step" && teach.tour == pullStep) {
+        if (amount > 0 && teach.tourBeat < 1) teach.tourPulledAt = time;
         if (amount > 0) teach.tourBeat = std::max(teach.tourBeat, 1);
         else if (teach.tourBeat >= 1) teach.tourBeat = 2;
     }

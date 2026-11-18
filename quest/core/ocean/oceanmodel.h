@@ -658,6 +658,7 @@ private:
         // The welcome tree's walk (oceanmodel_guide.cpp).
         int tour = -1;                      // the lesson the walk has got to; -1 when there is no walk
         int tourBeat = 0;                   // how far through that lesson: pulling is two (pull, then push back)
+        double tourPulledAt = -1;           // WS103: when the pull lesson's pull came, for its safety net
         bool tourTook = false;              // a card was pinched this frame: the walk is wherever that card is
         int tourAdvanceFor = -1;            // the lesson that is finished and about to be left, and when
         double tourAdvanceAt = 0;
