@@ -260,6 +260,11 @@ test("the voice stops at the device's minutes: the turn is over at once and Momo
   live.ws.send(JSON.stringify({ t: 'audio', pcm: Buffer.alloc(3200).toString('base64') }));
   live.ws.send(JSON.stringify({ t: 'end' }));
   assert.equal(sessions, 1, 'the refused turn opens nothing');
+  // A lesson of the welcome walk is Momo's voice too: past the minutes it gets no answer, and the device says the lesson's own line.
+  live.ws.send(JSON.stringify({ t: 'lesson', turn: 3, words: 'What is she holding?', picture: 'A woman reads a letter.', cards: [] }));
+  await live.until((m) => m.t === 'quiet' && m.turn === 3);
+  assert.equal(sessions, 1, 'the refused lesson opens nothing');
+  assert.deepEqual(recorded, [LINES.voiceMs], 'and no reason is said over the lesson');
   live.ws.close();
   c.ws.close();
   await again.hosted.close();

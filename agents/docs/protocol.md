@@ -224,6 +224,7 @@ Client to service:
 | `{t:'audio', pcm}` | The microphone at 16000 Hz until `over`: from 0.8 s before the first word after the phrase, or from a moment before the phrase when the request follows straight on. Nothing before the phrase, and not the phrase alone, which goes only in `name`. |
 | `{t:'end'}` | The client stopped sending before `over` (it sends a minute at most): take what was sent. |
 | `{t:'cancel'}` | Nothing was said after the phrase for 8 seconds: drop the turn. |
+| `{t:'lesson', turn, words, picture, cards}` | A lesson of the welcome walk that Momo answers, as the sketch lesson: what the user said there, written down by the client (500 characters at most), what the lesson's picture shows (600), and the lesson's own cards that come up as she answers, each `{title, says}` (8 at most). Turn `turn` is a new turn, as `start` takes, and stops whatever Momo is saying as it does. She answers in a sentence or two and walks through the cards, as any reply comes (`text`, `audio`, `done`), and may call no tool, so nothing starts in the walk's place. Past the device's voice minutes, or when her answer says nothing, `{t:'quiet', turn}` comes instead: the client then says the lesson's own line from the recording it carries. |
 
 While its `/live` socket is open a client does not speak `say` messages itself: Momo tells the ones for this device's work in its own words, and says nothing of other clients' work. When the live voice is down, a client speaks them through `GET /api/speak` as before.
 

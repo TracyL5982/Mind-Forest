@@ -10,6 +10,7 @@ import type { CardNote } from '../src/core/voice-tools.ts';
 import { FakeModel } from '../src/fake/model.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { cost, LiveVoice, Narration, Upsampler, type LiveDeps, type RealtimeEvent, type VoiceFrame } from '../src/node/live.ts';
+import { DeviceFrame } from '../src/node/protocol.ts';
 import { startServer } from '../src/node/server.ts';
 import { withoutLinks } from '../src/node/web-answer.ts';
 import { tempDir } from './temp.ts';
@@ -172,6 +173,44 @@ test("the user's words follow as they are written down, the turn is over as Momo
   model.ends('r1');
   assert.deepEqual(frames.slice(3).map((f) => (f.t === 'text' ? [f.t, f.text, f.kind] : f.t)), ['over', ['text', 'Vermeer, around 1665.', 'reply'], 'audio', 'audio', 'done']);
   assert.deepEqual(spoken, [{ who: 'user', text: 'Who painted Girl with a Pearl Earring?' }, { who: 'agent', text: 'Vermeer, around 1665.' }]);
+});
+
+test("a lesson of the welcome walk is answered from the words the device wrote down: Momo is told the picture and the lesson's cards, and her answer may call no tool", () => {
+  const { v, model, frames, spoken } = voice();
+  const lesson = {
+    t: 'lesson' as const, turn: 1, words: 'What is she holding?', picture: 'A woman in blue reads a letter by a window.',
+    cards: [{ title: 'From your sketch', says: 'The letter in her hands' }, { title: 'The Milkmaid', says: '' }],
+  };
+  assert.deepEqual(DeviceFrame.parse(lesson), lesson);
+  assert.throws(() => DeviceFrame.parse({ ...lesson, words: 'x'.repeat(501) }));
+  assert.throws(() => DeviceFrame.parse({ ...lesson, cards: Array.from({ length: 9 }, () => ({ title: 'A card', says: '' })) }));
+  v.heard(lesson);
+  assert.equal(model.sessions.length, 1, 'it opens the session, as a turn does');
+  const told = model.told().at(-1)!;
+  assert.match(told, /^\[Welcome walk\]/);
+  assert.match(told, /The picture: A woman in blue reads a letter by a window\./);
+  assert.match(told, /1\. From your sketch: The letter in her hands\n2\. The Milkmaid\n/);
+  assert.match(told, /Start no search and no tree, and call no tool/);
+  const said = model.sent('conversation.item.create').at(-1)!.item as { role: string; content: { text: string }[] };
+  assert.deepEqual([said.role, said.content[0]!.text], ['user', 'What is she holding?']);
+  assert.deepEqual(model.sent('response.create').map((e) => e.response), [{ metadata: { purpose: 'reply' }, tool_choice: 'none' }]);
+  model.begins('r1', 'reply');
+  model.says('r1', 'A letter, held up to the light. Round you now: the part you marked, and The Milkmaid.');
+  model.ends('r1');
+  assert.deepEqual(frames.slice(1).map((f) => (f.t === 'text' ? [f.t, f.kind] : f.t)), [['text', 'reply'], 'audio', 'audio', 'done']);
+  assert.deepEqual(spoken.map((t) => t.who), ['user', 'agent'], 'the lesson stays in the conversation');
+
+  // A lesson while Momo speaks stops her, and a turn being heard is dropped for it; a turn after it may call tools as ever.
+  v.heard({ t: 'start', turn: 2, scene: SCENE });
+  model.begins('r2', 'reply');
+  model.says('r2', 'Let me look');
+  v.heard({ ...lesson, turn: 3 });
+  assert.deepEqual(model.sent('response.cancel').map((e) => e.response_id), ['r2']);
+  assert.equal(model.sent('input_audio_buffer.clear').length, 2, 'the turn heard is cleared, as its start cleared before it');
+  assert.equal(model.sent('response.create').at(-1)!.response && (model.sent('response.create').at(-1)!.response as { tool_choice?: string }).tool_choice, 'none');
+  v.heard({ t: 'start', turn: 4, scene: SCENE });
+  v.heard({ t: 'end' });
+  assert.deepEqual(model.sent('response.create').at(-1)!.response, { metadata: { purpose: 'reply' } });
 });
 
 test('a web question: the call runs as soon as the model makes it, its label shows meanwhile, and its answer is spoken after the lead-in', async () => {

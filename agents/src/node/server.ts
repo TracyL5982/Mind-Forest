@@ -794,6 +794,18 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
           return;
         }
       }
+      if (frame.t === 'lesson') {
+        // A lesson's answer is Momo's voice too: past the day's share none is given, and the device says the lesson's own line.
+        turn = frame.turn;
+        cutting = false;
+        refusedTurn = null;
+        const why = meter?.refused('voiceMs');
+        if (why) {
+          log(`[limits] refused: ${why}`);
+          if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ t: 'quiet', turn: frame.turn } satisfies VoiceFrame));
+          return;
+        }
+      }
       if (frame.t === 'end' || frame.t === 'cancel') turn = null;
       if (refusedTurn !== null) {
         if (frame.t === 'end' || frame.t === 'cancel') refusedTurn = null;

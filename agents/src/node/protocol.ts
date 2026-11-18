@@ -53,5 +53,16 @@ export const DeviceFrame = z.discriminatedUnion('t', [
   z.object({ t: z.literal('audio'), pcm: z.string().max(1 << 20) }),
   z.object({ t: z.literal('end') }),
   z.object({ t: z.literal('cancel') }),
+  /**
+   * A lesson of the welcome walk that Momo answers: what the user said there, written down by the device, what the lesson's picture
+   * shows, and the lesson's own cards, which come up as she answers. `turn` is a new turn, as `start` takes.
+   */
+  z.object({
+    t: z.literal('lesson'),
+    turn: z.number().int().min(1),
+    words: z.string().trim().min(1).max(500),
+    picture: z.string().trim().min(1).max(600),
+    cards: z.array(z.object({ title: z.string().trim().min(1).max(120), says: z.string().trim().max(240).default('') })).max(8),
+  }),
 ]);
 export type DeviceFrame = z.infer<typeof DeviceFrame>;

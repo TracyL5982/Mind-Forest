@@ -389,8 +389,25 @@ export class Narration {
 /** The model's events that say who has the floor, logged as they come so a turn can be followed. */
 const TRACED = new Set(['input_audio_buffer.speech_started', 'input_audio_buffer.speech_stopped', 'input_audio_buffer.committed', 'input_audio_buffer.timeout_triggered']);
 
-/** Why a response is given: to answer a turn (at once, or after its calls), or to tell what the agents did. */
-type Purpose = { kind: 'reply'; turn?: number } | { kind: 'results' };
+/**
+ * Why a response is given: to answer a turn (at once, or after its calls), or to tell what the agents did. `tools: false`: an answer
+ * that may call no tool, as a lesson's.
+ */
+type Purpose = { kind: 'reply'; turn?: number; tools?: false } | { kind: 'results' };
+
+/**
+ * What Momo is told for a lesson of the welcome walk she answers: the lesson's picture, the cards that come up with her answer, and
+ * how to answer. The walk stands where a tree would, with cards of its own, so she starts nothing: the answer may call no tool.
+ */
+export function lessonNote(lesson: Extract<DeviceFrame, { t: 'lesson' }>): string {
+  const cards = lesson.cards.map((card, n) => `${n + 1}. ${card.title}${card.says ? `: ${card.says}` : ''}`).join('\n');
+  return [
+    "[Welcome walk] The user is on the welcome walk, the app's guided tour, in the lesson where they mark part of a picture and ask you about it.",
+    `The picture: ${lesson.picture}`,
+    ...(cards ? [`As you answer, the lesson's own cards come up round them:\n${cards}`] : []),
+    `Answer what they say in a sentence or two, from the picture. Then walk them through ${cards ? 'those cards' : 'what they marked'} in a few words${cards ? ' each' : ''}. Start no search and no tree, and call no tool: the walk's cards are already there.`,
+  ].join('\n');
+}
 
 /** The response the model is giving. */
 interface Speaking {
@@ -544,6 +561,21 @@ export class LiveVoice {
         this.hearing = null;
         this.drain();
         return;
+      case 'lesson': {
+        // The words come written down by the device, so nothing is heard: what Momo says stops, as for a new turn, and she is told
+        // the lesson, given the words as the user's, and asked for an answer that may call no tool.
+        const s = this.ensure();
+        this.hush();
+        if (this.hearing) s.send({ type: 'input_audio_buffer.clear' });
+        this.hearing = null;
+        this.answering = { turn: frame.turn, at: this.now() };
+        this.note(lessonNote(frame));
+        s.send({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: frame.words }] } });
+        this.deps.spoken({ who: 'user', text: frame.words });
+        this.deps.log(`[live] lesson, turn ${frame.turn}: ${frame.words}`);
+        this.ask({ kind: 'reply', turn: frame.turn, tools: false });
+        return;
+      }
     }
   }
 
@@ -984,7 +1016,7 @@ export class LiveVoice {
 
   private ask(purpose: Purpose, retry = true): void {
     this.asked = { purpose, at: this.now(), retry };
-    this.session?.send({ type: 'response.create', response: { metadata: { purpose: purpose.kind } } });
+    this.session?.send({ type: 'response.create', response: { metadata: { purpose: purpose.kind }, ...(purpose.kind === 'reply' && purpose.tools === false ? { tool_choice: 'none' } : {}) } });
   }
 
   /** Stops what Momo is saying, and cuts each piece of its voice in the conversation where the device was when the user spoke. */
