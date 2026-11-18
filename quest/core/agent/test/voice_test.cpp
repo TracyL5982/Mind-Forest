@@ -1636,6 +1636,31 @@ TEST(presenceMutedMakesNoSoundYetTakesTheTime) {
     CHECK_EQ(host.plays.size(), size_t(0));
 }
 
+// WS95 (WS97's finding): with no voice of the service's (hello's `voice` false) and /live not ready, a reply shows as
+// Momo's caption for as long as its words would take to say, with nothing fetched, and ends as a reply heard does.
+TEST(aReplyWithNoVoiceOfTheServicesShowsAsHerCaptionForItsReadingTime) {
+    Talking t(Made{.serviceSpeaks = false});
+    t.hear(Sound().quiet(0.3));
+    t.voice.asked("What else did Vermeer paint?");
+    t.frame(1);
+    CHECK(t.shows() == Presence::State::thinking, "thinking");
+    // Five words: about 1.9 s to say.
+    t.voice.say("He painted few, and slowly.");
+    t.frame();
+    CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(0));
+    CHECK(t.shows() == Presence::State::responding, "her words show, as she would say them");
+    CHECK_EQ(t.voice.presence().momoText, std::string("He painted few, and slowly."));
+    t.hear(Sound().quiet(0.1));
+    CHECK(t.voice.state() != Listener::State::speaking, "nothing yet told to the listener");
+    t.frame(1);
+    CHECK(t.shows() == Presence::State::responding, "for their reading time");
+    t.frame(1);
+    CHECK(t.shows() != Presence::State::responding, "then they are over");
+    t.hear(Sound().quiet(0.1));
+    CHECK(t.voice.state() == Listener::State::speaking, "and the reply's end is told to the listener (its echo, as after one heard)");
+    CHECK_EQ(host.plays.size(), size_t(0));
+}
+
 TEST(liveNamesItsConnectionAndOpensAgainForANewOne) {
     Talking t(Made{.live = false});
     Settings settings;

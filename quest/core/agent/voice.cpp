@@ -635,8 +635,16 @@ void Voice::say(const std::string& text) {
         return;
     }
     if (!serviceSpeaks) {
-        // The reply has come, and nothing will be heard of it.
+        // No voice of the service's (hello's `voice` false: the hosted and demo servers, WS97), and /live not ready: her
+        // words show as her caption for as long as they would take to say, with nothing fetched, as `-mute` shows a reply;
+        // then it ends as a reply heard does (`unheardReply`).
+        if (sound) sound->stop();
+        spoken = text;
+        sound = std::make_shared<UnheardFile>();
+        unheardReply = UnheardReply{++reply, clock + spokenSeconds(text)};
+        shown.momoText = text;
         if (awaiting()) endThinking();
+        logLine("[voice] no voice of the service's, so her words show: " + text);
         return;
     }
     pending = text;
