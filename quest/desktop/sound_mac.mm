@@ -174,6 +174,9 @@ namespace platform {
 // The Mac's microphone is read as it is, so the preview's own chime comes back through it from the speakers.
 bool microphoneHearsOwnSounds() { return true; }
 
+// The preview never asks: the Mac allows its microphone to the terminal it was started from, or not at all.
+MicrophoneLeave microphoneLeave() { return MicrophoneLeave::given; }
+
 MicrophoneRef openMicrophone(MicrophoneEvents events) {
     auto mic = std::make_shared<MacMicrophone>();
     mic->tap = std::make_shared<Tap>();

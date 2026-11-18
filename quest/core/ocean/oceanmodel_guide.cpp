@@ -39,7 +39,7 @@ constexpr double layerBeforeAnswerEnds = 2;
 constexpr int exampleTalk = 1000;
 
 // (`offButtons` is OceanModel::guideOffButtons, which pinchEnded reads.)
-enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109, offButtons = 110 };
+enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109, offButtons = 110, tourSettings = 111 };
 // The gestures a ghost hand teaches, in the order they are needed, and how long each waits once its moment has come.
 struct Plan {
     const char* id;
@@ -1329,6 +1329,9 @@ void OceanModel::tourDid(const std::string& did, float amount) {
 // - nothing is said for a while; the name is said and nothing after it;
 // - something else is asked (for the first lesson: anything that does not ask what Momo can do). It is quoted
 //   back, with what to ask instead. For the sketch, anything said is a word about it, and is taken.
+// A refused microphone (its window missed at launch, or answered no) is asked for again as either lesson begins.
+// Where the system no longer asks (the Quest, after two refusals), the line says where in its Settings to switch it
+// on, beside the way on an "Open Settings" button; back from there with it on, Momo listens (WS87).
 
 namespace {
 /// Whether what was said asks what Momo can do, loosely: a transcript is seldom word for word.
@@ -1344,10 +1347,10 @@ bool asksWhatItCan(const std::string& said) {
 }
 
 int OceanModel::tourHearing() const {
-    // `-guideHear ready|starting|asking|refused|off|none`: as if Momo's ears were so, for a look at each in the preview.
+    // `-guideHear ready|starting|asking|refused|settings|off|none`: as if Momo's ears were so, for a look at each in the preview.
     if (teach.demo && Flags::has("guideHear")) {
         std::string as = Flags::string("guideHear").value_or("ready");
-        return as == "ready" ? 0 : as == "starting" ? 1 : as == "asking" ? 2 : as == "refused" ? 3 : as == "off" ? 4 : 5;
+        return as == "ready" ? 0 : as == "starting" ? 1 : as == "asking" ? 2 : as == "refused" ? 3 : as == "settings" ? 6 : as == "off" ? 4 : 5;
     }
     agent::Voice* voice = agentBridge ? agentBridge->talk() : nullptr;
     if (!voice) return 5;
@@ -1356,6 +1359,7 @@ int OceanModel::tourHearing() const {
     case agent::Voice::Hearing::starting: return 1;
     case agent::Voice::Hearing::asking: return 2;
     case agent::Voice::Hearing::refused: return 3;
+    case agent::Voice::Hearing::settingsOnly: return 6;
     case agent::Voice::Hearing::off: return 4;
     }
     return 4;
@@ -1377,6 +1381,9 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
         } else if (voice) {
             voice->tutor(std::nullopt);
         }
+        // The microphone refused (its window missed at launch, or answered no): as a lesson by speaking begins, the
+        // system asks for it again (WS87). Where the system no longer asks, the line says where it is switched on.
+        if (voice && (want == momoStep || want == markStep) && voice->hearing() == agent::Voice::Hearing::refused) voice->askForMicrophone();
         if (want == exampleTalk) logLine(fmt("[guide] the example cards listen for one asked: Momo's ears are %d", tourHearing()));
         else if (want >= 0) logLine(fmt("[guide] lesson %d waits for words: Momo's ears are %d", want + 1, tourHearing()));
     }
@@ -1444,13 +1451,18 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
     int hear = tourHearing();
     double waited = now - teach.talkSince;
     std::string note = teach.talkNote;
-    bool pill = teach.talkMisses >= 2;
+    bool pill = teach.talkMisses >= 2, settings = false;
     if (hear == 5) {
         note = "Momo is not connected in this copy";
         pill = true;
     } else if (hear == 3) {
-        note = "The microphone is not allowed, so Momo cannot hear you";
+        note = "Momo can’t hear you yet: the microphone is off";
         pill = true;
+    } else if (hear == 6) {
+        // (The system no longer asks: only its Settings can switch it on. Meta's own words for the way there.)
+        note = "Momo can’t hear you yet: the microphone is off\nTurn it on in Settings › Privacy and safety › App permissions › Microphone";
+        pill = true;
+        settings = !teach.settingsWontOpen;
     } else if (hear == 2) {
         note = "Allow the microphone, so that Momo can hear you";
         pill = waited > 12;
@@ -1473,13 +1485,14 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
     } else {
         note.clear();
     }
-    tourTalkPanel(note, pill, at);
+    tourTalkPanel(note, pill, at, settings);
 }
 
-/// What the walk says about the words it waits for, over the lesson: a line, and under it (where speaking
-/// cannot work, or has not) the way on without it.
-void OceanModel::tourTalkPanel(const std::string& words, bool pill, std::optional<Vec3> at) {
-    std::string key = at && !words.empty() ? words + (pill ? "\n+" : "") : "";
+/// What the walk says about the words it waits for, over the lesson: a line (and, after a line break in `words`, a
+/// smaller one under it), and under them (where speaking cannot work, or has not) the way on without it; with
+/// `settings`, beside it a button that opens the system's Settings for this app (WS87).
+void OceanModel::tourTalkPanel(const std::string& words, bool pill, std::optional<Vec3> at, bool settings) {
+    std::string key = at && !words.empty() ? words + (pill ? "\n+" : "") + (settings ? "\n*" : "") : "";
     if (key != teach.talkPanelSaid) {
         for (const Entity* e : teach.talkPicks) picks.erase(e);
         teach.talkPicks.clear();
@@ -1489,23 +1502,41 @@ void OceanModel::tourTalkPanel(const std::string& words, bool pill, std::optiona
         }
         teach.talkPanel = nullptr;
         teach.talkPanelSaid = key;
+        size_t cut = words.find('\n');
+        std::string first = words.substr(0, cut), second = cut == std::string::npos ? "" : words.substr(cut + 1);
         // (A size under the line it stands over, which says what to do; this says how it is going.)
-        std::optional<Piece> line = !key.empty() && art ? art->line(words, 0.02f, Font::Weight::medium, Color::white(), Art::ink, Art::buttonPad) : std::nullopt;
+        std::optional<Piece> line = !key.empty() && art ? art->line(first, 0.02f, Font::Weight::medium, Color::white(), Art::ink, Art::buttonPad) : std::nullopt;
+        std::optional<Piece> more = line && !second.empty() ? art->line(second, 0.017f, Font::Weight::regular, Color::white(), Art::ink, Art::buttonPad) : std::nullopt;
         std::optional<Piece> go = line && pill ? art->pill("Go on without speaking", 0.019f) : std::nullopt;
-        teach.talkPanelLift = go ? go->size.y + 0.012f : 0;
+        std::optional<Piece> open = line && settings ? art->pill("Open Settings", 0.019f) : std::nullopt;
+        float moreDrop = more ? line->size.y / 2 + 0.006f + more->size.y / 2 : 0;
+        float buttons = std::max(go ? go->size.y : 0.0f, open ? open->size.y : 0.0f);
+        teach.talkPanelLift = (more ? moreDrop + more->size.y / 2 - line->size.y / 2 : 0) + (buttons > 0 ? buttons + 0.012f : 0);
         if (line) {
             EntityRef holder = Entity::make();
             EntityRef said = art->quad(*line);
             holder->addChild(said);
-            if (go) {
-                EntityRef e = art->quad(*go);
-                e->position = {0, -line->size.y / 2 - 0.012f - go->size.y / 2, 0};
-                e->collision = {Shape::generateBox({go->size.x, go->size.y + 0.008f, 0.01f})};
+            float bottom = -line->size.y / 2;
+            if (more) {
+                EntityRef e = art->quad(*more);
+                e->position = {0, -moreDrop, 0};
+                holder->addChild(e);
+                bottom = -moreDrop - more->size.y / 2;
+            }
+            // Side by side, as wide as both, under the words: "Open Settings", then the way on without speaking.
+            float gap = 0.012f, across = (go ? go->size.x : 0) + (open ? open->size.x : 0) + (go && open ? gap : 0);
+            float x = -across / 2;
+            for (auto [piece, act] : {std::pair{open, int(Act::tourSettings)}, std::pair{go, int(Act::tourSay)}}) {
+                if (!piece) continue;
+                EntityRef e = art->quad(*piece);
+                e->position = {x + piece->size.x / 2, bottom - 0.012f - buttons / 2, 0};
+                e->collision = {Shape::generateBox({piece->size.x, piece->size.y + 0.008f, 0.01f})};
                 e->inputTarget = true;
                 e->hover = Art::hover();
-                picks[e.get()] = Pick::guide(Act::tourSay);
+                picks[e.get()] = Pick::guide(act);
                 teach.talkPicks.push_back(e.get());
                 holder->addChild(e);
+                x += piece->size.x + gap;
             }
             root_->addChild(holder);
             fadeIn(holder, 0, 0.3f);
@@ -1722,6 +1753,7 @@ bool OceanModel::pressButton(const EntityRef& entity, int action) {
     case Act::tourSkip:
     case Act::closeSheet:
     case Act::tourSay:
+    case Act::tourSettings:
         break;
     default:
         return false;
@@ -2040,6 +2072,17 @@ void OceanModel::guideAct(int action) {
     case Act::tourSay:
         // "Go on without speaking": what the words would have done.
         if (teach.talkFor >= 0) tourAnswer(teach.talkFor, "");
+        break;
+    case Act::tourSettings:
+        // "Open Settings", where the system no longer asks for the microphone: its page for this app comes up over the
+        // walk, and back from it with the microphone allowed, Momo listens (agent::Voice). Where it can't be opened, the
+        // button goes and the line still says where to look.
+        if (platform::openAppSettings()) {
+            logLine("[guide] the system's Settings are opened, for the microphone");
+        } else {
+            logLine("[guide] the system's Settings could not be opened from here: the line says where they are");
+            teach.settingsWontOpen = true;
+        }
         break;
     case Act::tourSkip:
     case Act::tourEnd:

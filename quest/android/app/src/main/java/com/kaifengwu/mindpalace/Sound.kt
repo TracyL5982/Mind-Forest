@@ -123,6 +123,18 @@ object Sound {
         thread.start()
     }
 
+    /**
+     * Whether the app may use the microphone: 0 it may, 1 not yet and the system would ask, 2 not and the system has
+     * stopped asking (refused twice, Android 11 on), so only Settings can allow it. Before the first ask the system
+     * gives no reason to show either, so that reads as 2 too: the native side reads this only after asking.
+     */
+    @JvmStatic
+    fun leave(activity: Activity): Int = when {
+        activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> 0
+        activity.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) -> 1
+        else -> 2
+    }
+
     /** Returns once the microphone's thread has ended, so nothing more is heard. */
     @JvmStatic
     fun closeMicrophone(handle: Long) {

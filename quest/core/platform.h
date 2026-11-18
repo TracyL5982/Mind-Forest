@@ -258,6 +258,13 @@ struct MicrophoneEvents {
 };
 /// Opens the microphone. Where the user must allow it first (the Quest), sound starts once they have.
 MicrophoneRef openMicrophone(MicrophoneEvents events);
+/// Whether the app may use the microphone, and if not, whether the system would still ask the user (`askable`) or
+/// has stopped asking (`settingsOnly`: the Quest, after two refusals; only its Settings can allow it then). Read it
+/// once the app has asked: before the first ask, the Quest reads as `settingsOnly`.
+enum class MicrophoneLeave { given, askable, settingsOnly };
+MicrophoneLeave microphoneLeave();
+/// Opens the system's settings for this app, where its permissions are switched on: false where it could not.
+bool openAppSettings();
 /// Whether the microphone hears the app's own sounds, such as the chime that says the name was heard. Not on the Quest:
 /// its talking source gives silence unless someone speaks, measured with `-chimeCheck` (agents/DECISIONS.md 71).
 bool microphoneHearsOwnSounds();

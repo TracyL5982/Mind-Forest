@@ -65,6 +65,9 @@ struct Host {
     bool resumed = false;
     /// As the Mac preview's microphone, which hears the chime; false is the headset's, which does not.
     bool hearsOwnSounds = true;
+    /// Whether the user lets the app use the microphone, as the system says; and how often its Settings were opened.
+    platform::MicrophoneLeave leave = platform::MicrophoneLeave::given;
+    int settingsOpened = 0;
     /// The mixer's: the sounds played, by name, in order, and the level each loop was last asked for.
     std::vector<std::string> sounds;
     std::map<std::string, float> levels;
@@ -311,6 +314,11 @@ StreamRef playStream(int rate, std::function<void(bool)> done) {
 }
 bool microphoneHearsOwnSounds() { return host.hearsOwnSounds; }
 bool resumed() { return std::exchange(host.resumed, false); }
+MicrophoneLeave microphoneLeave() { return host.leave; }
+bool openAppSettings() {
+    host.settingsOpened++;
+    return true;
+}
 MicrophoneRef openMicrophone(MicrophoneEvents events) {
     host.opens++;
     host.microphone = std::move(events);
@@ -574,6 +582,68 @@ TEST(aRefusedMicrophoneSaysHowToAskMomoWithoutIt) {
     t.voice.say("He painted few.");
     t.frame();
     CHECK_EQ(t.fetchesTo("/api/speak").size(), size_t(1));
+}
+
+// WS87: a microphone refused at launch (the window missed, or answered no) is asked for again where the walk wants it.
+TEST(aRefusedMicrophoneIsAskedForAgainWhenTheWalkWantsIt) {
+    Talking t(true);
+    host.microphone.asking();
+    t.frame();
+    host.leave = platform::MicrophoneLeave::askable;
+    host.microphone.denied();
+    t.frame();
+    CHECK(t.voice.hearing() == Voice::Hearing::refused, "refused, and the system would ask again");
+    for (int i = 0; i < 30; i++) t.frame(1);
+    CHECK_EQ(host.opens, 1);
+    t.voice.askForMicrophone();
+    t.frame();
+    CHECK_EQ(host.opens, 2);
+    CHECK(t.voice.hearing() == Voice::Hearing::starting, "listening starts over");
+    CHECK(t.voice.presence().notice.empty(), "the line about the refusal goes");
+    host.microphone.asking();
+    t.frame();
+    CHECK(t.voice.hearing() == Voice::Hearing::asking, "the system asks again");
+    host.leave = platform::MicrophoneLeave::given;
+    t.hear(Sound().quiet(0.3));
+    CHECK(t.voice.hearing() == Voice::Hearing::ready, "allowed this time, it hears");
+    t.hear(Sound().quiet(0.5).say("command").quiet(2));
+    CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(1));
+    t.voice.askForMicrophone();
+    t.frame();
+    CHECK_EQ(host.opens, 2);
+}
+
+TEST(whereTheSystemNoLongerAsksForTheMicrophoneOnlyItsSettingsCan) {
+    Talking t(true);
+    host.leave = platform::MicrophoneLeave::settingsOnly;
+    host.microphone.denied();
+    t.frame();
+    CHECK(t.voice.hearing() == Voice::Hearing::settingsOnly, "the system has stopped asking");
+    t.voice.askForMicrophone();
+    t.frame();
+    CHECK_EQ(host.opens, 1);
+    // In front again with it still refused: nothing is opened, nothing is asked.
+    host.resumed = true;
+    t.frame(0.1);
+    CHECK_EQ(host.opens, 1);
+    CHECK(t.voice.hearing() == Voice::Hearing::settingsOnly, "still refused");
+}
+
+TEST(backFromSettingsWithTheMicrophoneAllowedMomoListensAgain) {
+    Talking t(true);
+    host.leave = platform::MicrophoneLeave::settingsOnly;
+    host.microphone.denied();
+    t.frame();
+    host.leave = platform::MicrophoneLeave::given;
+    t.frame(5);
+    CHECK_EQ(host.opens, 1);
+    host.resumed = true;
+    t.frame(0.1);
+    CHECK_EQ(host.opens, 2);
+    t.hear(Sound().quiet(0.3));
+    CHECK(t.voice.hearing() == Voice::Hearing::ready, "it hears");
+    t.hear(Sound().quiet(0.5).say("command").quiet(2));
+    CHECK_EQ(t.fetchesTo("/api/transcribe").size(), size_t(1));
 }
 
 TEST(momoSaysWhileTheServiceCantBeReached) {

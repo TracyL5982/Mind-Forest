@@ -122,6 +122,21 @@ class MainActivity : Activity() {
         }
     }
 
+    /**
+     * Called from native code: the walk's "Open Settings", where the system no longer asks for the microphone. The
+     * system's page for this app, where its permissions are switched on, comes up over it; false where it could not
+     * be opened (the Quest may not have it: the walk's line says where to look either way).
+     */
+    @Suppress("unused")
+    fun openAppSettings(): Boolean = try {
+        startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (e: Exception) {
+        android.util.Log.w("ocean", "[host] could not open this app's settings: $e")
+        false
+    }
+
     override fun onDestroy() {
         nativeStop()
         super.onDestroy()

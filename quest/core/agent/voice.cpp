@@ -240,7 +240,7 @@ void Voice::tutor(std::optional<Tutor> t) {
 }
 
 Voice::Hearing Voice::hearing() const {
-    if (microphoneRefusedAt >= 0) return Hearing::refused;
+    if (microphoneRefusedAt >= 0) return microphoneSettingsOnly ? Hearing::settingsOnly : Hearing::refused;
     if (askingForMicrophone) return Hearing::asking;
     if (!ears) return started ? Hearing::off : Hearing::starting;
     return ears->live ? Hearing::ready : Hearing::starting;
@@ -503,6 +503,20 @@ void Voice::start() {
         });
 }
 
+void Voice::askForMicrophone() {
+    if (microphoneRefusedAt < 0 || microphoneSettingsOnly) return;
+    logLine("[voice] the microphone was not allowed: the user is asked again");
+    listenAgain();
+}
+
+void Voice::listenAgain() {
+    microphoneRefusedAt = -1;
+    microphoneSettingsOnly = false;
+    microphoneFailures = 0;
+    reopenAt = -1;
+    start();
+}
+
 void Voice::openMicrophone() {
     std::weak_ptr<Ears> weak = ears;
     std::weak_ptr<Inbox> box = inbox;
@@ -731,8 +745,11 @@ void Voice::frame(double now) {
         send(ChimeEnded{});
     }
     if (refused) {
-        // Asked again, the headset would ask the user again: it stops listening, and replies are still spoken.
-        logLine("[voice] the microphone is not allowed, so the headset does not listen");
+        // It stops listening, and replies are still spoken. Asked again (`askForMicrophone`), the headset asks the user
+        // again, unless the system has stopped asking: then only its Settings can allow it.
+        microphoneSettingsOnly = platform::microphoneLeave() == platform::MicrophoneLeave::settingsOnly;
+        logLine(std::string("[voice] the microphone is not allowed, so the headset does not listen") +
+                (microphoneSettingsOnly ? ": the system no longer asks, so only its Settings can allow it" : ""));
         askingForMicrophone = false;
         microphoneRefusedAt = now;
         if (microphone) microphone->stop();
@@ -753,7 +770,14 @@ void Voice::frame(double now) {
     }
     // In front again (the headset put back on, or the app brought back): a microphone the system would not let capture
     // meanwhile opens again now, not after its wait, and waits from the first again should it fail.
-    if (platform::resumed() && ears && !microphone && reopenAt >= 0) {
+    bool back = platform::resumed();
+    // In front again with the microphone refused, and allowed meanwhile (in the system's Settings, WS87): listening starts
+    // again, with nothing to ask.
+    if (back && microphoneRefusedAt >= 0 && platform::microphoneLeave() == platform::MicrophoneLeave::given) {
+        logLine("[voice] the app is in front again and the microphone is allowed now, so the headset listens again");
+        listenAgain();
+    }
+    if (back && ears && !microphone && reopenAt >= 0) {
         logLine("[voice] the app is in front again, so the microphone opens again now");
         microphoneFailures = 0;
         reopenAt = now;

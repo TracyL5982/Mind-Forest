@@ -66,6 +66,11 @@ std::optional<std::string> readText(const std::string& name) {
 
 void openURL(const std::string& url) { logLine("[host] the preview opens no links: " + url); }
 
+bool openAppSettings() {
+    logLine("[host] the preview opens no settings");
+    return false;
+}
+
 std::string dataDirectory() {
     // `-dataDir <folder>` keeps a scripted run's shelf, pictures and spots out of the preview's own.
     std::optional<std::string> asked = Flags::string("dataDir");

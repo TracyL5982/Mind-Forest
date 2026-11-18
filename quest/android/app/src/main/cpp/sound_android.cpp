@@ -14,12 +14,13 @@ namespace {
 
 struct SoundClass {
     jclass cls = nullptr;
-    jmethodID openMicrophone, closeMicrophone, play, stop, openStream, writeStream, finishStream, stopStream;
+    jmethodID openMicrophone, closeMicrophone, leave, play, stop, openStream, writeStream, finishStream, stopStream;
     SoundClass() {
         JNIEnv* e = jni::env();
         cls = jni::findClass("com/kaifengwu/mindpalace/Sound");
         openMicrophone = e->GetStaticMethodID(cls, "openMicrophone", "(Landroid/app/Activity;JZZ)V");
         closeMicrophone = e->GetStaticMethodID(cls, "closeMicrophone", "(J)V");
+        leave = e->GetStaticMethodID(cls, "leave", "(Landroid/app/Activity;)I");
         play = e->GetStaticMethodID(cls, "play", "(Landroid/app/Activity;Ljava/lang/String;J)V");
         stop = e->GetStaticMethodID(cls, "stop", "(Landroid/app/Activity;J)V");
         openStream = e->GetStaticMethodID(cls, "openStream", "(IJ)V");
@@ -103,6 +104,16 @@ MicrophoneRef openMicrophone(MicrophoneEvents events) {
     jni::env()->CallStaticVoidMethod(sound().cls, sound().openMicrophone, jni::activity(), jlong(handle), jboolean(recognition), jboolean(callMode));
     logLine(std::string("[voice] microphone: ") + (recognition ? "VOICE_RECOGNITION" : "VOICE_COMMUNICATION") + (callMode ? ", in call mode" : ""));
     return std::make_shared<AndroidMicrophone>(handle);
+}
+
+MicrophoneLeave microphoneLeave() {
+    JNIEnv* e = jni::env();
+    jint said = e->CallStaticIntMethod(sound().cls, sound().leave, jni::activity());
+    if (e->ExceptionCheck()) {
+        e->ExceptionClear();
+        return MicrophoneLeave::askable;
+    }
+    return said == 0 ? MicrophoneLeave::given : said == 1 ? MicrophoneLeave::askable : MicrophoneLeave::settingsOnly;
 }
 
 SoundRef playSound(const std::string& path, std::function<void(bool played)> done) {

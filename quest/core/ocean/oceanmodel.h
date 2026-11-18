@@ -663,6 +663,7 @@ private:
         std::string talkPanelSaid;
         float talkPanelScale = 1;           // larger inside a picture gone into, where everything is
         float talkPanelLift = 0;            // how far up it stands, to keep its button clear of the line under it
+        bool settingsWontOpen = false;      // its "Open Settings" could not open them: the button goes, the line says where
         bool tourStood = false;             // its tree has stood
         bool tourDone[8] = {};              // which lessons the viewer has done
         int tourLessonWas = -2;             // the lesson in focus last frame, and since when it has been
@@ -705,7 +706,7 @@ private:
     /// Whether Momo can hear: 0 ready, 1 starting, 2 the microphone is being asked for, 3 refused, 4 off, 5 no Momo here.
     int tourHearing() const;
     void tourTalk(int lesson, bool wanted, double now, std::optional<Vec3> at);
-    void tourTalkPanel(const std::string& words, bool pill, std::optional<Vec3> at);
+    void tourTalkPanel(const std::string& words, bool pill, std::optional<Vec3> at, bool settings = false);
     void tourAnswer(int lesson, const std::string& words);
     /// WS78: what is said while the example cards of what Momo can do are in front, answered by her recorded reply.
     void tourExample(const std::string& said, double now);

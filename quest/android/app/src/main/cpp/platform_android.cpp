@@ -165,6 +165,19 @@ void openURL(const std::string& url) {
     e->DeleteLocalRef(cls);
 }
 
+bool openAppSettings() {
+    JNIEnv* e = jni::env();
+    jclass cls = e->GetObjectClass(jni::activity());
+    jmethodID open = e->GetMethodID(cls, "openAppSettings", "()Z");
+    bool opened = open && e->CallBooleanMethod(jni::activity(), open);
+    if (e->ExceptionCheck()) {
+        e->ExceptionClear();
+        opened = false;
+    }
+    e->DeleteLocalRef(cls);
+    return opened;
+}
+
 // MARK: - Pictures
 
 ImageRef decodeImage(const std::string& path, int maxPixel) {

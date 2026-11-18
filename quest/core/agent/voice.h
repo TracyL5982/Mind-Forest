@@ -111,9 +111,14 @@ public:
         std::function<void(const std::string& words)> said;     // what followed it; empty when nothing could be made of it
     };
     void tutor(std::optional<Tutor> t);
-    /// Whether it can hear, and if not why: for the walk to say so.
-    enum class Hearing { ready, starting, asking, refused, off };
+    /// Whether it can hear, and if not why: for the walk to say so. `refused`: the user did not allow the microphone, and
+    /// the system would ask them again; `settingsOnly`: it has stopped asking, and only its Settings can allow it.
+    enum class Hearing { ready, starting, asking, refused, settingsOnly, off };
     Hearing hearing() const;
+    /// GUIDE: the walk's lessons by speaking, where the microphone was refused (its window missed, or answered no): listening
+    /// starts over, and the system asks the user again (WS87). Nothing where it was not refused, or the system no
+    /// longer asks.
+    void askForMicrophone();
     /// GUIDE: a line of the walk's own, recorded in Momo's voice and carried in the app (`recordedLine`): spoken as a reply
     /// of hers is, through her stream player, with or without the service, its words shown as she says them. How long it
     /// is, s; nothing when there is no such line or its sound can't be read (said in the log).
@@ -243,6 +248,7 @@ private:
     platform::MicrophoneRef microphone;
     bool askingForMicrophone = false;   // the user is asked to allow it and has not answered
     double microphoneRefusedAt = -1;
+    bool microphoneSettingsOnly = false;    // refused, and the system no longer asks
     int microphoneFailures = 0;     // in a row, since sound last came
     double reopenAt = -1;
     std::shared_ptr<const Vocabulary> vocabulary;
@@ -396,6 +402,8 @@ private:
     /// The presence, from the turn, Momo's voice and the work in progress.
     void show();
     void openMicrophone();
+    /// After a refusal: listening starts over, from loading the listener's model, as at first.
+    void listenAgain();
     void respell();
     void send(Command command);
     void transcribe(const std::string& wav, int walk = -1);
