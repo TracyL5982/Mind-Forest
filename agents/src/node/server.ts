@@ -897,7 +897,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
         pipeline.undo(m.id);
         return;
       case 'commands':
-        pipeline.userCommands(m.label, m.commands);
+        if (pipeline.userCommands(m.label, m.commands)) director?.changed(m.commands);
         return;
       case 'organize':
         await pipeline.organize(m.request, m.scope, m.focus);
