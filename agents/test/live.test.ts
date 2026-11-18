@@ -197,7 +197,7 @@ test("a lesson of the welcome walk is answered from the words the device wrote d
   model.begins('r1', 'reply');
   model.says('r1', 'A letter, held up to the light. Round you now: the part you marked, and The Milkmaid.');
   model.ends('r1');
-  assert.deepEqual(frames.slice(1).map((f) => (f.t === 'text' ? [f.t, f.kind] : f.t)), [['text', 'reply'], 'audio', 'audio', 'done']);
+  assert.deepEqual(frames.slice(1).map((f) => (f.t === 'text' ? [f.t, f.kind, f.turn] : f.t)), [['text', 'reply', 1], 'audio', 'audio', 'done'], 'its words name the turn they answer');
   assert.deepEqual(spoken.map((t) => t.who), ['user', 'agent'], 'the lesson stays in the conversation');
 
   // A lesson while Momo speaks stops her, and a turn being heard is dropped for it; a turn after it may call tools as ever.

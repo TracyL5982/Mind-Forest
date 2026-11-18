@@ -23,7 +23,8 @@ export type VoiceFrame =
   | { t: 'heard'; turn: number; text: string; final: boolean }
   | { t: 'quiet'; turn: number }
   // `ms` and `from`: a recording's whole length, and how far into it its sound starts, so its words can be shown as it is heard.
-  | { t: 'text'; id: string; text: string; kind: SayKind; ms?: number; from?: number }
+  // `turn`: the turn a reply answers, when it answers one, so a device can tell its answer from anything else Momo says.
+  | { t: 'text'; id: string; text: string; kind: SayKind; ms?: number; from?: number; turn?: number }
   | { t: 'audio'; id: string; pcm: string }
   | { t: 'done'; id: string; usage?: Usage }
   /** The check of the sound that woke the device: whether it was the name. On `false` the device closes what the wake opened. */
@@ -848,7 +849,7 @@ export class LiveVoice {
         const m = this.speaking;
         if (!m || m.id !== e.response_id) return;
         m.text += e.delta as string;
-        this.device({ t: 'text', id: m.id, text: m.text, kind: m.purpose.kind });
+        this.device({ t: 'text', id: m.id, text: m.text, kind: m.purpose.kind, ...(m.purpose.kind === 'reply' && m.purpose.turn !== undefined ? { turn: m.purpose.turn } : {}) });
         return;
       }
       case 'response.output_audio.delta': {
