@@ -4,6 +4,7 @@
 // that say what to do. The marking lesson's stage is the picture to mark.
 //   props: `step`, its number; `badge`, what its opened card is ("Step 2 of 7"); `tall`, the stage's height, px;
 //   or `src`, a picture in place of the stage, and `aspect`, its width over its height.
+#include <algorithm>
 #include <cmath>
 
 #include "face.h"
@@ -16,10 +17,15 @@ namespace {
 /// The lesson's number on the small face's stage: as large for it as on the stage the guide drew before.
 constexpr Setting figure{50, 50, Font::Weight::semibold};
 
+/// The title's plate always has room for two lines, so every lesson's face is laid out alike: the same stage, the
+/// number at the same place on it, and the title starting at the same height, whether it takes one line or two (WS103).
+constexpr int PLATE_LINES = 2;
+
 /// The stage to the face's edges with the number in its middle, then the title on a plate under it.
 void lay(Col& c, const Item& item, const Json& props) {
     Titled plate = titled(item.titleOrUntitled(), face::COL, Measure::title);
-    float under = 19 + float(plate.lines * face::TITLE);
+    int room = std::max(PLATE_LINES, plate.lines);
+    float under = 19 + float(room * face::TITLE);
     float tall = float(face::H) - 2 - under;
     if (c.pen) {
         const Pen& pen = *c.pen;
@@ -31,7 +37,7 @@ void lay(Col& c, const Item& item, const Json& props) {
     }
     c.y = 1 + tall + 1 + 9;
     c.say(plate.said, setting::faceTitle, plate.lines, c.x, c.y, c.width, palette::ink);
-    c.y += float(plate.lines * face::TITLE) + 10 - face::BOTTOM;
+    c.y += float(room * face::TITLE) + 10 - face::BOTTOM;
 }
 
 Footprint size(const Item& item, const Json& props) {

@@ -580,11 +580,18 @@ void OceanModel::addWelcomeNotes() {
         {"momo-can-more", "More", "More like this", "Show me more like this.", "About the open card. Narrow it as you like: more, but older."},
         {"momo-can-hand", "Pass on", "Hand it off", "Hand this off to my coding agent.", "The tree becomes one file another agent can work from."},
     };
+    // Each is drawn as a served note is, closed and open (WS103): its headline, then the line it sets apart and its
+    // summary, from Momo (as a served card names its source, so it never reads as the user's own).
     auto make = [&](const std::string& text, const char* id) {
         std::optional<Json> json = Json::parse(text);
         std::optional<OceanNote> note = json ? OceanNote::from(*json) : std::nullopt;
-        if (note) catalog->notes[id] = *note;
-        else logLine(fmt("[guide] the walk's card %s could not be made", id));
+        if (!note) return logLine(fmt("[guide] the walk's card %s could not be made", id));
+        catalog->notes[id] = *note;
+        Json view = Json::object(), item = Json::object();
+        view.set("component", "note").set("props", Json::object());
+        std::string said = note->highlight.empty() ? note->summary : note->highlight + " " + note->summary;
+        item.set("title", note->headline).set("summary", said).set("origin", Json::object().set("by", "agent")).set("data", Json::object().set("from", "Momo"));
+        cards::ocean::hold(cards::OceanCard{id, view, item, std::nullopt});
     };
     std::string canLinks = fmt("{\"to\": \"note:%s\", \"why\": \"Next\"}", tourSteps[momoStep + 1].note);
     for (const Can& can : cans) {
@@ -624,8 +631,14 @@ void OceanModel::tourMarkNote(const std::string& words) {
                            said.empty() ? "Sent without a word." : ("You said: “" + said + "”").c_str(), markStep + 2, teach.tourMarkLinks.c_str());
     std::optional<Json> json = Json::parse(text);
     std::optional<OceanNote> note = json ? OceanNote::from(*json) : std::nullopt;
-    if (note) catalog->notes["momo-mark"] = *note;
-    else logLine("[guide] the walk's card momo-mark could not be made");
+    if (!note) return logLine("[guide] the walk's card momo-mark could not be made");
+    catalog->notes["momo-mark"] = *note;
+    // Drawn as a served note is, each time it is made again (WS103): as Momo's, like the cards round momo-can.
+    Json view = Json::object(), item = Json::object();
+    view.set("component", "note").set("props", Json::object());
+    std::string shown = note->highlight.empty() ? note->summary : note->highlight + " " + note->summary;
+    item.set("title", note->headline).set("summary", shown).set("origin", Json::object().set("by", "agent")).set("data", Json::object().set("from", "Momo"));
+    cards::ocean::hold(cards::OceanCard{"momo-mark", view, item, std::nullopt});
 }
 
 void OceanModel::ensureWelcomeTree(const char* why) {
