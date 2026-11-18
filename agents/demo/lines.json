@@ -50,7 +50,11 @@
    {
     "id": "answer",
     "kind": "answer",
-    "cards": [],
+    "cards": [
+     "gen-idea-time",
+     "gen-idea-branches",
+     "gen-idea-depth"
+    ],
     "text": "Yes my pleasure! I built a few interactive cards that organize information by time, branches, or depth. You might also be interested in the WoodSwimmer film I found—another take on the tree analogy."
    }
   ],

@@ -139,12 +139,23 @@ export function schedule(phase: ScriptPhase, under = '', mode: Mode = 'fast'): S
   const steps: Step[] = [];
   const drops: Drop[] = [];
   if (phase.cards.length === 0) return { steps, drops, end: 0, settled: 0 };
-  const own = phase.cards.filter((card) => card.origin === 'ocean');
-  const outside = phase.cards.filter((card) => card.origin === 'external');
-  const made = phase.cards.filter((card) => card.origin === 'generated');
+  // The cards Momo's opening line tells of land first, all at once, as quickly as the user's own things would.
+  const first = phase.cards.filter((card) => phase.first.includes(card.id));
+  const rest = phase.cards.filter((card) => !phase.first.includes(card.id));
+  const own = rest.filter((card) => card.origin === 'ocean');
+  const outside = rest.filter((card) => card.origin === 'external');
+  const made = rest.filter((card) => card.origin === 'generated');
 
   let start: number = REAL.begins;
   const began = start;
+  if (first.length > 0) {
+    const lands = began + REAL.own;
+    for (const card of first) {
+      const label = card.origin === 'ocean' ? 'Checking what you already have' : card.image && card.origin === 'generated' ? `Making a picture of ${card.title}`.slice(0, 60) : `Searching ${sourceOf(card)} for ${queryOf(card.title)}`.split(' ').slice(0, 7).join(' ');
+      if (!steps.some((step) => step.label === label)) steps.push({ label, at: began, end: lands });
+    }
+    drops.push({ at: lands, cards: first.map((card) => card.id) });
+  }
   if (outside.length + made.length > 0) {
     steps.push({ label: 'Choosing where to look first', at: start, end: start + REAL.plan });
     start += REAL.plan;
@@ -162,8 +173,8 @@ export function schedule(phase: ScriptPhase, under = '', mode: Mode = 'fast'): S
   // A run searches a few sources, not a dozen: the largest keep their names, and the rest are the web's.
   const named = [...bySource].sort((a, b) => b[1].length - a[1].length);
   const sources = named.slice(0, 2);
-  const rest = named.slice(2).flatMap(([, cards]) => cards);
-  if (rest.length > 0) sources.push(['the web', rest]);
+  const others = named.slice(2).flatMap(([, cards]) => cards);
+  if (others.length > 0) sources.push(['the web', others]);
   for (const [n, [source, cards]] of sources.entries()) {
     const found = start + REAL.search + n * REAL.searchApart + (source === 'research papers' ? REAL.papers : 0) + (cards.some((card) => card.image) ? REAL.pictures : 0);
     // The label names the service's own source, which a single museum or library is not, and what was searched for.
@@ -268,8 +279,10 @@ export function takeOf(phase: ScriptPhase, lines: readonly Line[], lengthOf: (te
   for (const line of lines) {
     const ms = lengthOf(line.text);
     const landed = Math.max(0, ...line.cards.map((id) => landsAt.get(id) ?? 0));
-    // The wrap-up waits for every agent to be done, so Momo never sums up a search that is still shown at work.
-    const at = Math.max(free, line.kind === 'answer' ? 0 : line.kind === 'wrap' ? sched.settled : landed);
+    // The wrap-up waits for every agent to be done, so Momo never sums up a search that is still shown at work. Her answer is
+    // said as the search starts, unless it tells of cards: then once they stand, laid out.
+    const answer = line.cards.length > 0 ? landed + REAL.laidOut : 0;
+    const at = Math.max(free, line.kind === 'answer' ? answer : line.kind === 'wrap' ? sched.settled : landed);
     timed.push({ ...line, at, ms });
     if (ms > 0) free = at + ms + REAL.breath;
   }

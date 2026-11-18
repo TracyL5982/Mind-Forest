@@ -77,6 +77,11 @@ export const ScriptPhase = z.object({
   note: z.string().default(''),
   /** A question offered under the round's card that plays this round when it is picked, whatever its place in the order. */
   ask: z.string().optional(),
+  /**
+   * Cards of the round that land before any other in a fast take, together, as soon as the user's own things would, as found
+   * cards land: those Momo's opening line tells of, which she says once they stand (the user's ask, 2026-11-18).
+   */
+  first: z.array(z.string()).default([]),
   cards: z.array(ScriptCard),
 });
 export type ScriptPhase = z.infer<typeof ScriptPhase>;
@@ -117,6 +122,7 @@ export const DemoScript = z.object({
       if (known.has(card.id)) ctx.addIssue({ code: 'custom', message: `the card ${card.id} is in two rounds` });
       known.add(card.id);
     }
+    for (const id of phase.first) if (!phase.cards.some((card) => card.id === id)) ctx.addIssue({ code: 'custom', message: `round ${phase.id} lands ${id} first, which it does not bring` });
   }
 });
 export type DemoScript = z.infer<typeof DemoScript>;

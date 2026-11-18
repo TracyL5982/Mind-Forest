@@ -134,7 +134,7 @@ The right column shows the picked round's take:
 
 In a take Momo's wrap-up starts only once every agent's label has gone: the last card has landed, the Scout's run is over and the Renderer has laid the cards out. From then the take is Momo alone. A real round is less tidy: there she starts wrapping up as the Scout's run ends, while the Renderer may still be laying cards out.
 
-A round's lines are whatever `lines.json` lists for it. In four rounds the fast take is one line the user wrote (2026-11-17), said as written in her realtime voice as the search starts, with no remark on a card, no count and no wrap-up: Round 1, Round 2, Round 3 and "Easy to get lost". Their real-pace takes are her own, as everywhere else. `scripts/demo-lines.ts --again` on one of those rounds at fast pace would replace the user's line with her own words, so it is not run on them.
+A round's lines are whatever `lines.json` lists for it. In four rounds the fast take is one line the user wrote (2026-11-17), said as written in her realtime voice as the search starts, with no remark on a card, no count and no wrap-up: Round 1, Round 2, Round 3 and "Easy to get lost". Round 3's line tells of its three made diagrams ("I built a few interactive cards…"), so in its fast take By time, By branches and By depth land first, together, 1.5 s in, as found cards land, and she starts the line at 2.4 s, once they stand. The rest of the round follows as before: the user's own things at 3.0 s and the found cards at 5.2 s (the user's ask, 2026-11-18; `first` on the round in `script.json`). Their real-pace takes are her own, as everywhere else. In Round 3's, each diagram has landed by the time she speaks of it. `scripts/demo-lines.ts --again` on one of those rounds at fast pace would replace the user's line with her own words, so it is not run on them.
 
 How long a round takes is mostly Momo: the found cards land 3 to 6.5 seconds in, a written idea from 13 seconds, a made picture at about 30, and she talks for 30 to 50 seconds. The page shows each take's length.
 
@@ -279,12 +279,14 @@ The file was generated from the walkthrough board by `sketches/walkthrough/gen/d
 
 The user changed the storyboard on 2026-11-17, in `script.json` itself, so running the generator again would undo it:
 
-- Slice of Heartland moved from Round 3 into Round 1, and Round 2 is asked from it with "Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?".
+- Slice of Heartland moved from Round 3 into Round 1, and Round 2 was asked from it (until 2026-11-18, below) with "Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?".
 - Momo opens Round 2 in her own words, as long as the user's example and in its spirit ("Let's map it out. I built a few interactive cards from Darwin's 1837 branching notebook alongside a 3D biotecture model—sketch on whichever structure clicks!"), but claiming only what the cards are: "Let’s map it out: I’m bringing Darwin’s 1837 branching tree sketch and a Biotecture tower drawn like a tree. Sketch on whichever structure clicks." It was the best of her takes, asked for with `scripts/demo-lines.ts --only n2 --openings 3 --steer "<note>"`, and then given to both paces with `--answer`.
 - Darwin's 1837 tree ("I think") moved from Round 3 into Round 2, beside Biotecture, so those words are true of the round.
 - "More of this" is the long pinch on A disc of pictures, a Round 2 card, not on the Neurones poster.
 - Round 3 is asked from Darwin's notebook tree, not Llull's ring, and is drawn on there. Momo's wrap-up in Round 2 points at that card (`scripts/demo-lines.ts --wrap "<note>"`), and the user prunes Llull's ring. The Neurones poster leads no round.
 - "Layers?" is asked from WoodSwimmer, not Slice of Heartland, since two rounds asked from one card put both rounds' cards on one layer.
+
+On 2026-11-18 Round 2 moved to the user's flower tree photo, the card Round 1 brings from their Telegram: pinch the Flower tree, then say "Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?". Slice of Heartland stays in Round 1 and leads no round. Momo's lines in Round 2 name neither card, so they stand as recorded.
 
 ## How it works
 

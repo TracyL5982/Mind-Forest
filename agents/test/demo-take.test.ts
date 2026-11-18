@@ -50,24 +50,34 @@ test('a round\'s schedule lands every card once, the user\'s own first, then eac
       assert.ok(written ? sched.steps.some((step) => /^Thinking of directions/.test(step.label) && step.at < drop.at && drop.at <= step.end) : sched.steps.some((step) => step.end === drop.at), `${phase.id}: a label ends as its cards land`);
     }
   }
-  const n3 = round('n3');
-  const sched = schedule(n3);
-  const own = n3.cards.filter((card) => card.origin === 'ocean').map((card) => card.id);
+  const f4 = round('f4');
+  const sched = schedule(f4);
+  const own = f4.cards.filter((card) => card.origin === 'ocean').map((card) => card.id);
   assert.deepEqual(sched.drops[0], { at: REAL.begins + REAL.plan + REAL.own, cards: own }, 'what the user has lands first');
   assert.deepEqual(sched.steps.slice(0, 2).map((step) => step.label), ['Choosing where to look first', 'Checking what you already have']);
-  const made = n3.cards.filter((card) => card.origin === 'generated' && card.image);
+  const made = f4.cards.filter((card) => card.origin === 'generated' && card.image);
   assert.ok(made.length > 0 && made.every((card) => sched.drops.find((drop) => drop.cards.includes(card.id))!.at >= REAL.begins + REAL.plan + REAL.picture), 'a made picture takes as long as one does');
+  // Round 3's three diagrams, which Momo's opening line tells of, land before anything else in a fast take, as quickly as the
+  // user's own things would, and the rest of the round as ever (the user's ask, 2026-11-18).
+  const n3 = round('n3');
+  const three = ['gen-idea-time', 'gen-idea-branches', 'gen-idea-depth'];
+  assert.deepEqual(n3.first, three);
+  const fast = schedule(n3, 'I think');
+  assert.deepEqual(fast.drops[0], { at: REAL.begins + REAL.own, cards: three });
+  assert.deepEqual(fast.drops[1], { at: REAL.begins + REAL.plan + REAL.own, cards: n3.cards.filter((card) => card.origin === 'ocean').map((card) => card.id) });
+  assert.ok(fast.drops.slice(1).every((drop) => drop.cards.every((id) => !three.includes(id))));
   assert.deepEqual(schedule(round('bs')), { steps: [], drops: [], end: 0, settled: 0 }, 'a round that brings nothing has no run');
 });
 
 test('Momo speaks at the moments the live voice does: her answer, the first card, later cards gathered, and a wrap-up', async () => {
-  const n3 = round('n3');
-  const lines = await plan(n3);
+  // Round 3's diagrams land first now, so the round whose cards come over half a minute is Layers? (f3).
+  const f3 = round('f3');
+  const lines = await plan(f3);
   assert.deepEqual(lines.map((line) => line.kind), ['answer', 'first', ...lines.slice(2, -1).map(() => 'more'), 'wrap']);
   assert.ok(lines.length >= 4, 'a round whose cards come over half a minute has remarks between the first card and the wrap-up');
   assert.equal(lines[1]!.cards.length, 1, 'the first remark is of the first card alone');
-  assert.equal(lines[1]!.cards[0], schedule(n3).drops[0]!.cards[0]);
-  assert.deepEqual(lines.flatMap((line) => line.cards).sort(), n3.cards.map((card) => card.id).sort(), 'between them the lines tell of every card once');
+  assert.equal(lines[1]!.cards[0], schedule(f3).drops[0]!.cards[0]);
+  assert.deepEqual(lines.flatMap((line) => line.cards).sort(), f3.cards.map((card) => card.id).sort(), 'between them the lines tell of every card once');
   assert.deepEqual(lines.map((line) => line.id), ['answer', 'first', ...lines.slice(2, -1).map((_, n) => `more-${n + 1}`), 'wrap']);
 
   assert.deepEqual((await plan(round('f7'))).map((line) => line.kind).slice(0, 1), ['first'], 'a round asked for by a pinch has no answer: nothing was said');
@@ -77,10 +87,10 @@ test('Momo speaks at the moments the live voice does: her answer, the first card
 });
 
 test('on the timeline a remark starts as its cards land, never over the line before it, and the wrap-up after the run is over', async () => {
-  const n3 = round('n3');
-  const lines = await plan(n3);
-  const sched = schedule(n3);
-  const take = takeOf(n3, lines, () => 4000);
+  const f3 = round('f3');
+  const lines = await plan(f3);
+  const sched = schedule(f3);
+  const take = takeOf(f3, lines, () => 4000);
   assert.equal(take.lines[0]!.at, 0);
   for (const [n, line] of take.lines.entries()) {
     if (n > 0) assert.ok(line.at >= take.lines[n - 1]!.at + take.lines[n - 1]!.ms + REAL.breath, `${line.id} waits for the line before it`);
@@ -88,16 +98,16 @@ test('on the timeline a remark starts as its cards land, never over the line bef
     assert.ok(line.at >= landed, `${line.id} is not said before its cards land`);
   }
   assert.equal(take.lines[1]!.at, 4000 + REAL.breath, 'the first card is told once her answer is over, when it landed while she spoke');
-  assert.equal(takeOf(n3, lines, () => 2000).lines[1]!.at, sched.drops[0]!.at, 'and the moment it lands, when she was free');
+  assert.equal(takeOf(f3, lines, () => 2000).lines[1]!.at, sched.drops[0]!.at, 'and the moment it lands, when she was free');
   assert.ok(take.lines.at(-1)!.at >= sched.end);
   assert.equal(take.ms, take.lines.at(-1)!.at + 4000 + REAL.tail);
 
   // Longer lines push later ones back and never the cards.
-  const slow = takeOf(n3, lines, () => 15_000);
+  const slow = takeOf(f3, lines, () => 15_000);
   assert.deepEqual(slow.drops, take.drops);
   assert.ok(slow.lines[2]!.at > take.lines[2]!.at && slow.ms > take.ms);
   // A line with no words is not said and takes no time.
-  const silent = takeOf(n3, lines.map((line) => (line.id === 'first' ? { ...line, text: '' } : line)), (text) => (text ? 4000 : 0));
+  const silent = takeOf(f3, lines.map((line) => (line.id === 'first' ? { ...line, text: '' } : line)), (text) => (text ? 4000 : 0));
   assert.equal(silent.lines[1]!.ms, 0);
 
   const mid = (sched.drops[0]!.at + sched.drops[1]!.at) / 2;
@@ -107,7 +117,7 @@ test('on the timeline a remark starts as its cards land, never over the line bef
   assert.deepEqual(momentAt(take, 0).cards, []);
   assert.equal(momentAt(take, 1000).line?.line.id, 'answer');
   assert.equal(momentAt(take, 1000).line?.offset, 1000);
-  assert.deepEqual(momentAt(take, take.ms).cards.sort(), n3.cards.map((card) => card.id).sort());
+  assert.deepEqual(momentAt(take, take.ms).cards.sort(), f3.cards.map((card) => card.id).sort());
 });
 
 // ---- the written lines
@@ -512,8 +522,8 @@ test('Play on an empty stage starts the tree and brings the first round, and a r
 // ---- Momo and the other agents
 
 test('in every round Momo wraps up only once every agent is done, and is never left resting while one still works', () => {
-  // The rounds as they are recorded: the repository's own lines, each as long as its recording. A round whose lines tell of none of
-  // its cards says what the user wrote for it, as written, and nothing more (the user's choice, 2026-11-17): it has no wrap-up.
+  // The rounds as they are recorded: the repository's own lines, each as long as its recording. A round whose take is a single
+  // answer says what the user wrote for it, as written, and nothing more (the user's choice, 2026-11-17): it has no wrap-up.
   const said = new Lines({ demoDir, dataDir: temp('mp-demo-data-'), voice: 'marin', log: () => {} });
   let wraps = 0;
   let written = 0;
@@ -525,7 +535,7 @@ test('in every round Momo wraps up only once every agent is done, and is never l
     assert.ok(take.steps.every((step) => step.end <= take.end), `${phase.id}: a label outlasts the run`);
     assert.ok(take.end <= take.settled && lastCard + 600 < take.settled, `${phase.id}: the agents are done before the take says they are`);
     const wrap = take.lines.find((line) => line.kind === 'wrap');
-    const tells = take.lines.some((line) => line.cards.length > 0);
+    const tells = take.lines.some((line) => line.kind !== 'answer');
     if (take.lines.length > 0 && !tells) written++;
     else if (take.lines.length > 0) assert.ok(wrap, `${phase.id}: the lines tell of its cards and do not wrap up`);
     if (wrap) {
@@ -554,11 +564,13 @@ test('in every round Momo wraps up only once every agent is done, and is never l
 
 test('a round whose lines the user wrote says them as written and nothing more: its take is those lines, from her realtime recordings', () => {
   const said = new Lines({ demoDir, dataDir: temp('mp-demo-data-'), voice: 'marin', log: () => {} });
-  const written = script.phases.filter((phase) => phase.cards.length > 0 && said.of(phase.id).length > 0 && said.of(phase.id).every((line) => line.cards.length === 0));
+  const written = script.phases.filter((phase) => phase.cards.length > 0 && said.of(phase.id).length > 0 && said.of(phase.id).every((line) => line.kind === 'answer'));
   assert.deepEqual(written.map((phase) => phase.id), ['r1', 'n2', 'n3', 'f1'], 'the rounds the user wrote Momo\'s fast lines for (2026-11-17)');
   for (const phase of written) {
     const take = takeOf(phase, said.of(phase.id), (text) => said.ms(text), 'the card');
-    assert.deepEqual(take.lines.map((line) => [line.kind, line.at, line.text]), said.of(phase.id).map((line) => ['answer', 0, line.text]), `${phase.id}: the line, as the search starts`);
+    // As the search starts; in Round 3, once the three diagrams it tells of stand (the user's ask, 2026-11-18).
+    const stand = (cards: readonly string[]) => (cards.length === 0 ? 0 : Math.max(...take.drops.filter((drop) => drop.cards.some((id) => cards.includes(id))).map((drop) => drop.at)) + REAL.laidOut);
+    assert.deepEqual(take.lines.map((line) => [line.kind, line.at, line.text]), said.of(phase.id).map((line) => ['answer', stand(line.cards), line.text]), `${phase.id}: the line, as the search starts or once its cards stand`);
     assert.ok(take.lines.every((line) => said.recorded(line.text) && line.ms === said.ms(line.text)), `${phase.id}: each from its recording`);
     assert.ok(take.ms >= take.settled, `${phase.id}: the take lasts until every agent is done`);
   }
@@ -641,7 +653,7 @@ test('at both paces, in every round, Momo speaks of a card only once it has land
         const wrap = take.lines.find((line) => line.kind === 'wrap');
         if (wrap) assert.ok(wrap.at >= take.settled && take.lines.at(-1) === wrap, `${mode} ${phase.id}, ${name}: the wrap-up waits for every agent, and is the last thing said`);
         // Lines that tell of the round's cards tell of each once; lines the user wrote for a round tell of none, and are said as written.
-        if (phase.cards.length > 0 && lines.some((line) => line.cards.length > 0)) assert.deepEqual(take.lines.flatMap((line) => line.cards).sort(), phase.cards.map((card) => card.id).sort(), `${mode} ${phase.id}, ${name}: between them the lines tell of every card once`);
+        if (phase.cards.length > 0 && lines.some((line) => line.kind !== 'answer')) assert.deepEqual(take.lines.flatMap((line) => line.cards).sort(), phase.cards.map((card) => card.id).sort(), `${mode} ${phase.id}, ${name}: between them the lines tell of every card once`);
       }
     }
   }

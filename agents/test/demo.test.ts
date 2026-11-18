@@ -91,9 +91,10 @@ test('going to a round builds every round before it, kept, and leaves it the nex
     assert.equal(run.mind.nodes.size, wanted + 1);
     assert.ok([...run.mind.nodes.values()].every((node) => node.status === 'kept'));
     assert.equal(run.demo!.status().armed, 3);
-    // Round 2 hangs from the film Round 1 brought, as the script says, More of this from A disc of pictures, and Round 3 waits on
-    // Darwin's notebook tree with nothing under it.
-    assert.deepEqual(titlesUnder(run, 'Slice of Heartland').sort(), cardsOf('n2').map((card) => card.title).sort());
+    // Round 2 hangs from the user's flower tree photo Round 1 brought, as the script says, and Slice of Heartland leads none; More
+    // of this from A disc of pictures, and Round 3 waits on Darwin's notebook tree with nothing under it.
+    assert.deepEqual(titlesUnder(run, 'Flower tree').sort(), cardsOf('n2').map((card) => card.title).sort());
+    assert.deepEqual(titlesUnder(run, 'Slice of Heartland'), []);
     assert.deepEqual(titlesUnder(run, 'A disc of pictures').sort(), cardsOf('mo').map((card) => card.title).sort());
     assert.deepEqual(titlesUnder(run, 'I think'), []);
     // The card's look is chosen with it: a paper is a reference, a picture carries its shape.
@@ -166,8 +167,8 @@ test('the questions under a round\'s card are the script\'s, and the stage can b
   const run = await boot();
   try {
     await run.demo!.goto('n2');
-    const film = nodeOf(run, 'Slice of Heartland')!;
-    assert.deepEqual(await run.pipeline.questions(film.id), script.phases.find((phase) => phase.id === 'n2')!.offers);
+    const photo = nodeOf(run, 'Flower tree')!;
+    assert.deepEqual(await run.pipeline.questions(photo.id), script.phases.find((phase) => phase.id === 'n2')!.offers);
     const tree = [...run.mind.trees.keys()][0];
     // Going on keeps the tree a headset has standing; only an empty stage takes it away.
     await run.demo!.goto('f1');

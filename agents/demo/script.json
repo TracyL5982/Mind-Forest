@@ -253,18 +253,18 @@
    "chart": "s7",
    "title": "Round 2 · Other analogies",
    "parent": "r1",
-   "head": "slice-of-heartland",
+   "head": "flower-tree",
    "say": "Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?",
    "sayAlso": [],
    "do": [
-    "Pinch Slice of Heartland: it opens"
+    "Pinch the Flower tree: it opens"
    ],
    "momo": "From your ocean: Biotecture and five of your pins. From outside: Darwin's first tree, a coral, a table with gaps, a song in a ring, a city and a ring of ideas.",
    "offers": [
     "Why a coral and not a tree?",
     "What are the gaps in the table for?"
    ],
-   "note": "The user's choice (2026-11-17): asked from Slice of Heartland, which moved into Round 1 for it.",
+   "note": "The user's choice (2026-11-18): asked from the Flower tree, the user's photo that Round 1 brings. Slice of Heartland stays in Round 1 and leads no round.",
    "cards": [
     {
      "id": "t080",
@@ -681,6 +681,11 @@
    "momo": "Three ways, each on its own card: by time, by branches, or by what stands in front. Examples are under each.",
    "offers": [],
    "note": "The user's choice (2026-11-17): asked from Darwin's notebook tree (\"I think\"), which Round 2 brings and Momo's opening names. Kai's Linux picture (with its mark) and his note stand in this panel on the board.",
+   "first": [
+    "gen-idea-time",
+    "gen-idea-branches",
+    "gen-idea-depth"
+   ],
    "cards": [
     {
      "id": "gen-idea-time",
@@ -3218,12 +3223,12 @@
    {
     "id": "s7",
     "phase": "n2",
-    "text": "Round 2 · “Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?”",
+    "text": "Round 2 · on your flower tree photo, “Hey Momo, the tree as an analogy looks interesting, can we explore that a bit more?”",
     "kind": "ask",
     "x": 304,
     "y": 105,
     "w": 240,
-    "h": 91
+    "h": 133
    },
    {
     "id": "u1",
