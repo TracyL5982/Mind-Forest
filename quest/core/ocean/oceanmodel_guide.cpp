@@ -1452,6 +1452,13 @@ void OceanModel::tourTalk(int lesson, bool wanted, double now, std::optional<Vec
     }
     // Why nothing is heard, if nothing can be; otherwise what the last turn came to, or after a while a nudge.
     int hear = tourHearing();
+    // The microphone has just come on (allowed at its window, or in Settings): the wait for words begins now, so the way
+    // on without speaking, which stood while Momo could not hear, goes. (The user, 2026-11-18.)
+    if (hear == 0 && teach.talkHearing > 0) {
+        teach.talkSince = now;
+        teach.talkMisses = 0;
+    }
+    teach.talkHearing = hear;
     double waited = now - teach.talkSince;
     std::string note = teach.talkNote;
     bool pill = teach.talkMisses >= 2, settings = false;

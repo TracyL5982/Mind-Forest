@@ -647,6 +647,7 @@ private:
         // The walk's two steps with Momo (oceanmodel_guide.cpp, "Talking to Momo").
         int talkFor = -1;                   // the lesson whose words are waited for; -1 when none are
         double talkSince = 0;               // since when
+        int talkHearing = -1;               // whether Momo could hear when last looked (`tourHearing`)
         double talkWoke = -1;               // when the name was heard, while what follows it is awaited
         int talkMisses = 0;                 // turns that were nothing, or something else
         std::string talkNote;               // what is said about the last turn
