@@ -70,9 +70,9 @@ struct TourStep {
 };
 const TourStep tourSteps[] = {
     {"welcome", "pinch", "Welcome to Mind Forest",
-     "Around you is everything the gardener remembers; a tree is the part in play. Point at the next card and pinch.", "ask", "", "", 2, 0.92f, "Point at card 2 and pinch it"},
+     "Around you is everything Momo remembers; a tree is the part in play. Point at the next card and pinch.", "ask", "", "", 2, 0.92f, "Point at card 2 and pinch it"},
     {"welcome-pan", "carry", "Grab to pan",
-     "Your pinch asked a question and its answer made this layer. Close your hand and move it: the tree comes too.", "carry", "", "", 2, 0.72f, "Close your hand and move it sideways"},
+     "This is a new layer of the tree: each one grows from a card. Close your hand and move it: the tree comes too.", "carry", "", "", 2, 0.72f, "Close your hand and move it sideways"},
     {"welcome-pull", "layers", "Grab to pull or push",
      "Close your hand and pull it toward you: the layer behind comes back. Push it away to return here.", "step", "tree", "Or choose a layer here  ↓", 1, 0.68f, "Close your hand and pull it toward you"},
     {"welcome-move", "drag", "Pinch and hold to move",
@@ -80,7 +80,7 @@ const TourStep tourSteps[] = {
     // NOTE: the two steps with Momo were added on 2026-11-15, once Momo was in the build (Kai: "weave momo
     // interactions into the onboarding"): asking it aloud what it can do, and sending it a sketch with a word about it.
     {"welcome-momo", "say", "Ask Momo",
-     "Momo is the gardener's voice. Say its name first, then what you want. Begin by asking what it can do for you.", "momo", "", "", 0, 0.8f,
+     "Momo is your thinking partner. Say its name first, then what you want. Begin by asking what it can do for you.", "momo", "", "", 0, 0.8f,
      "Say “Hi Momo, what can you do for me?”", "momo-can"},
     {"welcome-mark", "mark", "Show Momo part of a picture",
      "Pinch this card again to go in, take up the pen and draw round something. Then send it to Momo, and say what you want to know.", "mark", "", "", 0, 0.68f,

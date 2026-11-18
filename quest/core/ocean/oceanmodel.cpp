@@ -118,7 +118,8 @@ void OceanModel::build() {
         hologram->entity->isEnabled = false;
     }
 
-    if (std::optional<Piece> piece = art->tray("To image generation")) {
+    // AGENT: joined to the service nothing is ever sent to the tray (a tree is handed off through Momo), so it is not there.
+    if (std::optional<Piece> piece = agentBridge ? std::nullopt : art->tray("To image generation")) {
         EntityRef tray = art->quad(*piece);
         tray->position = trayPoint() + stage.u * 0.012f;
         // It lies on the desk, near, so it is smaller and square to the desk's edge.
