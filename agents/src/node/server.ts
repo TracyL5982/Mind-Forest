@@ -11,7 +11,7 @@ import { DEFAULT_SETTINGS, type Handoff, type Playback, type Roles, type Setting
 import { Mindstorm } from '../core/state.ts';
 import { saysWakePhrase, spokenName, withoutWakePhrase } from '../core/wake.ts';
 import { DiskAssets } from './assets.ts';
-import { Declined, whereItWent, type Channel, type Delivery, type Desk } from './contact.ts';
+import { Declined, whereItWent, type Channel, type Delivery, type Desk, type Invite } from './contact.ts';
 import { chatContext, readMessage } from './momo-chat.ts';
 import { matchTrees, treeLines } from './tree-asks.ts';
 import { landedCards, nameOf, runTool, toolLabel, toolSpecs, whereNote } from '../core/voice-tools.ts';
@@ -24,7 +24,7 @@ import { SPEECH_VOICE, HEARING_DOLLARS_PER_MINUTE, SPEECH_DOLLARS_PER_MINUTE, he
 import { checkName } from './wake-check.ts';
 import type { WebAnswer } from './web-answer.ts';
 import { SqliteStore } from './store.ts';
-import { Telegram, type TelegramOptions } from './telegram.ts';
+import { CODE_MS, Telegram, type TelegramOptions } from './telegram.ts';
 import { followingIn, openInstagram, type InstagramLibrary } from './instagram.ts';
 import { makeTools } from './tools.ts';
 import { zip } from './zip.ts';
@@ -472,10 +472,23 @@ export async function openSpace(given: Omit<ServerOptions, 'port' | 'host'>): Pr
       admit();
       await pipeline.handoff({ treeIds: [treeId], nodeIds: [] });
     },
+    // The headsets are told when the contact is paired or no longer is (`telegram`), so a pairing panel can close.
+    paired: (paired) => broadcast({ t: 'telegram', paired }),
   };
   const own = opts.telegram ? new Telegram({ ...opts.telegram, desk, file: join(opts.dataDir, 'telegram.json'), log }) : null;
   const telegram: Channel | null = opts.contact?.(desk) ?? own;
   const contact = () => ({ available: telegram !== null, ...(telegram?.status() ?? { ready: false, paired: null }) });
+  /**
+   * A pairing code given out while no one is paired also goes to the headsets (`telegram`, with the bot and the code), so the pairing
+   * panel shows the code Momo reads out. Never logged: a code is a secret while it works.
+   */
+  const toldCode = (invite: Invite | null): Invite | null => {
+    if (invite?.code && telegram?.status().paired === null) {
+      broadcast({ t: 'telegram', paired: false, bot: invite.bot, code: invite.code, expiresIn: invite.expiresIn ?? CODE_MS / 1000 });
+    }
+    return invite;
+  };
+  const voiceContact = telegram ? { status: () => telegram.status(), pair: () => toldCode(telegram.pair()) } : undefined;
 
   async function bundle(handoff: Handoff): Promise<{ name: string; url: string; markdown: string; files: string[] }> {
     const name = handoff.name.replace(/[^a-z0-9-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'handoff';
@@ -587,7 +600,7 @@ export async function openSpace(given: Omit<ServerOptions, 'port' | 'host'>): Pr
     if (req.method === 'GET' && path === '/api/telegram') return json(res, 200, contact());
     if (req.method === 'POST' && path === '/api/telegram/pair') {
       if (!telegram) return json(res, 404, { error: 'this service has no Telegram bot' });
-      const invite = telegram.pair();
+      const invite = toldCode(telegram.pair());
       return invite ? json(res, 200, invite) : json(res, 503, { error: 'Telegram has not answered yet' });
     }
     if (req.method === 'POST' && path === '/api/telegram/unpair') {
@@ -859,7 +872,7 @@ export async function openSpace(given: Omit<ServerOptions, 'port' | 'host'>): Pr
           }
           const why = (READING.has(name) ? null : noRoom()) ?? (SEARCHING.has(name) ? meter?.refused('searches') : null);
           if (why) return Promise.resolve({ error: why });
-          return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said, contact: telegram ?? undefined }));
+          return asking.run({ ws: own, voice }, () => runTool(name, args, { pipeline, scene, webAnswer, said, contact: voiceContact }));
         },
         label: toolLabel,
         where: (scene) => whereNote(pipeline.ctx, scene) + (director?.takeNote(scene.focus) ?? ''),
@@ -992,6 +1005,9 @@ export async function openSpace(given: Omit<ServerOptions, 'port' | 'host'>): Pr
     const connection = randomUUID();
     connections.set(connection, ws);
     ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, maps, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser', live: Boolean(opts.live), connection, ...(sharing && !director ? { share: 'telegram' } : {}) }));
+    // On a service whose Telegram is a hosted contact, whether this headset is paired with a chat: unpaired, its Send and Share say
+    // to pair first, and a pinch on that opens the pairing panel (`pair`).
+    if (opts.contact && telegram) ws.send(JSON.stringify({ t: 'telegram', paired: telegram.status().paired !== null }));
     ws.on('close', () => {
       sockets.delete(ws);
       looks.delete(ws);
@@ -1033,6 +1049,20 @@ export async function openSpace(given: Omit<ServerOptions, 'port' | 'host'>): Pr
         else if (!m.nodeId || looks.get(ws)?.nodeId === m.nodeId) looks.delete(ws);
         voices.get(ws)?.look(m);
         return;
+      case 'pair': {
+        // The headset's pairing panel asks for the bot and a code, the one already given while it still has a while to run.
+        if (!telegram) {
+          ws.send(JSON.stringify({ t: 'error', message: 'this service has no Telegram to pair with' }));
+          return;
+        }
+        if (telegram.status().paired !== null) {
+          ws.send(JSON.stringify({ t: 'telegram', paired: true }));
+          return;
+        }
+        const invite = telegram.pair({ reuse: true });
+        ws.send(JSON.stringify(invite?.code ? { t: 'telegram', paired: false, bot: invite.bot, code: invite.code, expiresIn: invite.expiresIn ?? CODE_MS / 1000 } : { t: 'telegram', paired: false, ready: false }));
+        return;
+      }
       case 'share':
         // The demo shares a tree with the user as the friend (the film); the hosted service, through the person's Telegram, with a
         // friend who uses it too, and tells the headset how it went. Any other service shares nothing.

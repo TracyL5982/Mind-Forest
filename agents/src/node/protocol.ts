@@ -56,6 +56,7 @@ export const ClientMessage = z.discriminatedUnion('t', [
   Look,
   /** Shares a tree with a friend. In the demo (the film) the friend is the user; between two people it is to come. */
   z.object({ t: z.literal('share'), tree: Id }),
+  z.object({ t: z.literal('pair') }),
   z.object({ t: z.literal('settings'), patch: z.object({
     picksMode: z.enum(['provisional', 'immediate']).optional(),
     picksPerRun: z.number().int().min(1).max(8).optional(),
