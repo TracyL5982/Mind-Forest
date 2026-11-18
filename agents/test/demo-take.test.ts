@@ -113,9 +113,9 @@ test('on the timeline a remark starts as its cards land, never over the line bef
 
 const silentOf = (demoDir: string, dataDir: string) => new Lines({ demoDir, dataDir, voice: 'test-voice', log: () => {} });
 
-async function linesFolder(rounds: string[]): Promise<string> {
+async function linesFolder(rounds: string[], said?: Record<string, string>): Promise<string> {
   const dir = temp('mp-demo-lines-');
-  const file: LinesFile = { version: 1, voice: 'test-voice', rounds: {}, real: {} };
+  const file: LinesFile = { version: 1, voice: 'test-voice', rounds: {}, real: {}, ...(said ? { said } : {}) };
   for (const id of rounds) file.real[id] = await planLines(round(id), 'the card', async ({ kind, cards }) => ({ text: `${kind} at real pace: ${cards.map((card) => card.title).join(', ') || 'no card'}.`, ms: 4000 }), 'real');
   for (const id of rounds) file.rounds[id] = await plan(round(id));
   writeFileSync(join(dir, 'lines.json'), JSON.stringify(file));
@@ -201,13 +201,13 @@ interface Stage {
 }
 
 /** The demo with stand-in roles, a headset joined with its voice open, and takes that run `rate` times as fast as a real round. */
-async function stage(rate: number, rounds = ['n3']): Promise<Stage> {
+async function stage(rate: number, rounds = ['n3'], said?: Record<string, string>): Promise<Stage> {
   const spoken: string[] = [];
   const run = await startServer({
     port: 0, host: '127.0.0.1', dataDir: data.fresh(), clientDir: join(import.meta.dirname, '../client'), model: new FakeModel(), roles: fakeRoles, token: 'secret',
     live: { open: () => ({ send: () => {}, close: () => {} }), options: { model: 'gpt-realtime-2.1-mini', voice: 'marin', turn: { kind: 'semantic' as const }, hearing: 'gpt-4o-transcribe' } },
     demo: {
-      script, mediaDir: join(demoDir, 'media'), linesDir: await linesFolder(rounds), voice: 'test-voice', record: async (text) => (spoken.push(text), record(text)),
+      script, mediaDir: join(demoDir, 'media'), linesDir: await linesFolder(rounds, said), voice: 'test-voice', record: async (text) => (spoken.push(text), record(text)),
       pace: { stand: 300, open: 300, land: 300, breath: 0, step: 0, rate, rejoin: 500 },
     },
   });
@@ -340,6 +340,36 @@ test('moving the bar makes the tree stand as it did at that moment, forwards and
 
     await assert.rejects(run.demo!.playTake('f2'), /not set up for .*Go to this round first/, 'a later round is not played over a tree that is not ready for it');
     assert.match(run.demo!.status().problem!, /Go to this round first/);
+  } finally {
+    await s.close();
+  }
+});
+
+test('when the last round has played to its end Momo asks about Muse Code, once in each set-up, and again from the page', { timeout: 30000 }, async () => {
+  const question = 'Ready to take this to Muse Code?';
+  const last = script.phases.at(-1)!.id;
+  const s = await stage(300, [last], { museCode: question });
+  const asked = () => saidOf(s.voice).filter((text) => text === question).length;
+  try {
+    const { run } = s;
+    await run.demo!.goto(last);
+    assert.deepEqual(run.demo!.status().ending, { asked: false, armed: false }, 'set up, the round waits and nothing is asked');
+    void run.demo!.playTake(last);
+    await until(() => run.demo!.status().ending?.armed === true, 20000);
+    assert.equal(asked(), 1, 'she asks it as the take ends, with its caption');
+    // Played again in the same set-up, it is not asked again.
+    await run.demo!.seek(last, 0);
+    void run.demo!.playTake(last);
+    await until(() => run.demo!.status().take?.playing === true);
+    await until(() => run.demo!.status().take?.playing === false, 20000);
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(asked(), 1);
+    // A new set-up asks it again once its last round is played, and the page asks it by hand.
+    await run.demo!.goto(last);
+    assert.deepEqual(run.demo!.status().ending, { asked: false, armed: false });
+    await run.demo!.askMuseCode();
+    assert.deepEqual(run.demo!.status().ending, { asked: true, armed: true });
+    assert.equal(asked(), 2);
   } finally {
     await s.close();
   }

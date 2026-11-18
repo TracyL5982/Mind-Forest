@@ -74,6 +74,8 @@ export const WORDS: Record<HeldKind, string> = {
   daily: 'Hi there! I grew a new tree today on the topics you love!',
   shared: 'A friend just shared a tree with you. I planted it right here!',
 };
+/** Momo's question at the walkthrough's end: its key in `said` in demo/lines.json. */
+export const MUSE_CODE = 'museCode';
 /** What the bot sends the phone when a tree is shared from the headset (the lead's words, 2026-11-17). */
 export const sharedMessage = (title: string) => `A friend shared a tree with you: “${title}”. Put on your headset to see it grow.`;
 /** The showcase tree the daily tree is unless the page picks another: the user's "rightmost tree", by the lead's reading. */
@@ -173,6 +175,11 @@ export interface DemoStatus {
    * whether a headset joining or put on again will still start it, and whether this service can send a message at all.
    */
   daily: { trees: { id: string; title: string }[]; armed: string | null; kind: HeldKind | null; sent: boolean; grown: boolean; onJoin: boolean; canSend: boolean };
+  /**
+   * The walkthrough's end: whether Momo has asked her question about Muse Code in this set-up, and whether the next thing the user
+   * says is answered with her recorded reply. Null when demo/lines.json has no such question.
+   */
+  ending: { asked: boolean; armed: boolean } | null;
 }
 
 /** A take as the page draws it: the timeline, with each of Momo's lines as it is written and whether its recording exists. */
@@ -234,6 +241,8 @@ export class Director {
   /** Until when Momo is told nothing of what a take did, so the run's end is not told in words of her own. */
   private quiet = 0;
   private plays = 0;
+  /** The walkthrough's end in this set-up: Momo's question asked, and her reply to the user's next words still to come. */
+  private ending = { asked: false, armed: false };
   /** The newest move asked for: an older one still waiting gives way to it. */
   private moves = 0;
   private moving: Promise<void> = Promise.resolve();
@@ -519,6 +528,23 @@ export class Director {
     }
   }
 
+  /**
+   * Momo's question at the walkthrough's end, from her recording (`said.museCode` in demo/lines.json), with its caption: said when
+   * the last round has played to its end, or from the page for another take. Once it is said, the next thing the user says is
+   * to be answered with her recorded reply.
+   */
+  async askMuseCode(): Promise<void> {
+    const text = this.deps.lines.saying(MUSE_CODE);
+    if (!text) this.refuse('demo/lines.json has no question about Muse Code (said.museCode).');
+    this.ending = { asked: true, armed: false };
+    const spoken = this.deps.lines.ms(text);
+    // She is told nothing of what the agents do while it is said.
+    this.quiet = Math.max(this.quiet, Date.now() + spoken + 500);
+    await this.say(++this.plays, { id: MUSE_CODE, kind: 'answer', cards: [], text, at: 0, ms: spoken }, 0, 1, () => false);
+    this.ending.armed = true;
+    this.deps.log('[demo] Momo asked about Muse Code: the next thing the user says is answered with her recorded reply');
+  }
+
   /** Says on the page why what was asked is not done, and stops. */
   private refuse(why: string): never {
     this.problem = why;
@@ -625,6 +651,7 @@ export class Director {
         onJoin: growsOnReturn(this.heldTree),
         canSend: this.deps.owner?.paired() ?? false,
       },
+      ending: this.deps.lines.saying(MUSE_CODE) ? { ...this.ending } : null,
     };
   }
 
@@ -725,6 +752,7 @@ export class Director {
     try {
       this.halt();
       this.cursor = null;
+      this.ending = { asked: false, armed: false };
       this.deps.forgetVoices();
       this.deps.pipeline.forget();
       for (const resume of [...this.waiting.values()].flatMap((set) => [...set])) resume();
@@ -1030,6 +1058,8 @@ export class Director {
     at(take.ms, () => {
       this.mark(phase, true);
       end(take.ms);
+      // The walkthrough's last round played to its end: Momo asks about Muse Code, once in each set-up.
+      if (phase === this.script.phases.at(-1) && this.scripted && !this.ending.asked && this.deps.lines.saying(MUSE_CODE)) void this.askMuseCode().catch(() => {});
     });
     // Asked for as a Scout's run, the take hands the run back when its cards are in; asked for by itself, it is awaited whole.
     return (deliver ? ran : over).then(() => []);

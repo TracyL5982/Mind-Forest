@@ -523,6 +523,9 @@ function drawBar() {
   $('showcase-name').textContent = shown.trees.length === 1 ? '1 other tree in the forest' : `${shown.trees.length} other trees in the forest`;
   $('showcase-switch').title = `${shown.trees.map((tree) => `${tree.title} (${tree.cards} cards)`).join(', ')}. Off: the forest holds the walkthrough's tree alone, and a headset is started again to let go of them.`;
   for (const id of ['go-start', 'go-end']) $(id).disabled = busy();
+  // Momo's question at the walkthrough's end, asked again by hand for another take: once the tree stands.
+  $('ask-ending').hidden = !status.ending;
+  $('ask-ending').disabled = busy() || !status.rounds.some((round) => round.state !== 'waiting');
   const progress = /round (\d+) of (\d+)/.exec(status.busy ?? '');
   $('progress').hidden = !status.busy;
   $('progress-text').textContent = status.busy ?? '';
@@ -638,6 +641,11 @@ function watch(soon = false) {
 
 $('go-start').addEventListener('click', () => go(outline.rounds[0].id));
 $('go-end').addEventListener('click', () => go('end'));
+$('ask-ending').addEventListener('click', async () => {
+  status = await api('/api/demo/ending', {});
+  draw();
+  watch(true);
+});
 $('scripted').addEventListener('change', async (event) => {
   status = await api('/api/demo/scripted', { on: event.target.checked });
   draw();

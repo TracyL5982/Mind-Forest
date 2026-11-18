@@ -146,11 +146,18 @@ In a take Momo's wrap-up starts only once every agent's label has gone: the last
 
 How long a round takes is mostly Momo: the found cards land 3 to 6.5 seconds in, a written idea from 13 seconds, a made picture at about 30, and she talks for 30 to 50 seconds. The page shows each take's length.
 
-Three more controls:
+Four more controls:
 
 - **Empty stage** takes the tree away, for recording Round 1, and starts the app again on the headset (see below). **Whole tree** builds everything.
 - **Rounds are scripted**, off: the next request is answered by the real Scout, live, and Momo speaks for herself. On again: the next request starts the next round's take.
 - **4 other trees in the forest**, off: the showcase trees (below) are taken out, and the headset's app is started again so it lets go of them.
+- **Ask about Muse Code** has Momo ask her question at the walkthrough's end again, for another take (below).
+
+### The walkthrough's end
+
+When the last round, "From a tree to a forest" (step 31), has played to its end, Momo asks from her recording, with its caption: "Ready to take this to Muse Code, to have your mind forest built out?" (`said.museCode` in `lines.json`). She asks once in each set-up: a take of the last round played again without setting it up again asks nothing, and nor does a tree built whole with **Whole tree**, a take that is paused or stopped, or a bar moved to the end. **Ask about Muse Code** asks it again by hand. With "Rounds are scripted" off she does not ask.
+
+The next thing the user says to her, whatever it is, is to be answered from a second recording, "Handed off to Muse Code, with your default preference settings.", with the live Momo's own answer and tools held for that one turn, so nothing is handed off for real. As of 2026-11-17 that answer is not built: its wording is being chosen, since every take of it was heard as "Hand it off…", and the hold is the one being built for the prune line in Round 2.
 
 ### Recording Round 1
 
