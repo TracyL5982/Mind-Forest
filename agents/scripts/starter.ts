@@ -2,7 +2,7 @@
  * Builds the starter trees every new judging space begins with: the trees with the most kept cards in a data folder, with the files
  * they show and the headset's library, as one change set that cannot be undone. Nothing else of the source comes along: no other
  * tree, nothing unplaced, no history, no token and no Telegram pairing. The source is only read, through a copy.
- * Usage: npm run starter -- --from <data folder> [--trees 3] [--tree <id> ...] [--out starter] [--list]
+ * Usage: npm run starter -- --from <data folder> [--trees 3] [--tree <id> ...] [--rename "<title>=<new title>" ...] [--out starter] [--list]
  */
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,6 +18,8 @@ const { values } = parseArgs({
     from: { type: 'string' },
     trees: { type: 'string', default: '3' },
     tree: { type: 'string', multiple: true },
+    // A tree named otherwise on every judge's desk: "Brainstorming in a headset=Designing Mind Forest" (the user's name, WS102).
+    rename: { type: 'string', multiple: true },
     out: { type: 'string', default: resolve(import.meta.dirname, '../starter') },
     list: { type: 'boolean', default: false },
   },
@@ -45,6 +47,7 @@ try {
   }
   const chosen = values.tree?.length ? ranked.filter((r) => values.tree!.includes(r.tree.id)) : ranked.slice(0, Number(values.trees));
 
+  const renamed = new Map((values.rename ?? []).map((pair): [string, string] => [pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1)]));
   const treeIds = new Set(chosen.map((r) => r.tree.id));
   // A thread's words that speak to the film's user read as every judge's (`whyForJudges`).
   const nodes = [...mind.nodes.values()].filter((n) => treeIds.has(n.treeId)).map((n) => ({ ...n, why: whyForJudges(n.why) }));
@@ -64,7 +67,7 @@ try {
     commands: [],
     patches: [
       ...created('item', items),
-      ...created('tree', chosen.map((r) => r.tree)),
+      ...created('tree', chosen.map((r) => ({ ...r.tree, title: renamed.get(r.tree.title) ?? r.tree.title }))),
       ...created('node', nodes),
       ...created('link', links),
       ...created('group', groups),
@@ -100,7 +103,7 @@ try {
   const linked = [...assetIds].filter((id) => existsSync(join(out, 'assets', `${id}.json`)) && 'from' in JSON.parse(readFileSync(join(out, 'assets', `${id}.json`), 'utf8'))).length;
 
   console.log(`starter trees in ${out}:`);
-  for (const r of chosen) console.log(`  ${r.tree.title} (${r.kept} kept of ${r.cards} cards, ${r.tree.id})`);
+  for (const r of chosen) console.log(`  ${renamed.get(r.tree.title) ?? r.tree.title} (${r.kept} kept of ${r.cards} cards, ${r.tree.id})`);
   console.log(`  ${nodes.length} cards, ${items.length} items (${items.filter(inLibrary).length} of the library), ${links.length} links, ${groups.length} groups`);
   console.log(`  ${files} asset files, ${(bytes / 1e6).toFixed(1)} MB${linked ? `; ${linked} linked to files on this Mac, not served when hosted` : ''}`);
 } finally {
