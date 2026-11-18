@@ -1,6 +1,7 @@
 #include "bridge.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <functional>
 #include <initializer_list>
@@ -1209,19 +1210,29 @@ void Bridge::see(const std::optional<NodeId>& nodeId, const std::string& title, 
     auto made = std::make_shared<Made>();
     std::weak_ptr<Pictures> alive = pictures;
     if (nodeId) looking.insert(nodeId->value);
+    using Clock = std::chrono::steady_clock;
+    auto ms = [](Clock::time_point a, Clock::time_point b) { return int(std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count()); };
+    Clock::time_point asked = Clock::now();
     Async::run(
-        [made, read = std::move(read), lines = std::move(lines), box] {
+        [made, read = std::move(read), lines = std::move(lines), box, asked, ms] {
+            // (How long each step takes, for the log: the wait for the background thread, reading the picture, cutting
+            // out and scaling, and making the two JPEGs.)
+            Clock::time_point began = Clock::now();
             ImageRef picture = read();
             if (!picture || picture->rgba.empty() || picture->height <= 0) return;
             picture->wait();
+            Clock::time_point read_ = Clock::now();
             std::optional<Sight> s = sight(picture->width, picture->height, picture->rgba.data(), onPicture(lines, box, float(picture->width) / float(picture->height)));
             if (!s) return;
+            Clock::time_point cut = Clock::now();
             std::string crop = platform::encodeJpeg(s->crop.width, s->crop.height, s->crop.rgba.data(), 80);
             std::string whole = platform::encodeJpeg(s->whole.width, s->whole.height, s->whole.rgba.data(), 75);
             if (crop.empty() || whole.empty()) return;
+            Clock::time_point encoded = Clock::now();
             made->seen = Outbound::Seen{s->box, "data:image/jpeg;base64," + base64Encode(crop), "data:image/jpeg;base64," + base64Encode(whole)};
-            made->sizes = fmt("the part %d × %d, %d KB; the whole %d × %d, %d KB", s->crop.width, s->crop.height, int(crop.size() / 1024),
-                              s->whole.width, s->whole.height, int(whole.size() / 1024));
+            made->sizes = fmt("the part %d × %d, %d KB; the whole %d × %d, %d KB; waited %d ms, read %d × %d in %d ms, cut %d ms, JPEGs %d ms",
+                              s->crop.width, s->crop.height, int(crop.size() / 1024), s->whole.width, s->whole.height, int(whole.size() / 1024),
+                              ms(asked, began), picture->width, picture->height, ms(began, read_), ms(read_, cut), ms(cut, encoded));
         },
         [this, alive, made, nodeId, title] {
             if (alive.expired()) return;
