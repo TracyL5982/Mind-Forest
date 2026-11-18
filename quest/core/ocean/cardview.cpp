@@ -10,6 +10,13 @@ struct Deferred {
 };
 template <class F>
 Deferred(F) -> Deferred<F>;
+
+/// NOTE(port): added for Quest (WS76). Cards of a layer stand on one sheet, and where two overlap (on a layer behind
+/// especially), or a card met a pane, their faces lay in one plane and fought over which shows. Each stands a little off it
+/// by its own amount: none to three steps of 0.3 mm (as a card's own pieces are stacked), by its id. (One to four steps
+/// put one card of the tree the depth audit walks back onto a pane.)
+constexpr float ownDepthStep = 0.0003f;
+constexpr int ownDepths = 4;
 }  // namespace
 
 CardView::CardView(const TreeNode& node, Vec2 smallBody, Vec2 openBody)
@@ -46,7 +53,7 @@ void CardView::apply(double now, const Stage::Spot& spot, float boost, float cur
     }
     if (!root->isEnabled) root->isEnabled = true;
     float e = emerge.value(now);
-    position = source + (treePoint - source) * e + drag.value(now);
+    position = source + (treePoint - source) * e + drag.value(now) + spot.normal * (ownDepthStep * float(((id % ownDepths) + ownDepths) % ownDepths));
     root->position = position;
     root->orientation = spot.orientation();
     if (sourceTurn && e < 1) root->orientation = slerp(*sourceTurn, spot.orientation(), smoothstep(0, 0.7f, e));      // NOTE(port): see `sourceTurn`
