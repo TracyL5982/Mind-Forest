@@ -7,34 +7,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Love that direction—let’s spin up a space for it."
-   },
-   {
-    "id": "first",
-    "kind": "first",
-    "cards": [
-     "warburg-library"
-    ],
-    "text": "The first thing that popped up is a picture called “Warburg’s reading room,” from your own cards. It shows picture panels standing along the shelves of his library, like ideas propped up around the room."
-   },
-   {
-    "id": "wrap",
-    "kind": "wrap",
-    "cards": [
-     "figjam",
-     "bobardi-easels",
-     "architects-table",
-     "vam-O1260839",
-     "slice-of-heartland",
-     "studio-wall",
-     "confucius-apricot",
-     "darwin-sandwalk",
-     "space-to-think-2010",
-     "krokos-2019",
-     "data-mountain-1998",
-     "warburg-atlas"
-    ],
-    "text": "I’d start with “Virtual memory palaces: immersion aids recall,” because it ties directly to how a headset changes memory and navigation."
+    "text": "I pulled your flower tree from earlier, your Figjam board, and paired it with how architects staged memory in physical space—from Lina Bo Bardi's glass easels to cognitive papers on spatial recall."
    }
   ],
   "n2": [
@@ -42,26 +15,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Let’s map it out: I’m bringing Darwin’s 1837 branching tree sketch and a Biotecture tower drawn like a tree. Sketch on whichever structure clicks."
-   },
-   {
-    "id": "wrap",
-    "kind": "wrap",
-    "cards": [
-     "t080",
-     "t125",
-     "t049",
-     "moma-445074",
-     "t023",
-     "t021",
-     "darwin-tree",
-     "haeckel-corals",
-     "mendeleev-table",
-     "cordier-canon",
-     "nolli-rome",
-     "llull-figure"
-    ],
-    "text": "I’d open Darwin’s 1837 sketch, the one titled “I think,” first. It’s the cleanest bridge from your tree idea into a branching logic for the posters. From there, we can add a contrasting structure, like the Biotecture tower, as a second layer to test how the metaphor shifts in 3D."
+    "text": "Let’s map it out: I’m bringing Darwin’s 1837 branching tree sketch, Neurones poster and a Biotecture tower drawn like a tree, along with some other ideas to organize information. Sketch on whichever structure clicks."
    }
   ],
   "mo": [
@@ -97,51 +51,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Let’s spin this into a new layer on your current card."
-   },
-   {
-    "id": "first",
-    "kind": "first",
-    "cards": [
-     "tree-ct"
-    ],
-    "text": "First up, a film called \"WoodSwimmer\" by Brett Foxwell. It’s all about wood being milled away, slice by slice, which feels like a neat metaphor for how we can carve complex ideas into clean layers."
-   },
-   {
-    "id": "more-1",
-    "kind": "more",
-    "cards": [
-     "linux-file-system",
-     "note-tree-grows",
-     "priestley-chart",
-     "sea-fan",
-     "multiplane-camera",
-     "paper-peepshow"
-    ],
-    "text": "Six more landed, and my pick is the \"Disney’s multiplane camera\" film, because it shows a scene split into painted layers at different depths."
-   },
-   {
-    "id": "more-2",
-    "kind": "more",
-    "cards": [
-     "gen-idea-time"
-    ],
-    "text": "One more landed: \"By time.\" It says every ask becomes a new layer, with earlier ones fading back and the newest one lit."
-   },
-   {
-    "id": "more-3",
-    "kind": "more",
-    "cards": [
-     "gen-idea-branches",
-     "gen-idea-depth"
-    ],
-    "text": "Two more landed: \"By branches\" and \"By depth.\" They show different ways to keep paths separate and let newer layers stand out visually."
-   },
-   {
-    "id": "wrap",
-    "kind": "wrap",
-    "cards": [],
-    "text": "I’d look at \"By time\" first, because it gives you a clear, simple rule for what’s in front and what fades back. Then we could pick either \"By branches\" or \"By depth\" and shape your workspace around that metaphor."
+    "text": "Yes my pleasure! I built a few interactive cards that organize information by time, branches, or depth. You might also be interested in the WoodSwimmer film I found—another take on the tree analogy."
    }
   ],
   "f1": [
@@ -149,29 +59,7 @@
     "id": "answer",
     "kind": "answer",
     "cards": [],
-    "text": "Nice thought—let’s spin that into a new layer on top of this."
-   },
-   {
-    "id": "first",
-    "kind": "first",
-    "cards": [
-     "vam-O1361001"
-    ],
-    "text": "First up, there’s “Underground map” by Harry Beck from 1934, shown as a picture. It’s from your own cards, and it’s a great example of simplifying a complex space so it’s easier to navigate."
-   },
-   {
-    "id": "wrap",
-    "kind": "wrap",
-    "cards": [
-     "aic-14929",
-     "t011",
-     "t012",
-     "ammassalik-map",
-     "pocket-globe",
-     "stick-chart",
-     "wim-1995"
-    ],
-    "text": "I’d start with “Virtual reality on a WIM” because it’s a tidy idea: a whole-room model in your hand that helps you stay oriented and jump where you need to go. Next, we could keep that one and then pull in one or two contrasting navigation examples, like the stick chart or the Beck-style simplification, to compare approaches."
+    "text": "Good point—let’s spin that into a new layer on top of this."
    }
   ],
   "f2": [

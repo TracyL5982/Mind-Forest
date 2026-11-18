@@ -117,7 +117,7 @@ test('a request on the card a round is asked from plays that round as the Scout 
   try {
     await run.demo!.goto('n3');
     const head = nodeOf(run, 'I think')!;
-    await run.pipeline.ask(head.id, 'so how do we keep the information organized?');
+    await run.pipeline.ask(head.id, 'Ooh, what about this part—take me deeper here.');
     await run.pipeline.idle();
     await over(run);
     const landed = run.mind.children(head.id);

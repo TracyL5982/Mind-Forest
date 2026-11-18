@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
-import { Lines, recordingName, type LinesFile } from '../src/demo/lines.ts';
+import { Lines, LinesFile, recordingName } from '../src/demo/lines.ts';
 import { loadScript, type ScriptPhase } from '../src/demo/script.ts';
 import { compare, record as recordLine, sentences, wavOf } from '../src/demo/momo-voice.ts';
 import { MODES, momentAt, planLines, REAL, schedule, takeOf, type Line } from '../src/demo/take.ts';
@@ -11,6 +11,7 @@ import { FakeModel } from '../src/fake/model.ts';
 import { demoData } from './demo-data.ts';
 import { fakeRoles } from '../src/fake/roles.ts';
 import { startServer, type Running } from '../src/node/server.ts';
+import { differences, listing } from '../scripts/demo-listing.ts';
 
 const demoDir = join(import.meta.dirname, '../demo');
 const script = loadScript(join(demoDir, 'script.json'));
@@ -511,9 +512,11 @@ test('Play on an empty stage starts the tree and brings the first round, and a r
 // ---- Momo and the other agents
 
 test('in every round Momo wraps up only once every agent is done, and is never left resting while one still works', () => {
-  // The rounds as they are recorded: the repository's own lines, each as long as its recording.
+  // The rounds as they are recorded: the repository's own lines, each as long as its recording. A round whose lines tell of none of
+  // its cards says what the user wrote for it, as written, and nothing more (the user's choice, 2026-11-17): it has no wrap-up.
   const said = new Lines({ demoDir, dataDir: temp('mp-demo-data-'), voice: 'marin', log: () => {} });
   let wraps = 0;
+  let written = 0;
   for (const phase of script.phases) {
     const take = takeOf(phase, said.of(phase.id), (text) => said.ms(text), 'the card');
     if (phase.cards.length === 0) continue;
@@ -522,6 +525,9 @@ test('in every round Momo wraps up only once every agent is done, and is never l
     assert.ok(take.steps.every((step) => step.end <= take.end), `${phase.id}: a label outlasts the run`);
     assert.ok(take.end <= take.settled && lastCard + 600 < take.settled, `${phase.id}: the agents are done before the take says they are`);
     const wrap = take.lines.find((line) => line.kind === 'wrap');
+    const tells = take.lines.some((line) => line.cards.length > 0);
+    if (take.lines.length > 0 && !tells) written++;
+    else if (take.lines.length > 0) assert.ok(wrap, `${phase.id}: the lines tell of its cards and do not wrap up`);
     if (wrap) {
       wraps++;
       assert.ok(wrap.at >= take.settled, `${phase.id}: the wrap-up starts at ${wrap.at}, before every agent is done at ${take.settled}`);
@@ -543,7 +549,36 @@ test('in every round Momo wraps up only once every agent is done, and is never l
       assert.ok(wrap.at <= Math.max(take.settled, before ? before.at + before.ms + REAL.breath : 0), `${phase.id}: the wrap-up waits for nothing`);
     }
   }
-  assert.ok(wraps >= 29, `the recorded rounds with cards have wrap-ups (${wraps})`);
+  assert.ok(wraps + written >= 29, `the recorded rounds with cards have wrap-ups or the user's own lines (${wraps} and ${written})`);
+});
+
+test('a round whose lines the user wrote says them as written and nothing more: its take is those lines, from her realtime recordings', () => {
+  const said = new Lines({ demoDir, dataDir: temp('mp-demo-data-'), voice: 'marin', log: () => {} });
+  const written = script.phases.filter((phase) => phase.cards.length > 0 && said.of(phase.id).length > 0 && said.of(phase.id).every((line) => line.cards.length === 0));
+  assert.deepEqual(written.map((phase) => phase.id), ['r1', 'n2', 'n3', 'f1'], 'the rounds the user wrote Momo\'s fast lines for (2026-11-17)');
+  for (const phase of written) {
+    const take = takeOf(phase, said.of(phase.id), (text) => said.ms(text), 'the card');
+    assert.deepEqual(take.lines.map((line) => [line.kind, line.at, line.text]), said.of(phase.id).map((line) => ['answer', 0, line.text]), `${phase.id}: the line, as the search starts`);
+    assert.ok(take.lines.every((line) => said.recorded(line.text) && line.ms === said.ms(line.text)), `${phase.id}: each from its recording`);
+    assert.ok(take.ms >= take.settled, `${phase.id}: the take lasts until every agent is done`);
+  }
+});
+
+test('the listing of Momo\'s lines (scripts/demo-listing.ts) gives each round, what the user says and every line at both paces in order, then the lines outside the rounds', () => {
+  const file = LinesFile.parse(JSON.parse(readFileSync(join(demoDir, 'lines.json'), 'utf8')));
+  const text = listing(script, file);
+  let at = 0;
+  const next = (part: string) => {
+    const found = text.indexOf(part, at);
+    assert.ok(found >= 0, `not in the listing, or out of order: ${part.slice(0, 80)}`);
+    at = found + part.length;
+  };
+  for (const [n, phase] of script.phases.entries()) {
+    next(`## ${n + 1}. ${phase.title}\n\n**You:** ${phase.say}\n`);
+    for (const line of [...(file.rounds[phase.id] ?? []), ...(file.real[phase.id] ?? [])]) if (line.text.trim()) next(`- ${line.text}\n`);
+  }
+  for (const [key, words] of Object.entries(file.said ?? {})) next(`- **${key}:** ${words}\n`);
+  assert.deepEqual(differences(['a', 'b', 'c'], ['a', 'x', 'c', 'd']), ['- b', '+ x', '+ d']);
 });
 
 test('played on a headset, every agent\'s label has ended before the wrap-up is said, and the run ends with its last card', { timeout: 30000 }, async () => {
@@ -605,7 +640,8 @@ test('at both paces, in every round, Momo speaks of a card only once it has land
         }
         const wrap = take.lines.find((line) => line.kind === 'wrap');
         if (wrap) assert.ok(wrap.at >= take.settled && take.lines.at(-1) === wrap, `${mode} ${phase.id}, ${name}: the wrap-up waits for every agent, and is the last thing said`);
-        if (phase.cards.length > 0 && lines.length > 0) assert.deepEqual(take.lines.flatMap((line) => line.cards).sort(), phase.cards.map((card) => card.id).sort(), `${mode} ${phase.id}, ${name}: between them the lines tell of every card once`);
+        // Lines that tell of the round's cards tell of each once; lines the user wrote for a round tell of none, and are said as written.
+        if (phase.cards.length > 0 && lines.some((line) => line.cards.length > 0)) assert.deepEqual(take.lines.flatMap((line) => line.cards).sort(), phase.cards.map((card) => card.id).sort(), `${mode} ${phase.id}, ${name}: between them the lines tell of every card once`);
       }
     }
   }

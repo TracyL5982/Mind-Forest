@@ -9,10 +9,8 @@
    "title": "Round 1 · Start the tree",
    "parent": null,
    "head": "root",
-   "say": "Hey Momo, let's jam on how we brainstorm with VR headset",
-   "sayAlso": [
-    "Hey Momo, Tracy and I want to brainstorm inside a headset. Start a tree on that."
-   ],
+   "say": "Hi Momo! I’m designing a mind palace in XR, and looking for ideas.",
+   "sayAlso": [],
    "do": [],
    "momo": "Started. Your ocean already has things that fit, so those come first.",
    "offers": [],
@@ -662,10 +660,8 @@
    "title": "Round 3 · Draw on a diagram: keep it organized",
    "parent": "n2",
    "head": "darwin-tree",
-   "say": "so how do we keep the information organized?",
-   "sayAlso": [
-    "this looks cool but has a lot going on, how do we keep the information organized?"
-   ],
+   "say": "Ooh, what about this part—take me deeper here.",
+   "sayAlso": [],
    "do": [
     "Draw on Darwin's notebook tree"
    ],
@@ -993,7 +989,7 @@
    "title": "Free-form · Easy to get lost",
    "parent": "n3",
    "head": "gen-idea-depth",
-   "say": "that’s cool, but seems easy to get lost wandering around…",
+   "say": "Whoa, this looks impressive, but also a little overwhelming—seems easy to get lost wandering around...",
    "sayAlso": [],
    "do": [],
    "momo": "People have drawn their way out of that. The Underground map in your ocean drops the real distances. Two more are maps you can hold.",
@@ -3161,7 +3157,7 @@
    {
     "id": "s3",
     "phase": "r1",
-    "text": "Round 1 · “Hey Momo, start a tree on, hmm, brainstorming with VR headset”",
+    "text": "Round 1 · “Hi Momo! I’m designing a mind palace in XR, and looking for ideas.”",
     "kind": "ask",
     "x": 0,
     "y": 850,
@@ -3191,7 +3187,7 @@
    {
     "id": "s47",
     "phase": "n3",
-    "text": "Round 3 · drawing on Darwin's notebook tree, “this looks cool but has a lot going on, how do we keep the information organized?”",
+    "text": "Round 3 · drawing on Darwin's notebook tree, “Ooh, what about this part—take me deeper here.”",
     "kind": "ask",
     "x": 608,
     "y": 116,
@@ -3201,7 +3197,7 @@
    {
     "id": "s15",
     "phase": "f1",
-    "text": "“that’s cool, but seems easy to get lost wandering around…”\n- Underground map",
+    "text": "“Whoa, this looks impressive, but also a little overwhelming—seems easy to get lost wandering around...”\n- Underground map",
     "kind": "ask",
     "x": 912,
     "y": 63,

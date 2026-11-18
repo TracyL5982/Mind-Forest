@@ -134,6 +134,8 @@ The right column shows the picked round's take:
 
 In a take Momo's wrap-up starts only once every agent's label has gone: the last card has landed, the Scout's run is over and the Renderer has laid the cards out. From then the take is Momo alone. A real round is less tidy: there she starts wrapping up as the Scout's run ends, while the Renderer may still be laying cards out.
 
+A round's lines are whatever `lines.json` lists for it. In four rounds the fast take is one line the user wrote (2026-11-17), said as written in her realtime voice as the search starts, with no remark on a card, no count and no wrap-up: Round 1, Round 2, Round 3 and "Easy to get lost". Their real-pace takes are her own, as everywhere else. `scripts/demo-lines.ts --again` on one of those rounds at fast pace would replace the user's line with her own words, so it is not run on them.
+
 How long a round takes is mostly Momo: the found cards land 3 to 6.5 seconds in, a written idea from 13 seconds, a made picture at about 30, and she talks for 30 to 50 seconds. The page shows each take's length.
 
 Four more controls:
@@ -250,6 +252,20 @@ Everything the demo shows is in two places:
 - `agents/demo/media/`: one picture per card, and one film.
 
 Edit `script.json` by hand for small changes, then start the service again. Two rules the service holds a tree to: no two cards with the same title, and no two with the same address (`href`).
+
+Momo's lines can be read and edited as one listing: each round, what the user says, and her lines at both paces, then the lines said outside any round. From `agents`:
+
+```bash
+node --no-warnings --import tsx scripts/demo-listing.ts > momo-demo-lines.md
+```
+
+prints it from `script.json` and `lines.json`. An edited copy is compared with the repository, line by line, with
+
+```bash
+node --no-warnings --import tsx scripts/demo-listing.ts --check momo-demo-lines.md
+```
+
+which prints the lines only one of them has (`-` the repository's, `+` the copy's) and exits 1 when they differ. A line changed in the listing is put in `lines.json` (or a user's line in `script.json`) and recorded as written with `scripts/demo-lines.ts --retake`.
 
 The file was generated from the walkthrough board by `sketches/walkthrough/gen/demo_inventory.py` in the main folder on Kai's Mac, which is not in git (the board's working files live only there). Run again, it writes into this folder. `demo_phases.json` beside it says which card each round is asked from. Where the board names the card ("Pinch the memory palace paper") that card is the head; where it does not, the head was chosen when the script was written, and each round's "About this round" on the page says which.
 
