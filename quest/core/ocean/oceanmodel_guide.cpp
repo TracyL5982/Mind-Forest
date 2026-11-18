@@ -26,7 +26,13 @@
 
 namespace {
 // What a pinch on one of the guide's own buttons asks for; 0…8 are the sheet's rows.
-enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109 };
+/// m round the home card's button that takes a pinch as the button does, about 1.6 degrees at its 2 m (my choice, WS75);
+/// m round the home card's pieces that takes a pinch for the card, which does nothing; and s into the button's fade-in
+/// (a quarter of it, some 40% shown) from which it takes pinches.
+constexpr float homeButtonReach = 0.06f, homeCardMargin = 0.03f;
+constexpr double homeButtonShows = 0.15;
+
+enum Act { begin = 100, closeSheet = 101, startOver = 102, openSheet = 103, tour = 104, tourSkip = 105, tourEnd = 106, tourBack = 107, homeClose = 108, tourSay = 109, homeCard = 110 };
 // The gestures a ghost hand teaches, in the order they are needed, and how long each waits once its moment has come.
 struct Plan {
     const char* id;
@@ -1518,6 +1524,12 @@ void OceanModel::showHome() {
         whole += piece->size.x - 2 * letter * 0.3f + (words.empty() ? 0 : space);
         words.push_back(*piece);
     }
+    // (How far the card's pieces reach on it, for what swallows a pinch that misses its button: below.)
+    Vec2 lo{1e9f, 1e9f}, hi{-1e9f, -1e9f};
+    auto spans = [&](Vec2 middle, Vec2 size) {
+        lo = {std::min(lo.x, middle.x - size.x / 2), std::min(lo.y, middle.y - size.y / 2)};
+        hi = {std::max(hi.x, middle.x + size.x / 2), std::max(hi.y, middle.y + size.y / 2)};
+    };
     float x = -whole / 2;
     for (size_t k = 0; k < words.size(); k++) {
         float inked = words[k].size.x - 2 * letter * 0.3f;
@@ -1525,6 +1537,7 @@ void OceanModel::showHome() {
         e->position = {x + inked / 2, 0, 0.002f * float(k)};
         holder->addChild(e);
         fadeIn(e, 0.3 + 0.38 * double(k), 0.8f);
+        spans({x + inked / 2, 0}, {inked, words[k].size.y});
         x += inked + space;
     }
     // Under it, a line and the three ways, side by side.
@@ -1533,12 +1546,20 @@ void OceanModel::showHome() {
         if (!piece) return;
         EntityRef e = art->quad(*piece);
         e->position = {px, py, 0};
+        spans({px, py}, piece->size);
         if (action >= 0) {
-            e->collision = {Shape::generateBox({piece->size.x, piece->size.y + 0.012f, 0.01f})};
-            e->inputTarget = true;
+            // The button takes a pinch near it as well as on it (`homeButtonReach`), and only once it has begun to
+            // show: a pinch where nothing yet shows is the card's, which does nothing (the lead, WS75).
+            e->collision = {Shape::generateBox({piece->size.x + 2 * homeButtonReach, piece->size.y + 2 * homeButtonReach, 0.01f})};
             e->hover = Art::hover();
             picks[e.get()] = Pick::guide(action);
             teach.homePicks.push_back(e.get());
+            std::weak_ptr<Entity> button = e;
+            this->after(delay + homeButtonShows, [this, button] {
+                EntityRef b = button.lock();
+                if (b && teach.home && b->parent == teach.home.get()) b->inputTarget = true;
+            });
+            spans({px, py}, {piece->size.x + 2 * homeButtonReach, piece->size.y + 2 * homeButtonReach});
         }
         holder->addChild(e);
         fadeIn(e, delay, 0.6f);
@@ -1548,7 +1569,19 @@ void OceanModel::showHome() {
     put(art->way(1, "Pinching a tree", "They stand on your desk.", 0.055f), -pitch, row, after + 0.25, -1);
     put(art->way(2, "Pinching an item", "They lie in the ocean around you.", 0.055f), 0, row, after + 0.4, -1);
     put(art->way(3, "Talking to Momo", "Pinch a question to begin.", 0.055f), pitch, row, after + 0.55, -1);
-    put(art->pill("Start exploring", 0.042f), 0, -0.71f, after + 1.0, Act::homeClose);
+    std::optional<Piece> pill = art->pill("Start exploring", 0.042f);
+    Vec2 button = pill ? Vec2{pill->size.x + 2 * homeButtonReach, pill->size.y + 2 * homeButtonReach} : Vec2{0, 0};
+    put(pill, 0, -0.71f, after + 1.0, Act::homeClose);
+    // A pinch anywhere on the card is the card's, never the ocean's behind it, where it would peek an item and so
+    // begin something unasked: a pinch that misses the button does nothing (the lead, WS75). Behind the button, so the
+    // button is met first.
+    EntityRef card = Entity::make();
+    card->position = {(lo.x + hi.x) / 2, (lo.y + hi.y) / 2, -0.02f};
+    card->collision = {Shape::generateBox({hi.x - lo.x + 2 * homeCardMargin, hi.y - lo.y + 2 * homeCardMargin, 0.01f})};
+    card->inputTarget = true;
+    picks[card.get()] = Pick::guide(Act::homeCard);
+    teach.homePicks.push_back(card.get());
+    holder->addChild(card);
     teach.home = holder;
     teach.homeDue = false;
     // (Momo is Kai's name for who answers. In this build the questions it points at are still headed "Ask the gardener".)
@@ -1561,7 +1594,8 @@ void OceanModel::showHome() {
         fadeIn(teach.homeTags[k], after + 0.8 + 0.15 * k, 0.5f);
     }
     sound("holo_wake", 0.4f);
-    logLine("[guide] the greeting after the walk");
+    logLine(fmt("[guide] the greeting after the walk: it takes a pinch over %.2f x %.2f m, its button over %.2f x %.2f m once it shows",
+                double(hi.x - lo.x + 2 * homeCardMargin), double(hi.y - lo.y + 2 * homeCardMargin), double(button.x), double(button.y)));
 }
 
 void OceanModel::closeHome() {
@@ -1592,6 +1626,7 @@ void OceanModel::updateHome(double now) {
     if (!teach.home && !tags) return;
     // Something was begun: that was the point.
     if (tree || peek) {
+        if (teach.home) logLine(fmt("[guide] the greeting goes: %s was begun", tree ? "a tree" : "a peek"));
         closeHome();
         clearHomeTags();
         return;
@@ -1720,7 +1755,11 @@ void OceanModel::guideAct(int action) {
         endTour("the walk was skipped");
         break;
     case Act::homeClose:
+        logLine("[guide] the greeting's button is pinched");
         closeHome();
+        break;
+    case Act::homeCard:
+        logLine("[guide] a pinch on the greeting, off its button: nothing");
         break;
     case Act::openSheet:
         if (teach.mode == 3) hideGuide(); else showSheet(teach.sheetRow);
