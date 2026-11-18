@@ -294,6 +294,14 @@ struct Questions {
 struct Rejected {
     std::string message;
 };
+/// The hosted service's answer to this connection's `share`: taken (`ok`), or why not (`reason`: unpaired, limit, too-big,
+/// unavailable), with a line the service would say (`text`). A demo server sends none.
+struct Shared {
+    TreeId tree;
+    bool ok = false;
+    std::string reason;
+    std::string text;
+};
 /// A message of a kind this build doesn't know, by its `t`.
 struct Unknown {
     std::string t;
@@ -305,7 +313,7 @@ struct Malformed {
     std::string why;
 };
 
-using Inbound = std::variant<Hello, Change, Activity, Say, Heard, Navigate, Handoff, SettingsChanged, Note, Questions, Rejected, Unknown, Malformed>;
+using Inbound = std::variant<Hello, Change, Activity, Say, Heard, Navigate, Handoff, SettingsChanged, Note, Questions, Rejected, Shared, Unknown, Malformed>;
 
 /// Reads one socket message. Never fails: what can't be read comes back as Unknown or Malformed.
 Inbound parseInbound(const std::string& text);

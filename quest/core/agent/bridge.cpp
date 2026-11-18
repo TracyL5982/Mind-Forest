@@ -203,6 +203,7 @@ void Bridge::frame(double t) {
                        [&](Note&) {},
                        [&](Questions& q) { offer(q); },
                        [&](Rejected& r) { logLine("[agent] the service refused a message: " + r.message); },
+                       [&](Shared& s) { shareAnswered(s); },
                    },
                    event);
     }
@@ -1011,6 +1012,16 @@ bool Bridge::sendTree(const Tree& tree) {
         return sent;
     }
     return false;
+}
+
+void Bridge::shareAnswered(const Shared& answer) {
+    auto found = trees.find(answer.tree.value);
+    std::shared_ptr<Tree> tree = found != trees.end() ? found->second.tree : nullptr;
+    logLine(fmt("[agent] the share of %s %s%s%s", tree ? ("\"" + tree->title + "\"").c_str() : answer.tree.value.c_str(),
+                answer.ok ? "was taken" : ("was not taken: " + answer.reason).c_str(), answer.text.empty() ? "" : ", ",
+                answer.text.c_str()));
+    // Taken: the button already says so. Not: it says why, on the tree's cover.
+    if (!answer.ok && tree) model.shareRefused(*tree, answer.reason);
 }
 
 bool Bridge::shareTree(const Tree& tree) {

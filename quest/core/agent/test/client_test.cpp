@@ -52,6 +52,7 @@ std::string kindOf(const Event& event) {
                           [](const Note&) { return std::string("note"); },
                           [](const Questions&) { return std::string("questions"); },
                           [](const Rejected&) { return std::string("error"); },
+                          [](const Shared&) { return std::string("shared"); },
                       },
                       event);
 }
