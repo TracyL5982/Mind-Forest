@@ -745,6 +745,14 @@ private:
     /// and written down. Once, after the service's trees are hung at launch (Bridge), or `welcomeFallbackAt` without them.
     void ensureWelcomeTree(const char* why);
     int tourLesson() const;
+    /// WS101: the first card of the layer the walk stands on, which is the lesson's: a card opened where it stands (a short
+    /// pinch, as in the service's trees) leaves it as it was. The welcome card not yet opened, at the start, is lesson 1's.
+    std::optional<int> tourHead() const;
+    /// WS101: a pinch on a closed card of the welcome tree's walk opens it where it stands, as a pinch does in the service's
+    /// trees (a layer grows from the next lesson's card only with a long pinch). True when the walk took it.
+    bool tourOpens(int id);
+    /// WS101: a long pinch on the welcome tree's walk: on the next lesson's card it grows that lesson's layer. True when it may.
+    bool tourHolds(int id) const;
     CardRef tourCard(int lesson) const;
     /// The card in focus is the layer Momo made for its lesson.
     bool tourOnResult() const;

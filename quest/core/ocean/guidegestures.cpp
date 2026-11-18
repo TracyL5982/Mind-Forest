@@ -415,11 +415,11 @@ static void tree(float t, Frame& f) {
 
 const std::vector<Gesture>& gestures() {
     static const std::vector<Gesture> all = {
-        {"pinch", draw::pinch, 5.0f, "Point and pinch", "Aim with your hand. Pinch to pick."},
+        {"pinch", draw::pinch, 5.0f, "Point and pinch", "Aim with your hand. A pinch opens a card."},
         {"carry", draw::carry, 5.6f, "Grab to pan", "Close your hand and move it. The tree comes along."},
         {"layers", draw::layers, 7.4f, "Grab to pull or push", "Pull toward you to bring back the layer behind."},
-        {"drag", draw::drag, 5.4f, "Pinch and hold to move", "A card stays where you put it."},
-        {"hold", draw::hold, 6.0f, "Pinch and hold a card", "Hold still till the ring fills: more like it."},
+        {"drag", draw::drag, 5.4f, "Pinch and drag to move", "Move at once. It stays where you put it."},
+        {"hold", draw::hold, 6.0f, "Pinch and hold a card", "Hold still till the ring fills: a new layer."},
         {"mark", draw::mark, 6.8f, "Mark part of a card", "Go in, take up the pen, draw. Send asks Momo."},
         {"tree", draw::tree, 6.0f, "Choose a layer on the small tree", "Slide a finger along it, then pinch."},
         {"clap", draw::clap, 5.4f, "Palms together, and hold", "A second like this closes the tree."},
