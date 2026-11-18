@@ -263,10 +263,10 @@ export class Bot implements Wire {
     await this.post(chat, text);
   }
 
-  /** A plain message, true once Telegram took it. One that fails is logged. */
-  async post(chat: number, text: string): Promise<boolean> {
+  /** A plain message, true once Telegram took it, within `ms` when given. One that fails, or takes longer, is logged. */
+  async post(chat: number, text: string, ms?: number): Promise<boolean> {
     try {
-      await this.call('sendMessage', { chat_id: chat, text, link_preview_options: { is_disabled: true } });
+      await this.call('sendMessage', { chat_id: chat, text, link_preview_options: { is_disabled: true } }, ms);
       return true;
     } catch (err) {
       this.log(`a message could not be sent: ${this.hide(err)}`);
@@ -276,19 +276,19 @@ export class Bot implements Wire {
 
   // ---- the Bot API
 
-  private async call<T>(method: string, body?: Record<string, unknown> | FormData): Promise<T> {
+  private async call<T>(method: string, body?: Record<string, unknown> | FormData, ms?: number): Promise<T> {
     const init: RequestInit =
       body === undefined ? {} : body instanceof FormData ? { method: 'POST', body } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-    const res = await this.request(`bot${this.opts.token}/${method}`, init);
+    const res = await this.request(`bot${this.opts.token}/${method}`, init, ms);
     const reply = (await res.json().catch(() => null)) as { ok?: boolean; result?: T; description?: string } | null;
     if (!res.ok || !reply?.ok) throw new BotError(res.status, this.hide(`Telegram ${method} answered ${res.status}${reply?.description ? `: ${reply.description}` : ''}`));
     return reply.result as T;
   }
 
   /** The one place a request to Telegram is made. Every address holds the bot token, so no error leaves here with it. */
-  private async request(path: string, init: RequestInit): Promise<Response> {
+  private async request(path: string, init: RequestInit, ms?: number): Promise<Response> {
     try {
-      return await fetch(`${this.api}/${path}`, { ...init, signal: this.stop.signal });
+      return await fetch(`${this.api}/${path}`, { ...init, signal: ms ? AbortSignal.any([this.stop.signal, AbortSignal.timeout(ms)]) : this.stop.signal });
     } catch (err) {
       throw new BotError(0, this.hide(`Telegram could not be reached: ${reason(err)}`));
     }

@@ -22,7 +22,11 @@ interface Options extends JudgeBotOptions {
 
 /** What a shared tree's link is: `start=share-<code>`. */
 const SHARE_START = 'share-';
-const OFFER = (title: string, link: string) => `Forward this to a friend who uses Mind Forest, and “${title}” will grow in their forest:\n${link}`;
+/** The two messages a sharer's chat gets: what to do, then the one to forward, which reads right in the friend's chat (the lead's words). */
+const OFFER_NOTE = 'Forward the next message to a friend who uses Mind Forest.';
+const OFFER = (title: string, link: string) => `A friend shared a tree with you in Mind Forest: “${title}”. Tap to plant it in your forest: ${link}`;
+/** How long each of them may take, so the headset hears how its Share went within seconds. */
+const OFFER_MS = 4000;
 const GIFT_WAITING = (title: string) => `“${title}” is waiting in your Mind Forest. Put on your headset to see it grow.`;
 const GIFT_PAIR_FIRST = (title: string) =>
   `To get “${title}”, pair this chat with your headset first: in your headset, say “Momo, connect my Telegram”, and send me the code it gives you. Then open the link again.`;
@@ -121,12 +125,16 @@ export class JudgeTelegram {
     return this.chatOf(device) !== undefined;
   }
 
-  /** Posts the link of a tree the device shared to its chat, to forward to a friend. False when there is no chat, or it failed. */
+  /**
+   * Posts a tree the device shared to its chat: a line on what to do, then the message to forward, with the link. False when there
+   * is no chat, or the message to forward did not go.
+   */
   async offer(device: string, title: string, code: string): Promise<boolean> {
     const chat = this.chatOf(device);
     const me = this.bot.me;
     if (!chat || !me) return false;
-    return this.bot.post(chat[0], OFFER(title, `https://t.me/${me.username}?start=${SHARE_START}${code}`));
+    await this.bot.post(chat[0], OFFER_NOTE, OFFER_MS);
+    return this.bot.post(chat[0], OFFER(title, `https://t.me/${me.username}?start=${SHARE_START}${code}`), OFFER_MS);
   }
 
   /** A tree shared under `code` grew in a friend's forest: its sharer's chat is told, with no name, since there are no accounts. */
