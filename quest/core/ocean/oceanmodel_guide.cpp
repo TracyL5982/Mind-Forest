@@ -97,7 +97,7 @@ const TourStep tourSteps[] = {
     {"welcome-tree", "tree", "Choose a layer on the small tree",
      "Low on your left stands this tree in little. Slide a finger along it and pinch to jump to a layer.", "jump", "tree", "Slide a finger along it, pinch to jump", 1, 0.86f, "Reach for the small tree, low on your left"},
     {"welcome-close", "clap", "Palms together to close",
-     "Hold your palms together for a second: the tree is pressed flat and put away. Its buttons do the same.", "press", "strip", "Or pinch Put away", 0, 0.6f, "Hold your palms together for a second"},
+     "Hold your palms together for a second: the tree is pressed flat and closed. Its buttons do the same.", "press", "strip", "Or pinch Close the Tree", 0, 0.6f, "Hold your palms together for a second"},
 };
 const int tourCount = int(sizeof(tourSteps) / sizeof(tourSteps[0]));
 const int pullStep = 2, moveStep = 3, momoStep = 4, markStep = 5, treeStep = 6, closeStep = 7;

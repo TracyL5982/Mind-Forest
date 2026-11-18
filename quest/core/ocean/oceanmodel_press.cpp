@@ -988,7 +988,7 @@ void OceanModel::rebuildStrip() {
     add(art->line(tree->title + " · " + label(tree->maker), Art::Size::label, Font::Weight::medium, Color::white(1, 0.8f)), left, 0.024f, std::nullopt);
     float x = left;
     // (`pad:` follows `fg:` and `bg:`, which these two leave as they are: they are written out.)
-    x += add(art->line("Put away", Art::Size::label, Font::Weight::medium, Color::white(), Art::ink, Art::buttonPad), x, -0.018f, Pick::putAway()) + 0.01f;
+    x += add(art->line("Close the Tree", Art::Size::label, Font::Weight::medium, Color::white(), Art::ink, Art::buttonPad), x, -0.018f, Pick::putAway()) + 0.01f;
     // (On the Quest a button is to press the tree as surely as the clap does. This one already
     // does: a pinch on it is `pressTree(send: true)`, the very call the clap makes in `handle`.
     // So nothing is added to the strip.) AGENT: joined to the service, nothing is sent by hand: a tree is handed off by
