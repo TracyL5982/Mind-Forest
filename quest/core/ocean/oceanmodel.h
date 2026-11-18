@@ -422,6 +422,10 @@ private:
     std::optional<Vec2> standingPlot;                   // And where it stood on the desk
     bool shelfDirty = false;
     bool shelfLoaded = false;
+    // AGENT (WS98): joined to the service, the welcome tree is always in the forest once the welcome is past.
+    bool welcomeEnsured = false;            // looked for once at launch, and made if missing
+    double welcomeFallbackAt = -1;          // when it is looked for if the service has not answered by then
+    size_t welcomeShape = 0;                // the standing welcome tree's shape last written, to write it as it grows
 
     EntityRef strip = Entity::make();
     std::string stripKey;
@@ -736,6 +740,10 @@ private:
     bool onWelcomeTree() const;
     void addWelcomeNotes();
     void startTour();
+    /// AGENT (WS98): joined to the service and past the welcome, with no welcome tree read from its file, standing or on
+    /// the desk: a new one is put on the desk as a cover (not stood: no walk), at a free place among the service's trees,
+    /// and written down. Once, after the service's trees are hung at launch (Bridge), or `welcomeFallbackAt` without them.
+    void ensureWelcomeTree(const char* why);
     int tourLesson() const;
     CardRef tourCard(int lesson) const;
     /// The card in focus is the layer Momo made for its lesson.
@@ -1721,6 +1729,9 @@ private:
     // lately saved first, instead of all at once before the first frame: there will be many more of them.
     // Those still to hang, in the file's order (oldest first). Nothing is written back until all are up.
     std::vector<ShelfFile::Item> shelfWaiting;
+    /// AGENT (WS98): joined, a welcome tree kept with no place on the desk yet (the app closed mid-walk): it waits for the
+    /// service's trees to be hung at their places, then takes a free one among them (`ensureWelcomeTree`).
+    std::optional<ShelfFile::Item> welcomeWaiting;
     void shelveWaiting();
 
     /// (`shelfURL`: the file's path; "" if there is nowhere to keep it.)

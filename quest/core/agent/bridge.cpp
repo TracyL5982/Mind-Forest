@@ -305,6 +305,8 @@ void Bridge::synced(const Delta& delta) {
     for (auto s = plots.begin(); s != plots.end();) s = client.mirror().tree(TreeId{s->first}) ? std::next(s) : plots.erase(s);
     for (auto s = stands.begin(); s != stands.end();) s = client.mirror().tree(TreeId{s->first}) ? std::next(s) : stands.erase(s);
     changed(delta, false, false);
+    // The welcome tree, the headset's own, is always in the forest once the welcome is past: among the trees just hung (WS98).
+    model.ensureWelcomeTree("after the service's trees");
     if (dump) {
         client.send(Outbound::dump({Dump::text(*dump)}));
         logLine("[agent] dropped in: " + *dump);

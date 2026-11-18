@@ -618,6 +618,30 @@ void OceanModel::tourMarkNote(const std::string& words) {
     else logLine("[guide] the walk's card momo-mark could not be made");
 }
 
+void OceanModel::ensureWelcomeTree(const char* why) {
+    if (!agentBridge || welcomeEnsured || !catalog || !built || !shelfWaiting.empty() || catalog->notes.count(tourSteps[0].note) == 0) return;
+    if (!teach.on || !teach.welcomed || teach.tour >= 0 || teach.demo || teach.scripted) return;
+    welcomeEnsured = true;
+    std::optional<ShelfFile::Item> waiting = std::exchange(welcomeWaiting, std::nullopt);
+    if (tree && tree->walk()) return;
+    for (const Shelved& cover : shelf) {
+        if (cover.tree && cover.tree->walk()) return;
+    }
+    // Kept with its layers when the app was closed mid-walk: on the desk now, at a free place among the service's trees.
+    if (waiting) {
+        if (TreeRef t = Tree::make(waiting->tree, catalog)) {
+            logLine(std::string("[guide] the welcome tree kept mid-walk goes on the desk (") + why + ")");
+            shelve(t, std::nullopt, nullptr, waiting->spot, std::nullopt);
+            shelfDirty = true;
+            return;
+        }
+    }
+    // (Its file never held one: the walk was taken on a build before it was kept, or ended with none put away.)
+    logLine(std::string("[guide] past the welcome with no welcome tree kept, so one is put on the desk (") + why + ")");
+    shelve(std::make_shared<Tree>(Ref::note(tourSteps[0].note), tourTitle, Maker::gardener, catalog), std::nullopt);
+    shelfDirty = true;
+}
+
 /// Stands the welcome tree. From there the tree is the walk (`updateTour`).
 void OceanModel::startTour() {
     if (!catalog || !teach.painter || catalog->notes.count(tourSteps[0].note) == 0) return;

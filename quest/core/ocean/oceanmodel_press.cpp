@@ -845,6 +845,11 @@ void OceanModel::loadShelf(const std::shared_ptr<Catalog>& catalog) {
         for (const ShelfFile::Item& item : file->trees) {
             if (welcome(item) && &item != lastWelcome) continue;
             if (agentBridge && !welcome(item)) continue;
+            // (Joined, one with no place yet waits for the service's trees, so as not to take one of their places.)
+            if (agentBridge && !item.plot) {
+                welcomeWaiting = item;
+                continue;
+            }
             bool holdsWorks = false;
             for (const TreeNode& n : item.tree.nodes) {
                 if (n.ref.kind == Ref::Kind::work) holdsWorks = true;
@@ -858,7 +863,7 @@ void OceanModel::loadShelf(const std::shared_ptr<Catalog>& catalog) {
         }
         if (dropped > 0) logLine(fmt("[ocean] shelf: %d covers held works the library has since changed, and were let go", dropped));
         logLine(fmt(agentBridge ? "[ocean] shelf: the welcome tree kept from last time (%d)" : "[ocean] shelf: %d covers kept from last time",
-                    int(shelfWaiting.size())));
+                    int(shelfWaiting.size() + (welcomeWaiting ? 1 : 0))));
         return;
     }
     if (agentBridge) return;
@@ -892,8 +897,12 @@ void OceanModel::saveShelf() {
     std::string url = agentBridge ? welcomeURL() : shelfURL();
     if (url.empty() || !catalog) return;
     std::vector<ShelfFile::Item> items = shelfWaiting;     // (none, by the time anything is written: see `update`)
+    if (welcomeWaiting) items.push_back(*welcomeWaiting);
     for (const Shelved& cover : shelf) items.push_back(ShelfFile::Item{cover.tree->saved(), cover.spot, cover.plot});
     if (tree && standingSpot) items.push_back(ShelfFile::Item{tree->saved(), *standingSpot, standingPlot});
+    // (Joined, the welcome tree standing on the walk, which has no place on the desk yet: kept with its layers, to come back
+    // at a free place, WS98.)
+    if (agentBridge && tree && !standingSpot && tree->walk()) items.push_back(ShelfFile::Item{tree->saved(), freeSpot(), std::nullopt});
     if (agentBridge) {
         items.erase(std::remove_if(items.begin(), items.end(), [](const ShelfFile::Item& item) { return !welcomeTree(item.tree); }), items.end());
         // (No welcome tree yet, or not put away: what the file holds stays.)

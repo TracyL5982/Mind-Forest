@@ -247,6 +247,17 @@ void OceanModel::update(float dt) {
     lookFrame();
     composeFrame(now);
 
+    // AGENT (WS98): joined, the welcome tree is in the forest once the welcome is past (`ensureWelcomeTree`), the service
+    // answering or not; and while it stands it is written down as it grows, so that the app closed mid-walk keeps it.
+    if (agentBridge && built) {
+        if (welcomeFallbackAt < 0) welcomeFallbackAt = now + 10;
+        if (now >= welcomeFallbackAt) ensureWelcomeTree("the service has not answered");
+        if (tree && tree->walk()) {
+            size_t shape = tree->nodes.size() * 1009 + size_t(tree->stand) * 31 + size_t(tree->focus().value_or(-1) + 1);
+            if (shape != welcomeShape && shelfLoaded) shelfDirty = true;
+            welcomeShape = shape;
+        }
+    }
     if (now < busyUntil + 0.1) {
         if (shell) shell->setShift(stirred.value(now));
         double t0 = mediaTime();
