@@ -634,6 +634,9 @@ private:
         EntityRef home;
         EntityRef homeTags[3];              // its numbers again, in the room, by the three things themselves
         std::vector<const Entity*> homePicks;
+        /// The button a pinch is on, shown pressed until it lets go (`pressButton`), and how it looked before.
+        EntityRef pressed;
+        Vec3 pressedScale = {1, 1, 1};
         bool homeDue = false;               // the walk is over: the card comes once nothing stands
         bool homeSeen = false;              // it has been shown and left
         double homeAfter = 0;
@@ -706,6 +709,18 @@ private:
     void tourOff(std::optional<Vec3> at);
     void showHome();
     void closeHome();
+    /// The guide's buttons as pinched: one that a pinch lands on (a guide pick's `action`) shows pressed until it lets go.
+    bool pressButton(const EntityRef& entity, int action);
+    void releaseButton();
+    /// How far what is drawn flat on a guide holder reaches on it, in its own x and y.
+    std::pair<Vec2, Vec2> guideExtent(const EntityRef& holder) const;
+    /// A target behind what stands on `holder`, over all of it and `margin` round it, that takes a pinch for the holder
+    /// and does nothing: one that misses a button never reaches what is behind. Into `into`, to be let go with the rest.
+    EntityRef guideSwallow(const EntityRef& holder, float margin, std::vector<const Entity*>& into);
+    /// A guide button's pinch area: as large as `size`, and further out by these on each side (m).
+    static void reachOut(const EntityRef& button, Vec2 size, float left, float right, float down, float up);
+    /// What a guide button reaches out round itself, m, at `distance` m from the eyes: about 1.6 degrees.
+    static float guideReach(float distance) { return 0.028f * distance; }
     void clearHomeTags();
     void updateHome(double now);
     std::optional<int> tourNode(int lesson) const;
@@ -855,6 +870,7 @@ private:
         float reach = 0;                    // NOTE(port): added for Quest: the furthest it has been from where it began, m (see `pinchEnded`)
     };
     std::optional<Press> press;
+    EntityRef releasedOver;             // what the ray of the hand that held the last pinch was on as it let go
     double time = 0.0;
     double busyUntil = 0.0;
     /// (The Swift's `(at: Double, run: () -> Void)`.)
@@ -1603,6 +1619,7 @@ private:
 
 public:
     void pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) override;
+    void pinchReleasedOver(const EntityRef& entity) override { releasedOver = entity; }
 
     void pinchEnded(Vec3 point) override;
 
