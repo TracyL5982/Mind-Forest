@@ -398,6 +398,8 @@ public:
     static Outbound client(const Media& media);
     /// The headset is worn again after `away` s off (its session back in front), to the tenth of a second.
     static Outbound worn(double away);
+    /// Share a tree with a friend (the Share button over a tree in the forest).
+    static Outbound share(const TreeId& tree);
 
     const Json& json() const { return json_; }
     std::string text() const { return json_.dump(); }

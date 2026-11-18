@@ -389,6 +389,12 @@ private:
         std::vector<Shape> trunk;
         int layers = 1;
         float treeFoot = 0.03f, treeRise = 0.055f;
+        // AGENT: its top, m from its middle in its own measure (`Cover::box`); the Send and Share buttons over it while it is
+        // hovered (`tendHover`), made when they show and let go when they go, and until when they stay after a press.
+        float top = 0;
+        EntityRef buttons;
+        double buttonsUntil = -1;
+        double hoverSeen = -1;              // when a ray last rested on it
         Tween<float> el{0.f};
         // How far its pictures are drawn in to the trunk and how small (1: as the cover was made), and the
         // rings on the ground round its foot.
@@ -480,6 +486,20 @@ private:
     void tendForest(double now);
     /// Puts a cover's pictures where they float when drawn in by `k` (see `huddleUp`).
     void layPictures(const std::vector<CoverPicture>& pictures, float k) const;
+    /// AGENT: a tree in the forest that a hand's ray rests on (its cover's `hovered`) shows two buttons over its crown, Send
+    /// and Share, while the hand is on it or on them and for `hoverGrace` s after, time for the hand to go from the tree up to
+    /// them. A pinch on the tree still opens it. Only on the desk, and only for a tree of the service's. Every frame.
+    void tendHover(double now);
+    static constexpr double hoverGrace = 1.0;
+    static constexpr float buttonText = 0.022f;         // m, in a tree's own measure: about 3.7 cm tall on the desk
+    static constexpr double buttonsSay = 1.8;           // s the pressed button says it took
+    /// AGENT: a press on one: 0 asks the service for the tree's handoff, 1 shares it; the button says so for a moment.
+    void coverButton(int uid, int which);
+    void showButtons(Shelved& s, int pressed);
+    /// AGENT: `-hoverCover <i> -hoverCoverAt <s>`: the cover at that place on the shelf counts as hovered from then (for
+    /// `-hoverCoverFor <s>`, 6), as a ray resting on it would make it, for pictures and checks.
+    int hoverForced = -1;
+    double hoverForcedUntil = -1;
     /// And its name with them: as much smaller, still standing on the ground before the tree's foot.
     static void layName(const EntityRef& caption, Vec2 size, float foot, float k);
     /// Rakes every tree's rings (gravel.h) for where the trees stand, or are on their way to: where two
@@ -777,7 +797,7 @@ private:
     std::optional<int> zoomedFor;
     std::optional<float> magnifyBase;
     struct Pick {
-        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink, reseat, stay, guide, tool, thread, cut };
+        enum class Kind { card, speck, peek, brief, shelf, send, putAway, background, ask, askMark, openLink, reseat, stay, guide, tool, thread, cut, coverButton };
         Kind kind = Kind::background;
         int index = 0;                      // card, ask, askMark, openLink: the card; speck: the piece; brief: which one; shelf: the cover's uid
         int question = 0;                   // ask: which of the card's questions
@@ -799,6 +819,8 @@ private:
         static Pick tool(int id, int what) { return {Kind::tool, id, what}; }
         static Pick thread(int child) { return {Kind::thread, child, 0}; }
         static Pick cut(int child) { return {Kind::cut, child, 0}; }
+        /// AGENT: a button over a tree in the forest: `which` 0 Send, 1 Share; `index` the cover's uid.
+        static Pick coverButton(int uid, int which) { return {Kind::coverButton, uid, which}; }
     };
     // (Keyed by the entity's address: ObjectIdentifier.)
     std::map<const Entity*, Pick> picks;

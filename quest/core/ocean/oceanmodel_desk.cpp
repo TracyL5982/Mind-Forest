@@ -5,6 +5,8 @@
 // away from it. (See desk.h, and `// MARK: The desk` in oceanmodel.h.)
 #include "oceanmodel.h"
 
+#include "../agent/bridge.h"
+
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -492,4 +494,92 @@ void OceanModel::hideSeatPrompt() {
         fadeOut(seatPrompt->entity, 0.2f);
     }
     seatPrompt = std::nullopt;
+}
+
+// MARK: - AGENT: Send and Share over a tree in the forest
+
+void OceanModel::tendHover(double now) {
+    if (hoverForced >= 0 && now > hoverForcedUntil) {
+        if (hoverForced < int(shelf.size())) shelf[size_t(hoverForced)].mover->entity->hovered = 0;
+        hoverForced = -1;
+    }
+    // The tree a ray rests on most, on the desk (a ray finds no tree on the ocean's floor).
+    int most = -1;
+    float strongest = 0.3f;
+    for (size_t i = 0; i < shelf.size(); i++) {
+        if (int(i) == hoverForced) shelf[i].mover->entity->hovered = 1;
+        float h = shelf[i].mover->entity->hovered;
+        if (h > strongest) {
+            strongest = h;
+            most = int(i);
+        }
+    }
+    for (size_t i = 0; i < shelf.size(); i++) {
+        Shelved& s = shelf[i];
+        bool served = !forestDown && agentBridge && s.tree && agentBridge->serves(*s.tree);
+        if (served && int(i) == most) s.hoverSeen = now;
+        // (A button that says it took stays its while even when the tree is no longer the service's: a tree shared is taken out
+        // of the forest at once, and its cover stays.)
+        bool keep = (served && s.hoverSeen >= 0 && now - s.hoverSeen < hoverGrace) || (!forestDown && now < s.buttonsUntil);
+        if (keep && !s.buttons) {
+            showButtons(s, -1);
+            logLine("[ocean] Send and Share over " + s.tree->title);
+        } else if (!keep && s.buttons) {
+            logLine("[ocean] Send and Share go from " + s.tree->title);
+            for (const EntityRef& b : s.buttons->children) picks.erase(b.get());
+            s.tilts.erase(std::remove(s.tilts.begin(), s.tilts.end(), s.buttons), s.tilts.end());
+            fadeOut(s.buttons, 0.2f);
+            s.buttons = nullptr;
+            s.buttonsUntil = -1;
+        }
+    }
+}
+
+void OceanModel::showButtons(Shelved& s, int pressed) {
+    if (!art) return;
+    EntityRef holder = s.mover->entity;
+    bool again = s.buttons != nullptr;
+    if (again) {
+        for (const EntityRef& b : s.buttons->children) picks.erase(b.get());
+        s.tilts.erase(std::remove(s.tilts.begin(), s.tilts.end(), s.buttons), s.tilts.end());
+        s.buttons->removeFromParent();
+    }
+    // Side by side over the tree's crown, as the app's other buttons look; the one pressed says it took, and takes no press.
+    static const char* names[2] = {"Send", "Share"};
+    static const char* done[2] = {"Sent", "Shared"};
+    std::vector<Piece> pieces;
+    for (int k = 0; k < 2; k++) {
+        std::optional<Piece> piece = art->pill(k == pressed ? done[k] : names[k], buttonText);
+        if (!piece) return;
+        pieces.push_back(*piece);
+    }
+    const float gap = 0.014f;
+    float width = pieces[0].size.x + gap + pieces[1].size.x, height = std::max(pieces[0].size.y, pieces[1].size.y);
+    EntityRef row = Entity::make();
+    float x = -width / 2;
+    for (int k = 0; k < 2; k++) {
+        EntityRef pill = art->quad(pieces[size_t(k)]);
+        pill->position = {x + pieces[size_t(k)].size.x / 2, 0, 0};
+        pill->collision = {Shape::generateBox({pieces[size_t(k)].size.x, pieces[size_t(k)].size.y, 0.02f})};
+        if (k != pressed) picks[pill.get()] = Pick::coverButton(s.uid, k);
+        row->addChild(pill);
+        x += pieces[size_t(k)].size.x + gap;
+    }
+    row->position = {0, s.top + height / 2 + 0.03f, 0.04f};
+    holder->addChild(row);
+    s.tilts.push_back(row);
+    tip({row}, s.el.value(time));
+    if (!again) fadeIn(row, 0, 0.2f);
+    s.buttons = row;
+    touch(time + 0.3);
+}
+
+void OceanModel::coverButton(int uid, int which) {
+    auto i = std::find_if(shelf.begin(), shelf.end(), [&](const Shelved& cover) { return cover.uid == uid; });
+    if (i == shelf.end() || !i->tree || !agentBridge) return;
+    bool told = which == 0 ? agentBridge->sendTree(*i->tree) : agentBridge->shareTree(*i->tree);
+    logLine(fmt("[ocean] %s pressed over %s%s", which == 0 ? "Send" : "Share", i->tree->title.c_str(), told ? "" : ", but the service could not be told"));
+    if (!told) return;
+    i->buttonsUntil = time + buttonsSay;
+    showButtons(*i, which);
 }

@@ -995,6 +995,26 @@ bool Bridge::treeFrom(const Ref& ref) {
 
 bool Bridge::serves(const Tree& tree) { return plantedOf(tree) != nullptr; }
 
+bool Bridge::sendTree(const Tree& tree) {
+    for (const auto& [key, p] : trees) {
+        if (p.tree.get() != &tree) continue;
+        bool sent = client.send(Outbound::handoff(Scope{.treeIds = {TreeId{key}}, .nodeIds = {}}));
+        if (sent) logLine("[agent] asked for the handoff of \"" + tree.title + "\"");
+        return sent;
+    }
+    return false;
+}
+
+bool Bridge::shareTree(const Tree& tree) {
+    for (const auto& [key, p] : trees) {
+        if (p.tree.get() != &tree) continue;
+        bool sent = client.send(Outbound::share(TreeId{key}));
+        if (sent) logLine("[agent] asked to share \"" + tree.title + "\"");
+        return sent;
+    }
+    return false;
+}
+
 bool Bridge::addPiece(const Ref& ref) {
     Planted* p = model.tree ? plantedOf(*model.tree) : nullptr;
     std::optional<ItemId> item = libraryItem(ref, *model.catalog);
