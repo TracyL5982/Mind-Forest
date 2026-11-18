@@ -270,6 +270,7 @@ void Input::update(const EntityRef& root, const std::optional<Mat4>& head, float
                 scene->magnifyEnded();
             }
             if (holder == i) {
+                scene->pinchReleasedOver(h.hit.entity);
                 scene->pinchEnded(heldAt);
                 holder = -1;
                 held = nullptr;

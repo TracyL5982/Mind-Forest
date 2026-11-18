@@ -37,6 +37,7 @@ void OceanModel::pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) {
         // A fist or a flat hand can read as a pinch; it isn't one.
         press = Press{*p, start, mediaTime() < hands->busyUntil, riders};
         press->began = time;
+        if (p->kind == Pick::Kind::guide) pressButton(entity, p->index);
     }
     press->at = point;
     if (press->cancelled) return;
@@ -107,6 +108,9 @@ void OceanModel::pinchChanged(const EntityRef& entity, Vec3 point, Vec3 start) {
 }
 
 void OceanModel::pinchEnded(Vec3 point) {
+    releaseButton();
+    EntityRef over = releasedOver;
+    releasedOver = nullptr;
     if (!press) return;
     Press p = *press;
     press = std::nullopt;
@@ -141,6 +145,13 @@ void OceanModel::pinchEnded(Vec3 point) {
     if (marking) {
         markEnd();
         if (!still) return;
+    }
+    // A guide button counts a pinch that began on it and lets go with the ray still on it, however far the ray went
+    // between: the fingers closing move it, and a pinch that seemed to land and did nothing was taken for a dead button
+    // (the lead, WS75). Cards and trees keep to stillness.
+    if (!still && p.pick.kind == Pick::Kind::guide && over) {
+        std::optional<Pick> under = pick(over);
+        if (under && under->kind == Pick::Kind::guide && under->index == p.pick.index) still = true;
     }
     if (still) {
         if (p.pick.kind == Pick::Kind::card) {
