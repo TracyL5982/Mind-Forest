@@ -783,7 +783,7 @@ test("with a round waiting on the open card, her name alone starts nothing, and 
   try {
     headset = await wearing(run);
     await run.demo!.goto('f1');
-    const depth = nodeOf(run, 'By depth')!;
+    const depth = nodeOf(run, 'Sinuous sea fan, False Bay, South Africa')!;
     const had = model.started();
     headset.talk({ t: 'start', turn: 1, scene: { focus: depth.id, treeId: depth.treeId, selection: [] } });
     await soon(() => model.started() > had);
@@ -812,7 +812,7 @@ test("with a round waiting on the open card, her name alone starts nothing, and 
     model.ends('r1');
     await soon(() => run.demo!.status().rounds.find((round) => round.id === 'f1')!.state === 'played', 8000);
     await run.pipeline.idle();
-    const under = titlesUnder(run, 'By depth');
+    const under = titlesUnder(run, 'Sinuous sea fan, False Bay, South Africa');
     assert.deepEqual([...under].sort(), cardsOf('f1').map((card) => card.title).sort(), "the round's cards, each once");
   } finally {
     headset?.off();
