@@ -70,6 +70,8 @@ struct Synced {
     Hearing hearing = Hearing::browser;
     bool live = false;
     std::string connection;
+    /// How the service shares a tree: "telegram", or empty (see `Hello::share`).
+    std::string share;
 };
 
 /// A change set is in the mirror.

@@ -528,6 +528,7 @@ void OceanModel::tendHover(double now) {
         if (!((served(s) && on) || (!forestDown && now < s.buttonsUntil))) {
             logLine("[ocean] Send and Share go from " + s.tree->title);
             if (sharing.uid == s.uid) closePeople(false);       // FILM: the list of people goes with them
+            if (sharing.uid == s.uid && sharing.waiting) sharing = Sharing{};     // (AGENT: a late answer brings them back)
             for (const EntityRef& b : s.buttons->children) picks.erase(b.get());
             s.tilts.erase(std::remove(s.tilts.begin(), s.tilts.end(), s.buttons), s.tilts.end());
             fadeOut(s.buttons, 0.2f);
@@ -574,7 +575,9 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
     std::optional<Piece> pieces[2];
     float wides[2] = {0, 0}, size = 1;
     for (int b = 0; b < 2; b++) {
-        bool open = b == 1 && sharing.list && sharing.uid == s.uid && sharing.chosen < 0;
+        // (AGENT: and while a share sent through Telegram waits for its answer.)
+        bool waiting = b == 1 && sharing.waiting && sharing.uid == s.uid;
+        bool open = (b == 1 && sharing.list && sharing.uid == s.uid && sharing.chosen < 0) || waiting;
         std::optional<Piece> rest = art->action(actionWords(s, b, false), buttonText, actionAccent(b), actionOn(b), false);
         if (!rest) return;
         // AGENT: why a share was not taken (`shareRefused`) is said in Share's place, as it was; not filled, since it has not
@@ -603,7 +606,7 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
         // A ray on one lights that one, and neither takes the glow of the tree behind them, which turns a dark label tan
         // (`tendShare` counts a ray on a button as a ray on its tree, since the tree itself is then not what is lit).
         target->hover = Hover::highlight(Color::white(), b == pressed ? 0 : 0.35f);
-        if (b != pressed) picks[target.get()] = Pick::coverButton(s.uid, b);
+        if (b != pressed && !(b == 1 && sharing.waiting && sharing.uid == s.uid)) picks[target.get()] = Pick::coverButton(s.uid, b);
         row->addChild(target);
         if (Flags::has("showHitAreas")) {
             if (std::optional<Piece> area = art->piece(fmt("hit-area:%.0fx%.0f", double(wide * Art::ppm), double(reach * Art::ppm)), wide * Art::ppm, reach * Art::ppm,
@@ -643,6 +646,25 @@ void OceanModel::showButtons(Shelved& s, int pressed, const std::string& said) {
 void OceanModel::coverButton(int uid, int which) {
     auto i = std::find_if(shelf.begin(), shelf.end(), [&](const Shelved& cover) { return cover.uid == uid; });
     if (i == shelf.end() || !i->tree || !agentBridge) return;
+    // AGENT: through Telegram (the hosted service), Share asks at once, with no list: those people are the film's, and a judge
+    // shares by forwarding the link the service sends to their own Telegram. It says so when the service answers
+    // (`shareTaken`, `shareRefused`); meanwhile it is on and takes no second pinch (the lead, WS88).
+    if (which == 1 && agentBridge->sharesByTelegram()) {
+        if (sharing.waiting && sharing.uid == uid) {
+            logLine("[ocean] Share over " + i->tree->title + ": asked already, the answer awaited");
+            return;
+        }
+        if (sharing.list) closePeople(false);
+        bool told = agentBridge->shareTree(*i->tree);
+        logLine(fmt("[ocean] Share pressed over %s%s", i->tree->title.c_str(), told ? ": through Telegram, the answer awaited" : ", but the service could not be told"));
+        if (!told) return;
+        sharing = Sharing{};
+        sharing.uid = uid;
+        sharing.waiting = true;
+        i->buttonsUntil = time + buttonsSay;
+        showButtons(*i, -1);
+        return;
+    }
     // FILM: Share opens the list of people to share it with, and shuts it again (oceanmodel_share.cpp): the service is told
     // once one of them is picked (`sharePerson`).
     if (which == 1) {
@@ -689,7 +711,9 @@ void OceanModel::shareRefused(const Tree& tree, const std::string& reason) {
     if (i == shelf.end()) return;
     std::string said = reason == "unpaired" ? "Pair Telegram first" : reason == "limit" ? "No more shares today"
                      : reason == "too-big"  ? "Too big to share"
+                     : reason == "not-shared" ? "Not shared"
                                             : "Try again later";
+    if (sharing.waiting && sharing.uid == i->uid) sharing = Sharing{};
     // One tree shows its buttons at a time: another's go, and the list of people with them. This one's list goes too, and
     // with it whom it was shared with: "Shared with <name>" does not stay when the service would not (WS88).
     if (sharing.list) closePeople(false);

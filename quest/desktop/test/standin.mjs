@@ -202,6 +202,9 @@ export async function standIn(name, source, { demo = false } = {}) {
 
   const proxyPort = await freePort();
   let previewSocket = null;
+  // Fields laid over the service's hello on its way to the preview (`hello(fields)`), as a service that sends them would:
+  // the hosted service's `"share":"telegram"`, say.
+  let helloFields = null;
   let previewUp = null;
   const fromPreview = [];
   // What becomes of each picture the preview asks for (`/assets/…`), by `pictures(rule)`: `rule(path, n)`, n counting them
@@ -240,7 +243,14 @@ export async function standIn(name, source, { demo = false } = {}) {
     const queued = [];
     previewSocket = down;
     previewUp = up;
-    up.on('message', (m) => down.send(String(m)));
+    up.on('message', (m) => {
+      let text = String(m);
+      if (helloFields && text.includes('"hello"')) {
+        const j = JSON.parse(text);
+        if (j.t === 'hello') text = JSON.stringify({ ...j, ...helloFields });
+      }
+      down.send(text);
+    });
     up.on('open', () => queued.splice(0).forEach((m) => up.send(m)));
     down.on('message', (m) => {
       fromPreview.push({ when: Date.now(), message: JSON.parse(String(m)) });
@@ -296,6 +306,10 @@ export async function standIn(name, source, { demo = false } = {}) {
     api,
     state,
     inject: (message) => previewSocket?.send(JSON.stringify(message)),
+    // Fields the service's hello carries from the next launch on (null: as it sends it).
+    hello: (fields) => {
+      helloFields = fields;
+    },
     // A message to the service as if the preview sent it, on its own connection: what it starts is the preview's own (`yours`).
     asPreview: (message) => previewUp?.readyState === WebSocket.OPEN && previewUp.send(JSON.stringify(message)),
     pictures: (rule) => {

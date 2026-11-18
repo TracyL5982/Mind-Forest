@@ -168,6 +168,11 @@ void Bridge::frame(double t) {
         std::visit(overloaded{
                        [&](Synced& s) {
                            synced(s.delta);
+                           if (s.share != shareBy) {
+                               shareBy = s.share;
+                               logLine(shareBy.empty() ? std::string("[agent] the service names no way of sharing: Share opens the list of people")
+                                                       : "[agent] the service shares a tree through " + shareBy + ": Share sends at once");
+                           }
                            if (voice) voice->joined(s.settings, s.voice, s.live, s.connection);
                        },
                        [&](Changed& c) {
@@ -202,7 +207,13 @@ void Bridge::frame(double t) {
                        },
                        [&](Note&) {},
                        [&](Questions& q) { offer(q); },
-                       [&](Rejected& r) { logLine("[agent] the service refused a message: " + r.message); },
+                       [&](Rejected& r) {
+                           logLine("[agent] the service refused a message: " + r.message);
+                           // (The demo's refusal of a share names no tree: it is the one last asked for. WS88)
+                           if (r.message.rfind("the tree was not shared", 0) == 0 && !lastShared.empty()) {
+                               shareAnswered(Shared{.tree = TreeId{lastShared}, .ok = false, .reason = "not-shared", .text = r.message});
+                           }
+                       },
                        [&](Shared& s) { shareAnswered(s); },
                    },
                    event);
@@ -1020,7 +1031,10 @@ void Bridge::shareAnswered(const Shared& answer) {
     logLine(fmt("[agent] the share of %s %s%s%s", tree ? ("\"" + tree->title + "\"").c_str() : answer.tree.value.c_str(),
                 answer.ok ? "was taken" : ("was not taken: " + answer.reason).c_str(), answer.text.empty() ? "" : ", ",
                 answer.text.c_str()));
-    // Taken: the button already says so. Not: it says why, on the tree's cover.
+    if (answer.tree.value == lastShared) lastShared.clear();
+    // Taken: through Telegram, the button says so now and the tree's copy goes (the demo's says so at the pick). Not: the
+    // button says why, on the tree's cover.
+    if (answer.ok && tree && sharesByTelegram()) model.shareTaken(*tree);
     if (!answer.ok && tree) model.shareRefused(*tree, answer.reason);
 }
 
@@ -1028,6 +1042,7 @@ bool Bridge::shareTree(const Tree& tree) {
     for (const auto& [key, p] : trees) {
         if (p.tree.get() != &tree) continue;
         bool sent = client.send(Outbound::share(TreeId{key}));
+        if (sent) lastShared = key;
         if (sent) logLine("[agent] asked to share \"" + tree.title + "\"");
         return sent;
     }

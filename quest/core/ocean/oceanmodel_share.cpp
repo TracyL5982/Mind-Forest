@@ -84,6 +84,8 @@ float smooth(float u) {
 std::string OceanModel::actionWords(const Shelved& s, int which, bool done) const {
     if (which == 0) return done ? "Sent to Agents" : "Send to Agents";
     if (!done) return "Share with Friends";
+    // AGENT: through Telegram, the link to forward is in the sharer's own chat (the lead, WS88).
+    if (agentBridge && agentBridge->sharesByTelegram()) return "Sent to your Telegram";
     return sharing.uid == s.uid && !sharing.with.empty() ? "Shared with " + sharing.with : "Shared with Friends";
 }
 
@@ -236,6 +238,29 @@ void OceanModel::sharePerson(int uid, int who) {
     sound("send", 0.8f);
     driftOff(*s);
     touch(time + sharedSay + 0.3);
+}
+
+void OceanModel::shareTaken(const Tree& tree) {
+    auto s = std::find_if(shelf.begin(), shelf.end(), [&](const Shelved& cover) { return cover.tree.get() == &tree; });
+    if (s == shelf.end()) return;
+    if (sharing.uid == s->uid) sharing = Sharing{};
+    // One tree shows its buttons at a time: another's go, and a list of people with them.
+    if (sharing.list) closePeople(false);
+    for (Shelved& other : shelf) {
+        if (&other == &*s || !other.buttons) continue;
+        for (const EntityRef& b : other.buttons->children) picks.erase(b.get());
+        other.tilts.erase(std::remove(other.tilts.begin(), other.tilts.end(), other.buttons), other.tilts.end());
+        fadeOut(other.buttons, 0.2f);
+        other.buttons = nullptr;
+        other.pills = {};
+        other.buttonsUntil = -1;
+    }
+    s->buttonsUntil = time + sharedSay;
+    showButtons(*s, 1);
+    sound("send", 0.8f);
+    driftOff(*s);
+    touch(time + sharedSay + 0.3);
+    logLine("[ocean] Share says: Sent to your Telegram, over " + tree.title);
 }
 
 void OceanModel::driftOff(const Shelved& s) {

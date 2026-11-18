@@ -56,8 +56,13 @@ public:
     /// alone in its scope), or to share it (`share`). True when it was told.
     bool sendTree(const Tree& tree);
     bool shareTree(const Tree& tree);
-    /// The hosted service's answer to a share (`shared`): nothing more when taken; when not, the tree's Share button says why.
+    /// The hosted service's answer to a share (`shared`): taken, the tree's Share button says where it went and the tree's copy
+    /// goes with the wind; not, the button says why. The demo's refusal, an error that says the tree was not shared, is taken
+    /// as an answer for the tree last asked for (WS88).
     void shareAnswered(const Shared& answer);
+    /// The service shares a tree through Telegram (its hello says `"share":"telegram"`, the hosted service): Share sends at
+    /// once, with no list of people (the lead, WS88). Otherwise, as on the demo, Share opens the film's list of people.
+    bool sharesByTelegram() const { return shareBy == "telegram"; }
     /// A long pinch on a card of a service tree, open or closed (the user's rule, 2026-11-17): one with cards under it is gone
     /// into, its layer standing, and nothing is asked; one with none starts a layer on it and asks for more like it (`moreLike`).
     void longPinch(int nodeID);
@@ -107,6 +112,8 @@ public:
     Voice* talk() { return voice.get(); }
 
 private:
+    std::string shareBy;            // how the service shares a tree, from its hello (`Hello::share`)
+    std::string lastShared;         // the tree last asked to be shared, until its answer
     /// One service tree as the scene holds it.
     struct Planted {
         std::shared_ptr<Tree> tree;

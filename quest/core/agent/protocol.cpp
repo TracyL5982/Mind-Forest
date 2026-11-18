@@ -477,6 +477,7 @@ std::optional<Inbound> readHello(const Json& j, Why& why) {
                                          : f.choice<Hearing>("hearing", {{"browser", Hearing::browser}, {"service", Hearing::service}}),
                           .live = f.optionalBoolean("live").value_or(false),
                           .connection = f.optionalString("connection").value_or(""),
+                          .share = f.optionalString("share").value_or(""),
                       });
 }
 

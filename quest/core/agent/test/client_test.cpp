@@ -197,6 +197,7 @@ TEST(theSessionArrivesAsEventsInOrder) {
 
     auto* synced = std::get_if<Synced>(&events.at(0));
     CHECK(synced && synced->delta.empty() && synced->settings.picksPerRun == 5, "the first hello, of an empty mindstorm");
+    CHECK(synced && synced->share.empty(), "a service that names no way of sharing");
     int64_t last = 0;
     for (const Event& e : events) {
         if (auto* changed = std::get_if<Changed>(&e)) {

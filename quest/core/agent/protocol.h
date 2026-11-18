@@ -247,6 +247,9 @@ struct Hello {
     bool live = false;
     /// This connection's id, which /live names so that what Momo starts there is this connection's own.
     std::string connection;
+    /// How the service shares a tree (`share`): "telegram" on the hosted service, which sends the sharer a link to forward
+    /// in their own Telegram; empty where it says nothing (the demo, the Mac's service).
+    std::string share;
 };
 struct Change {
     ChangeSet set;

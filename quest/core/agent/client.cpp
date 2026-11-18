@@ -188,6 +188,7 @@ void Client::receive(Inbound message, std::vector<Event>& events) {
                            .hearing = hello.hearing,
                            .live = hello.live,
                            .connection = hello.connection,
+                           .share = hello.share,
                        });
                    },
                    [&](Change& change) {

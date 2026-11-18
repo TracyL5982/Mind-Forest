@@ -502,8 +502,12 @@ private:
     void showButtons(Shelved& s, int pressed, const std::string& said = "");
     /// AGENT: the service would not share a tree (`reason`): its Share button says why for `buttonsSay` s, the buttons
     /// shown again if they had gone. unpaired: "Pair Telegram first" (the lead's words); limit, too-big, unavailable: a
-    /// short line each (mine). The service's own line is logged, not shown.
+    /// short line each (mine). The service's own line is logged, not shown. not-shared, the demo's refusal: "Not shared".
+    /// Whom the list had it shared with goes too (WS88).
     void shareRefused(const Tree& tree, const std::string& reason);
+    /// AGENT: the hosted service took a share it sends through Telegram: Share says "Sent to your Telegram" for `sharedSay`
+    /// s and the tree's copy goes with the wind, as a pick in the film's list does (WS88, the lead).
+    void shareTaken(const Tree& tree);
     /// AGENT: `-hoverCover <i> -hoverCoverAt <s>`: the cover at that place on the shelf counts as hovered from then (for
     /// `-hoverCoverFor <s>`, 6), as a ray resting on it would make it, for pictures and checks.
     int hoverForced = -1;
@@ -958,6 +962,9 @@ private:
         int chosen = -1;                    // who it was shared with, once it was
         std::string with;                   // and their name, which the Share button then says
         bool forced = false;                // opened by `-coverButton share`: it stays without a ray on it
+        /// AGENT: a service that shares through Telegram was asked, and its answer is awaited: Share is on and takes no
+        /// second pinch (WS88). No list is open then.
+        bool waiting = false;
     };
     Sharing sharing;
     /// s the buttons and the list stay with no ray on them or their tree, while the list is open: longer than the buttons'

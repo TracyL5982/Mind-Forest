@@ -231,11 +231,15 @@ TEST(optionalFieldsMayBeMissing) {
     if (hello) CHECK(!hello->voice && hello->hearing == Hearing::browser && !hello->live && !hello->undo, "and has none of them");
 
     if (hello) CHECK(hello->connection.empty(), "nor a connection's id");
+    if (hello) CHECK(hello->share.empty(), "nor a way of sharing");
 
     Inbound hearing = parseInbound(edited(fixture("hello.json"), [](Json j) { return j.set("hearing", "service").set("voice", true).set("live", true).set("connection", "c-1"); }));
     auto* withHearing = std::get_if<Hello>(&hearing);
     CHECK(withHearing && withHearing->hearing == Hearing::service && withHearing->voice && withHearing->live, "hearing service, voice and live true");
     CHECK(withHearing && withHearing->connection == "c-1", "the connection's id");
+    Inbound telegram = parseInbound(edited(fixture("hello.json"), [](Json j) { return j.set("share", "telegram"); }));
+    auto* hosted = std::get_if<Hello>(&telegram);
+    CHECK(hosted && hosted->share == "telegram", "the hosted service shares through Telegram: %s", kindOf(telegram).c_str());
 
     Inbound labelled = parseInbound(R"({"t":"activity","activity":{"id":"a1","role":"scout","state":"start","message":"Looking for films with a dolly zoom in them","label":"Finding dolly zooms"}})");
     auto* withLabel = std::get_if<Activity>(&labelled);
