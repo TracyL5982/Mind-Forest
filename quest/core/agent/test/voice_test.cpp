@@ -1099,6 +1099,11 @@ void layRecordings() {
 
 const std::string tenWords = "one two three four five six seven eight nine ten";
 
+/// `seconds` of frames as the headset has them, a sixtieth of a second each.
+void framesFor(Talking& t, double seconds) {
+    for (double at = 0; at < seconds - 1e-9; at += 1.0 / 60) t.frame(1.0 / 60);
+}
+
 }  // namespace
 
 TEST(theWalksRecordedLineIsSaidAsHerReplyItsWordsAsSheSaysThem) {
@@ -1113,16 +1118,17 @@ TEST(theWalksRecordedLineIsSaidAsHerReplyItsWordsAsSheSaysThem) {
     if (host.players.size() <= players) return;
     // Through her stream player, as a reply streamed from the service is: its sound read from the file, whatever the
     // platform's media player could make of the path (WS78: on the headset it could not open one inside the APK).
-    CHECK(host.players.back()->rate == 16000 && host.players.back()->written.size() == 64000 && host.players.back()->finished,
-          "all of its sound, at its own rate: %d Hz, %zu samples", host.players.back()->rate, host.players.back()->written.size());
+    CHECK(host.players.back()->rate == 16000 && !host.players.back()->finished, "at its own rate: %d Hz", host.players.back()->rate);
     CHECK(t.shows() == Presence::State::responding, "Momo speaks");
-    t.frame(1);
+    framesFor(t, 1);
     std::string shown = t.voice.presence().momoText;
     double wanted = (1.05 + Voice::wordsAhead) / 4 * double(tenWords.size());
     CHECK(tenWords.compare(0, shown.size(), shown) == 0 && double(shown.size()) <= wanted && double(shown.size()) > wanted - 7,
           "its words a little ahead of her voice: \"%s\"", shown.c_str());
-    t.frame(3.5);
+    framesFor(t, 3.5);
     CHECK_EQ(t.voice.presence().momoText, tenWords);
+    CHECK(host.players.back()->written.size() == 64000 && host.players.back()->finished,
+          "all of its sound, fed a little ahead of her voice, then finished: %zu samples", host.players.back()->written.size());
     host.players.back()->done(true);
     t.frame();
     CHECK(t.shows() != Presence::State::responding, "and she is done");
@@ -1162,7 +1168,7 @@ TEST(theSketchLessonsOwnLineIsSaidWhenTheLiveMomoCannotAnswer) {
         t.frame();
         size_t players = host.players.size();
         t.voice.askLesson({"what is she holding?", "a picture", {}}, "momo-sketch");
-        t.frame(0.05);
+        framesFor(t, 2.5);
         CHECK(host.players.size() == players + 1 && host.players.back()->written.size() == 35200, "the recorded line, at once");
         CHECK(t.liveSent("lesson").empty(), "nothing sent");
     }
@@ -1174,7 +1180,7 @@ TEST(theSketchLessonsOwnLineIsSaidWhenTheLiveMomoCannotAnswer) {
         t.voice.askLesson({"what is she holding?", "a picture", {}}, "momo-sketch");
         int turn = t.liveSent("lesson").empty() ? 0 : t.liveSent("lesson")[0]["turn"].integer(0);
         t.serviceSays(Json::object().set("t", "quiet").set("turn", turn).dump());
-        t.frame(0.05);
+        framesFor(t, 2.5);
         CHECK(host.players.size() == players + 1 && host.players.back()->written.size() == 35200, "the recorded line on quiet");
     }
     {
@@ -1188,11 +1194,71 @@ TEST(theSketchLessonsOwnLineIsSaidWhenTheLiveMomoCannotAnswer) {
         t.frame(Voice::lessonWait - 0.5);
         CHECK_EQ(host.players.size(), players);
         t.frame(0.6);
-        t.frame(0.05);
+        framesFor(t, 2.5);
         CHECK(host.players.size() == players + 1 && host.players.back()->written.size() == 35200, "the recorded line after %.0f s", Voice::lessonWait);
         t.serviceSays(audioFrame("l2", aSecondOfVoice()));
         CHECK_EQ(host.players.size(), players + 1);
     }
+}
+
+TEST(leavingTheLessonFadesHerLineOutAndStartsNothingMore) {
+    layRecordings();
+    Talking t(false);
+    t.frame();
+    size_t players = host.players.size();
+    t.voice.tellRecorded("momo-can");
+    t.frame(0.05);
+    CHECK_EQ(host.players.size(), players + 1);
+    if (host.players.size() <= players) return;
+    auto player = host.players.back();
+    framesFor(t, 1);
+    CHECK(!player->finished && player->written.size() < 64000, "fed a little at a time: %zu of 64000 samples", player->written.size());
+    size_t before = player->written.size();
+    t.voice.leaveWalkTurn();
+    size_t fade = size_t(Voice::walkFade * 16000);
+    CHECK(player->finished && player->written.size() <= before + fade, "faded out and finished: %zu samples more", player->written.size() - before);
+    CHECK(!player->written.empty() && std::abs(player->written.back()) < 100, "to nothing: %d", int(player->written.back()));
+    CHECK(double(player->written.size()) / 16000 < 1.05 + Voice::walkAhead + Voice::walkFade + 0.02,
+          "within %.2f s of where she was: %.2f s heard of 4", Voice::walkAhead + Voice::walkFade, double(player->written.size()) / 16000);
+    // A line asked for but not yet let speak: never said.
+    t.voice.tellRecorded("momo-sketch");
+    t.voice.leaveWalkTurn();
+    player->done(true);
+    t.frame(0.1);
+    t.frame(3);
+    CHECK_EQ(host.players.size(), players + 1);
+}
+
+TEST(whatWasSaidForTheWalkIsNotSentToTheLiveMomoOnceTheWalkMovesOn) {
+    Talking t(false);
+    t.voice.tutor(Voice::Tutor{[] {}, [](const std::string&) { CHECK(false, "the walk has moved on: nothing comes to it"); }});
+    t.hear(Sound().quiet(1).say("command").quiet(2));
+    auto posts = t.fetchesTo("/api/transcribe");
+    CHECK_EQ(posts.size(), size_t(1));
+    if (posts.empty()) return;
+    // The walk moves on while it is transcribed: it gives Momo's ears back.
+    t.voice.leaveWalkTurn();
+    t.voice.tutor(std::nullopt);
+    posts[0].done(ok(R"({"text":"Show me more like this."})"));
+    t.frame();
+    CHECK_EQ(t.utters().size(), size_t(0));
+    CHECK(t.shows() != Presence::State::thinking, "and she is not left thinking");
+}
+
+TEST(leavingTheSketchLessonLetsItsLateAnswerAndItsFallbackBe) {
+    layRecordings();
+    Talking t(true);
+    t.goLive();
+    size_t players = host.players.size();
+    t.voice.askLesson({"what is she holding?", "a picture", {}}, "momo-sketch");
+    int turn = t.liveSent("lesson").empty() ? 0 : t.liveSent("lesson")[0]["turn"].integer(0);
+    t.frame(1);
+    t.voice.leaveWalkTurn();
+    t.frame(Voice::lessonWait);
+    CHECK_EQ(host.players.size(), players);
+    t.serviceSays(Json::object().set("t", "text").set("id", "l3").set("turn", turn).set("text", "She is holding a letter.").set("kind", "reply").dump());
+    t.serviceSays(audioFrame("l3", aSecondOfVoice()));
+    CHECK_EQ(host.players.size(), players);
 }
 
 TEST(aReplyThatHasComeIsComingUntilItSoundsAndThinkingAloneIsNot) {
