@@ -247,6 +247,29 @@ test('sharing needs the sharer\'s Telegram; a friend not paired is told to pair 
   owner.off();
 });
 
+test("the hosted service's hello says a shared tree goes out through Telegram, so the headset shows no list of people; no other service says so", { timeout: 30000 }, async () => {
+  const hello = async (url: string, token: string) => {
+    const ws = new WebSocket(`${url.replace('http', 'ws')}/ws?token=${token}`);
+    const first = await new Promise<Frame>((done) => ws.once('message', (raw) => done(JSON.parse(String(raw)) as Frame)));
+    ws.close();
+    return first;
+  };
+  const s = await host();
+  const told = await hello(s.hosted.url, `${KEY}.${A}`);
+  assert.equal(told.t, 'hello');
+  assert.equal(told.share, 'telegram');
+  // Without the judges' bot nothing is shared, and the hello says nothing of it.
+  const bare = await host(tempDir('mp-share-'), undefined, undefined, { judgeBot: undefined });
+  assert.equal('share' in (await hello(bare.hosted.url, `${KEY}.${A}`)), false);
+  // Nor does a service that is not hosted.
+  const plain = await startServer({ port: 0, host: '127.0.0.1', dataDir: tempDir('mp-share-'), clientDir: '', model: new FakeModel(), roles: fakeRoles, token: 'x' });
+  try {
+    assert.equal('share' in (await hello(plain.url, 'x')), false);
+  } finally {
+    await plain.close();
+  }
+});
+
 test('a shared tree is its kept cards under new ids, its files pointing at their copies; codes count a day\'s shares, expire, and lose their files', () => {
   const dir = tempDir('mp-shares-');
   const clock = { now: 5_000_000 };

@@ -976,7 +976,7 @@ export async function openSpace(opts: Omit<ServerOptions, 'port' | 'host'>): Pro
     if (/okhttp/i.test(String(req?.headers['user-agent'] ?? ''))) headsets.add(ws);
     const connection = randomUUID();
     connections.set(connection, ws);
-    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, maps, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser', live: Boolean(opts.live), connection }));
+    ws.send(JSON.stringify({ t: 'hello', protocol: PROTOCOL_VERSION, snapshot: mind.snapshot(), settings, maps, undo: pipeline.undoLabel(), voice: Boolean(opts.speak), hearing: opts.transcribe ? 'service' : 'browser', live: Boolean(opts.live), connection, ...(sharing && !director ? { share: 'telegram' } : {}) }));
     ws.on('close', () => {
       sockets.delete(ws);
       plays.delete(ws);
