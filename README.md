@@ -17,6 +17,20 @@ We asked ourselves: what if AI didn’t try to automate our thinking behind a fl
   <img src="docs/lakeside-4.jpg" width="49%" alt="A card opened in the tree, with questions to ask under it">
 </p>
 
+## Connect Telegram
+
+Telegram is how things get into your forest from a phone or computer, and where handoffs and shared trees arrive. Each headset pairs with its own Telegram account, once:
+
+1. **In the headset, ask for the code.** Say "Hey Momo, connect my Telegram". Or point at a tree on the desk and pinch **Pair Telegram first**, on either Send to Agents or Share with Friends. A panel opens with the three steps and a six-digit code.
+2. **On your phone or computer, open Telegram** and find the bot **[@mind_forest_connector_bot](https://t.me/mind_forest_connector_bot)**. Press **Start**.
+3. **Send the bot the six-digit code.** The code works once, for 30 minutes; ask again for a new one.
+
+The panel closes with its X. Once paired:
+
+- anything you send the bot (a link, a photo, a file, a sentence, a voice note) lands in your forest;
+- **Send to Agents** on a tree posts its handoff file to your chat, ready to give to any other agent;
+- **Share with Friends** posts a link that grows a copy of the tree in a friend's forest.
+
 ## The first five minutes in the headset
 
 This is the judging build, one app named "Mind Forest" that joins the hosted service by itself. Hands only, no controllers.
@@ -38,7 +52,7 @@ This is the judging build, one app named "Mind Forest" that joins the hosted ser
 4. **Work a tree by hand.** Pinch a card to open it. Pinch and hold a card until the ring fills to start a layer on it and get more like it. Pinch the open card again to go into it, where a pen, an eraser and Send to Momo let you mark part of it and ask about that part.
 5. **Start from the library, or from a question.** Around the desk lies the library, about 100 film scenes and 750 museum works. With no tree open, pinch one to ask Momo for a tree about it, or pinch one of the three questions under "Ask Momo".
 6. **Open "Designing Mind Forest".** A new forest starts with five example trees. This one is the tree from the project's film, as far as its tenth round: how the idea of Mind Forest was worked out in Mind Forest, with the prototypes' pictures in its later layers.
-7. **Connect Telegram, hand off, share.** Point at a tree on the desk and two buttons appear: Send to Agents and Share with Friends. Until Telegram is connected they say "Pair Telegram first": pinch that, or say "connect my Telegram" to Momo, and a panel shows three steps with the bot's name and a six-digit code to send it from your phone (an X closes the panel). Once connected, anything you send the bot lands in your forest, Send posts the tree's handoff file to your chat, and Share posts a link that grows a copy of the tree in a friend's forest.
+7. **Connect Telegram, hand off, share.** Point at a tree on the desk and two buttons appear: Send to Agents and Share with Friends. Until Telegram is connected they say "Pair Telegram first": see [Connect Telegram](#connect-telegram) above.
 
 Hold your palms together for a second to close the tree you are in.
 
