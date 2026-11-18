@@ -1,105 +1,159 @@
-# Mind Palace: spatial interface demo
+# Mind Forest
 
-A browser prototype that answers "why a spatial interface?" for Mind Palace Next Gen.
-The design notes and spec are in [mind-palace-next-gen.md](mind-palace-next-gen.md).
+Mind Forest is a place to think in a Meta Quest 3 headset: what you save and what you ask about grows into trees of cards that stand in the room around your desk. You work with your hands, and you talk to Momo, an assistant who finds new material, answers questions and files what you send. Things get in from Telegram, and a finished tree leaves as one file that any other agent can pick up.
 
-## The agent system
+It is a native OpenXR app for the headset ([quest/](quest/README.md)) and a TypeScript service that runs the agents ([agents/](agents/README.md)).
 
-The agents that run the mindstorm live in [agents/](agents/README.md): a service, a web client, and an adapter for the Ocean app. Start there to run it.
+![A tree in the app: each layer of cards in its own colour, over the library of films and artworks](agents/demo/docs/tree-in-the-app.jpg)
 
-## AI agent system plan
+![Trees put away on the desk, each with its name and its rings](agents/demo/docs/showcase-forest.jpg)
 
-Read the [HTML reading edition](docs/agent-system-plan.html) for a navigable overview,
-the complete plan, and the research links. It opens directly in a browser and works
-offline, with mobile layouts, day/night reading, and print/PDF styling.
+## The first five minutes in the headset
 
-The canonical source is [agent-system-plan.md](agent-system-plan.md). To refresh the
-HTML after editing it, run `python3 scripts/render-agent-plan.py` (requires
-`markdown-it-py`). The template is in `docs/agent-system-plan.template.html`.
+This is the judging build, one app named "Mind Palace" that joins the hosted service by itself. Hands only, no controllers.
 
-## Run
+1. **Open the app and allow the microphone and the room.** The app asks for the microphone so you can talk to Momo. The first time you raise a hand it asks to see the room, so the scene can sit at your real desk. Refused, it sits at an assumed desk, and typing and picking still work without the microphone.
+2. **Take the welcome tree.** On a first launch one tree stands alone, "Welcome to Mind Forest". Its eight cards are lessons, each played by a hand drawn on the card:
+   - pinch a card;
+   - grab to pan;
+   - grab to pull or push between layers;
+   - pinch and hold to move a card;
+   - ask Momo;
+   - show Momo part of a picture;
+   - choose a layer on the small tree;
+   - palms together to close.
 
-```bash
-npm install
-npm run dev
+   One line over the tree says what to do next. Pinching the next card skips a lesson.
+3. **Ask Momo something.** Say "Hey Momo" (or "Hi Momo"), then what you want, such as "start a tree on Dutch still lifes". Momo answers in her own voice. Cards start to arrive round the open card within seconds, and she tells you about them as they land. While the conversation is open you can go on talking without the name, and talk over her.
+4. **Work a tree by hand.** Pinch a card to open it. Pinch and hold a card until the ring fills to start a layer on it and get more like it. Pinch the open card again to go into it, where a pen, an eraser and Send to Momo let you mark part of it and ask about that part.
+5. **Start from the library.** Around the desk lies the library, about 100 film scenes and 750 museum works. With no tree open, pinch one to ask Momo for a tree about it.
+6. **Connect Telegram, hand off, share.** Say "connect my Telegram" and Momo gives you a bot's name and a six-digit code. After that, anything you send the bot lands in your forest. Point at a tree on the desk and two buttons appear: Send posts the tree's handoff file to your chat, and Share posts a link that grows a copy of the tree in a friend's forest.
+
+Hold your palms together for a second to close the tree you are in.
+
+## How it fits together
+
+```mermaid
+flowchart LR
+  subgraph Headset["Quest 3"]
+    App["Mind Forest app<br/>C++, OpenXR, hand tracking, passthrough"]
+    Wake["Listens for 'Hey Momo'<br/>on the device"]
+  end
+  subgraph Service["Agent service (Node.js, TypeScript)"]
+    Pipe["Pipeline and roles<br/>Conductor, Intake, Filer, Scout,<br/>Renderer, Questions, Organizer, Packager"]
+    Live["Momo's live voice<br/>relay to a realtime model"]
+    Store["Mindstorm<br/>trees, cards, files, undo"]
+    Bot["Telegram contact"]
+  end
+  Models["Model APIs<br/>Meta, OpenAI, fal"]
+  Sources["Sources<br/>web, museums, papers, film, podcasts"]
+  Telegram["Telegram<br/>phone or computer"]
+  App -- "WebSocket /ws: state and what the hands do" --> Pipe
+  Wake -- "WebSocket /live: voice both ways" --> Live
+  Pipe --- Store
+  Live --> Pipe
+  Pipe --> Models
+  Live --> Models
+  Pipe --> Sources
+  Bot --> Pipe
+  Telegram <--> Bot
 ```
 
-Open http://localhost:5173 and press **Space** to play the guided tour, or explore by hand
-(click **Controls** in the bottom-left corner for the full list).
+- **The headset app** draws everything and reads the hands. It holds no agent logic: it keeps a copy of the service's state, draws it, and sends what you do ([agents/docs/protocol.md](agents/docs/protocol.md)).
+- **The service** runs the agents, keeps your trees, searches the sources and calls the models. The keys stay on the service and never reach the headset.
+- **Voice.** The headset listens for the name on its own processor and sends nothing before it hears it. After the name, your voice streams to the service, which relays it to a realtime model that is Momo. Momo acts through tools on the service.
+- **Telegram** is how things get in from a phone, and where handoffs and shared trees arrive.
+- **Where the service runs.** On a Mac beside the headset, reached over the USB cable, for development. On Fly.io for judging, with a separate space for each headset and daily limits. A second small Fly app runs the scripted walkthrough used to record the film.
 
-The 40 demo images are already in `public/media`. To re-download them from Lorem Picsum:
+## What is in the repository
 
-```bash
-npm run fetch-media
-```
-
-## Studies
-
-- `/studies/node/`: one memory going from a dot to a full image. Hover to expand; the slider sets the resting expansion (0 to 1).
-- `/studies/scatter/`: about 90 to 220 small dots (scaled to the window), each a scene from film history, colored by genre. They sway in a breeze and swell toward the hover peak as the cursor nears. The dot being looked at (hovered, open, or showing the headline) is pinned where you found it, and the others make way. Layout is deterministic (`studies/shared/lens.js`): each dot's target comes from its home and the focused dots only, through a radial push whose strength and reach scale with the focus's size; neighbors grow only as far as their room allows, and the breeze calms near the focus. A clicked dot opens fully until another is clicked. (The `main` branch has the earlier physics version, `studies/shared/field.js`.)
-  Growing dots play short low-res loops; a clicked dot hands off to its full clip with sound (see Clips below).
-
-Both studies share `studies/shared/node.js`, where `MemoryNode.shape(e)` defines the whole dot-to-image transition, and `studies/shared/label.js`, the text tag under each node. Tags have four tiers set by expansion (`TIERS`): hidden, short tag, headline, then headline plus description. The tag scales smoothly with its node and opens like a drawer: the short tag widens into the headline, then the description slides out below (timings in `DURATION`). Text is placeholder.
-
-## Clips
-
-The scatter study plays 100 scenes from the [Condensed Movies](https://www.robots.ox.ac.uk/~vgg/research/condensed-movies) dataset (Bain, Nagrani, Brown, Zisserman, ACCV 2020), one per film, hand-picked to span the 1930s to the 2010s. This is an academic, non-public demo, and it uses short excerpts only. The media isn't in git; to rebuild it you need ffmpeg and [yt-dlp](https://github.com/yt-dlp/yt-dlp) (the dataset's videos are its original YouTube uploads):
-
-```bash
-python3 scripts/clips/download.py /path/to/yt-dlp
-```
-
-```bash
-python3 scripts/clips/build.py
-```
-
-- `scripts/clips/selection.json`: the 100 films and the scene for each (plus backups per decade, used when a video is no longer available).
-- `download.py` saves a 60-second window of each scene to `media-src/`.
-- `build.py` writes `public/clips/`:
-  - `full/NNN.mp4`: a 30-second clip with sound, up to 720p (source resolution varies from 360p to 1080p).
-  - `atlas.mp4`: every clip's 4-second loop in one 10×10 grid video, so all small dots share one decoder.
-  - `atlas.jpg`: the atlas's first frame, shown while the video loads.
-  - `clips.json`: the manifest (tile positions, aspect ratios, film metadata and tag text).
-
-Each loop is the first 4 seconds of its full clip, frame for frame, and its last half second blends back into its start so it cycles seamlessly. Opening a dot starts the full clip at the loop's current moment and crossfades once that frame is on screen.
-
-## Works
-
-The visionOS ocean also holds about 750 museum works, gathered around the ideas the films carry ("Watching unseen", "The double") and some of their own ("Before cinema", "Masks"), so a film and a painting can stand under one tag. They come from the open collections of the Met, the V&A, the Art Institute of Chicago and the Cleveland Museum of Art (through their APIs, no key) and from MoMA's published dataset. Like the clips, this is for an academic, non-public demo: MoMA's pictures in particular are mostly in copyright. Each step keeps what it fetched, so a second run asks for nothing twice:
-
-```bash
-python3 scripts/works/moma.py
-```
-
-```bash
-python3 scripts/works/gather.py
-```
-
-```bash
-python3 scripts/works/pick.py
-```
-
-```bash
-python3 scripts/works/fetch.py
-```
-
-```bash
-python3 scripts/works/build.py
-```
-
-- `themes.py`: the themes, with the searches put to each museum. `gather.py` writes every answer to `media-src/works/candidates.json`. It paces itself per museum; the Met refuses a client that asks faster than a few times a second, and the script then leaves it and says what is still to ask (`--src met` asks one museum only).
-- `pick.py` chooses the works (`selection.json`): themes take turns and each takes from the museum that has had the least, a candidate must really match its theme, and no maker or series fills one. The same print kept by two museums counts once, and a work whose picture is already on disk is preferred, so a new run changes little. Ids listed in `exclude.txt` are left out (by `build.py` too, so removing a few needs no new pick). `sheet.py` makes a contact sheet per theme (`media-src/works/sheets/`) to look the choice over.
-- `fetch.py` asks for each picture near the size it is kept, turns it into a HEIC of at most 1600 px (about 140 KB, good enough to look into closely; 750 come to about 105 MB) and deletes the download at once. Pictures that turn out too small or too long and thin are marked, and the next `pick.py` chooses others.
-- `build.py` writes `public/works/`: `works.json` (every work with what its museum knows of it, and the tags: themes, makers, kinds, places, and the museums' own subjects where several works share one), `atlas.jpg` (every work small, for the ocean) beside `full/<id>.heic`. `norm.py` puts the five museums' wording into one vocabulary.
-
-## Code map
-
-| File | What it does |
+| Folder | What it is |
 |---|---|
-| `src/nodes.js` | Instanced node renderer. One shader draws circles, panels and dots (rounded-rect SDF, glow, fade to color by on-screen size) and runs per-node springs. |
-| `src/layout.js` | Target layouts for each level (flat, cosmos, group, focus, explore), the hex snap lattice, and the "related" ranking. |
-| `src/app.js` | State, navigation API, drag / snap / regroup logic, camera. |
-| `src/regions.js` | Group regions: a summed field drawn as a nebula and a contour, which stretches and turns dashed while a node is being dragged out. |
-| `src/overlay.js` | Connection lines (offset from node edges), snap-slot dots, lasso. |
-| `src/director.js` | The scripted Space tour. |
-| `src/data.js`, `src/media-ids.js`, `src/atlas.js` | Demo content and the texture atlas. |
+| [quest/](quest/README.md) | The headset app: C++ on OpenXR with its own OpenGL ES renderer, the Android project, a Mac preview window, and the tools that build, install and measure it |
+| [agents/](agents/README.md) | The agent service: the roles and the pipeline, Momo's live voice, the Telegram contact, sharing, the hosted mode, and a browser client used during development |
+| [agents/deploy/](agents/deploy/README.md) | Scripts that put the service on Fly.io and operate it |
+| [agents/demo/](agents/demo/README.md) | The scripted walkthrough for recording the film, with four example trees ([showcase/](agents/demo/showcase/README.md)) |
+| [media-src/](media-src/README.md) | The app's own media that is kept in git: sounds, fonts, the hand model, Momo's recorded lines |
+| `library/` | The library the app shows: the film scenes (`clips`), the museum works (`works`), its index (`ocean.json`), and the tools that built the first two (`tools`). See Media and credits |
+
+The names in the code are older than the product's name. The apps install as "Mind Palace Ocean" and "Mind Palace", and the service's settings begin with `MIND_PALACE_`.
+
+## Build and run
+
+Each part has its own README with the details. The short version, on a Mac:
+
+**The service**, with no model and no cost (scripted agents):
+
+```bash
+cd agents && npm install && npm run dev:fake
+```
+
+With real models, put the keys in the env file ([agents/README.md](agents/README.md) lists the variable names) and run:
+
+```bash
+cd agents && npm start
+```
+
+**The app in a window on the Mac**, without a headset (needs GLFW):
+
+```bash
+quest/tools/fetch-voice.sh
+quest/desktop/build.sh
+quest/desktop/preview -demo
+```
+
+**The app on a headset**, over USB with developer mode on (needs the Android SDK, NDK 27.2 and JDK 17):
+
+```bash
+quest/tools/run.sh --build
+quest/tools/push_media.sh
+quest/tools/agent.sh usb
+```
+
+The first command builds and installs the app, the second copies its media to the headset once, and the third starts the app joined to the service on the Mac.
+
+**The judging build**, one APK with its media inside that joins the hosted service:
+
+```bash
+quest/tools/judge.sh
+```
+
+It needs a signing key and the hosted service's address in files outside the repository ([quest/README.md](quest/README.md), The judging build).
+
+**The hosted service:** [agents/deploy/README.md](agents/deploy/README.md).
+
+**Tests:**
+
+```bash
+cd agents && npm test
+quest/core/agent/test/run.sh
+```
+
+The repository uses Git LFS for the library's films and pictures and the demo's media. Run `git lfs pull` after cloning, or those files are short text stubs.
+
+## Team
+
+The git history has two authors:
+
+- **Xinran Li**: 829 commits
+- **Kaifeng Wu**: 32 commits
+
+Counts are of `git shortlog` at this commit.
+
+## Media and credits
+
+What the repository itself records about third-party material:
+
+| What | Where | Source and licence as recorded |
+|---|---|---|
+| Film scenes, 100 | `library/clips` | From the Condensed Movies dataset (Bain, Nagrani, Brown, Zisserman, ACCV 2020), one scene per film, short excerpts, taken for an academic, non-public demo |
+| Museum works, about 750 | `library/works` | From the open collections of the Met, the V&A, the Art Institute of Chicago and the Cleveland Museum of Art, and MoMA's published dataset. MoMA's pictures are mostly in copyright |
+| Fraunces 72pt Soft Light and its italic | `media-src/quest/fonts` | SIL Open Font License 1.1, copyright 2020 The Fraunces Project Authors. The notice is beside the files |
+| Eraser and send icons | `quest/core/ocean/icons.h` | Lucide, ISC License |
+| Keyword spotter | fetched into `quest/vendor` by `quest/tools/fetch-voice.sh`, not in git | sherpa-onnx (k2-fsa), Apache-2.0 |
+| The walkthrough's pictures and one film | `agents/demo/media` | Many are other people's work, in copyright or of unknown rights. [agents/demo/README.md](agents/demo/README.md) says to clear each one before a public cut |
+| The four example trees | `agents/demo/showcase` | Pinterest pins of unknown rights, and found pictures that are public domain or openly licensed. Each card in `tree.json` records its licence, credit and page |
+| Sounds | `media-src/quest/sounds` | The project's own, synthesized by `quest/sound/synth.py` |
+| Momo's recorded lines | `media-src/quest/voice`, `agents/demo/voice` | Recorded from the realtime model's voice |
+
+The repository has no licence file of its own.

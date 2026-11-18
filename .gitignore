@@ -11,3 +11,4 @@ media-src/quest/*
 !media-src/quest/sounds/
 !media-src/quest/voice/
 quest/vendor
+!media-src/README.md

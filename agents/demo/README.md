@@ -12,21 +12,11 @@ One prepared tree, "Brainstorming in a headset", for recording the film. It is t
 
 ## Where it is
 
-The demo is on the branch `demo/walkthrough`, which holds `tracy/agents` as it stood late on 2026-11-16 (a817e83: the fist, the knife, the welcome walk's lessons, the looser "Hi Momo" and Momo's new look) and adds the demo to the service. The app's own code is the same as on `tracy/agents`.
+The demo is part of the agent service in this repository (`npm run demo`, the `--demo` flag). The app's own code is the same as for any other build. After cloning, fetch the demo's pictures, its film and Momo's recorded lines:
 
-- **On Kai's Mac** it is already checked out, in a second folder beside the main one, so the main folder and the work under way in it are left alone:
-
-  ```bash
-  cd <the demo's folder>
-  ```
-
-  Every command below is run from that folder. A release APK built from it on 2026-11-16 is at `quest/android/app/build/outputs/apk/release/app-release.apk`. An earlier build from this branch, without Momo's new look, was installed on Kai's headset that afternoon for the test below.
-
-- **On another Mac:**
-
-  ```bash
-  git fetch origin && git switch demo/walkthrough && git lfs pull
-  ```
+```bash
+git lfs pull
+```
 
 ## Set up, once
 
@@ -88,7 +78,7 @@ The same demo can run as a small service of its own on Fly, so that nothing has 
 **To put it there** (on the Mac that deploys the judging service, logged in to Fly, with the keys in `~/.muse-garden.env`):
 
 ```bash
-git fetch origin && git switch demo/walkthrough && git lfs pull
+git lfs pull
 ```
 
 ```bash
@@ -261,7 +251,7 @@ Everything the demo shows is in two places:
 
 Edit `script.json` by hand for small changes, then start the service again. Two rules the service holds a tree to: no two cards with the same title, and no two with the same address (`href`).
 
-The file was generated from the walkthrough board by `sketches/walkthrough/gen/demo_inventory.py` in the main folder on Kai's Mac, which is not in git (the board's working files live only there). Run again, it writes into this branch's folder. `demo_phases.json` beside it says which card each round is asked from. Where the board names the card ("Pinch the memory palace paper") that card is the head; where it does not, the head is Claude's choice, and each round's "About this round" on the page says which.
+The file was generated from the walkthrough board by `sketches/walkthrough/gen/demo_inventory.py` in the main folder on Kai's Mac, which is not in git (the board's working files live only there). Run again, it writes into this folder. `demo_phases.json` beside it says which card each round is asked from. Where the board names the card ("Pinch the memory palace paper") that card is the head; where it does not, the head was chosen when the script was written, and each round's "About this round" on the page says which.
 
 The user changed the storyboard on 2026-11-17, in `script.json` itself, so running the generator again would undo it:
 
@@ -313,4 +303,4 @@ Not tried:
 
 Seen on the way, and left as they are: the first card of a tree started by voice reads "From: You pasted this" (the service marks every tree started from a subject that way), where one set up from the page reads "You said this"; and before Round 1 the app shows its own three example asks, which are about films.
 
-The pictures are for the film's planning: many are other people's work, in copyright or of unknown rights (pins, film stills, a paper's figure). The repository is private; clear each one before a public cut.
+The pictures are for the film's planning: many are other people's work, in copyright or of unknown rights (pins, film stills, a paper's figure). Each one needs clearing before it is shown in public.
