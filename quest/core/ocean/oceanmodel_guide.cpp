@@ -107,7 +107,6 @@ const char* tourTitle = "Welcome to Mind Forest";
 const float lessonSize = 0.35f;     // of life size
 const float lessonGround = 0.5f;    // how solid the card behind an idle lesson is
 const float lessonLine = 0.0024f;   // the hand's line at that size, m (drawn small, it wants more weight)
-const float tourPinchSize = 0.65f;  // of life size, the hand that pinches card 1 open while it is closed
 // The stage on a lesson's card is as wide as the card's panel and this tall, m: all
 // that any lesson draws there at its `stage` size fits inside it, seen from where you stand.
 const float lessonStageTall = 0.35f;
@@ -717,6 +716,18 @@ std::optional<int> OceanModel::tourHead() const {
     return tree->stand;
 }
 
+/// WS103: the lesson whose card is open: the layer's own (`lesson`), or a lesson's card opened where it stands, whose stage
+/// plays its own gesture so that no lesson card is ever an empty card while open.
+int OceanModel::tourOpenLesson(int lesson) const {
+    if (!tree || !tree->focused || !tourHead() || tree->current == *tourHead()) return lesson;
+    const TreeNode* node = find(*tree, tree->current);
+    if (!node || node->ref.kind != Ref::Kind::note) return lesson;
+    for (int k = 0; k < tourCount; k++) {
+        if (node->ref.id == tourSteps[k].note && k != markStep) return k;
+    }
+    return lesson;
+}
+
 /// Which lesson's layer the walk stands on; -1 when it is none of them.
 int OceanModel::tourLesson() const {
     if (!tourHead()) return -1;
@@ -786,23 +797,30 @@ void OceanModel::tourShow(int shown) {
     // (It goes once the card is open: the lesson's own hand then plays on the open card.)
     if (shown == 300) {
         const guide::Gesture* gesture = tourGesture("pinch");
-        if (!gesture || !tourCard(0)) {
+        CardRef first = tourCard(0);
+        if (!gesture || !first) {
             teach.tourShown = -1;
             return;
         }
-        const float size = tourPinchSize;
+        // WS103: on card 1 itself, the drawing's own card laid exactly over it (the user: "match perfectly with step 1
+        // card"): the pinch drawing's card is 0.15 by 0.1 m with its middle at `pinchCard`, scaled to card 1's width and
+        // set on its middle, the hand in front of it. No dark card behind (the user: "remove the rectangle background").
+        const Vec3 pinchCard{-0.055f, 0.075f, -0.16f};
+        const float size = first->smallBody.x / 0.15f;
         EntityRef holder = Entity::make();
-        root_->addChild(holder);
+        first->smallHolder->addChild(holder);
         teach.painter->setLine(lessonLine);
-        guideHand(holder, {0, 0.02f, 0}, size);
-        EntityRef words = Entity::make();
-        words->position = guideBacking(holder, {0, 0.02f, 0}, size, 0.034f, 1) + Vec3{0, -0.012f, 0};
-        holder->addChild(words);
-        guideWords(words, art->line("A pinch opens a card", Art::Size::label, Font::Weight::semibold), 0, 0, true);
+        guideHand(holder, Vec3{0, 0, 0.004f} - pinchCard * size, size);
+        // Its words on their own ink, under card 1.
+        if (std::optional<Piece> piece = art->line("A pinch opens a card", Art::Size::label, Font::Weight::semibold, Color::white(), Art::ink, Art::buttonPad)) {
+            EntityRef words = art->quad(*piece);
+            words->position = {0, -first->smallBody.y / 2 - 0.012f - piece->size.y / 2, 0.006f};
+            holder->addChild(words);
+        }
         fadeIn(holder, 0, 0.4f);
         teach.holder = holder;
         teach.mode = 4;
-        logLine("[guide] lesson 1, card 1 closed: a hand pinches a card open under it");
+        logLine("[guide] lesson 1, card 1 closed: a hand pinches it open, on it");
         return;
     }
     const TourStep& step = tourSteps[shown >= 200 ? pullStep : shown % 100];
@@ -993,6 +1011,15 @@ bool OceanModel::tourPinchedOpen() {
     // (A card opened where it stands is not gone into on the walk: the line says what to do with it.)
     bool inPlace = tree->focused && tourHead() && tree->current != *tourHead();
     if (lesson == markStep && !tourOnResult() && !inPlace) return false;
+    // WS103: a lesson done, a pinch on its open card goes on, as before WS101: so step 7 opened from Momo's answer to the
+    // sketch. (Not lesson 1's own card, whose way on is the hold on card 2 it teaches.)
+    if (!inPlace && lesson > 0 && teach.tourAdvanceFor == lesson) {
+        if (std::optional<int> next = tourNode(lesson + 1)) {
+            logLine(fmt("[guide] lesson %d done, its open card pinched: on to step %d", lesson + 1, lesson + 2));
+            take(*next);
+            return true;
+        }
+    }
     logLine(fmt("[guide] the open card was pinched on lesson %d: nothing to go into", lesson + 1));
     return true;
 }
@@ -1119,7 +1146,7 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     else if (lesson == markStep) want = teach.tourDone[markStep] ? -1 : 100 + markStep;
     else if (lesson >= 0 && lesson != markStep && at == pullStep && teach.tourBeat >= 1 && !here) want = 200 + lesson;
     else if (lesson == 0 && !tree->focused) want = 300;      // (WS101: card 1 not open yet)
-    else if (lesson >= 0) want = lesson;
+    else if (lesson >= 0) want = tourOpenLesson(lesson);
     if (want >= 0 && (want < 100 || (want >= 200 && want < 300))) {
         CardRef c = tourCard(want % 100);
         // (Its card is still opening; WS101: or not open at all, the first one before its pinch, or one opened in place instead.)
@@ -1146,12 +1173,13 @@ void OceanModel::updateTour(double now, Vec3 eye) {
     // a minute, the walk takes it itself (sooner where the card is not there to pinch: the small tree has
     // taken you to another layer).
     bool canPinchNext = open && nextCard && here;
-    static const double autoAfter = Flags::has("guideAutoAfter") ? Flags::number("guideAutoAfter") : 15;
-    // (Not out of Momo's two lessons: there the user may still be asking her things, and moves on by hand, card 6 or 7 being
-    // there to pinch. The user, WS80: "this auto-advance feature makes sense for some rounds, just probably not right for
-    // the two rounds that has momo in it".)
+    // WS103: 20 s, the user's ("let's still auto-advance to next step after 20seconds"), and out of Momo's two lessons too,
+    // counted there from her last word (her answer, or her reply to an example asked), so that nobody still talking to her
+    // is taken on. (WS80 had them wait for a pinch.)
+    static const double autoAfter = Flags::has("guideAutoAfter") ? Flags::number("guideAutoAfter") : 20;
     bool hers = at == momoStep || at == markStep;
-    if (passing && !hers && !zoomed && !busy && !holdDone && now - teach.tourAdvanceAt >= (canPinchNext ? autoAfter : 4.0)) {
+    double doneSince = hers ? std::max({teach.tourAdvanceAt, teach.answerEnds, teach.askedUntil}) : teach.tourAdvanceAt;
+    if (passing && !zoomed && !busy && !holdDone && now - doneSince >= (canPinchNext ? autoAfter : 4.0)) {
         if (std::optional<int> next = tourNode(at + 1)) {
             take(*next);
             return;
@@ -1267,12 +1295,6 @@ void OceanModel::updateTour(double now, Vec3 eye) {
             }
             closedAt = first->position + stage.u * (top + 0.07f);
             firstAt = first->position + stage.u * (first->half.y + 0.085f);
-            // (The hand that pinches a card open stands under it, a little toward you.)
-            if (teach.tourShown == 300 && teach.holder) {
-                Vec3 p = first->position - stage.u * (first->half.y + 0.09f + 0.24f * tourPinchSize) + first->normal * 0.06f;
-                teach.holder->position = p;
-                teach.holder->orientation = guideFacing(p);
-            }
         }
     } else if (!open && inPlace) {
         // WS101: a card opened where it stands by a short pinch. The next lesson's card is to be held (as a layer grows in the
@@ -2497,7 +2519,25 @@ void OceanModel::updateGuide(double now, float dt) {
         }
     }
 
-    if (teach.tour >= 0) updateTour(now, eye);
+    if (teach.tour >= 0) {
+        updateTour(now, eye);
+    } else if (onWelcomeTree() && !pressing && teach.mode == 0 && tree->focus()) {
+        // WS103: the welcome tree standing out of the walk (it was skipped, or ended with the tree up): the lesson card open
+        // plays its gesture on its stage as on the walk, so none is ever an empty card.
+        int want = -1;
+        const TreeNode* node = find(*tree, *tree->focus());
+        for (int k = 0; node && node->ref.kind == Ref::Kind::note && k < tourCount; k++) {
+            if (node->ref.id == tourSteps[k].note && k != markStep) want = k;
+        }
+        CardRef c = want >= 0 ? card(*tree->focus()) : nullptr;
+        if (!c || !c->openBuilt || zoom.target() > 0.5f) want = -1;
+        if (want != teach.tourShown) tourShow(want);
+        if (teach.tourShown >= 0) {
+            if (const guide::Gesture* g = tourGesture(tourSteps[teach.tourShown].gesture)) {
+                teach.painter->draw(*g, float(std::fmod(now - teach.tourBegan, double(g->seconds))), eye);
+            }
+        }
+    }
     updateHome(now);
 
     if (teach.mode == 3) {

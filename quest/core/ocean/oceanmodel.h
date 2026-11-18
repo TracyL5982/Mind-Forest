@@ -749,6 +749,7 @@ private:
     /// WS101: the first card of the layer the walk stands on, which is the lesson's: a card opened where it stands (a short
     /// pinch, as in the service's trees) leaves it as it was. The welcome card not yet opened, at the start, is lesson 1's.
     std::optional<int> tourHead() const;
+    int tourOpenLesson(int lesson) const;
     /// WS101: a pinch on a closed card of the welcome tree's walk opens it where it stands, as a pinch does in the service's
     /// trees (a layer grows from the next lesson's card only with a long pinch). True when the walk took it.
     bool tourOpens(int id);
