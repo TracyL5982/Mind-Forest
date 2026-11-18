@@ -69,7 +69,7 @@ android {
             initWith(getByName("release"))
             applicationIdSuffix = ".judge"
             signingConfig = signingConfigs.getByName("judge")
-            manifestPlaceholders["appLabel"] = "Mind Palace"
+            manifestPlaceholders["appLabel"] = "Mind Forest"
             externalNativeBuild { cmake { arguments += "-DCMAKE_BUILD_TYPE=Release" } }
             buildConfigField("String", "SERVER", "\"${judging.getProperty("server", "")}\"")
             buildConfigField("String", "APP_KEY", "\"${judging.getProperty("appKey", "")}\"")

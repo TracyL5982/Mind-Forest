@@ -10,6 +10,7 @@ media-src/quest/*
 !media-src/quest/hands/
 !media-src/quest/sounds/
 !media-src/quest/people/
+!media-src/quest/people-placeholders/
 !media-src/quest/voice/
 quest/vendor
 !media-src/README.md

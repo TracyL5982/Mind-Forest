@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds the judging APK: "Mind Palace", com.kaifengwu.mindpalace.ocean.judge, release-signed with the key in
+# Builds the judging APK: "Mind Forest", com.kaifengwu.mindpalace.ocean.judge, release-signed with the key in
 # ~/.mind-palace/keys, joining the service named in ~/.mind-palace/judging.properties by itself, and carrying its media
 # inside, so a judge installs one file and opens it. It installs beside the user's two apps and replaces neither.
 #   tools/judge.sh             build it, check it, and say where it is
@@ -26,10 +26,14 @@ for f in "$REPO_ROOT"/library/notes/*; do [ -f "$f" ] && cp -c "$f" "$STAGE/medi
 cp -cR "$REPO_ROOT/library/clips" "$STAGE/media/clips"
 cp -cR "$REPO_ROOT/library/works" "$STAGE/media/works"
 cp -cR "$REPO_ROOT/media-src/quest/works-small" "$STAGE/media/works-small"
-for own in sounds hands fonts voice people; do
+for own in sounds hands fonts voice; do
   [ -n "$(ls -A "$REPO_ROOT/media-src/quest/$own" 2>/dev/null)" ] || { echo "media-src/quest/$own is missing or empty"; exit 1; }
   cp -cR "$REPO_ROOT/media-src/quest/$own" "$STAGE/media/$own"
 done
+# The people a tree can be shared with: the judging app carries drawn placeholders, never the photos of the film's cast
+# (media-src/quest/people), which stay with the film's build alone.
+[ -n "$(ls -A "$REPO_ROOT/media-src/quest/people-placeholders" 2>/dev/null)" ] || { echo "media-src/quest/people-placeholders is missing or empty"; exit 1; }
+cp -cR "$REPO_ROOT/media-src/quest/people-placeholders" "$STAGE/media/people"
 find "$STAGE" -name '.*' -type f -delete
 (cd "$STAGE/media" && find . -type f | sed 's|^\./||' | LC_ALL=C sort > ../index.txt)
 mv "$STAGE/index.txt" "$STAGE/media/index.txt"
@@ -42,14 +46,14 @@ APK="$OUT/app-judge.apk"
 # What a judge's headset would otherwise find out.
 badging=$("$TOOLS/aapt2" dump badging "$APK")
 echo "$badging" | grep -q "package: name='$JUDGE_ID'" || { echo "not $JUDGE_ID:"; echo "$badging" | head -1; exit 1; }
-echo "$badging" | grep -q "application-label:'Mind Palace'" || { echo "not named Mind Palace"; exit 1; }
+echo "$badging" | grep -q "application-label:'Mind Forest'" || { echo "not named Mind Forest"; exit 1; }
 inside=$(zipinfo -1 "$APK" 'assets/media/*' | grep -v '/$' | grep -vcx 'assets/media/index.txt')
 [ "$inside" = "$count" ] || { echo "the APK holds $inside of the $count media files"; exit 1; }
 deflated=$(zipinfo "$APK" 'assets/media/*' | grep -v 'assets/media/index.txt' | awk '$6 != "stor"' | grep -c 'assets/media/' || true)
 [ "$deflated" = 0 ] || { echo "$deflated media files are compressed inside the APK; films must be stored to play from it"; exit 1; }
 signer=$("$TOOLS/apksigner" verify --print-certs "$APK")
 version=$(echo "$badging" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)
-NAMED="$OUT/MindPalace-judging-$version.apk"
+NAMED="$OUT/MindForest-judging-$version.apk"
 cp -c "$APK" "$NAMED"
 echo "$(echo "$badging" | head -1)"
 echo "$(echo "$signer" | grep -E 'certificate (DN|SHA-256)')"
