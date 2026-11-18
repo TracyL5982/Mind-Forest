@@ -80,7 +80,22 @@ void OceanModel::standMore() {
     }
 }
 
+const std::vector<std::string>& OceanModel::momoQuestions() {
+    static const std::vector<std::string> asked = {"Maps of places that don’t exist", "Chairs that changed how we sit", "The weirdest things ever sent to space"};
+    return asked;
+}
+
 void OceanModel::startBrief(int i) {
+    // AGENT: joined to the service, a tree started from one of the forest's questions is the service's, as a tree from a
+    // piece of the ocean is: Momo is asked for it. The headset's own tree, where a pinch makes a layer and Momo knows
+    // nothing of what is open, is not made. (The user, 2026-11-18, in one of them: "momo has no idea of which one is selected".)
+    if (agentBridge) {
+        if (i < 0 || i >= int(momoQuestions().size())) return;
+        clearPeek();
+        const std::string& subject = momoQuestions()[size_t(i)];
+        if (!agentBridge->treeAbout(subject)) logLine("[ocean] the service can't be reached, so no tree is started on " + subject);
+        return;
+    }
     if (!(catalog && i >= 0 && i < int(catalog->briefs.size()))) return;
     std::optional<Ref> ref = Ref::make(catalog->briefs[i].root);
     if (!ref) return;

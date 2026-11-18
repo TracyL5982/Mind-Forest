@@ -307,9 +307,9 @@ enum class Maker { gardener, you, both };
 /// `maker.label`
 inline const char* label(Maker m) {
     switch (m) {
-    case Maker::gardener: return "Gardener";
+    case Maker::gardener: return "Momo";
     case Maker::you: return "You";
-    case Maker::both: return "Gardener + you";
+    case Maker::both: return "Momo + you";
     }
     return "";
 }

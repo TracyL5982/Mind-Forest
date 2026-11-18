@@ -133,7 +133,7 @@ void OceanModel::drawPairing() {
             std::string shown = pairing.code.size() == 6 ? pairing.code.substr(0, 3) + " " + pairing.code.substr(3) : pairing.code;
             line(art->line(shown, codeType, Font::Weight::semibold, Color::white(), Art::ink, Art::buttonPad), panelLeft + 0.02f, y);
             y -= 0.058f;
-            line(art->line("It works once, for ten minutes.", Art::Size::label, Font::Weight::medium, Color::white(1, 0.75f), Art::ink, Art::buttonPad), panelLeft, y);
+            line(art->line("It works once, for 30 minutes.", Art::Size::label, Font::Weight::medium, Color::white(1, 0.75f), Art::ink, Art::buttonPad), panelLeft, y);
         } else {
             line(art->line(pairing.notReady ? "Telegram is not answering yet. Try again in a minute." : "Getting a code…", Art::Size::label, Font::Weight::medium,
                            Color::white(1, 0.75f), Art::ink, Art::buttonPad),

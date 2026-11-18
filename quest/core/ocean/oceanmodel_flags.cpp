@@ -287,7 +287,9 @@ void OceanModel::tap(const Pick& pick) {
         confirmCut();
         break;
     case Pick::Kind::card:
-        if (tree && tree->focus() == pick.index) zoomIn(); else take(pick.index);
+        // (WS101: on the welcome tree's walk a pinch on a closed card opens it where it stands, as in the service's trees.)
+        if (tree && tree->focus() == pick.index) zoomIn();
+        else if (!tourOpens(pick.index)) take(pick.index);
         break;
     case Pick::Kind::ask:
         askGardener(pick.index, pick.question);

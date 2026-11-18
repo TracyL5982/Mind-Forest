@@ -118,7 +118,8 @@ void OceanModel::build() {
         hologram->entity->isEnabled = false;
     }
 
-    if (std::optional<Piece> piece = art->tray("To image generation")) {
+    // AGENT: joined to the service nothing is ever sent to the tray (a tree is handed off through Momo), so it is not there.
+    if (std::optional<Piece> piece = agentBridge ? std::nullopt : art->tray("To image generation")) {
         EntityRef tray = art->quad(*piece);
         tray->position = trayPoint() + stage.u * 0.012f;
         // It lies on the desk, near, so it is smaller and square to the desk's edge.
@@ -248,6 +249,17 @@ void OceanModel::update(float dt) {
     lookFrame();
     composeFrame(now);
 
+    // AGENT (WS98): joined, the welcome tree is in the forest once the welcome is past (`ensureWelcomeTree`), the service
+    // answering or not; and while it stands it is written down as it grows, so that the app closed mid-walk keeps it.
+    if (agentBridge && built) {
+        if (welcomeFallbackAt < 0) welcomeFallbackAt = now + 10;
+        if (now >= welcomeFallbackAt) ensureWelcomeTree("the service has not answered");
+        if (tree && tree->walk()) {
+            size_t shape = tree->nodes.size() * 1009 + size_t(tree->stand) * 31 + size_t(tree->focus().value_or(-1) + 1);
+            if (shape != welcomeShape && shelfLoaded) shelfDirty = true;
+            welcomeShape = shape;
+        }
+    }
     if (now < busyUntil + 0.1) {
         if (shell) shell->setShift(stirred.value(now));
         double t0 = mediaTime();

@@ -305,6 +305,8 @@ void Bridge::synced(const Delta& delta) {
     for (auto s = plots.begin(); s != plots.end();) s = client.mirror().tree(TreeId{s->first}) ? std::next(s) : plots.erase(s);
     for (auto s = stands.begin(); s != stands.end();) s = client.mirror().tree(TreeId{s->first}) ? std::next(s) : stands.erase(s);
     changed(delta, false, false);
+    // The welcome tree, the headset's own, is always in the forest once the welcome is past: among the trees just hung (WS98).
+    model.ensureWelcomeTree("after the service's trees");
     if (dump) {
         client.send(Outbound::dump({Dump::text(*dump)}));
         logLine("[agent] dropped in: " + *dump);
@@ -1000,7 +1002,10 @@ void Bridge::moreLike(int nodeID) {
 }
 
 bool Bridge::treeFrom(const Ref& ref) {
-    std::string title = model.catalog->title(ref);
+    return treeAbout(model.catalog->title(ref));
+}
+
+bool Bridge::treeAbout(const std::string& title) {
     // The service roots a tree on something the user has when its title is said ("make a tree about …", read by plain
     // rules). Those rules end the subject at a colon, a long dash or " - ", and its title match ignores punctuation, so
     // each becomes a comma, which reads as the user would say it: "2001, A Space Odyssey".

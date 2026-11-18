@@ -7,9 +7,14 @@
 //              service's trees, every one of which is on the desk too; nothing the preview sends names it; the file still
 //              holds it alone
 //   launch 3   the same again, turned to where the welcome tree stands, for a picture of it among the service's trees
+//   launch 4   past the welcome with no welcome tree kept (its file gone, as after a build before it was kept): one is put
+//              on the desk, at a free place, once, not stood, and written down
+//   launch 5   that one comes back at its place, and no other is made
+//   launch 6   a first launch again, closed mid-walk with the welcome tree standing, never put away: it is written down
+//   launch 7   it comes back on the desk once, with its layers, and the walk does not come again
 //
 //   quest/desktop/build.sh && node quest/desktop/test/welcome_check.mjs --data <data folder> [--shots <folder>]
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { checker, find, flag, standIn } from './standin.mjs';
 
@@ -20,6 +25,7 @@ const shots = flag('--shots', join(stand.work, 'shots'));
 mkdirSync(shots, { recursive: true });
 const { check, failed, summary } = checker();
 const welcomeFile = join(previewData, 'welcome-shelf.json');
+const guideFile = join(previewData, 'ocean-guide.txt');
 const ownShelf = join(previewData, 'ocean-shelf.json');
 const readWelcome = () => (existsSync(welcomeFile) ? JSON.parse(readFileSync(welcomeFile, 'utf8')) : null);
 const isWelcome = (t) => (t.tree?.nodes ?? []).some((n) => n.ref === 'note:welcome');
@@ -73,6 +79,58 @@ try {
   keepLog('launch3-forest', third.log);
   const welcome3 = placed(third.log).filter((p) => p.title === welcomeTitle);
   check(welcome3.length === 1 && welcome3[0].own && near(welcome3[0].plot, put1[0]?.plot), `launch 3: still once, at its own place (${welcome3.map((p) => show(p.plot)).join(' | ')})`);
+
+  // Launch 4: past the welcome, and no welcome tree kept.
+  rmSync(welcomeFile);
+  const fourth = stand.launch(shots, 'launch4-made', 20, []);
+  await fourth.done;
+  keepLog('launch4-made', fourth.log);
+  check(find(fourth.log, /^\[guide\] on: welcomed before$/) && !find(fourth.log, /^\[guide\] lesson 1 on its card/), 'launch 4: past the welcome, and no walk');
+  check(find(fourth.log, /^\[guide\] past the welcome with no welcome tree kept, so one is put on the desk \(after the service's trees\)$/),
+    'with no welcome tree kept, one is put on the desk once the service\'s trees are hung');
+  const welcome4 = placed(fourth.log).filter((p) => p.title === welcomeTitle);
+  const others4 = placed(fourth.log).filter((p) => p.title !== welcomeTitle);
+  check(welcome4.length === 1 && !welcome4[0].own && others4.every((p) => !near(p.plot, welcome4[0].plot)),
+    `on the desk once, at a free place among the service's trees (${welcome4.map((p) => show(p.plot)).join(' | ') || 'not there'})`);
+  check(!find(fourth.log, /^\[guide\] the welcome tree stands$/), 'it is not stood');
+  const file4 = readWelcome();
+  check(file4 && file4.trees.length === 1 && isWelcome(file4.trees[0]) && near(file4.trees[0].plot, welcome4[0]?.plot), `and written down (${file4 ? file4.trees.length : 0}, at ${show(file4?.trees[0]?.plot)})`);
+
+  // Launch 5: it comes back, and no other is made.
+  const fifth = stand.launch(shots, 'launch5', 16, []);
+  await fifth.done;
+  keepLog('launch5', fifth.log);
+  const welcome5 = placed(fifth.log).filter((p) => p.title === welcomeTitle);
+  check(welcome5.length === 1 && welcome5[0].own && near(welcome5[0].plot, welcome4[0]?.plot) && !find(fifth.log, /^\[guide\] past the welcome with no welcome tree/),
+    `launch 5: it is on the desk once, at its own place, and none is made (${welcome5.map((p) => show(p.plot)).join(' | ')})`);
+
+  // Launch 6: a first launch again, closed with the walk's tree still standing.
+  rmSync(welcomeFile);
+  rmSync(guideFile);
+  const sixth = stand.launch(shots, 'launch6-midwalk', 20, []);
+  await sixth.done;
+  keepLog('launch6-midwalk', sixth.log);
+  check(find(sixth.log, /^\[guide\] on: first time$/) && find(sixth.log, /^\[guide\] the welcome tree stands$/), 'launch 6: a first launch, and the walk stands');
+  check(!placed(sixth.log).some((p) => p.title === welcomeTitle), 'it is never put away');
+  const file6 = readWelcome();
+  check(file6 && file6.trees.length === 1 && isWelcome(file6.trees[0]) && !file6.trees[0].plot,
+    `closed mid-walk, the standing welcome tree is written down, with no place yet (${file6 ? file6.trees[0].tree.nodes.length + ' cards' : 'no file'})`);
+
+  // Launch 7: it comes back.
+  const seventh = stand.launch(shots, 'launch7', 16, []);
+  await seventh.done;
+  keepLog('launch7', seventh.log);
+  const welcome7 = placed(seventh.log).filter((p) => p.title === welcomeTitle);
+  check(find(seventh.log, /^\[guide\] on: welcomed before$/) && !find(seventh.log, /^\[guide\] the welcome tree stands$/), 'launch 7: the walk does not come again');
+  check(welcome7.length === 1 && !find(seventh.log, /^\[guide\] past the welcome with no welcome tree/),
+    `the walk's tree is on the desk once, as it was kept (${welcome7.map((p) => show(p.plot)).join(' | ') || 'not there'})`);
+  const others7 = placed(seventh.log).filter((p) => p.title !== welcomeTitle);
+  check(others7.length === trees.length && others7.every((p) => p.own) && others7.every((p) => !near(p.plot, welcome7[0]?.plot)),
+    `the service's trees keep their own places, and it takes a free one among them (${others7.filter((p) => p.own).length} of ${trees.length} at their own)`);
+  check(find(seventh.log, /^\[guide\] the welcome tree kept mid-walk goes on the desk \(after the service's trees\)$/), 'once the service\'s trees are hung');
+  const file7 = readWelcome();
+  check(file7 && file7.trees.length === 1 && file6 && file7.trees[0].tree.nodes.length === file6.trees[0].tree.nodes.length,
+    `with the cards it had (${file7 ? file7.trees[0].tree.nodes.length : 0} of ${file6 ? file6.trees[0].tree.nodes.length : 0})`);
 } finally {
   await stand.close();
 }

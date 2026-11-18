@@ -681,13 +681,16 @@ void OceanModel::holdPress() {
     // A pinch held still on a card for `holdFor`, once it has settled: a long pinch. On the open card as it always was; AGENT:
     // and on a closed card of the service's (the user's rule, 2026-11-17: "long pinch on a card should start a new layer").
     // A ring fills round the pinch from 0.08 s. Moved more than 2 cm first it is a drag; let go before, a click.
-    CardRef open = cardGestures && tree && tree->focus() ? card(*tree->focus()) : nullptr;
-    CardRef held = cardGestures && tree && press && press->pick.kind == Pick::Kind::card ? card(press->pick.index) : nullptr;
+    // WS101: and on the welcome tree's walk, on the next lesson's card, open or closed, where it grows that lesson's layer, as
+    // a long pinch grows one in the service's trees (`tourHolds`). With or without `-cards`.
+    bool walk = tree && press && press->pick.kind == Pick::Kind::card && tourHolds(press->pick.index);
+    CardRef open = (cardGestures || walk) && tree && tree->focus() ? card(*tree->focus()) : nullptr;
+    CardRef held = (cardGestures || walk) && tree && press && press->pick.kind == Pick::Kind::card ? card(press->pick.index) : nullptr;
     bool onOpen = held && open && held == open && open->openBuilt;
     bool served = agentBridge && tree && agentBridge->serves(*tree);
     int step = -1;
     if (held && art && !penOn && !press->cancelled && press->claim == Press::Claim::open && length(press->at - press->start) <= 0.02f &&
-        (onOpen ? held->holdRing != nullptr : served)) {
+        (walk || (onOpen ? held->holdRing != nullptr : served))) {
         double settled = settledAt(*held), long_ = time - std::max(press->began, settled);
         // A quick pinch, a tap, never shows it.
         if (time >= settled && long_ >= 0.08) step = std::min(Art::holdSteps, int(long_ / holdFor * Art::holdSteps));
@@ -695,7 +698,8 @@ void OceanModel::holdPress() {
             step = -1;
             press->claim = Press::Claim::spent;
             logLine("[cards] a long pinch on " + (catalog ? catalog->title(held->ref) : std::string("a card")) + (onOpen ? "" : ", closed"));
-            agentBridge->longPinch(held->id);
+            if (walk) take(held->id);
+            else if (agentBridge) agentBridge->longPinch(held->id);
         }
     }
     // The open card's ring is its own; a closed card's is made for it the first time.
@@ -718,7 +722,8 @@ void OceanModel::holdPress() {
         c->changed();
         touch(time + 0.1);
     };
-    if (open && open->holdRing && art) {
+    // (The walk's card opened where it stands has none of its own until it is held: `ring` makes it then.)
+    if (open && art && (open->holdRing || (walk && onOpen))) {
         ring(open, open->holdRing, open->holdShown, onOpen ? step : -1, open->openHolder, onOpen && press ? onCard(*open, press->start) : Vec2::zero());
     }
     // AGENT: a closed card's, where the pinch holds it.
