@@ -23,7 +23,7 @@ To see them all, run `npm run dev:fake` in `agents/` and open `/library.html`. O
 
 ## The order of the work
 
-The plan was ten stacked changes, G1 to G10. The design is in `genui-library-design.md` and the plan in `genui-library-plan.md`.
+The plan was ten stacked changes, G1 to G10. The design is in `genui-library-design.md`.
 
 | Step | What it added |
 |---|---|

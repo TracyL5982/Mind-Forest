@@ -2520,7 +2520,7 @@
    "do": [],
    "momo": "Yes: her glass easels at MASP, and her Glass House.",
    "offers": [],
-   "note": "Voice: Claude's choice to hang its one card round the FigJam board with the others.",
+   "note": "Voice: the script hangs its one card round the FigJam board with the others.",
    "cards": [
     {
      "id": "nipper",
@@ -2555,7 +2555,7 @@
    ],
    "momo": "Under an open card I offer three or four questions in your voice. A long pinch asks for more like it without a word.",
    "offers": [],
-   "note": "Shortcuts: Claude's choice to hang its one card round the FigJam board with the others.",
+   "note": "Shortcuts: the script hangs its one card round the FigJam board with the others.",
    "cards": [
     {
      "id": "gen-questions",
@@ -2586,7 +2586,7 @@
    ],
    "momo": "Your mark comes to me with the question, so I know which part you mean. Readers drew pointing hands in their margins for the same reason.",
    "offers": [],
-   "note": "Annotate: Claude's choice to hang its one card round the FigJam board with the others.",
+   "note": "Annotate: the script hangs its one card round the FigJam board with the others.",
    "cards": [
     {
      "id": "manicule",
